@@ -53,5 +53,5 @@ def test_logical_view_json_path_suffix():
 
     base = os.path.join("C:", "out", "plan.xlsx") if os.name == "nt" else "/tmp/out/plan.xlsx"
     j = logical_view_json_path(base)
-    assert j.endswith("_logical_view.json")
-    assert "plan_logical_view.json" in j or j.endswith("plan_logical_view.json")
+    assert j.endswith("論.json")
+    assert j.endswith("plan論.json") or "plan論.json" in j.replace("\\", "/")

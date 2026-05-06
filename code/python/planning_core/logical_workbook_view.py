@@ -98,10 +98,12 @@ def build_logical_view_workbook_payload(
 
 
 def logical_view_json_path(plan_xlsx: str) -> str:
-    """``plan.xlsx`` と並べて ``plan_logical_view.json``（正規化パス）。"""
+    """``plan.xlsx`` と並べて ``…論.json``（論理ビュー・正規化パス）。"""
+    from .stage2_output_naming import JSON_VARIANT_LOGICAL
+
     base, _ = os.path.splitext(os.path.abspath(os.path.normpath(plan_xlsx)))
     try:
         base = unicodedata.normalize("NFC", base)
     except Exception:
         pass
-    return base + "_logical_view.json"
+    return base + f"{JSON_VARIANT_LOGICAL}.json"

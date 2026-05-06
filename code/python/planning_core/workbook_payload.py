@@ -170,9 +170,11 @@ def build_workbook_payload_from_dataframes(
 
 
 def tabular_source_json_path(plan_xlsx_final: str) -> str:
-    """段階2計画ブックと並べて置く「表シート正本」JSON パス（拡張子手前にサフィックス）。"""
+    """段階2計画ブックと並べて置く「表シート正本」JSON パス（拡張子直前に「表」）。"""
+    from .stage2_output_naming import JSON_VARIANT_TABULAR
+
     base, _ = os.path.splitext(os.path.abspath(plan_xlsx_final))
-    return base + "_tabular_source.json"
+    return base + f"{JSON_VARIANT_TABULAR}.json"
 
 
 def write_tabular_source_json_file(

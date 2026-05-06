@@ -2,7 +2,6 @@ package jp.co.pm.ai.desktop;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -50,6 +49,7 @@ import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.ui.GanttScheduleStyle;
 import jp.co.pm.ai.desktop.ui.GanttSheetKind;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
@@ -60,7 +60,7 @@ import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 
 /**
- * {@code production_plan_multi_day*.json} と {@code member_schedule*.json} を入れ子
+ * {@code 計画*.json} と {@code 人員*.json}（旧英語名も解決可）を入れ子
  * タブ（データセット → 各シート → 表/ガント）で表示する。
  */
 public final class PlanResultViewerTabController {
@@ -351,8 +351,8 @@ public final class PlanResultViewerTabController {
         Map<String, String> ui = shell.snapshotUiEnv();
         Path dir = AppPaths.defaultPlanningOutputDir(ui);
         try {
-            Path plan = newestMatching(dir, "production_plan_multi_day_*.json");
-            Path mem = newestMatching(dir, "member_schedule_*.json");
+            Path plan = Stage2OutputNaming.newestPrimaryPlanJson(dir);
+            Path mem = Stage2OutputNaming.newestPrimaryMemberJson(dir);
             if (plan != null) {
                 planJsonField.setText(plan.toString());
             }
@@ -1012,26 +1012,5 @@ public final class PlanResultViewerTabController {
             return null;
         }
         return workbookPath.resolveSibling(stem + ".json");
-    }
-
-    private static Path newestMatching(Path dir, String glob) throws IOException {
-        if (!Files.isDirectory(dir)) {
-            return null;
-        }
-        Path best = null;
-        long bestTime = Long.MIN_VALUE;
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, glob)) {
-            for (Path p : stream) {
-                if (!Files.isRegularFile(p)) {
-                    continue;
-                }
-                long t = Files.getLastModifiedTime(p).toMillis();
-                if (t >= bestTime) {
-                    bestTime = t;
-                    best = p;
-                }
-            }
-        }
-        return best;
     }
 }

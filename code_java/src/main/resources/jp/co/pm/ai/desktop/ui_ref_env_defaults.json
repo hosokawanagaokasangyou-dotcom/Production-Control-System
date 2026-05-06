@@ -24,7 +24,7 @@
   }, {
     "key" : "PM_AI_OUTPUT_DIR",
     "value" : "",
-    "description" : "段階1/2の成果物フォルダ（plan_input_tasks.xlsx、production_plan_multi_day_*.xlsx、member_schedule_*.xlsx 等）。空のときは planning_core.bootstrap と同じ解決（PM_AI_REPO_ROOT 直下の output、または cwd 基準の output）。フルパス推奨。「フォルダ...」で選択可。"
+    "description" : "段階1/2の成果物フォルダ（plan_input_tasks.xlsx、計画*.xlsx、人員*.xlsx 等）。空のときは planning_core.bootstrap と同じ解決（PM_AI_REPO_ROOT 直下の output、または cwd 基準の output）。フルパス推奨。「フォルダ...」で選択可。"
   }, {
     "key" : "PM_AI_MASTER_WORKBOOK",
     "value" : "",

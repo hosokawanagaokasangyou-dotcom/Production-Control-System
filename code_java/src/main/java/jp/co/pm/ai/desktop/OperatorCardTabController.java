@@ -1,7 +1,6 @@
 package jp.co.pm.ai.desktop;
 
 import java.io.IOException;
-import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -34,6 +33,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.io.JsonTableIo.SheetTable;
 import jp.co.pm.ai.desktop.print.OperatorCardDocumentBuilder;
@@ -217,7 +217,7 @@ public final class OperatorCardTabController {
         Map<String, String> ui = shell.snapshotUiEnv();
         Path dir = AppPaths.defaultPlanningOutputDir(ui);
         try {
-            Path mem = newestMatching(dir, "member_schedule_*.json");
+            Path mem = Stage2OutputNaming.newestPrimaryMemberJson(dir);
             Path dispDirFile = AppPaths.resolveResultDispatchTableJsonPath(ui);
             if (mem != null) {
                 memberJsonField.setText(mem.toString());
@@ -444,26 +444,5 @@ public final class OperatorCardTabController {
         }
         statusLabel.setText(
                 "印刷完了: " + operators.size() + " 名分");
-    }
-
-    private static Path newestMatching(Path dir, String glob) throws IOException {
-        if (!Files.isDirectory(dir)) {
-            return null;
-        }
-        Path best = null;
-        long bestTime = Long.MIN_VALUE;
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, glob)) {
-            for (Path p : stream) {
-                if (!Files.isRegularFile(p)) {
-                    continue;
-                }
-                long t = Files.getLastModifiedTime(p).toMillis();
-                if (t >= bestTime) {
-                    bestTime = t;
-                    best = p;
-                }
-            }
-        }
-        return best;
     }
 }

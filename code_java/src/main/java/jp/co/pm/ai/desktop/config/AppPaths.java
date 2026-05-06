@@ -144,19 +144,19 @@ public final class AppPaths {
     public static final String KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET = "PM_AI_SKIP_WORKBOOK_ENV_SHEET";
 
     /**
-     * Python planning_core: mirror {@code production_plan_multi_day_*.xlsx} to same-name {@code .json}. Values
+     * Python planning_core: mirror {@code 計画*.xlsx} to same-name {@code .json}. Values
      * {@code 0}/{@code false}/{@code no}/{@code off}/{@code none} disable; unset defaults to enabled.
      */
     public static final String KEY_PM_AI_PLAN_WORKBOOK_JSON = "PM_AI_PLAN_WORKBOOK_JSON";
 
     /**
-     * Python planning_core: mirror {@code member_schedule_*.xlsx} to same-name {@code .json}. Same disable tokens as
+     * Python planning_core: mirror {@code 人員*.xlsx} to same-name {@code .json}. Same disable tokens as
      * {@link #KEY_PM_AI_PLAN_WORKBOOK_JSON}; unset defaults to enabled.
      */
     public static final String KEY_PM_AI_MEMBER_SCHEDULE_JSON = "PM_AI_MEMBER_SCHEDULE_JSON";
 
     /**
-     * 段階2: {@code production_plan_multi_day_*.xlsx} / {@code member_schedule_*.xlsx} を成果物として残す。
+     * 段階2: {@code 計画*.xlsx} / {@code 人員*.xlsx} を成果物として残す。
      * {@code 0} / {@code false} / {@code no} / {@code off} / {@code none} のときは JSON のみ（UI 実行・ログタブのチェックボックスから上書き可）。
      */
     public static final String KEY_PM_AI_STAGE2_WRITE_EXCEL = "PM_AI_STAGE2_WRITE_EXCEL";
@@ -630,7 +630,7 @@ public final class AppPaths {
     }
 
     /**
-     * Directory where stage-2 writes {@code production_plan_multi_day_*.xlsx} and {@code member_schedule_*.xlsx}
+     * Directory where stage-2 writes {@code 計画*.xlsx} and {@code 人員*.xlsx}
      * (same folder as {@link #defaultStage1PlanTasksPath} — typically {@code .../code/output/}).
      */
     public static Path defaultPlanningOutputDir(Map<String, String> ui) {

@@ -23,16 +23,17 @@ from .workbook_payload import (
     workbook_payload_from_final_xlsx_file,
     write_xlsx_from_workbook_payload_tabular,
 )
+from .stage2_output_naming import JSON_VARIANT_RESULT_TASK_LIST
 
 # 0/false/no/off/none: do not read or write sidecar JSON
 ENV_PLAN_RESULT_TASK_JSON = "PM_AI_PLAN_RESULT_TASK_JSON"
 ENV_PLAN_RESULT_TASK_JSON_PATH = "PM_AI_PLAN_RESULT_TASK_JSON_PATH"
-# 0/false/no/off/none: do not write production_plan_multi_day_*.json (full workbook mirror)
+# 0/false/no/off/none: do not write 計画*.json（full workbook mirror）
 ENV_PLAN_WORKBOOK_JSON = "PM_AI_PLAN_WORKBOOK_JSON"
-# 0/false/no/off/none: do not write member_schedule_*.json (mirror of member_schedule_*.xlsx)
+# 0/false/no/off/none: do not write 人員*.json（mirror of 人員*.xlsx）
 ENV_MEMBER_SCHEDULE_JSON = "PM_AI_MEMBER_SCHEDULE_JSON"
 
-RESULT_TASK_JSON_SUFFIX = "_\u7d50\u679c_\u30bf\u30b9\u30af\u4e00\u89a7.json"
+RESULT_TASK_JSON_SUFFIX = f"{JSON_VARIANT_RESULT_TASK_LIST}.json"
 SIDE_FORMAT_VERSION = 1
 
 # pandas の read_excel(header=0) だと、結果_設備ガントのようにタイトル行のあとに列見出し行がある

@@ -1,6 +1,5 @@
 package jp.co.pm.ai.desktop;
 
-import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -55,6 +54,7 @@ import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
+import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
 
@@ -1853,7 +1853,7 @@ public final class MainShellController {
     }
 
     /**
-     * After stage-2 success, show newest {@code production_plan_multi_day_*.xlsx} and {@code member_schedule_*.xlsx}
+     * After stage-2 success, show newest {@code 計画*.xlsx} / {@code 人員*.xlsx}（または旧英語名）
      * under {@link AppPaths#defaultPlanningOutputDir} in the run tab (same folder as plan-input export).
      */
     /**
@@ -1876,13 +1876,13 @@ public final class MainShellController {
                                 + dir);
                 return;
             }
-            Path newestPlan = newestInOutputDir(dir, "production_plan_multi_day_*.xlsx");
+            Path newestPlan = Stage2OutputNaming.newestPrimaryPlanXlsx(dir);
             if (newestPlan == null) {
-                newestPlan = newestInOutputDir(dir, "production_plan_multi_day_*.json");
+                newestPlan = Stage2OutputNaming.newestPrimaryPlanJson(dir);
             }
-            Path newestMember = newestInOutputDir(dir, "member_schedule_*.xlsx");
+            Path newestMember = Stage2OutputNaming.newestPrimaryMemberXlsx(dir);
             if (newestMember == null) {
-                newestMember = newestInOutputDir(dir, "member_schedule_*.json");
+                newestMember = Stage2OutputNaming.newestPrimaryMemberJson(dir);
             }
             String planStr = newestPlan != null ? newestPlan.toString() : "";
             String memStr = newestMember != null ? newestMember.toString() : "";
@@ -1904,21 +1904,6 @@ public final class MainShellController {
                             + "成果パス更新エラー: "
                             + ex.getMessage());
         }
-    }
-
-    private static Path newestInOutputDir(Path dir, String glob) throws java.io.IOException {
-        Path best = null;
-        long bestTime = Long.MIN_VALUE;
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, glob)) {
-            for (Path p : stream) {
-                long t = Files.getLastModifiedTime(p).toMillis();
-                if (t >= bestTime) {
-                    bestTime = t;
-                    best = p;
-                }
-            }
-        }
-        return best;
     }
 
     private static String defaultOsPython() {

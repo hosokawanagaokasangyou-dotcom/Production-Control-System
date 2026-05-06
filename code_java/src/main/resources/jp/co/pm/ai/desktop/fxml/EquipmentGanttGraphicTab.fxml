@@ -42,7 +42,7 @@
                                     text="最新JSONを検索"
                                     onAction="#onSyncLatestButtonAction"/>
                             <Label styleClass="pm-plan-result-viewer-hint-inline"
-                                   text="production_plan_multi_day*.json の設備ガント系シートを表示"/>
+                                   text="計画*.json の設備ガント系シートを表示"/>
                         </HBox>
                         <HBox alignment="CENTER_LEFT" spacing="8.0">
                             <TextField fx:id="planJsonField" maxWidth="Infinity" prefWidth="560.0"

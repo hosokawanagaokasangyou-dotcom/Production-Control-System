@@ -1,7 +1,6 @@
 package jp.co.pm.ai.desktop;
 
 import java.io.IOException;
-import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -23,8 +22,8 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Slider;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
 import javafx.scene.layout.BorderPane;
@@ -39,6 +38,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
+import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttContractSheetTableBuilder;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttSheetBundle;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
@@ -56,7 +56,7 @@ public final class EquipmentGanttGraphicTabController {
     private static final String DEFAULT_SHEET = "結果_設備ガント";
 
     private static final String HINT =
-            "計画結果ビューアと同じ production_plan_multi_day*.json を指定します。"
+            "計画結果ビューアと同じ 計画*.json（または旧 production_plan_multi_day*.json）を指定します。"
                     + " 設備タイムライン（時刻列 HH:MM）と判定されるシートのうち、既定では「結果_設備ガント」を表示します。"
                     + " グラフィック表示はメインのこのタブから利用してください。";
 
@@ -546,12 +546,12 @@ public final class EquipmentGanttGraphicTabController {
         Map<String, String> ui = shell.snapshotUiEnv();
         Path dir = AppPaths.defaultPlanningOutputDir(ui);
         try {
-            Path plan = newestMatching(dir, "production_plan_multi_day_*.json");
+            Path plan = Stage2OutputNaming.newestPrimaryPlanJson(dir);
             if (plan != null) {
                 planJsonField.setText(plan.toString());
             }
             if (plan == null) {
-                statusLabel.setText("このフォルダに production_plan_multi_day*.json がありません: " + dir);
+                statusLabel.setText("このフォルダに 計画*.json（または旧 production_plan_multi_day*.json）がありません: " + dir);
                 return;
             }
         } catch (Exception ex) {
@@ -885,7 +885,7 @@ public final class EquipmentGanttGraphicTabController {
         Path fn0 = planJsonFromField.getFileName();
         if (fn0 != null && fn0.toString().endsWith(".json")) {
             String stem0 = fn0.toString().substring(0, fn0.toString().length() - 5);
-            if (stem0.endsWith("_equipment_gantt_contract")) {
+            if (stem0.endsWith("_equipment_gantt_contract") || stem0.endsWith("設")) {
                 EquipmentGanttSheetBundle bundle =
                         EquipmentGanttContractSheetTableBuilder.buildBundleFromContractPath(
                                 planJsonFromField);
@@ -919,6 +919,42 @@ public final class EquipmentGanttGraphicTabController {
         return new SheetLoad(sheets, desc, badgeRows);
     }
 
+    /**
+     * 計画ブック JSON のファイル名 stem（拡張子除く）から、サイドカー接尾辞・旧英語接尾辞を繰り返し除去する。
+     */
+    private static String stripStage2PlanJsonStemVariants(String stem) {
+        String s = stem;
+        while (true) {
+            boolean changed = false;
+            if (s.endsWith("_equipment_gantt_contract")) {
+                s = s.substring(0, s.length() - "_equipment_gantt_contract".length());
+                changed = true;
+            } else if (s.endsWith("_logical_view")) {
+                s = s.substring(0, s.length() - "_logical_view".length());
+                changed = true;
+            } else if (s.endsWith("_tabular_source")) {
+                s = s.substring(0, s.length() - "_tabular_source".length());
+                changed = true;
+            } else if (s.endsWith("_actual_detail_gantt_contract")) {
+                s = s.substring(0, s.length() - "_actual_detail_gantt_contract".length());
+                changed = true;
+            } else if (s.endsWith("_結果_タスク一覧")) {
+                s = s.substring(0, s.length() - "_結果_タスク一覧".length());
+                changed = true;
+            } else if (s.endsWith("一覧")) {
+                s = s.substring(0, s.length() - 2);
+                changed = true;
+            } else if (s.endsWith("表") || s.endsWith("論") || s.endsWith("設") || s.endsWith("実")) {
+                s = s.substring(0, s.length() - 1);
+                changed = true;
+            }
+            if (!changed) {
+                break;
+            }
+        }
+        return s;
+    }
+
     /** 論理ビュー JSON 本体のパス（直接指定または sibling）。無ければ null。 */
     private static Path resolveLogicalViewPath(Path planJsonFromField) {
         if (planJsonFromField == null || !Files.isRegularFile(planJsonFromField)) {
@@ -933,16 +969,21 @@ public final class EquipmentGanttGraphicTabController {
             return null;
         }
         String stem = name.substring(0, name.length() - 5);
-        if (stem.endsWith("_logical_view")) {
+        if (stem.endsWith("_logical_view") || stem.endsWith("論")) {
             return planJsonFromField;
         }
-        Path sibling = planJsonFromField.resolveSibling(stem + "_logical_view.json");
-        return Files.isRegularFile(sibling) ? sibling : null;
+        String baseStem = stripStage2PlanJsonStemVariants(stem);
+        Path sibling = planJsonFromField.resolveSibling(baseStem + "論.json");
+        if (Files.isRegularFile(sibling)) {
+            return sibling;
+        }
+        Path legacy = planJsonFromField.resolveSibling(baseStem + "_logical_view.json");
+        return Files.isRegularFile(legacy) ? legacy : null;
     }
 
     /**
-     * {@code production_plan_multi_day_xxx.json} と並ぶ {@code …_equipment_gantt_contract.json}。
-     * {@code *_logical_view.json} を開いているときは stem から {@code _logical_view} を除いて兄弟を解決する。
+     * 計画ブック本体 JSON と並ぶ設備ガント契約 JSON（{@code …設.json}、または旧 {@code …_equipment_gantt_contract.json}）。
+     * サイドカー JSON を開いているときは stem から接尾辞を除いて兄弟を解決する。
      */
     private static Path resolveEquipmentContractSibling(Path planJsonFromField) {
         if (planJsonFromField == null) {
@@ -957,13 +998,16 @@ public final class EquipmentGanttGraphicTabController {
             return null;
         }
         String stem = name.substring(0, name.length() - 5);
-        if (stem.endsWith("_equipment_gantt_contract")) {
+        if (stem.endsWith("_equipment_gantt_contract") || stem.endsWith("設")) {
             return null;
         }
-        if (stem.endsWith("_logical_view")) {
-            stem = stem.substring(0, stem.length() - "_logical_view".length());
+        String baseStem = stripStage2PlanJsonStemVariants(stem);
+        Path modern = planJsonFromField.resolveSibling(baseStem + "設.json");
+        if (Files.isRegularFile(modern)) {
+            return modern;
         }
-        return planJsonFromField.resolveSibling(stem + "_equipment_gantt_contract.json");
+        Path legacy = planJsonFromField.resolveSibling(baseStem + "_equipment_gantt_contract.json");
+        return Files.isRegularFile(legacy) ? legacy : null;
     }
 
     /** バッジグリッドから表示キー（姓2文字等）を重複除去して列挙する。 */
@@ -1009,26 +1053,5 @@ public final class EquipmentGanttGraphicTabController {
             return null;
         }
         return workbookPath.resolveSibling(stem + ".json");
-    }
-
-    private static Path newestMatching(Path dir, String glob) throws IOException {
-        if (!Files.isDirectory(dir)) {
-            return null;
-        }
-        Path best = null;
-        long bestTime = Long.MIN_VALUE;
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, glob)) {
-            for (Path p : stream) {
-                if (!Files.isRegularFile(p)) {
-                    continue;
-                }
-                long t = Files.getLastModifiedTime(p).toMillis();
-                if (t >= bestTime) {
-                    bestTime = t;
-                    best = p;
-                }
-            }
-        }
-        return best;
     }
 }

@@ -67,7 +67,7 @@
                                          text="見切れ（1行）" toggleGroup="$planResultCellModeGroup"/>
                         </HBox>
                         <Separator/>
-                        <Label text="production_plan_multi_day*.json"/>
+                        <Label text="計画*.json"/>
                         <HBox alignment="CENTER_LEFT" spacing="8.0">
                             <TextField fx:id="planJsonField" maxWidth="Infinity" prefWidth="560.0"
                                        promptText="*.json" HBox.hgrow="ALWAYS"/>

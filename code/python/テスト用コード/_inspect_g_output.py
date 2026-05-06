@@ -16,7 +16,8 @@ def _planning_repo_root() -> Path:
 REPO = _planning_repo_root()
 base = str(REPO / "output")
 files = sorted(
-    glob.glob(base + r"\**\production_plan_multi_day_*.xlsx", recursive=True),
+    glob.glob(base + r"\**\計画*.xlsx", recursive=True)
+    + glob.glob(base + r"\**\production_plan_multi_day_*.xlsx", recursive=True),
     key=os.path.getmtime,
 )
 

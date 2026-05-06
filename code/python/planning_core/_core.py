@@ -63,6 +63,11 @@ from .plan_workbook_sidecar import (
     write_production_plan_workbook_json,
     write_result_task_json_sidecar,
 )
+from .stage2_output_naming import (
+    format_stage2_stamp,
+    member_workbook_filename,
+    plan_workbook_filename,
+)
 from .bootstrap import (
     PlanningValidationError,
     _clear_stage2_blocking_message_file,
@@ -1931,7 +1936,7 @@ def _apply_stage2_production_plan_workbook_polish(
     member_priority_second_header_row: int | None = None,
 ):
     """
-    production_plan_multi_day*.xlsx 各シートの共通仕上げ（ガント以外）。
+    計画*.xlsx（段階2計画ブック）各シートの共通仕上げ（ガント以外）。
 
     見出し背景・罫線・窓枠固定（先頭列＋行1）に限る。条件付き書式・ハイパーリンク・
     配台表の Excel テーブル化・設備時間割の列幅調整は、呼び出し側の前段・後段で維持する。
@@ -20370,7 +20375,7 @@ def _xlwings_write_dispatch_pattern_stage2_summary_sheet(
     intro = (
         "各パターンの配台試行順を「配台計画_タスク入力」に反映したうえで段階2のみ実行し、"
         "output/dispatch_pattern_stage2/<実行時刻>/<パターンID>/ に "
-        "production_plan_multi_day_*.xlsx / member_schedule_*.xlsx を保存した結果です。"
+        "計画*.xlsx / 人員*.xlsx を保存した結果です。"
         " 生産計画ブック・メンバー日程ブック列のリンクは当該ファイルの絶対パスです。スコアと参考スコアを比較してください。"
         " 最適と思う案のパターンIDを B3 に選び（プルダウン可）、ブックを保存してから"
         "「試行順パターン採用を計画へ反映」マクロで配台計画シートの配台試行順番に書き戻します。"
@@ -28417,7 +28422,7 @@ def generate_plan():
     段階2のメイン処理。戻り値なし（ログ・Excel 出力で完絝）。
 
     前提: 環境変数 TASK_INPUT_WORKBOOK、カレントディレクトリがスクリプトフォルダ。
-    出力: ``output_dir`` 直下の ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx``（実行直前に同名パターンを削除しようとする。ファイル名はデータ抽出時刻＋実行時刻サフィックスで実行ごとに一意）、および log/execution_log.txt。
+    出力: ``output_dir`` 直下の ``計画*.xlsx`` / ``人員*.xlsx``（実行直前に同名パターンを削除しようとする。ファイル名は短い日本語接頭辞＋時刻で実行ごとに一意）、および log/execution_log.txt。
     """
     master_abs = _master_workbook_path_resolved()
     try:
@@ -31664,14 +31669,11 @@ def _generate_plan_impl(
             return
     if not skip_remove_prior_stage2_workbooks:
         _remove_prior_stage2_workbooks_and_prune_empty_dirs(_stage2_out_root)
-    # ファイル名の主部はデータ抽出基準日時（シートメタと整合）。同一抽出データの再実行でも
-    # パスがぶつからないよう、壁時計のサフィックスを付与（Excel 占有で旧ファイル削除失敗時の上書き不能を回避）。
-    _stage2_data_stamp = base_now_dt.strftime("%Y%m%d_%H%M%S_%f")
-    _stage2_run_stamp = datetime.now().strftime("%H%M%S_%f")
-    _stage2_out_stamp = f"{_stage2_data_stamp}_{_stage2_run_stamp}"
-    plan_xlsx_final = os.path.join(
-        _stage2_out_root, f"production_plan_multi_day_{_stage2_out_stamp}.xlsx"
-    )
+    # ファイル名は短い日本語接頭辞＋時刻（本体ベース名は 20 文字以内）。同一抽出の再実行でも
+    # パスがぶつからないよう実行時刻のマイクロ秒下位を含める（Excel 占有で旧ファイル削除失敗時の上書き不能を回避）。
+    _stage2_run_now = datetime.now()
+    _stage2_stamp = format_stage2_stamp(base_now_dt, _stage2_run_now)
+    plan_xlsx_final = os.path.join(_stage2_out_root, plan_workbook_filename(_stage2_stamp))
     _publish_plan_xlsx = _stage2_publish_excel_enabled(stage2_output_root)
     if _publish_plan_xlsx:
         output_filename = plan_xlsx_final
@@ -32582,7 +32584,7 @@ def _generate_plan_impl(
     except OSError as e:
         logging.error(
             "段階2: 結果ブックの作成・保存に失敗しました: %s（%s）。"
-            "output 内の production_plan_multi_day_*.xlsx を Excel で開いでいないか確認してください。",
+            "output 内の 計画*.xlsx を Excel で開いでいないか確認してください。",
             output_filename,
             e,
         )
@@ -32719,7 +32721,7 @@ def _generate_plan_impl(
     # 5. ★追加: メンバー毎の行動スケジュール (別ファイル) 出力
     # =========================================================
     member_xlsx_final = os.path.join(
-        _stage2_out_root, f"member_schedule_{_stage2_out_stamp}.xlsx"
+        _stage2_out_root, member_workbook_filename(_stage2_stamp)
     )
     if _publish_plan_xlsx:
         member_output_filename = member_xlsx_final
@@ -32825,7 +32827,7 @@ def _generate_plan_impl(
     except OSError as e:
         logging.error(
             "段階2: メンバー別スケジュールの保存に失敗しました: %s（%s）。"
-            "member_schedule_*.xlsx を Excel で開いでいないか確認してください。",
+            "人員*.xlsx を Excel で開いでいないか確認してください。",
             member_output_filename,
             e,
         )

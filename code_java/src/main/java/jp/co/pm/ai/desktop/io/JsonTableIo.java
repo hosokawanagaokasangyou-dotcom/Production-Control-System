@@ -27,8 +27,7 @@ public final class JsonTableIo {
     public record SheetTable(List<String> columns, List<Map<String, String>> rows) {}
 
     /**
-     * Workbook JSON with top-level {@code sheets} object ({@code member_schedule_*.json},
-     * {@code production_plan_multi_day_*.json}).
+     * Workbook JSON with top-level {@code sheets} object ({@code 人員*.json}, {@code 計画*.json}).
      */
     public static Map<String, SheetTable> loadSheetsWorkbook(Path path) throws IOException {
         JsonNode root = JSON.readTree(Files.readString(path, StandardCharsets.UTF_8));

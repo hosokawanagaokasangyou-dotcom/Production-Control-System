@@ -3504,8 +3504,11 @@ Public Sub 段階2_コア実行(Optional ByVal preserveStage1LogOnLogSheet As Boolean 
     memberImported = False
     Set targetWb = ThisWorkbook
     
-    ' 7a. production_plan_multi_day_*.xlsx（結果_* シート）
-    outputFilePath = GetLatestOutputFile(targetDir & "\output", "production_plan_multi_day_*.xlsx")
+    ' 7a. 計画*.xlsx（旧: production_plan_multi_day_*.xlsx）（結果_* シート）
+    outputFilePath = GetLatestOutputFile(targetDir & "\output", "計画*.xlsx")
+    If outputFilePath = "" Then
+        outputFilePath = GetLatestOutputFile(targetDir & "\output", "production_plan_multi_day_*.xlsx")
+    End If
     
     If outputFilePath <> "" Then
         ' 画面描画と警告を一時停止（削除確認ダイアログ等を非表示）
@@ -3627,12 +3630,15 @@ NextSourceWs:
         targetWb.Sheets(1).Activate
     End If
     
-    MacroSplash_SetStep "段階2: 個人別スケジュール（member_schedule）を取り込んでいます…"
-    ' 7b. member_schedule_*.xlsx（メンバー名シート → 個人_プレフィックスで取り込み）
+    MacroSplash_SetStep "段階2: 個人別スケジュール（人員*.xlsx）を取り込んでいます…"
+    ' 7b. 人員*.xlsx（旧: member_schedule_*.xlsx）（メンバー名シート → 個人_プレフィックスで取り込み）
     Dim st2SkipMemberScheduleImport As Boolean
     st2SkipMemberScheduleImport = Stage2EnvBoolEffective("STAGE2_SKIP_MEMBER_SCHEDULE_IMPORT", False)
     If Not st2SkipMemberScheduleImport Then
-        memberPath = GetLatestOutputFile(targetDir & "\output", "member_schedule_*.xlsx")
+        memberPath = GetLatestOutputFile(targetDir & "\output", "人員*.xlsx")
+        If memberPath = "" Then
+            memberPath = GetLatestOutputFile(targetDir & "\output", "member_schedule_*.xlsx")
+        End If
     End If
     If Not st2SkipMemberScheduleImport And Len(memberPath) > 0 Then
         Application.ScreenUpdating = False

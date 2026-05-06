@@ -206,8 +206,17 @@ def gantt_contract_json_path(plan_xlsx_final: str, *, which: str) -> str:
     """
     which: ``equipment`` | ``actual_detail``
     """
+    from .stage2_output_naming import (
+        JSON_VARIANT_ACTUAL_DETAIL_GANTT_CONTRACT,
+        JSON_VARIANT_EQUIP_GANTT_CONTRACT,
+    )
+
     base, _ = os.path.splitext(os.path.abspath(plan_xlsx_final))
-    suf = "_equipment_gantt_contract.json" if which == "equipment" else "_actual_detail_gantt_contract.json"
+    suf = (
+        f"{JSON_VARIANT_EQUIP_GANTT_CONTRACT}.json"
+        if which == "equipment"
+        else f"{JSON_VARIANT_ACTUAL_DETAIL_GANTT_CONTRACT}.json"
+    )
     try:
         return unicodedata.normalize("NFC", base + suf)
     except Exception:

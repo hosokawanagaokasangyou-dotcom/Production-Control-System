@@ -14,7 +14,7 @@ if sys.version_info < (3, 14):
         "[planning_core] Python 3.14 以上が必要です（現在 "
         + _v
         + "）。\n"
-        "Windows の例: py -3.14 -X utf8 -m pip install -r python\\\\requirements.txt\n"
+        "Windows の例: py -3.14 -X utf8 -u python\\\\setup_environment.py\n"
     )
     raise SystemExit(2)
 
@@ -189,7 +189,7 @@ def _try_remove_path_with_retries(
 
 def _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_root: str) -> None:
     """
-    ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx`` を output 配下から削除し、
+    ``計画*.xlsx`` / ``人員*.xlsx``（および旧名 ``production_plan_multi_day_*.xlsx`` / ``member_schedule_*.xlsx``）を output 配下から削除し、
     同名の ``*.json`` ミラーは **書き出す設定のときだけ** 削除する（
     ``PM_AI_PLAN_WORKBOOK_JSON`` / ``PM_AI_MEMBER_SCHEDULE_JSON`` が無効な実行では、
     旧 JSON を消さず残す。段階2が xlsx のみ再生成され JSON が未出力のときに「JSON が消えた」状態を避ける）。
@@ -205,12 +205,16 @@ def _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_root: str) -> Non
     _skip_plan_json = _plan_workbook_json_disabled()
     _skip_member_json = _member_schedule_json_disabled()
     patterns: list[str] = [
+        "計画*.xlsx",
+        "人員*.xlsx",
         "production_plan_multi_day_*.xlsx",
         "member_schedule_*.xlsx",
     ]
     if not _skip_plan_json:
+        patterns.append("計画*.json")
         patterns.append("production_plan_multi_day_*.json")
     if not _skip_member_json:
+        patterns.append("人員*.json")
         patterns.append("member_schedule_*.json")
     if _skip_plan_json or _skip_member_json:
         logging.info(
@@ -250,7 +254,7 @@ def _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_root: str) -> Non
             pass
     if removed:
         logging.info(
-            "段階2出力の整理: production_plan_multi_day_*（.xlsx/.json）/ member_schedule_*（.xlsx/.json）を %s 件削除しました。",
+            "段階2出力の整理: 計画*・人員*（および旧 production_plan_multi_day_* / member_schedule_*）の .xlsx/.json を %s 件削除しました。",
             removed,
         )
     if failed_paths:
@@ -274,7 +278,7 @@ logger.addHandler(file_handler)
 
 
 def _maybe_register_xlwings_splash_logging() -> None:
-    """互換: PM_AI_SPLASH_XLWINGS は xlwings_splash_log で処理（現在は常に無効）。"""
+    """PM_AI_SPLASH_XLWINGS=1 のとき xlwings で UserForm txtExecutionLog にログ行を送る。"""
     try:
         import atexit
 
