@@ -84,6 +84,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static final double MIN_SIDE_COL_WIDTH = 48;
     private static final double MAX_SIDE_COL_WIDTH = 800;
 
+    /**
+     * 1 行あたりのタイムライン {@link Canvas} 幅（px）の上限。超過時はスロット幅を自動縮小し、GPU／ヒープ負荷を抑える。
+     */
+    private static final double MAX_TIMELINE_CANVAS_WIDTH_PX = 3072.0;
+
+    /**
+     * 行 Canvas 合計の RGBA ナイーブ見積（MiB）がこの値を超えると、面積比の平方根でスロット幅を追加縮小する。
+     */
+    private static final double MAX_NAIVE_ROW_CANVAS_RGBA_TOTAL_MIB = 512.0;
+
     private static final Group MEASURE_ROOT = new Group();
     private static final Scene MEASURE_SCENE = new Scene(MEASURE_ROOT, 4000, 4000);
 
@@ -526,6 +536,35 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         GanttPalette palette = GanttPalette.forTheme(theme);
         Font barFont = resolveBarFont(barFontFamily, layout.barFontSize);
 
+        double timelineOuterPad =
+                Math.min(
+                        layout.rowHeight * 0.32,
+                        Math.max(5 * layout.zoom, barFont.getSize() * 0.9));
+        double cellBodyH = layout.rowHeight + 2 * timelineOuterPad;
+
+        final int slotColCount = parsed.slotColumnIndices().size();
+        int approxTimelineRows = countNonSectionDisplayRows(parsed.displayRows());
+        double timelineWidthBeforeCap = slotColCount * layout.slotWidth;
+        double naiveTotalRgbaMiB =
+                (timelineWidthBeforeCap * cellBodyH * approxTimelineRows * 4.0)
+                        / (1024.0 * 1024.0);
+        double slotWidthScale = 1.0;
+        if (timelineWidthBeforeCap > MAX_TIMELINE_CANVAS_WIDTH_PX) {
+            slotWidthScale =
+                    Math.min(
+                            slotWidthScale,
+                            MAX_TIMELINE_CANVAS_WIDTH_PX / timelineWidthBeforeCap);
+        }
+        if (naiveTotalRgbaMiB > MAX_NAIVE_ROW_CANVAS_RGBA_TOTAL_MIB && naiveTotalRgbaMiB > 0) {
+            slotWidthScale =
+                    Math.min(
+                            slotWidthScale,
+                            Math.sqrt(MAX_NAIVE_ROW_CANVAS_RGBA_TOTAL_MIB / naiveTotalRgbaMiB));
+        }
+        if (slotWidthScale < 1.0 - 1e-12) {
+            layout = layout.scaleSlotWidth(slotWidthScale);
+        }
+
         List<MachineColumnPlan> machPlans =
                 computeMachineColumnPlans(effCols, parsed.displayRows());
         List<DateColumnPlan> datePlans = computeDateColumnPlans(effCols, parsed.displayRows());
@@ -536,7 +575,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         double procW = effectiveLeftColWidth(auto.procW(), processColWidthOverridePx);
         double leftTotal = dateW + machW + procW;
 
-        double timelineWidth = parsed.slotColumnIndices().size() * layout.slotWidth;
+        double timelineWidth = slotColCount * layout.slotWidth;
         /*
          * 幅・高さが 0 に近い／Prism の Canvas バックバッファ生成失敗時に NGCanvas で NPE になるのを避ける。
          * GPU ドライバ由来の不具合が残る場合は JVM に -Dprism.order=sw を試す。
@@ -601,12 +640,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         }
         leftBodyGrid.setCache(false);
         rightBodyGrid.setCache(false);
-
-        double timelineOuterPad =
-                Math.min(
-                        layout.rowHeight * 0.32,
-                        Math.max(5 * layout.zoom, barFont.getSize() * 0.9));
-        double cellBodyH = layout.rowHeight + 2 * timelineOuterPad;
 
         int machineColorSeq = -1;
         int gridR = 0;
@@ -866,17 +899,21 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         root.setBottom(hint);
         // #region agent log
         try {
-            int slotCols = parsed.slotColumnIndices().size();
             double rowRgbMiB =
                     (canvasTimelineW * cellBodyH * 4.0 * (double) timelineCanvasRowCount)
                             / (1024.0 * 1024.0);
             double headerRgbMiB =
                     (canvasTimelineW * canvasHeaderH * 4.0) / (1024.0 * 1024.0);
             Map<String, Object> data = new LinkedHashMap<>(AgentDebugLog.debugHeapMap());
-            data.put("slotColumns", slotCols);
+            data.put("slotColumns", slotColCount);
             data.put("timelineWidthPx", canvasTimelineW);
+            data.put("timelineWidthBeforeScalePx", timelineWidthBeforeCap);
+            data.put("slotWidthAutoScale", Math.round(slotWidthScale * 10000.0) / 10000.0);
             data.put("rowBodyHeightPx", cellBodyH);
             data.put("timelineCanvasRowCount", timelineCanvasRowCount);
+            data.put("approxNonSectionRows", approxTimelineRows);
+            data.put("firstDataRowNonEmptySlotCount", countNonEmptySlotsFirstDataRow(parsed.displayRows()));
+            data.put("firstDataRowSlotSample", firstDataRowSlotSample(parsed.displayRows(), 8));
             data.put("naiveRowCanvasRgbMiB", Math.round(rowRgbMiB * 10.0) / 10.0);
             data.put("naiveHeaderCanvasRgbMiB", Math.round(headerRgbMiB * 10.0) / 10.0);
             data.put(
@@ -1206,6 +1243,30 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     Math.max(8, 9 * z),
                     (int) Math.round(52 * z),
                     (int) Math.round(4 * z));
+        }
+
+        /** スロット列幅のみ変更（OOM 対策の自動縮小）。行高・フォントは維持する。 */
+        LayoutMetrics scaleSlotWidth(double factor) {
+            if (!Double.isFinite(factor) || factor <= 0) {
+                return this;
+            }
+            if (Math.abs(factor - 1.0) < 1e-15) {
+                return this;
+            }
+            return new LayoutMetrics(
+                    zoom,
+                    slotWidth * factor,
+                    rowHeight,
+                    sectionRowHeight,
+                    headerHeight,
+                    labelMinWidth,
+                    labelMaxWidth,
+                    rowLabelFontSize,
+                    axisFontSize,
+                    barFontSize,
+                    progressFontSize,
+                    progressCellWidth,
+                    progressGap);
         }
     }
 
@@ -2054,6 +2115,61 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         }
         String v = row.get(i);
         return v != null ? v.strip() : "";
+    }
+
+    private static int countNonSectionDisplayRows(List<DisplayRow> displayRows) {
+        int n = 0;
+        for (DisplayRow dr : displayRows) {
+            if (dr.sectionBanner() == null) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /** 先頭のデータ行（セクション行以外）における非空スロットセル数。バー非表示調査用 */
+    private static int countNonEmptySlotsFirstDataRow(List<DisplayRow> displayRows) {
+        for (DisplayRow dr : displayRows) {
+            if (dr.sectionBanner() != null) {
+                continue;
+            }
+            List<String> cells = dr.cellsInSlots();
+            if (cells == null) {
+                return 0;
+            }
+            int c = 0;
+            for (String s : cells) {
+                if (s != null && !s.isBlank()) {
+                    c++;
+                }
+            }
+            return c;
+        }
+        return 0;
+    }
+
+    private static List<String> firstDataRowSlotSample(List<DisplayRow> displayRows, int maxCells) {
+        List<String> out = new ArrayList<>();
+        for (DisplayRow dr : displayRows) {
+            if (dr.sectionBanner() != null) {
+                continue;
+            }
+            List<String> cells = dr.cellsInSlots();
+            if (cells == null) {
+                return out;
+            }
+            int lim = Math.min(maxCells, cells.size());
+            for (int i = 0; i < lim; i++) {
+                String s = cells.get(i);
+                String t = s == null ? "" : s.strip();
+                if (t.length() > 40) {
+                    t = t.substring(0, 40) + "…";
+                }
+                out.add(t);
+            }
+            return out;
+        }
+        return out;
     }
 
     private record ParseResult(
