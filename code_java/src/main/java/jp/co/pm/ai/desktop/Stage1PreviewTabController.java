@@ -345,4 +345,9 @@ public final class Stage1PreviewTabController {
     void clearColumnFiltersAndSort() {
         SpreadsheetTabularSupport.clearAllFiltersAndSort(spreadsheetView);
     }
+
+    @FXML
+    private void onClearColumnFiltersAction() {
+        clearColumnFiltersAndSort();
+    }
 }

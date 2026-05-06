@@ -48,6 +48,7 @@ public final class SpreadsheetTabularSupport {
         if (view == null) {
             return;
         }
+        SpreadsheetMultiColumnFilterCoordinator.clear(view);
         view.setFilteredRow(SPREADSHEET_FILTER_ROW);
         ObservableList<SpreadsheetColumn> cols = view.getColumns();
         for (int i = 0; i < cols.size(); i++) {
@@ -63,6 +64,7 @@ public final class SpreadsheetTabularSupport {
         if (view == null) {
             return;
         }
+        SpreadsheetMultiColumnFilterCoordinator.clear(view);
         view.setFilteredRow(SPREADSHEET_FILTER_ROW);
         ObservableList<SpreadsheetColumn> cols = view.getColumns();
         for (int i = 0; i < cols.size(); i++) {
@@ -77,6 +79,7 @@ public final class SpreadsheetTabularSupport {
         if (view == null) {
             return;
         }
+        SpreadsheetMultiColumnFilterCoordinator.clear(view);
         view.setComparator(null);
         view.setHiddenRows(new BitSet());
         ExcelLikeSpreadsheetFilter.resetAllColumnSortMenus(view);

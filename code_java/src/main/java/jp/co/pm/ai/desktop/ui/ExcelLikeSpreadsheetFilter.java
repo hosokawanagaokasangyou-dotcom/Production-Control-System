@@ -1,6 +1,5 @@
 package jp.co.pm.ai.desktop.ui;
 
-import java.util.BitSet;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Locale;
@@ -48,7 +47,6 @@ public final class ExcelLikeSpreadsheetFilter implements Filter {
     private final int column;
 
     private MenuButton menuButton;
-    private BitSet hiddenRows;
 
     private final Set<String> stringSet = new HashSet<>();
 
@@ -173,15 +171,9 @@ public final class ExcelLikeSpreadsheetFilter implements Filter {
                             (obs, oldVal, newVal) -> {
                                 if (Boolean.TRUE.equals(newVal)) {
                                     prepareMenuSession();
-                                    hiddenRows = new BitSet(spv.getHiddenRows().size());
-                                    hiddenRows.or(spv.getHiddenRows());
                                 } else {
-                                    int n = spv.getGrid().getRowCount();
-                                    for (int i = spv.getFilteredRow() + 1; i < n; ++i) {
-                                        String text = spv.getGrid().getRows().get(i).get(column).getText();
-                                        hiddenRows.set(i, !copySet.contains(text));
-                                    }
-                                    spv.setHiddenRows(hiddenRows);
+                                    SpreadsheetMultiColumnFilterCoordinator.commitColumnSelection(
+                                            spv, column, new HashSet<>(copySet));
                                 }
                             });
         }
@@ -205,10 +197,9 @@ public final class ExcelLikeSpreadsheetFilter implements Filter {
 
     private void rebuildUniqueValues() {
         stringSet.clear();
-        int n = spv.getGrid().getRowCount();
-        for (int i = spv.getFilteredRow() + 1; i < n; ++i) {
-            stringSet.add(spv.getGrid().getRows().get(i).get(column).getText());
-        }
+        stringSet.addAll(
+                SpreadsheetMultiColumnFilterCoordinator.distinctValuesForColumnRespectingOtherFilters(
+                        spv, column));
     }
 
     /** Visible rows seed copySet (same as FilterBase). */

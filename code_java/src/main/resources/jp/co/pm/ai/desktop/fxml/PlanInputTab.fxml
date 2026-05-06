@@ -45,6 +45,8 @@
     <HBox alignment="CENTER_LEFT" spacing="8.0">
         <Button mnemonicParsing="false" onAction="#onRowUpAction" prefWidth="40.0" text="↑" />
         <Button mnemonicParsing="false" onAction="#onRowDownAction" prefWidth="40.0" text="↓" />
+        <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
+                onAction="#onClearColumnFiltersAction"/>
     </HBox>
     <HBox fx:id="columnStripHostRow" alignment="CENTER_LEFT" spacing="8.0" style="-fx-alignment: CENTER_LEFT;">
         <HBox fx:id="columnStripHost" spacing="0.0" />

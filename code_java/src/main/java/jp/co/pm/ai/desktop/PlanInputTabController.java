@@ -593,4 +593,9 @@ public final class PlanInputTabController {
     void clearColumnFiltersAndSort() {
         SpreadsheetTabularSupport.clearAllFiltersAndSort(spreadsheetView);
     }
+
+    @FXML
+    private void onClearColumnFiltersAction() {
+        clearColumnFiltersAndSort();
+    }
 }

@@ -25,6 +25,8 @@
         <TextField fx:id="sheetField" HBox.hgrow="ALWAYS" />
         <Label text="列幅(px)" />
         <TextField fx:id="colWidthField" maxWidth="72.0" prefWidth="72.0" promptText="112" />
+        <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
+                onAction="#onClearColumnFiltersAction"/>
     </HBox>
     <HBox spacing="8.0" />
     <HBox fx:id="columnStripHostRow" alignment="CENTER_LEFT" spacing="8.0" style="-fx-alignment: CENTER_LEFT;">

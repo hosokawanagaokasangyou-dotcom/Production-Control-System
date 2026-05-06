@@ -20,6 +20,8 @@
         </padding>
         <Button fx:id="refreshButton" mnemonicParsing="false" text="更新"
                 onAction="#onRefreshButtonAction"/>
+        <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
+                onAction="#onClearColumnFiltersAction"/>
         <Label fx:id="statusLabel"/>
     </HBox>
     <Label fx:id="hintLabel" wrapText="true"/>

@@ -370,4 +370,9 @@ public final class ActualsStatusTabController {
         }
         table.getSortOrder().clear();
     }
+
+    @FXML
+    private void onClearColumnFiltersAction() {
+        clearColumnFiltersAndSort();
+    }
 }

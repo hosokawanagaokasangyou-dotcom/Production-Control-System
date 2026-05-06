@@ -115,9 +115,6 @@ public final class MainShellController {
     private TabPane tabPane;
 
     @FXML
-    private Button clearTabFiltersButton;
-
-    @FXML
     private ComboBox<DesktopTheme> themeCombo;
 
     @FXML
@@ -429,8 +426,6 @@ public final class MainShellController {
                                         DesktopSessionStateStore.save(collectDesktopSession());
                                     }
                                 });
-        updateClearTabFiltersButton(
-                resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem()));
     }
 
     /**
@@ -511,42 +506,6 @@ public final class MainShellController {
         DesktopTheme t = currentDesktopTheme();
         for (Scene s : themeTrackedSecondaryScenes) {
             t.applyTo(s);
-        }
-    }
-
-    private boolean tabSupportsClearFilters(Tab leafTab) {
-        Tab t = leafTab;
-        return t == mainShellTabEnv
-                || t == mainShellTabPlanInput
-                || t == mainShellTabStage1Preview
-                || t == mainShellTabActualsStatus
-                || t == mainShellTabResultDispatch
-                || t == mainShellTabPlanResultViewer;
-    }
-
-    private void updateClearTabFiltersButton(Tab selectedLeaf) {
-        if (clearTabFiltersButton == null) {
-            return;
-        }
-        clearTabFiltersButton.setDisable(!tabSupportsClearFilters(selectedLeaf));
-    }
-
-    @FXML
-    private void onClearTabFiltersAction() {
-        Tab sel =
-                resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
-        if (sel == mainShellTabEnv) {
-            envTabController.clearColumnFiltersAndSort();
-        } else if (sel == mainShellTabPlanInput) {
-            planInputTabController.clearColumnFiltersAndSort();
-        } else if (sel == mainShellTabStage1Preview) {
-            stage1PreviewTabController.clearColumnFiltersAndSort();
-        } else if (sel == mainShellTabActualsStatus) {
-            actualsStatusTabController.clearColumnFiltersAndSort();
-        } else if (sel == mainShellTabResultDispatch) {
-            resultDispatchTableTabController.clearColumnFiltersAndSort();
-        } else if (sel == mainShellTabPlanResultViewer) {
-            planResultViewerTabController.clearColumnFiltersAndSort();
         }
     }
 
@@ -991,7 +950,6 @@ public final class MainShellController {
         if (prev == mainShellTabRun && now != mainShellTabRun) {
             DesktopSessionStateStore.save(collectDesktopSession());
         }
-        updateClearTabFiltersButton(now);
     }
 
     /**
@@ -1115,7 +1073,6 @@ public final class MainShellController {
         }
         lastEffectiveShellLeaf =
                 resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
-        updateClearTabFiltersButton(lastEffectiveShellLeaf);
     }
 
     private static void collectLayoutLeafKeys(MainShellTabLayoutNode n, Set<String> out) {
@@ -1181,7 +1138,6 @@ public final class MainShellController {
         }
         lastEffectiveShellLeaf =
                 resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
-        updateClearTabFiltersButton(lastEffectiveShellLeaf);
     }
 
     /** ツリー編集結果を適用しセッション保存まで行う。 */

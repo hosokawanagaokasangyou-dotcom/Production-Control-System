@@ -506,6 +506,11 @@ public final class EnvTabController {
         applyEnvSearchPredicate();
     }
 
+    @FXML
+    private void onClearColumnFiltersAction() {
+        clearColumnFiltersAndSort();
+    }
+
     /**
      * Opens the folder path from a folder-type env row (Explorer / Finder / xdg-open).
      */

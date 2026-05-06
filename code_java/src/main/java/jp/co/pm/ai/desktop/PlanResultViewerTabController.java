@@ -413,6 +413,11 @@ public final class PlanResultViewerTabController {
         }
     }
 
+    @FXML
+    private void onClearColumnFiltersAction() {
+        clearColumnFiltersAndSort();
+    }
+
     private void reloadFromFields() {
         if (contentPane == null) {
             return;

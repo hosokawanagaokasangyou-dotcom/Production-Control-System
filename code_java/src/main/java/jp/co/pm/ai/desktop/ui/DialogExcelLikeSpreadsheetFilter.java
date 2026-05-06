@@ -258,16 +258,9 @@ public final class DialogExcelLikeSpreadsheetFilter implements Filter {
         snapshotHidden.or(spv.getHiddenRows());
 
         Runnable commit =
-                () -> {
-                    int n = spv.getGrid().getRowCount();
-                    BitSet hiddenRows = new BitSet(Math.max(n, spv.getHiddenRows().size()));
-                    hiddenRows.or(spv.getHiddenRows());
-                    for (int i = spv.getFilteredRow() + 1; i < n; ++i) {
-                        String text = spv.getGrid().getRows().get(i).get(column).getText();
-                        hiddenRows.set(i, !copySet.contains(text));
-                    }
-                    spv.setHiddenRows(hiddenRows);
-                };
+                () ->
+                        SpreadsheetMultiColumnFilterCoordinator.commitColumnSelection(
+                                spv, column, new HashSet<>(copySet));
 
         Runnable restore =
                 () -> {
@@ -327,10 +320,9 @@ public final class DialogExcelLikeSpreadsheetFilter implements Filter {
 
     private void rebuildUniqueValues() {
         stringSet.clear();
-        int n = spv.getGrid().getRowCount();
-        for (int i = spv.getFilteredRow() + 1; i < n; ++i) {
-            stringSet.add(spv.getGrid().getRows().get(i).get(column).getText());
-        }
+        stringSet.addAll(
+                SpreadsheetMultiColumnFilterCoordinator.distinctValuesForColumnRespectingOtherFilters(
+                        spv, column));
     }
 
     private void refreshCopySetFromVisibleRows() {

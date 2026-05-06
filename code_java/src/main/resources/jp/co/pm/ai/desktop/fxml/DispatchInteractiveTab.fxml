@@ -24,6 +24,8 @@
     <HBox alignment="CENTER_LEFT" spacing="8.0">
         <Button fx:id="loadButton" mnemonicParsing="false" text="再読み"
                 onAction="#onLoadAction"/>
+        <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
+                onAction="#onClearColumnFiltersAction"/>
         <Button fx:id="saveButton" mnemonicParsing="false" text="保存 (JSON+xlsx)"
                 onAction="#onSaveAction"/>
         <Button fx:id="reloadCalendarButton" mnemonicParsing="false"

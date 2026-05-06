@@ -21,6 +21,8 @@
             <HBox alignment="CENTER_LEFT" spacing="8.0">
                 <Label fx:id="envSearchLabel"/>
                 <TextField fx:id="envSearchField" maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+                <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
+                        onAction="#onClearColumnFiltersAction"/>
             </HBox>
             <HBox fx:id="columnStripHost" spacing="0.0"/>
             <TableView fx:id="envTable" minHeight="180.0" prefHeight="260.0"/>

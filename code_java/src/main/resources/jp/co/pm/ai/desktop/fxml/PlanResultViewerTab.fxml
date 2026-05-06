@@ -30,6 +30,8 @@
         <Button fx:id="syncLatestButton" mnemonicParsing="false"
                 text="最新JSONを検索"
                 onAction="#onSyncLatestButtonAction"/>
+        <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
+                onAction="#onClearColumnFiltersAction"/>
         <Label styleClass="pm-plan-result-viewer-hint-inline"
                text="フォント・行・JSONパスは下のアコーディオンで設定"/>
     </HBox>

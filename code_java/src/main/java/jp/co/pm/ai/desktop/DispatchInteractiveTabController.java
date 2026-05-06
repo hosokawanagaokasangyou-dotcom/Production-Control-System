@@ -300,6 +300,16 @@ public final class DispatchInteractiveTabController {
         Platform.runLater(this::reloadFromDiskQuiet);
     }
 
+    void clearColumnFiltersAndSort() {
+        SpreadsheetTabularSupport.clearAllFiltersAndSort(wideSpreadsheet);
+        SpreadsheetTabularSupport.clearAllFiltersAndSort(byDaySpreadsheet);
+    }
+
+    @FXML
+    private void onClearColumnFiltersAction() {
+        clearColumnFiltersAndSort();
+    }
+
     /**
      * 実行タブと同様、段階1／段階2 実行中は「段階2 実行」を無効化する（{@link MainShellController#applyRunTabGating} から）。
      */

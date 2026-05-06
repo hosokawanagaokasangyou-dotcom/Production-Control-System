@@ -339,4 +339,9 @@ public final class ResultDispatchTableTabController {
     void clearColumnFiltersAndSort() {
         SpreadsheetTabularSupport.clearAllFiltersAndSort(spreadsheetView);
     }
+
+    @FXML
+    private void onClearColumnFiltersAction() {
+        clearColumnFiltersAndSort();
+    }
 }
