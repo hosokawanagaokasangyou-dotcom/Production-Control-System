@@ -15,19 +15,23 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * コンソール無し exe 起動時に標準エラーが見えないため、起動診断を複数パスへミラー追記する。
+ * Append startup diagnostics when stdout/stderr are invisible (e.g. GUI-only exe).
+ *
+ * <p>Writes the same line to:
  *
  * <ul>
- *   <li>優先: {@code ~/.pm-ai-desktop/startup.log}
- *   <li>ミラー: {@code java.io.tmpdir/pm-ai-desktop-startup.log}（権限・ホーム異常時の退避）
- *   <li>ミラー: {@code user.dir/pm-ai-desktop-startup.log}（配布フォルダ直下。{@code user.dir} 合わせ後に有用）
+ *   <li>{@code ~/.pm-ai-desktop/startup.log}
+ *   <li>{@code java.io.tmpdir/pm-ai-desktop-startup.log}
+ *   <li>{@code user.dir/pm-ai-desktop-startup.log}
  * </ul>
+ *
+ * <p>Javadoc and comments are ASCII-only so javac never fails on broken source encoding on Windows.
  */
 public final class StartupCrashLog {
 
     private StartupCrashLog() {}
 
-    /** 未捕捉例外をログファイルへ残す（JavaFX 以外のスレッド向け）。 */
+    /** Install default uncaught-exception handler that appends to log files. */
     public static void installUncaughtExceptionLogging() {
         Thread.setDefaultUncaughtExceptionHandler(
                 (thread, ex) -> {
@@ -36,14 +40,12 @@ public final class StartupCrashLog {
                 });
     }
 
-    /**
-     * 既定の案内用パス（ホーム配下）。実際のログは {@link #append(String)} が複製先にも書く。
-     */
+    /** Primary path shown to users; {@link #append(String)} may also mirror elsewhere. */
     public static Path logPathForUserHint() {
         return Paths.get(System.getProperty("user.home", "."), ".pm-ai-desktop", "startup.log");
     }
 
-    /** ユーザ／TMP／カレントへ同一行を書く。どれか一つでも成功すればよいが、可能ならすべてに追記する。 */
+    /** Append one line to every writable target path. */
     public static void append(String message) {
         String line =
                 "[" + Instant.now() + "] " + message + System.lineSeparator();
@@ -60,7 +62,7 @@ public final class StartupCrashLog {
                         StandardOpenOption.CREATE,
                         StandardOpenOption.APPEND);
             } catch (IOException | RuntimeException ignored) {
-                /* 次の候補へ */
+                // try next path
             }
         }
     }
@@ -82,7 +84,7 @@ public final class StartupCrashLog {
                             .normalize()
                             .resolve("pm-ai-desktop-startup.log"));
         } catch (RuntimeException ignored) {
-            /* ignore */
+            // ignore
         }
         return new ArrayList<>(set);
     }

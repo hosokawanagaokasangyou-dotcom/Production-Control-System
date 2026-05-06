@@ -462,7 +462,23 @@ $pythonSrc = [string](Ensure-PythonEmbedCache -WorkspaceRootPath $WorkspaceRoot 
 Write-Host "--- Step 4: jpackage（type=$PackageType）---" -ForegroundColor Cyan
 $dist = Join-Path $Root 'dist'
 if (Test-Path $dist) {
-    Remove-Item -Recurse -Force $dist
+    $removed = $false
+    for ($i = 0; $i -lt 5; $i++) {
+        try {
+            Remove-Item -Recurse -Force -LiteralPath $dist -ErrorAction Stop
+            $removed = $true
+            break
+        }
+        catch {
+            Write-Warning "dist を削除できません（別プロセスが使用中の可能性）。PmAiDesktop/python を終了し、エクスプローラで dist を閉じてから再試行します (${i}/5)..."
+            Start-Sleep -Seconds 2
+        }
+    }
+    if (-not $removed -and (Test-Path $dist)) {
+        throw @'
+dist を削除できません。PmAiDesktop.exe / ターミナル / エクスプローラで code_java\dist を開いている場合は閉じてから package_app.ps1 を再実行してください。
+'@
+    }
 }
 
 $javaOpts = @(
@@ -525,11 +541,12 @@ $postJpkgRoot = Join-Path $dist $APP_NAME
 if (Test-Path -LiteralPath $postJpkgRoot) {
     $bundledJavaExe = Join-Path $postJpkgRoot 'runtime\bin\java.exe'
     if (-not (Test-Path -LiteralPath $bundledJavaExe)) {
-        throw @"
-jpackage 直後の成果物に同梱 JRE (runtime\bin\java.exe) がありません: $bundledJavaExe
-・Windows Defender 等が java.exe を隔離していないか確認してください。
-・--type が app-image で dist\$APP_NAME が生成されているか確認してください。
-・PmAiDesktop.exe と同階層の runtime は「Java 用」。pm-ai-data\runtime（Python 用）とは別です。
+        Write-Warning @"
+同梱 JRE (runtime\bin\java.exe) が見つかりません: $bundledJavaExe
+・古い dist が残っている場合は上記の dist 削除に失敗している可能性があります。
+・Windows Defender が java.exe を隔離していないか確認してください。
+・PmAiDesktop.exe と同階層の runtime は Java 用。pm-ai-data\runtime は Python 用です。
+Step 5 は続行しますが、成果物が不完全な場合があります。
 "@
     }
 }
