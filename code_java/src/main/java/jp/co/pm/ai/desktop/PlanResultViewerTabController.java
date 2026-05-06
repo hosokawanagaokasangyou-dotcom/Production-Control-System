@@ -5,10 +5,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -53,6 +55,7 @@ import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.ui.GanttScheduleStyle;
 import jp.co.pm.ai.desktop.ui.GanttSheetKind;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
+import jp.co.pm.ai.desktop.ui.SpreadsheetMultiColumnFilterCoordinator;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
@@ -130,6 +133,12 @@ public final class PlanResultViewerTabController {
 
     /** Active spreadsheet views for 列フィルタ解除 */
     private final List<SpreadsheetView> registeredSpreadsheets = new ArrayList<>();
+
+    /**
+     * 各表の列フィルタ JSON 保存に使う（見出し順は {@link SheetGridState#headersRef} に追随）。
+     */
+    private final WeakHashMap<SpreadsheetView, Runnable> planResultFilterSaveActionByView =
+            new WeakHashMap<>();
 
     private final AtomicReference<TableColumnOrderPersistence.PlanResultViewerUiPrefs> planResultUiPrefs =
             new AtomicReference<>(TableColumnOrderPersistence.loadPlanResultViewerUiPrefs());
@@ -410,6 +419,10 @@ public final class PlanResultViewerTabController {
     void clearColumnFiltersAndSort() {
         for (SpreadsheetView v : registeredSpreadsheets) {
             SpreadsheetTabularSupport.clearAllFiltersAndSort(v);
+            Runnable flushFilters = planResultFilterSaveActionByView.get(v);
+            if (flushFilters != null) {
+                flushFilters.run();
+            }
         }
     }
 
@@ -423,6 +436,7 @@ public final class PlanResultViewerTabController {
             return;
         }
         registeredSpreadsheets.clear();
+        planResultFilterSaveActionByView.clear();
         reloadButton.setDisable(true);
         syncLatestButton.setDisable(true);
         try {
@@ -700,6 +714,13 @@ public final class PlanResultViewerTabController {
                             gridState.suppressPersistence.set(false);
                         }
                         registeredSpreadsheets.add(sv);
+                        planResultFilterSaveActionByView.put(
+                                sv,
+                                () ->
+                                        TableColumnOrderPersistence.savePlanResultViewerColumnFiltersForScope(
+                                                gridState.scopeKey,
+                                                sv,
+                                                new ArrayList<>(gridState.headersRef)));
                     };
             Runnable loadGantt =
                     () -> {
@@ -732,6 +753,13 @@ public final class PlanResultViewerTabController {
                             gridState.suppressPersistence.set(false);
                         }
                         registeredSpreadsheets.add(sv);
+                        planResultFilterSaveActionByView.put(
+                                sv,
+                                () ->
+                                        TableColumnOrderPersistence.savePlanResultViewerColumnFiltersForScope(
+                                                gridState.scopeKey,
+                                                sv,
+                                                new ArrayList<>(gridState.headersRef)));
                     };
             st.setUserData(new Runnable[] {loadTable, loadGantt});
 
@@ -795,6 +823,7 @@ public final class PlanResultViewerTabController {
             SpreadsheetView sv,
             SheetGridState gridState,
             AtomicBoolean layoutWatcherInstalled) {
+        SpreadsheetMultiColumnFilterCoordinator.setColumnFilterCommitHook(sv, null);
         List<Double> widths =
                 TableColumnOrderPersistence.resolveWidthsForHeaders(
                         gridState.headersRef, gridState.persistedLayout.get(), 112);
@@ -804,6 +833,31 @@ public final class PlanResultViewerTabController {
         SpreadsheetTabularSupport.applyFixedLeadingColumnsLater(
                 sv, gridState.headerColumnCount.get());
         applyPlanResultPresentation(sv);
+        gridState.suppressPersistence.set(true);
+        try {
+            for (TableColumnOrderPersistence.PlanResultViewerColumnFilterSpec f :
+                    TableColumnOrderPersistence.loadPlanResultViewerColumnFiltersForScope(
+                            gridState.scopeKey)) {
+                int idx = gridState.headersRef.indexOf(f.title());
+                if (idx >= 0) {
+                    SpreadsheetMultiColumnFilterCoordinator.commitColumnSelection(
+                            sv, idx, new HashSet<>(f.values()));
+                }
+            }
+        } finally {
+            gridState.suppressPersistence.set(false);
+        }
+        SpreadsheetMultiColumnFilterCoordinator.setColumnFilterCommitHook(
+                sv,
+                () -> {
+                    if (gridState.suppressPersistence.get()) {
+                        return;
+                    }
+                    Runnable save = planResultFilterSaveActionByView.get(sv);
+                    if (save != null) {
+                        save.run();
+                    }
+                });
         if (layoutWatcherInstalled.compareAndSet(false, true)) {
             TableColumnOrderPersistence.installSpreadsheetColumnLayoutWatcherForScope(
                     sv,

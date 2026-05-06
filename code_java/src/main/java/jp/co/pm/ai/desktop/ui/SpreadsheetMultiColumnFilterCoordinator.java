@@ -22,7 +22,48 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
     private static final WeakHashMap<SpreadsheetView, Map<Integer, Set<String>>> COLUMN_ALLOWED =
             new WeakHashMap<>();
 
+    /** 計画結果ビューアなど、フィルタ確定後にストレージへ保存するフック（1 ビュー 1 つ）。 */
+    private static final WeakHashMap<SpreadsheetView, Runnable> COLUMN_FILTER_COMMIT_HOOK =
+            new WeakHashMap<>();
+
     private SpreadsheetMultiColumnFilterCoordinator() {}
+
+    /**
+     * 列フィルタ適用（{@link #commitColumnSelection}）のたびに呼ぶデバウンス用フック。
+     * {@link #clear} では呼ばない（再構築時の clear が保存で空上書きしないため）。
+     */
+    public static void setColumnFilterCommitHook(SpreadsheetView spv, Runnable hook) {
+        if (spv == null) {
+            return;
+        }
+        if (hook == null) {
+            COLUMN_FILTER_COMMIT_HOOK.remove(spv);
+        } else {
+            COLUMN_FILTER_COMMIT_HOOK.put(spv, hook);
+        }
+    }
+
+    private static void runColumnFilterCommitHook(SpreadsheetView spv) {
+        Runnable r = COLUMN_FILTER_COMMIT_HOOK.get(spv);
+        if (r != null) {
+            r.run();
+        }
+    }
+
+    /**
+     * 永続化用に、列インデックスごとの許容値集合のコピーを返す（空なら空マップ）。
+     */
+    public static Map<Integer, Set<String>> copyColumnAllowedByIndex(SpreadsheetView spv) {
+        Map<Integer, Set<String>> map = COLUMN_ALLOWED.get(spv);
+        if (map == null || map.isEmpty()) {
+            return Map.of();
+        }
+        Map<Integer, Set<String>> out = new HashMap<>();
+        for (Map.Entry<Integer, Set<String>> e : map.entrySet()) {
+            out.put(e.getKey(), new HashSet<>(e.getValue()));
+        }
+        return out;
+    }
 
     public static void clear(SpreadsheetView spv) {
         if (spv != null) {
@@ -51,6 +92,7 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
             COLUMN_ALLOWED.remove(spv);
         }
         recomputeHiddenRows(spv);
+        runColumnFilterCommitHook(spv);
     }
 
     /**

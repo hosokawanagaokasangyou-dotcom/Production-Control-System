@@ -48,6 +48,9 @@ public final class TableColumnOrderPersistence {
     /** {@link #planResultViewerSheetScopeKey} 用のルート JSON キー接尾辞（見出し固定列数）。 */
     private static final String SCOPE_SUFFIX_HEADER_COLUMN_COUNT = "_headerColumnCount";
 
+    /** {@link #planResultViewerSheetScopeKey} 用の列フィルタ状態（許容値）。 */
+    private static final String SCOPE_SUFFIX_COLUMN_FILTERS = "_columnFilters";
+
     private static final String KEY_PLAN_RESULT_FONT_FAMILY = "planResultViewer_ui_fontFamily";
 
     private static final String KEY_PLAN_RESULT_FONT_SIZE = "planResultViewer_ui_fontSize";
@@ -68,6 +71,14 @@ public final class TableColumnOrderPersistence {
             return new PlanResultViewerUiPrefs("", 12.0, 100.0, false);
         }
     }
+
+    /**
+     * 計画結果 JSON ビューアの列フィルタ（見出し名と許容セル文字列）。並べ替え状態は含まない。
+     *
+     * @param title 列見出し（論理列の識別）
+     * @param values 表示を許可するセル文字列の集合をリスト化したもの
+     */
+    public record PlanResultViewerColumnFilterSpec(String title, List<String> values) {}
 
     private static String headerCountKey(TableId id) {
         return id.jsonKey() + "_headerColumnCount";
@@ -356,6 +367,89 @@ public final class TableColumnOrderPersistence {
         }
     }
 
+    /** {@link #planResultViewerSheetScopeKey} 単位で保存した列フィルタを読む。 */
+    public static List<PlanResultViewerColumnFilterSpec> loadPlanResultViewerColumnFiltersForScope(
+            String scopeKey) {
+        try {
+            if (scopeKey == null || scopeKey.isEmpty() || !Files.isRegularFile(STORE)) {
+                return List.of();
+            }
+            JsonNode root = JSON.readTree(STORE.toFile());
+            if (root == null || !root.isObject()) {
+                return List.of();
+            }
+            JsonNode arr = root.get(scopeKey + SCOPE_SUFFIX_COLUMN_FILTERS);
+            if (arr == null || !arr.isArray()) {
+                return List.of();
+            }
+            List<PlanResultViewerColumnFilterSpec> out = new ArrayList<>();
+            for (JsonNode n : arr) {
+                if (n == null || !n.isObject()) {
+                    continue;
+                }
+                String title = n.path("title").asText("");
+                JsonNode vals = n.get("values");
+                if (vals == null || !vals.isArray()) {
+                    continue;
+                }
+                List<String> vs = new ArrayList<>();
+                for (JsonNode v : vals) {
+                    vs.add(v != null && v.isTextual() ? v.asText("") : v.asText(""));
+                }
+                if (!title.isEmpty()) {
+                    out.add(new PlanResultViewerColumnFilterSpec(title, vs));
+                }
+            }
+            return out;
+        } catch (IOException e) {
+            return List.of();
+        }
+    }
+
+    /** 計画結果ビューアの列フィルタ状態を {@link #planResultViewerSheetScopeKey} に保存する。 */
+    public static void savePlanResultViewerColumnFiltersForScope(
+            String scopeKey, SpreadsheetView view, List<String> headersInOrder) {
+        if (scopeKey == null || scopeKey.isEmpty() || view == null) {
+            return;
+        }
+        try {
+            Map<Integer, Set<String>> byIndex =
+                    SpreadsheetMultiColumnFilterCoordinator.copyColumnAllowedByIndex(view);
+            Files.createDirectories(STORE.getParent());
+            ObjectNode root;
+            if (Files.isRegularFile(STORE)) {
+                JsonNode tree = JSON.readTree(STORE.toFile());
+                root =
+                        tree != null && tree.isObject()
+                                ? (ObjectNode) tree.deepCopy()
+                                : JSON.createObjectNode();
+            } else {
+                root = JSON.createObjectNode();
+            }
+            ArrayNode arr = JSON.createArrayNode();
+            for (Map.Entry<Integer, Set<String>> e : byIndex.entrySet()) {
+                int idx = e.getKey();
+                if (headersInOrder == null
+                        || idx < 0
+                        || idx >= headersInOrder.size()) {
+                    continue;
+                }
+                String title = headersInOrder.get(idx);
+                ObjectNode o = JSON.createObjectNode();
+                o.put("title", title != null ? title : "");
+                ArrayNode vals = JSON.createArrayNode();
+                for (String s : e.getValue()) {
+                    vals.add(s != null ? s : "");
+                }
+                o.set("values", vals);
+                arr.add(o);
+            }
+            root.set(scopeKey + SCOPE_SUFFIX_COLUMN_FILTERS, arr);
+            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
+        } catch (IOException ignored) {
+        }
+    }
+
     public static PlanResultViewerUiPrefs loadPlanResultViewerUiPrefs() {
         try {
             if (!Files.isRegularFile(STORE)) {
@@ -550,17 +644,22 @@ public final class TableColumnOrderPersistence {
                 .addListener(
                         (ListChangeListener<SpreadsheetColumn>)
                                 c -> {
-                                    if (suppressSave.getAsBoolean()) {
-                                        return;
-                                    }
                                     while (c.next()) {
+                                        /*
+                                         * setGrid などで suppress 中に列が差し替わると、ここで全体 return すると
+                                         * 新しい SpreadsheetColumn に幅リスナが付かず、以後の列幅が永続化されない。
+                                         * 追加列へのリスナ装着は suppress に関わらず行い、保存だけ抑制する。
+                                         */
                                         if (c.wasAdded()) {
                                             for (SpreadsheetColumn col : c.getAddedSubList()) {
                                                 attachSpreadsheetWidthDebounced(
                                                         col, scheduleWidthSave, suppressSave);
                                             }
                                         }
-                                        if (c.wasPermutated() || c.wasAdded() || c.wasRemoved()) {
+                                        if (!suppressSave.getAsBoolean()
+                                                && (c.wasPermutated()
+                                                        || c.wasAdded()
+                                                        || c.wasRemoved())) {
                                             debounce.stop();
                                             flushWidths.run();
                                             return;
