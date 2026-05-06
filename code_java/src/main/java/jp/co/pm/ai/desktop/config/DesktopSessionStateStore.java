@@ -559,6 +559,25 @@ public final class DesktopSessionStateStore {
         String s3bo = nzFallback(text(n, "stage3BorderHex"), d.stage3BorderHex());
         String s3h = nzFallback(text(n, "stage3HoverBgHex"), d.stage3HoverBgHex());
         String s3p = nzFallback(text(n, "stage3PressedBgHex"), d.stage3PressedBgHex());
+        boolean cd = optionalBoolean(n, "customizeDialogButtons", false);
+        double dpr = optionalDouble(n, "dialogPrimaryBorderRadius", d.dialogPrimaryBorderRadius());
+        double dpv = optionalDouble(n, "dialogPrimaryPaddingV", d.dialogPrimaryPaddingV());
+        double dph = optionalDouble(n, "dialogPrimaryPaddingH", d.dialogPrimaryPaddingH());
+        double df = optionalDouble(n, "dialogPrimaryFontPx", d.dialogPrimaryFontPx());
+        String dpbg = nzFallback(text(n, "dialogPrimaryBgHex"), d.dialogPrimaryBgHex());
+        String dpbo = nzFallback(text(n, "dialogPrimaryBorderHex"), d.dialogPrimaryBorderHex());
+        String dpt = nzFallback(text(n, "dialogPrimaryTextHex"), d.dialogPrimaryTextHex());
+        String dphov = nzFallback(text(n, "dialogPrimaryHoverBgHex"), d.dialogPrimaryHoverBgHex());
+        String dppr = nzFallback(text(n, "dialogPrimaryPressedBgHex"), d.dialogPrimaryPressedBgHex());
+        double dsr = optionalDouble(n, "dialogSecondaryBorderRadius", d.dialogSecondaryBorderRadius());
+        double dsv = optionalDouble(n, "dialogSecondaryPaddingV", d.dialogSecondaryPaddingV());
+        double dsh = optionalDouble(n, "dialogSecondaryPaddingH", d.dialogSecondaryPaddingH());
+        double dsf = optionalDouble(n, "dialogSecondaryFontPx", d.dialogSecondaryFontPx());
+        String dsbg = nzFallback(text(n, "dialogSecondaryBgHex"), d.dialogSecondaryBgHex());
+        String dsbo = nzFallback(text(n, "dialogSecondaryBorderHex"), d.dialogSecondaryBorderHex());
+        String dst = nzFallback(text(n, "dialogSecondaryTextHex"), d.dialogSecondaryTextHex());
+        String dshov = nzFallback(text(n, "dialogSecondaryHoverBgHex"), d.dialogSecondaryHoverBgHex());
+        String dspr = nzFallback(text(n, "dialogSecondaryPressedBgHex"), d.dialogSecondaryPressedBgHex());
         return new PushButtonDesignPrefs(
                 cg,
                 gr,
@@ -588,7 +607,26 @@ public final class DesktopSessionStateStore {
                 s3b,
                 s3bo,
                 s3h,
-                s3p);
+                s3p,
+                cd,
+                dpr,
+                dpv,
+                dph,
+                df,
+                dpbg,
+                dpbo,
+                dpt,
+                dphov,
+                dppr,
+                dsr,
+                dsv,
+                dsh,
+                dsf,
+                dsbg,
+                dsbo,
+                dst,
+                dshov,
+                dspr);
     }
 
     private static String nzFallback(String s, String def) {
@@ -630,6 +668,25 @@ public final class DesktopSessionStateStore {
         o.put("stage3BorderHex", p.stage3BorderHex());
         o.put("stage3HoverBgHex", p.stage3HoverBgHex());
         o.put("stage3PressedBgHex", p.stage3PressedBgHex());
+        o.put("customizeDialogButtons", p.customizeDialogButtons());
+        o.put("dialogPrimaryBorderRadius", p.dialogPrimaryBorderRadius());
+        o.put("dialogPrimaryPaddingV", p.dialogPrimaryPaddingV());
+        o.put("dialogPrimaryPaddingH", p.dialogPrimaryPaddingH());
+        o.put("dialogPrimaryFontPx", p.dialogPrimaryFontPx());
+        o.put("dialogPrimaryBgHex", p.dialogPrimaryBgHex());
+        o.put("dialogPrimaryBorderHex", p.dialogPrimaryBorderHex());
+        o.put("dialogPrimaryTextHex", p.dialogPrimaryTextHex());
+        o.put("dialogPrimaryHoverBgHex", p.dialogPrimaryHoverBgHex());
+        o.put("dialogPrimaryPressedBgHex", p.dialogPrimaryPressedBgHex());
+        o.put("dialogSecondaryBorderRadius", p.dialogSecondaryBorderRadius());
+        o.put("dialogSecondaryPaddingV", p.dialogSecondaryPaddingV());
+        o.put("dialogSecondaryPaddingH", p.dialogSecondaryPaddingH());
+        o.put("dialogSecondaryFontPx", p.dialogSecondaryFontPx());
+        o.put("dialogSecondaryBgHex", p.dialogSecondaryBgHex());
+        o.put("dialogSecondaryBorderHex", p.dialogSecondaryBorderHex());
+        o.put("dialogSecondaryTextHex", p.dialogSecondaryTextHex());
+        o.put("dialogSecondaryHoverBgHex", p.dialogSecondaryHoverBgHex());
+        o.put("dialogSecondaryPressedBgHex", p.dialogSecondaryPressedBgHex());
     }
 
     private static void putWindowGeometry(ObjectNode root, DesktopSessionState state) {

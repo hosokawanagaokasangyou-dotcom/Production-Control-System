@@ -68,7 +68,97 @@ public final class PushButtonCssEmitter {
             sb.append("    -fx-opacity: 0.5;\n");
             sb.append("}\n");
         }
+        if (p.customizeDialogButtons()) {
+            appendDialogButtons(sb, p);
+        }
         return sb.toString();
+    }
+
+    /** {@link javafx.scene.control.DialogPane} 内のボタン（Alert の OK／キャンセル、確認ダイアログなど）。 */
+    private static void appendDialogButtons(StringBuilder sb, PushButtonDesignPrefs p) {
+        appendDialogVariant(
+                sb,
+                ".dialog-pane .button:default",
+                p.dialogPrimaryBorderRadius(),
+                p.dialogPrimaryPaddingV(),
+                p.dialogPrimaryPaddingH(),
+                p.dialogPrimaryFontPx(),
+                p.dialogPrimaryBgHex(),
+                p.dialogPrimaryBorderHex(),
+                p.dialogPrimaryTextHex(),
+                p.dialogPrimaryHoverBgHex(),
+                p.dialogPrimaryPressedBgHex());
+        appendDialogVariant(
+                sb,
+                ".dialog-pane .button:not(:default)",
+                p.dialogSecondaryBorderRadius(),
+                p.dialogSecondaryPaddingV(),
+                p.dialogSecondaryPaddingH(),
+                p.dialogSecondaryFontPx(),
+                p.dialogSecondaryBgHex(),
+                p.dialogSecondaryBorderHex(),
+                p.dialogSecondaryTextHex(),
+                p.dialogSecondaryHoverBgHex(),
+                p.dialogSecondaryPressedBgHex());
+        sb.append(".dialog-pane .button:default:focused,\n");
+        sb.append(".dialog-pane .button:not(:default):focused {\n");
+        sb.append("    -fx-focus-color: transparent;\n");
+        sb.append("    -fx-faint-focus-color: transparent;\n");
+        sb.append("}\n");
+    }
+
+    private static void appendDialogVariant(
+            StringBuilder sb,
+            String selector,
+            double radius,
+            double padV,
+            double padH,
+            double fontPx,
+            String bg,
+            String border,
+            String text,
+            String hover,
+            String pressed) {
+        sb.append(selector)
+                .append(" {\n")
+                .append("    -fx-cursor: hand;\n")
+                .append("    -fx-background-color: ")
+                .append(hexOrFallback(bg, "#808080"))
+                .append(";\n")
+                .append("    -fx-border-color: ")
+                .append(hexOrFallback(border, "#606060"))
+                .append(";\n")
+                .append("    -fx-border-width: 1;\n")
+                .append("    -fx-border-radius: ")
+                .append(fmtPx(radius, 6))
+                .append(";\n")
+                .append("    -fx-background-radius: ")
+                .append(fmtPx(radius, 6))
+                .append(";\n")
+                .append("    -fx-padding: ")
+                .append(fmtPx(padV, 8))
+                .append(" ")
+                .append(fmtPx(padH, 14))
+                .append(";\n")
+                .append("    -fx-font-size: ")
+                .append(fmtPx(fontPx, 12))
+                .append(";\n")
+                .append("    -fx-text-fill: ")
+                .append(hexOrFallback(text, "#202020"))
+                .append(";\n")
+                .append("}\n");
+        sb.append(selector)
+                .append(":hover {\n")
+                .append("    -fx-background-color: ")
+                .append(hexOrFallback(hover, hexOrFallback(bg, "#808080")))
+                .append(";\n")
+                .append("}\n");
+        sb.append(selector)
+                .append(":pressed {\n")
+                .append("    -fx-background-color: ")
+                .append(hexOrFallback(pressed, hexOrFallback(hover, hexOrFallback(bg, "#808080"))))
+                .append(";\n")
+                .append("}\n");
     }
 
     private static void appendGeneral(StringBuilder sb, PushButtonDesignPrefs p) {

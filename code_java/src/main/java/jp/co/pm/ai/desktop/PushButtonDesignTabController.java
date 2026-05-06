@@ -17,7 +17,7 @@ import jp.co.pm.ai.desktop.config.PushButtonDesignPrefs;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 
 /**
- * アプリ内プッシュボタン（実行タブの通常ボタン・段階実行ボタン）の見た目オーバーライド。
+ * アプリ内プッシュボタン（実行タブの通常ボタン・段階実行ボタン・ダイアログの OK／キャンセル等）の見た目オーバーライド。
  */
 public final class PushButtonDesignTabController {
 
@@ -144,6 +144,87 @@ public final class PushButtonDesignTabController {
     @FXML
     private ColorPicker stage3PressedPicker;
 
+    @FXML
+    private CheckBox customDialogCheck;
+
+    @FXML
+    private Slider dialogPrimaryRadiusSlider;
+
+    @FXML
+    private Label dialogPrimaryRadiusLabel;
+
+    @FXML
+    private Slider dialogPrimaryPadVSlider;
+
+    @FXML
+    private Label dialogPrimaryPadVLabel;
+
+    @FXML
+    private Slider dialogPrimaryPadHSlider;
+
+    @FXML
+    private Label dialogPrimaryPadHLabel;
+
+    @FXML
+    private Slider dialogPrimaryFontSlider;
+
+    @FXML
+    private Label dialogPrimaryFontLabel;
+
+    @FXML
+    private ColorPicker dialogPrimaryBgPicker;
+
+    @FXML
+    private ColorPicker dialogPrimaryBorderPicker;
+
+    @FXML
+    private ColorPicker dialogPrimaryTextPicker;
+
+    @FXML
+    private ColorPicker dialogPrimaryHoverPicker;
+
+    @FXML
+    private ColorPicker dialogPrimaryPressedPicker;
+
+    @FXML
+    private Slider dialogSecondaryRadiusSlider;
+
+    @FXML
+    private Label dialogSecondaryRadiusLabel;
+
+    @FXML
+    private Slider dialogSecondaryPadVSlider;
+
+    @FXML
+    private Label dialogSecondaryPadVLabel;
+
+    @FXML
+    private Slider dialogSecondaryPadHSlider;
+
+    @FXML
+    private Label dialogSecondaryPadHLabel;
+
+    @FXML
+    private Slider dialogSecondaryFontSlider;
+
+    @FXML
+    private Label dialogSecondaryFontLabel;
+
+    @FXML
+    private ColorPicker dialogSecondaryBgPicker;
+
+    @FXML
+    private ColorPicker dialogSecondaryBorderPicker;
+
+    @FXML
+    private ColorPicker dialogSecondaryTextPicker;
+
+    @FXML
+    private ColorPicker dialogSecondaryHoverPicker;
+
+    @FXML
+    private ColorPicker dialogSecondaryPressedPicker;
+
     private MainShellController shell;
 
     private PauseTransition persistDelay;
@@ -168,6 +249,9 @@ public final class PushButtonDesignTabController {
             }
             if (customStageCheck != null) {
                 customStageCheck.setSelected(false);
+            }
+            if (customDialogCheck != null) {
+                customDialogCheck.setSelected(false);
             }
             syncLabelsFromSliders();
         } finally {
@@ -203,6 +287,7 @@ public final class PushButtonDesignTabController {
         PushButtonDesignPrefs d = PushButtonDesignPrefs.builtInSnapshot();
         boolean g = customGeneralCheck != null && customGeneralCheck.isSelected();
         boolean st = customStageCheck != null && customStageCheck.isSelected();
+        boolean dlg = customDialogCheck != null && customDialogCheck.isSelected();
         return new PushButtonDesignPrefs(
                 g,
                 generalRadiusSlider != null ? generalRadiusSlider.getValue() : d.generalBorderRadius(),
@@ -232,7 +317,26 @@ public final class PushButtonDesignTabController {
                 colorToHex(stage3BgPicker, d.stage3BgHex()),
                 colorToHex(stage3BorderPicker, d.stage3BorderHex()),
                 colorToHex(stage3HoverPicker, d.stage3HoverBgHex()),
-                colorToHex(stage3PressedPicker, d.stage3PressedBgHex()));
+                colorToHex(stage3PressedPicker, d.stage3PressedBgHex()),
+                dlg,
+                dialogPrimaryRadiusSlider != null ? dialogPrimaryRadiusSlider.getValue() : d.dialogPrimaryBorderRadius(),
+                dialogPrimaryPadVSlider != null ? dialogPrimaryPadVSlider.getValue() : d.dialogPrimaryPaddingV(),
+                dialogPrimaryPadHSlider != null ? dialogPrimaryPadHSlider.getValue() : d.dialogPrimaryPaddingH(),
+                dialogPrimaryFontSlider != null ? dialogPrimaryFontSlider.getValue() : d.dialogPrimaryFontPx(),
+                colorToHex(dialogPrimaryBgPicker, d.dialogPrimaryBgHex()),
+                colorToHex(dialogPrimaryBorderPicker, d.dialogPrimaryBorderHex()),
+                colorToHex(dialogPrimaryTextPicker, d.dialogPrimaryTextHex()),
+                colorToHex(dialogPrimaryHoverPicker, d.dialogPrimaryHoverBgHex()),
+                colorToHex(dialogPrimaryPressedPicker, d.dialogPrimaryPressedBgHex()),
+                dialogSecondaryRadiusSlider != null ? dialogSecondaryRadiusSlider.getValue() : d.dialogSecondaryBorderRadius(),
+                dialogSecondaryPadVSlider != null ? dialogSecondaryPadVSlider.getValue() : d.dialogSecondaryPaddingV(),
+                dialogSecondaryPadHSlider != null ? dialogSecondaryPadHSlider.getValue() : d.dialogSecondaryPaddingH(),
+                dialogSecondaryFontSlider != null ? dialogSecondaryFontSlider.getValue() : d.dialogSecondaryFontPx(),
+                colorToHex(dialogSecondaryBgPicker, d.dialogSecondaryBgHex()),
+                colorToHex(dialogSecondaryBorderPicker, d.dialogSecondaryBorderHex()),
+                colorToHex(dialogSecondaryTextPicker, d.dialogSecondaryTextHex()),
+                colorToHex(dialogSecondaryHoverPicker, d.dialogSecondaryHoverBgHex()),
+                colorToHex(dialogSecondaryPressedPicker, d.dialogSecondaryPressedBgHex()));
     }
 
     /** メイン {@link javafx.scene.Scene} 準備後に呼び、保存済みプリファレンスを反映する。 */
@@ -251,6 +355,9 @@ public final class PushButtonDesignTabController {
             if (customStageCheck != null) {
                 customStageCheck.setSelected(true);
             }
+            if (customDialogCheck != null) {
+                customDialogCheck.setSelected(true);
+            }
             syncLabelsFromSliders();
         } finally {
             suppress = false;
@@ -266,6 +373,9 @@ public final class PushButtonDesignTabController {
         }
         if (customStageCheck != null) {
             customStageCheck.setSelected(x.customizeStageRunButtons());
+        }
+        if (customDialogCheck != null) {
+            customDialogCheck.setSelected(x.customizeDialogButtons());
         }
         if (generalRadiusSlider != null) {
             generalRadiusSlider.setValue(Math.clamp(x.generalBorderRadius(), 0, 24));
@@ -315,6 +425,42 @@ public final class PushButtonDesignTabController {
         setPicker(stage3BorderPicker, x.stage3BorderHex());
         setPicker(stage3HoverPicker, x.stage3HoverBgHex());
         setPicker(stage3PressedPicker, x.stage3PressedBgHex());
+
+        if (dialogPrimaryRadiusSlider != null) {
+            dialogPrimaryRadiusSlider.setValue(Math.clamp(x.dialogPrimaryBorderRadius(), 0, 24));
+        }
+        if (dialogPrimaryPadVSlider != null) {
+            dialogPrimaryPadVSlider.setValue(Math.clamp(x.dialogPrimaryPaddingV(), 0, 32));
+        }
+        if (dialogPrimaryPadHSlider != null) {
+            dialogPrimaryPadHSlider.setValue(Math.clamp(x.dialogPrimaryPaddingH(), 0, 48));
+        }
+        if (dialogPrimaryFontSlider != null) {
+            dialogPrimaryFontSlider.setValue(Math.clamp(x.dialogPrimaryFontPx(), 9, 24));
+        }
+        setPicker(dialogPrimaryBgPicker, x.dialogPrimaryBgHex());
+        setPicker(dialogPrimaryBorderPicker, x.dialogPrimaryBorderHex());
+        setPicker(dialogPrimaryTextPicker, x.dialogPrimaryTextHex());
+        setPicker(dialogPrimaryHoverPicker, x.dialogPrimaryHoverBgHex());
+        setPicker(dialogPrimaryPressedPicker, x.dialogPrimaryPressedBgHex());
+
+        if (dialogSecondaryRadiusSlider != null) {
+            dialogSecondaryRadiusSlider.setValue(Math.clamp(x.dialogSecondaryBorderRadius(), 0, 24));
+        }
+        if (dialogSecondaryPadVSlider != null) {
+            dialogSecondaryPadVSlider.setValue(Math.clamp(x.dialogSecondaryPaddingV(), 0, 32));
+        }
+        if (dialogSecondaryPadHSlider != null) {
+            dialogSecondaryPadHSlider.setValue(Math.clamp(x.dialogSecondaryPaddingH(), 0, 48));
+        }
+        if (dialogSecondaryFontSlider != null) {
+            dialogSecondaryFontSlider.setValue(Math.clamp(x.dialogSecondaryFontPx(), 9, 24));
+        }
+        setPicker(dialogSecondaryBgPicker, x.dialogSecondaryBgHex());
+        setPicker(dialogSecondaryBorderPicker, x.dialogSecondaryBorderHex());
+        setPicker(dialogSecondaryTextPicker, x.dialogSecondaryTextHex());
+        setPicker(dialogSecondaryHoverPicker, x.dialogSecondaryHoverBgHex());
+        setPicker(dialogSecondaryPressedPicker, x.dialogSecondaryPressedBgHex());
     }
 
     private static void setPicker(ColorPicker cp, String hex) {
@@ -347,11 +493,20 @@ public final class PushButtonDesignTabController {
                     refreshStylesheetOnShell();
                     schedulePersist();
                 };
+        Runnable onDialogEdit =
+                () -> {
+                    touchCustomizeDialog();
+                    refreshStylesheetOnShell();
+                    schedulePersist();
+                };
         if (customGeneralCheck != null) {
             customGeneralCheck.selectedProperty().addListener((o, a, b) -> onCheckboxToggle.run());
         }
         if (customStageCheck != null) {
             customStageCheck.selectedProperty().addListener((o, a, b) -> onCheckboxToggle.run());
+        }
+        if (customDialogCheck != null) {
+            customDialogCheck.selectedProperty().addListener((o, a, b) -> onCheckboxToggle.run());
         }
 
         wireSlider(generalRadiusSlider, generalRadiusLabel, "%.0f", onGeneralEdit);
@@ -383,6 +538,26 @@ public final class PushButtonDesignTabController {
         addPicker(stage3BorderPicker, onStageEdit);
         addPicker(stage3HoverPicker, onStageEdit);
         addPicker(stage3PressedPicker, onStageEdit);
+
+        wireSlider(dialogPrimaryRadiusSlider, dialogPrimaryRadiusLabel, "%.0f", onDialogEdit);
+        wireSlider(dialogPrimaryPadVSlider, dialogPrimaryPadVLabel, "%.0f", onDialogEdit);
+        wireSlider(dialogPrimaryPadHSlider, dialogPrimaryPadHLabel, "%.0f", onDialogEdit);
+        wireSlider(dialogPrimaryFontSlider, dialogPrimaryFontLabel, "%.0f", onDialogEdit);
+        wireSlider(dialogSecondaryRadiusSlider, dialogSecondaryRadiusLabel, "%.0f", onDialogEdit);
+        wireSlider(dialogSecondaryPadVSlider, dialogSecondaryPadVLabel, "%.0f", onDialogEdit);
+        wireSlider(dialogSecondaryPadHSlider, dialogSecondaryPadHLabel, "%.0f", onDialogEdit);
+        wireSlider(dialogSecondaryFontSlider, dialogSecondaryFontLabel, "%.0f", onDialogEdit);
+
+        addPicker(dialogPrimaryBgPicker, onDialogEdit);
+        addPicker(dialogPrimaryBorderPicker, onDialogEdit);
+        addPicker(dialogPrimaryTextPicker, onDialogEdit);
+        addPicker(dialogPrimaryHoverPicker, onDialogEdit);
+        addPicker(dialogPrimaryPressedPicker, onDialogEdit);
+        addPicker(dialogSecondaryBgPicker, onDialogEdit);
+        addPicker(dialogSecondaryBorderPicker, onDialogEdit);
+        addPicker(dialogSecondaryTextPicker, onDialogEdit);
+        addPicker(dialogSecondaryHoverPicker, onDialogEdit);
+        addPicker(dialogSecondaryPressedPicker, onDialogEdit);
     }
 
     /** スライダー／色の操作でカスタムが自動オンになる（チェックを先に付ける必要をなくす）。 */
@@ -401,6 +576,15 @@ public final class PushButtonDesignTabController {
         }
         if (!customStageCheck.isSelected()) {
             customStageCheck.setSelected(true);
+        }
+    }
+
+    private void touchCustomizeDialog() {
+        if (suppress || customDialogCheck == null) {
+            return;
+        }
+        if (!customDialogCheck.isSelected()) {
+            customDialogCheck.setSelected(true);
         }
     }
 
@@ -454,6 +638,30 @@ public final class PushButtonDesignTabController {
         }
         if (stageRadiusSlider != null && stageRadiusLabel != null) {
             stageRadiusLabel.setText(String.format("%.0f", stageRadiusSlider.getValue()));
+        }
+        if (dialogPrimaryRadiusSlider != null && dialogPrimaryRadiusLabel != null) {
+            dialogPrimaryRadiusLabel.setText(String.format("%.0f", dialogPrimaryRadiusSlider.getValue()));
+        }
+        if (dialogPrimaryPadVSlider != null && dialogPrimaryPadVLabel != null) {
+            dialogPrimaryPadVLabel.setText(String.format("%.0f", dialogPrimaryPadVSlider.getValue()));
+        }
+        if (dialogPrimaryPadHSlider != null && dialogPrimaryPadHLabel != null) {
+            dialogPrimaryPadHLabel.setText(String.format("%.0f", dialogPrimaryPadHSlider.getValue()));
+        }
+        if (dialogPrimaryFontSlider != null && dialogPrimaryFontLabel != null) {
+            dialogPrimaryFontLabel.setText(String.format("%.0f", dialogPrimaryFontSlider.getValue()));
+        }
+        if (dialogSecondaryRadiusSlider != null && dialogSecondaryRadiusLabel != null) {
+            dialogSecondaryRadiusLabel.setText(String.format("%.0f", dialogSecondaryRadiusSlider.getValue()));
+        }
+        if (dialogSecondaryPadVSlider != null && dialogSecondaryPadVLabel != null) {
+            dialogSecondaryPadVLabel.setText(String.format("%.0f", dialogSecondaryPadVSlider.getValue()));
+        }
+        if (dialogSecondaryPadHSlider != null && dialogSecondaryPadHLabel != null) {
+            dialogSecondaryPadHLabel.setText(String.format("%.0f", dialogSecondaryPadHSlider.getValue()));
+        }
+        if (dialogSecondaryFontSlider != null && dialogSecondaryFontLabel != null) {
+            dialogSecondaryFontLabel.setText(String.format("%.0f", dialogSecondaryFontSlider.getValue()));
         }
     }
 

@@ -1,10 +1,10 @@
 package jp.co.pm.ai.desktop.config;
 
 /**
- * 実行タブなどのプッシュボタン見た目のユーザー上書き（セッション保存用）。
+ * 実行タブ・ダイアログなどのプッシュボタン見た目のユーザー上書き（セッション保存用）。
  *
- * <p>{@link #customizeGeneralRunTab()} または {@link #customizeStageRunButtons()} が {@code true} のときだけ
- * 生成 CSS がシーンに適用される。プッシュボタン編集タブではスライダー／色を変えると自動で {@code true} になる。
+ * <p>各 {@code customize*} が {@code true} のときだけ該当ブロックの生成 CSS がシーンに適用される。
+ * プッシュボタン編集タブではスライダー／色を変えると該当グループのカスタムが自動でオンになる。
  */
 public record PushButtonDesignPrefs(
         boolean customizeGeneralRunTab,
@@ -35,7 +35,26 @@ public record PushButtonDesignPrefs(
         String stage3BgHex,
         String stage3BorderHex,
         String stage3HoverBgHex,
-        String stage3PressedBgHex) {
+        String stage3PressedBgHex,
+        boolean customizeDialogButtons,
+        double dialogPrimaryBorderRadius,
+        double dialogPrimaryPaddingV,
+        double dialogPrimaryPaddingH,
+        double dialogPrimaryFontPx,
+        String dialogPrimaryBgHex,
+        String dialogPrimaryBorderHex,
+        String dialogPrimaryTextHex,
+        String dialogPrimaryHoverBgHex,
+        String dialogPrimaryPressedBgHex,
+        double dialogSecondaryBorderRadius,
+        double dialogSecondaryPaddingV,
+        double dialogSecondaryPaddingH,
+        double dialogSecondaryFontPx,
+        String dialogSecondaryBgHex,
+        String dialogSecondaryBorderHex,
+        String dialogSecondaryTextHex,
+        String dialogSecondaryHoverBgHex,
+        String dialogSecondaryPressedBgHex) {
 
     /** 組み込み CSS に任せる（上書きスタイルシートを載せない）。 */
     public static PushButtonDesignPrefs inactiveDefaults() {
@@ -69,7 +88,26 @@ public record PushButtonDesignPrefs(
                 b.stage3BgHex,
                 b.stage3BorderHex,
                 b.stage3HoverBgHex,
-                b.stage3PressedBgHex);
+                b.stage3PressedBgHex,
+                false,
+                b.dialogPrimaryBorderRadius,
+                b.dialogPrimaryPaddingV,
+                b.dialogPrimaryPaddingH,
+                b.dialogPrimaryFontPx,
+                b.dialogPrimaryBgHex,
+                b.dialogPrimaryBorderHex,
+                b.dialogPrimaryTextHex,
+                b.dialogPrimaryHoverBgHex,
+                b.dialogPrimaryPressedBgHex,
+                b.dialogSecondaryBorderRadius,
+                b.dialogSecondaryPaddingV,
+                b.dialogSecondaryPaddingH,
+                b.dialogSecondaryFontPx,
+                b.dialogSecondaryBgHex,
+                b.dialogSecondaryBorderHex,
+                b.dialogSecondaryTextHex,
+                b.dialogSecondaryHoverBgHex,
+                b.dialogSecondaryPressedBgHex);
     }
 
     /** {@code pm-ai-desktop.css} に近い既定値（カスタム編集の初期値）。 */
@@ -104,11 +142,30 @@ public record PushButtonDesignPrefs(
                 b.stage3BgHex,
                 b.stage3BorderHex,
                 b.stage3HoverBgHex,
-                b.stage3PressedBgHex);
+                b.stage3PressedBgHex,
+                true,
+                b.dialogPrimaryBorderRadius,
+                b.dialogPrimaryPaddingV,
+                b.dialogPrimaryPaddingH,
+                b.dialogPrimaryFontPx,
+                b.dialogPrimaryBgHex,
+                b.dialogPrimaryBorderHex,
+                b.dialogPrimaryTextHex,
+                b.dialogPrimaryHoverBgHex,
+                b.dialogPrimaryPressedBgHex,
+                b.dialogSecondaryBorderRadius,
+                b.dialogSecondaryPaddingV,
+                b.dialogSecondaryPaddingH,
+                b.dialogSecondaryFontPx,
+                b.dialogSecondaryBgHex,
+                b.dialogSecondaryBorderHex,
+                b.dialogSecondaryTextHex,
+                b.dialogSecondaryHoverBgHex,
+                b.dialogSecondaryPressedBgHex);
     }
 
     public boolean anyCustomizationEnabled() {
-        return customizeGeneralRunTab || customizeStageRunButtons;
+        return customizeGeneralRunTab || customizeStageRunButtons || customizeDialogButtons;
     }
 
     private static final class BuiltIn {
@@ -145,6 +202,28 @@ public record PushButtonDesignPrefs(
         final String stage3BorderHex = "#166534";
         final String stage3HoverBgHex = "#16a34a";
         final String stage3PressedBgHex = "#14532d";
+
+        /** OK・既定（:default）向け。 */
+        final double dialogPrimaryBorderRadius = 6;
+        final double dialogPrimaryPaddingV = 8;
+        final double dialogPrimaryPaddingH = 18;
+        final double dialogPrimaryFontPx = 12;
+        final String dialogPrimaryBgHex = "#2563eb";
+        final String dialogPrimaryBorderHex = "#1d4ed8";
+        final String dialogPrimaryTextHex = "#ffffff";
+        final String dialogPrimaryHoverBgHex = "#3b82f6";
+        final String dialogPrimaryPressedBgHex = "#1e40af";
+
+        /** キャンセル等（:not(:default)）向け。 */
+        final double dialogSecondaryBorderRadius = 6;
+        final double dialogSecondaryPaddingV = 8;
+        final double dialogSecondaryPaddingH = 14;
+        final double dialogSecondaryFontPx = 12;
+        final String dialogSecondaryBgHex = "#f4f4f4";
+        final String dialogSecondaryBorderHex = "#c8c8c8";
+        final String dialogSecondaryTextHex = "#2b2b2b";
+        final String dialogSecondaryHoverBgHex = "#e8e8e8";
+        final String dialogSecondaryPressedBgHex = "#dedede";
 
         private BuiltIn() {}
     }

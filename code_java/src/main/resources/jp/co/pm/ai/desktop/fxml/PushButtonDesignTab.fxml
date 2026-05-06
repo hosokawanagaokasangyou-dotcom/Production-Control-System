@@ -20,7 +20,7 @@
         <Insets bottom="8.0" left="12.0" right="12.0" top="8.0"/>
     </padding>
     <Label styleClass="pm-plan-result-viewer-hint-inline"
-           text="スライダーや色を変更すると、そのグループのカスタムが自動でオンになり、アプリに反映されます。チェックを外すと組み込み見た目に戻します（設定値は残ります）。通常ボタン＝実行タブの段階実行以外、段階ボタン＝アプリ全体の同種ボタンです。"/>
+           text="スライダーや色を変更すると、そのグループのカスタムが自動でオンになり、アプリに反映されます。チェックを外すと組み込み見た目に戻します。実行タブ／段階ボタンに加え、確認ダイアログの OK・キャンセル等も編集できます。"/>
     <BorderPane fx:id="previewRunPane" styleClass="pm-run-tab">
         <padding>
             <Insets bottom="8.0" left="8.0" right="8.0" top="8.0"/>
@@ -35,6 +35,15 @@
             </HBox>
         </center>
     </BorderPane>
+    <HBox alignment="CENTER_LEFT" spacing="12.0">
+        <Label text="ダイアログ例"/>
+        <VBox spacing="8.0" style="-fx-padding: 10;" styleClass="dialog-pane">
+            <HBox alignment="CENTER_RIGHT" spacing="8.0">
+                <Button mnemonicParsing="false" text="キャンセル"/>
+                <Button defaultButton="true" mnemonicParsing="false" text="OK"/>
+            </HBox>
+        </VBox>
+    </HBox>
     <HBox alignment="CENTER_LEFT" spacing="12.0">
         <Button mnemonicParsing="false" onAction="#onResetToBuiltInAction" text="既定の見た目に戻す"/>
     </HBox>
@@ -188,6 +197,106 @@
                             <HBox alignment="CENTER_LEFT" spacing="8.0">
                                 <Label prefWidth="140.0" text="押下"/>
                                 <ColorPicker fx:id="stage3PressedPicker"/>
+                            </HBox>
+                        </VBox>
+                    </content>
+                </TitledPane>
+                <TitledPane animated="true" text="ダイアログ・アラート（OK／キャンセルなど）" expanded="false">
+                    <content>
+                        <VBox spacing="8.0">
+                            <padding>
+                                <Insets bottom="8.0" left="8.0" right="8.0" top="8.0"/>
+                            </padding>
+                            <CheckBox fx:id="customDialogCheck" text="このグループをカスタムする"/>
+                            <Label styleClass="pm-section-title" text="主ボタン（OK・適用・既定）"/>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="角丸"/>
+                                <Slider fx:id="dialogPrimaryRadiusSlider" blockIncrement="0.5" max="24.0" min="0.0"
+                                        prefWidth="160.0" value="6.0"/>
+                                <Label fx:id="dialogPrimaryRadiusLabel" text="6"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="縦パディング"/>
+                                <Slider fx:id="dialogPrimaryPadVSlider" blockIncrement="0.5" max="32.0" min="0.0"
+                                        prefWidth="160.0" value="8.0"/>
+                                <Label fx:id="dialogPrimaryPadVLabel" text="8"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="横パディング"/>
+                                <Slider fx:id="dialogPrimaryPadHSlider" blockIncrement="0.5" max="48.0" min="0.0"
+                                        prefWidth="160.0" value="18.0"/>
+                                <Label fx:id="dialogPrimaryPadHLabel" text="18"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="フォント(px)"/>
+                                <Slider fx:id="dialogPrimaryFontSlider" blockIncrement="0.5" max="24.0" min="9.0"
+                                        prefWidth="160.0" value="12.0"/>
+                                <Label fx:id="dialogPrimaryFontLabel" text="12"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="背景"/>
+                                <ColorPicker fx:id="dialogPrimaryBgPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="枠"/>
+                                <ColorPicker fx:id="dialogPrimaryBorderPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="文字色"/>
+                                <ColorPicker fx:id="dialogPrimaryTextPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="ホバー背景"/>
+                                <ColorPicker fx:id="dialogPrimaryHoverPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="押下背景"/>
+                                <ColorPicker fx:id="dialogPrimaryPressedPicker"/>
+                            </HBox>
+                            <Label styleClass="pm-section-title" text="副ボタン（キャンセルなど）"/>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="角丸"/>
+                                <Slider fx:id="dialogSecondaryRadiusSlider" blockIncrement="0.5" max="24.0" min="0.0"
+                                        prefWidth="160.0" value="6.0"/>
+                                <Label fx:id="dialogSecondaryRadiusLabel" text="6"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="縦パディング"/>
+                                <Slider fx:id="dialogSecondaryPadVSlider" blockIncrement="0.5" max="32.0" min="0.0"
+                                        prefWidth="160.0" value="8.0"/>
+                                <Label fx:id="dialogSecondaryPadVLabel" text="8"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="横パディング"/>
+                                <Slider fx:id="dialogSecondaryPadHSlider" blockIncrement="0.5" max="48.0" min="0.0"
+                                        prefWidth="160.0" value="14.0"/>
+                                <Label fx:id="dialogSecondaryPadHLabel" text="14"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="フォント(px)"/>
+                                <Slider fx:id="dialogSecondaryFontSlider" blockIncrement="0.5" max="24.0" min="9.0"
+                                        prefWidth="160.0" value="12.0"/>
+                                <Label fx:id="dialogSecondaryFontLabel" text="12"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="背景"/>
+                                <ColorPicker fx:id="dialogSecondaryBgPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="枠"/>
+                                <ColorPicker fx:id="dialogSecondaryBorderPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="文字色"/>
+                                <ColorPicker fx:id="dialogSecondaryTextPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="ホバー背景"/>
+                                <ColorPicker fx:id="dialogSecondaryHoverPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="押下背景"/>
+                                <ColorPicker fx:id="dialogSecondaryPressedPicker"/>
                             </HBox>
                         </VBox>
                     </content>
