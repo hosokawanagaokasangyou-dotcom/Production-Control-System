@@ -120,7 +120,10 @@ public final class MainShellTabOrganizerTabController {
                     .getSelectedItems()
                     .addListener(
                             (ListChangeListener<TreeItem<OrgRow>>)
-                                    c -> rebuildOrganizerVisualTree());
+                                    c -> {
+                                        syncOrganizerSideFields();
+                                        rebuildOrganizerVisualTree();
+                                    });
         }
         installHeaderGlowControls();
         reloadTreeFromShell();
@@ -189,6 +192,35 @@ public final class MainShellTabOrganizerTabController {
     private void syncOrganizerSideFields() {
         syncGroupNameField();
         syncTabAliasField();
+        syncColorPickerFromSelection();
+        syncHeaderGlowCheckFromShell();
+    }
+
+    /** 単一選択時、見出し色ピッカーを選択行の {@link OrgRow#colorHex} に合わせる。 */
+    private void syncColorPickerFromSelection() {
+        if (colorPicker == null || treeView == null) {
+            return;
+        }
+        ObservableList<TreeItem<OrgRow>> multi =
+                treeView.getSelectionModel().getSelectedItems();
+        if (multi == null || multi.size() != 1) {
+            return;
+        }
+        TreeItem<OrgRow> ti = multi.getFirst();
+        if (ti == null || ti.getValue() == null) {
+            return;
+        }
+        String hx = ti.getValue().colorHex;
+        hx = hx != null ? hx.strip() : "";
+        try {
+            if (!hx.isBlank()) {
+                colorPicker.setValue(Color.web(hx));
+            } else {
+                colorPicker.setValue(Color.web("#4a90d9"));
+            }
+        } catch (IllegalArgumentException ex) {
+            colorPicker.setValue(Color.web("#4a90d9"));
+        }
     }
 
     private void syncGroupNameField() {
@@ -754,7 +786,6 @@ public final class MainShellTabOrganizerTabController {
         lab.getStyleClass().add("pm-org-tree-pill-label");
         String hx = row.colorHex;
         if (hx != null && !hx.isBlank() && shell != null) {
-            pill.setStyle(shell.tabOrganizerTreePillSurfaceStyle(hx));
             String fill = shell.tabOrganizerPreviewChipLabelTextFill(hx);
             lab.setStyle(
                     "-fx-text-fill: "
@@ -762,7 +793,6 @@ public final class MainShellTabOrganizerTabController {
                             + "; -fx-font-size: 11px; -fx-font-weight: bold;");
             pill.getStyleClass().remove("pm-org-tree-pill-empty");
         } else {
-            pill.setStyle("");
             pill.getStyleClass().add("pm-org-tree-pill-empty");
             lab.setStyle(
                     "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: "
@@ -861,15 +891,28 @@ public final class MainShellTabOrganizerTabController {
         node.setOnDragDone(ev -> dragSourceItem = null);
     }
 
+    /**
+     * 選択枠はインラインで指定する（色付きピルの {@code tabOrganizerTreePillSurfaceStyle} が
+     * {@code -fx-border-color} を直指定しており、CSS の {@code .pm-org-tree-pill-selected} より優先されるため）。
+     */
     private void updatePillSelectionStyle(StackPane pill, TreeItem<OrgRow> item) {
-        if (treeView == null) {
+        if (treeView == null || item == null || item.getValue() == null) {
             return;
         }
+        OrgRow row = item.getValue();
         boolean sel = treeView.getSelectionModel().getSelectedItems().contains(item);
-        pill.getStyleClass().remove("pm-org-tree-pill-selected");
-        if (sel) {
-            pill.getStyleClass().add("pm-org-tree-pill-selected");
+        StringBuilder sb = new StringBuilder();
+        if (row.colorHex != null && !row.colorHex.isBlank() && shell != null) {
+            sb.append(shell.tabOrganizerTreePillSurfaceStyle(row.colorHex.strip()));
         }
+        if (sel) {
+            if (sb.length() > 0) {
+                sb.append(' ');
+            }
+            sb.append("-fx-border-color: -fx-accent; -fx-border-width: 2;");
+        }
+        pill.setStyle(sb.toString().strip());
+        pill.getStyleClass().remove("pm-org-tree-pill-selected");
     }
 
     /**
