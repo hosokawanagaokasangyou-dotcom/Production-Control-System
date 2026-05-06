@@ -68,7 +68,8 @@ Public Sub ImportVBAFiles(Optional ByVal folderPath As String = vbNullString)
     Set fso = Nothing
 End Sub
 
-' ブックが code\ 直下にあるとき、ThisWorkbook.Path\VBA\モジュール分割バージョン を返す。
+' ブックが code\ 直下にあるとき、ThisWorkbook.Path\参照用\モジュール分割バージョン を返す。
+' （モジュール分割テキストは参照用に隔離済み）
 ' 未保存ブックなどで Path が取れないときは "" 。
 Public Function GetSplitModulesFolderPath() As String
     Dim basePath As String
@@ -83,7 +84,7 @@ Public Function GetSplitModulesFolderPath() As String
         basePath = basePath & Application.PathSeparator
     End If
 
-    GetSplitModulesFolderPath = basePath & "VBA" & Application.PathSeparator & "モジュール分割バージョン"
+    GetSplitModulesFolderPath = basePath & "参照用" & Application.PathSeparator & "モジュール分割バージョン"
 End Function
 
 ' -------------------------------------------------------------------------
