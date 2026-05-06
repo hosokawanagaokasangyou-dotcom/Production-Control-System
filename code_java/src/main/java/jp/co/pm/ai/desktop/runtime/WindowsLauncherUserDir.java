@@ -6,9 +6,13 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Windows で jpackage の {@code PmAiDesktop.exe} から起動したとき、{@code user.dir} が exe と同じフォルダにならない環境がある。
- * {@link jp.co.pm.ai.desktop.config.AppPaths} や {@code pm-ai-data} 解決が崩れ、ネイティブ／クラスパス前提が破綻して無言終了することがあるため、
- * プロセスのコマンドラインが {@code PmAiDesktop.exe} のときだけ {@code user.dir} をその親ディレクトリに合わせる。
+ * When started from jpackage {@code PmAiDesktop.exe} on Windows, {@code user.dir} may not match the
+ * install folder. Portable paths (e.g. pm-ai-data) then fail. If the process command line ends with
+ * {@code PmAiDesktop.exe}, set {@code user.dir} to that exe's parent directory.
+ *
+ * <p>Javadoc is ASCII-only so javac never fails on broken multi-byte source encoding on Windows.
+ *
+ * @see jp.co.pm.ai.desktop.config.AppPaths
  */
 public final class WindowsLauncherUserDir {
 
@@ -17,7 +21,8 @@ public final class WindowsLauncherUserDir {
     private WindowsLauncherUserDir() {}
 
     /**
-     * Windows かつランチャ exe のときだけ {@code user.dir} を上書きする。IDE / {@code java -jar} / {@code java.exe} では何もしない。
+     * Overwrites {@code user.dir} only on Windows when the launcher exe name matches. No-op for IDE,
+     * {@code java -jar}, or plain {@code java.exe}.
      */
     public static void alignWithPackagedLauncherIfWindows() {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
@@ -43,7 +48,7 @@ public final class WindowsLauncherUserDir {
                 System.setProperty("user.dir", abs.toString());
             }
         } catch (Throwable ignored) {
-            /* 失敗時は既定の user.dir のまま */
+            // keep default user.dir
         }
     }
 }
