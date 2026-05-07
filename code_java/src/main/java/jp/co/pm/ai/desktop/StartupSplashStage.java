@@ -9,37 +9,41 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 
-/** 本体ウィンドウのFXML読込・初期化が終わるまで表示する簡易スプラッシュ。 */
+/**
+ * Simple splash until main window FXML is loaded and initialized.
+ *
+ * <p>Japanese labels use Unicode code point escapes in string literals so this source file is pure
+ * ASCII. That
+ * avoids Windows builds failing with "cannot map to UTF-8" when a copy of this file is saved in
+ * Shift_JIS (CP932) by an editor, while {@code javac} is invoked with {@code -encoding UTF-8}.
+ */
 final class StartupSplashStage {
 
-    /**
-     * Windows 11 での日本語欠け・文字化けを避けるため、UI 向けフォントを明示する（フォールバック付き）。
-     */
     private static final String SPLASH_FONT_STACK =
             "\"Yu Gothic UI\", \"Meiryo UI\", Meiryo, \"Segoe UI\", \"Noto Sans CJK JP\", sans-serif";
 
     private StartupSplashStage() {}
 
     /**
-     * スプラッシュを生成して表示する。呼び出しは JavaFX アプリケーションスレッド上。
+     * Creates and shows the splash. Must run on the JavaFX application thread.
      *
-     * @return 後から {@link Stage#close()} するステージ
+     * @return the stage; close it when the main window is ready
      */
     static Stage createAndShow() {
         Stage stage = new Stage();
         stage.initStyle(StageStyle.UNDECORATED);
         stage.initModality(Modality.APPLICATION_MODAL);
         stage.setAlwaysOnTop(true);
-        stage.setTitle("起動中");
+        // Japanese UI strings below: ASCII source via Unicode escapes (see class Javadoc).
+        stage.setTitle("\u8d77\u52d5\u4e2d");
 
-        Label title = new Label("工程管理 AI 配台");
+        Label title = new Label("\u5de5\u7a0b\u7ba1\u7406 AI \u914d\u53f0");
         title.setStyle(
                 "-fx-font-family: "
                         + SPLASH_FONT_STACK
                         + "; -fx-font-size: 18px; -fx-font-weight: bold;");
 
-        // U+2026 の三点リーダーは環境によって字形が崩れることがあるため ASCII の ... を使う
-        Label sub = new Label("起動しています...");
+        Label sub = new Label("\u8d77\u52d5\u3057\u3066\u3044\u307e\u3059...");
         sub.setStyle(
                 "-fx-font-family: "
                         + SPLASH_FONT_STACK
@@ -70,7 +74,7 @@ final class StartupSplashStage {
         return stage;
     }
 
-    /** OS の前面奪い合いや別ウィンドウ生成後にスプラッシュが埋もれるのを緩和する。 */
+    /** Moves splash forward after OS focus steal or other Stage creation. */
     static void raiseToFront(Stage splash) {
         if (splash == null) {
             return;
