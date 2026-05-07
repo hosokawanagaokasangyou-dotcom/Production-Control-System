@@ -841,6 +841,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         personBadgeDragAdjustEnabled,
                         timelineOuterPad,
                         canvasTimelineW,
+                        rowCanvasH,
                         dragEff,
                         personBadgeDragDeltaSink);
             }
@@ -1649,6 +1650,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             boolean badgeDragAdjustEnabled,
             double timelineOuterPad,
             double timelinePaneWidth,
+            double overlayPaneHeight,
             Map<String, EquipmentGanttBadgeDragDelta> dragDeltas,
             BiConsumer<String, EquipmentGanttBadgeDragDelta> dragDeltaSink) {
         if (overlay == null
@@ -1766,6 +1768,18 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     totalStackH += segmentGapEff;
                 }
             }
+            /*
+             * 帯の描画高 barH がバッジより短いと、縦クランプでバッジが同じ Y に寄り横押し出しが増え、
+             * UI の横間隔（gapPx）が潰れる。スタック高まで縦クランプ領域を広げる（行 Pane 高で上限）。
+             */
+            double insetBottom = Math.max(2.0, layout.zoom);
+            double maxBottom =
+                    Double.isFinite(overlayPaneHeight) && overlayPaneHeight > insetBottom + barTop
+                            ? overlayPaneHeight - insetBottom
+                            : barTop + barH;
+            double desiredClampBottom = barTop + Math.max(barH, totalStackH);
+            double badgeClampBottom = Math.min(desiredClampBottom, maxBottom);
+
             double ySegCursor = barTop + Math.max(0, (barH - totalStackH) / 2);
 
             for (int si = 0; si < segments.size(); si++) {
@@ -1787,7 +1801,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                     + (segRowMax - stackH) / 2;
                     double ly =
                             clampBadgeLayoutYInBand(
-                                    yTop - b.getMinY(), b, barTop, barTop + barH);
+                                    yTop - b.getMinY(), b, barTop, badgeClampBottom);
                     double visualLeft = xVis;
                     Bounds logicalSize = badgeDragClampBounds(sp);
                     BoundingBox proposed =
@@ -1819,7 +1833,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         lyUse += sv.dy();
                     }
                     lx = clampBadgeLayoutX(lx, cb, timelinePaneWidth);
-                    lyUse = clampBadgeLayoutYInBand(lyUse, cb, barTop, barTop + barH);
+                    lyUse = clampBadgeLayoutYInBand(lyUse, cb, barTop, badgeClampBottom);
                     sp.setLayoutX(lx);
                     sp.setLayoutY(lyUse);
                     overlay.getChildren().add(sp);
@@ -1834,7 +1848,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 sp,
                                 badgeDragClampBounds(sp),
                                 barTop,
-                                barTop + barH,
+                                badgeClampBottom,
                                 timelinePaneWidth,
                                 defaultLayoutX,
                                 defaultLayoutY,
