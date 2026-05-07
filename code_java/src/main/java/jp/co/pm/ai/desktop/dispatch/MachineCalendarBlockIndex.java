@@ -143,6 +143,12 @@ public final class MachineCalendarBlockIndex {
         if (!Files.isRegularFile(script)) {
             return null;
         }
+        Path planningCoreInit = pythonScriptDir.resolve("planning_core").resolve("__init__.py");
+        if (!Files.isRegularFile(planningCoreInit)) {
+            return syntheticToolErrorJson(
+                    "planning_core が見つかりません（pm-ai-data のバンドル不整合の可能性）。期待パス: "
+                            + planningCoreInit.toAbsolutePath().normalize());
+        }
         ProcessBuilder pb =
                 new ProcessBuilder(
                         pythonExe.toString(),
@@ -180,6 +186,18 @@ public final class MachineCalendarBlockIndex {
             return null;
         }
         return pickJsonPayload(rawStdout);
+    }
+
+    /** Same JSON shape as {@code export_machine_calendar_blocks.py} when Python is not run. */
+    private static String syntheticToolErrorJson(String errorText) {
+        try {
+            ObjectNode root = JSON.createObjectNode();
+            root.put("error", errorText);
+            root.set("blocks", JSON.createObjectNode());
+            return JSON.writeValueAsString(root);
+        } catch (Exception e) {
+            return "{\"error\":\"synthetic_tool_error\",\"blocks\":{}}";
+        }
     }
 
     /**
