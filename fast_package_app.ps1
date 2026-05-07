@@ -45,9 +45,13 @@ $ReleaseDirName = 'pm-ai-package-release'
 $ReleaseRoot = Join-Path $WorkspaceRoot $ReleaseDirName
 $BundleInitialName = 'PMD_initial_install'
 $BundleUpgradeName = 'PMD_version_upgrade'
-Set-Location $CodeJavaRoot
 
-. (Join-Path $CodeJavaRoot 'package_workspace_copy.ps1')
+# Load shared copy logic before changing directory; Maven runs under code_java via Push-Location only.
+$packageWorkspaceCopyScript = Join-Path $CodeJavaRoot 'package_workspace_copy.ps1'
+if (-not (Test-Path -LiteralPath $packageWorkspaceCopyScript)) {
+    throw "Missing package_workspace_copy.ps1: $packageWorkspaceCopyScript (pull latest or restore from repo)."
+}
+. (Resolve-Path -LiteralPath $packageWorkspaceCopyScript).Path
 
 function Read-MavenPomProperties {
     param([string]$PomPath)
@@ -536,10 +540,16 @@ $mvnw = Join-Path $CodeJavaRoot 'mvnw.cmd'
 if (-not (Test-Path -LiteralPath $mvnw)) {
     throw "Maven Wrapper not found: $mvnw"
 }
-& $mvnw @('clean', 'package', '-DskipTests')
-if ($LASTEXITCODE -ne 0) {
-    Write-Error 'Maven build failed.'
-    exit $LASTEXITCODE
+Push-Location $CodeJavaRoot
+try {
+    & $mvnw @('clean', 'package', '-DskipTests')
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error 'Maven build failed.'
+        exit $LASTEXITCODE
+    }
+}
+finally {
+    Pop-Location
 }
 
 Write-Host "--- Step 2: jpackage input directory ---" -ForegroundColor Cyan
