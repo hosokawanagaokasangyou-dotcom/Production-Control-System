@@ -699,6 +699,7 @@ public final class MainShellController {
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttSlotWidthPercent(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttShiftWheelHScrollPercent(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttPersonBadgeGapPx(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttPersonBadgeBandVerticalOffsetPx(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttGraphicDataFingerprint(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttBadgeDragDeltas(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttPersonBadgeDragAdjustEnabled(),

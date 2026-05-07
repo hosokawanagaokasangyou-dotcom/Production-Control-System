@@ -203,6 +203,12 @@ public final class EquipmentGanttGraphicTabController {
     @FXML
     private Label graphicPersonBadgeGapLabel;
 
+    @FXML
+    private Slider graphicPersonBadgeBandVerticalOffsetSlider;
+
+    @FXML
+    private Label graphicPersonBadgeBandVerticalOffsetLabel;
+
     /** 日付列幅スライダー上限（px）。0 は自動計測 */
     private static final double DATE_COL_WIDTH_SLIDER_MAX = 220;
 
@@ -349,6 +355,19 @@ public final class EquipmentGanttGraphicTabController {
                     },
                     graphicCommitted);
         }
+        if (graphicPersonBadgeBandVerticalOffsetSlider != null) {
+            SliderCommittedChangeSupport.install(
+                    graphicPersonBadgeBandVerticalOffsetSlider,
+                    () -> {
+                        if (graphicPersonBadgeBandVerticalOffsetLabel != null) {
+                            graphicPersonBadgeBandVerticalOffsetLabel.setText(
+                                    String.format(
+                                            "%+.0fpx",
+                                            graphicPersonBadgeBandVerticalOffsetSlider.getValue()));
+                        }
+                    },
+                    graphicCommitted);
+        }
         if (personBadgeDragAdjustCheckBox != null) {
             personBadgeDragAdjustCheckBox
                     .selectedProperty()
@@ -477,6 +496,23 @@ public final class EquipmentGanttGraphicTabController {
                         String.format("%.0fpx", graphicPersonBadgeGapSlider.getValue()));
             }
         }
+        double bvOff = s.equipmentGanttPersonBadgeBandVerticalOffsetPx();
+        if (graphicPersonBadgeBandVerticalOffsetSlider != null) {
+            double mn = DesktopSessionState.MIN_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX;
+            double mx = DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX;
+            if (Double.isFinite(bvOff) && bvOff >= mn && bvOff <= mx) {
+                graphicPersonBadgeBandVerticalOffsetSlider.setValue(bvOff);
+            } else {
+                graphicPersonBadgeBandVerticalOffsetSlider.setValue(
+                        DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX);
+            }
+            if (graphicPersonBadgeBandVerticalOffsetLabel != null) {
+                graphicPersonBadgeBandVerticalOffsetLabel.setText(
+                        String.format(
+                                "%+.0fpx",
+                                graphicPersonBadgeBandVerticalOffsetSlider.getValue()));
+            }
+        }
         equipmentGanttGraphicDataFingerprint =
                 s.equipmentGanttGraphicDataFingerprint() != null
                         ? s.equipmentGanttGraphicDataFingerprint()
@@ -580,6 +616,12 @@ public final class EquipmentGanttGraphicTabController {
         return graphicPersonBadgeGapSlider != null
                 ? graphicPersonBadgeGapSlider.getValue()
                 : DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX;
+    }
+
+    double snapshotEquipmentGanttPersonBadgeBandVerticalOffsetPx() {
+        return graphicPersonBadgeBandVerticalOffsetSlider != null
+                ? graphicPersonBadgeBandVerticalOffsetSlider.getValue()
+                : DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX;
     }
 
     String snapshotEquipmentGanttGraphicDataFingerprint() {
@@ -891,6 +933,7 @@ public final class EquipmentGanttGraphicTabController {
                         showBadges,
                         badgeResolver,
                         snapshotEquipmentGanttPersonBadgeGapPx(),
+                        snapshotEquipmentGanttPersonBadgeBandVerticalOffsetPx(),
                         snapshotEquipmentGanttPersonBadgeDragAdjustEnabled(),
                         equipmentGanttBadgeDragDeltas,
                         dragSink);

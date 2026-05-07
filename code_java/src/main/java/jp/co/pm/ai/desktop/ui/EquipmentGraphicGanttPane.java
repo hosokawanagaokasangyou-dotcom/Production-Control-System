@@ -442,6 +442,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 false,
                 null,
                 DEFAULT_PERSON_BADGE_GAP_PX,
+                DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX,
                 false,
                 null,
                 null);
@@ -485,6 +486,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 false,
                 null,
                 DEFAULT_PERSON_BADGE_GAP_PX,
+                DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX,
                 false,
                 null,
                 null);
@@ -501,6 +503,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      * @param showPersonBadges 担当バッジオーバーレイを描画するか
      * @param personBadgeStyleResolver バッジ表示文字列ごとの見た目（{@code null} は常に {@link PersonBadgeStyle#defaultStyle()}）
      * @param personBadgeGapPx 担当バッジ横方向の固定間隔（px、隣接ピル左端間の追加距離、{@code <0} は既定）
+     * @param personBadgeBandVerticalOffsetPx バッジブロックをタスク帯に対して縦にずらす量（px、正で下方向、非有限は既定）
      * @param personBadgeDragAdjustEnabled バッジをドラッグで移動する
      * @param personBadgeDragDeltas {@link #computeDataFingerprint} が同一のとき適用するドラッグずれ（{@code null} で空）
      * @param personBadgeDragDeltaSink ドラッグ確定時にずれを通知（{@code null} で保存しない）
@@ -523,6 +526,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             boolean showPersonBadges,
             Function<String, PersonBadgeStyle> personBadgeStyleResolver,
             double personBadgeGapPx,
+            double personBadgeBandVerticalOffsetPx,
             boolean personBadgeDragAdjustEnabled,
             Map<String, EquipmentGanttBadgeDragDelta> personBadgeDragDeltas,
             BiConsumer<String, EquipmentGanttBadgeDragDelta> personBadgeDragDeltaSink) {
@@ -573,6 +577,17 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         gapPxEff,
                         0d,
                         DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX);
+
+        double bandVertEff = personBadgeBandVerticalOffsetPx;
+        if (!Double.isFinite(bandVertEff)) {
+            bandVertEff =
+                    DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX;
+        }
+        bandVertEff =
+                Math.clamp(
+                        bandVertEff,
+                        DesktopSessionState.MIN_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX,
+                        DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX);
 
         Map<String, EquipmentGanttBadgeDragDelta> dragEff =
                 personBadgeDragDeltas != null ? personBadgeDragDeltas : Map.of();
@@ -838,6 +853,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         badgeResolver,
                         ri,
                         gapPxEff,
+                        bandVertEff,
                         personBadgeDragAdjustEnabled,
                         timelineOuterPad,
                         canvasTimelineW,
@@ -1647,6 +1663,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             Function<String, PersonBadgeStyle> styleForLabel,
             int displayRowIndex,
             double personBadgeGapPx,
+            double personBadgeBandVerticalOffsetPx,
             boolean badgeDragAdjustEnabled,
             double timelineOuterPad,
             double timelinePaneWidth,
@@ -1780,7 +1797,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double desiredClampBottom = barTop + Math.max(barH, totalStackH);
             double badgeClampBottom = Math.min(desiredClampBottom, maxBottom);
 
-            double ySegCursor = barTop + Math.max(0, (barH - totalStackH) / 2);
+            double ySegCursor =
+                    barTop
+                            + Math.max(0, (barH - totalStackH) / 2)
+                            + personBadgeBandVerticalOffsetPx;
 
             for (int si = 0; si < segments.size(); si++) {
                 List<Integer> seg = segments.get(si);

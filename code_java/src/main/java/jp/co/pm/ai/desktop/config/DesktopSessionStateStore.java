@@ -76,6 +76,7 @@ public final class DesktopSessionStateStore {
                     optionalDouble(root, "equipmentGanttSlotWidthPercent", 0d),
                     optionalDouble(root, "equipmentGanttShiftWheelHScrollPercent", 0d),
                     loadEquipmentGanttPersonBadgeGapPx(root),
+                    loadEquipmentGanttPersonBadgeBandVerticalOffsetPx(root),
                     text(root, "equipmentGanttGraphicDataFingerprint"),
                     loadEquipmentGanttBadgeDragDeltas(root),
                     optionalBoolean(root, "equipmentGanttPersonBadgeDragAdjustEnabled", false),
@@ -405,6 +406,21 @@ public final class DesktopSessionStateStore {
         return DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX;
     }
 
+    private static double loadEquipmentGanttPersonBadgeBandVerticalOffsetPx(JsonNode root) {
+        double v =
+                optionalDouble(
+                        root,
+                        "equipmentGanttPersonBadgeBandVerticalOffsetPx",
+                        DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX);
+        if (!Double.isFinite(v)) {
+            return DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX;
+        }
+        return Math.clamp(
+                v,
+                DesktopSessionState.MIN_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX,
+                DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX);
+    }
+
     /**
      * 旧「重なり量 0〜80%」を、おおよそ同程度の疎さになるよう固定間隔（px）に変換する移行用。
      */
@@ -499,6 +515,15 @@ public final class DesktopSessionStateStore {
         double bgap = state.equipmentGanttPersonBadgeGapPx();
         if (Double.isFinite(bgap) && bgap >= 0) {
             root.put("equipmentGanttPersonBadgeGapPx", bgap);
+        }
+        double bvOff = state.equipmentGanttPersonBadgeBandVerticalOffsetPx();
+        if (Double.isFinite(bvOff)) {
+            root.put(
+                    "equipmentGanttPersonBadgeBandVerticalOffsetPx",
+                    Math.clamp(
+                            bvOff,
+                            DesktopSessionState.MIN_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX,
+                            DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX));
         }
         put(root, "equipmentGanttGraphicDataFingerprint", state.equipmentGanttGraphicDataFingerprint());
         putEquipmentGanttBadgeDragDeltas(root, state.equipmentGanttBadgeDragDeltas());

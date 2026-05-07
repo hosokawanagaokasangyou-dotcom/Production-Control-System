@@ -45,6 +45,7 @@ import java.util.Map;
  * @param equipmentGanttSlotWidthPercent 時刻スロット列幅の調整（50〜500、0 は未保存として既定 100）
  * @param equipmentGanttShiftWheelHScrollPercent Shift+ホイール横スクロールの感度（50〜1000、100＝従来相当、0 は未保存として既定 200）
  * @param equipmentGanttPersonBadgeGapPx 担当バッジの横方向の固定間隔（px、隣接ピル左端同士の追加距離、0〜48 程度を想定）
+ * @param equipmentGanttPersonBadgeBandVerticalOffsetPx 担当バッジブロックをタスク帯に対して縦方向へずらす量（px、正で下方向）
  * @param equipmentGanttGraphicDataFingerprint 設備ガント表示データの内容フィンガープリント（SHA-256 16 進）。JSON 等が変わると無効化される
  * @param equipmentGanttBadgeDragDeltas データ同一時のみ有効な担当バッジのドラッグずれ（キーはバッジ安定 ID）
  * @param equipmentGanttPersonBadgeDragAdjustEnabled 担当バッジをマウスドラッグで移動するモード（データ同一ならずれはセッションに保存される）
@@ -110,6 +111,7 @@ public record DesktopSessionState(
         double equipmentGanttSlotWidthPercent,
         double equipmentGanttShiftWheelHScrollPercent,
         double equipmentGanttPersonBadgeGapPx,
+        double equipmentGanttPersonBadgeBandVerticalOffsetPx,
         String equipmentGanttGraphicDataFingerprint,
         Map<String, EquipmentGanttBadgeDragDelta> equipmentGanttBadgeDragDeltas,
         boolean equipmentGanttPersonBadgeDragAdjustEnabled,
@@ -141,6 +143,14 @@ public record DesktopSessionState(
     public static final double DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX = 4.0;
 
     public static final double MAX_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX = 48.0;
+
+    /** 帯に対するバッジブロックの縦オフセット（px）の既定。 */
+    public static final double DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX = 0.0;
+
+    /** 帯に対する縦オフセットのスライダー範囲（px）。 */
+    public static final double MIN_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX = -48.0;
+
+    public static final double MAX_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX = 48.0;
 
     public DesktopSessionState {
         equipmentGanttPersonBadgeStylesByLabel =
@@ -260,6 +270,7 @@ public record DesktopSessionState(
                 0d,
                 0d,
                 DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX,
+                DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX,
                 "",
                 Map.of(),
                 false,
