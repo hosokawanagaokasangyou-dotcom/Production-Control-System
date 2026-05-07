@@ -3053,6 +3053,7 @@ public final class MainShellController {
             case AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET -> r.setValue("1");
             default -> {
                 /* PM_AI_WORKSPACE stays empty */
+                /* PM_AI_PORTABLE_BUNDLE_SOURCE_DIR は空＝同期しないため、既定は newBootstrapRow のみ */
             }
         }
     }
@@ -3098,6 +3099,8 @@ public final class MainShellController {
                     AppPaths.KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK,
                     AppPaths.KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV -> r.setValue("");
             case AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET -> r.setValue("1");
+            case AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR ->
+                    r.setValue(AppPaths.DEFAULT_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR);
             default -> r.setValue("");
         }
         return r;
