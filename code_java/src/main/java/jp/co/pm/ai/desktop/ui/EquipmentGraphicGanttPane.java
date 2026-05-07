@@ -43,6 +43,7 @@ import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 
+import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 import java.util.function.Function;
 
@@ -97,8 +98,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      */
     private static final double MAX_NAIVE_ROW_CANVAS_RGBA_TOTAL_MIB = 512.0;
 
-    /** 担当バッジの横重なり（UI・セッションは 0〜80 のパーセント）。 */
-    public static final double DEFAULT_PERSON_BADGE_OVERLAP_PERCENT = 38d;
+    /** 担当バッジの横方向固定間隔（px）。実体は {@link DesktopSessionState#DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX}。 */
+    public static final double DEFAULT_PERSON_BADGE_GAP_PX =
+            DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX;
 
     private static final Group MEASURE_ROOT = new Group();
     private static final Scene MEASURE_SCENE = new Scene(MEASURE_ROOT, 4000, 4000);
@@ -435,7 +437,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 null,
                 false,
                 null,
-                DEFAULT_PERSON_BADGE_OVERLAP_PERCENT,
+                DEFAULT_PERSON_BADGE_GAP_PX,
                 false);
     }
 
@@ -476,7 +478,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 null,
                 false,
                 null,
-                DEFAULT_PERSON_BADGE_OVERLAP_PERCENT,
+                DEFAULT_PERSON_BADGE_GAP_PX,
                 false);
     }
 
@@ -490,7 +492,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      *     {@code null}
      * @param showPersonBadges 担当バッジオーバーレイを描画するか
      * @param personBadgeStyleResolver バッジ表示文字列ごとの見た目（{@code null} は常に {@link PersonBadgeStyle#defaultStyle()}）
-     * @param personBadgeOverlapPercent 担当バッジ横方向の重なり（0〜80＝重なり％）
+     * @param personBadgeGapPx 担当バッジ横方向の固定間隔（px、隣接ピル左端間の追加距離、{@code <0} は既定）
      * @param personBadgeDragAdjustEnabled バッジをドラッグで移動する（再描画で初期配置に戻る）
      */
     public static BorderPane build(
@@ -510,7 +512,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             List<List<String>> badgeSlotRowsRaw,
             boolean showPersonBadges,
             Function<String, PersonBadgeStyle> personBadgeStyleResolver,
-            double personBadgeOverlapPercent,
+            double personBadgeGapPx,
             boolean personBadgeDragAdjustEnabled) {
         BorderPane root = new BorderPane();
         root.setCache(false);
@@ -550,11 +552,15 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         GanttPalette palette = GanttPalette.forTheme(theme);
         Font barFont = resolveBarFont(barFontFamily, layout.barFontSize);
 
-        double overlapPctEff = personBadgeOverlapPercent;
-        if (!Double.isFinite(overlapPctEff) || overlapPctEff < 0d) {
-            overlapPctEff = DEFAULT_PERSON_BADGE_OVERLAP_PERCENT;
+        double gapPxEff = personBadgeGapPx;
+        if (!Double.isFinite(gapPxEff) || gapPxEff < 0d) {
+            gapPxEff = DEFAULT_PERSON_BADGE_GAP_PX;
         }
-        overlapPctEff = Math.clamp(overlapPctEff, 0d, 80d);
+        gapPxEff =
+                Math.clamp(
+                        gapPxEff,
+                        0d,
+                        DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX);
 
         double timelineOuterPad =
                 Math.min(
@@ -815,7 +821,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         dr.cellsInSlots(),
                         layout,
                         badgeResolver,
-                        overlapPctEff,
+                        gapPxEff,
                         personBadgeDragAdjustEnabled,
                         timelineOuterPad,
                         canvasTimelineW);
@@ -1535,7 +1541,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             List<String> slotTexts,
             LayoutMetrics layout,
             Function<String, PersonBadgeStyle> styleForLabel,
-            double personBadgeOverlapPercent,
+            double personBadgeGapPx,
             boolean badgeDragAdjustEnabled,
             double timelineOuterPad,
             double timelinePaneWidth) {
@@ -1601,18 +1607,15 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double x0 = run.fromSlot() * layout.slotWidth + inset + xPad;
 
             /*
-             * 横: overlapFrac で前バッジとどれだけ同じ行で重ねるか（0 なら論理幅分だけ横に詰め、隣接ピルは接するまで離す）。
-             * 縦: 重なり量 0 のときは対角オフセット（diagDy）を使わない。使うと帯内で常に重なって見える。
+             * 横: personBadgeGapPx を隣接ピル左端間の追加距離として足す（論理幅 + gap）。
+             * 縦: 間隔 0 のときは対角オフセット（diagDy）を使わない。
              */
-            double overlapFrac =
-                    Math.max(0d, Math.min(0.85, personBadgeOverlapPercent / 100.0));
-            boolean horizNoOverlap = personBadgeOverlapPercent <= 0.0;
-            final double minAdvanceX = Math.max(2.5 * layout.zoom, 4);
+            double gapPx = Math.max(0d, personBadgeGapPx);
             double diagDy =
                     Math.min(
                             Math.max(3 * layout.zoom, 4),
                             Math.max(6, barH / Math.max(8, nodes.size() + 4)));
-            double diagDyEff = horizNoOverlap ? 0.0 : diagDy;
+            double diagDyEff = gapPx <= 1e-9 ? 0.0 : diagDy;
             double segmentGapEff = Math.max(2 * layout.zoom, diagDyEff * 0.45);
 
             List<List<Integer>> segments = new ArrayList<>();
@@ -1621,7 +1624,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             for (int i = 0; i < nodes.size(); i++) {
                 StackPane spNode = nodes.get(i);
                 Bounds b = locals.get(i);
-                double stepW = badgeHorizontalStepWidth(horizNoOverlap, spNode, b);
+                double stepW = badgeStepWidthLogical(spNode);
                 if (!curSeg.isEmpty()
                         && xVisPack > x0
                         && xVisPack + stepW > bandRight + 1e-6) {
@@ -1630,7 +1633,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     xVisPack = x0;
                 }
                 curSeg.add(i);
-                double advance = badgeOverlapAdvanceX(stepW, overlapFrac, minAdvanceX);
+                double advance = stepW + gapPx;
                 xVisPack += advance;
             }
             if (!curSeg.isEmpty()) {
@@ -1671,7 +1674,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     StackPane sp = nodes.get(ii);
                     Bounds b = locals.get(ii);
                     double stackH = stackHeights.get(ii);
-                    double stepW = badgeHorizontalStepWidth(horizNoOverlap, sp, b);
+                    double stepW = badgeStepWidthLogical(sp);
                     double yTop =
                             ySegCursor
                                     + k * diagDyEff
@@ -1712,7 +1715,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 barTop + barH,
                                 timelinePaneWidth);
                     }
-                    double advance = badgeOverlapAdvanceX(stepW, overlapFrac, minAdvanceX);
+                    double advance = stepW + gapPx;
                     xVis = visualLeft + advance;
                 }
                 ySegCursor += segHeights.get(si) + segmentGapEff;
@@ -1830,20 +1833,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         return Math.max(1.0, Double.isFinite(w) ? w : b.getWidth());
     }
 
-    /** 横方向の「1 バッジぶん」のステップ幅（重なり 0 時はグロー除く論理幅で隣接ピルを接するまで離す）。 */
-    private static double badgeHorizontalStepWidth(
-            boolean horizNoOverlap, StackPane sp, Bounds boundsInLocal) {
-        if (horizNoOverlap) {
-            return Math.max(1.0, badgeDragClampBounds(sp).getWidth());
-        }
-        return visualWidth(boundsInLocal);
-    }
-
-    private static double badgeOverlapAdvanceX(
-            double stepW, double overlapFrac, double minAdvanceX) {
-        return Math.max(
-                stepW * (1.0 - overlapFrac),
-                Math.min(minAdvanceX, stepW * 0.92));
+    /** 横方向の 1 バッジ分のステップ（グロー除く論理幅）。 */
+    private static double badgeStepWidthLogical(StackPane sp) {
+        return Math.max(1.0, badgeDragClampBounds(sp).getWidth());
     }
 
     /**

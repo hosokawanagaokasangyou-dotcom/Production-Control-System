@@ -44,7 +44,7 @@ import java.util.Map;
  * @param equipmentGanttHeaderHeightPercent 見出し行（日付・機械名・工程名・時刻軸）の高さ（50〜200、0 は未保存として既定 100）
  * @param equipmentGanttSlotWidthPercent 時刻スロット列幅の調整（50〜500、0 は未保存として既定 100）
  * @param equipmentGanttShiftWheelHScrollPercent Shift+ホイール横スクロールの感度（50〜1000、100＝従来相当、0 は未保存として既定 200）
- * @param equipmentGanttPersonBadgeOverlapPercent 担当バッジの横方向の重なり量（0〜80＝重なり％、{@code -1} は未保存として既定 38）
+ * @param equipmentGanttPersonBadgeGapPx 担当バッジの横方向の固定間隔（px、隣接ピル左端同士の追加距離、0〜48 程度を想定）
  * @param equipmentGanttPersonBadgeDragAdjustEnabled 担当バッジをマウスドラッグで移動するモード（再描画で初期配置に戻る）
  * @param equipmentGanttPersonBadgeEnabled 設備ガント・担当バッジ表示のオンオフ
  * @param equipmentGanttPersonBadgeFontFamily バッジ文字フォント（空は既定ファミリ）
@@ -107,7 +107,7 @@ public record DesktopSessionState(
         double equipmentGanttHeaderHeightPercent,
         double equipmentGanttSlotWidthPercent,
         double equipmentGanttShiftWheelHScrollPercent,
-        double equipmentGanttPersonBadgeOverlapPercent,
+        double equipmentGanttPersonBadgeGapPx,
         boolean equipmentGanttPersonBadgeDragAdjustEnabled,
         boolean equipmentGanttPersonBadgeEnabled,
         String equipmentGanttPersonBadgeFontFamily,
@@ -132,6 +132,11 @@ public record DesktopSessionState(
         boolean memoryMonitorEnabled,
         long memoryMonitorIntervalSec,
         long nextLaunchHeapMaxMiB) {
+
+    /** 設備ガント・担当バッジ横方向固定間隔（px）の既定、およびスライダー上限の目安。 */
+    public static final double DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX = 4.0;
+
+    public static final double MAX_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX = 48.0;
 
     public DesktopSessionState {
         equipmentGanttPersonBadgeStylesByLabel =
@@ -242,7 +247,7 @@ public record DesktopSessionState(
                 0d,
                 0d,
                 0d,
-                -1d,
+                DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX,
                 false,
                 true,
                 "",

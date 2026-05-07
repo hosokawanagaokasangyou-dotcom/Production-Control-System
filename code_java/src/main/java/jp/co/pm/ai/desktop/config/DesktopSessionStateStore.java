@@ -75,7 +75,7 @@ public final class DesktopSessionStateStore {
                     optionalDouble(root, "equipmentGanttHeaderHeightPercent", 0d),
                     optionalDouble(root, "equipmentGanttSlotWidthPercent", 0d),
                     optionalDouble(root, "equipmentGanttShiftWheelHScrollPercent", 0d),
-                    optionalDouble(root, "equipmentGanttPersonBadgeOverlapPercent", -1d),
+                    loadEquipmentGanttPersonBadgeGapPx(root),
                     optionalBoolean(root, "equipmentGanttPersonBadgeDragAdjustEnabled", false),
                     optionalBoolean(root, "equipmentGanttPersonBadgeEnabled", true),
                     text(root, "equipmentGanttPersonBadgeFontFamily"),
@@ -390,6 +390,30 @@ public final class DesktopSessionStateStore {
         return o;
     }
 
+    private static double loadEquipmentGanttPersonBadgeGapPx(JsonNode root) {
+        double gap = optionalDouble(root, "equipmentGanttPersonBadgeGapPx", -1d);
+        if (Double.isFinite(gap) && gap >= 0) {
+            return Math.clamp(
+                    gap, 0.0, DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX);
+        }
+        double legacy = optionalDouble(root, "equipmentGanttPersonBadgeOverlapPercent", -1d);
+        if (Double.isFinite(legacy) && legacy >= 0) {
+            return legacyPersonBadgeOverlapPercentToGapPx(legacy);
+        }
+        return DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX;
+    }
+
+    /**
+     * 旧「重なり量 0〜80%」を、おおよそ同程度の疎さになるよう固定間隔（px）に変換する移行用。
+     */
+    private static double legacyPersonBadgeOverlapPercentToGapPx(double overlapPercent0To80) {
+        double op = Math.clamp(overlapPercent0To80, 0.0, 80.0);
+        return Math.clamp(
+                (80.0 - op) / 80.0 * 12.0,
+                0.0,
+                DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX);
+    }
+
     private static void putEquipmentGanttGraphicPrefs(ObjectNode root, DesktopSessionState state) {
         double z = state.equipmentGanttGraphicZoomPercent();
         if (Double.isFinite(z) && z >= 50 && z <= 200) {
@@ -431,9 +455,9 @@ public final class DesktopSessionStateStore {
         if (Double.isFinite(sh) && sh >= 50 && sh <= 1000) {
             root.put("equipmentGanttShiftWheelHScrollPercent", sh);
         }
-        double bmo = state.equipmentGanttPersonBadgeOverlapPercent();
-        if (Double.isFinite(bmo) && bmo >= 0 && bmo <= 80) {
-            root.put("equipmentGanttPersonBadgeOverlapPercent", bmo);
+        double bgap = state.equipmentGanttPersonBadgeGapPx();
+        if (Double.isFinite(bgap) && bgap >= 0) {
+            root.put("equipmentGanttPersonBadgeGapPx", bgap);
         }
         root.put(
                 "equipmentGanttPersonBadgeDragAdjustEnabled",

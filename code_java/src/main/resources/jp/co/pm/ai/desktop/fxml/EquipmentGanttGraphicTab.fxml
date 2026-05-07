@@ -92,11 +92,11 @@
                                 <Label fx:id="graphicShiftWheelHLabel" text="200%"/>
                             </HBox>
                             <HBox alignment="CENTER_LEFT" spacing="8.0">
-                                <Label prefWidth="156.0" text="バッジ重なり量"/>
-                                <Slider fx:id="graphicPersonBadgeOverlapSlider" blockIncrement="1.0"
-                                        max="80.0" min="0.0" prefWidth="96.0"
-                                        showTickLabels="false" showTickMarks="false" value="38.0"/>
-                                <Label fx:id="graphicPersonBadgeOverlapLabel" text="38%"/>
+                                <Label prefWidth="156.0" text="バッジ横間隔"/>
+                                <Slider fx:id="graphicPersonBadgeGapSlider" blockIncrement="1.0"
+                                        max="48.0" min="0.0" prefWidth="96.0"
+                                        showTickLabels="false" showTickMarks="false" value="4.0"/>
+                                <Label fx:id="graphicPersonBadgeGapLabel" text="4px"/>
                             </HBox>
                             <HBox alignment="CENTER_LEFT" spacing="8.0">
                                 <Label prefWidth="156.0" text="日付列幅"/>
