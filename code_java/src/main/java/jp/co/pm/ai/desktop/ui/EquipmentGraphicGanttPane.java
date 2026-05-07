@@ -1834,13 +1834,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     private static BarKind classifyBar(String t) {
-        if (t.contains("休憩") || t.contains("（休憩）")) {
-            return BarKind.BREAK;
-        }
-        if (t.contains("日次始業準備")) {
-            return BarKind.STARTUP;
-        }
-        return BarKind.DEFAULT;
+        return switch (GanttScheduleSlotBarKind.fromTimelineCell(t)) {
+            case BREAK -> BarKind.BREAK;
+            case STARTUP -> BarKind.STARTUP;
+            default -> BarKind.DEFAULT;
+        };
     }
 
     private static LocalTime parseTimeHeader(String col) {

@@ -44,6 +44,14 @@ class PersonNameBadgeTextTest {
         assertEquals(List.of("田中", "佐藤", "鈴木"), b);
     }
 
+    /** JSON {@code op} はしばしば U+3000 区切り（計画…設.json の Y5-3 など）。 */
+    @Test
+    void badgeList_op_fullwidth_space_between_sei_mei() {
+        List<String> b =
+                PersonNameBadgeText.badgeListFromOpSub("竹内　正美", "", false);
+        assertEquals(List.of("竹内"), b);
+    }
+
     @Test
     void firstN_codePoints_surrogate_safe() {
         assertEquals("𠮷野", PersonNameBadgeText.firstNCodePoints("𠮷野口", 2));
