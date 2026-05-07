@@ -1549,6 +1549,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         // スロット文言がスロット按分の m で微妙に異なると collectBarRuns が細切れになり、
         // バッジがスロット個数ぶん重複描画される。バッジ結合だけ末尾「◯◯m」を除いたキーでまとめる。
         List<BarRun> runs = collectBarRunsForPersonBadges(slotTexts);
+        /*
+         * 同一行に複数 BarRun（別タスクバー）があると、Run ごとのループでは座標が独立し
+         * 別バーのバッジ同士が同じ Y 帯で重なる。論理矩形を蓄積して右へ押し出す。
+         */
+        List<BoundingBox> placedBadgeLogicalRects = new ArrayList<>();
         for (BarRun run : runs) {
             if (run.kind() == BarKind.BREAK) {
                 continue;
@@ -1671,10 +1676,26 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             ySegCursor
                                     + k * diagDyEff
                                     + (segRowMax - stackH) / 2;
-                    sp.setLayoutX(xVis - b.getMinX());
                     double ly =
                             clampBadgeLayoutYInBand(
                                     yTop - b.getMinY(), b, barTop, barTop + barH);
+                    double visualLeft = xVis;
+                    Bounds logicalSize = badgeDragClampBounds(sp);
+                    BoundingBox proposed =
+                            new BoundingBox(
+                                    visualLeft,
+                                    ly,
+                                    logicalSize.getWidth(),
+                                    logicalSize.getHeight());
+                    proposed =
+                            nudgeBadgeLogicalRectToClearPlaced(
+                                    proposed,
+                                    placedBadgeLogicalRects,
+                                    Math.max(0.5, layout.zoom));
+                    visualLeft = proposed.getMinX();
+                    placedBadgeLogicalRects.add(proposed);
+
+                    sp.setLayoutX(visualLeft - b.getMinX());
                     sp.setLayoutY(ly);
                     overlay.getChildren().add(sp);
                     if (badgeDragAdjustEnabled) {
@@ -1692,11 +1713,50 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 timelinePaneWidth);
                     }
                     double advance = badgeOverlapAdvanceX(stepW, overlapFrac, minAdvanceX);
-                    xVis += advance;
+                    xVis = visualLeft + advance;
                 }
                 ySegCursor += segHeights.get(si) + segmentGapEff;
             }
         }
+    }
+
+    /** 既配置バッジの論理矩形と重ならないよう、水平方向にだけ押し出す（同一行・複数 BarRun 対策）。 */
+    private static BoundingBox nudgeBadgeLogicalRectToClearPlaced(
+            BoundingBox proposed,
+            List<BoundingBox> placed,
+            double gap) {
+        BoundingBox cur = proposed;
+        for (int guard = 0; guard < 512; guard++) {
+            boolean moved = false;
+            for (BoundingBox o : placed) {
+                if (!badgeLogicalRectsOverlapWithSeparation(cur, o, gap)) {
+                    continue;
+                }
+                double shift = o.getMaxX() + gap - cur.getMinX();
+                if (shift > 1e-6) {
+                    cur =
+                            new BoundingBox(
+                                    cur.getMinX() + shift,
+                                    cur.getMinY(),
+                                    cur.getWidth(),
+                                    cur.getHeight());
+                    moved = true;
+                    break;
+                }
+            }
+            if (!moved) {
+                break;
+            }
+        }
+        return cur;
+    }
+
+    private static boolean badgeLogicalRectsOverlapWithSeparation(
+            BoundingBox a, BoundingBox b, double gap) {
+        return !(a.getMaxX() + gap <= b.getMinX()
+                || b.getMaxX() + gap <= a.getMinX()
+                || a.getMaxY() + gap <= b.getMinY()
+                || b.getMaxY() + gap <= a.getMinY());
     }
 
     private static void installBadgeDragHandlers(
