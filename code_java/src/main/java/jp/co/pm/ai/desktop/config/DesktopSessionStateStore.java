@@ -76,6 +76,8 @@ public final class DesktopSessionStateStore {
                     optionalDouble(root, "equipmentGanttSlotWidthPercent", 0d),
                     optionalDouble(root, "equipmentGanttShiftWheelHScrollPercent", 0d),
                     loadEquipmentGanttPersonBadgeGapPx(root),
+                    text(root, "equipmentGanttGraphicDataFingerprint"),
+                    loadEquipmentGanttBadgeDragDeltas(root),
                     optionalBoolean(root, "equipmentGanttPersonBadgeDragAdjustEnabled", false),
                     optionalBoolean(root, "equipmentGanttPersonBadgeEnabled", true),
                     text(root, "equipmentGanttPersonBadgeFontFamily"),
@@ -414,6 +416,45 @@ public final class DesktopSessionStateStore {
                 DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX);
     }
 
+    private static Map<String, EquipmentGanttBadgeDragDelta> loadEquipmentGanttBadgeDragDeltas(
+            JsonNode root) {
+        JsonNode obj = root.get("equipmentGanttBadgeDragDeltas");
+        if (obj == null || !obj.isObject()) {
+            return Map.of();
+        }
+        Map<String, EquipmentGanttBadgeDragDelta> out = new LinkedHashMap<>();
+        for (Iterator<String> it = obj.fieldNames(); it.hasNext(); ) {
+            String field = it.next();
+            JsonNode el = obj.get(field);
+            if (el != null && el.isObject()) {
+                double dx = el.path("dx").asDouble(0.0);
+                double dy = el.path("dy").asDouble(0.0);
+                out.put(field, new EquipmentGanttBadgeDragDelta(dx, dy));
+            }
+        }
+        return Map.copyOf(out);
+    }
+
+    private static void putEquipmentGanttBadgeDragDeltas(
+            ObjectNode root, Map<String, EquipmentGanttBadgeDragDelta> deltas) {
+        if (deltas == null || deltas.isEmpty()) {
+            return;
+        }
+        ObjectNode o = JSON.createObjectNode();
+        for (Map.Entry<String, EquipmentGanttBadgeDragDelta> e : deltas.entrySet()) {
+            if (e.getKey() == null || e.getKey().isBlank() || e.getValue() == null) {
+                continue;
+            }
+            ObjectNode one = JSON.createObjectNode();
+            one.put("dx", e.getValue().dx());
+            one.put("dy", e.getValue().dy());
+            o.set(e.getKey(), one);
+        }
+        if (!o.isEmpty()) {
+            root.set("equipmentGanttBadgeDragDeltas", o);
+        }
+    }
+
     private static void putEquipmentGanttGraphicPrefs(ObjectNode root, DesktopSessionState state) {
         double z = state.equipmentGanttGraphicZoomPercent();
         if (Double.isFinite(z) && z >= 50 && z <= 200) {
@@ -459,6 +500,8 @@ public final class DesktopSessionStateStore {
         if (Double.isFinite(bgap) && bgap >= 0) {
             root.put("equipmentGanttPersonBadgeGapPx", bgap);
         }
+        put(root, "equipmentGanttGraphicDataFingerprint", state.equipmentGanttGraphicDataFingerprint());
+        putEquipmentGanttBadgeDragDeltas(root, state.equipmentGanttBadgeDragDeltas());
         root.put(
                 "equipmentGanttPersonBadgeDragAdjustEnabled",
                 state.equipmentGanttPersonBadgeDragAdjustEnabled());

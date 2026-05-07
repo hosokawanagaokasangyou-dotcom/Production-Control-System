@@ -40,6 +40,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.EquipmentGanttBadgeDragDelta;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
@@ -123,6 +124,13 @@ public final class EquipmentGanttGraphicTabController {
 
     /** {@link #applyGraphicCenter} に渡す現在のバッジ行（シートに応じて null）。 */
     private List<List<String>> badgeRowsForCurrentGraphic;
+
+    /** {@link jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane#computeDataFingerprint} と同一キーでデータ同一判定に使う。 */
+    private String equipmentGanttGraphicDataFingerprint = "";
+
+    /** データ同一時のみ有効なバッジドラッグずれ（セッションと同期）。 */
+    private final Map<String, EquipmentGanttBadgeDragDelta> equipmentGanttBadgeDragDeltas =
+            new LinkedHashMap<>();
 
     private BorderPane graphicRootWrapper;
 
@@ -469,6 +477,14 @@ public final class EquipmentGanttGraphicTabController {
                         String.format("%.0fpx", graphicPersonBadgeGapSlider.getValue()));
             }
         }
+        equipmentGanttGraphicDataFingerprint =
+                s.equipmentGanttGraphicDataFingerprint() != null
+                        ? s.equipmentGanttGraphicDataFingerprint()
+                        : "";
+        equipmentGanttBadgeDragDeltas.clear();
+        if (s.equipmentGanttBadgeDragDeltas() != null) {
+            equipmentGanttBadgeDragDeltas.putAll(s.equipmentGanttBadgeDragDeltas());
+        }
         if (personBadgeDragAdjustCheckBox != null) {
             personBadgeDragAdjustCheckBox.setSelected(s.equipmentGanttPersonBadgeDragAdjustEnabled());
         }
@@ -564,6 +580,14 @@ public final class EquipmentGanttGraphicTabController {
         return graphicPersonBadgeGapSlider != null
                 ? graphicPersonBadgeGapSlider.getValue()
                 : DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX;
+    }
+
+    String snapshotEquipmentGanttGraphicDataFingerprint() {
+        return equipmentGanttGraphicDataFingerprint != null ? equipmentGanttGraphicDataFingerprint : "";
+    }
+
+    Map<String, EquipmentGanttBadgeDragDelta> snapshotEquipmentGanttBadgeDragDeltas() {
+        return Map.copyOf(equipmentGanttBadgeDragDeltas);
     }
 
     boolean snapshotEquipmentGanttPersonBadgeDragAdjustEnabled() {
@@ -766,6 +790,8 @@ public final class EquipmentGanttGraphicTabController {
         lastGraphicSheet = null;
         loadedContractBadgeRows = null;
         badgeRowsForCurrentGraphic = null;
+        equipmentGanttGraphicDataFingerprint = "";
+        equipmentGanttBadgeDragDeltas.clear();
         graphicRootWrapper = null;
         graphicWheelHookInstalled = false;
         pendingHorizontalZoomAnchor = null;
@@ -825,6 +851,27 @@ public final class EquipmentGanttGraphicTabController {
                         ? shell.personBadgeStyleResolverForGantt()
                         : (String __) -> PersonBadgeStyle.defaultStyle();
         boolean showBadges = snapshotEquipmentGanttPersonBadgeEnabled();
+
+        String fpNow =
+                EquipmentGraphicGanttPane.computeDataFingerprint(
+                        st.columns(), rows, badgeRowsForCurrentGraphic);
+        if (!fpNow.equals(equipmentGanttGraphicDataFingerprint)) {
+            equipmentGanttBadgeDragDeltas.clear();
+        }
+        equipmentGanttGraphicDataFingerprint = fpNow;
+
+        java.util.function.BiConsumer<String, EquipmentGanttBadgeDragDelta> dragSink =
+                snapshotEquipmentGanttPersonBadgeDragAdjustEnabled()
+                        ? (k, d) -> {
+                            if (Math.abs(d.dx()) < 1e-6 && Math.abs(d.dy()) < 1e-6) {
+                                equipmentGanttBadgeDragDeltas.remove(k);
+                            } else {
+                                equipmentGanttBadgeDragDeltas.put(k, d);
+                            }
+                            scheduleEquipmentGraphicPersist();
+                        }
+                        : null;
+
         BorderPane gantt =
                 EquipmentGraphicGanttPane.build(
                         st.columns(),
@@ -844,7 +891,9 @@ public final class EquipmentGanttGraphicTabController {
                         showBadges,
                         badgeResolver,
                         snapshotEquipmentGanttPersonBadgeGapPx(),
-                        snapshotEquipmentGanttPersonBadgeDragAdjustEnabled());
+                        snapshotEquipmentGanttPersonBadgeDragAdjustEnabled(),
+                        equipmentGanttBadgeDragDeltas,
+                        dragSink);
         if (shell != null) {
             shell.refreshEquipmentGanttObservedBadgeLabels(distinctBadgeLabelsFromGrid(badgeRowsForCurrentGraphic));
         }

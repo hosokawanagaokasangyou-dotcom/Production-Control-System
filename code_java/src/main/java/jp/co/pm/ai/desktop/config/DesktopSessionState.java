@@ -45,7 +45,9 @@ import java.util.Map;
  * @param equipmentGanttSlotWidthPercent 時刻スロット列幅の調整（50〜500、0 は未保存として既定 100）
  * @param equipmentGanttShiftWheelHScrollPercent Shift+ホイール横スクロールの感度（50〜1000、100＝従来相当、0 は未保存として既定 200）
  * @param equipmentGanttPersonBadgeGapPx 担当バッジの横方向の固定間隔（px、隣接ピル左端同士の追加距離、0〜48 程度を想定）
- * @param equipmentGanttPersonBadgeDragAdjustEnabled 担当バッジをマウスドラッグで移動するモード（再描画で初期配置に戻る）
+ * @param equipmentGanttGraphicDataFingerprint 設備ガント表示データの内容フィンガープリント（SHA-256 16 進）。JSON 等が変わると無効化される
+ * @param equipmentGanttBadgeDragDeltas データ同一時のみ有効な担当バッジのドラッグずれ（キーはバッジ安定 ID）
+ * @param equipmentGanttPersonBadgeDragAdjustEnabled 担当バッジをマウスドラッグで移動するモード（データ同一ならずれはセッションに保存される）
  * @param equipmentGanttPersonBadgeEnabled 設備ガント・担当バッジ表示のオンオフ
  * @param equipmentGanttPersonBadgeFontFamily バッジ文字フォント（空は既定ファミリ）
  * @param equipmentGanttPersonBadgeFontPercent バッジ文字サイズ（行ラベル基準の%、0 は未保存として既定 85）
@@ -108,6 +110,8 @@ public record DesktopSessionState(
         double equipmentGanttSlotWidthPercent,
         double equipmentGanttShiftWheelHScrollPercent,
         double equipmentGanttPersonBadgeGapPx,
+        String equipmentGanttGraphicDataFingerprint,
+        Map<String, EquipmentGanttBadgeDragDelta> equipmentGanttBadgeDragDeltas,
         boolean equipmentGanttPersonBadgeDragAdjustEnabled,
         boolean equipmentGanttPersonBadgeEnabled,
         String equipmentGanttPersonBadgeFontFamily,
@@ -156,6 +160,14 @@ public record DesktopSessionState(
                 mainShellTabTitleAliases == null || mainShellTabTitleAliases.isEmpty()
                         ? Map.of()
                         : Map.copyOf(mainShellTabTitleAliases);
+        equipmentGanttGraphicDataFingerprint =
+                equipmentGanttGraphicDataFingerprint != null
+                        ? equipmentGanttGraphicDataFingerprint
+                        : "";
+        equipmentGanttBadgeDragDeltas =
+                equipmentGanttBadgeDragDeltas == null || equipmentGanttBadgeDragDeltas.isEmpty()
+                        ? Map.of()
+                        : Map.copyOf(equipmentGanttBadgeDragDeltas);
     }
 
     /**
@@ -248,6 +260,8 @@ public record DesktopSessionState(
                 0d,
                 0d,
                 DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX,
+                "",
+                Map.of(),
                 false,
                 true,
                 "",

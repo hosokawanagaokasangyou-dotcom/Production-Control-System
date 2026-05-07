@@ -1,5 +1,7 @@
 package jp.co.pm.ai.desktop.ui;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -12,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.function.BiConsumer;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -45,6 +48,7 @@ import javafx.scene.layout.StackPane;
 
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
+import jp.co.pm.ai.desktop.config.EquipmentGanttBadgeDragDelta;
 import java.util.function.Function;
 
 import javafx.application.Platform;
@@ -438,7 +442,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 false,
                 null,
                 DEFAULT_PERSON_BADGE_GAP_PX,
-                false);
+                false,
+                null,
+                null);
     }
 
     /**
@@ -479,7 +485,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 false,
                 null,
                 DEFAULT_PERSON_BADGE_GAP_PX,
-                false);
+                false,
+                null,
+                null);
     }
 
     /**
@@ -493,7 +501,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      * @param showPersonBadges 担当バッジオーバーレイを描画するか
      * @param personBadgeStyleResolver バッジ表示文字列ごとの見た目（{@code null} は常に {@link PersonBadgeStyle#defaultStyle()}）
      * @param personBadgeGapPx 担当バッジ横方向の固定間隔（px、隣接ピル左端間の追加距離、{@code <0} は既定）
-     * @param personBadgeDragAdjustEnabled バッジをドラッグで移動する（再描画で初期配置に戻る）
+     * @param personBadgeDragAdjustEnabled バッジをドラッグで移動する
+     * @param personBadgeDragDeltas {@link #computeDataFingerprint} が同一のとき適用するドラッグずれ（{@code null} で空）
+     * @param personBadgeDragDeltaSink ドラッグ確定時にずれを通知（{@code null} で保存しない）
      */
     public static BorderPane build(
             List<String> columns,
@@ -513,7 +523,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             boolean showPersonBadges,
             Function<String, PersonBadgeStyle> personBadgeStyleResolver,
             double personBadgeGapPx,
-            boolean personBadgeDragAdjustEnabled) {
+            boolean personBadgeDragAdjustEnabled,
+            Map<String, EquipmentGanttBadgeDragDelta> personBadgeDragDeltas,
+            BiConsumer<String, EquipmentGanttBadgeDragDelta> personBadgeDragDeltaSink) {
         BorderPane root = new BorderPane();
         root.setCache(false);
         List<String> effCols = columns;
@@ -561,6 +573,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         gapPxEff,
                         0d,
                         DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX);
+
+        Map<String, EquipmentGanttBadgeDragDelta> dragEff =
+                personBadgeDragDeltas != null ? personBadgeDragDeltas : Map.of();
 
         double timelineOuterPad =
                 Math.min(
@@ -821,10 +836,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         dr.cellsInSlots(),
                         layout,
                         badgeResolver,
+                        ri,
                         gapPxEff,
                         personBadgeDragAdjustEnabled,
                         timelineOuterPad,
-                        canvasTimelineW);
+                        canvasTimelineW,
+                        dragEff,
+                        personBadgeDragDeltaSink);
             }
             StackPane rowStack = new StackPane(rowCanvas, badgePane);
 
@@ -1535,16 +1553,104 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
     private record BarRun(int fromSlot, int toSlot, String text, BarKind kind) {}
 
+    /**
+     * バッジドラッグ位置の保存キー（同一データ・同一レイアルゴリズム前提）。
+     * 表示行インデックス・バー占据スロット・セグメント位置・担当名で一意化する。
+     */
+    private static String personBadgeDragKey(
+            int displayRowIndex,
+            BarRun run,
+            int segmentIndex,
+            int indexInSegment,
+            String personLabel) {
+        return displayRowIndex
+                + "|"
+                + run.fromSlot()
+                + "|"
+                + run.toSlot()
+                + "|"
+                + segmentIndex
+                + "|"
+                + indexInSegment
+                + "|"
+                + PersonBadgeStyle.normalizeLabelKey(personLabel);
+    }
+
+    /**
+     * {@link #build} と同一の pandas 列補正のあと、表本体＋担当バッジ列から SHA-256 フィンガープリントを返す。
+     */
+    public static String computeDataFingerprint(
+            List<String> columns,
+            ObservableList<ObservableList<String>> rows,
+            List<List<String>> badgeSlotRowsRaw) {
+        if (columns == null || rows == null) {
+            return "";
+        }
+        List<String> effCols = columns;
+        ObservableList<ObservableList<String>> effRows = rows;
+        List<List<String>> badgeEff = badgeSlotRowsRaw;
+        RepairResult repaired = tryRepairPandasUnnamedEquipmentTimeline(effCols, effRows);
+        if (repaired != null) {
+            effCols = repaired.columns();
+            effRows = repaired.rows();
+            badgeEff = null;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String c : effCols) {
+            sb.append('C').append(c != null ? c : "").append('\u001f');
+        }
+        sb.append('\u001e');
+        for (int r = 0; r < effRows.size(); r++) {
+            ObservableList<String> row = effRows.get(r);
+            for (int c = 0; c < effCols.size(); c++) {
+                String cell = row != null && c < row.size() ? row.get(c) : "";
+                sb.append(cell != null ? cell : "").append('\u001f');
+            }
+            sb.append('\u001e');
+        }
+        if (badgeEff != null) {
+            sb.append('\u001d');
+            for (List<String> br : badgeEff) {
+                if (br == null) {
+                    sb.append('\u001e');
+                    continue;
+                }
+                for (String x : br) {
+                    sb.append(x != null ? x : "").append('\u001f');
+                }
+                sb.append('\u001e');
+            }
+        }
+        return sha256Hex(sb.toString());
+    }
+
+    private static String sha256Hex(String text) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(text.getBytes(StandardCharsets.UTF_8));
+            StringBuilder out = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                out.append(String.format(Locale.US, "%02x", b & 0xff));
+            }
+            return out.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            return Integer.toHexString(text.hashCode());
+        }
+    }
+
     private static void layoutPersonBadgeOverlay(
             Pane overlay,
             List<String> badgeSlotTexts,
             List<String> slotTexts,
             LayoutMetrics layout,
             Function<String, PersonBadgeStyle> styleForLabel,
+            int displayRowIndex,
             double personBadgeGapPx,
             boolean badgeDragAdjustEnabled,
             double timelineOuterPad,
-            double timelinePaneWidth) {
+            double timelinePaneWidth,
+            Map<String, EquipmentGanttBadgeDragDelta> dragDeltas,
+            BiConsumer<String, EquipmentGanttBadgeDragDelta> dragDeltaSink) {
         if (overlay == null
                 || styleForLabel == null
                 || badgeSlotTexts == null
@@ -1698,8 +1804,24 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     visualLeft = proposed.getMinX();
                     placedBadgeLogicalRects.add(proposed);
 
-                    sp.setLayoutX(visualLeft - b.getMinX());
-                    sp.setLayoutY(ly);
+                    String personLabel = ii < parts.size() ? parts.get(ii) : "";
+                    String badgeKey =
+                            personBadgeDragKey(displayRowIndex, run, si, k, personLabel);
+                    Bounds cb = badgeDragClampBounds(sp);
+                    double defaultLayoutX = visualLeft - b.getMinX();
+                    double defaultLayoutY = ly;
+                    double lx = defaultLayoutX;
+                    double lyUse = defaultLayoutY;
+                    EquipmentGanttBadgeDragDelta sv =
+                            dragDeltas != null ? dragDeltas.get(badgeKey) : null;
+                    if (sv != null) {
+                        lx += sv.dx();
+                        lyUse += sv.dy();
+                    }
+                    lx = clampBadgeLayoutX(lx, cb, timelinePaneWidth);
+                    lyUse = clampBadgeLayoutYInBand(lyUse, cb, barTop, barTop + barH);
+                    sp.setLayoutX(lx);
+                    sp.setLayoutY(lyUse);
                     overlay.getChildren().add(sp);
                     if (badgeDragAdjustEnabled) {
                         sp.setMouseTransparent(false);
@@ -1713,7 +1835,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 badgeDragClampBounds(sp),
                                 barTop,
                                 barTop + barH,
-                                timelinePaneWidth);
+                                timelinePaneWidth,
+                                defaultLayoutX,
+                                defaultLayoutY,
+                                badgeKey,
+                                dragDeltaSink);
                     }
                     double advance = stepW + gapPx;
                     xVis = visualLeft + advance;
@@ -1767,10 +1893,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             Bounds local,
             double bandTop,
             double bandBottom,
-            double paneWidth) {
+            double paneWidth,
+            double defaultLayoutX,
+            double defaultLayoutY,
+            String badgeKey,
+            BiConsumer<String, EquipmentGanttBadgeDragDelta> dragDeltaSink) {
         final double[] press = new double[4];
+        final boolean[] dragged = {false};
         sp.setOnMousePressed(
                 e -> {
+                    dragged[0] = false;
                     press[0] = e.getSceneX();
                     press[1] = e.getSceneY();
                     press[2] = sp.getLayoutX();
@@ -1779,6 +1911,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 });
         sp.setOnMouseDragged(
                 e -> {
+                    dragged[0] = true;
                     double dx = e.getSceneX() - press[0];
                     double dy = e.getSceneY() - press[1];
                     double nx = clampBadgeLayoutX(press[2] + dx, local, paneWidth);
@@ -1788,6 +1921,19 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     sp.setLayoutY(ny);
                     e.consume();
                 });
+        if (dragDeltaSink != null && badgeKey != null && !badgeKey.isEmpty()) {
+            sp.setOnMouseReleased(
+                    e -> {
+                        if (!dragged[0]) {
+                            return;
+                        }
+                        double tdx = sp.getLayoutX() - defaultLayoutX;
+                        double tdy = sp.getLayoutY() - defaultLayoutY;
+                        dragDeltaSink.accept(
+                                badgeKey, new EquipmentGanttBadgeDragDelta(tdx, tdy));
+                        e.consume();
+                    });
+        }
     }
 
     private static double clampBadgeLayoutX(double layoutX, Bounds local, double paneWidth) {
