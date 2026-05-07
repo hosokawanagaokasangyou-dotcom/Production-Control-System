@@ -951,7 +951,7 @@ public final class DispatchInteractiveTabController {
     private MachineCalendarBlockIndex.LoadOutcome loadMachineCalendarFromSharedJson(MainShellController shellRef)
             throws Exception {
         Path json = AppPaths.resolveMachineCalendarBlocksJsonPath(shellRef.snapshotUiEnv());
-        return MachineCalendarBlockIndex.loadOutcomeFromJsonFile(shellRef.snapshotUiEnv(), json);
+        return MachineCalendarBlockIndex.loadOutcomeFromJsonFile(json);
     }
 
     /**
@@ -970,7 +970,6 @@ public final class DispatchInteractiveTabController {
                     try {
                         MachineCalendarBlockIndex.LoadOutcome lo =
                                 MachineCalendarBlockIndex.loadOutcomeFromJsonFile(
-                                        shell.snapshotUiEnv(),
                                         AppPaths.resolveMachineCalendarBlocksJsonPath(shell.snapshotUiEnv()));
                         calendarBlocks = lo.index();
                         rebuildGrids();
