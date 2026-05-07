@@ -1477,6 +1477,23 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 || badgeSlotTexts == null
                 || slotTexts == null
                 || badgeSlotTexts.size() != slotTexts.size()) {
+            // #region agent log
+            try {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put(
+                        "badgeSlotCount",
+                        badgeSlotTexts != null ? badgeSlotTexts.size() : -1);
+                m.put("slotTextCount", slotTexts != null ? slotTexts.size() : -1);
+                AgentDebugLog.appendStructured(
+                        Map.of(),
+                        "bdec51",
+                        "H5",
+                        "EquipmentGraphicGanttPane.layoutPersonBadgeOverlay",
+                        "badge/slot column count mismatch early exit",
+                        m);
+            } catch (Throwable ignored) {
+            }
+            // #endregion
             return;
         }
         // スロット文言がスロット按分の m で微妙に異なると collectBarRuns が細切れになり、
@@ -1489,6 +1506,38 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             String frag =
                     PersonNameBadgeText.firstNonEmptyInSlotRange(
                             badgeSlotTexts, run.fromSlot(), run.toSlot());
+            // #region agent log
+            try {
+                String rt = run.text() != null ? run.text() : "";
+                if (rt.contains("Y5-3")) {
+                    int nonEmpty = 0;
+                    int from = run.fromSlot();
+                    int to = run.toSlot();
+                    int lim = Math.min(to, badgeSlotTexts.size() - 1);
+                    for (int si = from; si <= lim && si >= 0; si++) {
+                        String bs = badgeSlotTexts.get(si);
+                        if (bs != null && !bs.isBlank()) {
+                            nonEmpty++;
+                        }
+                    }
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("runText", rt);
+                    m.put("runKind", String.valueOf(run.kind()));
+                    m.put("fromSlot", Integer.valueOf(from));
+                    m.put("toSlot", Integer.valueOf(to));
+                    m.put("frag", frag);
+                    m.put("nonEmptyBadgeSlotsInRun", Integer.valueOf(nonEmpty));
+                    AgentDebugLog.appendStructured(
+                            Map.of(),
+                            "bdec51",
+                            "H4",
+                            "EquipmentGraphicGanttPane.layoutPersonBadgeOverlay",
+                            "Y5-3 bar run badge fragment",
+                            m);
+                }
+            } catch (Throwable ignored) {
+            }
+            // #endregion
             if (frag.isEmpty()) {
                 continue;
             }

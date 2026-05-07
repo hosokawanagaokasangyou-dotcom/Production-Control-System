@@ -795,6 +795,28 @@ public final class EquipmentGanttGraphicTabController {
                 graphicBarFontPctSlider != null ? graphicBarFontPctSlider.getValue() : 100d;
         DesktopTheme theme =
                 shell != null ? shell.currentDesktopTheme() : DesktopTheme.LIGHT;
+        // #region agent log
+        try {
+            Map<String, Object> bg = new LinkedHashMap<>();
+            bg.put(
+                    "badgeRowsForCurrentGraphicNull",
+                    Boolean.valueOf(badgeRowsForCurrentGraphic == null));
+            bg.put(
+                    "loadedContractBadgeRowsNull",
+                    Boolean.valueOf(loadedContractBadgeRows == null));
+            bg.put(
+                    "tableRowCount",
+                    Integer.valueOf(st != null && st.rows() != null ? st.rows().size() : -1));
+            AgentDebugLog.appendStructured(
+                    shell != null ? shell.snapshotUiEnv() : Map.of(),
+                    "bdec51",
+                    "H3",
+                    "EquipmentGanttGraphicTabController.applyGraphicCenter",
+                    "equipment gantt graphic badge grid",
+                    bg);
+        } catch (Throwable ignored) {
+        }
+        // #endregion
         ObservableList<ObservableList<String>> rows = toObservableRows(st);
         Function<String, PersonBadgeStyle> badgeResolver =
                 shell != null

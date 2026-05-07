@@ -190,6 +190,32 @@ public final class EquipmentGanttContractSheetTableBuilder {
                         }
                         cell = ev.timelineCellLabel();
                         badgeCell = ev.badgeSlotFragment();
+                        // #region agent log
+                        try {
+                            String cl = cell != null ? cell : "";
+                            if (cl.contains("Y5-3")
+                                    || (ev.taskId != null && ev.taskId.contains("Y5-3"))) {
+                                Map<String, Object> y = new LinkedHashMap<>(AgentDebugLog.debugHeapMap());
+                                y.put("day", day.toString());
+                                y.put("equipLine", equipLine);
+                                y.put("taskId", ev.taskId);
+                                y.put("op", ev.op);
+                                y.put("sub", ev.sub);
+                                y.put("cell", cl);
+                                y.put("badgeCell", badgeCell != null ? badgeCell : "");
+                                y.put("eventKind", ev.eventKind);
+                                y.put("slotCol", col);
+                                AgentDebugLog.appendStructured(
+                                        Map.of(),
+                                        "bdec51",
+                                        "H1",
+                                        "EquipmentGanttContractSheetTableBuilder.slotFill",
+                                        "Y5-3 timeline slot cell+badge",
+                                        y);
+                            }
+                        } catch (Throwable ignored) {
+                        }
+                        // #endregion
                         break;
                     }
                     row.put(col, cell);
