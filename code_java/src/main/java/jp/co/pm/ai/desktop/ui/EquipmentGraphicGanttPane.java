@@ -1676,8 +1676,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     if (badgeDragAdjustEnabled) {
                         sp.setMouseTransparent(false);
                         sp.setCursor(Cursor.MOVE);
+                        /*
+                         * ドラッグのクランプは DropShadow を含む getBoundsInLocal() を使わない。
+                         * グローの広がりがバッジごとに異なり論理高さが帯より大きくなると可動域がほぼゼロになる。
+                         */
                         installBadgeDragHandlers(
-                                sp, b, barTop, barTop + barH, timelinePaneWidth);
+                                sp,
+                                badgeDragClampBounds(sp),
+                                barTop,
+                                barTop + barH,
+                                timelinePaneWidth);
                     }
                     double advance =
                             Math.max(
@@ -1743,6 +1751,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         double w = Math.max(1.0, sp.prefWidth(-1));
         double h = Math.max(1.0, sp.prefHeight(-1));
         return new BoundingBox(0, 0, w, h);
+    }
+
+    /**
+     * ドラッグ時の左右・上下クランプに使うピル本体の論理矩形（原点付き）。
+     * {@link StackPane#getBoundsInLocal()} はエフェクトで縦横に肥大するため可動域がバッジごとに潰れる。
+     */
+    private static Bounds badgeDragClampBounds(StackPane sp) {
+        return computeBadgeFallbackBounds(sp);
     }
 
     private static double visualWidth(Bounds b) {
