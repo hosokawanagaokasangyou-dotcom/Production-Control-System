@@ -51,7 +51,6 @@ import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.ui.GanttScheduleStyle;
 import jp.co.pm.ai.desktop.ui.GanttSheetKind;
@@ -443,22 +442,6 @@ public final class PlanResultViewerTabController {
         try {
             String ps = planJsonField != null ? planJsonField.getText().strip() : "";
             String ms = memberJsonField != null ? memberJsonField.getText().strip() : "";
-            // #region agent log
-            try {
-                Map<String, Object> rd = new LinkedHashMap<>(AgentDebugLog.debugHeapMap());
-                rd.put("phase", "reloadFromFields_entry");
-                rd.put("planJsonLen", ps.length());
-                rd.put("memberJsonLen", ms.length());
-                AgentDebugLog.appendStructured(
-                        shell != null ? shell.snapshotUiEnv() : Map.of(),
-                        "81ed4a",
-                        "H2",
-                        "PlanResultViewerTabController:reloadFromFields",
-                        "plan result viewer reload entry",
-                        rd);
-            } catch (Throwable ignored) {
-            }
-            // #endregion
             Path planPath = ps.isEmpty() ? null : Path.of(ps);
             Path memberPath = ms.isEmpty() ? null : Path.of(ms);
 

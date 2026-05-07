@@ -73,7 +73,6 @@ import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
@@ -2202,65 +2201,11 @@ public final class MainShellController {
                                                             "段階1 の処理が正常終了しました。");
                                                 }
                                                 if (STAGE2.equals(script) && c == 0) {
-                                                    // #region agent log
-                                                    try {
-                                                        Map<String, Object> d0 =
-                                                                new LinkedHashMap<>(
-                                                                        AgentDebugLog.debugHeapMap());
-                                                        d0.put(
-                                                                "phase",
-                                                                "stage2_before_refreshStage2OutputArtifacts");
-                                                        AgentDebugLog.appendStructured(
-                                                                collectUiEnv(),
-                                                                "81ed4a",
-                                                                "H2",
-                                                                "MainShellController:runStage.whenComplete",
-                                                                "stage2 success heap before artifact refresh",
-                                                                d0);
-                                                    } catch (Throwable ignored) {
-                                                    }
-                                                    // #endregion
                                                     refreshStage2OutputArtifacts();
-                                                    // #region agent log
-                                                    try {
-                                                        Map<String, Object> d1 =
-                                                                new LinkedHashMap<>(
-                                                                        AgentDebugLog.debugHeapMap());
-                                                        d1.put(
-                                                                "phase",
-                                                                "stage2_after_refreshStage2_before_dispatchReload");
-                                                        AgentDebugLog.appendStructured(
-                                                                collectUiEnv(),
-                                                                "81ed4a",
-                                                                "H2",
-                                                                "MainShellController:runStage.whenComplete",
-                                                                "stage2 heap after artifact paths + related tabs",
-                                                                d1);
-                                                    } catch (Throwable ignored) {
-                                                    }
-                                                    // #endregion
                                                     if (dispatchInteractiveTabController != null) {
                                                         dispatchInteractiveTabController
                                                                 .reloadTableFromDiskAfterExternalUpdate();
                                                     }
-                                                    // #region agent log
-                                                    try {
-                                                        Map<String, Object> d2 =
-                                                                new LinkedHashMap<>(
-                                                                        AgentDebugLog.debugHeapMap());
-                                                        d2.put(
-                                                                "phase",
-                                                                "stage2_after_scheduling_dispatch_reload_async");
-                                                        AgentDebugLog.appendStructured(
-                                                                collectUiEnv(),
-                                                                "81ed4a",
-                                                                "H2",
-                                                                "MainShellController:runStage.whenComplete",
-                                                                "stage2 heap after scheduling dispatch reload",
-                                                                d2);
-                                                    } catch (Throwable ignored) {
-                                                    }
-                                                    // #endregion
                                                     MacroCompleteChime.playIfAvailable(collectUiEnv());
                                                     showStageCompletionDialog(
                                                             "段階2 完了",

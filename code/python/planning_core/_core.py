@@ -24287,9 +24287,6 @@ def _norm_ymd(v) -> str:
     return s
 
 
-# #endregion
-
-
 def _gap_minutes_until_next_break_start(dt, breaks_merged) -> float | None:
     """dt 以降に始まる最初の休憩開始までの分。無ければ None。"""
     if not isinstance(dt, datetime) or not breaks_merged:

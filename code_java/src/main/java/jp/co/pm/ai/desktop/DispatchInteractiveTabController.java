@@ -69,7 +69,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
 import jp.co.pm.ai.desktop.dispatch.MachineCalendarBlockIndex;
@@ -908,23 +907,6 @@ public final class DispatchInteractiveTabController {
                             b.calendarLoadError(),
                             b.pythonCalendarJsonError(),
                             b.pythonCalendarDiagnosticsJson());
-                    // #region agent log
-                    try {
-                        long sz = Files.size(jsonPath);
-                        Map<String, Object> ld = new LinkedHashMap<>(AgentDebugLog.debugHeapMap());
-                        ld.put("phase", "reloadFromDisk_json_loaded_before_rebuildGrids");
-                        ld.put("resultDispatchJsonBytes", sz);
-                        ld.put("loadedDocRows", doc.rows().size());
-                        AgentDebugLog.appendStructured(
-                                shellRef.snapshotUiEnv(),
-                                "81ed4a",
-                                "H3",
-                                "DispatchInteractiveTabController:reloadFromDiskQuiet",
-                                "dispatch json on FX before spreadsheet rebuild",
-                                ld);
-                    } catch (Throwable ignored) {
-                    }
-                    // #endregion
                     rebuildGrids();
                     clearDispatchDocDirty();
                     hideReloadProgress();
@@ -1154,32 +1136,6 @@ public final class DispatchInteractiveTabController {
     private void rebuildGrids() {
         gridRebuildGeneration++;
         FullGridRebuild bundle = buildFullGridRebuild(staffCheckToggle.isSelected());
-        // #region agent log
-        try {
-            Map<String, Object> d = new LinkedHashMap<>(AgentDebugLog.debugHeapMap());
-            d.put("docRows", doc.rows().size());
-            d.put("dateAxisDays", bundle.axis().size());
-            d.put("wideProfileCount", bundle.wide().profiles().size());
-            int wideCols =
-                    bundle.wide().staticCols()
-                            + bundle.wide().dayCount() * DAY_SLOT_COLUMNS;
-            d.put("wideCols", wideCols);
-            d.put("wideGridRowCount", bundle.wide().grid().getRows().size());
-            int byDayCols =
-                    bundle.byDay().staticCols()
-                            + bundle.byDay().dayCount() * DAY_SLOT_COLUMNS;
-            d.put("byDayCols", byDayCols);
-            d.put("byDayGridRowCount", bundle.byDay().grid().getRows().size());
-            AgentDebugLog.appendStructured(
-                    shell != null ? shell.snapshotUiEnv() : Map.of(),
-                    "81ed4a",
-                    "H3",
-                    "DispatchInteractiveTabController:rebuildGrids",
-                    "dispatch spreadsheet grid dimensions",
-                    d);
-        } catch (Throwable ignored) {
-        }
-        // #endregion
         applyFullGridRebuild(bundle);
     }
 

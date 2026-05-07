@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -27,7 +26,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 /**
  * Bridges tabular {@link ObservableList} rows to ControlsFX {@link SpreadsheetView} / {@link GridBase}.
@@ -597,30 +595,6 @@ public final class SpreadsheetTabularSupport {
         }
         int physicalRows = spreadsheetPhysicalRowCount(view);
         boolean skipResize = physicalRows >= PLAN_RESULT_REFRESH_SKIP_RESIZE_ROWS;
-        // #region agent log
-        try {
-            Map<String, Object> data = new LinkedHashMap<>(AgentDebugLog.debugHeapMap());
-            data.put("viewRef", System.identityHashCode(view));
-            data.put("refreshMode", skipResize ? "layout_only" : "resize_then_layout");
-            data.put("evalAt", "flush_execute");
-            if (view.getGrid() instanceof GridBase gb) {
-                var rows = gb.getRows();
-                data.put("gridPhysicalRows", rows != null ? rows.size() : -1);
-                int cols =
-                        rows != null && !rows.isEmpty() ? rows.get(0).size() : -1;
-                data.put("gridColsFirstRow", cols);
-            }
-            data.put("runId", "post-fix-v3");
-            AgentDebugLog.appendStructured(
-                    Map.of(),
-                    "81ed4a",
-                    "H1",
-                    "SpreadsheetTabularSupport:presentationFlushOnce",
-                    "presentation refresh flush",
-                    data);
-        } catch (Throwable ignored) {
-        }
-        // #endregion
         if (!skipResize) {
             view.resizeRowsToDefault();
             refreshEmbeddedTableViewsRecursive(view, 0);
