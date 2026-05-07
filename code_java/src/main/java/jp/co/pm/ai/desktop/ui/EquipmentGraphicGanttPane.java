@@ -802,7 +802,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     barFont);
 
             Pane badgePane = new Pane();
-            badgePane.setMouseTransparent(true);
+            /*
+             * 親 Pane が mouseTransparent のとき JavaFX は子もヒットしない（バッジが最前面でもドラッグ不可）。
+             * ドラッグ調整 ON のときだけ非透過にし、余白は pickOnBounds(false) で Canvas 側へ透過させる。
+             */
+            badgePane.setPickOnBounds(false);
+            badgePane.setMouseTransparent(!(showPersonBadges && personBadgeDragAdjustEnabled));
             if (showPersonBadges) {
                 layoutPersonBadgeOverlay(
                         badgePane,
