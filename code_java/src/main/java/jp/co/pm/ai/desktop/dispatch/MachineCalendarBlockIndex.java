@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.dispatch;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -212,6 +213,15 @@ public final class MachineCalendarBlockIndex {
                         masterWorkbook.toAbsolutePath().toString());
         pb.directory(pythonScriptDir.toFile());
         pb.environment().put("PM_AI_ALLOW_LEGACY_PYTHON_FOR_TOOLS", "1");
+        // Embedded / subprocess Python may omit the script dir from sys.path; planning_core lives beside this script.
+        String pyDirNorm = pythonScriptDir.toAbsolutePath().normalize().toString();
+        Map<String, String> env = pb.environment();
+        String prevPyPath = env.get("PYTHONPATH");
+        env.put(
+                "PYTHONPATH",
+                (prevPyPath == null || prevPyPath.isBlank())
+                        ? pyDirNorm
+                        : pyDirNorm + File.pathSeparator + prevPyPath);
         pb.redirectErrorStream(true);
         Process p = pb.start();
         String rawStdout;
