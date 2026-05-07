@@ -778,13 +778,6 @@ public final class MainShellController {
         }
     }
 
-    /** Cursor debug e02e86: skills メンバー一覧が読めているか（ガント初回描画との順序検証用）。 */
-    public int ganttDebugMasterMemberCount() {
-        return ganttPersonBadgeDesignTabController != null
-                ? ganttPersonBadgeDesignTabController.ganttDebugMasterMemberCount()
-                : -1;
-    }
-
     private String snapshotPersonBadgeFontFamily() {
         return ganttPersonBadgeDesignTabController != null
                 ? ganttPersonBadgeDesignTabController.snapshotPersonBadgeFontFamily()
