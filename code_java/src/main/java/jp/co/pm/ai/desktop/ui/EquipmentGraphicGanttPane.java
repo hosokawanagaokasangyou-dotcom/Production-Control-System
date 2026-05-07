@@ -44,6 +44,7 @@ import jp.co.pm.ai.desktop.config.DesktopTheme;
 import java.util.function.Function;
 
 import javafx.application.Platform;
+import javafx.geometry.BoundingBox;
 import javafx.geometry.Bounds;
 import javafx.geometry.Point2D;
 import javafx.scene.Node;
@@ -1462,27 +1463,31 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 continue;
             }
             List<StackPane> nodes = new ArrayList<>();
-            List<Double> widths = new ArrayList<>();
-            List<Double> heights = new ArrayList<>();
+            List<Bounds> locals = new ArrayList<>();
             for (String p : parts) {
+                PersonBadgeStyle st = styleForLabel.apply(p);
                 StackPane sp =
                         PersonBadgeNodeFactory.createBadge(
-                                p,
-                                styleForLabel.apply(p),
-                                layout.zoom,
-                                layout.rowLabelFontSize);
+                                p, st, layout.zoom, layout.rowLabelFontSize);
                 sp.applyCss();
                 sp.layout();
+                Bounds lb = sp.getBoundsInLocal();
+                if (lb == null
+                        || !Double.isFinite(lb.getWidth())
+                        || !Double.isFinite(lb.getHeight())
+                        || lb.getWidth() < 0.5
+                        || lb.getHeight() < 0.5) {
+                    lb = computeBadgeFallbackBounds(sp);
+                }
+                locals.add(lb);
                 nodes.add(sp);
-                widths.add(Math.max(1.0, sp.prefWidth(-1)));
-                heights.add(Math.max(1.0, sp.prefHeight(-1)));
             }
 
             double inset = 0.5 * layout.zoom;
             double barTop = 3 * layout.zoom;
             double barH = layout.rowHeight - 2 * barTop;
             double xPad = 3 * layout.zoom;
-            double gap = 2 * layout.zoom;
+            double gap = Math.max(4 * layout.zoom, 6);
             double bandRight = (run.toSlot() + 1) * layout.slotWidth - inset;
             double x0 = run.fromSlot() * layout.slotWidth + inset + xPad;
 
@@ -1491,17 +1496,18 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             int idx = 0;
             while (idx < nodes.size()) {
                 List<Integer> row = new ArrayList<>();
-                double x = x0;
+                double xVis = x0;
                 double maxRowH = 0;
                 while (idx < nodes.size()) {
-                    double w = widths.get(idx);
-                    double h = heights.get(idx);
-                    if (x > x0 && x + w > bandRight + 1e-6) {
+                    Bounds b = locals.get(idx);
+                    double vw = visualWidth(b);
+                    double vh = visualHeight(b);
+                    if (xVis > x0 && xVis + vw > bandRight + 1e-6) {
                         break;
                     }
                     row.add(idx);
-                    maxRowH = Math.max(maxRowH, h);
-                    x += w + gap;
+                    maxRowH = Math.max(maxRowH, vh);
+                    xVis += vw + gap;
                     idx++;
                 }
                 rowIndices.add(row);
@@ -1520,21 +1526,43 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             int rowNum = 0;
             for (List<Integer> row : rowIndices) {
                 double rowMax = rowMaxHeights.get(rowNum);
-                double x = x0;
+                double xVis = x0;
                 for (int ii : row) {
                     StackPane sp = nodes.get(ii);
-                    double w = widths.get(ii);
-                    double h = heights.get(ii);
-                    double yBadge = yCursor + (rowMax - h) / 2;
-                    sp.setLayoutX(x);
-                    sp.setLayoutY(yBadge);
+                    Bounds b = locals.get(ii);
+                    double vh = visualHeight(b);
+                    double yTop = yCursor + (rowMax - vh) / 2;
+                    sp.setLayoutX(xVis - b.getMinX());
+                    sp.setLayoutY(yTop - b.getMinY());
                     overlay.getChildren().add(sp);
-                    x += w + gap;
+                    xVis += visualWidth(b) + gap;
                 }
                 yCursor += rowMax + gap;
                 rowNum++;
             }
         }
+    }
+
+    private static Bounds computeBadgeFallbackBounds(StackPane sp) {
+        double w = Math.max(1.0, sp.prefWidth(-1));
+        double h = Math.max(1.0, sp.prefHeight(-1));
+        return new BoundingBox(0, 0, w, h);
+    }
+
+    private static double visualWidth(Bounds b) {
+        if (b == null) {
+            return 1.0;
+        }
+        double w = b.getMaxX() - b.getMinX();
+        return Math.max(1.0, Double.isFinite(w) ? w : b.getWidth());
+    }
+
+    private static double visualHeight(Bounds b) {
+        if (b == null) {
+            return 1.0;
+        }
+        double h = b.getMaxY() - b.getMinY();
+        return Math.max(1.0, Double.isFinite(h) ? h : b.getHeight());
     }
 
     private static void drawTimelineRow(
