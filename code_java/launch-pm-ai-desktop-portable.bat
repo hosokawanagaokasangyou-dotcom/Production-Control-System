@@ -38,11 +38,16 @@ exit /b 1
 
 :have_java
 
-rem Match pom.xml jvm.initial.heap / jvm.max.heap and package_app.ps1 javaOpts (3g)
-"%JAVA_EXE%" -Dfile.encoding=UTF-8 -Xms3g -Xmx3g -XX:+HeapDumpOnOutOfMemoryError -XX:+UseStringDeduplication -Dprism.order=sw --add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED --add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED --add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED -classpath "%ROOT%\app\*" jp.co.pm.ai.desktop.PmAiFxApp %*
+rem Heap/prism match pom.xml and package_app.ps1. Do NOT use --add-opens javafx.* here:
+rem classpath-only JavaFX resolves too late and JDK prints "Unknown module: javafx.controls".
+
+"%JAVA_EXE%" -Dfile.encoding=UTF-8 -Xms3g -Xmx3g -XX:+HeapDumpOnOutOfMemoryError -XX:+UseStringDeduplication -Dprism.order=sw -classpath "%ROOT%\app\*" jp.co.pm.ai.desktop.PmAiFxApp %*
 
 set EXITCODE=!ERRORLEVEL!
 
 if !EXITCODE! neq 0 (
     echo.
-    echo [Exit !EXITCODE!] Logs: !USERPROFILE!\.pm-ai-desktop\startup.log  or  !TEMP!\p
+    echo [Exit !EXITCODE!] Logs: !USERPROFILE!\.pm-ai-desktop\startup.log  or  !TEMP!\pm-ai-desktop-startup.log
+)
+
+exit /b !EXITCODE!
