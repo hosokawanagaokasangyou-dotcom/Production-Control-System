@@ -34,7 +34,7 @@ exit /b 1
 rem OpenJFX Windows modular jars (must match files under app\ from package_app.ps1).
 set "PM_AI_JFX_MODPATH=%ROOT%\app\javafx-base-26.0.1-win.jar;%ROOT%\app\javafx-controls-26.0.1-win.jar;%ROOT%\app\javafx-fxml-26.0.1-win.jar;%ROOT%\app\javafx-graphics-26.0.1-win.jar;%ROOT%\app\javafx-swing-26.0.1-win.jar"
 
-"%JAVA_EXE%" -Dfile.encoding=UTF-8 -Xms3g -Xmx3g -XX:+HeapDumpOnOutOfMemoryError -XX:+UseStringDeduplication -Dprism.order=sw --module-path "%PM_AI_JFX_MODPATH%" --add-modules javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.swing -classpath "%ROOT%\app\*" jp.co.pm.ai.desktop.PmAiFxApp %*
+"%JAVA_EXE%" -Dfile.encoding=UTF-8 -Xms3g -Xmx3g -XX:+HeapDumpOnOutOfMemoryError -XX:+UseStringDeduplication -Dprism.order=sw --add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED --add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED --add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED --enable-native-access=javafx.graphics --module-path "%PM_AI_JFX_MODPATH%" --add-modules javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.swing -classpath "%ROOT%\app\*" jp.co.pm.ai.desktop.PmAiFxApp %*
 
 set EXITCODE=!ERRORLEVEL!
 

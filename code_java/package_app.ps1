@@ -456,7 +456,9 @@ function Build-PmAiDesktopLauncherBatContent {
         $lines.Add('set "PM_AI_JFX_MODPATH=!PM_AI_JFX_MODPATH!;%ROOT%\app\' + $artifacts[$ai] + '-' + $jv + '-win.jar"')
     }
     $lines.Add('')
-    $javaLine = '"%JAVA_EXE%" -Dfile.encoding=UTF-8 -Xms' + $xms + ' -Xmx' + $xmx + ' -XX:+HeapDumpOnOutOfMemoryError -XX:+UseStringDeduplication -Dprism.order=sw --module-path "!PM_AI_JFX_MODPATH!" --add-modules javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.swing -classpath "%ROOT%\app\*" jp.co.pm.ai.desktop.PmAiFxApp %*'
+    # Must match jpackage --java-options ($javaOpts): ControlsFX SpreadsheetView needs internal JavaFX packages.
+    $compatJvm = '--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED --add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED --add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED --enable-native-access=javafx.graphics'
+    $javaLine = '"%JAVA_EXE%" -Dfile.encoding=UTF-8 -Xms' + $xms + ' -Xmx' + $xmx + ' -XX:+HeapDumpOnOutOfMemoryError -XX:+UseStringDeduplication -Dprism.order=sw ' + $compatJvm + ' --module-path "!PM_AI_JFX_MODPATH!" --add-modules javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.swing -classpath "%ROOT%\app\*" jp.co.pm.ai.desktop.PmAiFxApp %*'
     $lines.Add($javaLine)
     $lines.Add('')
     $lines.Add('set EXITCODE=!ERRORLEVEL!')
@@ -743,7 +745,8 @@ $javaOpts = @(
     "-Dprism.order=$prismOrder",
     '--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED',
     '--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED',
-    '--add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED'
+    '--add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED',
+    '--enable-native-access=javafx.graphics'
 )
 
 $jpkgArgs = [System.Collections.Generic.List[string]]::new()
