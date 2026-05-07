@@ -1464,6 +1464,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             }
             List<StackPane> nodes = new ArrayList<>();
             List<Bounds> locals = new ArrayList<>();
+            /** 帯内の縦積み・中央寄せはピル寸法（pref）で行う。bounds は DropShadow で縦に肥大化し帯外へ押し出す。 */
+            List<Double> stackHeights = new ArrayList<>();
             for (String p : parts) {
                 PersonBadgeStyle st = styleForLabel.apply(p);
                 StackPane sp =
@@ -1481,6 +1483,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 }
                 locals.add(lb);
                 nodes.add(sp);
+                stackHeights.add(Math.max(1.0, sp.prefHeight(-1)));
             }
 
             double inset = 0.5 * layout.zoom;
@@ -1501,12 +1504,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 while (idx < nodes.size()) {
                     Bounds b = locals.get(idx);
                     double vw = visualWidth(b);
-                    double vh = visualHeight(b);
+                    double stackH = stackHeights.get(idx);
                     if (xVis > x0 && xVis + vw > bandRight + 1e-6) {
                         break;
                     }
                     row.add(idx);
-                    maxRowH = Math.max(maxRowH, vh);
+                    maxRowH = Math.max(maxRowH, stackH);
                     xVis += vw + gap;
                     idx++;
                 }
@@ -1530,10 +1533,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 for (int ii : row) {
                     StackPane sp = nodes.get(ii);
                     Bounds b = locals.get(ii);
-                    double vh = visualHeight(b);
-                    double yTop = yCursor + (rowMax - vh) / 2;
+                    double stackH = stackHeights.get(ii);
+                    double yTop = yCursor + (rowMax - stackH) / 2;
                     sp.setLayoutX(xVis - b.getMinX());
-                    sp.setLayoutY(yTop - b.getMinY());
+                    double ly = clampBadgeLayoutYInBand(yTop - b.getMinY(), b, barTop, barTop + barH);
+                    sp.setLayoutY(ly);
                     overlay.getChildren().add(sp);
                     xVis += visualWidth(b) + gap;
                 }
@@ -1557,12 +1561,29 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         return Math.max(1.0, Double.isFinite(w) ? w : b.getWidth());
     }
 
-    private static double visualHeight(Bounds b) {
-        if (b == null) {
-            return 1.0;
+    /**
+     * 親座標系での見かけ矩形が {@code [bandTop, bandBottom]} に収まるよう layoutY を調整する（グローのはみ出し対策）。
+     */
+    private static double clampBadgeLayoutYInBand(
+            double layoutY, Bounds local, double bandTop, double bandBottom) {
+        if (local == null) {
+            return layoutY;
         }
-        double h = b.getMaxY() - b.getMinY();
-        return Math.max(1.0, Double.isFinite(h) ? h : b.getHeight());
+        double ly = layoutY;
+        double top = ly + local.getMinY();
+        double bot = ly + local.getMaxY();
+        if (top < bandTop) {
+            ly += bandTop - top;
+        }
+        bot = ly + local.getMaxY();
+        if (bot > bandBottom) {
+            ly -= bot - bandBottom;
+        }
+        top = ly + local.getMinY();
+        if (top < bandTop) {
+            ly += bandTop - top;
+        }
+        return ly;
     }
 
     private static void drawTimelineRow(
