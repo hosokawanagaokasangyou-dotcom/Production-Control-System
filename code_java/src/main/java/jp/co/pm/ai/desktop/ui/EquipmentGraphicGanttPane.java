@@ -2022,6 +2022,29 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 || b.getMaxY() + gap <= a.getMinY());
     }
 
+    /**
+     * バッジドラッグの「つかみ」判定を、論理ピル矩形の中央に限定する（幅・高さそれぞれこの割合の矩形）。
+     * 端やグロー周辺での誤掴みを抑え、中央以外ではイベントを消費しない（下のスクロール等へ伝播しやすくする）。
+     */
+    private static final double BADGE_DRAG_GRAB_ZONE_FRAC = 0.5;
+
+    /** {@link #BADGE_DRAG_GRAB_ZONE_FRAC} に基づき、論理ピル座標系でのポイントがドラッグ開始可能域にあるか。 */
+    private static boolean isWithinBadgeDragGrabZone(Bounds local, double localX, double localY) {
+        if (local == null) {
+            return true;
+        }
+        double w = local.getWidth();
+        double h = local.getHeight();
+        if (!Double.isFinite(w) || !Double.isFinite(h) || w <= 1e-6 || h <= 1e-6) {
+            return true;
+        }
+        double cx = (local.getMinX() + local.getMaxX()) / 2;
+        double cy = (local.getMinY() + local.getMaxY()) / 2;
+        double halfW = (w * BADGE_DRAG_GRAB_ZONE_FRAC) / 2;
+        double halfH = (h * BADGE_DRAG_GRAB_ZONE_FRAC) / 2;
+        return Math.abs(localX - cx) <= halfW && Math.abs(localY - cy) <= halfH;
+    }
+
     private static void installBadgeDragHandlers(
             StackPane sp,
             Bounds local,
@@ -2034,8 +2057,15 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             BiConsumer<String, EquipmentGanttBadgeDragDelta> dragDeltaSink) {
         final double[] press = new double[4];
         final boolean[] dragged = {false};
+        final boolean[] armed = {false};
         sp.setOnMousePressed(
                 e -> {
+                    armed[0] =
+                            e.getButton() == MouseButton.PRIMARY
+                                    && isWithinBadgeDragGrabZone(local, e.getX(), e.getY());
+                    if (!armed[0]) {
+                        return;
+                    }
                     dragged[0] = false;
                     press[0] = e.getSceneX();
                     press[1] = e.getSceneY();
@@ -2045,6 +2075,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 });
         sp.setOnMouseDragged(
                 e -> {
+                    if (!armed[0]) {
+                        return;
+                    }
                     dragged[0] = true;
                     double dx = e.getSceneX() - press[0];
                     double dy = e.getSceneY() - press[1];
@@ -2058,6 +2091,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         if (dragDeltaSink != null && badgeKey != null && !badgeKey.isEmpty()) {
             sp.setOnMouseReleased(
                     e -> {
+                        if (!armed[0]) {
+                            return;
+                        }
                         if (!dragged[0]) {
                             return;
                         }
