@@ -17,4 +17,4 @@ alwaysApply: true
 - **配台「特別ルール」の L 番号列挙（リポジトリ直下）** … `特別ルール列挙.md`（`planning_core/_core.py` の「特別ルール Ln」と対応）
 - **同じくリポジトリ直下の人向け要約** … `特別ルール.md`。`特別ルール列挙.md` や L 系ロジックを更新したら **同じ変更単位で `特別ルール.md` も更新**し、Java デスクトップの **「特別ルール」タブ**（要約／列挙の表示）と内容が乖離しないようにする。
 
-※ ローカルコミット手順・メッセージは `.cursor/rules/pre-edit-git-commit-push.mdc` に従う。
+※ 変更後のコミット・プッシュは `.cursor/rules/git-commit-push-after-code-changes.mdc` に従う。

@@ -2,8 +2,7 @@
 
 ---
 ## Git（コミット運用・メッセージ）
-正本: **`.cursor/rules/pre-edit-git-commit-push.mdc`**（変更前ローカルコミット、**先頭固定文言 `(下記、変更を加える前の直前コミットです）` ＋チャット先頭 300 文字**、**Generate 等の AI コミットメッセージは日本語**、**変更前コミット成功後は `git push`**）。
-**作業完了時（変更後）**: **`.cursor/rules/git-commit-push-after-code-changes.mdc`** — そのターンで変更・追加した版管理対象は **漏れなく `git add` → `commit` → `push`**。依頼外の差分が混在する場合はコミットを分け、応答で `git status` の要約を報告する。**`*.xlsm` に未コミットの変更がある場合も同ファイルに従い必ずコミット・push**（節「Excel マクロブック」）。
+**作業完了時（変更後）**: **`.cursor/rules/git-commit-push-after-code-changes.mdc`** — そのターンで変更・追加した版管理対象は **漏れなく `git add` → `commit` → `push`**。依頼外の差分が混在する場合はコミットを分け、応答で `git status` の要約を報告する。**`*.xlsm` に未コミットの変更がある場合も同ファイルに従い必ずコミット・push**（節「Excel マクロブック」）。**編集前のローカルコミットは不要**（旧ルールは `.cursor/rules/pre-edit-git-commit-push.mdc` に廃止旨を記載）。
 要点（Generate 用）: **日本語のみ**（英語だけの件名は出さない）。1 行目は短い要約。必要なら `feat:` / `fix:` 等＋日本語説明。
 
 ### version.txt 自動バンプ

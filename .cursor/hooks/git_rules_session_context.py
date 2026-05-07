@@ -9,13 +9,10 @@ def main() -> None:
     sys.stdin.read()
     text = (
         "【このリポジトリの Git 運用（エージェント向け・必須の要約）】\n"
-        "版管理対象（ソース、*.md / *.html、設定、ルール等）を編集ツールで変えるターンでは、"
-        "編集の前に必ず git status。未コミットがあれば .cursor/rules/pre-edit-git-commit-push.mdc "
-        "の手順でローカルコミット（メッセージ先頭は固定の "
-        "「(下記、変更を加える前の直前コミットです)」＋そのターンのユーザー入力先頭300文字相当・"
-        "改行タブは半角スペース）→ コミットしたら git push → 結果をユーザーに報告。"
-        "作業ツリーがクリーンならコミット省略。無関係な変更が多いときは git add の範囲に注意。"
-        "AI が別途コミット文を生成する場合は日本語（.cursor/rules/git-commit-message-japanese.mdc）。\n"
+        "版管理対象を変更したターンでは .cursor/rules/git-commit-push-after-code-changes.mdc に従い、"
+        "その依頼で触ったファイルを git add → commit → push し、応答で結果をユーザーに報告する。"
+        "依頼外の差分が混在する場合はコミットを分けるかユーザーに確認。編集前のローカルコミットは不要。"
+        "AI がコミット文を生成する場合は日本語（.cursor/rules/git-commit-message-japanese.mdc）。\n"
     )
     sys.stdout.write(json.dumps({"additional_context": text}, ensure_ascii=False))
 
