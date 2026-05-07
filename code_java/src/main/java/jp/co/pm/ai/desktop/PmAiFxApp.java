@@ -102,7 +102,10 @@ public class PmAiFxApp extends Application {
         Platform.runLater(
                 () -> {
                     try {
+                        StartupSplashStage.raiseToFront(splash);
                         MainShellController shell = bootstrapMainWindow(primaryStage);
+                        // primary にシーンを載せた直後、前面が移ることがあるため閉じる直前にも前面化する
+                        StartupSplashStage.raiseToFront(splash);
                         primaryStage.show();
                         splash.close();
                         shell.appendBootMessage();
