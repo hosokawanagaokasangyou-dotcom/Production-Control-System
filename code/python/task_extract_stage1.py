@@ -12,6 +12,12 @@ import sys
 import traceback
 from datetime import datetime
 
+# python -P / PYTHONSAFEPATH ではスクリプト所在ディレクトリが sys.path に入らない。
+# 同梱の planning_core / workbook_env_bootstrap を確実に解決する。
+_py_here = os.path.dirname(os.path.abspath(__file__))
+if _py_here:
+    sys.path.insert(0, _py_here)
+
 # planning_core は import 途中（FileHandler より前）で落ちると execution_log が作られない。
 # VBA は「ログ無し」を判定するため、読み込み前に必ず log/execution_log.txt を用意する。
 def _repo_root_for_stage1() -> str:

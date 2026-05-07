@@ -18,6 +18,8 @@ import traceback
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+# python -P / PYTHONSAFEPATH ではスクリプト所在ディレクトリが sys.path に入らない。
+sys.path.insert(0, str(SCRIPT_DIR))
 os.chdir(str(SCRIPT_DIR))
 
 try:

@@ -6,6 +6,11 @@ import os
 import sys
 import ctypes
 
+# python -P / PYTHONSAFEPATH ではスクリプト所在ディレクトリが sys.path に入らない。
+_py_here = os.path.dirname(os.path.abspath(__file__))
+if _py_here:
+    sys.path.insert(0, _py_here)
+
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 if os.name == "nt":
