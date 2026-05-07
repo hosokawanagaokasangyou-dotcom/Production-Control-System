@@ -47,90 +47,108 @@ Set-Location $Root
 
 $WorkspaceRoot = (Resolve-Path -LiteralPath (Join-Path $Root '..')).Path
 
-function Copy-WorkspaceTreeRespectingGitIgnore {
+function Copy-WorkspaceTreeWithExplicitExclusions {
+    # Walk the workspace by filesystem (no git, no .gitignore). Exclusions are individually listed
+    # below so adding/removing one path is a one-liner edit. Excluded dirs are pruned during
+    # traversal so we never recurse into .git/ or huge build_cache/ trees.
     param(
         [string]$RepoRoot,
         [string]$DestRoot
     )
 
-    $gitMarker = Join-Path $RepoRoot '.git'
-    if (-not (Test-Path -LiteralPath $gitMarker)) {
-        throw @'
-Repository root has no .git.
-package_app.ps1 bundles pm-ai-data using git ls-files and .gitignore. Run from a Git checkout.
-'@
-    }
+    # Directory prefixes (repo-relative, slash form, must end with '/'). Subtree pruned at this point.
+    $excludedDirPrefixes = @(
+        '.git/',
+        '.venv/',
+        'code_java/target/',
+        'code_java/build_cache/',
+        'code_java/package_input/',
+        'code_java/dist/',
+        'code_java/output/'
+    )
 
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        throw @'
-git is not on PATH.
-Install Git for Windows so git ls-files can honor .gitignore.
-'@
-    }
+    # Directory base names matched anywhere in the path (Python / pytest caches).
+    $excludedDirNames = @(
+        '__pycache__',
+        '.pytest_cache'
+    )
 
-    Push-Location $RepoRoot
-    try {
-        $stdout = & git -c core.quotepath=false ls-files -co --exclude-standard 2>$null
-        if ($LASTEXITCODE -ne 0) {
-            throw "git ls-files failed (exit $LASTEXITCODE). Does git status work in this folder?"
-        }
-    }
-    finally {
-        Pop-Location
-    }
+    # File-name globs (matched against the leaf name only). Excel lock + log noise.
+    $excludedFileNamePatterns = @(
+        '*.log',
+        '~$*'
+    )
 
-    $lines = @()
-    if ($null -eq $stdout) {
-        $lines = @()
-    }
-    elseif ($stdout -is [System.Array]) {
-        $lines = $stdout
-    }
-    else {
-        $lines = @($stdout.ToString() -split "`r?`n")
-    }
-
-    # Skip packaging scratch dirs even if listed (avoid duplicate Python / bloat).
-    function Test-IsPackagingScratchPath {
+    function Test-IsExcludedDir {
         param([string]$RelSlash)
-        foreach ($prefix in @(
-                'code_java/build_cache/',
-                'code_java/package_input/',
-                'code_java/dist/'
-            )) {
-            if ($RelSlash.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+        if ([string]::IsNullOrEmpty($RelSlash)) { return $false }
+        $withSlash = if ($RelSlash.EndsWith('/')) { $RelSlash } else { $RelSlash + '/' }
+        foreach ($prefix in $excludedDirPrefixes) {
+            if ($withSlash.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+                return $true
+            }
+        }
+        foreach ($seg in $RelSlash.Split('/')) {
+            foreach ($name in $excludedDirNames) {
+                if ($seg.Equals($name, [StringComparison]::OrdinalIgnoreCase)) {
+                    return $true
+                }
+            }
+        }
+        return $false
+    }
+
+    # Ancestors are already pruned during BFS, so file check is leaf-name only.
+    function Test-IsExcludedFile {
+        param([string]$Leaf)
+        foreach ($pat in $excludedFileNamePatterns) {
+            if ($Leaf -like $pat) {
                 return $true
             }
         }
         return $false
     }
 
-    foreach ($raw in $lines) {
-        if ($null -eq $raw) {
-            continue
-        }
-        $relSlash = ($raw.ToString().Trim() -replace '\\', '/')
-        if ([string]::IsNullOrWhiteSpace($relSlash)) {
-            continue
-        }
+    $rootFull = (Resolve-Path -LiteralPath $RepoRoot).Path
+    $rootLen = $rootFull.Length
 
-        if (Test-IsPackagingScratchPath -RelSlash $relSlash) {
-            continue
-        }
+    # Iterative BFS so we can prune excluded directories without descending into them.
+    $queue = New-Object System.Collections.Queue
+    $queue.Enqueue($rootFull)
 
-        $relOs = $relSlash -replace '/', [System.IO.Path]::DirectorySeparatorChar
-        $src = Join-Path $RepoRoot $relOs
-        if (-not (Test-Path -LiteralPath $src)) {
-            continue
-        }
+    while ($queue.Count -gt 0) {
+        $cur = [string]$queue.Dequeue()
+        $children = Get-ChildItem -LiteralPath $cur -Force -ErrorAction SilentlyContinue
+        foreach ($child in $children) {
+            $full = $child.FullName
+            if (-not $full.StartsWith($rootFull, [StringComparison]::OrdinalIgnoreCase)) {
+                continue
+            }
+            $rel = $full.Substring($rootLen).TrimStart('\', '/')
+            if ([string]::IsNullOrWhiteSpace($rel)) {
+                continue
+            }
+            $relSlash = $rel -replace '\\', '/'
 
-        $dst = Join-Path $DestRoot $relOs
-        $parent = Split-Path -Parent $dst
-        if (-not [string]::IsNullOrWhiteSpace($parent) -and -not (Test-Path -LiteralPath $parent)) {
-            New-Item -ItemType Directory -Path $parent -Force | Out-Null
-        }
+            if ($child.PSIsContainer) {
+                if (Test-IsExcludedDir -RelSlash $relSlash) {
+                    continue
+                }
+                $queue.Enqueue($full)
+                continue
+            }
 
-        Copy-Item -LiteralPath $src -Destination $dst -Force
+            if (Test-IsExcludedFile -Leaf $child.Name) {
+                continue
+            }
+
+            $dst = Join-Path $DestRoot $rel
+            $parent = Split-Path -Parent $dst
+            if (-not [string]::IsNullOrWhiteSpace($parent) -and -not (Test-Path -LiteralPath $parent)) {
+                New-Item -ItemType Directory -Path $parent -Force | Out-Null
+            }
+            Copy-Item -LiteralPath $full -Destination $dst -Force
+        }
     }
 
     # Always copy master *.txt under code/ (paths listed in UTF-8 sidecar file).
@@ -544,8 +562,8 @@ function Copy-BundleToDist {
 
     New-Item -ItemType Directory -Path $data -Force | Out-Null
 
-    Write-Host "--- Copy workspace into pm-ai-data (git ls-files / .gitignore + mandatory code/*.txt) ---" -ForegroundColor Cyan
-    Copy-WorkspaceTreeRespectingGitIgnore -RepoRoot $WorkspaceRootPath -DestRoot $data
+    Write-Host "--- Copy workspace into pm-ai-data (explicit exclude list + mandatory code/*.txt) ---" -ForegroundColor Cyan
+    Copy-WorkspaceTreeWithExplicitExclusions -RepoRoot $WorkspaceRootPath -DestRoot $data
 
     New-Item -ItemType Directory -Path (Join-Path $data 'input\task-input') -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $data 'input\actual-detail') -Force | Out-Null
@@ -565,9 +583,10 @@ function Copy-BundleToDist {
         'JVM: bundled via jpackage --runtime-image from Temurin JDK (see pom.xml / package_app.ps1).',
         'JavaFX: OpenJFX Windows jars pinned from Maven Central into package_input during package_app.ps1 (javafx.version).',
         'Portable bundle generated by package_app.ps1.',
-        'Workspace mirror source: git ls-files -co --exclude-standard (respects .gitignore).',
+        'Workspace mirror source: filesystem walk with explicit exclude list in package_app.ps1.',
         'Master *.txt under code/ are always copied (see package_app_mandatory_code_paths.txt).',
-        'Also excludes packaging dirs: code_java/build_cache, package_input, dist.',
+        'Excluded dirs: .git, .venv, code_java/{target,build_cache,package_input,dist,output}, **/__pycache__, **/.pytest_cache.',
+        'Excluded files: *.log, ~$* (Excel lock).',
         "This folder sits next to $($AppExeBaseName).exe.",
         'Version: repo-root version.txt (included here). Optional sync via PM_AI_PORTABLE_BUNDLE_SOURCE_DIR.',
         'Python: pm-ai-data\runtime\python-embed\python.exe (from build_cache embed + pip).',
