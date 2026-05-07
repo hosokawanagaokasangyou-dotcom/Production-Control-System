@@ -718,6 +718,7 @@ public final class MainShellController {
                 snapshotPersonBadgeOpacity(),
                 snapshotPersonBadgeStylesByLabel(),
                 snapshotPersonBadgeStylesByMemberKey(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttPlanJsonPath(),
                 uiBadgeDesignTabController != null
                         ? uiBadgeDesignTabController.snapshotStage1NetworkCacheBadgeLabel()
                         : "",
@@ -2629,6 +2630,15 @@ public final class MainShellController {
 
     Map<String, String> snapshotUiEnv() {
         return collectUiEnv();
+    }
+
+    /** 実行タブに表示中の段階2計画ブックパス（設備ガントの兄弟 JSON オートフィル用）。 */
+    public String mainRunStage2ProductionPlanPathOrEmpty() {
+        if (mainRunTabController == null) {
+            return "";
+        }
+        String p = mainRunTabController.snapshotStage2ProductionPlanPath();
+        return p != null ? p.strip() : "";
     }
 
     /**

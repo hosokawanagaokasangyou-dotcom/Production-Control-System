@@ -95,6 +95,7 @@ public final class DesktopSessionStateStore {
                     optionalDouble(root, "equipmentGanttPersonBadgeOpacity", -1d),
                     loadPersonBadgeStyleMap(root, "equipmentGanttPersonBadgeStylesByLabel"),
                     loadPersonBadgeStyleMap(root, "equipmentGanttPersonBadgeStylesByMemberKey"),
+                    text(root, "equipmentGanttPlanJsonPath"),
                     text(root, "stage1NetworkCacheBadgeLabel"),
                     loadStage1NetworkCacheBadgeStyle(root),
                     optionalBoolean(root, "mainShellTabOrganizerHeaderGlow", true),
@@ -563,6 +564,7 @@ public final class DesktopSessionStateStore {
         }
         putPersonBadgeStyleMap(root, state.equipmentGanttPersonBadgeStylesByLabel(), "equipmentGanttPersonBadgeStylesByLabel");
         putPersonBadgeStyleMap(root, state.equipmentGanttPersonBadgeStylesByMemberKey(), "equipmentGanttPersonBadgeStylesByMemberKey");
+        put(root, "equipmentGanttPlanJsonPath", state.equipmentGanttPlanJsonPath());
     }
 
     private static Map<String, PersonBadgeStyle> loadPersonBadgeStyleMap(JsonNode root, String jsonKey) {

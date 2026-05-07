@@ -250,8 +250,15 @@ public final class EquipmentGanttGraphicTabController {
         }
         if (sourceAccordion != null && sourceTitledPane != null) {
             sourceAccordion.setExpandedPane(sourceTitledPane);
-            /* ツールバー（列幅・Shift横スクロール等）を見つけやすくする */
-            sourceTitledPane.setExpanded(true);
+        }
+        if (sourceTitledPane != null) {
+            sourceTitledPane
+                    .expandedProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                scheduleEquipmentGraphicPersist();
+                                requestThrottledGraphicRebuild();
+                            });
         }
         if (contentPane != null) {
             contentPane.setCenter(emptyPlaceholder("JSON を指定して再読みしてください。"));
@@ -411,6 +418,12 @@ public final class EquipmentGanttGraphicTabController {
     }
 
     private void applyEquipmentGanttSessionBody(DesktopSessionState s) {
+        if (planJsonField != null) {
+            String pp = s.equipmentGanttPlanJsonPath();
+            if (pp != null && !pp.isBlank()) {
+                planJsonField.setText(pp.strip());
+            }
+        }
         double z = s.equipmentGanttGraphicZoomPercent();
         if (graphicZoomSlider != null && Double.isFinite(z) && z >= 50 && z <= 200) {
             graphicZoomSlider.setValue(z);
@@ -636,6 +649,20 @@ public final class EquipmentGanttGraphicTabController {
         return personBadgeDragAdjustCheckBox != null && personBadgeDragAdjustCheckBox.isSelected();
     }
 
+    /**
+     * アコーディオン「閲覧モード」ではドラッグを無効にする。チェックボックス ON でも閉じている間は操作しない。
+     */
+    private boolean effectivePersonBadgeDragAdjustEnabled() {
+        if (personBadgeDragAdjustCheckBox == null || !personBadgeDragAdjustCheckBox.isSelected()) {
+            return false;
+        }
+        return sourceTitledPane == null || sourceTitledPane.isExpanded();
+    }
+
+    String snapshotEquipmentGanttPlanJsonPath() {
+        return planJsonField != null ? planJsonField.getText().strip() : "";
+    }
+
     private void scheduleEquipmentGraphicPersist() {
         if (equipmentGraphicPersistDelay == null) {
             equipmentGraphicPersistDelay = new PauseTransition(Duration.millis(450));
@@ -732,6 +759,43 @@ public final class EquipmentGanttGraphicTabController {
         }
     }
 
+    /**
+     * JSON パス欄が空または無効なとき、実行タブの段階2計画ブックに対応する .json、または既定出力の最新計画 JSON
+     * でフィールドを埋める。
+     */
+    private void tryAutofillPlanJsonIfEmpty() {
+        if (planJsonField == null) {
+            return;
+        }
+        String cur = planJsonField.getText().strip();
+        if (!cur.isEmpty() && Files.isRegularFile(Path.of(cur))) {
+            return;
+        }
+        if (shell != null) {
+            String stage2 = shell.mainRunStage2ProductionPlanPathOrEmpty();
+            if (!stage2.isEmpty()) {
+                tryAutofillJsonFromStage2Xlsx(stage2, "");
+            }
+        }
+        String again = planJsonField.getText().strip();
+        if (!again.isEmpty() && Files.isRegularFile(Path.of(again))) {
+            return;
+        }
+        if (shell == null) {
+            return;
+        }
+        try {
+            java.util.Map<String, String> ui = shell.snapshotUiEnv();
+            Path dir = AppPaths.defaultPlanningOutputDir(ui);
+            Path newest = Stage2OutputNaming.newestPrimaryPlanJson(dir);
+            if (newest != null && Files.isRegularFile(newest)) {
+                planJsonField.setText(newest.toString());
+            }
+        } catch (Exception ignored) {
+            // ignore
+        }
+    }
+
     private void reloadFromFields() {
         if (contentPane == null) {
             return;
@@ -739,10 +803,12 @@ public final class EquipmentGanttGraphicTabController {
         reloadButton.setDisable(true);
         syncLatestButton.setDisable(true);
         try {
+            tryAutofillPlanJsonIfEmpty();
             String ps = planJsonField != null ? planJsonField.getText().strip() : "";
             Path planPath = ps.isEmpty() ? null : Path.of(ps);
             if (planPath == null || !Files.isRegularFile(planPath)) {
-                resetGraphicState("ファイルが指定されていないか、見つかりません。");
+                resetGraphicState(
+                        "ファイルが指定されていないか、見つかりません。", false);
                 statusLabel.setText("読み込み対象なし");
                 return;
             }
@@ -829,11 +895,20 @@ public final class EquipmentGanttGraphicTabController {
     }
 
     private void resetGraphicState(String placeholderMsg) {
+        resetGraphicState(placeholderMsg, true);
+    }
+
+    /**
+     * @param clearBadgeSessionData false のとき、セッション復元済みのフィンガープリント・バッジドラッグずれは消さない（パス未指定時など）。
+     */
+    private void resetGraphicState(String placeholderMsg, boolean clearBadgeSessionData) {
         lastGraphicSheet = null;
         loadedContractBadgeRows = null;
         badgeRowsForCurrentGraphic = null;
-        equipmentGanttGraphicDataFingerprint = "";
-        equipmentGanttBadgeDragDeltas.clear();
+        if (clearBadgeSessionData) {
+            equipmentGanttGraphicDataFingerprint = "";
+            equipmentGanttBadgeDragDeltas.clear();
+        }
         graphicRootWrapper = null;
         graphicWheelHookInstalled = false;
         pendingHorizontalZoomAnchor = null;
@@ -902,8 +977,9 @@ public final class EquipmentGanttGraphicTabController {
         }
         equipmentGanttGraphicDataFingerprint = fpNow;
 
+        boolean dragEffective = effectivePersonBadgeDragAdjustEnabled();
         java.util.function.BiConsumer<String, EquipmentGanttBadgeDragDelta> dragSink =
-                snapshotEquipmentGanttPersonBadgeDragAdjustEnabled()
+                dragEffective
                         ? (k, d) -> {
                             if (Math.abs(d.dx()) < 1e-6 && Math.abs(d.dy()) < 1e-6) {
                                 equipmentGanttBadgeDragDeltas.remove(k);
@@ -914,6 +990,7 @@ public final class EquipmentGanttGraphicTabController {
                         }
                         : null;
 
+        long buildT0 = System.nanoTime();
         BorderPane gantt =
                 EquipmentGraphicGanttPane.build(
                         st.columns(),
@@ -934,9 +1011,15 @@ public final class EquipmentGanttGraphicTabController {
                         badgeResolver,
                         snapshotEquipmentGanttPersonBadgeGapPx(),
                         snapshotEquipmentGanttPersonBadgeBandVerticalOffsetPx(),
-                        snapshotEquipmentGanttPersonBadgeDragAdjustEnabled(),
+                        dragEffective,
                         equipmentGanttBadgeDragDeltas,
                         dragSink);
+        if (Boolean.getBoolean("pm.ai.gantt.profile")) {
+            long ms = (System.nanoTime() - buildT0) / 1_000_000L;
+            if (shell != null) {
+                shell.appendLog("[gantt-profile] EquipmentGraphicGanttPane.build ms=" + ms);
+            }
+        }
         if (shell != null) {
             shell.refreshEquipmentGanttObservedBadgeLabels(distinctBadgeLabelsFromGrid(badgeRowsForCurrentGraphic));
         }
@@ -947,6 +1030,11 @@ public final class EquipmentGanttGraphicTabController {
         graphicRootWrapper.setCenter(gantt);
         EquipmentGraphicGanttPane.restoreScrollAfterRebuild(gantt, scrollSnap, zoomAnchor);
         installGraphicWheelZoomIfNeeded();
+        Object ud = gantt.getUserData();
+        if (ud instanceof EquipmentGraphicGanttPane.EquipmentGanttViewHandles h
+                && h.scheduleViewportRepaint() != null) {
+            Platform.runLater(h.scheduleViewportRepaint());
+        }
     }
 
     private void installGraphicWheelZoomIfNeeded() {

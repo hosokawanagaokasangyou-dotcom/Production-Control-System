@@ -64,6 +64,7 @@ import java.util.Map;
  * @param equipmentGanttPersonBadgeOpacity バッジの不透明度（0〜1、{@code -1} は未保存として既定を使用）
  * @param equipmentGanttPersonBadgeStylesByLabel バッジ表示文字のみの旧キー（後方互換・読込のみ参照し得る）
  * @param equipmentGanttPersonBadgeStylesByMemberKey skills メンバー名（正規化キー）ごとの見た目
+ * @param equipmentGanttPlanJsonPath 設備ガント・グラフィックタブの計画 JSON パス（空は未保存）
  * @param stage1NetworkCacheBadgeLabel 段階1付近バッジの表示文言（ネットワークソースがキャッシュのとき）
  * @param stage1NetworkCacheBadgeStyle 同バッジの {@link PersonBadgeStyle}
  * @param mainShellTabOrganizerHeaderGlow メインシェル「タブの並び」で指定した見出し色にグロー（dropshadow）を付けるか
@@ -130,6 +131,7 @@ public record DesktopSessionState(
         double equipmentGanttPersonBadgeOpacity,
         Map<String, PersonBadgeStyle> equipmentGanttPersonBadgeStylesByLabel,
         Map<String, PersonBadgeStyle> equipmentGanttPersonBadgeStylesByMemberKey,
+        String equipmentGanttPlanJsonPath,
         String stage1NetworkCacheBadgeLabel,
         PersonBadgeStyle stage1NetworkCacheBadgeStyle,
         boolean mainShellTabOrganizerHeaderGlow,
@@ -178,6 +180,8 @@ public record DesktopSessionState(
                 equipmentGanttBadgeDragDeltas == null || equipmentGanttBadgeDragDeltas.isEmpty()
                         ? Map.of()
                         : Map.copyOf(equipmentGanttBadgeDragDeltas);
+        equipmentGanttPlanJsonPath =
+                equipmentGanttPlanJsonPath != null ? equipmentGanttPlanJsonPath.strip() : "";
     }
 
     /**
@@ -289,6 +293,7 @@ public record DesktopSessionState(
                 -1d,
                 Map.of(),
                 Map.of(),
+                "",
                 "",
                 PersonBadgeStyle.networkSourceCacheBadgeDefault(),
                 true,

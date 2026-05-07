@@ -51,11 +51,13 @@ import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.EquipmentGanttBadgeDragDelta;
 import java.util.function.Function;
 
+import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.geometry.BoundingBox;
 import javafx.geometry.Bounds;
 import javafx.geometry.Point2D;
 import javafx.scene.Node;
+import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
@@ -115,7 +117,46 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     public record EquipmentGanttScrollState(double hValue, double vValue) {}
 
     /** 時刻軸（右ペイン）の {@link ScrollPane}。縦スクロールは左ペインと双方向バインド済み。 */
-    public record EquipmentGanttViewHandles(ScrollPane timelineScroll) {}
+    public record EquipmentGanttViewHandles(ScrollPane timelineScroll, Runnable scheduleViewportRepaint) {
+        public EquipmentGanttViewHandles(ScrollPane timelineScroll) {
+            this(timelineScroll, null);
+        }
+    }
+
+    /** 横スクロールの見えている範囲の前後に確保するスロット数（部分描画のマージン）。 */
+    private static final int VIEWPORT_SLOT_MARGIN = 48;
+
+    private static final String PROFILE_PROP = "pm.ai.gantt.profile";
+
+    /**
+     * ビューポートとスロット幅から、背景・格子を描くスロットインデックス範囲（両端含む）を返す。
+     */
+    public static int[] visibleSlotRangeInclusive(
+            ScrollPane sp, double slotWidthPx, int slotCount, int marginSlots) {
+        if (slotCount <= 0 || slotWidthPx <= 1e-9) {
+            return new int[] {0, Math.max(0, slotCount - 1)};
+        }
+        if (sp == null) {
+            return new int[] {0, Math.max(0, slotCount - 1)};
+        }
+        Node content = sp.getContent();
+        javafx.geometry.Bounds vp = sp.getViewportBounds();
+        if (content == null || vp == null || vp.getWidth() <= 1.0) {
+            return new int[] {0, slotCount - 1};
+        }
+        double contentW = content.getLayoutBounds().getWidth();
+        double viewportW = vp.getWidth();
+        double excess = contentW - viewportW;
+        double scrollPx = excess > 1e-6 ? sp.getHvalue() * excess : 0.0;
+        int from = (int) Math.floor(scrollPx / slotWidthPx) - marginSlots;
+        int to = (int) Math.ceil((scrollPx + viewportW) / slotWidthPx) + marginSlots;
+        from = Math.max(0, from);
+        to = Math.min(slotCount - 1, to);
+        if (from > to) {
+            return new int[] {0, slotCount - 1};
+        }
+        return new int[] {from, to};
+    }
 
     /**
      * Ctrl+ホイールで拡大率を変えるとき、マウス下の内容位置を維持するためのアンカー（コンテンツ座標の X とビューポート内 X）。
@@ -532,15 +573,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             BiConsumer<String, EquipmentGanttBadgeDragDelta> personBadgeDragDeltaSink) {
         BorderPane root = new BorderPane();
         root.setCache(false);
-        List<String> effCols = columns;
-        ObservableList<ObservableList<String>> effRows = rows;
-        RepairResult repaired = tryRepairPandasUnnamedEquipmentTimeline(effCols, effRows);
-        List<List<String>> badgeEff = badgeSlotRowsRaw;
-        if (repaired != null) {
-            effCols = repaired.columns();
-            effRows = repaired.rows();
-            badgeEff = null;
-        }
+        RepairedGanttTable repairedTable = RepairedGanttTable.from(columns, rows, badgeSlotRowsRaw);
+        List<String> effCols = repairedTable.effCols();
+        ObservableList<ObservableList<String>> effRows = repairedTable.effRows();
+        List<List<String>> badgeEff = repairedTable.badgeEff();
         Function<String, PersonBadgeStyle> badgeResolver =
                 personBadgeStyleResolver != null
                         ? personBadgeStyleResolver
@@ -641,7 +677,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
         Canvas headerCanvas = new Canvas(canvasTimelineW, canvasHeaderH);
         headerCanvas.setCache(false);
-        drawTimeAxis(headerCanvas.getGraphicsContext2D(), parsed, canvasTimelineW, layout, palette);
 
         Label hDate = new Label("");
         Label hMach = new Label("機械名");
@@ -700,6 +735,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         int machineColorSeq = -1;
         int gridR = 0;
         int timelineCanvasRowCount = 0;
+        List<ViewportRowSpec> viewportRowSpecs = new ArrayList<>();
         for (int ri = 0; ri < parsed.displayRows().size(); ri++) {
             DisplayRow dr = parsed.displayRows().get(ri);
             if (dr.sectionBanner() != null) {
@@ -827,15 +863,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             Canvas rowCanvas = new Canvas(canvasTimelineW, rowCanvasH);
             timelineCanvasRowCount++;
             rowCanvas.setCache(false);
-            GraphicsContext gcx = rowCanvas.getGraphicsContext2D();
-            gcx.translate(0, timelineOuterPad);
-            drawTimelineRow(
-                    gcx,
-                    dr.cellsInSlots(),
-                    machineGroupIndex,
-                    layout,
-                    palette,
-                    barFont);
+            viewportRowSpecs.add(
+                    new ViewportRowSpec(
+                            rowCanvas,
+                            timelineOuterPad,
+                            dr.cellsInSlots(),
+                            machineGroupIndex,
+                            rowCanvasH));
 
             Pane badgePane = new Pane();
             /*
@@ -944,6 +978,57 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         headerRightScroll.hvalueProperty().bindBidirectional(rightBodyScroll.hvalueProperty());
         leftBodyScroll.vvalueProperty().bindBidirectional(rightBodyScroll.vvalueProperty());
 
+        final LayoutMetrics layoutViewport = layout;
+
+        PauseTransition viewportRepaintDebounce = new PauseTransition(Duration.millis(32));
+        Runnable paintTimelineViewport =
+                () -> {
+                    int nSlots = slotColCount;
+                    int[] vr =
+                            visibleSlotRangeInclusive(
+                                    rightBodyScroll,
+                                    layoutViewport.slotWidth,
+                                    nSlots,
+                                    VIEWPORT_SLOT_MARGIN);
+                    GraphicsContext hg = headerCanvas.getGraphicsContext2D();
+                    hg.clearRect(0, 0, canvasTimelineW, canvasHeaderH);
+                    drawTimeAxis(
+                            hg,
+                            parsed,
+                            canvasTimelineW,
+                            layoutViewport,
+                            palette,
+                            vr[0],
+                            vr[1]);
+                    for (ViewportRowSpec s : viewportRowSpecs) {
+                        GraphicsContext gcx = s.canvas().getGraphicsContext2D();
+                        gcx.clearRect(0, 0, canvasTimelineW, s.rowH());
+                        gcx.translate(0, s.outerPad());
+                        drawTimelineRow(
+                                gcx,
+                                s.slotTexts(),
+                                s.machineGroupIndex(),
+                                layoutViewport,
+                                palette,
+                                barFont,
+                                vr[0],
+                                vr[1]);
+                        gcx.translate(0, -s.outerPad());
+                    }
+                    if (Boolean.getBoolean(PROFILE_PROP)) {
+                        /* プロファイル用: -Dpm.ai.gantt.profile=true */
+                    }
+                };
+        viewportRepaintDebounce.setOnFinished(e -> paintTimelineViewport.run());
+        Runnable scheduleViewportRepaint =
+                () -> {
+                    viewportRepaintDebounce.stop();
+                    viewportRepaintDebounce.playFromStart();
+                };
+        rightBodyScroll.hvalueProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
+        rightBodyScroll.widthProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
+        Platform.runLater(paintTimelineViewport);
+
         double shiftSens =
                 effectiveShiftWheelHorizontalSensitivity(shiftWheelHorizontalSensitivityPercent);
         installShiftWheelHorizontalScroll(rightBodyScroll, shiftSens);
@@ -976,7 +1061,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         mainColumn.setPadding(new Insets(4));
         mainColumn.setCache(false);
         root.setCenter(mainColumn);
-        root.setUserData(new EquipmentGanttViewHandles(rightBodyScroll));
+        root.setUserData(new EquipmentGanttViewHandles(rightBodyScroll, scheduleViewportRepaint));
 
         Label hint =
                 new Label(
@@ -1510,7 +1595,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             ParseResult parsed,
             double timelineWidth,
             LayoutMetrics layout,
-            GanttPalette palette) {
+            GanttPalette palette,
+            int slotVisibleFrom,
+            int slotVisibleToIncl) {
         gc.setFill(palette.headerAxis());
         gc.fillRect(0, 0, timelineWidth, layout.headerHeight);
         gc.setStroke(palette.grid());
@@ -1518,10 +1605,20 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
         List<Integer> slotCols = parsed.slotColumnIndices();
         int n = slotCols.size();
+        if (n <= 0) {
+            return;
+        }
         LocalTime t0 = parsed.slotBaseTime();
         int slotMin = Math.max(1, parsed.slotMinutes());
 
-        for (int i = 0; i <= n; i++) {
+        int vf = Math.max(0, slotVisibleFrom);
+        int vt = Math.min(n - 1, slotVisibleToIncl);
+        if (vf > vt) {
+            vf = 0;
+            vt = Math.max(0, n - 1);
+        }
+
+        for (int i = vf; i <= vt + 1 && i <= n; i++) {
             double x = i * layout.slotWidth;
             gc.strokeLine(x, 0, x, layout.headerHeight);
         }
@@ -1532,7 +1629,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         gc.setFill(palette.axisLabel());
         gc.setFont(Font.font(labelFont));
         DateTimeFormatter tf = DateTimeFormatter.ofPattern("H:mm");
-        for (int i = 0; i < n; i += labelStep) {
+        int i0 = vf - (vf % Math.max(1, labelStep));
+        if (i0 < vf) {
+            i0 += labelStep;
+        }
+        for (int i = Math.max(i0, vf); i <= vt; i += labelStep) {
             double cx = i * layout.slotWidth + layout.slotWidth * 0.5;
             LocalTime tt = t0.plusMinutes((long) i * slotMin);
             String txt = tt.format(tf);
@@ -1603,15 +1704,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         if (columns == null || rows == null) {
             return "";
         }
-        List<String> effCols = columns;
-        ObservableList<ObservableList<String>> effRows = rows;
-        List<List<String>> badgeEff = badgeSlotRowsRaw;
-        RepairResult repaired = tryRepairPandasUnnamedEquipmentTimeline(effCols, effRows);
-        if (repaired != null) {
-            effCols = repaired.columns();
-            effRows = repaired.rows();
-            badgeEff = null;
-        }
+        RepairedGanttTable rt = RepairedGanttTable.from(columns, rows, badgeSlotRowsRaw);
+        return fingerprintFromRepairedSheets(rt.effCols(), rt.effRows(), rt.badgeEff());
+    }
+
+    private static String fingerprintFromRepairedSheets(
+            List<String> effCols,
+            ObservableList<ObservableList<String>> effRows,
+            List<List<String>> badgeEff) {
         StringBuilder sb = new StringBuilder();
         for (String c : effCols) {
             sb.append('C').append(c != null ? c : "").append('\u001f');
@@ -2049,25 +2149,37 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             int machineGroupIndex,
             LayoutMetrics layout,
             GanttPalette palette,
-            Font barFont) {
+            Font barFont,
+            int slotVisibleFrom,
+            int slotVisibleToIncl) {
         int n = slotTexts.size();
+        int vf = Math.max(0, slotVisibleFrom);
+        int vt = Math.min(n - 1, slotVisibleToIncl);
+        if (vf > vt) {
+            vf = 0;
+            vt = Math.max(0, n - 1);
+        }
+
         Color band = palette.machineBandFill(machineGroupIndex);
-        for (int i = 0; i < n; i++) {
+        for (int i = vf; i <= vt; i++) {
             double x = i * layout.slotWidth;
             gc.setFill(band);
             gc.fillRect(x, 0, layout.slotWidth, layout.rowHeight);
         }
         gc.setStroke(palette.grid());
         gc.setLineWidth(0.35);
-        for (int i = 0; i <= n; i++) {
+        for (int i = vf; i <= vt + 1 && i <= n; i++) {
             gc.strokeLine(i * layout.slotWidth, 0, i * layout.slotWidth, layout.rowHeight);
         }
 
         List<BarRun> runs = collectBarRuns(slotTexts);
         for (BarRun run : runs) {
+            if (run.toSlot() < vf || run.fromSlot() > vt) {
+                continue;
+            }
             fillBar(gc, run, layout, palette);
         }
-        drawBarLabelsOutside(gc, runs, layout, palette, barFont);
+        drawBarLabelsOutside(gc, runs, layout, palette, barFont, vf, vt);
     }
 
     private static List<BarRun> collectBarRuns(List<String> slotTexts) {
@@ -2217,11 +2329,19 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             List<BarRun> runs,
             LayoutMetrics layout,
             GanttPalette palette,
-            Font barFont) {
-        if (runs.isEmpty()) {
+            Font barFont,
+            int slotVisibleFrom,
+            int slotVisibleToIncl) {
+        List<BarRun> sorted = new ArrayList<>();
+        for (BarRun run : runs) {
+            if (run.toSlot() < slotVisibleFrom || run.fromSlot() > slotVisibleToIncl) {
+                continue;
+            }
+            sorted.add(run);
+        }
+        if (sorted.isEmpty()) {
             return;
         }
-        List<BarRun> sorted = new ArrayList<>(runs);
         sorted.sort(Comparator.comparingInt(BarRun::fromSlot));
         double inset = 0.5 * layout.zoom;
         double barTop = 3 * layout.zoom;
@@ -2411,6 +2531,35 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
     private record RepairResult(
             List<String> columns, ObservableList<ObservableList<String>> rows) {}
+
+    private record ViewportRowSpec(
+            Canvas canvas,
+            double outerPad,
+            List<String> slotTexts,
+            int machineGroupIndex,
+            double rowH) {}
+
+    /**
+     * {@link #build} と {@link #computeDataFingerprint} で同一の pandas 救済を適用した列・行・担当バッジ列。
+     */
+    private record RepairedGanttTable(
+            List<String> effCols,
+            ObservableList<ObservableList<String>> effRows,
+            List<List<String>> badgeEff) {
+        static RepairedGanttTable from(
+                List<String> columns,
+                ObservableList<ObservableList<String>> rows,
+                List<List<String>> badgeSlotRowsRaw) {
+            List<String> effCols = columns;
+            ObservableList<ObservableList<String>> effRows = rows;
+            List<List<String>> badgeEff = badgeSlotRowsRaw;
+            RepairResult repaired = tryRepairPandasUnnamedEquipmentTimeline(effCols, effRows);
+            if (repaired != null) {
+                return new RepairedGanttTable(repaired.columns(), repaired.rows(), null);
+            }
+            return new RepairedGanttTable(effCols, effRows, badgeEff);
+        }
+    }
 
     private static ParseResult parse(
             List<String> columns,
