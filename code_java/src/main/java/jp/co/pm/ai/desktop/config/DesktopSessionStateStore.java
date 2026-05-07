@@ -87,6 +87,7 @@ public final class DesktopSessionStateStore {
                     text(root, "equipmentGanttPersonBadgeGlowColorHex"),
                     optionalDouble(root, "equipmentGanttPersonBadgeGlowRadius", -1d),
                     optionalDouble(root, "equipmentGanttPersonBadgeGlowSpread", -1d),
+                    optionalDouble(root, "equipmentGanttPersonBadgeOpacity", -1d),
                     loadPersonBadgeStyleMap(root, "equipmentGanttPersonBadgeStylesByLabel"),
                     loadPersonBadgeStyleMap(root, "equipmentGanttPersonBadgeStylesByMemberKey"),
                     text(root, "stage1NetworkCacheBadgeLabel"),
@@ -455,6 +456,10 @@ public final class DesktopSessionStateStore {
         if (Double.isFinite(gs) && gs >= 0 && gs <= 1) {
             root.put("equipmentGanttPersonBadgeGlowSpread", gs);
         }
+        double bop = state.equipmentGanttPersonBadgeOpacity();
+        if (Double.isFinite(bop) && bop >= 0 && bop <= 1) {
+            root.put("equipmentGanttPersonBadgeOpacity", bop);
+        }
         putPersonBadgeStyleMap(root, state.equipmentGanttPersonBadgeStylesByLabel(), "equipmentGanttPersonBadgeStylesByLabel");
         putPersonBadgeStyleMap(root, state.equipmentGanttPersonBadgeStylesByMemberKey(), "equipmentGanttPersonBadgeStylesByMemberKey");
     }
@@ -506,6 +511,7 @@ public final class DesktopSessionStateStore {
         o.put("glowColorHex", st.glowColorHex());
         o.put("glowRadius", st.glowRadius());
         o.put("glowSpread", st.glowSpread());
+        o.put("opacity", st.opacity());
     }
 
     private static PersonBadgeStyle loadPersonBadgeStyleObject(JsonNode o) {
@@ -521,6 +527,7 @@ public final class DesktopSessionStateStore {
         String glow = text(o, "glowColorHex");
         double gr = optionalDouble(o, "glowRadius", -1d);
         double gs = optionalDouble(o, "glowSpread", -1d);
+        double op = optionalDouble(o, "opacity", -1d);
         return new PersonBadgeStyle(
                 ff,
                 fp > 0 && fp <= 300 ? fp : d.fontPercent(),
@@ -532,7 +539,8 @@ public final class DesktopSessionStateStore {
                 pill,
                 nzStored(glow, d.glowColorHex()),
                 gr >= 0 ? gr : d.glowRadius(),
-                gs >= 0 && gs <= 1 ? gs : d.glowSpread());
+                gs >= 0 && gs <= 1 ? gs : d.glowSpread(),
+                op >= 0 && op <= 1 ? op : d.opacity());
     }
 
     private static String nzStored(String s, String def) {
@@ -567,6 +575,7 @@ public final class DesktopSessionStateStore {
             o.put("glowColorHex", st.glowColorHex());
             o.put("glowRadius", st.glowRadius());
             o.put("glowSpread", st.glowSpread());
+            o.put("opacity", st.opacity());
         }
         if (!bag.isEmpty()) {
             root.set(jsonKey, bag);

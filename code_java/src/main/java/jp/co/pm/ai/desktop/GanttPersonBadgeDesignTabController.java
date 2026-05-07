@@ -114,6 +114,12 @@ public final class GanttPersonBadgeDesignTabController {
     private Label badgeGlowSpreadPctLabel;
 
     @FXML
+    private Slider badgeOpacityPctSlider;
+
+    @FXML
+    private Label badgeOpacityPctLabel;
+
+    @FXML
     private Button badgeRandomizeButton;
 
     @FXML
@@ -452,6 +458,10 @@ public final class GanttPersonBadgeDesignTabController {
         return globalStyle.glowSpread();
     }
 
+    double snapshotPersonBadgeOpacity() {
+        return globalStyle.opacity();
+    }
+
     @FXML
     private void onReloadSkillsMembersAction() {
         loadMembersFromMasterBook(true);
@@ -628,6 +638,9 @@ public final class GanttPersonBadgeDesignTabController {
                             : (x.glowSpread() <= 1e-12 ? 0.0 : 100.0);
             badgeGlowSpreadPctSlider.setValue(Math.clamp(pct, 0, 400));
         }
+        if (badgeOpacityPctSlider != null) {
+            badgeOpacityPctSlider.setValue(Math.clamp(x.opacity() * 100.0, 0.0, 100.0));
+        }
     }
 
     private void attachListeners() {
@@ -647,6 +660,7 @@ public final class GanttPersonBadgeDesignTabController {
         addColorPickerListener(badgeGlowColorPicker, r);
         wireSlider(badgeGlowRadiusPctSlider, badgeGlowRadiusPctLabel, "%.0f%%", r);
         wireSlider(badgeGlowSpreadPctSlider, badgeGlowSpreadPctLabel, "%.0f%%", r);
+        wireSlider(badgeOpacityPctSlider, badgeOpacityPctLabel, "%.0f%%", r);
     }
 
     private static void addColorPickerListener(ColorPicker cp, Runnable r) {
@@ -685,6 +699,9 @@ public final class GanttPersonBadgeDesignTabController {
         if (badgeGlowSpreadPctSlider != null && badgeGlowSpreadPctLabel != null) {
             badgeGlowSpreadPctLabel.setText(String.format("%.0f%%", badgeGlowSpreadPctSlider.getValue()));
         }
+        if (badgeOpacityPctSlider != null && badgeOpacityPctLabel != null) {
+            badgeOpacityPctLabel.setText(String.format("%.0f%%", badgeOpacityPctSlider.getValue()));
+        }
     }
 
     private void schedulePersist() {
@@ -721,6 +738,8 @@ public final class GanttPersonBadgeDesignTabController {
         double sPct = badgeGlowSpreadPctSlider != null ? badgeGlowSpreadPctSlider.getValue() : 100.0;
         double glowR = baseR * (rPct / 100.0);
         double glowS = Math.min(1.0, Math.max(0.0, baseS * (sPct / 100.0)));
+        double opPct = badgeOpacityPctSlider != null ? badgeOpacityPctSlider.getValue() : 100.0;
+        double opacity = Math.max(0.0, Math.min(1.0, opPct / 100.0));
         return new PersonBadgeStyle(
                 fontFam,
                 badgeFontPctSlider != null ? badgeFontPctSlider.getValue() : d.fontPercent(),
@@ -732,7 +751,8 @@ public final class GanttPersonBadgeDesignTabController {
                 badgePillCheck != null && badgePillCheck.isSelected(),
                 colorToHex(badgeGlowColorPicker, d.glowColorHex()),
                 glowR,
-                glowS);
+                glowS,
+                opacity);
     }
 
     private static String colorToHex(ColorPicker cp, String fallbackHex) {
@@ -832,6 +852,9 @@ public final class GanttPersonBadgeDesignTabController {
             }
             if (badgeGlowSpreadPctSlider != null) {
                 badgeGlowSpreadPctSlider.setValue(35 + rnd.nextInt(166));
+            }
+            if (badgeOpacityPctSlider != null) {
+                badgeOpacityPctSlider.setValue(55 + rnd.nextInt(46));
             }
             syncLabelsFromSliders();
         } finally {

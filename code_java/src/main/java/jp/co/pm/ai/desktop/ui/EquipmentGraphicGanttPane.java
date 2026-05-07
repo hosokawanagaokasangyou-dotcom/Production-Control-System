@@ -1461,29 +1461,79 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             if (parts.isEmpty()) {
                 continue;
             }
-            HBox box = new HBox(2 * layout.zoom);
-            box.setAlignment(Pos.CENTER);
+            List<StackPane> nodes = new ArrayList<>();
+            List<Double> widths = new ArrayList<>();
+            List<Double> heights = new ArrayList<>();
             for (String p : parts) {
-                box.getChildren()
-                        .add(
-                                PersonBadgeNodeFactory.createBadge(
-                                        p,
-                                        styleForLabel.apply(p),
-                                        layout.zoom,
-                                        layout.rowLabelFontSize));
+                StackPane sp =
+                        PersonBadgeNodeFactory.createBadge(
+                                p,
+                                styleForLabel.apply(p),
+                                layout.zoom,
+                                layout.rowLabelFontSize);
+                sp.applyCss();
+                sp.layout();
+                nodes.add(sp);
+                widths.add(Math.max(1.0, sp.prefWidth(-1)));
+                heights.add(Math.max(1.0, sp.prefHeight(-1)));
             }
+
+            double inset = 0.5 * layout.zoom;
             double barTop = 3 * layout.zoom;
             double barH = layout.rowHeight - 2 * barTop;
-            box.applyCss();
-            box.layout();
-            double w = Math.max(1, box.prefWidth(-1));
-            double h = Math.max(1, box.prefHeight(-1));
-            double cx = (run.fromSlot() + run.toSlot() + 1) * 0.5 * layout.slotWidth;
-            double x0 = cx - w / 2;
-            double y0 = barTop + (barH - h) / 2;
-            box.setLayoutX(x0);
-            box.setLayoutY(y0);
-            overlay.getChildren().add(box);
+            double xPad = 3 * layout.zoom;
+            double gap = 2 * layout.zoom;
+            double bandRight = (run.toSlot() + 1) * layout.slotWidth - inset;
+            double x0 = run.fromSlot() * layout.slotWidth + inset + xPad;
+
+            List<List<Integer>> rowIndices = new ArrayList<>();
+            List<Double> rowMaxHeights = new ArrayList<>();
+            int idx = 0;
+            while (idx < nodes.size()) {
+                List<Integer> row = new ArrayList<>();
+                double x = x0;
+                double maxRowH = 0;
+                while (idx < nodes.size()) {
+                    double w = widths.get(idx);
+                    double h = heights.get(idx);
+                    if (x > x0 && x + w > bandRight + 1e-6) {
+                        break;
+                    }
+                    row.add(idx);
+                    maxRowH = Math.max(maxRowH, h);
+                    x += w + gap;
+                    idx++;
+                }
+                rowIndices.add(row);
+                rowMaxHeights.add(maxRowH);
+            }
+
+            double totalStackH = 0;
+            for (int i = 0; i < rowMaxHeights.size(); i++) {
+                totalStackH += rowMaxHeights.get(i);
+                if (i + 1 < rowMaxHeights.size()) {
+                    totalStackH += gap;
+                }
+            }
+            double yCursor = barTop + Math.max(0, (barH - totalStackH) / 2);
+
+            int rowNum = 0;
+            for (List<Integer> row : rowIndices) {
+                double rowMax = rowMaxHeights.get(rowNum);
+                double x = x0;
+                for (int ii : row) {
+                    StackPane sp = nodes.get(ii);
+                    double w = widths.get(ii);
+                    double h = heights.get(ii);
+                    double yBadge = yCursor + (rowMax - h) / 2;
+                    sp.setLayoutX(x);
+                    sp.setLayoutY(yBadge);
+                    overlay.getChildren().add(sp);
+                    x += w + gap;
+                }
+                yCursor += rowMax + gap;
+                rowNum++;
+            }
         }
     }
 

@@ -364,7 +364,8 @@ public final class UiBadgeDesignTabController {
                 colorToHex(
                         badgeGlowColorPicker, PersonBadgeStyle.networkSourceCacheBadgeDefault().glowColorHex()),
                 glowR,
-                glowS);
+                glowS,
+                d.opacity());
     }
 
     private void pushStyleToUi(PersonBadgeStyle st) {

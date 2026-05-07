@@ -53,6 +53,10 @@ public final class PersonBadgeNodeFactory {
         }
         sp.setEffect(glow);
 
+        double op = st.opacity();
+        sp.setOpacity(
+                Math.max(0.0, Math.min(1.0, Double.isFinite(op) ? op : 1.0)));
+
         return sp;
     }
 

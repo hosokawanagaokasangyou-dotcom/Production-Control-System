@@ -719,6 +719,7 @@ public final class MainShellController {
                 snapshotPersonBadgeGlowColorHex(),
                 snapshotPersonBadgeGlowRadius(),
                 snapshotPersonBadgeGlowSpread(),
+                snapshotPersonBadgeOpacity(),
                 snapshotPersonBadgeStylesByLabel(),
                 snapshotPersonBadgeStylesByMemberKey(),
                 uiBadgeDesignTabController != null
@@ -838,6 +839,12 @@ public final class MainShellController {
     private double snapshotPersonBadgeGlowSpread() {
         return ganttPersonBadgeDesignTabController != null
                 ? ganttPersonBadgeDesignTabController.snapshotPersonBadgeGlowSpread()
+                : -1d;
+    }
+
+    private double snapshotPersonBadgeOpacity() {
+        return ganttPersonBadgeDesignTabController != null
+                ? ganttPersonBadgeDesignTabController.snapshotPersonBadgeOpacity()
                 : -1d;
     }
 

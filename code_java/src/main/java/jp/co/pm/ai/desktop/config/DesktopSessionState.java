@@ -56,6 +56,7 @@ import java.util.Map;
  * @param equipmentGanttPersonBadgeGlowColorHex グロー（DropShadow）の色
  * @param equipmentGanttPersonBadgeGlowRadius グロー半径
  * @param equipmentGanttPersonBadgeGlowSpread DropShadow の spread（0〜1）
+ * @param equipmentGanttPersonBadgeOpacity バッジの不透明度（0〜1、{@code -1} は未保存として既定を使用）
  * @param equipmentGanttPersonBadgeStylesByLabel バッジ表示文字のみの旧キー（後方互換・読込のみ参照し得る）
  * @param equipmentGanttPersonBadgeStylesByMemberKey skills メンバー名（正規化キー）ごとの見た目
  * @param stage1NetworkCacheBadgeLabel 段階1付近バッジの表示文言（ネットワークソースがキャッシュのとき）
@@ -116,6 +117,7 @@ public record DesktopSessionState(
         String equipmentGanttPersonBadgeGlowColorHex,
         double equipmentGanttPersonBadgeGlowRadius,
         double equipmentGanttPersonBadgeGlowSpread,
+        double equipmentGanttPersonBadgeOpacity,
         Map<String, PersonBadgeStyle> equipmentGanttPersonBadgeStylesByLabel,
         Map<String, PersonBadgeStyle> equipmentGanttPersonBadgeStylesByMemberKey,
         String stage1NetworkCacheBadgeLabel,
@@ -173,7 +175,10 @@ public record DesktopSessionState(
                         : d.glowRadius(),
                 equipmentGanttPersonBadgeGlowSpread() >= 0 && equipmentGanttPersonBadgeGlowSpread() <= 1
                         ? equipmentGanttPersonBadgeGlowSpread()
-                        : d.glowSpread());
+                        : d.glowSpread(),
+                equipmentGanttPersonBadgeOpacity() >= 0.0 && equipmentGanttPersonBadgeOpacity() <= 1.0
+                        ? equipmentGanttPersonBadgeOpacity()
+                        : d.opacity());
     }
 
     /**
@@ -245,6 +250,7 @@ public record DesktopSessionState(
                 d.glowColorHex(),
                 d.glowRadius(),
                 d.glowSpread(),
+                -1d,
                 Map.of(),
                 Map.of(),
                 "",

@@ -19,7 +19,9 @@ public record PersonBadgeStyle(
         String glowColorHex,
         double glowRadius,
         /** DropShadow の spread（0〜1 付近） */
-        double glowSpread) {
+        double glowSpread,
+        /** バッジ全体の不透明度（0〜1） */
+        double opacity) {
 
     /**
      * 担当者ごとのスタイルマップのキーに使う（NFKC・前後空白除去）。
@@ -45,7 +47,8 @@ public record PersonBadgeStyle(
                 false,
                 "#38bdf8",
                 14.0,
-                0.28);
+                0.28,
+                1.0);
     }
 
     /** 実行タブ「ソースキャッシュ」バッジの初期配色（ネットワーク不可フォールバックの視認性）。 */
@@ -61,6 +64,7 @@ public record PersonBadgeStyle(
                 false,
                 "#fdba74",
                 12.0,
-                0.22);
+                0.22,
+                1.0);
     }
 }

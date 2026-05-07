@@ -82,6 +82,12 @@
                                 <CheckBox fx:id="badgePillCheck" mnemonicParsing="false" text="ピル形状"/>
                             </HBox>
                             <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="透明度％"/>
+                                <Slider fx:id="badgeOpacityPctSlider" blockIncrement="5.0" max="100.0"
+                                        min="0.0" prefWidth="120.0" value="100.0"/>
+                                <Label fx:id="badgeOpacityPctLabel" text="100%"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
                                 <Label prefWidth="140.0" text="グロー色"/>
                                 <ColorPicker fx:id="badgeGlowColorPicker"/>
                             </HBox>
