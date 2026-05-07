@@ -1596,32 +1596,36 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double x0 = run.fromSlot() * layout.slotWidth + inset + xPad;
 
             /*
-             * イメージ: 右下へずらしながら軽く重ねる（テキストが潰れない程度の対角オフセット）。
-             * 横は視覚幅の一部だけ進める → カードのような重なり。後ろから追加したノードが手前（Pane は後勝ち）。
+             * 横: overlapFrac で前バッジとどれだけ同じ行で重ねるか（0 なら論理幅分だけ横に詰め、隣接ピルは接するまで離す）。
+             * 縦: 重なり量 0 のときは対角オフセット（diagDy）を使わない。使うと帯内で常に重なって見える。
              */
             double overlapFrac =
                     Math.max(0d, Math.min(0.85, personBadgeOverlapPercent / 100.0));
+            boolean horizNoOverlap = personBadgeOverlapPercent <= 0.0;
             final double minAdvanceX = Math.max(2.5 * layout.zoom, 4);
             double diagDy =
                     Math.min(
                             Math.max(3 * layout.zoom, 4),
                             Math.max(6, barH / Math.max(8, nodes.size() + 4)));
-            double segmentGap = Math.max(2 * layout.zoom, diagDy * 0.45);
+            double diagDyEff = horizNoOverlap ? 0.0 : diagDy;
+            double segmentGapEff = Math.max(2 * layout.zoom, diagDyEff * 0.45);
 
             List<List<Integer>> segments = new ArrayList<>();
             List<Integer> curSeg = new ArrayList<>();
             double xVisPack = x0;
             for (int i = 0; i < nodes.size(); i++) {
+                StackPane spNode = nodes.get(i);
                 Bounds b = locals.get(i);
-                double vw = visualWidth(b);
-                if (!curSeg.isEmpty() && xVisPack > x0 && xVisPack + vw > bandRight + 1e-6) {
+                double stepW = badgeHorizontalStepWidth(horizNoOverlap, spNode, b);
+                if (!curSeg.isEmpty()
+                        && xVisPack > x0
+                        && xVisPack + stepW > bandRight + 1e-6) {
                     segments.add(curSeg);
                     curSeg = new ArrayList<>();
                     xVisPack = x0;
                 }
                 curSeg.add(i);
-                double advance =
-                        Math.max(vw * (1.0 - overlapFrac), Math.min(minAdvanceX, vw * 0.92));
+                double advance = badgeOverlapAdvanceX(stepW, overlapFrac, minAdvanceX);
                 xVisPack += advance;
             }
             if (!curSeg.isEmpty()) {
@@ -1637,7 +1641,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 double span =
                         seg.size() <= 1
                                 ? maxPref
-                                : (seg.size() - 1) * diagDy + maxPref;
+                                : (seg.size() - 1) * diagDyEff + maxPref;
                 segHeights.add(span);
             }
 
@@ -1645,7 +1649,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             for (int i = 0; i < segHeights.size(); i++) {
                 totalStackH += segHeights.get(i);
                 if (i + 1 < segHeights.size()) {
-                    totalStackH += segmentGap;
+                    totalStackH += segmentGapEff;
                 }
             }
             double ySegCursor = barTop + Math.max(0, (barH - totalStackH) / 2);
@@ -1662,10 +1666,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     StackPane sp = nodes.get(ii);
                     Bounds b = locals.get(ii);
                     double stackH = stackHeights.get(ii);
-                    double vw = visualWidth(b);
+                    double stepW = badgeHorizontalStepWidth(horizNoOverlap, sp, b);
                     double yTop =
                             ySegCursor
-                                    + k * diagDy
+                                    + k * diagDyEff
                                     + (segRowMax - stackH) / 2;
                     sp.setLayoutX(xVis - b.getMinX());
                     double ly =
@@ -1687,13 +1691,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 barTop + barH,
                                 timelinePaneWidth);
                     }
-                    double advance =
-                            Math.max(
-                                    vw * (1.0 - overlapFrac),
-                                    Math.min(minAdvanceX, vw * 0.92));
+                    double advance = badgeOverlapAdvanceX(stepW, overlapFrac, minAdvanceX);
                     xVis += advance;
                 }
-                ySegCursor += segHeights.get(si) + segmentGap;
+                ySegCursor += segHeights.get(si) + segmentGapEff;
             }
         }
     }
@@ -1767,6 +1768,22 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         }
         double w = b.getMaxX() - b.getMinX();
         return Math.max(1.0, Double.isFinite(w) ? w : b.getWidth());
+    }
+
+    /** 横方向の「1 バッジぶん」のステップ幅（重なり 0 時はグロー除く論理幅で隣接ピルを接するまで離す）。 */
+    private static double badgeHorizontalStepWidth(
+            boolean horizNoOverlap, StackPane sp, Bounds boundsInLocal) {
+        if (horizNoOverlap) {
+            return Math.max(1.0, badgeDragClampBounds(sp).getWidth());
+        }
+        return visualWidth(boundsInLocal);
+    }
+
+    private static double badgeOverlapAdvanceX(
+            double stepW, double overlapFrac, double minAdvanceX) {
+        return Math.max(
+                stepW * (1.0 - overlapFrac),
+                Math.min(minAdvanceX, stepW * 0.92));
     }
 
     /**
