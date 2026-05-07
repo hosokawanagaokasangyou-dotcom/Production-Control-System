@@ -80,6 +80,87 @@ public final class TableColumnOrderPersistence {
      */
     public record PlanResultViewerColumnFilterSpec(String title, List<String> values) {}
 
+    /**
+     * 段階1成形結果・結果_配台表 JSON など、ControlsFX Spreadsheet タブのデータ行の高さと折り返し。
+     *
+     * @param rowHeightPercent {@link SpreadsheetTabularSupport#PLAN_RESULT_ROW_HEIGHT_PCT_MIN} 〜 {@link
+     *     SpreadsheetTabularSupport#PLAN_RESULT_ROW_HEIGHT_PCT_MAX}（100＝既定）
+     */
+    public record SpreadsheetTabPresentationPrefs(double rowHeightPercent, boolean cellWrapText) {
+        public static SpreadsheetTabPresentationPrefs defaults() {
+            return new SpreadsheetTabPresentationPrefs(100.0, false);
+        }
+    }
+
+    private static String spreadsheetTabRowHeightKey(TableId id) {
+        return id.jsonKey() + "_ui_rowHeightPercent";
+    }
+
+    private static String spreadsheetTabCellWrapKey(TableId id) {
+        return id.jsonKey() + "_ui_cellWrapText";
+    }
+
+    /** 指定 {@link TableId} の Spreadsheet 行高・折り返しを読み込む（キーが無ければ既定）。 */
+    public static SpreadsheetTabPresentationPrefs loadSpreadsheetTabPresentationPrefs(TableId id) {
+        if (id == null) {
+            return SpreadsheetTabPresentationPrefs.defaults();
+        }
+        try {
+            if (!Files.isRegularFile(STORE)) {
+                return SpreadsheetTabPresentationPrefs.defaults();
+            }
+            JsonNode root = JSON.readTree(STORE.toFile());
+            if (root == null || !root.isObject()) {
+                return SpreadsheetTabPresentationPrefs.defaults();
+            }
+            double rh = root.path(spreadsheetTabRowHeightKey(id)).asDouble(100.0);
+            if (Double.isNaN(rh) || rh < SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MIN) {
+                rh = 100.0;
+            }
+            rh =
+                    Math.min(
+                            SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MAX,
+                            Math.max(SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MIN, rh));
+            boolean wrap = root.path(spreadsheetTabCellWrapKey(id)).asBoolean(false);
+            return new SpreadsheetTabPresentationPrefs(rh, wrap);
+        } catch (IOException e) {
+            return SpreadsheetTabPresentationPrefs.defaults();
+        }
+    }
+
+    /** 指定 {@link TableId} の Spreadsheet 行高・折り返しを永続化する。 */
+    public static void saveSpreadsheetTabPresentationPrefs(
+            TableId id, SpreadsheetTabPresentationPrefs prefs) {
+        if (id == null || prefs == null) {
+            return;
+        }
+        try {
+            Files.createDirectories(STORE.getParent());
+            ObjectNode root;
+            if (Files.isRegularFile(STORE)) {
+                JsonNode tree = JSON.readTree(STORE.toFile());
+                root =
+                        tree != null && tree.isObject()
+                                ? (ObjectNode) tree.deepCopy()
+                                : JSON.createObjectNode();
+            } else {
+                root = JSON.createObjectNode();
+            }
+            double rh = prefs.rowHeightPercent();
+            if (Double.isNaN(rh)) {
+                rh = 100.0;
+            }
+            rh =
+                    Math.min(
+                            SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MAX,
+                            Math.max(SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MIN, rh));
+            root.put(spreadsheetTabRowHeightKey(id), rh);
+            root.put(spreadsheetTabCellWrapKey(id), prefs.cellWrapText());
+            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
+        } catch (IOException ignored) {
+        }
+    }
+
     private static String headerCountKey(TableId id) {
         return id.jsonKey() + "_headerColumnCount";
     }

@@ -521,13 +521,13 @@ public final class SpreadsheetTabularSupport {
     private static final double PLAN_RESULT_FILTER_ROW_MAX_HEIGHT_PX = 34.0;
 
     /**
-     * 計画結果 JSON ビューア：データ行の高さをスケールする（列フィルタ行は上限 px で抑える）。フィルタ行以外のセルに折り返しを適用する。
+     * 列フィルタ行付き {@link GridBase} 共通：データ行の高さをスケールし、フィルタ行は上限 px で抑える。データ行のセルに折り返しを適用する。
      *
      * @param cellWrapText {@code true} で折り返し、{@code false} で単行（見切れ）
      * @param rowHeightPercent {@link #PLAN_RESULT_ROW_HEIGHT_PCT_MIN}〜{@link #PLAN_RESULT_ROW_HEIGHT_PCT_MAX}
      *         （ControlsFX 既定行高に対する倍率％、100＝既定）
      */
-    public static void applyPlanResultGridPresentation(
+    public static void applySpreadsheetGridRowHeightsAndWrap(
             GridBase grid, boolean cellWrapText, double rowHeightPercent) {
         if (grid == null) {
             return;
@@ -560,7 +560,15 @@ public final class SpreadsheetTabularSupport {
     }
 
     /**
-     * {@link #applyPlanResultGridPresentation} 後、内側 {@link TableView} が古い行高を保持することがあるため、
+     * {@link #applySpreadsheetGridRowHeightsAndWrap} のエイリアス（計画結果ビューア向け名称）。
+     */
+    public static void applyPlanResultGridPresentation(
+            GridBase grid, boolean cellWrapText, double rowHeightPercent) {
+        applySpreadsheetGridRowHeightsAndWrap(grid, cellWrapText, rowHeightPercent);
+    }
+
+    /**
+     * {@link #applySpreadsheetGridRowHeightsAndWrap} 後、内側 {@link TableView} が古い行高を保持することがあるため、
      * グリッド由来の行高を再適用し、表示を更新する（スクロールしなくても反映されるようにする）。
      *
      * <p>行数が極端に多いグリッドでは {@link SpreadsheetView#resizeRowsToDefault()} や内側 {@link TableView#refresh()} の再帰が

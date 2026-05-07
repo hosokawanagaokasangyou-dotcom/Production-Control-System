@@ -13,8 +13,10 @@ import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
+import javafx.scene.control.Slider;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -28,6 +30,8 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
+import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
+import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
@@ -68,6 +72,15 @@ public final class Stage1PreviewTabController {
     private TextField colWidthField;
 
     @FXML
+    private Slider stage1RowHeightSlider;
+
+    @FXML
+    private Label stage1RowHeightPctLabel;
+
+    @FXML
+    private CheckBox stage1CellWrapCheck;
+
+    @FXML
     private StackPane spreadsheetHost;
 
     private final SpreadsheetView spreadsheetView = new SpreadsheetView();
@@ -78,6 +91,15 @@ public final class Stage1PreviewTabController {
     private final AtomicReference<List<TableColumnOrderPersistence.ColumnSpec>> persistedLayout =
             new AtomicReference<>(List.of());
     private final AtomicInteger headerColumnCount = new AtomicInteger(0);
+
+    private final AtomicReference<TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs>
+            spreadsheetTabPrefs =
+                    new AtomicReference<>(
+                            TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs.defaults());
+
+    private final AtomicBoolean suppressPresentationUiEvents = new AtomicBoolean(false);
+
+    private volatile boolean stage1PresentationHooksInstalled;
 
     @FXML
     private void initialize() {
@@ -138,6 +160,8 @@ public final class Stage1PreviewTabController {
                 suppressColumnOrderPersistence::get,
                 () -> new ArrayList<>(headersRef));
 
+        initStage1SpreadsheetPresentationControls();
+
         javafx.application.Platform.runLater(
                 () -> {
                     if (pathField.getText().isBlank()) {
@@ -154,6 +178,82 @@ public final class Stage1PreviewTabController {
         rebuildSpreadsheet();
     }
 
+    private void initStage1SpreadsheetPresentationControls() {
+        if (stage1PresentationHooksInstalled) {
+            return;
+        }
+        if (stage1RowHeightSlider == null) {
+            return;
+        }
+        stage1PresentationHooksInstalled = true;
+        TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs loaded =
+                TableColumnOrderPersistence.loadSpreadsheetTabPresentationPrefs(
+                        TableColumnOrderPersistence.TableId.STAGE1_PREVIEW);
+        spreadsheetTabPrefs.set(loaded);
+        suppressPresentationUiEvents.set(true);
+        try {
+            stage1RowHeightSlider.setMin(SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MIN);
+            stage1RowHeightSlider.setMax(SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MAX);
+            stage1RowHeightSlider.setValue(loaded.rowHeightPercent());
+            stage1RowHeightSlider.setMajorTickUnit(250);
+            stage1RowHeightSlider.setMinorTickCount(4);
+            stage1RowHeightSlider.setShowTickMarks(true);
+            if (stage1RowHeightPctLabel != null) {
+                stage1RowHeightPctLabel.setText(
+                        String.format("%.0f%%", loaded.rowHeightPercent()));
+            }
+            if (stage1CellWrapCheck != null) {
+                stage1CellWrapCheck.setSelected(loaded.cellWrapText());
+            }
+        } finally {
+            suppressPresentationUiEvents.set(false);
+        }
+        SliderCommittedChangeSupport.install(
+                stage1RowHeightSlider,
+                () -> {
+                    if (stage1RowHeightPctLabel != null && stage1RowHeightSlider != null) {
+                        stage1RowHeightPctLabel.setText(
+                                String.format("%.0f%%", stage1RowHeightSlider.getValue()));
+                    }
+                },
+                this::commitStage1SpreadsheetPresentationFromSlider);
+        if (stage1CellWrapCheck != null) {
+            stage1CellWrapCheck
+                    .selectedProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (suppressPresentationUiEvents.get()) {
+                                    return;
+                                }
+                                commitStage1SpreadsheetPresentationFromUi();
+                            });
+        }
+    }
+
+    private void commitStage1SpreadsheetPresentationFromSlider() {
+        if (suppressPresentationUiEvents.get()) {
+            return;
+        }
+        commitStage1SpreadsheetPresentationFromUi();
+    }
+
+    private void commitStage1SpreadsheetPresentationFromUi() {
+        if (stage1RowHeightSlider == null) {
+            return;
+        }
+        double v = stage1RowHeightSlider.getValue();
+        boolean wrap = stage1CellWrapCheck != null && stage1CellWrapCheck.isSelected();
+        TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs next =
+                new TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs(v, wrap);
+        spreadsheetTabPrefs.set(next);
+        TableColumnOrderPersistence.saveSpreadsheetTabPresentationPrefs(
+                TableColumnOrderPersistence.TableId.STAGE1_PREVIEW, next);
+        if (stage1RowHeightPctLabel != null) {
+            stage1RowHeightPctLabel.setText(String.format("%.0f%%", v));
+        }
+        rebuildSpreadsheet();
+    }
+
     private void onReorderColumns() {
         if (headersRef.isEmpty()) {
             shell.appendLog("[stage1-preview] 列がありません（先に読み込み）");
@@ -164,31 +264,40 @@ public final class Stage1PreviewTabController {
                         perm -> {
                             List<String> oldHeaders = new ArrayList<>(headersRef);
                             List<String> titleOrder = perm.stream().map(oldHeaders::get).toList();
-                            List<TableColumnOrderPersistence.ColumnSpec> lay = persistedLayout.get();
-                            TableColumnOrderPersistence.applyLogicalColumnOrder(
-                                    headersRef, rows, titleOrder);
-                            double colW = 112;
-                            try {
-                                colW =
-                                        Math.max(
-                                                40,
-                                                Double.parseDouble(colWidthField.getText().trim()));
-                            } catch (NumberFormatException ignored) {
-                            }
-                            List<Double> widths =
-                                    TableColumnOrderPersistence.resolveWidthsForHeaders(
-                                            headersRef, lay, colW);
-                            List<TableColumnOrderPersistence.ColumnSpec> newLay = new ArrayList<>();
-                            for (int i = 0; i < headersRef.size(); i++) {
-                                newLay.add(
-                                        new TableColumnOrderPersistence.ColumnSpec(
-                                                headersRef.get(i), widths.get(i)));
-                            }
-                            persistedLayout.set(newLay);
-                            TableColumnOrderPersistence.saveLayout(
-                                    TableColumnOrderPersistence.TableId.STAGE1_PREVIEW, newLay);
-                            rebuildSpreadsheet();
+                            applyPersistedColumnOrderAfterLogicalReorder(titleOrder);
                         });
+    }
+
+    /**
+     * ダイアログまたはヘッダードラッグで確定した見出し順へ論理列を揃え、列幅レイアウトを保存して再構築する。
+     */
+    private void applyPersistedColumnOrderAfterLogicalReorder(List<String> titleOrder) {
+        if (headersRef.isEmpty()) {
+            return;
+        }
+        List<TableColumnOrderPersistence.ColumnSpec> lay = persistedLayout.get();
+        TableColumnOrderPersistence.applyLogicalColumnOrder(headersRef, rows, titleOrder);
+        double colW = readColWidthFieldOrDefault();
+        List<Double> widths =
+                TableColumnOrderPersistence.resolveWidthsForHeaders(headersRef, lay, colW);
+        List<TableColumnOrderPersistence.ColumnSpec> newLay = new ArrayList<>();
+        for (int i = 0; i < headersRef.size(); i++) {
+            newLay.add(
+                    new TableColumnOrderPersistence.ColumnSpec(headersRef.get(i), widths.get(i)));
+        }
+        persistedLayout.set(newLay);
+        TableColumnOrderPersistence.saveLayout(
+                TableColumnOrderPersistence.TableId.STAGE1_PREVIEW, newLay);
+        rebuildSpreadsheet();
+    }
+
+    private double readColWidthFieldOrDefault() {
+        double colW = 112;
+        try {
+            colW = Math.max(40, Double.parseDouble(colWidthField.getText().trim()));
+        } catch (NumberFormatException ignored) {
+        }
+        return colW;
     }
 
     @FXML
@@ -287,17 +396,17 @@ public final class Stage1PreviewTabController {
         }
         suppressColumnOrderPersistence.set(true);
         try {
-            double colW = 112;
-            try {
-                colW = Math.max(40, Double.parseDouble(colWidthField.getText().trim()));
-            } catch (NumberFormatException ignored) {
-            }
+            double colW = readColWidthFieldOrDefault();
             final List<Double> widths =
                     TableColumnOrderPersistence.resolveWidthsForHeaders(
                             headersRef, persistedLayout.get(), colW);
             final double widthDefault = colW;
 
             GridBase grid = SpreadsheetTabularSupport.buildStage1PreviewGrid(headersRef, rows);
+            TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs pres =
+                    spreadsheetTabPrefs.get();
+            SpreadsheetTabularSupport.applySpreadsheetGridRowHeightsAndWrap(
+                    grid, pres.cellWrapText(), pres.rowHeightPercent());
             spreadsheetView.setGrid(grid);
 
             javafx.application.Platform.runLater(
@@ -307,6 +416,14 @@ public final class Stage1PreviewTabController {
                         SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                 spreadsheetView, headerColumnCount.get());
                         SpreadsheetTabularSupport.applyColumnFilters(spreadsheetView);
+                        SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(
+                                spreadsheetView);
+                        SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
+                                spreadsheetView,
+                                suppressColumnOrderPersistence::get,
+                                () -> new ArrayList<>(headersRef),
+                                headerColumnCount.get(),
+                                this::applyPersistedColumnOrderAfterLogicalReorder);
                     });
         } finally {
             suppressColumnOrderPersistence.set(false);

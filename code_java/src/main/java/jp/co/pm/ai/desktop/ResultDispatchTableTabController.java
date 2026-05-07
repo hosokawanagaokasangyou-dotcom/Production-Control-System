@@ -20,8 +20,10 @@ import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
+import javafx.scene.control.Slider;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
@@ -33,6 +35,8 @@ import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
+import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
@@ -67,6 +71,15 @@ public final class ResultDispatchTableTabController {
     private Label hintLabel;
 
     @FXML
+    private Slider resultDispatchRowHeightSlider;
+
+    @FXML
+    private Label resultDispatchRowHeightPctLabel;
+
+    @FXML
+    private CheckBox resultDispatchCellWrapCheck;
+
+    @FXML
     private HBox columnStripHost;
 
     @FXML
@@ -91,6 +104,15 @@ public final class ResultDispatchTableTabController {
             new AtomicReference<>(List.of());
 
     private final AtomicInteger headerColumnCount = new AtomicInteger(0);
+
+    private final AtomicReference<TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs>
+            spreadsheetTabPrefs =
+                    new AtomicReference<>(
+                            TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs.defaults());
+
+    private final AtomicBoolean suppressPresentationUiEvents = new AtomicBoolean(false);
+
+    private volatile boolean resultDispatchPresentationHooksInstalled;
 
     @FXML
     private void initialize() {
@@ -125,11 +147,91 @@ public final class ResultDispatchTableTabController {
                 suppressColumnPersistence::get,
                 () -> new ArrayList<>(headersRef));
 
+        initResultDispatchSpreadsheetPresentationControls();
+
         Platform.runLater(this::reloadFromDisk);
     }
 
     private void onLeadingColumnCountCommitted(int n) {
         headerColumnCount.set(n);
+        rebuildSpreadsheet();
+    }
+
+    private void initResultDispatchSpreadsheetPresentationControls() {
+        if (resultDispatchPresentationHooksInstalled) {
+            return;
+        }
+        if (resultDispatchRowHeightSlider == null) {
+            return;
+        }
+        resultDispatchPresentationHooksInstalled = true;
+        TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs loaded =
+                TableColumnOrderPersistence.loadSpreadsheetTabPresentationPrefs(
+                        TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE);
+        spreadsheetTabPrefs.set(loaded);
+        suppressPresentationUiEvents.set(true);
+        try {
+            resultDispatchRowHeightSlider.setMin(SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MIN);
+            resultDispatchRowHeightSlider.setMax(SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MAX);
+            resultDispatchRowHeightSlider.setValue(loaded.rowHeightPercent());
+            resultDispatchRowHeightSlider.setMajorTickUnit(250);
+            resultDispatchRowHeightSlider.setMinorTickCount(4);
+            resultDispatchRowHeightSlider.setShowTickMarks(true);
+            if (resultDispatchRowHeightPctLabel != null) {
+                resultDispatchRowHeightPctLabel.setText(
+                        String.format("%.0f%%", loaded.rowHeightPercent()));
+            }
+            if (resultDispatchCellWrapCheck != null) {
+                resultDispatchCellWrapCheck.setSelected(loaded.cellWrapText());
+            }
+        } finally {
+            suppressPresentationUiEvents.set(false);
+        }
+        SliderCommittedChangeSupport.install(
+                resultDispatchRowHeightSlider,
+                () -> {
+                    if (resultDispatchRowHeightPctLabel != null
+                            && resultDispatchRowHeightSlider != null) {
+                        resultDispatchRowHeightPctLabel.setText(
+                                String.format("%.0f%%", resultDispatchRowHeightSlider.getValue()));
+                    }
+                },
+                this::commitResultDispatchSpreadsheetPresentationFromSlider);
+        if (resultDispatchCellWrapCheck != null) {
+            resultDispatchCellWrapCheck
+                    .selectedProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (suppressPresentationUiEvents.get()) {
+                                    return;
+                                }
+                                commitResultDispatchSpreadsheetPresentationFromUi();
+                            });
+        }
+    }
+
+    private void commitResultDispatchSpreadsheetPresentationFromSlider() {
+        if (suppressPresentationUiEvents.get()) {
+            return;
+        }
+        commitResultDispatchSpreadsheetPresentationFromUi();
+    }
+
+    private void commitResultDispatchSpreadsheetPresentationFromUi() {
+        if (resultDispatchRowHeightSlider == null) {
+            return;
+        }
+        double v = resultDispatchRowHeightSlider.getValue();
+        boolean wrap =
+                resultDispatchCellWrapCheck != null && resultDispatchCellWrapCheck.isSelected();
+        TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs next =
+                new TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs(v, wrap);
+        spreadsheetTabPrefs.set(next);
+        TableColumnOrderPersistence.saveSpreadsheetTabPresentationPrefs(
+                TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE, next);
+        if (resultDispatchRowHeightPctLabel != null) {
+            resultDispatchRowHeightPctLabel.setText(String.format("%.0f%%", v));
+        }
         rebuildSpreadsheet();
     }
 
@@ -144,23 +246,27 @@ public final class ResultDispatchTableTabController {
                         perm -> {
                             List<String> oldHeaders = new ArrayList<>(headersRef);
                             List<String> titleOrder = perm.stream().map(oldHeaders::get).toList();
-                            List<TableColumnOrderPersistence.ColumnSpec> lay = persistedLayout.get();
-                            TableColumnOrderPersistence.applyLogicalColumnOrder(
-                                    headersRef, rows, titleOrder);
-                            List<Double> widths =
-                                    TableColumnOrderPersistence.resolveWidthsForHeaders(
-                                            headersRef, lay, 112);
-                            List<TableColumnOrderPersistence.ColumnSpec> newLay = new ArrayList<>();
-                            for (int i = 0; i < headersRef.size(); i++) {
-                                newLay.add(
-                                        new TableColumnOrderPersistence.ColumnSpec(
-                                                headersRef.get(i), widths.get(i)));
-                            }
-                            persistedLayout.set(newLay);
-                            TableColumnOrderPersistence.saveLayout(
-                                    TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE, newLay);
-                            rebuildSpreadsheet();
+                            applyPersistedColumnOrderAfterLogicalReorder(titleOrder);
                         });
+    }
+
+    private void applyPersistedColumnOrderAfterLogicalReorder(List<String> titleOrder) {
+        if (headersRef.isEmpty()) {
+            return;
+        }
+        List<TableColumnOrderPersistence.ColumnSpec> lay = persistedLayout.get();
+        TableColumnOrderPersistence.applyLogicalColumnOrder(headersRef, rows, titleOrder);
+        List<Double> widths =
+                TableColumnOrderPersistence.resolveWidthsForHeaders(headersRef, lay, 112);
+        List<TableColumnOrderPersistence.ColumnSpec> newLay = new ArrayList<>();
+        for (int i = 0; i < headersRef.size(); i++) {
+            newLay.add(
+                    new TableColumnOrderPersistence.ColumnSpec(headersRef.get(i), widths.get(i)));
+        }
+        persistedLayout.set(newLay);
+        TableColumnOrderPersistence.saveLayout(
+                TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE, newLay);
+        rebuildSpreadsheet();
     }
 
     private void applyDynamicColumnWidths() {
@@ -183,6 +289,10 @@ public final class ResultDispatchTableTabController {
             final double widthDefault = 112;
 
             GridBase grid = SpreadsheetTabularSupport.buildReadOnlyPlainGrid(headersRef, rows);
+            TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs pres =
+                    spreadsheetTabPrefs.get();
+            SpreadsheetTabularSupport.applySpreadsheetGridRowHeightsAndWrap(
+                    grid, pres.cellWrapText(), pres.rowHeightPercent());
             spreadsheetView.setGrid(grid);
 
             Platform.runLater(
@@ -193,6 +303,14 @@ public final class ResultDispatchTableTabController {
                         SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                 spreadsheetView, headerColumnCount.get());
                         SpreadsheetTabularSupport.applyColumnFilters(spreadsheetView);
+                        SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(
+                                spreadsheetView);
+                        SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
+                                spreadsheetView,
+                                suppressColumnPersistence::get,
+                                () -> new ArrayList<>(headersRef),
+                                headerColumnCount.get(),
+                                this::applyPersistedColumnOrderAfterLogicalReorder);
                     });
         } finally {
             suppressColumnPersistence.set(false);

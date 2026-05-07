@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.function.Consumer;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -55,6 +56,7 @@ import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.ui.GanttScheduleStyle;
 import jp.co.pm.ai.desktop.ui.GanttSheetKind;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
+import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetMultiColumnFilterCoordinator;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
@@ -558,6 +560,8 @@ public final class PlanResultViewerTabController {
             AtomicBoolean tableWatcherInstalled = new AtomicBoolean();
             AtomicBoolean ganttWatcherInstalled = new AtomicBoolean();
             final boolean[] built = new boolean[2];
+            AtomicReference<Consumer<List<String>>> planResultColumnDragHandler =
+                    new AtomicReference<>();
 
             Runnable rebuildTable =
                     () -> {
@@ -574,7 +578,10 @@ public final class PlanResultViewerTabController {
                             Platform.runLater(
                                     () ->
                                             finishPlanResultSpreadsheet(
-                                                    sv, gridState, tableWatcherInstalled));
+                                                    sv,
+                                                    gridState,
+                                                    tableWatcherInstalled,
+                                                    planResultColumnDragHandler.get()));
                         } finally {
                             gridState.suppressPersistence.set(false);
                         }
@@ -600,7 +607,10 @@ public final class PlanResultViewerTabController {
                                             sv.getStyleClass().add("pm-gantt-equipment-xlsx");
                                         }
                                         finishPlanResultSpreadsheet(
-                                                sv, gridState, ganttWatcherInstalled);
+                                                sv,
+                                                gridState,
+                                                ganttWatcherInstalled,
+                                                planResultColumnDragHandler.get());
                                     });
                         } finally {
                             gridState.suppressPersistence.set(false);
@@ -642,34 +652,19 @@ public final class PlanResultViewerTabController {
                                                     new ArrayList<>(gridState.headersRef);
                                             List<String> titleOrder =
                                                     perm.stream().map(oldHeaders::get).toList();
-                                            TableColumnOrderPersistence.applyLogicalColumnOrder(
-                                                    gridState.headersRef,
-                                                    gridState.rows,
-                                                    titleOrder);
-                                            List<Double> widths =
-                                                    TableColumnOrderPersistence.resolveWidthsForHeaders(
-                                                            gridState.headersRef,
-                                                            gridState.persistedLayout.get(),
-                                                            112);
-                                            List<TableColumnOrderPersistence.ColumnSpec> newLay =
-                                                    new ArrayList<>();
-                                            for (int i = 0; i < gridState.headersRef.size(); i++) {
-                                                newLay.add(
-                                                        new TableColumnOrderPersistence.ColumnSpec(
-                                                                gridState.headersRef.get(i),
-                                                                widths.get(i)));
-                                            }
-                                            gridState.persistedLayout.set(newLay);
-                                            TableColumnOrderPersistence.saveLayoutForScope(
-                                                    gridState.scopeKey, newLay);
-                                            if (built[0]) {
-                                                rebuildTable.run();
-                                            }
-                                            if (built[1]) {
-                                                rebuildGantt.run();
-                                            }
+                                            applyPlanResultSheetPersistedColumnOrderAfterLogicalReorder(
+                                                    gridState,
+                                                    titleOrder,
+                                                    built,
+                                                    rebuildTable,
+                                                    rebuildGantt);
                                         });
                     };
+
+            planResultColumnDragHandler.set(
+                    visual ->
+                            applyPlanResultSheetPersistedColumnOrderAfterLogicalReorder(
+                                    gridState, visual, built, rebuildTable, rebuildGantt));
 
             HBox strip =
                     SpreadsheetColumnSettingsStrip.createForScope(
@@ -706,7 +701,10 @@ public final class PlanResultViewerTabController {
                             Platform.runLater(
                                     () -> {
                                         finishPlanResultSpreadsheet(
-                                                sv, gridState, tableWatcherInstalled);
+                                                sv,
+                                                gridState,
+                                                tableWatcherInstalled,
+                                                planResultColumnDragHandler.get());
                                         tableHost.getChildren().setAll(sv);
                                         StackPane.setAlignment(sv, Pos.CENTER_LEFT);
                                     });
@@ -745,7 +743,10 @@ public final class PlanResultViewerTabController {
                                             sv.getStyleClass().add("pm-gantt-equipment-xlsx");
                                         }
                                         finishPlanResultSpreadsheet(
-                                                sv, gridState, ganttWatcherInstalled);
+                                                sv,
+                                                gridState,
+                                                ganttWatcherInstalled,
+                                                planResultColumnDragHandler.get());
                                         ganttHost.getChildren().setAll(sv);
                                         StackPane.setAlignment(sv, Pos.CENTER_LEFT);
                                     });
@@ -763,15 +764,11 @@ public final class PlanResultViewerTabController {
                     };
             st.setUserData(new Runnable[] {loadTable, loadGantt});
 
-            Accordion columnSettingsAccordion = new Accordion();
-            TitledPane columnSettingsPane = new TitledPane("列設定", strip);
-            columnSettingsPane.setExpanded(false);
-            columnSettingsAccordion.getPanes().add(columnSettingsPane);
-            columnSettingsAccordion.setMaxWidth(Double.MAX_VALUE);
-            columnSettingsAccordion.getStyleClass().add("pm-plan-result-sheet-column-accordion");
+            strip.setMaxWidth(Double.MAX_VALUE);
+            strip.getStyleClass().add("pm-plan-result-sheet-column-strip");
 
-            VBox sheetVBox = new VBox(4, columnSettingsAccordion, modeTabs);
-            VBox.setVgrow(columnSettingsAccordion, Priority.NEVER);
+            VBox sheetVBox = new VBox(4, strip, modeTabs);
+            VBox.setVgrow(strip, Priority.NEVER);
             VBox.setVgrow(modeTabs, Priority.ALWAYS);
 
             modeTabs
@@ -819,10 +816,42 @@ public final class PlanResultViewerTabController {
         return inner;
     }
 
+    private static void applyPlanResultSheetPersistedColumnOrderAfterLogicalReorder(
+            SheetGridState gridState,
+            List<String> titleOrder,
+            boolean[] built,
+            Runnable rebuildTable,
+            Runnable rebuildGantt) {
+        if (gridState.headersRef.isEmpty()) {
+            return;
+        }
+        List<TableColumnOrderPersistence.ColumnSpec> lay = gridState.persistedLayout.get();
+        TableColumnOrderPersistence.applyLogicalColumnOrder(
+                gridState.headersRef, gridState.rows, titleOrder);
+        List<Double> widths =
+                TableColumnOrderPersistence.resolveWidthsForHeaders(
+                        gridState.headersRef, lay, 112);
+        List<TableColumnOrderPersistence.ColumnSpec> newLay = new ArrayList<>();
+        for (int i = 0; i < gridState.headersRef.size(); i++) {
+            newLay.add(
+                    new TableColumnOrderPersistence.ColumnSpec(
+                            gridState.headersRef.get(i), widths.get(i)));
+        }
+        gridState.persistedLayout.set(newLay);
+        TableColumnOrderPersistence.saveLayoutForScope(gridState.scopeKey, newLay);
+        if (built[0]) {
+            rebuildTable.run();
+        }
+        if (built[1]) {
+            rebuildGantt.run();
+        }
+    }
+
     private void finishPlanResultSpreadsheet(
             SpreadsheetView sv,
             SheetGridState gridState,
-            AtomicBoolean layoutWatcherInstalled) {
+            AtomicBoolean layoutWatcherInstalled,
+            Consumer<List<String>> onHeaderDragColumnOrder) {
         SpreadsheetMultiColumnFilterCoordinator.setColumnFilterCommitHook(sv, null);
         List<Double> widths =
                 TableColumnOrderPersistence.resolveWidthsForHeaders(
@@ -864,6 +893,14 @@ public final class PlanResultViewerTabController {
                     gridState.scopeKey,
                     gridState.suppressPersistence::get,
                     () -> new ArrayList<>(gridState.headersRef));
+        }
+        if (onHeaderDragColumnOrder != null) {
+            SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
+                    sv,
+                    gridState.suppressPersistence::get,
+                    () -> new ArrayList<>(gridState.headersRef),
+                    gridState.headerColumnCount.get(),
+                    onHeaderDragColumnOrder);
         }
     }
 
