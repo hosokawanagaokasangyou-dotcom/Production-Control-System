@@ -3,6 +3,8 @@ package jp.co.pm.ai.desktop;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import javafx.application.Platform;
 import javafx.concurrent.Task;
@@ -13,6 +15,7 @@ import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextArea;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.dispatch.MachineCalendarBlockIndex;
 
 /**
@@ -128,6 +131,24 @@ public final class MachineCalendarTabController {
                         Path summary = AppPaths.summaryAiDispatchXlsmPath(shellRef.snapshotUiEnv());
                         Path pyExe = resolvePythonExe();
                         Path pyDir = AppPaths.resolvePythonScriptDir(shellRef.snapshotUiEnv());
+                        // #region agent log
+                        try {
+                            Map<String, Object> d = new LinkedHashMap<>();
+                            d.put("pyExe", pyExe.toString());
+                            d.put("pyDir", pyDir.toString());
+                            d.put("primaryMaster", primary.toString());
+                            d.put("summaryXlsm", summary != null ? summary.toString() : "");
+                            d.put("jsonOut", jsonOut.toString());
+                            AgentDebugLog.appendStructured(
+                                    shellRef.snapshotUiEnv(),
+                                    "ecf65d",
+                                    "H1",
+                                    "MachineCalendarTabController.onExportFromMasterAction",
+                                    "before exportWithSummaryFallbackToJsonFile",
+                                    d);
+                        } catch (Throwable ignored) {
+                        }
+                        // #endregion
                         return MachineCalendarBlockIndex.exportWithSummaryFallbackToJsonFile(
                                 primary, summary, pyExe, pyDir, jsonOut);
                     }

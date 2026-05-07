@@ -9,6 +9,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -16,6 +17,8 @@ import java.util.concurrent.TimeUnit;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 /**
  * Equipment calendar blocks: days where the machine column has at least one occupied slot (planning_core).
@@ -77,7 +80,26 @@ public final class MachineCalendarBlockIndex {
             return new LoadOutcome(empty(), "missing_file", null);
         }
         String s = Files.readString(jsonFile, StandardCharsets.UTF_8);
-        return parseLoadOutcome(s.trim());
+        String trimmed = s.trim();
+        LoadOutcome lo = parseLoadOutcome(trimmed);
+        // #region agent log
+        try {
+            Map<String, Object> d = new LinkedHashMap<>();
+            d.put("jsonFile", jsonFile.toString());
+            d.put("bytes", s.length());
+            d.put("pythonJsonError", lo.pythonJsonError());
+            d.put("blocksEmpty", lo.index().isEmpty());
+            AgentDebugLog.appendStructured(
+                    Map.of(),
+                    "ecf65d",
+                    "H4",
+                    "MachineCalendarBlockIndex.loadOutcomeFromJsonFile",
+                    "parsed calendar JSON snapshot",
+                    d);
+        } catch (Throwable ignored) {
+        }
+        // #endregion
+        return lo;
     }
 
     /**
@@ -161,10 +183,45 @@ public final class MachineCalendarBlockIndex {
         }
         boolean finished = p.waitFor(120, TimeUnit.SECONDS);
         if (!finished) {
+            // #region agent log
+            try {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("masterWorkbook", masterWorkbook.toString());
+                d.put("script", script.toString());
+                d.put("reason", "timeout_120s");
+                AgentDebugLog.appendStructured(
+                        Map.of(),
+                        "ecf65d",
+                        "H6",
+                        "MachineCalendarBlockIndex.runExportScriptRawPayload",
+                        "subprocess did not finish",
+                        d);
+            } catch (Throwable ignored) {
+            }
+            // #endregion
             p.destroyForcibly();
             return null;
         }
         if (p.exitValue() != 0) {
+            // #region agent log
+            try {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("exitCode", p.exitValue());
+                d.put(
+                        "stdoutTail",
+                        rawStdout.length() > 800
+                                ? rawStdout.substring(rawStdout.length() - 800)
+                                : rawStdout);
+                AgentDebugLog.appendStructured(
+                        Map.of(),
+                        "ecf65d",
+                        "H6",
+                        "MachineCalendarBlockIndex.runExportScriptRawPayload",
+                        "python exit non-zero",
+                        d);
+            } catch (Throwable ignored) {
+            }
+            // #endregion
             return null;
         }
         return pickJsonPayload(rawStdout);
