@@ -590,10 +590,14 @@ public final class MainShellController {
         }
         mainRunTabController.applyStage2WriteExcelFromSession(s.mainRunStage2WriteExcel());
         mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
-        equipmentGanttGraphicTabController.applyEquipmentGanttSession(s);
+        /*
+         * 設備ガントの apply は末尾で Canvas を再構築し personBadgeStyleResolverForGantt を参照する。
+         * 担当バッジのセッション（グロー等）を先に適用しないと、起動直後の帯は既定スタイルで描かれる。
+         */
         if (ganttPersonBadgeDesignTabController != null) {
             ganttPersonBadgeDesignTabController.applyPersonBadgeDesignSession(s);
         }
+        equipmentGanttGraphicTabController.applyEquipmentGanttSession(s);
         if (uiBadgeDesignTabController != null) {
             uiBadgeDesignTabController.applyUiBadgeSession(s);
         }
