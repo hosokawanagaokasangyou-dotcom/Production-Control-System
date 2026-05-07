@@ -18688,6 +18688,24 @@ def _l10_initial_slit_roll_capacity_for_tid(task_queue: list, task_id: str) -> f
     return s
 
 
+def _l10_b41_threshold_unreachable(task_queue: list, task_id: str) -> bool:
+    """当該依頼のスリット総ロールが B-4.1 閾値未満なら、閾値到達不能（ゲートを掛けない）。"""
+    thr = float(SLIT_BEFORE_SEC_MIN_SLIT_ROLLS)
+    if thr <= 1e-9:
+        return False
+    cap = _l10_initial_slit_roll_capacity_for_tid(task_queue, task_id)
+    return cap + 1e-9 < thr
+
+
+def _b61_threshold_unreachable(task_queue: list, task_id: str) -> bool:
+    """当該依頼の接続総ロールが B-6.1 閾値未満なら、閾値到達不能（ゲートを掛けない）。"""
+    thr = float(CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS)
+    if thr <= 1e-9:
+        return False
+    cap = _b6_initial_connection_roll_capacity_for_tid(task_queue, task_id)
+    return cap + 1e-9 < thr
+
+
 # region agent log
 def _agent_debug_log_fa9590(
     *,
@@ -18752,6 +18770,8 @@ def _l10_sec_start_floor_from_slit_timeline(
         return None
     tid = str(task.get("task_id") or "").strip()
     if not tid:
+        return None
+    if _l10_b41_threshold_unreachable(task_queue, tid):
         return None
     slit_row: dict | None = None
     slit_eq: str = ""
@@ -18831,6 +18851,8 @@ def _b6_sec_start_floor_from_connection_timeline(
         return None
     tid = str(task.get("task_id") or "").strip()
     if not tid:
+        return None
+    if _b61_threshold_unreachable(task_queue, tid):
         return None
     conn_row: dict | None = None
     conn_eq: str = ""
@@ -25851,9 +25873,11 @@ def _trial_order_flow_eligible_tasks(
         # L10 B-4.1: 加工内容が「スリット,SEC」の依頼では、**当該依頼**でスリットが SLIT_BEFORE_SEC_MIN_SLIT_ROLLS ロール以上終わるまで SEC を開始しない
         _l10_tid = str(task.get("task_id") or "").strip()
         _l10_pair_gap = _l10_slit_done_minus_sec_done_for_task_id(task_queue, _l10_tid)
-        if SLIT_BEFORE_SEC_MIN_SLIT_ROLLS > 0 and _l10_pair_gap < float(
-            SLIT_BEFORE_SEC_MIN_SLIT_ROLLS
-        ) - 1e-9:
+        if (
+            SLIT_BEFORE_SEC_MIN_SLIT_ROLLS > 0
+            and _l10_pair_gap < float(SLIT_BEFORE_SEC_MIN_SLIT_ROLLS) - 1e-9
+            and not _l10_b41_threshold_unreachable(task_queue, _l10_tid)
+        ):
             proc = _normalize_process_name_for_rule_match(task.get("machine"))
             mach = _normalize_equipment_match_key(task.get("machine_name"))
             if (
@@ -25894,9 +25918,12 @@ def _trial_order_flow_eligible_tasks(
         _b6_pair_gap = _b6_connection_done_minus_sec_done_for_task_id(
             task_queue, _b6_tid
         )
-        if CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS > 0 and _b6_pair_gap < float(
-            CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS
-        ) - 1e-9:
+        if (
+            CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS > 0
+            and _b6_pair_gap
+            < float(CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS) - 1e-9
+            and not _b61_threshold_unreachable(task_queue, _b6_tid)
+        ):
             proc = _normalize_process_name_for_rule_match(task.get("machine"))
             mach = _normalize_equipment_match_key(task.get("machine_name"))
             if (
@@ -27197,9 +27224,11 @@ def _trial_order_hard_precheck_blocks_assign_probe(task: dict, task_queue: list)
             return True
     _l10_tid_p = str(task.get("task_id") or "").strip()
     _l10_gap_p = _l10_slit_done_minus_sec_done_for_task_id(task_queue, _l10_tid_p)
-    if SLIT_BEFORE_SEC_MIN_SLIT_ROLLS > 0 and _l10_gap_p < float(
-        SLIT_BEFORE_SEC_MIN_SLIT_ROLLS
-    ) - 1e-9:
+    if (
+        SLIT_BEFORE_SEC_MIN_SLIT_ROLLS > 0
+        and _l10_gap_p < float(SLIT_BEFORE_SEC_MIN_SLIT_ROLLS) - 1e-9
+        and not _l10_b41_threshold_unreachable(task_queue, _l10_tid_p)
+    ):
         proc = _normalize_process_name_for_rule_match(task.get("machine"))
         mach = _normalize_equipment_match_key(task.get("machine_name"))
         if (
@@ -27232,9 +27261,11 @@ def _trial_order_hard_precheck_blocks_assign_probe(task: dict, task_queue: list)
                 return True
     _b6_tid_p = str(task.get("task_id") or "").strip()
     _b6_gap_p = _b6_connection_done_minus_sec_done_for_task_id(task_queue, _b6_tid_p)
-    if CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS > 0 and _b6_gap_p < float(
-        CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS
-    ) - 1e-9:
+    if (
+        CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS > 0
+        and _b6_gap_p < float(CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS) - 1e-9
+        and not _b61_threshold_unreachable(task_queue, _b6_tid_p)
+    ):
         proc = _normalize_process_name_for_rule_match(task.get("machine"))
         mach = _normalize_equipment_match_key(task.get("machine_name"))
         if (
