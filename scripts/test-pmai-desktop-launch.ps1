@@ -1,10 +1,10 @@
-# PmAiDesktop.exe が起動し、短時間プロセスが生存することを確認する（自動テスト用）。
+# PMD.exe が起動し、短時間プロセスが生存することを確認する（自動テスト用）。
 #
-# 前提: Windows で code_java\\package_app.ps1 を実行済み（既定では code_java\\dist\\PmAiDesktop\\PmAiDesktop.exe）。
+# 前提: Windows で code_java\package_app.ps1 を実行済み（既定では code_java\dist\PMD\PMD.exe）。
 #
 # 例:
 #   .\scripts\test-pmai-desktop-launch.ps1
-#   .\scripts\test-pmai-desktop-launch.ps1 -ExePath 'D:\build\PmAiDesktop\PmAiDesktop.exe'
+#   .\scripts\test-pmai-desktop-launch.ps1 -ExePath 'D:\build\PMD\PMD.exe'
 #   .\scripts\test-pmai-desktop-launch.ps1 -LeaveRunning   # 検証後も終了させない
 
 param(
@@ -17,7 +17,7 @@ $ErrorActionPreference = 'Stop'
 
 if ([string]::IsNullOrWhiteSpace($ExePath)) {
     $here = if ($PSScriptRoot) { $PSScriptRoot } else { Get-Location }
-    $ExePath = Join-Path $here '..\code_java\dist\PmAiDesktop\PmAiDesktop.exe'
+    $ExePath = Join-Path $here '..\code_java\dist\PMD\PMD.exe'
 }
 
 try {
@@ -25,13 +25,13 @@ try {
 }
 catch {
     Write-Error @"
-PmAiDesktop.exe が見つかりません: $ExePath
+PMD.exe が見つかりません: $ExePath
 先に code_java フォルダで package_app.ps1 を実行して dist を生成してください。
 "@
     exit 2
 }
 
-Write-Host "--- PmAiDesktop 起動テスト ---" -ForegroundColor Cyan
+Write-Host "--- PMD 起動テスト ---" -ForegroundColor Cyan
 Write-Host "Exe: $ExePath"
 
 $workDir = Split-Path -Parent $ExePath

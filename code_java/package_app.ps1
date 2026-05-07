@@ -407,7 +407,8 @@ function Build-PmAiDesktopLauncherBatContent {
     param(
         [string]$JavafxVersion,
         [string]$JvmInitial,
-        [string]$JvmMax
+        [string]$JvmMax,
+        [string]$LauncherExeBaseName = 'PMD'
     )
     $jv = ($JavafxVersion -replace '[\r\n\t]', '').Trim()
     if ([string]::IsNullOrWhiteSpace($jv)) {
@@ -428,7 +429,7 @@ function Build-PmAiDesktopLauncherBatContent {
     $lines.Add('cd /d "%ROOT%"')
     $lines.Add('')
     $lines.Add('if not exist "%ROOT%\app" (')
-    $lines.Add('    echo [ERROR] Missing app folder. Put this bat next to PmAiDesktop.exe / app / runtime.')
+    $lines.Add('    echo [ERROR] Missing app folder. Put this bat next to ' + $LauncherExeBaseName + '.exe / app / runtime.')
     $lines.Add('    echo Current: "%ROOT%"')
     $lines.Add('    pause')
     $lines.Add('    exit /b 1')
@@ -528,7 +529,8 @@ function Copy-BundleToDist {
     param(
         [string]$WorkspaceRootPath,
         [string]$DistAppRoot,
-        [string]$PythonEmbedSourceDir
+        [string]$PythonEmbedSourceDir,
+        [string]$AppExeBaseName = 'PMD'
     )
 
     if ([string]::IsNullOrWhiteSpace($PythonEmbedSourceDir) -or -not (Test-Path -LiteralPath $PythonEmbedSourceDir)) {
@@ -566,7 +568,7 @@ function Copy-BundleToDist {
         'Workspace mirror source: git ls-files -co --exclude-standard (respects .gitignore).',
         'Master *.txt under code/ are always copied (see package_app_mandatory_code_paths.txt).',
         'Also excludes packaging dirs: code_java/build_cache, package_input, dist.',
-        'This folder sits next to PmAiDesktop.exe.',
+        "This folder sits next to $($AppExeBaseName).exe.",
         'Version: repo-root version.txt (included here). Optional sync via PM_AI_PORTABLE_BUNDLE_SOURCE_DIR.',
         'Python: pm-ai-data\runtime\python-embed\python.exe (from build_cache embed + pip).',
         'Default inputs: input\task-input , input\actual-detail.',
@@ -590,7 +592,7 @@ if ([string]::IsNullOrWhiteSpace($pyEmbedVer)) {
 
 $proj = Get-MavenProjectInfo -PomPath $POM
 
-$APP_NAME = 'PmAiDesktop'
+$APP_NAME = 'PMD'
 $VersionTxtPath = Join-Path $WorkspaceRoot 'version.txt'
 $APP_VERSION = $proj.Version -replace '-SNAPSHOT$', '.0'
 if (Test-Path -LiteralPath $VersionTxtPath) {
@@ -812,7 +814,7 @@ if ($usedStagingForJpackage) {
                 break
             }
             catch {
-                Write-Warning "Cannot remove old bundle folder (close PmAiDesktop.exe / Explorer on dist\$APP_NAME). Retry ($ri/8)..."
+                Write-Warning "Cannot remove old bundle folder (close $($APP_NAME).exe / Explorer on dist\$APP_NAME). Retry ($ri/8)..."
                 Start-Sleep -Seconds 3
             }
         }
@@ -853,7 +855,7 @@ Common causes:
   1) Windows Defender / AV removed java.exe (DLLs often remain). Check Protection history.
   2) Very long or non-ASCII path - this script stages jpackage --dest under %TEMP% when the repo path has non-ASCII; override with -JpackageDest or PM_AI_JPACKAGE_DEST, or clone to e.g. C:\work\pm-ai.
   3) Stale dist - ensure code_java\dist was removed before jpackage.
-Java runtime is next to PmAiDesktop.exe (from --runtime-image JDK); pm-ai-data\runtime is Python only.
+Java runtime is next to $($APP_NAME).exe (from --runtime-image JDK); pm-ai-data\runtime is Python only.
 Step 7 continues; output may be incomplete.
 "@
         $diagRt = Join-Path $postJpkgRoot 'runtime'
@@ -887,14 +889,14 @@ $distRoot = $publishedBundleRoot
 if (-not (Test-Path -LiteralPath $distRoot)) {
     throw "Distribution folder missing: $distRoot"
 }
-Copy-BundleToDist -WorkspaceRootPath $WorkspaceRoot -DistAppRoot $distRoot -PythonEmbedSourceDir $pythonSrc
+Copy-BundleToDist -WorkspaceRootPath $WorkspaceRoot -DistAppRoot $distRoot -PythonEmbedSourceDir $pythonSrc -AppExeBaseName $APP_NAME
 
 $launcherBatDst = Join-Path $distRoot 'launch-pm-ai-desktop.bat'
 $javafxVerForLauncher = Expand-PomPropertyPlaceholder -Raw ([string]$pomProps['javafx.version']) -Props $pomProps
 if ([string]::IsNullOrWhiteSpace($javafxVerForLauncher)) {
     $javafxVerForLauncher = '26.0.1'
 }
-$batBody = Build-PmAiDesktopLauncherBatContent -JavafxVersion $javafxVerForLauncher -JvmInitial $jvmInitial -JvmMax $jvmMax
+$batBody = Build-PmAiDesktopLauncherBatContent -JavafxVersion $javafxVerForLauncher -JvmInitial $jvmInitial -JvmMax $jvmMax -LauncherExeBaseName $APP_NAME
 [System.IO.File]::WriteAllText($launcherBatDst, $batBody, [System.Text.UTF8Encoding]::new($false))
 Write-Host "Launcher bat: $launcherBatDst (JavaFX module-path from pom javafx.version=$javafxVerForLauncher)" -ForegroundColor DarkGray
 

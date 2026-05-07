@@ -6,9 +6,9 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * When started from jpackage {@code PmAiDesktop.exe} on Windows, {@code user.dir} may not match the
+ * When started from jpackage {@code PMD.exe} on Windows, {@code user.dir} may not match the
  * install folder. Portable paths (e.g. pm-ai-data) then fail. If the process command line ends with
- * {@code PmAiDesktop.exe}, set {@code user.dir} to that exe's parent directory.
+ * {@code PMD.exe}, set {@code user.dir} to that exe's parent directory.
  *
  * <p>Javadoc is ASCII-only so javac never fails on broken multi-byte source encoding on Windows.
  *
@@ -16,7 +16,7 @@ import java.util.Optional;
  */
 public final class WindowsLauncherUserDir {
 
-    private static final String LAUNCHER_EXE = "PmAiDesktop.exe";
+    private static final String LAUNCHER_EXE = "PMD.exe";
 
     private WindowsLauncherUserDir() {}
 

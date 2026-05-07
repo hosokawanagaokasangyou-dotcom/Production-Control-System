@@ -30,7 +30,7 @@ public final class EnvVarDocs {
                         + "PM_AI_CODE_PYTHON_DIR 未指定時の推定に使用。");
         put(
                 "PM_AI_PORTABLE_BUNDLE_SOURCE_DIR",
-                "ポータブル配布（PmAiDesktop.exe と pm-ai-data）向け。正本リポジトリルートのパス（ネットワーク共有・ローカル Clone）。"
+                "ポータブル配布（PMD.exe と pm-ai-data）向け。正本リポジトリルートのパス（ネットワーク共有・ローカル Clone）。"
                         + "リポジトリ直下の version.txt がローカル pm-ai-data より新しいときのみ、起動時に pm-ai-data を同期する。"
                         + "空のときは自動更新しない（情報表示のみ）。フォルダパス（UNC 可）。");
         put(

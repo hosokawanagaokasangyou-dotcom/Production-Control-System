@@ -8,7 +8,7 @@ if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
 cd /d "%ROOT%"
 
 if not exist "%ROOT%\app" (
-    echo [ERROR] Missing app folder. Put this bat next to PmAiDesktop.exe / app / runtime.
+    echo [ERROR] Missing app folder. Put this bat next to PMD.exe / app / runtime.
     echo Current: "%ROOT%"
     pause
     exit /b 1
