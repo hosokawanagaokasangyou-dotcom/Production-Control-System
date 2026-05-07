@@ -457,7 +457,7 @@ function Build-PmAiDesktopLauncherBatContent {
         $lines.Add('set "PM_AI_JFX_MODPATH=!PM_AI_JFX_MODPATH!;%ROOT%\app\' + $artifacts[$ai] + '-' + $jv + '-win.jar"')
     }
     $lines.Add('')
-    # Must match jpackage --java-options ($javaOpts): ControlsFX SpreadsheetView needs internal JavaFX packages.
+    # Must match jpackage --java-options ($javaOpts): JavaFX --module-path/--add-modules + ControlsFX (internal JavaFX) opens/exports.
     $compatJvm = '--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED --add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED --add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED --enable-native-access=javafx.graphics'
     $javaLine = '"%JAVA_EXE%" -Dfile.encoding=UTF-8 -Xms' + $xms + ' -Xmx' + $xmx + ' -XX:+HeapDumpOnOutOfMemoryError -XX:+UseStringDeduplication -Dprism.order=sw ' + $compatJvm + ' --module-path "!PM_AI_JFX_MODPATH!" --add-modules javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.swing -classpath "%ROOT%\app\*" jp.co.pm.ai.desktop.PmAiFxApp %*'
     $lines.Add($javaLine)
@@ -738,6 +738,25 @@ if ($usedStagingForJpackage) {
     New-Item -ItemType Directory -Path $jpkgDestParent -Force | Out-Null
 }
 
+# Native exe launch uses only jpackage --java-options (see dist\<APP_NAME>\app\<APP_NAME>.cfg).
+# Match launch-pm-ai-desktop.bat: JavaFX modular jars on --module-path + --add-modules.
+# jpackage cfg understands $APPDIR (bundle root); jars land under app\ next to the launcher.
+# Oracle: custom --module-path in --java-options is appended to any default module path.
+$jvForJpkgOpts = ($javafxVer -replace '[\r\n\t]', '').Trim()
+$jfxModsForJpkg = @('javafx-base', 'javafx-controls', 'javafx-fxml', 'javafx-graphics', 'javafx-swing')
+$modPathJpkgSb = [System.Text.StringBuilder]::new()
+for ($mi = 0; $mi -lt $jfxModsForJpkg.Count; $mi++) {
+    if ($mi -gt 0) {
+        [void]$modPathJpkgSb.Append(';')
+    }
+    [void]$modPathJpkgSb.Append('$APPDIR/app/')
+    [void]$modPathJpkgSb.Append($jfxModsForJpkg[$mi])
+    [void]$modPathJpkgSb.Append('-')
+    [void]$modPathJpkgSb.Append($jvForJpkgOpts)
+    [void]$modPathJpkgSb.Append('-win.jar')
+}
+$jpackageModulePathJavaOpt = '--module-path=' + $modPathJpkgSb.ToString()
+
 $javaOpts = @(
     '-Dfile.encoding=UTF-8',
     "-Xms$jvmInitial",
@@ -745,6 +764,8 @@ $javaOpts = @(
     '-XX:+HeapDumpOnOutOfMemoryError',
     '-XX:+UseStringDeduplication',
     "-Dprism.order=$prismOrder",
+    $jpackageModulePathJavaOpt,
+    '--add-modules=javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.swing',
     '--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED',
     '--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED',
     '--add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED',
