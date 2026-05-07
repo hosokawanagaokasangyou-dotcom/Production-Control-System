@@ -18650,6 +18650,77 @@ def _b6_task_queue_has_special_connection_row_for_tid(
     return False
 
 
+def _b6_initial_connection_roll_capacity_for_tid(task_queue: list, task_id: str) -> float:
+    """同一依頼の接続（熱融着機　湖南）行の initial_remaining_units 合計（ロール）。"""
+    tid = (task_id or "").strip()
+    if not tid:
+        return 0.0
+    _conn_proc = _normalize_process_name_for_rule_match(
+        SPECIAL_WIP_CONNECTION_PROCESS
+    )
+    _conn_mach = _normalize_equipment_match_key(SPECIAL_WIP_CONNECTION_MACHINE)
+    s = 0.0
+    for _t in task_queue:
+        if str(_t.get("task_id") or "").strip() != tid:
+            continue
+        proc = _normalize_process_name_for_rule_match(_t.get("machine"))
+        mach = _normalize_equipment_match_key(_t.get("machine_name"))
+        if proc == _conn_proc and mach == _conn_mach:
+            s += float(_t.get("initial_remaining_units") or 0)
+    return s
+
+
+def _l10_initial_slit_roll_capacity_for_tid(task_queue: list, task_id: str) -> float:
+    """同一依頼のスリット（スリット機1　湖南）行の initial_remaining_units 合計（ロール）。"""
+    tid = (task_id or "").strip()
+    if not tid:
+        return 0.0
+    _slit_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
+    _slit_mach = _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
+    s = 0.0
+    for _t in task_queue:
+        if str(_t.get("task_id") or "").strip() != tid:
+            continue
+        proc = _normalize_process_name_for_rule_match(_t.get("machine"))
+        mach = _normalize_equipment_match_key(_t.get("machine_name"))
+        if proc == _slit_proc and mach == _slit_mach:
+            s += float(_t.get("initial_remaining_units") or 0)
+    return s
+
+
+# region agent log
+def _agent_debug_log_fa9590(
+    *,
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict | None = None,
+) -> None:
+    """デバッグセッション fa9590 向け NDJSON（配台ブロック原因調査）。"""
+    _path = (
+        pathlib.Path(__file__).resolve().parents[3]
+        / ".cursor"
+        / "debug-fa9590.log"
+    )
+    try:
+        payload = {
+            "sessionId": "fa9590",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time_module.time() * 1000),
+        }
+        _path.parent.mkdir(parents=True, exist_ok=True)
+        with open(_path, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# endregion
+
+
 def _l10_sec_start_floor_from_slit_timeline(
     task: dict,
     timeline_events: list | None,
@@ -25800,6 +25871,22 @@ def _trial_order_flow_eligible_tasks(
                     if _l10_task_queue_has_special_slit_row_for_tid(
                         task_queue, _l10_tid
                     ):
+                        # region agent log
+                        _agent_debug_log_fa9590(
+                            hypothesis_id="H-L10-B41-eligible",
+                            location="_trial_order_flow_eligible_tasks:L10",
+                            message="SEC excluded by L10 B-4.1 (slit before SEC min rolls)",
+                            data={
+                                "task_id": _l10_tid,
+                                "pair_gap_slit_minus_sec": _l10_pair_gap,
+                                "threshold": SLIT_BEFORE_SEC_MIN_SLIT_ROLLS,
+                                "slit_roll_capacity": _l10_initial_slit_roll_capacity_for_tid(
+                                    task_queue, _l10_tid
+                                ),
+                                "machine": str(task.get("machine_name") or ""),
+                            },
+                        )
+                        # endregion
                         continue
         # B-6.1: 加工内容が「接続→SEC」の依頼では、当該依頼で接続が
         # CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS ロール以上終わるまで SEC を開始しない
@@ -25828,6 +25915,26 @@ def _trial_order_flow_eligible_tasks(
                     if _b6_task_queue_has_special_connection_row_for_tid(
                         task_queue, _b6_tid
                     ):
+                        # region agent log
+                        _cap_b6 = _b6_initial_connection_roll_capacity_for_tid(
+                            task_queue, _b6_tid
+                        )
+                        _agent_debug_log_fa9590(
+                            hypothesis_id="H-B61-eligible",
+                            location="_trial_order_flow_eligible_tasks:B-6.1",
+                            message="SEC excluded by B-6.1 (connection before SEC min rolls)",
+                            data={
+                                "task_id": _b6_tid,
+                                "pair_gap_conn_minus_sec": _b6_pair_gap,
+                                "threshold": CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS,
+                                "connection_roll_capacity": _cap_b6,
+                                "gap_unreachable": _cap_b6
+                                < float(CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS)
+                                - 1e-9,
+                                "machine": str(task.get("machine_name") or ""),
+                            },
+                        )
+                        # endregion
                         continue
         if _task_blocked_by_same_request_dependency(task, task_queue):
             continue
@@ -27107,6 +27214,21 @@ def _trial_order_hard_precheck_blocks_assign_probe(task: dict, task_queue: list)
                 and _norm.index(_normalize_process_name_for_rule_match("スリット"))
                 < _norm.index(_normalize_process_name_for_rule_match("SEC"))
             ):
+                # region agent log
+                _agent_debug_log_fa9590(
+                    hypothesis_id="H-L10-B41-precheck",
+                    location="_trial_order_hard_precheck_blocks_assign_probe:L10",
+                    message="assign probe blocked by L10 B-4.1 gate",
+                    data={
+                        "task_id": _l10_tid_p,
+                        "pair_gap_slit_minus_sec": _l10_gap_p,
+                        "threshold": SLIT_BEFORE_SEC_MIN_SLIT_ROLLS,
+                        "slit_roll_capacity": _l10_initial_slit_roll_capacity_for_tid(
+                            task_queue, _l10_tid_p
+                        ),
+                    },
+                )
+                # endregion
                 return True
     _b6_tid_p = str(task.get("task_id") or "").strip()
     _b6_gap_p = _b6_connection_done_minus_sec_done_for_task_id(task_queue, _b6_tid_p)
@@ -27131,6 +27253,25 @@ def _trial_order_hard_precheck_blocks_assign_probe(task: dict, task_queue: list)
                 if _b6_task_queue_has_special_connection_row_for_tid(
                     task_queue, _b6_tid_p
                 ):
+                    # region agent log
+                    _cap_b6p = _b6_initial_connection_roll_capacity_for_tid(
+                        task_queue, _b6_tid_p
+                    )
+                    _agent_debug_log_fa9590(
+                        hypothesis_id="H-B61-precheck",
+                        location="_trial_order_hard_precheck_blocks_assign_probe:B-6.1",
+                        message="assign probe blocked by B-6.1 gate",
+                        data={
+                            "task_id": _b6_tid_p,
+                            "pair_gap_conn_minus_sec": _b6_gap_p,
+                            "threshold": CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS,
+                            "connection_roll_capacity": _cap_b6p,
+                            "gap_unreachable": _cap_b6p
+                            < float(CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS)
+                            - 1e-9,
+                        },
+                    )
+                    # endregion
                     return True
     if _task_blocked_by_same_request_dependency(task, task_queue):
         return True
