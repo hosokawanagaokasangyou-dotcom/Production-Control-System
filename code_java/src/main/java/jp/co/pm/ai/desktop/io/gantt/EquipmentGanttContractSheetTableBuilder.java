@@ -20,8 +20,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jp.co.pm.ai.desktop.io.JsonTableIo;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
-
 /**
  * {@code *_equipment_gantt_contract.json}（設備ガント描画契約）から、
  * {@link jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane} が期待する
@@ -88,23 +86,6 @@ public final class EquipmentGanttContractSheetTableBuilder {
                 events.add(te);
             }
         }
-        // #region agent log
-        try {
-            int rawLen = eventsNode.size();
-            Map<String, Object> eb = new LinkedHashMap<>(AgentDebugLog.debugHeapMap());
-            eb.put("contractFileName", contractPath.getFileName().toString());
-            eb.put("timelineEventsJsonArrayLength", Integer.valueOf(rawLen));
-            eb.put("parsedTimelineEventCount", Integer.valueOf(events.size()));
-            AgentDebugLog.appendStructured(
-                    Map.of(),
-                    "81ed4a",
-                    "EB1",
-                    "EquipmentGanttContractSheetTableBuilder.buildBundleFromContractPath",
-                    "contract timeline_events raw vs parsed",
-                    eb);
-        } catch (Throwable ignored) {
-        }
-        // #endregion
 
         events = applyGapAwareMachiningLabels(events);
 
@@ -190,32 +171,6 @@ public final class EquipmentGanttContractSheetTableBuilder {
                         }
                         cell = ev.timelineCellLabel();
                         badgeCell = ev.badgeSlotFragment();
-                        // #region agent log
-                        try {
-                            String cl = cell != null ? cell : "";
-                            if (cl.contains("Y5-3")
-                                    || (ev.taskId != null && ev.taskId.contains("Y5-3"))) {
-                                Map<String, Object> y = new LinkedHashMap<>(AgentDebugLog.debugHeapMap());
-                                y.put("day", day.toString());
-                                y.put("equipLine", equipLine);
-                                y.put("taskId", ev.taskId);
-                                y.put("op", ev.op);
-                                y.put("sub", ev.sub);
-                                y.put("cell", cl);
-                                y.put("badgeCell", badgeCell != null ? badgeCell : "");
-                                y.put("eventKind", ev.eventKind);
-                                y.put("slotCol", col);
-                                AgentDebugLog.appendStructured(
-                                        Map.of(),
-                                        "bdec51",
-                                        "H1",
-                                        "EquipmentGanttContractSheetTableBuilder.slotFill",
-                                        "Y5-3 timeline slot cell+badge",
-                                        y);
-                            }
-                        } catch (Throwable ignored) {
-                        }
-                        // #endregion
                         break;
                     }
                     row.put(col, cell);

@@ -52,8 +52,6 @@ import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
 import jp.co.pm.ai.desktop.ui.GanttSheetKind;
 
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
-
 /**
  * 「結果_設備ガント」等の時刻軸シートを plan JSON から読み、グラフィック表示する独立タブ。
  * グラフィック調整ツールバーのレイアウトは {@code EquipmentGanttGraphicTab.fxml} の FlowPane で定義する。
@@ -625,39 +623,6 @@ public final class EquipmentGanttGraphicTabController {
             }
 
             SheetLoad loaded = loadWorkbookSheetsForGraphic(planPath);
-            // #region agent log
-            try {
-                Path contractCand = resolveEquipmentContractSibling(planPath);
-                Map<String, Object> eg = new LinkedHashMap<>(AgentDebugLog.debugHeapMap());
-                eg.put("planInput", planPath.getFileName().toString());
-                eg.put("loadDescription", loaded.description());
-                eg.put("contractMerged", loaded.description().contains("設備ガント帯"));
-                eg.put(
-                        "contractSiblingFileName",
-                        contractCand != null ? contractCand.getFileName().toString() : "");
-                eg.put(
-                        "contractFileExists",
-                        Boolean.valueOf(contractCand != null && Files.isRegularFile(contractCand)));
-                JsonTableIo.SheetTable def = loaded.sheets().get(DEFAULT_SHEET);
-                if (def != null) {
-                    eg.put("defaultSheetRowCount", Integer.valueOf(def.rows().size()));
-                    eg.put(
-                            "defaultSheetTimelineNonEmptyCells",
-                            Integer.valueOf(countNonEmptyTimelineSlotCells(def, 600)));
-                } else {
-                    eg.put("defaultSheetRowCount", Integer.valueOf(-1));
-                    eg.put("defaultSheetTimelineNonEmptyCells", Integer.valueOf(-1));
-                }
-                AgentDebugLog.appendStructured(
-                        shell != null ? shell.snapshotUiEnv() : Map.of(),
-                        "81ed4a",
-                        "EG1",
-                        "EquipmentGanttGraphicTabController.reloadFromFields",
-                        "equipment gantt sheet load",
-                        eg);
-            } catch (Throwable ignored) {
-            }
-            // #endregion
             Map<String, JsonTableIo.SheetTable> sheets = loaded.sheets();
             loadedContractBadgeRows = loaded.contractBadgeSlotRows();
             lastLoadedPlanPath = planPath.toString();
@@ -795,28 +760,6 @@ public final class EquipmentGanttGraphicTabController {
                 graphicBarFontPctSlider != null ? graphicBarFontPctSlider.getValue() : 100d;
         DesktopTheme theme =
                 shell != null ? shell.currentDesktopTheme() : DesktopTheme.LIGHT;
-        // #region agent log
-        try {
-            Map<String, Object> bg = new LinkedHashMap<>();
-            bg.put(
-                    "badgeRowsForCurrentGraphicNull",
-                    Boolean.valueOf(badgeRowsForCurrentGraphic == null));
-            bg.put(
-                    "loadedContractBadgeRowsNull",
-                    Boolean.valueOf(loadedContractBadgeRows == null));
-            bg.put(
-                    "tableRowCount",
-                    Integer.valueOf(st != null && st.rows() != null ? st.rows().size() : -1));
-            AgentDebugLog.appendStructured(
-                    shell != null ? shell.snapshotUiEnv() : Map.of(),
-                    "bdec51",
-                    "H3",
-                    "EquipmentGanttGraphicTabController.applyGraphicCenter",
-                    "equipment gantt graphic badge grid",
-                    bg);
-        } catch (Throwable ignored) {
-        }
-        // #endregion
         ObservableList<ObservableList<String>> rows = toObservableRows(st);
         Function<String, PersonBadgeStyle> badgeResolver =
                 shell != null
