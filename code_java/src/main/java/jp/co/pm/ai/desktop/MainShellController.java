@@ -55,6 +55,7 @@ import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.runtime.FxJvmMemoryStatusBar;
 
+import jp.co.pm.ai.desktop.audio.MacroCompleteChime;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
@@ -2186,6 +2187,7 @@ public final class MainShellController {
                                                     if (reloadAfterStage1PlanInput != null) {
                                                         reloadAfterStage1PlanInput.run();
                                                     }
+                                                    MacroCompleteChime.playIfAvailable(collectUiEnv());
                                                     showStageCompletionDialog(
                                                             "段階1 完了",
                                                             "段階1 の処理が正常終了しました。");
@@ -2250,6 +2252,7 @@ public final class MainShellController {
                                                     } catch (Throwable ignored) {
                                                     }
                                                     // #endregion
+                                                    MacroCompleteChime.playIfAvailable(collectUiEnv());
                                                     showStageCompletionDialog(
                                                             "段階2 完了",
                                                             "段階2 の処理が正常終了しました。");
