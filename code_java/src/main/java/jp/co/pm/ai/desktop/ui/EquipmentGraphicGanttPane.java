@@ -1490,59 +1490,93 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double barTop = 3 * layout.zoom;
             double barH = layout.rowHeight - 2 * barTop;
             double xPad = 3 * layout.zoom;
-            double gap = Math.max(4 * layout.zoom, 6);
             double bandRight = (run.toSlot() + 1) * layout.slotWidth - inset;
             double x0 = run.fromSlot() * layout.slotWidth + inset + xPad;
 
-            List<List<Integer>> rowIndices = new ArrayList<>();
-            List<Double> rowMaxHeights = new ArrayList<>();
-            int idx = 0;
-            while (idx < nodes.size()) {
-                List<Integer> row = new ArrayList<>();
-                double xVis = x0;
-                double maxRowH = 0;
-                while (idx < nodes.size()) {
-                    Bounds b = locals.get(idx);
-                    double vw = visualWidth(b);
-                    double stackH = stackHeights.get(idx);
-                    if (xVis > x0 && xVis + vw > bandRight + 1e-6) {
-                        break;
-                    }
-                    row.add(idx);
-                    maxRowH = Math.max(maxRowH, stackH);
-                    xVis += vw + gap;
-                    idx++;
+            /*
+             * イメージ: 右下へずらしながら軽く重ねる（テキストが潰れない程度の対角オフセット）。
+             * 横は視覚幅の一部だけ進める → カードのような重なり。後ろから追加したノードが手前（Pane は後勝ち）。
+             */
+            final double overlapFrac = 0.38;
+            final double minAdvanceX = Math.max(2.5 * layout.zoom, 4);
+            double diagDy =
+                    Math.min(
+                            Math.max(3 * layout.zoom, 4),
+                            Math.max(6, barH / Math.max(8, nodes.size() + 4)));
+            double segmentGap = Math.max(2 * layout.zoom, diagDy * 0.45);
+
+            List<List<Integer>> segments = new ArrayList<>();
+            List<Integer> curSeg = new ArrayList<>();
+            double xVisPack = x0;
+            for (int i = 0; i < nodes.size(); i++) {
+                Bounds b = locals.get(i);
+                double vw = visualWidth(b);
+                if (!curSeg.isEmpty() && xVisPack > x0 && xVisPack + vw > bandRight + 1e-6) {
+                    segments.add(curSeg);
+                    curSeg = new ArrayList<>();
+                    xVisPack = x0;
                 }
-                rowIndices.add(row);
-                rowMaxHeights.add(maxRowH);
+                curSeg.add(i);
+                double advance =
+                        Math.max(vw * (1.0 - overlapFrac), Math.min(minAdvanceX, vw * 0.92));
+                xVisPack += advance;
+            }
+            if (!curSeg.isEmpty()) {
+                segments.add(curSeg);
+            }
+
+            List<Double> segHeights = new ArrayList<>();
+            for (List<Integer> seg : segments) {
+                double maxPref = 1.0;
+                for (int ii : seg) {
+                    maxPref = Math.max(maxPref, stackHeights.get(ii));
+                }
+                double span =
+                        seg.size() <= 1
+                                ? maxPref
+                                : (seg.size() - 1) * diagDy + maxPref;
+                segHeights.add(span);
             }
 
             double totalStackH = 0;
-            for (int i = 0; i < rowMaxHeights.size(); i++) {
-                totalStackH += rowMaxHeights.get(i);
-                if (i + 1 < rowMaxHeights.size()) {
-                    totalStackH += gap;
+            for (int i = 0; i < segHeights.size(); i++) {
+                totalStackH += segHeights.get(i);
+                if (i + 1 < segHeights.size()) {
+                    totalStackH += segmentGap;
                 }
             }
-            double yCursor = barTop + Math.max(0, (barH - totalStackH) / 2);
+            double ySegCursor = barTop + Math.max(0, (barH - totalStackH) / 2);
 
-            int rowNum = 0;
-            for (List<Integer> row : rowIndices) {
-                double rowMax = rowMaxHeights.get(rowNum);
+            for (int si = 0; si < segments.size(); si++) {
+                List<Integer> seg = segments.get(si);
+                double segRowMax = 1.0;
+                for (int ii : seg) {
+                    segRowMax = Math.max(segRowMax, stackHeights.get(ii));
+                }
                 double xVis = x0;
-                for (int ii : row) {
+                for (int k = 0; k < seg.size(); k++) {
+                    int ii = seg.get(k);
                     StackPane sp = nodes.get(ii);
                     Bounds b = locals.get(ii);
                     double stackH = stackHeights.get(ii);
-                    double yTop = yCursor + (rowMax - stackH) / 2;
+                    double vw = visualWidth(b);
+                    double yTop =
+                            ySegCursor
+                                    + k * diagDy
+                                    + (segRowMax - stackH) / 2;
                     sp.setLayoutX(xVis - b.getMinX());
-                    double ly = clampBadgeLayoutYInBand(yTop - b.getMinY(), b, barTop, barTop + barH);
+                    double ly =
+                            clampBadgeLayoutYInBand(
+                                    yTop - b.getMinY(), b, barTop, barTop + barH);
                     sp.setLayoutY(ly);
                     overlay.getChildren().add(sp);
-                    xVis += visualWidth(b) + gap;
+                    double advance =
+                            Math.max(
+                                    vw * (1.0 - overlapFrac),
+                                    Math.min(minAdvanceX, vw * 0.92));
+                    xVis += advance;
                 }
-                yCursor += rowMax + gap;
-                rowNum++;
+                ySegCursor += segHeights.get(si) + segmentGap;
             }
         }
     }
