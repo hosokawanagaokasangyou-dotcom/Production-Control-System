@@ -1,22 +1,20 @@
-﻿# Production desktop (JavaFX) - Windows app bundle builder (jpackage + bundled runtime).
+# Production desktop (JavaFX) - Windows app bundle builder (jpackage + bundled runtime).
 #
 # Prerequisites:
 #   - Run build on Windows (OpenJFX win classifier required).
 #   - Maven uses JAVA_HOME on PATH (compile must match maven.compiler.release).
-#   - Bundled JVM: Temurin JDK zip -> build_cache -> jpackage --runtime-image. Override: -JdkRuntimeImage or PM_AI_JDK_RUNTIME_IMAGE.
+#   - Bundled JVM: Temurin JDK zip -> Cash_PMD -> jpackage --runtime-image. Override: -JdkRuntimeImage or PM_AI_JDK_RUNTIME_IMAGE.
 #   - JavaFX: OpenJFX Windows win jars downloaded from Maven Central into package_input (same version as pom javafx.version).
 #   - For --type exe/msi: WiX Toolset on PATH (candle/light).
 #   - Bundled Python: pip runs at build time - internet on first run or empty cache.
 #
-# Usage:
-#   .\package_app.ps1
-#   .\package_app.ps1 -PackageType exe
-#   .\package_app.ps1 -SkipPythonPrepare   # reuse existing build_cache python (faster)
-#   .\package_app.ps1 -SkipJdkPrepare      # reuse existing build_cache JDK extract (faster)
-#   .\package_app.ps1 -SkipJavaFxPrepare   # reuse cached OpenJFX win jars (faster)
-#   .\package_app.ps1 -WinConsole
-#   .\package_app.ps1 -JpackageDest C:\pm-ai-out   # ASCII-only parent for jpackage --dest (if launchers missing)
-#   .\package_app.ps1 -JdkRuntimeImage C:\path\to\jdk   # skip download; needs bin\java.exe and bin\jpackage.exe
+# Usage (run from repository root):
+#   .\fast_package_app.ps1
+#   .\fast_package_app.ps1 -PackageType exe
+#   .\fast_package_app.ps1 -RefreshCache        # Force re-download of all components (ignore cache)
+#   .\fast_package_app.ps1 -WinConsole
+#   .\fast_package_app.ps1 -JpackageDest C:\pm-ai-out   # ASCII-only parent for jpackage --dest (if launchers missing)
+#   .\fast_package_app.ps1 -JdkRuntimeImage C:\path\to\jdk   # skip download; needs bin\java.exe and bin\jpackage.exe
 # Env: PM_AI_JPACKAGE_DEST, PM_AI_JDK_RUNTIME_IMAGE (optional)
 
 # UTF-8 BOM: Windows PowerShell 5.1 parses this file as UTF-8. Body is ASCII-only; Japanese paths live in package_app_mandatory_code_paths.txt.
@@ -27,13 +25,10 @@ param(
 
     [switch]$WinConsole,
 
-    [switch]$SkipPythonPrepare,
+    # キャッシュを無視して強制的に再ダウンロードする場合に使用します
+    [switch]$RefreshCache,
 
-    [switch]$SkipJdkPrepare,
-
-    [switch]$SkipJavaFxPrepare,
-
-    # JDK root for --runtime-image (bin\java.exe). Empty = download per pom.xml into build_cache.
+    # JDK root for --runtime-image (bin\java.exe). Empty = download per pom.xml into Cash_PMD.
     [string]$JdkRuntimeImage = '',
 
     # Parent directory for jpackage --dest only (must be ASCII-only on some JDK/Windows builds).
@@ -42,12 +37,17 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$Root = if ($PSScriptRoot) { $PSScriptRoot } else { Get-Location }
-Set-Location $Root
+# Script lives at repo root; Maven project is code_java/.
+$ScriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Get-Location }
+$WorkspaceRoot = $ScriptRoot
+$CodeJavaRoot = Join-Path $WorkspaceRoot 'code_java'
+$ReleaseDirName = 'pm-ai-package-release'
+$ReleaseRoot = Join-Path $WorkspaceRoot $ReleaseDirName
+$BundleInitialName = 'PMD_initial_install'
+$BundleUpgradeName = 'PMD_version_upgrade'
+Set-Location $CodeJavaRoot
 
-$WorkspaceRoot = (Resolve-Path -LiteralPath (Join-Path $Root '..')).Path
-
-. (Join-Path $PSScriptRoot 'package_workspace_copy.ps1')
+. (Join-Path $CodeJavaRoot 'package_workspace_copy.ps1')
 
 function Read-MavenPomProperties {
     param([string]$PomPath)
@@ -147,15 +147,16 @@ function Ensure-JdkWindowsEmbedCache {
         [string]$CacheRoot,
         [string]$JdkRelease,
         [string]$ZipUrlOverride,
-        [bool]$Skip
+        [switch]$RefreshCache # [bool]から[switch]に変更
     )
 
     $dest = Join-Path $CacheRoot ('jdk-embed-' + $JdkRelease + '-windows-amd64')
     $javaExe = Join-Path $dest 'bin\java.exe'
     $jpkgExe = Join-Path $dest 'bin\jpackage.exe'
 
-    if ($Skip -and (Test-Path -LiteralPath $javaExe) -and (Test-Path -LiteralPath $jpkgExe)) {
-        Write-Host "SkipJdkPrepare: using cache: $dest" -ForegroundColor DarkGray
+    # キャッシュが存在し、リフレッシュフラグがない場合は再利用
+    if (-not $RefreshCache -and (Test-Path -LiteralPath $javaExe) -and (Test-Path -LiteralPath $jpkgExe)) {
+        Write-Host "Using cached JDK: $dest" -ForegroundColor DarkGray
         return [string]$dest
     }
 
@@ -213,15 +214,16 @@ function Ensure-PythonEmbedCache {
         [string]$WorkspaceRootPath,
         [string]$PythonVersion,
         [string]$CacheRoot,
-        [bool]$Skip
+        [switch]$RefreshCache # [bool]から[switch]に変更
     )
 
     $dest = Join-Path $CacheRoot "python-embed-$PythonVersion-amd64"
     $pyExe = Join-Path $dest 'python.exe'
     $req = Join-Path $WorkspaceRootPath 'code\python\requirements.txt'
 
-    if ($Skip -and (Test-Path -LiteralPath $pyExe)) {
-        Write-Host "SkipPythonPrepare: using cache: $dest" -ForegroundColor DarkGray
+    # キャッシュが存在し、リフレッシュフラグがない場合は再利用
+    if (-not $RefreshCache -and (Test-Path -LiteralPath $pyExe)) {
+        Write-Host "Using cached Python embed: $dest" -ForegroundColor DarkGray
         return [string]$dest
     }
 
@@ -311,7 +313,7 @@ function Build-PmAiDesktopLauncherBatContent {
     $artifacts = @('javafx-base', 'javafx-controls', 'javafx-fxml', 'javafx-graphics', 'javafx-swing')
     $lines = [System.Collections.Generic.List[string]]::new()
     $lines.Add('@echo off')
-    $lines.Add('rem ASCII-only. Generated by package_app.ps1 from pom javafx.version / jvm heap.')
+    $lines.Add('rem ASCII-only. Generated by fast_package_app.ps1 from pom javafx.version / jvm heap.')
     $lines.Add('rem Do not paste into PowerShell; run: .\launch-pm-ai-desktop.bat')
     $lines.Add('setlocal EnableExtensions EnableDelayedExpansion')
     $lines.Add('')
@@ -370,7 +372,7 @@ function Sync-JavaFxWindowsRuntimeFromMavenCentral {
         [string]$PackageInputDir,
         [string]$JavafxVersion,
         [string]$CacheRoot,
-        [bool]$Skip
+        [switch]$RefreshCache # [bool]から[switch]に変更
     )
 
     $artifacts = @(
@@ -390,11 +392,12 @@ function Sync-JavaFxWindowsRuntimeFromMavenCentral {
         $url = "https://repo1.maven.org/maven2/org/openjfx/$aid/$JavafxVersion/$fn"
 
         $needDownload = $true
-        if ($Skip -and (Test-Path -LiteralPath $cached)) {
+        # キャッシュが存在し、リフレッシュフラグがない場合は再利用
+        if (-not $RefreshCache -and (Test-Path -LiteralPath $cached)) {
             $fi = Get-Item -LiteralPath $cached -ErrorAction SilentlyContinue
             if ($null -ne $fi -and $fi.Length -gt 4096) {
                 $needDownload = $false
-                Write-Host "SkipJavaFxPrepare: using cache $fn" -ForegroundColor DarkGray
+                Write-Host "Using cached JavaFX runtime: $fn" -ForegroundColor DarkGray
             }
         }
 
@@ -421,6 +424,10 @@ function Copy-BundleToDist {
         [string]$WorkspaceRootPath,
         [string]$DistAppRoot,
         [string]$PythonEmbedSourceDir,
+        [ValidateSet('InitialInstall', 'VersionUpgrade')]
+        [string]$BundleKind,
+        [string]$MandatoryPathsFile,
+        [string]$ReleaseFolderRelativePrefix,
         [string]$AppExeBaseName = 'PMD'
     )
 
@@ -435,10 +442,9 @@ function Copy-BundleToDist {
 
     New-Item -ItemType Directory -Path $data -Force | Out-Null
 
-    Write-Host "--- Copy workspace into pm-ai-data (DeveloperMirror profile, package_workspace_copy.ps1) ---" -ForegroundColor Cyan
-    $mandatoryPathsFile = Join-Path $Root 'package_app_mandatory_code_paths.txt'
+    Write-Host "--- Copy workspace into pm-ai-data (bundle=$BundleKind) ---" -ForegroundColor Cyan
     Copy-WorkspaceTreeWithExplicitExclusions -RepoRoot $WorkspaceRootPath -DestRoot $data `
-        -BundleKind DeveloperMirror -MandatoryPathsFile $mandatoryPathsFile -ReleaseFolderRelativePrefix 'pm-ai-package-release/'
+        -BundleKind $BundleKind -MandatoryPathsFile $MandatoryPathsFile -ReleaseFolderRelativePrefix $ReleaseFolderRelativePrefix
 
     New-Item -ItemType Directory -Path (Join-Path $data 'input\task-input') -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $data 'input\actual-detail') -Force | Out-Null
@@ -454,24 +460,31 @@ function Copy-BundleToDist {
     }
 
     $readme = Join-Path $data 'README_PORTABLE.txt'
-    @(
-        'JVM: bundled via jpackage --runtime-image from Temurin JDK (see pom.xml / package_app.ps1).',
-        'JavaFX: OpenJFX Windows jars pinned from Maven Central into package_input during package_app.ps1 (javafx.version).',
-        'Portable bundle generated by package_app.ps1.',
-        'Workspace mirror: package_workspace_copy.ps1 (DeveloperMirror: same as VersionUpgrade plan dirs + IDE/VBA/release folder exclusions).',
-        'Master *.txt under code/ are always copied (see package_app_mandatory_code_paths.txt).',
-        'Excluded dirs include .git, .venv, .cursor, .vscode, code/VBA, pm-ai-package-release/, code_java build dirs, **/build_cache, **/plan, **/plans, **/__pycache__, **/.pytest_cache.',
-        'Excluded files: *.log, ~$* (Excel lock).',
-        "This folder sits next to $($AppExeBaseName).exe.",
-        'Version: repo-root version.txt (included here). Optional sync via PM_AI_PORTABLE_BUNDLE_SOURCE_DIR.',
-        'Python: pm-ai-data\runtime\python-embed\python.exe (from build_cache embed + pip).',
-        'Default inputs: input\task-input , input\actual-detail.',
-        'Per-user session data: ~/.pm-ai-desktop (initialized per machine/user).',
-        ''
-    ) | Set-Content -LiteralPath $readme -Encoding UTF8
+    $rmLines = [System.Collections.Generic.List[string]]::new()
+    $rmLines.Add('JVM: bundled via jpackage --runtime-image from Temurin JDK (see pom.xml / fast_package_app.ps1).')
+    $rmLines.Add('JavaFX: OpenJFX Windows jars pinned from Maven Central into package_input during fast_package_app.ps1 (javafx.version).')
+    $rmLines.Add('Portable bundle generated by fast_package_app.ps1.')
+    $rmLines.Add('Workspace mirror: package_workspace_copy.ps1 (shared with package_app.ps1).')
+    $rmLines.Add('Master *.txt under code/ are always copied (see package_app_mandatory_code_paths.txt).')
+    if ($BundleKind -eq 'InitialInstall') {
+        $rmLines.Add('Bundle profile: InitialInstall - excludes .git, .venv, .cursor, .vscode, code/VBA, code_java build/cache dirs, pm-ai-package-release/, **/__pycache__, **/.pytest_cache, build_cache.')
+        $rmLines.Add('Does NOT exclude plan/plans or code/output (may include local artifacts if present).')
+    }
+    else {
+        $rmLines.Add('Bundle profile: VersionUpgrade - also excludes **/plan, **/plans, code/output/, repo output/, code/python/output/, .pm-ai-cache/, extra env-var TSVs (template TSV still bundled), .env.')
+        $rmLines.Add('See package_workspace_copy.ps1 for exact rules.')
+    }
+    $rmLines.Add('Excluded files (all profiles): *.log, ~$* (Excel lock).')
+    $rmLines.Add("This folder sits next to $($AppExeBaseName).exe.")
+    $rmLines.Add('Version: repo-root version.txt (included here). Optional sync via PM_AI_PORTABLE_BUNDLE_SOURCE_DIR.')
+    $rmLines.Add('Python: pm-ai-data\runtime\python-embed\python.exe (cache under pm-ai-package-release\Cash_PMD).')
+    $rmLines.Add('Default inputs: input\task-input , input\actual-detail.')
+    $rmLines.Add('Per-user session data: ~/.pm-ai-desktop (initialized per machine/user).')
+    $rmLines.Add('')
+    $rmLines | Set-Content -LiteralPath $readme -Encoding UTF8
 }
 
-$POM = Join-Path $Root 'pom.xml'
+$POM = Join-Path $CodeJavaRoot 'pom.xml'
 $pomProps = Read-MavenPomProperties -PomPath $POM
 $jvmInitial = $pomProps['jvm.initial.heap']
 $jvmMax = $pomProps['jvm.max.heap']
@@ -519,7 +532,7 @@ if (Test-Path -LiteralPath $VersionTxtPath) {
 }
 
 Write-Host "--- Step 1: Maven package ---" -ForegroundColor Cyan
-$mvnw = Join-Path $Root 'mvnw.cmd'
+$mvnw = Join-Path $CodeJavaRoot 'mvnw.cmd'
 if (-not (Test-Path -LiteralPath $mvnw)) {
     throw "Maven Wrapper not found: $mvnw"
 }
@@ -530,17 +543,19 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "--- Step 2: jpackage input directory ---" -ForegroundColor Cyan
-$packageInput = Join-Path $Root 'package_input'
-Copy-JpackageInputDirectory -RootPath $Root -MainJarName $proj.MainJar -DestPath $packageInput
+$packageInput = Join-Path $CodeJavaRoot 'package_input'
+Copy-JpackageInputDirectory -RootPath $CodeJavaRoot -MainJarName $proj.MainJar -DestPath $packageInput
 
-$cacheRoot = Join-Path $Root 'build_cache'
+New-Item -ItemType Directory -Path $ReleaseRoot -Force | Out-Null
+$cacheRoot = Join-Path $ReleaseRoot 'Cash_PMD'
+New-Item -ItemType Directory -Path $cacheRoot -Force | Out-Null
 
 Write-Host "--- Step 3: JavaFX Windows runtime (Maven Central win jars -> package_input) ---" -ForegroundColor Cyan
 $javafxVer = Expand-PomPropertyPlaceholder -Raw ([string]$pomProps['javafx.version']) -Props $pomProps
 if ([string]::IsNullOrWhiteSpace($javafxVer)) {
     throw 'pom.xml: javafx.version is required for JavaFX bundle.'
 }
-Sync-JavaFxWindowsRuntimeFromMavenCentral -PackageInputDir $packageInput -JavafxVersion $javafxVer -CacheRoot $cacheRoot -Skip:$SkipJavaFxPrepare
+Sync-JavaFxWindowsRuntimeFromMavenCentral -PackageInputDir $packageInput -JavafxVersion $javafxVer -CacheRoot $cacheRoot -RefreshCache:$RefreshCache
 
 Write-Host "--- Step 4: Windows JDK bundle (Temurin zip -> jpackage --runtime-image) ---" -ForegroundColor Cyan
 $jdkRelease = Expand-PomPropertyPlaceholder -Raw ([string]$pomProps['pm.ai.bundle.jdk.windows.release']) -Props $pomProps
@@ -563,7 +578,7 @@ elseif (-not [string]::IsNullOrWhiteSpace($env:PM_AI_JDK_RUNTIME_IMAGE)) {
 }
 else {
     $jdkRoot = [string](Ensure-JdkWindowsEmbedCache -CacheRoot $cacheRoot -JdkRelease $jdkRelease `
-            -ZipUrlOverride $jdkZipUrlOverride -Skip:$SkipJdkPrepare)
+            -ZipUrlOverride $jdkZipUrlOverride -RefreshCache:$RefreshCache)
 }
 
 $jdkJavaExe = Join-Path $jdkRoot 'bin\java.exe'
@@ -578,13 +593,12 @@ Write-Host "Using JDK for jpackage + bundled runtime: $jdkRoot" -ForegroundColor
 
 Write-Host "--- Step 5: Python embed cache (pip) ---" -ForegroundColor Cyan
 $pythonSrc = [string](Ensure-PythonEmbedCache -WorkspaceRootPath $WorkspaceRoot -PythonVersion $pyEmbedVer `
-        -CacheRoot $cacheRoot -Skip:$SkipPythonPrepare)
+        -CacheRoot $cacheRoot -RefreshCache:$RefreshCache)
 
 Write-Host "--- Step 6: jpackage (type=$PackageType) ---" -ForegroundColor Cyan
 
-# Final output always under code_java\dist. jpackage --dest may use a staging folder: non-ASCII paths
-# can produce runtime\bin with DLLs but no java.exe on some JDK builds.
-$distFinal = Join-Path $Root 'dist'
+# Final output under repo-root pm-ai-package-release\. jpackage --dest may use TEMP when paths are non-ASCII.
+$distFinal = $ReleaseRoot
 $jpkgDestParent = $distFinal
 if (-not [string]::IsNullOrWhiteSpace($JpackageDest)) {
     $jpkgDestParent = $JpackageDest.TrimEnd('\', '/')
@@ -592,23 +606,26 @@ if (-not [string]::IsNullOrWhiteSpace($JpackageDest)) {
 elseif (-not [string]::IsNullOrWhiteSpace($env:PM_AI_JPACKAGE_DEST)) {
     $jpkgDestParent = $env:PM_AI_JPACKAGE_DEST.Trim().TrimEnd('\', '/')
 }
-elseif ($Root -match '[^\x00-\x7F]') {
+elseif ($WorkspaceRoot -match '[^\x00-\x7F]') {
     $jpkgDestParent = Join-Path $env:TEMP ("pm-ai-jpackage-" + [Guid]::NewGuid().ToString('N'))
     Write-Host "Repo path contains non-ASCII: staging jpackage --dest to ASCII-only: $jpkgDestParent" -ForegroundColor Cyan
 }
 $usedStagingForJpackage = ($jpkgDestParent -ne $distFinal)
 
-# When staging to TEMP, do not pre-delete code_java\dist: Explorer / running exe often locks it.
-# jpackage only writes to $jpkgDestParent; we replace dist\<APP_NAME> after success.
-$pathsToClean = @($jpkgDestParent)
-if (-not $usedStagingForJpackage) {
-    $pathsToClean = @($distFinal)
+# Remove only prior jpackage app folder and bundle outputs (never delete whole $ReleaseRoot: Cash_PMD lives there).
+$bundleOutInitial = Join-Path $ReleaseRoot $BundleInitialName
+$bundleOutUpgrade = Join-Path $ReleaseRoot $BundleUpgradeName
+$pathsToClean = @()
+if ($usedStagingForJpackage) {
+    $pathsToClean += $jpkgDestParent
 }
-$pathsToClean = $pathsToClean | Select-Object -Unique
+else {
+    $pathsToClean += (Join-Path $ReleaseRoot $APP_NAME)
+}
+$pathsToClean += $bundleOutInitial
+$pathsToClean += $bundleOutUpgrade
+$pathsToClean = $pathsToClean | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
 foreach ($p in $pathsToClean) {
-    if ([string]::IsNullOrWhiteSpace($p)) {
-        continue
-    }
     if (-not (Test-Path -LiteralPath $p)) {
         continue
     }
@@ -632,7 +649,7 @@ if ($usedStagingForJpackage) {
     New-Item -ItemType Directory -Path $jpkgDestParent -Force | Out-Null
 }
 
-# Native exe launch uses only jpackage --java-options (see dist\<APP_NAME>\app\<APP_NAME>.cfg).
+# Native exe launch uses only jpackage --java-options (see PMD_fast\<APP_NAME>\app\<APP_NAME>.cfg).
 # Match launch-pm-ai-desktop.bat: JavaFX modular jars on --module-path + --add-modules.
 # jpackage cfg understands $APPDIR (bundle root); jars land under app\ next to the launcher.
 # Oracle: custom --module-path in --java-options is appended to any default module path.
@@ -643,7 +660,8 @@ for ($mi = 0; $mi -lt $jfxModsForJpkg.Count; $mi++) {
     if ($mi -gt 0) {
         [void]$modPathJpkgSb.Append(';')
     }
-    [void]$modPathJpkgSb.Append('$APPDIR/app/')
+    # $APPDIR\ に設定 (appフォルダ自身の参照)
+    [void]$modPathJpkgSb.Append('$APPDIR\')
     [void]$modPathJpkgSb.Append($jfxModsForJpkg[$mi])
     [void]$modPathJpkgSb.Append('-')
     [void]$modPathJpkgSb.Append($jvForJpkgOpts)
@@ -729,7 +747,7 @@ if ($usedStagingForJpackage) {
                 break
             }
             catch {
-                Write-Warning "Cannot remove old bundle folder (close $($APP_NAME).exe / Explorer on dist\$APP_NAME). Retry ($ri/8)..."
+                Write-Warning "Cannot remove old bundle folder (close $($APP_NAME).exe / Explorer on ${ReleaseDirName}\$APP_NAME). Retry ($ri/8)..."
                 Start-Sleep -Seconds 3
             }
         }
@@ -769,7 +787,7 @@ Bundled launcher not found: $bundledJavaExe
 Common causes:
   1) Windows Defender / AV removed java.exe (DLLs often remain). Check Protection history.
   2) Very long or non-ASCII path - this script stages jpackage --dest under %TEMP% when the repo path has non-ASCII; override with -JpackageDest or PM_AI_JPACKAGE_DEST, or clone to e.g. C:\work\pm-ai.
-  3) Stale dist - ensure code_java\dist was removed before jpackage.
+  3) Stale bundle folder - remove ${ReleaseDirName}\$APP_NAME under repo root before jpackage.
 Java runtime is next to $($APP_NAME).exe (from --runtime-image JDK); pm-ai-data\runtime is Python only.
 Step 7 continues; output may be incomplete.
 "@
@@ -799,30 +817,59 @@ Step 7 continues; output may be incomplete.
     }
 }
 
-Write-Host "--- Step 7: bundle pm-ai-data (Python + code/python + default dirs) ---" -ForegroundColor Cyan
-$distRoot = $publishedBundleRoot
-if (-not (Test-Path -LiteralPath $distRoot)) {
-    throw "Distribution folder missing: $distRoot"
+Write-Host "--- Step 7: bundle pm-ai-data (Initial + VersionUpgrade) ---" -ForegroundColor Cyan
+if (-not (Test-Path -LiteralPath $publishedBundleRoot)) {
+    throw "Distribution folder missing: $publishedBundleRoot"
 }
-Copy-BundleToDist -WorkspaceRootPath $WorkspaceRoot -DistAppRoot $distRoot -PythonEmbedSourceDir $pythonSrc -AppExeBaseName $APP_NAME
 
-$launcherBatDst = Join-Path $distRoot 'launch-pm-ai-desktop.bat'
+$mandatoryFile = Join-Path $CodeJavaRoot 'package_app_mandatory_code_paths.txt'
+$relPref = "$ReleaseDirName/"
+
+foreach ($destBundle in @($bundleOutInitial, $bundleOutUpgrade)) {
+    if (Test-Path -LiteralPath $destBundle) {
+        Remove-Item -Recurse -Force -LiteralPath $destBundle -ErrorAction Stop
+    }
+}
+
+Write-Host "--- robocopy jpackage -> $BundleInitialName ---" -ForegroundColor Cyan
+& robocopy $publishedBundleRoot $bundleOutInitial /E /NFL /NDL /NJH /NJS /nc /ns /np | Out-Host
+if ($LASTEXITCODE -ge 8) {
+    throw "robocopy to $BundleInitialName failed (exit $LASTEXITCODE)"
+}
+Write-Host "--- robocopy jpackage -> $BundleUpgradeName ---" -ForegroundColor Cyan
+& robocopy $publishedBundleRoot $bundleOutUpgrade /E /NFL /NDL /NJH /NJS /nc /ns /np | Out-Host
+if ($LASTEXITCODE -ge 8) {
+    throw "robocopy to $BundleUpgradeName failed (exit $LASTEXITCODE)"
+}
+
+Write-Host "--- Remove intermediate folder $($APP_NAME) ---" -ForegroundColor DarkGray
+Remove-Item -Recurse -Force -LiteralPath $publishedBundleRoot -ErrorAction SilentlyContinue
+
+Copy-BundleToDist -WorkspaceRootPath $WorkspaceRoot -DistAppRoot $bundleOutInitial -PythonEmbedSourceDir $pythonSrc `
+    -BundleKind InitialInstall -MandatoryPathsFile $mandatoryFile -ReleaseFolderRelativePrefix $relPref -AppExeBaseName $APP_NAME
+Copy-BundleToDist -WorkspaceRootPath $WorkspaceRoot -DistAppRoot $bundleOutUpgrade -PythonEmbedSourceDir $pythonSrc `
+    -BundleKind VersionUpgrade -MandatoryPathsFile $mandatoryFile -ReleaseFolderRelativePrefix $relPref -AppExeBaseName $APP_NAME
+
 $javafxVerForLauncher = Expand-PomPropertyPlaceholder -Raw ([string]$pomProps['javafx.version']) -Props $pomProps
 if ([string]::IsNullOrWhiteSpace($javafxVerForLauncher)) {
     $javafxVerForLauncher = '26.0.1'
 }
 $batBody = Build-PmAiDesktopLauncherBatContent -JavafxVersion $javafxVerForLauncher -JvmInitial $jvmInitial -JvmMax $jvmMax -LauncherExeBaseName $APP_NAME
-[System.IO.File]::WriteAllText($launcherBatDst, $batBody, [System.Text.UTF8Encoding]::new($false))
-Write-Host "Launcher bat: $launcherBatDst (JavaFX module-path from pom javafx.version=$javafxVerForLauncher)" -ForegroundColor DarkGray
+foreach ($bd in @($bundleOutInitial, $bundleOutUpgrade)) {
+    $launcherBatDst = Join-Path $bd 'launch-pm-ai-desktop.bat'
+    [System.IO.File]::WriteAllText($launcherBatDst, $batBody, [System.Text.UTF8Encoding]::new($false))
+    Write-Host "Launcher bat: $launcherBatDst" -ForegroundColor DarkGray
+}
 
 Write-Host "--- Done ---" -ForegroundColor Green
-$mainExePath = Join-Path $distRoot ($APP_NAME + '.exe')
-Write-Host "App: $mainExePath"
-Write-Host "Portable data: $(Join-Path $distRoot 'pm-ai-data')"
+Write-Host "Release folder: $ReleaseRoot (downloads cache: Cash_PMD)"
+Write-Host "Initial install: $(Join-Path $bundleOutInitial ($APP_NAME + '.exe'))"
+Write-Host "Version upgrade: $(Join-Path $bundleOutUpgrade ($APP_NAME + '.exe'))"
+Write-Host "Portable data: $(Join-Path $bundleOutInitial 'pm-ai-data') (Initial) / $(Join-Path $bundleOutUpgrade 'pm-ai-data') (Upgrade)"
 Write-Host "JVM: -Xms$jvmInitial -Xmx$jvmMax (same as pom.xml properties)"
 if ($PackageType -ne 'app-image') {
-    Write-Host 'Check dist for installer output.'
+    Write-Host "Check $ReleaseDirName for installer output."
 }
 if (-not $WinConsole -and $PackageType -eq 'app-image') {
-    Write-Host 'Hint: console build: .\package_app.ps1 -WinConsole' -ForegroundColor DarkGray
+    Write-Host 'Hint: console build: .\fast_package_app.ps1 -WinConsole (run from repo root)' -ForegroundColor DarkGray
 }
