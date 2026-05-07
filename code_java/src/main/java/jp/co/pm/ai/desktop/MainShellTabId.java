@@ -21,7 +21,6 @@ public enum MainShellTabId {
     EQUIPMENT_GANTT_GRAPHIC("equipmentGanttGraphic"),
     GANTT_PERSON_BADGE_DESIGN("ganttPersonBadgeDesign"),
     OPERATOR_CARD("operatorCard"),
-    MACHINE_CALENDAR_JSON("machineCalendarJson"),
     DISPATCH_INTERACTIVE("dispatchInteractive"),
     /** メインシェル末尾の「タブ整理」（入れ子構成・色の編集用）。 */
     TAB_ORGANIZER("tabOrganizer");

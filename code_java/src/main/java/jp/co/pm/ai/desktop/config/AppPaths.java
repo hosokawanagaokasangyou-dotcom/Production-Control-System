@@ -416,28 +416,12 @@ public final class AppPaths {
             "結果_配台表.json";
 
     /**
-     * Single canonical machine-calendar block index for Java desktop ({@code export_machine_calendar_blocks.py} output,
-     * pretty-printed). Lives next to {@link #RESULT_DISPATCH_TABLE_JSON_BASENAME}.
-     */
-    public static final String MACHINE_CALENDAR_BLOCKS_JSON_BASENAME = "machine_calendar_blocks.json";
-
-    /**
      * {@link #RESULT_DISPATCH_TABLE_JSON_BASENAME} under {@link #resolveResultDispatchTableDir(Map)} (override via
      * {@link #KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR}).
      */
     public static Path resolveResultDispatchTableJsonPath(Map<String, String> ui) {
         return resolveResultDispatchTableDir(ui != null ? ui : Map.of())
                 .resolve(RESULT_DISPATCH_TABLE_JSON_BASENAME)
-                .toAbsolutePath()
-                .normalize();
-    }
-
-    /**
-     * Shared machine-calendar JSON used by the interactive dispatch editor and the machine-calendar preview tab.
-     */
-    public static Path resolveMachineCalendarBlocksJsonPath(Map<String, String> ui) {
-        return resolveResultDispatchTableDir(ui != null ? ui : Map.of())
-                .resolve(MACHINE_CALENDAR_BLOCKS_JSON_BASENAME)
                 .toAbsolutePath()
                 .normalize();
     }

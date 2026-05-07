@@ -450,18 +450,13 @@ function Copy-BundleToDist {
     Copy-WorkspaceTreeWithExplicitExclusions -RepoRoot $WorkspaceRootPath -DestRoot $data `
         -BundleKind $BundleKind -MandatoryPathsFile $MandatoryPathsFile -ReleaseFolderRelativePrefix $ReleaseFolderRelativePrefix
 
-    # Machine-calendar JSON export imports planning_core from code/python (see export_machine_calendar_blocks.py).
     $verifyPcInit = Join-Path $data 'code\python\planning_core\__init__.py'
-    $verifyExportScript = Join-Path $data 'code\python\export_machine_calendar_blocks.py'
     if (-not (Test-Path -LiteralPath $verifyPcInit)) {
         throw @"
 Bundle incomplete: missing planning_core package.
 Expected: $verifyPcInit
 Ensure the repo workspace contains code/python/planning_core (clone depth / sparse checkout).
 "@
-    }
-    if (-not (Test-Path -LiteralPath $verifyExportScript)) {
-        throw "Bundle incomplete: missing export_machine_calendar_blocks.py at: $verifyExportScript"
     }
 
     New-Item -ItemType Directory -Path (Join-Path $data 'input\task-input') -Force | Out-Null

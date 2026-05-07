@@ -71,7 +71,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
-import jp.co.pm.ai.desktop.dispatch.MachineCalendarBlockIndex;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialConsistency;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchJsonIo;
@@ -90,18 +89,7 @@ import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
  */
 public final class DispatchInteractiveTabController {
 
-    private record ReloadBundle(
-            ResultDispatchDocument doc,
-            MachineCalendarBlockIndex calendar,
-            String calendarLoadError,
-            String pythonCalendarJsonError,
-            String pythonCalendarDiagnosticsJson) {}
-
-    private record CalendarReloadOutcome(
-            MachineCalendarBlockIndex calendar,
-            String error,
-            String pythonCalendarJsonError,
-            String pythonCalendarDiagnosticsJson) {}
+    private record ReloadBundle(ResultDispatchDocument doc) {}
 
     private record DispatchSaveOutcome(Path jsonPath, String xlsxStdoutLine) {}
 
@@ -178,9 +166,6 @@ public final class DispatchInteractiveTabController {
     private Button saveButton;
 
     @FXML
-    private Button reloadCalendarButton;
-
-    @FXML
     private Button stage2RunButton;
 
     @FXML
@@ -226,8 +211,6 @@ public final class DispatchInteractiveTabController {
 
     /** Parallel to {@link #wideProfiles} rows in the wide grid. */
     private final List<WideRow> wideRowItems = new ArrayList<>();
-
-    private MachineCalendarBlockIndex calendarBlocks = MachineCalendarBlockIndex.empty();
 
     @FXML
     private void initialize() {
@@ -428,71 +411,6 @@ public final class DispatchInteractiveTabController {
             alert.initOwner(shell.getPrimaryStage());
         }
         alert.showAndWait();
-    }
-
-    @FXML
-    private void onReloadCalendarAction() {
-        if (shell == null) {
-            return;
-        }
-        showReloadProgress();
-        final MainShellController shellRef = shell;
-        Task<CalendarReloadOutcome> task =
-                new Task<>() {
-                    @Override
-                    protected CalendarReloadOutcome call() {
-                        try {
-                            MachineCalendarBlockIndex.LoadOutcome lo =
-                                    loadMachineCalendarFromSharedJson(shellRef);
-                            return new CalendarReloadOutcome(
-                                    lo.index(),
-                                    null,
-                                    lo.pythonJsonError(),
-                                    lo.pythonDiagnosticsJson());
-                        } catch (Exception e) {
-                            return new CalendarReloadOutcome(
-                                    MachineCalendarBlockIndex.empty(), e.getMessage(), null, null);
-                        }
-                    }
-                };
-        task.setOnSucceeded(
-                ev -> {
-                    CalendarReloadOutcome o = task.getValue();
-                    calendarBlocks = o.calendar();
-                    if (o.error() != null) {
-                        shell.appendLog("[dispatch-editor] calendar load: " + o.error());
-                    }
-                    if (o.pythonCalendarJsonError() != null) {
-                        shell.appendLog(
-                                "[dispatch-editor] machine calendar json: "
-                                        + o.pythonCalendarJsonError());
-                    }
-                    if (o.pythonCalendarDiagnosticsJson() != null) {
-                        shell.appendLog(
-                                "[dispatch-editor] machine calendar diagnostics: "
-                                        + o.pythonCalendarDiagnosticsJson());
-                    }
-                    if (o.error() == null) {
-                        shell.appendLog(
-                                "[dispatch-editor] machine calendar blocks: "
-                                        + (calendarBlocks.isEmpty() ? "none" : "loaded"));
-                    }
-                    maybeLogMachineCalendarEmptyBlocksHint(
-                            o.error(), o.pythonCalendarJsonError(), o.pythonCalendarDiagnosticsJson());
-                    rebuildGrids();
-                    hideReloadProgress();
-                });
-        task.setOnFailed(
-                ev -> {
-                    calendarBlocks = MachineCalendarBlockIndex.empty();
-                    Throwable ex = task.getException();
-                    shell.appendLog(
-                            "[dispatch-editor] calendar load: "
-                                    + (ex != null ? ex.getMessage() : ""));
-                    rebuildGrids();
-                    hideReloadProgress();
-                });
-        new Thread(task, "dispatch-calendar-reload").start();
     }
 
     @FXML
@@ -863,50 +781,14 @@ public final class DispatchInteractiveTabController {
                     @Override
                     protected ReloadBundle call() throws Exception {
                         ResultDispatchDocument d = ResultDispatchJsonIo.read(jsonPath);
-                        MachineCalendarBlockIndex cal = MachineCalendarBlockIndex.empty();
-                        String calErr = null;
-                        String pyCalErr = null;
-                        String pyDiag = null;
-                        try {
-                            MachineCalendarBlockIndex.LoadOutcome lo =
-                                    loadMachineCalendarFromSharedJson(shellRef);
-                            cal = lo.index();
-                            pyCalErr = lo.pythonJsonError();
-                            pyDiag = lo.pythonDiagnosticsJson();
-                        } catch (Exception e) {
-                            calErr = e.getMessage();
-                        }
-                        return new ReloadBundle(d, cal, calErr, pyCalErr, pyDiag);
+                        return new ReloadBundle(d);
                     }
                 };
         task.setOnSucceeded(
                 ev -> {
                     ReloadBundle b = task.getValue();
                     doc = b.doc();
-                    calendarBlocks = b.calendar();
                     statusLabel.setText(doc.rows().size() + " 行");
-                    if (b.calendarLoadError() != null) {
-                        shell.appendLog("[dispatch-editor] calendar load: " + b.calendarLoadError());
-                    }
-                    if (b.pythonCalendarJsonError() != null) {
-                        shell.appendLog(
-                                "[dispatch-editor] machine calendar json: "
-                                        + b.pythonCalendarJsonError());
-                    }
-                    if (b.pythonCalendarDiagnosticsJson() != null) {
-                        shell.appendLog(
-                                "[dispatch-editor] machine calendar diagnostics: "
-                                        + b.pythonCalendarDiagnosticsJson());
-                    }
-                    if (b.calendarLoadError() == null) {
-                        shell.appendLog(
-                                "[dispatch-editor] machine calendar blocks: "
-                                        + (calendarBlocks.isEmpty() ? "none" : "loaded"));
-                    }
-                    maybeLogMachineCalendarEmptyBlocksHint(
-                            b.calendarLoadError(),
-                            b.pythonCalendarJsonError(),
-                            b.pythonCalendarDiagnosticsJson());
                     rebuildGrids();
                     clearDispatchDocDirty();
                     hideReloadProgress();
@@ -917,7 +799,6 @@ public final class DispatchInteractiveTabController {
         task.setOnFailed(
                 ev -> {
                     doc = ResultDispatchDocument.empty();
-                    calendarBlocks = MachineCalendarBlockIndex.empty();
                     statusLabel.setText("読込エラー");
                     Throwable ex = task.getException();
                     shell.appendLog(
@@ -930,79 +811,11 @@ public final class DispatchInteractiveTabController {
         new Thread(task, "dispatch-editor-reload").start();
     }
 
-    private MachineCalendarBlockIndex.LoadOutcome loadMachineCalendarFromSharedJson(MainShellController shellRef)
-            throws Exception {
-        Path json = AppPaths.resolveMachineCalendarBlocksJsonPath(shellRef.snapshotUiEnv());
-        return MachineCalendarBlockIndex.loadOutcomeFromJsonFile(json);
-    }
-
     /**
      * 実行・ログから段階2を実行して {@code 結果_配台表.json} が更新されたあと、当タブの表をディスクから再読込する。
      */
     void reloadTableFromDiskAfterExternalUpdate() {
         reloadFromDiskQuiet();
-    }
-
-    void refreshCalendarFromSharedJsonFile() {
-        if (shell == null) {
-            return;
-        }
-        Runnable r =
-                () -> {
-                    try {
-                        MachineCalendarBlockIndex.LoadOutcome lo =
-                                MachineCalendarBlockIndex.loadOutcomeFromJsonFile(
-                                        AppPaths.resolveMachineCalendarBlocksJsonPath(shell.snapshotUiEnv()));
-                        calendarBlocks = lo.index();
-                        rebuildGrids();
-                        if ("missing_file".equals(lo.pythonJsonError())) {
-                            shell.appendLog(
-                                    "[dispatch-editor] machine calendar json missing: "
-                                            + AppPaths.resolveMachineCalendarBlocksJsonPath(
-                                                    shell.snapshotUiEnv()));
-                        }
-                    } catch (Exception e) {
-                        calendarBlocks = MachineCalendarBlockIndex.empty();
-                        rebuildGrids();
-                        shell.appendLog(
-                                "[dispatch-editor] machine calendar json read: " + e.getMessage());
-                    }
-                };
-        if (Platform.isFxApplicationThread()) {
-            r.run();
-        } else {
-            Platform.runLater(r);
-        }
-    }
-
-    private void maybeLogMachineCalendarEmptyBlocksHint(
-            String javaCalendarLoadError,
-            String pythonJsonError,
-            String pythonDiagnosticsJson) {
-        if (shell == null) {
-            return;
-        }
-        if (javaCalendarLoadError != null) {
-            return;
-        }
-        if ("missing_file".equals(pythonJsonError)) {
-            return;
-        }
-        if (pythonJsonError != null) {
-            return;
-        }
-        if (pythonDiagnosticsJson != null) {
-            return;
-        }
-        if (!calendarBlocks.isEmpty()) {
-            return;
-        }
-        shell.appendLog(
-                "[dispatch-editor] machine calendar hint: empty blocks in JSON. Use "
-                        + "機械カレンダー"
-                        + " (JSON) tab "
-                        + "「マスタから JSON 出力」"
-                        + " or check master / occupancy.");
     }
 
     private void showReloadProgress() {
@@ -1038,9 +851,6 @@ public final class DispatchInteractiveTabController {
         }
         if (saveButton != null) {
             saveButton.setDisable(disabled);
-        }
-        if (reloadCalendarButton != null) {
-            reloadCalendarButton.setDisable(disabled);
         }
         applyStage2RunButtonEnabledState();
         applyDispatchTrialButtonEnabledState();
@@ -1220,14 +1030,14 @@ public final class DispatchInteractiveTabController {
                 SpreadsheetCell cell =
                         SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, qtxt);
                 cell.setEditable(false);
-                applyWideCellStyle(wr, di, cell, staffHighlight, axis);
+                applyWideCellStyle(wr, di, cell, staffHighlight);
                 line.add(cell);
             }
             gridRows.add(line);
         }
         grid.setRows(gridRows);
 
-        boolean[] wideBlockedCols = computeWideFullyBlockedDateColumns(dayCount, profiles, axis);
+        boolean[] wideBlockedCols = computeWideFullyBlockedDateColumns(dayCount);
         return new WideGridBundle(grid, profiles, rowItems, wideBlockedCols, staticCols, dayCount);
     }
 
@@ -1286,14 +1096,14 @@ public final class DispatchInteractiveTabController {
                 SpreadsheetCell cell =
                         SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, qtxt);
                 cell.setEditable(false);
-                applyByDayCellStyle(br, di, cell, staffHighlight, axis);
+                applyByDayCellStyle(br, di, cell, staffHighlight);
                 line.add(cell);
             }
             gridRows.add(line);
         }
         grid.setRows(gridRows);
 
-        boolean[] byDayBlockedCols = computeByDayFullyBlockedDateColumns(dayCount, axis);
+        boolean[] byDayBlockedCols = computeByDayFullyBlockedDateColumns(dayCount);
         return new ByDayGridBundle(grid, byDayBlockedCols, staticCols, dayCount);
     }
 
@@ -1432,47 +1242,12 @@ public final class DispatchInteractiveTabController {
     /**
      * Date columns where every profile row is blocked on that day get a narrow width; mixed columns stay default.
      */
-    private boolean[] computeWideFullyBlockedDateColumns(
-            int dayCount, List<Map<String, String>> profiles, List<LocalDate> axis) {
-        boolean[] out = new boolean[dayCount];
-        if (profiles.isEmpty() || calendarBlocks.isEmpty()) {
-            return out;
-        }
-        for (int di = 0; di < dayCount; di++) {
-            LocalDate day = axis.get(di);
-            boolean all = true;
-            for (Map<String, String> profile : profiles) {
-                String proc = profile.get(ResultDispatchSchema.COL_PROCESS);
-                String mach = profile.get(ResultDispatchSchema.COL_MACHINE);
-                if (!calendarBlocks.isBlockedDay(
-                        proc != null ? proc : "", mach != null ? mach : "", day)) {
-                    all = false;
-                    break;
-                }
-            }
-            out[di] = all;
-        }
-        return out;
+    private boolean[] computeWideFullyBlockedDateColumns(int dayCount) {
+        return new boolean[dayCount];
     }
 
-    private boolean[] computeByDayFullyBlockedDateColumns(int dayCount, List<LocalDate> axis) {
-        boolean[] out = new boolean[dayCount];
-        List<Map.Entry<String, String>> keys = ResultDispatchPivot.sortedProcessMachineKeys(doc.rows());
-        if (keys.isEmpty() || calendarBlocks.isEmpty()) {
-            return out;
-        }
-        for (int di = 0; di < dayCount; di++) {
-            LocalDate day = axis.get(di);
-            boolean all = true;
-            for (Map.Entry<String, String> en : keys) {
-                if (!calendarBlocks.isBlockedDay(en.getKey(), en.getValue(), day)) {
-                    all = false;
-                    break;
-                }
-            }
-            out[di] = all;
-        }
-        return out;
+    private boolean[] computeByDayFullyBlockedDateColumns(int dayCount) {
+        return new boolean[dayCount];
     }
 
     private static void applyDateColumnWidthsForBlockedDays(
@@ -1505,20 +1280,9 @@ public final class DispatchInteractiveTabController {
     }
 
     private void applyWideCellStyle(
-            WideRow wr,
-            int dateIdx,
-            SpreadsheetCell cell,
-            boolean staffHighlight,
-            List<LocalDate> axis) {
+            WideRow wr, int dateIdx, SpreadsheetCell cell, boolean staffHighlight) {
         double q = wr.getAmount(dateIdx);
-        String proc = wr.getStatic(ResultDispatchSchema.COL_PROCESS);
-        String mach = wr.getStatic(ResultDispatchSchema.COL_MACHINE);
-        LocalDate day = axis.get(dateIdx);
-        boolean block = calendarBlocks.isBlockedDay(proc, mach, day);
-        if (block) {
-            cell.getStyleClass().add("pm-dispatch-blocked-cell");
-            cell.setStyle("-fx-background-color: #c8c8c8;");
-        } else if (staffHighlight && q > 1e-9) {
+        if (staffHighlight && q > 1e-9) {
             cell.setStyle("-fx-background-color: #ffe0e0;");
         } else {
             cell.setStyle("");
@@ -1665,12 +1429,9 @@ public final class DispatchInteractiveTabController {
     }
 
     private void applyByDayCellStyle(
-            ByDayRow br, int dateIdx, SpreadsheetCell cell, boolean staffHighlight, List<LocalDate> axis) {
+            ByDayRow br, int dateIdx, SpreadsheetCell cell, boolean staffHighlight) {
         double q = br.getAmount(dateIdx);
-        boolean block = calendarBlocks.isBlockedDay(br.process(), br.machine(), axis.get(dateIdx));
-        if (block) {
-            cell.setStyle("-fx-background-color: #c8c8c8;");
-        } else if (staffHighlight && q > 1e-9) {
+        if (staffHighlight && q > 1e-9) {
             cell.setStyle("-fx-background-color: #ffe0e0;");
         } else {
             cell.setStyle("");
@@ -1761,21 +1522,12 @@ public final class DispatchInteractiveTabController {
                         return;
                     }
 
-                    int slot = modelCol - staticCols;
-                    int dateIdx = slot / DAY_SLOT_COLUMNS;
                     int profIdx = wideProfileIndexFromTableCell(tc);
                     if (profIdx < 0 || profIdx >= wideRowItems.size()) {
                         return;
                     }
-                    WideRow tgt = wideRowItems.get(profIdx);
-                    boolean blocked =
-                            calendarBlocks.isBlockedDay(
-                                    tgt.getStatic(ResultDispatchSchema.COL_PROCESS),
-                                    tgt.getStatic(ResultDispatchSchema.COL_MACHINE),
-                                    dateAxis.get(dateIdx));
                     if (e.getDragboard().hasString()
-                            && e.getDragboard().getString().startsWith(DND_PREFIX)
-                            && !blocked) {
+                            && e.getDragboard().getString().startsWith(DND_PREFIX)) {
                         e.acceptTransferModes(TransferMode.MOVE);
                     }
                     e.consume();
@@ -1996,13 +1748,6 @@ public final class DispatchInteractiveTabController {
         if (fromRow == toIdx && fromDateIdx == targetDateIdx) {
             return false;
         }
-        String proc = targetRow.getStatic(ResultDispatchSchema.COL_PROCESS);
-        String mach = targetRow.getStatic(ResultDispatchSchema.COL_MACHINE);
-        LocalDate tday = dateAxis.get(targetDateIdx);
-        if (calendarBlocks.isBlockedDay(proc, mach, tday)) {
-            reportMachineCalendarBlockedMoveRejected(tday, proc, mach);
-            return false;
-        }
         Optional<Double> moved = pickMoveQuantity(shell != null ? shell.getPrimaryStage() : null, max);
         if (moved.isEmpty()) {
             return false;
@@ -2039,21 +1784,6 @@ public final class DispatchInteractiveTabController {
         return dialog.showAndWait()
                 .map(ResultDispatchNormalizer::parseDouble)
                 .filter(v -> v > 0);
-    }
-
-    private void reportMachineCalendarBlockedMoveRejected(
-            LocalDate day, String process, String machine) {
-        String msg =
-                "機械カレンダーでブロックのため移動できません: "
-                        + day
-                        + " / "
-                        + process
-                        + " / "
-                        + machine;
-        statusLabel.setText(msg);
-        if (shell != null) {
-            shell.appendLog("[dispatch-editor] " + msg);
-        }
     }
 
     /** Mutable wide row (amounts indexed by {@link #dateAxis}). */

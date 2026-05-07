@@ -102,12 +102,6 @@
                         <fx:include fx:id="resultDispatchTableTab" source="ResultDispatchTableTab.fxml"/>
                     </content>
                 </Tab>
-                <Tab fx:id="mainShellTabMachineCalendarJson" closable="false"
-                     text="機械カレンダー (JSON)">
-                    <content>
-                        <fx:include fx:id="machineCalendarTab" source="MachineCalendarTab.fxml"/>
-                    </content>
-                </Tab>
                 <Tab fx:id="mainShellTabDispatchInteractive" closable="false"
                      text="配台計画手動修正">
                     <content>

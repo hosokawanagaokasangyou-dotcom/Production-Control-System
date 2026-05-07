@@ -100,43 +100,6 @@ class ResultDispatchPivotTest {
     }
 
     @Test
-    void machineCalendarJsonParses() {
-        String json = "{\"blocks\":{\"M1\":[\"2026-05-09\"]}}";
-        MachineCalendarBlockIndex idx = MachineCalendarBlockIndex.parseStdoutJson(json);
-        assertEquals(true, idx.isBlockedDay("P", "M1", LocalDate.of(2026, 5, 9)));
-    }
-
-    @Test
-    void parseLoadOutcome_surfacesPythonJsonError() {
-        String json =
-                "{\"error\": \"No module named 'pandas'\", \"blocks\": {}}";
-        MachineCalendarBlockIndex.LoadOutcome lo = MachineCalendarBlockIndex.parseLoadOutcome(json);
-        assertTrue(lo.index().isEmpty());
-        assertEquals("No module named 'pandas'", lo.pythonJsonError());
-        assertEquals(null, lo.pythonDiagnosticsJson());
-    }
-
-    @Test
-    void parseLoadOutcome_errorOnly_noBlocksKey() {
-        String json = "{\"error\": \"file_not_found\", \"path\": \"/x\"}";
-        MachineCalendarBlockIndex.LoadOutcome lo = MachineCalendarBlockIndex.parseLoadOutcome(json);
-        assertTrue(lo.index().isEmpty());
-        assertEquals("file_not_found", lo.pythonJsonError());
-        assertEquals(null, lo.pythonDiagnosticsJson());
-    }
-
-    @Test
-    void parseLoadOutcome_includesDiagnosticsJson() {
-        String json =
-                "{\"blocks\":{},\"diagnostics\":{\"has_machine_calendar_sheet\":true,\"equipment_list_len\":3}}";
-        MachineCalendarBlockIndex.LoadOutcome lo = MachineCalendarBlockIndex.parseLoadOutcome(json);
-        assertTrue(lo.index().isEmpty());
-        assertEquals(null, lo.pythonJsonError());
-        assertTrue(lo.pythonDiagnosticsJson().contains("has_machine_calendar_sheet"));
-        assertTrue(lo.pythonDiagnosticsJson().contains("equipment_list_len"));
-    }
-
-    @Test
     void distinctProfiles_sortByStaticGroupKey_isStableWhenRowOrderDiffers() {
         List<String> cols = new ArrayList<>(ResultDispatchSchema.canonicalColumnOrder());
         List<Map<String, String>> rowsA = new ArrayList<>();
@@ -164,17 +127,6 @@ class ResultDispatchPivotTest {
         pa.sort(cmp);
         pb.sort(cmp);
         assertEquals(pa.getFirst().get(ResultDispatchSchema.COL_PROCESS), pb.getFirst().get(ResultDispatchSchema.COL_PROCESS));
-    }
-
-    @Test
-    void pickJsonPayload_skipsLeadingLogLines() {
-        String stdout =
-                "[planning_core] warning line\n"
-                        + "{\"blocks\":{\"M1\":[\"2026-05-09\"]}}\n";
-        String payload = MachineCalendarBlockIndex.pickJsonPayload(stdout);
-        assertTrue(payload.startsWith("{"));
-        MachineCalendarBlockIndex idx = MachineCalendarBlockIndex.parseStdoutJson(payload);
-        assertEquals(true, idx.isBlockedDay("P", "M1", LocalDate.of(2026, 5, 9)));
     }
 
     @Test

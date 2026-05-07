@@ -188,9 +188,6 @@ public final class MainShellController {
     private ResultDispatchTableTabController resultDispatchTableTabController;
 
     @FXML
-    private MachineCalendarTabController machineCalendarTabController;
-
-    @FXML
     private DispatchInteractiveTabController dispatchInteractiveTabController;
 
     @FXML
@@ -248,9 +245,6 @@ public final class MainShellController {
     private Tab mainShellTabResultDispatch;
 
     @FXML
-    private Tab mainShellTabMachineCalendarJson;
-
-    @FXML
     private Tab mainShellTabDispatchInteractive;
 
     @FXML
@@ -294,7 +288,6 @@ public final class MainShellController {
                     MainShellTabId.SPECIAL_RULES.key(),
                     MainShellTabId.ACTUALS_STATUS.key(),
                     MainShellTabId.RESULT_DISPATCH.key(),
-                    MainShellTabId.MACHINE_CALENDAR_JSON.key(),
                     MainShellTabId.DISPATCH_INTERACTIVE.key(),
                     MainShellTabId.PLAN_RESULT_VIEWER.key(),
                     MainShellTabId.EQUIPMENT_GANTT_GRAPHIC.key(),
@@ -424,7 +417,6 @@ public final class MainShellController {
         specialRulesTabController.bindShell(this);
         actualsStatusTabController.bindShell(this);
         resultDispatchTableTabController.bindShell(this);
-        machineCalendarTabController.bindShell(this);
         dispatchInteractiveTabController.bindShell(this);
 
         primaryStage.setMinWidth(640);
@@ -914,9 +906,6 @@ public final class MainShellController {
         if (t == mainShellTabResultDispatch) {
             return MainShellTabId.RESULT_DISPATCH;
         }
-        if (t == mainShellTabMachineCalendarJson) {
-            return MainShellTabId.MACHINE_CALENDAR_JSON;
-        }
         if (t == mainShellTabDispatchInteractive) {
             return MainShellTabId.DISPATCH_INTERACTIVE;
         }
@@ -955,7 +944,6 @@ public final class MainShellController {
             case SPECIAL_RULES -> mainShellTabSpecialRules;
             case ACTUALS_STATUS -> mainShellTabActualsStatus;
             case RESULT_DISPATCH -> mainShellTabResultDispatch;
-            case MACHINE_CALENDAR_JSON -> mainShellTabMachineCalendarJson;
             case DISPATCH_INTERACTIVE -> mainShellTabDispatchInteractive;
             case PLAN_RESULT_VIEWER -> mainShellTabPlanResultViewer;
             case EQUIPMENT_GANTT_GRAPHIC -> mainShellTabEquipmentGanttGraphic;
@@ -2563,13 +2551,6 @@ public final class MainShellController {
             suppressEnvSessionPersistence.set(false);
         }
         DesktopSessionStateStore.save(collectDesktopSession());
-    }
-
-    /** After {@code machine_calendar_blocks.json} is (re)written, refresh interactive dispatch block overlay. */
-    public void notifyMachineCalendarJsonUpdated() {
-        if (dispatchInteractiveTabController != null) {
-            dispatchInteractiveTabController.refreshCalendarFromSharedJsonFile();
-        }
     }
 
     /**

@@ -28,9 +28,6 @@
                 onAction="#onClearColumnFiltersAction"/>
         <Button fx:id="saveButton" mnemonicParsing="false" text="保存 (JSON+xlsx)"
                 onAction="#onSaveAction"/>
-        <Button fx:id="reloadCalendarButton" mnemonicParsing="false"
-                text="機械 JSON 再読み"
-                onAction="#onReloadCalendarAction"/>
         <Button fx:id="stage2RunButton" mnemonicParsing="false" text="段階2 実行"
                 styleClass="pm-stage-run-button,pm-stage-run-2"
                 onAction="#onStage2RunButtonAction"/>
