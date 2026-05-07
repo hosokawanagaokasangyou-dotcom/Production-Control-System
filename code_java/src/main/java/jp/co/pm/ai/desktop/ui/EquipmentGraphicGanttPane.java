@@ -35,6 +35,8 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.Text;
 import javafx.geometry.VPos;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.input.ScrollEvent;
 
 import javafx.scene.layout.Pane;
@@ -859,7 +861,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
         ScrollPane rightBodyScroll = new ScrollPane(rightBodyGrid);
         rightBodyScroll.setFitToWidth(false);
-        rightBodyScroll.setPannable(true);
+        /*
+         * 既定の setPannable(true) は主ボタンドラッグでパンするため、担当バッジの左ドラッグと競合する。
+         * ホイール（中）ボタンのみドラッグパンする。
+         */
+        rightBodyScroll.setPannable(false);
+        installMiddleButtonPanScroll(rightBodyScroll);
         HBox.setHgrow(rightBodyScroll, Priority.ALWAYS);
 
         leftHead.minWidthProperty().bind(leftBodyScroll.widthProperty());
@@ -928,7 +935,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         Label hint =
                 new Label(
                         """
-                        ヒント: 横スクロールで時刻軸を追えます（左3列は固定）。Shift+ホイールでも横（時刻軸方向）にスクロール（感度はツールバー「Shift横スクロール」）。Ctrl+ホイールで表示倍率。 \
+                        ヒント: 横スクロールで時刻軸を追えます（左3列は固定）。ホイールボタンを押したままドラッグでもスクロールできます。Shift+ホイールでも横（時刻軸方向）にスクロール（感度はツールバー「Shift横スクロール」）。Ctrl+ホイールで表示倍率。 \
                         左列は内容に応じ自動幅。日付列は見出しなし・データは反時計回り90°。同一暦日は日付列を縦結合、同一機械は機械名列を縦結合。 \
                         行の高さ・見出し行の高さ・時刻列幅・バー文字サイズはツールバーで調整できます。日付・機械名・工程名列幅もスライダーで指定できます（先頭は自動）。""");
         hint.setWrapText(true);
@@ -984,6 +991,69 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     double deltaH = -delta / excess * factor;
                     scrollPane.setHvalue(Math.clamp(scrollPane.getHvalue() + deltaH, 0.0, 1.0));
                 });
+    }
+
+    /**
+     * 右ボディ {@link ScrollPane} を、ホイール（中）ボタンドラッグでのみパン可能にする（左ドラッグはバッジ移動に使う）。
+     */
+    private static void installMiddleButtonPanScroll(ScrollPane scroll) {
+        final boolean[] middlePanning = {false};
+        final double[] lastScene = new double[2];
+        scroll.addEventFilter(
+                MouseEvent.MOUSE_PRESSED,
+                e -> {
+                    if (e.getButton() == MouseButton.MIDDLE) {
+                        middlePanning[0] = true;
+                        lastScene[0] = e.getSceneX();
+                        lastScene[1] = e.getSceneY();
+                        e.consume();
+                    }
+                });
+        scroll.addEventFilter(
+                MouseEvent.MOUSE_DRAGGED,
+                e -> {
+                    if (!middlePanning[0]) {
+                        return;
+                    }
+                    double dx = e.getSceneX() - lastScene[0];
+                    double dy = e.getSceneY() - lastScene[1];
+                    lastScene[0] = e.getSceneX();
+                    lastScene[1] = e.getSceneY();
+                    panScrollPaneByPixelDelta(scroll, dx, dy);
+                    e.consume();
+                });
+        scroll.addEventFilter(
+                MouseEvent.MOUSE_RELEASED,
+                e -> {
+                    if (e.getButton() == MouseButton.MIDDLE) {
+                        middlePanning[0] = false;
+                    }
+                });
+    }
+
+    private static void panScrollPaneByPixelDelta(ScrollPane scroll, double sceneDx, double sceneDy) {
+        Node content = scroll.getContent();
+        if (content == null) {
+            return;
+        }
+        Bounds vp = scroll.getViewportBounds();
+        if (vp == null || vp.getWidth() <= 0 || vp.getHeight() <= 0) {
+            return;
+        }
+        double viewportW = vp.getWidth();
+        double viewportH = vp.getHeight();
+        double contentW = content.getLayoutBounds().getWidth();
+        double contentH = content.getLayoutBounds().getHeight();
+        double excessX = contentW - viewportW;
+        double excessY = contentH - viewportH;
+        if (excessX > 1.0 && Double.isFinite(excessX)) {
+            double nh = scroll.getHvalue() - sceneDx / excessX;
+            scroll.setHvalue(Math.clamp(nh, 0.0, 1.0));
+        }
+        if (excessY > 1.0 && Double.isFinite(excessY)) {
+            double nv = scroll.getVvalue() - sceneDy / excessY;
+            scroll.setVvalue(Math.clamp(nv, 0.0, 1.0));
+        }
     }
 
     private static void applySideHeaderStyle(
