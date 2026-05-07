@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -96,37 +97,49 @@ public class PmAiFxApp extends Application {
     public void start(Stage primaryStage) {
         primaryStage.setTitle("工程管理 AI 配台 — JavaFX MVP");
 
-        try {
-            FXMLLoader loader =
-                    new FXMLLoader(
-                            PmAiFxApp.class.getResource("/jp/co/pm/ai/desktop/fxml/MainShell.fxml"));
-            loader.setCharset(StandardCharsets.UTF_8);
-            loader.setControllerFactory(
-                    clazz -> {
-                        if (clazz == MainShellController.class) {
-                            return new MainShellController(primaryStage);
-                        }
-                        try {
-                            return clazz.getDeclaredConstructor().newInstance();
-                        } catch (Exception e) {
-                            throw new IllegalStateException(e);
-                        }
-                    });
-            Parent root = loader.load();
-            MainShellController shell = loader.getController();
-            Scene scene = new Scene(root, 960, 640);
-            scene.getStylesheets()
-                    .add(
-                            PmAiFxApp.class
-                                    .getResource("/jp/co/pm/ai/desktop/css/pm-ai-desktop.css")
-                                    .toExternalForm());
-            primaryStage.setScene(scene);
-            shell.finishStartup(scene);
-            primaryStage.show();
-            shell.appendBootMessage();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        Stage splash = StartupSplashStage.createAndShow();
+        // loader.load() が同じパルスで走るとスプラッシュが描画されないため、次のパルスで本体を構築する
+        Platform.runLater(
+                () -> {
+                    try {
+                        MainShellController shell = bootstrapMainWindow(primaryStage);
+                        primaryStage.show();
+                        splash.close();
+                        shell.appendBootMessage();
+                    } catch (Exception e) {
+                        splash.close();
+                        throw new RuntimeException(e);
+                    }
+                });
+    }
+
+    private static MainShellController bootstrapMainWindow(Stage primaryStage) throws Exception {
+        FXMLLoader loader =
+                new FXMLLoader(
+                        PmAiFxApp.class.getResource("/jp/co/pm/ai/desktop/fxml/MainShell.fxml"));
+        loader.setCharset(StandardCharsets.UTF_8);
+        loader.setControllerFactory(
+                clazz -> {
+                    if (clazz == MainShellController.class) {
+                        return new MainShellController(primaryStage);
+                    }
+                    try {
+                        return clazz.getDeclaredConstructor().newInstance();
+                    } catch (Exception e) {
+                        throw new IllegalStateException(e);
+                    }
+                });
+        Parent root = loader.load();
+        MainShellController shell = loader.getController();
+        Scene scene = new Scene(root, 960, 640);
+        scene.getStylesheets()
+                .add(
+                        PmAiFxApp.class
+                                .getResource("/jp/co/pm/ai/desktop/css/pm-ai-desktop.css")
+                                .toExternalForm());
+        primaryStage.setScene(scene);
+        shell.finishStartup(scene);
+        return shell;
     }
 
     public static void main(String[] args) {
