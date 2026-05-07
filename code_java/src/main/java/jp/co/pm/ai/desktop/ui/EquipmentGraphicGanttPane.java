@@ -912,7 +912,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             // #region agent log
             if (ri == 0) {
                 Map<String, Object> d = new LinkedHashMap<>();
-                d.put("runId", "pre-fix");
+                d.put("runId", "post-fix-verify");
                 d.put("showPersonBadges", showPersonBadges);
                 d.put("personBadgeDragAdjustEnabled", personBadgeDragAdjustEnabled);
                 d.put("badgePaneMouseTransparent", badgePane.isMouseTransparent());
@@ -1810,7 +1810,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         // #region agent log
         if (displayRowIndex == 0) {
             Map<String, Object> d = new LinkedHashMap<>();
-            d.put("runId", "pre-fix");
+            d.put("runId", "post-fix-verify");
             d.put("badgeDragAdjustEnabled", badgeDragAdjustEnabled);
             d.put("dragSinkNull", dragDeltaSink == null);
             AgentDebugLog.appendStructured(
@@ -2068,33 +2068,37 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     /**
-     * バッジドラッグの「つかみ」判定を、論理ピル矩形の中央に限定する（幅・高さそれぞれこの割合の矩形）。
-     * 端やグロー周辺での誤掴みを抑え、中央以外ではイベントを消費しない（下のスクロール等へ伝播しやすくする）。
+     * バッジドラッグの「つかみ」判定を、見た目矩形の中央に限定する（幅・高さそれぞれこの割合の矩形）。
+     * {@link StackPane#getBoundsInLocal()} は DropShadow 等を含み、{@code sceneToLocal} の座標系と一致する。
+     * クランプ用の論理ピル（pref のみ）とは寸法が異なるため、掴み判定だけ実ヒット矩形を使う。
      */
     private static final double BADGE_DRAG_GRAB_ZONE_FRAC = 0.5;
 
-    /** {@link #BADGE_DRAG_GRAB_ZONE_FRAC} に基づき、論理ピル座標系でのポイントがドラッグ開始可能域にあるか。 */
-    private static boolean isWithinBadgeDragGrabZone(Bounds local, double localX, double localY) {
-        if (local == null) {
+    /** {@link #BADGE_DRAG_GRAB_ZONE_FRAC} に基づき、{@link StackPane#getBoundsInLocal()} 内の中央域にあるか。 */
+    private static boolean isWithinBadgeDragGrabZone(StackPane sp, double localX, double localY) {
+        if (sp == null) {
             return true;
         }
-        double w = local.getWidth();
-        double h = local.getHeight();
+        Bounds b = sp.getBoundsInLocal();
+        if (b == null) {
+            return true;
+        }
+        double w = b.getWidth();
+        double h = b.getHeight();
         if (!Double.isFinite(w) || !Double.isFinite(h) || w <= 1e-6 || h <= 1e-6) {
             return true;
         }
-        double cx = (local.getMinX() + local.getMaxX()) / 2;
-        double cy = (local.getMinY() + local.getMaxY()) / 2;
+        double cx = (b.getMinX() + b.getMaxX()) / 2;
+        double cy = (b.getMinY() + b.getMaxY()) / 2;
         double halfW = (w * BADGE_DRAG_GRAB_ZONE_FRAC) / 2;
         double halfH = (h * BADGE_DRAG_GRAB_ZONE_FRAC) / 2;
         return Math.abs(localX - cx) <= halfW && Math.abs(localY - cy) <= halfH;
     }
 
     /** 掴み可能ホバー時のみ MOVE、それ以外は DEFAULT（バッジ全域が MOVE に見える問題の回避）。 */
-    private static void updateBadgeDragHoverCursor(
-            StackPane sp, Bounds local, double localX, double localY) {
+    private static void updateBadgeDragHoverCursor(StackPane sp, double localX, double localY) {
         sp.setCursor(
-                isWithinBadgeDragGrabZone(local, localX, localY)
+                isWithinBadgeDragGrabZone(sp, localX, localY)
                         ? Cursor.MOVE
                         : Cursor.DEFAULT);
     }
@@ -2131,7 +2135,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     if (lp != null
                             && Double.isFinite(lp.getX())
                             && Double.isFinite(lp.getY())) {
-                        updateBadgeDragHoverCursor(sp, local, lp.getX(), lp.getY());
+                        updateBadgeDragHoverCursor(sp, lp.getX(), lp.getY());
                     }
                 });
         sp.addEventHandler(
@@ -2145,7 +2149,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     if (lp != null
                             && Double.isFinite(lp.getX())
                             && Double.isFinite(lp.getY())) {
-                        updateBadgeDragHoverCursor(sp, local, lp.getX(), lp.getY());
+                        updateBadgeDragHoverCursor(sp, lp.getX(), lp.getY());
                     }
                 });
         sp.addEventHandler(
@@ -2165,16 +2169,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                     && Double.isFinite(lp.getX())
                                     && Double.isFinite(lp.getY());
                     boolean withinGrab =
-                            lpFinite
-                                    && isWithinBadgeDragGrabZone(
-                                            local, lp.getX(), lp.getY());
+                            lpFinite && isWithinBadgeDragGrabZone(sp, lp.getX(), lp.getY());
                     armed[0] =
                             e.getButton() == MouseButton.PRIMARY && withinGrab;
                     // #region agent log
                     int sn = DEBUG_BADGE_PRESS_SAMPLES.incrementAndGet();
                     if (sn <= 12) {
                         Map<String, Object> d = new LinkedHashMap<>();
-                        d.put("runId", "pre-fix");
+                        d.put("runId", "post-fix-verify");
                         d.put("sample", sn);
                         d.put(
                                 "target",
@@ -2188,8 +2190,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         d.put("withinGrab", withinGrab);
                         d.put("armed", armed[0]);
                         d.put("primary", e.getButton() == MouseButton.PRIMARY);
-                        d.put("localW", local != null ? local.getWidth() : -1);
-                        d.put("localH", local != null ? local.getHeight() : -1);
+                        d.put("logicalW", local != null ? local.getWidth() : -1);
+                        d.put("logicalH", local != null ? local.getHeight() : -1);
+                        Bounds vb = sp.getBoundsInLocal();
+                        d.put("visualW", vb != null ? vb.getWidth() : -1);
+                        d.put("visualH", vb != null ? vb.getHeight() : -1);
+                        d.put("grabBasis", "boundsInLocal");
                         AgentDebugLog.appendStructured(
                                 Map.of(),
                                 "e02e86",
@@ -2201,7 +2207,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     // #endregion
                     if (!armed[0]) {
                         if (lpFinite) {
-                            updateBadgeDragHoverCursor(sp, local, lp.getX(), lp.getY());
+                            updateBadgeDragHoverCursor(sp, lp.getX(), lp.getY());
                         }
                         return;
                     }
@@ -2223,7 +2229,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     int dn = DEBUG_BADGE_DRAG_SAMPLES.incrementAndGet();
                     if (dn <= 8) {
                         Map<String, Object> d = new LinkedHashMap<>();
-                        d.put("runId", "pre-fix");
+                        d.put("runId", "post-fix-verify");
                         d.put("sample", dn);
                         d.put("sceneDx", e.getSceneX() - press[0]);
                         AgentDebugLog.appendStructured(
@@ -2269,7 +2275,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     if (lp != null
                             && Double.isFinite(lp.getX())
                             && Double.isFinite(lp.getY())) {
-                        updateBadgeDragHoverCursor(sp, local, lp.getX(), lp.getY());
+                        updateBadgeDragHoverCursor(sp, lp.getX(), lp.getY());
                     }
                 });
     }
