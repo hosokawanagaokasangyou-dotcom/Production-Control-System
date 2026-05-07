@@ -15,7 +15,6 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.function.BiConsumer;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -61,7 +60,6 @@ import javafx.scene.Node;
 import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 
 /**
@@ -100,11 +98,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      * 1 行あたりのタイムライン {@link Canvas} 幅（px）の上限。超過時はスロット幅を自動縮小し、GPU／ヒープ負荷を抑える。
      */
     private static final double MAX_TIMELINE_CANVAS_WIDTH_PX = 3072.0;
-
-    /** Cursor debug e02e86: バッジドラッグ計測（本番では削除） */
-    private static final AtomicInteger DEBUG_BADGE_PRESS_SAMPLES = new AtomicInteger();
-
-    private static final AtomicInteger DEBUG_BADGE_DRAG_SAMPLES = new AtomicInteger();
 
     /**
      * 行 Canvas 合計の RGBA ナイーブ見積（MiB）がこの値を超えると、面積比の平方根でスロット幅を追加縮小する。
@@ -909,23 +902,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             if (showPersonBadges && personBadgeDragAdjustEnabled) {
                 badgePane.toFront();
             }
-            // #region agent log
-            if (ri == 0) {
-                Map<String, Object> d = new LinkedHashMap<>();
-                d.put("runId", "post-fix-verify");
-                d.put("showPersonBadges", showPersonBadges);
-                d.put("personBadgeDragAdjustEnabled", personBadgeDragAdjustEnabled);
-                d.put("badgePaneMouseTransparent", badgePane.isMouseTransparent());
-                d.put("badgePanePickOnBounds", badgePane.isPickOnBounds());
-                AgentDebugLog.appendStructured(
-                        Map.of(),
-                        "e02e86",
-                        "H1",
-                        "EquipmentGraphicGanttPane.timelineRow",
-                        "row0 badgePane flags",
-                        d);
-            }
-            // #endregion
 
             String tip =
                     (dr.rowSummary() != null ? dr.rowSummary() : "")
@@ -1807,21 +1783,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 || badgeSlotTexts.size() != slotTexts.size()) {
             return;
         }
-        // #region agent log
-        if (displayRowIndex == 0) {
-            Map<String, Object> d = new LinkedHashMap<>();
-            d.put("runId", "post-fix-verify");
-            d.put("badgeDragAdjustEnabled", badgeDragAdjustEnabled);
-            d.put("dragSinkNull", dragDeltaSink == null);
-            AgentDebugLog.appendStructured(
-                    Map.of(),
-                    "e02e86",
-                    "H1",
-                    "EquipmentGraphicGanttPane.layoutPersonBadgeOverlay",
-                    "first row overlay entry",
-                    d);
-        }
-        // #endregion
         // スロット文言がスロット按分の m で微妙に異なると collectBarRuns が細切れになり、
         // バッジがスロット個数ぶん重複描画される。バッジ結合だけ末尾「◯◯m」を除いたキーでまとめる。
         List<BarRun> runs = collectBarRunsForPersonBadges(slotTexts);
@@ -2172,39 +2133,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             lpFinite && isWithinBadgeDragGrabZone(sp, lp.getX(), lp.getY());
                     armed[0] =
                             e.getButton() == MouseButton.PRIMARY && withinGrab;
-                    // #region agent log
-                    int sn = DEBUG_BADGE_PRESS_SAMPLES.incrementAndGet();
-                    if (sn <= 12) {
-                        Map<String, Object> d = new LinkedHashMap<>();
-                        d.put("runId", "post-fix-verify");
-                        d.put("sample", sn);
-                        d.put(
-                                "target",
-                                e.getTarget() != null
-                                        ? e.getTarget().getClass().getSimpleName()
-                                        : "null");
-                        d.put("source", e.getSource() != null ? e.getSource().getClass().getSimpleName() : "null");
-                        d.put("lpFinite", lpFinite);
-                        d.put("lpX", lp != null ? lp.getX() : null);
-                        d.put("lpY", lp != null ? lp.getY() : null);
-                        d.put("withinGrab", withinGrab);
-                        d.put("armed", armed[0]);
-                        d.put("primary", e.getButton() == MouseButton.PRIMARY);
-                        d.put("logicalW", local != null ? local.getWidth() : -1);
-                        d.put("logicalH", local != null ? local.getHeight() : -1);
-                        Bounds vb = sp.getBoundsInLocal();
-                        d.put("visualW", vb != null ? vb.getWidth() : -1);
-                        d.put("visualH", vb != null ? vb.getHeight() : -1);
-                        d.put("grabBasis", "boundsInLocal");
-                        AgentDebugLog.appendStructured(
-                                Map.of(),
-                                "e02e86",
-                                "H2",
-                                "EquipmentGraphicGanttPane.installBadgeDragHandlers",
-                                "mouse pressed",
-                                d);
-                    }
-                    // #endregion
                     if (!armed[0]) {
                         if (lpFinite) {
                             updateBadgeDragHoverCursor(sp, lp.getX(), lp.getY());
@@ -2225,22 +2153,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         return;
                     }
                     dragged[0] = true;
-                    // #region agent log
-                    int dn = DEBUG_BADGE_DRAG_SAMPLES.incrementAndGet();
-                    if (dn <= 8) {
-                        Map<String, Object> d = new LinkedHashMap<>();
-                        d.put("runId", "post-fix-verify");
-                        d.put("sample", dn);
-                        d.put("sceneDx", e.getSceneX() - press[0]);
-                        AgentDebugLog.appendStructured(
-                                Map.of(),
-                                "e02e86",
-                                "H4",
-                                "EquipmentGraphicGanttPane.installBadgeDragHandlers",
-                                "mouse dragged",
-                                d);
-                    }
-                    // #endregion
                     sp.setCursor(Cursor.MOVE);
                     double dx = e.getSceneX() - press[0];
                     double dy = e.getSceneY() - press[1];
