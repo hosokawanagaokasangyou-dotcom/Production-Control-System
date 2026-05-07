@@ -44,6 +44,8 @@ import java.util.Map;
  * @param equipmentGanttHeaderHeightPercent 見出し行（日付・機械名・工程名・時刻軸）の高さ（50〜200、0 は未保存として既定 100）
  * @param equipmentGanttSlotWidthPercent 時刻スロット列幅の調整（50〜500、0 は未保存として既定 100）
  * @param equipmentGanttShiftWheelHScrollPercent Shift+ホイール横スクロールの感度（50〜1000、100＝従来相当、0 は未保存として既定 200）
+ * @param equipmentGanttPersonBadgeOverlapPercent 担当バッジの横方向の重なり量（0〜80＝重なり％、{@code -1} は未保存として既定 38）
+ * @param equipmentGanttPersonBadgeDragAdjustEnabled 担当バッジをマウスドラッグで移動するモード（再描画で初期配置に戻る）
  * @param equipmentGanttPersonBadgeEnabled 設備ガント・担当バッジ表示のオンオフ
  * @param equipmentGanttPersonBadgeFontFamily バッジ文字フォント（空は既定ファミリ）
  * @param equipmentGanttPersonBadgeFontPercent バッジ文字サイズ（行ラベル基準の%、0 は未保存として既定 85）
@@ -105,6 +107,8 @@ public record DesktopSessionState(
         double equipmentGanttHeaderHeightPercent,
         double equipmentGanttSlotWidthPercent,
         double equipmentGanttShiftWheelHScrollPercent,
+        double equipmentGanttPersonBadgeOverlapPercent,
+        boolean equipmentGanttPersonBadgeDragAdjustEnabled,
         boolean equipmentGanttPersonBadgeEnabled,
         String equipmentGanttPersonBadgeFontFamily,
         double equipmentGanttPersonBadgeFontPercent,
@@ -238,6 +242,8 @@ public record DesktopSessionState(
                 0d,
                 0d,
                 0d,
+                -1d,
+                false,
                 true,
                 "",
                 d.fontPercent(),

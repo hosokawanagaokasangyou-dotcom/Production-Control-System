@@ -36,6 +36,8 @@
                             <CheckBox fx:id="personBadgeShowCheckBox" mnemonicParsing="false"
                                       text="担当バッジを表示" selected="true"
                                       onAction="#onPersonBadgeShowAction"/>
+                            <CheckBox fx:id="personBadgeDragAdjustCheckBox" mnemonicParsing="false"
+                                      text="バッジをドラッグで移動（再描画でリセット）"/>
                             <Button fx:id="reloadButton" mnemonicParsing="false" text="再読み"
                                     onAction="#onReloadButtonAction"/>
                             <Button fx:id="syncLatestButton" mnemonicParsing="false"
@@ -88,6 +90,13 @@
                                         max="1000.0" min="50.0" prefWidth="96.0"
                                         showTickLabels="false" showTickMarks="false" value="200.0"/>
                                 <Label fx:id="graphicShiftWheelHLabel" text="200%"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="156.0" text="バッジ重なり量"/>
+                                <Slider fx:id="graphicPersonBadgeOverlapSlider" blockIncrement="1.0"
+                                        max="80.0" min="0.0" prefWidth="96.0"
+                                        showTickLabels="false" showTickMarks="false" value="38.0"/>
+                                <Label fx:id="graphicPersonBadgeOverlapLabel" text="38%"/>
                             </HBox>
                             <HBox alignment="CENTER_LEFT" spacing="8.0">
                                 <Label prefWidth="156.0" text="日付列幅"/>

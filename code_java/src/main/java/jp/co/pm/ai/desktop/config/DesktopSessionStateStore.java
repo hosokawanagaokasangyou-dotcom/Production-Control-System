@@ -75,6 +75,8 @@ public final class DesktopSessionStateStore {
                     optionalDouble(root, "equipmentGanttHeaderHeightPercent", 0d),
                     optionalDouble(root, "equipmentGanttSlotWidthPercent", 0d),
                     optionalDouble(root, "equipmentGanttShiftWheelHScrollPercent", 0d),
+                    optionalDouble(root, "equipmentGanttPersonBadgeOverlapPercent", -1d),
+                    optionalBoolean(root, "equipmentGanttPersonBadgeDragAdjustEnabled", false),
                     optionalBoolean(root, "equipmentGanttPersonBadgeEnabled", true),
                     text(root, "equipmentGanttPersonBadgeFontFamily"),
                     optionalDouble(root, "equipmentGanttPersonBadgeFontPercent", 0d),
@@ -429,6 +431,13 @@ public final class DesktopSessionStateStore {
         if (Double.isFinite(sh) && sh >= 50 && sh <= 1000) {
             root.put("equipmentGanttShiftWheelHScrollPercent", sh);
         }
+        double bmo = state.equipmentGanttPersonBadgeOverlapPercent();
+        if (Double.isFinite(bmo) && bmo >= 0 && bmo <= 80) {
+            root.put("equipmentGanttPersonBadgeOverlapPercent", bmo);
+        }
+        root.put(
+                "equipmentGanttPersonBadgeDragAdjustEnabled",
+                state.equipmentGanttPersonBadgeDragAdjustEnabled());
         root.put("equipmentGanttPersonBadgeEnabled", state.equipmentGanttPersonBadgeEnabled());
         put(root, "equipmentGanttPersonBadgeFontFamily", state.equipmentGanttPersonBadgeFontFamily());
         double bpf = state.equipmentGanttPersonBadgeFontPercent();

@@ -130,6 +130,9 @@ public final class EquipmentGanttGraphicTabController {
     private CheckBox personBadgeShowCheckBox;
 
     @FXML
+    private CheckBox personBadgeDragAdjustCheckBox;
+
+    @FXML
     private Slider graphicZoomSlider;
 
     @FXML
@@ -185,6 +188,12 @@ public final class EquipmentGanttGraphicTabController {
 
     @FXML
     private Label graphicShiftWheelHLabel;
+
+    @FXML
+    private Slider graphicPersonBadgeOverlapSlider;
+
+    @FXML
+    private Label graphicPersonBadgeOverlapLabel;
 
     /** 日付列幅スライダー上限（px）。0 は自動計測 */
     private static final double DATE_COL_WIDTH_SLIDER_MAX = 220;
@@ -318,6 +327,29 @@ public final class EquipmentGanttGraphicTabController {
                         graphicShiftWheelHLabel.setText(
                                 String.format("%.0f%%", graphicShiftWheelHSlider.getValue())),
                 graphicCommitted);
+
+        if (graphicPersonBadgeOverlapSlider != null) {
+            SliderCommittedChangeSupport.install(
+                    graphicPersonBadgeOverlapSlider,
+                    () -> {
+                        if (graphicPersonBadgeOverlapLabel != null) {
+                            graphicPersonBadgeOverlapLabel.setText(
+                                    String.format(
+                                            "%.0f%%",
+                                            graphicPersonBadgeOverlapSlider.getValue()));
+                        }
+                    },
+                    graphicCommitted);
+        }
+        if (personBadgeDragAdjustCheckBox != null) {
+            personBadgeDragAdjustCheckBox
+                    .selectedProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                flushGraphicRebuildNow();
+                                scheduleEquipmentGraphicPersist();
+                            });
+        }
     }
 
     private void populateEquipmentGraphicBarFontComboItems() {
@@ -423,6 +455,22 @@ public final class EquipmentGanttGraphicTabController {
         if (personBadgeShowCheckBox != null) {
             personBadgeShowCheckBox.setSelected(s.equipmentGanttPersonBadgeEnabled());
         }
+        double bmo = s.equipmentGanttPersonBadgeOverlapPercent();
+        if (graphicPersonBadgeOverlapSlider != null) {
+            if (Double.isFinite(bmo) && bmo >= 0 && bmo <= 80) {
+                graphicPersonBadgeOverlapSlider.setValue(bmo);
+            } else {
+                graphicPersonBadgeOverlapSlider.setValue(
+                        EquipmentGraphicGanttPane.DEFAULT_PERSON_BADGE_OVERLAP_PERCENT);
+            }
+            if (graphicPersonBadgeOverlapLabel != null) {
+                graphicPersonBadgeOverlapLabel.setText(
+                        String.format("%.0f%%", graphicPersonBadgeOverlapSlider.getValue()));
+            }
+        }
+        if (personBadgeDragAdjustCheckBox != null) {
+            personBadgeDragAdjustCheckBox.setSelected(s.equipmentGanttPersonBadgeDragAdjustEnabled());
+        }
     }
 
     private void requestThrottledGraphicRebuild() {
@@ -509,6 +557,16 @@ public final class EquipmentGanttGraphicTabController {
 
     boolean snapshotEquipmentGanttPersonBadgeEnabled() {
         return personBadgeShowCheckBox == null || personBadgeShowCheckBox.isSelected();
+    }
+
+    double snapshotEquipmentGanttPersonBadgeOverlapPercent() {
+        return graphicPersonBadgeOverlapSlider != null
+                ? graphicPersonBadgeOverlapSlider.getValue()
+                : EquipmentGraphicGanttPane.DEFAULT_PERSON_BADGE_OVERLAP_PERCENT;
+    }
+
+    boolean snapshotEquipmentGanttPersonBadgeDragAdjustEnabled() {
+        return personBadgeDragAdjustCheckBox != null && personBadgeDragAdjustCheckBox.isSelected();
     }
 
     private void scheduleEquipmentGraphicPersist() {
@@ -783,7 +841,9 @@ public final class EquipmentGanttGraphicTabController {
                         snapshotEquipmentGanttShiftWheelHScrollPercent(),
                         badgeRowsForCurrentGraphic,
                         showBadges,
-                        badgeResolver);
+                        badgeResolver,
+                        snapshotEquipmentGanttPersonBadgeOverlapPercent(),
+                        snapshotEquipmentGanttPersonBadgeDragAdjustEnabled());
         if (shell != null) {
             shell.refreshEquipmentGanttObservedBadgeLabels(distinctBadgeLabelsFromGrid(badgeRowsForCurrentGraphic));
         }
