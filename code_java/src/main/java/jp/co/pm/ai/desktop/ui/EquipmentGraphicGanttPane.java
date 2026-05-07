@@ -1959,7 +1959,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     overlay.getChildren().add(sp);
                     if (badgeDragAdjustEnabled) {
                         sp.setMouseTransparent(false);
-                        sp.setCursor(Cursor.MOVE);
+                        /*
+                         * Label が子で最前面だとホバーが StackPane に届かずカーソル同期できないため透過する。
+                         */
+                        for (Node ch : sp.getChildren()) {
+                            ch.setMouseTransparent(true);
+                        }
+                        sp.setCursor(Cursor.DEFAULT);
                         /*
                          * ドラッグのクランプは DropShadow を含む getBoundsInLocal() を使わない。
                          * グローの広がりがバッジごとに異なり論理高さが帯より大きくなると可動域がほぼゼロになる。
@@ -2045,6 +2051,15 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         return Math.abs(localX - cx) <= halfW && Math.abs(localY - cy) <= halfH;
     }
 
+    /** 掴み可能ホバー時のみ MOVE、それ以外は DEFAULT（バッジ全域が MOVE に見える問題の回避）。 */
+    private static void updateBadgeDragHoverCursor(
+            StackPane sp, Bounds local, double localX, double localY) {
+        sp.setCursor(
+                isWithinBadgeDragGrabZone(local, localX, localY)
+                        ? Cursor.MOVE
+                        : Cursor.DEFAULT);
+    }
+
     private static void installBadgeDragHandlers(
             StackPane sp,
             Bounds local,
@@ -2058,12 +2073,40 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         final double[] press = new double[4];
         final boolean[] dragged = {false};
         final boolean[] armed = {false};
+        sp.addEventHandler(
+                MouseEvent.MOUSE_MOVED,
+                e -> {
+                    if (armed[0]) {
+                        sp.setCursor(Cursor.MOVE);
+                        return;
+                    }
+                    updateBadgeDragHoverCursor(sp, local, e.getX(), e.getY());
+                });
+        sp.addEventHandler(
+                MouseEvent.MOUSE_ENTERED,
+                e -> {
+                    if (armed[0]) {
+                        sp.setCursor(Cursor.MOVE);
+                        return;
+                    }
+                    updateBadgeDragHoverCursor(sp, local, e.getX(), e.getY());
+                });
+        sp.addEventHandler(
+                MouseEvent.MOUSE_EXITED,
+                e -> {
+                    if (armed[0]) {
+                        sp.setCursor(Cursor.MOVE);
+                    } else {
+                        sp.setCursor(Cursor.DEFAULT);
+                    }
+                });
         sp.setOnMousePressed(
                 e -> {
                     armed[0] =
                             e.getButton() == MouseButton.PRIMARY
                                     && isWithinBadgeDragGrabZone(local, e.getX(), e.getY());
                     if (!armed[0]) {
+                        updateBadgeDragHoverCursor(sp, local, e.getX(), e.getY());
                         return;
                     }
                     dragged[0] = false;
@@ -2071,6 +2114,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     press[1] = e.getSceneY();
                     press[2] = sp.getLayoutX();
                     press[3] = sp.getLayoutY();
+                    sp.setCursor(Cursor.MOVE);
                     e.consume();
                 });
         sp.setOnMouseDragged(
@@ -2079,6 +2123,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         return;
                     }
                     dragged[0] = true;
+                    sp.setCursor(Cursor.MOVE);
                     double dx = e.getSceneX() - press[0];
                     double dy = e.getSceneY() - press[1];
                     double nx = clampBadgeLayoutX(press[2] + dx, local, paneWidth);
@@ -2088,22 +2133,28 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     sp.setLayoutY(ny);
                     e.consume();
                 });
-        if (dragDeltaSink != null && badgeKey != null && !badgeKey.isEmpty()) {
-            sp.setOnMouseReleased(
-                    e -> {
-                        if (!armed[0]) {
-                            return;
-                        }
-                        if (!dragged[0]) {
-                            return;
-                        }
+        sp.setOnMouseReleased(
+                e -> {
+                    if (e.getButton() != MouseButton.PRIMARY) {
+                        return;
+                    }
+                    boolean sink =
+                            armed[0]
+                                    && dragged[0]
+                                    && dragDeltaSink != null
+                                    && badgeKey != null
+                                    && !badgeKey.isEmpty();
+                    if (sink) {
                         double tdx = sp.getLayoutX() - defaultLayoutX;
                         double tdy = sp.getLayoutY() - defaultLayoutY;
                         dragDeltaSink.accept(
                                 badgeKey, new EquipmentGanttBadgeDragDelta(tdx, tdy));
                         e.consume();
-                    });
-        }
+                    }
+                    armed[0] = false;
+                    dragged[0] = false;
+                    updateBadgeDragHoverCursor(sp, local, e.getX(), e.getY());
+                });
     }
 
     private static double clampBadgeLayoutX(double layoutX, Bounds local, double paneWidth) {
