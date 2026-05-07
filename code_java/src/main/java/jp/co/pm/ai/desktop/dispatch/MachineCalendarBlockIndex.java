@@ -63,7 +63,7 @@ public final class MachineCalendarBlockIndex {
      */
     public static LoadOutcome loadOutcome(Path masterWorkbook, Path pythonExe, Path pythonScriptDir)
             throws Exception {
-        String payload = runExportScriptRawPayload(masterWorkbook, pythonExe, pythonScriptDir);
+        String payload = runExportScriptRawPayload(Map.of(), masterWorkbook, pythonExe, pythonScriptDir);
         if (payload == null) {
             return new LoadOutcome(empty(), null, null);
         }
@@ -76,6 +76,14 @@ public final class MachineCalendarBlockIndex {
      * {@code missing_file} when the file is absent.
      */
     public static LoadOutcome loadOutcomeFromJsonFile(Path jsonFile) throws Exception {
+        return loadOutcomeFromJsonFile(Map.of(), jsonFile);
+    }
+
+    /**
+     * Same as {@link #loadOutcomeFromJsonFile(Path)}; pass {@code shell.snapshotUiEnv()} for {@link AgentDebugLog}
+     * resolution (agent-debug-ndjson-logging.mdc).
+     */
+    public static LoadOutcome loadOutcomeFromJsonFile(Map<String, String> ui, Path jsonFile) throws Exception {
         if (jsonFile == null || !Files.isRegularFile(jsonFile)) {
             return new LoadOutcome(empty(), "missing_file", null);
         }
@@ -84,13 +92,21 @@ public final class MachineCalendarBlockIndex {
         LoadOutcome lo = parseLoadOutcome(trimmed);
         // #region agent log
         try {
+            Map<String, String> u = ui != null ? ui : Map.of();
             Map<String, Object> d = new LinkedHashMap<>();
             d.put("jsonFile", jsonFile.toString());
             d.put("bytes", s.length());
             d.put("pythonJsonError", lo.pythonJsonError());
             d.put("blocksEmpty", lo.index().isEmpty());
+            try {
+                Path resolved = AgentDebugLog.resolveNdjsonPath(u, "ecf65d");
+                if (resolved != null) {
+                    d.put("resolvedNdjsonPath", resolved.toString());
+                }
+            } catch (Throwable ignored2) {
+            }
             AgentDebugLog.appendStructured(
-                    Map.of(),
+                    u,
                     "ecf65d",
                     "H4",
                     "MachineCalendarBlockIndex.loadOutcomeFromJsonFile",
@@ -108,7 +124,18 @@ public final class MachineCalendarBlockIndex {
      */
     public static LoadOutcome exportMasterWorkbookToJsonFile(
             Path masterWorkbook, Path pythonExe, Path pythonScriptDir, Path outputJsonFile) throws Exception {
-        String payload = runExportScriptRawPayload(masterWorkbook, pythonExe, pythonScriptDir);
+        return exportMasterWorkbookToJsonFile(Map.of(), masterWorkbook, pythonExe, pythonScriptDir, outputJsonFile);
+    }
+
+    public static LoadOutcome exportMasterWorkbookToJsonFile(
+            Map<String, String> ui,
+            Path masterWorkbook,
+            Path pythonExe,
+            Path pythonScriptDir,
+            Path outputJsonFile)
+            throws Exception {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String payload = runExportScriptRawPayload(u, masterWorkbook, pythonExe, pythonScriptDir);
         if (payload == null) {
             return new LoadOutcome(empty(), null, null);
         }
@@ -135,7 +162,21 @@ public final class MachineCalendarBlockIndex {
             Path pythonScriptDir,
             Path outputJsonFile)
             throws Exception {
-        LoadOutcome lo = exportMasterWorkbookToJsonFile(primaryWorkbook, pythonExe, pythonScriptDir, outputJsonFile);
+        return exportWithSummaryFallbackToJsonFile(
+                Map.of(), primaryWorkbook, summaryWorkbook, pythonExe, pythonScriptDir, outputJsonFile);
+    }
+
+    public static LoadOutcome exportWithSummaryFallbackToJsonFile(
+            Map<String, String> ui,
+            Path primaryWorkbook,
+            Path summaryWorkbook,
+            Path pythonExe,
+            Path pythonScriptDir,
+            Path outputJsonFile)
+            throws Exception {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        LoadOutcome lo =
+                exportMasterWorkbookToJsonFile(u, primaryWorkbook, pythonExe, pythonScriptDir, outputJsonFile);
         if (!lo.index().isEmpty() || lo.pythonJsonError() != null) {
             return lo;
         }
@@ -147,14 +188,16 @@ public final class MachineCalendarBlockIndex {
         if (pNorm.equals(sNorm)) {
             return lo;
         }
-        return exportMasterWorkbookToJsonFile(summaryWorkbook, pythonExe, pythonScriptDir, outputJsonFile);
+        return exportMasterWorkbookToJsonFile(u, summaryWorkbook, pythonExe, pythonScriptDir, outputJsonFile);
     }
 
     /**
      * @return JSON payload string for {@link #parseLoadOutcome(String)}, or {@code null} if prerequisites/process failed.
      */
-    private static String runExportScriptRawPayload(Path masterWorkbook, Path pythonExe, Path pythonScriptDir)
+    private static String runExportScriptRawPayload(
+            Map<String, String> ui, Path masterWorkbook, Path pythonExe, Path pythonScriptDir)
             throws Exception {
+        Map<String, String> u = ui != null ? ui : Map.of();
         if (masterWorkbook == null || !Files.isRegularFile(masterWorkbook)) {
             return null;
         }
@@ -190,7 +233,7 @@ public final class MachineCalendarBlockIndex {
                 d.put("script", script.toString());
                 d.put("reason", "timeout_120s");
                 AgentDebugLog.appendStructured(
-                        Map.of(),
+                        u,
                         "ecf65d",
                         "H6",
                         "MachineCalendarBlockIndex.runExportScriptRawPayload",
@@ -213,7 +256,7 @@ public final class MachineCalendarBlockIndex {
                                 ? rawStdout.substring(rawStdout.length() - 800)
                                 : rawStdout);
                 AgentDebugLog.appendStructured(
-                        Map.of(),
+                        u,
                         "ecf65d",
                         "H6",
                         "MachineCalendarBlockIndex.runExportScriptRawPayload",

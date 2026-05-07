@@ -68,11 +68,24 @@ public final class AgentDebugLog {
         }
 
         Path repo = AppPaths.resolveRepoRoot(u);
+        /*
+         * Nested clone: repo leaf is Production-Control-System → workspace .cursor is parent(repo)/.cursor
+         * (see agent-debug-ndjson-logging.mdc). Flat repo: repo/.cursor (parent would be drive root — wrong).
+         */
         Path parent = repo.getParent();
-        if (parent != null) {
+        if (parent != null && isProductionControlSystemRepoLeaf(repo)) {
             return parent.resolve(".cursor").resolve(fileName).toAbsolutePath().normalize();
         }
         return repo.resolve(".cursor").resolve(fileName).toAbsolutePath().normalize();
+    }
+
+    private static boolean isProductionControlSystemRepoLeaf(Path repo) {
+        if (repo == null) {
+            return false;
+        }
+        Path leaf = repo.getFileName();
+        return leaf != null
+                && "Production-Control-System".equalsIgnoreCase(leaf.toString());
     }
 
     /**

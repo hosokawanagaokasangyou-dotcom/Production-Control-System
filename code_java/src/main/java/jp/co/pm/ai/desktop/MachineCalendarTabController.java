@@ -150,7 +150,7 @@ public final class MachineCalendarTabController {
                         }
                         // #endregion
                         return MachineCalendarBlockIndex.exportWithSummaryFallbackToJsonFile(
-                                primary, summary, pyExe, pyDir, jsonOut);
+                                shellRef.snapshotUiEnv(), primary, summary, pyExe, pyDir, jsonOut);
                     }
                 };
         task.setOnSucceeded(
