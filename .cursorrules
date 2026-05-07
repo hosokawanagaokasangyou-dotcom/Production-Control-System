@@ -20,6 +20,14 @@
 
 ---
 
+## ソースの文字エンコーディング（UTF-8）
+
+正本: **`.cursor/rules/source-encoding-utf8-except-bas.mdc`**
+
+要点: **`.bas` / `.BAS` を除くソース・テキスト系ファイルは UTF-8 で作成・保存する**。VBA テキストのみ例外。
+
+---
+
 ## Java（文字列・コメント）
 
 正本: **`.cursor/rules/java-utf8-string-literals.mdc`**
