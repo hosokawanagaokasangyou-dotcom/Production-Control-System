@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.regex.Pattern;
+
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -52,6 +53,7 @@ import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
 import jp.co.pm.ai.desktop.ui.GanttSheetKind;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 /**
  * 「結果_設備ガント」等の時刻軸シートを plan JSON から読み、グラフィック表示する独立タブ。
@@ -680,6 +682,20 @@ public final class EquipmentGanttGraphicTabController {
     void bindShell(MainShellController shell) {
         this.shell = shell;
         this.ownerStage = shell.getPrimaryStage();
+        // #region agent log
+        if (shell != null) {
+            Map<String, Object> d = new LinkedHashMap<>();
+            d.put("runId", "pre-fix");
+            d.put("event", "equipment_bindShell_schedule_reloadFromFields");
+            AgentDebugLog.appendStructured(
+                    shell.snapshotUiEnv(),
+                    "e02e86",
+                    "H1",
+                    "EquipmentGanttGraphicTabController.bindShell",
+                    "runLater queued",
+                    d);
+        }
+        // #endregion
         Platform.runLater(this::reloadFromFields);
     }
 
@@ -922,6 +938,21 @@ public final class EquipmentGanttGraphicTabController {
         if (contentPane == null || st == null) {
             return;
         }
+        // #region agent log
+        if (shell != null) {
+            Map<String, Object> d = new LinkedHashMap<>();
+            d.put("runId", "pre-fix");
+            d.put("masterMemberCountAtGraphicBuild", shell.ganttDebugMasterMemberCount());
+            d.put("phase", "applyGraphicCenter_enter");
+            AgentDebugLog.appendStructured(
+                    shell.snapshotUiEnv(),
+                    "e02e86",
+                    "H1",
+                    "EquipmentGanttGraphicTabController.applyGraphicCenter",
+                    "graphic center build",
+                    d);
+        }
+        // #endregion
         Path planPath =
                 lastLoadedPlanPath != null && !lastLoadedPlanPath.isBlank()
                         ? Path.of(lastLoadedPlanPath)

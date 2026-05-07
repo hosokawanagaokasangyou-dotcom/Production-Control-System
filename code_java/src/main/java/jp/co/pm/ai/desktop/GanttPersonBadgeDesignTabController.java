@@ -9,6 +9,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
@@ -41,9 +42,17 @@ import jp.co.pm.ai.desktop.io.SkillsSheetMemberReader;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 /** 設備ガント・担当バッジのデザイン編集タブ（master skills メンバー表＋セッション保存）。 */
 public final class GanttPersonBadgeDesignTabController {
+
+    private static final AtomicInteger DEBUG_BADGE_RESOLVE_SAMPLES = new AtomicInteger();
+
+    /** Cursor debug e02e86: skills メンバー名の件数（ガント初回描画との順序検証用）。 */
+    int ganttDebugMasterMemberCount() {
+        return masterMemberNames == null ? 0 : masterMemberNames.size();
+    }
 
     /** 表の先頭行：マスタに無いバッジ向けの全体既定。 */
     public static final String GLOBAL_EDIT_LABEL = "（既定・マスタ外のバッジ）";
@@ -320,6 +329,20 @@ public final class GanttPersonBadgeDesignTabController {
     void bindShell(MainShellController mainShell) {
         this.shell = mainShell;
         autoLoadedSkillsOnce = false;
+        // #region agent log
+        if (shell != null) {
+            Map<String, Object> d = new LinkedHashMap<>();
+            d.put("runId", "pre-fix");
+            d.put("event", "badge_bindShell_schedule_trySilentInitialMasterLoad");
+            AgentDebugLog.appendStructured(
+                    shell.snapshotUiEnv(),
+                    "e02e86",
+                    "H1",
+                    "GanttPersonBadgeDesignTabController.bindShell",
+                    "runLater queued",
+                    d);
+        }
+        // #endregion
         Platform.runLater(this::trySilentInitialMasterLoad);
     }
 
@@ -389,6 +412,24 @@ public final class GanttPersonBadgeDesignTabController {
                 matchKeys.add(PersonBadgeStyle.normalizeLabelKey(raw));
             }
         }
+        // #region agent log
+        int sample = DEBUG_BADGE_RESOLVE_SAMPLES.incrementAndGet();
+        if (sample <= 2 && shell != null) {
+            Map<String, Object> d = new LinkedHashMap<>();
+            d.put("runId", "pre-fix");
+            d.put("sample", sample);
+            d.put("masterMemberCount", masterMemberNames.size());
+            d.put("matchKeysSize", matchKeys.size());
+            d.put("hasLegacyForFrag", legacyLabelStylesFromSession.containsKey(frag));
+            AgentDebugLog.appendStructured(
+                    shell.snapshotUiEnv(),
+                    "e02e86",
+                    "H2",
+                    "GanttPersonBadgeDesignTabController.resolveStyleForBadgeLabelRaw",
+                    "style resolve sample",
+                    d);
+        }
+        // #endregion
         if (matchKeys.size() == 1) {
             PersonBadgeStyle st = perMemberStyles.get(matchKeys.iterator().next());
             return st != null ? st : globalStyle;
@@ -493,6 +534,21 @@ public final class GanttPersonBadgeDesignTabController {
         try {
             masterMemberNames = SkillsSheetMemberReader.readMemberDisplayNames(master);
             autoLoadedSkillsOnce = true;
+            // #region agent log
+            if (shell != null) {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("runId", "pre-fix");
+                d.put("masterMemberCount", masterMemberNames.size());
+                d.put("phase", "after_skills_read");
+                AgentDebugLog.appendStructured(
+                        shell.snapshotUiEnv(),
+                        "e02e86",
+                        "H1",
+                        "GanttPersonBadgeDesignTabController.loadMembersFromMasterBook",
+                        "skills member names loaded",
+                        d);
+            }
+            // #endregion
             suppress = true;
             try {
                 rebuildTableItems();
@@ -514,6 +570,25 @@ public final class GanttPersonBadgeDesignTabController {
             refreshPreview();
             if (badgeMemberTable != null) {
                 badgeMemberTable.refresh();
+            }
+            /*
+             * skills メンバー一覧が揃うまで resolveStyleForBadgeLabelRaw は matchKeys が空になりやすい。
+             * 設備ガントの初回 runLater(reloadFromFields) がマスタ読込より先に走るため、読込完了後に再描画する。
+             */
+            if (shell != null) {
+                // #region agent log
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("runId", "post-fix");
+                d.put("event", "refreshEquipmentGanttGraphicForBadgeChange_after_skills");
+                AgentDebugLog.appendStructured(
+                        shell.snapshotUiEnv(),
+                        "e02e86",
+                        "H5",
+                        "GanttPersonBadgeDesignTabController.loadMembersFromMasterBook",
+                        "trigger equipment gantt rebuild after skills",
+                        d);
+                // #endregion
+                shell.refreshEquipmentGanttGraphicForBadgeChange();
             }
         } catch (IOException ex) {
             if (showAlertOnFailure) {
