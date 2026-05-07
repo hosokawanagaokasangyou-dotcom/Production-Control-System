@@ -896,6 +896,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         personBadgeDragDeltaSink);
             }
             StackPane rowStack = new StackPane(rowCanvas, badgePane);
+            /*
+             * Canvas と Pane を並べるだけでも後勝ちだが、子追加や再有効化時に順序がずれたとき備えて明示的に最前面へ。
+             */
+            if (showPersonBadges && personBadgeDragAdjustEnabled) {
+                badgePane.toFront();
+            }
 
             String tip =
                     (dr.rowSummary() != null ? dr.rowSummary() : "")
@@ -1959,12 +1965,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     overlay.getChildren().add(sp);
                     if (badgeDragAdjustEnabled) {
                         sp.setMouseTransparent(false);
-                        /*
-                         * Label が子で最前面だとホバーが StackPane に届かずカーソル同期できないため透過する。
-                         */
-                        for (Node ch : sp.getChildren()) {
-                            ch.setMouseTransparent(true);
-                        }
                         sp.setCursor(Cursor.DEFAULT);
                         /*
                          * ドラッグのクランプは DropShadow を含む getBoundsInLocal() を使わない。
@@ -2060,6 +2060,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         : Cursor.DEFAULT);
     }
 
+    /**
+     * 子 {@link Label} がイベントソースのとき {@code e.getX/Y} は Label 座標になるため、シーン座標から
+     * {@link StackPane} ローカルへ変換して掴み判定・カーソル同期に使う。
+     */
+    private static Point2D badgeMouseLocalInStackPane(StackPane sp, MouseEvent e) {
+        return sp.sceneToLocal(e.getSceneX(), e.getSceneY());
+    }
+
     private static void installBadgeDragHandlers(
             StackPane sp,
             Bounds local,
@@ -2080,7 +2088,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         sp.setCursor(Cursor.MOVE);
                         return;
                     }
-                    updateBadgeDragHoverCursor(sp, local, e.getX(), e.getY());
+                    Point2D lp = badgeMouseLocalInStackPane(sp, e);
+                    updateBadgeDragHoverCursor(sp, local, lp.getX(), lp.getY());
                 });
         sp.addEventHandler(
                 MouseEvent.MOUSE_ENTERED,
@@ -2089,7 +2098,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         sp.setCursor(Cursor.MOVE);
                         return;
                     }
-                    updateBadgeDragHoverCursor(sp, local, e.getX(), e.getY());
+                    Point2D lp = badgeMouseLocalInStackPane(sp, e);
+                    updateBadgeDragHoverCursor(sp, local, lp.getX(), lp.getY());
                 });
         sp.addEventHandler(
                 MouseEvent.MOUSE_EXITED,
@@ -2102,11 +2112,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 });
         sp.setOnMousePressed(
                 e -> {
+                    Point2D lp = badgeMouseLocalInStackPane(sp, e);
                     armed[0] =
                             e.getButton() == MouseButton.PRIMARY
-                                    && isWithinBadgeDragGrabZone(local, e.getX(), e.getY());
+                                    && isWithinBadgeDragGrabZone(local, lp.getX(), lp.getY());
                     if (!armed[0]) {
-                        updateBadgeDragHoverCursor(sp, local, e.getX(), e.getY());
+                        updateBadgeDragHoverCursor(sp, local, lp.getX(), lp.getY());
                         return;
                     }
                     dragged[0] = false;
@@ -2153,7 +2164,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     }
                     armed[0] = false;
                     dragged[0] = false;
-                    updateBadgeDragHoverCursor(sp, local, e.getX(), e.getY());
+                    Point2D lp = badgeMouseLocalInStackPane(sp, e);
+                    updateBadgeDragHoverCursor(sp, local, lp.getX(), lp.getY());
                 });
     }
 
