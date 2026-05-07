@@ -1,22 +1,41 @@
-あなたはJAVAとjavafxとpythonの専門家です
-
----
-## Git（コミット運用・メッセージ）
-**作業完了時（変更後）**: **`.cursor/rules/git-commit-push-after-code-changes.mdc`** — そのターンで変更・追加した版管理対象は **漏れなく `git add` → `commit` → `push`**。依頼外の差分が混在する場合はコミットを分け、応答で `git status` の要約を報告する。**`*.xlsm` に未コミットの変更がある場合も同ファイルに従い必ずコミット・push**（節「Excel マクロブック」）。**編集前のローカルコミットは不要**（旧ルールは `.cursor/rules/pre-edit-git-commit-push.mdc` に廃止旨を記載）。
-要点（Generate 用）: **日本語のみ**（英語だけの件名は出さない）。1 行目は短い要約。必要なら `feat:` / `fix:` 等＋日本語説明。
-
-### version.txt 自動バンプ
-正本: **`.cursor/rules/version-txt-bump-on-commit.mdc`**
-要点: **`git commit` のたびにリポジトリ直下の `version.txt` を +0.01**。実装は `scripts/bump_version_txt.py` ＋ `scripts/git-hooks/pre-commit`。各クローンで一度 **`git config core.hooksPath scripts/git-hooks`** が必要。`--no-verify` で勝手にスキップしない。
-
----
-## Java（文字列・コメント）
-正本: **`.cursor/rules/java-utf8-string-literals.mdc`**
-要点: **`*.java` では日本語を `\uXXXX` にしない**。UTF-8 のまま文字列リテラル・コメント・Javadoc に書く。
-
----
-## レビュー・指摘のトーン（厳格シニア）
-正本: **`.cursor/rules/strict-senior-review-tone.mdc`**
-要点: **誤り・バグの可能性・非効率は忖度や長い前置きなく単刀直入に指摘**。**修正案はベストプラクティスに基づき簡潔にのみ**。
-
-
+**Java**・**JavaFX**・**Python** を第一に扱う。コード・説明・レビューでは各エコシステムの公式表記と現代的なベストプラクティスに従う。
+
+---
+
+## Git（コミット運用・メッセージ）
+
+**作業完了時（変更後）**: **`.cursor/rules/git-commit-push-after-code-changes.mdc`** — そのターンで変更・追加した版管理対象は **漏れなく `git add` → `commit` → `push`**。依頼外の差分が混在する場合はコミットを分け、応答で `git status` の要約を報告する。**`*.xlsm` に未コミットの変更がある場合も同ファイルに従い必ずコミット・push**（節「Excel マクロブック」）。**編集前のローカルコミットは不要**（旧ルールは `.cursor/rules/pre-edit-git-commit-push.mdc` に廃止旨を記載）。
+
+要点（Generate 用）: **日本語のみ**（英語だけの件名は出さない）。1 行目は短い要約。必要なら `feat:` / `fix:` 等＋日本語説明。
+
+
+
+### version.txt 自動バンプ
+
+正本: **`.cursor/rules/version-txt-bump-on-commit.mdc`**
+
+要点: **`git commit` のたびにリポジトリ直下の `version.txt` を +0.01**。実装は `scripts/bump_version_txt.py` ＋ `scripts/git-hooks/pre-commit`。各クローンで一度 **`git config core.hooksPath scripts/git-hooks`** が必要。`--no-verify` で勝手にスキップしない。
+
+
+
+---
+
+## Java（文字列・コメント）
+
+正本: **`.cursor/rules/java-utf8-string-literals.mdc`**
+
+要点: **`*.java` では日本語を `\uXXXX` にしない**。UTF-8 のまま文字列リテラル・コメント・Javadoc に書く。
+
+
+
+---
+
+## レビュー・指摘のトーン（厳格シニア）
+
+正本: **`.cursor/rules/strict-senior-review-tone.mdc`**
+
+要点: **誤り・バグの可能性・非効率は忖度や長い前置きなく単刀直入に指摘**。**修正案はベストプラクティスに基づき簡潔にのみ**。
+
+
+
+
