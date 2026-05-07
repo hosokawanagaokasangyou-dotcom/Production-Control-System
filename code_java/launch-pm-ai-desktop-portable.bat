@@ -1,16 +1,14 @@
 @echo off
-rem ASCII-only: UTF-8 Japanese in .bat breaks cmd.exe parsing on many PCs.
-rem Do not paste lines into PowerShell; double-click or: .\launch-pm-ai-desktop.bat
+rem ASCII-only. Keep javafx-* version suffix in sync with pom.xml javafx.version (currently 26.0.1).
+rem Do not paste into PowerShell; run: .\launch-pm-ai-desktop.bat
 setlocal EnableExtensions EnableDelayedExpansion
-
-rem Portable launcher: keep next to PmAiDesktop.exe, app\, runtime\, pm-ai-data\
 
 set "ROOT=%~dp0"
 if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
 cd /d "%ROOT%"
 
 if not exist "%ROOT%\app" (
-    echo [ERROR] Missing app folder. Put this bat in app-image root (e.g. dist\PmAiDesktop^).
+    echo [ERROR] Missing app folder. Put this bat next to PmAiDesktop.exe / app / runtime.
     echo Current: "%ROOT%"
     pause
     exit /b 1
@@ -22,26 +20,21 @@ if exist "%JAVA_EXE%" goto :have_java
 if defined JAVA_HOME (
     if exist "%JAVA_HOME%\bin\java.exe" (
         set "JAVA_EXE=%JAVA_HOME%\bin\java.exe"
-        echo [WARN] Bundled runtime\bin\java.exe missing; using JAVA_HOME.
-        echo        "%JAVA_EXE%"
+        echo [WARN] Using JAVA_HOME java.exe (bundled runtime missing).
         goto :have_java
     )
 )
 
 echo [ERROR] Java not found: "%ROOT%\runtime\bin\java.exe"
-echo.
-echo Note: pm-ai-data\runtime is Python only. Need runtime\bin\java.exe beside this bat.
-echo.
-dir /b "%ROOT%"
 pause
 exit /b 1
 
 :have_java
 
-rem Heap/prism match pom.xml and package_app.ps1. Do NOT use --add-opens javafx.* here:
-rem classpath-only JavaFX resolves too late and JDK prints "Unknown module: javafx.controls".
+rem OpenJFX Windows modular jars (must match files under app\ from package_app.ps1).
+set "PM_AI_JFX_MODPATH=%ROOT%\app\javafx-base-26.0.1-win.jar;%ROOT%\app\javafx-controls-26.0.1-win.jar;%ROOT%\app\javafx-fxml-26.0.1-win.jar;%ROOT%\app\javafx-graphics-26.0.1-win.jar;%ROOT%\app\javafx-swing-26.0.1-win.jar"
 
-"%JAVA_EXE%" -Dfile.encoding=UTF-8 -Xms3g -Xmx3g -XX:+HeapDumpOnOutOfMemoryError -XX:+UseStringDeduplication -Dprism.order=sw -classpath "%ROOT%\app\*" jp.co.pm.ai.desktop.PmAiFxApp %*
+"%JAVA_EXE%" -Dfile.encoding=UTF-8 -Xms3g -Xmx3g -XX:+HeapDumpOnOutOfMemoryError -XX:+UseStringDeduplication -Dprism.order=sw --module-path "%PM_AI_JFX_MODPATH%" --add-modules javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.swing -classpath "%ROOT%\app\*" jp.co.pm.ai.desktop.PmAiFxApp %*
 
 set EXITCODE=!ERRORLEVEL!
 
