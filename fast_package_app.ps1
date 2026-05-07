@@ -3,7 +3,7 @@
 # Prerequisites:
 #   - Run build on Windows (OpenJFX win classifier required).
 #   - Maven uses JAVA_HOME on PATH (compile must match maven.compiler.release).
-#   - Bundled JVM: Temurin JDK zip -> Cash_PMD -> jpackage --runtime-image. Override: -JdkRuntimeImage or PM_AI_JDK_RUNTIME_IMAGE.
+#   - Bundled JVM: Temurin JDK zip -> code_java/Cash_PMD -> jpackage --runtime-image. Override: -JdkRuntimeImage or PM_AI_JDK_RUNTIME_IMAGE.
 #   - JavaFX: OpenJFX Windows win jars downloaded from Maven Central into package_input (same version as pom javafx.version).
 #   - For --type exe/msi: WiX Toolset on PATH (candle/light).
 #   - Bundled Python: pip runs at build time - internet on first run or empty cache.
@@ -28,7 +28,7 @@ param(
     # キャッシュを無視して強制的に再ダウンロードする場合に使用します
     [switch]$RefreshCache,
 
-    # JDK root for --runtime-image (bin\java.exe). Empty = download per pom.xml into Cash_PMD.
+    # JDK root for --runtime-image (bin\java.exe). Empty = download per pom.xml into code_java/Cash_PMD.
     [string]$JdkRuntimeImage = '',
 
     # Parent directory for jpackage --dest only (must be ASCII-only on some JDK/Windows builds).
@@ -481,7 +481,7 @@ function Copy-BundleToDist {
     $rmLines.Add('Excluded files (all profiles): *.log, ~$* (Excel lock).')
     $rmLines.Add("This folder sits next to $($AppExeBaseName).exe.")
     $rmLines.Add('Version: repo-root version.txt (included here). Optional sync via PM_AI_PORTABLE_BUNDLE_SOURCE_DIR.')
-    $rmLines.Add('Python: pm-ai-data\runtime\python-embed\python.exe (cache under pm-ai-package-release\Cash_PMD).')
+    $rmLines.Add('Python: pm-ai-data\runtime\python-embed\python.exe (build cache: code_java\Cash_PMD, not bundled).')
     $rmLines.Add('Default inputs: input\task-input , input\actual-detail.')
     $rmLines.Add('Per-user session data: ~/.pm-ai-desktop (initialized per machine/user).')
     $rmLines.Add('')
@@ -557,8 +557,14 @@ $packageInput = Join-Path $CodeJavaRoot 'package_input'
 Copy-JpackageInputDirectory -RootPath $CodeJavaRoot -MainJarName $proj.MainJar -DestPath $packageInput
 
 New-Item -ItemType Directory -Path $ReleaseRoot -Force | Out-Null
-$cacheRoot = Join-Path $ReleaseRoot 'Cash_PMD'
+# Download cache (JDK/JavaFX/Python embed) lives under code_java/Cash_PMD so pm-ai-package-release/ stays bundle outputs only.
+$cacheRoot = Join-Path $CodeJavaRoot 'Cash_PMD'
 New-Item -ItemType Directory -Path $cacheRoot -Force | Out-Null
+$legacyCashUnderRelease = Join-Path $ReleaseRoot 'Cash_PMD'
+if (Test-Path -LiteralPath $legacyCashUnderRelease) {
+    Write-Host "--- Remove legacy Cash_PMD under $ReleaseDirName (cache moved to code_java\Cash_PMD) ---" -ForegroundColor DarkGray
+    Remove-Item -Recurse -Force -LiteralPath $legacyCashUnderRelease -ErrorAction SilentlyContinue
+}
 
 Write-Host "--- Step 3: JavaFX Windows runtime (Maven Central win jars -> package_input) ---" -ForegroundColor Cyan
 $javafxVer = Expand-PomPropertyPlaceholder -Raw ([string]$pomProps['javafx.version']) -Props $pomProps
@@ -622,7 +628,7 @@ elseif ($WorkspaceRoot -match '[^\x00-\x7F]') {
 }
 $usedStagingForJpackage = ($jpkgDestParent -ne $distFinal)
 
-# Remove only prior jpackage app folder and bundle outputs (never delete whole $ReleaseRoot: Cash_PMD lives there).
+# Remove only prior jpackage app folder and bundle outputs (download cache is code_java\Cash_PMD, not under $ReleaseRoot).
 $bundleOutInitial = Join-Path $ReleaseRoot $BundleInitialName
 $bundleOutUpgrade = Join-Path $ReleaseRoot $BundleUpgradeName
 $pathsToClean = @()
@@ -872,7 +878,7 @@ foreach ($bd in @($bundleOutInitial, $bundleOutUpgrade)) {
 }
 
 Write-Host "--- Done ---" -ForegroundColor Green
-Write-Host "Release folder: $ReleaseRoot (downloads cache: Cash_PMD)"
+Write-Host "Release folder: $ReleaseRoot (bundles only). Download cache: $cacheRoot"
 Write-Host "Initial install: $(Join-Path $bundleOutInitial ($APP_NAME + '.exe'))"
 Write-Host "Version upgrade: $(Join-Path $bundleOutUpgrade ($APP_NAME + '.exe'))"
 Write-Host "Portable data: $(Join-Path $bundleOutInitial 'pm-ai-data') (Initial) / $(Join-Path $bundleOutUpgrade 'pm-ai-data') (Upgrade)"

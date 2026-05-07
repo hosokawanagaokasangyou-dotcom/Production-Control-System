@@ -12,6 +12,8 @@ code_java/package_input/
 code_java/dist/
 **/__pycache__/
 **/.pytest_cache/
-
-# fast_package_app.ps1: release folder (PMD_* bundles + Cash_PMD under repo root)
+# fast_package_app.ps1: release output (PMD_* bundles under repo root). Download cache: code_java/Cash_PMD/
 pm-ai-package-release/
+/cash_PMD/
+/code_java/PMD_fast/
+/code_java/Cash_PMD/
