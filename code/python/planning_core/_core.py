@@ -146,14 +146,13 @@ GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
 
 # Gemini API のモデルコード（Google AI for Developers のモデルページの Model code に準拠）
 # https://ai.google.dev/gemini-api/docs/models
-# 既定の試行順（精度の高い順）。gemini-3-flash-preview は応答遅延のため列から除外。
+# 既定の試行順: Flash → Flash-Lite → Pro（各モデル失敗・試行上限後に次点へ）。
 # マクロブック「設定」シート D/E で有効行があるときはそちらを優先。
 # 利用不可・同一モデルの試行上限消化後は _gemini_generate_content_with_retry が次点へ進む。
 GEMINI_MODEL_IDS_BY_QUALITY: tuple[str, ...] = (
-    "gemini-2.5-pro",
     "gemini-2.5-flash",
-    "gemini-3.1-flash-lite-preview",
     "gemini-2.5-flash-lite",
+    "gemini-2.5-pro",
 )
 # 既定の Flash 系モデル ID（試行列先頭が Pro になり得るため [0] とは一致させない）
 GEMINI_MODEL_FLASH = "gemini-2.5-flash"
@@ -4349,7 +4348,7 @@ def _gemini_generate_content_with_retry(
     """generate_content を再試行する（Gemini generateContent 共通）。
 
     - モデル列: マクロブック「設定」シート D/E で有効化した ID（上から順）、なければ
-      GEMINI_MODEL_IDS_BY_QUALITY（精度高い順）。環境変数 GEMINI_MODEL で単一固定、
+      GEMINI_MODEL_IDS_BY_QUALITY（既定: Flash → Flash-Lite → Pro）。環境変数 GEMINI_MODEL で単一固定、
       GEMINI_MODEL_TRY_ORDER（カンマ区切り）で上書き可。引数 model を渡したときはその1件のみ。
     - 同一モデルあたり最大 _GEMINI_RETRY_MAX_ATTEMPTS 回（既定 3、GEMINI_RETRY_MAX_ATTEMPTS で変更）。
       そのモデルで試行を使い切ったら、列の次のモデルへ進む（試すモデルがなくなるまで）。
