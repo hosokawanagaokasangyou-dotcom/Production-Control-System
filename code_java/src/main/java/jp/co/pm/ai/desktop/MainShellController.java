@@ -1638,6 +1638,8 @@ public final class MainShellController {
                             continue;
                         }
                         if (tabOrdinal == idx) {
+                            pane.applyCss();
+                            pane.layout();
                             if (rgbHexOrNull != null
                                     && !rgbHexOrNull.isBlank()
                                     && labelFillHexOrNull != null
@@ -1657,18 +1659,23 @@ public final class MainShellController {
                                             if (!labeled.textFillProperty().isBound()) {
                                                 labeled.setTextFill(fillCol);
                                             }
+                                            labeled.setStyle("-fx-text-fill: " + tf + ";");
                                         }
                                         Runnable refill =
                                                 () -> {
                                                     try {
+                                                        pane.applyCss();
+                                                        pane.layout();
                                                         applyPreviewDescendantTextFillRecursive(
                                                                 lab,
                                                                 Color.web(tf),
                                                                 tf);
-                                                        if (lab instanceof Labeled ld
-                                                                && !ld.textFillProperty()
-                                                                        .isBound()) {
-                                                            ld.setTextFill(Color.web(tf));
+                                                        if (lab instanceof Labeled ld) {
+                                                            if (!ld.textFillProperty()
+                                                                    .isBound()) {
+                                                                ld.setTextFill(Color.web(tf));
+                                                            }
+                                                            ld.setStyle("-fx-text-fill: " + tf + ";");
                                                         }
                                                     } catch (IllegalArgumentException ignored) {
                                                         // keep chrome from outer try
