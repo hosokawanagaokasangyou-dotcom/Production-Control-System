@@ -467,7 +467,12 @@ public final class MainShellController {
         tabPane
                 .getSelectionModel()
                 .selectedItemProperty()
-                .addListener((obs, prevTab, newTab) -> emitShellTabNavigation());
+                .addListener(
+                        (obs, prevTab, newTab) -> {
+                            emitShellTabNavigation();
+                            /* :selected 由来の -fx-text-fill がインラインより後勝ちになることがあるため再適用 */
+                            refreshMainShellTabHeaderChromeFromStoredColors();
+                        });
         tabPane
                 .getTabs()
                 .addListener(
@@ -517,6 +522,7 @@ public final class MainShellController {
                             mainRunTabController.refreshLogThemeCells();
                             equipmentGanttGraphicTabController.refreshGraphicForTheme();
                             refreshPushButtonStylesheet();
+                            refreshMainShellTabHeaderChromeFromStoredColors();
                         });
         Platform.runLater(mainRunTabController::refreshLogThemeCells);
         if (pushButtonDesignTabController != null) {
@@ -1433,6 +1439,7 @@ public final class MainShellController {
         }
         syncLeafTabColorsFromOrganizerTree(invisibleRoot);
         syncGroupTabHeadersFromOrganizerTree(invisibleRoot);
+        Platform.runLater(this::refreshMainShellTabHeaderChromeFromStoredColors);
     }
 
     private void syncLeafTabColorsFromOrganizerTree(TreeItem<MainShellTabOrganizerTabController.OrgRow> node) {
@@ -1576,7 +1583,11 @@ public final class MainShellController {
             for (TabPane inner : wiredInnerMainShellTabPanes) {
                 inner.getSelectionModel()
                         .selectedItemProperty()
-                        .addListener((o, p, n) -> emitShellTabNavigation());
+                        .addListener(
+                                (o, p, n) -> {
+                                    emitShellTabNavigation();
+                                    refreshMainShellTabHeaderChromeFromStoredColors();
+                                });
             }
         } finally {
             suppressEnvSessionPersistence.set(false);
@@ -1584,6 +1595,7 @@ public final class MainShellController {
         refreshMainShellTabDisplayedTitles();
         lastEffectiveShellLeaf =
                 resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
+        Platform.runLater(this::refreshMainShellTabHeaderChromeFromStoredColors);
         return true;
     }
 
