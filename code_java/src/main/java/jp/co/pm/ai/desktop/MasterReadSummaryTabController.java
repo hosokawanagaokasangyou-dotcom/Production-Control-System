@@ -546,7 +546,7 @@ public final class MasterReadSummaryTabController {
         if (s == null) {
             return "";
         }
-        String t = s.replace('\r', '\n').replace('\n', "\\n");
+        String t = s.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\\n");
         if (t.length() <= maxChars) {
             return t;
         }
