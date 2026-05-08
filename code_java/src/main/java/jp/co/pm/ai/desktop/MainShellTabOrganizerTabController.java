@@ -335,6 +335,8 @@ public final class MainShellTabOrganizerTabController {
         String t = groupNameField.getText() != null ? groupNameField.getText().strip() : "";
         OrgRow prev = sel.getValue();
         sel.setValue(OrgRow.group(t, prev != null ? prev.colorHex : ""));
+        /* 選択は変わらないため selection リスナーが走らない。プレビューは手組みのため明示的に再構築する。 */
+        rebuildOrganizerVisualTree();
     }
 
     @FXML
@@ -402,9 +404,9 @@ public final class MainShellTabOrganizerTabController {
         g.setExpanded(true);
         treeView.getRoot().getChildren().add(g);
         // TreeView は非表示で可視一覧は organizerVisualRoot を手組みするため、モデルだけ追加では画面が更新されない。
-        // 選択を変えてリスナー経由で rebuild する（ドラッグ移動完了時と同様）。
         treeView.getSelectionModel().clearSelection();
         treeView.getSelectionModel().select(g);
+        rebuildOrganizerVisualTree();
     }
 
     @FXML
@@ -453,6 +455,7 @@ public final class MainShellTabOrganizerTabController {
         }
         treeView.getSelectionModel().clearSelection();
         treeView.getSelectionModel().select(group);
+        rebuildOrganizerVisualTree();
     }
 
     @FXML
