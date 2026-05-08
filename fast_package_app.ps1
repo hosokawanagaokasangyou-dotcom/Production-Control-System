@@ -503,6 +503,7 @@ function Compress-PortableBundleFolderToZip {
     <#
     .SYNOPSIS
       Zip an app-image folder; omits pm-ai-data/version.txt (release version is beside the zip).
+      Overwrites ZipFilePath when a file with that name already exists.
     #>
     [CmdletBinding()]
     param(
@@ -515,13 +516,14 @@ function Compress-PortableBundleFolderToZip {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $sourceFull = (Resolve-Path -LiteralPath $SourceDir).Path.TrimEnd('\')
     if (Test-Path -LiteralPath $ZipFilePath) {
-        Remove-Item -LiteralPath $ZipFilePath -Force
+        Remove-Item -LiteralPath $ZipFilePath -Force -ErrorAction SilentlyContinue
     }
     $zipParent = Split-Path -Parent $ZipFilePath
     if (-not [string]::IsNullOrWhiteSpace($zipParent) -and -not (Test-Path -LiteralPath $zipParent)) {
         New-Item -ItemType Directory -Path $zipParent -Force | Out-Null
     }
-    $fs = [System.IO.File]::Open($ZipFilePath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+    # Create (not CreateNew): always overwrite an existing ZIP with the same path.
+    $fs = [System.IO.File]::Open($ZipFilePath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
     try {
         $zip = New-Object System.IO.Compression.ZipArchive($fs, [System.IO.Compression.ZipArchiveMode]::Create, $false)
         try {
@@ -957,10 +959,11 @@ $firstLaunchMarker = Join-Path $bundleOutInitial $firstLaunchLeaf
 [System.IO.File]::WriteAllText($firstLaunchMarker, '', [System.Text.UTF8Encoding]::new($false))
 Write-Host "First-launch marker (Initial only): $firstLaunchMarker" -ForegroundColor DarkGray
 
-Write-Host "--- Step 8: release version.txt + portable ZIPs (pm-ai-data/version.txt omitted inside ZIP) ---" -ForegroundColor Cyan
+Write-Host "--- Step 8: release version.txt + portable ZIPs (overwrite same names; pm-ai-data/version.txt omitted inside ZIP) ---" -ForegroundColor Cyan
 if (Test-Path -LiteralPath $VersionTxtPath) {
-    Copy-Item -LiteralPath $VersionTxtPath -Destination (Join-Path $ReleaseRoot 'version.txt') -Force
-    Write-Host "Copied version.txt to $ReleaseRoot" -ForegroundColor DarkGray
+    $releaseVersionTxt = Join-Path $ReleaseRoot 'version.txt'
+    Copy-Item -LiteralPath $VersionTxtPath -Destination $releaseVersionTxt -Force
+    Write-Host "Copied/overwrote: $releaseVersionTxt" -ForegroundColor DarkGray
 }
 else {
     Write-Warning "Repo version.txt missing; skipped copy to $ReleaseRoot"
