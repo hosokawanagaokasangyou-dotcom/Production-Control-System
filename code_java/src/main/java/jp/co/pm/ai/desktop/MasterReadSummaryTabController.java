@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -26,10 +27,14 @@ import javafx.scene.layout.GridPane;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 
 /** Master workbook read summary (Python JSON); layout {@code MasterReadSummaryTab.fxml}. */
 public final class MasterReadSummaryTabController {
+
+    /** Cursor debug session NDJSON (agent-debug-ndjson-logging.mdc). */
+    private static final String AGENT_DEBUG_SESSION_ID = "6f550e";
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -381,6 +386,26 @@ public final class MasterReadSummaryTabController {
         openExcelButton.setDisable(true);
         statusLabel.setText("取得中...");
         RunRequest req = requestFactory.get();
+        // #region agent log
+        if (shell != null) {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("pythonExe", req.pythonExecutable().toString());
+            data.put("scriptDir", req.scriptDirectory().toString());
+            data.put("scriptFile", req.scriptFileName());
+            String wb = req.taskInputWorkbook();
+            data.put("workbookArgChars", wb != null ? wb.length() : 0);
+            data.put(
+                    "workbookArgTail",
+                    wb != null && wb.length() > 120 ? wb.substring(wb.length() - 120) : wb);
+            AgentDebugLog.appendStructured(
+                    shell.snapshotUiEnv(),
+                    AGENT_DEBUG_SESSION_ID,
+                    "D",
+                    "MasterReadSummaryTabController.onRefreshAction",
+                    "RunRequest before PythonProcessRunner.runCaptureAsync",
+                    data);
+        }
+        // #endregion
         PythonProcessRunner.runCaptureAsync(req)
                 .whenComplete(
                         (cap, err) ->
@@ -391,6 +416,18 @@ public final class MasterReadSummaryTabController {
                                             if (err != null) {
                                                 statusLabel.setText("error: " + err.getMessage());
                                                 shell.appendLog("[master-summary] " + err.getMessage());
+                                                // #region agent log
+                                                Map<String, Object> fail = new LinkedHashMap<>();
+                                                fail.put("errorClass", err.getClass().getSimpleName());
+                                                fail.put("errorMessage", err.getMessage());
+                                                AgentDebugLog.appendStructured(
+                                                        shell.snapshotUiEnv(),
+                                                        AGENT_DEBUG_SESSION_ID,
+                                                        "D",
+                                                        "MasterReadSummaryTabController.onRefreshAction",
+                                                        "runCaptureAsync failed before stdout",
+                                                        fail);
+                                                // #endregion
                                                 clearDisplay();
                                                 return;
                                             }
@@ -435,6 +472,27 @@ public final class MasterReadSummaryTabController {
         String trimmed = stdout != null ? stdout.trim() : "";
         String jsonPayload = extractJsonPayload(trimmed);
         lastRawJson = jsonPayload;
+        // #region agent log
+        {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("exitCode", exitCode);
+            data.put("stdoutChars", trimmed.length());
+            String[] split = trimmed.isEmpty() ? new String[0] : trimmed.split("\\R", -1);
+            data.put("stdoutLineCount", split.length);
+            data.put("hasBraceJsonLine", hasExtractableJsonLine(trimmed));
+            data.put("stdoutContainsBrace", trimmed.contains("{"));
+            data.put("jsonPayloadChars", jsonPayload.length());
+            data.put("jsonPayloadStartsTraceback", jsonPayload.trim().startsWith("Traceback"));
+            data.put("jsonPayloadPreview", debugPreview(jsonPayload, 500));
+            AgentDebugLog.appendStructured(
+                    shell != null ? shell.snapshotUiEnv() : Map.of(),
+                    AGENT_DEBUG_SESSION_ID,
+                    "A",
+                    "MasterReadSummaryTabController.applyStdout",
+                    "stdout summary before JSON.readTree",
+                    data);
+        }
+        // #endregion
         if (jsonPayload.isEmpty()) {
             clearDisplay();
             statusLabel.setText("exit=" + exitCode + " (empty stdout)");
@@ -450,8 +508,49 @@ public final class MasterReadSummaryTabController {
         } catch (Exception e) {
             statusLabel.setText("JSON parse error: " + e.getMessage());
             shell.appendLog("[master-summary] parse: " + e.getMessage());
+            // #region agent log
+            Map<String, Object> errData = new LinkedHashMap<>();
+            errData.put("exceptionClass", e.getClass().getSimpleName());
+            errData.put("exceptionMessage", e.getMessage());
+            errData.put(
+                    "mergedStderrIntoStdoutNote",
+                    "PythonProcessRunner merges stderr into stdout (redirectErrorStream)");
+            AgentDebugLog.appendStructured(
+                    shell != null ? shell.snapshotUiEnv() : Map.of(),
+                    AGENT_DEBUG_SESSION_ID,
+                    "B",
+                    "MasterReadSummaryTabController.applyStdout",
+                    "JSON.parse failed",
+                    errData);
+            // #endregion
             clearDisplay();
         }
+    }
+
+    /** Same brace-line detection as {@link #extractJsonPayload(String)} (single-line JSON object). */
+    private static boolean hasExtractableJsonLine(String stdout) {
+        if (stdout == null || stdout.isBlank()) {
+            return false;
+        }
+        String[] lines = stdout.split("\\R", -1);
+        for (int i = lines.length - 1; i >= 0; i--) {
+            String t = lines[i].trim();
+            if (t.length() >= 2 && t.startsWith("{") && t.endsWith("}")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String debugPreview(String s, int maxChars) {
+        if (s == null) {
+            return "";
+        }
+        String t = s.replace('\r', '\n').replace('\n', "\\n");
+        if (t.length() <= maxChars) {
+            return t;
+        }
+        return t.substring(0, maxChars) + "...(trunc)";
     }
 
     /**
