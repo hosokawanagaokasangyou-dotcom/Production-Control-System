@@ -192,6 +192,31 @@ public final class AppPaths {
     public static final String DEFAULT_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR =
             "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\pm-ai-package-release";
 
+    /**
+     * {@link #KEY_PM_AI_TASK_INPUT_SOURCE_DIR} が空のときの既定（工場共有・生産計画問合せフォルダ）。{@code plan/01_*.m} のパスと揃える。
+     */
+    public static final String DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR =
+            "\\\\192.168.0.101\\"
+                    + "共有フォルダ\\"
+                    + "湖南工場\\"
+                    + "湖南共有\\"
+                    + "生産管理システム\\"
+                    + "管理システム\\"
+                    + "●DATA\\"
+                    + "生産計画問合せ";
+
+    /**
+     * {@link #KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR} が空のときの既定（加工実績明細DATA）。{@code plan/02__q加工実績明細DATA.m} と揃える。
+     */
+    public static final String DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR =
+            "\\\\192.168.0.101\\"
+                    + "共有フォルダ\\"
+                    + "湖南工場\\"
+                    + "湖南共有\\"
+                    + "002  加工G\\"
+                    + "●検査表作成\\"
+                    + "加工実績明細DATA";
+
     /** リポジトリ直下および {@code pm-ai-data} 直下で共用する版ファイル名。 */
     public static final String VERSION_TXT_FILE_NAME = "version.txt";
 
@@ -300,29 +325,6 @@ public final class AppPaths {
     }
 
     /**
-     * Same UNC as {@code plan/01_*.m} {@code パス} (PQ-A / production plan inquiry folder).
-     */
-    private static final String DEFAULT_PQ_A_SOURCE_UNC =
-            "\\\\192.168.0.101\\"
-                    + "共有フォルダ\\"
-                    + "湖南工場\\"
-                    + "湖南共有\\"
-                    + "生産管理システム\\"
-                    + "管理システム\\"
-                    + "●DATA\\"
-                    + "生産計画問合せ";
-
-    /** Same as {@code plan/02__q加工実績明細DATA.m} {@code Folder.Files} path. */
-    private static final String DEFAULT_ACTUAL_DETAIL_SOURCE_UNC =
-            "\\\\192.168.0.101\\"
-                    + "共有フォルダ\\"
-                    + "湖南工場\\"
-                    + "湖南共有\\"
-                    + "002  加工G\\"
-                    + "●検査表作成\\"
-                    + "加工実績明細DATA";
-
-    /**
      * {@code ui} from the env tab; {@code null} or empty map uses directory walk only (no overrides).
      */
     public static Path resolvePythonScriptDir(Map<String, String> ui) {
@@ -369,7 +371,7 @@ public final class AppPaths {
         if (!override.isEmpty()) {
             return Path.of(override).toAbsolutePath().normalize();
         }
-        return Path.of(DEFAULT_PQ_A_SOURCE_UNC);
+        return Path.of(DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR);
     }
 
     /** Machining actual-detail export folder; optional {@code PM_AI_ACTUAL_DETAIL_SOURCE_DIR} in {@code ui}. */
@@ -379,7 +381,7 @@ public final class AppPaths {
         if (!override.isEmpty()) {
             return Path.of(override).toAbsolutePath().normalize();
         }
-        return Path.of(DEFAULT_ACTUAL_DETAIL_SOURCE_UNC);
+        return Path.of(DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR);
     }
 
     /**
