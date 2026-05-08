@@ -482,6 +482,7 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
     if ($BundleKind -eq 'InitialInstall') {
         $rmLines.Add('Bundle profile: InitialInstall - excludes .git, .venv, .cursor, .vscode, code/VBA, code_java build/cache dirs, pm-ai-package-release/, **/__pycache__, **/.pytest_cache, build_cache.')
         $rmLines.Add('Does NOT exclude plan/plans or code/output (may include local artifacts if present).')
+        $rmLines.Add('Badge defaults: pm-ai-data/config/bundled_session_badge_defaults.json (used when ~/.pm-ai-desktop/session-state.json is missing; also embedded in the app JAR).')
     }
     else {
         $rmLines.Add('Bundle profile: VersionUpgrade - also excludes **/plan, **/plans, code/output/, repo output/, code/python/output/, .pm-ai-cache/, extra env-var TSVs (template TSV still bundled), .env.')
@@ -497,6 +498,17 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
     $rmLines.Add('Per-user session data: ~/.pm-ai-desktop (initialized per machine/user).')
     $rmLines.Add('')
     $rmLines | Set-Content -LiteralPath $readme -Encoding UTF8
+
+    if ($BundleKind -eq 'InitialInstall') {
+        $badgeSrc = Join-Path $WorkspaceRootPath 'code_java/src/main/resources/jp/co/pm/ai/desktop/config/bundled_session_badge_defaults.json'
+        if (Test-Path -LiteralPath $badgeSrc) {
+            $cfgDestDir = Join-Path $data 'config'
+            New-Item -ItemType Directory -Path $cfgDestDir -Force | Out-Null
+            $badgeDest = Join-Path $cfgDestDir 'bundled_session_badge_defaults.json'
+            Copy-Item -LiteralPath $badgeSrc -Destination $badgeDest -Force
+            Write-Host "Bundled badge session defaults (Initial): $badgeDest" -ForegroundColor DarkGray
+        }
+    }
 }
 
 function Compress-PortableBundleFolderToZip {

@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.config;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -20,6 +21,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /**
  * Persists last-used paths under {@code ~/.pm-ai-desktop/session-state.json} so tabs reload the same files on
  * the next launch.
+ *
+ * <p>初回などセッションファイルが無いときは、{@code pm-ai-data/config/bundled_session_badge_defaults.json}（初回
+ * インストール用バンドルに同梱）またはクラスパス上の同名リソースから、バッジ関連の既定だけを読み込む。
  */
 public final class DesktopSessionStateStore {
 
@@ -27,86 +31,139 @@ public final class DesktopSessionStateStore {
     private static final Path STORE =
             Paths.get(System.getProperty("user.home"), ".pm-ai-desktop", "session-state.json");
 
+    /** Same path as {@code src/main/resources/jp/co/pm/ai/desktop/config/bundled_session_badge_defaults.json}. */
+    private static final String BUNDLED_SESSION_BADGE_DEFAULTS_RESOURCE =
+            "/jp/co/pm/ai/desktop/config/bundled_session_badge_defaults.json";
+
     private DesktopSessionStateStore() {}
 
     public static DesktopSessionState load() {
         try {
-            if (!Files.isRegularFile(STORE)) {
-                return DesktopSessionState.empty();
+            JsonNode root;
+            if (Files.isRegularFile(STORE)) {
+                root = JSON.readTree(STORE.toFile());
+                if (root == null || !root.isObject()) {
+                    return DesktopSessionState.empty();
+                }
+            } else {
+                root = sessionRootWhenStoreFileMissing();
             }
-            JsonNode root = JSON.readTree(STORE.toFile());
-            if (root == null || !root.isObject()) {
-                return DesktopSessionState.empty();
-            }
-            return new DesktopSessionState(
-                    text(root, "planInputPath"),
-                    text(root, "planInputSheet"),
-                    text(root, "stage1PreviewPath"),
-                    text(root, "stage1PreviewSheet"),
-                    text(root, "excludeRulesPath"),
-                    text(root, "mainRunWorkbook"),
-                    text(root, "mainRunPythonExe"),
-                    text(root, "mainRunScriptDir"),
-                    optionalDouble(root, "windowWidth", 0d),
-                    optionalDouble(root, "windowHeight", 0d),
-                    optionalDouble(root, "windowX", Double.NaN),
-                    optionalDouble(root, "windowY", Double.NaN),
-                    text(root, "uiTheme"),
-                    text(root, "logFontFamily"),
-                    optionalDouble(root, "logFontSize", 0d),
-                    text(root, "mainRunLogFilter"),
-                    loadStringList(root, "mainRunLogLines"),
-                    optionalDouble(root, "mainRunLogScroll", Double.NaN),
-                    text(root, "mainRunStage2ProductionPlan"),
-                    text(root, "mainRunStage2MemberSchedule"),
-                    optionalBoolean(root, "mainRunStage2WriteExcel", true),
-                    text(root, "mainRunStage2ResultBookFont"),
-                    loadUiEnvRows(root),
-                    loadStringList(root, "mainShellTabOrder"),
-                    loadMainShellTabLayout(root),
-                    loadStringStringMap(root, "mainShellTabTitleAliases"),
-                    optionalDouble(root, "equipmentGanttGraphicZoomPercent", 0d),
-                    optionalDouble(root, "equipmentGanttDateColWidth", 0d),
-                    optionalDouble(root, "equipmentGanttMachineColWidth", 0d),
-                    optionalDouble(root, "equipmentGanttProcessColWidth", 0d),
-                    text(root, "equipmentGanttBarFontFamily"),
-                    optionalDouble(root, "equipmentGanttBarFontPercent", 0d),
-                    optionalDouble(root, "equipmentGanttRowHeightPercent", 0d),
-                    optionalDouble(root, "equipmentGanttHeaderHeightPercent", 0d),
-                    optionalDouble(root, "equipmentGanttSlotWidthPercent", 0d),
-                    optionalDouble(root, "equipmentGanttShiftWheelHScrollPercent", 0d),
-                    loadEquipmentGanttPersonBadgeGapPx(root),
-                    loadEquipmentGanttPersonBadgeBandVerticalOffsetPx(root),
-                    text(root, "equipmentGanttGraphicDataFingerprint"),
-                    loadEquipmentGanttBadgeDragDeltas(root),
-                    optionalBoolean(root, "equipmentGanttPersonBadgeDragAdjustEnabled", false),
-                    optionalBoolean(root, "equipmentGanttPersonBadgeEnabled", true),
-                    text(root, "equipmentGanttPersonBadgeFontFamily"),
-                    optionalDouble(root, "equipmentGanttPersonBadgeFontPercent", 0d),
-                    text(root, "equipmentGanttPersonBadgeFillHex"),
-                    text(root, "equipmentGanttPersonBadgeTextHex"),
-                    text(root, "equipmentGanttPersonBadgeStrokeHex"),
-                    optionalDouble(root, "equipmentGanttPersonBadgeStrokeWidth", -1d),
-                    optionalDouble(root, "equipmentGanttPersonBadgeCornerRadius", -1d),
-                    optionalBoolean(root, "equipmentGanttPersonBadgePill", false),
-                    text(root, "equipmentGanttPersonBadgeGlowColorHex"),
-                    optionalDouble(root, "equipmentGanttPersonBadgeGlowRadius", -1d),
-                    optionalDouble(root, "equipmentGanttPersonBadgeGlowSpread", -1d),
-                    optionalDouble(root, "equipmentGanttPersonBadgeOpacity", -1d),
-                    loadPersonBadgeStyleMap(root, "equipmentGanttPersonBadgeStylesByLabel"),
-                    loadPersonBadgeStyleMap(root, "equipmentGanttPersonBadgeStylesByMemberKey"),
-                    text(root, "equipmentGanttPlanJsonPath"),
-                    text(root, "stage1NetworkCacheBadgeLabel"),
-                    loadStage1NetworkCacheBadgeStyle(root),
-                    optionalBoolean(root, "mainShellTabOrganizerHeaderGlow", true),
-                    clamp01(optionalDouble(root, "mainShellTabOrganizerHeaderGlowStrength", 1d)),
-                    loadPushButtonDesignPrefs(root),
-                    optionalBoolean(root, "memoryMonitorEnabled", false),
-                    optionalLongClamped(root, "memoryMonitorIntervalSec", 5L, 1L, 3600L),
-                    optionalNonNegativeLong(root, "nextLaunchHeapMaxMiB", 0L));
+            return parseDesktopSessionState(root);
         } catch (IOException e) {
             return DesktopSessionState.empty();
         }
+    }
+
+    /**
+     * {@code session-state.json} が無いときの JSON ルート。バッジ既定ファイルがあればそのオブジェクトのみ（他キーは
+     * ローダ既定）。
+     */
+    private static JsonNode sessionRootWhenStoreFileMissing() {
+        JsonNode bundled = readBundledBadgeDefaultsNode();
+        if (bundled != null && bundled.isObject() && bundled.size() > 0) {
+            return bundled;
+        }
+        return JSON.createObjectNode();
+    }
+
+    /**
+     * {@code user.dir/pm-ai-data/config/bundled_session_badge_defaults.json} を優先し、無ければクラスパス上の
+     * リソース。
+     */
+    private static JsonNode readBundledBadgeDefaultsNode() {
+        try {
+            Path beside =
+                    Path.of(System.getProperty("user.dir", "."))
+                            .toAbsolutePath()
+                            .normalize()
+                            .resolve("pm-ai-data")
+                            .resolve("config")
+                            .resolve("bundled_session_badge_defaults.json");
+            if (Files.isRegularFile(beside)) {
+                JsonNode n = JSON.readTree(beside.toFile());
+                if (n != null && n.isObject()) {
+                    return n;
+                }
+            }
+        } catch (IOException ignored) {
+        }
+        try (InputStream in = DesktopSessionStateStore.class.getResourceAsStream(BUNDLED_SESSION_BADGE_DEFAULTS_RESOURCE)) {
+            if (in == null) {
+                return null;
+            }
+            return JSON.readTree(in);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private static DesktopSessionState parseDesktopSessionState(JsonNode root) {
+        return new DesktopSessionState(
+                text(root, "planInputPath"),
+                text(root, "planInputSheet"),
+                text(root, "stage1PreviewPath"),
+                text(root, "stage1PreviewSheet"),
+                text(root, "excludeRulesPath"),
+                text(root, "mainRunWorkbook"),
+                text(root, "mainRunPythonExe"),
+                text(root, "mainRunScriptDir"),
+                optionalDouble(root, "windowWidth", 0d),
+                optionalDouble(root, "windowHeight", 0d),
+                optionalDouble(root, "windowX", Double.NaN),
+                optionalDouble(root, "windowY", Double.NaN),
+                text(root, "uiTheme"),
+                text(root, "logFontFamily"),
+                optionalDouble(root, "logFontSize", 0d),
+                text(root, "mainRunLogFilter"),
+                loadStringList(root, "mainRunLogLines"),
+                optionalDouble(root, "mainRunLogScroll", Double.NaN),
+                text(root, "mainRunStage2ProductionPlan"),
+                text(root, "mainRunStage2MemberSchedule"),
+                optionalBoolean(root, "mainRunStage2WriteExcel", true),
+                text(root, "mainRunStage2ResultBookFont"),
+                loadUiEnvRows(root),
+                loadStringList(root, "mainShellTabOrder"),
+                loadMainShellTabLayout(root),
+                loadStringStringMap(root, "mainShellTabTitleAliases"),
+                optionalDouble(root, "equipmentGanttGraphicZoomPercent", 0d),
+                optionalDouble(root, "equipmentGanttDateColWidth", 0d),
+                optionalDouble(root, "equipmentGanttMachineColWidth", 0d),
+                optionalDouble(root, "equipmentGanttProcessColWidth", 0d),
+                text(root, "equipmentGanttBarFontFamily"),
+                optionalDouble(root, "equipmentGanttBarFontPercent", 0d),
+                optionalDouble(root, "equipmentGanttRowHeightPercent", 0d),
+                optionalDouble(root, "equipmentGanttHeaderHeightPercent", 0d),
+                optionalDouble(root, "equipmentGanttSlotWidthPercent", 0d),
+                optionalDouble(root, "equipmentGanttShiftWheelHScrollPercent", 0d),
+                loadEquipmentGanttPersonBadgeGapPx(root),
+                loadEquipmentGanttPersonBadgeBandVerticalOffsetPx(root),
+                text(root, "equipmentGanttGraphicDataFingerprint"),
+                loadEquipmentGanttBadgeDragDeltas(root),
+                optionalBoolean(root, "equipmentGanttPersonBadgeDragAdjustEnabled", false),
+                optionalBoolean(root, "equipmentGanttPersonBadgeEnabled", true),
+                text(root, "equipmentGanttPersonBadgeFontFamily"),
+                optionalDouble(root, "equipmentGanttPersonBadgeFontPercent", 0d),
+                text(root, "equipmentGanttPersonBadgeFillHex"),
+                text(root, "equipmentGanttPersonBadgeTextHex"),
+                text(root, "equipmentGanttPersonBadgeStrokeHex"),
+                optionalDouble(root, "equipmentGanttPersonBadgeStrokeWidth", -1d),
+                optionalDouble(root, "equipmentGanttPersonBadgeCornerRadius", -1d),
+                optionalBoolean(root, "equipmentGanttPersonBadgePill", false),
+                text(root, "equipmentGanttPersonBadgeGlowColorHex"),
+                optionalDouble(root, "equipmentGanttPersonBadgeGlowRadius", -1d),
+                optionalDouble(root, "equipmentGanttPersonBadgeGlowSpread", -1d),
+                optionalDouble(root, "equipmentGanttPersonBadgeOpacity", -1d),
+                loadPersonBadgeStyleMap(root, "equipmentGanttPersonBadgeStylesByLabel"),
+                loadPersonBadgeStyleMap(root, "equipmentGanttPersonBadgeStylesByMemberKey"),
+                text(root, "equipmentGanttPlanJsonPath"),
+                text(root, "stage1NetworkCacheBadgeLabel"),
+                loadStage1NetworkCacheBadgeStyle(root),
+                optionalBoolean(root, "mainShellTabOrganizerHeaderGlow", true),
+                clamp01(optionalDouble(root, "mainShellTabOrganizerHeaderGlowStrength", 1d)),
+                loadPushButtonDesignPrefs(root),
+                optionalBoolean(root, "memoryMonitorEnabled", false),
+                optionalLongClamped(root, "memoryMonitorIntervalSec", 5L, 1L, 3600L),
+                optionalNonNegativeLong(root, "nextLaunchHeapMaxMiB", 0L));
     }
 
     public static void save(DesktopSessionState state) {

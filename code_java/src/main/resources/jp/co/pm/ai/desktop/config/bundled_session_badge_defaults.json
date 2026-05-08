@@ -1,0 +1,32 @@
+{
+  "equipmentGanttPersonBadgeGapPx": 4,
+  "equipmentGanttPersonBadgeBandVerticalOffsetPx": 0,
+  "equipmentGanttPersonBadgeDragAdjustEnabled": false,
+  "equipmentGanttPersonBadgeEnabled": true,
+  "equipmentGanttPersonBadgeFontPercent": 85,
+  "equipmentGanttPersonBadgeFillHex": "#2563eb",
+  "equipmentGanttPersonBadgeTextHex": "#f8fafc",
+  "equipmentGanttPersonBadgeStrokeHex": "#1d4ed8",
+  "equipmentGanttPersonBadgeStrokeWidth": 1.0,
+  "equipmentGanttPersonBadgeCornerRadius": 6.0,
+  "equipmentGanttPersonBadgePill": false,
+  "equipmentGanttPersonBadgeGlowColorHex": "#38bdf8",
+  "equipmentGanttPersonBadgeGlowRadius": 14.0,
+  "equipmentGanttPersonBadgeGlowSpread": 0.28,
+  "equipmentGanttPersonBadgeOpacity": 1.0,
+  "stage1NetworkCacheBadgeLabel": "ƒLƒƒƒbƒVƒ…",
+  "stage1NetworkCacheBadgeStyle": {
+    "fontFamily": "",
+    "fontPercent": 92,
+    "fillHex": "#ea580c",
+    "textHex": "#fffbeb",
+    "strokeHex": "#c2410c",
+    "strokeWidth": 1.2,
+    "cornerRadius": 8.0,
+    "pill": false,
+    "glowColorHex": "#fdba74",
+    "glowRadius": 12.0,
+    "glowSpread": 0.22,
+    "opacity": 1.0
+  }
+}
