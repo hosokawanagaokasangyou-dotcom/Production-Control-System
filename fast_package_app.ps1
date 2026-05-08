@@ -489,7 +489,7 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
     }
     $rmLines.Add('Excluded files (all profiles): *.log, ~$* (Excel lock).')
     $rmLines.Add("This folder sits next to $($AppExeBaseName).exe.")
-    $rmLines.Add('Release ZIPs omit pm-ai-data/version.txt; repo-root version.txt is shipped next to the ZIPs in pm-ai-package-release (interim bundle folders are deleted after zipping).')
+    $rmLines.Add('Release: Step 8 deletes existing version.txt and same-name ZIPs in pm-ai-package-release, then writes fresh copies; ZIPs omit pm-ai-data/version.txt. Interim bundle folders are removed after zipping.')
     $rmLines.Add('First launch: if the empty marker file next to this app exe exists, the desktop resets env-tab defaults once then deletes it (Initial install bundle only). See Java AppPaths.PORTABLE_FIRST_LAUNCH_MARKER_FILE.')
     $rmLines.Add('Portable sync: PM_AI_PORTABLE_BUNDLE_SOURCE_DIR may be a folder (repo root layout under pm-ai-data on share) or a path to PMD_version_upgrade_*.zip with version.txt beside the zip.')
     $rmLines.Add('Python: pm-ai-data\runtime\python-embed\python.exe (build cache: code_java\Cash_PMD, not bundled).')
@@ -503,7 +503,7 @@ function Compress-PortableBundleFolderToZip {
     <#
     .SYNOPSIS
       Zip an app-image folder; omits pm-ai-data/version.txt (release version is beside the zip).
-      Overwrites ZipFilePath when a file with that name already exists.
+      Removes ZipFilePath if present (-ErrorAction Stop), then creates a new file (CreateNew).
     #>
     [CmdletBinding()]
     param(
@@ -516,14 +516,13 @@ function Compress-PortableBundleFolderToZip {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $sourceFull = (Resolve-Path -LiteralPath $SourceDir).Path.TrimEnd('\')
     if (Test-Path -LiteralPath $ZipFilePath) {
-        Remove-Item -LiteralPath $ZipFilePath -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $ZipFilePath -Force -ErrorAction Stop
     }
     $zipParent = Split-Path -Parent $ZipFilePath
     if (-not [string]::IsNullOrWhiteSpace($zipParent) -and -not (Test-Path -LiteralPath $zipParent)) {
         New-Item -ItemType Directory -Path $zipParent -Force | Out-Null
     }
-    # Create (not CreateNew): always overwrite an existing ZIP with the same path.
-    $fs = [System.IO.File]::Open($ZipFilePath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+    $fs = [System.IO.File]::Open($ZipFilePath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
     try {
         $zip = New-Object System.IO.Compression.ZipArchive($fs, [System.IO.Compression.ZipArchiveMode]::Create, $false)
         try {
@@ -959,19 +958,27 @@ $firstLaunchMarker = Join-Path $bundleOutInitial $firstLaunchLeaf
 [System.IO.File]::WriteAllText($firstLaunchMarker, '', [System.Text.UTF8Encoding]::new($false))
 Write-Host "First-launch marker (Initial only): $firstLaunchMarker" -ForegroundColor DarkGray
 
-Write-Host "--- Step 8: release version.txt + portable ZIPs (overwrite same names; pm-ai-data/version.txt omitted inside ZIP) ---" -ForegroundColor Cyan
+Write-Host "--- Step 8: release version.txt + portable ZIPs (delete same names then regenerate; pm-ai-data/version.txt omitted inside ZIP) ---" -ForegroundColor Cyan
+$zipVerSafe = $APP_VERSION -replace '[^\w\.\-]', '_'
+$zipInitial = Join-Path $ReleaseRoot ("PMD_initial_install_$zipVerSafe.zip")
+$zipUpgrade = Join-Path $ReleaseRoot ("PMD_version_upgrade_$zipVerSafe.zip")
+$releaseVersionTxt = Join-Path $ReleaseRoot 'version.txt'
+
+Write-Host "Removing existing release artifacts (if any): version.txt, matching ZIPs" -ForegroundColor DarkGray
+foreach ($p in @($releaseVersionTxt, $zipInitial, $zipUpgrade)) {
+    if (Test-Path -LiteralPath $p) {
+        Remove-Item -LiteralPath $p -Force -ErrorAction Stop
+    }
+}
+
 if (Test-Path -LiteralPath $VersionTxtPath) {
-    $releaseVersionTxt = Join-Path $ReleaseRoot 'version.txt'
     Copy-Item -LiteralPath $VersionTxtPath -Destination $releaseVersionTxt -Force
-    Write-Host "Copied/overwrote: $releaseVersionTxt" -ForegroundColor DarkGray
+    Write-Host "Generated: $releaseVersionTxt" -ForegroundColor DarkGray
 }
 else {
     Write-Warning "Repo version.txt missing; skipped copy to $ReleaseRoot"
 }
 
-$zipVerSafe = $APP_VERSION -replace '[^\w\.\-]', '_'
-$zipInitial = Join-Path $ReleaseRoot ("PMD_initial_install_$zipVerSafe.zip")
-$zipUpgrade = Join-Path $ReleaseRoot ("PMD_version_upgrade_$zipVerSafe.zip")
 Write-Host "Zipping Initial -> $zipInitial" -ForegroundColor Cyan
 Compress-PortableBundleFolderToZip -SourceDir $bundleOutInitial -ZipFilePath $zipInitial
 Write-Host "Zipping Upgrade -> $zipUpgrade" -ForegroundColor Cyan
