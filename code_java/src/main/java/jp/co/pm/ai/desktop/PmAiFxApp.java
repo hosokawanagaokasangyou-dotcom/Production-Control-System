@@ -136,7 +136,7 @@ public class PmAiFxApp extends Application {
         TableColumnOrderPersistence.materializeBundledDefaultsIfStoreMissing();
         Parent root = loader.load();
         MainShellController shell = loader.getController();
-        Scene scene = new Scene(root, 1800, 850);
+        Scene scene = new Scene(root);
         scene.getStylesheets()
                 .add(
                         PmAiFxApp.class

@@ -16,6 +16,7 @@
 <!-- UI 文言は UTF-8 の日本語リテラル（XML 宣言の encoding と一致）。 -->
 <BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
             styleClass="pm-shell"
+            prefWidth="1800.0" prefHeight="850.0"
             fx:controller="jp.co.pm.ai.desktop.MainShellController">
     <top>
         <ToolBar styleClass="pm-app-toolbar">
