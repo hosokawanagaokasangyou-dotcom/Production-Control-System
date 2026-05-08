@@ -31,6 +31,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
  *   <li>UI {@link AppPaths#KEY_PM_AI_CURSOR_DEBUG_LOG}</li>
  *   <li>{@code parent(resolveRepoRoot) / .cursor / …}（リーフが {@code Production-Control-System} のとき）</li>
  *   <li>{@code resolveRepoRoot / .cursor / …}</li>
+ *   <li>{@code resolveRepoRoot / code / log / …}（運用で {@code code/log} に置く場合）</li>
  *   <li>{@code user.dir} を遡り、PM AI リポジトリらしき根に {@code .cursor / …}</li>
  *   <li>{@code user.dir} を遡り、最初に見つかった {@code .cursor / …}</li>
  *   <li>{@code user.home / .cursor / …}</li>
@@ -95,6 +96,15 @@ public final class AgentDebugLog {
                     parent.resolve(".cursor").resolve(fileName).toAbsolutePath().normalize());
         }
         addCandidate(out, seen, repo.resolve(".cursor").resolve(fileName).toAbsolutePath().normalize());
+
+        addCandidate(
+                out,
+                seen,
+                repo.resolve("code")
+                        .resolve("log")
+                        .resolve(fileName)
+                        .toAbsolutePath()
+                        .normalize());
 
         Path walkedRepo = walkUpPmAiRepoCursorLog(fileName);
         if (walkedRepo != null) {
@@ -206,12 +216,53 @@ public final class AgentDebugLog {
     public static Path appendNdjsonLine(Map<String, String> ui, String sessionId, String jsonLine) {
         String line = jsonLine.endsWith("\n") ? jsonLine : jsonLine + "\n";
         List<Path> candidates = ndjsonWriteCandidates(ui, sessionId);
+        Path hit = null;
         for (Path path : candidates) {
             if (writeUtf8Append(path, line)) {
-                return path;
+                hit = path;
+                break;
             }
         }
+        if (hit != null) {
+            mirrorNdjsonToRepoCodeLogIfDefault(ui, sessionId, hit, line);
+            return hit;
+        }
         return null;
+    }
+
+    /**
+     * 既定の候補チェーンで書けたあとも、リポジトリの {@code code/log/debug-<session>.log} へ同一行をベストエフォートで複写する。
+     * {@code CURSOR_DEBUG_LOG} / UI の単独パス指定時は複写しない。
+     */
+    private static void mirrorNdjsonToRepoCodeLogIfDefault(
+            Map<String, String> ui, String sessionId, Path actualWritten, String line) {
+        if (pathFromEnvOverride() != null) {
+            return;
+        }
+        Map<String, String> u = ui != null ? ui : Map.of();
+        if (!trim(u.get(AppPaths.KEY_PM_AI_CURSOR_DEBUG_LOG)).isEmpty()) {
+            return;
+        }
+        try {
+            String id =
+                    sessionId == null || sessionId.isBlank()
+                            ? DEFAULT_SESSION_ID
+                            : sessionId.trim();
+            String fileName = "debug-" + id + ".log";
+            Path repo = AppPaths.resolveRepoRoot(u);
+            Path mirror =
+                    repo.resolve("code")
+                            .resolve("log")
+                            .resolve(fileName)
+                            .toAbsolutePath()
+                            .normalize();
+            if (actualWritten.normalize().equals(mirror)) {
+                return;
+            }
+            writeUtf8Append(mirror, line);
+        } catch (Throwable ignored) {
+            // best-effort mirror
+        }
     }
 
     private static boolean writeUtf8Append(Path path, String line) {
