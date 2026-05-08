@@ -372,7 +372,8 @@
     -fx-font-size: 0.85em;
 }
 
-.pm-main-shell-tab-organizer .label {
+/* ツリー色ピル内の .pm-org-tree-pill-label はインラインで -fx-text-fill 指定。汎用ラベルのみテーマ色。 */
+.pm-main-shell-tab-organizer .label:not(.pm-org-tree-pill-label) {
     -fx-text-fill: -fx-text-background-color;
 }
 

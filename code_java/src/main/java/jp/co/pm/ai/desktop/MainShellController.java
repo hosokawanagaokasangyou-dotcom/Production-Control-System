@@ -1379,6 +1379,23 @@ public final class MainShellController {
             return;
         }
         applyStoredShellTabColorsRecursive(tabPane.getTabs());
+        layoutShellTabPanesRecursive(tabPane);
+    }
+
+    /**
+     * 入れ子 {@link TabPane} まで {@code applyCss}/{@code layout} し、見出しセル（{@code .headers-region}）の取りこぼしを減らす。
+     */
+    private static void layoutShellTabPanesRecursive(TabPane pane) {
+        if (pane == null) {
+            return;
+        }
+        pane.applyCss();
+        pane.layout();
+        for (Tab t : pane.getTabs()) {
+            if (t.getContent() instanceof TabPane inner) {
+                layoutShellTabPanesRecursive(inner);
+            }
+        }
     }
 
     private void applyStoredShellTabColorsRecursive(ObservableList<Tab> tabs) {
@@ -1560,7 +1577,10 @@ public final class MainShellController {
         if (root instanceof Text textNode) {
             textNode.setStyle("-fx-fill: " + tf + ";");
         } else if (root instanceof Labeled labeled) {
-            labeled.setTextFill(fillColor);
+            /* TabSkin のバインドと干渉しないよう、可能なときだけ直接指定（主に -fx-text-fill） */
+            if (!labeled.textFillProperty().isBound()) {
+                labeled.setTextFill(fillColor);
+            }
             labeled.setStyle("-fx-text-fill: " + tf + ";");
         }
         if (root instanceof Parent p) {
@@ -1578,8 +1598,10 @@ public final class MainShellController {
         if (root instanceof Text textNode) {
             textNode.setStyle("");
         } else if (root instanceof Labeled labeled) {
-            labeled.setTextFill(null);
             labeled.setStyle("");
+            if (!labeled.textFillProperty().isBound()) {
+                labeled.setTextFill(null);
+            }
         }
         if (root instanceof Parent p) {
             for (Node ch : p.getChildrenUnmodifiable()) {
@@ -1651,7 +1673,9 @@ public final class MainShellController {
                                                 lab, Color.web(tf), tf);
                                     } catch (IllegalArgumentException ex) {
                                         if (lab instanceof Labeled labeled) {
-                                            labeled.setTextFill(Color.web(tf));
+                                            if (!labeled.textFillProperty().isBound()) {
+                                                labeled.setTextFill(Color.web(tf));
+                                            }
                                             labeled.setStyle("-fx-text-fill: " + tf + ";");
                                         } else {
                                             lab.setStyle("-fx-text-fill: " + tf + ";");
@@ -1740,6 +1764,8 @@ public final class MainShellController {
         }
         syncLeafTabColorsFromOrganizerTree(invisibleRoot);
         syncGroupTabHeadersFromOrganizerTree(invisibleRoot);
+        /* 同一フレームで見出しへ反映（runLater のみだと未レイアウトで poke が無効になることがある） */
+        refreshMainShellTabHeaderChromeFromStoredColors();
         Platform.runLater(this::refreshMainShellTabHeaderChromeFromStoredColors);
     }
 

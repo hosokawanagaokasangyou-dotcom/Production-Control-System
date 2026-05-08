@@ -335,6 +335,8 @@ public final class MainShellTabOrganizerTabController {
         String t = groupNameField.getText() != null ? groupNameField.getText().strip() : "";
         OrgRow prev = sel.getValue();
         sel.setValue(OrgRow.group(t, prev != null ? prev.colorHex : ""));
+        /* 選択は変わらないため selection リスナーが走らない。プレビューは手組みのため明示再構築 */
+        rebuildOrganizerVisualTree();
     }
 
     @FXML
@@ -405,6 +407,7 @@ public final class MainShellTabOrganizerTabController {
         // 選択を変えてリスナー経由で rebuild する（ドラッグ移動完了時と同様）。
         treeView.getSelectionModel().clearSelection();
         treeView.getSelectionModel().select(g);
+        rebuildOrganizerVisualTree();
     }
 
     @FXML
@@ -453,6 +456,7 @@ public final class MainShellTabOrganizerTabController {
         }
         treeView.getSelectionModel().clearSelection();
         treeView.getSelectionModel().select(group);
+        rebuildOrganizerVisualTree();
     }
 
     @FXML
@@ -467,6 +471,9 @@ public final class MainShellTabOrganizerTabController {
         String hex = toHexRgb(c);
         ObservableList<TreeItem<OrgRow>> sel = treeView.getSelectionModel().getSelectedItems();
         if (sel == null || sel.isEmpty()) {
+            alert(
+                    AlertType.INFORMATION,
+                    "下の一覧のチップ（ピル）を選んでから「選択に色を適用」を押してください。");
             return;
         }
         List<TreeItem<OrgRow>> keep = new ArrayList<>(sel);
@@ -475,7 +482,9 @@ public final class MainShellTabOrganizerTabController {
         }
         if (shell != null && treeView.getRoot() != null) {
             shell.syncMainShellTabHeaderColorsFromOrganizerTree(treeView.getRoot());
+            DesktopSessionStateStore.save(shell.collectDesktopSessionSnapshot());
         }
+        rebuildOrganizerVisualTree();
         Platform.runLater(() -> restoreOrganizerTreeSelection(keep));
     }
 
@@ -486,6 +495,9 @@ public final class MainShellTabOrganizerTabController {
         }
         ObservableList<TreeItem<OrgRow>> sel = treeView.getSelectionModel().getSelectedItems();
         if (sel == null || sel.isEmpty()) {
+            alert(
+                    AlertType.INFORMATION,
+                    "下の一覧のチップ（ピル）を選んでから「選択の色を解除」を押してください。");
             return;
         }
         List<TreeItem<OrgRow>> keep = new ArrayList<>(sel);
@@ -494,7 +506,9 @@ public final class MainShellTabOrganizerTabController {
         }
         if (shell != null && treeView.getRoot() != null) {
             shell.syncMainShellTabHeaderColorsFromOrganizerTree(treeView.getRoot());
+            DesktopSessionStateStore.save(shell.collectDesktopSessionSnapshot());
         }
+        rebuildOrganizerVisualTree();
         Platform.runLater(() -> restoreOrganizerTreeSelection(keep));
     }
 
