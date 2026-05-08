@@ -43,9 +43,11 @@ public final class GlobalSettingsTabController {
         if (shell.primaryStageForDialogs() != null) {
             dialog.initOwner(shell.primaryStageForDialogs());
         }
-        dialog.setTitle("??");
+        dialog.setTitle("確認");
         dialog.setHeaderText(null);
-        dialog.setContentText("?????????111??????????");
+        dialog.setContentText(
+                "現在の UI とセッションをパッケージ既定としてリポジトリの init_setting に書き出します。"
+                        + "確認のため「111」と入力してください。");
         Optional<String> ans = dialog.showAndWait();
         if (ans.isEmpty() || !"111".equals(ans.get().trim())) {
             return;
@@ -57,17 +59,17 @@ public final class GlobalSettingsTabController {
             if (shell.primaryStageForDialogs() != null) {
                 ok.initOwner(shell.primaryStageForDialogs());
             }
-            ok.setTitle("??");
+            ok.setTitle("完了");
             ok.setHeaderText(null);
             ok.setContentText(
-                    "???????? init_setting ????????session_defaults.json, table_column_defaults.json??");
+                    "書き出しました。init_setting に session_defaults.json と table_column_defaults.json を出力しました。");
             ok.showAndWait();
         } catch (Exception ex) {
             Alert err = new Alert(AlertType.ERROR);
             if (shell.primaryStageForDialogs() != null) {
                 err.initOwner(shell.primaryStageForDialogs());
             }
-            err.setTitle("???");
+            err.setTitle("エラー");
             err.setHeaderText(null);
             err.setContentText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
             err.showAndWait();
