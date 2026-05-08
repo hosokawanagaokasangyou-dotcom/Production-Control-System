@@ -6,7 +6,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,17 +22,20 @@ import jp.co.pm.ai.desktop.config.AppPaths;
  * <p>Project convention: {@code .cursor/rules/agent-debug-ndjson-logging.mdc}（モノレポでは親
  * {@code 工程管理AIプロジェクト_JAVA/.cursor/rules/agent-debug-ndjson-logging.mdc} が正本）。
  *
- * <p>Resolution order (first hit wins):
+ * <p>書き込みは複数候補を順に試す（いずれかが成功すればよい）。候補の組み立ては {@link #resolveNdjsonPath} と整合。
+ *
+ * <p>概略（重複パスは除外）:
  *
  * <ol>
- *   <li>{@code CURSOR_DEBUG_LOG} or {@code PM_AI_DEBUG_LOG} (absolute path to log file)</li>
- *   <li>UI env {@link AppPaths#KEY_PM_AI_CURSOR_DEBUG_LOG}</li>
- *   <li>{@code parent(resolveRepoRoot) / .cursor / debug-&lt;sessionId&gt;.log} (workspace {@code .cursor} when repo is
- *       {@code Production-Control-System})</li>
- *   <li>{@code resolveRepoRoot / .cursor / debug-&lt;sessionId&gt;.log}</li>
+ *   <li>{@code CURSOR_DEBUG_LOG} / {@code PM_AI_DEBUG_LOG}</li>
+ *   <li>UI {@link AppPaths#KEY_PM_AI_CURSOR_DEBUG_LOG}</li>
+ *   <li>{@code parent(resolveRepoRoot) / .cursor / …}（リーフが {@code Production-Control-System} のとき）</li>
+ *   <li>{@code resolveRepoRoot / .cursor / …}</li>
+ *   <li>{@code user.dir} を遡り、PM AI リポジトリらしき根に {@code .cursor / …}</li>
+ *   <li>{@code user.dir} を遡り、最初に見つかった {@code .cursor / …}</li>
+ *   <li>{@code user.home / .cursor / …}</li>
+ *   <li>{@code java.io.tmpdir / pm-ai-agent-debug-&lt;sessionId&gt;.ndjson}</li>
  * </ol>
- *
- * <p>If the primary path cannot be written, retries under {@code user.home/.cursor/}.
  */
 public final class AgentDebugLog {
 
@@ -50,33 +56,136 @@ public final class AgentDebugLog {
     }
 
     public static Path resolveNdjsonPath(Map<String, String> ui, String sessionId) {
+        List<Path> c = ndjsonWriteCandidates(ui, sessionId);
+        return c.isEmpty() ? tmpdirNdjsonPath(sessionId) : c.get(0);
+    }
+
+    /**
+     * 実際に追記を試みるパス候補（先頭ほど優先）。{@link #appendNdjsonLine} と同一順。
+     */
+    public static List<Path> ndjsonWriteCandidates(Map<String, String> ui, String sessionId) {
         String id =
                 sessionId == null || sessionId.isBlank()
                         ? DEFAULT_SESSION_ID
                         : sessionId.trim();
         String fileName = "debug-" + id + ".log";
 
+        LinkedHashSet<Path> seen = new LinkedHashSet<>();
+        List<Path> out = new ArrayList<>();
+
         Path envPath = pathFromEnvOverride();
         if (envPath != null) {
-            return envPath;
+            addCandidate(out, seen, envPath);
+            return out;
         }
 
         Map<String, String> u = ui != null ? ui : Map.of();
         String uiPath = trim(u.get(AppPaths.KEY_PM_AI_CURSOR_DEBUG_LOG));
         if (!uiPath.isEmpty()) {
-            return Path.of(uiPath).toAbsolutePath().normalize();
+            addCandidate(out, seen, Path.of(uiPath).toAbsolutePath().normalize());
+            return out;
         }
 
         Path repo = AppPaths.resolveRepoRoot(u);
-        /*
-         * Nested clone: repo leaf is Production-Control-System → workspace .cursor is parent(repo)/.cursor
-         * (see agent-debug-ndjson-logging.mdc). Flat repo: repo/.cursor (parent would be drive root — wrong).
-         */
         Path parent = repo.getParent();
         if (parent != null && isProductionControlSystemRepoLeaf(repo)) {
-            return parent.resolve(".cursor").resolve(fileName).toAbsolutePath().normalize();
+            addCandidate(
+                    out,
+                    seen,
+                    parent.resolve(".cursor").resolve(fileName).toAbsolutePath().normalize());
         }
-        return repo.resolve(".cursor").resolve(fileName).toAbsolutePath().normalize();
+        addCandidate(out, seen, repo.resolve(".cursor").resolve(fileName).toAbsolutePath().normalize());
+
+        Path walkedRepo = walkUpPmAiRepoCursorLog(fileName);
+        if (walkedRepo != null) {
+            addCandidate(out, seen, walkedRepo);
+        }
+        Path walkedCursor = walkUpFirstExistingCursorLog(fileName);
+        if (walkedCursor != null) {
+            addCandidate(out, seen, walkedCursor);
+        }
+
+        Path homeFallback =
+                Path.of(System.getProperty("user.home", "."))
+                        .resolve(".cursor")
+                        .resolve(fileName)
+                        .toAbsolutePath()
+                        .normalize();
+        addCandidate(out, seen, homeFallback);
+
+        addCandidate(out, seen, tmpdirNdjsonPath(sessionId));
+        return out;
+    }
+
+    private static void addCandidate(List<Path> out, LinkedHashSet<Path> seen, Path p) {
+        if (p == null) {
+            return;
+        }
+        Path n = p.toAbsolutePath().normalize();
+        if (seen.add(n)) {
+            out.add(n);
+        }
+    }
+
+    /**
+     * {@code user.dir} から上位へ遡り、リポジトリらしきディレクトリ直下の {@code .cursor/debug-…​.log}。
+     */
+    private static Path walkUpPmAiRepoCursorLog(String fileName) {
+        Path start = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
+        Path p = start;
+        for (int depth = 0; depth < 14 && p != null; depth++) {
+            if (looksLikePmAiRepositoryRoot(p)) {
+                return p.resolve(".cursor").resolve(fileName).toAbsolutePath().normalize();
+            }
+            p = p.getParent();
+        }
+        return null;
+    }
+
+    /**
+     * {@code user.dir} から上位へ遡り、最初に存在する {@code .cursor} ディレクトリ配下のログパス。
+     */
+    private static Path walkUpFirstExistingCursorLog(String fileName) {
+        Path start = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
+        Path p = start;
+        for (int depth = 0; depth < 14 && p != null; depth++) {
+            Path cursorDir = p.resolve(".cursor");
+            if (Files.isDirectory(cursorDir)) {
+                return cursorDir.resolve(fileName).toAbsolutePath().normalize();
+            }
+            p = p.getParent();
+        }
+        return null;
+    }
+
+    private static boolean looksLikePmAiRepositoryRoot(Path p) {
+        if (p == null || !Files.isDirectory(p)) {
+            return false;
+        }
+        try {
+            if (Files.isRegularFile(p.resolve("version.txt"))) {
+                return true;
+            }
+            Path pom = p.resolve("code_java").resolve("pom.xml");
+            if (Files.isRegularFile(pom)) {
+                return true;
+            }
+            Path py = p.resolve("code").resolve("python");
+            return Files.isDirectory(py);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static Path tmpdirNdjsonPath(String sessionId) {
+        String id =
+                sessionId == null || sessionId.isBlank()
+                        ? DEFAULT_SESSION_ID
+                        : sessionId.trim();
+        return Path.of(System.getProperty("java.io.tmpdir", "."))
+                .resolve("pm-ai-agent-debug-" + id + ".ndjson")
+                .toAbsolutePath()
+                .normalize();
     }
 
     private static boolean isProductionControlSystemRepoLeaf(Path repo) {
@@ -96,22 +205,11 @@ public final class AgentDebugLog {
      */
     public static Path appendNdjsonLine(Map<String, String> ui, String sessionId, String jsonLine) {
         String line = jsonLine.endsWith("\n") ? jsonLine : jsonLine + "\n";
-        Path primary = resolveNdjsonPath(ui, sessionId);
-        if (writeUtf8Append(primary, line)) {
-            return primary;
-        }
-        String id =
-                sessionId == null || sessionId.isBlank()
-                        ? DEFAULT_SESSION_ID
-                        : sessionId.trim();
-        Path fallback =
-                Path.of(System.getProperty("user.home", "."))
-                        .resolve(".cursor")
-                        .resolve("debug-" + id + ".log")
-                        .toAbsolutePath()
-                        .normalize();
-        if (writeUtf8Append(fallback, line)) {
-            return fallback;
+        List<Path> candidates = ndjsonWriteCandidates(ui, sessionId);
+        for (Path path : candidates) {
+            if (writeUtf8Append(path, line)) {
+                return path;
+            }
         }
         return null;
     }

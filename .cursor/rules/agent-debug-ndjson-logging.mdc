@@ -30,13 +30,18 @@ alwaysApply: true
 - Cursor デバッグセッションで ID が指定されているときは**その値**（例: `471ee7`, `f0dedd`）
 - それ以外は **`AgentDebugLog.DEFAULT_SESSION_ID`** または機能ごとに定数化
 
-## ログファイルの解決順（実装と同一・first hit）
+## ログファイルの解決（実装と同一）
+
+追記は **複数候補を順に試し、最初に書けたパスを採用**する（同一パスは除外）。`CURSOR_DEBUG_LOG` / UI キー単独指定のときはそのパスのみ。
 
 1. **`CURSOR_DEBUG_LOG`** または **`PM_AI_DEBUG_LOG`**（ログ**ファイル**への絶対パス）
 2. 環境タブ **`PM_AI_CURSOR_DEBUG_LOG`**（`AppPaths.KEY_PM_AI_CURSOR_DEBUG_LOG`）
-3. **`parent(resolveRepoRoot(ui))/.cursor/debug-<sessionId>.log`** — リポジトリが `Production-Control-System` のとき、多くの場合**ワークスペース直下**の `.cursor/`（例: `工程管理AIプロジェクト_JAVA/.cursor/debug-471ee7.log`）
+3. **`parent(resolveRepoRoot(ui))/.cursor/debug-<sessionId>.log`** — リポジトリ・リーフが `Production-Control-System` のとき（親がワークスペース直下の `.cursor/` になりやすい）
 4. **`resolveRepoRoot(ui)/.cursor/debug-<sessionId>.log`**
-5. 失敗時: **`user.home/.cursor/debug-<sessionId>.log`**
+5. **`user.dir` を上位へ遡ったとき**、`version.txt` / `code_java/pom.xml` / `code/python` などで **PM AI リポジトリ根**と判定できたディレクトリの **`.cursor/debug-<sessionId>.log`**
+6. **`user.dir` を上位へ遡り**、途中で見つかった最初の **`.cursor/debug-<sessionId>.log`**
+7. **`user.home/.cursor/debug-<sessionId>.log`**
+8. いずれも不可のときの最終手段: **`java.io.tmpdir/pm-ai-agent-debug-<sessionId>.ndjson`**
 
 ## コード上のレイアウト
 
