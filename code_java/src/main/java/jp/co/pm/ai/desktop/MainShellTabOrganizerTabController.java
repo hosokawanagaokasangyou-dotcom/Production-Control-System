@@ -878,24 +878,6 @@ public final class MainShellTabOrganizerTabController {
                 // 既定のまま
             }
             pill.getStyleClass().remove("pm-org-tree-pill-empty");
-            // #region agent log
-            try {
-                Map<String, Object> d = new LinkedHashMap<>();
-                d.put("treePillLabel", row.treePillPrimaryLabel(shell));
-                d.put("colorHex", hx.strip());
-                d.put("previewLabelFill", fill);
-                d.put(
-                        "treePillSurfacePreview",
-                        shell.tabOrganizerTreePillSurfaceStyle(hx.strip()));
-                shell.appendTabPreviewAgentDebug(
-                        "B",
-                        "MainShellTabOrganizerTabController.createPillForTreeItem",
-                        "ツリープレビューピル",
-                        d);
-            } catch (Throwable ignored) {
-                // debug-only
-            }
-            // #endregion
         } else {
             pill.getStyleClass().add("pm-org-tree-pill-empty");
             String emptyFill =
@@ -912,23 +894,6 @@ public final class MainShellTabOrganizerTabController {
             if (shell != null) {
                 previewContrastFill = emptyFill;
             }
-            // #region agent log
-            try {
-                Map<String, Object> d = new LinkedHashMap<>();
-                d.put("treePillLabel", row.treePillPrimaryLabel(shell));
-                d.put("colorHex", "");
-                d.put("previewLabelFill", emptyFill);
-                if (shell != null) {
-                    shell.appendTabPreviewAgentDebug(
-                            "B",
-                            "MainShellTabOrganizerTabController.createPillForTreeItem",
-                            "ツリープレビューピル（未着色）",
-                            d);
-                }
-            } catch (Throwable ignored) {
-                // debug-only
-            }
-            // #endregion
         }
         Tooltip.install(pill, new Tooltip(row.treeDetailWithoutHex(shell)));
         pill.getChildren().setAll(lab);
@@ -942,7 +907,7 @@ public final class MainShellTabOrganizerTabController {
 
     /**
      * プレビュー {@link Label} はシーン未接続ではスキンが無く子 {@link javafx.scene.text.Text} が無い。親 {@link StackPane} に載せたうえで
-     * シーン接続後にコントラスト色を子へ同期する（計測ログは据え置き）。
+     * シーン接続・スキン付与後にコントラスト色を子へ同期する。
      */
     private void scheduleOrganizerPillLabelContrastSync(Label lab, StackPane pill, String fillHex) {
         if (shell == null || fillHex == null || fillHex.isBlank()) {
@@ -950,25 +915,6 @@ public final class MainShellTabOrganizerTabController {
         }
         Runnable syncWork =
                 () -> {
-                    // #region agent log (cursor debug 8ffdd1)
-                    try {
-                        Map<String, Object> m = new LinkedHashMap<>();
-                        m.put("labScene", lab.getScene() != null);
-                        m.put("pillScene", pill.getScene() != null);
-                        m.put(
-                                "textCountBeforeCss",
-                                MainShellController.countTextDescendantsForDebug(lab));
-                        m.put("skinReady", lab.getSkin() != null);
-                        m.put("computedPreviewFill", fillHex);
-                        shell.cursorDebugNdjson8ffdd1(
-                                "A",
-                                "MainShellTabOrganizerTabController.scheduleOrganizerPillLabelContrastSync",
-                                "beforeApplyCss",
-                                m);
-                    } catch (Throwable ignored) {
-                        // debug-only
-                    }
-                    // #endregion
                     lab.applyCss();
                     lab.layout();
                     shell.syncOrganizerPreviewPillLabelTextNodes(lab, fillHex);

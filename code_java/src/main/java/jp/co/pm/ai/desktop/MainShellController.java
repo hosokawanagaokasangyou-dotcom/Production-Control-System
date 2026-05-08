@@ -48,7 +48,6 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
-import javafx.scene.paint.Paint;
 import javafx.scene.text.Text;
 import javafx.stage.Modality;
 import javafx.stage.Screen;
@@ -75,7 +74,6 @@ import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
@@ -87,15 +85,6 @@ import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
  * Layout: {@code MainShell.fxml} and tab FXML files.
  */
 public final class MainShellController {
-
-    /** Cursor デバッグセッション用（タブ整理プレビュー vs 実タブ配色の計測）。 */
-    private static final String AGENT_DEBUG_SESSION_TAB_PREVIEW = "8da428";
-
-    /**
-     * Cursor デバッグモード（タブ整理プレビュー vs 実タブ文字色）セッション ID。
-     * 出力は {@link AgentDebugLog#appendStructured}／候補チェーンに従う（{@code .cursor/rules/agent-debug-ndjson-logging.mdc}）。
-     */
-    private static final String CURSOR_DEBUG_SESSION_8FFDD1 = "8ffdd1";
 
     /**
      * {@link Tab#getProperties()} に登録済みかどうか。選択変更時に見出し chrome を再適用するリスナーを二重登録しない。
@@ -1180,21 +1169,6 @@ public final class MainShellController {
         if (hex.isEmpty()) {
             return;
         }
-        // #region agent log
-        try {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("tabText", tab.getText() != null ? tab.getText() : "");
-            row.put("storedHex", hex);
-            row.put("tabSelected", tab.isSelected());
-            appendTabPreviewAgentDebug(
-                    "F",
-                    "MainShellController.refreshShellTabChromeOnSelectionChange",
-                    "選択変化後の chrome 再適用",
-                    row);
-        } catch (Throwable ignored) {
-            // debug-only
-        }
-        // #endregion
         applyShellTabColor(tab, hex);
     }
 
@@ -1211,19 +1185,6 @@ public final class MainShellController {
                                 Platform.runLater(() -> refreshShellTabChromeOnSelectionChange(tab)));
     }
 
-    /** タブ整理プレビューと実タブの配色計測（同一パッケージのコントローラからも使用）。 */
-    void appendTabPreviewAgentDebug(String hypothesisId, String location, String message, Map<String, ?> data) {
-        // #region agent log
-        AgentDebugLog.appendStructured(
-                collectUiEnv(),
-                AGENT_DEBUG_SESSION_TAB_PREVIEW,
-                hypothesisId,
-                location,
-                message,
-                data != null ? data : Map.of());
-        // #endregion
-    }
-
     private void applyShellTabColor(Tab tab, String colorHex) {
         if (tab == null) {
             return;
@@ -1238,69 +1199,11 @@ public final class MainShellController {
                             ? shellTabHeaderGlowEffectCss(h)
                             : "";
             tab.setStyle(shellTabHeaderChromeInlineStyle(h, textFill, glowEffect));
-            // #region agent log
-            try {
-                Color cw = Color.web(h);
-                double lum =
-                        relativeSrgbLuminance(
-                                (int) Math.round(cw.getRed() * 255.0),
-                                (int) Math.round(cw.getGreen() * 255.0),
-                                (int) Math.round(cw.getBlue() * 255.0));
-                MainShellTabId mid = mainShellTabId(tab);
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("tabText", tab.getText() != null ? tab.getText() : "");
-                row.put("mainShellTabId", mid != null ? mid.name() : "");
-                row.put("colorHexParam", h);
-                row.put("computedTextFill", textFill);
-                row.put("bgRelativeLum", lum);
-                row.put("tabSelected", tab.isSelected());
-                row.put("glowEnabled", mainShellTabOrganizerHeaderGlowEnabled.get());
-                row.put("glowStrength", getMainShellTabOrganizerHeaderGlowStrength());
-                appendTabPreviewAgentDebug(
-                        "A",
-                        "MainShellController.applyShellTabColor",
-                        "着色タブへ chrome 適用",
-                        row);
-                appendCursorDebugNdjson8ffdd1(
-                        "C",
-                        "MainShellController.applyShellTabColor",
-                        "shellTabComputedChrome",
-                        Map.of(
-                                "mainShellTabId",
-                                mid != null ? mid.name() : "",
-                                "tabText",
-                                tab.getText() != null ? tab.getText() : "",
-                                "colorHexParam",
-                                h,
-                                "computedTextFill",
-                                textFill,
-                                "bgRelativeLum",
-                                lum));
-            } catch (Throwable ignored) {
-                // debug-only
-            }
-            // #endregion
-            pokeShellTabHeaderBackground(collectUiEnv(), pane, tab, h, textFill, glowEffect);
+            pokeShellTabHeaderBackground(pane, tab, h, textFill, glowEffect);
         } else {
             tab.getProperties().remove("pmShellTabColor");
             tab.setStyle("");
-            // #region agent log
-            try {
-                MainShellTabId mid = mainShellTabId(tab);
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("tabText", tab.getText() != null ? tab.getText() : "");
-                row.put("mainShellTabId", mid != null ? mid.name() : "");
-                row.put("tabSelected", tab.isSelected());
-                appendTabPreviewAgentDebug(
-                        "D",
-                        "MainShellController.applyShellTabColor",
-                        "色解除（既定へ）",
-                        row);
-            } catch (Throwable ignored) {
-                // debug-only
-            }
-            // #endregion
-            pokeShellTabHeaderBackground(collectUiEnv(), pane, tab, null, null, null);
+            pokeShellTabHeaderBackground(pane, tab, null, null, null);
         }
         ensureShellTabSelectionChromeListener(tab);
     }
@@ -1541,69 +1444,6 @@ public final class MainShellController {
         }
     }
 
-    // #region agent log (cursor debug 8ffdd1 — AgentDebugLog.appendStructured)
-    /**
-     * セッション {@link #CURSOR_DEBUG_SESSION_8FFDD1} 向け NDJSON。{@link AgentDebugLog#appendStructured} を使用し {@code ui} は
-     * {@link #collectUiEnv()}（子コントローラ経由でも {@link #snapshotUiEnv()} と同一）。
-     */
-    private void appendCursorDebugNdjson8ffdd1(
-            String hypothesisId, String location, String message, Map<String, Object> data) {
-        try {
-            Map<String, Object> payload =
-                    data != null ? new LinkedHashMap<>(data) : new LinkedHashMap<>();
-            payload.put(
-                    "ndjsonPathPrimary",
-                    AgentDebugLog.resolveNdjsonPath(collectUiEnv(), CURSOR_DEBUG_SESSION_8FFDD1)
-                            .toString());
-            AgentDebugLog.appendStructured(
-                    collectUiEnv(),
-                    CURSOR_DEBUG_SESSION_8FFDD1,
-                    hypothesisId,
-                    location,
-                    message,
-                    payload);
-        } catch (Throwable ignored) {
-            // debug-only
-        }
-    }
-
-    /** {@link MainShellTabOrganizerTabController} からの計測用（{@link #appendCursorDebugNdjson8ffdd1} と同一）。 */
-    public void cursorDebugNdjson8ffdd1(
-            String hypothesisId, String location, String message, Map<String, Object> data) {
-        appendCursorDebugNdjson8ffdd1(hypothesisId, location, message, data);
-    }
-
-    /** デバッグ計測：サブツリー内の {@link Text} 個数。 */
-    static int countTextDescendantsForDebug(Node root) {
-        int n = 0;
-        if (root instanceof Text) {
-            n++;
-        }
-        if (root instanceof Parent p) {
-            for (Node ch : p.getChildrenUnmodifiable()) {
-                n += countTextDescendantsForDebug(ch);
-            }
-        }
-        return n;
-    }
-
-    private static Text firstTextDescendantForDebug(Node root) {
-        if (root instanceof Text t) {
-            return t;
-        }
-        if (root instanceof Parent p) {
-            for (Node ch : p.getChildrenUnmodifiable()) {
-                Text x = firstTextDescendantForDebug(ch);
-                if (x != null) {
-                    return x;
-                }
-            }
-        }
-        return null;
-    }
-
-    // #endregion
-
     /**
      * タブ整理ツリーのプレビュー {@link Label} はメインタブ見出しと異なり単純な {@link Labeled} のため、テーマ CSS が子 {@link Text} の
      * {@code -fx-fill} を残し、親の {@code -fx-text-fill} だけでは実タブと文字色が食い違うことがある。
@@ -1633,95 +1473,11 @@ public final class MainShellController {
             return;
         }
         String tfIn = textFillHex.strip();
-        // #region agent log (8ffdd1)
-        try {
-            Text ftBefore = firstTextDescendantForDebug(labeled);
-            Map<String, Object> pre = new LinkedHashMap<>();
-            pre.put("sceneAttached", labeled.getScene() != null);
-            pre.put("textCount", countTextDescendantsForDebug(labeled));
-            pre.put("textFillTargetHex", tfIn);
-            Paint ltf = labeled.getTextFill();
-            pre.put("labeledTextFill", ltf != null ? ltf.toString() : "");
-            pre.put("firstTextMissing", ftBefore == null);
-            if (ftBefore != null) {
-                pre.put("firstTextFillBound", ftBefore.fillProperty().isBound());
-                Paint ff = ftBefore.getFill();
-                pre.put("firstTextFillPaint", ff != null ? ff.toString() : "");
-            }
-            pre.put(
-                    "firstTextFillStringBefore",
-                    firstTabLabelDescendantTextFillString(labeled));
-            appendCursorDebugNdjson8ffdd1(
-                    "D",
-                    "MainShellController.syncOrganizerPreviewPillLabelTextNodes",
-                    "beforeApply",
-                    pre);
-        } catch (Throwable ignored) {
-            // debug-only
-        }
-        // #endregion
         try {
             applyPreviewDescendantTextFillRecursive(labeled, Color.web(tfIn), textFillHex);
         } catch (IllegalArgumentException ex) {
-            // #region agent log (8ffdd1)
-            appendCursorDebugNdjson8ffdd1(
-                    "D",
-                    "MainShellController.syncOrganizerPreviewPillLabelTextNodes",
-                    "colorParseFailed",
-                    Map.of(
-                            "textFillHex",
-                            tfIn,
-                            "error",
-                            ex.getMessage() != null ? ex.getMessage() : ""));
-            // #endregion
             // テーマ側の既定のまま
         }
-        // #region agent log (8ffdd1)
-        try {
-            Text ftAfter = firstTextDescendantForDebug(labeled);
-            Map<String, Object> post = new LinkedHashMap<>();
-            post.put("textCount", countTextDescendantsForDebug(labeled));
-            post.put("firstTextMissing", ftAfter == null);
-            if (ftAfter != null) {
-                post.put("firstTextFillBound", ftAfter.fillProperty().isBound());
-                Paint ff = ftAfter.getFill();
-                post.put("firstTextFillPaint", ff != null ? ff.toString() : "");
-            }
-            post.put(
-                    "firstTextFillStringAfter",
-                    firstTabLabelDescendantTextFillString(labeled));
-            appendCursorDebugNdjson8ffdd1(
-                    "D",
-                    "MainShellController.syncOrganizerPreviewPillLabelTextNodes",
-                    "afterApply",
-                    post);
-            Platform.runLater(
-                    () -> {
-                        try {
-                            Text ftLate = firstTextDescendantForDebug(labeled);
-                            Map<String, Object> late = new LinkedHashMap<>();
-                            late.put("textCount", countTextDescendantsForDebug(labeled));
-                            late.put("firstTextMissing", ftLate == null);
-                            if (ftLate != null) {
-                                Paint ff = ftLate.getFill();
-                                late.put("firstTextFillPaint", ff != null ? ff.toString() : "");
-                            }
-                            late.put(
-                                    "firstTextFillStringDeferredPulse",
-                                    firstTabLabelDescendantTextFillString(labeled));
-                            appendCursorDebugNdjson8ffdd1(
-                                    "B",
-                                    "MainShellController.syncOrganizerPreviewPillLabelTextNodes",
-                                    "afterNextPulse",
-                                    late);
-                        } catch (Throwable ignored) {
-                            // debug-only
-                        }
-                    });
-        } catch (Throwable ignored) {
-            // debug-only
-        }
-        // #endregion
     }
 
     /** 着色解除時に {@link #applyShellTabHeaderForegroundRecursive} で付けたインラインを除去する。 */
@@ -1748,29 +1504,11 @@ public final class MainShellController {
         }
     }
 
-    /** デバッグ計測：{@code .tab-label} サブツリー内の最初の {@link Text} の {@code fill}。 */
-    private static String firstTabLabelDescendantTextFillString(Node root) {
-        if (root instanceof Text t) {
-            javafx.scene.paint.Paint f = t.getFill();
-            return f != null ? f.toString() : "";
-        }
-        if (root instanceof Parent p) {
-            for (Node ch : p.getChildrenUnmodifiable()) {
-                String s = firstTabLabelDescendantTextFillString(ch);
-                if (!s.isEmpty()) {
-                    return s;
-                }
-            }
-        }
-        return "";
-    }
-
     /**
      * テーマ CSS の {@code .tab-pane > ... > .tab:selected} 等が Tab のインラインより強く当たり色が変わらないことがあるため、
      * 見出し行のセル（{@code .headers-region} 直下の {@code .tab}）へ直接背景・文字色を指定する。
      */
     private static void pokeShellTabHeaderBackground(
-            Map<String, String> uiEnv,
             TabPane pane,
             Tab tab,
             String rgbHexOrNull,
@@ -1834,59 +1572,6 @@ public final class MainShellController {
                 };
         op.run();
         Platform.runLater(op);
-        // #region agent log
-        if (rgbHexOrNull != null
-                && !rgbHexOrNull.isBlank()
-                && labelFillHexOrNull != null
-                && !labelFillHexOrNull.isBlank()) {
-            final String expectedTf = labelFillHexOrNull.strip();
-            Platform.runLater(
-                    () ->
-                            Platform.runLater(
-                                    () -> {
-                                int idx2 = pane.getTabs().indexOf(tab);
-                                if (idx2 < 0) {
-                                    return;
-                                }
-                                Node headersRegion2 = pane.lookup(".headers-region");
-                                if (!(headersRegion2 instanceof Parent hp2)) {
-                                    return;
-                                }
-                                int ord = 0;
-                                for (Node ch : hp2.getChildrenUnmodifiable()) {
-                                    if (!ch.getStyleClass().contains("tab")) {
-                                        continue;
-                                    }
-                                    if (ord == idx2) {
-                                        Node lab2 = ch.lookup(".tab-label");
-                                        Map<String, Object> row = new LinkedHashMap<>();
-                                        row.put("expectedLabelFillHex", expectedTf);
-                                        row.put("tabSelectedAfter", tab.isSelected());
-                                        if (lab2 instanceof Labeled l2) {
-                                            javafx.scene.paint.Paint fill = l2.getTextFill();
-                                            row.put(
-                                                    "effectiveTextFill",
-                                                    fill != null ? fill.toString() : "");
-                                        } else {
-                                            row.put("effectiveTextFill", "");
-                                        }
-                                        row.put(
-                                                "firstDescendantTextFill",
-                                                firstTabLabelDescendantTextFillString(lab2));
-                                        AgentDebugLog.appendStructured(
-                                                uiEnv,
-                                                AGENT_DEBUG_SESSION_TAB_PREVIEW,
-                                                "C",
-                                                "MainShellController.pokeShellTabHeaderBackground",
-                                                "poke 後の実効ラベル色",
-                                                row);
-                                        return;
-                                    }
-                                    ord++;
-                                }
-                            }));
-        }
-        // #endregion
     }
 
     /**
