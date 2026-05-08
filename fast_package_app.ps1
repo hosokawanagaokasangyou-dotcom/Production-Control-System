@@ -490,7 +490,7 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
     $rmLines.Add('Excluded files (all profiles): *.log, ~$* (Excel lock).')
     $rmLines.Add("This folder sits next to $($AppExeBaseName).exe.")
     $rmLines.Add('Release: repo-root version.txt is also shipped next to the release ZIPs (not inside ZIP).')
-    $rmLines.Add('First launch: if 初回起動.txt exists next to this app exe, the desktop resets env-tab defaults once then deletes the marker (Initial install bundle only).')
+    $rmLines.Add('First launch: if the empty marker file next to this app exe exists, the desktop resets env-tab defaults once then deletes it (Initial install bundle only). See Java AppPaths.PORTABLE_FIRST_LAUNCH_MARKER_FILE.')
     $rmLines.Add('Portable sync: PM_AI_PORTABLE_BUNDLE_SOURCE_DIR may be a folder (repo root layout under pm-ai-data on share) or a path to PMD_version_upgrade_*.zip with version.txt beside the zip.')
     $rmLines.Add('Python: pm-ai-data\runtime\python-embed\python.exe (build cache: code_java\Cash_PMD, not bundled).')
     $rmLines.Add('Default inputs: input\task-input , input\actual-detail.')
@@ -951,7 +951,9 @@ foreach ($bd in @($bundleOutInitial, $bundleOutUpgrade)) {
 }
 
 # Initial install only: empty marker for first-launch env reset (Java deletes after success).
-$firstLaunchMarker = Join-Path $bundleOutInitial '初回起動.txt'
+# Build leaf name as UTF-16 code units to avoid script-file encoding mojibake on Windows PowerShell 5.1 (must match AppPaths.PORTABLE_FIRST_LAUNCH_MARKER_FILE).
+$firstLaunchLeaf = (-join @([char]0x521d, [char]0x56de, [char]0x8d77, [char]0x52d5)) + '.txt'
+$firstLaunchMarker = Join-Path $bundleOutInitial $firstLaunchLeaf
 [System.IO.File]::WriteAllText($firstLaunchMarker, '', [System.Text.UTF8Encoding]::new($false))
 Write-Host "First-launch marker (Initial only): $firstLaunchMarker" -ForegroundColor DarkGray
 
