@@ -73,6 +73,7 @@ import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
+import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
@@ -2929,7 +2930,18 @@ public final class MainShellController {
                                 line -> Platform.runLater(() -> appendLog(line)));
                     }
                     wait.close();
+                    try {
+                        DesktopSessionStateStore.applyPortableUpgradeBundledPolicyToSessionStore();
+                        TableColumnOrderPersistence
+                                .overwriteTableColumnOrderStoreFromBundledAfterPortableUpgrade();
+                    } catch (IOException ex) {
+                        appendLog(
+                                "[startup] バージョンアップ後のバンドル既定（タブ／列順／配台不要 JSON パス）の上書きに失敗: "
+                                        + ex.getMessage());
+                    }
                     applyBundledPortableDefaultsIfPresent();
+                    applyDesktopSession(DesktopSessionStateStore.load());
+                    DesktopSessionStateStore.save(collectDesktopSession());
                     mainRunTabController.refreshAppVersionLabel();
                     appendLog("[startup] ポータブル同期が完了しました（version.txt に従いファイルを更新）。");
                 });

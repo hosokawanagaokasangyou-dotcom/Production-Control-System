@@ -38,6 +38,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * <p>初回インストールでは {@code pm-ai-data/config/bundled_table_column_order.json}（またはクラスパス上の同名）を
  * {@link #materializeBundledDefaultsIfStoreMissing()} でユーザーホームへコピーしてから各タブが読み込む。
  *
+ * <p>ポータブル自動バージョンアップ後は {@link #overwriteTableColumnOrderStoreFromBundledAfterPortableUpgrade()} で
+ * {@link #STORE} を正本バンドルに合わせて上書きする。
+ *
  * <p>JSON value per key: an array of objects {@code title} + {@code width}. Legacy string-only arrays
  * (column order only) are still read; missing widths use the tab default (e.g. 112px).
  */
@@ -933,6 +936,19 @@ public final class TableColumnOrderPersistence {
     private static String colTitle(TableColumn<?, ?> c) {
         String t = c.getText();
         return t != null ? t : "";
+    }
+
+    /**
+     * ポータブル自動バージョンアップ直後に、{@code pm-ai-data/config/bundled_table_column_order.json}（またはクラスパス
+     * 既定）の内容で {@link #STORE} を上書きする。既存の列順・幅設定は失われる。
+     */
+    public static void overwriteTableColumnOrderStoreFromBundledAfterPortableUpgrade() throws IOException {
+        JsonNode bundled = readBundledTableColumnOrderRoot();
+        if (bundled == null || !bundled.isObject()) {
+            return;
+        }
+        Files.createDirectories(STORE.getParent());
+        JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), ((ObjectNode) bundled).deepCopy());
     }
 
     /**

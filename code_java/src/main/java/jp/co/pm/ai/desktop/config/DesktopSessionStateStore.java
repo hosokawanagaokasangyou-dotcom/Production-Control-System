@@ -25,6 +25,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * <p>初回などセッションファイルが無いときは、{@code pm-ai-data/config/bundled_session_ui_defaults.json}（メインシェル
  * タブ順・見出しグロー、設備ガント表示、バッジ等）またはクラスパス上の同名リソースを読み込む。旧ファイル名
  * {@code bundled_session_badge_defaults.json} が残っているインストーラでも読み込める。
+ *
+ * <p>ポータブル自動バージョンアップ後は {@link #applyPortableUpgradeBundledPolicyToSessionStore()} で同ファイルのキーを
+ * {@code ~/.pm-ai-desktop/session-state.json} に上書きし、配台不要 JSON パスも正本に合わせる。
  */
 public final class DesktopSessionStateStore {
 
@@ -99,6 +102,68 @@ public final class DesktopSessionStateStore {
             return fromCp;
         }
         return readBundledJsonFromClasspath(LEGACY_BUNDLED_SESSION_BADGE_DEFAULTS_RESOURCE);
+    }
+
+    /**
+     * ポータブル自動バージョンアップ（正本→ローカル {@code pm-ai-data} 同期）のあと、同梱された
+     * {@code bundled_session_ui_defaults.json} の各キーを {@link #STORE} に上書きし、
+     * {@code pm-ai-data/code/exclude_rules.json} があれば {@code excludeRulesPath} と環境タブ相当の
+     * {@link AppPaths#KEY_PM_AI_EXCLUDE_RULES_JSON} 行も最新の絶対パスへ更新する。
+     */
+    public static void applyPortableUpgradeBundledPolicyToSessionStore() throws IOException {
+        JsonNode bundled = readBundledSessionUiDefaultsNode();
+        ObjectNode root;
+        if (Files.isRegularFile(STORE)) {
+            JsonNode cur = JSON.readTree(STORE.toFile());
+            root = cur != null && cur.isObject() ? (ObjectNode) cur : JSON.createObjectNode();
+        } else {
+            root = JSON.createObjectNode();
+        }
+        if (bundled != null && bundled.isObject()) {
+            ObjectNode bo = (ObjectNode) bundled;
+            Iterator<String> fn = bo.fieldNames();
+            while (fn.hasNext()) {
+                String k = fn.next();
+                JsonNode v = bo.get(k);
+                if (v != null) {
+                    root.set(k, v.deepCopy());
+                }
+            }
+            if (bo.has("mainShellTabOrder")) {
+                root.remove("mainShellTabLayout");
+            }
+        }
+        Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
+        Path exclude = cwd.resolve("pm-ai-data").resolve("code").resolve("exclude_rules.json");
+        if (Files.isRegularFile(exclude)) {
+            String abs = exclude.toAbsolutePath().normalize().toString();
+            root.put("excludeRulesPath", abs);
+            putOrUpdateUiEnvRowValueInSessionRoot(root, AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON, abs);
+        }
+        Files.createDirectories(STORE.getParent());
+        JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
+    }
+
+    private static void putOrUpdateUiEnvRowValueInSessionRoot(ObjectNode root, String key, String value) {
+        JsonNode arrNode = root.get("uiEnvRows");
+        ArrayNode arr;
+        if (arrNode != null && arrNode.isArray()) {
+            arr = (ArrayNode) arrNode;
+        } else {
+            arr = JSON.createArrayNode();
+            root.set("uiEnvRows", arr);
+        }
+        for (int i = 0; i < arr.size(); i++) {
+            JsonNode el = arr.get(i);
+            if (el != null && el.isObject() && key.equals(text(el, "name"))) {
+                ((ObjectNode) el).put("value", value != null ? value : "");
+                return;
+            }
+        }
+        ObjectNode o = arr.addObject();
+        o.put("name", key);
+        o.put("value", value != null ? value : "");
+        o.put("description", "");
     }
 
     private static JsonNode readBundledJsonFromClasspath(String resourcePath) {

@@ -482,11 +482,12 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
     if ($BundleKind -eq 'InitialInstall') {
         $rmLines.Add('Bundle profile: InitialInstall - excludes .git, .venv, .cursor, .vscode, code/VBA, code_java build/cache dirs, pm-ai-package-release/, **/__pycache__, **/.pytest_cache, build_cache.')
         $rmLines.Add('Does NOT exclude plan/plans or code/output (may include local artifacts if present).')
-        $rmLines.Add('Desktop UI defaults (Initial): pm-ai-data/config/bundled_session_ui_defaults.json (session fragment: main tab order/title aliases/header glow, gantt sliders, badges when ~/.pm-ai-desktop/session-state.json is missing; JAR fallback) and bundled_table_column_order.json (column layouts; materialized to ~/.pm-ai-desktop/table-column-order.json on first launch).')
-        $rmLines.Add('Exclude rules JSON (Initial): pm-ai-data/code/exclude_rules.json (copy of code/json/stage1_exclude_rules.json when present, else JAR-resource fallback bundled_exclude_rules.json) so PM_AI_EXCLUDE_RULES_JSON bootstrap in MainShellController finds a file.')
+        $rmLines.Add('Desktop UI defaults (Initial + VersionUpgrade): pm-ai-data/config/bundled_session_ui_defaults.json (session fragment: main tab order/title aliases/header glow, gantt sliders, badges; JAR fallback) and bundled_table_column_order.json (column layouts). After portable version sync, Java overwrites ~/.pm-ai-desktop session-state.json keys and table-column-order.json from these files.')
+        $rmLines.Add('Exclude rules JSON (Initial + VersionUpgrade): pm-ai-data/code/exclude_rules.json (copy of code/json/stage1_exclude_rules.json when present, else JAR-resource fallback bundled_exclude_rules.json) for PM_AI_EXCLUDE_RULES_JSON bootstrap and post-sync session overwrite.')
     }
     else {
         $rmLines.Add('Bundle profile: VersionUpgrade - also excludes **/plan, **/plans, code/output/, repo output/, code/python/output/, .pm-ai-cache/, extra env-var TSVs (template TSV still bundled), .env.')
+        $rmLines.Add('Bundled policy (Upgrade): pm-ai-data/config/bundled_session_ui_defaults.json + bundled_table_column_order.json + code/exclude_rules.json (same as Initial); portable sync overwrites local pm-ai-data then Java overwrites ~/.pm-ai-desktop session tab prefs and table-column-order.json from these files.')
         $rmLines.Add('See package_workspace_copy.ps1 for exact rules.')
     }
     $rmLines.Add('Excluded files (all profiles): *.log, ~$* (Excel lock).')
@@ -500,7 +501,7 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
     $rmLines.Add('')
     $rmLines | Set-Content -LiteralPath $readme -Encoding UTF8
 
-    if ($BundleKind -eq 'InitialInstall') {
+    if ($BundleKind -eq 'InitialInstall' -or $BundleKind -eq 'VersionUpgrade') {
         $cfgDestDir = Join-Path $data 'config'
         New-Item -ItemType Directory -Path $cfgDestDir -Force | Out-Null
         $resRoot = Join-Path $WorkspaceRootPath 'code_java/src/main/resources/jp/co/pm/ai/desktop/config'
@@ -508,13 +509,13 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
         if (Test-Path -LiteralPath $sessionUiSrc) {
             $sessionDest = Join-Path $cfgDestDir 'bundled_session_ui_defaults.json'
             Copy-Item -LiteralPath $sessionUiSrc -Destination $sessionDest -Force
-            Write-Host "Bundled session UI defaults (Initial): $sessionDest" -ForegroundColor DarkGray
+            Write-Host "Bundled session UI defaults ($BundleKind): $sessionDest" -ForegroundColor DarkGray
         }
         $tableColSrc = Join-Path $resRoot 'bundled_table_column_order.json'
         if (Test-Path -LiteralPath $tableColSrc) {
             $tableDest = Join-Path $cfgDestDir 'bundled_table_column_order.json'
             Copy-Item -LiteralPath $tableColSrc -Destination $tableDest -Force
-            Write-Host "Bundled table column order template (Initial): $tableDest" -ForegroundColor DarkGray
+            Write-Host "Bundled table column order template ($BundleKind): $tableDest" -ForegroundColor DarkGray
         }
 
         # 配台不要ルール: 環境タブ既定（MainShellController.maybeFillEmptyBootstrap）が参照する code/exclude_rules.json を同梱
@@ -523,14 +524,14 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
         $bundledExcludeFallback = Join-Path $resRoot 'bundled_exclude_rules.json'
         if (Test-Path -LiteralPath $stage1ExcludeSrc) {
             Copy-Item -LiteralPath $stage1ExcludeSrc -Destination $excludeRulesDest -Force
-            Write-Host "Bundled exclude rules JSON via stage1 mirror (Initial): $excludeRulesDest" -ForegroundColor DarkGray
+            Write-Host "Bundled exclude rules JSON via stage1 mirror ($BundleKind): $excludeRulesDest" -ForegroundColor DarkGray
         }
         elseif (Test-Path -LiteralPath $bundledExcludeFallback) {
             Copy-Item -LiteralPath $bundledExcludeFallback -Destination $excludeRulesDest -Force
-            Write-Host "Bundled exclude rules JSON from classpath fallback (Initial): $excludeRulesDest" -ForegroundColor DarkGray
+            Write-Host "Bundled exclude rules JSON from classpath fallback ($BundleKind): $excludeRulesDest" -ForegroundColor DarkGray
         }
         else {
-            Write-Warning "Initial bundle: missing code\json\stage1_exclude_rules.json and bundled_exclude_rules.json — code\exclude_rules.json not materialized."
+            Write-Warning "Bundle ($BundleKind): missing code\json\stage1_exclude_rules.json and bundled_exclude_rules.json — code\exclude_rules.json not materialized."
         }
     }
 }
