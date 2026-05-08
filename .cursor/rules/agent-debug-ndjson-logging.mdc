@@ -7,7 +7,7 @@ alwaysApply: true
 
 ## 実装の正
 
-- **コード**: `Production-Control-System/code_java/src/main/java/jp/co/pm/ai/desktop/debug/AgentDebugLog.java`
+- **コード**: `code_java/src/main/java/jp/co/pm/ai/desktop/debug/AgentDebugLog.java`（ネストクローンでは `Production-Control-System/code_java/...` と同等）
 
 ## 出力に使う API（必須）
 

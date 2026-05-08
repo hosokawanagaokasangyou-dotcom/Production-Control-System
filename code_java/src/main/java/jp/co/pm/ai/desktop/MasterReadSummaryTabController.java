@@ -33,8 +33,11 @@ import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 /** Master workbook read summary (Python JSON); layout {@code MasterReadSummaryTab.fxml}. */
 public final class MasterReadSummaryTabController {
 
-    /** Cursor debug session NDJSON (agent-debug-ndjson-logging.mdc). */
-    private static final String AGENT_DEBUG_SESSION_ID = "6f550e";
+    /**
+     * {@link AgentDebugLog} 用セッション ID（.cursor/rules/agent-debug-ndjson-logging.mdc）。
+     * Cursor デバッグで ID が提示されたターンのみ一時的に差し替え。通常は {@link AgentDebugLog#DEFAULT_SESSION_ID}。
+     */
+    private static final String AGENT_DEBUG_SESSION_ID = AgentDebugLog.DEFAULT_SESSION_ID;
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -380,6 +383,25 @@ public final class MasterReadSummaryTabController {
         this.requestFactory = shell::buildMasterReadSummaryRequest;
     }
 
+    /**
+     * Agent NDJSON: {@code shell.snapshotUiEnv()} と同一規約で {@link AgentDebugLog#resolveNdjsonPath} を {@code data}
+     * に載せてから {@link AgentDebugLog#appendStructured}。
+     */
+    private void agentDebugAppendStructured(
+            Map<String, String> ui,
+            String hypothesisId,
+            String location,
+            String message,
+            Map<String, Object> data) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Map<String, Object> payload = new LinkedHashMap<>(data != null ? data : Map.of());
+        payload.put(
+                "ndjsonPath",
+                AgentDebugLog.resolveNdjsonPath(u, AGENT_DEBUG_SESSION_ID).toString());
+        AgentDebugLog.appendStructured(
+                u, AGENT_DEBUG_SESSION_ID, hypothesisId, location, message, payload);
+    }
+
     @FXML
     private void onRefreshAction() {
         refreshButton.setDisable(true);
@@ -397,9 +419,8 @@ public final class MasterReadSummaryTabController {
             data.put(
                     "workbookArgTail",
                     wb != null && wb.length() > 120 ? wb.substring(wb.length() - 120) : wb);
-            AgentDebugLog.appendStructured(
+            agentDebugAppendStructured(
                     shell.snapshotUiEnv(),
-                    AGENT_DEBUG_SESSION_ID,
                     "D",
                     "MasterReadSummaryTabController.onRefreshAction",
                     "RunRequest before PythonProcessRunner.runCaptureAsync",
@@ -420,9 +441,8 @@ public final class MasterReadSummaryTabController {
                                                 Map<String, Object> fail = new LinkedHashMap<>();
                                                 fail.put("errorClass", err.getClass().getSimpleName());
                                                 fail.put("errorMessage", err.getMessage());
-                                                AgentDebugLog.appendStructured(
+                                                agentDebugAppendStructured(
                                                         shell.snapshotUiEnv(),
-                                                        AGENT_DEBUG_SESSION_ID,
                                                         "D",
                                                         "MasterReadSummaryTabController.onRefreshAction",
                                                         "runCaptureAsync failed before stdout",
@@ -484,9 +504,8 @@ public final class MasterReadSummaryTabController {
             data.put("jsonPayloadChars", jsonPayload.length());
             data.put("jsonPayloadStartsTraceback", jsonPayload.trim().startsWith("Traceback"));
             data.put("jsonPayloadPreview", debugPreview(jsonPayload, 500));
-            AgentDebugLog.appendStructured(
+            agentDebugAppendStructured(
                     shell != null ? shell.snapshotUiEnv() : Map.of(),
-                    AGENT_DEBUG_SESSION_ID,
                     "A",
                     "MasterReadSummaryTabController.applyStdout",
                     "stdout summary before JSON.readTree",
@@ -515,9 +534,8 @@ public final class MasterReadSummaryTabController {
             errData.put(
                     "mergedStderrIntoStdoutNote",
                     "PythonProcessRunner merges stderr into stdout (redirectErrorStream)");
-            AgentDebugLog.appendStructured(
+            agentDebugAppendStructured(
                     shell != null ? shell.snapshotUiEnv() : Map.of(),
-                    AGENT_DEBUG_SESSION_ID,
                     "B",
                     "MasterReadSummaryTabController.applyStdout",
                     "JSON.parse failed",
