@@ -2,7 +2,9 @@ package jp.co.pm.ai.desktop;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
@@ -853,14 +855,49 @@ public final class MainShellTabOrganizerTabController {
                             + fill
                             + "; -fx-font-size: 11px; -fx-font-weight: bold;");
             pill.getStyleClass().remove("pm-org-tree-pill-empty");
+            // #region agent log
+            try {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("treePillLabel", row.treePillPrimaryLabel(shell));
+                d.put("colorHex", hx.strip());
+                d.put("previewLabelFill", fill);
+                d.put(
+                        "treePillSurfacePreview",
+                        shell.tabOrganizerTreePillSurfaceStyle(hx.strip()));
+                shell.appendTabPreviewAgentDebug(
+                        "B",
+                        "MainShellTabOrganizerTabController.createPillForTreeItem",
+                        "ツリープレビューピル",
+                        d);
+            } catch (Throwable ignored) {
+                // debug-only
+            }
+            // #endregion
         } else {
             pill.getStyleClass().add("pm-org-tree-pill-empty");
+            String emptyFill =
+                    shell != null ? shell.tabOrganizerPreviewChipLabelTextFill("") : "#94a3b8";
             lab.setStyle(
                     "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: "
-                            + (shell != null
-                                    ? shell.tabOrganizerPreviewChipLabelTextFill("")
-                                    : "#94a3b8")
+                            + emptyFill
                             + ";");
+            // #region agent log
+            try {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("treePillLabel", row.treePillPrimaryLabel(shell));
+                d.put("colorHex", "");
+                d.put("previewLabelFill", emptyFill);
+                if (shell != null) {
+                    shell.appendTabPreviewAgentDebug(
+                            "B",
+                            "MainShellTabOrganizerTabController.createPillForTreeItem",
+                            "ツリープレビューピル（未着色）",
+                            d);
+                }
+            } catch (Throwable ignored) {
+                // debug-only
+            }
+            // #endregion
         }
         Tooltip.install(pill, new Tooltip(row.treeDetailWithoutHex(shell)));
         pill.getChildren().setAll(lab);

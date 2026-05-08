@@ -73,6 +73,7 @@ import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
@@ -84,6 +85,9 @@ import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
  * Layout: {@code MainShell.fxml} and tab FXML files.
  */
 public final class MainShellController {
+
+    /** Cursor デバッグセッション用（タブ整理プレビュー vs 実タブ配色の計測）。 */
+    private static final String AGENT_DEBUG_SESSION_TAB_PREVIEW = "8da428";
 
     private static final String STAGE1 = "task_extract_stage1.py";
     private static final String STAGE2 = "plan_simulation_stage2.py";
@@ -1151,6 +1155,19 @@ public final class MainShellController {
         return v instanceof String s && !s.isBlank() ? s.strip() : "";
     }
 
+    /** タブ整理プレビューと実タブの配色計測（同一パッケージのコントローラからも使用）。 */
+    void appendTabPreviewAgentDebug(String hypothesisId, String location, String message, Map<String, ?> data) {
+        // #region agent log
+        AgentDebugLog.appendStructured(
+                collectUiEnv(),
+                AGENT_DEBUG_SESSION_TAB_PREVIEW,
+                hypothesisId,
+                location,
+                message,
+                data != null ? data : Map.of());
+        // #endregion
+    }
+
     private void applyShellTabColor(Tab tab, String colorHex) {
         if (tab == null) {
             return;
@@ -1165,11 +1182,54 @@ public final class MainShellController {
                             ? shellTabHeaderGlowEffectCss(h)
                             : "";
             tab.setStyle(shellTabHeaderChromeInlineStyle(h, textFill, glowEffect));
-            pokeShellTabHeaderBackground(pane, tab, h, textFill, glowEffect);
+            // #region agent log
+            try {
+                Color cw = Color.web(h);
+                double lum =
+                        relativeSrgbLuminance(
+                                (int) Math.round(cw.getRed() * 255.0),
+                                (int) Math.round(cw.getGreen() * 255.0),
+                                (int) Math.round(cw.getBlue() * 255.0));
+                MainShellTabId mid = mainShellTabId(tab);
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("tabText", tab.getText() != null ? tab.getText() : "");
+                row.put("mainShellTabId", mid != null ? mid.name() : "");
+                row.put("colorHexParam", h);
+                row.put("computedTextFill", textFill);
+                row.put("bgRelativeLum", lum);
+                row.put("tabSelected", tab.isSelected());
+                row.put("glowEnabled", mainShellTabOrganizerHeaderGlowEnabled.get());
+                row.put("glowStrength", getMainShellTabOrganizerHeaderGlowStrength());
+                appendTabPreviewAgentDebug(
+                        "A",
+                        "MainShellController.applyShellTabColor",
+                        "着色タブへ chrome 適用",
+                        row);
+            } catch (Throwable ignored) {
+                // debug-only
+            }
+            // #endregion
+            pokeShellTabHeaderBackground(collectUiEnv(), pane, tab, h, textFill, glowEffect);
         } else {
             tab.getProperties().remove("pmShellTabColor");
             tab.setStyle("");
-            pokeShellTabHeaderBackground(pane, tab, null, null, null);
+            // #region agent log
+            try {
+                MainShellTabId mid = mainShellTabId(tab);
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("tabText", tab.getText() != null ? tab.getText() : "");
+                row.put("mainShellTabId", mid != null ? mid.name() : "");
+                row.put("tabSelected", tab.isSelected());
+                appendTabPreviewAgentDebug(
+                        "D",
+                        "MainShellController.applyShellTabColor",
+                        "色解除（既定へ）",
+                        row);
+            } catch (Throwable ignored) {
+                // debug-only
+            }
+            // #endregion
+            pokeShellTabHeaderBackground(collectUiEnv(), pane, tab, null, null, null);
         }
     }
 
@@ -1367,6 +1427,7 @@ public final class MainShellController {
      * 見出し行のセル（{@code .headers-region} 直下の {@code .tab}）へ直接背景・文字色を指定する。
      */
     private static void pokeShellTabHeaderBackground(
+            Map<String, String> uiEnv,
             TabPane pane,
             Tab tab,
             String rgbHexOrNull,
@@ -1424,6 +1485,56 @@ public final class MainShellController {
                 };
         op.run();
         Platform.runLater(op);
+        // #region agent log
+        if (rgbHexOrNull != null
+                && !rgbHexOrNull.isBlank()
+                && labelFillHexOrNull != null
+                && !labelFillHexOrNull.isBlank()) {
+            final String expectedTf = labelFillHexOrNull.strip();
+            Platform.runLater(
+                    () ->
+                            Platform.runLater(
+                                    () -> {
+                                int idx2 = pane.getTabs().indexOf(tab);
+                                if (idx2 < 0) {
+                                    return;
+                                }
+                                Node headersRegion2 = pane.lookup(".headers-region");
+                                if (!(headersRegion2 instanceof Parent hp2)) {
+                                    return;
+                                }
+                                int ord = 0;
+                                for (Node ch : hp2.getChildrenUnmodifiable()) {
+                                    if (!ch.getStyleClass().contains("tab")) {
+                                        continue;
+                                    }
+                                    if (ord == idx2) {
+                                        Node lab2 = ch.lookup(".tab-label");
+                                        Map<String, Object> row = new LinkedHashMap<>();
+                                        row.put("expectedLabelFillHex", expectedTf);
+                                        row.put("tabSelectedAfter", tab.isSelected());
+                                        if (lab2 instanceof Labeled l2) {
+                                            javafx.scene.paint.Paint fill = l2.getTextFill();
+                                            row.put(
+                                                    "effectiveTextFill",
+                                                    fill != null ? fill.toString() : "");
+                                        } else {
+                                            row.put("effectiveTextFill", "");
+                                        }
+                                        AgentDebugLog.appendStructured(
+                                                uiEnv,
+                                                AGENT_DEBUG_SESSION_TAB_PREVIEW,
+                                                "C",
+                                                "MainShellController.pokeShellTabHeaderBackground",
+                                                "poke 後の実効ラベル色",
+                                                row);
+                                        return;
+                                    }
+                                    ord++;
+                                }
+                            }));
+        }
+        // #endregion
     }
 
     /**
