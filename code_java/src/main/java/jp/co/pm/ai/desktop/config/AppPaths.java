@@ -186,10 +186,11 @@ public final class AppPaths {
     public static final String KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR = "PM_AI_PORTABLE_BUNDLE_SOURCE_DIR";
 
     /**
-     * 環境変数タブ・{@code ui_ref_env_defaults.json} で値が空のときの工場共有上の正本ルート（UNC）。ユーザーが上書き可能。
+     * 環境変数タブ・{@code ui_ref_env_defaults.json} で値が空のときの工場共有上の正本（UNC）。バージョンアップ用 ZIP と外付け
+     * {@code version.txt} を置く {@code pm-ai-package-release} フォルダを指す。ユーザーが上書き可能。
      */
     public static final String DEFAULT_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR =
-            "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\PMD_version_upgrade";
+            "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\pm-ai-package-release";
 
     /** リポジトリ直下および {@code pm-ai-data} 直下で共用する版ファイル名。 */
     public static final String VERSION_TXT_FILE_NAME = "version.txt";
