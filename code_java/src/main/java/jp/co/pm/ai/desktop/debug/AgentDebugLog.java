@@ -10,9 +10,13 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Comparator;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -45,6 +49,11 @@ public final class AgentDebugLog {
     public static final String DEFAULT_SESSION_ID = "e04a1d";
 
     private static final ObjectMapper JSON = new ObjectMapper();
+
+    /** Lazily resolved when {@code WSL_DISTRO_NAME} / {@code PM_AI_WSL_DISTRO} are unset (powershell.exe 子プロセスではよく未設定）。 */
+    private static volatile boolean wslDistroDiscoveryAttempted;
+
+    private static volatile String cachedDiscoveredWslDistro;
 
     private AgentDebugLog() {}
 
@@ -129,6 +138,14 @@ public final class AgentDebugLog {
 
     /** Package-private: mirror path string for tests ({@code C:\...} → {@code \\wsl$\distro\mnt\c\...}). */
     static String buildWslUncPathString(String windowsNormalizedAbsolute, String distro) {
+        return buildWslUncPathString(windowsNormalizedAbsolute, distro, "\\\\wsl$\\");
+    }
+
+    /**
+     * @param uncRootPrefix UNC のルート（{@code \\\\wsl$\\} または {@code \\\\wsl.localhost\\}）。末尾はバックスラッシュを付ける。
+     */
+    static String buildWslUncPathString(
+            String windowsNormalizedAbsolute, String distro, String uncRootPrefix) {
         if (distro == null || distro.isBlank()) {
             return null;
         }
@@ -143,7 +160,8 @@ public final class AgentDebugLog {
         if (!tail.startsWith("\\")) {
             tail = "\\" + tail;
         }
-        return "\\\\wsl$\\"
+        String root = uncRootPrefix != null ? uncRootPrefix : "\\\\wsl$\\";
+        return root
                 + distro.trim()
                 + "\\mnt\\"
                 + Character.toLowerCase(dl)
@@ -168,11 +186,72 @@ public final class AgentDebugLog {
             return d;
         }
         d = trim(System.getenv("WSL_DISTRO_NAME"));
-        return d.isEmpty() ? null : d;
+        if (!d.isEmpty()) {
+            return d;
+        }
+        return discoverWslDistroNameCached();
     }
 
-    private static Path windowsDrivePathToWslUnc(Path absoluteDrivePath, String distro) {
-        String unc = buildWslUncPathString(absoluteDrivePath.normalize().toString(), distro);
+    private static String discoverWslDistroNameCached() {
+        if (wslDistroDiscoveryAttempted) {
+            return cachedDiscoveredWslDistro;
+        }
+        synchronized (AgentDebugLog.class) {
+            if (wslDistroDiscoveryAttempted) {
+                return cachedDiscoveredWslDistro;
+            }
+            wslDistroDiscoveryAttempted = true;
+            cachedDiscoveredWslDistro = discoverWslDistroByListingShare();
+            return cachedDiscoveredWslDistro;
+        }
+    }
+
+    /**
+     * {@code \\\\wsl$\\} を列挙し、docker-desktop 等を除いて優先する（名前に {@code ubuntu} を含むものを優先）。
+     */
+    private static String discoverWslDistroByListingShare() {
+        if (!isWindowsOs()) {
+            return null;
+        }
+        try (Stream<Path> stream = Files.list(Path.of("\\\\wsl$\\"))) {
+            List<String> names =
+                    stream.filter(
+                                    p -> {
+                                        try {
+                                            return Files.isDirectory(p);
+                                        } catch (Throwable ignored) {
+                                            return false;
+                                        }
+                                    })
+                            .map(p -> p.getFileName().toString())
+                            .filter(AgentDebugLog::isPlausibleUserWslDistroFolder)
+                            .sorted()
+                            .collect(Collectors.toList());
+            Optional<String> ubuntu =
+                    names.stream()
+                            .filter(n -> n.toLowerCase(Locale.ROOT).contains("ubuntu"))
+                            .min(Comparator.naturalOrder());
+            return ubuntu.orElseGet(() -> names.isEmpty() ? null : names.get(0));
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static boolean isPlausibleUserWslDistroFolder(String name) {
+        if (name == null || name.isBlank()) {
+            return false;
+        }
+        String lower = name.toLowerCase(Locale.ROOT);
+        if (lower.equals("docker-desktop")
+                || lower.startsWith("rancher-desktop")
+                || lower.contains("podman")) {
+            return false;
+        }
+        return true;
+    }
+
+    private static Path windowsDrivePathToWslUnc(Path absoluteDrivePath, String distro, String uncRoot) {
+        String unc = buildWslUncPathString(absoluteDrivePath.normalize().toString(), distro, uncRoot);
         return unc != null ? Path.of(unc) : null;
     }
 
@@ -205,9 +284,15 @@ public final class AgentDebugLog {
         }
         if (isWindowsOs() && wslUncMirrorEnabled()) {
             String distro = resolveWslDistroName();
-            Path unc = windowsDrivePathToWslUnc(primaryWritten, distro);
-            if (unc != null) {
-                out.add(unc);
+            if (distro != null) {
+                Path uncWsl = windowsDrivePathToWslUnc(primaryWritten, distro, "\\\\wsl$\\");
+                if (uncWsl != null) {
+                    out.add(uncWsl);
+                }
+                Path uncLh = windowsDrivePathToWslUnc(primaryWritten, distro, "\\\\wsl.localhost\\");
+                if (uncLh != null) {
+                    out.add(uncLh);
+                }
             }
         }
         return new ArrayList<>(out);

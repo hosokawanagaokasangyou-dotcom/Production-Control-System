@@ -16,6 +16,14 @@ class AgentDebugLogMirrorPathTest {
     }
 
     @Test
+    void buildWslUncPathString_wslLocalhostPrefix() {
+        assertEquals(
+                "\\\\wsl.localhost\\Ubuntu\\mnt\\c\\repo\\.cursor\\x.log",
+                AgentDebugLog.buildWslUncPathString(
+                        "C:\\repo\\.cursor\\x.log", "Ubuntu", "\\\\wsl.localhost\\"));
+    }
+
+    @Test
     void buildWslUncPathString_forwardSlashesNormalized() {
         assertEquals(
                 "\\\\wsl$\\Ubuntu\\mnt\\c\\repo\\.cursor\\x.log",
