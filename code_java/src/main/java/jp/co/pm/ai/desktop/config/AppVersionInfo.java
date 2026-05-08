@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Optional;
 
 /** Resolves {@link AppPaths#VERSION_TXT_FILE_NAME} for the run tab label. */
 public final class AppVersionInfo {
@@ -26,10 +27,10 @@ public final class AppVersionInfo {
                         .resolve("task_extract_stage1.py");
         try {
             if (Files.isRegularFile(portableMarker)) {
-                Path vf = c.resolve("pm-ai-data").resolve(AppPaths.VERSION_TXT_FILE_NAME);
-                return PortableBundleSelfUpdater.parseVersionFile(vf)
-                        .map(BigDecimal::toPlainString)
-                        .orElse(VERSION_UNKNOWN);
+                Path pmData = c.resolve("pm-ai-data");
+                Optional<BigDecimal> v =
+                        PortableBundleSelfUpdater.readLocalBundleVersion(c, pmData);
+                return v.map(BigDecimal::toPlainString).orElse(VERSION_UNKNOWN);
             }
             Path repo = AppPaths.resolveRepoRoot(ui != null ? ui : Map.of());
             Path vf = repo.resolve(AppPaths.VERSION_TXT_FILE_NAME);

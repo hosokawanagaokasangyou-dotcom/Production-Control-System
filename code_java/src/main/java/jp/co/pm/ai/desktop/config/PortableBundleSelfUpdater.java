@@ -11,6 +11,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -34,15 +35,128 @@ public final class PortableBundleSelfUpdater {
         return Files.isRegularFile(marker);
     }
 
+    /** Reads {@link AppPaths#VERSION_TXT_FILE_NAME} at canonical repo root or, when {@code canonicalPath} is a {@code .zip} file, beside that zip. */
+    public static Optional<BigDecimal> readCanonicalPortableBundleVersion(Path canonicalPath) {
+        Objects.requireNonNull(canonicalPath, "canonicalPath");
+        Path abs = canonicalPath.toAbsolutePath().normalize();
+        if (isPortableBundleZipPath(abs)) {
+            Path outer = abs.getParent() != null ? abs.getParent().resolve(AppPaths.VERSION_TXT_FILE_NAME) : null;
+            if (outer == null) {
+                return Optional.empty();
+            }
+            return parseVersionFile(outer);
+        }
+        return readBundleVersion(abs);
+    }
+
+    /** Reads {@link AppPaths#VERSION_TXT_FILE_NAME} under {@code pm-ai-data}, then {@code cwd} when missing (release ZIP omits inner version). */
+    public static Optional<BigDecimal> readLocalBundleVersion(Path cwd, Path pmAiDataRoot) {
+        Objects.requireNonNull(pmAiDataRoot, "pmAiDataRoot");
+        Optional<BigDecimal> inData = parseVersionFile(pmAiDataRoot.resolve(AppPaths.VERSION_TXT_FILE_NAME));
+        if (inData.isPresent()) {
+            return inData;
+        }
+        if (cwd != null) {
+            return parseVersionFile(cwd.toAbsolutePath().normalize().resolve(AppPaths.VERSION_TXT_FILE_NAME));
+        }
+        return Optional.empty();
+    }
+
+    /** {@code true} when {@code path} is a regular file whose name ends with {@code .zip} (case-insensitive). */
+    public static boolean isPortableBundleZipPath(Path path) {
+        if (path == null || !Files.isRegularFile(path)) {
+            return false;
+        }
+        String name = path.getFileName().toString();
+        return name.toLowerCase(Locale.ROOT).endsWith(".zip");
+    }
+
+    /** Readable directory, or readable {@code .zip} file for portable upgrade bundles. */
+    public static boolean isValidPortableBundleCanonical(Path path) {
+        if (path == null) {
+            return false;
+        }
+        if (isPortableBundleZipPath(path)) {
+            try {
+                return Files.isReadable(path);
+            } catch (SecurityException e) {
+                return false;
+            }
+        }
+        return isReadableDirectory(path);
+    }
+
+    /**
+     * Extracts a portable app-image zip (root contains {@code pm-ai-data/}) to a new temp directory. Caller must
+     * {@link #deleteDirectoryRecursive(Path, Consumer)} when done.
+     */
+    public static Path extractUpgradeZipToTempDirectory(Path zipPath, Consumer<String> log) throws IOException {
+        Objects.requireNonNull(zipPath, "zipPath");
+        Path zip = zipPath.toAbsolutePath().normalize();
+        if (!isPortableBundleZipPath(zip)) {
+            throw new IOException("Not a zip file: " + zip);
+        }
+        Path tempRoot = Files.createTempDirectory("pm-ai-upgrade-zip-");
+        if (log != null) {
+            log.accept("[portable-sync] extracting " + safePathForLog(zip) + " -> " + safePathForLog(tempRoot));
+        }
+        try (java.util.zip.ZipFile zf = new java.util.zip.ZipFile(zip.toFile(), StandardCharsets.UTF_8)) {
+            java.util.Enumeration<? extends java.util.zip.ZipEntry> en = zf.entries();
+            while (en.hasMoreElements()) {
+                java.util.zip.ZipEntry entry = en.nextElement();
+                String name = entry.getName().replace('\\', '/');
+                if (name.isEmpty() || name.startsWith("/") || name.contains("..")) {
+                    throw new IOException("Unsafe or unsupported zip entry: " + name);
+                }
+                Path dest = tempRoot.resolve(name).normalize();
+                if (!dest.startsWith(tempRoot)) {
+                    throw new IOException("Zip-slip entry: " + name);
+                }
+                if (entry.isDirectory()) {
+                    Files.createDirectories(dest);
+                } else {
+                    Files.createDirectories(dest.getParent());
+                    try (var in = zf.getInputStream(entry)) {
+                        Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                }
+            }
+        }
+        return tempRoot;
+    }
+
+    /** Best-effort recursive delete (reverse walk). */
+    public static void deleteDirectoryRecursive(Path root, Consumer<String> log) {
+        if (root == null) {
+            return;
+        }
+        try {
+            if (!Files.exists(root)) {
+                return;
+            }
+            try (java.util.stream.Stream<Path> walk = Files.walk(root)) {
+                walk.sorted(java.util.Comparator.reverseOrder())
+                        .forEach(
+                                p -> {
+                                    try {
+                                        Files.deleteIfExists(p);
+                                    } catch (IOException e) {
+                                        if (log != null) {
+                                            log.accept("[portable-sync] cleanup: " + p + " — " + e.getMessage());
+                                        }
+                                    }
+                                });
+            }
+        } catch (IOException e) {
+            if (log != null) {
+                log.accept("[portable-sync] cleanup walk failed: " + e.getMessage());
+            }
+        }
+    }
+
     /** Reads {@link AppPaths#VERSION_TXT_FILE_NAME} at canonical repo root. */
     public static Optional<BigDecimal> readBundleVersion(Path canonicalRepoRoot) {
         Path v = canonicalRepoRoot.resolve(AppPaths.VERSION_TXT_FILE_NAME);
-        return parseVersionFile(v);
-    }
-
-    /** Reads {@link AppPaths#VERSION_TXT_FILE_NAME} under {@code pm-ai-data}. */
-    public static Optional<BigDecimal> readLocalBundleVersion(Path pmAiDataRoot) {
-        Path v = pmAiDataRoot.resolve(AppPaths.VERSION_TXT_FILE_NAME);
         return parseVersionFile(v);
     }
 

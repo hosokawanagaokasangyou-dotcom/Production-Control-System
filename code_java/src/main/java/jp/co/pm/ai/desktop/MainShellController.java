@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -440,6 +441,7 @@ public final class MainShellController {
         installUiEnvAutoSave();
 
         applyRepoFolderPathNormalization();
+        maybePortableFirstLaunchEnvInit();
 
         probeNetworkSourceDirsAtStartup();
 
@@ -2010,7 +2012,10 @@ public final class MainShellController {
         resetEnvRowsToDefaults();
     }
 
-    private void resetEnvRowsToDefaults() {
+    /**
+     * 環境タブをバンドル既定で再構築し永続化する（確認ダイアログなし）。{@link #resetEnvRowsToDefaults()} と初回起動マーカーから利用。
+     */
+    private void applyEnvRowsFullBundledResetAndPersist() {
         if (envRows == null) {
             return;
         }
@@ -2043,6 +2048,10 @@ public final class MainShellController {
         applyRepoFolderPathNormalization();
         DesktopSessionStateStore.save(collectDesktopSession());
         uiEnvSaveDebounce.stop();
+    }
+
+    private void resetEnvRowsToDefaults() {
+        applyEnvRowsFullBundledResetAndPersist();
     }
 
     void appendBootMessage() {
@@ -2757,9 +2766,37 @@ public final class MainShellController {
                 : "python3";
     }
 
+    private void maybePortableFirstLaunchEnvInit() {
+        Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
+        if (!PortableBundleSelfUpdater.isPortableBundleLayout(cwd)) {
+            return;
+        }
+        Path marker = cwd.resolve(AppPaths.PORTABLE_FIRST_LAUNCH_MARKER_FILE);
+        if (!Files.isRegularFile(marker)) {
+            return;
+        }
+        try {
+            applyEnvRowsFullBundledResetAndPersist();
+            applyBundledPortableDefaultsIfPresent();
+            applyRepoFolderPathNormalization();
+            DesktopSessionStateStore.save(collectDesktopSession());
+            Files.deleteIfExists(marker);
+            appendLog(
+                    "[startup] 初回起動: 環境変数を初期化し、"
+                            + AppPaths.PORTABLE_FIRST_LAUNCH_MARKER_FILE
+                            + " を削除しました。");
+        } catch (Exception ex) {
+            appendLog(
+                    "[startup] 初回起動の環境変数初期化に失敗（"
+                            + AppPaths.PORTABLE_FIRST_LAUNCH_MARKER_FILE
+                            + " は残します）: "
+                            + ex.getMessage());
+        }
+    }
+
     /**
      * ポータブル配布: 正本が {@link AppPaths#KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR} に設定され、{@code version.txt} がローカルより新しいときに
-     * {@code pm-ai-data} を同期する。
+     * {@code pm-ai-data} を同期する。正本はディレクトリ（リポジトリルート）または {@code .zip}（ZIP 隣に外付け {@code version.txt}）。
      */
     private void maybePortableBundleSelfUpdate() {
         Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
@@ -2777,7 +2814,7 @@ public final class MainShellController {
             a.setContentText(
                     "ポータブル配布では "
                             + AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR
-                            + "（正本フォルダ）が空です。\n"
+                            + "（正本フォルダまたはバージョンアップ用 ZIP のパス）が空です。\n"
                             + "自動バージョンアップは行いません。そのまま続行します。");
             a.show();
             appendLog(
@@ -2788,9 +2825,9 @@ public final class MainShellController {
         }
         Path canonical = Path.of(raw.trim()).toAbsolutePath().normalize();
         Path localData = cwd.resolve("pm-ai-data").normalize();
-        if (!PortableBundleSelfUpdater.isReadableDirectory(canonical)) {
+        if (!PortableBundleSelfUpdater.isValidPortableBundleCanonical(canonical)) {
             appendLog(
-                    "[startup] 正本フォルダにアクセスできません: "
+                    "[startup] 正本パスにアクセスできません: "
                             + PortableBundleSelfUpdater.safePathForLog(canonical));
             Alert w = new Alert(AlertType.WARNING);
             w.initOwner(primaryStage);
@@ -2798,18 +2835,22 @@ public final class MainShellController {
             w.setTitle("自動バージョンアップ");
             w.setHeaderText(null);
             w.setContentText(
-                    "正本フォルダを開けませんでした。自動バージョンアップはスキップします。\n"
+                    "正本フォルダまたは ZIP を開けませんでした。自動バージョンアップはスキップします。\n"
                             + PortableBundleSelfUpdater.safePathForLog(canonical));
             w.show();
             return;
         }
-        Optional<BigDecimal> cv = PortableBundleSelfUpdater.readBundleVersion(canonical);
-        Optional<BigDecimal> lv = PortableBundleSelfUpdater.readLocalBundleVersion(localData);
+        Optional<BigDecimal> cv = PortableBundleSelfUpdater.readCanonicalPortableBundleVersion(canonical);
+        Optional<BigDecimal> lv = PortableBundleSelfUpdater.readLocalBundleVersion(cwd, localData);
         if (!PortableBundleSelfUpdater.shouldUpdate(cv, lv)) {
             return;
         }
         String canonVerStr = cv.map(BigDecimal::toPlainString).orElse("?");
         String localVerStr = lv.map(BigDecimal::toPlainString).orElse("（なし・初回）");
+        String syncHint =
+                PortableBundleSelfUpdater.isPortableBundleZipPath(canonical)
+                        ? "ZIP を展開して pm-ai-data に同期します。"
+                        : "正本フォルダから pm-ai-data へファイルを同期します。";
         Alert confirm = new Alert(AlertType.CONFIRMATION);
         confirm.initOwner(primaryStage);
         applyAlertStylesheetsFromOwner(confirm);
@@ -2821,7 +2862,8 @@ public final class MainShellController {
                         + "）がローカル pm-ai-data（"
                         + localVerStr
                         + "）より新しいです。\n"
-                        + "正本フォルダから pm-ai-data へファイルを同期します。実行してよいですか？");
+                        + syncHint
+                        + " 実行してよいですか？");
         Optional<ButtonType> ans = confirm.showAndWait();
         if (ans.isEmpty() || ans.get() != ButtonType.OK) {
             appendLog("[startup] ポータル同期はユーザー操作によりスキップしました（版 " + canonVerStr + " → 保留）。");
@@ -2841,19 +2883,51 @@ public final class MainShellController {
         wait.setScene(new Scene(root));
         wait.show();
 
+        final Path[] extractedHolder = new Path[1];
         Task<Void> task =
                 new Task<>() {
                     @Override
                     protected Void call() throws Exception {
+                        Path syncSource;
+                        if (PortableBundleSelfUpdater.isPortableBundleZipPath(canonical)) {
+                            Path tmp =
+                                    PortableBundleSelfUpdater.extractUpgradeZipToTempDirectory(
+                                            canonical,
+                                            line -> Platform.runLater(() -> appendLog(line)));
+                            extractedHolder[0] = tmp;
+                            syncSource = tmp.resolve("pm-ai-data");
+                            if (!Files.isDirectory(syncSource)) {
+                                throw new IOException("ZIP 内に pm-ai-data フォルダがありません: " + canonical);
+                            }
+                        } else {
+                            syncSource = canonical;
+                        }
                         PortableBundleSelfUpdater.syncFromCanonical(
-                                canonical,
+                                syncSource,
                                 localData,
                                 line -> Platform.runLater(() -> appendLog(line)));
+                        if (PortableBundleSelfUpdater.isPortableBundleZipPath(canonical)) {
+                            Path parent = canonical.getParent();
+                            if (parent != null) {
+                                Path outer = parent.resolve(AppPaths.VERSION_TXT_FILE_NAME);
+                                if (Files.isRegularFile(outer)) {
+                                    Files.copy(
+                                            outer,
+                                            localData.resolve(AppPaths.VERSION_TXT_FILE_NAME),
+                                            StandardCopyOption.REPLACE_EXISTING);
+                                }
+                            }
+                        }
                         return null;
                     }
                 };
         task.setOnSucceeded(
                 e -> {
+                    if (extractedHolder[0] != null) {
+                        PortableBundleSelfUpdater.deleteDirectoryRecursive(
+                                extractedHolder[0],
+                                line -> Platform.runLater(() -> appendLog(line)));
+                    }
                     wait.close();
                     applyBundledPortableDefaultsIfPresent();
                     mainRunTabController.refreshAppVersionLabel();
@@ -2861,6 +2935,11 @@ public final class MainShellController {
                 });
         task.setOnFailed(
                 e -> {
+                    if (extractedHolder[0] != null) {
+                        PortableBundleSelfUpdater.deleteDirectoryRecursive(
+                                extractedHolder[0],
+                                line -> Platform.runLater(() -> appendLog(line)));
+                    }
                     wait.close();
                     Throwable ex = task.getException();
                     String detail = ex != null ? ex.getMessage() : "不明なエラー";

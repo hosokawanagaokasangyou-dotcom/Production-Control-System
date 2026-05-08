@@ -489,12 +489,76 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
     }
     $rmLines.Add('Excluded files (all profiles): *.log, ~$* (Excel lock).')
     $rmLines.Add("This folder sits next to $($AppExeBaseName).exe.")
-    $rmLines.Add('Version: repo-root version.txt (included here). Optional sync via PM_AI_PORTABLE_BUNDLE_SOURCE_DIR.')
+    $rmLines.Add('Release: repo-root version.txt is also shipped next to the release ZIPs (not inside ZIP).')
+    $rmLines.Add('First launch: if 初回起動.txt exists next to this app exe, the desktop resets env-tab defaults once then deletes the marker (Initial install bundle only).')
+    $rmLines.Add('Portable sync: PM_AI_PORTABLE_BUNDLE_SOURCE_DIR may be a folder (repo root layout under pm-ai-data on share) or a path to PMD_version_upgrade_*.zip with version.txt beside the zip.')
     $rmLines.Add('Python: pm-ai-data\runtime\python-embed\python.exe (build cache: code_java\Cash_PMD, not bundled).')
     $rmLines.Add('Default inputs: input\task-input , input\actual-detail.')
     $rmLines.Add('Per-user session data: ~/.pm-ai-desktop (initialized per machine/user).')
     $rmLines.Add('')
     $rmLines | Set-Content -LiteralPath $readme -Encoding UTF8
+}
+
+function Compress-PortableBundleFolderToZip {
+    <#
+    .SYNOPSIS
+      Zip an app-image folder; omits pm-ai-data/version.txt (release version is beside the zip).
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourceDir,
+        [Parameter(Mandatory = $true)]
+        [string]$ZipFilePath
+    )
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $sourceFull = (Resolve-Path -LiteralPath $SourceDir).Path.TrimEnd('\')
+    if (Test-Path -LiteralPath $ZipFilePath) {
+        Remove-Item -LiteralPath $ZipFilePath -Force
+    }
+    $zipParent = Split-Path -Parent $ZipFilePath
+    if (-not [string]::IsNullOrWhiteSpace($zipParent) -and -not (Test-Path -LiteralPath $zipParent)) {
+        New-Item -ItemType Directory -Path $zipParent -Force | Out-Null
+    }
+    $fs = [System.IO.File]::Open($ZipFilePath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+    try {
+        $zip = New-Object System.IO.Compression.ZipArchive($fs, [System.IO.Compression.ZipArchiveMode]::Create, $false)
+        try {
+            Get-ChildItem -LiteralPath $sourceFull -Recurse -File -Force | ForEach-Object {
+                $full = $_.FullName
+                $rel = $full.Substring($sourceFull.Length).TrimStart('\')
+                $relNorm = $rel -replace '\\', '/'
+                if ($relNorm -ieq 'pm-ai-data/version.txt') {
+                    return
+                }
+                $entryName = $rel -replace '\\', '/'
+                if ($entryName -match '\.\./|^\.\.(/|\\)|(/|\\)\.\.(/|\\)') {
+                    throw "Unsafe zip entry name: $entryName"
+                }
+                $entry = $zip.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+                $es = $entry.Open()
+                try {
+                    $srcFs = [System.IO.File]::OpenRead($full)
+                    try {
+                        $srcFs.CopyTo($es)
+                    }
+                    finally {
+                        $srcFs.Dispose()
+                    }
+                }
+                finally {
+                    $es.Dispose()
+                }
+            }
+        }
+        finally {
+            $zip.Dispose()
+        }
+    }
+    finally {
+        $fs.Dispose()
+    }
 }
 
 $POM = Join-Path $CodeJavaRoot 'pom.xml'
@@ -886,11 +950,34 @@ foreach ($bd in @($bundleOutInitial, $bundleOutUpgrade)) {
     Write-Host "Launcher bat: $launcherBatDst" -ForegroundColor DarkGray
 }
 
+# Initial install only: empty marker for first-launch env reset (Java deletes after success).
+$firstLaunchMarker = Join-Path $bundleOutInitial '初回起動.txt'
+[System.IO.File]::WriteAllText($firstLaunchMarker, '', [System.Text.UTF8Encoding]::new($false))
+Write-Host "First-launch marker (Initial only): $firstLaunchMarker" -ForegroundColor DarkGray
+
+Write-Host "--- Step 8: release version.txt + portable ZIPs (pm-ai-data/version.txt omitted inside ZIP) ---" -ForegroundColor Cyan
+if (Test-Path -LiteralPath $VersionTxtPath) {
+    Copy-Item -LiteralPath $VersionTxtPath -Destination (Join-Path $ReleaseRoot 'version.txt') -Force
+    Write-Host "Copied version.txt to $ReleaseRoot" -ForegroundColor DarkGray
+}
+else {
+    Write-Warning "Repo version.txt missing; skipped copy to $ReleaseRoot"
+}
+
+$zipVerSafe = $APP_VERSION -replace '[^\w\.\-]', '_'
+$zipInitial = Join-Path $ReleaseRoot ("PMD_initial_install_$zipVerSafe.zip")
+$zipUpgrade = Join-Path $ReleaseRoot ("PMD_version_upgrade_$zipVerSafe.zip")
+Write-Host "Zipping Initial -> $zipInitial" -ForegroundColor Cyan
+Compress-PortableBundleFolderToZip -SourceDir $bundleOutInitial -ZipFilePath $zipInitial
+Write-Host "Zipping Upgrade -> $zipUpgrade" -ForegroundColor Cyan
+Compress-PortableBundleFolderToZip -SourceDir $bundleOutUpgrade -ZipFilePath $zipUpgrade
+
 Write-Host "--- Done ---" -ForegroundColor Green
 Write-Host "Release folder: $ReleaseRoot (bundles only). Download cache: $cacheRoot"
 Write-Host "Initial install: $(Join-Path $bundleOutInitial ($APP_NAME + '.exe'))"
 Write-Host "Version upgrade: $(Join-Path $bundleOutUpgrade ($APP_NAME + '.exe'))"
 Write-Host "Portable data: $(Join-Path $bundleOutInitial 'pm-ai-data') (Initial) / $(Join-Path $bundleOutUpgrade 'pm-ai-data') (Upgrade)"
+Write-Host "Release ZIPs: $zipInitial | $zipUpgrade (version.txt at $ReleaseRoot\version.txt)"
 Write-Host "JVM: -Xms$jvmInitial -Xmx$jvmMax (same as pom.xml properties)"
 if ($PackageType -ne 'app-image') {
     Write-Host "Check $ReleaseDirName for installer output."

@@ -195,6 +195,11 @@ public final class AppPaths {
     public static final String VERSION_TXT_FILE_NAME = "version.txt";
 
     /**
+     * 初回インストール用バンドルに同梱する空マーカー（{@code PMD.exe} と同階層）。存在時のみ起動時に環境タブを既定へリセットし、成功後に削除する。
+     */
+    public static final String PORTABLE_FIRST_LAUNCH_MARKER_FILE = "初回起動.txt";
+
+    /**
      * Env keys whose value is a directory (folder picker in the UI).
      */
     private static final Set<String> FOLDER_PATH_ENV_KEYS = Set.of(
