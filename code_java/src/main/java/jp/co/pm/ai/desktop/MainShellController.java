@@ -91,7 +91,10 @@ public final class MainShellController {
     /** Cursor デバッグセッション用（タブ整理プレビュー vs 実タブ配色の計測）。 */
     private static final String AGENT_DEBUG_SESSION_TAB_PREVIEW = "8da428";
 
-    /** Cursor デバッグモード（タブ整理プレビュー vs 実タブ文字色）セッション ID。実ファイルは {@link AgentDebugLog} の解決ルールに従う。 */
+    /**
+     * Cursor デバッグモード（タブ整理プレビュー vs 実タブ文字色）セッション ID。
+     * 出力は {@link AgentDebugLog#appendStructured}／候補チェーンに従う（{@code .cursor/rules/agent-debug-ndjson-logging.mdc}）。
+     */
     private static final String CURSOR_DEBUG_SESSION_8FFDD1 = "8ffdd1";
 
     /**
@@ -1538,54 +1541,33 @@ public final class MainShellController {
         }
     }
 
-    // #region agent log (cursor debug 8ffdd1 NDJSON)
-    private static String escapeJsonCursorDebug(String s) {
-        if (s == null) {
-            return "";
-        }
-        return s.replace("\\", "\\\\").replace("\"", "\\\"");
-    }
-
+    // #region agent log (cursor debug 8ffdd1 — AgentDebugLog.appendStructured)
+    /**
+     * セッション {@link #CURSOR_DEBUG_SESSION_8FFDD1} 向け NDJSON。{@link AgentDebugLog#appendStructured} を使用し {@code ui} は
+     * {@link #collectUiEnv()}（子コントローラ経由でも {@link #snapshotUiEnv()} と同一）。
+     */
     private void appendCursorDebugNdjson8ffdd1(
             String hypothesisId, String location, String message, Map<String, Object> data) {
         try {
-            long ts = System.currentTimeMillis();
-            StringBuilder sb = new StringBuilder(768);
-            sb.append("{\"sessionId\":\"").append(CURSOR_DEBUG_SESSION_8FFDD1).append('"');
-            sb.append(",\"hypothesisId\":\"").append(escapeJsonCursorDebug(hypothesisId)).append('"');
-            sb.append(",\"location\":\"").append(escapeJsonCursorDebug(location)).append('"');
-            sb.append(",\"message\":\"").append(escapeJsonCursorDebug(message)).append('"');
-            sb.append(",\"timestamp\":").append(ts);
-            if (data != null && !data.isEmpty()) {
-                sb.append(",\"data\":{");
-                boolean first = true;
-                for (Map.Entry<String, Object> e : data.entrySet()) {
-                    if (!first) {
-                        sb.append(',');
-                    }
-                    first = false;
-                    sb.append('"').append(escapeJsonCursorDebug(e.getKey())).append("\":");
-                    Object v = e.getValue();
-                    if (v == null) {
-                        sb.append("null");
-                    } else if (v instanceof Boolean b) {
-                        sb.append(b);
-                    } else if (v instanceof Number n) {
-                        sb.append(n);
-                    } else {
-                        sb.append('"').append(escapeJsonCursorDebug(String.valueOf(v))).append('"');
-                    }
-                }
-                sb.append('}');
-            }
-            sb.append("}\n");
-            AgentDebugLog.appendNdjsonLine(collectUiEnv(), CURSOR_DEBUG_SESSION_8FFDD1, sb.toString());
+            Map<String, Object> payload =
+                    data != null ? new LinkedHashMap<>(data) : new LinkedHashMap<>();
+            payload.put(
+                    "ndjsonPathPrimary",
+                    AgentDebugLog.resolveNdjsonPath(collectUiEnv(), CURSOR_DEBUG_SESSION_8FFDD1)
+                            .toString());
+            AgentDebugLog.appendStructured(
+                    collectUiEnv(),
+                    CURSOR_DEBUG_SESSION_8FFDD1,
+                    hypothesisId,
+                    location,
+                    message,
+                    payload);
         } catch (Throwable ignored) {
             // debug-only
         }
     }
 
-    /** {@link MainShellTabOrganizerTabController} から同一ログへ書くための公開ラッパー。 */
+    /** {@link MainShellTabOrganizerTabController} からの計測用（{@link #appendCursorDebugNdjson8ffdd1} と同一）。 */
     public void cursorDebugNdjson8ffdd1(
             String hypothesisId, String location, String message, Map<String, Object> data) {
         appendCursorDebugNdjson8ffdd1(hypothesisId, location, message, data);
