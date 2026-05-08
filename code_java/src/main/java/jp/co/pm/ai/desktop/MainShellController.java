@@ -1519,6 +1519,41 @@ public final class MainShellController {
         }
     }
 
+    /**
+     * タブ整理ツリーのプレビュー {@link Label} はメインタブ見出しと異なり単純な {@link Labeled} のため、テーマ CSS が子 {@link Text} の
+     * {@code -fx-fill} を残し、親の {@code -fx-text-fill} だけでは実タブと文字色が食い違うことがある。
+     * {@link #applyShellTabHeaderForegroundRecursive} は親 {@link Labeled} のインライン（フォント等）を潰すため使わず、子 {@link Text} のみ同期する。
+     */
+    private static void applyPreviewDescendantTextFillRecursive(Node root, Color fillColor, String tfHex) {
+        if (root == null || tfHex == null || tfHex.isBlank()) {
+            return;
+        }
+        String tf = tfHex.strip();
+        if (root instanceof Text textNode) {
+            if (!textNode.fillProperty().isBound()) {
+                textNode.setFill(fillColor);
+            }
+            textNode.setStyle("-fx-fill: " + tf + ";");
+        }
+        if (root instanceof Parent p) {
+            for (Node ch : p.getChildrenUnmodifiable()) {
+                applyPreviewDescendantTextFillRecursive(ch, fillColor, tf);
+            }
+        }
+    }
+
+    /** @see #applyPreviewDescendantTextFillRecursive */
+    public void syncOrganizerPreviewPillLabelTextNodes(Labeled labeled, String textFillHex) {
+        if (labeled == null || textFillHex == null || textFillHex.isBlank()) {
+            return;
+        }
+        try {
+            applyPreviewDescendantTextFillRecursive(labeled, Color.web(textFillHex.strip()), textFillHex);
+        } catch (IllegalArgumentException ex) {
+            // テーマ側の既定のまま
+        }
+    }
+
     /** 着色解除時に {@link #applyShellTabHeaderForegroundRecursive} で付けたインラインを除去する。 */
     private static void clearShellTabHeaderForegroundRecursive(Node root) {
         if (root == null) {

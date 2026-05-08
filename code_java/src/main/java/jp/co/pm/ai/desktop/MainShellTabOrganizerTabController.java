@@ -868,6 +868,19 @@ public final class MainShellTabOrganizerTabController {
                     "-fx-text-fill: "
                             + fill
                             + "; -fx-font-size: 11px; -fx-font-weight: bold;");
+            try {
+                lab.setTextFill(Color.web(fill));
+            } catch (IllegalArgumentException ignored) {
+                // 既定のまま
+            }
+            if (shell != null) {
+                Platform.runLater(
+                        () -> {
+                            lab.applyCss();
+                            lab.layout();
+                            shell.syncOrganizerPreviewPillLabelTextNodes(lab, fill);
+                        });
+            }
             pill.getStyleClass().remove("pm-org-tree-pill-empty");
             // #region agent log
             try {
@@ -895,6 +908,19 @@ public final class MainShellTabOrganizerTabController {
                     "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: "
                             + emptyFill
                             + ";");
+            try {
+                lab.setTextFill(Color.web(emptyFill));
+            } catch (IllegalArgumentException ignored) {
+                // 既定のまま
+            }
+            if (shell != null) {
+                Platform.runLater(
+                        () -> {
+                            lab.applyCss();
+                            lab.layout();
+                            shell.syncOrganizerPreviewPillLabelTextNodes(lab, emptyFill);
+                        });
+            }
             // #region agent log
             try {
                 Map<String, Object> d = new LinkedHashMap<>();
