@@ -489,7 +489,7 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
     }
     $rmLines.Add('Excluded files (all profiles): *.log, ~$* (Excel lock).')
     $rmLines.Add("This folder sits next to $($AppExeBaseName).exe.")
-    $rmLines.Add('Release: repo-root version.txt is also shipped next to the release ZIPs (not inside ZIP).')
+    $rmLines.Add('Release ZIPs omit pm-ai-data/version.txt; repo-root version.txt is shipped next to the ZIPs in pm-ai-package-release (interim bundle folders are deleted after zipping).')
     $rmLines.Add('First launch: if the empty marker file next to this app exe exists, the desktop resets env-tab defaults once then deletes it (Initial install bundle only). See Java AppPaths.PORTABLE_FIRST_LAUNCH_MARKER_FILE.')
     $rmLines.Add('Portable sync: PM_AI_PORTABLE_BUNDLE_SOURCE_DIR may be a folder (repo root layout under pm-ai-data on share) or a path to PMD_version_upgrade_*.zip with version.txt beside the zip.')
     $rmLines.Add('Python: pm-ai-data\runtime\python-embed\python.exe (build cache: code_java\Cash_PMD, not bundled).')
@@ -630,7 +630,7 @@ $packageInput = Join-Path $CodeJavaRoot 'package_input'
 Copy-JpackageInputDirectory -RootPath $CodeJavaRoot -MainJarName $proj.MainJar -DestPath $packageInput
 
 New-Item -ItemType Directory -Path $ReleaseRoot -Force | Out-Null
-# Download cache (JDK/JavaFX/Python embed) lives under code_java/Cash_PMD so pm-ai-package-release/ stays bundle outputs only.
+# Download cache (JDK/JavaFX/Python embed) lives under code_java/Cash_PMD; pm-ai-package-release ends with ZIPs + version.txt only.
 $cacheRoot = Join-Path $CodeJavaRoot 'Cash_PMD'
 New-Item -ItemType Directory -Path $cacheRoot -Force | Out-Null
 $legacyCashUnderRelease = Join-Path $ReleaseRoot 'Cash_PMD'
@@ -974,12 +974,16 @@ Compress-PortableBundleFolderToZip -SourceDir $bundleOutInitial -ZipFilePath $zi
 Write-Host "Zipping Upgrade -> $zipUpgrade" -ForegroundColor Cyan
 Compress-PortableBundleFolderToZip -SourceDir $bundleOutUpgrade -ZipFilePath $zipUpgrade
 
+if (-not (Test-Path -LiteralPath $zipInitial) -or -not (Test-Path -LiteralPath $zipUpgrade)) {
+    throw "ZIP output missing after compress (initial or upgrade)."
+}
+Write-Host "--- Remove interim bundle folders (release artifacts: 2 ZIPs + version.txt only) ---" -ForegroundColor DarkGray
+Remove-Item -Recurse -Force -LiteralPath $bundleOutInitial -ErrorAction Stop
+Remove-Item -Recurse -Force -LiteralPath $bundleOutUpgrade -ErrorAction Stop
+
 Write-Host "--- Done ---" -ForegroundColor Green
-Write-Host "Release folder: $ReleaseRoot (bundles only). Download cache: $cacheRoot"
-Write-Host "Initial install: $(Join-Path $bundleOutInitial ($APP_NAME + '.exe'))"
-Write-Host "Version upgrade: $(Join-Path $bundleOutUpgrade ($APP_NAME + '.exe'))"
-Write-Host "Portable data: $(Join-Path $bundleOutInitial 'pm-ai-data') (Initial) / $(Join-Path $bundleOutUpgrade 'pm-ai-data') (Upgrade)"
-Write-Host "Release ZIPs: $zipInitial | $zipUpgrade (version.txt at $ReleaseRoot\version.txt)"
+Write-Host "Release: $ReleaseRoot — PMD_initial_install_$zipVerSafe.zip, PMD_version_upgrade_$zipVerSafe.zip, version.txt"
+Write-Host "Download cache: $cacheRoot"
 Write-Host "JVM: -Xms$jvmInitial -Xmx$jvmMax (same as pom.xml properties)"
 if ($PackageType -ne 'app-image') {
     Write-Host "Check $ReleaseDirName for installer output."
