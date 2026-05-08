@@ -5,6 +5,12 @@ alwaysApply: true
 
 # Agent debug NDJSON（Cursor・Java デスクトップ）
 
+## ログファイルの場所（本ワークスペース）
+
+- **作成・確認するフォルダ**: リポジトリ直下の **`.cursor`**。**本ワークスペース**では **`/mnt/c/工程管理AIプロジェクト_JAVA/.cursor`** の直下に **`debug-<sessionId>.log`** が作成される（NDJSON 行の追記）。
+- アプリソースに上記の絶対パスを直書きしてログへ書くことは禁止（下記「禁止」）。出力は **`AgentDebugLog`** の候補チェーンに任せ、人手で探すときはまずこの `.cursor` を見る。
+- 環境変数 **`CURSOR_DEBUG_LOG`** / **`PM_AI_DEBUG_LOG`** / 環境タブ **`PM_AI_CURSOR_DEBUG_LOG`** で単一路が指定されている場合や、全候補が失敗したときの **`java.io.tmpdir`** フォールバックなど、別パスになることがある。詳細は下記「ログファイルの候補順」。
+
 ## 実装の正
 
 - **コード**: `code_java/src/main/java/jp/co/pm/ai/desktop/debug/AgentDebugLog.java`（ネストクローンでは `Production-Control-System/code_java/...` と同等）
