@@ -74,6 +74,7 @@ import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
@@ -1227,6 +1228,34 @@ public final class MainShellController {
                             : "";
             tab.setStyle(shellTabHeaderChromeInlineStyle(h, textFill, glowEffect));
             pokeShellTabHeaderBackground(pane, tab, h, textFill, glowEffect);
+            // #region agent log
+            try {
+                if (mainShellTabId(tab) == MainShellTabId.DISPATCH_INTERACTIVE) {
+                    Color cx = Color.web(h);
+                    double lum =
+                            relativeSrgbLuminance(
+                                    (int) Math.round(cx.getRed() * 255.0),
+                                    (int) Math.round(cx.getGreen() * 255.0),
+                                    (int) Math.round(cx.getBlue() * 255.0));
+                    Map<String, Object> d = new LinkedHashMap<>();
+                    d.put("source", "applyShellTabColor");
+                    d.put("bgHex", h);
+                    d.put("labelIn", labelIn);
+                    d.put("textFill", textFill);
+                    d.put("bgLuminance", lum);
+                    d.put("tabTitle", tab.getText());
+                    AgentDebugLog.appendStructured(
+                            collectUiEnv(),
+                            "8ffdd1",
+                            "H1",
+                            "MainShellController.applyShellTabColor",
+                            "dispatchInteractive real tab contrast",
+                            d);
+                }
+            } catch (Throwable ignored) {
+                // debug-only
+            }
+            // #endregion
         } else {
             tab.getProperties().remove("pmShellTabColor");
             tab.getProperties().remove("pmShellTabLabelColor");
@@ -1442,6 +1471,22 @@ public final class MainShellController {
         }
     }
 
+    /** 同一パッケージのデバッグログ用（コントラスト判定と同一の相対輝度）。 */
+    static double debugTabLabelContrastLuminance(String bgHex) {
+        if (bgHex == null || bgHex.isBlank()) {
+            return Double.NaN;
+        }
+        try {
+            Color c = Color.web(bgHex.strip());
+            return relativeSrgbLuminance(
+                    (int) Math.round(c.getRed() * 255.0),
+                    (int) Math.round(c.getGreen() * 255.0),
+                    (int) Math.round(c.getBlue() * 255.0));
+        } catch (IllegalArgumentException ex) {
+            return Double.NaN;
+        }
+    }
+
     /** sRGB の相対輝度（0〜1）。{@link Color} と同じ係数。 */
     private static double relativeSrgbLuminance(int r, int g, int b) {
         double rs = linearizeSrgbChannel(clamp255(r) / 255.0);
@@ -1520,6 +1565,26 @@ public final class MainShellController {
             return;
         }
         String tfIn = textFillHex.strip();
+        // #region agent log
+        try {
+            String lt = labeled.getText();
+            if (lt != null && lt.contains("手動修正")) {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("source", "syncOrganizerPreviewPillLabelTextNodes");
+                d.put("labelText", lt);
+                d.put("textFillHex", tfIn);
+                AgentDebugLog.appendStructured(
+                        collectUiEnv(),
+                        "8ffdd1",
+                        "H4",
+                        "MainShellController.syncOrganizerPreviewPillLabelTextNodes",
+                        "manual correction preview label sync",
+                        d);
+            }
+        } catch (Throwable ignored) {
+            // debug-only
+        }
+        // #endregion
         try {
             applyPreviewDescendantTextFillRecursive(labeled, Color.web(tfIn), textFillHex);
         } catch (IllegalArgumentException ex) {

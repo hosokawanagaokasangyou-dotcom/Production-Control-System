@@ -45,6 +45,7 @@ import javafx.scene.paint.Color;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 /**
  * メインシェルタブの入れ子と色を編集する専用タブ。
@@ -1028,6 +1029,29 @@ public final class MainShellTabOrganizerTabController {
             String fill =
                     shell.tabOrganizerPreviewChipLabelTextFill(hx, row.labelColorHex != null ? row.labelColorHex : "");
             previewContrastFill = fill;
+            // #region agent log
+            try {
+                if (row.kind == OrgRow.Kind.TAB
+                        && row.tabId == MainShellTabId.DISPATCH_INTERACTIVE) {
+                    double lum = MainShellController.debugTabLabelContrastLuminance(hx);
+                    Map<String, Object> d = new LinkedHashMap<>();
+                    d.put("source", "createPillForTreeItem");
+                    d.put("rowBgHex", hx);
+                    d.put("rowLabelHex", row.labelColorHex != null ? row.labelColorHex : "");
+                    d.put("previewFill", fill);
+                    d.put("bgLuminance", lum);
+                    AgentDebugLog.appendStructured(
+                            shell.snapshotUiEnv(),
+                            "8ffdd1",
+                            "H1",
+                            "MainShellTabOrganizerTabController.createPillForTreeItem",
+                            "dispatchInteractive organizer preview pill",
+                            d);
+                }
+            } catch (Throwable ignored) {
+                // debug-only
+            }
+            // #endregion
             lab.setStyle(
                     "-fx-text-fill: "
                             + fill
