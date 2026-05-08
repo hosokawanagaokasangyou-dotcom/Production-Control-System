@@ -90,6 +90,12 @@ public final class MainShellController {
     /** Cursor デバッグセッション用（タブ整理プレビュー vs 実タブ配色の計測）。 */
     private static final String AGENT_DEBUG_SESSION_TAB_PREVIEW = "8da428";
 
+    /**
+     * {@link Tab#getProperties()} に登録済みかどうか。選択変更時に見出し chrome を再適用するリスナーを二重登録しない。
+     */
+    private static final String PROP_SHELL_TAB_SELECTION_CHROME_LISTENER =
+            "pmShellTabSelectionChromeListener";
+
     private static final String STAGE1 = "task_extract_stage1.py";
     private static final String STAGE2 = "plan_simulation_stage2.py";
 
@@ -1156,6 +1162,48 @@ public final class MainShellController {
         return v instanceof String s && !s.isBlank() ? s.strip() : "";
     }
 
+    /**
+     * 選択／非選択の切り替えでテーマ CSS が見出しを塗り直し、インライン前景が潰れることがあるため、保存色があれば再適用する。
+     */
+    private void refreshShellTabChromeOnSelectionChange(Tab tab) {
+        if (tab == null) {
+            return;
+        }
+        String hex = readShellTabColorHex(tab);
+        if (hex.isEmpty()) {
+            return;
+        }
+        // #region agent log
+        try {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("tabText", tab.getText() != null ? tab.getText() : "");
+            row.put("storedHex", hex);
+            row.put("tabSelected", tab.isSelected());
+            appendTabPreviewAgentDebug(
+                    "F",
+                    "MainShellController.refreshShellTabChromeOnSelectionChange",
+                    "選択変化後の chrome 再適用",
+                    row);
+        } catch (Throwable ignored) {
+            // debug-only
+        }
+        // #endregion
+        applyShellTabColor(tab, hex);
+    }
+
+    private void ensureShellTabSelectionChromeListener(Tab tab) {
+        if (tab == null
+                || Boolean.TRUE.equals(
+                        tab.getProperties().get(PROP_SHELL_TAB_SELECTION_CHROME_LISTENER))) {
+            return;
+        }
+        tab.getProperties().put(PROP_SHELL_TAB_SELECTION_CHROME_LISTENER, Boolean.TRUE);
+        tab.selectedProperty()
+                .addListener(
+                        (obs, was, now) ->
+                                Platform.runLater(() -> refreshShellTabChromeOnSelectionChange(tab)));
+    }
+
     /** タブ整理プレビューと実タブの配色計測（同一パッケージのコントローラからも使用）。 */
     void appendTabPreviewAgentDebug(String hypothesisId, String location, String message, Map<String, ?> data) {
         // #region agent log
@@ -1232,6 +1280,7 @@ public final class MainShellController {
             // #endregion
             pokeShellTabHeaderBackground(collectUiEnv(), pane, tab, null, null, null);
         }
+        ensureShellTabSelectionChromeListener(tab);
     }
 
     public boolean isMainShellTabOrganizerHeaderGlowEnabled() {
