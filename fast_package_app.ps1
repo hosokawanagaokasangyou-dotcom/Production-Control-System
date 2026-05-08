@@ -483,6 +483,7 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
         $rmLines.Add('Bundle profile: InitialInstall - excludes .git, .venv, .cursor, .vscode, code/VBA, code_java build/cache dirs, pm-ai-package-release/, **/__pycache__, **/.pytest_cache, build_cache.')
         $rmLines.Add('Does NOT exclude plan/plans or code/output (may include local artifacts if present).')
         $rmLines.Add('Desktop UI defaults (Initial): pm-ai-data/config/bundled_session_ui_defaults.json (session fragment: main tab order/title aliases/header glow, gantt sliders, badges when ~/.pm-ai-desktop/session-state.json is missing; JAR fallback) and bundled_table_column_order.json (column layouts; materialized to ~/.pm-ai-desktop/table-column-order.json on first launch).')
+        $rmLines.Add('Exclude rules JSON (Initial): pm-ai-data/code/exclude_rules.json (copy of code/json/stage1_exclude_rules.json when present, else JAR-resource fallback bundled_exclude_rules.json) so PM_AI_EXCLUDE_RULES_JSON bootstrap in MainShellController finds a file.')
     }
     else {
         $rmLines.Add('Bundle profile: VersionUpgrade - also excludes **/plan, **/plans, code/output/, repo output/, code/python/output/, .pm-ai-cache/, extra env-var TSVs (template TSV still bundled), .env.')
@@ -514,6 +515,22 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
             $tableDest = Join-Path $cfgDestDir 'bundled_table_column_order.json'
             Copy-Item -LiteralPath $tableColSrc -Destination $tableDest -Force
             Write-Host "Bundled table column order template (Initial): $tableDest" -ForegroundColor DarkGray
+        }
+
+        # 配台不要ルール: 環境タブ既定（MainShellController.maybeFillEmptyBootstrap）が参照する code/exclude_rules.json を同梱
+        $stage1ExcludeSrc = Join-Path $data 'code\json\stage1_exclude_rules.json'
+        $excludeRulesDest = Join-Path $data 'code\exclude_rules.json'
+        $bundledExcludeFallback = Join-Path $resRoot 'bundled_exclude_rules.json'
+        if (Test-Path -LiteralPath $stage1ExcludeSrc) {
+            Copy-Item -LiteralPath $stage1ExcludeSrc -Destination $excludeRulesDest -Force
+            Write-Host "Bundled exclude rules JSON via stage1 mirror (Initial): $excludeRulesDest" -ForegroundColor DarkGray
+        }
+        elseif (Test-Path -LiteralPath $bundledExcludeFallback) {
+            Copy-Item -LiteralPath $bundledExcludeFallback -Destination $excludeRulesDest -Force
+            Write-Host "Bundled exclude rules JSON from classpath fallback (Initial): $excludeRulesDest" -ForegroundColor DarkGray
+        }
+        else {
+            Write-Warning "Initial bundle: missing code\json\stage1_exclude_rules.json and bundled_exclude_rules.json — code\exclude_rules.json not materialized."
         }
     }
 }

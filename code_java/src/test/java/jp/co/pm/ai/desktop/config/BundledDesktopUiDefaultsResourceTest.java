@@ -41,4 +41,16 @@ class BundledDesktopUiDefaultsResourceTest {
                 TableColumnOrderPersistence.class.getResource(
                         "/jp/co/pm/ai/desktop/config/bundled_table_column_order.json"));
     }
+
+    /** 初回インストーラー用フォールバック（workspace に stage1 JSON が無いパック時に fast_package が複製元にする） */
+    @Test
+    void bundledExcludeRules_jsonParses() throws Exception {
+        try (InputStream in =
+                DesktopSessionStateStore.class.getResourceAsStream(
+                        "/jp/co/pm/ai/desktop/config/bundled_exclude_rules.json")) {
+            assertNotNull(in);
+            JsonNode n = new ObjectMapper().readTree(in);
+            assertTrue(n.path("rules").isArray());
+        }
+    }
 }
