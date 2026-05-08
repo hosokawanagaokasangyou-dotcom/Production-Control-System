@@ -25,6 +25,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.MultipleSelectionModel;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Skin;
 import javafx.scene.control.Slider;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
@@ -957,6 +958,7 @@ public final class MainShellTabOrganizerTabController {
                         m.put(
                                 "textCountBeforeCss",
                                 MainShellController.countTextDescendantsForDebug(lab));
+                        m.put("skinReady", lab.getSkin() != null);
                         m.put("computedPreviewFill", fillHex);
                         shell.cursorDebugNdjson8ffdd1(
                                 "A",
@@ -972,7 +974,7 @@ public final class MainShellTabOrganizerTabController {
                     shell.syncOrganizerPreviewPillLabelTextNodes(lab, fillHex);
                 };
         if (lab.getScene() != null) {
-            Platform.runLater(syncWork);
+            enqueuePreviewContrastSyncWhenSkinReady(lab, syncWork);
         } else {
             ChangeListener<Scene> sceneAttached =
                     new ChangeListener<>() {
@@ -983,12 +985,37 @@ public final class MainShellTabOrganizerTabController {
                                 Scene newScene) {
                             if (newScene != null) {
                                 lab.sceneProperty().removeListener(this);
-                                Platform.runLater(syncWork);
+                                enqueuePreviewContrastSyncWhenSkinReady(lab, syncWork);
                             }
                         }
                     };
             lab.sceneProperty().addListener(sceneAttached);
         }
+    }
+
+    /**
+     * シーン付与直後は {@link Label} のスキンがまだ無く子 {@link javafx.scene.text.Text} が無いことがあるため、
+     * {@link javafx.scene.control.Control#getSkin()} が非 null になってから同期する。
+     */
+    private void enqueuePreviewContrastSyncWhenSkinReady(Label lab, Runnable syncWork) {
+        if (lab.getSkin() != null) {
+            Platform.runLater(syncWork);
+            return;
+        }
+        javafx.beans.value.ChangeListener<Skin<?>> skinAttached =
+                new javafx.beans.value.ChangeListener<>() {
+                    @Override
+                    public void changed(
+                            javafx.beans.value.ObservableValue<? extends Skin<?>> observable,
+                            Skin<?> oldSkin,
+                            Skin<?> newSkin) {
+                        if (newSkin != null) {
+                            lab.skinProperty().removeListener(this);
+                            Platform.runLater(syncWork);
+                        }
+                    }
+                };
+        lab.skinProperty().addListener(skinAttached);
     }
 
     private void wirePillInteractions(StackPane pill, TreeItem<OrgRow> item) {
