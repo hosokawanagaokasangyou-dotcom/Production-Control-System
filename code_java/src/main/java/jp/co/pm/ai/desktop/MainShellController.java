@@ -1256,9 +1256,17 @@ public final class MainShellController {
 
     public String tabOrganizerPreviewChipLabelTextFill(String colorHexOrEmpty) {
         if (colorHexOrEmpty == null || colorHexOrEmpty.isBlank()) {
-            return "#94a3b8";
+            return defaultUncoloredShellTabHeaderLabelTextFillHex();
         }
         return contrastingTabLabelTextFillHex(colorHexOrEmpty.strip());
+    }
+
+    /**
+     * カスタム見出し色が無いときのラベル文字色（タブ整理プレビューと実タブ見出しで共通）。
+     * {@link Labeled#setTextFill} を {@code null} に戻すとシーン CSS の継承で黒になり、ダーク見出しと衝突する。
+     */
+    private static String defaultUncoloredShellTabHeaderLabelTextFillHex() {
+        return "#94a3b8";
     }
 
     private static String previewChipBorderRgba(String bgHex) {
@@ -1408,13 +1416,14 @@ public final class MainShellController {
                                     lab.setStyle("-fx-text-fill: " + tf + ";");
                                 }
                             } else {
+                                String tf = defaultUncoloredShellTabHeaderLabelTextFillHex();
                                 child.setStyle("");
                                 Node lab = child.lookup(".tab-label");
                                 if (lab instanceof Labeled labeled) {
-                                    labeled.setTextFill(null);
+                                    labeled.setTextFill(Color.web(tf));
                                 }
                                 if (lab != null) {
-                                    lab.setStyle("");
+                                    lab.setStyle("-fx-text-fill: " + tf + ";");
                                 }
                             }
                             return;
