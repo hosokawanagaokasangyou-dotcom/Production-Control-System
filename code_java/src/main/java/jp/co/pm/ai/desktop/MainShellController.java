@@ -1501,10 +1501,15 @@ public final class MainShellController {
         }
         String tf = tfHex.strip();
         if (root instanceof Text textNode) {
-            textNode.setFill(fillColor);
+            /* JavaFX 26: LabeledText 等で fill がバインドされている場合に setFill が失敗する */
+            if (!textNode.fillProperty().isBound()) {
+                textNode.setFill(fillColor);
+            }
             textNode.setStyle("-fx-fill: " + tf + ";");
         } else if (root instanceof Labeled labeled) {
-            labeled.setTextFill(fillColor);
+            if (!labeled.textFillProperty().isBound()) {
+                labeled.setTextFill(fillColor);
+            }
             labeled.setStyle("-fx-text-fill: " + tf + ";");
         }
         if (root instanceof Parent p) {
@@ -1520,11 +1525,16 @@ public final class MainShellController {
             return;
         }
         if (root instanceof Text textNode) {
-            textNode.setFill(null);
             textNode.setStyle("");
+            /* JavaFX 26: 「LabeledText.fill : A bound value cannot be set」回避 */
+            if (!textNode.fillProperty().isBound()) {
+                textNode.setFill(null);
+            }
         } else if (root instanceof Labeled labeled) {
-            labeled.setTextFill(null);
             labeled.setStyle("");
+            if (!labeled.textFillProperty().isBound()) {
+                labeled.setTextFill(null);
+            }
         }
         if (root instanceof Parent p) {
             for (Node ch : p.getChildrenUnmodifiable()) {
@@ -1596,7 +1606,9 @@ public final class MainShellController {
                                                 lab, Color.web(tf), tf);
                                     } catch (IllegalArgumentException ex) {
                                         if (lab instanceof Labeled labeled) {
-                                            labeled.setTextFill(Color.web(tf));
+                                            if (!labeled.textFillProperty().isBound()) {
+                                                labeled.setTextFill(Color.web(tf));
+                                            }
                                             labeled.setStyle("-fx-text-fill: " + tf + ";");
                                         } else {
                                             lab.setStyle("-fx-text-fill: " + tf + ";");
