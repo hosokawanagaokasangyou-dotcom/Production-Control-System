@@ -1307,6 +1307,23 @@ public final class MainShellController {
             return;
         }
         applyStoredShellTabColorsRecursive(tabPane.getTabs());
+        layoutShellTabPanesRecursive(tabPane);
+    }
+
+    /**
+     * 入れ子 {@link TabPane} まで {@code applyCss}/{@code layout} し、{@code .headers-region} が未構築のときの見出し着色取りこぼしを減らす。
+     */
+    private static void layoutShellTabPanesRecursive(TabPane pane) {
+        if (pane == null) {
+            return;
+        }
+        pane.applyCss();
+        pane.layout();
+        for (Tab t : pane.getTabs()) {
+            if (t.getContent() instanceof TabPane inner) {
+                layoutShellTabPanesRecursive(inner);
+            }
+        }
     }
 
     private void applyStoredShellTabColorsRecursive(ObservableList<Tab> tabs) {
@@ -1668,6 +1685,8 @@ public final class MainShellController {
         }
         syncLeafTabColorsFromOrganizerTree(invisibleRoot);
         syncGroupTabHeadersFromOrganizerTree(invisibleRoot);
+        /* 同一フレームで見出しへ反映（runLater だけだと未レイアウトで poke が無効になることがある） */
+        refreshMainShellTabHeaderChromeFromStoredColors();
         Platform.runLater(this::refreshMainShellTabHeaderChromeFromStoredColors);
     }
 
