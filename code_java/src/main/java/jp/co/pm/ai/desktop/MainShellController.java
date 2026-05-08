@@ -2,11 +2,9 @@ package jp.co.pm.ai.desktop;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -93,11 +91,8 @@ public final class MainShellController {
     /** Cursor デバッグセッション用（タブ整理プレビュー vs 実タブ配色の計測）。 */
     private static final String AGENT_DEBUG_SESSION_TAB_PREVIEW = "8da428";
 
-    /** Cursor デバッグモード（タブ整理プレビュー vs 実タブ文字色）NDJSON 出力先。 */
+    /** Cursor デバッグモード（タブ整理プレビュー vs 実タブ文字色）セッション ID。実ファイルは {@link AgentDebugLog} の解決ルールに従う。 */
     private static final String CURSOR_DEBUG_SESSION_8FFDD1 = "8ffdd1";
-
-    private static final Path CURSOR_DEBUG_NDJSON_8FFDD1 =
-            Path.of("/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-8ffdd1.log");
 
     /**
      * {@link Tab#getProperties()} に登録済みかどうか。選択変更時に見出し chrome を再適用するリスナーを二重登録しない。
@@ -1551,7 +1546,7 @@ public final class MainShellController {
         return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
-    private static void appendCursorDebugNdjson8ffdd1(
+    private void appendCursorDebugNdjson8ffdd1(
             String hypothesisId, String location, String message, Map<String, Object> data) {
         try {
             long ts = System.currentTimeMillis();
@@ -1584,12 +1579,7 @@ public final class MainShellController {
                 sb.append('}');
             }
             sb.append("}\n");
-            Files.writeString(
-                    CURSOR_DEBUG_NDJSON_8FFDD1,
-                    sb.toString(),
-                    StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.APPEND);
+            AgentDebugLog.appendNdjsonLine(collectUiEnv(), CURSOR_DEBUG_SESSION_8FFDD1, sb.toString());
         } catch (Throwable ignored) {
             // debug-only
         }

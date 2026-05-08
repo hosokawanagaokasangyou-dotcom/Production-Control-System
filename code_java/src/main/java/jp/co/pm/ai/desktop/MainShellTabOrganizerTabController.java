@@ -11,6 +11,7 @@ import java.util.Set;
 
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
+import javafx.scene.Scene;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
@@ -862,8 +863,10 @@ public final class MainShellTabOrganizerTabController {
         lab.setWrapText(false);
         lab.getStyleClass().add("pm-org-tree-pill-label");
         String hx = row.colorHex;
+        String previewContrastFill = null;
         if (hx != null && !hx.isBlank() && shell != null) {
             String fill = shell.tabOrganizerPreviewChipLabelTextFill(hx);
+            previewContrastFill = fill;
             lab.setStyle(
                     "-fx-text-fill: "
                             + fill
@@ -872,33 +875,6 @@ public final class MainShellTabOrganizerTabController {
                 lab.setTextFill(Color.web(fill));
             } catch (IllegalArgumentException ignored) {
                 // 既定のまま
-            }
-            if (shell != null) {
-                Platform.runLater(
-                        () -> {
-                            // #region agent log (cursor debug 8ffdd1)
-                            try {
-                                Map<String, Object> m = new LinkedHashMap<>();
-                                m.put("labScene", lab.getScene() != null);
-                                m.put("pillScene", pill.getScene() != null);
-                                m.put(
-                                        "textCountBeforeCss",
-                                        MainShellController.countTextDescendantsForDebug(lab));
-                                m.put("colorHex", hx.strip());
-                                m.put("computedPreviewFill", fill);
-                                shell.cursorDebugNdjson8ffdd1(
-                                        "A",
-                                        "MainShellTabOrganizerTabController.createPillForTreeItem.runLater",
-                                        "beforeApplyCss",
-                                        m);
-                            } catch (Throwable ignored) {
-                                // debug-only
-                            }
-                            // #endregion
-                            lab.applyCss();
-                            lab.layout();
-                            shell.syncOrganizerPreviewPillLabelTextNodes(lab, fill);
-                        });
             }
             pill.getStyleClass().remove("pm-org-tree-pill-empty");
             // #region agent log
@@ -933,31 +909,7 @@ public final class MainShellTabOrganizerTabController {
                 // 既定のまま
             }
             if (shell != null) {
-                Platform.runLater(
-                        () -> {
-                            // #region agent log (cursor debug 8ffdd1)
-                            try {
-                                Map<String, Object> m = new LinkedHashMap<>();
-                                m.put("labScene", lab.getScene() != null);
-                                m.put("pillScene", pill.getScene() != null);
-                                m.put(
-                                        "textCountBeforeCss",
-                                        MainShellController.countTextDescendantsForDebug(lab));
-                                m.put("colorHex", "");
-                                m.put("computedPreviewFill", emptyFill);
-                                shell.cursorDebugNdjson8ffdd1(
-                                        "A",
-                                        "MainShellTabOrganizerTabController.createPillForTreeItem.runLater",
-                                        "beforeApplyCss",
-                                        m);
-                            } catch (Throwable ignored) {
-                                // debug-only
-                            }
-                            // #endregion
-                            lab.applyCss();
-                            lab.layout();
-                            shell.syncOrganizerPreviewPillLabelTextNodes(lab, emptyFill);
-                        });
+                previewContrastFill = emptyFill;
             }
             // #region agent log
             try {
@@ -979,9 +931,64 @@ public final class MainShellTabOrganizerTabController {
         }
         Tooltip.install(pill, new Tooltip(row.treeDetailWithoutHex(shell)));
         pill.getChildren().setAll(lab);
+        if (shell != null && previewContrastFill != null) {
+            scheduleOrganizerPillLabelContrastSync(lab, pill, previewContrastFill);
+        }
         wirePillInteractions(pill, item);
         updatePillSelectionStyle(pill, item);
         return pill;
+    }
+
+    /**
+     * プレビュー {@link Label} はシーン未接続ではスキンが無く子 {@link javafx.scene.text.Text} が無い。親 {@link StackPane} に載せたうえで
+     * シーン接続後にコントラスト色を子へ同期する（計測ログは据え置き）。
+     */
+    private void scheduleOrganizerPillLabelContrastSync(Label lab, StackPane pill, String fillHex) {
+        if (shell == null || fillHex == null || fillHex.isBlank()) {
+            return;
+        }
+        Runnable syncWork =
+                () -> {
+                    // #region agent log (cursor debug 8ffdd1)
+                    try {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("labScene", lab.getScene() != null);
+                        m.put("pillScene", pill.getScene() != null);
+                        m.put(
+                                "textCountBeforeCss",
+                                MainShellController.countTextDescendantsForDebug(lab));
+                        m.put("computedPreviewFill", fillHex);
+                        shell.cursorDebugNdjson8ffdd1(
+                                "A",
+                                "MainShellTabOrganizerTabController.scheduleOrganizerPillLabelContrastSync",
+                                "beforeApplyCss",
+                                m);
+                    } catch (Throwable ignored) {
+                        // debug-only
+                    }
+                    // #endregion
+                    lab.applyCss();
+                    lab.layout();
+                    shell.syncOrganizerPreviewPillLabelTextNodes(lab, fillHex);
+                };
+        if (lab.getScene() != null) {
+            Platform.runLater(syncWork);
+        } else {
+            ChangeListener<Scene> sceneAttached =
+                    new ChangeListener<>() {
+                        @Override
+                        public void changed(
+                                javafx.beans.value.ObservableValue<? extends Scene> observable,
+                                Scene oldScene,
+                                Scene newScene) {
+                            if (newScene != null) {
+                                lab.sceneProperty().removeListener(this);
+                                Platform.runLater(syncWork);
+                            }
+                        }
+                    };
+            lab.sceneProperty().addListener(sceneAttached);
+        }
     }
 
     private void wirePillInteractions(StackPane pill, TreeItem<OrgRow> item) {
