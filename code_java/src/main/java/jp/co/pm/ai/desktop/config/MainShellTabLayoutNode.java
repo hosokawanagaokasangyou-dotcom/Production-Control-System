@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.JsonNode;
  * @param id {@link jp.co.pm.ai.desktop.MainShellTabId#key()}（kind が tab のとき）
  * @param title グループタブの見出し（kind が group のとき）
  * @param colorHex タブ見出しの背景色（任意、{@code #RRGGBB}）
+ * @param labelColorHex 見出しの文字色（空は背景に対する自動コントラスト）
  * @param children グループ内の子（入れ子グループ可）
  */
 public record MainShellTabLayoutNode(
@@ -20,6 +21,7 @@ public record MainShellTabLayoutNode(
         String id,
         String title,
         String colorHex,
+        String labelColorHex,
         List<MainShellTabLayoutNode> children) {
 
     public MainShellTabLayoutNode {
@@ -27,6 +29,7 @@ public record MainShellTabLayoutNode(
         id = id != null ? id.trim() : "";
         title = title != null ? title.trim() : "";
         colorHex = colorHex != null ? colorHex.trim() : "";
+        labelColorHex = labelColorHex != null ? labelColorHex.trim() : "";
         children =
                 children == null || children.isEmpty()
                         ? List.of()
@@ -34,13 +37,31 @@ public record MainShellTabLayoutNode(
     }
 
     public static MainShellTabLayoutNode tabNode(String tabId, String colorHex) {
-        return new MainShellTabLayoutNode("tab", Objects.requireNonNullElse(tabId, ""), "", colorHex, List.of());
+        return tabNode(tabId, colorHex, "");
+    }
+
+    public static MainShellTabLayoutNode tabNode(String tabId, String colorHex, String labelColorHex) {
+        return new MainShellTabLayoutNode(
+                "tab", Objects.requireNonNullElse(tabId, ""), "", colorHex, labelColorHex, List.of());
     }
 
     public static MainShellTabLayoutNode groupNode(
             String title, String colorHex, List<MainShellTabLayoutNode> children) {
+        return groupNode(title, colorHex, "", children);
+    }
+
+    public static MainShellTabLayoutNode groupNode(
+            String title,
+            String colorHex,
+            String labelColorHex,
+            List<MainShellTabLayoutNode> children) {
         return new MainShellTabLayoutNode(
-                "group", "", Objects.requireNonNullElse(title, ""), colorHex, children != null ? children : List.of());
+                "group",
+                "",
+                Objects.requireNonNullElse(title, ""),
+                colorHex,
+                labelColorHex,
+                children != null ? children : List.of());
     }
 
     public boolean isGroup() {
@@ -63,6 +84,7 @@ public record MainShellTabLayoutNode(
             return null;
         }
         String color = text(o, "color");
+        String labelColor = text(o, "labelColor");
         if ("group".equalsIgnoreCase(k)) {
             String title = text(o, "title");
             if (title.isBlank()) {
@@ -78,14 +100,14 @@ public record MainShellTabLayoutNode(
                     }
                 }
             }
-            return groupNode(title, color, list);
+            return groupNode(title, color, labelColor, list);
         }
         if ("tab".equalsIgnoreCase(k)) {
             String id = text(o, "id");
             if (id.isBlank()) {
                 return null;
             }
-            return tabNode(id, color);
+            return tabNode(id, color, labelColor);
         }
         return null;
     }

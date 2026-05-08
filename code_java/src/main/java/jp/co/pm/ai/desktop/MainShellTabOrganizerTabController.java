@@ -70,6 +70,12 @@ public final class MainShellTabOrganizerTabController {
     private ColorPicker colorPicker;
 
     @FXML
+    private CheckBox tabLabelAutoContrastCheck;
+
+    @FXML
+    private ColorPicker tabLabelColorPicker;
+
+    @FXML
     private TextField groupNameField;
 
     @FXML
@@ -103,6 +109,23 @@ public final class MainShellTabOrganizerTabController {
     private void initialize() {
         if (colorPicker != null) {
             colorPicker.setValue(Color.web("#4a90d9"));
+        }
+        if (tabLabelColorPicker != null) {
+            tabLabelColorPicker.setValue(Color.web("#f8fafc"));
+        }
+        if (tabLabelAutoContrastCheck != null) {
+            tabLabelAutoContrastCheck.setSelected(true);
+            tabLabelAutoContrastCheck
+                    .selectedProperty()
+                    .addListener(
+                            (o, p, n) -> {
+                                if (suppressOrganizerChromeListeners) {
+                                    return;
+                                }
+                                if (tabLabelColorPicker != null) {
+                                    tabLabelColorPicker.setDisable(Boolean.TRUE.equals(n));
+                                }
+                            });
         }
         if (treeView != null) {
             treeView.setShowRoot(false);
@@ -254,6 +277,7 @@ public final class MainShellTabOrganizerTabController {
         syncGroupNameField();
         syncTabAliasField();
         syncColorPickerFromSelection();
+        syncTabLabelControlsFromSelection();
         syncHeaderGlowControlsFromShell();
     }
 
@@ -281,6 +305,49 @@ public final class MainShellTabOrganizerTabController {
             }
         } catch (IllegalArgumentException ex) {
             colorPicker.setValue(Color.web("#4a90d9"));
+        }
+    }
+
+    /** 単一選択時、見出し文字色を選択行の {@link OrgRow#labelColorHex} に合わせる。 */
+    private void syncTabLabelControlsFromSelection() {
+        if (treeView == null) {
+            return;
+        }
+        boolean disable = true;
+        if (tabLabelAutoContrastCheck != null && tabLabelColorPicker != null) {
+            ObservableList<TreeItem<OrgRow>> multi =
+                    treeView.getSelectionModel().getSelectedItems();
+            if (multi != null && multi.size() == 1 && multi.getFirst() != null) {
+                OrgRow row = multi.getFirst().getValue();
+                if (row != null) {
+                    disable = false;
+                    suppressOrganizerChromeListeners = true;
+                    try {
+                        String lx = row.labelColorHex != null ? row.labelColorHex.strip() : "";
+                        boolean auto = lx.isEmpty();
+                        tabLabelAutoContrastCheck.setSelected(auto);
+                        tabLabelColorPicker.setDisable(auto);
+                        if (!auto) {
+                            try {
+                                tabLabelColorPicker.setValue(Color.web(lx));
+                            } catch (IllegalArgumentException ex) {
+                                tabLabelColorPicker.setValue(Color.web("#f8fafc"));
+                            }
+                        }
+                    } finally {
+                        suppressOrganizerChromeListeners = false;
+                    }
+                }
+            }
+            if (disable) {
+                suppressOrganizerChromeListeners = true;
+                try {
+                    tabLabelAutoContrastCheck.setSelected(true);
+                    tabLabelColorPicker.setDisable(true);
+                } finally {
+                    suppressOrganizerChromeListeners = false;
+                }
+            }
         }
     }
 
@@ -336,7 +403,11 @@ public final class MainShellTabOrganizerTabController {
         }
         String t = groupNameField.getText() != null ? groupNameField.getText().strip() : "";
         OrgRow prev = sel.getValue();
-        sel.setValue(OrgRow.group(t, prev != null ? prev.colorHex : ""));
+        sel.setValue(
+                OrgRow.group(
+                        t,
+                        prev != null ? prev.colorHex : "",
+                        prev != null ? prev.labelColorHex : ""));
         /* 選択は変わらないため selection リスナーが走らない。プレビューは手組みのため明示的に再構築する。 */
         rebuildOrganizerVisualTree();
     }
@@ -376,10 +447,10 @@ public final class MainShellTabOrganizerTabController {
             if (id == null || id == MainShellTabId.TAB_ORGANIZER) {
                 return null;
             }
-            return leafItem(OrgRow.tab(id, n.colorHex()));
+            return leafItem(OrgRow.tab(id, n.colorHex(), n.labelColorHex()));
         }
         if (n.isGroup()) {
-            TreeItem<OrgRow> g = new TreeItem<>(OrgRow.group(n.title(), n.colorHex()));
+            TreeItem<OrgRow> g = new TreeItem<>(OrgRow.group(n.title(), n.colorHex(), n.labelColorHex()));
             for (MainShellTabLayoutNode c : n.children()) {
                 TreeItem<OrgRow> ch = treeItemForLayoutNode(c);
                 if (ch != null) {
@@ -514,6 +585,62 @@ public final class MainShellTabOrganizerTabController {
         Platform.runLater(() -> restoreOrganizerTreeSelection(keep));
     }
 
+    @FXML
+    private void onApplySelectedTabLabelColor() {
+        if (treeView == null || shell == null) {
+            return;
+        }
+        ObservableList<TreeItem<OrgRow>> sel = treeView.getSelectionModel().getSelectedItems();
+        if (sel == null || sel.isEmpty()) {
+            alert(
+                    AlertType.INFORMATION,
+                    "チップを選んでから「文字色を適用」を押してください。");
+            return;
+        }
+        boolean auto = tabLabelAutoContrastCheck == null || tabLabelAutoContrastCheck.isSelected();
+        String hex = "";
+        if (!auto) {
+            if (tabLabelColorPicker == null || tabLabelColorPicker.getValue() == null) {
+                return;
+            }
+            hex = toHexRgb(tabLabelColorPicker.getValue());
+        }
+        List<TreeItem<OrgRow>> keep = new ArrayList<>(sel);
+        for (TreeItem<OrgRow> ti : keep) {
+            replaceRowLabelColorHex(ti, hex);
+        }
+        if (treeView.getRoot() != null) {
+            shell.syncMainShellTabHeaderColorsFromOrganizerTree(treeView.getRoot());
+            DesktopSessionStateStore.save(shell.collectDesktopSessionSnapshot());
+        }
+        rebuildOrganizerVisualTree();
+        Platform.runLater(() -> restoreOrganizerTreeSelection(keep));
+    }
+
+    @FXML
+    private void onClearSelectedTabLabelColor() {
+        if (treeView == null || shell == null) {
+            return;
+        }
+        ObservableList<TreeItem<OrgRow>> sel = treeView.getSelectionModel().getSelectedItems();
+        if (sel == null || sel.isEmpty()) {
+            alert(
+                    AlertType.INFORMATION,
+                    "チップを選んでから「文字色を解除」を押してください。");
+            return;
+        }
+        List<TreeItem<OrgRow>> keep = new ArrayList<>(sel);
+        for (TreeItem<OrgRow> ti : keep) {
+            replaceRowLabelColorHex(ti, "");
+        }
+        if (treeView.getRoot() != null) {
+            shell.syncMainShellTabHeaderColorsFromOrganizerTree(treeView.getRoot());
+            DesktopSessionStateStore.save(shell.collectDesktopSessionSnapshot());
+        }
+        rebuildOrganizerVisualTree();
+        Platform.runLater(() -> restoreOrganizerTreeSelection(keep));
+    }
+
     /** {@link TreeItem#setValue} やシェル同期のあとでも選択が維持されるようにする。 */
     private void restoreOrganizerTreeSelection(List<TreeItem<OrgRow>> items) {
         if (treeView == null || items == null || items.isEmpty()) {
@@ -544,9 +671,25 @@ public final class MainShellTabOrganizerTabController {
         }
         String h = hex != null ? hex : "";
         if (r.kind == OrgRow.Kind.TAB) {
-            ti.setValue(OrgRow.tab(r.tabId, h));
+            ti.setValue(OrgRow.tab(r.tabId, h, r.labelColorHex));
         } else {
-            ti.setValue(OrgRow.group(r.groupTitle, h));
+            ti.setValue(OrgRow.group(r.groupTitle, h, r.labelColorHex));
+        }
+    }
+
+    private static void replaceRowLabelColorHex(TreeItem<OrgRow> ti, String hex) {
+        if (ti == null) {
+            return;
+        }
+        OrgRow r = ti.getValue();
+        if (r == null) {
+            return;
+        }
+        String h = hex != null ? hex : "";
+        if (r.kind == OrgRow.Kind.TAB) {
+            ti.setValue(OrgRow.tab(r.tabId, r.colorHex, h));
+        } else {
+            ti.setValue(OrgRow.group(r.groupTitle, r.colorHex, h));
         }
     }
 
@@ -605,7 +748,7 @@ public final class MainShellTabOrganizerTabController {
                 String t = groupNameField.getText() != null ? groupNameField.getText().strip() : "";
                 OrgRow r = sel.getValue();
                 if (r != null && r.kind == OrgRow.Kind.GROUP) {
-                    sel.setValue(OrgRow.group(t, r.colorHex));
+                    sel.setValue(OrgRow.group(t, r.colorHex, r.labelColorHex));
                 }
             }
         }
@@ -677,7 +820,7 @@ public final class MainShellTabOrganizerTabController {
         }
         OrgRow r = ti.getValue();
         if (r.kind == OrgRow.Kind.TAB) {
-            return MainShellTabLayoutNode.tabNode(r.tabId.key(), nz(r.colorHex));
+            return MainShellTabLayoutNode.tabNode(r.tabId.key(), nz(r.colorHex), nz(r.labelColorHex));
         }
         List<MainShellTabLayoutNode> ch = new ArrayList<>();
         for (TreeItem<OrgRow> c : ti.getChildren()) {
@@ -687,7 +830,7 @@ public final class MainShellTabOrganizerTabController {
             }
         }
         String title = r.groupTitle != null && !r.groupTitle.isBlank() ? r.groupTitle : "グループ";
-        return MainShellTabLayoutNode.groupNode(title, nz(r.colorHex), ch);
+        return MainShellTabLayoutNode.groupNode(title, nz(r.colorHex), nz(r.labelColorHex), ch);
     }
 
     private static String nz(String s) {
@@ -721,24 +864,40 @@ public final class MainShellTabOrganizerTabController {
         MainShellTabId tabId;
         String groupTitle;
         String colorHex;
+        /** 見出し文字色（空は背景から自動コントラスト）。 */
+        String labelColorHex;
 
-        private OrgRow(Kind kind, MainShellTabId tabId, String groupTitle, String colorHex) {
+        private OrgRow(
+                Kind kind,
+                MainShellTabId tabId,
+                String groupTitle,
+                String colorHex,
+                String labelColorHex) {
             this.kind = kind;
             this.tabId = tabId;
             this.groupTitle = groupTitle != null ? groupTitle : "";
             this.colorHex = colorHex != null ? colorHex : "";
+            this.labelColorHex = labelColorHex != null ? labelColorHex : "";
         }
 
         static OrgRow placeholder() {
-            return new OrgRow(Kind.GROUP, null, "", "");
+            return new OrgRow(Kind.GROUP, null, "", "", "");
         }
 
         static OrgRow tab(MainShellTabId id, String colorHex) {
-            return new OrgRow(Kind.TAB, Objects.requireNonNull(id), "", nz(colorHex));
+            return tab(id, colorHex, "");
+        }
+
+        static OrgRow tab(MainShellTabId id, String colorHex, String labelColorHex) {
+            return new OrgRow(Kind.TAB, Objects.requireNonNull(id), "", nz(colorHex), nz(labelColorHex));
         }
 
         static OrgRow group(String title, String colorHex) {
-            return new OrgRow(Kind.GROUP, null, title != null ? title : "", nz(colorHex));
+            return group(title, colorHex, "");
+        }
+
+        static OrgRow group(String title, String colorHex, String labelColorHex) {
+            return new OrgRow(Kind.GROUP, null, title != null ? title : "", nz(colorHex), nz(labelColorHex));
         }
 
         String formatDisplay(MainShellController shell) {
@@ -866,7 +1025,8 @@ public final class MainShellTabOrganizerTabController {
         String hx = row.colorHex;
         String previewContrastFill = null;
         if (hx != null && !hx.isBlank() && shell != null) {
-            String fill = shell.tabOrganizerPreviewChipLabelTextFill(hx);
+            String fill =
+                    shell.tabOrganizerPreviewChipLabelTextFill(hx, row.labelColorHex != null ? row.labelColorHex : "");
             previewContrastFill = fill;
             lab.setStyle(
                     "-fx-text-fill: "

@@ -239,7 +239,8 @@ public final class DesktopSessionStateStore {
                 text(root, "stage1NetworkCacheBadgeLabel"),
                 loadStage1NetworkCacheBadgeStyle(root),
                 optionalBoolean(root, "mainShellTabOrganizerHeaderGlow", true),
-                clamp01(optionalDouble(root, "mainShellTabOrganizerHeaderGlowStrength", 1d)),
+                clampMainShellHeaderGlowStrength(
+                        optionalDouble(root, "mainShellTabOrganizerHeaderGlowStrength", 1d)),
                 loadPushButtonDesignPrefs(root),
                 optionalBoolean(root, "memoryMonitorEnabled", false),
                 optionalLongClamped(root, "memoryMonitorIntervalSec", 5L, 1L, 3600L),
@@ -307,6 +308,14 @@ public final class DesktopSessionStateStore {
             return 1d;
         }
         return Math.max(0d, Math.min(1d, v));
+    }
+
+    /** メインシェル見出しグロー強度（保存値は従来 0〜1、拡張後は最大 4）。 */
+    private static double clampMainShellHeaderGlowStrength(double v) {
+        if (!Double.isFinite(v)) {
+            return 1d;
+        }
+        return Math.max(0d, Math.min(4d, v));
     }
 
     private static long optionalLongClamped(
@@ -517,6 +526,9 @@ public final class DesktopSessionStateStore {
         o.put("kind", n.kind());
         if (!n.colorHex().isBlank()) {
             o.put("color", n.colorHex());
+        }
+        if (!n.labelColorHex().isBlank()) {
+            o.put("labelColor", n.labelColorHex());
         }
         if (n.isTab()) {
             o.put("id", n.id());

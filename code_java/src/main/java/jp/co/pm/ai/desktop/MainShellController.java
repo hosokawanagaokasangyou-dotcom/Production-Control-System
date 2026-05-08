@@ -333,6 +333,9 @@ public final class MainShellController {
     private final AtomicReference<Double> mainShellTabOrganizerHeaderGlowStrength =
             new AtomicReference<>(1.0);
 
+    /** 見出しグロー強度の内部上限（UI は % で 0〜400 をこれに対応）。 */
+    private static final double MAIN_SHELL_HEADER_GLOW_STRENGTH_MAX = 4.0;
+
     private final PauseTransition uiEnvSaveDebounce = new PauseTransition(Duration.millis(400));
     /** Assigned in {@link #installUiEnvAutoSave()} for {@link #resetEnvRowsToDefaults()}. */
     private Runnable uiEnvPersistSchedule;
@@ -580,7 +583,7 @@ public final class MainShellController {
         JvmMemoryLogStore.bootstrapRingFromDisk();
         setMainShellTabOrganizerHeaderGlowEnabled(s.mainShellTabOrganizerHeaderGlow());
         setMainShellTabOrganizerHeaderGlowStrength(
-                clamp(s.mainShellTabOrganizerHeaderGlowStrength(), 0.0, 1.0));
+                clamp(s.mainShellTabOrganizerHeaderGlowStrength(), 0.0, 4.0));
         applyUiEnvRowsFromSession(s);
         memorySettingsTabController.applyMemorySettingsSession(s);
         planInputTabController.restoreDesktopSessionPaths(s.planInputPath(), s.planInputSheet());
@@ -1144,17 +1147,24 @@ public final class MainShellController {
                 }
             }
             String title = t.getText() != null && !t.getText().isBlank() ? t.getText() : "グループ";
-            return MainShellTabLayoutNode.groupNode(title, readShellTabColorHex(t), ch);
+            return MainShellTabLayoutNode.groupNode(
+                    title, readShellTabColorHex(t), readShellTabLabelColorHex(t), ch);
         }
         MainShellTabId id = mainShellTabId(t);
         if (id == null || id == MainShellTabId.TAB_ORGANIZER) {
             return null;
         }
-        return MainShellTabLayoutNode.tabNode(id.key(), readShellTabColorHex(t));
+        return MainShellTabLayoutNode.tabNode(
+                id.key(), readShellTabColorHex(t), readShellTabLabelColorHex(t));
     }
 
     private static String readShellTabColorHex(Tab t) {
         Object v = t.getProperties().get("pmShellTabColor");
+        return v instanceof String s && !s.isBlank() ? s.strip() : "";
+    }
+
+    private static String readShellTabLabelColorHex(Tab t) {
+        Object v = t.getProperties().get("pmShellTabLabelColor");
         return v instanceof String s && !s.isBlank() ? s.strip() : "";
     }
 
@@ -1169,7 +1179,7 @@ public final class MainShellController {
         if (hex.isEmpty()) {
             return;
         }
-        applyShellTabColor(tab, hex);
+        applyShellTabColor(tab, hex, readShellTabLabelColorHex(tab));
     }
 
     private void ensureShellTabSelectionChromeListener(Tab tab) {
@@ -1185,7 +1195,10 @@ public final class MainShellController {
                                 Platform.runLater(() -> refreshShellTabChromeOnSelectionChange(tab)));
     }
 
-    private void applyShellTabColor(Tab tab, String colorHex) {
+    /**
+     * @param labelColorHexOrEmpty 見出し文字色（空は背景に対する自動コントラスト）
+     */
+    private void applyShellTabColor(Tab tab, String colorHex, String labelColorHexOrEmpty) {
         if (tab == null) {
             return;
         }
@@ -1193,7 +1206,21 @@ public final class MainShellController {
         if (colorHex != null && !colorHex.isBlank()) {
             String h = colorHex.strip();
             tab.getProperties().put("pmShellTabColor", h);
-            String textFill = contrastingTabLabelTextFillHex(h);
+            String labelIn = labelColorHexOrEmpty != null ? labelColorHexOrEmpty.strip() : "";
+            String textFill;
+            if (!labelIn.isEmpty()) {
+                try {
+                    Color.web(labelIn);
+                    tab.getProperties().put("pmShellTabLabelColor", labelIn);
+                    textFill = labelIn;
+                } catch (IllegalArgumentException ex) {
+                    tab.getProperties().remove("pmShellTabLabelColor");
+                    textFill = contrastingTabLabelTextFillHex(h);
+                }
+            } else {
+                tab.getProperties().remove("pmShellTabLabelColor");
+                textFill = contrastingTabLabelTextFillHex(h);
+            }
             String glowEffect =
                     mainShellTabOrganizerHeaderGlowEnabled.get()
                             ? shellTabHeaderGlowEffectCss(h)
@@ -1202,6 +1229,7 @@ public final class MainShellController {
             pokeShellTabHeaderBackground(pane, tab, h, textFill, glowEffect);
         } else {
             tab.getProperties().remove("pmShellTabColor");
+            tab.getProperties().remove("pmShellTabLabelColor");
             tab.setStyle("");
             pokeShellTabHeaderBackground(pane, tab, null, null, null);
         }
@@ -1219,11 +1247,12 @@ public final class MainShellController {
     public double getMainShellTabOrganizerHeaderGlowStrength() {
         Double v = mainShellTabOrganizerHeaderGlowStrength.get();
         double x = v != null ? v : 1.0;
-        return clamp(x, 0.0, 1.0);
+        return clamp(x, 0.0, MAIN_SHELL_HEADER_GLOW_STRENGTH_MAX);
     }
 
     public void setMainShellTabOrganizerHeaderGlowStrength(double strength01) {
-        mainShellTabOrganizerHeaderGlowStrength.set(clamp(strength01, 0.0, 1.0));
+        mainShellTabOrganizerHeaderGlowStrength.set(
+                clamp(strength01, 0.0, MAIN_SHELL_HEADER_GLOW_STRENGTH_MAX));
     }
 
     /** 保存済みの {@code pmShellTabColor} を踏まえて全タブ見出しのインラインスタイルを再適用（グロー切替時）。 */
@@ -1259,7 +1288,7 @@ public final class MainShellController {
             if (t == mainShellTabOrganizer) {
                 continue;
             }
-            applyShellTabColor(t, readShellTabColorHex(t));
+            applyShellTabColor(t, readShellTabColorHex(t), readShellTabLabelColorHex(t));
             if (t.getContent() instanceof TabPane inner) {
                 applyStoredShellTabColorsRecursive(inner.getTabs());
             }
@@ -1307,10 +1336,27 @@ public final class MainShellController {
     }
 
     public String tabOrganizerPreviewChipLabelTextFill(String colorHexOrEmpty) {
-        if (colorHexOrEmpty == null || colorHexOrEmpty.isBlank()) {
+        return tabOrganizerPreviewChipLabelTextFill(colorHexOrEmpty, "");
+    }
+
+    /**
+     * @param bgHexOrEmpty 見出し背景色（空のとき既定の灰文字）
+     * @param labelHexOrEmpty ユーザー指定の文字色（空なら背景から自動コントラスト）
+     */
+    public String tabOrganizerPreviewChipLabelTextFill(String bgHexOrEmpty, String labelHexOrEmpty) {
+        String override = labelHexOrEmpty != null ? labelHexOrEmpty.strip() : "";
+        if (!override.isEmpty()) {
+            try {
+                Color.web(override);
+                return override;
+            } catch (IllegalArgumentException ex) {
+                /* fall through */
+            }
+        }
+        if (bgHexOrEmpty == null || bgHexOrEmpty.isBlank()) {
             return "#94a3b8";
         }
-        return contrastingTabLabelTextFillHex(colorHexOrEmpty.strip());
+        return contrastingTabLabelTextFillHex(bgHexOrEmpty.strip());
     }
 
     private static String previewChipBorderRgba(String bgHex) {
@@ -1334,7 +1380,8 @@ public final class MainShellController {
      * @return CSS の {@code -fx-effect} に渡す値（{@code dropshadow(...)}）。失敗時は空。
      */
     private String shellTabHeaderGlowEffectCss(String hexBg) {
-        double strength = clamp(getMainShellTabOrganizerHeaderGlowStrength(), 0.0, 1.0);
+        double strength =
+                clamp(getMainShellTabOrganizerHeaderGlowStrength(), 0.0, MAIN_SHELL_HEADER_GLOW_STRENGTH_MAX);
         if (strength <= 1e-6) {
             return "";
         }
@@ -1600,7 +1647,7 @@ public final class MainShellController {
         if (r != null && r.kind == MainShellTabOrganizerTabController.OrgRow.Kind.TAB) {
             Tab t = mainShellTabFor(r.tabId);
             if (t != null) {
-                applyShellTabColor(t, r.colorHex);
+                applyShellTabColor(t, r.colorHex, r.labelColorHex);
             }
         }
         for (TreeItem<MainShellTabOrganizerTabController.OrgRow> c : node.getChildren()) {
@@ -1636,7 +1683,7 @@ public final class MainShellController {
             Tab match = findShellGroupTabWithSameLeafKeys(ti, unmatched);
             if (match != null
                     && match.getContent() instanceof TabPane inner) {
-                applyShellTabColor(match, r.colorHex);
+                applyShellTabColor(match, r.colorHex, r.labelColorHex);
                 unmatched.remove(match);
                 syncGroupHeaderColorsForTreeLevel(ti.getChildren(), new ArrayList<>(inner.getTabs()));
             }
@@ -1764,7 +1811,7 @@ public final class MainShellController {
             MainShellTabId id = MainShellTabId.fromKey(n.id());
             Tab t = id != null ? mainShellTabFor(id) : null;
             if (t != null) {
-                applyShellTabColor(t, n.colorHex());
+                applyShellTabColor(t, n.colorHex(), n.labelColorHex());
             }
             return t;
         }
@@ -1781,7 +1828,7 @@ public final class MainShellController {
                 }
             }
             groupTab.setContent(inner);
-            applyShellTabColor(groupTab, n.colorHex());
+            applyShellTabColor(groupTab, n.colorHex(), n.labelColorHex());
             wiredInnerMainShellTabPanes.add(inner);
             return groupTab;
         }
@@ -1801,7 +1848,7 @@ public final class MainShellController {
                 MainShellTabId id = MainShellTabId.fromKey(key);
                 Tab t = id != null ? mainShellTabFor(id) : null;
                 if (t != null) {
-                    applyShellTabColor(t, "");
+                    applyShellTabColor(t, "", "");
                     tabPane.getTabs().add(t);
                 }
             }

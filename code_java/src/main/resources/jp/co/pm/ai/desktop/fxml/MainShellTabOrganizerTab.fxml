@@ -51,13 +51,23 @@
                     <Button mnemonicParsing="false" onAction="#onApplySelectedColor" text="選択に色を適用"/>
                     <Button mnemonicParsing="false" onAction="#onClearSelectedColor" text="選択の色を解除"/>
                 </HBox>
+                <HBox alignment="CENTER_LEFT" spacing="8.0">
+                    <Label minWidth="72.0" text="見出し文字色"/>
+                    <CheckBox fx:id="tabLabelAutoContrastCheck" mnemonicParsing="false"
+                              text="背景から自動"/>
+                    <ColorPicker fx:id="tabLabelColorPicker"/>
+                    <Button mnemonicParsing="false" onAction="#onApplySelectedTabLabelColor" text="文字色を適用"/>
+                    <Button mnemonicParsing="false" onAction="#onClearSelectedTabLabelColor" text="文字色を解除"/>
+                </HBox>
+                <Label wrapText="true" styleClass="pm-main-shell-tab-organizer-subhint"
+                       text="「背景から自動」でコントラスト計算、オフで任意の文字色（グループ行にも可）。見出し背景が無い行は、背景色を付けたあとに反映されます。"/>
                 <CheckBox fx:id="headerGlowCheck" mnemonicParsing="false"
                           text="見出しにグロー（発光風）を付ける — メインタブの見出しの縁に色にじみが付きます（オフでフラット）"/>
                 <HBox alignment="CENTER_LEFT" spacing="8.0">
                     <Label minWidth="90.0" text="グロー強度"/>
-                    <Slider fx:id="headerGlowStrengthSlider" blockIncrement="5.0" majorTickUnit="25.0"
-                            max="100.0" min="0.0" minorTickCount="4" prefWidth="220.0"
-                            showTickLabels="true" showTickMarks="true" snapToTicks="true" value="100.0"
+                    <Slider fx:id="headerGlowStrengthSlider" blockIncrement="20.0" majorTickUnit="100.0"
+                            max="400.0" min="0.0" minorTickCount="4" prefWidth="220.0"
+                            showTickLabels="true" showTickMarks="true" snapToTicks="false" value="100.0"
                             HBox.hgrow="ALWAYS"/>
                     <Label fx:id="headerGlowStrengthLabel" minWidth="42.0" text="100%"/>
                 </HBox>
