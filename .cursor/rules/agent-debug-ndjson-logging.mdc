@@ -30,34 +30,13 @@ alwaysApply: true
 - Cursor デバッグセッションで ID が指定されているときは**その値**（例: `471ee7`, `f0dedd`）
 - それ以外は **`AgentDebugLog.DEFAULT_SESSION_ID`** または機能ごとに定数化
 
-## ログが取れなかった原因（旧挙動の整理）
+## ログファイルの解決順（実装と同一・first hit）
 
-以前は **`appendNdjsonLine` が `resolveRepoRoot` が返す 1 系統のパスにだけ追記**し、失敗時の再試行が限定的でした。起動時の **`user.dir` が `code_java` 直下など** `AppPaths.resolveRepoRoot` とズレると、**リポジトリ直下の `.cursor`** と **ワークスペース側の `.cursor`** が別物になり、WSL・ポータブル・別ドライブでは書き込みに失敗したり、Cursor が開いているパスにファイルが現れませんでした。
-
-## 書き込みの挙動（現行・実装と同一）
-
-- **候補の組み立て**: `ndjsonWriteCandidates(ui, sessionId)` が **先頭ほど優先**の `List<Path>` を返す（重複パスは正規化後に除外）。
-- **表示用の「主パス」**: `resolveNdjsonPath` は上記リストの **先頭**を返す。リストが空のときだけ **`java.io.tmpdir/pm-ai-agent-debug-<sessionId>.ndjson`**。
-- **実際の追記**: `appendNdjsonLine` は候補を **順に** `writeUtf8Append` し、**最初に成功したパス**を採用して返す。`CURSOR_DEBUG_LOG` / `PM_AI_DEBUG_LOG` / 環境タブの **`PM_AI_CURSOR_DEBUG_LOG`**（`AppPaths.KEY_PM_AI_CURSOR_DEBUG_LOG`）で **単一パスだけ**が指定されているときは、そのパスのみを試す。
-- **最終候補**: 候補チェーンの末尾に **`java.io.tmpdir`** の NDJSON を含めるため、通常は **どこかへ必ず書ける**（全候補が失敗した場合のみ `appendNdjsonLine` は `null`）。
-- **複写（既定チェーン時のみ）**: 環境変数・UI の単独パス指定でないとき、既定チェーンのどれかへ書けたあと、**ベストエフォート**で `resolveRepoRoot(ui)/code/log/debug-<sessionId>.log` にも同一行を追記する（失敗しても本体の成否には影響しない）。
-
-## ログファイルの候補順（`ndjsonWriteCandidates` と同一）
-
-ファイル名は **`debug-<sessionId>.log`**（tmpdir のみ **`pm-ai-agent-debug-<sessionId>.ndjson`**）。
-
-1. **`CURSOR_DEBUG_LOG`** または **`PM_AI_DEBUG_LOG`**（ログ**ファイル**への絶対パス）— 設定時は **この 1 パスのみ**で終了。
-2. 環境タブ **`PM_AI_CURSOR_DEBUG_LOG`**（`AppPaths.KEY_PM_AI_CURSOR_DEBUG_LOG`）— 非空時は **この 1 パスのみ**で終了。
-3. **`parent(resolveRepoRoot(ui))/.cursor/debug-<sessionId>.log`** — リポジトリ・リーフ名が **`Production-Control-System`** のときのみ追加（親＝ワークスペース直下の `.cursor/` になりやすい）。
+1. **`CURSOR_DEBUG_LOG`** または **`PM_AI_DEBUG_LOG`**（ログ**ファイル**への絶対パス）
+2. 環境タブ **`PM_AI_CURSOR_DEBUG_LOG`**（`AppPaths.KEY_PM_AI_CURSOR_DEBUG_LOG`）
+3. **`parent(resolveRepoRoot(ui))/.cursor/debug-<sessionId>.log`** — リポジトリが `Production-Control-System` のとき、多くの場合**ワークスペース直下**の `.cursor/`（例: `工程管理AIプロジェクト_JAVA/.cursor/debug-471ee7.log`）
 4. **`resolveRepoRoot(ui)/.cursor/debug-<sessionId>.log`**
-5. **`resolveRepoRoot(ui)/code/log/debug-<sessionId>.log`**
-6. **`user.dir` を最大 14 段まで上位へ遡り**、次のいずれかで **PM AI リポジトリ根**と判定できたディレクトリの **`.cursor/debug-<sessionId>.log`**  
-   - `version.txt` がファイルとして存在  
-   - `code_java/pom.xml` がファイルとして存在  
-   - `code/python` がディレクトリとして存在
-7. 同じく **`user.dir` から最大 14 段まで上位へ遡り**、途中で **`Files.isDirectory` として存在する `.cursor`** が見つかったら、その直下の **`debug-<sessionId>.log`**（ワークスペースの `.cursor` に届けやすくするための走査）。
-8. **`user.home/.cursor/debug-<sessionId>.log`**
-9. **`java.io.tmpdir/pm-ai-agent-debug-<sessionId>.ndjson`**（最終フォールバック）
+5. 失敗時: **`user.home/.cursor/debug-<sessionId>.log`**
 
 ## コード上のレイアウト
 
