@@ -2,9 +2,11 @@ package jp.co.pm.ai.desktop;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -48,6 +50,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.paint.Paint;
 import javafx.scene.text.Text;
 import javafx.stage.Modality;
 import javafx.stage.Screen;
@@ -89,6 +92,12 @@ public final class MainShellController {
 
     /** Cursor デバッグセッション用（タブ整理プレビュー vs 実タブ配色の計測）。 */
     private static final String AGENT_DEBUG_SESSION_TAB_PREVIEW = "8da428";
+
+    /** Cursor デバッグモード（タブ整理プレビュー vs 実タブ文字色）NDJSON 出力先。 */
+    private static final String CURSOR_DEBUG_SESSION_8FFDD1 = "8ffdd1";
+
+    private static final Path CURSOR_DEBUG_NDJSON_8FFDD1 =
+            Path.of("/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-8ffdd1.log");
 
     /**
      * {@link Tab#getProperties()} に登録済みかどうか。選択変更時に見出し chrome を再適用するリスナーを二重登録しない。
@@ -1254,6 +1263,21 @@ public final class MainShellController {
                         "MainShellController.applyShellTabColor",
                         "着色タブへ chrome 適用",
                         row);
+                appendCursorDebugNdjson8ffdd1(
+                        "C",
+                        "MainShellController.applyShellTabColor",
+                        "shellTabComputedChrome",
+                        Map.of(
+                                "mainShellTabId",
+                                mid != null ? mid.name() : "",
+                                "tabText",
+                                tab.getText() != null ? tab.getText() : "",
+                                "colorHexParam",
+                                h,
+                                "computedTextFill",
+                                textFill,
+                                "bgRelativeLum",
+                                lum));
             } catch (Throwable ignored) {
                 // debug-only
             }
@@ -1519,6 +1543,95 @@ public final class MainShellController {
         }
     }
 
+    // #region agent log (cursor debug 8ffdd1 NDJSON)
+    private static String escapeJsonCursorDebug(String s) {
+        if (s == null) {
+            return "";
+        }
+        return s.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private static void appendCursorDebugNdjson8ffdd1(
+            String hypothesisId, String location, String message, Map<String, Object> data) {
+        try {
+            long ts = System.currentTimeMillis();
+            StringBuilder sb = new StringBuilder(768);
+            sb.append("{\"sessionId\":\"").append(CURSOR_DEBUG_SESSION_8FFDD1).append('"');
+            sb.append(",\"hypothesisId\":\"").append(escapeJsonCursorDebug(hypothesisId)).append('"');
+            sb.append(",\"location\":\"").append(escapeJsonCursorDebug(location)).append('"');
+            sb.append(",\"message\":\"").append(escapeJsonCursorDebug(message)).append('"');
+            sb.append(",\"timestamp\":").append(ts);
+            if (data != null && !data.isEmpty()) {
+                sb.append(",\"data\":{");
+                boolean first = true;
+                for (Map.Entry<String, Object> e : data.entrySet()) {
+                    if (!first) {
+                        sb.append(',');
+                    }
+                    first = false;
+                    sb.append('"').append(escapeJsonCursorDebug(e.getKey())).append("\":");
+                    Object v = e.getValue();
+                    if (v == null) {
+                        sb.append("null");
+                    } else if (v instanceof Boolean b) {
+                        sb.append(b);
+                    } else if (v instanceof Number n) {
+                        sb.append(n);
+                    } else {
+                        sb.append('"').append(escapeJsonCursorDebug(String.valueOf(v))).append('"');
+                    }
+                }
+                sb.append('}');
+            }
+            sb.append("}\n");
+            Files.writeString(
+                    CURSOR_DEBUG_NDJSON_8FFDD1,
+                    sb.toString(),
+                    StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.APPEND);
+        } catch (Throwable ignored) {
+            // debug-only
+        }
+    }
+
+    /** {@link MainShellTabOrganizerTabController} から同一ログへ書くための公開ラッパー。 */
+    public void cursorDebugNdjson8ffdd1(
+            String hypothesisId, String location, String message, Map<String, Object> data) {
+        appendCursorDebugNdjson8ffdd1(hypothesisId, location, message, data);
+    }
+
+    /** デバッグ計測：サブツリー内の {@link Text} 個数。 */
+    static int countTextDescendantsForDebug(Node root) {
+        int n = 0;
+        if (root instanceof Text) {
+            n++;
+        }
+        if (root instanceof Parent p) {
+            for (Node ch : p.getChildrenUnmodifiable()) {
+                n += countTextDescendantsForDebug(ch);
+            }
+        }
+        return n;
+    }
+
+    private static Text firstTextDescendantForDebug(Node root) {
+        if (root instanceof Text t) {
+            return t;
+        }
+        if (root instanceof Parent p) {
+            for (Node ch : p.getChildrenUnmodifiable()) {
+                Text x = firstTextDescendantForDebug(ch);
+                if (x != null) {
+                    return x;
+                }
+            }
+        }
+        return null;
+    }
+
+    // #endregion
+
     /**
      * タブ整理ツリーのプレビュー {@link Label} はメインタブ見出しと異なり単純な {@link Labeled} のため、テーマ CSS が子 {@link Text} の
      * {@code -fx-fill} を残し、親の {@code -fx-text-fill} だけでは実タブと文字色が食い違うことがある。
@@ -1547,11 +1660,96 @@ public final class MainShellController {
         if (labeled == null || textFillHex == null || textFillHex.isBlank()) {
             return;
         }
+        String tfIn = textFillHex.strip();
+        // #region agent log (8ffdd1)
         try {
-            applyPreviewDescendantTextFillRecursive(labeled, Color.web(textFillHex.strip()), textFillHex);
+            Text ftBefore = firstTextDescendantForDebug(labeled);
+            Map<String, Object> pre = new LinkedHashMap<>();
+            pre.put("sceneAttached", labeled.getScene() != null);
+            pre.put("textCount", countTextDescendantsForDebug(labeled));
+            pre.put("textFillTargetHex", tfIn);
+            Paint ltf = labeled.getTextFill();
+            pre.put("labeledTextFill", ltf != null ? ltf.toString() : "");
+            pre.put("firstTextMissing", ftBefore == null);
+            if (ftBefore != null) {
+                pre.put("firstTextFillBound", ftBefore.fillProperty().isBound());
+                Paint ff = ftBefore.getFill();
+                pre.put("firstTextFillPaint", ff != null ? ff.toString() : "");
+            }
+            pre.put(
+                    "firstTextFillStringBefore",
+                    firstTabLabelDescendantTextFillString(labeled));
+            appendCursorDebugNdjson8ffdd1(
+                    "D",
+                    "MainShellController.syncOrganizerPreviewPillLabelTextNodes",
+                    "beforeApply",
+                    pre);
+        } catch (Throwable ignored) {
+            // debug-only
+        }
+        // #endregion
+        try {
+            applyPreviewDescendantTextFillRecursive(labeled, Color.web(tfIn), textFillHex);
         } catch (IllegalArgumentException ex) {
+            // #region agent log (8ffdd1)
+            appendCursorDebugNdjson8ffdd1(
+                    "D",
+                    "MainShellController.syncOrganizerPreviewPillLabelTextNodes",
+                    "colorParseFailed",
+                    Map.of(
+                            "textFillHex",
+                            tfIn,
+                            "error",
+                            ex.getMessage() != null ? ex.getMessage() : ""));
+            // #endregion
             // テーマ側の既定のまま
         }
+        // #region agent log (8ffdd1)
+        try {
+            Text ftAfter = firstTextDescendantForDebug(labeled);
+            Map<String, Object> post = new LinkedHashMap<>();
+            post.put("textCount", countTextDescendantsForDebug(labeled));
+            post.put("firstTextMissing", ftAfter == null);
+            if (ftAfter != null) {
+                post.put("firstTextFillBound", ftAfter.fillProperty().isBound());
+                Paint ff = ftAfter.getFill();
+                post.put("firstTextFillPaint", ff != null ? ff.toString() : "");
+            }
+            post.put(
+                    "firstTextFillStringAfter",
+                    firstTabLabelDescendantTextFillString(labeled));
+            appendCursorDebugNdjson8ffdd1(
+                    "D",
+                    "MainShellController.syncOrganizerPreviewPillLabelTextNodes",
+                    "afterApply",
+                    post);
+            Platform.runLater(
+                    () -> {
+                        try {
+                            Text ftLate = firstTextDescendantForDebug(labeled);
+                            Map<String, Object> late = new LinkedHashMap<>();
+                            late.put("textCount", countTextDescendantsForDebug(labeled));
+                            late.put("firstTextMissing", ftLate == null);
+                            if (ftLate != null) {
+                                Paint ff = ftLate.getFill();
+                                late.put("firstTextFillPaint", ff != null ? ff.toString() : "");
+                            }
+                            late.put(
+                                    "firstTextFillStringDeferredPulse",
+                                    firstTabLabelDescendantTextFillString(labeled));
+                            appendCursorDebugNdjson8ffdd1(
+                                    "B",
+                                    "MainShellController.syncOrganizerPreviewPillLabelTextNodes",
+                                    "afterNextPulse",
+                                    late);
+                        } catch (Throwable ignored) {
+                            // debug-only
+                        }
+                    });
+        } catch (Throwable ignored) {
+            // debug-only
+        }
+        // #endregion
     }
 
     /** 着色解除時に {@link #applyShellTabHeaderForegroundRecursive} で付けたインラインを除去する。 */

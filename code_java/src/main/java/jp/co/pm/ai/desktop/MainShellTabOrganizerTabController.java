@@ -876,6 +876,25 @@ public final class MainShellTabOrganizerTabController {
             if (shell != null) {
                 Platform.runLater(
                         () -> {
+                            // #region agent log (cursor debug 8ffdd1)
+                            try {
+                                Map<String, Object> m = new LinkedHashMap<>();
+                                m.put("labScene", lab.getScene() != null);
+                                m.put("pillScene", pill.getScene() != null);
+                                m.put(
+                                        "textCountBeforeCss",
+                                        MainShellController.countTextDescendantsForDebug(lab));
+                                m.put("colorHex", hx.strip());
+                                m.put("computedPreviewFill", fill);
+                                shell.cursorDebugNdjson8ffdd1(
+                                        "A",
+                                        "MainShellTabOrganizerTabController.createPillForTreeItem.runLater",
+                                        "beforeApplyCss",
+                                        m);
+                            } catch (Throwable ignored) {
+                                // debug-only
+                            }
+                            // #endregion
                             lab.applyCss();
                             lab.layout();
                             shell.syncOrganizerPreviewPillLabelTextNodes(lab, fill);
@@ -916,6 +935,25 @@ public final class MainShellTabOrganizerTabController {
             if (shell != null) {
                 Platform.runLater(
                         () -> {
+                            // #region agent log (cursor debug 8ffdd1)
+                            try {
+                                Map<String, Object> m = new LinkedHashMap<>();
+                                m.put("labScene", lab.getScene() != null);
+                                m.put("pillScene", pill.getScene() != null);
+                                m.put(
+                                        "textCountBeforeCss",
+                                        MainShellController.countTextDescendantsForDebug(lab));
+                                m.put("colorHex", "");
+                                m.put("computedPreviewFill", emptyFill);
+                                shell.cursorDebugNdjson8ffdd1(
+                                        "A",
+                                        "MainShellTabOrganizerTabController.createPillForTreeItem.runLater",
+                                        "beforeApplyCss",
+                                        m);
+                            } catch (Throwable ignored) {
+                                // debug-only
+                            }
+                            // #endregion
                             lab.applyCss();
                             lab.layout();
                             shell.syncOrganizerPreviewPillLabelTextNodes(lab, emptyFill);
