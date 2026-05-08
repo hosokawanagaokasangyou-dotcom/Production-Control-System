@@ -1548,6 +1548,8 @@ public final class MainShellController {
      * タブ見出しラベル（{@code .tab-label}）以下の {@link Text} にも前景色を適用する。Modena の {@code .tab-label}
      * は {@code Labeled} に対する {@code -fx-text-fill} と子 {@link Text} の {@code -fx-fill} が一致しないことがあり、タブ整理のプレビュー（単純
      * {@link Label}）と実タブで文字色だけずれる原因になる。
+     * <p>JavaFX 26 以降、タブ見出しの {@code LabeledText} などでは {@code fill} が CSS 側でバインドされることがあり、
+     * {@link Text#setFill} が例外になる。そのため {@link Text} 系はインライン {@code -fx-fill} のみで指定する。
      */
     private static void applyShellTabHeaderForegroundRecursive(
             Node root, Color fillColor, String tfHex) {
@@ -1556,7 +1558,6 @@ public final class MainShellController {
         }
         String tf = tfHex.strip();
         if (root instanceof Text textNode) {
-            textNode.setFill(fillColor);
             textNode.setStyle("-fx-fill: " + tf + ";");
         } else if (root instanceof Labeled labeled) {
             labeled.setTextFill(fillColor);
@@ -1575,7 +1576,6 @@ public final class MainShellController {
             return;
         }
         if (root instanceof Text textNode) {
-            textNode.setFill(null);
             textNode.setStyle("");
         } else if (root instanceof Labeled labeled) {
             labeled.setTextFill(null);
