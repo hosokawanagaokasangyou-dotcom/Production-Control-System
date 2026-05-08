@@ -48,6 +48,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.text.Text;
 import javafx.stage.Modality;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
@@ -1423,6 +1424,67 @@ public final class MainShellController {
     }
 
     /**
+     * タブ見出しラベル（{@code .tab-label}）以下の {@link Text} にも前景色を適用する。Modena の {@code .tab-label}
+     * は {@code Labeled} に対する {@code -fx-text-fill} と子 {@link Text} の {@code -fx-fill} が一致しないことがあり、タブ整理のプレビュー（単純
+     * {@link Label}）と実タブで文字色だけずれる原因になる。
+     */
+    private static void applyShellTabHeaderForegroundRecursive(
+            Node root, Color fillColor, String tfHex) {
+        if (root == null || tfHex == null || tfHex.isBlank()) {
+            return;
+        }
+        String tf = tfHex.strip();
+        if (root instanceof Text textNode) {
+            textNode.setFill(fillColor);
+            textNode.setStyle("-fx-fill: " + tf + ";");
+        } else if (root instanceof Labeled labeled) {
+            labeled.setTextFill(fillColor);
+            labeled.setStyle("-fx-text-fill: " + tf + ";");
+        }
+        if (root instanceof Parent p) {
+            for (Node ch : p.getChildrenUnmodifiable()) {
+                applyShellTabHeaderForegroundRecursive(ch, fillColor, tf);
+            }
+        }
+    }
+
+    /** 着色解除時に {@link #applyShellTabHeaderForegroundRecursive} で付けたインラインを除去する。 */
+    private static void clearShellTabHeaderForegroundRecursive(Node root) {
+        if (root == null) {
+            return;
+        }
+        if (root instanceof Text textNode) {
+            textNode.setFill(null);
+            textNode.setStyle("");
+        } else if (root instanceof Labeled labeled) {
+            labeled.setTextFill(null);
+            labeled.setStyle("");
+        }
+        if (root instanceof Parent p) {
+            for (Node ch : p.getChildrenUnmodifiable()) {
+                clearShellTabHeaderForegroundRecursive(ch);
+            }
+        }
+    }
+
+    /** デバッグ計測：{@code .tab-label} サブツリー内の最初の {@link Text} の {@code fill}。 */
+    private static String firstTabLabelDescendantTextFillString(Node root) {
+        if (root instanceof Text t) {
+            javafx.scene.paint.Paint f = t.getFill();
+            return f != null ? f.toString() : "";
+        }
+        if (root instanceof Parent p) {
+            for (Node ch : p.getChildrenUnmodifiable()) {
+                String s = firstTabLabelDescendantTextFillString(ch);
+                if (!s.isEmpty()) {
+                    return s;
+                }
+            }
+        }
+        return "";
+    }
+
+    /**
      * テーマ CSS の {@code .tab-pane > ... > .tab:selected} 等が Tab のインラインより強く当たり色が変わらないことがあるため、
      * 見出し行のセル（{@code .headers-region} 直下の {@code .tab}）へ直接背景・文字色を指定する。
      */
@@ -1462,20 +1524,24 @@ public final class MainShellController {
                                         shellTabHeaderChromeInlineStyle(
                                                 h, tf, glowEffectCssOrNull));
                                 Node lab = child.lookup(".tab-label");
-                                if (lab instanceof Labeled labeled) {
-                                    labeled.setTextFill(Color.web(tf));
-                                    labeled.setStyle("-fx-text-fill: " + tf + ";");
-                                } else if (lab != null) {
-                                    lab.setStyle("-fx-text-fill: " + tf + ";");
+                                if (lab != null) {
+                                    try {
+                                        applyShellTabHeaderForegroundRecursive(
+                                                lab, Color.web(tf), tf);
+                                    } catch (IllegalArgumentException ex) {
+                                        if (lab instanceof Labeled labeled) {
+                                            labeled.setTextFill(Color.web(tf));
+                                            labeled.setStyle("-fx-text-fill: " + tf + ";");
+                                        } else {
+                                            lab.setStyle("-fx-text-fill: " + tf + ";");
+                                        }
+                                    }
                                 }
                             } else {
                                 child.setStyle("");
                                 Node lab = child.lookup(".tab-label");
-                                if (lab instanceof Labeled labeled) {
-                                    labeled.setTextFill(null);
-                                }
                                 if (lab != null) {
-                                    lab.setStyle("");
+                                    clearShellTabHeaderForegroundRecursive(lab);
                                 }
                             }
                             return;
@@ -1521,6 +1587,9 @@ public final class MainShellController {
                                         } else {
                                             row.put("effectiveTextFill", "");
                                         }
+                                        row.put(
+                                                "firstDescendantTextFill",
+                                                firstTabLabelDescendantTextFillString(lab2));
                                         AgentDebugLog.appendStructured(
                                                 uiEnv,
                                                 AGENT_DEBUG_SESSION_TAB_PREVIEW,
