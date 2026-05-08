@@ -24,7 +24,7 @@
 
 正本: **`.cursor/rules/source-encoding-utf8-except-bas.mdc`**
 
-要点: **`.bas` / `.BAS` を除くソース・テキスト系ファイルは UTF-8 で作成・保存する**。VBA テキストのみ例外。
+要点: **`.bas` / `.BAS` を除くソース・テキスト系ファイルは UTF-8 で作成・保存する**。VBA テキストのみ例外。**`*.md` は Shift-JIS での新規作成・保存を禁止**（`pre-commit` が UTF-8 検証）。
 
 ---
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Git pre-commit: bump repo-root version.txt by 0.01 and stage it (requires python3).
+# Git pre-commit: UTF-8 チェック（*.md）→ version.txt バンプ（requires python3）。
 set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
+python3 "$ROOT/scripts/check_staged_markdown_utf8.py"
 VT="$ROOT/version.txt"
 if [[ ! -f "$VT" ]]; then
   exit 0
