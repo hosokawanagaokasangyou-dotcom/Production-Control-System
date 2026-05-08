@@ -1531,39 +1531,8 @@ public final class MainShellController {
     }
 
     /**
-     * タブ見出しラベル（{@code .tab-label}）以下の {@link Text} にも前景色を適用する。Modena の {@code .tab-label}
-     * は {@code Labeled} に対する {@code -fx-text-fill} と子 {@link Text} の {@code -fx-fill} が一致しないことがあり、タブ整理のプレビュー（単純
-     * {@link Label}）と実タブで文字色だけずれる原因になる。
-     */
-    private static void applyShellTabHeaderForegroundRecursive(
-            Node root, Color fillColor, String tfHex) {
-        if (root == null || tfHex == null || tfHex.isBlank()) {
-            return;
-        }
-        String tf = tfHex.strip();
-        if (root instanceof Text textNode) {
-            /* JavaFX 26: LabeledText 等で fill がバインドされている場合に setFill が失敗する */
-            if (!textNode.fillProperty().isBound()) {
-                textNode.setFill(fillColor);
-            }
-            textNode.setStyle("-fx-fill: " + tf + ";");
-        } else if (root instanceof Labeled labeled) {
-            if (!labeled.textFillProperty().isBound()) {
-                labeled.setTextFill(fillColor);
-            }
-            labeled.setStyle("-fx-text-fill: " + tf + ";");
-        }
-        if (root instanceof Parent p) {
-            for (Node ch : p.getChildrenUnmodifiable()) {
-                applyShellTabHeaderForegroundRecursive(ch, fillColor, tf);
-            }
-        }
-    }
-
-    /**
-     * タブ整理ツリーのプレビュー {@link Label} はメインタブ見出しと異なり単純な {@link Labeled} のため、テーマ CSS が子 {@link Text} の
-     * {@code -fx-fill} を残し、親の {@code -fx-text-fill} だけでは実タブと文字色が食い違うことがある。
-     * {@link #applyShellTabHeaderForegroundRecursive} は親 {@link Labeled} のインライン（フォント等）を潰すため使わず、子 {@link Text} のみ同期する。
+     * タブ整理プレビューおよびメインシェル {@code .tab-label} 配下の {@link Text} に {@code -fx-fill} を付与する。Modena は子
+     * {@link Text} の fill を親の {@code -fx-text-fill} と同期しないことがある。
      */
     private static void applyPreviewDescendantTextFillRecursive(Node root, Color fillColor, String tfHex) {
         if (root == null || tfHex == null || tfHex.isBlank()) {
@@ -1616,7 +1585,7 @@ public final class MainShellController {
         }
     }
 
-    /** 着色解除時に {@link #applyShellTabHeaderForegroundRecursive} で付けたインラインを除去する。 */
+    /** 着色解除時に {@link #applyPreviewDescendantTextFillRecursive} で付けた子 {@link Text} のインラインを除去する。 */
     private static void clearShellTabHeaderForegroundRecursive(Node root) {
         if (root == null) {
             return;
@@ -1681,8 +1650,32 @@ public final class MainShellController {
                                 Node lab = child.lookup(".tab-label");
                                 if (lab != null) {
                                     try {
-                                        applyShellTabHeaderForegroundRecursive(
-                                                lab, Color.web(tf), tf);
+                                        Color fillCol = Color.web(tf);
+                                        applyPreviewDescendantTextFillRecursive(
+                                                lab, fillCol, tf);
+                                        if (lab instanceof Labeled labeled) {
+                                            if (!labeled.textFillProperty().isBound()) {
+                                                labeled.setTextFill(fillCol);
+                                            }
+                                        }
+                                        Runnable refill =
+                                                () -> {
+                                                    try {
+                                                        applyPreviewDescendantTextFillRecursive(
+                                                                lab,
+                                                                Color.web(tf),
+                                                                tf);
+                                                        if (lab instanceof Labeled ld
+                                                                && !ld.textFillProperty()
+                                                                        .isBound()) {
+                                                            ld.setTextFill(Color.web(tf));
+                                                        }
+                                                    } catch (IllegalArgumentException ignored) {
+                                                        // keep chrome from outer try
+                                                    }
+                                                };
+                                        refill.run();
+                                        Platform.runLater(refill);
                                     } catch (IllegalArgumentException ex) {
                                         if (lab instanceof Labeled labeled) {
                                             if (!labeled.textFillProperty().isBound()) {
