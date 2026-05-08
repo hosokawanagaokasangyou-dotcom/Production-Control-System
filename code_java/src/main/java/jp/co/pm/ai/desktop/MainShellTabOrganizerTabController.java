@@ -1023,11 +1023,15 @@ public final class MainShellTabOrganizerTabController {
         Label lab = new Label(row.treePillPrimaryLabel(shell));
         lab.setWrapText(false);
         lab.getStyleClass().add("pm-org-tree-pill-label");
-        String hx = row.colorHex;
+        String hx = row.colorHex != null ? row.colorHex : "";
+        String labelHx = row.labelColorHex != null ? row.labelColorHex : "";
+        if (row.kind == OrgRow.Kind.TAB && row.tabId != null && shell != null) {
+            hx = shell.organizerPreviewEffectiveBgHex(row.tabId, hx);
+            labelHx = shell.organizerPreviewLabelHexForPill(row.tabId, labelHx);
+        }
         String previewContrastFill = null;
         if (hx != null && !hx.isBlank() && shell != null) {
-            String fill =
-                    shell.tabOrganizerPreviewChipLabelTextFill(hx, row.labelColorHex != null ? row.labelColorHex : "");
+            String fill = shell.tabOrganizerPreviewChipLabelTextFill(hx, labelHx);
             previewContrastFill = fill;
             // #region agent log
             try {
@@ -1036,8 +1040,10 @@ public final class MainShellTabOrganizerTabController {
                     double lum = MainShellController.debugTabLabelContrastLuminance(hx);
                     Map<String, Object> d = new LinkedHashMap<>();
                     d.put("source", "createPillForTreeItem");
-                    d.put("rowBgHex", hx);
-                    d.put("rowLabelHex", row.labelColorHex != null ? row.labelColorHex : "");
+                    d.put("effectiveBgHex", hx);
+                    d.put("effectiveLabelHex", labelHx);
+                    d.put("rowBgHexRaw", row.colorHex != null ? row.colorHex : "");
+                    d.put("rowLabelHexRaw", row.labelColorHex != null ? row.labelColorHex : "");
                     d.put("previewFill", fill);
                     d.put("bgLuminance", lum);
                     AgentDebugLog.appendStructured(
@@ -1242,8 +1248,12 @@ public final class MainShellTabOrganizerTabController {
         OrgRow row = item.getValue();
         boolean sel = treeView.getSelectionModel().getSelectedItems().contains(item);
         StringBuilder sb = new StringBuilder();
-        if (row.colorHex != null && !row.colorHex.isBlank() && shell != null) {
-            sb.append(shell.tabOrganizerTreePillSurfaceStyle(row.colorHex.strip()));
+        String bgForPill = row.colorHex != null ? row.colorHex : "";
+        if (row.kind == OrgRow.Kind.TAB && row.tabId != null && shell != null) {
+            bgForPill = shell.organizerPreviewEffectiveBgHex(row.tabId, bgForPill);
+        }
+        if (bgForPill != null && !bgForPill.isBlank() && shell != null) {
+            sb.append(shell.tabOrganizerTreePillSurfaceStyle(bgForPill.strip()));
         }
         if (sel) {
             if (sb.length() > 0) {

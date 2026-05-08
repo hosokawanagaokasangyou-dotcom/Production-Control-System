@@ -1170,6 +1170,30 @@ public final class MainShellController {
     }
 
     /**
+     * タブ整理プレビュー用: 実タブに適用済みの見出し背景色を優先（ツリーモデルと見出し chrome の一時的な不一致を吸収）。
+     */
+    String organizerPreviewEffectiveBgHex(MainShellTabId tabId, String rowBgFallback) {
+        Tab t = mainShellTabFor(tabId);
+        if (t == null) {
+            return nz(rowBgFallback);
+        }
+        String on = readShellTabColorHex(t);
+        return !on.isBlank() ? on : nz(rowBgFallback);
+    }
+
+    /**
+     * タブ整理プレビュー用: 実タブで明示されている文字色のみ採用し、それ以外は自動コントラスト（ツリー行に残った古い明示 hex を参照しない）。
+     */
+    String organizerPreviewLabelHexForPill(MainShellTabId tabId, String rowLabelFallback) {
+        Tab t = mainShellTabFor(tabId);
+        if (t == null) {
+            return nz(rowLabelFallback);
+        }
+        String on = readShellTabLabelColorHex(t);
+        return !on.isBlank() ? on : "";
+    }
+
+    /**
      * 選択／非選択の切り替えでテーマ CSS が見出しを塗り直し、インライン前景が潰れることがあるため、保存色があれば再適用する。
      */
     private void refreshShellTabChromeOnSelectionChange(Tab tab) {
