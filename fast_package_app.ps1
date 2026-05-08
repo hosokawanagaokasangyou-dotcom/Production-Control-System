@@ -482,7 +482,7 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
     if ($BundleKind -eq 'InitialInstall') {
         $rmLines.Add('Bundle profile: InitialInstall - excludes .git, .venv, .cursor, .vscode, code/VBA, code_java build/cache dirs, pm-ai-package-release/, **/__pycache__, **/.pytest_cache, build_cache.')
         $rmLines.Add('Does NOT exclude plan/plans or code/output (may include local artifacts if present).')
-        $rmLines.Add('Desktop UI defaults (Initial): pm-ai-data/config/bundled_session_ui_defaults.json (session fragment: gantt + badges when ~/.pm-ai-desktop/session-state.json is missing; JAR fallback) and bundled_table_column_order.json (column layouts; materialized to ~/.pm-ai-desktop/table-column-order.json on first launch).')
+        $rmLines.Add('Desktop UI defaults (Initial): pm-ai-data/config/bundled_session_ui_defaults.json (session fragment: main tab order/title aliases/header glow, gantt sliders, badges when ~/.pm-ai-desktop/session-state.json is missing; JAR fallback) and bundled_table_column_order.json (column layouts; materialized to ~/.pm-ai-desktop/table-column-order.json on first launch).')
     }
     else {
         $rmLines.Add('Bundle profile: VersionUpgrade - also excludes **/plan, **/plans, code/output/, repo output/, code/python/output/, .pm-ai-cache/, extra env-var TSVs (template TSV still bundled), .env.')

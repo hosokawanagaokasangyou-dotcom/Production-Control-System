@@ -22,9 +22,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * Persists last-used paths under {@code ~/.pm-ai-desktop/session-state.json} so tabs reload the same files on
  * the next launch.
  *
- * <p>初回などセッションファイルが無いときは、{@code pm-ai-data/config/bundled_session_ui_defaults.json}（設備ガント表示・
- * バッジ等）またはクラスパス上の同名リソースを読み込む。旧ファイル名 {@code bundled_session_badge_defaults.json} が
- * 残っているインストーラでも読み込める。
+ * <p>初回などセッションファイルが無いときは、{@code pm-ai-data/config/bundled_session_ui_defaults.json}（メインシェル
+ * タブ順・見出しグロー、設備ガント表示、バッジ等）またはクラスパス上の同名リソースを読み込む。旧ファイル名
+ * {@code bundled_session_badge_defaults.json} が残っているインストーラでも読み込める。
  */
 public final class DesktopSessionStateStore {
 
