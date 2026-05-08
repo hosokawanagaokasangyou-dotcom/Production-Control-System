@@ -22,8 +22,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * Persists last-used paths under {@code ~/.pm-ai-desktop/session-state.json} so tabs reload the same files on
  * the next launch.
  *
- * <p>初回などセッションファイルが無いときは、{@code pm-ai-data/config/bundled_session_badge_defaults.json}（初回
- * インストール用バンドルに同梱）またはクラスパス上の同名リソースから、バッジ関連の既定だけを読み込む。
+ * <p>初回などセッションファイルが無いときは、{@code pm-ai-data/config/bundled_session_ui_defaults.json}（設備ガント表示・
+ * バッジ等）またはクラスパス上の同名リソースを読み込む。旧ファイル名 {@code bundled_session_badge_defaults.json} が
+ * 残っているインストーラでも読み込める。
  */
 public final class DesktopSessionStateStore {
 
@@ -31,8 +32,10 @@ public final class DesktopSessionStateStore {
     private static final Path STORE =
             Paths.get(System.getProperty("user.home"), ".pm-ai-desktop", "session-state.json");
 
-    /** Same path as {@code src/main/resources/jp/co/pm/ai/desktop/config/bundled_session_badge_defaults.json}. */
-    private static final String BUNDLED_SESSION_BADGE_DEFAULTS_RESOURCE =
+    private static final String BUNDLED_SESSION_UI_DEFAULTS_RESOURCE =
+            "/jp/co/pm/ai/desktop/config/bundled_session_ui_defaults.json";
+
+    private static final String LEGACY_BUNDLED_SESSION_BADGE_DEFAULTS_RESOURCE =
             "/jp/co/pm/ai/desktop/config/bundled_session_badge_defaults.json";
 
     private DesktopSessionStateStore() {}
@@ -55,11 +58,11 @@ public final class DesktopSessionStateStore {
     }
 
     /**
-     * {@code session-state.json} が無いときの JSON ルート。バッジ既定ファイルがあればそのオブジェクトのみ（他キーは
+     * {@code session-state.json} が無いときの JSON ルート。バンドル既定があればそのオブジェクトのみ（他キーは
      * ローダ既定）。
      */
     private static JsonNode sessionRootWhenStoreFileMissing() {
-        JsonNode bundled = readBundledBadgeDefaultsNode();
+        JsonNode bundled = readBundledSessionUiDefaultsNode();
         if (bundled != null && bundled.isObject() && bundled.size() > 0) {
             return bundled;
         }
@@ -67,27 +70,39 @@ public final class DesktopSessionStateStore {
     }
 
     /**
-     * {@code user.dir/pm-ai-data/config/bundled_session_badge_defaults.json} を優先し、無ければクラスパス上の
-     * リソース。
+     * {@code user.dir/pm-ai-data/config/} の {@code bundled_session_ui_defaults.json} を優先し、無ければ旧名
+     * {@code bundled_session_badge_defaults.json}、次にクラスパス（新→旧）。
      */
-    private static JsonNode readBundledBadgeDefaultsNode() {
-        try {
-            Path beside =
-                    Path.of(System.getProperty("user.dir", "."))
-                            .toAbsolutePath()
-                            .normalize()
-                            .resolve("pm-ai-data")
-                            .resolve("config")
-                            .resolve("bundled_session_badge_defaults.json");
-            if (Files.isRegularFile(beside)) {
-                JsonNode n = JSON.readTree(beside.toFile());
-                if (n != null && n.isObject()) {
-                    return n;
+    private static JsonNode readBundledSessionUiDefaultsNode() {
+        String[] besideNames =
+                new String[] {"bundled_session_ui_defaults.json", "bundled_session_badge_defaults.json"};
+        for (String leaf : besideNames) {
+            try {
+                Path beside =
+                        Path.of(System.getProperty("user.dir", "."))
+                                .toAbsolutePath()
+                                .normalize()
+                                .resolve("pm-ai-data")
+                                .resolve("config")
+                                .resolve(leaf);
+                if (Files.isRegularFile(beside)) {
+                    JsonNode n = JSON.readTree(beside.toFile());
+                    if (n != null && n.isObject() && n.size() > 0) {
+                        return n;
+                    }
                 }
+            } catch (IOException ignored) {
             }
-        } catch (IOException ignored) {
         }
-        try (InputStream in = DesktopSessionStateStore.class.getResourceAsStream(BUNDLED_SESSION_BADGE_DEFAULTS_RESOURCE)) {
+        JsonNode fromCp = readBundledJsonFromClasspath(BUNDLED_SESSION_UI_DEFAULTS_RESOURCE);
+        if (fromCp != null && fromCp.isObject() && fromCp.size() > 0) {
+            return fromCp;
+        }
+        return readBundledJsonFromClasspath(LEGACY_BUNDLED_SESSION_BADGE_DEFAULTS_RESOURCE);
+    }
+
+    private static JsonNode readBundledJsonFromClasspath(String resourcePath) {
+        try (InputStream in = DesktopSessionStateStore.class.getResourceAsStream(resourcePath)) {
             if (in == null) {
                 return null;
             }

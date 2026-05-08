@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.ui;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -34,6 +35,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /**
  * Persists TableView column order and widths under {@code ~/.pm-ai-desktop/table-column-order.json}.
  *
+ * <p>初回インストールでは {@code pm-ai-data/config/bundled_table_column_order.json}（またはクラスパス上の同名）を
+ * {@link #materializeBundledDefaultsIfStoreMissing()} でユーザーホームへコピーしてから各タブが読み込む。
+ *
  * <p>JSON value per key: an array of objects {@code title} + {@code width}. Legacy string-only arrays
  * (column order only) are still read; missing widths use the tab default (e.g. 112px).
  */
@@ -42,6 +46,9 @@ public final class TableColumnOrderPersistence {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Path STORE =
             Paths.get(System.getProperty("user.home"), ".pm-ai-desktop", "table-column-order.json");
+
+    private static final String BUNDLED_TABLE_COLUMN_ORDER_RESOURCE =
+            "/jp/co/pm/ai/desktop/config/bundled_table_column_order.json";
 
     private static final double MIN_WIDTH = 40.0;
 
@@ -926,5 +933,53 @@ public final class TableColumnOrderPersistence {
     private static String colTitle(TableColumn<?, ?> c) {
         String t = c.getText();
         return t != null ? t : "";
+    }
+
+    /**
+     * {@code table-column-order.json} が無いときだけ、バンドル既定をユーザーホームへ書き出す。空の JSON オブジェクト
+     * でもファイルを作り、以降の保存がマージで動作するようにする。
+     */
+    public static void materializeBundledDefaultsIfStoreMissing() {
+        try {
+            if (Files.isRegularFile(STORE)) {
+                return;
+            }
+            JsonNode bundled = readBundledTableColumnOrderRoot();
+            ObjectNode root =
+                    bundled != null && bundled.isObject()
+                            ? (ObjectNode) bundled.deepCopy()
+                            : JSON.createObjectNode();
+            Files.createDirectories(STORE.getParent());
+            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
+        } catch (IOException ignored) {
+        }
+    }
+
+    private static JsonNode readBundledTableColumnOrderRoot() {
+        try {
+            Path beside =
+                    Path.of(System.getProperty("user.dir", "."))
+                            .toAbsolutePath()
+                            .normalize()
+                            .resolve("pm-ai-data")
+                            .resolve("config")
+                            .resolve("bundled_table_column_order.json");
+            if (Files.isRegularFile(beside)) {
+                JsonNode n = JSON.readTree(beside.toFile());
+                if (n != null && n.isObject()) {
+                    return n;
+                }
+            }
+        } catch (IOException ignored) {
+        }
+        try (InputStream in =
+                TableColumnOrderPersistence.class.getResourceAsStream(BUNDLED_TABLE_COLUMN_ORDER_RESOURCE)) {
+            if (in == null) {
+                return null;
+            }
+            return JSON.readTree(in);
+        } catch (IOException e) {
+            return null;
+        }
     }
 }

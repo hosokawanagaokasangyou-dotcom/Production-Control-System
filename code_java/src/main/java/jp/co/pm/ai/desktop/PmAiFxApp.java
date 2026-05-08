@@ -14,6 +14,7 @@ import javafx.stage.Stage;
 import jp.co.pm.ai.desktop.config.StartupCrashLog;
 import jp.co.pm.ai.desktop.runtime.JvmMemoryMonitor;
 import jp.co.pm.ai.desktop.runtime.WindowsLauncherUserDir;
+import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 
 /**
  * JavaFX エントリ — UI レイアウトは FXML（{@code jp/co/pm/ai/desktop/fxml/MainShell.fxml}）、ロジックは
@@ -132,6 +133,7 @@ public class PmAiFxApp extends Application {
                         throw new IllegalStateException(e);
                     }
                 });
+        TableColumnOrderPersistence.materializeBundledDefaultsIfStoreMissing();
         Parent root = loader.load();
         MainShellController shell = loader.getController();
         Scene scene = new Scene(root, 960, 640);

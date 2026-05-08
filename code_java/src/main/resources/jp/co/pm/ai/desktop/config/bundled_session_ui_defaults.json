@@ -1,4 +1,13 @@
 {
+  "equipmentGanttGraphicZoomPercent": 100,
+  "equipmentGanttDateColWidth": 0,
+  "equipmentGanttMachineColWidth": 0,
+  "equipmentGanttProcessColWidth": 0,
+  "equipmentGanttBarFontPercent": 100,
+  "equipmentGanttRowHeightPercent": 100,
+  "equipmentGanttHeaderHeightPercent": 100,
+  "equipmentGanttSlotWidthPercent": 100,
+  "equipmentGanttShiftWheelHScrollPercent": 200,
   "equipmentGanttPersonBadgeGapPx": 4,
   "equipmentGanttPersonBadgeBandVerticalOffsetPx": 0,
   "equipmentGanttPersonBadgeDragAdjustEnabled": false,
