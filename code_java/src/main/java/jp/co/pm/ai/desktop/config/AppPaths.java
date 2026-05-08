@@ -35,6 +35,12 @@ public final class AppPaths {
     public static final String KEY_PM_AI_CURSOR_DEBUG_LOG = "PM_AI_CURSOR_DEBUG_LOG";
 
     /**
+     * NDJSON デバッグログの追加ミラー先（任意）。Windows JVM が {@code C:\...} に書いた行を、UNC（{@code \\wsl$\...}）など
+     * Cursor（WSL）側が読むパスへ複製する場合に使用。{@link jp.co.pm.ai.desktop.debug.AgentDebugLog} を参照。
+     */
+    public static final String KEY_PM_AI_DEBUG_LOG_MIRROR = "PM_AI_DEBUG_LOG_MIRROR";
+
+    /**
      * Stage1/2 成果物フォルダ（従来の {@code code/output} に相当）。未設定時は {@link #resolveRepoRoot(Map)} の直下の
      * {@code output/}。Python {@code planning_core.bootstrap} の {@code output_dir} と揃える。
      */
@@ -268,6 +274,7 @@ public final class AppPaths {
         s.add(KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK);
         s.add(KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH);
         s.add(KEY_PM_AI_CURSOR_DEBUG_LOG);
+        s.add(KEY_PM_AI_DEBUG_LOG_MIRROR);
         s.addAll(TABULAR_DATA_TABLE_PATH_KEYS);
         return Set.copyOf(s);
     }

@@ -6,8 +6,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -30,6 +35,10 @@ import jp.co.pm.ai.desktop.config.AppPaths;
  * </ol>
  *
  * <p>If the primary path cannot be written, retries under {@code user.home/.cursor/}.
+ *
+ * <p>WSL コンソールから {@code powershell.exe} で Windows JVM を起動した場合、NDJSON はドライブレター経由（{@code C:\...}）で
+ * 書かれることがある。Cursor がワークスペースを {@code /mnt/c/...}（WSL）として開いていると、エージェントがログを見つけにくい。
+ * そのため一次書き込み成功後にミラー追記する。詳細は {@code .cursor/rules/agent-debug-wsl-windows-mirror.mdc}。
  */
 public final class AgentDebugLog {
 
@@ -98,6 +107,7 @@ public final class AgentDebugLog {
         String line = jsonLine.endsWith("\n") ? jsonLine : jsonLine + "\n";
         Path primary = resolveNdjsonPath(ui, sessionId);
         if (writeUtf8Append(primary, line)) {
+            appendMirrors(primary, line, ui);
             return primary;
         }
         String id =
@@ -111,9 +121,104 @@ public final class AgentDebugLog {
                         .toAbsolutePath()
                         .normalize();
         if (writeUtf8Append(fallback, line)) {
+            appendMirrors(fallback, line, ui);
             return fallback;
         }
         return null;
+    }
+
+    /** Package-private: mirror path string for tests ({@code C:\...} → {@code \\wsl$\distro\mnt\c\...}). */
+    static String buildWslUncPathString(String windowsNormalizedAbsolute, String distro) {
+        if (distro == null || distro.isBlank()) {
+            return null;
+        }
+        if (windowsNormalizedAbsolute == null || windowsNormalizedAbsolute.length() < 3) {
+            return null;
+        }
+        char dl = windowsNormalizedAbsolute.charAt(0);
+        if (!Character.isLetter(dl) || windowsNormalizedAbsolute.charAt(1) != ':') {
+            return null;
+        }
+        String tail = windowsNormalizedAbsolute.substring(2).replace('/', '\\');
+        if (!tail.startsWith("\\")) {
+            tail = "\\" + tail;
+        }
+        return "\\\\wsl$\\"
+                + distro.trim()
+                + "\\mnt\\"
+                + Character.toLowerCase(dl)
+                + tail;
+    }
+
+    private static boolean isWindowsOs() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("windows");
+    }
+
+    private static boolean wslUncMirrorEnabled() {
+        String v = trim(System.getenv("PM_AI_DEBUG_LOG_WSL_UNC"));
+        if (v.isEmpty()) {
+            return true;
+        }
+        return !(v.equals("0") || v.equalsIgnoreCase("false") || v.equalsIgnoreCase("off"));
+    }
+
+    private static String resolveWslDistroName() {
+        String d = trim(System.getenv("PM_AI_WSL_DISTRO"));
+        if (!d.isEmpty()) {
+            return d;
+        }
+        d = trim(System.getenv("WSL_DISTRO_NAME"));
+        return d.isEmpty() ? null : d;
+    }
+
+    private static Path windowsDrivePathToWslUnc(Path absoluteDrivePath, String distro) {
+        String unc = buildWslUncPathString(absoluteDrivePath.normalize().toString(), distro);
+        return unc != null ? Path.of(unc) : null;
+    }
+
+    private static void appendMirrors(Path writtenPath, String line, Map<String, String> ui) {
+        for (Path mirror : resolveMirrorTargets(writtenPath, ui)) {
+            if (mirror == null) {
+                continue;
+            }
+            Path n = mirror.toAbsolutePath().normalize();
+            Path w = writtenPath.toAbsolutePath().normalize();
+            if (n.equals(w)) {
+                continue;
+            }
+            try {
+                if (Files.exists(w) && Files.exists(n) && Files.isSameFile(w, n)) {
+                    continue;
+                }
+            } catch (Throwable ignored) {
+                // attempt mirror write
+            }
+            writeUtf8Append(n, line);
+        }
+    }
+
+    private static List<Path> resolveMirrorTargets(Path primaryWritten, Map<String, String> ui) {
+        Set<Path> out = new LinkedHashSet<>();
+        Path explicit = mirrorPathFromEnv(ui);
+        if (explicit != null) {
+            out.add(explicit);
+        }
+        if (isWindowsOs() && wslUncMirrorEnabled()) {
+            String distro = resolveWslDistroName();
+            Path unc = windowsDrivePathToWslUnc(primaryWritten, distro);
+            if (unc != null) {
+                out.add(unc);
+            }
+        }
+        return new ArrayList<>(out);
+    }
+
+    private static Path mirrorPathFromEnv(Map<String, String> ui) {
+        String v = trim(System.getenv("PM_AI_DEBUG_LOG_MIRROR"));
+        if (v.isEmpty() && ui != null) {
+            v = trim(ui.get(AppPaths.KEY_PM_AI_DEBUG_LOG_MIRROR));
+        }
+        return v.isEmpty() ? null : Path.of(v).toAbsolutePath().normalize();
     }
 
     private static boolean writeUtf8Append(Path path, String line) {

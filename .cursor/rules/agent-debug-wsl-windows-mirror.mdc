@@ -1,0 +1,30 @@
+---
+description: WSL から PowerShell で起動した Windows JVM の NDJSON デバッグログを Cursor（WSL ワークスペース）で読めるようにミラーする
+alwaysApply: true
+---
+
+# デバッグ NDJSON：Windows 書き込みと WSL ワークスペースの整合
+
+## 問題
+
+WSL コンソールから `powershell.exe` 経由で JavaFX デスクトップ（Windows JVM）を動かすと、NDJSON は **`C:\...\.cursor\debug-&lt;session&gt;.log`** に追記される一方、Cursor が開いているワークスペースは **`/mnt/c/.../.cursor/`** 側であり、エージェントが「ログファイルが無い」と判断することがある。
+
+## 実装の正本
+
+- **`jp.co.pm.ai.desktop.debug.AgentDebugLog`** … 一次書き込み成功後に **ミラー追記**する。
+- **`AppPaths.KEY_PM_AI_DEBUG_LOG_MIRROR`**（`PM_AI_DEBUG_LOG_MIRROR`）… 追加のログファイル絶対パス（任意）。
+- Windows では既定で **`\\wsl$\&lt;distro&gt;\mnt\c\...`** 形式（UNC）への追記を試みる（同一ファイルなら `Files.isSameFile` で二重追記を避ける）。
+
+## 環境変数（Windows JVM 側）
+
+| 変数 | 説明 |
+|------|------|
+| `PM_AI_DEBUG_LOG_MIRROR` | ミラー先ファイルの絶対パス（UNC で `/mnt/c` 相当へ書く場合に指定） |
+| `PM_AI_WSL_DISTRO` | UNC に使うディストリ名（未設定時は `WSL_DISTRO_NAME` を参照） |
+| `PM_AI_DEBUG_LOG_WSL_UNC` | `0` / `false` / `off` で UNC ミラーを無効化（既定は有効） |
+
+## エージェント向けメモ
+
+- NDJSON を追加するときは **`AgentDebugLog.appendStructured`** を使う（ミラーが自動）。
+- セッションのログパスはチャット指示の **`debug-&lt;sessionId&gt;.log`** と揃える。
+- ユーザーが「WSL でログが見えない」と言う場合、まず **`PM_AI_WSL_DISTRO`** と **`\\wsl$\...`** への書き込み可否を疑う。
