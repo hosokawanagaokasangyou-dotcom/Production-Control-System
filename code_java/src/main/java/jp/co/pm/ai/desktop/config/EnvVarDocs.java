@@ -32,7 +32,7 @@ public final class EnvVarDocs {
                 "PM_AI_PORTABLE_BUNDLE_SOURCE_DIR",
                 "ポータブル配布（PMD.exe と pm-ai-data）向け。正本は次のいずれか。"
                         + "（1）リポジトリルートのフォルダパス（UNC 可）。直下の version.txt とローカル pm-ai-data を比較し、新しいときのみ起動時に pm-ai-data を同期する。"
-                        + "（2）バージョンアップ用の .zip ファイルのパス。ZIP と同じフォルダに外付けの version.txt を置き、起動時に ZIP を自動展開してから pm-ai-data に同期する。"
+                        + "（2）バージョンアップ用の .zip ファイルのパス（配布は固定名 PMD_version_upgrade.zip を推奨。バージョンは ZIP と同じフォルダの外付け version.txt で区別）。起動時に ZIP を自動展開してから pm-ai-data に同期する。"
                         + "空のときは自動更新しない（情報表示のみ）。");
         put(
                 "PM_AI_OUTPUT_DIR",

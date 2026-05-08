@@ -63,7 +63,7 @@ class PortableBundleSelfUpdaterTest {
 
     @Test
     void readCanonicalPortableBundleVersion_readsVersionBesideZip(@TempDir Path tmp) throws IOException {
-        Path zip = tmp.resolve("PMD_version_upgrade_1.zip");
+        Path zip = tmp.resolve("PMD_version_upgrade.zip");
         try (ZipOutputStream zout = new ZipOutputStream(Files.newOutputStream(zip))) {
             zout.putNextEntry(new ZipEntry("pm-ai-data/readme.txt"));
             zout.write(new byte[] {'x'});

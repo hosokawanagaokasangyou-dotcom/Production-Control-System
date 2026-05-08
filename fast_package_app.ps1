@@ -491,7 +491,7 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
     $rmLines.Add("This folder sits next to $($AppExeBaseName).exe.")
     $rmLines.Add('Release: Step 8 deletes existing version.txt and same-name ZIPs in pm-ai-package-release, then writes fresh copies; ZIPs omit pm-ai-data/version.txt. Interim bundle folders are removed after zipping.')
     $rmLines.Add('First launch: if the empty marker file next to this app exe exists, the desktop resets env-tab defaults once then deletes it (Initial install bundle only). See Java AppPaths.PORTABLE_FIRST_LAUNCH_MARKER_FILE.')
-    $rmLines.Add('Portable sync: PM_AI_PORTABLE_BUNDLE_SOURCE_DIR may be a folder (repo root layout under pm-ai-data on share) or a path to PMD_version_upgrade_*.zip with version.txt beside the zip.')
+    $rmLines.Add('Portable sync: PM_AI_PORTABLE_BUNDLE_SOURCE_DIR may be a folder (repo root layout under pm-ai-data on share) or a path to PMD_version_upgrade.zip with version.txt beside the zip.')
     $rmLines.Add('Python: pm-ai-data\runtime\python-embed\python.exe (build cache: code_java\Cash_PMD, not bundled).')
     $rmLines.Add('Default inputs: input\task-input , input\actual-detail.')
     $rmLines.Add('Per-user session data: ~/.pm-ai-desktop (initialized per machine/user).')
@@ -959,9 +959,8 @@ $firstLaunchMarker = Join-Path $bundleOutInitial $firstLaunchLeaf
 Write-Host "First-launch marker (Initial only): $firstLaunchMarker" -ForegroundColor DarkGray
 
 Write-Host "--- Step 8: release version.txt + portable ZIPs (delete same names then regenerate; pm-ai-data/version.txt omitted inside ZIP) ---" -ForegroundColor Cyan
-$zipVerSafe = $APP_VERSION -replace '[^\w\.\-]', '_'
-$zipInitial = Join-Path $ReleaseRoot ("PMD_initial_install_$zipVerSafe.zip")
-$zipUpgrade = Join-Path $ReleaseRoot ("PMD_version_upgrade_$zipVerSafe.zip")
+$zipInitial = Join-Path $ReleaseRoot ($BundleInitialName + '.zip')
+$zipUpgrade = Join-Path $ReleaseRoot ($BundleUpgradeName + '.zip')
 $releaseVersionTxt = Join-Path $ReleaseRoot 'version.txt'
 
 Write-Host "Removing existing release artifacts (if any): version.txt, matching ZIPs" -ForegroundColor DarkGray
@@ -992,7 +991,7 @@ Remove-Item -Recurse -Force -LiteralPath $bundleOutInitial -ErrorAction Stop
 Remove-Item -Recurse -Force -LiteralPath $bundleOutUpgrade -ErrorAction Stop
 
 Write-Host "--- Done ---" -ForegroundColor Green
-Write-Host "Release: $ReleaseRoot — PMD_initial_install_$zipVerSafe.zip, PMD_version_upgrade_$zipVerSafe.zip, version.txt"
+Write-Host "Release: $ReleaseRoot — $($BundleInitialName).zip, $($BundleUpgradeName).zip, version.txt"
 Write-Host "Download cache: $cacheRoot"
 Write-Host "JVM: -Xms$jvmInitial -Xmx$jvmMax (same as pom.xml properties)"
 if ($PackageType -ne 'app-image') {
