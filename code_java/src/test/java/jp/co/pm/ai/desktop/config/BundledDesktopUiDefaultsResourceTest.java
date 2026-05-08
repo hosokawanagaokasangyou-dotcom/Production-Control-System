@@ -42,7 +42,7 @@ class BundledDesktopUiDefaultsResourceTest {
                         "/jp/co/pm/ai/desktop/config/bundled_table_column_order.json"));
     }
 
-    /** 初回インストーラー用フォールバック（workspace に stage1 JSON が無いパック時に fast_package が複製元にする） */
+    /** Installer fallback when stage1 JSON is absent from workspace (fast_package copies from JAR). */
     @Test
     void bundledExcludeRules_jsonParses() throws Exception {
         try (InputStream in =

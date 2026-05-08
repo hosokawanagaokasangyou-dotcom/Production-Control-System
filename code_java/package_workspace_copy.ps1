@@ -52,6 +52,17 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
         $excludedDirPrefixes.Add($p)
     }
 
+    if ($BundleKind -eq 'InitialInstall') {
+        foreach ($p in @(
+                '.githooks/',
+                '.github/',
+                '.pm-ai-cache/network-source/',
+                'code/参照用/'
+            )) {
+            $excludedDirPrefixes.Add($p)
+        }
+    }
+
     if ($BundleKind -eq 'VersionUpgrade') {
         $excludedDirPrefixes.Add('.pm-ai-cache/')
         $excludedDirPrefixes.Add('code/output/')
@@ -116,6 +127,32 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
         return $false
     }
 
+    function Test-IsExcludedExactRepoRelativeFile {
+        param([string]$RelSlash)
+        $norm = $RelSlash -replace '\\', '/'
+        if ($BundleKind -eq 'InitialInstall') {
+            foreach ($x in @(
+                    'xlwingsインストール.bat',
+                    'code/----AI------.code-workspace'
+                )) {
+                if ($norm.Equals($x, [StringComparison]::OrdinalIgnoreCase)) {
+                    return $true
+                }
+            }
+        }
+        if ($BundleKind -eq 'VersionUpgrade') {
+            foreach ($x in @(
+                    'config/bundled_session_ui_defaults.json',
+                    'config/bundled_table_column_order.json'
+                )) {
+                if ($norm.Equals($x, [StringComparison]::OrdinalIgnoreCase)) {
+                    return $true
+                }
+            }
+        }
+        return $false
+    }
+
     function Test-IsExcludedUpgradeEnvFile {
         param([string]$RelSlash, [string]$Leaf)
         if ($BundleKind -ne 'VersionUpgrade') {
@@ -165,6 +202,9 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
             }
 
             if (Test-IsExcludedFileLeaf -Leaf $child.Name) {
+                continue
+            }
+            if (Test-IsExcludedExactRepoRelativeFile -RelSlash $relSlash) {
                 continue
             }
             if (Test-IsExcludedUpgradeEnvFile -RelSlash $relSlash -Leaf $child.Name) {

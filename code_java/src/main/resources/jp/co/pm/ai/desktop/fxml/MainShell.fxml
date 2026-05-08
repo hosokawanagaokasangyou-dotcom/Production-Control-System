@@ -61,6 +61,11 @@
                         <fx:include fx:id="memorySettingsTab" source="MemorySettingsTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabGlobalSettings" closable="false" text="グローバル設定">
+                    <content>
+                        <fx:include fx:id="globalSettingsTab" source="GlobalSettingsTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabMasterSummary" closable="false"
                      text="マスタ読込サマリ">
                     <content>

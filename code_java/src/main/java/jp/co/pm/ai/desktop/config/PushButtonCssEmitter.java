@@ -19,6 +19,14 @@ public final class PushButtonCssEmitter {
 
     private PushButtonCssEmitter() {}
 
+    /** 工場出荷 UI リセット時にユーザー CSS を削除する。 */
+    public static void deleteUserOverridesFileSilently() {
+        try {
+            Files.deleteIfExists(resolveStoreFile());
+        } catch (IOException ignored) {
+        }
+    }
+
     /**
      * 既存の上書きシートを外し、必要なら生成した CSS を最後に追加する（{@code pm-ai-desktop.css} より優先）。
      */

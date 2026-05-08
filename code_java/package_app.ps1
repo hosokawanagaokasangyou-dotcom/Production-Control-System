@@ -440,6 +440,18 @@ function Copy-BundleToDist {
     Copy-WorkspaceTreeWithExplicitExclusions -RepoRoot $WorkspaceRootPath -DestRoot $data `
         -BundleKind DeveloperMirror -MandatoryPathsFile $mandatoryPathsFile -ReleaseFolderRelativePrefix 'pm-ai-package-release/'
 
+    $initSrc = Join-Path $WorkspaceRootPath 'init_setting'
+    $initDst = Join-Path $data 'init_setting'
+    if (Test-Path -LiteralPath $initSrc) {
+        Write-Host "--- robocopy init_setting -> pm-ai-data\init_setting (DeveloperMirror) ---" -ForegroundColor Cyan
+        New-Item -ItemType Directory -Path $initDst -Force | Out-Null
+        & robocopy $initSrc $initDst /E /NFL /NDL /NJH /NJS /nc /ns /np | Out-Host
+        $rcInit = $LASTEXITCODE
+        if ($rcInit -ge 8) {
+            throw "robocopy init_setting failed (exit $rcInit)"
+        }
+    }
+
     $verifyPcInit = Join-Path $data 'code\python\planning_core\__init__.py'
     if (-not (Test-Path -LiteralPath $verifyPcInit)) {
         throw "Bundle incomplete: missing planning_core package at: $verifyPcInit"

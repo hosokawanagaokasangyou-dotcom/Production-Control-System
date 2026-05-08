@@ -61,47 +61,120 @@ public final class DesktopSessionStateStore {
     }
 
     /**
-     * {@code session-state.json} が無いときの JSON ルート。バンドル既定があればそのオブジェクトのみ（他キーは
-     * ローダ既定）。
+     * {@code session-state.json} が無いときの JSON ルート。クラスパス・{@code pm-ai-data/config}・{@code init_setting}
+     * をマージした UI フラグメント。
      */
     private static JsonNode sessionRootWhenStoreFileMissing() {
-        JsonNode bundled = readBundledSessionUiDefaultsNode();
-        if (bundled != null && bundled.isObject() && bundled.size() > 0) {
-            return bundled;
+        JsonNode merged = readMergedSessionUiDefaultsNode();
+        if (merged != null && merged.isObject() && merged.size() > 0) {
+            return merged;
         }
         return JSON.createObjectNode();
     }
 
     /**
-     * {@code user.dir/pm-ai-data/config/} の {@code bundled_session_ui_defaults.json} を優先し、無ければ旧名
-     * {@code bundled_session_badge_defaults.json}、次にクラスパス（新→旧）。
+     * 優先順（後勝ち）: クラスパス {@code bundled_session_ui_defaults.json} → 旧バッジ既定 → {@code
+     * pm-ai-data/config/bundled_session_ui_defaults.json} → 同 {@code bundled_session_badge_defaults.json} →
+     * {@code init_setting/session_defaults.json} → {@code pm-ai-data/init_setting/session_defaults.json}。
      */
-    private static JsonNode readBundledSessionUiDefaultsNode() {
-        String[] besideNames =
-                new String[] {"bundled_session_ui_defaults.json", "bundled_session_badge_defaults.json"};
-        for (String leaf : besideNames) {
-            try {
-                Path beside =
-                        Path.of(System.getProperty("user.dir", "."))
-                                .toAbsolutePath()
-                                .normalize()
-                                .resolve("pm-ai-data")
-                                .resolve("config")
-                                .resolve(leaf);
-                if (Files.isRegularFile(beside)) {
-                    JsonNode n = JSON.readTree(beside.toFile());
-                    if (n != null && n.isObject() && n.size() > 0) {
-                        return n;
-                    }
-                }
-            } catch (IOException ignored) {
+    static JsonNode readMergedSessionUiDefaultsNode() {
+        ObjectNode acc = JSON.createObjectNode();
+        mergeSessionUiFromClasspath(acc, BUNDLED_SESSION_UI_DEFAULTS_RESOURCE);
+        mergeSessionUiFromClasspath(acc, LEGACY_BUNDLED_SESSION_BADGE_DEFAULTS_RESOURCE);
+        Path cfgDir =
+                Path.of(System.getProperty("user.dir", "."))
+                        .toAbsolutePath()
+                        .normalize()
+                        .resolve("pm-ai-data")
+                        .resolve("config");
+        mergeSessionUiFromPath(acc, cfgDir.resolve("bundled_session_ui_defaults.json"));
+        mergeSessionUiFromPath(acc, cfgDir.resolve("bundled_session_badge_defaults.json"));
+        mergeSessionUiFromPath(
+                acc, InitSettingPaths.cwdInitSettingDir().resolve(InitSettingPaths.SESSION_DEFAULTS_FILE));
+        mergeSessionUiFromPath(
+                acc,
+                InitSettingPaths.portableBundleInitSettingDir()
+                        .resolve(InitSettingPaths.SESSION_DEFAULTS_FILE));
+        return acc.size() > 0 ? acc : null;
+    }
+
+    private static void mergeSessionUiFromClasspath(ObjectNode acc, String resourcePath) {
+        JsonNode n = readBundledJsonFromClasspath(resourcePath);
+        if (n != null && n.isObject()) {
+            deepMergeInto(acc, (ObjectNode) n);
+        }
+    }
+
+    private static void mergeSessionUiFromPath(ObjectNode acc, Path file) {
+        try {
+            if (!Files.isRegularFile(file)) {
+                return;
+            }
+            JsonNode n = JSON.readTree(file.toFile());
+            if (n != null && n.isObject()) {
+                deepMergeInto(acc, (ObjectNode) n);
+            }
+        } catch (IOException ignored) {
+        }
+    }
+
+    private static void deepMergeInto(ObjectNode acc, ObjectNode overlay) {
+        Iterator<String> fn = overlay.fieldNames();
+        while (fn.hasNext()) {
+            String k = fn.next();
+            JsonNode v = overlay.get(k);
+            if (v != null) {
+                acc.set(k, v.deepCopy());
             }
         }
-        JsonNode fromCp = readBundledJsonFromClasspath(BUNDLED_SESSION_UI_DEFAULTS_RESOURCE);
-        if (fromCp != null && fromCp.isObject() && fromCp.size() > 0) {
-            return fromCp;
-        }
-        return readBundledJsonFromClasspath(LEGACY_BUNDLED_SESSION_BADGE_DEFAULTS_RESOURCE);
+    }
+
+    /** 工場出荷 UI リセット用: マージ済み既定に対し、環境・実行パスだけ {@code bootstrap} を適用する。 */
+    public static DesktopSessionState buildFactoryResetSession(DesktopSessionState bootstrap) {
+        JsonNode merged = readMergedSessionUiDefaultsNode();
+        ObjectNode root =
+                merged != null && merged.isObject()
+                        ? (ObjectNode) merged
+                        : JSON.createObjectNode();
+        DesktopSessionState factory = parseDesktopSessionState(root);
+        return factory.withBootstrapFieldsFrom(bootstrap);
+    }
+
+    /** {@link #save(DesktopSessionState)} と同一形状の JSON（{@code init_setting} 書き出し用）。 */
+    public static ObjectNode toJsonObject(DesktopSessionState state) {
+        ObjectNode root = JSON.createObjectNode();
+        put(root, "planInputPath", state.planInputPath());
+        put(root, "planInputSheet", state.planInputSheet());
+        put(root, "stage1PreviewPath", state.stage1PreviewPath());
+        put(root, "stage1PreviewSheet", state.stage1PreviewSheet());
+        put(root, "excludeRulesPath", state.excludeRulesPath());
+        put(root, "mainRunWorkbook", state.mainRunWorkbook());
+        put(root, "mainRunPythonExe", state.mainRunPythonExe());
+        put(root, "mainRunScriptDir", state.mainRunScriptDir());
+        put(root, "uiTheme", state.uiTheme());
+        put(root, "logFontFamily", state.logFontFamily());
+        putLogFontSize(root, state.logFontSize());
+        put(root, "mainRunLogFilter", state.mainRunLogFilter());
+        putMainRunLogLines(root, state.mainRunLogLines());
+        putMainRunLogScroll(root, state.mainRunLogScroll());
+        put(root, "mainRunStage2ProductionPlan", state.mainRunStage2ProductionPlan());
+        put(root, "mainRunStage2MemberSchedule", state.mainRunStage2MemberSchedule());
+        root.put("mainRunStage2WriteExcel", state.mainRunStage2WriteExcel());
+        put(root, "mainRunStage2ResultBookFont", state.mainRunStage2ResultBookFont());
+        putUiEnvRows(root, state.uiEnvRows());
+        putMainShellTabOrder(root, state.mainShellTabOrder());
+        putMainShellTabLayout(root, state.mainShellTabLayout());
+        putStringStringMap(root, "mainShellTabTitleAliases", state.mainShellTabTitleAliases());
+        putEquipmentGanttGraphicPrefs(root, state);
+        putStage1NetworkCacheBadgePrefs(root, state);
+        root.put("mainShellTabOrganizerHeaderGlow", state.mainShellTabOrganizerHeaderGlow());
+        root.put(
+                "mainShellTabOrganizerHeaderGlowStrength",
+                state.mainShellTabOrganizerHeaderGlowStrength());
+        putPushButtonDesignPrefs(root, state);
+        putMemorySettingsPrefs(root, state);
+        putWindowGeometry(root, state);
+        return root;
     }
 
     /**
@@ -111,7 +184,7 @@ public final class DesktopSessionStateStore {
      * {@link AppPaths#KEY_PM_AI_EXCLUDE_RULES_JSON} 行も最新の絶対パスへ更新する。
      */
     public static void applyPortableUpgradeBundledPolicyToSessionStore() throws IOException {
-        JsonNode bundled = readBundledSessionUiDefaultsNode();
+        JsonNode bundled = readMergedSessionUiDefaultsNode();
         ObjectNode root;
         if (Files.isRegularFile(STORE)) {
             JsonNode cur = JSON.readTree(STORE.toFile());
@@ -249,39 +322,7 @@ public final class DesktopSessionStateStore {
     public static void save(DesktopSessionState state) {
         try {
             Files.createDirectories(STORE.getParent());
-            ObjectNode root = JSON.createObjectNode();
-            put(root, "planInputPath", state.planInputPath());
-            put(root, "planInputSheet", state.planInputSheet());
-            put(root, "stage1PreviewPath", state.stage1PreviewPath());
-            put(root, "stage1PreviewSheet", state.stage1PreviewSheet());
-            put(root, "excludeRulesPath", state.excludeRulesPath());
-            put(root, "mainRunWorkbook", state.mainRunWorkbook());
-            put(root, "mainRunPythonExe", state.mainRunPythonExe());
-            put(root, "mainRunScriptDir", state.mainRunScriptDir());
-            put(root, "uiTheme", state.uiTheme());
-            put(root, "logFontFamily", state.logFontFamily());
-            putLogFontSize(root, state.logFontSize());
-            put(root, "mainRunLogFilter", state.mainRunLogFilter());
-            putMainRunLogLines(root, state.mainRunLogLines());
-            putMainRunLogScroll(root, state.mainRunLogScroll());
-            put(root, "mainRunStage2ProductionPlan", state.mainRunStage2ProductionPlan());
-            put(root, "mainRunStage2MemberSchedule", state.mainRunStage2MemberSchedule());
-            root.put("mainRunStage2WriteExcel", state.mainRunStage2WriteExcel());
-            put(root, "mainRunStage2ResultBookFont", state.mainRunStage2ResultBookFont());
-            putUiEnvRows(root, state.uiEnvRows());
-            putMainShellTabOrder(root, state.mainShellTabOrder());
-            putMainShellTabLayout(root, state.mainShellTabLayout());
-            putStringStringMap(root, "mainShellTabTitleAliases", state.mainShellTabTitleAliases());
-            putEquipmentGanttGraphicPrefs(root, state);
-            putStage1NetworkCacheBadgePrefs(root, state);
-            root.put("mainShellTabOrganizerHeaderGlow", state.mainShellTabOrganizerHeaderGlow());
-            root.put(
-                    "mainShellTabOrganizerHeaderGlowStrength",
-                    state.mainShellTabOrganizerHeaderGlowStrength());
-            putPushButtonDesignPrefs(root, state);
-            putMemorySettingsPrefs(root, state);
-            putWindowGeometry(root, state);
-            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
+            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), toJsonObject(state));
         } catch (IOException ignored) {
         }
     }

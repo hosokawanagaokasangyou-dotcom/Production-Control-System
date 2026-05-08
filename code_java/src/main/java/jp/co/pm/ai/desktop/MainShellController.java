@@ -63,6 +63,7 @@ import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
+import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.JvmMemoryLogStore;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
@@ -180,6 +181,9 @@ public final class MainShellController {
     private MemorySettingsTabController memorySettingsTabController;
 
     @FXML
+    private GlobalSettingsTabController globalSettingsTabController;
+
+    @FXML
     private PlanInputTabController planInputTabController;
 
     @FXML
@@ -235,6 +239,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabMemorySettings;
+
+    @FXML
+    private Tab mainShellTabGlobalSettings;
 
     @FXML
     private Tab mainShellTabMasterSummary;
@@ -294,6 +301,7 @@ public final class MainShellController {
                     MainShellTabId.PUSH_BUTTON_DESIGN.key(),
                     MainShellTabId.ENV.key(),
                     MainShellTabId.MEMORY_SETTINGS.key(),
+                    MainShellTabId.GLOBAL_SETTINGS.key(),
                     MainShellTabId.MASTER_SUMMARY.key(),
                     MainShellTabId.PLAN_INPUT.key(),
                     MainShellTabId.STAGE1_PREVIEW.key(),
@@ -385,6 +393,9 @@ public final class MainShellController {
             mainRunTabController.bindShell(this);
             envTabController.bindShell(this);
             memorySettingsTabController.bindShell(this);
+            if (globalSettingsTabController != null) {
+                globalSettingsTabController.bindShell(this);
+            }
             masterReadSummaryTabController.bindShell(this);
             planResultViewerTabController.bindShell(this);
             equipmentGanttGraphicTabController.bindShell(this);
@@ -886,6 +897,63 @@ public final class MainShellController {
         DesktopSessionStateStore.save(collectDesktopSession());
     }
 
+    /** {@link InitSettingPersistence} 用のセッションスナップショット。 */
+    public DesktopSessionState snapshotDesktopSessionForExport() {
+        return collectDesktopSession();
+    }
+
+    Stage primaryStageForDialogs() {
+        return primaryStage;
+    }
+
+    /**
+     * タブ・表・テーマ等をマージ済みバンドル既定へ戻し、環境タブはテンプレ既定へ戻す。実行パス・環境値のうちブートストラップ系は
+     * リセット後の環境タブから再収集する。
+     */
+    public void performGlobalUiFactoryReset() {
+        Alert confirm = new Alert(AlertType.CONFIRMATION);
+        confirm.initOwner(primaryStage);
+        applyAlertStylesheetsFromOwner(confirm);
+        confirm.setTitle("Confirm");
+        confirm.setHeaderText(null);
+        confirm.setContentText(
+                "Reset UI (tabs, tables, theme, …) to bundled defaults and restore env tab from template. Continue?");
+        Optional<ButtonType> ans = confirm.showAndWait();
+        if (ans.isEmpty() || ans.get() != ButtonType.OK) {
+            return;
+        }
+
+        suppressEnvSessionPersistence.set(true);
+        try {
+            applyEnvRowsFullBundledResetAndPersist(false);
+            try {
+                Files.deleteIfExists(TableColumnOrderPersistence.userHomeStorePath());
+            } catch (IOException ignored) {
+            }
+            DispatchTrialLogUiStore.deleteStoreSilently();
+            PushButtonCssEmitter.deleteUserOverridesFileSilently();
+
+            DesktopSessionState merged =
+                    DesktopSessionStateStore.buildFactoryResetSession(collectDesktopSession());
+            DesktopSessionStateStore.save(merged);
+            applyDesktopSession(merged);
+            TableColumnOrderPersistence.materializeBundledDefaultsIfStoreMissing();
+            refreshPushButtonStylesheet();
+            refreshThemeTrackedSecondaryScenes();
+            persistDesktopSessionNow();
+        } finally {
+            suppressEnvSessionPersistence.set(false);
+        }
+
+        Alert done = new Alert(AlertType.INFORMATION);
+        done.initOwner(primaryStage);
+        applyAlertStylesheetsFromOwner(done);
+        done.setTitle("Done");
+        done.setHeaderText(null);
+        done.setContentText("UI reset to defaults.");
+        done.showAndWait();
+    }
+
     /** プッシュボタンのユーザー CSS をメインシーンに適用し直す（テーマ変更後も最後尾で上書き）。 */
     public void refreshPushButtonStylesheet() {
         if (primaryScene == null || pushButtonDesignTabController == null) {
@@ -912,6 +980,9 @@ public final class MainShellController {
         }
         if (t == mainShellTabMemorySettings) {
             return MainShellTabId.MEMORY_SETTINGS;
+        }
+        if (t == mainShellTabGlobalSettings) {
+            return MainShellTabId.GLOBAL_SETTINGS;
         }
         if (t == mainShellTabMasterSummary) {
             return MainShellTabId.MASTER_SUMMARY;
@@ -965,6 +1036,7 @@ public final class MainShellController {
             case PUSH_BUTTON_DESIGN -> mainShellTabPushButtonDesign;
             case ENV -> mainShellTabEnv;
             case MEMORY_SETTINGS -> mainShellTabMemorySettings;
+            case GLOBAL_SETTINGS -> mainShellTabGlobalSettings;
             case MASTER_SUMMARY -> mainShellTabMasterSummary;
             case PLAN_INPUT -> mainShellTabPlanInput;
             case STAGE1_PREVIEW -> mainShellTabStage1Preview;
@@ -2256,8 +2328,10 @@ public final class MainShellController {
 
     /**
      * 環境タブをバンドル既定で再構築し永続化する（確認ダイアログなし）。{@link #resetEnvRowsToDefaults()} と初回起動マーカーから利用。
+     *
+     * @param persistSession false のとき {@code session-state.json} には書かない（工場出荷 UI リセットの途中で利用）。
      */
-    private void applyEnvRowsFullBundledResetAndPersist() {
+    private void applyEnvRowsFullBundledResetAndPersist(boolean persistSession) {
         if (envRows == null) {
             return;
         }
@@ -2288,12 +2362,14 @@ public final class MainShellController {
             suppressEnvSessionPersistence.set(false);
         }
         applyRepoFolderPathNormalization();
-        DesktopSessionStateStore.save(collectDesktopSession());
+        if (persistSession) {
+            DesktopSessionStateStore.save(collectDesktopSession());
+        }
         uiEnvSaveDebounce.stop();
     }
 
     private void resetEnvRowsToDefaults() {
-        applyEnvRowsFullBundledResetAndPersist();
+        applyEnvRowsFullBundledResetAndPersist(true);
     }
 
     void appendBootMessage() {
@@ -3018,7 +3094,7 @@ public final class MainShellController {
             return;
         }
         try {
-            applyEnvRowsFullBundledResetAndPersist();
+            applyEnvRowsFullBundledResetAndPersist(true);
             applyBundledPortableDefaultsIfPresent();
             applyRepoFolderPathNormalization();
             DesktopSessionStateStore.save(collectDesktopSession());

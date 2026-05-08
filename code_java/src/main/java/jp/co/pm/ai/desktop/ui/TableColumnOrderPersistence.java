@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.Iterator;
 
 import javafx.animation.PauseTransition;
 import javafx.collections.ListChangeListener;
@@ -31,6 +32,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import jp.co.pm.ai.desktop.config.InitSettingPaths;
 
 /**
  * Persists TableView column order and widths under {@code ~/.pm-ai-desktop/table-column-order.json}.
@@ -196,6 +199,16 @@ public final class TableColumnOrderPersistence {
     }
 
     private TableColumnOrderPersistence() {}
+
+    /** {@link #STORE} — export / factory reset で削除するときに参照。 */
+    public static Path userHomeStorePath() {
+        return STORE;
+    }
+
+    /** {@link #readBundledTableColumnOrderRoot()} の公開名（init_setting 書き出し用）。 */
+    public static JsonNode mergedTableColumnDefaultsRootForExport() {
+        return readBundledTableColumnOrderRoot();
+    }
 
     /**
      * Reorders {@code headersRef} and each row so indices stay aligned (logical column move).
@@ -971,7 +984,13 @@ public final class TableColumnOrderPersistence {
         }
     }
 
+    /**
+     * 優先順（後勝ち）: クラスパス {@code bundled_table_column_order.json} → {@code pm-ai-data/config} 同名 →
+     * {@code init_setting/table_column_defaults.json} → {@code pm-ai-data/init_setting/table_column_defaults.json}。
+     */
     private static JsonNode readBundledTableColumnOrderRoot() {
+        ObjectNode acc = JSON.createObjectNode();
+        mergeTableColumnRootFromClasspath(acc);
         try {
             Path beside =
                     Path.of(System.getProperty("user.dir", "."))
@@ -980,22 +999,54 @@ public final class TableColumnOrderPersistence {
                             .resolve("pm-ai-data")
                             .resolve("config")
                             .resolve("bundled_table_column_order.json");
-            if (Files.isRegularFile(beside)) {
-                JsonNode n = JSON.readTree(beside.toFile());
-                if (n != null && n.isObject()) {
-                    return n;
-                }
-            }
-        } catch (IOException ignored) {
+            mergeTableColumnRootFromPath(acc, beside);
+        } catch (Exception ignored) {
         }
+        mergeTableColumnRootFromPath(
+                acc,
+                InitSettingPaths.cwdInitSettingDir().resolve(InitSettingPaths.TABLE_COLUMN_DEFAULTS_FILE));
+        mergeTableColumnRootFromPath(
+                acc,
+                InitSettingPaths.portableBundleInitSettingDir()
+                        .resolve(InitSettingPaths.TABLE_COLUMN_DEFAULTS_FILE));
+        return acc.size() > 0 ? acc : null;
+    }
+
+    private static void mergeTableColumnRootFromClasspath(ObjectNode acc) {
         try (InputStream in =
                 TableColumnOrderPersistence.class.getResourceAsStream(BUNDLED_TABLE_COLUMN_ORDER_RESOURCE)) {
             if (in == null) {
-                return null;
+                return;
             }
-            return JSON.readTree(in);
-        } catch (IOException e) {
-            return null;
+            JsonNode n = JSON.readTree(in);
+            if (n != null && n.isObject()) {
+                deepMergeTableColumnRoot(acc, (ObjectNode) n);
+            }
+        } catch (IOException ignored) {
+        }
+    }
+
+    private static void mergeTableColumnRootFromPath(ObjectNode acc, Path file) {
+        try {
+            if (!Files.isRegularFile(file)) {
+                return;
+            }
+            JsonNode n = JSON.readTree(file.toFile());
+            if (n != null && n.isObject()) {
+                deepMergeTableColumnRoot(acc, (ObjectNode) n);
+            }
+        } catch (IOException ignored) {
+        }
+    }
+
+    private static void deepMergeTableColumnRoot(ObjectNode acc, ObjectNode overlay) {
+        Iterator<String> fn = overlay.fieldNames();
+        while (fn.hasNext()) {
+            String k = fn.next();
+            JsonNode v = overlay.get(k);
+            if (v != null) {
+                acc.set(k, v.deepCopy());
+            }
         }
     }
 }

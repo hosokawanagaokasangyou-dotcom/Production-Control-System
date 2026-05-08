@@ -27,6 +27,14 @@ public final class DispatchTrialLogUiStore {
 
     private DispatchTrialLogUiStore() {}
 
+    /** 工場出荷 UI リセット時にモーダル位置記録を消す。 */
+    public static void deleteStoreSilently() {
+        try {
+            Files.deleteIfExists(STORE);
+        } catch (IOException ignored) {
+        }
+    }
+
     public static DispatchTrialLogUiSnapshot load() {
         try {
             if (!Files.isRegularFile(STORE)) {

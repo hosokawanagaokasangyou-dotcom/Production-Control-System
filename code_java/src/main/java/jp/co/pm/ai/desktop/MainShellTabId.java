@@ -10,6 +10,8 @@ public enum MainShellTabId {
     ENV("env"),
     /** JVM ヒープ・メモリ監視・次回起動時ヒープ希望値。 */
     MEMORY_SETTINGS("memorySettings"),
+    /** UI 全体の既定リセット・パッケージ既定の書き出し。 */
+    GLOBAL_SETTINGS("globalSettings"),
     MASTER_SUMMARY("masterSummary"),
     PLAN_INPUT("planInput"),
     STAGE1_PREVIEW("stage1Preview"),
