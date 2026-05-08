@@ -48,7 +48,6 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
-import javafx.scene.text.Text;
 import javafx.stage.Modality;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
@@ -1152,40 +1151,13 @@ public final class MainShellController {
         return v instanceof String s && !s.isBlank() ? s.strip() : "";
     }
 
-    /**
-     * 見出し色を {@link Color#web} で解釈し {@code #rrggbb} に正規化する（ツリーと実タブで輝度判定を一致させる）。
-     * 解釈できないときは空。
-     */
-    private static String canonicalShellTabChromeHexOrEmpty(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return "";
-        }
-        try {
-            Color c = Color.web(raw.strip());
-            return String.format(
-                    Locale.US,
-                    "#%02x%02x%02x",
-                    clamp255((int) Math.round(c.getRed() * 255.0)),
-                    clamp255((int) Math.round(c.getGreen() * 255.0)),
-                    clamp255((int) Math.round(c.getBlue() * 255.0)));
-        } catch (IllegalArgumentException ex) {
-            return "";
-        }
-    }
-
     private void applyShellTabColor(Tab tab, String colorHex) {
         if (tab == null) {
             return;
         }
         TabPane pane = tab.getTabPane();
         if (colorHex != null && !colorHex.isBlank()) {
-            String h = canonicalShellTabChromeHexOrEmpty(colorHex);
-            if (h.isBlank()) {
-                tab.getProperties().remove("pmShellTabColor");
-                tab.setStyle("");
-                pokeShellTabHeaderBackground(pane, tab, null, null, null);
-                return;
-            }
+            String h = colorHex.strip();
             tab.getProperties().put("pmShellTabColor", h);
             String textFill = contrastingTabLabelTextFillHex(h);
             String glowEffect =
@@ -1284,17 +1256,9 @@ public final class MainShellController {
 
     public String tabOrganizerPreviewChipLabelTextFill(String colorHexOrEmpty) {
         if (colorHexOrEmpty == null || colorHexOrEmpty.isBlank()) {
-            return defaultUncoloredShellTabHeaderLabelTextFillHex();
+            return "#94a3b8";
         }
-        return contrastingTabLabelTextFillHex(colorHexOrEmpty);
-    }
-
-    /**
-     * カスタム見出し色が無いときのラベル文字色（タブ整理プレビューと実タブ見出しで共通）。
-     * {@link Labeled#setTextFill} を {@code null} に戻すとシーン CSS の継承で黒になり、ダーク見出しと衝突する。
-     */
-    private static String defaultUncoloredShellTabHeaderLabelTextFillHex() {
-        return "#94a3b8";
+        return contrastingTabLabelTextFillHex(colorHexOrEmpty.strip());
     }
 
     private static String previewChipBorderRgba(String bgHex) {
@@ -1366,37 +1330,16 @@ public final class MainShellController {
      * ユーザー指定のタブ背景に対し、WCAG 系の相対輝度で明暗を判定してラベル色を選ぶ（固定の白／グレー文字との衝突を避ける）。
      */
     private static String contrastingTabLabelTextFillHex(String bgHex) {
-        String canon = canonicalShellTabChromeHexOrEmpty(bgHex);
-        if (canon.isEmpty()) {
-            return defaultUncoloredShellTabHeaderLabelTextFillHex();
-        }
-        Color c = Color.web(canon);
-        double lum =
-                relativeSrgbLuminance(
-                        (int) Math.round(c.getRed() * 255.0),
-                        (int) Math.round(c.getGreen() * 255.0),
-                        (int) Math.round(c.getBlue() * 255.0));
-        return lum > 0.45 ? "#0f172a" : "#f8fafc";
-    }
-
-    /**
-     * Modena の {@code .tab-container > .tab-label { -fx-text-fill: -fx-text-base-color }} がラベルに直接当たるため、
-     * 見出しセル配下の {@link Labeled}/{@link Text} を再帰的に上書きする。
-     */
-    private static void applyShellTabHeaderForegroundRecursive(Node n, Color fillColor, String tfHex) {
-        if (n == null || tfHex == null || tfHex.isBlank()) {
-            return;
-        }
-        if (n instanceof Labeled labeled) {
-            labeled.setTextFill(fillColor);
-            labeled.setStyle("-fx-text-fill: " + tfHex.strip() + ";");
-        } else if (n instanceof Text t) {
-            t.setFill(fillColor);
-        }
-        if (n instanceof Parent p) {
-            for (Node ch : p.getChildrenUnmodifiable()) {
-                applyShellTabHeaderForegroundRecursive(ch, fillColor, tfHex);
-            }
+        try {
+            Color c = Color.web(bgHex.strip());
+            double lum =
+                    relativeSrgbLuminance(
+                            (int) Math.round(c.getRed() * 255.0),
+                            (int) Math.round(c.getGreen() * 255.0),
+                            (int) Math.round(c.getBlue() * 255.0));
+            return lum > 0.45 ? "#0f172a" : "#f8fafc";
+        } catch (IllegalArgumentException ex) {
+            return "#f8fafc";
         }
     }
 
@@ -1457,13 +1400,22 @@ public final class MainShellController {
                                 child.setStyle(
                                         shellTabHeaderChromeInlineStyle(
                                                 h, tf, glowEffectCssOrNull));
-                                Color fill = Color.web(tf);
-                                applyShellTabHeaderForegroundRecursive(child, fill, tf);
+                                Node lab = child.lookup(".tab-label");
+                                if (lab instanceof Labeled labeled) {
+                                    labeled.setTextFill(Color.web(tf));
+                                    labeled.setStyle("-fx-text-fill: " + tf + ";");
+                                } else if (lab != null) {
+                                    lab.setStyle("-fx-text-fill: " + tf + ";");
+                                }
                             } else {
-                                String tf = defaultUncoloredShellTabHeaderLabelTextFillHex();
                                 child.setStyle("");
-                                applyShellTabHeaderForegroundRecursive(
-                                        child, Color.web(tf), tf);
+                                Node lab = child.lookup(".tab-label");
+                                if (lab instanceof Labeled labeled) {
+                                    labeled.setTextFill(null);
+                                }
+                                if (lab != null) {
+                                    lab.setStyle("");
+                                }
                             }
                             return;
                         }
@@ -1472,7 +1424,6 @@ public final class MainShellController {
                 };
         op.run();
         Platform.runLater(op);
-        Platform.runLater(() -> Platform.runLater(op));
     }
 
     /**
