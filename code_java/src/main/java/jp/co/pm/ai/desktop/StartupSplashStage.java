@@ -1,6 +1,8 @@
 package jp.co.pm.ai.desktop;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 import javafx.application.Platform;
 import javafx.geometry.Pos;
@@ -34,10 +36,15 @@ final class StartupSplashStage {
      * <p>{@code outVisibleSinceNanos} が非 null のとき、最初にウィンドウが表示されたとみなせる時刻（ナノ秒）を
      * 一度だけ格納する。{@link javafx.stage.WindowEvent#WINDOW_SHOWN} またはその直後のパルスで設定する。
      *
+     * <p>{@code afterSplashFullyDisplayed} が非 null のとき、{@link javafx.stage.WindowEvent#WINDOW_SHOWN} のあと 2
+     * パルス経過後（レイアウト・初回描画後）に一度だけ呼ぶ。本体ロード等はこのコールバック内で開始する。
+     *
      * @param outVisibleSinceNanos 表示開始時刻を格納するコンテナ（必要なければ {@code null}）
+     * @param afterSplashFullyDisplayed スプラッシュの画面表示完了後に実行する処理（不要なら {@code null}）
      * @return the stage; close it when the main window is ready
      */
-    static Stage createAndShow(AtomicLong outVisibleSinceNanos) {
+    static Stage createAndShow(
+            AtomicLong outVisibleSinceNanos, Consumer<Stage> afterSplashFullyDisplayed) {
         Stage stage = new Stage();
         stage.initStyle(StageStyle.UNDECORATED);
         stage.initModality(Modality.APPLICATION_MODAL);
@@ -82,10 +89,31 @@ final class StartupSplashStage {
                     WindowEvent.WINDOW_SHOWN,
                     e -> outVisibleSinceNanos.compareAndSet(0L, System.nanoTime()));
         }
+        AtomicBoolean bootstrapStarted = new AtomicBoolean(false);
+        Runnable startNextLogic =
+                () -> {
+                    if (afterSplashFullyDisplayed == null) {
+                        return;
+                    }
+                    if (!bootstrapStarted.compareAndSet(false, true)) {
+                        return;
+                    }
+                    afterSplashFullyDisplayed.accept(stage);
+                };
+        if (afterSplashFullyDisplayed != null) {
+            stage.addEventHandler(
+                    WindowEvent.WINDOW_SHOWN,
+                    e ->
+                            Platform.runLater(
+                                    () -> Platform.runLater(startNextLogic)));
+        }
         stage.show();
         raiseToFront(stage);
         if (outVisibleSinceNanos != null) {
             Platform.runLater(() -> outVisibleSinceNanos.compareAndSet(0L, System.nanoTime()));
+        }
+        if (afterSplashFullyDisplayed != null) {
+            Platform.runLater(() -> Platform.runLater(startNextLogic));
         }
         return stage;
     }

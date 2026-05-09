@@ -104,10 +104,9 @@ public class PmAiFxApp extends Application {
         primaryStage.setTitle("工程管理 AI 配台 — JavaFX MVP");
 
         AtomicLong splashVisibleSinceNanos = new AtomicLong();
-        Stage splash = StartupSplashStage.createAndShow(splashVisibleSinceNanos);
-        // loader.load() が同じパルスで走るとスプラッシュが描画されないため、次のパルスで本体を構築する
-        Platform.runLater(
-                () -> {
+        StartupSplashStage.createAndShow(
+                splashVisibleSinceNanos,
+                splash -> {
                     try {
                         AtomicLong mainWindowPaintedNanos = new AtomicLong();
                         AtomicBoolean splashCloseScheduled = new AtomicBoolean();
