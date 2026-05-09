@@ -104,7 +104,7 @@ final class GpuProbeLauncher {
     }
 
     /**
-     * javafx-maven-plugin 等が親 JVM に付ける JavaFX モジュール解決用オプションを子へ継承する。
+     * exec:exec@pm-ai-desktop や従来の JavaFX 起動が付ける JavaFX モジュール解決用オプションを子へ継承する。
      *
      * <p>継承しないと子プロセスだけ {@code javafx.application.Application} が解決できず GPU プローブが誤って不合格になる。
      */

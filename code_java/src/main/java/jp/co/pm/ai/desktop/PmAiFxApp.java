@@ -235,7 +235,7 @@ public class PmAiFxApp extends Application {
             String msg =
                     "[PmAiFxApp] No graphical display (headless). "
                             + "Run on Windows desktop, or on WSL set DISPLAY for JavaFX (e.g. WSLg / VcXsrv). "
-                            + "Do not run javafx:run from SSH without X forwarding.";
+                            + "Do not run the desktop from Maven/exec without X forwarding when using SSH.";
             StartupCrashLog.append(msg);
             System.err.println(msg);
             System.exit(2);

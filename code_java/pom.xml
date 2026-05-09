@@ -26,9 +26,9 @@
     <log4j.version>2.24.3</log4j.version>
     <!-- NGCanvas + Prism GPU で RTTexture が null（NPE）になる環境があるため既定は sw。GPU 試行は pm.ai.javafx.prism.gpu を参照 -->
     <javafx.prism.order>sw</javafx.prism.order>
-    <!-- javafx:run / jpackage のヒープ上限（既定 3g。増やす例: -Djvm.max.heap=8g） -->
+    <!-- exec:exec@pm-ai-desktop / jpackage のヒープ上限（既定 3g。増やす例: -Djvm.max.heap=8g） -->
     <jvm.max.heap>4g</jvm.max.heap>
-    <!-- javafx:run / jpackage の初期ヒープ（-Xms。package_app.ps1 も同じ値を参照） -->
+    <!-- exec:exec@pm-ai-desktop / jpackage の初期ヒープ（-Xms。package_app.ps1 も同じ値を参照） -->
     <jvm.initial.heap>4g</jvm.initial.heap>
     <!-- package_app.ps1: Windows embeddable Python（amd64）。code/python/pyproject.toml の requires-python と整合 -->
     <pm.ai.bundle.python.embed.version>3.14.4</pm.ai.bundle.python.embed.version>
@@ -243,29 +243,47 @@
       </plugin>
       <!-- ========================================================= -->
 
+      <!-- javafx-maven-plugin 0.0.8 は非モジュール時 javafx.* 以外を classpath に回すため JDK26 の jdk.jsobject が欠落する。
+           dependency:build-classpath で org.openjfx 一式を 1 本の module path にまとめて exec で起動する（javafx:run の代替）。 -->
       <plugin>
-        <groupId>org.openjfx</groupId>
-        <artifactId>javafx-maven-plugin</artifactId>
-        <version>0.0.8</version>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.6.3</version>
         <configuration>
-          <mainClass>jp.co.pm.ai.desktop.PmAiFxApp</mainClass>
-          <!-- Prism: pom 既定 sw。本体は起動時プローブで Canvas を試験し合格時のみ GPU。強制は -Dpm.ai.javafx.prism.gpu=true -->
-          <options>
-            <option>-Dfile.encoding=UTF-8</option>
-            <option>-Xms${jvm.initial.heap}</option>
-            <option>-Xmx${jvm.max.heap}</option>
-            <option>-XX:+HeapDumpOnOutOfMemoryError</option>
-            <option>-XX:+UseStringDeduplication</option>
-            <option>-Dprism.order=${javafx.prism.order}</option>
-            <!-- javafx.web は jdk.jsobject を要求。JDK 26 では JDK 本体に無く、javafx-web が OpenJFX の jdk-jsobject を推移依存する -->
-            <option>--add-modules</option>
-            <option>javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.swing,javafx.web,jdk.jsobject,jdk.xml.dom</option>
-            <option>--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED</option>
-            <option>--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED</option>
-            <option>--add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED</option>
-            <option>--enable-native-access=javafx.graphics</option>
-          </options>
+          <classpathScope>compile</classpathScope>
+          <executable>java</executable>
+          <longModulepath>false</longModulepath>
         </configuration>
+        <executions>
+          <execution>
+            <id>pm-ai-desktop</id>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <phase>none</phase>
+            <configuration>
+              <arguments>
+                <argument>-Dfile.encoding=UTF-8</argument>
+                <argument>-Xms${jvm.initial.heap}</argument>
+                <argument>-Xmx${jvm.max.heap}</argument>
+                <argument>-XX:+HeapDumpOnOutOfMemoryError</argument>
+                <argument>-XX:+UseStringDeduplication</argument>
+                <argument>-Dprism.order=${javafx.prism.order}</argument>
+                <argument>--module-path</argument>
+                <argument>${pm.ai.openjfx.module.path}</argument>
+                <argument>--add-modules</argument>
+                <argument>javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.swing,javafx.web,jdk.jsobject,jdk.xml.dom</argument>
+                <argument>--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED</argument>
+                <argument>--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED</argument>
+                <argument>--add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED</argument>
+                <argument>--enable-native-access=javafx.graphics</argument>
+                <argument>-classpath</argument>
+                <argument>${project.build.outputDirectory}${path.separator}${pm.ai.non.openjfx.classpath}</argument>
+                <argument>jp.co.pm.ai.desktop.PmAiFxApp</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -275,17 +293,38 @@
           <useModulePath>false</useModulePath>
         </configuration>
       </plugin>
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>exec-maven-plugin</artifactId>
-        <version>3.6.3</version>
-      </plugin>
       <!-- jpackage（Windows package_app.ps1）が classpath 入力を組むため package 時に依存 JAR を target/dependency に複製 -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-dependency-plugin</artifactId>
         <version>3.8.1</version>
         <executions>
+          <execution>
+            <id>pm-ai-openjfx-module-path</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>build-classpath</goal>
+            </goals>
+            <configuration>
+              <includeScope>compile</includeScope>
+              <includeGroupIds>org.openjfx</includeGroupIds>
+              <pathSeparator>${path.separator}</pathSeparator>
+              <outputProperty>pm.ai.openjfx.module.path</outputProperty>
+            </configuration>
+          </execution>
+          <execution>
+            <id>pm-ai-non-openjfx-classpath</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>build-classpath</goal>
+            </goals>
+            <configuration>
+              <includeScope>compile</includeScope>
+              <excludeGroupIds>org.openjfx</excludeGroupIds>
+              <pathSeparator>${path.separator}</pathSeparator>
+              <outputProperty>pm.ai.non.openjfx.classpath</outputProperty>
+            </configuration>
+          </execution>
           <execution>
             <id>copy-runtime-deps-for-jpackage</id>
             <phase>package</phase>
