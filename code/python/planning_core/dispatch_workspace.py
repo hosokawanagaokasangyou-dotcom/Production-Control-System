@@ -560,20 +560,27 @@ def _parse_cell_to_date(val):
 
 
 def _base_year_month_from_order_date(df: pd.DataFrame) -> tuple[int, int]:
-    """受注日列の先頭の有効な値から年・月（M/D 見出しの年付与に使用）。"""
-    if df is None or getattr(df, "empty", True) or "受注日" not in df.columns:
-        from datetime import date
+    """受注日列から基準年・月を決める（M/D 見出しへの年付与に使用）。
 
-        t = date.today()
-        return t.year, t.month
-    for val in df["受注日"]:
-        d = _parse_cell_to_date(val)
-        if d is not None:
-            return d.year, d.month
+    工程別問合せの Power Query（``List.Min(有効な受注日)`` を ``基準日`` にする処理）と整合させるため、
+    列内で **最も古い** 有効な日付を採用する（先頭行だけではない）。
+    """
     from datetime import date
 
-    t = date.today()
-    return t.year, t.month
+    if df is None or getattr(df, "empty", True) or "受注日" not in df.columns:
+        t = date.today()
+        return t.year, t.month
+    best: date | None = None
+    for val in df["受注日"]:
+        d = _parse_cell_to_date(val)
+        if d is None:
+            continue
+        if best is None or d < best:
+            best = d
+    if best is None:
+        t = date.today()
+        return t.year, t.month
+    return best.year, best.month
 
 
 def _normalize_koubai_date_header(name: str, base_year: int, base_month: int) -> str:
