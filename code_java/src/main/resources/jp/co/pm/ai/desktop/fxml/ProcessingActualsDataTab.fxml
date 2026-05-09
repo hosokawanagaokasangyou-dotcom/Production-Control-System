@@ -45,8 +45,8 @@
                     <ComboBox fx:id="sheetCombo" prefWidth="280.0"/>
                 </HBox>
                 <HBox alignment="CENTER_LEFT" spacing="8.0">
-                    <Label text="&#x88fd;&#x54c1;&#x6761;&#x4ef6;&#x0028;&#x5185;&#x8a33;&#x0029;"/>
-                    <ComboBox fx:id="productConditionBreakdownFilterCombo" editable="false"
+                    <Label text="&#x88fd;&#x9020;&#x6761;&#x4ef6;&#x0028;&#x5185;&#x8a33;&#x0029;"/>
+                    <ComboBox fx:id="manufacturingConditionBreakdownFilterCombo" editable="false"
                               prefWidth="320.0"
                               promptText="&#x9078;&#x629e;"/>
                 </HBox>

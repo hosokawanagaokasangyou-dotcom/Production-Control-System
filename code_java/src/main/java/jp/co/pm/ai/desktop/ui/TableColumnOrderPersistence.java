@@ -114,14 +114,18 @@ public final class TableColumnOrderPersistence {
         return id.jsonKey() + "_ui_cellWrapText";
     }
 
-    private static String processingActualsProductConditionBreakdownFilterKey(TableId id) {
+    /**
+     * JSON suffix unchanged ({@code _ui_productConditionBreakdownFilter}) for backward compatibility with existing
+     * {@link #STORE} files; column meaning is 「製造条件(内訳)」.
+     */
+    private static String processingActualsManufacturingConditionBreakdownFilterStoreKey(TableId id) {
         return id.jsonKey() + "_ui_productConditionBreakdownFilter";
     }
 
     /**
-     * 加工実績タブ「製品条件(内訳)」コンボの選択値（{@link TableId#PROCESSING_ACTUALS_DETAIL_RAW}）。空は「（全行）」。
+     * 加工実績タブ「製造条件(内訳)」コンボの選択値（{@link TableId#PROCESSING_ACTUALS_DETAIL_RAW}）。空は「（全行）」。
      */
-    public static String loadProcessingActualsProductConditionBreakdownFilter() {
+    public static String loadProcessingActualsManufacturingConditionBreakdownFilter() {
         TableId id = TableId.PROCESSING_ACTUALS_DETAIL_RAW;
         try {
             if (!Files.isRegularFile(STORE)) {
@@ -131,14 +135,14 @@ public final class TableColumnOrderPersistence {
             if (root == null || !root.isObject()) {
                 return "";
             }
-            return root.path(processingActualsProductConditionBreakdownFilterKey(id)).asText("");
+            return root.path(processingActualsManufacturingConditionBreakdownFilterStoreKey(id)).asText("");
         } catch (IOException e) {
             return "";
         }
     }
 
-    /** Persists {@link #loadProcessingActualsProductConditionBreakdownFilter()} into {@link #STORE}. */
-    public static void saveProcessingActualsProductConditionBreakdownFilter(String text) {
+    /** Persists {@link #loadProcessingActualsManufacturingConditionBreakdownFilter()} into {@link #STORE}. */
+    public static void saveProcessingActualsManufacturingConditionBreakdownFilter(String text) {
         TableId id = TableId.PROCESSING_ACTUALS_DETAIL_RAW;
         try {
             Files.createDirectories(STORE.getParent());
@@ -153,7 +157,7 @@ public final class TableColumnOrderPersistence {
                 root = JSON.createObjectNode();
             }
             root.put(
-                    processingActualsProductConditionBreakdownFilterKey(id),
+                    processingActualsManufacturingConditionBreakdownFilterStoreKey(id),
                     text != null ? text : "");
             JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
         } catch (IOException ignored) {

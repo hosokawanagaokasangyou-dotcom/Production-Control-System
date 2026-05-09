@@ -51,25 +51,25 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
  * ({@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK} / {@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR}).
  * Display applies {@link TaskInputSourceRawGridIo#applyProcessingActualsDisplaySteps}. Optional sheet:
  * {@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_SHEET}. Rows can be filtered by combo selection for column
- * {@link #HEADER_PRODUCT_CONDITION_BREAKDOWN}. FXML: {@code ProcessingActualsDataTab.fxml}.
+ * {@link #HEADER_MANUFACTURING_CONDITION_BREAKDOWN}. FXML: {@code ProcessingActualsDataTab.fxml}.
  */
 
 public final class ProcessingActualsDataTabController {
 
     /** Header label after shaping (Excel row 5); must match the workbook column title. */
-    private static final String HEADER_PRODUCT_CONDITION_BREAKDOWN =
-            "\u88fd\u54c1\u6761\u4ef6(\u5185\u8a33)";
+    private static final String HEADER_MANUFACTURING_CONDITION_BREAKDOWN =
+            "\u88fd\u9020\u6761\u4ef6(\u5185\u8a33)";
 
     /** Combo first row: no row filter (show full shaped table). */
-    private static final String PRODUCT_CONDITION_FILTER_ALL = "\uff08\u5168\u884c\uff09";
+    private static final String MANUFACTURING_CONDITION_FILTER_ALL = "\uff08\u5168\u884c\uff09";
 
     /** Combo entry matching rows whose cell in the column is blank. */
-    private static final String PRODUCT_CONDITION_EMPTY_DISPLAY = "\uff08\u7a7a\u767d\uff09";
+    private static final String MANUFACTURING_CONDITION_EMPTY_DISPLAY = "\uff08\u7a7a\u767d\uff09";
 
     private static final String HINT_TEXT =
             "\u5148\u982d4\u884c\u3092\u9664\u53bb\u3057\u3001\u539f\u7a3f\u306e5\u884c\u76ee\u3092\u5217\u898b\u51fa\u3057\u306b\u3057\u307e\u3059\u3002"
                     + " \u2462 \u30b3\u30f3\u30dc\u3067\u300c"
-                    + HEADER_PRODUCT_CONDITION_BREAKDOWN
+                    + HEADER_MANUFACTURING_CONDITION_BREAKDOWN
                     + "\u300d\u306e\u5024\u3092\u9078\u629e\u3057\u3001\u8868\u793a\u884c\u3092\u7d5e\u308a\u8fbc\u307f\u307e\u3059\u3002"
                     + " \u30c7\u30fc\u30bf\u306f PM_AI_ACTUAL_DETAIL_WORKBOOK \u307e\u305f\u306f"
                     + " PM_AI_ACTUAL_DETAIL_SOURCE_DIR \u304b\u3089\u89e3\u6c7a\u3055\u308c\u308b Excel\uff08\u307e\u305f\u306f CSV\uff09\u3092\u8aad\u307f\u8fbc\u307f\u307e\u3059\u3002"
@@ -94,7 +94,7 @@ public final class ProcessingActualsDataTabController {
     private ComboBox<String> sheetCombo;
 
     @FXML
-    private ComboBox<String> productConditionBreakdownFilterCombo;
+    private ComboBox<String> manufacturingConditionBreakdownFilterCombo;
 
     @FXML
     private Label hintLabel;
@@ -145,7 +145,7 @@ public final class ProcessingActualsDataTabController {
 
     private final AtomicBoolean suppressFilterUi = new AtomicBoolean(false);
 
-    /** Full shaped grid before {@link #applyProductBreakdownFilter}; used when the filter selection changes. */
+    /** Full shaped grid before {@link #applyManufacturingConditionFilter}; used when the filter selection changes. */
     private final List<String> unfilteredShapedHeaders = new ArrayList<>();
 
     private final List<List<String>> unfilteredShapedRows = new ArrayList<>();
@@ -196,8 +196,8 @@ public final class ProcessingActualsDataTabController {
                             Platform.runLater(() -> applyLoadedFile(loadedPath, idx, false));
                         });
 
-        if (productConditionBreakdownFilterCombo != null) {
-            productConditionBreakdownFilterCombo
+        if (manufacturingConditionBreakdownFilterCombo != null) {
+            manufacturingConditionBreakdownFilterCombo
                     .getSelectionModel()
                     .selectedItemProperty()
                     .addListener(
@@ -205,8 +205,8 @@ public final class ProcessingActualsDataTabController {
                                 if (suppressFilterUi.get()) {
                                     return;
                                 }
-                                TableColumnOrderPersistence.saveProcessingActualsProductConditionBreakdownFilter(
-                                        persistProductConditionSelection(newV));
+                                TableColumnOrderPersistence.saveProcessingActualsManufacturingConditionBreakdownFilter(
+                                        persistManufacturingConditionSelection(newV));
                                 Platform.runLater(this::refilterFromSnapshotIfPossible);
                             });
         }
@@ -496,8 +496,8 @@ public final class ProcessingActualsDataTabController {
                     TaskInputSourceRawGridIo.applyProcessingActualsDisplaySteps(
                             TaskInputSourceRawGridIo.readRaw(file, excelSheetIndex));
             rememberShapedSnapshot(shaped);
-            populateProductConditionFilterChoices(shaped);
-            PlanInputTabularIo.TabularSheet tab = applyProductBreakdownFilter(shaped);
+            populateManufacturingConditionFilterChoices(shaped);
+            PlanInputTabularIo.TabularSheet tab = applyManufacturingConditionFilter(shaped);
             populateFromFilteredSheet(tab);
         } catch (Exception ex) {
             if (showErrorsInStatus) {
@@ -516,16 +516,16 @@ public final class ProcessingActualsDataTabController {
      * Fills the product-condition combo from distinct values in the shaped sheet and restores the last
      * persisted selection when still present.
      */
-    private void populateProductConditionFilterChoices(PlanInputTabularIo.TabularSheet shaped) {
-        if (productConditionBreakdownFilterCombo == null || shaped == null) {
+    private void populateManufacturingConditionFilterChoices(PlanInputTabularIo.TabularSheet shaped) {
+        if (manufacturingConditionBreakdownFilterCombo == null || shaped == null) {
             return;
         }
-        ObservableList<String> items = productConditionBreakdownFilterCombo.getItems();
+        ObservableList<String> items = manufacturingConditionBreakdownFilterCombo.getItems();
         suppressFilterUi.set(true);
         try {
             items.clear();
-            items.add(PRODUCT_CONDITION_FILTER_ALL);
-            int col = indexOfProductBreakdownColumn(shaped.headers());
+            items.add(MANUFACTURING_CONDITION_FILTER_ALL);
+            int col = indexOfManufacturingConditionColumn(shaped.headers());
             if (col >= 0) {
                 Collator collator = Collator.getInstance(Locale.JAPANESE);
                 TreeSet<String> sorted = new TreeSet<>(collator);
@@ -541,24 +541,24 @@ public final class ProcessingActualsDataTabController {
                 }
                 items.addAll(sorted);
                 if (anyEmpty) {
-                    items.add(PRODUCT_CONDITION_EMPTY_DISPLAY);
+                    items.add(MANUFACTURING_CONDITION_EMPTY_DISPLAY);
                 }
             }
             String saved =
-                    TableColumnOrderPersistence.loadProcessingActualsProductConditionBreakdownFilter();
+                    TableColumnOrderPersistence.loadProcessingActualsManufacturingConditionBreakdownFilter();
             if (saved != null && !saved.isEmpty() && items.contains(saved)) {
-                productConditionBreakdownFilterCombo.getSelectionModel().select(saved);
+                manufacturingConditionBreakdownFilterCombo.getSelectionModel().select(saved);
             } else {
-                productConditionBreakdownFilterCombo.getSelectionModel().selectFirst();
+                manufacturingConditionBreakdownFilterCombo.getSelectionModel().selectFirst();
             }
         } finally {
             suppressFilterUi.set(false);
         }
     }
 
-    /** Stored string matches combo items (empty string = {@link #PRODUCT_CONDITION_FILTER_ALL}). */
-    private static String persistProductConditionSelection(String selectedItem) {
-        if (selectedItem == null || PRODUCT_CONDITION_FILTER_ALL.equals(selectedItem)) {
+    /** Stored string matches combo items (empty string = {@link #MANUFACTURING_CONDITION_FILTER_ALL}). */
+    private static String persistManufacturingConditionSelection(String selectedItem) {
+        if (selectedItem == null || MANUFACTURING_CONDITION_FILTER_ALL.equals(selectedItem)) {
             return "";
         }
         return selectedItem;
@@ -579,26 +579,26 @@ public final class ProcessingActualsDataTabController {
     }
 
     /**
-     * Keeps rows whose {@link #HEADER_PRODUCT_CONDITION_BREAKDOWN} cell equals the combo selection.
-     * {@link #PRODUCT_CONDITION_FILTER_ALL} leaves all rows. Unknown column: no filtering (with log).
+     * Keeps rows whose {@link #HEADER_MANUFACTURING_CONDITION_BREAKDOWN} cell equals the combo selection.
+     * {@link #MANUFACTURING_CONDITION_FILTER_ALL} leaves all rows. Unknown column: no filtering (with log).
      */
-    private PlanInputTabularIo.TabularSheet applyProductBreakdownFilter(
+    private PlanInputTabularIo.TabularSheet applyManufacturingConditionFilter(
             PlanInputTabularIo.TabularSheet shaped) {
         String sel =
-                productConditionBreakdownFilterCombo != null
-                        ? productConditionBreakdownFilterCombo.getSelectionModel().getSelectedItem()
+                manufacturingConditionBreakdownFilterCombo != null
+                        ? manufacturingConditionBreakdownFilterCombo.getSelectionModel().getSelectedItem()
                         : null;
-        if (sel == null || PRODUCT_CONDITION_FILTER_ALL.equals(sel)) {
+        if (sel == null || MANUFACTURING_CONDITION_FILTER_ALL.equals(sel)) {
             return shaped;
         }
-        String want = PRODUCT_CONDITION_EMPTY_DISPLAY.equals(sel) ? "" : sel;
+        String want = MANUFACTURING_CONDITION_EMPTY_DISPLAY.equals(sel) ? "" : sel;
         List<String> headers = shaped.headers();
-        int col = indexOfProductBreakdownColumn(headers);
+        int col = indexOfManufacturingConditionColumn(headers);
         if (col < 0) {
             if (shell != null) {
                 shell.appendLog(
                         "[processing-actuals-detail] missing header column: "
-                                + HEADER_PRODUCT_CONDITION_BREAKDOWN);
+                                + HEADER_MANUFACTURING_CONDITION_BREAKDOWN);
             }
             return shaped;
         }
@@ -612,13 +612,13 @@ public final class ProcessingActualsDataTabController {
         return new PlanInputTabularIo.TabularSheet(new ArrayList<>(headers), out);
     }
 
-    private static int indexOfProductBreakdownColumn(List<String> headers) {
+    private static int indexOfManufacturingConditionColumn(List<String> headers) {
         if (headers == null) {
             return -1;
         }
         for (int i = 0; i < headers.size(); i++) {
             String h = headers.get(i);
-            if (HEADER_PRODUCT_CONDITION_BREAKDOWN.equals(h != null ? h.strip() : "")) {
+            if (HEADER_MANUFACTURING_CONDITION_BREAKDOWN.equals(h != null ? h.strip() : "")) {
                 return i;
             }
         }
@@ -636,7 +636,7 @@ public final class ProcessingActualsDataTabController {
         PlanInputTabularIo.TabularSheet shaped =
                 new PlanInputTabularIo.TabularSheet(
                         new ArrayList<>(unfilteredShapedHeaders), copyRows);
-        PlanInputTabularIo.TabularSheet tab = applyProductBreakdownFilter(shaped);
+        PlanInputTabularIo.TabularSheet tab = applyManufacturingConditionFilter(shaped);
         populateFromFilteredSheet(tab);
     }
 
@@ -678,10 +678,10 @@ public final class ProcessingActualsDataTabController {
 
     private String filterActiveSuffix() {
         String sel =
-                productConditionBreakdownFilterCombo != null
-                        ? productConditionBreakdownFilterCombo.getSelectionModel().getSelectedItem()
+                manufacturingConditionBreakdownFilterCombo != null
+                        ? manufacturingConditionBreakdownFilterCombo.getSelectionModel().getSelectedItem()
                         : null;
-        if (sel == null || PRODUCT_CONDITION_FILTER_ALL.equals(sel)) {
+        if (sel == null || MANUFACTURING_CONDITION_FILTER_ALL.equals(sel)) {
             return "";
         }
         return " [\u7d5e\u308a]";
@@ -690,10 +690,10 @@ public final class ProcessingActualsDataTabController {
     private void applyEmpty() {
         suppressFilterUi.set(true);
         try {
-            if (productConditionBreakdownFilterCombo != null) {
-                productConditionBreakdownFilterCombo.getItems().clear();
-                productConditionBreakdownFilterCombo.getItems().add(PRODUCT_CONDITION_FILTER_ALL);
-                productConditionBreakdownFilterCombo.getSelectionModel().selectFirst();
+            if (manufacturingConditionBreakdownFilterCombo != null) {
+                manufacturingConditionBreakdownFilterCombo.getItems().clear();
+                manufacturingConditionBreakdownFilterCombo.getItems().add(MANUFACTURING_CONDITION_FILTER_ALL);
+                manufacturingConditionBreakdownFilterCombo.getSelectionModel().selectFirst();
             }
         } finally {
             suppressFilterUi.set(false);
