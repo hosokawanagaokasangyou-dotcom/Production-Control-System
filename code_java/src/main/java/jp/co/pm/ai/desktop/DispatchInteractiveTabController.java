@@ -130,6 +130,13 @@ public final class DispatchInteractiveTabController {
                     "換算数量",
                     "計画合計");
 
+    /** 「工程+機械×日」ビューの先頭固定列（日付ブロックの直前まで）。 */
+    private static final List<String> BY_DAY_STATIC_HEADERS =
+            List.of(
+                    ResultDispatchSchema.COL_PROCESS,
+                    ResultDispatchSchema.COL_MACHINE,
+                    "加工内容");
+
     private record WideGridBundle(
             GridBase grid,
             List<Map<String, String>> profiles,
@@ -1050,13 +1057,15 @@ public final class DispatchInteractiveTabController {
     }
 
     private boolean byDayStaticPrefixMatches(List<String> titles) {
-        if (titles == null || titles.size() < 2) {
+        if (titles == null || titles.size() < BY_DAY_STATIC_HEADERS.size()) {
             return false;
         }
-        if (!ResultDispatchSchema.COL_PROCESS.equals(titles.get(0))) {
-            return false;
+        for (int i = 0; i < BY_DAY_STATIC_HEADERS.size(); i++) {
+            if (!BY_DAY_STATIC_HEADERS.get(i).equals(titles.get(i))) {
+                return false;
+            }
         }
-        return ResultDispatchSchema.COL_MACHINE.equals(titles.get(1));
+        return true;
     }
 
     private static List<LocalDate> parseDateTailAsDates(List<String> titles, int staticCount) {
@@ -1130,7 +1139,7 @@ public final class DispatchInteractiveTabController {
             return;
         }
         List<LocalDate> computed = computeDateAxisList();
-        List<LocalDate> dates = parseDateTailAsDates(titles, 2);
+        List<LocalDate> dates = parseDateTailAsDates(titles, BY_DAY_STATIC_HEADERS.size());
         if (dates == null || !sameMultisetLocalDate(dates, computed)) {
             return;
         }
@@ -1220,7 +1229,7 @@ public final class DispatchInteractiveTabController {
 
     private ByDayGridBundle buildByDayGridModel(List<LocalDate> axis, boolean staffHighlight) {
         List<Map.Entry<String, String>> keys = ResultDispatchPivot.sortedProcessMachineKeys(doc.rows());
-        int staticCols = 2;
+        int staticCols = BY_DAY_STATIC_HEADERS.size();
         int dayCount = axis.size();
         int slotCols = dayCount * DAY_SLOT_COLUMNS;
         int totalCols = staticCols + slotCols;
@@ -1242,9 +1251,13 @@ public final class DispatchInteractiveTabController {
         }
         gridRows.add(filterRow);
 
+        List<String> cols = doc.columns();
         List<ByDayRow> byItems = new ArrayList<>();
         for (Map.Entry<String, String> en : keys) {
-            ByDayRow br = new ByDayRow(en.getKey(), en.getValue(), axis.size());
+            String pcSummary =
+                    ResultDispatchPivot.processingContentSummaryForProcessMachine(
+                            cols, doc.rows(), en.getKey(), en.getValue());
+            ByDayRow br = new ByDayRow(en.getKey(), en.getValue(), pcSummary, axis.size());
             for (int j = 0; j < axis.size(); j++) {
                 double v =
                         ResultDispatchPivot.sumQuantityForProcessMachineDate(
@@ -1266,6 +1279,10 @@ public final class DispatchInteractiveTabController {
                     SpreadsheetCellType.STRING.createCell(gridRow, 1, 1, 1, br.machine());
             c1.setEditable(false);
             line.add(c1);
+            SpreadsheetCell c2 =
+                    SpreadsheetCellType.STRING.createCell(gridRow, 2, 1, 1, br.processingContent());
+            c2.setEditable(false);
+            line.add(c2);
             for (int di = 0; di < dayCount; di++) {
                 double dayAmt = br.getAmount(di);
                 String qtxt = dayAmt > 1e-9 ? ResultDispatchNormalizer.formatQty(dayAmt) : "";
@@ -1364,7 +1381,8 @@ public final class DispatchInteractiveTabController {
                         Platform.runLater(job[0]);
                         return;
                     }
-                    SpreadsheetTabularSupport.applyFixedLeadingColumns(byDaySpreadsheet, 2);
+                    SpreadsheetTabularSupport.applyFixedLeadingColumns(
+                            byDaySpreadsheet, BY_DAY_STATIC_HEADERS.size());
                     applyDateColumnWidthsForBlockedDays(
                             byDaySpreadsheet,
                             b.staticCols(),
@@ -1374,7 +1392,7 @@ public final class DispatchInteractiveTabController {
                             byDaySpreadsheet,
                             suppressColumnReorderPersistence::get,
                             () -> new ArrayList<>(buildByDayColumnLabelsForAxis(dateAxis)),
-                            2,
+                            BY_DAY_STATIC_HEADERS.size(),
                             this::onByDaySpreadsheetVisualColumnOrderChanged);
                 };
         Platform.runLater(job[0]);
@@ -1411,9 +1429,9 @@ public final class DispatchInteractiveTabController {
     }
 
     private List<String> buildByDayColumnLabelsForAxis(List<LocalDate> axis) {
-        List<String> headers = new ArrayList<>(2 + axis.size() * DAY_SLOT_COLUMNS);
-        headers.add(ResultDispatchSchema.COL_PROCESS);
-        headers.add(ResultDispatchSchema.COL_MACHINE);
+        List<String> headers =
+                new ArrayList<>(BY_DAY_STATIC_HEADERS.size() + axis.size() * DAY_SLOT_COLUMNS);
+        headers.addAll(BY_DAY_STATIC_HEADERS);
         for (LocalDate d : axis) {
             headers.add(d.toString());
         }
@@ -1772,7 +1790,7 @@ public final class DispatchInteractiveTabController {
                         return;
                     }
                     int col = tc.getTableView().getColumns().indexOf(tc.getTableColumn());
-                    int staticCols = 2;
+                    int staticCols = BY_DAY_STATIC_HEADERS.size();
                     if (col < staticCols) {
                         return;
                     }
@@ -2002,9 +2020,9 @@ public final class DispatchInteractiveTabController {
         }
     }
 
-    public record ByDayRow(String process, String machine, double[] amounts) {
-        ByDayRow(String process, String machine, int n) {
-            this(process, machine, new double[n]);
+    public record ByDayRow(String process, String machine, String processingContent, double[] amounts) {
+        ByDayRow(String process, String machine, String processingContent, int n) {
+            this(process, machine, processingContent, new double[n]);
         }
 
         double getAmount(int i) {

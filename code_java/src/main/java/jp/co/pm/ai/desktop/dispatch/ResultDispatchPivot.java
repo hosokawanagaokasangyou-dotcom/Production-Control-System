@@ -306,6 +306,39 @@ public final class ResultDispatchPivot {
         return null;
     }
 
+    /**
+     * 同一工程・機械に紐づく行の「加工内容」を（空でないものだけ）抽出し、表示用に連結する。
+     *
+     * <p>列セットに「加工内容」が無い場合は空文字を返す。
+     */
+    public static String processingContentSummaryForProcessMachine(
+            List<String> columns,
+            List<Map<String, String>> rows,
+            String process,
+            String machine) {
+        final String pc = "加工内容";
+        if (columns == null || !columns.contains(pc)) {
+            return "";
+        }
+        LinkedHashSet<String> distinct = new LinkedHashSet<>();
+        for (Map<String, String> row : rows) {
+            if (!nz(row.get(ResultDispatchSchema.COL_PROCESS)).equals(nz(process))) {
+                continue;
+            }
+            if (!nz(row.get(ResultDispatchSchema.COL_MACHINE)).equals(nz(machine))) {
+                continue;
+            }
+            String v = nz(row.get(pc));
+            if (!v.isEmpty()) {
+                distinct.add(v);
+            }
+        }
+        if (distinct.isEmpty()) {
+            return "";
+        }
+        return String.join(" / ", distinct);
+    }
+
     public static List<Map.Entry<String, String>> sortedProcessMachineKeys(List<Map<String, String>> rows) {
         record Pm(String p, String m) {}
         Set<Pm> set = new TreeSet<>(Comparator.comparing(Pm::p).thenComparing(Pm::m));
