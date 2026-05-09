@@ -1771,13 +1771,22 @@ public final class MainShellController {
         try {
             wiredInnerMainShellTabPanes.clear();
             tabPane.getTabs().clear();
+            boolean organizerInserted = false;
             for (MainShellTabLayoutNode n : prepared) {
                 Tab built = materializeLayoutNode(n);
                 if (built != null) {
                     tabPane.getTabs().add(built);
                 }
+                if (!organizerInserted
+                        && n.isTab()
+                        && MainShellTabId.OPERATOR_CARD.key().equals(n.id())) {
+                    tabPane.getTabs().add(mainShellTabOrganizer);
+                    organizerInserted = true;
+                }
             }
-            tabPane.getTabs().add(mainShellTabOrganizer);
+            if (!organizerInserted) {
+                tabPane.getTabs().add(mainShellTabOrganizer);
+            }
             boolean nested = prepared.stream().anyMatch(MainShellTabLayoutNode::isGroup);
             tabPane.setTabDragPolicy(
                     nested
@@ -1850,6 +1859,7 @@ public final class MainShellController {
         try {
             wiredInnerMainShellTabPanes.clear();
             tabPane.getTabs().clear();
+            boolean organizerInserted = false;
             for (String key : MainShellTabLayoutDefaults.completeFlatTabKeyOrder()) {
                 MainShellTabId id = MainShellTabId.fromKey(key);
                 Tab t = id != null ? mainShellTabFor(id) : null;
@@ -1857,8 +1867,14 @@ public final class MainShellController {
                     applyShellTabColor(t, "");
                     tabPane.getTabs().add(t);
                 }
+                if (!organizerInserted && id == MainShellTabId.OPERATOR_CARD) {
+                    tabPane.getTabs().add(mainShellTabOrganizer);
+                    organizerInserted = true;
+                }
             }
-            tabPane.getTabs().add(mainShellTabOrganizer);
+            if (!organizerInserted) {
+                tabPane.getTabs().add(mainShellTabOrganizer);
+            }
             tabPane.setTabDragPolicy(TabPane.TabDragPolicy.REORDER);
         } finally {
             suppressEnvSessionPersistence.set(false);
