@@ -137,7 +137,8 @@ public final class TaskInputSourceRawGridIo {
 
     /**
      * Aladdin tab: (1) drop first 4 sheet rows, (2) copy row6 text into blank cells of row5,
-     * (3) drop columns whose row6 label is speed/time, (4) drop the row6 line.
+     * (3) drop columns whose row6 label is speed/time, (4) drop the row6 line,
+     * (5) use the top remaining row as column headers and remove it from data rows.
      */
     public static PlanInputTabularIo.TabularSheet applyAladdinProcessingPlanDisplaySteps(
             PlanInputTabularIo.TabularSheet raw) {
@@ -195,10 +196,15 @@ public final class TaskInputSourceRawGridIo {
             maxCol = Math.max(maxCol, r.size());
         }
         padRowsToWidth(rows, maxCol);
-        List<String> headers = new ArrayList<>();
-        for (int c = 0; c < maxCol; c++) {
-            headers.add("\u5217" + (c + 1));
+        if (rows.isEmpty()) {
+            return new PlanInputTabularIo.TabularSheet(List.of(), rows);
         }
+        List<String> headerRow = rows.get(0);
+        List<String> headers = new ArrayList<>(headerRow.size());
+        for (String cell : headerRow) {
+            headers.add(cell != null ? cell : "");
+        }
+        rows.remove(0);
         return new PlanInputTabularIo.TabularSheet(headers, rows);
     }
 
