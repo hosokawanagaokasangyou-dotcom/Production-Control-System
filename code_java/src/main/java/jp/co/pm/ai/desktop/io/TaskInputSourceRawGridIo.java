@@ -6,6 +6,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -246,6 +248,121 @@ public final class TaskInputSourceRawGridIo {
         }
         rows.remove(0);
         return new PlanInputTabularIo.TabularSheet(headers, rows);
+    }
+
+    private static final DateTimeFormatter PROCESSING_DATETIME_OUT =
+            DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
+
+    private static final String HEADER_KAKOU_DATE = "\u52a0\u5de5\u65e5";
+    private static final String HEADER_START_HOUR = "\u958b\u59cb\u6642\u9593";
+    private static final String HEADER_START_MIN = "\u958b\u59cb\u5206";
+    private static final String HEADER_END_HOUR = "\u7d42\u4e86\u6642\u9593";
+    private static final String HEADER_END_MIN = "\u7d42\u4e86\u5206";
+    private static final String HEADER_KAKOU_START_DT = "\u52a0\u5de5\u958b\u59cb\u65e5\u6642";
+    private static final String HEADER_KAKOU_END_DT = "\u52a0\u5de5\u7d42\u4e86\u65e5\u6642";
+
+    /**
+     * Appends {@code ??????} and {@code ??????} from {@code ???} + ({@code ????},{@code ???})
+     * and {@code ???} + ({@code ????},{@code ???}). Output uses {@link #PROCESSING_DATETIME_OUT}.
+     * Missing source headers or unparseable cells yield empty appended cells.
+     */
+    public static PlanInputTabularIo.TabularSheet applyProcessingActualsDateTimeColumns(
+            PlanInputTabularIo.TabularSheet shaped) {
+        Objects.requireNonNull(shaped, "shaped");
+        List<String> headers = new ArrayList<>(shaped.headers());
+        int idxDate = indexOfHeaderTitle(headers, HEADER_KAKOU_DATE);
+        int idxSh = indexOfHeaderTitle(headers, HEADER_START_HOUR);
+        int idxSm = indexOfHeaderTitle(headers, HEADER_START_MIN);
+        int idxEh = indexOfHeaderTitle(headers, HEADER_END_HOUR);
+        int idxEm = indexOfHeaderTitle(headers, HEADER_END_MIN);
+
+        int baseCols = headers.size();
+        List<List<String>> outRows = new ArrayList<>();
+        for (List<String> src : shaped.rows()) {
+            List<String> row = new ArrayList<>(src);
+            while (row.size() < baseCols) {
+                row.add("");
+            }
+            String startDt = formatProcessingDateTimeCell(row, idxDate, idxSh, idxSm);
+            String endDt = formatProcessingDateTimeCell(row, idxDate, idxEh, idxEm);
+            row.add(startDt);
+            row.add(endDt);
+            outRows.add(row);
+        }
+        headers.add(HEADER_KAKOU_START_DT);
+        headers.add(HEADER_KAKOU_END_DT);
+        return new PlanInputTabularIo.TabularSheet(headers, outRows);
+    }
+
+    private static int indexOfHeaderTitle(List<String> headers, String title) {
+        if (headers == null || title == null) {
+            return -1;
+        }
+        for (int i = 0; i < headers.size(); i++) {
+            String h = headers.get(i);
+            if (title.equals(h != null ? h.strip() : "")) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static String formatProcessingDateTimeCell(
+            List<String> row, int idxDate, int idxHour, int idxMin) {
+        if (idxDate < 0 || idxHour < 0 || idxMin < 0) {
+            return "";
+        }
+        LocalDate d = parseKakouDate(cellAt(row, idxDate));
+        int hh = parseHourMinutePart(cellAt(row, idxHour));
+        int mm = parseHourMinutePart(cellAt(row, idxMin));
+        if (d == null || hh < 0 || mm < 0 || hh > 23 || mm > 59) {
+            return "";
+        }
+        try {
+            return LocalDateTime.of(d, LocalTime.of(hh, mm)).format(PROCESSING_DATETIME_OUT);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private static String cellAt(List<String> row, int idx) {
+        if (idx < 0 || idx >= row.size()) {
+            return "";
+        }
+        String s = row.get(idx);
+        return s != null ? s : "";
+    }
+
+    private static LocalDate parseKakouDate(String raw) {
+        if (isBlankCell(raw)) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        String withoutWeekday = stripTrailingWeekdayInParens(trimmed);
+        LocalDate d = tryParseFlexibleDate(withoutWeekday);
+        if (d != null) {
+            return d;
+        }
+        return tryParseFlexibleDate(trimmed);
+    }
+
+    private static int parseHourMinutePart(String raw) {
+        if (raw == null) {
+            return -1;
+        }
+        String t = raw.strip().replace(",", "");
+        if (t.isEmpty()) {
+            return -1;
+        }
+        int dot = t.indexOf('.');
+        if (dot >= 0) {
+            t = t.substring(0, dot);
+        }
+        try {
+            return Integer.parseInt(t.strip());
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
     private static final DateTimeFormatter ALADDIN_HEADER_DATE_OUT =
