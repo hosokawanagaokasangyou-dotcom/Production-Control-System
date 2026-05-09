@@ -257,7 +257,7 @@
             <option>-XX:+HeapDumpOnOutOfMemoryError</option>
             <option>-XX:+UseStringDeduplication</option>
             <option>-Dprism.order=${javafx.prism.order}</option>
-            <!-- javafx.web は jdk.jsobject / jdk.xml.dom をルートに要求（WebView。未指定だと FindException） -->
+            <!-- javafx.web は jdk.jsobject を要求。JDK 26 では JDK 本体に無く、javafx-web が OpenJFX の jdk-jsobject を推移依存する -->
             <option>--add-modules</option>
             <option>javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.swing,javafx.web,jdk.jsobject,jdk.xml.dom</option>
             <option>--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED</option>
