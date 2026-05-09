@@ -49,9 +49,9 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 /**
  * Raw spreadsheet for the machining actual-detail workbook, resolved via {@link NetworkSourceDirResolver}
  * ({@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK} / {@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR}).
- * Display applies {@link TaskInputSourceRawGridIo#applyProcessingActualsDisplaySteps}, then
- * {@link TaskInputSourceRawGridIo#applyProcessingActualsDeduplicateKeyColumns} (same 工程名・機械名・依頼NO・加工日
- * keeps first row only), then {@link TaskInputSourceRawGridIo#applyProcessingActualsDateTimeColumns}. Optional sheet:
+ * Display applies {@link TaskInputSourceRawGridIo#applyProcessingActualsDisplaySteps} then
+ * {@link TaskInputSourceRawGridIo#applyProcessingActualsDateTimeColumns} then
+ * {@link TaskInputSourceRawGridIo#applyProcessingActualsDedupeByQuadKey}. Optional sheet:
  * {@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_SHEET}. Rows can be filtered by combo selection for column
  * {@link #HEADER_MANUFACTURING_CONDITION_BREAKDOWN}. FXML: {@code ProcessingActualsDataTab.fxml}.
  */
@@ -79,7 +79,9 @@ public final class ProcessingActualsDataTabController {
                     + " \u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u672a\u5230\u9054\u6642\u306f\u30ed\u30fc\u30ab\u30eb\u30ad\u30e3\u30c3\u30b7\u30e5\u3092\u8a66\u884c\u3057\u307e\u3059\u3002"
                     + " \u9078\u629e\u5024\u306f\u81ea\u52d5\u4fdd\u5b58\u3055\u308c\u3001\u6b21\u56de\u8d77\u52d5\u6642\u306b\u5fa9\u5143\u3055\u308c\u307e\u3059\u3002"
                     + " \u52a0\u5de5\u65e5\u30fb\u958b\u59cb/\u7d42\u4e86\u306e\u6642\u5206\u304b\u3089"
-                    + "\u52a0\u5de5\u958b\u59cb\u65e5\u6642\u30fb\u52a0\u5de5\u7d42\u4e86\u65e5\u6642\u5217\u3092\u4ed8\u52a0\u3057\u307e\u3059\u3002";
+                    + "\u52a0\u5de5\u958b\u59cb\u65e5\u6642\u30fb\u52a0\u5de5\u7d42\u4e86\u65e5\u6642\u5217\u3092\u4ed8\u52a0\u3057\u307e\u3059\u3002"
+                    + " \u540c\u4e00\u5de5\u7a0b\u540d\u30fb\u6a5f\u68b0\u540d\u30fb\u4f9d\u983cNO\u30fb\u52a0\u5de5\u65e5\u306e\u884c\u306f"
+                    + "\u5148\u982d\u884c\u306e\u307f\u6b8b\u3057\u307e\u3059\u3002";
 
 
     @FXML
@@ -497,8 +499,8 @@ public final class ProcessingActualsDataTabController {
     private void applyLoadedFile(Path file, int excelSheetIndex, boolean showErrorsInStatus) {
         try {
             PlanInputTabularIo.TabularSheet shaped =
-                    TaskInputSourceRawGridIo.applyProcessingActualsDateTimeColumns(
-                            TaskInputSourceRawGridIo.applyProcessingActualsDeduplicateKeyColumns(
+                    TaskInputSourceRawGridIo.applyProcessingActualsDedupeByQuadKey(
+                            TaskInputSourceRawGridIo.applyProcessingActualsDateTimeColumns(
                                     TaskInputSourceRawGridIo.applyProcessingActualsDisplaySteps(
                                             TaskInputSourceRawGridIo.readRaw(file, excelSheetIndex))));
             rememberShapedSnapshot(shaped);

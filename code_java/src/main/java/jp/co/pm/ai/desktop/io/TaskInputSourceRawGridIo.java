@@ -15,6 +15,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -254,11 +255,15 @@ public final class TaskInputSourceRawGridIo {
     private static final DateTimeFormatter PROCESSING_DATETIME_OUT =
             DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
 
-    private static final String HEADER_PROCESS = "\u5de5\u7a0b\u540d";
-    private static final String HEADER_MACHINE = "\u6a5f\u68b0\u540d";
-    /** Excel ??????????? NO / ?? ???? */
-    private static final String[] HEADER_IRAI_ALIASES =
-            new String[] {"\u4f9d\u983cNO", "\u4f9d\u983c\uff2e\uff2f"};
+    /** ??????????????????????? */
+    private static final String HEADER_PROCESS_NAME = "\u5de5\u7a0b\u540d";
+
+    private static final String HEADER_MACHINE_NAME = "\u6a5f\u68b0\u540d";
+
+    /** ?? NO / ?? ?? ??????????????????? */
+    private static final String HEADER_REQUEST_NO_ASCII = "\u4f9d\u983cNO";
+
+    private static final String HEADER_REQUEST_NO_FULL = "\u4f9d\u983c\uff2e\uff2f";
 
     private static final String HEADER_KAKOU_DATE = "\u52a0\u5de5\u65e5";
     private static final String HEADER_START_HOUR = "\u958b\u59cb\u6642\u9593";
@@ -267,63 +272,6 @@ public final class TaskInputSourceRawGridIo {
     private static final String HEADER_END_MIN = "\u7d42\u4e86\u5206";
     private static final String HEADER_KAKOU_START_DT = "\u52a0\u5de5\u958b\u59cb\u65e5\u6642";
     private static final String HEADER_KAKOU_END_DT = "\u52a0\u5de5\u7d42\u4e86\u65e5\u6642";
-
-    /**
-     * ???????: {@link #HEADER_PROCESS}?{@link #HEADER_MACHINE}???????{@link #HEADER_KAKOU_DATE}
-     * ? 4 ???????????????????????????
-     *
-     * <p>?????????????????????????
-     */
-    public static PlanInputTabularIo.TabularSheet applyProcessingActualsDeduplicateKeyColumns(
-            PlanInputTabularIo.TabularSheet shaped) {
-        Objects.requireNonNull(shaped, "shaped");
-        List<String> headers = shaped.headers();
-        int iProc = indexOfHeaderTitle(headers, HEADER_PROCESS);
-        int iMach = indexOfHeaderTitle(headers, HEADER_MACHINE);
-        int iReq = indexOfHeaderFirstAlias(headers, HEADER_IRAI_ALIASES);
-        int iDate = indexOfHeaderTitle(headers, HEADER_KAKOU_DATE);
-        if (iProc < 0 || iMach < 0 || iReq < 0 || iDate < 0) {
-            return shaped;
-        }
-        List<List<String>> out = new ArrayList<>();
-        HashSet<String> seen = new HashSet<>();
-        final char sep = '\u001f';
-        for (List<String> src : shaped.rows()) {
-            String k =
-                    normalizeProcessingActualsDedupeCell(src, iProc)
-                            + sep
-                            + normalizeProcessingActualsDedupeCell(src, iMach)
-                            + sep
-                            + normalizeProcessingActualsDedupeCell(src, iReq)
-                            + sep
-                            + normalizeProcessingActualsDedupeCell(src, iDate);
-            if (seen.add(k)) {
-                out.add(new ArrayList<>(src));
-            }
-        }
-        return new PlanInputTabularIo.TabularSheet(new ArrayList<>(headers), out);
-    }
-
-    private static String normalizeProcessingActualsDedupeCell(List<String> row, int idx) {
-        if (idx < 0 || row == null || idx >= row.size()) {
-            return "";
-        }
-        String s = row.get(idx);
-        return s != null ? s.strip() : "";
-    }
-
-    private static int indexOfHeaderFirstAlias(List<String> headers, String[] aliases) {
-        if (aliases == null) {
-            return -1;
-        }
-        for (String a : aliases) {
-            int i = indexOfHeaderTitle(headers, a);
-            if (i >= 0) {
-                return i;
-            }
-        }
-        return -1;
-    }
 
     /**
      * Appends {@code ??????} and {@code ??????} from {@code ???} + ({@code ????},{@code ???})
@@ -356,6 +304,56 @@ public final class TaskInputSourceRawGridIo {
         headers.add(HEADER_KAKOU_START_DT);
         headers.add(HEADER_KAKOU_END_DT);
         return new PlanInputTabularIo.TabularSheet(headers, outRows);
+    }
+
+    /**
+     * ??????????NO?????????????????????????????????????
+     * ?????????????????????????
+     */
+    public static PlanInputTabularIo.TabularSheet applyProcessingActualsDedupeByQuadKey(
+            PlanInputTabularIo.TabularSheet shaped) {
+        Objects.requireNonNull(shaped, "shaped");
+        List<String> headers = shaped.headers();
+        int iProc = indexOfHeaderTitle(headers, HEADER_PROCESS_NAME);
+        int iMach = indexOfHeaderTitle(headers, HEADER_MACHINE_NAME);
+        int iReq = indexOfHeaderFirst(headers, HEADER_REQUEST_NO_ASCII, HEADER_REQUEST_NO_FULL);
+        int iDate = indexOfHeaderTitle(headers, HEADER_KAKOU_DATE);
+        if (iProc < 0 || iMach < 0 || iReq < 0 || iDate < 0) {
+            return shaped;
+        }
+        Set<String> seen = new HashSet<>();
+        List<List<String>> outRows = new ArrayList<>();
+        for (List<String> src : shaped.rows()) {
+            String key = quadDedupeKey(src, iProc, iMach, iReq, iDate);
+            if (seen.add(key)) {
+                outRows.add(new ArrayList<>(src));
+            }
+        }
+        return new PlanInputTabularIo.TabularSheet(new ArrayList<>(headers), outRows);
+    }
+
+    private static int indexOfHeaderFirst(List<String> headers, String... titles) {
+        if (titles == null) {
+            return -1;
+        }
+        for (String t : titles) {
+            int ix = indexOfHeaderTitle(headers, t);
+            if (ix >= 0) {
+                return ix;
+            }
+        }
+        return -1;
+    }
+
+    private static String quadDedupeKey(
+            List<String> row, int iProc, int iMach, int iReq, int iDate) {
+        return cellAt(row, iProc).strip()
+                + '\u001e'
+                + cellAt(row, iMach).strip()
+                + '\u001e'
+                + cellAt(row, iReq).strip()
+                + '\u001e'
+                + cellAt(row, iDate).strip();
     }
 
     private static int indexOfHeaderTitle(List<String> headers, String title) {
