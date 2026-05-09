@@ -1,13 +1,14 @@
 /*
- * ?????????: ????????????
- * ????????? SpreadsheetTabularSupport ??????????????
+ * ???????????????????? SpreadsheetView ??
+ * SpreadsheetTabularSupport.installDeliveryCalendarSpreadsheetChrome ????
+ * ????????????????????????????
  */
 
 .delivery-calendar-spreadsheet.table-view.cell-spreadsheet {
     -fx-background-color: #ffffff;
 }
 
-/* ????????: ?????????????? text-fill ???????? */
+/* ????: ????? text-fill ?????? */
 .delivery-calendar-spreadsheet .spreadsheet-cell {
     -fx-border-color: #cccccc;
     -fx-text-fill: black;
@@ -25,28 +26,30 @@
     -fx-fill: black;
 }
 
+/* ???????VerticalHeader? */
 .delivery-calendar-spreadsheet VerticalHeader > Label,
 .delivery-calendar-spreadsheet VerticalHeader > Label.fixed {
-    -fx-background-color: #ffffff;
+    -fx-background-color: #e8e8e8;
     -fx-text-fill: black;
 }
 
+/* ???????HorizontalHeaderColumn? */
 .delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column,
 .delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.fixed {
-    -fx-background-color: #1565c0;
-    -fx-text-fill: white;
+    -fx-background-color: #e8e8e8;
+    -fx-text-fill: black;
 }
 
 .delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column .label,
 .delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.fixed .label {
-    -fx-text-fill: white;
+    -fx-text-fill: black;
 }
 
 .delivery-calendar-spreadsheet VerticalHeader > Label.selected,
 .delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.selected,
 .delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.selected > Label {
-    -fx-background-color: #0d47a1;
-    -fx-text-fill: white;
+    -fx-background-color: #d0d0d0;
+    -fx-text-fill: black;
 }
 
 .delivery-calendar-spreadsheet .spreadsheet-cell:filled:selected,
