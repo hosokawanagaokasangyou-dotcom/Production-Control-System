@@ -10,6 +10,7 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -65,6 +66,7 @@ import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.JvmMemoryLogStore;
+import jp.co.pm.ai.desktop.config.MainShellTabLayoutDefaults;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PushButtonCssEmitter;
@@ -298,31 +300,6 @@ public final class MainShellController {
 
     /** {@link #emitShellTabNavigation()} 用の直前リーフ（列フィルタ解除・実行タブ離脱保存）。 */
     private Tab lastEffectiveShellLeaf;
-
-    /**
-     * MainShell.fxml の既定タブ並び（{@link MainShellTabId#TAB_ORGANIZER} を除く）。
-     */
-    private static final List<String> DEFAULT_MAIN_SHELL_TAB_KEYS =
-            List.of(
-                    MainShellTabId.RUN.key(),
-                    MainShellTabId.UI_BADGE_DESIGN.key(),
-                    MainShellTabId.PUSH_BUTTON_DESIGN.key(),
-                    MainShellTabId.ENV.key(),
-                    MainShellTabId.MEMORY_SETTINGS.key(),
-                    MainShellTabId.GLOBAL_SETTINGS.key(),
-                    MainShellTabId.MASTER_SUMMARY.key(),
-                    MainShellTabId.PLAN_INPUT.key(),
-                    MainShellTabId.STAGE1_PREVIEW.key(),
-                    MainShellTabId.EXCLUDE_RULES.key(),
-                    MainShellTabId.SPECIAL_RULES.key(),
-                    MainShellTabId.ACTUALS_STATUS.key(),
-                    MainShellTabId.DELIVERY_CALENDAR_VIEW.key(),
-                    MainShellTabId.RESULT_DISPATCH.key(),
-                    MainShellTabId.DISPATCH_INTERACTIVE.key(),
-                    MainShellTabId.PLAN_RESULT_VIEWER.key(),
-                    MainShellTabId.EQUIPMENT_GANTT_GRAPHIC.key(),
-                    MainShellTabId.GANTT_PERSON_BADGE_DESIGN.key(),
-                    MainShellTabId.OPERATOR_CARD.key());
 
     private ObservableList<EnvVarRow> envRows;
 
@@ -658,8 +635,10 @@ public final class MainShellController {
         }
         applyWindowGeometry(s);
         if (s.mainShellTabLayout() != null && !s.mainShellTabLayout().isEmpty()) {
-            rebuildMainShellTabsFromLayout(s.mainShellTabLayout());
-        } else {
+            if (!rebuildMainShellTabsFromLayout(s.mainShellTabLayout())) {
+                rebuildMainShellTabsFromLayout(null);
+            }
+        } else if (!rebuildMainShellTabsFromLayout(null)) {
             applyMainShellTabOrder(s.mainShellTabOrder());
         }
         applyMainShellTabTitleAliasesFromSession(s.mainShellTabTitleAliases());
@@ -1776,17 +1755,13 @@ public final class MainShellController {
      * @return レイアウトが検証されメイン {@link TabPane} が組み替えられたとき {@code true}。検証不一致などでスキップしたとき {@code false}
      */
     private boolean rebuildMainShellTabsFromLayout(List<MainShellTabLayoutNode> layout) {
-        if (tabPane == null || layout == null || layout.isEmpty() || mainShellTabOrganizer == null) {
+        if (tabPane == null || mainShellTabOrganizer == null) {
             return false;
         }
-        HashSet<String> required = new HashSet<>();
-        for (MainShellTabId id : MainShellTabId.values()) {
-            if (id != MainShellTabId.TAB_ORGANIZER) {
-                required.add(id.key());
-            }
-        }
+        List<MainShellTabLayoutNode> prepared = prepareMainShellLayoutForRebuild(layout);
+        HashSet<String> required = requiredShellTabKeys();
         HashSet<String> found = new HashSet<>();
-        for (MainShellTabLayoutNode n : layout) {
+        for (MainShellTabLayoutNode n : prepared) {
             collectLayoutLeafKeys(n, found);
         }
         if (!found.equals(required)) {
@@ -1796,14 +1771,14 @@ public final class MainShellController {
         try {
             wiredInnerMainShellTabPanes.clear();
             tabPane.getTabs().clear();
-            for (MainShellTabLayoutNode n : layout) {
+            for (MainShellTabLayoutNode n : prepared) {
                 Tab built = materializeLayoutNode(n);
                 if (built != null) {
                     tabPane.getTabs().add(built);
                 }
             }
             tabPane.getTabs().add(mainShellTabOrganizer);
-            boolean nested = layout.stream().anyMatch(MainShellTabLayoutNode::isGroup);
+            boolean nested = prepared.stream().anyMatch(MainShellTabLayoutNode::isGroup);
             tabPane.setTabDragPolicy(
                     nested
                             ? TabPane.TabDragPolicy.FIXED
@@ -1875,7 +1850,7 @@ public final class MainShellController {
         try {
             wiredInnerMainShellTabPanes.clear();
             tabPane.getTabs().clear();
-            for (String key : DEFAULT_MAIN_SHELL_TAB_KEYS) {
+            for (String key : MainShellTabLayoutDefaults.completeFlatTabKeyOrder()) {
                 MainShellTabId id = MainShellTabId.fromKey(key);
                 Tab t = id != null ? mainShellTabFor(id) : null;
                 if (t != null) {
@@ -1911,16 +1886,131 @@ public final class MainShellController {
         return snapshotMainShellTabLayout();
     }
 
-    /** {@link #DEFAULT_MAIN_SHELL_TAB_KEYS} と同順の {@link MainShellTabId}（オーガナイザ以外）。 */
+    /** {@link MainShellTabLayoutDefaults#completeFlatTabKeyOrder()} と同順の {@link MainShellTabId}。 */
     List<MainShellTabId> defaultMainShellTabIds() {
         List<MainShellTabId> out = new ArrayList<>();
-        for (String k : DEFAULT_MAIN_SHELL_TAB_KEYS) {
+        for (String k : MainShellTabLayoutDefaults.completeFlatTabKeyOrder()) {
             MainShellTabId id = MainShellTabId.fromKey(k);
             if (id != null) {
                 out.add(id);
             }
         }
         return List.copyOf(out);
+    }
+
+    /** タブ整理オーガナイザ用の既定グループ構成（メインシェルが未構築のときのツリー表示）。 */
+    List<MainShellTabLayoutNode> defaultMainShellTabLayoutGrouped() {
+        return MainShellTabLayoutDefaults.groupedLayout();
+    }
+
+    private static HashSet<String> requiredShellTabKeys() {
+        HashSet<String> r = new HashSet<>();
+        for (MainShellTabId id : MainShellTabId.values()) {
+            if (id != MainShellTabId.TAB_ORGANIZER) {
+                r.add(id.key());
+            }
+        }
+        return r;
+    }
+
+    /**
+     * セッション由来やユーザー編集のレイアウトを、未知 ID の除去・欠落タブの末尾追記・重複時のフォールバックを行う。
+     */
+    private List<MainShellTabLayoutNode> prepareMainShellLayoutForRebuild(
+            List<MainShellTabLayoutNode> raw) {
+        if (raw == null || raw.isEmpty()) {
+            return mergeMissingMainShellTabLeaves(MainShellTabLayoutDefaults.groupedLayout());
+        }
+        List<MainShellTabLayoutNode> sanitized = sanitizeMainShellTabLayoutNodes(raw);
+        List<String> leaves = new ArrayList<>();
+        for (MainShellTabLayoutNode n : sanitized) {
+            collectLayoutLeafKeysToList(n, leaves);
+        }
+        Set<String> req = requiredShellTabKeys();
+        Set<String> uniq = new HashSet<>(leaves);
+        if (uniq.size() != leaves.size()) {
+            return mergeMissingMainShellTabLeaves(MainShellTabLayoutDefaults.groupedLayout());
+        }
+        for (String leaf : uniq) {
+            if (!req.contains(leaf)) {
+                return mergeMissingMainShellTabLeaves(MainShellTabLayoutDefaults.groupedLayout());
+            }
+        }
+        if (uniq.equals(req)) {
+            return sanitized;
+        }
+        return mergeMissingMainShellTabLeaves(sanitized);
+    }
+
+    private static MainShellTabLayoutNode sanitizeLayoutNode(MainShellTabLayoutNode n) {
+        if (n == null) {
+            return null;
+        }
+        if (n.isTab()) {
+            MainShellTabId id = MainShellTabId.fromKey(n.id());
+            if (id == null || id == MainShellTabId.TAB_ORGANIZER) {
+                return null;
+            }
+            return MainShellTabLayoutNode.tabNode(id.key(), n.colorHex());
+        }
+        List<MainShellTabLayoutNode> ch = new ArrayList<>();
+        for (MainShellTabLayoutNode c : n.children()) {
+            MainShellTabLayoutNode s = sanitizeLayoutNode(c);
+            if (s != null) {
+                ch.add(s);
+            }
+        }
+        if (ch.isEmpty()) {
+            return null;
+        }
+        String title = n.title().isBlank() ? "グループ" : n.title();
+        return MainShellTabLayoutNode.groupNode(title, n.colorHex(), ch);
+    }
+
+    private static List<MainShellTabLayoutNode> sanitizeMainShellTabLayoutNodes(
+            List<MainShellTabLayoutNode> top) {
+        List<MainShellTabLayoutNode> out = new ArrayList<>();
+        for (MainShellTabLayoutNode n : top) {
+            MainShellTabLayoutNode s = sanitizeLayoutNode(n);
+            if (s != null) {
+                out.add(s);
+            }
+        }
+        return out;
+    }
+
+    private static void collectLayoutLeafKeysToList(MainShellTabLayoutNode n, List<String> out) {
+        if (n.isTab()) {
+            out.add(n.id());
+            return;
+        }
+        for (MainShellTabLayoutNode c : n.children()) {
+            collectLayoutLeafKeysToList(c, out);
+        }
+    }
+
+    private static List<MainShellTabLayoutNode> mergeMissingMainShellTabLeaves(
+            List<MainShellTabLayoutNode> top) {
+        Set<String> required = requiredShellTabKeys();
+        Set<String> found = new HashSet<>();
+        for (MainShellTabLayoutNode n : top) {
+            collectLayoutLeafKeys(n, found);
+        }
+        LinkedHashSet<String> missing = new LinkedHashSet<>(required);
+        missing.removeAll(found);
+        if (missing.isEmpty()) {
+            return List.copyOf(top);
+        }
+        List<MainShellTabLayoutNode> out = new ArrayList<>(top);
+        for (String key : MainShellTabLayoutDefaults.DEFAULT_FLAT_TAB_KEY_ORDER) {
+            if (missing.remove(key)) {
+                out.add(MainShellTabLayoutNode.tabNode(key, ""));
+            }
+        }
+        for (String key : missing) {
+            out.add(MainShellTabLayoutNode.tabNode(key, ""));
+        }
+        return out;
     }
 
     String mainShellTabTitle(MainShellTabId id) {

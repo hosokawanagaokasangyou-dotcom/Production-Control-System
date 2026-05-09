@@ -40,6 +40,7 @@ import javafx.scene.paint.Color;
 
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
+import jp.co.pm.ai.desktop.config.MainShellInnerTabCatalog;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
 
 /**
@@ -226,11 +227,11 @@ public final class MainShellTabOrganizerTabController {
         List<MainShellTabLayoutNode> layout = shell.snapshotMainShellTabLayoutNodes();
         TreeItem<OrgRow> invisibleRoot = new TreeItem<>(OrgRow.placeholder());
         if (layout.isEmpty()) {
-            for (MainShellTabId id : shell.defaultMainShellTabIds()) {
-                if (id == MainShellTabId.TAB_ORGANIZER) {
-                    continue;
+            for (MainShellTabLayoutNode n : shell.defaultMainShellTabLayoutGrouped()) {
+                TreeItem<OrgRow> ti = treeItemForLayoutNode(n);
+                if (ti != null) {
+                    invisibleRoot.getChildren().add(ti);
                 }
-                invisibleRoot.getChildren().add(leafItem(OrgRow.tab(id, "")));
             }
         } else {
             for (MainShellTabLayoutNode n : layout) {
@@ -372,7 +373,9 @@ public final class MainShellTabOrganizerTabController {
             if (id == null || id == MainShellTabId.TAB_ORGANIZER) {
                 return null;
             }
-            return leafItem(OrgRow.tab(id, n.colorHex()));
+            TreeItem<OrgRow> tabItem = leafItem(OrgRow.tab(id, n.colorHex()));
+            appendInnerTabCatalogRows(tabItem, id);
+            return tabItem;
         }
         if (n.isGroup()) {
             TreeItem<OrgRow> g = new TreeItem<>(OrgRow.group(n.title(), n.colorHex()));
@@ -385,6 +388,12 @@ public final class MainShellTabOrganizerTabController {
             return g;
         }
         return null;
+    }
+
+    private static void appendInnerTabCatalogRows(TreeItem<OrgRow> tabItem, MainShellTabId id) {
+        for (String label : MainShellInnerTabCatalog.labelsFor(id)) {
+            tabItem.getChildren().add(leafItem(OrgRow.innerTab(id, label)));
+        }
     }
 
     private static TreeItem<OrgRow> leafItem(OrgRow row) {
@@ -579,6 +588,9 @@ public final class MainShellTabOrganizerTabController {
             return;
         }
         String h = hex != null ? hex : "";
+        if (r.kind == OrgRow.Kind.INNER_TAB) {
+            return;
+        }
         if (r.kind == OrgRow.Kind.TAB) {
             ti.setValue(OrgRow.tab(r.tabId, h));
         } else {
@@ -712,6 +724,9 @@ public final class MainShellTabOrganizerTabController {
             return null;
         }
         OrgRow r = ti.getValue();
+        if (r.kind == OrgRow.Kind.INNER_TAB) {
+            return null;
+        }
         if (r.kind == OrgRow.Kind.TAB) {
             return MainShellTabLayoutNode.tabNode(r.tabId.key(), nz(r.colorHex));
         }
@@ -746,14 +761,17 @@ public final class MainShellTabOrganizerTabController {
         a.showAndWait();
     }
 
-    /** ツリー1行分（タブまたはグループ）。 */
+    /** ツリー1行分（メインタブ・グループ・またはビュー内の子タブ説明）。 */
     static final class OrgRow {
         enum Kind {
             TAB,
-            GROUP
+            GROUP,
+            /** メインタブ直下の子（レイアウト保存対象外・参照用）。{@link #tabId} は親タブ。 */
+            INNER_TAB
         }
 
         final Kind kind;
+        /** kind が {@link Kind#TAB} のときリーフタブ ID；{@link Kind#INNER_TAB} のとき親タブ ID */
         MainShellTabId tabId;
         String groupTitle;
         String colorHex;
@@ -777,11 +795,25 @@ public final class MainShellTabOrganizerTabController {
             return new OrgRow(Kind.GROUP, null, title != null ? title : "", nz(colorHex));
         }
 
+        /** 親メインタブ ID と子タブ見出し（一覧向け）。 */
+        static OrgRow innerTab(MainShellTabId parentTabId, String innerTitle) {
+            return new OrgRow(
+                    Kind.INNER_TAB,
+                    Objects.requireNonNull(parentTabId),
+                    innerTitle != null ? innerTitle : "",
+                    "");
+        }
+
         String formatDisplay(MainShellController shell) {
             if (kind == Kind.GROUP) {
                 String t = groupTitle != null && !groupTitle.isBlank() ? groupTitle : "グループ";
                 String c = colorHex != null && !colorHex.isBlank() ? "  [" + colorHex + "]" : "";
                 return "[グループ] " + t + c;
+            }
+            if (kind == Kind.INNER_TAB) {
+                String parent = shell != null ? shell.mainShellTabTitle(tabId) : tabId.name();
+                String inner = groupTitle != null && !groupTitle.isBlank() ? groupTitle : "";
+                return "[子タブ] " + parent + " — " + inner;
             }
             String base = shell != null ? shell.mainShellTabTitle(tabId) : tabId.name();
             String c = colorHex != null && !colorHex.isBlank() ? "  [" + colorHex + "]" : "";
@@ -794,6 +826,11 @@ public final class MainShellTabOrganizerTabController {
                 String t = groupTitle != null && !groupTitle.isBlank() ? groupTitle : "グループ";
                 return "[グループ] " + t;
             }
+            if (kind == Kind.INNER_TAB) {
+                String parent = shellCtl != null ? shellCtl.mainShellTabTitle(tabId) : tabId.name();
+                String inner = groupTitle != null && !groupTitle.isBlank() ? groupTitle : "";
+                return parent + " — " + inner + "（子タブ・並べ替え対象外）";
+            }
             return shellCtl != null ? shellCtl.mainShellTabTitle(tabId) : tabId.name();
         }
 
@@ -801,6 +838,9 @@ public final class MainShellTabOrganizerTabController {
         String treePillPrimaryLabel(MainShellController shellCtl) {
             if (kind == Kind.GROUP) {
                 return groupTitle != null && !groupTitle.isBlank() ? groupTitle : "グループ";
+            }
+            if (kind == Kind.INNER_TAB) {
+                return groupTitle != null && !groupTitle.isBlank() ? groupTitle : "子タブ";
             }
             return shellCtl != null ? shellCtl.mainShellTabTitle(tabId) : tabId.name();
         }
@@ -831,6 +871,22 @@ public final class MainShellTabOrganizerTabController {
         }
         OrgRow r = item.getValue();
         if (r.kind == OrgRow.Kind.TAB) {
+            boolean hasInner =
+                    item.getChildren().stream()
+                            .anyMatch(
+                                    ch ->
+                                            ch.getValue() != null
+                                                    && ch.getValue().kind == OrgRow.Kind.INNER_TAB);
+            if (hasInner) {
+                VBox col = new VBox(6);
+                col.setFillWidth(false);
+                HBox head = new HBox(8);
+                head.setAlignment(Pos.CENTER_LEFT);
+                head.getChildren().add(createPillForTreeItem(item));
+                col.getChildren().add(head);
+                col.getChildren().add(buildInnerTabChildStrip(item));
+                return col;
+            }
             return createPillForTreeItem(item);
         }
         HBox row = new HBox(8);
@@ -890,12 +946,40 @@ public final class MainShellTabOrganizerTabController {
         return col;
     }
 
+    /** メインタブ行の下に、ビュー内子タブのピルを縦に並べる。 */
+    private VBox buildInnerTabChildStrip(TreeItem<OrgRow> tabItem) {
+        VBox col = new VBox(CHILD_STRIP_VERTICAL_GAP);
+        col.setFillWidth(false);
+        col.setAlignment(Pos.TOP_LEFT);
+        int i = 0;
+        for (TreeItem<OrgRow> ch : tabItem.getChildren()) {
+            if (ch.getValue() == null || ch.getValue().kind != OrgRow.Kind.INNER_TAB) {
+                continue;
+            }
+            Node pill = createPillForTreeItem(ch);
+            HBox line = new HBox(0);
+            line.setAlignment(Pos.CENTER_LEFT);
+            double indent = CHILD_STRIP_HORIZONTAL_STAGGER + i * CHILD_STRIP_HORIZONTAL_STAGGER;
+            Region lead = new Region();
+            lead.setMinWidth(indent);
+            lead.setPrefWidth(indent);
+            lead.setMaxWidth(indent);
+            line.getChildren().addAll(lead, pill);
+            col.getChildren().add(line);
+            i++;
+        }
+        return col;
+    }
+
     private StackPane createPillForTreeItem(TreeItem<OrgRow> item) {
         OrgRow row = item.getValue();
         StackPane pill = new StackPane();
         pill.setMinSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
         pill.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
         pill.getStyleClass().setAll("pm-org-tree-pill");
+        if (row.kind == OrgRow.Kind.INNER_TAB) {
+            pill.getStyleClass().add("pm-org-tree-pill-inner");
+        }
         Label lab = new Label(row.treePillPrimaryLabel(shell));
         lab.setWrapText(false);
         lab.getStyleClass().add("pm-org-tree-pill-label");
@@ -924,6 +1008,25 @@ public final class MainShellTabOrganizerTabController {
     }
 
     private void wirePillInteractions(StackPane pill, TreeItem<OrgRow> item) {
+        if (item.getValue() != null && item.getValue().kind == OrgRow.Kind.INNER_TAB) {
+            pill.setOnMouseClicked(
+                    ev -> {
+                        if (treeView == null) {
+                            return;
+                        }
+                        MultipleSelectionModel<TreeItem<OrgRow>> sm = treeView.getSelectionModel();
+                        sm.clearSelection();
+                        sm.select(item);
+                        rebuildOrganizerVisualTree();
+                        syncOrganizerSideFields();
+                        ev.consume();
+                    });
+            pill.setOnDragDetected(null);
+            pill.setOnDragOver(null);
+            pill.setOnDragDropped(null);
+            pill.setOnDragDone(null);
+            return;
+        }
         pill.setOnMouseClicked(
                 ev -> {
                     if (treeView == null) {
@@ -1090,7 +1193,11 @@ public final class MainShellTabOrganizerTabController {
         if (source == null || target == null || source == target) {
             return false;
         }
-        if (target.getValue() == null) {
+        if (target.getValue() == null || source.getValue() == null) {
+            return false;
+        }
+        if (source.getValue().kind == OrgRow.Kind.INNER_TAB
+                || target.getValue().kind == OrgRow.Kind.INNER_TAB) {
             return false;
         }
         return !isStrictDescendant(source, target);

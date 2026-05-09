@@ -407,6 +407,16 @@
     -fx-border-width: 2;
 }
 
+/* メインタブ配下の「子タブ」説明ピル（並べ替え対象外・やや弱め） */
+.pm-org-tree-pill.pm-org-tree-pill-inner {
+    -fx-opacity: 0.92;
+}
+
+.pm-org-tree-pill.pm-org-tree-pill-inner .label.pm-org-tree-pill-label {
+    -fx-font-size: 10px;
+    -fx-font-weight: normal;
+}
+
 .pm-org-tree-pill .label.pm-org-tree-pill-label {
     -fx-padding: 0 2 0 2;
 }
