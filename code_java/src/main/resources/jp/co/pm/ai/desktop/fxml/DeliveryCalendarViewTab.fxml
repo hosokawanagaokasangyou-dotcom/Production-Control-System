@@ -34,7 +34,8 @@
                                     maxHeight="320.0" minViewportHeight="96.0"
                                     prefViewportHeight="220.0"
                                     style="-fx-background-color: transparent;">
-                            <Label fx:id="metaLabel" wrapText="true"/>
+                            <Label fx:id="metaLabel" wrapText="true"
+                                   style="-fx-line-spacing: 10px; -fx-padding: 6 8 10 8;"/>
                         </ScrollPane>
                     </VBox>
                 </content>
