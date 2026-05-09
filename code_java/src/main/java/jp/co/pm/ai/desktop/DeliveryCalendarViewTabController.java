@@ -53,7 +53,7 @@ import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 
 /**
- * Displays JSON from {@code pm_ai_delivery_calendar_view.py} (delivery calendar + plan comparison).
+ * Displays JSON from {@code pm_ai_delivery_calendar_view.py} (delivery calendar main grid).
  * Source file uses ASCII and Unicode escapes only (safe on CP932 mounts).
  */
 public final class DeliveryCalendarViewTabController {
@@ -65,22 +65,6 @@ public final class DeliveryCalendarViewTabController {
      * Writes via {@link AgentDebugLog} so Windows JVM logs mirror to WSL workspace ({@code .cursor/rules/agent-debug-wsl-windows-mirror.mdc}).
      */
     private static final String DEBUG_SESSION_ID_OVERLAY = "ebddd7";
-
-    private static final Map<String, String> COMPARE_HEADER_JP = compareHeaderJp();
-
-    private static Map<String, String> compareHeaderJp() {
-        Map<String, String> m = new LinkedHashMap<>();
-        m.put("machine_key", "\u6a5f\u68b0\u30ad\u30fc");
-        m.put("machine_display", "\u6a5f\u68b0\u540d\u8868\u793a");
-        m.put("request_id", "\u4f9d\u983cNO");
-        m.put("calendar_date", "\u66c6\u65e5");
-        m.put("qty_dispatch_json", "\u6570\u91cf_\u7d50\u679c\u914d\u53f0\u8868");
-        m.put(
-                "qty_task_input_aladdin",
-                "\u6570\u91cf_\u30bf\u30b9\u30af\u5165\u529b\u30a2\u30e9\u30b8\u30f3");
-        m.put("delta", "\u5dee\u5206");
-        return Map.copyOf(m);
-    }
 
     /**
      * Child stderr is merged into stdout ({@link PythonProcessRunner#runCaptureAsync}); probe scripts may
@@ -140,9 +124,6 @@ public final class DeliveryCalendarViewTabController {
     private StackPane mainSpreadsheetHost;
 
     @FXML
-    private StackPane compareSpreadsheetHost;
-
-    @FXML
     private Slider mainRowHeightSlider;
 
     @FXML
@@ -155,18 +136,6 @@ public final class DeliveryCalendarViewTabController {
     private HBox mainColumnStripHost;
 
     @FXML
-    private Slider compareRowHeightSlider;
-
-    @FXML
-    private Label compareRowHeightPctLabel;
-
-    @FXML
-    private CheckBox compareCellWrapCheck;
-
-    @FXML
-    private HBox compareColumnStripHost;
-
-    @FXML
     private TextArea mainSelectedCellInfo;
 
     private MainShellController shell;
@@ -174,8 +143,6 @@ public final class DeliveryCalendarViewTabController {
     private Stage ownerStage;
 
     private final SpreadsheetView mainSpreadsheet = new SpreadsheetView();
-
-    private final SpreadsheetView compareSpreadsheet = new SpreadsheetView();
 
     private Supplier<RunRequest> requestFactory;
 
@@ -192,35 +159,18 @@ public final class DeliveryCalendarViewTabController {
      */
     private final ArrayList<String[]> mainRowMeta = new ArrayList<>();
 
-    private final ArrayList<String> compareHeadersRef = new ArrayList<>();
-
-    private final ObservableList<ObservableList<String>> compareRows = FXCollections.observableArrayList();
-
     private final AtomicReference<List<TableColumnOrderPersistence.ColumnSpec>> persistedLayoutMain =
-            new AtomicReference<>(List.of());
-
-    private final AtomicReference<List<TableColumnOrderPersistence.ColumnSpec>> persistedLayoutCompare =
             new AtomicReference<>(List.of());
 
     private final AtomicInteger headerColumnCountMain = new AtomicInteger(0);
 
-    private final AtomicInteger headerColumnCountCompare = new AtomicInteger(0);
-
     private final AtomicBoolean suppressMainPersistence = new AtomicBoolean(false);
-
-    private final AtomicBoolean suppressComparePersistence = new AtomicBoolean(false);
 
     private final AtomicReference<TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs>
             mainPresentationPrefs =
                     new AtomicReference<>(TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs.defaults());
 
-    private final AtomicReference<TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs>
-            comparePresentationPrefs =
-                    new AtomicReference<>(TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs.defaults());
-
     private final AtomicBoolean suppressPresentationUiMain = new AtomicBoolean(false);
-
-    private final AtomicBoolean suppressPresentationUiCompare = new AtomicBoolean(false);
 
     private volatile boolean presentationControlsInstalled;
 
@@ -237,13 +187,6 @@ public final class DeliveryCalendarViewTabController {
         mainSpreadsheet.prefWidthProperty().bind(mainSpreadsheetHost.widthProperty());
         mainSpreadsheet.prefHeightProperty().bind(mainSpreadsheetHost.heightProperty());
 
-        StackPane.setAlignment(compareSpreadsheet, Pos.TOP_LEFT);
-        compareSpreadsheetHost.getChildren().setAll(compareSpreadsheet);
-        VBox.setVgrow(compareSpreadsheetHost, Priority.ALWAYS);
-        compareSpreadsheet.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
-        compareSpreadsheet.prefWidthProperty().bind(compareSpreadsheetHost.widthProperty());
-        compareSpreadsheet.prefHeightProperty().bind(compareSpreadsheetHost.heightProperty());
-
         if (metaScrollPane != null && metaLabel != null) {
             metaScrollPane.setFitToWidth(true);
             metaLabel.setWrapText(true);
@@ -251,16 +194,13 @@ public final class DeliveryCalendarViewTabController {
         }
 
         SpreadsheetTabularSupport.installDeliveryCalendarSpreadsheetChrome(mainSpreadsheet);
-        SpreadsheetTabularSupport.installDeliveryCalendarSpreadsheetChrome(compareSpreadsheet);
         mainSpreadsheet.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-        compareSpreadsheet.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         /*
          * \u5168\u884c\u9078\u629e\u62e1\u5f35\u306f\u30af\u30ea\u30c3\u30af\u5217\u3068 TablePosition \u306e\u5217\u304c\u305a\u308c\u308b
          * \uff08\u62e1\u5f35\u5f8c\u306e\u30d5\u30a9\u30fc\u30ab\u30b9\u304c\u5148\u982d\u5217\u306b\u79fb\u308b\u305f\u3081\uff09\u3002
          * \u4e0b\u90e8\u306e\u30bb\u30eb\u5185\u5bb9\u8868\u793a\u3068\u5408\u308f\u305b\u308b\u305f\u3081\u3001\u30e1\u30a4\u30f3\u8868\u3067\u306e\u307f\u62e1\u5f35\u3092\u7121\u52b9\u5316\u3002
          */
         SpreadsheetTabularSupport.installFullRowDataSelection(mainSpreadsheet, () -> true);
-        SpreadsheetTabularSupport.installFullRowDataSelection(compareSpreadsheet);
 
         mainColumnStripHost
                 .getChildren()
@@ -277,24 +217,8 @@ public final class DeliveryCalendarViewTabController {
                                                 TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN,
                                                 mainSpreadsheet,
                                                 () -> new ArrayList<>(mainHeadersRef))));
-        compareColumnStripHost
-                .getChildren()
-                .setAll(
-                        SpreadsheetColumnSettingsStrip.create(
-                                this::resetCompareColumnWidths,
-                                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE,
-                                headerColumnCountCompare,
-                                this::onCompareLeadingColumnCommitted,
-                                this::onReorderCompareColumns,
-                                () ->
-                                        ColumnVisibilitySupport.openSpreadsheetColumnVisibilityDialog(
-                                                ownerStage,
-                                                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE,
-                                                compareSpreadsheet,
-                                                () -> new ArrayList<>(compareHeadersRef))));
 
         mainSpreadsheet.setGrid(new GridBase(0, 0));
-        compareSpreadsheet.setGrid(new GridBase(0, 0));
 
         installMainSelectedCellInfoListener();
     }
@@ -406,11 +330,6 @@ public final class DeliveryCalendarViewTabController {
                 TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN,
                 suppressMainPersistence::get,
                 () -> new ArrayList<>(mainHeadersRef));
-        TableColumnOrderPersistence.installSpreadsheetColumnLayoutWatcher(
-                compareSpreadsheet,
-                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE,
-                suppressComparePersistence::get,
-                () -> new ArrayList<>(compareHeadersRef));
 
         initDeliveryCalendarPresentationControlsOnce();
 
@@ -471,7 +390,7 @@ public final class DeliveryCalendarViewTabController {
         if (presentationControlsInstalled) {
             return;
         }
-        if (mainRowHeightSlider == null || compareRowHeightSlider == null) {
+        if (mainRowHeightSlider == null) {
             return;
         }
         presentationControlsInstalled = true;
@@ -479,43 +398,31 @@ public final class DeliveryCalendarViewTabController {
         TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs lm =
                 TableColumnOrderPersistence.loadSpreadsheetTabPresentationPrefs(
                         TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN);
-        TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs lc =
-                TableColumnOrderPersistence.loadSpreadsheetTabPresentationPrefs(
-                        TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE);
         mainPresentationPrefs.set(lm);
-        comparePresentationPrefs.set(lc);
 
         suppressPresentationUiMain.set(true);
-        suppressPresentationUiCompare.set(true);
         try {
-            mainRowHeightSlider.setMin(SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MIN);
-            mainRowHeightSlider.setMax(SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MAX);
-            mainRowHeightSlider.setValue(lm.rowHeightPercent());
-            mainRowHeightSlider.setMajorTickUnit(250);
+            double lo = SpreadsheetTabularSupport.DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MIN;
+            double hi = SpreadsheetTabularSupport.DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MAX;
+            double pv = lm.rowHeightPercent();
+            if (Double.isNaN(pv) || pv <= 0) {
+                pv = 100.0;
+            }
+            pv = Math.min(hi, Math.max(lo, pv));
+            mainRowHeightSlider.setMin(lo);
+            mainRowHeightSlider.setMax(hi);
+            mainRowHeightSlider.setValue(pv);
+            mainRowHeightSlider.setMajorTickUnit(500);
             mainRowHeightSlider.setMinorTickCount(4);
             mainRowHeightSlider.setShowTickMarks(true);
             if (mainRowHeightPctLabel != null) {
-                mainRowHeightPctLabel.setText(String.format("%.0f%%", lm.rowHeightPercent()));
+                mainRowHeightPctLabel.setText(String.format("%.0f%%", pv));
             }
             if (mainCellWrapCheck != null) {
                 mainCellWrapCheck.setSelected(lm.cellWrapText());
             }
-
-            compareRowHeightSlider.setMin(SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MIN);
-            compareRowHeightSlider.setMax(SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MAX);
-            compareRowHeightSlider.setValue(lc.rowHeightPercent());
-            compareRowHeightSlider.setMajorTickUnit(250);
-            compareRowHeightSlider.setMinorTickCount(4);
-            compareRowHeightSlider.setShowTickMarks(true);
-            if (compareRowHeightPctLabel != null) {
-                compareRowHeightPctLabel.setText(String.format("%.0f%%", lc.rowHeightPercent()));
-            }
-            if (compareCellWrapCheck != null) {
-                compareCellWrapCheck.setSelected(lc.cellWrapText());
-            }
         } finally {
             suppressPresentationUiMain.set(false);
-            suppressPresentationUiCompare.set(false);
         }
 
         SliderCommittedChangeSupport.install(
@@ -538,27 +445,6 @@ public final class DeliveryCalendarViewTabController {
                                 commitMainPresentationFromUi();
                             });
         }
-
-        SliderCommittedChangeSupport.install(
-                compareRowHeightSlider,
-                () -> {
-                    if (compareRowHeightPctLabel != null && compareRowHeightSlider != null) {
-                        compareRowHeightPctLabel.setText(
-                                String.format("%.0f%%", compareRowHeightSlider.getValue()));
-                    }
-                },
-                this::commitComparePresentationFromSlider);
-        if (compareCellWrapCheck != null) {
-            compareCellWrapCheck
-                    .selectedProperty()
-                    .addListener(
-                            (o, a, b) -> {
-                                if (suppressPresentationUiCompare.get()) {
-                                    return;
-                                }
-                                commitComparePresentationFromUi();
-                            });
-        }
     }
 
     private void commitMainPresentationFromSlider() {
@@ -572,7 +458,12 @@ public final class DeliveryCalendarViewTabController {
         if (mainRowHeightSlider == null) {
             return;
         }
-        double v = mainRowHeightSlider.getValue();
+        double lo = SpreadsheetTabularSupport.DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MIN;
+        double hi = SpreadsheetTabularSupport.DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MAX;
+        double v =
+                Math.min(
+                        hi,
+                        Math.max(lo, mainRowHeightSlider.getValue()));
         boolean wrap = mainCellWrapCheck != null && mainCellWrapCheck.isSelected();
         TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs next =
                 new TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs(v, wrap);
@@ -585,30 +476,6 @@ public final class DeliveryCalendarViewTabController {
         rebuildMainSpreadsheet();
     }
 
-    private void commitComparePresentationFromSlider() {
-        if (suppressPresentationUiCompare.get()) {
-            return;
-        }
-        commitComparePresentationFromUi();
-    }
-
-    private void commitComparePresentationFromUi() {
-        if (compareRowHeightSlider == null) {
-            return;
-        }
-        double v = compareRowHeightSlider.getValue();
-        boolean wrap = compareCellWrapCheck != null && compareCellWrapCheck.isSelected();
-        TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs next =
-                new TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs(v, wrap);
-        comparePresentationPrefs.set(next);
-        TableColumnOrderPersistence.saveSpreadsheetTabPresentationPrefs(
-                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE, next);
-        if (compareRowHeightPctLabel != null) {
-            compareRowHeightPctLabel.setText(String.format("%.0f%%", v));
-        }
-        rebuildCompareSpreadsheet();
-    }
-
     private void resetMainColumnWidths() {
         if (mainSpreadsheet == null) {
             return;
@@ -619,24 +486,9 @@ public final class DeliveryCalendarViewTabController {
         }
     }
 
-    private void resetCompareColumnWidths() {
-        if (compareSpreadsheet == null) {
-            return;
-        }
-        double w = 112;
-        for (var c : compareSpreadsheet.getColumns()) {
-            c.setPrefWidth(w);
-        }
-    }
-
     private void onMainLeadingColumnCommitted(int n) {
         headerColumnCountMain.set(n);
         rebuildMainSpreadsheet();
-    }
-
-    private void onCompareLeadingColumnCommitted(int n) {
-        headerColumnCountCompare.set(n);
-        rebuildCompareSpreadsheet();
     }
 
     private void onReorderMainColumns() {
@@ -655,25 +507,6 @@ public final class DeliveryCalendarViewTabController {
                             List<String> oldHeaders = new ArrayList<>(mainHeadersRef);
                             List<String> titleOrder = perm.stream().map(oldHeaders::get).toList();
                             applyPersistedMainColumnOrderAfterLogicalReorder(titleOrder);
-                        });
-    }
-
-    private void onReorderCompareColumns() {
-        if (compareHeadersRef.isEmpty()) {
-            if (shell != null) {
-                shell.appendLog("[delivery-calendar] columns empty (reload first)");
-            }
-            return;
-        }
-        if (ownerStage == null) {
-            return;
-        }
-        SpreadsheetColumnReorderDialog.show(ownerStage, new ArrayList<>(compareHeadersRef))
-                .ifPresent(
-                        perm -> {
-                            List<String> oldHeaders = new ArrayList<>(compareHeadersRef);
-                            List<String> titleOrder = perm.stream().map(oldHeaders::get).toList();
-                            applyPersistedCompareColumnOrderAfterLogicalReorder(titleOrder);
                         });
     }
 
@@ -706,34 +539,6 @@ public final class DeliveryCalendarViewTabController {
         rebuildMainSpreadsheet();
     }
 
-    private void applyPersistedCompareColumnOrderAfterLogicalReorder(List<String> titleOrder) {
-        if (compareHeadersRef.isEmpty()) {
-            return;
-        }
-        List<String> oldHeaders = new ArrayList<>(compareHeadersRef);
-        boolean[] oldVis =
-                TableColumnOrderPersistence.loadColumnVisibility(
-                        TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE, oldHeaders.size());
-        List<TableColumnOrderPersistence.ColumnSpec> lay = persistedLayoutCompare.get();
-        TableColumnOrderPersistence.applyLogicalColumnOrder(compareHeadersRef, compareRows, titleOrder);
-        boolean[] newVis =
-                TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
-                        oldHeaders, oldVis, titleOrder);
-        TableColumnOrderPersistence.saveColumnVisibility(
-                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE, newVis);
-        List<Double> widths =
-                TableColumnOrderPersistence.resolveWidthsForHeaders(compareHeadersRef, lay, 112);
-        List<TableColumnOrderPersistence.ColumnSpec> newLay = new ArrayList<>();
-        for (int i = 0; i < compareHeadersRef.size(); i++) {
-            newLay.add(
-                    new TableColumnOrderPersistence.ColumnSpec(compareHeadersRef.get(i), widths.get(i)));
-        }
-        persistedLayoutCompare.set(newLay);
-        TableColumnOrderPersistence.saveLayout(
-                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE, newLay);
-        rebuildCompareSpreadsheet();
-    }
-
     private void rebuildMainSpreadsheet() {
         if (mainHeadersRef.isEmpty()) {
             mainSpreadsheet.setGrid(new GridBase(0, 0));
@@ -754,7 +559,9 @@ public final class DeliveryCalendarViewTabController {
                     pres.cellWrapText(),
                     pres.rowHeightPercent(),
                     SpreadsheetTabularSupport.DELIVERY_CALENDAR_ROW_HEIGHT_BASE_PX,
-                    SpreadsheetTabularSupport.DELIVERY_CALENDAR_ROW_HEIGHT_MIN_PX);
+                    SpreadsheetTabularSupport.DELIVERY_CALENDAR_ROW_HEIGHT_MIN_PX,
+                    SpreadsheetTabularSupport.DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MIN,
+                    SpreadsheetTabularSupport.DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MAX);
             mainSpreadsheet.setGrid(grid);
             mainSpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
 
@@ -786,62 +593,9 @@ public final class DeliveryCalendarViewTabController {
         }
     }
 
-    private void rebuildCompareSpreadsheet() {
-        if (compareHeadersRef.isEmpty()) {
-            compareSpreadsheet.setGrid(new GridBase(0, 0));
-            return;
-        }
-        suppressComparePersistence.set(true);
-        try {
-            final List<Double> widths =
-                    TableColumnOrderPersistence.resolveWidthsForHeaders(
-                            compareHeadersRef, persistedLayoutCompare.get(), 112);
-            final double widthDefault = 112;
-            GridBase grid =
-                    SpreadsheetTabularSupport.buildReadOnlyPlainGrid(
-                            compareHeadersRef, compareRows, headerColumnCountCompare.get());
-            TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs pres =
-                    comparePresentationPrefs.get();
-            SpreadsheetTabularSupport.applySpreadsheetGridRowHeightsAndWrap(
-                    grid, pres.cellWrapText(), pres.rowHeightPercent());
-            compareSpreadsheet.setGrid(grid);
-            compareSpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
-
-            Platform.runLater(
-                    () -> {
-                        SpreadsheetTabularSupport.applyColumnWidths(compareSpreadsheet, widths, widthDefault);
-                        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(compareSpreadsheet);
-                        SpreadsheetTabularSupport.applyFixedLeadingColumns(
-                                compareSpreadsheet, headerColumnCountCompare.get());
-                        SpreadsheetTabularSupport.applyColumnFiltersWithDialog(compareSpreadsheet);
-                        SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(compareSpreadsheet);
-                        SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
-                                compareSpreadsheet,
-                                suppressComparePersistence::get,
-                                () -> new ArrayList<>(compareHeadersRef),
-                                headerColumnCountCompare.get(),
-                                this::applyPersistedCompareColumnOrderAfterLogicalReorder);
-                        ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
-                                compareSpreadsheet,
-                                () -> new ArrayList<>(compareHeadersRef),
-                                () ->
-                                        TableColumnOrderPersistence.loadColumnVisibility(
-                                                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE,
-                                                compareHeadersRef.size()));
-                    });
-        } finally {
-            suppressComparePersistence.set(false);
-        }
-    }
-
     @FXML
     private void onClearMainFilters() {
         SpreadsheetTabularSupport.clearAllFiltersAndSort(mainSpreadsheet);
-    }
-
-    @FXML
-    private void onClearCompareFilters() {
-        SpreadsheetTabularSupport.clearAllFiltersAndSort(compareSpreadsheet);
     }
 
     @FXML
@@ -948,14 +702,6 @@ public final class DeliveryCalendarViewTabController {
                 rebuildMainSpreadsheet();
             }
 
-            JsonNode cmp = root.get("planCompareTable");
-            if (cmp != null && cmp.isObject()) {
-                loadCompareTable(cmp);
-            } else {
-                compareHeadersRef.clear();
-                compareRows.clear();
-                rebuildCompareSpreadsheet();
-            }
         } catch (Exception e) {
             statusLabel.setText("parse: " + e.getMessage());
             if (shell != null) {
@@ -1424,51 +1170,6 @@ public final class DeliveryCalendarViewTabController {
             }
         }
         return result;
-    }
-
-    private void loadCompareTable(JsonNode cmp) {
-        compareHeadersRef.clear();
-        JsonNode cols = cmp.get("columns");
-        if (cols != null && cols.isArray()) {
-            for (JsonNode c : cols) {
-                String key = c.asText("");
-                compareHeadersRef.add(COMPARE_HEADER_JP.getOrDefault(key, key));
-            }
-        }
-        compareRows.clear();
-        JsonNode rows = cmp.get("rows");
-        if (rows != null && rows.isArray()) {
-            for (JsonNode row : rows) {
-                ObservableList<String> line = FXCollections.observableArrayList();
-                if (row.isArray()) {
-                    for (JsonNode cell : row) {
-                        line.add(cell.asText(""));
-                    }
-                }
-                compareRows.add(line);
-            }
-        }
-
-        List<TableColumnOrderPersistence.ColumnSpec> lay =
-                TableColumnOrderPersistence.loadLayout(
-                        TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE);
-        persistedLayoutCompare.set(lay);
-        List<String> beforeHeaders = new ArrayList<>(compareHeadersRef);
-        boolean[] visBefore =
-                TableColumnOrderPersistence.loadColumnVisibility(
-                        TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE,
-                        beforeHeaders.size());
-        List<String> titleOrder =
-                lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList();
-        TableColumnOrderPersistence.applyLogicalColumnOrder(
-                compareHeadersRef, compareRows, titleOrder);
-        boolean[] visAfter =
-                TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
-                        beforeHeaders, visBefore, titleOrder);
-        TableColumnOrderPersistence.saveColumnVisibility(
-                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE, visAfter);
-
-        rebuildCompareSpreadsheet();
     }
 
     private static DeliveryCalendarMainCell parseDeliveryCalendarMainCell(JsonNode cell) {

@@ -61,9 +61,9 @@
                                             </HBox>
                                             <HBox alignment="CENTER_LEFT" spacing="10.0">
                                                 <Label text="&#x30c7;&#x30fc;&#x30bf;&#x884c;&#x306e;&#x9ad8;&#x3055;&#xff08;&#x4e00;&#x62ec;&#xff09;"/>
-                                                <Slider fx:id="mainRowHeightSlider" blockIncrement="25.0"
-                                                        majorTickUnit="250.0" max="2000.0" min="50.0"
-                                                        prefWidth="240.0" showTickMarks="true"/>
+                                                <Slider fx:id="mainRowHeightSlider" blockIncrement="50.0"
+                                                        majorTickUnit="500.0" max="10000.0" min="15.0"
+                                                        prefWidth="420.0" showTickMarks="true"/>
                                                 <Label fx:id="mainRowHeightPctLabel" minWidth="52.0" text="100%"/>
                                                 <CheckBox fx:id="mainCellWrapCheck" mnemonicParsing="false"
                                                           text="&#x9577;&#x3044;&#x6587;&#x5b57;&#x5217;&#x3092;&#x6298;&#x308a;&#x8fd4;&#x3059;"/>
@@ -88,39 +88,6 @@
                             </panes>
                         </Accordion>
                         <StackPane fx:id="mainSpreadsheetHost" minHeight="240.0" VBox.vgrow="ALWAYS"/>
-                    </VBox>
-                </content>
-            </Tab>
-            <Tab closable="false" text="&#x8a08;&#x753b;&#x6bd4;&#x8f03;">
-                <content>
-                    <VBox fillWidth="true" spacing="6.0">
-                        <Accordion VBox.vgrow="NEVER">
-                            <panes>
-                                <TitledPane animated="false" expanded="false"
-                                            text="&#x8868;&#x793a;&#x30fb;&#x5217;&#x8a2d;&#x5b9a;">
-                                    <content>
-                                        <VBox fillWidth="true" spacing="6.0">
-                                            <HBox alignment="CENTER_LEFT" spacing="8.0">
-                                                <Button fx:id="compareClearFiltersButton" mnemonicParsing="false"
-                                                        onAction="#onClearCompareFilters"
-                                                        text="&#x5217;&#x30d5;&#x30a3;&#x30eb;&#x30bf;&#x30fb;&#x4e26;&#x3079;&#x66ff;&#x3048;&#x89e3;&#x9664;"/>
-                                            </HBox>
-                                            <HBox alignment="CENTER_LEFT" spacing="10.0">
-                                                <Label text="&#x30c7;&#x30fc;&#x30bf;&#x884c;&#x306e;&#x9ad8;&#x3055;&#xff08;&#x4e00;&#x62ec;&#xff09;"/>
-                                                <Slider fx:id="compareRowHeightSlider" blockIncrement="25.0"
-                                                        majorTickUnit="250.0" max="2000.0" min="50.0"
-                                                        prefWidth="240.0" showTickMarks="true"/>
-                                                <Label fx:id="compareRowHeightPctLabel" minWidth="52.0" text="100%"/>
-                                                <CheckBox fx:id="compareCellWrapCheck" mnemonicParsing="false"
-                                                          text="&#x9577;&#x3044;&#x6587;&#x5b57;&#x5217;&#x3092;&#x6298;&#x308a;&#x8fd4;&#x3059;"/>
-                                            </HBox>
-                                            <HBox fx:id="compareColumnStripHost" spacing="0.0"/>
-                                        </VBox>
-                                    </content>
-                                </TitledPane>
-                            </panes>
-                        </Accordion>
-                        <StackPane fx:id="compareSpreadsheetHost" minHeight="240.0" VBox.vgrow="ALWAYS"/>
                     </VBox>
                 </content>
             </Tab>

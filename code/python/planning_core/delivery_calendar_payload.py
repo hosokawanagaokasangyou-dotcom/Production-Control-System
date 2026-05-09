@@ -224,6 +224,8 @@ def _collect_sorted_dates(
     df_plan: pd.DataFrame | None,
     df_actual: pd.DataFrame | None,
 ) -> list:
+    """Calendar columns: contiguous days from (today - 14 days) through max(data, today)."""
+    display_start = date.today() - timedelta(days=14)
     aladdin_dates: set[date] = set()
     if df_plan is not None and len(df_plan) > 0:
         for col in df_plan.columns:
@@ -243,10 +245,31 @@ def _collect_sorted_dates(
     merged = core._sorted_dates_filter_inclusive_range(merged, d_from, d_to)
     if not merged and aladdin_dates:
         merged = sorted(aladdin_dates)
-    if not merged:
-        t = date.today()
-        merged = [t + timedelta(days=i) for i in range(14)]
-    return merged
+    today = date.today()
+    if merged:
+        d_max = max(max(merged), today)
+    else:
+        d_max = display_start + timedelta(days=13)
+    d_max = max(d_max, display_start)
+    out: list[date] = []
+    d = display_start
+    while d <= d_max:
+        out.append(d)
+        d += timedelta(days=1)
+    # region agent log
+    _agent_debug_ndjson(
+        "H_CAL_RANGE",
+        "delivery_calendar_payload.py:_collect_sorted_dates",
+        "calendar_column_range",
+        {
+            "display_start": display_start.isoformat(),
+            "d_max": d_max.isoformat(),
+            "n_days": len(out),
+            "merged_sample_n": len(merged) if merged else 0,
+        },
+    )
+    # endregion
+    return out
 
 
 def _machine_display_from_plan_row(row) -> str:

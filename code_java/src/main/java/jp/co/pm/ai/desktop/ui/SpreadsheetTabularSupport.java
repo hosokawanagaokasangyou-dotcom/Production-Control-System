@@ -739,7 +739,15 @@ public final class SpreadsheetTabularSupport {
     public static final double PLAN_RESULT_ROW_HEIGHT_PCT_MAX = 2000.0;
 
     /**
-     * 納期管理カレンダー（3 段セルグラフィック）向け：100% スライダー時のデータ行基準高さ（px）。24px では行に収まらず表示されない。
+     * \u7d0d\u671f\u7ba1\u7406\u30d3\u30e5\u30fc\u300c\u30a2\u30e9\u30fb\u5b9f\u7e3e\u30fb\u30b7\u30b9\u6bd4\u8f03\u300d\u30e1\u30a4\u30f3\u8868\u306e\u884c\u9ad8\u3055\u30b9\u30e9\u30a4\u30c0\u30fc\u7bc4\u56f2\uff08%\uff09\u3002
+     */
+    public static final double DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MIN = 15.0;
+
+    /** Upper bound (\u0025) for {@link #DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MIN} slider pair; clamp in grid apply. */
+    public static final double DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MAX = 10000.0;
+
+    /**
+     * \u7d0d\u671f\u7ba1\u7406\u30ab\u30ec\u30f3\u30c0\u30fc\uff083 \u6bb5\u30bb\u30eb\u30b0\u30e9\u30d5\u30a3\u30c3\u30af\uff09\u5411\u3051\uff1a100% \u30b9\u30e9\u30a4\u30c0\u30fc\u6642\u306e\u30c7\u30fc\u30bf\u884c\u57fa\u6e96\u9ad8\u3055\uff08px\uff09\u300224px \u3067\u306f\u884c\u306b\u53ce\u307e\u3089\u305a\u8868\u793a\u3055\u308c\u306a\u3044\u3002
      */
     public static final double DELIVERY_CALENDAR_ROW_HEIGHT_BASE_PX = 96.0;
 
@@ -787,17 +795,37 @@ public final class SpreadsheetTabularSupport {
             double rowHeightPercent,
             double baseDataRowHeightPx,
             double minDataRowHeightPx) {
+        applySpreadsheetGridRowHeightsAndWrap(
+                grid,
+                cellWrapText,
+                rowHeightPercent,
+                baseDataRowHeightPx,
+                minDataRowHeightPx,
+                PLAN_RESULT_ROW_HEIGHT_PCT_MIN,
+                PLAN_RESULT_ROW_HEIGHT_PCT_MAX);
+    }
+
+    /**
+     * \u540c\u4e0a\u3002{@code pctMin}/{@code pctMax} \u3067\u300c\u8a08\u753b\u7d50\u679c\u300d\u3068\u300c\u7d0d\u671f\u30ab\u30ec\u30f3\u30c0\u30fc\u300d\u3067\u7570\u306a\u308b\u30b9\u30e9\u30a4\u30c0\u30fc\u7bc4\u56f2\u3092\u6307\u5b9a\u3059\u308b\u3002
+     */
+    public static void applySpreadsheetGridRowHeightsAndWrap(
+            GridBase grid,
+            boolean cellWrapText,
+            double rowHeightPercent,
+            double baseDataRowHeightPx,
+            double minDataRowHeightPx,
+            double pctMin,
+            double pctMax) {
         if (grid == null) {
             return;
         }
+        double lo = pctMin > 0 ? pctMin : PLAN_RESULT_ROW_HEIGHT_PCT_MIN;
+        double hi = pctMax > lo ? pctMax : PLAN_RESULT_ROW_HEIGHT_PCT_MAX;
         double pct = rowHeightPercent;
         if (Double.isNaN(pct) || pct <= 0) {
             pct = 100.0;
         }
-        pct =
-                Math.min(
-                        PLAN_RESULT_ROW_HEIGHT_PCT_MAX,
-                        Math.max(PLAN_RESULT_ROW_HEIGHT_PCT_MIN, pct));
+        pct = Math.min(hi, Math.max(lo, pct));
         final double basePx = baseDataRowHeightPx > 0 ? baseDataRowHeightPx : 24.0;
         final double scaled = basePx * (pct / 100.0);
         final double rowPx =
