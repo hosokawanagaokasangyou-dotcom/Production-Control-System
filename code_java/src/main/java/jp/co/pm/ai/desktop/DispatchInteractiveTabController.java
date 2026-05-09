@@ -81,6 +81,7 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchPivot;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
+import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetRowReorderDragGhost;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
@@ -310,6 +311,26 @@ public final class DispatchInteractiveTabController {
     @FXML
     private void onClearColumnFiltersAction() {
         clearColumnFiltersAndSort();
+    }
+
+    @FXML
+    private void onWideColumnVisibilityAction() {
+        Stage st = shell != null ? shell.getPrimaryStage() : null;
+        ColumnVisibilitySupport.openSpreadsheetColumnVisibilityDialog(
+                st,
+                TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_WIDE,
+                wideSpreadsheet,
+                () -> new ArrayList<>(buildWideColumnLabelsForAxis(dateAxis)));
+    }
+
+    @FXML
+    private void onByDayColumnVisibilityAction() {
+        Stage st = shell != null ? shell.getPrimaryStage() : null;
+        ColumnVisibilitySupport.openSpreadsheetColumnVisibilityDialog(
+                st,
+                TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_BY_DAY,
+                byDaySpreadsheet,
+                () -> new ArrayList<>(buildByDayColumnLabelsForAxis(dateAxis)));
     }
 
     /**
@@ -1366,6 +1387,15 @@ public final class DispatchInteractiveTabController {
                             () -> new ArrayList<>(buildWideColumnLabelsForAxis(dateAxis)),
                             WIDE_STATIC_HEADERS.size(),
                             this::onWideSpreadsheetVisualColumnOrderChanged);
+                    ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
+                            wideSpreadsheet,
+                            () -> new ArrayList<>(buildWideColumnLabelsForAxis(dateAxis)),
+                            () -> {
+                                List<String> h = buildWideColumnLabelsForAxis(dateAxis);
+                                return TableColumnOrderPersistence.loadColumnVisibility(
+                                        TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_WIDE,
+                                        h.size());
+                            });
                 };
         Platform.runLater(job[0]);
     }
@@ -1394,6 +1424,15 @@ public final class DispatchInteractiveTabController {
                             () -> new ArrayList<>(buildByDayColumnLabelsForAxis(dateAxis)),
                             BY_DAY_STATIC_HEADERS.size(),
                             this::onByDaySpreadsheetVisualColumnOrderChanged);
+                    ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
+                            byDaySpreadsheet,
+                            () -> new ArrayList<>(buildByDayColumnLabelsForAxis(dateAxis)),
+                            () -> {
+                                List<String> h = buildByDayColumnLabelsForAxis(dateAxis);
+                                return TableColumnOrderPersistence.loadColumnVisibility(
+                                        TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_BY_DAY,
+                                        h.size());
+                            });
                 };
         Platform.runLater(job[0]);
     }

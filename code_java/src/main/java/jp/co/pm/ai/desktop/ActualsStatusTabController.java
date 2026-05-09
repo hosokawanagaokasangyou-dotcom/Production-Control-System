@@ -29,6 +29,7 @@ import org.controlsfx.control.table.TableFilter;
 
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
+import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.ui.TableHeaderColumnStyle;
 import jp.co.pm.ai.desktop.ui.TableViewColumnSettingsStrip;
@@ -237,7 +238,19 @@ public final class ActualsStatusTabController {
                                 resetActualsColumns,
                                 false,
                                 TableColumnOrderPersistence.TableId.ACTUALS_STATUS,
-                                headerColumnCount));
+                                headerColumnCount,
+                                () ->
+                                        ColumnVisibilitySupport.openTableViewColumnVisibilityDialog(
+                                                shell != null ? shell.getPrimaryStage() : null,
+                                                TableColumnOrderPersistence.TableId.ACTUALS_STATUS,
+                                                table)));
+        Platform.runLater(
+                () ->
+                        ColumnVisibilitySupport.applyColumnVisibilityToTableView(
+                                table,
+                                TableColumnOrderPersistence.loadColumnVisibility(
+                                        TableColumnOrderPersistence.TableId.ACTUALS_STATUS,
+                                        table.getColumns().size())));
     }
 
     @FXML

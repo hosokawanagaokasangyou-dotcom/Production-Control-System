@@ -36,6 +36,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
+import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
 import jp.co.pm.ai.desktop.ui.SpreadsheetPlanInputCellEditSupport;
@@ -173,7 +174,13 @@ public final class PlanInputTabController {
                                 TableColumnOrderPersistence.TableId.PLAN_INPUT,
                                 headerColumnCount,
                                 this::onLeadingColumnCountCommitted,
-                                this::onReorderColumns));
+                                this::onReorderColumns,
+                                () ->
+                                        ColumnVisibilitySupport.openSpreadsheetColumnVisibilityDialog(
+                                                ownerStage,
+                                                TableColumnOrderPersistence.TableId.PLAN_INPUT,
+                                                spreadsheetView,
+                                                () -> new ArrayList<>(headersRef))));
 
         shell.acceptReloadAfterStage1PlanInput(
                 () -> {
@@ -322,14 +329,23 @@ public final class PlanInputTabController {
                             + "並べ替えられません");
             return;
         }
-        SpreadsheetColumnReorderDialog.show(ownerStage, new ArrayList<>(headersRef))
+                        SpreadsheetColumnReorderDialog.show(ownerStage, new ArrayList<>(headersRef))
                 .ifPresent(
                         perm -> {
                             List<String> oldHeaders = new ArrayList<>(headersRef);
+                            boolean[] oldVis =
+                                    TableColumnOrderPersistence.loadColumnVisibility(
+                                            TableColumnOrderPersistence.TableId.PLAN_INPUT,
+                                            oldHeaders.size());
                             List<String> titleOrder = perm.stream().map(oldHeaders::get).toList();
                             List<TableColumnOrderPersistence.ColumnSpec> lay = persistedLayout.get();
                             TableColumnOrderPersistence.applyLogicalColumnOrder(
                                     headersRef, rows, titleOrder);
+                            boolean[] newVis =
+                                    TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
+                                            oldHeaders, oldVis, titleOrder);
+                            TableColumnOrderPersistence.saveColumnVisibility(
+                                    TableColumnOrderPersistence.TableId.PLAN_INPUT, newVis);
                             double colW = 112;
                             try {
                                 colW =
@@ -492,6 +508,13 @@ public final class PlanInputTabController {
                         SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                 spreadsheetView, headerColumnCount.get());
                         SpreadsheetTabularSupport.applyColumnFiltersWithDialog(spreadsheetView);
+                        ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
+                                spreadsheetView,
+                                () -> new ArrayList<>(headersRef),
+                                () ->
+                                        TableColumnOrderPersistence.loadColumnVisibility(
+                                                TableColumnOrderPersistence.TableId.PLAN_INPUT,
+                                                headersRef.size()));
                     });
         } finally {
             suppressColumnOrderPersistence.set(false);
@@ -552,10 +575,18 @@ public final class PlanInputTabController {
             List<TableColumnOrderPersistence.ColumnSpec> lay =
                     TableColumnOrderPersistence.loadLayout(TableColumnOrderPersistence.TableId.PLAN_INPUT);
             persistedLayout.set(lay);
-            TableColumnOrderPersistence.applyLogicalColumnOrder(
-                    headersRef,
-                    rows,
-                    lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList());
+            List<String> beforeHeaders = new ArrayList<>(headersRef);
+            boolean[] visBefore =
+                    TableColumnOrderPersistence.loadColumnVisibility(
+                            TableColumnOrderPersistence.TableId.PLAN_INPUT, beforeHeaders.size());
+            List<String> titleOrder =
+                    lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList();
+            TableColumnOrderPersistence.applyLogicalColumnOrder(headersRef, rows, titleOrder);
+            boolean[] visAfter =
+                    TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
+                            beforeHeaders, visBefore, titleOrder);
+            TableColumnOrderPersistence.saveColumnVisibility(
+                    TableColumnOrderPersistence.TableId.PLAN_INPUT, visAfter);
             applyLoaded();
             shell.appendLog(
                     "[plan-input] loaded rows="

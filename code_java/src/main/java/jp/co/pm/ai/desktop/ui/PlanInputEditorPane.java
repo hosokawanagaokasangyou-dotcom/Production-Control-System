@@ -143,6 +143,11 @@ public final class PlanInputEditorPane {
                             col.setPrefWidth(prefW);
                             table.getColumns().add(col);
                         }
+                        ColumnVisibilitySupport.applyColumnVisibilityToTableView(
+                                table,
+                                TableColumnOrderPersistence.loadColumnVisibility(
+                                        TableColumnOrderPersistence.TableId.PLAN_INPUT,
+                                        headersRef.size()));
                     } finally {
                         suppressColumnOrderPersistence.set(false);
                     }
@@ -216,10 +221,20 @@ public final class PlanInputEditorPane {
                                 TableColumnOrderPersistence.loadLayout(
                                         TableColumnOrderPersistence.TableId.PLAN_INPUT);
                         persistedLayout.set(lay);
+                        List<String> beforeHeaders = new ArrayList<>(headersRef);
+                        boolean[] visBefore =
+                                TableColumnOrderPersistence.loadColumnVisibility(
+                                        TableColumnOrderPersistence.TableId.PLAN_INPUT,
+                                        beforeHeaders.size());
+                        List<String> titleOrder =
+                                lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList();
                         TableColumnOrderPersistence.applyLogicalColumnOrder(
-                                headersRef,
-                                rows,
-                                lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList());
+                                headersRef, rows, titleOrder);
+                        boolean[] visAfter =
+                                TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
+                                        beforeHeaders, visBefore, titleOrder);
+                        TableColumnOrderPersistence.saveColumnVisibility(
+                                TableColumnOrderPersistence.TableId.PLAN_INPUT, visAfter);
                         applyLoaded.run();
                         log.accept(
                                 "[plan-input] loaded rows="
@@ -318,7 +333,17 @@ public final class PlanInputEditorPane {
         HBox planColStrip =
                 new HBox(
                         8,
-                        TableViewColumnSettingsStrip.create(table, applyDynamicColumnWidths, false),
+                        TableViewColumnSettingsStrip.create(
+                                table,
+                                applyDynamicColumnWidths,
+                                false,
+                                TableColumnOrderPersistence.TableId.PLAN_INPUT,
+                                null,
+                                () ->
+                                        ColumnVisibilitySupport.openTableViewColumnVisibilityDialog(
+                                                owner,
+                                                TableColumnOrderPersistence.TableId.PLAN_INPUT,
+                                                table)),
                         new Label("\u65e2\u5b9a\u5217\u5e45(px)"),
                         colWidthField);
         planColStrip.setStyle("-fx-alignment: CENTER_LEFT;");

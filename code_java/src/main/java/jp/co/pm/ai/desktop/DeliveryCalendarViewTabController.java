@@ -35,6 +35,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
+import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCell;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
@@ -217,7 +218,13 @@ public final class DeliveryCalendarViewTabController {
                                 TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN,
                                 headerColumnCountMain,
                                 this::onMainLeadingColumnCommitted,
-                                this::onReorderMainColumns));
+                                this::onReorderMainColumns,
+                                () ->
+                                        ColumnVisibilitySupport.openSpreadsheetColumnVisibilityDialog(
+                                                ownerStage,
+                                                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN,
+                                                mainSpreadsheet,
+                                                () -> new ArrayList<>(mainHeadersRef))));
         compareColumnStripHost
                 .getChildren()
                 .setAll(
@@ -226,7 +233,13 @@ public final class DeliveryCalendarViewTabController {
                                 TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE,
                                 headerColumnCountCompare,
                                 this::onCompareLeadingColumnCommitted,
-                                this::onReorderCompareColumns));
+                                this::onReorderCompareColumns,
+                                () ->
+                                        ColumnVisibilitySupport.openSpreadsheetColumnVisibilityDialog(
+                                                ownerStage,
+                                                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE,
+                                                compareSpreadsheet,
+                                                () -> new ArrayList<>(compareHeadersRef))));
 
         mainSpreadsheet.setGrid(new GridBase(0, 0));
         compareSpreadsheet.setGrid(new GridBase(0, 0));
@@ -465,9 +478,18 @@ public final class DeliveryCalendarViewTabController {
         if (mainHeadersRef.isEmpty()) {
             return;
         }
+        List<String> oldHeaders = new ArrayList<>(mainHeadersRef);
+        boolean[] oldVis =
+                TableColumnOrderPersistence.loadColumnVisibility(
+                        TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN, oldHeaders.size());
         List<TableColumnOrderPersistence.ColumnSpec> lay = persistedLayoutMain.get();
         TableColumnOrderPersistence.applyLogicalColumnOrderDeliveryCalendar(
                 mainHeadersRef, mainRows, titleOrder);
+        boolean[] newVis =
+                TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
+                        oldHeaders, oldVis, titleOrder);
+        TableColumnOrderPersistence.saveColumnVisibility(
+                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN, newVis);
         List<Double> widths =
                 TableColumnOrderPersistence.resolveWidthsForHeaders(mainHeadersRef, lay, 112);
         List<TableColumnOrderPersistence.ColumnSpec> newLay = new ArrayList<>();
@@ -485,8 +507,17 @@ public final class DeliveryCalendarViewTabController {
         if (compareHeadersRef.isEmpty()) {
             return;
         }
+        List<String> oldHeaders = new ArrayList<>(compareHeadersRef);
+        boolean[] oldVis =
+                TableColumnOrderPersistence.loadColumnVisibility(
+                        TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE, oldHeaders.size());
         List<TableColumnOrderPersistence.ColumnSpec> lay = persistedLayoutCompare.get();
         TableColumnOrderPersistence.applyLogicalColumnOrder(compareHeadersRef, compareRows, titleOrder);
+        boolean[] newVis =
+                TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
+                        oldHeaders, oldVis, titleOrder);
+        TableColumnOrderPersistence.saveColumnVisibility(
+                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE, newVis);
         List<Double> widths =
                 TableColumnOrderPersistence.resolveWidthsForHeaders(compareHeadersRef, lay, 112);
         List<TableColumnOrderPersistence.ColumnSpec> newLay = new ArrayList<>();
@@ -534,6 +565,13 @@ public final class DeliveryCalendarViewTabController {
                                 () -> new ArrayList<>(mainHeadersRef),
                                 headerColumnCountMain.get(),
                                 this::applyPersistedMainColumnOrderAfterLogicalReorder);
+                        ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
+                                mainSpreadsheet,
+                                () -> new ArrayList<>(mainHeadersRef),
+                                () ->
+                                        TableColumnOrderPersistence.loadColumnVisibility(
+                                                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN,
+                                                mainHeadersRef.size()));
                     });
         } finally {
             suppressMainPersistence.set(false);
@@ -575,6 +613,13 @@ public final class DeliveryCalendarViewTabController {
                                 () -> new ArrayList<>(compareHeadersRef),
                                 headerColumnCountCompare.get(),
                                 this::applyPersistedCompareColumnOrderAfterLogicalReorder);
+                        ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
+                                compareSpreadsheet,
+                                () -> new ArrayList<>(compareHeadersRef),
+                                () ->
+                                        TableColumnOrderPersistence.loadColumnVisibility(
+                                                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE,
+                                                compareHeadersRef.size()));
                     });
         } finally {
             suppressComparePersistence.set(false);
@@ -701,10 +746,19 @@ public final class DeliveryCalendarViewTabController {
                 TableColumnOrderPersistence.loadLayout(
                         TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN);
         persistedLayoutMain.set(lay);
+        List<String> beforeHeaders = new ArrayList<>(mainHeadersRef);
+        boolean[] visBefore =
+                TableColumnOrderPersistence.loadColumnVisibility(
+                        TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN, beforeHeaders.size());
+        List<String> titleOrder =
+                lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList();
         TableColumnOrderPersistence.applyLogicalColumnOrderDeliveryCalendar(
-                mainHeadersRef,
-                mainRows,
-                lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList());
+                mainHeadersRef, mainRows, titleOrder);
+        boolean[] visAfter =
+                TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
+                        beforeHeaders, visBefore, titleOrder);
+        TableColumnOrderPersistence.saveColumnVisibility(
+                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN, visAfter);
 
         rebuildMainSpreadsheet();
     }
@@ -736,10 +790,20 @@ public final class DeliveryCalendarViewTabController {
                 TableColumnOrderPersistence.loadLayout(
                         TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE);
         persistedLayoutCompare.set(lay);
+        List<String> beforeHeaders = new ArrayList<>(compareHeadersRef);
+        boolean[] visBefore =
+                TableColumnOrderPersistence.loadColumnVisibility(
+                        TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE,
+                        beforeHeaders.size());
+        List<String> titleOrder =
+                lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList();
         TableColumnOrderPersistence.applyLogicalColumnOrder(
-                compareHeadersRef,
-                compareRows,
-                lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList());
+                compareHeadersRef, compareRows, titleOrder);
+        boolean[] visAfter =
+                TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
+                        beforeHeaders, visBefore, titleOrder);
+        TableColumnOrderPersistence.saveColumnVisibility(
+                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE, visAfter);
 
         rebuildCompareSpreadsheet();
     }

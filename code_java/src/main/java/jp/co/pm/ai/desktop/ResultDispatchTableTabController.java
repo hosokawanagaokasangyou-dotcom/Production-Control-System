@@ -35,6 +35,7 @@ import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
@@ -134,7 +135,13 @@ public final class ResultDispatchTableTabController {
                                 TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE,
                                 headerColumnCount,
                                 this::onLeadingColumnCountCommitted,
-                                this::onReorderColumns));
+                                this::onReorderColumns,
+                                () ->
+                                        ColumnVisibilitySupport.openSpreadsheetColumnVisibilityDialog(
+                                                ownerStage,
+                                                TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE,
+                                                spreadsheetView,
+                                                () -> new ArrayList<>(headersRef))));
     }
 
     void bindShell(MainShellController shell) {
@@ -254,8 +261,17 @@ public final class ResultDispatchTableTabController {
         if (headersRef.isEmpty()) {
             return;
         }
+        List<String> oldHeaders = new ArrayList<>(headersRef);
+        boolean[] oldVis =
+                TableColumnOrderPersistence.loadColumnVisibility(
+                        TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE, oldHeaders.size());
         List<TableColumnOrderPersistence.ColumnSpec> lay = persistedLayout.get();
         TableColumnOrderPersistence.applyLogicalColumnOrder(headersRef, rows, titleOrder);
+        boolean[] newVis =
+                TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
+                        oldHeaders, oldVis, titleOrder);
+        TableColumnOrderPersistence.saveColumnVisibility(
+                TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE, newVis);
         List<Double> widths =
                 TableColumnOrderPersistence.resolveWidthsForHeaders(headersRef, lay, 112);
         List<TableColumnOrderPersistence.ColumnSpec> newLay = new ArrayList<>();
@@ -311,6 +327,13 @@ public final class ResultDispatchTableTabController {
                                 () -> new ArrayList<>(headersRef),
                                 headerColumnCount.get(),
                                 this::applyPersistedColumnOrderAfterLogicalReorder);
+                        ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
+                                spreadsheetView,
+                                () -> new ArrayList<>(headersRef),
+                                () ->
+                                        TableColumnOrderPersistence.loadColumnVisibility(
+                                                TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE,
+                                                headersRef.size()));
                     });
         } finally {
             suppressColumnPersistence.set(false);
@@ -399,10 +422,19 @@ public final class ResultDispatchTableTabController {
                     TableColumnOrderPersistence.loadLayout(
                             TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE);
             persistedLayout.set(lay);
-            TableColumnOrderPersistence.applyLogicalColumnOrder(
-                    headersRef,
-                    rows,
-                    lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList());
+            List<String> beforeHeaders = new ArrayList<>(headersRef);
+            boolean[] visBefore =
+                    TableColumnOrderPersistence.loadColumnVisibility(
+                            TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE,
+                            beforeHeaders.size());
+            List<String> titleOrder =
+                    lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList();
+            TableColumnOrderPersistence.applyLogicalColumnOrder(headersRef, rows, titleOrder);
+            boolean[] visAfter =
+                    TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
+                            beforeHeaders, visBefore, titleOrder);
+            TableColumnOrderPersistence.saveColumnVisibility(
+                    TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE, visAfter);
 
             rebuildSpreadsheet();
         } catch (Exception ex) {

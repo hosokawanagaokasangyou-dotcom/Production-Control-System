@@ -20,13 +20,15 @@ public final class SpreadsheetColumnSettingsStrip {
     /**
      * @param onLeadingColumnCountChanged called after count is saved; typically rebuilds grid and reapplies freeze
      * @param reorderColumns opens column reorder UI ({@code null} = hide button)
+     * @param columnVisibility opens column visibility dialog ({@code null} = hide button)
      */
     public static HBox create(
             Runnable resetColumnWidths,
             TableColumnOrderPersistence.TableId tableId,
             AtomicInteger headerColumnCountHolder,
             Consumer<Integer> onLeadingColumnCountChanged,
-            Runnable reorderColumns) {
+            Runnable reorderColumns,
+            Runnable columnVisibility) {
         int initial = TableColumnOrderPersistence.loadHeaderColumnCount(tableId);
         headerColumnCountHolder.set(initial);
         Spinner<Integer> headerSpinner =
@@ -55,6 +57,18 @@ public final class SpreadsheetColumnSettingsStrip {
         reorder.setManaged(reorderColumns != null);
         reorder.setVisible(reorderColumns != null);
 
+        Button visibility =
+                new Button(
+                        "\u5217\u306e\u8868\u793a");
+        visibility.setOnAction(
+                e -> {
+                    if (columnVisibility != null) {
+                        columnVisibility.run();
+                    }
+                });
+        visibility.setManaged(columnVisibility != null);
+        visibility.setVisible(columnVisibility != null);
+
         Button reset = new Button("列幅を既定に");
         reset.setOnAction(
                 e -> {
@@ -69,6 +83,7 @@ public final class SpreadsheetColumnSettingsStrip {
                         new Label("見出し列数"),
                         headerSpinner,
                         reorder,
+                        visibility,
                         reset);
         h.setStyle("-fx-alignment: CENTER_LEFT;");
         return h;
@@ -82,7 +97,8 @@ public final class SpreadsheetColumnSettingsStrip {
             String sheetScopeKey,
             AtomicInteger headerColumnCountHolder,
             Consumer<Integer> onLeadingColumnCountChanged,
-            Runnable reorderColumns) {
+            Runnable reorderColumns,
+            Runnable columnVisibility) {
         int initial = TableColumnOrderPersistence.loadHeaderColumnCountForScope(sheetScopeKey);
         headerColumnCountHolder.set(initial);
         Spinner<Integer> headerSpinner =
@@ -111,6 +127,18 @@ public final class SpreadsheetColumnSettingsStrip {
         reorder.setManaged(reorderColumns != null);
         reorder.setVisible(reorderColumns != null);
 
+        Button visibility =
+                new Button(
+                        "\u5217\u306e\u8868\u793a");
+        visibility.setOnAction(
+                e -> {
+                    if (columnVisibility != null) {
+                        columnVisibility.run();
+                    }
+                });
+        visibility.setManaged(columnVisibility != null);
+        visibility.setVisible(columnVisibility != null);
+
         Button reset = new Button("列幅を既定に");
         reset.setOnAction(
                 e -> {
@@ -125,6 +153,7 @@ public final class SpreadsheetColumnSettingsStrip {
                         new Label("見出し列数"),
                         headerSpinner,
                         reorder,
+                        visibility,
                         reset);
         h.setStyle("-fx-alignment: CENTER_LEFT;");
         return h;

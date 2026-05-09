@@ -128,6 +128,11 @@ public final class Stage1ShapedOutputPreviewPane {
                             col.setPrefWidth(prefW);
                             table.getColumns().add(col);
                         }
+                        ColumnVisibilitySupport.applyColumnVisibilityToTableView(
+                                table,
+                                TableColumnOrderPersistence.loadColumnVisibility(
+                                        TableColumnOrderPersistence.TableId.STAGE1_PREVIEW,
+                                        headersRef.size()));
                     } finally {
                         suppressColumnOrderPersistence.set(false);
                     }
@@ -210,10 +215,20 @@ public final class Stage1ShapedOutputPreviewPane {
                                 TableColumnOrderPersistence.loadLayout(
                                         TableColumnOrderPersistence.TableId.STAGE1_PREVIEW);
                         persistedLayout.set(lay);
+                        List<String> beforeHeaders = new ArrayList<>(headersRef);
+                        boolean[] visBefore =
+                                TableColumnOrderPersistence.loadColumnVisibility(
+                                        TableColumnOrderPersistence.TableId.STAGE1_PREVIEW,
+                                        beforeHeaders.size());
+                        List<String> titleOrder =
+                                lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList();
                         TableColumnOrderPersistence.applyLogicalColumnOrder(
-                                headersRef,
-                                rows,
-                                lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList());
+                                headersRef, rows, titleOrder);
+                        boolean[] visAfter =
+                                TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
+                                        beforeHeaders, visBefore, titleOrder);
+                        TableColumnOrderPersistence.saveColumnVisibility(
+                                TableColumnOrderPersistence.TableId.STAGE1_PREVIEW, visAfter);
                         applyLoaded.run();
                         log.accept(
                                 "[stage1-preview] loaded rows="
@@ -247,7 +262,17 @@ public final class Stage1ShapedOutputPreviewPane {
         HBox colStrip =
                 new HBox(
                         8,
-                        TableViewColumnSettingsStrip.create(table, applyDynamicColumnWidths, false),
+                        TableViewColumnSettingsStrip.create(
+                                table,
+                                applyDynamicColumnWidths,
+                                false,
+                                TableColumnOrderPersistence.TableId.STAGE1_PREVIEW,
+                                null,
+                                () ->
+                                        ColumnVisibilitySupport.openTableViewColumnVisibilityDialog(
+                                                owner,
+                                                TableColumnOrderPersistence.TableId.STAGE1_PREVIEW,
+                                                table)),
                         new Label("\u5217\u5e45(px)"),
                         colWidthField);
         colStrip.setStyle("-fx-alignment: CENTER_LEFT;");

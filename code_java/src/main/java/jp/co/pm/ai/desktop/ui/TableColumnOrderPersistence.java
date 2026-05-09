@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -176,6 +177,160 @@ public final class TableColumnOrderPersistence {
 
     private static String headerCountKey(TableId id) {
         return id.jsonKey() + "_headerColumnCount";
+    }
+
+    private static String columnVisibleKey(TableId id) {
+        return id.jsonKey() + "_columnVisible";
+    }
+
+    /** {@link #planResultViewerSheetScopeKey} 単位の列ごとの表示フラグ（boolean[] と JSON 配列）。 */
+    private static final String SCOPE_SUFFIX_COLUMN_VISIBLE = "_columnVisible";
+
+    /**
+     * 列の表示状態（{@code headersRef} の並びと同一長）。既定はすべて {@code true}。
+     */
+    public static boolean[] loadColumnVisibility(TableId id, int columnCount) {
+        boolean[] defaults = visibilityDefaults(columnCount);
+        if (id == null || columnCount <= 0) {
+            return defaults;
+        }
+        try {
+            if (!Files.isRegularFile(STORE)) {
+                return defaults;
+            }
+            JsonNode root = JSON.readTree(STORE.toFile());
+            if (root == null || !root.isObject()) {
+                return defaults;
+            }
+            JsonNode arr = root.get(columnVisibleKey(id));
+            return mergeVisibilityFromJsonArray(defaults, arr);
+        } catch (IOException e) {
+            return defaults;
+        }
+    }
+
+    public static void saveColumnVisibility(TableId id, boolean[] visible) {
+        if (id == null || visible == null) {
+            return;
+        }
+        try {
+            Files.createDirectories(STORE.getParent());
+            ObjectNode root;
+            if (Files.isRegularFile(STORE)) {
+                JsonNode tree = JSON.readTree(STORE.toFile());
+                root =
+                        tree != null && tree.isObject()
+                                ? (ObjectNode) tree.deepCopy()
+                                : JSON.createObjectNode();
+            } else {
+                root = JSON.createObjectNode();
+            }
+            ArrayNode arr = JSON.createArrayNode();
+            for (boolean b : visible) {
+                arr.add(b);
+            }
+            root.set(columnVisibleKey(id), arr);
+            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
+        } catch (IOException ignored) {
+        }
+    }
+
+    public static boolean[] loadColumnVisibilityForScope(String scopeKey, int columnCount) {
+        boolean[] defaults = visibilityDefaults(columnCount);
+        if (scopeKey == null || scopeKey.isEmpty() || columnCount <= 0) {
+            return defaults;
+        }
+        try {
+            if (!Files.isRegularFile(STORE)) {
+                return defaults;
+            }
+            JsonNode root = JSON.readTree(STORE.toFile());
+            if (root == null || !root.isObject()) {
+                return defaults;
+            }
+            JsonNode arr = root.get(scopeKey + SCOPE_SUFFIX_COLUMN_VISIBLE);
+            return mergeVisibilityFromJsonArray(defaults, arr);
+        } catch (IOException e) {
+            return defaults;
+        }
+    }
+
+    public static void saveColumnVisibilityForScope(String scopeKey, boolean[] visible) {
+        if (scopeKey == null || scopeKey.isEmpty() || visible == null) {
+            return;
+        }
+        try {
+            Files.createDirectories(STORE.getParent());
+            ObjectNode root;
+            if (Files.isRegularFile(STORE)) {
+                JsonNode tree = JSON.readTree(STORE.toFile());
+                root =
+                        tree != null && tree.isObject()
+                                ? (ObjectNode) tree.deepCopy()
+                                : JSON.createObjectNode();
+            } else {
+                root = JSON.createObjectNode();
+            }
+            ArrayNode arr = JSON.createArrayNode();
+            for (boolean b : visible) {
+                arr.add(b);
+            }
+            root.set(scopeKey + SCOPE_SUFFIX_COLUMN_VISIBLE, arr);
+            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
+        } catch (IOException ignored) {
+        }
+    }
+
+    private static boolean[] visibilityDefaults(int columnCount) {
+        if (columnCount <= 0) {
+            return new boolean[0];
+        }
+        boolean[] d = new boolean[columnCount];
+        Arrays.fill(d, true);
+        return d;
+    }
+
+    private static boolean[] mergeVisibilityFromJsonArray(boolean[] defaults, JsonNode arr) {
+        if (arr == null || !arr.isArray()) {
+            return defaults;
+        }
+        for (int i = 0; i < defaults.length && i < arr.size(); i++) {
+            defaults[i] = arr.get(i).asBoolean(true);
+        }
+        return defaults;
+    }
+
+    /**
+     * {@link #applyLogicalColumnOrder} と同じ並べ替えで {@code visibilityBefore} を並べ替える。
+     *
+     * @param headersBefore {@code applyLogicalColumnOrder} 直前の {@code headersRef} のコピー
+     * @param visibilityBefore {@code headersBefore} と同一長（短い場合は true で埋める）
+     * @param savedOrderTitles {@code applyLogicalColumnOrder} に渡す順序
+     */
+    public static boolean[] permuteVisibilityForLogicalReorder(
+            List<String> headersBefore,
+            boolean[] visibilityBefore,
+            List<String> savedOrderTitles) {
+        if (headersBefore == null || savedOrderTitles == null) {
+            return visibilityBefore;
+        }
+        int n = headersBefore.size();
+        boolean[] src = visibilityDefaults(n);
+        if (visibilityBefore != null) {
+            for (int i = 0; i < n; i++) {
+                src[i] = i < visibilityBefore.length ? visibilityBefore[i] : true;
+            }
+        }
+        List<Integer> perm = buildPermutation(new ArrayList<>(headersBefore), savedOrderTitles);
+        if (perm.size() != n) {
+            return src;
+        }
+        boolean[] out = new boolean[n];
+        for (int j = 0; j < perm.size(); j++) {
+            int oldIdx = perm.get(j);
+            out[j] = src[oldIdx];
+        }
+        return out;
     }
 
     public record ColumnSpec(String title, double width) {}

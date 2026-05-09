@@ -59,6 +59,7 @@ import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetMultiColumnFilterCoordinator;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
+import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
@@ -679,7 +680,21 @@ public final class PlanResultViewerTabController {
                                     rebuildGantt.run();
                                 }
                             },
-                            onReorder);
+                            onReorder,
+                            () -> {
+                                SpreadsheetView t = tableSvRef.get();
+                                if (t == null) {
+                                    t = ganttSvRef.get();
+                                }
+                                if (t == null) {
+                                    return;
+                                }
+                                ColumnVisibilitySupport.openSpreadsheetColumnVisibilityDialogForScope(
+                                        ownerStage,
+                                        gridState.scopeKey,
+                                        t,
+                                        () -> new ArrayList<>(gridState.headersRef));
+                            });
 
             Runnable loadTable =
                     () -> {
@@ -825,9 +840,17 @@ public final class PlanResultViewerTabController {
         if (gridState.headersRef.isEmpty()) {
             return;
         }
+        List<String> oldHeaders = new ArrayList<>(gridState.headersRef);
+        boolean[] oldVis =
+                TableColumnOrderPersistence.loadColumnVisibilityForScope(
+                        gridState.scopeKey, oldHeaders.size());
         List<TableColumnOrderPersistence.ColumnSpec> lay = gridState.persistedLayout.get();
         TableColumnOrderPersistence.applyLogicalColumnOrder(
                 gridState.headersRef, gridState.rows, titleOrder);
+        boolean[] newVis =
+                TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
+                        oldHeaders, oldVis, titleOrder);
+        TableColumnOrderPersistence.saveColumnVisibilityForScope(gridState.scopeKey, newVis);
         List<Double> widths =
                 TableColumnOrderPersistence.resolveWidthsForHeaders(
                         gridState.headersRef, lay, 112);
@@ -902,6 +925,12 @@ public final class PlanResultViewerTabController {
                     gridState.headerColumnCount.get(),
                     onHeaderDragColumnOrder);
         }
+        ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
+                sv,
+                () -> new ArrayList<>(gridState.headersRef),
+                () ->
+                        TableColumnOrderPersistence.loadColumnVisibilityForScope(
+                                gridState.scopeKey, gridState.headersRef.size()));
     }
 
     private static final class SheetGridState {
@@ -933,10 +962,18 @@ public final class PlanResultViewerTabController {
             List<TableColumnOrderPersistence.ColumnSpec> lay =
                     TableColumnOrderPersistence.loadLayoutForScope(scope);
             st.persistedLayout.set(lay);
+            List<String> beforeHeaders = new ArrayList<>(st.headersRef);
+            boolean[] visBefore =
+                    TableColumnOrderPersistence.loadColumnVisibilityForScope(
+                            scope, beforeHeaders.size());
+            List<String> titleOrder =
+                    lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList();
             TableColumnOrderPersistence.applyLogicalColumnOrder(
-                    st.headersRef,
-                    st.rows,
-                    lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList());
+                    st.headersRef, st.rows, titleOrder);
+            boolean[] visAfter =
+                    TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
+                            beforeHeaders, visBefore, titleOrder);
+            TableColumnOrderPersistence.saveColumnVisibilityForScope(scope, visAfter);
             st.headerColumnCount.set(TableColumnOrderPersistence.loadHeaderColumnCountForScope(scope));
             return st;
         }

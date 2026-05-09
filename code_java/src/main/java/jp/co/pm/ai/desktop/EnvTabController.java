@@ -36,6 +36,7 @@ import javafx.util.StringConverter;
 import org.controlsfx.control.table.TableFilter;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.FileChooserForEnvKey;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.ui.TableHeaderColumnStyle;
@@ -419,10 +420,23 @@ public final class EnvTabController {
                         resetEnvColumns,
                         false,
                         TableColumnOrderPersistence.TableId.ENV_VARS,
-                        headerColumnCount);
+                        headerColumnCount,
+                        () ->
+                                ColumnVisibilitySupport.openTableViewColumnVisibilityDialog(
+                                        ownerStage,
+                                        TableColumnOrderPersistence.TableId.ENV_VARS,
+                                        envTable));
         columnStripHost.getChildren().setAll(strip);
 
         VBox.setVgrow(envTable, Priority.ALWAYS);
+
+        javafx.application.Platform.runLater(
+                () ->
+                        ColumnVisibilitySupport.applyColumnVisibilityToTableView(
+                                envTable,
+                                TableColumnOrderPersistence.loadColumnVisibility(
+                                        TableColumnOrderPersistence.TableId.ENV_VARS,
+                                        envTable.getColumns().size())));
 
         for (EnvVarRow r : envRows) {
             hookEnvRowForSearchFilter(r);

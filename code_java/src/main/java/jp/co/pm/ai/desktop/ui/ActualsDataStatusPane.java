@@ -162,6 +162,14 @@ public final class ActualsDataStatusPane {
         TableColumnOrderPersistence.installColumnLayoutWatcher(
                 table, TableColumnOrderPersistence.TableId.ACTUALS_STATUS, () -> false);
 
+        Platform.runLater(
+                () ->
+                        ColumnVisibilitySupport.applyColumnVisibilityToTableView(
+                                table,
+                                TableColumnOrderPersistence.loadColumnVisibility(
+                                        TableColumnOrderPersistence.TableId.ACTUALS_STATUS,
+                                        table.getColumns().size())));
+
         Runnable resetActualsColumns =
                 () -> {
                     for (int i = 0; i < columns.size(); i++) {
@@ -170,7 +178,18 @@ public final class ActualsDataStatusPane {
                         columns.get(i).setPrefWidth(w);
                     }
                 };
-        HBox actualsColStrip = TableViewColumnSettingsStrip.create(table, resetActualsColumns, false);
+        HBox actualsColStrip =
+                TableViewColumnSettingsStrip.create(
+                        table,
+                        resetActualsColumns,
+                        false,
+                        TableColumnOrderPersistence.TableId.ACTUALS_STATUS,
+                        null,
+                        () ->
+                                ColumnVisibilitySupport.openTableViewColumnVisibilityDialog(
+                                        table.getScene() != null ? table.getScene().getWindow() : null,
+                                        TableColumnOrderPersistence.TableId.ACTUALS_STATUS,
+                                        table));
 
         Text footLong = new Text();
         footLong.setWrappingWidth(880);

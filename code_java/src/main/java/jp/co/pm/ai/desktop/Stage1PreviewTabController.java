@@ -30,6 +30,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
+import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
@@ -145,7 +146,13 @@ public final class Stage1PreviewTabController {
                                 TableColumnOrderPersistence.TableId.STAGE1_PREVIEW,
                                 headerColumnCount,
                                 this::onLeadingColumnCountCommitted,
-                                this::onReorderColumns));
+                                this::onReorderColumns,
+                                () ->
+                                        ColumnVisibilitySupport.openSpreadsheetColumnVisibilityDialog(
+                                                ownerStage,
+                                                TableColumnOrderPersistence.TableId.STAGE1_PREVIEW,
+                                                spreadsheetView,
+                                                () -> new ArrayList<>(headersRef))));
 
         shell.acceptReloadAfterStage1Preview(
                 () -> {
@@ -275,8 +282,17 @@ public final class Stage1PreviewTabController {
         if (headersRef.isEmpty()) {
             return;
         }
+        List<String> oldHeaders = new ArrayList<>(headersRef);
+        boolean[] oldVis =
+                TableColumnOrderPersistence.loadColumnVisibility(
+                        TableColumnOrderPersistence.TableId.STAGE1_PREVIEW, oldHeaders.size());
         List<TableColumnOrderPersistence.ColumnSpec> lay = persistedLayout.get();
         TableColumnOrderPersistence.applyLogicalColumnOrder(headersRef, rows, titleOrder);
+        boolean[] newVis =
+                TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
+                        oldHeaders, oldVis, titleOrder);
+        TableColumnOrderPersistence.saveColumnVisibility(
+                TableColumnOrderPersistence.TableId.STAGE1_PREVIEW, newVis);
         double colW = readColWidthFieldOrDefault();
         List<Double> widths =
                 TableColumnOrderPersistence.resolveWidthsForHeaders(headersRef, lay, colW);
@@ -361,10 +377,18 @@ public final class Stage1PreviewTabController {
             List<TableColumnOrderPersistence.ColumnSpec> lay =
                     TableColumnOrderPersistence.loadLayout(TableColumnOrderPersistence.TableId.STAGE1_PREVIEW);
             persistedLayout.set(lay);
-            TableColumnOrderPersistence.applyLogicalColumnOrder(
-                    headersRef,
-                    rows,
-                    lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList());
+            List<String> beforeHeaders = new ArrayList<>(headersRef);
+            boolean[] visBefore =
+                    TableColumnOrderPersistence.loadColumnVisibility(
+                            TableColumnOrderPersistence.TableId.STAGE1_PREVIEW, beforeHeaders.size());
+            List<String> titleOrder =
+                    lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList();
+            TableColumnOrderPersistence.applyLogicalColumnOrder(headersRef, rows, titleOrder);
+            boolean[] visAfter =
+                    TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
+                            beforeHeaders, visBefore, titleOrder);
+            TableColumnOrderPersistence.saveColumnVisibility(
+                    TableColumnOrderPersistence.TableId.STAGE1_PREVIEW, visAfter);
             applyLoaded();
             shell.appendLog(
                     "[stage1-preview] loaded rows="
@@ -424,6 +448,13 @@ public final class Stage1PreviewTabController {
                                 () -> new ArrayList<>(headersRef),
                                 headerColumnCount.get(),
                                 this::applyPersistedColumnOrderAfterLogicalReorder);
+                        ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
+                                spreadsheetView,
+                                () -> new ArrayList<>(headersRef),
+                                () ->
+                                        TableColumnOrderPersistence.loadColumnVisibility(
+                                                TableColumnOrderPersistence.TableId.STAGE1_PREVIEW,
+                                                headersRef.size()));
                     });
         } finally {
             suppressColumnOrderPersistence.set(false);

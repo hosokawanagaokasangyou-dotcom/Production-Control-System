@@ -27,7 +27,7 @@ public final class TableViewColumnSettingsStrip {
      */
     public static HBox create(
             TableView<?> table, Runnable resetToDefaults, boolean flexLastColumnInitially) {
-        return create(table, resetToDefaults, flexLastColumnInitially, null, null);
+        return create(table, resetToDefaults, flexLastColumnInitially, null, null, null);
     }
 
     /**
@@ -43,6 +43,20 @@ public final class TableViewColumnSettingsStrip {
             boolean flexLastColumnInitially,
             TableColumnOrderPersistence.TableId tableId,
             AtomicInteger headerColumnCountHolder) {
+        return create(table, resetToDefaults, flexLastColumnInitially, tableId, headerColumnCountHolder, null);
+    }
+
+    /**
+     * @param columnVisibility opens column visibility UI ({@code null} = hide button); typically persists via
+     *     {@link ColumnVisibilitySupport#openTableViewColumnVisibilityDialog}
+     */
+    public static HBox create(
+            TableView<?> table,
+            Runnable resetToDefaults,
+            boolean flexLastColumnInitially,
+            TableColumnOrderPersistence.TableId tableId,
+            AtomicInteger headerColumnCountHolder,
+            Runnable columnVisibility) {
         CheckBox flex = new CheckBox("最終列を伸縮");
         flex.setSelected(flexLastColumnInitially);
         applyResizePolicy(table, flex.isSelected());
@@ -60,6 +74,18 @@ public final class TableViewColumnSettingsStrip {
                         resetToDefaults.run();
                     }
                 });
+
+        Button visibility =
+                new Button(
+                        "\u5217\u306e\u8868\u793a");
+        visibility.setOnAction(
+                e -> {
+                    if (columnVisibility != null) {
+                        columnVisibility.run();
+                    }
+                });
+        visibility.setManaged(columnVisibility != null);
+        visibility.setVisible(columnVisibility != null);
 
         Runnable refreshHeaderColumns =
                 () -> {
@@ -107,12 +133,13 @@ public final class TableViewColumnSettingsStrip {
                             flex,
                             new Label("見出し列数"),
                             headerSpinner,
+                            visibility,
                             reset);
             h.setStyle("-fx-alignment: CENTER_LEFT;");
             return h;
         }
 
-        HBox h = new HBox(8, new Label("列設定"), flex, reset);
+        HBox h = new HBox(8, new Label("列設定"), flex, visibility, reset);
         h.setStyle("-fx-alignment: CENTER_LEFT;");
         return h;
     }
