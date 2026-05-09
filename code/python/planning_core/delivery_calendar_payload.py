@@ -30,6 +30,17 @@ _DIS_JSON_TID = "\u4f9d\u983cNO"
 _DIS_JSON_DAY = "\u914d\u53f0\u65e5"
 _DIS_JSON_QTY = "\u5f53\u65e5\u914d\u53f0\u6570\u91cf"
 
+# Actual-detail (NO-(roll)-betsu raw) column names referenced from the Power Query in ”z‘äƒ‹[ƒ‹:
+#   “úŽŸWŒv = Group({ˆË—ŠNO, H’ö–¼, ‰ÁH“ú•t}, max(ŽÀ‰ÁH”)) where ‰ÁH“ú•t = DateTime.Date(‰ÁHŠJŽn“úŽž)
+#   ƒtƒBƒ‹ƒ^: »‘¢ðŒ(“à–ó) == "’·‚³" ‚Ì‚Ý
+_ACT_COL_TID = "\u4f9d\u983cNO"
+_ACT_COL_PROC = "\u5de5\u7a0b\u540d"
+_ACT_COL_QTY = "\u5b9f\u52a0\u5de5\u6570"
+_ACT_COL_START_DT = "\u52a0\u5de5\u958b\u59cb\u65e5\u6642"
+_ACT_COL_DAY = "\u52a0\u5de5\u65e5"
+_ACT_COL_PRODUCTION_DETAIL = "\u88fd\u9020\u6761\u4ef6(\u5185\u8a33)"
+_ACT_PRODUCTION_DETAIL_LENGTH = "\u9577\u3055"
+
 __all__ = ("build_delivery_calendar_payload",)
 
 
@@ -200,6 +211,83 @@ def _machine_display_from_plan_row(row) -> str:
     return str(v).strip() if v is not None and not (isinstance(v, float) and pd.isna(v)) else ""
 
 
+def _row_actual_day(row) -> date | None:
+    """Per Power Query: ???? = DateTime.Date(??????)????? ??? ?? fallback?"""
+    d = _parse_cell_date(row.get(_ACT_COL_START_DT))
+    if d is not None:
+        return d
+    return _parse_cell_date(row.get(_ACT_COL_DAY))
+
+
+def _aggregate_daily_actual_qty_aladdin_max(
+    df: pd.DataFrame | None,
+    equipment_list,
+    sorted_dates: list,
+) -> dict[tuple[str, date], dict[str, float]]:
+    """
+    Power Query ????? = Group({??NO, ???, ????}, max(????))??????? Python ????
+
+    - 1 ? = 1 ?????? (??NO, ???, ???) ???????????????????????
+      ``max(????)`` ???? 1 ? 1 ???????????????
+    - ``????(??)`` ??????? ``"??"`` ??????????????
+    - ????? ``equipment_list`` ?????????canonical??????????
+    """
+    if df is None or len(df) == 0:
+        return {}
+    equip_lookup = core._equipment_lookup_normalized_to_canonical(equipment_list)
+    date_ok = set(sorted_dates) if sorted_dates else None
+    has_filter_col = _ACT_COL_PRODUCTION_DETAIL in df.columns
+
+    grouped: dict[tuple[str, date, str], float] = defaultdict(float)
+    for _, row in df.iterrows():
+        if has_filter_col:
+            cond = row.get(_ACT_COL_PRODUCTION_DETAIL)
+            if cond is None or (isinstance(cond, float) and pd.isna(cond)):
+                continue
+            if str(cond).strip() != _ACT_PRODUCTION_DETAIL_LENGTH:
+                continue
+        tid = core.planning_task_id_str_from_scalar(row.get(_ACT_COL_TID))
+        if not tid:
+            continue
+        proc = row.get(_ACT_COL_PROC)
+        if proc is None or (isinstance(proc, float) and pd.isna(proc)):
+            continue
+        proc_key = core._normalize_equipment_match_key(proc)
+        canonical = equip_lookup.get(proc_key)
+        if not canonical:
+            continue
+        _, mn = core._split_equipment_line_process_machine(str(canonical))
+        mk = core._normalize_equipment_match_key((mn or canonical).strip())
+        if not mk:
+            continue
+        d = _row_actual_day(row)
+        if d is None:
+            continue
+        if date_ok is not None and d not in date_ok:
+            continue
+        try:
+            q = core.parse_float_safe(row.get(_ACT_COL_QTY), None)
+        except Exception:
+            q = None
+        if q is None:
+            continue
+        try:
+            qf = float(q)
+        except (TypeError, ValueError):
+            continue
+        if qf <= 1e-12 or math.isnan(qf):
+            continue
+        key = (mk, d, tid)
+        if qf > grouped[key]:
+            grouped[key] = qf
+
+    out: dict[tuple[str, date], dict[str, float]] = defaultdict(dict)
+    for (mk, d, tid), v in grouped.items():
+        if v > 1e-12:
+            out[(mk, d)][tid] = v
+    return out
+
+
 def _equipment_sort_index(equipment_list: list, mk_normalized: str) -> int:
     for i, eq in enumerate(equipment_list or []):
         _, mn = core._split_equipment_line_process_machine(str(eq))
@@ -239,7 +327,7 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             dates_set,
         )
 
-        actual_agg = core._aggregate_actual_qty_for_aladdin_compare_from_detail_df(
+        actual_agg = _aggregate_daily_actual_qty_aladdin_max(
             df_actual if df_actual is not None else pd.DataFrame(),
             equipment_list,
             sorted_dates,
