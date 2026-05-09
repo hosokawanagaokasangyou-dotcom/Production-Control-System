@@ -29050,8 +29050,10 @@ def _build_plan_timeline_events_from_snapshot_result_task_csv(csv_path: str) -> 
     return events
 
 
+# 単一行見出し: ``YYYY/MM/DD_加工数量``。工程別問合せ成形後(read_tabular_dataframe の koubai 処理)では
+# 「加工数量」トークン除去済みで列名が ``YYYY/MM/DD`` のみになるため ``_加工数量`` は任意。
 _COMPARE_GANTT_ALADDIN_QTY_COL_RE = re.compile(
-    r"^\s*(\d{4})[./-](\d{1,2})[./-](\d{1,2})_加工数量\s*$"
+    r"^\s*(\d{4})[./-](\d{1,2})[./-](\d{1,2})(?:_加工数量)?\s*$"
 )
 
 
@@ -29386,8 +29388,9 @@ def _build_compare_gantt_aladdin_qty_lookup(
     dict[tuple[str, date], list[tuple[str, float]]],
 ]:
     """
-    加工計画DATA の「YYYY/MM/DD_加工数量」列から、(機械名キー, 日付) ごとの
+    加工計画DATA の日付付き数量列から、(機械名キー, 日付) ごとの
     （タスク概覝＝依頼NOのみ, タイムライン中央＝「依頼NO(数量)」をスペース区切り）を構築する。
+    列名は ``YYYY/MM/DD_加工数量`` または工程別成形後の ``YYYY/MM/DD``（同一セグメントが加工数量）。
     併せて同一キーの生バケツ（依頼NO別数量の比較用）も返す。
     """
     out: dict[tuple[str, date], tuple[str, str]] = {}
@@ -29417,7 +29420,7 @@ def _build_compare_gantt_aladdin_qty_lookup(
 
     if not date_cols:
         logging.info(
-            "計画実績比較ガント: 「日付_加工数量」形式の列がありません（アラジン行は空または予約のみ）。"
+            "計画実績比較ガント: 「YYYY/MM/DD」または「YYYY/MM/DD_加工数量」形式の数量列がありません（アラジン行は空または予約のみ）。"
         )
 
     for col_name, dk in date_cols:
