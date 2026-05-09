@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
+import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -14,6 +15,7 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.stage.WindowEvent;
+import javafx.util.Duration;
 
 /**
  * Simple splash until main window FXML is loaded and initialized.
@@ -24,6 +26,9 @@ import javafx.stage.WindowEvent;
  * Shift_JIS (CP932) by an editor, while {@code javac} is invoked with {@code -encoding UTF-8}.
  */
 final class StartupSplashStage {
+
+    /** スプラッシュが表示されたとみなしてから、本体ロード等の後続処理を始めるまでの待ち（ナノ秒）。 */
+    private static final long SPLASH_NEXT_LOGIC_DELAY_NANOS = 3_000_000_000L;
 
     private static final String SPLASH_FONT_STACK =
             "\"Yu Gothic UI\", \"Meiryo UI\", Meiryo, \"Segoe UI\", \"Noto Sans CJK JP\", sans-serif";
@@ -37,7 +42,8 @@ final class StartupSplashStage {
      * 一度だけ格納する。{@link javafx.stage.WindowEvent#WINDOW_SHOWN} またはその直後のパルスで設定する。
      *
      * <p>{@code afterSplashFullyDisplayed} が非 null のとき、{@link javafx.stage.WindowEvent#WINDOW_SHOWN} のあと 2
-     * パルス経過後（レイアウト・初回描画後）に一度だけ呼ぶ。本体ロード等はこのコールバック内で開始する。
+     * パルス経過後（レイアウト・初回描画後）、かつスプラッシュ表示開始から {@value #SPLASH_NEXT_LOGIC_DELAY_NANOS}
+     * ナノ秒経過後に一度だけ呼ぶ。本体ロード等はこのコールバック内で開始する。
      *
      * @param outVisibleSinceNanos 表示開始時刻を格納するコンテナ（必要なければ {@code null}）
      * @param afterSplashFullyDisplayed スプラッシュの画面表示完了後に実行する処理（不要なら {@code null}）
@@ -98,7 +104,24 @@ final class StartupSplashStage {
                     if (!bootstrapStarted.compareAndSet(false, true)) {
                         return;
                     }
-                    afterSplashFullyDisplayed.accept(stage);
+                    long since =
+                            outVisibleSinceNanos != null
+                                    ? outVisibleSinceNanos.get()
+                                    : 0L;
+                    if (since == 0L) {
+                        since = System.nanoTime();
+                    }
+                    long deadlineNanos = since + SPLASH_NEXT_LOGIC_DELAY_NANOS;
+                    long waitNs = deadlineNanos - System.nanoTime();
+                    Runnable runBootstrap = () -> afterSplashFullyDisplayed.accept(stage);
+                    if (waitNs <= 0) {
+                        runBootstrap.run();
+                        return;
+                    }
+                    PauseTransition pause =
+                            new PauseTransition(Duration.millis(waitNs / 1_000_000.0));
+                    pause.setOnFinished(e -> runBootstrap.run());
+                    pause.play();
                 };
         if (afterSplashFullyDisplayed != null) {
             stage.addEventHandler(
