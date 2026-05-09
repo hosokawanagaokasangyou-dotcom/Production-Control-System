@@ -134,6 +134,7 @@ public final class MainShellController {
                     AppPaths.KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV,
                     AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET,
                     AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                    AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH,
                     AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
                     AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
                     AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON,
@@ -3392,6 +3393,7 @@ public final class MainShellController {
             case AppPaths.KEY_PM_AI_CODE_PYTHON_DIR -> r.setValue(AppPaths.resolvePythonScriptDir(ui).toString());
             case AppPaths.KEY_PM_AI_WORKSPACE -> r.setValue("");
             case AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR -> r.setValue("");
+            case AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH -> r.setValue("");
             case AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR -> r.setValue("");
             case AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR ->
                     r.setValue(AppPaths.resolveResultDispatchTableDir(ui).toString());
