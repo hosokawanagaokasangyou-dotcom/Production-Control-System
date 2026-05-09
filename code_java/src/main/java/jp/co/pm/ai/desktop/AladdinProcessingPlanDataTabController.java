@@ -27,7 +27,6 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.scene.text.Text;
 import javafx.stage.Stage;
 
 import org.controlsfx.control.spreadsheet.GridBase;
@@ -47,15 +46,17 @@ import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 
 /**
- * {@link AppPaths#KEY_PM_AI_TASK_INPUT_SOURCE_DIR} 直下�?�最新タスク入力ファイルを読み、�?��?�シート（また�?� CSV 全体）を
- * 生表として {@link SpreadsheetView} に表示する。レイアウト�?� {@code AladdinProcessingPlanDataTab.fxml}�?
+ * {@link AppPaths#KEY_PM_AI_TASK_INPUT_SOURCE_DIR} 直下の最新タスク入力ファイルを読み、先頭シート（または CSV 全体）を
+ * 生表として {@link SpreadsheetView} に表示する。レイアウトは {@code AladdinProcessingPlanDataTab.fxml}。
  */
+
 public final class AladdinProcessingPlanDataTabController {
 
     private static final String HINT_TEXT =
-            "PM_AI_TASK_INPUT_SOURCE_DIR で�?定したフォルダ�?で、加工計画DATA相当�?�拡張子�?csv / xlsx 等）�?�"
-                    + "更新時刻が最新の1ファイルを表示します�?Excel は列見�?�しを「�??1…」とした�?えでシート上�?�全行を�?ータ行とします�?"
-                    + " ネットワーク未到達時はフォルダが開けず空表示になります�?";
+            "PM_AI_TASK_INPUT_SOURCE_DIR で指定したフォルダ直下で、加工計画DATA相当の拡張子（csv / xlsx 等）の"
+                    + "更新時刻が最新の1ファイルを表示します。Excel は列見出しを「列1…」としたうえでシート上の全行をデータ行とします。"
+                    + " ネットワーク未到達時はフォルダが開けず空表示になります。";
+
 
     @FXML
     private Button refreshButton;
@@ -90,8 +91,6 @@ public final class AladdinProcessingPlanDataTabController {
     @FXML
     private StackPane spreadsheetHost;
 
-    @FXML
-    private Text metaText;
 
     private MainShellController shell;
 
@@ -265,7 +264,7 @@ public final class AladdinProcessingPlanDataTabController {
     private void onReorderColumns() {
         if (headersRef.isEmpty()) {
             if (shell != null) {
-                shell.appendLog("[aladdin-plan-data] 列がありません?���?�に再読み?�?");
+                shell.appendLog("[aladdin-plan-data] 列がありません?���?�に再読み?�?");
             }
             return;
         }
@@ -369,10 +368,9 @@ public final class AladdinProcessingPlanDataTabController {
         try {
             Map<String, String> ui = shell.snapshotUiEnv();
             Path dir = AppPaths.resolveTaskInputSourceDir(ui);
-            dirLabel.setText(dir != null ? dir.toString() : "(未設�?)");
+            dirLabel.setText(dir != null ? dir.toString() : "(未設定)");
             if (dir == null || !Files.isDirectory(dir)) {
-                statusLabel.setText("フォルダなしまた�?�未到�?");
-                metaText.setText("");
+                statusLabel.setText("フォルダなしまたは未到達");
                 pathLabel.setText("");
                 sheetCombo.setDisable(true);
                 sheetCombo.getItems().clear();
@@ -382,8 +380,7 @@ public final class AladdinProcessingPlanDataTabController {
             }
             Optional<Path> newest = NetworkSourceDirResolver.newestTaskInputFileInDirectory(dir);
             if (newest.isEmpty()) {
-                statusLabel.setText("該当ファイルな�?");
-                metaText.setText("");
+                statusLabel.setText("該当ファイルなし");
                 pathLabel.setText("");
                 sheetCombo.setDisable(true);
                 sheetCombo.getItems().clear();
@@ -397,8 +394,7 @@ public final class AladdinProcessingPlanDataTabController {
 
             String low = file.getFileName().toString().toLowerCase(Locale.ROOT);
             if (low.endsWith(".pq") || low.endsWith(".parquet")) {
-                statusLabel.setText("Parquet は未対応で�?");
-                metaText.setText(file.toString());
+                statusLabel.setText("Parquet は未対応です");
                 sheetCombo.setDisable(true);
                 sheetCombo.getItems().clear();
                 applyEmpty();
@@ -416,7 +412,11 @@ public final class AladdinProcessingPlanDataTabController {
                     }
                 } catch (IOException ex) {
                     statusLabel.setText("シート一覧エラー");
-                    metaText.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
+                    if (shell != null) {
+                        shell.appendLog(
+                                "[aladdin-plan-data] "
+                                        + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+                    }
                     sheetCombo.setDisable(true);
                     sheetCombo.getItems().clear();
                     applyEmpty();
@@ -464,22 +464,16 @@ public final class AladdinProcessingPlanDataTabController {
             TableColumnOrderPersistence.saveColumnVisibility(
                     TableColumnOrderPersistence.TableId.ALADDIN_PROCESSING_PLAN_RAW, visAfter);
 
-            statusLabel.setText(rows.size() + " �? �? " + headersRef.size() + " �?");
-            metaText.setText(
-                    "file="
-                            + file
-                            + (isExcelPath(file)
-                                    ? ", sheetIndex=" + excelSheetIndex
-                                    : ", csv"));
-
+            statusLabel.setText(rows.size() + " 行 × " + headersRef.size() + " 列");
             rebuildSpreadsheet();
         } catch (Exception ex) {
             if (showErrorsInStatus) {
                 statusLabel.setText("読込エラー");
-                metaText.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
             }
             if (shell != null) {
-                shell.appendLog("[aladdin-plan-data] " + ex.getMessage());
+                shell.appendLog(
+                        "[aladdin-plan-data] "
+                                + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
             }
             applyEmpty();
         }
