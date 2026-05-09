@@ -29403,7 +29403,9 @@ def _build_compare_gantt_aladdin_qty_lookup(
     buckets: dict[tuple[str, date], list[tuple[str, float]]] = defaultdict(list)
     date_cols: list[tuple[str, date]] = []
     for col in df.columns:
-        m = _COMPARE_GANTT_ALADDIN_QTY_COL_RE.match(str(col))
+        # Excel 見出しの全角「＿」・数字などが混ざると素の str(col) では正規表現に届かない。
+        col_key = _nfkc_column_aliases(col)
+        m = _COMPARE_GANTT_ALADDIN_QTY_COL_RE.match(col_key)
         if not m:
             continue
         try:

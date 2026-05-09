@@ -7,7 +7,6 @@ import json
 import logging
 import math
 import os
-import time
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime, timedelta
@@ -30,35 +29,6 @@ from planning_core.dispatch_workspace import (
 )
 
 _LOG = logging.getLogger(__name__)
-
-
-def _agent_debug_log_ebddd7(hyp: str, msg: str, data: dict) -> None:
-    """Append one NDJSON line for debug session ebddd7. Tries Windows + WSL paths; never raises."""
-    try:
-        line = json.dumps(
-            {
-                "sessionId": "ebddd7",
-                "hypothesisId": hyp,
-                "location": "delivery_calendar_payload.py",
-                "message": msg,
-                "data": data,
-                "timestamp": int(time.time() * 1000),
-            },
-            ensure_ascii=False,
-        )
-        candidates = [
-            "C:\\\u5de5\u7a0b\u7ba1\u7406AI\u30d7\u30ed\u30b8\u30a7\u30af\u30c8_JAVA\\.cursor\\debug-ebddd7.log",
-            "/mnt/c/\u5de5\u7a0b\u7ba1\u7406AI\u30d7\u30ed\u30b8\u30a7\u30af\u30c8_JAVA/.cursor/debug-ebddd7.log",
-        ]
-        for p in candidates:
-            try:
-                with open(p, "a", encoding="utf-8") as f:
-                    f.write(line + "\n")
-                return
-            except OSError:
-                continue
-    except Exception:
-        pass
 
 # Result dispatch JSON column names (avoid non-ASCII literals in this file on CP932 mounts)
 _DIS_JSON_MACH = "\u6a5f\u68b0\u540d"
@@ -233,7 +203,9 @@ def _collect_sorted_dates(
     aladdin_dates: set[date] = set()
     if df_plan is not None and len(df_plan) > 0:
         for col in df_plan.columns:
-            m = core._COMPARE_GANTT_ALADDIN_QTY_COL_RE.match(str(col))
+            m = core._COMPARE_GANTT_ALADDIN_QTY_COL_RE.match(
+                core._nfkc_column_aliases(str(col))
+            )
             if m:
                 try:
                     y, mo, dd = int(m.group(1)), int(m.group(2)), int(m.group(3))
@@ -291,7 +263,9 @@ def _aggregate_daily_actual_qty_aladdin_max(
             cond = row.get(_ACT_COL_PRODUCTION_DETAIL)
             if cond is None or (isinstance(cond, float) and pd.isna(cond)):
                 continue
-            if str(cond).strip() != _ACT_PRODUCTION_DETAIL_LENGTH:
+            want = core._nfkc_column_aliases(_ACT_PRODUCTION_DETAIL_LENGTH)
+            got = core._nfkc_column_aliases(str(cond)).strip()
+            if got != want:
                 continue
         tid = core.planning_task_id_str_from_scalar(row.get(_ACT_COL_TID))
         if not tid:
@@ -405,76 +379,6 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             sorted_dates,
         )
 
-        # region agent log
-        try:
-            buckets_keys = len(buckets)
-            buckets_nonempty_qty = 0
-            buckets_distinct_tids = set()
-            for _k, parts in buckets.items():
-                for t, q in parts:
-                    if abs(float(q)) > 1e-12:
-                        buckets_nonempty_qty += 1
-                    tid_norm = core.planning_task_id_str_from_scalar(t) or str(t).strip()
-                    buckets_distinct_tids.add(tid_norm)
-            actual_agg_keys = len(actual_agg)
-            actual_agg_nonzero_pairs = 0
-            actual_distinct_tids = set()
-            for _k, tmap in actual_agg.items():
-                for tid, v in tmap.items():
-                    if abs(float(v)) > 1e-12:
-                        actual_agg_nonzero_pairs += 1
-                        actual_distinct_tids.add(tid)
-            dispatch_agg_keys = len(dispatch_agg)
-            dispatch_agg_nonzero = 0
-            dispatch_distinct_tids = set()
-            dispatch_distinct_mks = set()
-            for (mk, _d, tid), v in dispatch_agg.items():
-                if abs(float(v)) > 1e-12:
-                    dispatch_agg_nonzero += 1
-                    dispatch_distinct_tids.add(tid)
-                    dispatch_distinct_mks.add(mk)
-            df_plan_rows = int(len(df_plan)) if df_plan is not None else -1
-            df_actual_rows = int(len(df_actual)) if df_actual is not None else -1
-            sample_dispatch_keys = []
-            for k in list(dispatch_agg.keys())[:5]:
-                sample_dispatch_keys.append([k[0], str(k[1]), k[2], float(dispatch_agg[k])])
-            sample_actual_keys = []
-            for k in list(actual_agg.keys())[:5]:
-                first_tid = next(iter(actual_agg[k].keys()), None)
-                sample_actual_keys.append(
-                    [k[0], str(k[1]), first_tid, float(actual_agg[k].get(first_tid, 0.0)) if first_tid else None]
-                )
-            sample_buckets_keys = []
-            for k in list(buckets.keys())[:5]:
-                first = buckets[k][0] if buckets[k] else None
-                sample_buckets_keys.append([k[0], str(k[1]), str(first[0]) if first else None, float(first[1]) if first else None])
-            _agent_debug_log_ebddd7(
-                "H-py-agg",
-                "buckets / actual_agg / dispatch_agg sizes and non-zero counts",
-                {
-                    "df_plan_rows": df_plan_rows,
-                    "df_actual_rows": df_actual_rows,
-                    "sorted_dates_n": len(sorted_dates),
-                    "equipment_list_n": len(equipment_list),
-                    "buckets_keys_mk_d": buckets_keys,
-                    "buckets_nonempty_qty": buckets_nonempty_qty,
-                    "buckets_distinct_tids": len(buckets_distinct_tids),
-                    "actual_agg_keys_mk_d": actual_agg_keys,
-                    "actual_agg_nonzero_pairs": actual_agg_nonzero_pairs,
-                    "actual_distinct_tids": len(actual_distinct_tids),
-                    "dispatch_agg_keys_mk_d_tid": dispatch_agg_keys,
-                    "dispatch_agg_nonzero": dispatch_agg_nonzero,
-                    "dispatch_distinct_tids": len(dispatch_distinct_tids),
-                    "dispatch_distinct_mks": len(dispatch_distinct_mks),
-                    "sampleDispatchKeysFirst5": sample_dispatch_keys,
-                    "sampleActualKeysFirst5": sample_actual_keys,
-                    "sampleBucketsKeysFirst5": sample_buckets_keys,
-                },
-            )
-        except Exception:
-            pass
-        # endregion
-
         pair_plan_row: dict[tuple[str, str], Any] = {}
 
         if df_plan is not None and len(df_plan) > 0:
@@ -526,15 +430,6 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
 
         main_rows_out: list[dict[str, Any]] = []
         current_mk = ""
-        _dbg_triple_total = 0
-        _dbg_triple_p = 0
-        _dbg_triple_a = 0
-        _dbg_triple_d = 0
-        _dbg_triple_any = 0
-        _dbg_triple_samples_nonempty: list[dict[str, Any]] = []
-        _dbg_triple_samples_empty: list[dict[str, Any]] = []
-        _dbg_pair_count = len(ordered_pairs)
-        _dbg_pair_nonempty = 0
 
         def flush_section(mk_norm: str):
             nonlocal current_mk
@@ -565,7 +460,6 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                     left_cells[left_headers.index(core.TASK_COL_TASK_ID)] = tid
 
             cal_cells: list[dict[str, Any]] = []
-            _row_has_value = False
             for d in sorted_dates:
                 q_in = _qty_from_buckets_for_tid(buckets, mk, d, tid)
                 q_act = float(actual_agg.get((mk, d), {}).get(tid, 0.0))
@@ -574,28 +468,6 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                 ta = core._format_qty_short(q_act) if abs(q_act) > 1e-12 else ""
                 td = core._format_qty_short(q_disp) if abs(q_disp) > 1e-12 else ""
                 cal_cells.append({"triple": {"p": tp, "a": ta, "d": td}})
-                _dbg_triple_total += 1
-                if tp:
-                    _dbg_triple_p += 1
-                if ta:
-                    _dbg_triple_a += 1
-                if td:
-                    _dbg_triple_d += 1
-                if tp or ta or td:
-                    _dbg_triple_any += 1
-                    _row_has_value = True
-                    if len(_dbg_triple_samples_nonempty) < 5:
-                        _dbg_triple_samples_nonempty.append(
-                            {"mk": mk, "tid": tid, "date": str(d), "p": tp, "a": ta, "d": td,
-                             "qIn": q_in, "qAct": q_act, "qDisp": q_disp}
-                        )
-                else:
-                    if len(_dbg_triple_samples_empty) < 5:
-                        _dbg_triple_samples_empty.append(
-                            {"mk": mk, "tid": tid, "date": str(d), "qIn": q_in, "qAct": q_act, "qDisp": q_disp}
-                        )
-            if _row_has_value:
-                _dbg_pair_nonempty += 1
 
             main_rows_out.append(
                 {
@@ -605,27 +477,6 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                     "cells": left_cells + cal_cells,
                 }
             )
-
-        # region agent log
-        try:
-            _agent_debug_log_ebddd7(
-                "H-py-triple",
-                "triple-cell fill summary across (mk,tid)x(date)",
-                {
-                    "ordered_pairs": _dbg_pair_count,
-                    "pairs_with_any_value": _dbg_pair_nonempty,
-                    "triple_total_cells": _dbg_triple_total,
-                    "triple_nonempty_any": _dbg_triple_any,
-                    "triple_nonempty_p": _dbg_triple_p,
-                    "triple_nonempty_a": _dbg_triple_a,
-                    "triple_nonempty_d": _dbg_triple_d,
-                    "samplesNonemptyFirst5": _dbg_triple_samples_nonempty,
-                    "samplesEmptyFirst5": _dbg_triple_samples_empty,
-                },
-            )
-        except Exception:
-            pass
-        # endregion
 
         plan_agg: dict[tuple[str, date, str], float] = defaultdict(float)
         for (mk, dk), parts in buckets.items():

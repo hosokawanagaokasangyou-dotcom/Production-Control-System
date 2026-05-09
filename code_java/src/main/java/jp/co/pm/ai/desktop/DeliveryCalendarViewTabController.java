@@ -38,7 +38,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCell;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
@@ -55,9 +54,6 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 public final class DeliveryCalendarViewTabController {
 
     private static final ObjectMapper JSON = new ObjectMapper();
-
-    /** Cursor NDJSON session id; log path {@code .cursor/debug-dcCells.log} (see AgentDebugLog mirror rules). */
-    private static final String DC_DEBUG_SESSION = "dcCells";
 
     private static final Map<String, String> COMPARE_HEADER_JP = compareHeaderJp();
 
@@ -835,7 +831,6 @@ public final class DeliveryCalendarViewTabController {
 
             JsonNode mainCal = root.get("mainCalendar");
             if (mainCal != null && mainCal.isObject()) {
-                dcDebugPayloadSummary(mainCal);
                 loadMainCalendar(mainCal);
             } else {
                 mainHeadersRef.clear();
@@ -900,8 +895,6 @@ public final class DeliveryCalendarViewTabController {
         TableColumnOrderPersistence.saveColumnVisibility(
                 TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN, visAfter);
 
-        dcDebugGridModelSummary();
-
         rebuildMainSpreadsheet();
     }
 
@@ -948,99 +941,6 @@ public final class DeliveryCalendarViewTabController {
                 TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_COMPARE, visAfter);
 
         rebuildCompareSpreadsheet();
-    }
-
-    private void dcDebugPayloadSummary(JsonNode mainCal) {
-        Map<String, Object> d = new LinkedHashMap<>();
-        JsonNode cols = mainCal.get("columns");
-        JsonNode rows = mainCal.get("rows");
-        int colN = cols != null && cols.isArray() ? cols.size() : 0;
-        int rowN = rows != null && rows.isArray() ? rows.size() : 0;
-        d.put("columns", colN);
-        d.put("rows", rowN);
-        int dataRows = 0;
-        if (rows != null && rows.isArray()) {
-            for (JsonNode row : rows) {
-                if ("data".equals(row.path("kind").asText(""))) {
-                    dataRows++;
-                }
-            }
-        }
-        String firstDataCellsVsCols = "";
-        String sampleLastCalendarCell = "";
-        if (rows != null && rows.isArray()) {
-            for (JsonNode row : rows) {
-                if (!"data".equals(row.path("kind").asText(""))) {
-                    continue;
-                }
-                JsonNode cells = row.get("cells");
-                if (cells != null && cells.isArray()) {
-                    int cn = cells.size();
-                    firstDataCellsVsCols = cn + "/" + colN;
-                    if (cn > 0) {
-                        JsonNode tail = cells.get(cn - 1);
-                        String s = tail.toString();
-                        sampleLastCalendarCell =
-                                s.length() > 280 ? s.substring(0, 280) + "..." : s;
-                    }
-                }
-                break;
-            }
-        }
-        d.put("dataRowsJson", dataRows);
-        d.put("firstDataCellsVsColumns", firstDataCellsVsCols.isEmpty() ? "n/a" : firstDataCellsVsCols);
-        d.put("sampleLastCellJson", sampleLastCalendarCell.isEmpty() ? "n/a" : sampleLastCalendarCell);
-        AgentDebugLog.appendStructured(
-                Map.of(),
-                DC_DEBUG_SESSION,
-                "H-json",
-                "DeliveryCalendarViewTabController.dcDebugPayloadSummary",
-                "mainCalendar JSON shape",
-                d);
-    }
-
-    private void dcDebugGridModelSummary() {
-        int lead = headerColumnCountMain.get();
-        Map<String, Object> d = new LinkedHashMap<>();
-        d.put("leadingColumnCountUi", lead);
-        d.put("headerCount", mainHeadersRef.size());
-        d.put("modelRows", mainRows.size());
-        int tripleTotal = 0;
-        int tripleNonEmpty = 0;
-        int plainCal = 0;
-        int rowsWithNonemptyTriple = 0;
-        for (ObservableList<DeliveryCalendarMainCell> line : mainRows) {
-            boolean rowNonempty = false;
-            for (int c = lead; c < line.size(); c++) {
-                DeliveryCalendarMainCell mc = line.get(c);
-                if (mc instanceof DeliveryCalendarMainCell.TripleQty t) {
-                    tripleTotal++;
-                    if (!t.plan().isBlank()
-                            || !t.actual().isBlank()
-                            || !t.dispatch().isBlank()) {
-                        tripleNonEmpty++;
-                        rowNonempty = true;
-                    }
-                } else {
-                    plainCal++;
-                }
-            }
-            if (rowNonempty) {
-                rowsWithNonemptyTriple++;
-            }
-        }
-        d.put("tripleCellsCalZone", tripleTotal);
-        d.put("tripleCellsCalZoneNonEmpty", tripleNonEmpty);
-        d.put("plainCellsCalZone", plainCal);
-        d.put("rowsWithAnyNonemptyTriple", rowsWithNonemptyTriple);
-        d.putAll(AgentDebugLog.debugHeapMap());
-        AgentDebugLog.appendStructured(
-                Map.of(),
-                DC_DEBUG_SESSION,
-                "H-model",
-                "DeliveryCalendarViewTabController.dcDebugGridModelSummary",
-                "after logical column reorder; before rebuildMainSpreadsheet",
-                d);
     }
 
     private static DeliveryCalendarMainCell parseDeliveryCalendarMainCell(JsonNode cell) {

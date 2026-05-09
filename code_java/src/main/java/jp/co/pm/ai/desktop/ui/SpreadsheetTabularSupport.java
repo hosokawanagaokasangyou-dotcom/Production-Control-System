@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -32,9 +31,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetCell;
 import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
-
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
-
 
 /**
  * Bridges tabular {@link ObservableList} rows to ControlsFX {@link SpreadsheetView} / {@link GridBase}.
@@ -511,13 +507,6 @@ public final class SpreadsheetTabularSupport {
         gridRows.add(filterRow);
 
         int firstData = spreadsheetFirstDataRowIndex();
-        int dbgLeadTriple = 0;
-        int dbgLeadPlain = 0;
-        int dbgCalTriple = 0;
-        int dbgCalPlain = 0;
-        int dbgCalTripleNonemptyItem = 0;
-        int dbgCalPlainNonempty = 0;
-        List<Map<String, Object>> dbgCalTripleSamples = new ArrayList<>();
         for (int r = 0; r < rc; r++) {
             int gridRow = firstData + r;
             ObservableList<DeliveryCalendarMainCell> src = rows.get(r);
@@ -541,23 +530,8 @@ public final class SpreadsheetTabularSupport {
                                             + "\u7d50\u679c_\u914d\u53f0\u8868.json");
                     Tooltip.install(g, tt);
                     if (c < lead) {
-                        dbgLeadTriple++;
                         cell.setStyle(DC_STYLE_LEADING_COL);
                     } else {
-                        dbgCalTriple++;
-                        if (item != null && !item.isBlank()) {
-                            dbgCalTripleNonemptyItem++;
-                        }
-                        if (dbgCalTripleSamples.size() < 15) {
-                            Map<String, Object> s = new LinkedHashMap<>();
-                            s.put("dataRow", r);
-                            s.put("col", c);
-                            s.put("planLen", t.plan() != null ? t.plan().length() : 0);
-                            s.put("actualLen", t.actual() != null ? t.actual().length() : 0);
-                            s.put("dispatchLen", t.dispatch() != null ? t.dispatch().length() : 0);
-                            s.put("itemLen", item != null ? item.length() : 0);
-                            dbgCalTripleSamples.add(s);
-                        }
                         cell.setStyle(
                                 deliveryCalendarTripleQualifiesGreen(t)
                                         ? DC_STYLE_DATA_GREEN
@@ -573,13 +547,8 @@ public final class SpreadsheetTabularSupport {
                     cell.setCellGraphic(false);
                     cell.setGraphic(null);
                     if (c < lead) {
-                        dbgLeadPlain++;
                         cell.setStyle(DC_STYLE_LEADING_COL);
                     } else {
-                        dbgCalPlain++;
-                        if (raw != null && !raw.isBlank()) {
-                            dbgCalPlainNonempty++;
-                        }
                         cell.setStyle(deliveryCalendarDataStyleForDisplayText(raw));
                     }
                     rowCells.add(cell);
@@ -587,40 +556,6 @@ public final class SpreadsheetTabularSupport {
             }
             gridRows.add(rowCells);
         }
-        // #region agent log
-        try {
-            Map<String, Object> d = new LinkedHashMap<>();
-            d.put("cols", cols);
-            d.put("lead", lead);
-            d.put("modelDataRows", rc);
-            d.put("leadTriple", dbgLeadTriple);
-            d.put("leadPlain", dbgLeadPlain);
-            d.put("calTriple", dbgCalTriple);
-            d.put("calTripleNonemptyItem", dbgCalTripleNonemptyItem);
-            d.put("calPlain", dbgCalPlain);
-            d.put("calPlainNonempty", dbgCalPlainNonempty);
-            d.put("samplesCalTripleFirst15", dbgCalTripleSamples);
-            if (rc > 0 && cols > 0) {
-                int probeCol = cols > lead + 1 ? lead + 1 : lead;
-                probeCol = Math.min(probeCol, cols - 1);
-                SpreadsheetCell probe = gridRows.get(firstData).get(probeCol);
-                Object it = probe.getItem();
-                d.put("probeRow0_col", probeCol);
-                d.put("probeItemLen", it != null ? it.toString().length() : -1);
-                d.put("probeHasGraphic", probe.getGraphic() != null);
-                d.put("probeCellGraphicFlag", probe.isCellGraphic());
-            }
-            AgentDebugLog.appendStructured(
-                    Map.of(),
-                    "ebddd7",
-                    "H-cell-out",
-                    "SpreadsheetTabularSupport.buildReadOnlyDeliveryCalendarMainGrid",
-                    "SpreadsheetCell built from model (counts + probe)",
-                    d);
-        } catch (Throwable ignored) {
-            // debug-only
-        }
-        // #endregion
         grid.setRows(gridRows);
         return grid;
     }
@@ -905,21 +840,6 @@ public final class SpreadsheetTabularSupport {
         }
         int physicalRows = spreadsheetPhysicalRowCount(view);
         boolean skipResize = physicalRows >= PLAN_RESULT_REFRESH_SKIP_RESIZE_ROWS;
-        // #region agent log
-        if (skipResizeRowsToDefault) {
-            Map<String, Object> d = new LinkedHashMap<>();
-            d.put("physicalRows", physicalRows);
-            d.put("skipResize", skipResize);
-            d.put("runId", "post-fix-verify");
-            AgentDebugLog.appendStructured(
-                    Map.of(),
-                    "ebddd7",
-                    "H-fix",
-                    "SpreadsheetTabularSupport.presentationFlushAfterRowPresentationChangeOnce",
-                    "flush_skip_resizeRowsToDefault",
-                    d);
-        }
-        // #endregion
         if (!skipResize) {
             if (!skipResizeRowsToDefault) {
                 view.resizeRowsToDefault();
