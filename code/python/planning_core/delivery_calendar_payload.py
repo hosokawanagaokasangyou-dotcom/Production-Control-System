@@ -342,26 +342,25 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
     try:
         df_plan = _read_plan_tasks_from_processing_plan_env()
         pp = (os.environ.get(ENV_PROCESSING_PLAN_PATH) or "").strip()
-        meta["processingPlanPath"] = pp if pp else None
+        meta["processingPlanPath"] = pp
 
         dispatch_path = _resolve_dispatch_json_path(pp)
-        meta["dispatchJsonPath"] = dispatch_path
+        meta["dispatchJsonPath"] = dispatch_path or ""
         _disp_header, disp_rows = _load_dispatch_json_rows(dispatch_path)
         dispatch_agg = _aggregate_dispatch_quantities(disp_rows)
 
         df_actual = core.load_machining_actual_detail_df()
         _tiw = core._excel_plan_input_wb()
         _ad_resolved = resolve_actual_detail_workbook_path(_tiw)
-        meta["pmAiTaskInputSourceDir"] = (
-            (os.environ.get(ENV_TASK_INPUT_SOURCE_DIR) or "").strip() or None
-        )
+        # Always emit strings so JavaFX meta label can show rows (null omits keys / hasNonNull skips).
+        meta["pmAiTaskInputSourceDir"] = (os.environ.get(ENV_TASK_INPUT_SOURCE_DIR) or "").strip()
         meta["pmAiActualDetailSourceDir"] = (
-            (os.environ.get(ENV_ACTUAL_DETAIL_SOURCE_DIR) or "").strip() or None
-        )
+            os.environ.get(ENV_ACTUAL_DETAIL_SOURCE_DIR) or ""
+        ).strip()
         meta["pmAiActualDetailWorkbook"] = (
-            (os.environ.get(ENV_ACTUAL_DETAIL_WORKBOOK) or "").strip() or None
-        )
-        meta["actualDetailWorkbookPath"] = _ad_resolved
+            os.environ.get(ENV_ACTUAL_DETAIL_WORKBOOK) or ""
+        ).strip()
+        meta["actualDetailWorkbookPath"] = (_ad_resolved or "").strip()
         meta["actualDetailRowCount"] = (
             int(len(df_actual)) if df_actual is not None else 0
         )
