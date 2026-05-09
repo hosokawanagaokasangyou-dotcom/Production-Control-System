@@ -103,7 +103,7 @@
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabDeliveryCalendar" closable="false"
-                     text="納期管理ビュー">
+                     text="&#x7d0d;&#x671f;&#x7ba1;&#x7406;&#x30d3;&#x30e5;&#x30fc;">
                     <content>
                         <fx:include fx:id="deliveryCalendarViewTab" source="DeliveryCalendarViewTab.fxml"/>
                     </content>

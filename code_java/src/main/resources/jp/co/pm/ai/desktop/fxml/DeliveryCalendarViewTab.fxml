@@ -16,18 +16,19 @@
         <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
     </padding>
     <HBox alignment="CENTER_LEFT" spacing="8.0">
-        <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshButtonAction" text="再読込"/>
+        <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshButtonAction"
+                text="&#x518d;&#x8aad;&#x8fbc;"/>
         <Label fx:id="statusLabel"/>
     </HBox>
     <Label fx:id="metaLabel" wrapText="true"/>
     <TabPane fx:id="innerTabPane" tabClosingPolicy="UNAVAILABLE" VBox.vgrow="ALWAYS">
         <tabs>
-            <Tab closable="false" text="カレンダー">
+            <Tab closable="false" text="&#x30ab;&#x30ec;&#x30f3;&#x30c0;&#x30fc;">
                 <content>
                     <StackPane fx:id="mainSpreadsheetHost" minHeight="280.0"/>
                 </content>
             </Tab>
-            <Tab closable="false" text="計画比較">
+            <Tab closable="false" text="&#x8a08;&#x753b;&#x6bd4;&#x8f03;">
                 <content>
                     <StackPane fx:id="compareSpreadsheetHost" minHeight="280.0"/>
                 </content>
