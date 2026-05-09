@@ -29052,8 +29052,9 @@ def _build_plan_timeline_events_from_snapshot_result_task_csv(csv_path: str) -> 
 
 # 単一行見出し: ``YYYY/MM/DD_加工数量``。工程別問合せ成形後(read_tabular_dataframe の koubai 処理)では
 # 「加工数量」トークン除去済みで列名が ``YYYY/MM/DD`` のみになるため ``_加工数量`` は任意。
+# 同一日付への正規化衝突時は dispatch_workspace が ``YYYY/MM/DD__2`` 形式の接尾辞を付ける。
 _COMPARE_GANTT_ALADDIN_QTY_COL_RE = re.compile(
-    r"^\s*(\d{4})[./-](\d{1,2})[./-](\d{1,2})(?:_加工数量)?\s*$"
+    r"^\s*(\d{4})[./-](\d{1,2})[./-](\d{1,2})(?:_加工数量)?(?:__\d+)?\s*$"
 )
 
 
