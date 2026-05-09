@@ -205,6 +205,10 @@ public final class DeliveryCalendarViewTabController {
 
     private volatile boolean presentationControlsInstalled;
 
+    private final AtomicBoolean suppressInnerTabSessionPersistence = new AtomicBoolean(false);
+
+    private volatile boolean innerTabPersistenceWired;
+
     @FXML
     private void initialize() {
         StackPane.setAlignment(mainSpreadsheet, Pos.TOP_LEFT);
@@ -393,6 +397,48 @@ public final class DeliveryCalendarViewTabController {
         }
         if (deliveryCalendarResultDispatchTableTabController != null) {
             deliveryCalendarResultDispatchTableTabController.bindShell(shell);
+        }
+        ensureInnerTabPersistenceWired();
+    }
+
+    private void ensureInnerTabPersistenceWired() {
+        if (innerTabPersistenceWired || innerTabPane == null || shell == null) {
+            return;
+        }
+        innerTabPersistenceWired = true;
+        innerTabPane
+                .getSelectionModel()
+                .selectedIndexProperty()
+                .addListener(
+                        (obs, a, b) -> {
+                            if (suppressInnerTabSessionPersistence.get()) {
+                                return;
+                            }
+                            shell.persistDesktopSessionNow();
+                        });
+    }
+
+    /** @return ???????????????????? -1 */
+    public int snapshotInnerTabSelectedIndex() {
+        if (innerTabPane == null) {
+            return -1;
+        }
+        return innerTabPane.getSelectionModel().getSelectedIndex();
+    }
+
+    public void applyInnerTabSelectedIndex(int index) {
+        if (innerTabPane == null || index < 0) {
+            return;
+        }
+        int n = innerTabPane.getTabs().size();
+        if (index >= n) {
+            return;
+        }
+        suppressInnerTabSessionPersistence.set(true);
+        try {
+            innerTabPane.getSelectionModel().select(index);
+        } finally {
+            suppressInnerTabSessionPersistence.set(false);
         }
     }
 

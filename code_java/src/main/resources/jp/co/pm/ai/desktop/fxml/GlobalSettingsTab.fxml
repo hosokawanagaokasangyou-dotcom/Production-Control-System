@@ -26,7 +26,7 @@
             <Button fx:id="saveDefaultsButton" mnemonicParsing="false" onAction="#onSavePackageDefaultsAction"
                     text="現在の状態をデフォルトとする"/>
             <Label wrapText="true" maxWidth="720" style="-fx-text-fill: -fx-mid-text-color"
-                   text="リポジトリ直下の init_setting に session_defaults.json と table_column_defaults.json を書き出します。確認のためダイアログで「111」を入力する必要があります。"/>
+                   text="リポジトリ直下の init_setting に session_defaults.json（メイン／子タブ・タブ整理など）と table_column_defaults.json（各表の列幅・行高・納期管理ビュー等をバンドル既定とマージ）を書き出します。確認のためダイアログで「111」を入力する必要があります。"/>
         </VBox>
     </center>
 </BorderPane>

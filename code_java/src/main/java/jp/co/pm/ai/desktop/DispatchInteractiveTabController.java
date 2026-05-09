@@ -204,6 +204,10 @@ public final class DispatchInteractiveTabController {
     @FXML
     private TabPane innerTabPane;
 
+    private final AtomicBoolean suppressInnerTabSessionPersistence = new AtomicBoolean(false);
+
+    private volatile boolean innerTabPersistenceWired;
+
     @FXML
     private StackPane wideSpreadsheetHost;
 
@@ -301,6 +305,48 @@ public final class DispatchInteractiveTabController {
     void bindShell(MainShellController shell) {
         this.shell = shell;
         Platform.runLater(this::reloadFromDiskQuiet);
+        ensureInnerTabPersistenceWired();
+    }
+
+    private void ensureInnerTabPersistenceWired() {
+        if (innerTabPersistenceWired || innerTabPane == null || shell == null) {
+            return;
+        }
+        innerTabPersistenceWired = true;
+        innerTabPane
+                .getSelectionModel()
+                .selectedIndexProperty()
+                .addListener(
+                        (obs, a, b) -> {
+                            if (suppressInnerTabSessionPersistence.get()) {
+                                return;
+                            }
+                            shell.persistDesktopSessionNow();
+                        });
+    }
+
+    /** @return 選択中の子タブインデックス。未初期化時は -1 */
+    public int snapshotInnerTabSelectedIndex() {
+        if (innerTabPane == null) {
+            return -1;
+        }
+        return innerTabPane.getSelectionModel().getSelectedIndex();
+    }
+
+    public void applyInnerTabSelectedIndex(int index) {
+        if (innerTabPane == null || index < 0) {
+            return;
+        }
+        int n = innerTabPane.getTabs().size();
+        if (index >= n) {
+            return;
+        }
+        suppressInnerTabSessionPersistence.set(true);
+        try {
+            innerTabPane.getSelectionModel().select(index);
+        } finally {
+            suppressInnerTabSessionPersistence.set(false);
+        }
     }
 
     void clearColumnFiltersAndSort() {

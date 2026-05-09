@@ -165,6 +165,7 @@ public final class DesktopSessionStateStore {
         putMainShellTabOrder(root, state.mainShellTabOrder());
         putMainShellTabLayout(root, state.mainShellTabLayout());
         putStringStringMap(root, "mainShellTabTitleAliases", state.mainShellTabTitleAliases());
+        putStringIntMap(root, "innerTabSelectedIndexByShellTabKey", state.innerTabSelectedIndexByShellTabKey());
         putEquipmentGanttGraphicPrefs(root, state);
         putStage1NetworkCacheBadgePrefs(root, state);
         root.put("mainShellTabOrganizerHeaderGlow", state.mainShellTabOrganizerHeaderGlow());
@@ -278,6 +279,7 @@ public final class DesktopSessionStateStore {
                 loadStringList(root, "mainShellTabOrder"),
                 loadMainShellTabLayout(root),
                 loadStringStringMap(root, "mainShellTabTitleAliases"),
+                loadStringIntMap(root, "innerTabSelectedIndexByShellTabKey"),
                 optionalDouble(root, "equipmentGanttGraphicZoomPercent", 0d),
                 optionalDouble(root, "equipmentGanttDateColWidth", 0d),
                 optionalDouble(root, "equipmentGanttMachineColWidth", 0d),
@@ -546,6 +548,47 @@ public final class DesktopSessionStateStore {
                     && e.getValue() != null
                     && !e.getValue().isBlank()) {
                 o.put(e.getKey().trim(), e.getValue().strip());
+            }
+        }
+        if (o.size() > 0) {
+            root.set(key, o);
+        }
+    }
+
+    private static Map<String, Integer> loadStringIntMap(JsonNode root, String key) {
+        JsonNode o = root.get(key);
+        if (o == null || !o.isObject()) {
+            return Map.of();
+        }
+        Map<String, Integer> out = new LinkedHashMap<>();
+        Iterator<String> names = o.fieldNames();
+        while (names.hasNext()) {
+            String k = names.next();
+            if (k == null || k.isBlank()) {
+                continue;
+            }
+            JsonNode vn = o.get(k);
+            if (vn != null && vn.isNumber()) {
+                int idx = vn.asInt(-1);
+                if (idx >= 0) {
+                    out.put(k.trim(), idx);
+                }
+            }
+        }
+        return Map.copyOf(out);
+    }
+
+    private static void putStringIntMap(ObjectNode root, String key, Map<String, Integer> map) {
+        if (map == null || map.isEmpty()) {
+            return;
+        }
+        ObjectNode o = JSON.createObjectNode();
+        for (Map.Entry<String, Integer> e : map.entrySet()) {
+            if (e.getKey() != null
+                    && !e.getKey().isBlank()
+                    && e.getValue() != null
+                    && e.getValue() >= 0) {
+                o.put(e.getKey().trim(), e.getValue());
             }
         }
         if (o.size() > 0) {

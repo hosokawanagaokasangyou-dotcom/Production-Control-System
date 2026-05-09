@@ -3,7 +3,6 @@ package jp.co.pm.ai.desktop.config;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -33,14 +32,9 @@ public final class InitSettingPersistence {
                 .writeValue(sessionDest.toFile(), DesktopSessionStateStore.toJsonObject(state));
 
         Path tableDest = dir.resolve(InitSettingPaths.TABLE_COLUMN_DEFAULTS_FILE);
-        Path tableSrc = TableColumnOrderPersistence.userHomeStorePath();
-        if (Files.isRegularFile(tableSrc)) {
-            Files.copy(tableSrc, tableDest, StandardCopyOption.REPLACE_EXISTING);
-        } else {
-            JsonNode merged = TableColumnOrderPersistence.mergedTableColumnDefaultsRootForExport();
-            if (merged != null && merged.isObject()) {
-                JSON.writerWithDefaultPrettyPrinter().writeValue(tableDest.toFile(), merged);
-            }
+        JsonNode merged = TableColumnOrderPersistence.mergedTableColumnDefaultsRootForExport();
+        if (merged != null && merged.isObject()) {
+            JSON.writerWithDefaultPrettyPrinter().writeValue(tableDest.toFile(), merged);
         }
     }
 }

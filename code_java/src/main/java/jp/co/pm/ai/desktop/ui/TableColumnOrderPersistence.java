@@ -422,9 +422,26 @@ public final class TableColumnOrderPersistence {
         return STORE;
     }
 
-    /** {@link #readBundledTableColumnOrderRoot()} の公開名（init_setting 書き出し用）。 */
+    /**
+     * init_setting 書き出し用: バンドル既定（クラスパス・{@code pm-ai-data/config}・既存 {@code init_setting}）
+     * に、ユーザーホームの {@link #STORE} を上乗せマージしたルート（ユーザー値が優先）。
+     */
     public static JsonNode mergedTableColumnDefaultsRootForExport() {
-        return readBundledTableColumnOrderRoot();
+        ObjectNode acc = JSON.createObjectNode();
+        JsonNode bundled = readBundledTableColumnOrderRoot();
+        if (bundled != null && bundled.isObject()) {
+            deepMergeTableColumnRoot(acc, (ObjectNode) bundled);
+        }
+        try {
+            if (Files.isRegularFile(STORE)) {
+                JsonNode user = JSON.readTree(STORE.toFile());
+                if (user != null && user.isObject()) {
+                    deepMergeTableColumnRoot(acc, (ObjectNode) user);
+                }
+            }
+        } catch (IOException ignored) {
+        }
+        return acc;
     }
 
     /**

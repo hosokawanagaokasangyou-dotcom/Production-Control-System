@@ -642,6 +642,7 @@ public final class MainShellController {
             applyMainShellTabOrder(s.mainShellTabOrder());
         }
         applyMainShellTabTitleAliasesFromSession(s.mainShellTabTitleAliases());
+        applyInnerTabSelectionsFromSession(s.innerTabSelectedIndexByShellTabKey());
         pendingTheme = DesktopTheme.fromStored(s.uiTheme());
         if (mainShellTabOrganizerPaneController != null) {
             mainShellTabOrganizerPaneController.syncHeaderGlowControlsFromShell();
@@ -723,6 +724,7 @@ public final class MainShellController {
                 snapshotMainShellTabOrder(),
                 snapshotMainShellTabLayout(),
                 snapshotMainShellTabTitleAliases(),
+                snapshotInnerTabSelectedIndexByShellTabKey(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttZoomPercent(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttDateColWidth(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttMachineColWidth(),
@@ -895,6 +897,11 @@ public final class MainShellController {
     /** 現在の UI 状態を直ちに session-state.json に保存する（タブ内の微調整の自動保存用）。 */
     public void persistDesktopSessionNow() {
         DesktopSessionStateStore.save(collectDesktopSession());
+    }
+
+    /** グローバル設定の「現在の状態をデフォルトとする」実行直前にローカル {@code session-state.json} を同期する。 */
+    public void preparePackageDefaultsExport() {
+        persistDesktopSessionNow();
     }
 
     /** {@link InitSettingPersistence} 用のセッションスナップショット。 */
@@ -1192,6 +1199,40 @@ public final class MainShellController {
             }
         }
         refreshMainShellTabDisplayedTitles();
+    }
+
+    private Map<String, Integer> snapshotInnerTabSelectedIndexByShellTabKey() {
+        LinkedHashMap<String, Integer> m = new LinkedHashMap<>();
+        if (deliveryCalendarViewTabController != null) {
+            int i = deliveryCalendarViewTabController.snapshotInnerTabSelectedIndex();
+            if (i >= 0) {
+                m.put(MainShellTabId.DELIVERY_CALENDAR_VIEW.key(), i);
+            }
+        }
+        if (dispatchInteractiveTabController != null) {
+            int i = dispatchInteractiveTabController.snapshotInnerTabSelectedIndex();
+            if (i >= 0) {
+                m.put(MainShellTabId.DISPATCH_INTERACTIVE.key(), i);
+            }
+        }
+        return Map.copyOf(m);
+    }
+
+    private void applyInnerTabSelectionsFromSession(Map<String, Integer> map) {
+        if (map == null || map.isEmpty()) {
+            return;
+        }
+        Platform.runLater(
+                () -> {
+                    Integer dc = map.get(MainShellTabId.DELIVERY_CALENDAR_VIEW.key());
+                    if (dc != null && deliveryCalendarViewTabController != null) {
+                        deliveryCalendarViewTabController.applyInnerTabSelectedIndex(dc.intValue());
+                    }
+                    Integer di = map.get(MainShellTabId.DISPATCH_INTERACTIVE.key());
+                    if (di != null && dispatchInteractiveTabController != null) {
+                        dispatchInteractiveTabController.applyInnerTabSelectedIndex(di.intValue());
+                    }
+                });
     }
 
     private List<MainShellTabLayoutNode> snapshotMainShellTabLayout() {

@@ -53,6 +53,7 @@ public final class GlobalSettingsTabController {
             return;
         }
         try {
+            shell.preparePackageDefaultsExport();
             InitSettingPersistence.savePackageDefaults(
                     shell.snapshotUiEnv(), shell.snapshotDesktopSessionForExport());
             Alert ok = new Alert(AlertType.INFORMATION);
@@ -62,7 +63,8 @@ public final class GlobalSettingsTabController {
             ok.setTitle("完了");
             ok.setHeaderText(null);
             ok.setContentText(
-                    "書き出しました。init_setting に session_defaults.json と table_column_defaults.json を出力しました。");
+                    "書き出しました。init_setting に session_defaults.json（メイン／子タブ含む）と、"
+                            + "table_column_defaults.json（列・行高・納期管理ビュー等の表設定をバンドル既定にマージ）を出力しました。");
             ok.showAndWait();
         } catch (Exception ex) {
             Alert err = new Alert(AlertType.ERROR);
