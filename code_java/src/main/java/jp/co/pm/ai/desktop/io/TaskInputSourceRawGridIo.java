@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
@@ -17,8 +18,8 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.usermodel.DataFormatter;
 
 /**
- * {@link jp.co.pm.ai.desktop.config.AppPaths#KEY_PM_AI_TASK_INPUT_SOURCE_DIR} 由来ブックの「生シート」表示用。先頭行をヘッダー専用とせず、
- * シート上の全行をデータとして読み、列見出しは {@code 列1..列N} とする。
+ * Raw sheet reader for {@link jp.co.pm.ai.desktop.config.AppPaths#KEY_PM_AI_TASK_INPUT_SOURCE_DIR}.
+ * All sheet rows are data; synthetic headers use column index labels (see {@code readRaw} output).
  */
 public final class TaskInputSourceRawGridIo {
 
@@ -27,9 +28,9 @@ public final class TaskInputSourceRawGridIo {
     private TaskInputSourceRawGridIo() {}
 
     /**
-     * タスク入力ディレクトリで選ばれたファイルを生表として読む。
+     * Reads the selected file as a raw grid (CSV or Excel sheet by index).
      *
-     * @param excelSheetIndex Excel 系のみ有効（0 から）。CSV は無視される。
+     * @param excelSheetIndex Excel sheet index (0-based); ignored for CSV
      */
     public static PlanInputTabularIo.TabularSheet readRaw(Path path, int excelSheetIndex)
             throws IOException {
@@ -43,10 +44,10 @@ public final class TaskInputSourceRawGridIo {
                 || low.endsWith(".xltm")) {
             return readExcelSheetRaw(path, excelSheetIndex);
         }
-        throw new IOException("未対応の拡張子（csv / xlsx / xlsm / xltx / xltm のみ）: " + path);
+        throw new IOException("unsupported extension (csv / xlsx / xlsm / xltx / xltm only): " + path);
     }
 
-    /** Excel ブックのシート名一覧（順序はブック定義順）。 */
+    /** Lists Excel workbook sheet names (empty list if not Excel). */
     public static List<String> listExcelSheetNames(Path path) throws IOException {
         String low = path.getFileName().toString().toLowerCase(Locale.ROOT);
         if (!(low.endsWith(".xlsx")
@@ -78,7 +79,7 @@ public final class TaskInputSourceRawGridIo {
         }
         List<String> headers = new ArrayList<>();
         for (int c = 0; c < maxCol; c++) {
-            headers.add("列" + (c + 1));
+            headers.add("\u5217" + (c + 1));
         }
         List<List<String>> rows = new ArrayList<>();
         for (List<String> src : allRows) {
@@ -112,7 +113,7 @@ public final class TaskInputSourceRawGridIo {
             }
             List<String> headers = new ArrayList<>();
             for (int c = 0; c < maxCol; c++) {
-                headers.add("列" + (c + 1));
+                headers.add("\u5217" + (c + 1));
             }
             List<List<String>> rows = new ArrayList<>();
             for (int r = 0; r <= lastRow; r++) {
@@ -132,5 +133,92 @@ public final class TaskInputSourceRawGridIo {
             return "";
         }
         return CELL_FORMAT.formatCellValue(cell);
+    }
+
+    /**
+     * Aladdin tab: (1) drop first 4 sheet rows, (2) copy row6 text into blank cells of row5,
+     * (3) drop columns whose row6 label is speed/time, (4) drop the row6 line.
+     */
+    public static PlanInputTabularIo.TabularSheet applyAladdinProcessingPlanDisplaySteps(
+            PlanInputTabularIo.TabularSheet raw) {
+        Objects.requireNonNull(raw, "raw");
+        List<List<String>> rows = new ArrayList<>();
+        for (List<String> r : raw.rows()) {
+            rows.add(new ArrayList<>(r));
+        }
+        int maxCol = raw.headers().size();
+        for (List<String> r : rows) {
+            maxCol = Math.max(maxCol, r.size());
+        }
+        padRowsToWidth(rows, maxCol);
+
+        int dropHead = Math.min(4, rows.size());
+        if (dropHead > 0) {
+            rows.subList(0, dropHead).clear();
+        }
+
+        if (rows.size() >= 2) {
+            List<String> line5 = rows.get(0);
+            List<String> line6 = rows.get(1);
+            int w = Math.max(line5.size(), line6.size());
+            padRowsToWidth(rows, w);
+            line5 = rows.get(0);
+            line6 = rows.get(1);
+            for (int c = 0; c < w; c++) {
+                if (isBlankCell(line5.get(c))) {
+                    line5.set(c, line6.get(c) != null ? line6.get(c) : "");
+                }
+            }
+            line6 = rows.get(1);
+            List<Integer> keep = new ArrayList<>();
+            for (int c = 0; c < line6.size(); c++) {
+                String label = normalizeAladdinHeaderCell(line6.get(c));
+                if (!isAladdinSpeedOrTimeColumn(label)) {
+                    keep.add(c);
+                }
+            }
+            if (keep.size() != line6.size()) {
+                for (int i = 0; i < rows.size(); i++) {
+                    List<String> row = rows.get(i);
+                    List<String> next = new ArrayList<>(keep.size());
+                    for (int k : keep) {
+                        next.add(k < row.size() && row.get(k) != null ? row.get(k) : "");
+                    }
+                    rows.set(i, next);
+                }
+            }
+            rows.remove(1);
+        }
+
+        maxCol = 0;
+        for (List<String> r : rows) {
+            maxCol = Math.max(maxCol, r.size());
+        }
+        padRowsToWidth(rows, maxCol);
+        List<String> headers = new ArrayList<>();
+        for (int c = 0; c < maxCol; c++) {
+            headers.add("\u5217" + (c + 1));
+        }
+        return new PlanInputTabularIo.TabularSheet(headers, rows);
+    }
+
+    private static void padRowsToWidth(List<List<String>> rows, int width) {
+        for (List<String> r : rows) {
+            while (r.size() < width) {
+                r.add("");
+            }
+        }
+    }
+
+    private static boolean isBlankCell(String s) {
+        return s == null || s.trim().isEmpty();
+    }
+
+    private static String normalizeAladdinHeaderCell(String s) {
+        return s == null ? "" : s.trim();
+    }
+
+    private static boolean isAladdinSpeedOrTimeColumn(String label) {
+        return "\u52a0\u5de5\u901f\u5ea6".equals(label) || "\u52a0\u5de5\u6642\u9593".equals(label);
     }
 }
