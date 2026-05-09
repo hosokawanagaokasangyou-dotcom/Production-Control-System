@@ -1,5 +1,8 @@
 package jp.co.pm.ai.desktop;
 
+import java.util.concurrent.atomic.AtomicLong;
+
+import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
@@ -8,6 +11,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
+import javafx.stage.WindowEvent;
 
 /**
  * Simple splash until main window FXML is loaded and initialized.
@@ -27,9 +31,13 @@ final class StartupSplashStage {
     /**
      * Creates and shows the splash. Must run on the JavaFX application thread.
      *
+     * <p>{@code outVisibleSinceNanos} が非 null のとき、最初にウィンドウが表示されたとみなせる時刻（ナノ秒）を
+     * 一度だけ格納する。{@link javafx.stage.WindowEvent#WINDOW_SHOWN} またはその直後のパルスで設定する。
+     *
+     * @param outVisibleSinceNanos 表示開始時刻を格納するコンテナ（必要なければ {@code null}）
      * @return the stage; close it when the main window is ready
      */
-    static Stage createAndShow() {
+    static Stage createAndShow(AtomicLong outVisibleSinceNanos) {
         Stage stage = new Stage();
         stage.initStyle(StageStyle.UNDECORATED);
         stage.initModality(Modality.APPLICATION_MODAL);
@@ -69,8 +77,16 @@ final class StartupSplashStage {
         stage.setScene(scene);
         stage.setResizable(false);
         stage.centerOnScreen();
+        if (outVisibleSinceNanos != null) {
+            stage.addEventHandler(
+                    WindowEvent.WINDOW_SHOWN,
+                    e -> outVisibleSinceNanos.compareAndSet(0L, System.nanoTime()));
+        }
         stage.show();
         raiseToFront(stage);
+        if (outVisibleSinceNanos != null) {
+            Platform.runLater(() -> outVisibleSinceNanos.compareAndSet(0L, System.nanoTime()));
+        }
         return stage;
     }
 

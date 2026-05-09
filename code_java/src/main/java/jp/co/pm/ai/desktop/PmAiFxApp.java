@@ -3,13 +3,16 @@ package jp.co.pm.ai.desktop;
 import java.awt.GraphicsEnvironment;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicLong;
 
+import javafx.animation.PauseTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.StartupCrashLog;
 import jp.co.pm.ai.desktop.runtime.JvmMemoryMonitor;
@@ -98,7 +101,8 @@ public class PmAiFxApp extends Application {
     public void start(Stage primaryStage) {
         primaryStage.setTitle("工程管理 AI 配台 — JavaFX MVP");
 
-        Stage splash = StartupSplashStage.createAndShow();
+        AtomicLong splashVisibleSinceNanos = new AtomicLong();
+        Stage splash = StartupSplashStage.createAndShow(splashVisibleSinceNanos);
         // loader.load() が同じパルスで走るとスプラッシュが描画されないため、次のパルスで本体を構築する
         Platform.runLater(
                 () -> {
@@ -108,13 +112,44 @@ public class PmAiFxApp extends Application {
                         // primary にシーンを載せた直後、前面が移ることがあるため閉じる直前にも前面化する
                         StartupSplashStage.raiseToFront(splash);
                         primaryStage.show();
-                        splash.close();
-                        shell.appendBootMessage();
+                        closeSplashAfterMinimumVisibleDuration(
+                                splash, splashVisibleSinceNanos, shell);
                     } catch (Exception e) {
                         splash.close();
                         throw new RuntimeException(e);
                     }
                 });
+    }
+
+    private static final long SPLASH_MIN_VISIBLE_NANOS = 3_000_000_000L;
+
+    /**
+     * スプラッシュが実際に映ってから最低 {@value #SPLASH_MIN_VISIBLE_NANOS} ナノ秒経過してから閉じる。
+     * 本体ロードがそれより長い場合は追加待ちしない。
+     */
+    private static void closeSplashAfterMinimumVisibleDuration(
+            Stage splash,
+            AtomicLong splashVisibleSinceNanos,
+            MainShellController shell) {
+        long since = splashVisibleSinceNanos.get();
+        if (since == 0L) {
+            since = System.nanoTime();
+        }
+        long deadline = since + SPLASH_MIN_VISIBLE_NANOS;
+        long waitNs = deadline - System.nanoTime();
+        Runnable finish =
+                () -> {
+                    splash.close();
+                    shell.appendBootMessage();
+                };
+        if (waitNs <= 0) {
+            finish.run();
+            return;
+        }
+        double millis = waitNs / 1_000_000.0;
+        PauseTransition pause = new PauseTransition(Duration.millis(millis));
+        pause.setOnFinished(e -> finish.run());
+        pause.play();
     }
 
     private static MainShellController bootstrapMainWindow(Stage primaryStage) throws Exception {
