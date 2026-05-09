@@ -9,6 +9,57 @@ alwaysApply: true
 
 JavaFX デスクトップの **メインシェル最上段タブ**を増減する変更では、以下を守り、既定構成・セッション復元・タブ整理ツリーが破綻しないようにする。
 
+## タブ管理における初期値（説明・運用）
+
+チャットや設計メモで示す **並び・グループ分けの例**として次を参照できる。**ソースへそのままコピーして埋め込む仕様ではない**。実装の既定は `MainShellTabLayoutDefaults` が正で、説明用の表と完全に一致させる義務はない。
+
+並び順・グループ分け（key と画面名の対応の例）:
+
+| key | 画面名 |
+|-----|--------|
+| run | 実行・ログ |
+| planInput | 配台計画_タスク入力 |
+| dispatchInteractive | 配台計画手動修正 |
+| equipmentGanttGraphic | 設備ガント（グラフィック） |
+| deliveryCalendarView | 納期管理ビュー |
+| operatorCard | オペレーターカード |
+| tabOrganizer | タブ整理 |
+
+● が付く名称はグループ見出しの例。
+
+**●バッジ設定**
+
+| key | 画面名 |
+|-----|--------|
+| uiBadgeDesign | UIバッジ |
+| pushButtonDesign | プッシュボタン |
+| ganttPersonBadgeDesign | 設備ガント・担当バッジ |
+
+**●環境設定**
+
+| key | 画面名 |
+|-----|--------|
+| env | 環境変数 |
+| memorySettings | メモリ設定 |
+| globalSettings | グローバル設定 |
+
+**●結果情報**
+
+| key | 画面名 |
+|-----|--------|
+| planResultViewer | 計画結果ビューア (JSON) |
+| stage1Preview | 段階1 成形結果 |
+| resultDispatch | 結果_配台表 (JSON) |
+
+**●その他**
+
+| key | 画面名 |
+|-----|--------|
+| masterSummary | マスタ読込サマリ |
+| excludeRules | 配台不要ルール (JSON) |
+| specialRules | 特別ルール |
+| actualsStatus | 実績DATA・明細の取得状態 |
+
 ## 正本（実装）
 
 | 役割 | ファイル |
@@ -27,7 +78,7 @@ JavaFX デスクトップの **メインシェル最上段タブ**を増減する変更では、以下を守り、
    - これが「**トップレベルの最後**（タブ整理タブの直前）」に並ぶ順の正本になる。  
    - `completeFlatTabKeyOrder()` は enum にだけあってこのリストに無いキーも末尾に拾うが、**意図した順序で運用するなら必ず DEFAULT に明示追加**すること。
 3. **`MainShellTabLayoutDefaults.groupedLayout()` を更新**し、新タブを適切なブロックへ入れる（単独トップ／「バッジ設定」「環境設定」「結果情報」「その他」等）。仕様が無ければ **トップレベル末尾**（他単独タブと同列の最後）か、性質に近いグループへ。
-4. ドキュメント・チャットで「タブ整理の既定」を説明するときは **`groupedLayout()` の構造**に合わせる。
+4. 説明用の並び・グループは上記「初期値」を参照してよい。**コード変更時は `MainShellTabLayoutDefaults` を実装の正として更新**する（説明表と機械的に同期させることだけを義務とはしない）。
 
 ## 必須（子タブをタブ整理ツリーに載せる）
 

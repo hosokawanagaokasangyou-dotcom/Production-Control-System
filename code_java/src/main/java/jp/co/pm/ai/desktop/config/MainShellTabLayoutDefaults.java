@@ -9,22 +9,10 @@ import jp.co.pm.ai.desktop.MainShellTabId;
 /**
  * Default grouped layout for main-shell tabs (tab organizer baseline when session has no layout).
  *
- * <p>Catalog (keys are {@link MainShellTabId#key()}):
+ * <p>Tab-management initial ordering / grouping for documentation is in
+ * {@code .cursor/rules/main-shell-tab-management.mdc}; it is not duplicated here as a normative catalog.
  *
- * <ul>
- *   <li>Top-level strip (single tabs): run, planInput, dispatchInteractive, equipmentGanttGraphic,
- *       deliveryCalendarView, operatorCard ? then {@link MainShellTabId#TAB_ORGANIZER} is inserted by
- *       {@link jp.co.pm.ai.desktop.MainShellController} immediately after operatorCard (not listed here;
- *       omitted from merge-required leaves).
- *   <li>Group {@code \u30d0\u30c3\u30b8\u8a2d\u5b9a}: uiBadgeDesign, pushButtonDesign,
- *       ganttPersonBadgeDesign
- *   <li>Group {@code \u74b0\u5883\u8a2d\u5b9a}: env, memorySettings, globalSettings
- *   <li>Group {@code \u7d50\u679c\u60c5\u5831}: planResultViewer, stage1Preview, resultDispatch
- *   <li>Group {@code \u305d\u306e\u4ed6}: masterSummary, excludeRules, specialRules, actualsStatus
- * </ul>
- *
- * <p>Add new {@link MainShellTabId} keys at the end of {@link #DEFAULT_FLAT_TAB_KEY_ORDER} (before badge group
- * keys in that list).
+ * <p>Add new {@link MainShellTabId} keys at the end of {@link #DEFAULT_FLAT_TAB_KEY_ORDER} (before tab organizer).
  *
  * <p>Rulebook: {@code .cursor/rules/main-shell-tab-management.mdc}
  */
