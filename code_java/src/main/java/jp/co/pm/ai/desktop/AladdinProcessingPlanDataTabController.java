@@ -47,16 +47,16 @@ import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 
 /**
- * {@link AppPaths#KEY_PM_AI_TASK_INPUT_SOURCE_DIR} 直下㝮最新タスク入力ファイルを読㝿〝先頭シート（㝾㝟㝯 CSV 全体）を
- * 生表㝨㝗㝦 {@link SpreadsheetView} 㝫表示㝙る。レイアウト㝯 {@code AladdinProcessingPlanDataTab.fxml}。
+ * {@link AppPaths#KEY_PM_AI_TASK_INPUT_SOURCE_DIR} ??????????????????????????? CSV ????
+ * ????? {@link SpreadsheetView} ???????????? {@code AladdinProcessingPlanDataTab.fxml}?
  */
 
 public final class AladdinProcessingPlanDataTabController {
 
     private static final String HINT_TEXT =
-            "PM_AI_TASK_INPUT_SOURCE_DIR 㝧指定㝗㝟フォルダ直下㝧〝加工計画DATA相当㝮拡張孝（csv / xlsx 等）㝮"
-                    + "更新時刻㝌最新㝮1ファイルを表示㝗㝾㝙。Excel 㝯列見出㝗を「列1…〝㝨㝗㝟㝆㝈㝧シート上㝮全行をデータ行㝨㝗㝾㝙。"
-                    + " ポットワーク未到靔時㝯フォルダ㝌開㝑㝚空表示㝫㝪り㝾㝙。";
+            "PM_AI_TASK_INPUT_SOURCE_DIR ?????????????????DATA???????csv / xlsx ???"
+                    + "????????1???????????Excel ????????1?????????????????????????"
+                    + " ????????????????????????????";
 
 
     @FXML
@@ -265,7 +265,7 @@ public final class AladdinProcessingPlanDataTabController {
     private void onReorderColumns() {
         if (headersRef.isEmpty()) {
             if (shell != null) {
-                shell.appendLog("[aladdin-plan-data] 列㝌㝂り㝾㝛ん?���?�㝫冝読㝿?�?");
+                shell.appendLog("[aladdin-plan-data] ????????????????????");
             }
             return;
         }
@@ -369,9 +369,9 @@ public final class AladdinProcessingPlanDataTabController {
         try {
             Map<String, String> ui = shell.snapshotUiEnv();
             Path dir = AppPaths.resolveTaskInputSourceDir(ui);
-            dirLabel.setText(dir != null ? dir.toString() : "(未設定)");
+            dirLabel.setText(dir != null ? dir.toString() : "(???)");
             if (dir == null || !Files.isDirectory(dir)) {
-                statusLabel.setText("フォルダ㝪㝗㝾㝟㝯未到靔");
+                statusLabel.setText("????????????");
                 pathLabel.setText("");
                 sheetCombo.setDisable(true);
                 sheetCombo.getItems().clear();
@@ -381,7 +381,7 @@ public final class AladdinProcessingPlanDataTabController {
             }
             Optional<Path> newest = NetworkSourceDirResolver.newestTaskInputFileInDirectory(dir);
             if (newest.isEmpty()) {
-                statusLabel.setText("該当ファイル㝪㝗");
+                statusLabel.setText("????????");
                 pathLabel.setText("");
                 sheetCombo.setDisable(true);
                 sheetCombo.getItems().clear();
@@ -395,7 +395,7 @@ public final class AladdinProcessingPlanDataTabController {
 
             String low = file.getFileName().toString().toLowerCase(Locale.ROOT);
             if (low.endsWith(".pq") || low.endsWith(".parquet")) {
-                statusLabel.setText("Parquet 㝯未対応㝧㝙");
+                statusLabel.setText("Parquet ??????");
                 sheetCombo.setDisable(true);
                 sheetCombo.getItems().clear();
                 applyEmpty();
@@ -412,7 +412,7 @@ public final class AladdinProcessingPlanDataTabController {
                         sheetCombo.getSelectionModel().select(0);
                     }
                 } catch (IOException ex) {
-                    statusLabel.setText("シート一覧エラー");
+                    statusLabel.setText("????????");
                     if (shell != null) {
                         shell.appendLog(
                                 "[aladdin-plan-data] "
@@ -441,7 +441,7 @@ public final class AladdinProcessingPlanDataTabController {
             PlanInputTabularIo.TabularSheet tab =
                     TaskInputSourceRawGridIo.applyAladdinProcessingPlanDisplaySteps(
                             TaskInputSourceRawGridIo.readRaw(file, excelSheetIndex));
-            // Persist shaped data (pre-permutation) for calendar overlay reuse
+            // Persist shaped plan (pre-column-order) for DeliveryCalendarView overlay JSON cache
             if (shell != null) {
                 try {
                     java.nio.file.Path savePath =
@@ -449,7 +449,8 @@ public final class AladdinProcessingPlanDataTabController {
                     JsonTableIo.saveArrayTable(savePath, tab.headers(), tab.rows());
                 } catch (Exception saveEx) {
                     shell.appendLog(
-                            "[aladdin-plan-data] shaped JSON save failed: " + saveEx.getMessage());
+                            "[aladdin-plan-data] shaped JSON save failed: "
+                                    + saveEx.getMessage());
                 }
             }
             List<TableColumnOrderPersistence.ColumnSpec> lay =
@@ -478,11 +479,15 @@ public final class AladdinProcessingPlanDataTabController {
             TableColumnOrderPersistence.saveColumnVisibility(
                     TableColumnOrderPersistence.TableId.ALADDIN_PROCESSING_PLAN_RAW, visAfter);
 
-            statusLabel.setText(rows.size() + " 行 × " + headersRef.size() + " 列");
+            statusLabel.setText(
+                    rows.size()
+                            + " \u884c \u00d7 "
+                            + headersRef.size()
+                            + " \u5217");
             rebuildSpreadsheet();
         } catch (Exception ex) {
             if (showErrorsInStatus) {
-                statusLabel.setText("読込エラー");
+                statusLabel.setText("\u8aad\u8fbc\u30a8\u30e9\u30fc");
             }
             if (shell != null) {
                 shell.appendLog(
