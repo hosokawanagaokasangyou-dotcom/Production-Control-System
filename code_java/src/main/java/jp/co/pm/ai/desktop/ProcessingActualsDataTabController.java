@@ -728,6 +728,20 @@ public final class ProcessingActualsDataTabController {
         clearColumnFiltersAndSort();
     }
 
+    /**
+     * Snapshot of shaped headers <em>before</em> manufacturing-condition filter and dedupe.
+     * This is the same data Python's {@code _aggregate_daily_actual_qty_aladdin_max} uses as its
+     * source, so calendar overlay applies the same "長さ" filter independently.
+     */
+    List<String> getUnfilteredShapedHeaders() {
+        return new ArrayList<>(unfilteredShapedHeaders);
+    }
+
+    /** Snapshot of shaped rows before filter/dedupe (see {@link #getUnfilteredShapedHeaders()}). */
+    List<List<String>> getUnfilteredShapedRows() {
+        return new ArrayList<>(unfilteredShapedRows);
+    }
+
     private static boolean isExcelPath(Path p) {
         if (p == null || p.getFileName() == null) {
             return false;

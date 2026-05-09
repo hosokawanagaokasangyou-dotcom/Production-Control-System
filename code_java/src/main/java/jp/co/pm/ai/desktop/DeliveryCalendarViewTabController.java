@@ -173,6 +173,14 @@ public final class DeliveryCalendarViewTabController {
     private final ObservableList<ObservableList<DeliveryCalendarMainCell>> mainRows =
             FXCollections.observableArrayList();
 
+    /**
+     * Parallel metadata for {@link #mainRows}: each element is {@code {machineKey, requestId}} for a
+     * data row, or {@code null} for section/header rows. Populated during {@link #loadMainCalendar} from
+     * the Python JSON before column permutation; row order is never changed by column permutation so
+     * indices stay aligned.
+     */
+    private final ArrayList<String[]> mainRowMeta = new ArrayList<>();
+
     private final ArrayList<String> compareHeadersRef = new ArrayList<>();
 
     private final ObservableList<ObservableList<String>> compareRows = FXCollections.observableArrayList();
@@ -954,9 +962,19 @@ public final class DeliveryCalendarViewTabController {
             }
         }
         mainRows.clear();
+        mainRowMeta.clear();
         JsonNode rows = mainCal.get("rows");
         if (rows != null && rows.isArray()) {
             for (JsonNode row : rows) {
+                String kind = row.path("kind").asText("data");
+                if ("section".equals(kind)) {
+                    mainRowMeta.add(null);
+                } else {
+                    mainRowMeta.add(new String[]{
+                        row.path("machineKey").asText(""),
+                        row.path("requestId").asText("")
+                    });
+                }
                 ObservableList<DeliveryCalendarMainCell> line = FXCollections.observableArrayList();
                 JsonNode cells = row.get("cells");
                 if (cells != null && cells.isArray()) {
@@ -986,7 +1004,332 @@ public final class DeliveryCalendarViewTabController {
         TableColumnOrderPersistence.saveColumnVisibility(
                 TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN, visAfter);
 
+        overlayChildTabValues();
         rebuildMainSpreadsheet();
+    }
+
+    // -------------------------------------------------------------------------
+    // Child-tab data overlay (replaces Python-computed p/a/d with Java-side data)
+    // -------------------------------------------------------------------------
+
+    /** Pattern for calendar column-header dates like {@code 2026?4?21?(?)}. */
+    private static final java.util.regex.Pattern CAL_DATE_HDR =
+            java.util.regex.Pattern.compile("(\\d{4})\u5e74(\\d{1,2})\u6708(\\d{1,2})\u65e5\\([\u6708\u706b\u6c34\u6728\u91d1\u571f\u65e5]\\)");
+
+    /** Pattern for Aladdin date column headers: {@code yyyy/MM/dd}. */
+    private static final java.util.regex.Pattern ALADDIN_DATE_COL =
+            java.util.regex.Pattern.compile("\\d{4}/\\d{2}/\\d{2}");
+
+    private static final String COL_MK_NAME = "\u6a5f\u68b0\u540d"; // ???
+    private static final String COL_TID     = "\u4f9d\u983cNO";     // ??NO
+    private static final String COL_KAKOU_DATE = "\u52a0\u5de5\u65e5"; // ???
+    private static final String COL_ACT_QTY = "\u5b9f\u52a0\u5de5\u6570"; // ????
+    private static final String COL_MFG_COND = "\u88fd\u9020\u6761\u4ef6(\u5185\u8a33)"; // ????(??)
+    private static final String MFG_COND_LENGTH = "\u9577\u3055"; // ??
+    private static final String COL_DIS_DATE = "\u914d\u53f0\u65e5"; // ???
+    private static final String COL_DIS_QTY  = "\u5f53\u65e5\u914d\u53f0\u6570\u91cf"; // ??????
+
+    /**
+     * Replaces triple-cell p/a/d values in {@link #mainRows} with quantities aggregated directly from
+     * the child tab controllers' shaped data (Aladdin plan, processing actuals, dispatch table).
+     * This is called after {@link #loadMainCalendar} so that column permutation has already been
+     * applied to {@link #mainHeadersRef}; row order is preserved and {@link #mainRowMeta} indices align.
+     */
+    private void overlayChildTabValues() {
+        if (mainRowMeta.isEmpty() || mainHeadersRef.isEmpty()) {
+            return;
+        }
+
+        // Map column position ? normalised date string "yyyy/MM/dd" for every date column
+        Map<Integer, String> calDateByIdx = new LinkedHashMap<>();
+        for (int i = 0; i < mainHeadersRef.size(); i++) {
+            String ds = parseDateHeader(mainHeadersRef.get(i));
+            if (ds != null) {
+                calDateByIdx.put(i, ds);
+            }
+        }
+        if (calDateByIdx.isEmpty()) {
+            return;
+        }
+
+        // Build lookup tables from each child tab
+        Map<String, Map<String, Map<String, Double>>> planLookup =
+                buildAladdinPlanLookup(
+                        aladdinProcessingPlanDataTabController.getShapedHeaders(),
+                        aladdinProcessingPlanDataTabController.getShapedRows());
+
+        Map<String, Map<String, Map<String, Double>>> actualLookup =
+                buildActualLookup(
+                        processingActualsDataTabController.getUnfilteredShapedHeaders(),
+                        processingActualsDataTabController.getUnfilteredShapedRows());
+
+        Map<String, Map<String, Map<String, Double>>> dispatchLookup =
+                buildDispatchLookup(
+                        deliveryCalendarResultDispatchTableTabController.getShapedHeaders(),
+                        deliveryCalendarResultDispatchTableTabController.getShapedRows());
+
+        // region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter(
+                    "/mnt/c/\u5de5\u7a0b\u7ba1\u7406AI\u30d7\u30ed\u30b8\u30a7\u30af\u30c8_JAVA/.cursor/debug-ebddd7.log",
+                    true);
+            fw.write("{\"sessionId\":\"ebddd7\",\"hypothesisId\":\"OVERLAY\",\"location\":\"DeliveryCalendarViewTabController.java:overlayChildTabValues\",\"message\":\"lookup_sizes\",\"data\":{\"planMachines\":" + planLookup.size() + ",\"actualMachines\":" + actualLookup.size() + ",\"dispatchMachines\":" + dispatchLookup.size() + ",\"calDateCols\":" + calDateByIdx.size() + ",\"mainRows\":" + mainRows.size() + "},\"timestamp\":" + System.currentTimeMillis() + "}\n");
+            fw.close();
+        } catch (Exception _e) { /* ignore */ }
+        // endregion
+
+        // Replace TripleQty cells with values from child tab data
+        for (int i = 0; i < mainRows.size(); i++) {
+            String[] meta = i < mainRowMeta.size() ? mainRowMeta.get(i) : null;
+            if (meta == null) {
+                continue; // section row
+            }
+            String mk = meta[0];
+            String tid = meta[1];
+            if (mk.isEmpty() && tid.isEmpty()) {
+                continue;
+            }
+            ObservableList<DeliveryCalendarMainCell> row = mainRows.get(i);
+            for (Map.Entry<Integer, String> e : calDateByIdx.entrySet()) {
+                int j = e.getKey();
+                if (j >= row.size()) {
+                    continue;
+                }
+                String dateStr = e.getValue();
+                double p = lookupQty(planLookup, mk, tid, dateStr);
+                double a = lookupQty(actualLookup, mk, tid, dateStr);
+                double d = lookupQty(dispatchLookup, mk, tid, dateStr);
+                String sp = Math.abs(p) > 1e-12 ? formatQtyShort(p) : "";
+                String sa = Math.abs(a) > 1e-12 ? formatQtyShort(a) : "";
+                String sd = Math.abs(d) > 1e-12 ? formatQtyShort(d) : "";
+                row.set(j, new DeliveryCalendarMainCell.TripleQty(sp, sa, sd));
+            }
+        }
+    }
+
+    private static double lookupQty(
+            Map<String, Map<String, Map<String, Double>>> lookup, String mk, String tid, String dateStr) {
+        Map<String, Map<String, Double>> byTid = lookup.get(mk);
+        if (byTid == null) {
+            return 0.0;
+        }
+        Map<String, Double> byDate = byTid.get(tid);
+        if (byDate == null) {
+            return 0.0;
+        }
+        Double q = byDate.get(dateStr);
+        return q != null ? q : 0.0;
+    }
+
+    /**
+     * Parses a calendar column-header string like {@code 2026?4?21?(?)} to {@code "2026/04/21"};
+     * returns {@code null} if the string does not match the pattern.
+     */
+    private static String parseDateHeader(String header) {
+        if (header == null) {
+            return null;
+        }
+        var m = CAL_DATE_HDR.matcher(header);
+        if (!m.matches()) {
+            return null;
+        }
+        int y = Integer.parseInt(m.group(1));
+        int mo = Integer.parseInt(m.group(2));
+        int d = Integer.parseInt(m.group(3));
+        return String.format("%04d/%02d/%02d", y, mo, d);
+    }
+
+    /**
+     * NFKC-normalise a machine name to a match key (mirrors Python {@code _normalize_equipment_match_key}).
+     */
+    private static String normalizeEquipmentMatchKey(String val) {
+        if (val == null || val.isBlank()) {
+            return "";
+        }
+        String t = java.text.Normalizer.normalize(val, java.text.Normalizer.Form.NFKC);
+        t = t.replace('\u00a0', ' ').replace('\u3000', ' ');
+        t = t.replaceAll("[\u200b\u200c\u200d\ufeff]", "");
+        return t.replaceAll("\\s+", " ").strip();
+    }
+
+    /** Format a double the same way Python {@code _format_qty_short} does. */
+    private static String formatQtyShort(double v) {
+        long rounded = Math.round(v);
+        if (Math.abs(v - rounded) < 1e-9) {
+            return Long.toString(rounded);
+        }
+        String s = String.format("%.4f", v).replaceAll("0+$", "").replaceAll("\\.$", "");
+        return s.isEmpty() ? "0" : s;
+    }
+
+    private static double parseCellDouble(String s) {
+        if (s == null || s.isBlank()) {
+            return 0.0;
+        }
+        try {
+            return Double.parseDouble(s.strip());
+        } catch (NumberFormatException e) {
+            return 0.0;
+        }
+    }
+
+    private static int colIdx(List<String> headers, String title) {
+        for (int i = 0; i < headers.size(); i++) {
+            if (title.equals(headers.get(i))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static String cellAt(List<String> row, int idx) {
+        return (idx >= 0 && idx < row.size() && row.get(idx) != null) ? row.get(idx) : "";
+    }
+
+    /**
+     * Normalises a date string to {@code yyyy/MM/dd}.  Accepts {@code yyyy/MM/dd} (unchanged),
+     * {@code yyyy-MM-dd} or {@code yyyy-MM-ddThh:mm:ss} (ISO, replaces {@code -} and drops time).
+     */
+    private static String normaliseDateStr(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String s = raw.strip();
+        // ISO datetime: 2026-04-21 or 2026-04-21T00:00:00
+        if (s.length() >= 10 && s.charAt(4) == '-' && s.charAt(7) == '-') {
+            return s.substring(0, 10).replace('-', '/');
+        }
+        // Already yyyy/MM/dd
+        if (s.length() == 10 && s.charAt(4) == '/' && s.charAt(7) == '/') {
+            return s;
+        }
+        // Try flexible y/m/d variants like yyyy/M/d
+        try {
+            String[] parts = s.split("[/\\-]");
+            if (parts.length == 3) {
+                int y = Integer.parseInt(parts[0].strip());
+                int mo = Integer.parseInt(parts[1].strip());
+                int d = Integer.parseInt(parts[2].strip());
+                return String.format("%04d/%02d/%02d", y, mo, d);
+            }
+        } catch (NumberFormatException ignored) { /* fall through */ }
+        return null;
+    }
+
+    /**
+     * Builds plan qty lookup from Aladdin shaped data.
+     * Key: {@code normalizedMk -> tid -> "yyyy/MM/dd" -> sumQty}.
+     * Date columns are identified by the {@code yyyy/MM/dd} header pattern.
+     */
+    private static Map<String, Map<String, Map<String, Double>>> buildAladdinPlanLookup(
+            List<String> headers, List<List<String>> rows) {
+        int mkIdx  = colIdx(headers, COL_MK_NAME);
+        int tidIdx = colIdx(headers, COL_TID);
+        if (mkIdx < 0 || tidIdx < 0) {
+            return Map.of();
+        }
+        Map<Integer, String> dateCols = new LinkedHashMap<>();
+        for (int i = 0; i < headers.size(); i++) {
+            String h = headers.get(i);
+            if (h != null && ALADDIN_DATE_COL.matcher(h).matches()) {
+                dateCols.put(i, h);
+            }
+        }
+        if (dateCols.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Map<String, Map<String, Double>>> result = new LinkedHashMap<>();
+        for (List<String> row : rows) {
+            String mk  = normalizeEquipmentMatchKey(cellAt(row, mkIdx));
+            String tid = cellAt(row, tidIdx).strip();
+            if (mk.isEmpty() || tid.isEmpty()) {
+                continue;
+            }
+            for (Map.Entry<Integer, String> e : dateCols.entrySet()) {
+                double qty = parseCellDouble(cellAt(row, e.getKey()));
+                if (Math.abs(qty) > 1e-12) {
+                    result.computeIfAbsent(mk, k -> new LinkedHashMap<>())
+                          .computeIfAbsent(tid, k -> new LinkedHashMap<>())
+                          .merge(e.getValue(), qty, Double::sum);
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Builds actual qty lookup from <em>unfiltered</em> shaped actuals data,
+     * applying the same {@code ????(??) == "??"} filter Python uses.
+     * Aggregation: MAX per {@code (mk, tid, date)}.
+     * Key: {@code normalizedMk -> tid -> "yyyy/MM/dd" -> maxQty}.
+     */
+    private static Map<String, Map<String, Map<String, Double>>> buildActualLookup(
+            List<String> headers, List<List<String>> rows) {
+        int mkIdx   = colIdx(headers, COL_MK_NAME);
+        int tidIdx  = colIdx(headers, COL_TID);
+        int dateIdx = colIdx(headers, COL_KAKOU_DATE);
+        int qtyIdx  = colIdx(headers, COL_ACT_QTY);
+        int condIdx = colIdx(headers, COL_MFG_COND);
+        if (mkIdx < 0 || tidIdx < 0 || dateIdx < 0 || qtyIdx < 0) {
+            return Map.of();
+        }
+        Map<String, Map<String, Map<String, Double>>> result = new LinkedHashMap<>();
+        for (List<String> row : rows) {
+            // Filter: ????(??) == "??" (when column is present)
+            if (condIdx >= 0) {
+                String cond = cellAt(row, condIdx).strip();
+                if (!MFG_COND_LENGTH.equals(cond)) {
+                    continue;
+                }
+            }
+            String mk  = normalizeEquipmentMatchKey(cellAt(row, mkIdx));
+            String tid = cellAt(row, tidIdx).strip();
+            String ds  = normaliseDateStr(cellAt(row, dateIdx));
+            if (mk.isEmpty() || tid.isEmpty() || ds == null) {
+                continue;
+            }
+            double qty = parseCellDouble(cellAt(row, qtyIdx));
+            if (qty <= 1e-12) {
+                continue;
+            }
+            // MAX aggregation (mirrors Python)
+            result.computeIfAbsent(mk, k -> new LinkedHashMap<>())
+                  .computeIfAbsent(tid, k -> new LinkedHashMap<>())
+                  .merge(ds, qty, Math::max);
+        }
+        return result;
+    }
+
+    /**
+     * Builds dispatch qty lookup from shaped dispatch table data.
+     * Key: {@code normalizedMk -> tid -> "yyyy/MM/dd" -> sumQty}.
+     * The {@code ???} column comes from JSON and is in ISO {@code yyyy-MM-dd} format.
+     */
+    private static Map<String, Map<String, Map<String, Double>>> buildDispatchLookup(
+            List<String> headers, List<List<String>> rows) {
+        int mkIdx   = colIdx(headers, COL_MK_NAME);
+        int tidIdx  = colIdx(headers, COL_TID);
+        int dateIdx = colIdx(headers, COL_DIS_DATE);
+        int qtyIdx  = colIdx(headers, COL_DIS_QTY);
+        if (mkIdx < 0 || tidIdx < 0 || dateIdx < 0 || qtyIdx < 0) {
+            return Map.of();
+        }
+        Map<String, Map<String, Map<String, Double>>> result = new LinkedHashMap<>();
+        for (List<String> row : rows) {
+            String mk  = normalizeEquipmentMatchKey(cellAt(row, mkIdx));
+            String tid = cellAt(row, tidIdx).strip();
+            String ds  = normaliseDateStr(cellAt(row, dateIdx));
+            if (mk.isEmpty() || tid.isEmpty() || ds == null) {
+                continue;
+            }
+            double qty = parseCellDouble(cellAt(row, qtyIdx));
+            if (Math.abs(qty) > 1e-12) {
+                result.computeIfAbsent(mk, k -> new LinkedHashMap<>())
+                      .computeIfAbsent(tid, k -> new LinkedHashMap<>())
+                      .merge(ds, qty, Double::sum);
+            }
+        }
+        return result;
     }
 
     private void loadCompareTable(JsonNode cmp) {

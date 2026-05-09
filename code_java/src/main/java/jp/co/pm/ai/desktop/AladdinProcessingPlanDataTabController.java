@@ -497,6 +497,20 @@ public final class AladdinProcessingPlanDataTabController {
         clearColumnFiltersAndSort();
     }
 
+    /** Snapshot of current shaped headers (after column-order permutation). Thread-safe defensive copy. */
+    List<String> getShapedHeaders() {
+        return new ArrayList<>(headersRef);
+    }
+
+    /** Snapshot of current shaped rows (after column-order permutation). Thread-safe defensive copy. */
+    List<List<String>> getShapedRows() {
+        List<List<String>> out = new ArrayList<>(rows.size());
+        for (var r : rows) {
+            out.add(new ArrayList<>(r));
+        }
+        return out;
+    }
+
     private static boolean isExcelPath(Path p) {
         if (p == null || p.getFileName() == null) {
             return false;
