@@ -229,9 +229,10 @@ public final class TaskInputSourceRawGridIo {
     private static final Pattern MONTH_DAY_SLASH = Pattern.compile("^\\s*(\\d{1,2})/(\\d{1,2})\\s*$");
 
     /**
-     * Top row = future headers: cells that look like dates become {@code yyyy/MM/dd}. Year is taken
-     * from the first data row at the column whose header cell is \u53d7\u6ce8\u65e5. The literal header
-     * text cell \u53d7\u6ce8\u65e5 is left unchanged.
+     * Top row = future headers: cells that look like dates become {@code yyyy/MM/dd} (e.g. {@code 2026/04/01}).
+     * Trailing weekday suffixes like {@code (?)} are stripped before parsing. Year for month/day-only
+     * values is taken from the first data row at the column whose header cell is \u53d7\u6ce8\u65e5.
+     * The literal header text cell \u53d7\u6ce8\u65e5 is left unchanged.
      */
     private static void normalizeAladdinHeaderRowDateCells(List<List<String>> rows) {
         if (rows.size() < 2) {
@@ -304,7 +305,15 @@ public final class TaskInputSourceRawGridIo {
         return null;
     }
 
-    /** Returns formatted date or null if left unchanged. */
+    /** Trailing {@code (?)} / {@code (?)} labels on calendar-style headers (e.g. {@code 05/25(?)}). */
+    private static String stripTrailingWeekdayInParens(String s) {
+        if (s == null || s.isEmpty()) {
+            return "";
+        }
+        return s.replaceFirst("\\s*\\([^)]*\\)\\s*$", "").trim();
+    }
+
+    /** Returns formatted date or null if left unchanged. Output always uses {@link #ALADDIN_HEADER_DATE_OUT}. */
     private static String formatAladdinHeaderDateCell(String raw, int year) {
         if (isBlankCell(raw)) {
             return null;
@@ -313,11 +322,15 @@ public final class TaskInputSourceRawGridIo {
         if ("\u53d7\u6ce8\u65e5".equals(t)) {
             return null;
         }
+        String core = stripTrailingWeekdayInParens(t);
         LocalDate full = tryParseFlexibleDate(t);
+        if (full == null) {
+            full = tryParseFlexibleDate(core);
+        }
         if (full != null) {
             return full.format(ALADDIN_HEADER_DATE_OUT);
         }
-        Matcher md = MONTH_DAY_SLASH.matcher(t);
+        Matcher md = MONTH_DAY_SLASH.matcher(core);
         if (md.matches()) {
             int month = Integer.parseInt(md.group(1));
             int day = Integer.parseInt(md.group(2));
