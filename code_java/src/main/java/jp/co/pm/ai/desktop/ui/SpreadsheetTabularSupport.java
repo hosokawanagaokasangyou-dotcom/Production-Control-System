@@ -54,6 +54,13 @@ public final class SpreadsheetTabularSupport {
     /** \u4e09\u91cd\u30bb\u30eb\u5185\u5404\u884c\u30e9\u30d9\u30eb\uff08\u30c6\u30fc\u30de\u7121\u8996\u30fb\u9ed2\uff09 */
     private static final String DC_TRIPLE_LABEL_STYLE = "-fx-text-fill: black; -fx-font-size: 10px;";
 
+    /** Date-column triple: lines shown as {@code (prefix)(qty)}; blanks show em dash after prefix. */
+    private static final String DC_TRIPLE_PREFIX_PLAN = "(\u30a2\u30e9\u8a08\u753b)";
+
+    private static final String DC_TRIPLE_PREFIX_ACTUAL = "(\u5b9f\u7e3e)";
+
+    private static final String DC_TRIPLE_PREFIX_DISPATCH = "(\u30b7\u30b9\u914d\u53f0)";
+
     /** Grid row index reserved for ControlsFX column filters ({@link SpreadsheetView#setFilteredRow}). */
     public static final int SPREADSHEET_FILTER_ROW = 0;
 
@@ -515,7 +522,14 @@ public final class SpreadsheetTabularSupport {
                 DeliveryCalendarMainCell mc =
                         c < src.size() && src.get(c) != null ? src.get(c) : new DeliveryCalendarMainCell.PlainText("");
                 if (mc instanceof DeliveryCalendarMainCell.TripleQty t) {
-                    String item = Stream.of(t.plan(), t.actual(), t.dispatch()).collect(Collectors.joining("\n"));
+                    String item =
+                            Stream.of(
+                                            formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_PLAN, t.plan()),
+                                            formatDeliveryCalendarTripleLine(
+                                                    DC_TRIPLE_PREFIX_ACTUAL, t.actual()),
+                                            formatDeliveryCalendarTripleLine(
+                                                    DC_TRIPLE_PREFIX_DISPATCH, t.dispatch()))
+                                    .collect(Collectors.joining("\n"));
                     SpreadsheetCell cell =
                             SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, item);
                     cell.setEditable(false);
@@ -525,9 +539,9 @@ public final class SpreadsheetTabularSupport {
                     cell.setGraphic(g);
                     Tooltip tt =
                             new Tooltip(
-                                    "\u30bf\u30b9\u30af\u5165\u529b\uff08\u30a2\u30e9\u30b8\u30f3\u8a08\u753b\uff09 / "
-                                            + "\u5b9f\u7e3e\u660e\u7d30 / "
-                                            + "\u7d50\u679c_\u914d\u53f0\u8868.json");
+                                    "\u30a2\u30e9\u30b8\u30f3\u52a0\u5de5\u8a08\u753b\u53d6\u5f97\u30c7\u30fc\u30bf / "
+                                            + "\u52a0\u5de5\u5b9f\u7e3e / "
+                                            + "\u914d\u53f0\u7d50\u679c\uff08\u7d50\u679c_\u914d\u53f0\u8868.json\uff09");
                     Tooltip.install(g, tt);
                     if (c < lead) {
                         cell.setStyle(DC_STYLE_LEADING_COL);
@@ -597,18 +611,40 @@ public final class SpreadsheetTabularSupport {
     private static Node deliveryCalendarTripleGraphic(DeliveryCalendarMainCell.TripleQty t) {
         VBox box = new VBox(1);
         box.setPadding(new Insets(2, 4, 2, 4));
-        Label plan = new Label(dashIfBlank(t.plan()));
+        Label plan =
+                new Label(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_PLAN, t.plan()));
         plan.setStyle(DC_TRIPLE_LABEL_STYLE);
-        Label actual = new Label(dashIfBlank(t.actual()));
+        Label actual =
+                new Label(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_ACTUAL, t.actual()));
         actual.setStyle(DC_TRIPLE_LABEL_STYLE);
-        Label dispatch = new Label(dashIfBlank(t.dispatch()));
+        Label dispatch =
+                new Label(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_DISPATCH, t.dispatch()));
         dispatch.setStyle(DC_TRIPLE_LABEL_STYLE);
         box.getChildren().addAll(plan, actual, dispatch);
         return box;
     }
 
-    private static String dashIfBlank(String s) {
-        return (s == null || s.isBlank()) ? "\u2014" : s;
+    /**
+     * Same strings as rendered in date columns (for inspectors / logs). Quantity is the JSON triple field
+     * string (already formatted).
+     */
+    public static String deliveryCalendarPlanLineForInspector(String qty) {
+        return formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_PLAN, qty);
+    }
+
+    public static String deliveryCalendarActualLineForInspector(String qty) {
+        return formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_ACTUAL, qty);
+    }
+
+    public static String deliveryCalendarDispatchLineForInspector(String qty) {
+        return formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_DISPATCH, qty);
+    }
+
+    private static String formatDeliveryCalendarTripleLine(String prefix, String qty) {
+        if (qty == null || qty.isBlank()) {
+            return prefix + "\u2014";
+        }
+        return prefix + qty.strip();
     }
 
     /**

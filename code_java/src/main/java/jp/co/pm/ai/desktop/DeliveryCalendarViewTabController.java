@@ -354,9 +354,15 @@ public final class DeliveryCalendarViewTabController {
         sb.append("dataRow=").append(dataRow).append('\n');
         if (mc instanceof DeliveryCalendarMainCell.TripleQty t) {
             sb.append("type: TripleQty\n")
-                    .append("  plan(\u30bf\u30b9\u30af\u5165\u529b)     : ").append(quoteForCellInfo(t.plan())).append('\n')
-                    .append("  actual(\u5b9f\u7e3e\u660e\u7d30)       : ").append(quoteForCellInfo(t.actual())).append('\n')
-                    .append("  dispatch(\u7d50\u679c_\u914d\u53f0\u8868) : ").append(quoteForCellInfo(t.dispatch())).append('\n');
+                    .append("  ")
+                    .append(SpreadsheetTabularSupport.deliveryCalendarPlanLineForInspector(t.plan()))
+                    .append('\n')
+                    .append("  ")
+                    .append(SpreadsheetTabularSupport.deliveryCalendarActualLineForInspector(t.actual()))
+                    .append('\n')
+                    .append("  ")
+                    .append(SpreadsheetTabularSupport.deliveryCalendarDispatchLineForInspector(t.dispatch()))
+                    .append('\n');
         } else if (mc instanceof DeliveryCalendarMainCell.PlainText pt) {
             sb.append("type: PlainText\n").append("  text: ").append(quoteForCellInfo(pt.text())).append('\n');
         } else {
