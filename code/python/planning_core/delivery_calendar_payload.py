@@ -16,8 +16,12 @@ import pandas as pd
 
 import planning_core._core as core
 from planning_core.dispatch_workspace import (
+    ENV_ACTUAL_DETAIL_SOURCE_DIR,
+    ENV_ACTUAL_DETAIL_WORKBOOK,
     ENV_PROCESSING_PLAN_PATH,
+    ENV_TASK_INPUT_SOURCE_DIR,
     read_tabular_dataframe,
+    resolve_actual_detail_workbook_path,
     resolve_processing_plan_path_from_env,
     resolve_result_dispatch_table_output_dir,
 )
@@ -346,6 +350,22 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
         dispatch_agg = _aggregate_dispatch_quantities(disp_rows)
 
         df_actual = core.load_machining_actual_detail_df()
+        _tiw = core._excel_plan_input_wb()
+        _ad_resolved = resolve_actual_detail_workbook_path(_tiw)
+        meta["pmAiTaskInputSourceDir"] = (
+            (os.environ.get(ENV_TASK_INPUT_SOURCE_DIR) or "").strip() or None
+        )
+        meta["pmAiActualDetailSourceDir"] = (
+            (os.environ.get(ENV_ACTUAL_DETAIL_SOURCE_DIR) or "").strip() or None
+        )
+        meta["pmAiActualDetailWorkbook"] = (
+            (os.environ.get(ENV_ACTUAL_DETAIL_WORKBOOK) or "").strip() or None
+        )
+        meta["actualDetailWorkbookPath"] = _ad_resolved
+        meta["actualDetailRowCount"] = (
+            int(len(df_actual)) if df_actual is not None else 0
+        )
+
         sorted_dates = _collect_sorted_dates(df_plan, df_actual)
 
         skills_pack = core.load_skills_and_needs()

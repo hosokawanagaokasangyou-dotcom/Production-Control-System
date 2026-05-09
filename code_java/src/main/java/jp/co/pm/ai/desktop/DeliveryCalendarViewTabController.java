@@ -712,9 +712,36 @@ public final class DeliveryCalendarViewTabController {
             JsonNode meta = root.get("meta");
             if (meta != null && meta.isObject()) {
                 StringBuilder sb = new StringBuilder();
+                if (meta.hasNonNull("pmAiTaskInputSourceDir")) {
+                    sb.append("PM_AI_TASK_INPUT_SOURCE_DIR: ")
+                            .append(meta.get("pmAiTaskInputSourceDir").asText())
+                            .append("\n");
+                }
                 if (meta.hasNonNull("processingPlanPath")) {
                     sb.append("PM_AI_PROCESSING_PLAN_PATH: ")
                             .append(meta.get("processingPlanPath").asText())
+                            .append("\n");
+                }
+                if (meta.hasNonNull("pmAiActualDetailSourceDir")) {
+                    sb.append("PM_AI_ACTUAL_DETAIL_SOURCE_DIR: ")
+                            .append(meta.get("pmAiActualDetailSourceDir").asText())
+                            .append("\n");
+                }
+                if (meta.hasNonNull("pmAiActualDetailWorkbook")) {
+                    sb.append("PM_AI_ACTUAL_DETAIL_WORKBOOK: ")
+                            .append(meta.get("pmAiActualDetailWorkbook").asText())
+                            .append("\n");
+                }
+                if (meta.hasNonNull("actualDetailWorkbookPath")) {
+                    sb.append(
+                                    "\u52a0\u5de5\u5b9f\u7e3e\u660e\u7d30\uff08"
+                                            + "\u89e3\u6c7a\u6e08\u307f\u8aad\u8fbc\u5143\uff09: ")
+                            .append(meta.get("actualDetailWorkbookPath").asText())
+                            .append("\n");
+                }
+                if (meta.has("actualDetailRowCount") && !meta.get("actualDetailRowCount").isNull()) {
+                    sb.append("\u52a0\u5de5\u5b9f\u7e3e\u660e\u7d30\u884c\u6570: ")
+                            .append(meta.get("actualDetailRowCount").asInt())
                             .append("\n");
                 }
                 if (meta.hasNonNull("dispatchJsonPath")) {
