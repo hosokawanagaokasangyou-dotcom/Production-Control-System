@@ -448,7 +448,12 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                 if mk and mk not in mk_to_display:
                     mk_to_display[mk] = _machine_display_from_plan_row(row)
 
-        left_headers = list(core.RESULT_DISPATCH_TABLE_STATIC_HEADERS)
+        # ???????????????????????????????_??????????????????
+        left_headers = [
+            h
+            for h in core.RESULT_DISPATCH_TABLE_STATIC_HEADERS
+            if h != "??????"
+        ]
         # One column per calendar day: JSON cell {"triple": {p,a,d}} stacked in JavaFX (plan / actual / dispatch).
         cal_cols: list[str] = []
         for d in sorted_dates:
@@ -523,7 +528,7 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             current_mk = mk_norm
             label = mk_to_display.get(mk_norm, mk_norm)
             sec_cells = [""] * len(left_headers)
-            # Section title is machine display: put it under \u6a5f\u68b0\u540d, not \u914d\u53f0\u8a66\u884c\u9806\u756a (col 0).
+            # ???????????????????????????? left_headers ????
             try:
                 mi = left_headers.index(core.TASK_COL_MACHINE_NAME)
             except ValueError:
