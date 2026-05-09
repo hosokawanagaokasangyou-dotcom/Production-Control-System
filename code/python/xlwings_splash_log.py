@@ -9,6 +9,9 @@ import time
 FLUSH_INTERVAL_SEC = 0.12
 MAX_MACRO_ARG_CHARS = 2800
 
+# VBA の Public Sub SplashLog_AppendChunk（環境変数では上書きしない）
+_SPLASH_LOG_MACRO_QUALIFIED = "スプラッシュ表示.SplashLog_AppendChunk"
+
 _buf: list[str] = []
 _lock = threading.Lock()
 _last_flush = 0.0
@@ -18,10 +21,6 @@ _book_ref = None
 def enabled() -> bool:
     v = (os.environ.get("PM_AI_SPLASH_XLWINGS") or "").strip().lower()
     return v in ("1", "true", "yes", "on")
-
-
-def _macro_qualified_name() -> str:
-    return (os.environ.get("PM_AI_XLWINGS_SPLASH_MACRO") or "スプラッシュ表示.SplashLog_AppendChunk").strip()
 
 
 def _task_workbook_abs() -> str:
@@ -68,7 +67,7 @@ def _get_book():
 def _invoke_macro(chunk: str) -> None:
     global _book_ref
 
-    name = _macro_qualified_name()
+    name = _SPLASH_LOG_MACRO_QUALIFIED
     for _ in range(2):
         book = _get_book()
         if book is None:

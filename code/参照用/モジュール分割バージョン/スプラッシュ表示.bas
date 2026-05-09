@@ -450,7 +450,7 @@ Public Sub MacroSplash_Hide()
     End If
 End Sub
 
-' Python（xlwings）から呼ぶ。PM_AI_SPLASH_XLWINGS=1 時のみ実行される想定。マクロ名衝突時は環境変数 PM_AI_XLWINGS_SPLASH_MACRO=標準モジュール名.SplashLog_AppendChunk
+' Python（xlwings）から呼ぶ。PM_AI_SPLASH_XLWINGS=1 時のみ実行される想定。修飾名は Python 側で スプラッシュ表示.SplashLog_AppendChunk に固定
 Public Sub SplashLog_AppendChunk(ByVal chunk As String)
     On Error Resume Next
     If Len(chunk) = 0 Then Exit Sub
