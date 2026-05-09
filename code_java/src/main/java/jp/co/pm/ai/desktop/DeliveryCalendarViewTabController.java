@@ -222,7 +222,12 @@ public final class DeliveryCalendarViewTabController {
         SpreadsheetTabularSupport.installDeliveryCalendarSpreadsheetChrome(compareSpreadsheet);
         mainSpreadsheet.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         compareSpreadsheet.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-        SpreadsheetTabularSupport.installFullRowDataSelection(mainSpreadsheet);
+        /*
+         * \u5168\u884c\u9078\u629e\u62e1\u5f35\u306f\u30af\u30ea\u30c3\u30af\u5217\u3068 TablePosition \u306e\u5217\u304c\u305a\u308c\u308b
+         * \uff08\u62e1\u5f35\u5f8c\u306e\u30d5\u30a9\u30fc\u30ab\u30b9\u304c\u5148\u982d\u5217\u306b\u79fb\u308b\u305f\u3081\uff09\u3002
+         * \u4e0b\u90e8\u306e\u30bb\u30eb\u5185\u5bb9\u8868\u793a\u3068\u5408\u308f\u305b\u308b\u305f\u3081\u3001\u30e1\u30a4\u30f3\u8868\u3067\u306e\u307f\u62e1\u5f35\u3092\u7121\u52b9\u5316\u3002
+         */
+        SpreadsheetTabularSupport.installFullRowDataSelection(mainSpreadsheet, () -> true);
         SpreadsheetTabularSupport.installFullRowDataSelection(compareSpreadsheet);
 
         mainColumnStripHost
@@ -263,9 +268,8 @@ public final class DeliveryCalendarViewTabController {
     }
 
     /**
-     * ??????????????????????{@link DeliveryCalendarMainCell.TripleQty} ? plan / actual / dispatch????
-     * {@link DeliveryCalendarMainCell.PlainText} ? text?? {@link #mainSelectedCellInfo} ??????
-     * ??????????????????????????????
+     * \u9078\u629e\u30bb\u30eb\u306e\u30e2\u30c7\u30eb\u5024\uff08{@link DeliveryCalendarMainCell.TripleQty} \u307e\u305f\u306f
+     * {@link DeliveryCalendarMainCell.PlainText}\uff09\u3092 {@link #mainSelectedCellInfo} \u306b\u8868\u793a\u3059\u308b\u3002
      */
     private void installMainSelectedCellInfoListener() {
         if (mainSelectedCellInfo == null) {
@@ -285,21 +289,37 @@ public final class DeliveryCalendarViewTabController {
         if (mainSelectedCellInfo == null) {
             return;
         }
-        var sel = mainSpreadsheet.getSelectionModel().getSelectedCells();
-        if (sel == null || sel.isEmpty()) {
+        var sm = mainSpreadsheet.getSelectionModel();
+        TablePosition<?, ?> pos = sm.getFocusedCell();
+        if (pos == null || pos.getRow() < 0) {
+            var sel = sm.getSelectedCells();
+            if (sel == null || sel.isEmpty()) {
+                mainSelectedCellInfo.setText("(\u672a\u9078\u629e)");
+                return;
+            }
+            pos = sel.getFirst();
+        }
+        if (pos == null || pos.getRow() < 0) {
             mainSelectedCellInfo.setText("(\u672a\u9078\u629e)");
             return;
         }
-        TablePosition<?, ?> pos = sel.get(sel.size() - 1);
-        int gridRow = pos.getRow();
+        /* TablePosition#getRow \u306f\u30d3\u30e5\u30fc\u884c\u3002\u30b0\u30ea\u30c3\u30c9\u884c\u306f SpreadsheetView#getModelRow \u3092\u4f7f\u3046\u3002 */
+        int viewRow = pos.getRow();
+        int gridRow = mainSpreadsheet.getModelRow(viewRow);
         int col = pos.getColumn();
         int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
         StringBuilder sb = new StringBuilder();
         String header = (col >= 0 && col < mainHeadersRef.size()) ? mainHeadersRef.get(col) : "";
-        sb.append("gridRow=").append(gridRow)
+        sb.append("viewRow=").append(viewRow)
+                .append("  gridRow=").append(gridRow)
                 .append("  col=").append(col)
                 .append("  header=").append(header)
                 .append('\n');
+        if (gridRow < 0) {
+            sb.append("(\u884c\u306e\u89e3\u6c7a\u5931\u8d25 viewRow=").append(viewRow).append(")");
+            mainSelectedCellInfo.setText(sb.toString());
+            return;
+        }
         if (gridRow < firstData) {
             sb.append("(\u30d5\u30a3\u30eb\u30bf\u884c)");
             mainSelectedCellInfo.setText(sb.toString());
