@@ -38,9 +38,9 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
  */
 public final class SpreadsheetTabularSupport {
 
-    /** \u7d0d\u671f\u7ba1\u7406\u30d3\u30e5\u30fc\u898b\u51fa\u884c\uff08\u30d5\u30a3\u30eb\u30bf\u884c\u542b\u3080\uff09: \u8584\u3044\u30b0\u30ec\u30fc \uff0b \u9ed2\u6587\u5b57 */
+    /** \u7d0d\u671f\u7ba1\u7406: \u30d5\u30a3\u30eb\u30bf\u884c\uff08\u5217\u898b\u51fa\u3057\u3068\u540c\u7cfb\u30d6\u30eb\u30fc\uff09 */
     private static final String DC_STYLE_HEADER_ROW =
-            "-fx-background-color: #e8e8e8; -fx-text-fill: black;";
+            "-fx-background-color: #1565c0; -fx-text-fill: white;";
 
     /** \u5148\u982d\u306e\u898b\u51fa\u3057\u5217\uff08\u5c5e\u6027\u5217\uff09: \u767d \uff0b \u9ed2 */
     private static final String DC_STYLE_LEADING_COL =

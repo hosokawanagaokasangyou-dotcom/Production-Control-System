@@ -1,6 +1,6 @@
 /*
- * 納期管理ビュー専用: シーンに依らず固定配色。
- * セル本文の背景色は SpreadsheetTabularSupport のインラインスタイルと併用。
+ * 納期管理ビュ拏晝用: シ拏ンに依らず固定配戳截
+ * セル本文の背景戳は SpreadsheetTabularSupport のインラインスタイルと併用截
  */
 
 .delivery-calendar-spreadsheet.table-view.cell-spreadsheet {
@@ -19,15 +19,20 @@
 
 .delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column,
 .delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.fixed {
-    -fx-background-color: #e8e8e8;
-    -fx-text-fill: black;
+    -fx-background-color: #1565c0;
+    -fx-text-fill: white;
+}
+
+.delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column .label,
+.delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.fixed .label {
+    -fx-text-fill: white;
 }
 
 .delivery-calendar-spreadsheet VerticalHeader > Label.selected,
 .delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.selected,
 .delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.selected > Label {
-    -fx-background-color: #b8c8d8;
-    -fx-text-fill: black;
+    -fx-background-color: #0d47a1;
+    -fx-text-fill: white;
 }
 
 .delivery-calendar-spreadsheet .spreadsheet-cell:filled:selected,
