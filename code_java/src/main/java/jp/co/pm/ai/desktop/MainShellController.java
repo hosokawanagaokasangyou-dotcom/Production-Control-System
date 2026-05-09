@@ -189,9 +189,6 @@ public final class MainShellController {
     private PlanInputTabController planInputTabController;
 
     @FXML
-    private AladdinProcessingPlanDataTabController aladdinProcessingPlanDataTabController;
-
-    @FXML
     private Stage1PreviewTabController stage1PreviewTabController;
 
     @FXML
@@ -258,9 +255,6 @@ public final class MainShellController {
     private Tab mainShellTabPlanInput;
 
     @FXML
-    private Tab mainShellTabAladdinProcessingPlanData;
-
-    @FXML
     private Tab mainShellTabStage1Preview;
 
     @FXML
@@ -318,7 +312,6 @@ public final class MainShellController {
                     MainShellTabId.GLOBAL_SETTINGS.key(),
                     MainShellTabId.MASTER_SUMMARY.key(),
                     MainShellTabId.PLAN_INPUT.key(),
-                    MainShellTabId.ALADDIN_PROCESSING_PLAN_DATA.key(),
                     MainShellTabId.STAGE1_PREVIEW.key(),
                     MainShellTabId.EXCLUDE_RULES.key(),
                     MainShellTabId.SPECIAL_RULES.key(),
@@ -452,9 +445,6 @@ public final class MainShellController {
                 .setPromptText("code/python (未設定時は環境変数 PM_AI_CODE_PYTHON_DIR)");
 
         planInputTabController.bindShell(this);
-        if (aladdinProcessingPlanDataTabController != null) {
-            aladdinProcessingPlanDataTabController.bindShell(this);
-        }
         stage1PreviewTabController.bindShell(this);
         excludeRulesTabController.bindShell(this);
         specialRulesTabController.bindShell(this);
@@ -1021,9 +1011,6 @@ public final class MainShellController {
         if (t == mainShellTabPlanInput) {
             return MainShellTabId.PLAN_INPUT;
         }
-        if (t == mainShellTabAladdinProcessingPlanData) {
-            return MainShellTabId.ALADDIN_PROCESSING_PLAN_DATA;
-        }
         if (t == mainShellTabStage1Preview) {
             return MainShellTabId.STAGE1_PREVIEW;
         }
@@ -1076,7 +1063,6 @@ public final class MainShellController {
             case GLOBAL_SETTINGS -> mainShellTabGlobalSettings;
             case MASTER_SUMMARY -> mainShellTabMasterSummary;
             case PLAN_INPUT -> mainShellTabPlanInput;
-            case ALADDIN_PROCESSING_PLAN_DATA -> mainShellTabAladdinProcessingPlanData;
             case STAGE1_PREVIEW -> mainShellTabStage1Preview;
             case EXCLUDE_RULES -> mainShellTabExcludeRules;
             case SPECIAL_RULES -> mainShellTabSpecialRules;

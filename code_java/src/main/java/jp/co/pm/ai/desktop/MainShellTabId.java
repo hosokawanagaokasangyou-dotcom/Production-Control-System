@@ -14,8 +14,6 @@ public enum MainShellTabId {
     GLOBAL_SETTINGS("globalSettings"),
     MASTER_SUMMARY("masterSummary"),
     PLAN_INPUT("planInput"),
-    /** PM_AI_TASK_INPUT_SOURCE_DIR 最新の加工計画DATA相当を生表表示。 */
-    ALADDIN_PROCESSING_PLAN_DATA("aladdinProcessingPlanData"),
     STAGE1_PREVIEW("stage1Preview"),
     EXCLUDE_RULES("excludeRules"),
     SPECIAL_RULES("specialRules"),
