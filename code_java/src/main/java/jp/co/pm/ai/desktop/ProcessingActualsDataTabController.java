@@ -67,7 +67,8 @@ public final class ProcessingActualsDataTabController {
                     + " \u30c7\u30fc\u30bf\u306f PM_AI_ACTUAL_DETAIL_WORKBOOK \u307e\u305f\u306f"
                     + " PM_AI_ACTUAL_DETAIL_SOURCE_DIR \u304b\u3089\u89e3\u6c7a\u3055\u308c\u308b Excel\uff08\u307e\u305f\u306f CSV\uff09\u3092\u8aad\u307f\u8fbc\u307f\u307e\u3059\u3002"
                     + " PM_AI_ACTUAL_DETAIL_SHEET \u3067\u30b7\u30fc\u30c8\u540d\u3092\u6307\u5b9a\u3067\u304d\u307e\u3059\u3002"
-                    + " \u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u672a\u5230\u9054\u6642\u306f\u30ed\u30fc\u30ab\u30eb\u30ad\u30e3\u30c3\u30b7\u30e5\u3092\u8a66\u884c\u3057\u307e\u3059\u3002";
+                    + " \u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u672a\u5230\u9054\u6642\u306f\u30ed\u30fc\u30ab\u30eb\u30ad\u30e3\u30c3\u30b7\u30e5\u3092\u8a66\u884c\u3057\u307e\u3059\u3002"
+                    + " \u5165\u529b\u5024\u306f\u81ea\u52d5\u4fdd\u5b58\u3055\u308c\u3001\u6b21\u56de\u8d77\u52d5\u6642\u306b\u5fa9\u5143\u3055\u308c\u307e\u3059\u3002";
 
 
     @FXML
@@ -192,12 +193,22 @@ public final class ProcessingActualsDataTabController {
             productConditionBreakdownFilterField
                     .textProperty()
                     .addListener(
-                            (o, a, b) -> {
+                            (o, oldV, newV) -> {
                                 if (suppressFilterUi.get()) {
                                     return;
                                 }
+                                TableColumnOrderPersistence.saveProcessingActualsProductConditionBreakdownFilter(
+                                        newV != null ? newV : "");
                                 Platform.runLater(this::refilterFromSnapshotIfPossible);
                             });
+            suppressFilterUi.set(true);
+            try {
+                productConditionBreakdownFilterField.setText(
+                        TableColumnOrderPersistence
+                                .loadProcessingActualsProductConditionBreakdownFilter());
+            } finally {
+                suppressFilterUi.set(false);
+            }
         }
     }
 
@@ -630,14 +641,6 @@ public final class ProcessingActualsDataTabController {
 
     private void applyEmpty() {
         clearShapedSnapshot();
-        suppressFilterUi.set(true);
-        try {
-            if (productConditionBreakdownFilterField != null) {
-                productConditionBreakdownFilterField.clear();
-            }
-        } finally {
-            suppressFilterUi.set(false);
-        }
         headersRef.clear();
         rows.clear();
         persistedLayout.set(List.of());

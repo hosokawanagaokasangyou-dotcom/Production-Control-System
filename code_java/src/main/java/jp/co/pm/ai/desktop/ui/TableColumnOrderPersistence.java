@@ -114,6 +114,52 @@ public final class TableColumnOrderPersistence {
         return id.jsonKey() + "_ui_cellWrapText";
     }
 
+    private static String processingActualsProductConditionBreakdownFilterKey(TableId id) {
+        return id.jsonKey() + "_ui_productConditionBreakdownFilter";
+    }
+
+    /**
+     * 加工実績タブ「製品条件(内訳)」行フィルタの入力文字列（{@link TableId#PROCESSING_ACTUALS_DETAIL_RAW}）。
+     */
+    public static String loadProcessingActualsProductConditionBreakdownFilter() {
+        TableId id = TableId.PROCESSING_ACTUALS_DETAIL_RAW;
+        try {
+            if (!Files.isRegularFile(STORE)) {
+                return "";
+            }
+            JsonNode root = JSON.readTree(STORE.toFile());
+            if (root == null || !root.isObject()) {
+                return "";
+            }
+            return root.path(processingActualsProductConditionBreakdownFilterKey(id)).asText("");
+        } catch (IOException e) {
+            return "";
+        }
+    }
+
+    /** Persists {@link #loadProcessingActualsProductConditionBreakdownFilter()} into {@link #STORE}. */
+    public static void saveProcessingActualsProductConditionBreakdownFilter(String text) {
+        TableId id = TableId.PROCESSING_ACTUALS_DETAIL_RAW;
+        try {
+            Files.createDirectories(STORE.getParent());
+            ObjectNode root;
+            if (Files.isRegularFile(STORE)) {
+                JsonNode tree = JSON.readTree(STORE.toFile());
+                root =
+                        tree != null && tree.isObject()
+                                ? (ObjectNode) tree.deepCopy()
+                                : JSON.createObjectNode();
+            } else {
+                root = JSON.createObjectNode();
+            }
+            root.put(
+                    processingActualsProductConditionBreakdownFilterKey(id),
+                    text != null ? text : "");
+            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
+        } catch (IOException ignored) {
+        }
+    }
+
     /** 指定 {@link TableId} の Spreadsheet 行高・折り返しを読み込む（キーが無ければ既定）。 */
     public static SpreadsheetTabPresentationPrefs loadSpreadsheetTabPresentationPrefs(TableId id) {
         if (id == null) {
