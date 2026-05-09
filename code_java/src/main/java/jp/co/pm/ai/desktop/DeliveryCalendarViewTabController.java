@@ -1,11 +1,6 @@
 package jp.co.pm.ai.desktop;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +28,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
-import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 
@@ -90,42 +84,6 @@ public final class DeliveryCalendarViewTabController {
             throw e;
         }
     }
-
-    // #region agent log
-    private Path resolveAgentDebugLogFile() {
-        try {
-            Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
-            return AppPaths.resolveRepoRoot(ui).resolve(".cursor").resolve("debug-ebddd7.log").normalize();
-        } catch (Exception e) {
-            return Path.of(System.getProperty("user.dir"))
-                    .resolve(".cursor")
-                    .resolve("debug-ebddd7.log")
-                    .normalize();
-        }
-    }
-
-    private void agentDebugNdjson(String hypothesisId, String location, String message, Map<String, ?> data) {
-        try {
-            Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("sessionId", "ebddd7");
-            payload.put("timestamp", System.currentTimeMillis());
-            payload.put("hypothesisId", hypothesisId);
-            payload.put("location", location);
-            payload.put("message", message);
-            payload.put("data", data);
-            String line = JSON.writeValueAsString(payload) + "\n";
-            Files.writeString(
-                    resolveAgentDebugLogFile(),
-                    line,
-                    StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.APPEND);
-        } catch (Exception ignored) {
-            // debug ingest only
-        }
-    }
-
-    // #endregion
 
     @FXML
     private Button refreshButton;
@@ -224,38 +182,7 @@ public final class DeliveryCalendarViewTabController {
             return;
         }
         try {
-            // #region agent log
-            {
-                int nl = trimmed.indexOf('\n');
-                String first =
-                        nl > 0
-                                ? trimmed.substring(0, Math.min(160, nl))
-                                : trimmed.substring(0, Math.min(160, trimmed.length()));
-                boolean brace =
-                        Arrays.stream(trimmed.split("\\R", -1))
-                                .map(String::trim)
-                                .anyMatch(s -> s.startsWith("{"));
-                agentDebugNdjson(
-                        "H1",
-                        "DeliveryCalendarViewTabController.applyPayload",
-                        "pre_parse_stdout",
-                        Map.of(
-                                "firstLineSample",
-                                first.replace('\"', '\''),
-                                "hasBraceLine",
-                                brace,
-                                "totalLen",
-                                trimmed.length()));
-            }
-            // #endregion
             JsonNode root = parseDeliveryCalendarPayloadRoot(trimmed);
-            // #region agent log
-            agentDebugNdjson(
-                    "H1",
-                    "DeliveryCalendarViewTabController.applyPayload",
-                    "post_parse_ok",
-                    Map.of("rootOk", root.path("ok").asBoolean(false)));
-            // #endregion
             if (!root.path("ok").asBoolean(false)) {
                 statusLabel.setText(root.path("error").asText("failed"));
             }
