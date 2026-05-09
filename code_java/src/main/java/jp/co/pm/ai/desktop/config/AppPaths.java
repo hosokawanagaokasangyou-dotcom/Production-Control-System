@@ -122,6 +122,9 @@ public final class AppPaths {
      */
     public static final String KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK = "PM_AI_ACTUAL_DETAIL_WORKBOOK";
 
+    /** Optional sheet name inside {@link #KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK} (empty = first sheet). */
+    public static final String KEY_PM_AI_ACTUAL_DETAIL_SHEET = "PM_AI_ACTUAL_DETAIL_SHEET";
+
     /** Optional absolute path to result-task JSON sidecar ({@code PM_AI_PLAN_RESULT_TASK_JSON_PATH}). */
     public static final String KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH = "PM_AI_PLAN_RESULT_TASK_JSON_PATH";
 

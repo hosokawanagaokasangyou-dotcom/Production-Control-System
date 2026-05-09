@@ -19,7 +19,8 @@ public final class MainShellInnerTabCatalog {
      */
     public static List<String> titledPaneLabelsUnderInnerTab(
             MainShellTabId parent, int innerTabIndex) {
-        if (parent == MainShellTabId.DELIVERY_CALENDAR_VIEW && innerTabIndex == 2) {
+        if (parent == MainShellTabId.DELIVERY_CALENDAR_VIEW
+                && (innerTabIndex == 2 || innerTabIndex == 3)) {
             return List.of(
                     "\u64cd\u4f5c\u30fb\u30bd\u30fc\u30b9",
                     "\u30c7\u30fc\u30bf\u8868");
@@ -37,6 +38,7 @@ public final class MainShellInnerTabCatalog {
                     List.of(
                             "\u30ab\u30ec\u30f3\u30c0\u30fc",
                             "\u8a08\u753b\u6bd4\u8f03",
+                            "\u52a0\u5de5\u5b9f\u7e3e",
                             "\u30a2\u30e9\u30b8\u30f3\u52a0\u5de5\u8a08\u753b\u53d6\u5f97\u30c7\u30fc\u30bf");
             case DISPATCH_INTERACTIVE ->
                     List.of(
