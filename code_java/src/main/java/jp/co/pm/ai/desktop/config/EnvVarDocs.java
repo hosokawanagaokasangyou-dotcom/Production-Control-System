@@ -155,7 +155,8 @@ public final class EnvVarDocs {
                         + "JavaFX 初期値は AppPaths.resolveTaskInputSourceDir。"
                         + "Python は PM_AI_PROCESSING_PLAN_PATH が未設定または存在しないとき"
                         + "、このフォルダ内 CSV/Parquet/xlsx 等のうち"
-                        + "更新時刻が最新の1件をタスク入力に使用。");
+                        + "更新時刻が最新の1件をタスク入力に使用。"
+                        + "「納期管理ビュー」タブの計画側アラジン数量もこの解決パス由来の加工計画シートを参照する。");
         put(
                 "PM_AI_ACTUAL_DETAIL_SOURCE_DIR",
                 "加工実績明細DATA 出力元（plan/02__q*.m の Folder.Files と同系）。"
@@ -177,7 +178,16 @@ public final class EnvVarDocs {
                         + "未設定時は段階2は PM_AI_WORKSPACE または"
                         + " PM_AI_PLAN_INPUT_PATH 親階層に合わせる場合がある、"
                         + "JavaFX 初期値は PM_AI_REPO_ROOT 下の code/output（例: Production-Control-System/code/output/"
-                        + "結果_配台表.xlsx 同階層に 結果_配台表.json も出力）。");
+                        + "結果_配台表.xlsx 同階層に 結果_配台表.json も出力）。"
+                        + "「納期管理ビュー」の計画比較サブタブはこのフォルダ直下の 結果_配台表.json と"
+                        + "タスク入力ソースのアラジン日別数量を突き合わせる。");
+        put(
+                "GANTT_ACTUAL_DETAIL_DATE_FROM",
+                "納期管理ビュー／実績明細ガント共通：実績側で表示する暦日の開始（空＝下限なし）。"
+                        + " planning_core の ENV と同じ。");
+        put(
+                "GANTT_ACTUAL_DETAIL_DATE_TO",
+                "納期管理ビュー／実績明細ガント共通：実績側で表示する暦日の終了（空＝上限なし）。");
         put(
                 "PM_AI_RESULT_DISPATCH_TABLE_JSON",
                 "段階2 の 結果_配台表.json 出力："

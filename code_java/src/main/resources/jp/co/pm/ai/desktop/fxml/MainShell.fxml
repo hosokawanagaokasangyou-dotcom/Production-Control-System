@@ -102,6 +102,12 @@
                         <fx:include fx:id="actualsStatusTab" source="ActualsStatusTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabDeliveryCalendar" closable="false"
+                     text="納期管理ビュー">
+                    <content>
+                        <fx:include fx:id="deliveryCalendarViewTab" source="DeliveryCalendarViewTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabResultDispatch" closable="false"
                      text="結果_配台表 (JSON)">
                     <content>

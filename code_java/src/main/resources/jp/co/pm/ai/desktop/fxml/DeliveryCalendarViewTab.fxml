@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="jp.co.pm.ai.desktop.DeliveryCalendarViewTabController"
+      fillWidth="true" spacing="8.0">
+    <padding>
+        <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+    </padding>
+    <HBox alignment="CENTER_LEFT" spacing="8.0">
+        <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshButtonAction" text="再読込"/>
+        <Label fx:id="statusLabel"/>
+    </HBox>
+    <Label fx:id="metaLabel" wrapText="true"/>
+    <TabPane fx:id="innerTabPane" tabClosingPolicy="UNAVAILABLE" VBox.vgrow="ALWAYS">
+        <tabs>
+            <Tab closable="false" text="カレンダー">
+                <content>
+                    <StackPane fx:id="mainSpreadsheetHost" minHeight="280.0"/>
+                </content>
+            </Tab>
+            <Tab closable="false" text="計画比較">
+                <content>
+                    <StackPane fx:id="compareSpreadsheetHost" minHeight="280.0"/>
+                </content>
+            </Tab>
+        </tabs>
+    </TabPane>
+</VBox>

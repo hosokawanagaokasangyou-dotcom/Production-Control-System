@@ -200,6 +200,9 @@ public final class MainShellController {
     private ActualsStatusTabController actualsStatusTabController;
 
     @FXML
+    private DeliveryCalendarViewTabController deliveryCalendarViewTabController;
+
+    @FXML
     private MasterReadSummaryTabController masterReadSummaryTabController;
 
     @FXML
@@ -263,6 +266,9 @@ public final class MainShellController {
     private Tab mainShellTabActualsStatus;
 
     @FXML
+    private Tab mainShellTabDeliveryCalendar;
+
+    @FXML
     private Tab mainShellTabResultDispatch;
 
     @FXML
@@ -309,6 +315,7 @@ public final class MainShellController {
                     MainShellTabId.EXCLUDE_RULES.key(),
                     MainShellTabId.SPECIAL_RULES.key(),
                     MainShellTabId.ACTUALS_STATUS.key(),
+                    MainShellTabId.DELIVERY_CALENDAR_VIEW.key(),
                     MainShellTabId.RESULT_DISPATCH.key(),
                     MainShellTabId.DISPATCH_INTERACTIVE.key(),
                     MainShellTabId.PLAN_RESULT_VIEWER.key(),
@@ -441,6 +448,7 @@ public final class MainShellController {
         excludeRulesTabController.bindShell(this);
         specialRulesTabController.bindShell(this);
         actualsStatusTabController.bindShell(this);
+        deliveryCalendarViewTabController.bindShell(this);
         resultDispatchTableTabController.bindShell(this);
         dispatchInteractiveTabController.bindShell(this);
 
@@ -1014,6 +1022,9 @@ public final class MainShellController {
         if (t == mainShellTabActualsStatus) {
             return MainShellTabId.ACTUALS_STATUS;
         }
+        if (t == mainShellTabDeliveryCalendar) {
+            return MainShellTabId.DELIVERY_CALENDAR_VIEW;
+        }
         if (t == mainShellTabResultDispatch) {
             return MainShellTabId.RESULT_DISPATCH;
         }
@@ -1055,6 +1066,7 @@ public final class MainShellController {
             case EXCLUDE_RULES -> mainShellTabExcludeRules;
             case SPECIAL_RULES -> mainShellTabSpecialRules;
             case ACTUALS_STATUS -> mainShellTabActualsStatus;
+            case DELIVERY_CALENDAR_VIEW -> mainShellTabDeliveryCalendar;
             case RESULT_DISPATCH -> mainShellTabResultDispatch;
             case DISPATCH_INTERACTIVE -> mainShellTabDispatchInteractive;
             case PLAN_RESULT_VIEWER -> mainShellTabPlanResultViewer;
@@ -2674,6 +2686,23 @@ public final class MainShellController {
                                 mainRunTabController.getScriptDirField().getText().trim()));
         String wb = effectiveTaskInputWorkbookPath();
         return new RunRequest(py, dir, "pm_ai_actuals_status.py", wb, childEnvForPython(uiRun));
+    }
+
+    /** pm_ai_delivery_calendar_view.py: same env merge as stage1/2 / actuals status. */
+    RunRequest buildDeliveryCalendarRequest() {
+        Map<String, String> uiRun = collectUiEnv();
+        Path py =
+                Path.of(
+                        firstNonBlank(
+                                uiRun.get(AppPaths.KEY_PM_AI_PYTHON),
+                                mainRunTabController.getPythonExeField().getText().trim()));
+        Path dir =
+                Path.of(
+                        firstNonBlank(
+                                uiRun.get(AppPaths.KEY_PM_AI_CODE_PYTHON_DIR),
+                                mainRunTabController.getScriptDirField().getText().trim()));
+        String wb = effectiveTaskInputWorkbookPath();
+        return new RunRequest(py, dir, "pm_ai_delivery_calendar_view.py", wb, childEnvForPython(uiRun));
     }
 
     /**

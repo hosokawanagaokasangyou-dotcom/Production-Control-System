@@ -18,6 +18,8 @@ public enum MainShellTabId {
     EXCLUDE_RULES("excludeRules"),
     SPECIAL_RULES("specialRules"),
     ACTUALS_STATUS("actualsStatus"),
+    /** 納期管理（アラジン計画）風ビュー（計画＋実績・計画比較表）。 */
+    DELIVERY_CALENDAR_VIEW("deliveryCalendarView"),
     RESULT_DISPATCH("resultDispatch"),
     PLAN_RESULT_VIEWER("planResultViewer"),
     EQUIPMENT_GANTT_GRAPHIC("equipmentGanttGraphic"),
