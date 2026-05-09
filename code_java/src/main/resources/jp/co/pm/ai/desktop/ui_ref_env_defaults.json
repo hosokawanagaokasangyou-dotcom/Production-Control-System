@@ -8,7 +8,7 @@
   }, {
     "key" : "PM_AI_EXCLUDE_RULES_JSON",
     "value" : "",
-    "description" : "段階1の配台不要ルールを JSON に寄せる場合のフルパス（list または {\"rules\":[...]}）。code/exclude_rules.json があれば初期値に使われる。有効時はマクロブックの「設定_配台不要工程」Excel 保守も省略。"
+    "description" : "段階1の配台不要ルールを JSON に寄せる場合のフルパス（list または {\"rules\":[...]}）。既定は code/exclude_rules.json（実在時）、無ければ code/json/stage1_exclude_rules.json（実在時）。有効時はマクロブックの「設定_配台不要工程」Excel 保守も省略。"
   }, {
     "key" : "PM_AI_EXCEL_TRACE_TASK_ID",
     "value" : "",

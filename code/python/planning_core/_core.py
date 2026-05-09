@@ -15055,13 +15055,41 @@ def _resolve_repo_root_exclude_rules_json_path() -> str | None:
     return None
 
 
+def _resolve_default_exclude_rules_json_path_for_env() -> str | None:
+    """実在する既定 JSON: ``code/exclude_rules.json`` を優先し、無ければ ``code/json/stage1_exclude_rules.json``。"""
+    primary = _resolve_repo_root_exclude_rules_json_path()
+    if primary:
+        return primary
+    repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
+    name = STAGE1_EXCLUDE_RULES_JSON_FILENAME
+    candidates: list[str] = []
+    if repo:
+        candidates.append(os.path.normpath(os.path.join(repo, "code", "json", name)))
+    cwd = os.path.abspath(os.getcwd())
+    candidates.append(os.path.join(cwd, "code", "json", name))
+    try:
+        _pkg_dir = os.path.dirname(os.path.abspath(__file__))
+        _code_dir = os.path.normpath(os.path.join(_pkg_dir, "..", ".."))
+        candidates.append(os.path.join(_code_dir, "json", name))
+    except Exception:
+        pass
+    seen: set[str] = set()
+    for cand in candidates:
+        if not cand or cand in seen:
+            continue
+        seen.add(cand)
+        if os.path.isfile(cand):
+            return cand
+    return None
+
+
 def _ensure_stage1_exclude_rules_json_env_from_repo_default() -> None:
-    """``PM_AI_EXCLUDE_RULES_JSON`` が未設定のとき、実在する ``code/exclude_rules.json`` を正本として載せる。"""
+    """``PM_AI_EXCLUDE_RULES_JSON`` が未設定のとき、既定 JSON（exclude_rules または stage1 サイドカー）を正本として載せる。"""
     cur = (os.environ.get(ENV_EXCLUDE_RULES_JSON) or "").strip()
     if cur and os.path.isfile(cur):
         _reset_exclude_rules_json_env_memo()
         return
-    bundled = _resolve_repo_root_exclude_rules_json_path()
+    bundled = _resolve_default_exclude_rules_json_path_for_env()
     if not bundled:
         return
     os.environ[ENV_EXCLUDE_RULES_JSON] = bundled
@@ -15853,8 +15881,9 @@ def run_stage1_extract():
     「配台試行順番」の付与より前に行う。
 
     配台不要ルールの**正本**は UTF-8 JSON（list または ``{"rules":[...]}``）。既定でリポジトリの
-    ``code/exclude_rules.json`` が実在すれば ``PM_AI_EXCLUDE_RULES_JSON`` に載せ、Excel の
-    「設定_配台不要工程」は読まない。JSON が無い場合のみ master.xlsm の当該シートから
+    ``code/exclude_rules.json`` が実在すれば ``PM_AI_EXCLUDE_RULES_JSON`` に載せ、無ければ
+    ``code/json/stage1_exclude_rules.json`` が実在すれば同様に載せ、Excel の
+    「設定_配台不要工程」は読まない。どちらも無い場合のみ master.xlsm の当該シートから
     ``json/stage1_exclude_rules.json`` へ書き出して同変数を設定する。
 
     ``PM_AI_PLAN_INPUT_PATH`` が Excel ブック実ファイルのときのみ、そのブックへ

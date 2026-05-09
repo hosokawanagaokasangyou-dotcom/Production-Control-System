@@ -3316,13 +3316,8 @@ public final class MainShellController {
                     r.setValue(cand.toAbsolutePath().normalize().toString());
                 }
             }
-            case AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON -> {
-                Path cand =
-                        AppPaths.resolveRepoRoot(ui).resolve("code").resolve("exclude_rules.json");
-                if (Files.isRegularFile(cand)) {
-                    r.setValue(cand.toAbsolutePath().normalize().toString());
-                }
-            }
+            case AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON ->
+                    AppPaths.resolveDefaultExcludeRulesJsonPath(ui).ifPresent(p -> r.setValue(p.toString()));
             case AppPaths.KEY_PM_AI_MASTER_WORKBOOK ->
                     AppPaths.resolveMasterWorkbookCandidate(ui).ifPresent(p -> r.setValue(p.toString()));
             case AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET -> r.setValue("1");
@@ -3359,14 +3354,11 @@ public final class MainShellController {
                                 ? cand.toAbsolutePath().normalize().toString()
                                 : "");
             }
-            case AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON -> {
-                Path cand =
-                        AppPaths.resolveRepoRoot(ui).resolve("code").resolve("exclude_rules.json");
-                r.setValue(
-                        Files.isRegularFile(cand)
-                                ? cand.toAbsolutePath().normalize().toString()
-                                : "");
-            }
+            case AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON ->
+                    r.setValue(
+                            AppPaths.resolveDefaultExcludeRulesJsonPath(ui)
+                                    .map(Path::toString)
+                                    .orElse(""));
             case AppPaths.KEY_PM_AI_MASTER_WORKBOOK ->
                     r.setValue(
                             AppPaths.resolveMasterWorkbookCandidate(ui).map(Path::toString).orElse(""));

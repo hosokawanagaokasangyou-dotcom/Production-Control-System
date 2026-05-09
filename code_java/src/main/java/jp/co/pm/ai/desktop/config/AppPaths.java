@@ -609,6 +609,23 @@ public final class AppPaths {
     }
 
     /**
+     * Default for {@link #KEY_PM_AI_EXCLUDE_RULES_JSON}: {@code code/exclude_rules.json} when present, else
+     * {@code code/json/stage1_exclude_rules.json} when present (repository typically ships the latter).
+     */
+    public static Optional<Path> resolveDefaultExcludeRulesJsonPath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path primary = resolveRepoRoot(u).resolve("code").resolve("exclude_rules.json");
+        if (Files.isRegularFile(primary)) {
+            return Optional.of(primary.toAbsolutePath().normalize());
+        }
+        Path stage1 = stage1ExcludeRulesJsonPath(u);
+        if (Files.isRegularFile(stage1)) {
+            return Optional.of(stage1.toAbsolutePath().normalize());
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Default path to stage-1 Excel output.
      *
      * <p>{@code planning_core.bootstrap} resolves {@code output_dir} from {@code PM_AI_OUTPUT_DIR} or

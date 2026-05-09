@@ -224,6 +224,8 @@ public final class EnvVarDocs {
                         + " 手動でも UTF-8 JSON（list または {\"rules\":[...]}、"
                         + " 列構造は設定シートと同槗。"
                         + " 有効ファイルがあれば read_excel 経路を省略可。"
+                        + " JavaFX 環境変数タブの既定は"
+                        + " code/exclude_rules.json（実在時）、無ければ code/json/stage1_exclude_rules.json（実在時）。"
                         + " JavaFX は「ファイル...」で選択可。");
         put(
                 "PM_AI_PLAN_RESULT_TASK_JSON",

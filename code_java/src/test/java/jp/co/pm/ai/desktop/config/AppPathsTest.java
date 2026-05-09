@@ -98,6 +98,27 @@ class AppPathsTest {
     }
 
     @Test
+    void resolveDefaultExcludeRulesJsonPath_prefersPrimaryThenStage1(@TempDir Path fakeRepo) throws Exception {
+        Path code = fakeRepo.resolve("code");
+        Files.createDirectories(code.resolve("python"));
+        Files.createFile(code.resolve("python").resolve("task_extract_stage1.py"));
+        Path jsonDir = code.resolve("json");
+        Files.createDirectories(jsonDir);
+        Path stage1 = jsonDir.resolve(AppPaths.STAGE1_EXCLUDE_RULES_JSON_FILENAME);
+        Files.createFile(stage1);
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
+        assertEquals(
+                stage1.toAbsolutePath().normalize(),
+                AppPaths.resolveDefaultExcludeRulesJsonPath(ui).get());
+
+        Path primary = code.resolve("exclude_rules.json");
+        Files.createFile(primary);
+        assertEquals(
+                primary.toAbsolutePath().normalize(),
+                AppPaths.resolveDefaultExcludeRulesJsonPath(ui).get());
+    }
+
+    @Test
     void resolveDefaultOutputDir_defaultsToRepoOutput(@TempDir Path fakeRepo) throws Exception {
         Path code = fakeRepo.resolve("code").resolve("python");
         Files.createDirectories(code);
