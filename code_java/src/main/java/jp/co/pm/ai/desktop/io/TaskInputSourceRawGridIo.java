@@ -255,14 +255,15 @@ public final class TaskInputSourceRawGridIo {
     private static final DateTimeFormatter PROCESSING_DATETIME_OUT =
             DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
 
-    /** ??????????????????????? */
+    /** Workbook header for process name (dedupe key). */
     private static final String HEADER_PROCESS_NAME = "\u5de5\u7a0b\u540d";
 
     private static final String HEADER_MACHINE_NAME = "\u6a5f\u68b0\u540d";
 
-    /** ?? NO / ?? ?? ??????????????????? */
+    /** Request-id column title (halfwidth Latin suffix). */
     private static final String HEADER_REQUEST_NO_ASCII = "\u4f9d\u983cNO";
 
+    /** Alternate request-id header (fullwidth Latin) when {@link #HEADER_REQUEST_NO_ASCII} is absent. */
     private static final String HEADER_REQUEST_NO_FULL = "\u4f9d\u983c\uff2e\uff2f";
 
     private static final String HEADER_KAKOU_DATE = "\u52a0\u5de5\u65e5";
@@ -307,8 +308,8 @@ public final class TaskInputSourceRawGridIo {
     }
 
     /**
-     * ??????????NO?????????????????????????????????????
-     * ?????????????????????????
+     * Keeps the first row per key (process name, machine name, request no., processing date); drops later
+     * duplicates. If any of those header columns is absent, returns the input unchanged.
      */
     public static PlanInputTabularIo.TabularSheet applyProcessingActualsDedupeByQuadKey(
             PlanInputTabularIo.TabularSheet shaped) {
