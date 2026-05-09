@@ -257,6 +257,9 @@
             <option>-XX:+HeapDumpOnOutOfMemoryError</option>
             <option>-XX:+UseStringDeduplication</option>
             <option>-Dprism.order=${javafx.prism.order}</option>
+            <!-- javafx.web は jdk.jsobject / jdk.xml.dom をルートに要求（WebView。未指定だと FindException） -->
+            <option>--add-modules</option>
+            <option>javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.swing,javafx.web,jdk.jsobject,jdk.xml.dom</option>
             <option>--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED</option>
             <option>--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED</option>
             <option>--add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED</option>
