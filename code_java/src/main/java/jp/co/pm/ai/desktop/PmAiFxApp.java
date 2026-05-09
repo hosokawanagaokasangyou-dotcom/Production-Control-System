@@ -3,6 +3,7 @@ package jp.co.pm.ai.desktop;
 import java.awt.GraphicsEnvironment;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import javafx.animation.PauseTransition;
@@ -12,6 +13,7 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
+import javafx.stage.WindowEvent;
 import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.StartupCrashLog;
@@ -107,13 +109,37 @@ public class PmAiFxApp extends Application {
         Platform.runLater(
                 () -> {
                     try {
+                        AtomicLong mainWindowPaintedNanos = new AtomicLong();
+                        AtomicBoolean splashCloseScheduled = new AtomicBoolean();
+
                         StartupSplashStage.raiseToFront(splash);
                         MainShellController shell = bootstrapMainWindow(primaryStage);
                         // primary にシーンを載せた直後、前面が移ることがあるため閉じる直前にも前面化する
                         StartupSplashStage.raiseToFront(splash);
+
+                        Runnable markMainPaintedAndScheduleClose =
+                                () -> {
+                                    mainWindowPaintedNanos.compareAndSet(
+                                            0L, System.nanoTime());
+                                    scheduleSplashCloseAfterMainPainted(
+                                            splash,
+                                            splashVisibleSinceNanos,
+                                            mainWindowPaintedNanos,
+                                            shell,
+                                            splashCloseScheduled);
+                                };
+                        // メインを一度表示したあと、レイアウト・初回描画が終わるまで待ってから閉じる
+                        primaryStage.addEventHandler(
+                                WindowEvent.WINDOW_SHOWN,
+                                e ->
+                                        Platform.runLater(
+                                                () ->
+                                                        Platform.runLater(
+                                                                markMainPaintedAndScheduleClose)));
                         primaryStage.show();
-                        closeSplashAfterMinimumVisibleDuration(
-                                splash, splashVisibleSinceNanos, shell);
+                        Platform.runLater(
+                                () ->
+                                        Platform.runLater(markMainPaintedAndScheduleClose));
                     } catch (Exception e) {
                         splash.close();
                         throw new RuntimeException(e);
@@ -124,19 +150,28 @@ public class PmAiFxApp extends Application {
     private static final long SPLASH_MIN_VISIBLE_NANOS = 3_000_000_000L;
 
     /**
-     * スプラッシュが実際に映ってから最低 {@value #SPLASH_MIN_VISIBLE_NANOS} ナノ秒経過してから閉じる。
-     * 本体ロードがそれより長い場合は追加待ちしない。
+     * メインウィンドウの初回表示・レイアウト後（{@link WindowEvent#WINDOW_SHOWN} のあと 2 パルス）と、スプラッシュの最低表示時間の
+     * いずれか遅い方まで待ってから閉じる。
      */
-    private static void closeSplashAfterMinimumVisibleDuration(
+    private static void scheduleSplashCloseAfterMainPainted(
             Stage splash,
             AtomicLong splashVisibleSinceNanos,
-            MainShellController shell) {
+            AtomicLong mainWindowPaintedNanos,
+            MainShellController shell,
+            AtomicBoolean splashCloseScheduled) {
+        long painted = mainWindowPaintedNanos.get();
+        if (painted == 0L) {
+            return;
+        }
+        if (!splashCloseScheduled.compareAndSet(false, true)) {
+            return;
+        }
         long since = splashVisibleSinceNanos.get();
         if (since == 0L) {
             since = System.nanoTime();
         }
-        long deadline = since + SPLASH_MIN_VISIBLE_NANOS;
-        long waitNs = deadline - System.nanoTime();
+        long earliestCloseNanos = Math.max(since + SPLASH_MIN_VISIBLE_NANOS, painted);
+        long waitNs = earliestCloseNanos - System.nanoTime();
         Runnable finish =
                 () -> {
                     splash.close();
