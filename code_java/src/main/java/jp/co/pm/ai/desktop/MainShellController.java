@@ -3257,8 +3257,8 @@ public final class MainShellController {
     }
 
     /**
-     * jpackage 配布の {@code pm-ai-data/}（{@code package_app.ps1} が同梱）があるとき、データパスをインストール直下のローカル
-     * フォルダに寄せる（未設定 PC でネットワーク既定 UNC に依存しない）。
+     * jpackage 配布の {@code pm-ai-data/}（{@code package_app.ps1} が同梱）があるとき、{@link AppPaths#KEY_PM_AI_OUTPUT_DIR} をインストール直下の
+     * {@code pm-ai-data/output} に寄せる。ネットワークソース正本（{@code PM_AI_TASK_INPUT_SOURCE_DIR} / {@code PM_AI_ACTUAL_DETAIL_SOURCE_DIR}）は上書きしない。
      */
     private void applyBundledPortableDefaultsIfPresent() {
         if (envRows == null) {
@@ -3269,23 +3269,15 @@ public final class MainShellController {
         }
         Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
         Path repo = cwd.resolve("pm-ai-data").toAbsolutePath().normalize();
-        Path taskIn = repo.resolve("input").resolve("task-input");
-        Path actualDetail = repo.resolve("input").resolve("actual-detail");
         Path outDir = repo.resolve("output");
         try {
-            Files.createDirectories(taskIn);
-            Files.createDirectories(actualDetail);
             Files.createDirectories(outDir);
         } catch (IOException ignored) {
             /* UI にはパスだけ反映；作成失敗はユーザー環境で対応 */
         }
         for (EnvVarRow r : envRows) {
             String name = r.getName() != null ? r.getName().trim() : "";
-            if (AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR.equals(name)) {
-                r.setValue(taskIn.toString());
-            } else if (AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR.equals(name)) {
-                r.setValue(actualDetail.toString());
-            } else if (AppPaths.KEY_PM_AI_OUTPUT_DIR.equals(name)) {
+            if (AppPaths.KEY_PM_AI_OUTPUT_DIR.equals(name)) {
                 r.setValue(outDir.toString());
             }
         }
