@@ -30,7 +30,7 @@
                 <Label wrapText="true"
                        text="メイン画面上部のタブ構成・見出し・色をここで編集します。グループ名・別名の入力欄は、「構成を適用」のときまとめて取り込まれます（個別の反映ボタンは省略できます）。見出し別名は見た目のみで内部タブ ID は変わりません。適用成功時にセッションへ保存されます。"/>
                 <Label wrapText="true" styleClass="pm-main-shell-tab-organizer-hint"
-                       text="ドラッグで行を移動（タブ行へ＝その前へ挿入、グループ行へ＝子の末尾へ）。複数選択して「選択をまとめてグループへ」でフォルダ化。"/>
+                       text="ドラッグで行を移動（タブ行へ＝その前へ挿入、グループ行へ＝子の末尾へ）。複数選択して「選択をまとめてグループへ」でフォルダ化。「グループを削除」は枠だけ外し、中身のタブ・子グループはその階層に残ります。"/>
                 <HBox alignment="CENTER_LEFT" spacing="8.0">
                     <Label text="グループ名"/>
                     <TextField fx:id="groupNameField" prefWidth="220.0" promptText="グループ行を1つ選ぶと編集できます"
@@ -64,6 +64,7 @@
                 <HBox spacing="8.0">
                     <Button mnemonicParsing="false" onAction="#onAddGroup" text="空のグループを追加"/>
                     <Button mnemonicParsing="false" onAction="#onGroupSelection" text="選択をまとめてグループへ"/>
+                    <Button mnemonicParsing="false" onAction="#onDeleteSelectedGroup" text="グループを削除"/>
                 </HBox>
             </VBox>
         </ScrollPane>

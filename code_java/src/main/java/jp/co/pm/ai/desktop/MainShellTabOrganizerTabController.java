@@ -457,6 +457,46 @@ public final class MainShellTabOrganizerTabController {
         rebuildOrganizerVisualTree();
     }
 
+    /**
+     * 選択中のグループ行を削除する。子がある場合は同一親の直下へ順に繰り上げる（タブは失わない）。
+     */
+    @FXML
+    private void onDeleteSelectedGroup() {
+        if (treeView == null || treeView.getRoot() == null) {
+            return;
+        }
+        TreeItem<OrgRow> sel = treeView.getSelectionModel().getSelectedItem();
+        if (sel == null
+                || sel.getValue() == null
+                || sel.getValue().kind != OrgRow.Kind.GROUP) {
+            alert(AlertType.INFORMATION, "グループ行を1つ選んでください。");
+            return;
+        }
+        TreeItem<OrgRow> parent = sel.getParent();
+        if (parent == null) {
+            return;
+        }
+        ObservableList<TreeItem<OrgRow>> siblings = parent.getChildren();
+        int idx = siblings.indexOf(sel);
+        if (idx < 0) {
+            return;
+        }
+        List<TreeItem<OrgRow>> toHoist = new ArrayList<>(sel.getChildren());
+        siblings.remove(idx);
+        for (int i = 0; i < toHoist.size(); i++) {
+            siblings.add(idx + i, toHoist.get(i));
+        }
+        treeView.getSelectionModel().clearSelection();
+        if (!toHoist.isEmpty()) {
+            treeView.getSelectionModel().select(toHoist.getFirst());
+        } else if (!siblings.isEmpty()) {
+            int pick = Math.min(idx, siblings.size() - 1);
+            treeView.getSelectionModel().select(siblings.get(pick));
+        }
+        rebuildOrganizerVisualTree();
+        syncOrganizerSideFields();
+    }
+
     @FXML
     private void onApplySelectedColor() {
         if (treeView == null || colorPicker == null) {
