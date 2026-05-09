@@ -22,6 +22,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Slider;
+import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
@@ -48,13 +49,21 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
  * Raw spreadsheet for the machining actual-detail workbook, resolved via {@link NetworkSourceDirResolver}
  * ({@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK} / {@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR}).
  * Display applies {@link TaskInputSourceRawGridIo#applyProcessingActualsDisplaySteps}. Optional sheet:
- * {@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_SHEET}. FXML: {@code ProcessingActualsDataTab.fxml}.
+ * {@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_SHEET}. Rows can be filtered by UI text for column
+ * {@link #HEADER_PRODUCT_CONDITION_BREAKDOWN}. FXML: {@code ProcessingActualsDataTab.fxml}.
  */
 
 public final class ProcessingActualsDataTabController {
 
+    /** Header label after shaping (Excel row 5); must match the workbook column title. */
+    private static final String HEADER_PRODUCT_CONDITION_BREAKDOWN =
+            "\u88fd\u54c1\u6761\u4ef6(\u5185\u8a33)";
+
     private static final String HINT_TEXT =
             "\u5148\u982d4\u884c\u3092\u9664\u53bb\u3057\u3001\u539f\u7a3f\u306e5\u884c\u76ee\u3092\u5217\u898b\u51fa\u3057\u306b\u3057\u307e\u3059\u3002"
+                    + " \u2462 \u5165\u529b\u3057\u305f\u5024\u3068\u540c\u3058\u300c"
+                    + HEADER_PRODUCT_CONDITION_BREAKDOWN
+                    + "\u300d\u306e\u307f\u6b8b\u3059\u3002"
                     + " \u30c7\u30fc\u30bf\u306f PM_AI_ACTUAL_DETAIL_WORKBOOK \u307e\u305f\u306f"
                     + " PM_AI_ACTUAL_DETAIL_SOURCE_DIR \u304b\u3089\u89e3\u6c7a\u3055\u308c\u308b Excel\uff08\u307e\u305f\u306f CSV\uff09\u3092\u8aad\u307f\u8fbc\u307f\u307e\u3059\u3002"
                     + " PM_AI_ACTUAL_DETAIL_SHEET \u3067\u30b7\u30fc\u30c8\u540d\u3092\u6307\u5b9a\u3067\u304d\u307e\u3059\u3002"
@@ -75,6 +84,9 @@ public final class ProcessingActualsDataTabController {
 
     @FXML
     private ComboBox<String> sheetCombo;
+
+    @FXML
+    private TextField productConditionBreakdownFilterField;
 
     @FXML
     private Label hintLabel;
@@ -123,6 +135,13 @@ public final class ProcessingActualsDataTabController {
 
     private volatile boolean presentationHooksInstalled;
 
+    private final AtomicBoolean suppressFilterUi = new AtomicBoolean(false);
+
+    /** Full shaped grid before {@link #applyProductBreakdownFilter}; used when the filter text changes. */
+    private final List<String> unfilteredShapedHeaders = new ArrayList<>();
+
+    private final List<List<String>> unfilteredShapedRows = new ArrayList<>();
+
     @FXML
     private void initialize() {
         hintLabel.setText(HINT_TEXT);
@@ -168,6 +187,18 @@ public final class ProcessingActualsDataTabController {
                             }
                             Platform.runLater(() -> applyLoadedFile(loadedPath, idx, false));
                         });
+
+        if (productConditionBreakdownFilterField != null) {
+            productConditionBreakdownFilterField
+                    .textProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (suppressFilterUi.get()) {
+                                    return;
+                                }
+                                Platform.runLater(this::refilterFromSnapshotIfPossible);
+                            });
+        }
     }
 
     void bindShell(MainShellController shell) {
@@ -450,40 +481,15 @@ public final class ProcessingActualsDataTabController {
 
     private void applyLoadedFile(Path file, int excelSheetIndex, boolean showErrorsInStatus) {
         try {
-            PlanInputTabularIo.TabularSheet tab =
+            PlanInputTabularIo.TabularSheet shaped =
                     TaskInputSourceRawGridIo.applyProcessingActualsDisplaySteps(
                             TaskInputSourceRawGridIo.readRaw(file, excelSheetIndex));
-            List<TableColumnOrderPersistence.ColumnSpec> lay =
-                    TableColumnOrderPersistence.loadLayout(
-                            TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW);
-            persistedLayout.set(lay);
-            List<String> beforeHeaders = new ArrayList<>(tab.headers());
-            boolean[] visBefore =
-                    TableColumnOrderPersistence.loadColumnVisibility(
-                            TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW,
-                            beforeHeaders.size());
-            List<String> titleOrder =
-                    lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList();
-
-            headersRef.clear();
-            headersRef.addAll(tab.headers());
-            rows.clear();
-            for (List<String> r : tab.rows()) {
-                rows.add(FXCollections.observableArrayList(r));
-            }
-
-            TableColumnOrderPersistence.applyLogicalColumnOrder(headersRef, rows, titleOrder);
-            boolean[] visAfter =
-                    TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
-                            beforeHeaders, visBefore, titleOrder);
-            TableColumnOrderPersistence.saveColumnVisibility(
-                    TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW, visAfter);
-
-            statusLabel.setText(rows.size() + " 行 × " + headersRef.size() + " 列");
-            rebuildSpreadsheet();
+            rememberShapedSnapshot(shaped);
+            PlanInputTabularIo.TabularSheet tab = applyProductBreakdownFilter(shaped);
+            populateFromFilteredSheet(tab);
         } catch (Exception ex) {
             if (showErrorsInStatus) {
-                statusLabel.setText("読込エラー");
+                statusLabel.setText("\u8aad\u8fbc\u30a8\u30e9\u30fc");
             }
             if (shell != null) {
                 shell.appendLog(
@@ -494,7 +500,144 @@ public final class ProcessingActualsDataTabController {
         }
     }
 
+    private void rememberShapedSnapshot(PlanInputTabularIo.TabularSheet shaped) {
+        unfilteredShapedHeaders.clear();
+        unfilteredShapedRows.clear();
+        unfilteredShapedHeaders.addAll(shaped.headers());
+        for (List<String> r : shaped.rows()) {
+            unfilteredShapedRows.add(new ArrayList<>(r));
+        }
+    }
+
+    private void clearShapedSnapshot() {
+        unfilteredShapedHeaders.clear();
+        unfilteredShapedRows.clear();
+    }
+
+    /**
+     * Keeps rows whose {@link #HEADER_PRODUCT_CONDITION_BREAKDOWN} cell equals the trimmed filter text.
+     * Empty filter leaves all rows. Unknown column: no filtering (with log).
+     */
+    private PlanInputTabularIo.TabularSheet applyProductBreakdownFilter(
+            PlanInputTabularIo.TabularSheet shaped) {
+        String want =
+                productConditionBreakdownFilterField != null
+                        ? productConditionBreakdownFilterField.getText()
+                        : "";
+        if (want != null) {
+            want = want.strip();
+        }
+        if (want == null || want.isEmpty()) {
+            return shaped;
+        }
+        List<String> headers = shaped.headers();
+        int col = indexOfProductBreakdownColumn(headers);
+        if (col < 0) {
+            if (shell != null) {
+                shell.appendLog(
+                        "[processing-actuals-detail] missing header column: "
+                                + HEADER_PRODUCT_CONDITION_BREAKDOWN);
+            }
+            return shaped;
+        }
+        List<List<String>> out = new ArrayList<>();
+        for (List<String> row : shaped.rows()) {
+            String cell = col < row.size() && row.get(col) != null ? row.get(col).strip() : "";
+            if (want.equals(cell)) {
+                out.add(new ArrayList<>(row));
+            }
+        }
+        return new PlanInputTabularIo.TabularSheet(new ArrayList<>(headers), out);
+    }
+
+    private static int indexOfProductBreakdownColumn(List<String> headers) {
+        if (headers == null) {
+            return -1;
+        }
+        for (int i = 0; i < headers.size(); i++) {
+            String h = headers.get(i);
+            if (HEADER_PRODUCT_CONDITION_BREAKDOWN.equals(h != null ? h.strip() : "")) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private void refilterFromSnapshotIfPossible() {
+        if (unfilteredShapedHeaders.isEmpty()) {
+            return;
+        }
+        List<List<String>> copyRows = new ArrayList<>();
+        for (List<String> r : unfilteredShapedRows) {
+            copyRows.add(new ArrayList<>(r));
+        }
+        PlanInputTabularIo.TabularSheet shaped =
+                new PlanInputTabularIo.TabularSheet(
+                        new ArrayList<>(unfilteredShapedHeaders), copyRows);
+        PlanInputTabularIo.TabularSheet tab = applyProductBreakdownFilter(shaped);
+        populateFromFilteredSheet(tab);
+    }
+
+    private void populateFromFilteredSheet(PlanInputTabularIo.TabularSheet tab) {
+        List<TableColumnOrderPersistence.ColumnSpec> lay =
+                TableColumnOrderPersistence.loadLayout(
+                        TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW);
+        persistedLayout.set(lay);
+        List<String> beforeHeaders = new ArrayList<>(tab.headers());
+        boolean[] visBefore =
+                TableColumnOrderPersistence.loadColumnVisibility(
+                        TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW,
+                        beforeHeaders.size());
+        List<String> titleOrder =
+                lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList();
+
+        headersRef.clear();
+        headersRef.addAll(tab.headers());
+        rows.clear();
+        for (List<String> r : tab.rows()) {
+            rows.add(FXCollections.observableArrayList(r));
+        }
+
+        TableColumnOrderPersistence.applyLogicalColumnOrder(headersRef, rows, titleOrder);
+        boolean[] visAfter =
+                TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
+                        beforeHeaders, visBefore, titleOrder);
+        TableColumnOrderPersistence.saveColumnVisibility(
+                TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW, visAfter);
+
+        statusLabel.setText(
+                rows.size()
+                        + " \u884c \u00d7 "
+                        + headersRef.size()
+                        + " \u5217"
+                        + filterActiveSuffix());
+        rebuildSpreadsheet();
+    }
+
+    private String filterActiveSuffix() {
+        String want =
+                productConditionBreakdownFilterField != null
+                        ? productConditionBreakdownFilterField.getText()
+                        : "";
+        if (want != null) {
+            want = want.strip();
+        }
+        if (want == null || want.isEmpty()) {
+            return "";
+        }
+        return " [\u7d5e\u308a]";
+    }
+
     private void applyEmpty() {
+        clearShapedSnapshot();
+        suppressFilterUi.set(true);
+        try {
+            if (productConditionBreakdownFilterField != null) {
+                productConditionBreakdownFilterField.clear();
+            }
+        } finally {
+            suppressFilterUi.set(false);
+        }
         headersRef.clear();
         rows.clear();
         persistedLayout.set(List.of());

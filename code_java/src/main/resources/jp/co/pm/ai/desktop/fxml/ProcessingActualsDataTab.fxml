@@ -8,6 +8,7 @@
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.Slider?>
+<?import javafx.scene.control.TextField?>
 <?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.StackPane?>
@@ -43,6 +44,11 @@
                 <HBox alignment="CENTER_LEFT" spacing="8.0">
                     <Label text="Excel &#x30b7;&#x30fc;&#x30c8;"/>
                     <ComboBox fx:id="sheetCombo" prefWidth="280.0"/>
+                </HBox>
+                <HBox alignment="CENTER_LEFT" spacing="8.0">
+                    <Label text="&#x88fd;&#x54c1;&#x6761;&#x4ef6;&#x0028;&#x5185;&#x8a33;&#x0029;&#x306e;&#x5024;"/>
+                    <TextField fx:id="productConditionBreakdownFilterField" prefWidth="280.0"
+                               promptText="&#x7a7a;&#x6b04;&#x3067;&#x5168;&#x884c;&#x3001;&#x5165;&#x529b;&#x3067;&#x4e00;&#x81f4;&#x884c;&#x306e;&#x307f;"/>
                 </HBox>
                 <Label fx:id="hintLabel" wrapText="true"/>
                 <HBox alignment="CENTER_LEFT" spacing="10.0">
