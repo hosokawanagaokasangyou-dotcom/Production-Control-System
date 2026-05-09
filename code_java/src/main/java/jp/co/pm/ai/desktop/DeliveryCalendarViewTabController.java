@@ -1102,9 +1102,26 @@ public final class DeliveryCalendarViewTabController {
             actRows = processingActualsDataTabController.getUnfilteredShapedRows();
         }
 
-        // --- Dispatch: in-memory (controller already reads from \u7d50\u679c_\u914d\u53f0\u8868.json) ---
+        // --- Dispatch: load from \u7d50\u679c_\u914d\u53f0\u8868.json when present (restart-safe without opening tab) ---
+        Path dispatchJsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
         List<String> disHeaders = deliveryCalendarResultDispatchTableTabController.getShapedHeaders();
         List<List<String>> disRows = deliveryCalendarResultDispatchTableTabController.getShapedRows();
+        String dispatchSource = disRows.isEmpty() ? "none" : "memory";
+        if (Files.isRegularFile(dispatchJsonPath)) {
+            try {
+                JsonTableIo.SheetTable st = JsonTableIo.loadFlatTable(dispatchJsonPath);
+                if (!st.columns().isEmpty() && !st.rows().isEmpty()) {
+                    disHeaders = new ArrayList<>(st.columns());
+                    disRows = sheetTableToRowLists(st);
+                    dispatchSource = "file";
+                }
+            } catch (Exception ex) {
+                if (shell != null) {
+                    shell.appendLog(
+                            "[delivery-calendar] dispatch flat JSON load failed: " + ex.getMessage());
+                }
+            }
+        }
 
         Map<String, Map<String, Map<String, Double>>> planLookup =
                 buildAladdinPlanLookup(planHeaders, planRows);
@@ -1115,21 +1132,27 @@ public final class DeliveryCalendarViewTabController {
 
         // region agent log
         try {
-            java.io.FileWriter fw = new java.io.FileWriter(
-                    "/mnt/c/\u5de5\u7a0b\u7ba1\u7406AI\u30d7\u30ed\u30b8\u30a7\u30af\u30c8_JAVA/.cursor/debug-ebddd7.log",
-                    true);
-            fw.write("{\"sessionId\":\"ebddd7\",\"hypothesisId\":\"OVERLAY\","
-                    + "\"location\":\"DeliveryCalendarViewTabController.java:overlayChildTabValues\","
-                    + "\"message\":\"lookup_sizes\","
-                    + "\"data\":{"
-                    + "\"planMachines\":" + planLookup.size()
-                    + ",\"actualMachines\":" + actualLookup.size()
-                    + ",\"dispatchMachines\":" + dispatchLookup.size()
-                    + ",\"calDateCols\":" + calDateByIdx.size()
-                    + ",\"mainRows\":" + mainRows.size()
-                    + ",\"aladdinJsonExists\":" + Files.isRegularFile(aladdinJsonPath)
-                    + ",\"actualsJsonExists\":" + Files.isRegularFile(actualsJsonPath)
-                    + "},\"timestamp\":" + System.currentTimeMillis() + "}\n");
+            Path debugLogPath =
+                    AppPaths.resolveRepoRoot(ui).resolve(".cursor").resolve("debug-ebddd7.log");
+            Files.createDirectories(debugLogPath.getParent());
+            java.io.FileWriter fw = new java.io.FileWriter(debugLogPath.toFile(), true);
+            fw.write(
+                    "{\"sessionId\":\"ebddd7\",\"hypothesisId\":\"OVERLAY\","
+                            + "\"location\":\"DeliveryCalendarViewTabController.java:overlayChildTabValues\","
+                            + "\"message\":\"lookup_sizes\","
+                            + "\"data\":{"
+                            + "\"planMachines\":" + planLookup.size()
+                            + ",\"actualMachines\":" + actualLookup.size()
+                            + ",\"dispatchMachines\":" + dispatchLookup.size()
+                            + ",\"calDateCols\":" + calDateByIdx.size()
+                            + ",\"mainRows\":" + mainRows.size()
+                            + ",\"aladdinJsonExists\":" + Files.isRegularFile(aladdinJsonPath)
+                            + ",\"actualsJsonExists\":" + Files.isRegularFile(actualsJsonPath)
+                            + ",\"dispatchJsonExists\":" + Files.isRegularFile(dispatchJsonPath)
+                            + ",\"dispatchSource\":\"" + dispatchSource + "\""
+                            + ",\"dispatchJsonPath\":\""
+                            + dispatchJsonPath.toString().replace("\\", "\\\\").replace("\"", "\\\"")
+                            + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
             fw.close();
         } catch (Exception _e) { /* ignore */ }
         // endregion
@@ -1240,6 +1263,20 @@ public final class DeliveryCalendarViewTabController {
 
     private static String cellAt(List<String> row, int idx) {
         return (idx >= 0 && idx < row.size() && row.get(idx) != null) ? row.get(idx) : "";
+    }
+
+    /** Converts {@link JsonTableIo.SheetTable} row maps to aligned row lists for lookup builders. */
+    private static List<List<String>> sheetTableToRowLists(JsonTableIo.SheetTable st) {
+        List<String> cols = st.columns();
+        List<List<String>> out = new ArrayList<>(st.rows().size());
+        for (Map<String, String> m : st.rows()) {
+            List<String> line = new ArrayList<>(cols.size());
+            for (String c : cols) {
+                line.add(m != null ? m.getOrDefault(c, "") : "");
+            }
+            out.add(line);
+        }
+        return out;
     }
 
     /**
