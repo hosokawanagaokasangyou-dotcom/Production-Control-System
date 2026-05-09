@@ -590,6 +590,14 @@ public final class MainShellController {
     }
 
     private void applyDesktopSession(DesktopSessionState s) {
+        applyDesktopSession(s, true);
+    }
+
+    /**
+     * @param restoreUiEnvRowsFromSession {@code false} のとき環境変数タブはセッションから復元せず、呼び出し元で構築済みの行を保持する（ポータル
+     *     バージョンアップ直後のバンドル既定への初期化後など）。
+     */
+    private void applyDesktopSession(DesktopSessionState s, boolean restoreUiEnvRowsFromSession) {
         if (s == null) {
             return;
         }
@@ -597,7 +605,9 @@ public final class MainShellController {
         setMainShellTabOrganizerHeaderGlowEnabled(s.mainShellTabOrganizerHeaderGlow());
         setMainShellTabOrganizerHeaderGlowStrength(
                 clamp(s.mainShellTabOrganizerHeaderGlowStrength(), 0.0, 1.0));
-        applyUiEnvRowsFromSession(s);
+        if (restoreUiEnvRowsFromSession) {
+            applyUiEnvRowsFromSession(s);
+        }
         memorySettingsTabController.applyMemorySettingsSession(s);
         planInputTabController.restoreDesktopSessionPaths(s.planInputPath(), s.planInputSheet());
         stage1PreviewTabController.restoreDesktopSessionPaths(s.stage1PreviewPath(), s.stage1PreviewSheet());
@@ -3159,11 +3169,13 @@ public final class MainShellController {
                                 "[startup] バージョンアップ後のバンドル既定（タブ／列順／配台不要 JSON パス）の上書きに失敗: "
                                         + ex.getMessage());
                     }
+                    applyEnvRowsFullBundledResetAndPersist(false);
                     applyBundledPortableDefaultsIfPresent();
-                    applyDesktopSession(DesktopSessionStateStore.load());
+                    applyDesktopSession(DesktopSessionStateStore.load(), false);
+                    applyRepoFolderPathNormalization();
                     DesktopSessionStateStore.save(collectDesktopSession());
                     mainRunTabController.refreshAppVersionLabel();
-                    appendLog("[startup] ポータブル同期が完了しました（version.txt に従いファイルを更新）。");
+                    appendLog("[startup] ポータル同期が完了しました（version.txt に従いファイルを更新）。環境変数はバンドル既定で初期化しました。");
                 });
         task.setOnFailed(
                 e -> {
