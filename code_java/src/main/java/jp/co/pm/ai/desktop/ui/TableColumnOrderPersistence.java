@@ -185,7 +185,11 @@ public final class TableColumnOrderPersistence {
         STAGE1_PREVIEW("stage1Preview"),
         ACTUALS_STATUS("actualsStatus"),
         ENV_VARS("envVars"),
-        RESULT_DISPATCH_TABLE("resultDispatchTable");
+        RESULT_DISPATCH_TABLE("resultDispatchTable"),
+        /** 配台計画手動修正タブ「タスク×日付」 */
+        DISPATCH_INTERACTIVE_WIDE("dispatchInteractiveWide"),
+        /** 配台計画手動修正タブ「工程+機械×日」 */
+        DISPATCH_INTERACTIVE_BY_DAY("dispatchInteractiveByDay");
 
         private final String jsonKey;
 

@@ -4,10 +4,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.BitSet;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -79,9 +81,11 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchPivot;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
+import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetRowReorderDragGhost;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
+import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 
 /**
  * Interactive pivot editor for result dispatch JSON (ControlsFX SpreadsheetView: task-by-day columns +
@@ -206,6 +210,14 @@ public final class DispatchInteractiveTabController {
     private ResultDispatchDocument doc = ResultDispatchDocument.empty();
 
     private List<LocalDate> dateAxis = new ArrayList<>();
+
+    /**
+     * 日付列のユーザー希望順（両グリッド共通）。{@code null} のときは {@link #computeDateAxisList()} の自然順を使う。
+     */
+    private List<LocalDate> preferredDateAxisOrder;
+
+    /** 列ドラッグ並べ替え起因の {@link #rebuildGrids()} 中はヘッダ変更コールバックを無視する。 */
+    private final AtomicBoolean suppressColumnReorderPersistence = new AtomicBoolean(false);
 
     private final List<Map<String, String>> wideProfiles = new ArrayList<>();
 
@@ -964,10 +976,175 @@ public final class DispatchInteractiveTabController {
     }
 
     private FullGridRebuild buildFullGridRebuild(boolean staffHighlight) {
-        List<LocalDate> axis = computeDateAxisList();
+        List<LocalDate> axis = axisForRebuild();
         WideGridBundle wide = buildWideGridModel(axis, staffHighlight);
         ByDayGridBundle byDay = buildByDayGridModel(axis, staffHighlight);
         return new FullGridRebuild(axis, wide, byDay);
+    }
+
+    /** データに存在する日付集合は維持しつつ、保存済み／ユーザー設定の列順を日付軸に反映する。 */
+    private List<LocalDate> axisForRebuild() {
+        List<LocalDate> computed = computeDateAxisList();
+        if (preferredDateAxisOrder != null && sameMultisetLocalDate(preferredDateAxisOrder, computed)) {
+            return new ArrayList<>(preferredDateAxisOrder);
+        }
+        preferredDateAxisOrder = null;
+        List<LocalDate> fromPersistence = tryLoadPreferredDateOrderFromPersistence(computed);
+        if (fromPersistence != null) {
+            preferredDateAxisOrder = new ArrayList<>(fromPersistence);
+            return new ArrayList<>(fromPersistence);
+        }
+        return computed;
+    }
+
+    private static boolean sameMultisetLocalDate(List<LocalDate> a, List<LocalDate> b) {
+        if (a == null || b == null || a.size() != b.size()) {
+            return false;
+        }
+        HashMap<LocalDate, Integer> freq = new HashMap<>();
+        for (LocalDate d : a) {
+            freq.merge(d, 1, Integer::sum);
+        }
+        for (LocalDate d : b) {
+            Integer n = freq.get(d);
+            if (n == null || n <= 0) {
+                return false;
+            }
+            if (n == 1) {
+                freq.remove(d);
+            } else {
+                freq.put(d, n - 1);
+            }
+        }
+        return freq.isEmpty();
+    }
+
+    private List<LocalDate> tryLoadPreferredDateOrderFromPersistence(List<LocalDate> computed) {
+        List<TableColumnOrderPersistence.ColumnSpec> lay =
+                TableColumnOrderPersistence.loadLayout(TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_WIDE);
+        if (lay == null || lay.isEmpty()) {
+            return null;
+        }
+        List<String> titles = lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList();
+        if (!wideStaticPrefixMatches(titles)
+                || titles.size() != WIDE_STATIC_HEADERS.size() + computed.size()) {
+            return null;
+        }
+        List<LocalDate> dates = parseDateTailAsDates(titles, WIDE_STATIC_HEADERS.size());
+        if (dates == null || !sameMultisetLocalDate(dates, computed)) {
+            return null;
+        }
+        return dates;
+    }
+
+    private static boolean wideStaticPrefixMatches(List<String> titles) {
+        if (titles == null || titles.size() < WIDE_STATIC_HEADERS.size()) {
+            return false;
+        }
+        for (int i = 0; i < WIDE_STATIC_HEADERS.size(); i++) {
+            if (!WIDE_STATIC_HEADERS.get(i).equals(titles.get(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean byDayStaticPrefixMatches(List<String> titles) {
+        if (titles == null || titles.size() < 2) {
+            return false;
+        }
+        if (!ResultDispatchSchema.COL_PROCESS.equals(titles.get(0))) {
+            return false;
+        }
+        return ResultDispatchSchema.COL_MACHINE.equals(titles.get(1));
+    }
+
+    private static List<LocalDate> parseDateTailAsDates(List<String> titles, int staticCount) {
+        if (titles == null || titles.size() < staticCount) {
+            return null;
+        }
+        List<LocalDate> dates = new ArrayList<>();
+        for (int i = staticCount; i < titles.size(); i++) {
+            try {
+                dates.add(LocalDate.parse(titles.get(i)));
+            } catch (DateTimeParseException e) {
+                return null;
+            }
+        }
+        return dates;
+    }
+
+    private void persistDispatchColumnLayouts(List<String> wideTitles, List<String> byDayTitles) {
+        List<TableColumnOrderPersistence.ColumnSpec> wideLay =
+                TableColumnOrderPersistence.loadLayout(TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_WIDE);
+        List<Double> wideW =
+                TableColumnOrderPersistence.resolveWidthsForHeaders(wideTitles, wideLay, 112);
+        List<TableColumnOrderPersistence.ColumnSpec> wideSpecs = new ArrayList<>();
+        for (int i = 0; i < wideTitles.size(); i++) {
+            wideSpecs.add(new TableColumnOrderPersistence.ColumnSpec(wideTitles.get(i), wideW.get(i)));
+        }
+        TableColumnOrderPersistence.saveLayout(TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_WIDE, wideSpecs);
+
+        List<TableColumnOrderPersistence.ColumnSpec> byDayLay =
+                TableColumnOrderPersistence.loadLayout(TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_BY_DAY);
+        List<Double> byDayW =
+                TableColumnOrderPersistence.resolveWidthsForHeaders(byDayTitles, byDayLay, 112);
+        List<TableColumnOrderPersistence.ColumnSpec> byDaySpecs = new ArrayList<>();
+        for (int i = 0; i < byDayTitles.size(); i++) {
+            byDaySpecs.add(new TableColumnOrderPersistence.ColumnSpec(byDayTitles.get(i), byDayW.get(i)));
+        }
+        TableColumnOrderPersistence.saveLayout(
+                TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_BY_DAY, byDaySpecs);
+    }
+
+    private void onWideSpreadsheetVisualColumnOrderChanged(List<String> titles) {
+        if (suppressColumnReorderPersistence.get()) {
+            return;
+        }
+        if (!wideStaticPrefixMatches(titles)) {
+            return;
+        }
+        List<LocalDate> computed = computeDateAxisList();
+        List<LocalDate> dates = parseDateTailAsDates(titles, WIDE_STATIC_HEADERS.size());
+        if (dates == null || !sameMultisetLocalDate(dates, computed)) {
+            return;
+        }
+        if (dates.equals(preferredDateAxisOrder)) {
+            return;
+        }
+        preferredDateAxisOrder = new ArrayList<>(dates);
+        persistDispatchColumnLayouts(titles, buildByDayColumnLabelsForAxis(dates));
+        suppressColumnReorderPersistence.set(true);
+        try {
+            rebuildGrids();
+        } finally {
+            suppressColumnReorderPersistence.set(false);
+        }
+    }
+
+    private void onByDaySpreadsheetVisualColumnOrderChanged(List<String> titles) {
+        if (suppressColumnReorderPersistence.get()) {
+            return;
+        }
+        if (!byDayStaticPrefixMatches(titles)) {
+            return;
+        }
+        List<LocalDate> computed = computeDateAxisList();
+        List<LocalDate> dates = parseDateTailAsDates(titles, 2);
+        if (dates == null || !sameMultisetLocalDate(dates, computed)) {
+            return;
+        }
+        if (dates.equals(preferredDateAxisOrder)) {
+            return;
+        }
+        preferredDateAxisOrder = new ArrayList<>(dates);
+        persistDispatchColumnLayouts(buildWideColumnLabelsForAxis(dates), titles);
+        suppressColumnReorderPersistence.set(true);
+        try {
+            rebuildGrids();
+        } finally {
+            suppressColumnReorderPersistence.set(false);
+        }
     }
 
     private WideGridBundle buildWideGridModel(List<LocalDate> axis, boolean staffHighlight) {
@@ -1166,6 +1343,12 @@ public final class DispatchInteractiveTabController {
                             w.staticCols(),
                             w.dayCount(),
                             sanitizeFullyBlockedFlagsForColumnWidth(w.blockedCols()));
+                    SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
+                            wideSpreadsheet,
+                            suppressColumnReorderPersistence::get,
+                            () -> new ArrayList<>(buildWideColumnLabelsForAxis(dateAxis)),
+                            WIDE_STATIC_HEADERS.size(),
+                            this::onWideSpreadsheetVisualColumnOrderChanged);
                 };
         Platform.runLater(job[0]);
     }
@@ -1187,6 +1370,12 @@ public final class DispatchInteractiveTabController {
                             b.staticCols(),
                             b.dayCount(),
                             sanitizeFullyBlockedFlagsForColumnWidth(b.blockedCols()));
+                    SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
+                            byDaySpreadsheet,
+                            suppressColumnReorderPersistence::get,
+                            () -> new ArrayList<>(buildByDayColumnLabelsForAxis(dateAxis)),
+                            2,
+                            this::onByDaySpreadsheetVisualColumnOrderChanged);
                 };
         Platform.runLater(job[0]);
     }
