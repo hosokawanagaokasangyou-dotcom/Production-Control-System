@@ -249,9 +249,8 @@ public final class EquipmentGanttGraphicTabController {
         if (hintLabel != null) {
             hintLabel.setText(HINT);
         }
-        if (sourceAccordion != null && sourceTitledPane != null) {
-            sourceAccordion.setExpandedPane(sourceTitledPane);
-        }
+        // FXML の expanded="false" を尊重する。起動時に setExpandedPane すると開アニメが走り、
+        // 直後の reload 成功時の setExpanded(false) と競合して見た目だけ中途半端に残ることがある。
         if (sourceTitledPane != null) {
             sourceTitledPane
                     .expandedProperty()
@@ -879,11 +878,16 @@ public final class EquipmentGanttGraphicTabController {
 
     /** 再読み／最新JSON検索が成功したあとアコーディオンを閉じて表示領域を広げる */
     private void collapseSourceAccordionAfterSuccessfulLoad() {
-        if (sourceAccordion != null) {
-            sourceAccordion.setExpandedPane(null);
-        }
         if (sourceTitledPane != null) {
+            boolean anim = sourceTitledPane.isAnimated();
+            sourceTitledPane.setAnimated(false);
             sourceTitledPane.setExpanded(false);
+            if (sourceAccordion != null) {
+                sourceAccordion.setExpandedPane(null);
+            }
+            sourceTitledPane.setAnimated(anim);
+        } else if (sourceAccordion != null) {
+            sourceAccordion.setExpandedPane(null);
         }
     }
 
