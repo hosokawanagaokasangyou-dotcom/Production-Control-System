@@ -507,6 +507,18 @@
     -fx-text-fill: white;
 }
 
+/*
+ * Tab 見出しラベル：ダーク系テーマで Modena の推定文字色が暗いままになり、見出し背景と融けて判読不能になることがある
+ * （メインシェル最上段は pokeShellTabHeaderBackground で上書きされる）。ネストした TabPane（納期管理ビュー等）向け。
+ */
+.tab-pane > .tab-header-area > .headers-region > .tab .tab-label {
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab:selected .tab-label {
+    -fx-text-fill: -fx-dark-text-color;
+}
+
 /* メインシェル：グループ内の第2段 TabPane */
 .tab-pane.pm-main-shell-inner-tab-pane {
     -fx-padding: 2 0 0 0;
