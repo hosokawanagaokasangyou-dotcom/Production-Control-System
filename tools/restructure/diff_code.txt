@@ -15,7 +15,6 @@ Production-Control-System/code/log のみに存在: gemini_usage_summary_for_mai
 ファイル code/python/task_extract_stage1.py と Production-Control-System/code/python/task_extract_stage1.py は異なります
 ファイル code/python/workbook_env_bootstrap.py と Production-Control-System/code/python/workbook_env_bootstrap.py は異なります
 ファイル code/python/xlwings_console_runner.py と Production-Control-System/code/python/xlwings_console_runner.py は異なります
-ファイル code/python/xlwings_splash_log.py と Production-Control-System/code/python/xlwings_splash_log.py は異なります
 Production-Control-System/code のみに存在: サマリ_AI配台.xlsm
 Production-Control-System/code のみに存在: 結果_配台表.json
 code のみに存在: 削除予定

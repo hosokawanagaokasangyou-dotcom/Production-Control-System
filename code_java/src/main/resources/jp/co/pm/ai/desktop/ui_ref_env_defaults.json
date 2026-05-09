@@ -335,10 +335,6 @@
     "value" : "1",
     "description" : "環境構築 setup_environment: Windows で成功時に完了メッセージ（MessageBox）を表示。0 false no off で無効"
   }, {
-    "key" : "PM_AI_SPLASH_XLWINGS",
-    "value" : "",
-    "description" : "1/true 等で xlwings 経由のスプラッシュログ追記を有効（段階実行で利用する場合）"
-  }, {
     "key" : "EXCLUDE_RULES_TRY_OPENPYXL_SAVE",
     "value" : "",
     "description" : "互換用（Python未使用・xlwingsのみ保存）"
