@@ -20,15 +20,12 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
-import org.apache.poi.ss.usermodel.DataFormatter;
 
 /**
  * Raw sheet reader for {@link jp.co.pm.ai.desktop.config.AppPaths#KEY_PM_AI_TASK_INPUT_SOURCE_DIR}.
  * All sheet rows are data; synthetic headers use column index labels (see {@code readRaw} output).
  */
 public final class TaskInputSourceRawGridIo {
-
-    private static final DataFormatter CELL_FORMAT = new DataFormatter();
 
     private TaskInputSourceRawGridIo() {}
 
@@ -90,7 +87,9 @@ public final class TaskInputSourceRawGridIo {
         for (List<String> src : allRows) {
             List<String> line = new ArrayList<>(maxCol);
             for (int c = 0; c < maxCol; c++) {
-                line.add(c < src.size() && src.get(c) != null ? src.get(c) : "");
+                line.add(
+                        ExcelCellReadSupport.normalizeCommaDigitArtifacts(
+                                c < src.size() && src.get(c) != null ? src.get(c) : ""));
             }
             rows.add(line);
         }
@@ -134,10 +133,7 @@ public final class TaskInputSourceRawGridIo {
     }
 
     private static String cellToString(Cell cell) {
-        if (cell == null) {
-            return "";
-        }
-        return CELL_FORMAT.formatCellValue(cell);
+        return ExcelCellReadSupport.cellToDisplayString(cell);
     }
 
     /**

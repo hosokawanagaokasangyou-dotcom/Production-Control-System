@@ -82,6 +82,6 @@ public final class WorkbookEnvSheetReader {
         if (cell == null) {
             return "";
         }
-        return fmt.formatCellValue(cell).trim();
+        return ExcelCellReadSupport.normalizeCommaDigitArtifacts(fmt.formatCellValue(cell).trim());
     }
 }

@@ -150,6 +150,6 @@ public final class SkillsSheetMemberReader {
         if (cell == null) {
             return "";
         }
-        return fmt.formatCellValue(cell).trim();
+        return ExcelCellReadSupport.normalizeCommaDigitArtifacts(fmt.formatCellValue(cell).trim());
     }
 }

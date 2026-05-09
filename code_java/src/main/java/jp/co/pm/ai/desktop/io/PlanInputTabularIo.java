@@ -15,7 +15,6 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
-import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 /**
@@ -23,8 +22,6 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
  * {@code PM_AI_PLAN_INPUT_PATH}). Supports {@code .csv} (UTF-8) and Excel {@code .xlsx/.xlsm}.
  */
 public final class PlanInputTabularIo {
-
-    private static final DataFormatter CELL_FORMAT = new DataFormatter();
 
     private PlanInputTabularIo() {}
 
@@ -218,9 +215,6 @@ public final class PlanInputTabularIo {
     }
 
     private static String cellToString(Cell cell) {
-        if (cell == null) {
-            return "";
-        }
-        return CELL_FORMAT.formatCellValue(cell);
+        return ExcelCellReadSupport.cellToDisplayString(cell);
     }
 }
