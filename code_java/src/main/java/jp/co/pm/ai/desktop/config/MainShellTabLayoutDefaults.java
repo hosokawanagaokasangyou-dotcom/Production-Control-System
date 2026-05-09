@@ -7,19 +7,17 @@ import java.util.List;
 import jp.co.pm.ai.desktop.MainShellTabId;
 
 /**
- * メインシェルタブの既定の入れ子構成（タブ整理の初期状態・セッション未保存時）。
+ * Default grouped layout for main-shell tabs (tab organizer baseline when session has no layout).
  *
- * <p>新規 {@link MainShellTabId} が追加された場合は {@link #DEFAULT_FLAT_TAB_KEY_ORDER} の末尾にキーを足す（トップレベル最後＝タブ整理の直前）。
+ * <p>Add new {@link MainShellTabId} keys at the end of {@link #DEFAULT_FLAT_TAB_KEY_ORDER} (before tab organizer).
  *
- * <p>運用ルールの正本: {@code .cursor/rules/main-shell-tab-management.mdc}
+ * <p>Rulebook: {@code .cursor/rules/main-shell-tab-management.mdc}
  */
 public final class MainShellTabLayoutDefaults {
 
     private MainShellTabLayoutDefaults() {}
 
-    /**
-     * フラット一列に並べるときのキー順（「フラット初期構成に戻す」およびマージ時の欠落キー挿入順）。
-     */
+    /** Flat tab key order (reset-flat button and merge order for missing keys). */
     public static final List<String> DEFAULT_FLAT_TAB_KEY_ORDER =
             List.of(
                     MainShellTabId.RUN.key(),
@@ -43,8 +41,8 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.ACTUALS_STATUS.key());
 
     /**
-     * フラット復帰および「欠けたキー」のマージ順に、{@link MainShellTabId} のうち {@link
-     * MainShellTabId#TAB_ORGANIZER} 以外をすべて含める（コード追加タブは末尾）。
+     * All {@link MainShellTabId} keys except {@link MainShellTabId#TAB_ORGANIZER}: DEFAULT order then any enum-only
+     * keys appended (new tabs at end).
      */
     public static List<String> completeFlatTabKeyOrder() {
         LinkedHashSet<String> keys = new LinkedHashSet<>(DEFAULT_FLAT_TAB_KEY_ORDER);
@@ -56,9 +54,7 @@ public final class MainShellTabLayoutDefaults {
         return List.copyOf(keys);
     }
 
-    /**
-     * 既定のグループ付き構成（セッションに mainShellTabLayout が無いときの初期適用）。
-     */
+    /** Default grouped layout when session has no {@code mainShellTabLayout}. */
     public static List<MainShellTabLayoutNode> groupedLayout() {
         List<MainShellTabLayoutNode> top = new ArrayList<>();
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.RUN.key(), ""));
@@ -70,7 +66,7 @@ public final class MainShellTabLayoutDefaults {
 
         top.add(
                 MainShellTabLayoutNode.groupNode(
-                        "バッジ設定",
+                        "\u30d0\u30c3\u30b8\u8a2d\u5b9a",
                         "",
                         List.of(
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.UI_BADGE_DESIGN.key(), ""),
@@ -80,7 +76,7 @@ public final class MainShellTabLayoutDefaults {
 
         top.add(
                 MainShellTabLayoutNode.groupNode(
-                        "環境設定",
+                        "\u74b0\u5883\u8a2d\u5b9a",
                         "",
                         List.of(
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.ENV.key(), ""),
@@ -89,7 +85,7 @@ public final class MainShellTabLayoutDefaults {
 
         top.add(
                 MainShellTabLayoutNode.groupNode(
-                        "結果情報",
+                        "\u7d50\u679c\u60c5\u5831",
                         "",
                         List.of(
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_RESULT_VIEWER.key(), ""),
@@ -98,7 +94,7 @@ public final class MainShellTabLayoutDefaults {
 
         top.add(
                 MainShellTabLayoutNode.groupNode(
-                        "その他",
+                        "\u305d\u306e\u4ed6",
                         "",
                         List.of(
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.MASTER_SUMMARY.key(), ""),

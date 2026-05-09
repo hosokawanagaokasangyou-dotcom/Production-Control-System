@@ -5,17 +5,29 @@ import java.util.List;
 import jp.co.pm.ai.desktop.MainShellTabId;
 
 /**
- * メインシェル各タブ内の「子タブ」（{@link javafx.scene.control.TabPane}）見出しをタブ整理ツリーに載せるための一覧。
+ * Catalog of TabPane child labels and optional {@link javafx.scene.control.TitledPane} rows under a child tab,
+ * for the tab organizer tree (see {@code MainShellTabOrganizerTabController}).
  *
- * <p>計画結果ビューアのように JSON 読込後にのみ現れるタブは代表ラベルで示す。
- *
- * <p>運用ルールの正本: {@code .cursor/rules/main-shell-tab-management.mdc}
+ * <p>Rulebook: {@code .cursor/rules/main-shell-tab-management.mdc}
  */
 public final class MainShellInnerTabCatalog {
 
     private MainShellInnerTabCatalog() {}
 
-    /** @return 表示ラベル（永続 ID ではない） */
+    /**
+     * TitledPane headings under the inner tab at {@code innerTabIndex} in {@link #labelsFor} order (0-based).
+     */
+    public static List<String> titledPaneLabelsUnderInnerTab(
+            MainShellTabId parent, int innerTabIndex) {
+        if (parent == MainShellTabId.DELIVERY_CALENDAR_VIEW && innerTabIndex == 2) {
+            return List.of(
+                    "\u64cd\u4f5c\u30fb\u30bd\u30fc\u30b9",
+                    "\u30c7\u30fc\u30bf\u8868");
+        }
+        return List.of();
+    }
+
+    /** Display labels for TabPane tabs (not persisted IDs). */
     public static List<String> labelsFor(MainShellTabId parent) {
         if (parent == null) {
             return List.of();

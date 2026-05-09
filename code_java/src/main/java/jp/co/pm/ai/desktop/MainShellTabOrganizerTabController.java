@@ -391,8 +391,14 @@ public final class MainShellTabOrganizerTabController {
     }
 
     private static void appendInnerTabCatalogRows(TreeItem<OrgRow> tabItem, MainShellTabId id) {
-        for (String label : MainShellInnerTabCatalog.labelsFor(id)) {
-            tabItem.getChildren().add(leafItem(OrgRow.innerTab(id, label)));
+        List<String> labels = MainShellInnerTabCatalog.labelsFor(id);
+        for (int i = 0; i < labels.size(); i++) {
+            String label = labels.get(i);
+            TreeItem<OrgRow> innerItem = leafItem(OrgRow.innerTab(id, label));
+            for (String pane : MainShellInnerTabCatalog.titledPaneLabelsUnderInnerTab(id, i)) {
+                innerItem.getChildren().add(leafItem(OrgRow.innerAccordionPane(id, label, pane)));
+            }
+            tabItem.getChildren().add(innerItem);
         }
     }
 
@@ -588,7 +594,7 @@ public final class MainShellTabOrganizerTabController {
             return;
         }
         String h = hex != null ? hex : "";
-        if (r.kind == OrgRow.Kind.INNER_TAB) {
+        if (r.kind == OrgRow.Kind.INNER_TAB || r.kind == OrgRow.Kind.INNER_ACCORDION) {
             return;
         }
         if (r.kind == OrgRow.Kind.TAB) {
@@ -724,7 +730,7 @@ public final class MainShellTabOrganizerTabController {
             return null;
         }
         OrgRow r = ti.getValue();
-        if (r.kind == OrgRow.Kind.INNER_TAB) {
+        if (r.kind == OrgRow.Kind.INNER_TAB || r.kind == OrgRow.Kind.INNER_ACCORDION) {
             return null;
         }
         if (r.kind == OrgRow.Kind.TAB) {
@@ -761,47 +767,75 @@ public final class MainShellTabOrganizerTabController {
         a.showAndWait();
     }
 
-    /** ツリー1行分（メインタブ・グループ・またはビュー内の子タブ説明）。 */
+    /** ツリー1行分（メインタブ・グループ・子タブ・TitledPane 説明）。 */
     static final class OrgRow {
         enum Kind {
             TAB,
             GROUP,
-            /** メインタブ直下の子（レイアウト保存対象外・参照用）。{@link #tabId} は親タブ。 */
-            INNER_TAB
+            /** メインタブ直下の TabPane 子（レイアウト保存対象外）。{@link #tabId} はメインシェルタブ。 */
+            INNER_TAB,
+            /**
+             * 子タブ直下の {@link javafx.scene.control.TitledPane} 見出し（レイアウト保存対象外）。{@link
+             * #tabId} はメインシェルタブ、{@link #anchorInnerTabLabel} は親となる子タブ見出し。
+             */
+            INNER_ACCORDION
         }
 
         final Kind kind;
-        /** kind が {@link Kind#TAB} のときリーフタブ ID；{@link Kind#INNER_TAB} のとき親タブ ID */
+        /**
+         * TAB: リーフ ID。INNER_TAB / INNER_ACCORDION: メインシェル上の親タブ ID（{@link MainShellTabId}）。
+         */
         MainShellTabId tabId;
+        /** GROUP: グループ名。INNER_TAB: 子タブ見出し。INNER_ACCORDION: TitledPane の text。 */
         String groupTitle;
         String colorHex;
+        /** INNER_ACCORDION のみ: {@link #labelsFor} のどの子タブ直下か（同一文言で紐づけ）。 */
+        final String anchorInnerTabLabel;
 
-        private OrgRow(Kind kind, MainShellTabId tabId, String groupTitle, String colorHex) {
+        private OrgRow(
+                Kind kind,
+                MainShellTabId tabId,
+                String groupTitle,
+                String colorHex,
+                String anchorInnerTabLabel) {
             this.kind = kind;
             this.tabId = tabId;
             this.groupTitle = groupTitle != null ? groupTitle : "";
             this.colorHex = colorHex != null ? colorHex : "";
+            this.anchorInnerTabLabel = anchorInnerTabLabel != null ? anchorInnerTabLabel : "";
         }
 
         static OrgRow placeholder() {
-            return new OrgRow(Kind.GROUP, null, "", "");
+            return new OrgRow(Kind.GROUP, null, "", "", "");
         }
 
         static OrgRow tab(MainShellTabId id, String colorHex) {
-            return new OrgRow(Kind.TAB, Objects.requireNonNull(id), "", nz(colorHex));
+            return new OrgRow(Kind.TAB, Objects.requireNonNull(id), "", nz(colorHex), "");
         }
 
         static OrgRow group(String title, String colorHex) {
-            return new OrgRow(Kind.GROUP, null, title != null ? title : "", nz(colorHex));
+            return new OrgRow(Kind.GROUP, null, title != null ? title : "", nz(colorHex), "");
         }
 
-        /** 親メインタブ ID と子タブ見出し（一覧向け）。 */
+        /** 親メインタブ ID と TabPane 内の子タブ見出し。 */
         static OrgRow innerTab(MainShellTabId parentTabId, String innerTitle) {
             return new OrgRow(
                     Kind.INNER_TAB,
                     Objects.requireNonNull(parentTabId),
                     innerTitle != null ? innerTitle : "",
+                    "",
                     "");
+        }
+
+        /** メインタブ・子タブ見出し・{@code AladdinProcessingPlanDataTab} 等の TitledPane 見出し。 */
+        static OrgRow innerAccordionPane(
+                MainShellTabId shellTabId, String anchorInnerTabTitle, String titledPaneTitle) {
+            return new OrgRow(
+                    Kind.INNER_ACCORDION,
+                    Objects.requireNonNull(shellTabId),
+                    titledPaneTitle != null ? titledPaneTitle : "",
+                    "",
+                    anchorInnerTabTitle != null ? anchorInnerTabTitle : "");
         }
 
         String formatDisplay(MainShellController shell) {
@@ -814,6 +848,15 @@ public final class MainShellTabOrganizerTabController {
                 String parent = shell != null ? shell.mainShellTabTitle(tabId) : tabId.name();
                 String inner = groupTitle != null && !groupTitle.isBlank() ? groupTitle : "";
                 return "[子タブ] " + parent + " — " + inner;
+            }
+            if (kind == Kind.INNER_ACCORDION) {
+                String parent = shell != null ? shell.mainShellTabTitle(tabId) : tabId.name();
+                String anchor =
+                        anchorInnerTabLabel != null && !anchorInnerTabLabel.isBlank()
+                                ? anchorInnerTabLabel
+                                : "";
+                String pane = groupTitle != null && !groupTitle.isBlank() ? groupTitle : "";
+                return "[折りたたみ] " + parent + " — " + anchor + " — " + pane;
             }
             String base = shell != null ? shell.mainShellTabTitle(tabId) : tabId.name();
             String c = colorHex != null && !colorHex.isBlank() ? "  [" + colorHex + "]" : "";
@@ -831,6 +874,15 @@ public final class MainShellTabOrganizerTabController {
                 String inner = groupTitle != null && !groupTitle.isBlank() ? groupTitle : "";
                 return parent + " — " + inner + "（子タブ・並べ替え対象外）";
             }
+            if (kind == Kind.INNER_ACCORDION) {
+                String parent = shellCtl != null ? shellCtl.mainShellTabTitle(tabId) : tabId.name();
+                String anchor =
+                        anchorInnerTabLabel != null && !anchorInnerTabLabel.isBlank()
+                                ? anchorInnerTabLabel
+                                : "";
+                String pane = groupTitle != null && !groupTitle.isBlank() ? groupTitle : "";
+                return parent + " — " + anchor + " — " + pane + "（TitledPane・並べ替え対象外）";
+            }
             return shellCtl != null ? shellCtl.mainShellTabTitle(tabId) : tabId.name();
         }
 
@@ -841,6 +893,9 @@ public final class MainShellTabOrganizerTabController {
             }
             if (kind == Kind.INNER_TAB) {
                 return groupTitle != null && !groupTitle.isBlank() ? groupTitle : "子タブ";
+            }
+            if (kind == Kind.INNER_ACCORDION) {
+                return groupTitle != null && !groupTitle.isBlank() ? groupTitle : "パネル";
             }
             return shellCtl != null ? shellCtl.mainShellTabTitle(tabId) : tabId.name();
         }
@@ -946,7 +1001,7 @@ public final class MainShellTabOrganizerTabController {
         return col;
     }
 
-    /** メインタブ行の下に、ビュー内子タブのピルを縦に並べる。 */
+    /** メインタブ行の下に、ビュー内子タブのピルを縦に並べる（子の下に TitledPane 行も続ける）。 */
     private VBox buildInnerTabChildStrip(TreeItem<OrgRow> tabItem) {
         VBox col = new VBox(CHILD_STRIP_VERTICAL_GAP);
         col.setFillWidth(false);
@@ -956,17 +1011,57 @@ public final class MainShellTabOrganizerTabController {
             if (ch.getValue() == null || ch.getValue().kind != OrgRow.Kind.INNER_TAB) {
                 continue;
             }
-            Node pill = createPillForTreeItem(ch);
+            double indentOuter = CHILD_STRIP_HORIZONTAL_STAGGER + i * CHILD_STRIP_HORIZONTAL_STAGGER;
+            VBox block = new VBox(CHILD_STRIP_VERTICAL_GAP);
+            block.setFillWidth(false);
+            HBox head = new HBox(0);
+            head.setAlignment(Pos.CENTER_LEFT);
+            Region leadOuter = new Region();
+            leadOuter.setMinWidth(indentOuter);
+            leadOuter.setPrefWidth(indentOuter);
+            leadOuter.setMaxWidth(indentOuter);
+            head.getChildren().addAll(leadOuter, createPillForTreeItem(ch));
+            block.getChildren().add(head);
+            if (hasInnerAccordionChildren(ch)) {
+                block.getChildren().add(buildAccordionPaneStrip(ch, indentOuter));
+            }
+            col.getChildren().add(block);
+            i++;
+        }
+        return col;
+    }
+
+    private static boolean hasInnerAccordionChildren(TreeItem<OrgRow> innerTabItem) {
+        if (innerTabItem == null) {
+            return false;
+        }
+        return innerTabItem.getChildren().stream()
+                .anyMatch(
+                        c ->
+                                c.getValue() != null
+                                        && c.getValue().kind == OrgRow.Kind.INNER_ACCORDION);
+    }
+
+    /** 子タブ行の下に、{@code AladdinProcessingPlanDataTab} 等の TitledPane 見出しピルを並べる。 */
+    private VBox buildAccordionPaneStrip(TreeItem<OrgRow> innerTabItem, double outerIndentPx) {
+        VBox col = new VBox(CHILD_STRIP_VERTICAL_GAP);
+        col.setFillWidth(false);
+        int j = 0;
+        for (TreeItem<OrgRow> acc : innerTabItem.getChildren()) {
+            if (acc.getValue() == null || acc.getValue().kind != OrgRow.Kind.INNER_ACCORDION) {
+                continue;
+            }
+            double indent =
+                    outerIndentPx + CHILD_STRIP_HORIZONTAL_STAGGER * 2 + j * CHILD_STRIP_HORIZONTAL_STAGGER;
             HBox line = new HBox(0);
             line.setAlignment(Pos.CENTER_LEFT);
-            double indent = CHILD_STRIP_HORIZONTAL_STAGGER + i * CHILD_STRIP_HORIZONTAL_STAGGER;
             Region lead = new Region();
             lead.setMinWidth(indent);
             lead.setPrefWidth(indent);
             lead.setMaxWidth(indent);
-            line.getChildren().addAll(lead, pill);
+            line.getChildren().addAll(lead, createPillForTreeItem(acc));
             col.getChildren().add(line);
-            i++;
+            j++;
         }
         return col;
     }
@@ -977,8 +1072,11 @@ public final class MainShellTabOrganizerTabController {
         pill.setMinSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
         pill.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
         pill.getStyleClass().setAll("pm-org-tree-pill");
-        if (row.kind == OrgRow.Kind.INNER_TAB) {
+        if (row.kind == OrgRow.Kind.INNER_TAB || row.kind == OrgRow.Kind.INNER_ACCORDION) {
             pill.getStyleClass().add("pm-org-tree-pill-inner");
+        }
+        if (row.kind == OrgRow.Kind.INNER_ACCORDION) {
+            pill.getStyleClass().add("pm-org-tree-pill-accordion");
         }
         Label lab = new Label(row.treePillPrimaryLabel(shell));
         lab.setWrapText(false);
@@ -1008,7 +1106,9 @@ public final class MainShellTabOrganizerTabController {
     }
 
     private void wirePillInteractions(StackPane pill, TreeItem<OrgRow> item) {
-        if (item.getValue() != null && item.getValue().kind == OrgRow.Kind.INNER_TAB) {
+        OrgRow ov = item.getValue();
+        if (ov != null
+                && (ov.kind == OrgRow.Kind.INNER_TAB || ov.kind == OrgRow.Kind.INNER_ACCORDION)) {
             pill.setOnMouseClicked(
                     ev -> {
                         if (treeView == null) {
@@ -1197,7 +1297,9 @@ public final class MainShellTabOrganizerTabController {
             return false;
         }
         if (source.getValue().kind == OrgRow.Kind.INNER_TAB
-                || target.getValue().kind == OrgRow.Kind.INNER_TAB) {
+                || source.getValue().kind == OrgRow.Kind.INNER_ACCORDION
+                || target.getValue().kind == OrgRow.Kind.INNER_TAB
+                || target.getValue().kind == OrgRow.Kind.INNER_ACCORDION) {
             return false;
         }
         return !isStrictDescendant(source, target);

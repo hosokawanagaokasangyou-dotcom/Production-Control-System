@@ -417,6 +417,12 @@
     -fx-font-weight: normal;
 }
 
+/* 子タブの下の TitledPane 行（さらに一段弱く） */
+.pm-org-tree-pill.pm-org-tree-pill-accordion .label.pm-org-tree-pill-label {
+    -fx-font-size: 9.5px;
+    -fx-opacity: 0.95;
+}
+
 .pm-org-tree-pill .label.pm-org-tree-pill-label {
     -fx-padding: 0 2 0 2;
 }
