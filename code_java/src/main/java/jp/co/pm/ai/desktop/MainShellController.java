@@ -2777,9 +2777,8 @@ public final class MainShellController {
     /**
      * フォルダ系 {@code PM_AI_*} のうち、リポジトリ基準へ補正できるものを更新する（{@link AppPaths#normalizedFolderEnvOverrides(Map)}）。
      *
-     * <p>{@code PM_AI_TASK_INPUT_SOURCE_DIR} / {@code PM_AI_ACTUAL_DETAIL_SOURCE_DIR} は正規化対象外とし、同梱 {@code pm-ai-data}
-     * でない場合は {@link AppPaths#DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR} / {@link AppPaths#DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR}
-     * で上書きする。セッションへ保存する。
+     * <p>{@code PM_AI_TASK_INPUT_SOURCE_DIR} / {@code PM_AI_ACTUAL_DETAIL_SOURCE_DIR} は {@link AppPaths#normalizedFolderEnvOverrides(Map)}
+     * の対象外のためここでは変更しない（バージョンアップ完了時の {@link #applyUncNetworkSourceDirDefaults()} とフォルダ選択のみで更新）。
      */
     private void applyRepoFolderPathNormalization() {
         if (envRows == null) {
@@ -2802,7 +2801,6 @@ public final class MainShellController {
         } finally {
             suppressEnvSessionPersistence.set(false);
         }
-        applyUncNetworkSourceDirDefaults(true);
         DesktopSessionStateStore.save(collectDesktopSession());
     }
 
@@ -2822,17 +2820,13 @@ public final class MainShellController {
     }
 
     /**
-     * {@link AppPaths#DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR} / {@link AppPaths#DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR}
-     * のリテラルを環境タブに書き込む（UNC は {@link Path} 経由にしない。OS により変形するため）。
+     * ネットワークソース 2 変数を {@link AppPaths#DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR} /
+     * {@link AppPaths#DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR} のリテラルへ書き換える（UNC は {@link Path} 経由にしない）。
      *
-     * @param skipWhenPortableBundled {@code true} のとき同梱レイアウトでは何もしない（通常起動時はローカル {@code pm-ai-data}
-     *     入力パスを維持）。{@code false} のときは常に上書き（ポータブル自動バージョンアップ直後の初期化など）。
+     * <p>環境タブでこの 2 変数をコードから書き換えるのは、ポータル自動バージョンアップ完了時とここだけとする。
      */
-    private void applyUncNetworkSourceDirDefaults(boolean skipWhenPortableBundled) {
+    private void applyUncNetworkSourceDirDefaults() {
         if (envRows == null) {
-            return;
-        }
-        if (skipWhenPortableBundled && bundledPortableStage1MarkerPresent()) {
             return;
         }
         String task = AppPaths.DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR;
@@ -2845,13 +2839,6 @@ public final class MainShellController {
                 r.setValue(actual);
             }
         }
-    }
-
-    /**
-     * ネットワークソース 2 変数をリポジトリ正規化の対象外とし、同梱でない環境では {@link AppPaths} の既定 UNC 文字列で上書きする。
-     */
-    private void applyDefaultNetworkSourceDirsIgnoringNormalization() {
-        applyUncNetworkSourceDirDefaults(true);
     }
 
     /**
@@ -3227,7 +3214,7 @@ public final class MainShellController {
                     applyDesktopSession(DesktopSessionStateStore.load(), false);
                     mainRunTabController.clearMainRunTabLog();
                     applyRepoFolderPathNormalization();
-                    applyUncNetworkSourceDirDefaults(false);
+                    applyUncNetworkSourceDirDefaults();
                     DesktopSessionStateStore.save(collectDesktopSession());
                     mainRunTabController.refreshAppVersionLabel();
                     appendLog("[startup] ポータル同期が完了しました（version.txt に従いファイルを更新）。環境変数はバンドル既定で初期化しました。");
@@ -3342,10 +3329,6 @@ public final class MainShellController {
             case AppPaths.KEY_PM_AI_PYTHON -> r.setValue(defaultOsPython());
             case AppPaths.KEY_PM_AI_REPO_ROOT -> r.setValue(AppPaths.resolveRepoRoot(ui).toString());
             case AppPaths.KEY_PM_AI_CODE_PYTHON_DIR -> r.setValue(AppPaths.resolvePythonScriptDir(ui).toString());
-            case AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR ->
-                    r.setValue(AppPaths.resolveTaskInputSourceDir(ui).toString());
-            case AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR ->
-                    r.setValue(AppPaths.resolveActualDetailSourceDir(ui).toString());
             case AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR ->
                     r.setValue(AppPaths.resolveResultDispatchTableDir(ui).toString());
             case AppPaths.KEY_PM_AI_OUTPUT_DIR -> r.setValue(AppPaths.resolveDefaultOutputDir(ui).toString());
@@ -3379,10 +3362,8 @@ public final class MainShellController {
             case AppPaths.KEY_PM_AI_REPO_ROOT -> r.setValue(AppPaths.resolveRepoRoot(ui).toString());
             case AppPaths.KEY_PM_AI_CODE_PYTHON_DIR -> r.setValue(AppPaths.resolvePythonScriptDir(ui).toString());
             case AppPaths.KEY_PM_AI_WORKSPACE -> r.setValue("");
-            case AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR ->
-                    r.setValue(AppPaths.resolveTaskInputSourceDir(ui).toString());
-            case AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR ->
-                    r.setValue(AppPaths.resolveActualDetailSourceDir(ui).toString());
+            case AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR -> r.setValue("");
+            case AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR -> r.setValue("");
             case AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR ->
                     r.setValue(AppPaths.resolveResultDispatchTableDir(ui).toString());
             case AppPaths.KEY_PM_AI_OUTPUT_DIR -> r.setValue(AppPaths.resolveDefaultOutputDir(ui).toString());
