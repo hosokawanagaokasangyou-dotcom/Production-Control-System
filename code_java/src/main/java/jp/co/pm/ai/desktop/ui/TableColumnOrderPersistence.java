@@ -189,7 +189,11 @@ public final class TableColumnOrderPersistence {
         /** 配台計画手動修正タブ「タスク×日付」 */
         DISPATCH_INTERACTIVE_WIDE("dispatchInteractiveWide"),
         /** 配台計画手動修正タブ「工程+機械×日」 */
-        DISPATCH_INTERACTIVE_BY_DAY("dispatchInteractiveByDay");
+        DISPATCH_INTERACTIVE_BY_DAY("dispatchInteractiveByDay"),
+        /** 納期管理ビュー「カレンダー」メイン表 */
+        DELIVERY_CALENDAR_MAIN("deliveryCalendarMain"),
+        /** 納期管理ビュー「計画比較」別表 */
+        DELIVERY_CALENDAR_COMPARE("deliveryCalendarCompare");
 
         private final String jsonKey;
 
@@ -242,6 +246,43 @@ public final class TableColumnOrderPersistence {
             row.clear();
             for (int oldIdx : perm) {
                 row.add(oldIdx < old.size() ? Objects.requireNonNullElse(old.get(oldIdx), "") : "");
+            }
+        }
+    }
+
+    /**
+     * Same as {@link #applyLogicalColumnOrder} for delivery-calendar main-grid rows ({@link
+     * DeliveryCalendarMainCell}).
+     */
+    public static void applyLogicalColumnOrderDeliveryCalendar(
+            List<String> headersRef,
+            ObservableList<ObservableList<DeliveryCalendarMainCell>> rows,
+            List<String> savedOrder) {
+        if (savedOrder == null || savedOrder.isEmpty() || headersRef.isEmpty()) {
+            return;
+        }
+        List<String> fileHeaders = new ArrayList<>(headersRef);
+        List<Integer> perm = buildPermutation(fileHeaders, savedOrder);
+        List<Integer> natural = new ArrayList<>();
+        for (int i = 0; i < fileHeaders.size(); i++) {
+            natural.add(i);
+        }
+        if (perm.equals(natural)) {
+            return;
+        }
+        headersRef.clear();
+        for (int oldIdx : perm) {
+            headersRef.add(fileHeaders.get(oldIdx));
+        }
+        DeliveryCalendarMainCell emptyCell = new DeliveryCalendarMainCell.PlainText("");
+        for (ObservableList<DeliveryCalendarMainCell> row : rows) {
+            List<DeliveryCalendarMainCell> old = new ArrayList<>(row);
+            row.clear();
+            for (int oldIdx : perm) {
+                row.add(
+                        oldIdx < old.size()
+                                ? Objects.requireNonNullElse(old.get(oldIdx), emptyCell)
+                                : emptyCell);
             }
         }
     }

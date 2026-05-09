@@ -2,7 +2,9 @@
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Slider?>
 <?import javafx.scene.control.Tab?>
 <?import javafx.scene.control.TabPane?>
 <?import javafx.scene.layout.HBox?>
@@ -25,12 +27,44 @@
         <tabs>
             <Tab closable="false" text="&#x30ab;&#x30ec;&#x30f3;&#x30c0;&#x30fc;">
                 <content>
-                    <StackPane fx:id="mainSpreadsheetHost" minHeight="280.0"/>
+                    <VBox fillWidth="true" spacing="6.0">
+                        <HBox alignment="CENTER_LEFT" spacing="8.0">
+                            <Button fx:id="mainClearFiltersButton" mnemonicParsing="false"
+                                    onAction="#onClearMainFilters"
+                                    text="&#x5217;&#x30d5;&#x30a3;&#x30eb;&#x30bf;&#x30fb;&#x4e26;&#x3079;&#x66ff;&#x3048;&#x89e3;&#x9664;"/>
+                        </HBox>
+                        <HBox alignment="CENTER_LEFT" spacing="10.0">
+                            <Label text="&#x30c7;&#x30fc;&#x30bf;&#x884c;&#x306e;&#x9ad8;&#x3055;&#xff08;&#x4e00;&#x62ec;&#xff09;"/>
+                            <Slider fx:id="mainRowHeightSlider" blockIncrement="25.0" majorTickUnit="250.0"
+                                    max="2000.0" min="50.0" prefWidth="240.0" showTickMarks="true"/>
+                            <Label fx:id="mainRowHeightPctLabel" minWidth="52.0" text="100%"/>
+                            <CheckBox fx:id="mainCellWrapCheck" mnemonicParsing="false"
+                                      text="&#x9577;&#x3044;&#x6587;&#x5b57;&#x5217;&#x3092;&#x6298;&#x308a;&#x8fd4;&#x3059;"/>
+                        </HBox>
+                        <HBox fx:id="mainColumnStripHost" spacing="0.0"/>
+                        <StackPane fx:id="mainSpreadsheetHost" minHeight="240.0" VBox.vgrow="ALWAYS"/>
+                    </VBox>
                 </content>
             </Tab>
             <Tab closable="false" text="&#x8a08;&#x753b;&#x6bd4;&#x8f03;">
                 <content>
-                    <StackPane fx:id="compareSpreadsheetHost" minHeight="280.0"/>
+                    <VBox fillWidth="true" spacing="6.0">
+                        <HBox alignment="CENTER_LEFT" spacing="8.0">
+                            <Button fx:id="compareClearFiltersButton" mnemonicParsing="false"
+                                    onAction="#onClearCompareFilters"
+                                    text="&#x5217;&#x30d5;&#x30a3;&#x30eb;&#x30bf;&#x30fb;&#x4e26;&#x3079;&#x66ff;&#x3048;&#x89e3;&#x9664;"/>
+                        </HBox>
+                        <HBox alignment="CENTER_LEFT" spacing="10.0">
+                            <Label text="&#x30c7;&#x30fc;&#x30bf;&#x884c;&#x306e;&#x9ad8;&#x3055;&#xff08;&#x4e00;&#x62ec;&#xff09;"/>
+                            <Slider fx:id="compareRowHeightSlider" blockIncrement="25.0" majorTickUnit="250.0"
+                                    max="2000.0" min="50.0" prefWidth="240.0" showTickMarks="true"/>
+                            <Label fx:id="compareRowHeightPctLabel" minWidth="52.0" text="100%"/>
+                            <CheckBox fx:id="compareCellWrapCheck" mnemonicParsing="false"
+                                      text="&#x9577;&#x3044;&#x6587;&#x5b57;&#x5217;&#x3092;&#x6298;&#x308a;&#x8fd4;&#x3059;"/>
+                        </HBox>
+                        <HBox fx:id="compareColumnStripHost" spacing="0.0"/>
+                        <StackPane fx:id="compareSpreadsheetHost" minHeight="240.0" VBox.vgrow="ALWAYS"/>
+                    </VBox>
                 </content>
             </Tab>
         </tabs>
