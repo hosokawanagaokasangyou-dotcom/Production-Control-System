@@ -2802,7 +2802,7 @@ public final class MainShellController {
         } finally {
             suppressEnvSessionPersistence.set(false);
         }
-        applyDefaultNetworkSourceDirsIgnoringNormalization();
+        applyUncNetworkSourceDirDefaults(true);
         DesktopSessionStateStore.save(collectDesktopSession());
     }
 
@@ -2822,27 +2822,36 @@ public final class MainShellController {
     }
 
     /**
-     * ネットワークソース 2 変数をリポジトリ正規化の対象外とし、同梱でない環境では {@link AppPaths} の既定 UNC 文字列で上書きする。
+     * {@link AppPaths#DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR} / {@link AppPaths#DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR}
+     * のリテラルを環境タブに書き込む（UNC は {@link Path} 経由にしない。OS により変形するため）。
+     *
+     * @param skipWhenPortableBundled {@code true} のとき同梱レイアウトでは何もしない（通常起動時はローカル {@code pm-ai-data}
+     *     入力パスを維持）。{@code false} のときは常に上書き（ポータブル自動バージョンアップ直後の初期化など）。
      */
-    private void applyDefaultNetworkSourceDirsIgnoringNormalization() {
+    private void applyUncNetworkSourceDirDefaults(boolean skipWhenPortableBundled) {
         if (envRows == null) {
             return;
         }
-        if (bundledPortableStage1MarkerPresent()) {
+        if (skipWhenPortableBundled && bundledPortableStage1MarkerPresent()) {
             return;
         }
-        Path task = Path.of(AppPaths.DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR).toAbsolutePath().normalize();
-        Path actual = Path.of(AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR).toAbsolutePath().normalize();
-        String ts = task.toString();
-        String as = actual.toString();
+        String task = AppPaths.DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR;
+        String actual = AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR;
         for (EnvVarRow r : envRows) {
             String name = r.getName() != null ? r.getName().trim() : "";
             if (AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR.equals(name)) {
-                r.setValue(ts);
+                r.setValue(task);
             } else if (AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR.equals(name)) {
-                r.setValue(as);
+                r.setValue(actual);
             }
         }
+    }
+
+    /**
+     * ネットワークソース 2 変数をリポジトリ正規化の対象外とし、同梱でない環境では {@link AppPaths} の既定 UNC 文字列で上書きする。
+     */
+    private void applyDefaultNetworkSourceDirsIgnoringNormalization() {
+        applyUncNetworkSourceDirDefaults(true);
     }
 
     /**
@@ -3218,6 +3227,7 @@ public final class MainShellController {
                     applyDesktopSession(DesktopSessionStateStore.load(), false);
                     mainRunTabController.clearMainRunTabLog();
                     applyRepoFolderPathNormalization();
+                    applyUncNetworkSourceDirDefaults(false);
                     DesktopSessionStateStore.save(collectDesktopSession());
                     mainRunTabController.refreshAppVersionLabel();
                     appendLog("[startup] ポータル同期が完了しました（version.txt に従いファイルを更新）。環境変数はバンドル既定で初期化しました。");
