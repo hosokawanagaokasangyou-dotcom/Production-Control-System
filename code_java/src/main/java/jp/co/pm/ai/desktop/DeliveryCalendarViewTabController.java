@@ -25,6 +25,8 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Slider;
 import javafx.scene.control.TabPane;
+import javafx.scene.control.TablePosition;
+import javafx.scene.control.TextArea;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
@@ -148,6 +150,9 @@ public final class DeliveryCalendarViewTabController {
     @FXML
     private HBox compareColumnStripHost;
 
+    @FXML
+    private TextArea mainSelectedCellInfo;
+
     private MainShellController shell;
 
     private Stage ownerStage;
@@ -257,6 +262,84 @@ public final class DeliveryCalendarViewTabController {
 
         mainSpreadsheet.setGrid(new GridBase(0, 0));
         compareSpreadsheet.setGrid(new GridBase(0, 0));
+
+        installMainSelectedCellInfoListener();
+    }
+
+    /**
+     * ??????????????????????{@link DeliveryCalendarMainCell.TripleQty} ? plan / actual / dispatch????
+     * {@link DeliveryCalendarMainCell.PlainText} ? text?? {@link #mainSelectedCellInfo} ??????
+     * ??????????????????????????????
+     */
+    private void installMainSelectedCellInfoListener() {
+        if (mainSelectedCellInfo == null) {
+            return;
+        }
+        mainSelectedCellInfo.setText("\u30bb\u30eb\u3092\u30af\u30ea\u30c3\u30af\u3059\u308b\u3068\u3001"
+                + "\u305d\u306e\u30bb\u30eb\u306e\u30e2\u30c7\u30eb\u4e0a\u306e\u5024\u304c\u3053\u3053\u306b\u51fa\u307e\u3059\u3002");
+        mainSpreadsheet
+                .getSelectionModel()
+                .getSelectedCells()
+                .addListener(
+                        (javafx.collections.ListChangeListener<? super TablePosition>) ch ->
+                                Platform.runLater(this::refreshMainSelectedCellInfo));
+    }
+
+    private void refreshMainSelectedCellInfo() {
+        if (mainSelectedCellInfo == null) {
+            return;
+        }
+        var sel = mainSpreadsheet.getSelectionModel().getSelectedCells();
+        if (sel == null || sel.isEmpty()) {
+            mainSelectedCellInfo.setText("(\u672a\u9078\u629e)");
+            return;
+        }
+        TablePosition<?, ?> pos = sel.get(sel.size() - 1);
+        int gridRow = pos.getRow();
+        int col = pos.getColumn();
+        int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+        StringBuilder sb = new StringBuilder();
+        String header = (col >= 0 && col < mainHeadersRef.size()) ? mainHeadersRef.get(col) : "";
+        sb.append("gridRow=").append(gridRow)
+                .append("  col=").append(col)
+                .append("  header=").append(header)
+                .append('\n');
+        if (gridRow < firstData) {
+            sb.append("(\u30d5\u30a3\u30eb\u30bf\u884c)");
+            mainSelectedCellInfo.setText(sb.toString());
+            return;
+        }
+        int dataRow = gridRow - firstData;
+        if (dataRow < 0 || dataRow >= mainRows.size()) {
+            sb.append("(\u30c7\u30fc\u30bf\u884c\u30aa\u30fc\u30d0\u30fc)");
+            mainSelectedCellInfo.setText(sb.toString());
+            return;
+        }
+        ObservableList<DeliveryCalendarMainCell> line = mainRows.get(dataRow);
+        if (col < 0 || col >= line.size()) {
+            sb.append("(\u5217\u30aa\u30fc\u30d0\u30fc)");
+            mainSelectedCellInfo.setText(sb.toString());
+            return;
+        }
+        DeliveryCalendarMainCell mc = line.get(col);
+        sb.append("dataRow=").append(dataRow).append('\n');
+        if (mc instanceof DeliveryCalendarMainCell.TripleQty t) {
+            sb.append("type: TripleQty\n")
+                    .append("  plan(\u30bf\u30b9\u30af\u5165\u529b)     : ").append(quoteForCellInfo(t.plan())).append('\n')
+                    .append("  actual(\u5b9f\u7e3e\u660e\u7d30)       : ").append(quoteForCellInfo(t.actual())).append('\n')
+                    .append("  dispatch(\u7d50\u679c_\u914d\u53f0\u8868) : ").append(quoteForCellInfo(t.dispatch())).append('\n');
+        } else if (mc instanceof DeliveryCalendarMainCell.PlainText pt) {
+            sb.append("type: PlainText\n").append("  text: ").append(quoteForCellInfo(pt.text())).append('\n');
+        } else {
+            sb.append("type: (null)\n");
+        }
+        mainSelectedCellInfo.setText(sb.toString());
+    }
+
+    private static String quoteForCellInfo(String s) {
+        if (s == null) return "(null)";
+        if (s.isEmpty()) return "(\u7a7a\u6587\u5b57)  len=0";
+        return "\"" + s + "\"  len=" + s.length();
     }
 
     void bindShell(MainShellController shell) {

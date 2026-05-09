@@ -9,6 +9,7 @@
 <?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Tab?>
 <?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TextArea?>
 <?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.StackPane?>
@@ -74,6 +75,11 @@
                             </panes>
                         </Accordion>
                         <StackPane fx:id="mainSpreadsheetHost" minHeight="240.0" VBox.vgrow="ALWAYS"/>
+                        <Label text="&#x9078;&#x629e;&#x4e2d;&#x306e;&#x30bb;&#x30eb;&#x306e;&#x30e2;&#x30c7;&#x30eb;&#x5024;&#xff08;&#x30af;&#x30ea;&#x30c3;&#x30af;&#x3067;&#x66f4;&#x65b0;&#xff09;"
+                               style="-fx-font-weight: bold;"/>
+                        <TextArea fx:id="mainSelectedCellInfo" editable="false" wrapText="true"
+                                  prefRowCount="6" minHeight="96.0"
+                                  style="-fx-font-family: 'Consolas','Menlo',monospace;"/>
                     </VBox>
                 </content>
             </Tab>
