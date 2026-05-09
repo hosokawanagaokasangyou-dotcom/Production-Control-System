@@ -16,6 +16,8 @@ import pandas as pd
 
 import planning_core._core as core
 from planning_core.dispatch_workspace import (
+    DEFAULT_ACTUAL_DETAIL_SOURCE_DIR,
+    DEFAULT_TASK_INPUT_SOURCE_DIR,
     ENV_ACTUAL_DETAIL_SOURCE_DIR,
     ENV_ACTUAL_DETAIL_WORKBOOK,
     ENV_PROCESSING_PLAN_PATH,
@@ -353,10 +355,20 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
         _tiw = core._excel_plan_input_wb()
         _ad_resolved = resolve_actual_detail_workbook_path(_tiw)
         # Always emit strings so JavaFX meta label can show rows (null omits keys / hasNonNull skips).
-        meta["pmAiTaskInputSourceDir"] = (os.environ.get(ENV_TASK_INPUT_SOURCE_DIR) or "").strip()
-        meta["pmAiActualDetailSourceDir"] = (
-            os.environ.get(ENV_ACTUAL_DETAIL_SOURCE_DIR) or ""
-        ).strip()
+        # Env empty -> same defaults as Java AppPaths / resolve_actual_detail_workbook_path (actual detail).
+        _tdir_env = (os.environ.get(ENV_TASK_INPUT_SOURCE_DIR) or "").strip()
+        meta["pmAiTaskInputSourceDir"] = _tdir_env
+        meta["pmAiTaskInputSourceDirEffective"] = (
+            _tdir_env if _tdir_env else DEFAULT_TASK_INPUT_SOURCE_DIR
+        )
+        meta["pmAiTaskInputSourceDirUsesDefaultDir"] = not bool(_tdir_env)
+
+        _adir_env = (os.environ.get(ENV_ACTUAL_DETAIL_SOURCE_DIR) or "").strip()
+        meta["pmAiActualDetailSourceDir"] = _adir_env
+        meta["pmAiActualDetailSourceDirEffective"] = (
+            _adir_env if _adir_env else DEFAULT_ACTUAL_DETAIL_SOURCE_DIR
+        )
+        meta["pmAiActualDetailSourceDirUsesDefaultDir"] = not bool(_adir_env)
         meta["pmAiActualDetailWorkbook"] = (
             os.environ.get(ENV_ACTUAL_DETAIL_WORKBOOK) or ""
         ).strip()

@@ -713,19 +713,33 @@ public final class DeliveryCalendarViewTabController {
             if (meta != null && meta.isObject()) {
                 String na = "\uff08\u672a\u8a2d\u5b9a\uff09";
                 String noneResolved = "\uff08\u89e3\u6c7a\u5148\u306a\u3057\uff09";
+                String defaultDirSuffix =
+                        " \uff08\u74b0\u5883\u5909\u6570\u7a7a\u6b04\u30fb\u65e2\u5b9a\u30d5\u30a9\u30eb\u30c0\uff09";
                 StringBuilder sb = new StringBuilder();
-                String taskSrc = meta.path("pmAiTaskInputSourceDir").asText("");
+                String taskEff = meta.path("pmAiTaskInputSourceDirEffective").asText("");
+                if (taskEff.isEmpty()) {
+                    taskEff = meta.path("pmAiTaskInputSourceDir").asText("");
+                }
                 sb.append("PM_AI_TASK_INPUT_SOURCE_DIR: ")
-                        .append(taskSrc.isEmpty() ? na : taskSrc)
-                        .append("\n");
+                        .append(taskEff.isEmpty() ? na : taskEff);
+                if (meta.path("pmAiTaskInputSourceDirUsesDefaultDir").asBoolean(false)) {
+                    sb.append(defaultDirSuffix);
+                }
+                sb.append("\n");
                 String planPath = meta.path("processingPlanPath").asText("");
                 sb.append("PM_AI_PROCESSING_PLAN_PATH: ")
                         .append(planPath.isEmpty() ? na : planPath)
                         .append("\n");
-                String actDir = meta.path("pmAiActualDetailSourceDir").asText("");
+                String actDirEff = meta.path("pmAiActualDetailSourceDirEffective").asText("");
+                if (actDirEff.isEmpty()) {
+                    actDirEff = meta.path("pmAiActualDetailSourceDir").asText("");
+                }
                 sb.append("PM_AI_ACTUAL_DETAIL_SOURCE_DIR: ")
-                        .append(actDir.isEmpty() ? na : actDir)
-                        .append("\n");
+                        .append(actDirEff.isEmpty() ? na : actDirEff);
+                if (meta.path("pmAiActualDetailSourceDirUsesDefaultDir").asBoolean(false)) {
+                    sb.append(defaultDirSuffix);
+                }
+                sb.append("\n");
                 String actWbEnv = meta.path("pmAiActualDetailWorkbook").asText("");
                 if (!actWbEnv.isEmpty()) {
                     sb.append("PM_AI_ACTUAL_DETAIL_WORKBOOK: ")
