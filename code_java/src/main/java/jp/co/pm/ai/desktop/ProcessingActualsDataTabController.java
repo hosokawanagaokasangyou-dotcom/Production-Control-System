@@ -47,15 +47,16 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 /**
  * Raw spreadsheet for the machining actual-detail workbook, resolved via {@link NetworkSourceDirResolver}
  * ({@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK} / {@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR}).
- * Optional sheet: {@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_SHEET}. FXML: {@code ProcessingActualsDataTab.fxml}.
+ * Display applies {@link TaskInputSourceRawGridIo#applyProcessingActualsDisplaySteps}. Optional sheet:
+ * {@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_SHEET}. FXML: {@code ProcessingActualsDataTab.fxml}.
  */
 
 public final class ProcessingActualsDataTabController {
 
     private static final String HINT_TEXT =
-            "\u52a0\u5de5\u5b9f\u7e3e\u660e\u7d30\u306f PM_AI_ACTUAL_DETAIL_WORKBOOK \u307e\u305f\u306f"
-                    + " PM_AI_ACTUAL_DETAIL_SOURCE_DIR \u304b\u3089\u89e3\u6c7a\u3055\u308c\u308b Excel\uff08\u307e\u305f\u306f CSV\uff09\u3092"
-                    + " \u751f\u306e\u307e\u307e\u8868\u793a\u3057\u307e\u3059\u3002"
+            "\u5148\u982d4\u884c\u3092\u9664\u53bb\u3057\u3001\u539f\u7a3f\u306e5\u884c\u76ee\u3092\u5217\u898b\u51fa\u3057\u306b\u3057\u307e\u3059\u3002"
+                    + " \u30c7\u30fc\u30bf\u306f PM_AI_ACTUAL_DETAIL_WORKBOOK \u307e\u305f\u306f"
+                    + " PM_AI_ACTUAL_DETAIL_SOURCE_DIR \u304b\u3089\u89e3\u6c7a\u3055\u308c\u308b Excel\uff08\u307e\u305f\u306f CSV\uff09\u3092\u8aad\u307f\u8fbc\u307f\u307e\u3059\u3002"
                     + " PM_AI_ACTUAL_DETAIL_SHEET \u3067\u30b7\u30fc\u30c8\u540d\u3092\u6307\u5b9a\u3067\u304d\u307e\u3059\u3002"
                     + " \u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u672a\u5230\u9054\u6642\u306f\u30ed\u30fc\u30ab\u30eb\u30ad\u30e3\u30c3\u30b7\u30e5\u3092\u8a66\u884c\u3057\u307e\u3059\u3002";
 
@@ -449,7 +450,9 @@ public final class ProcessingActualsDataTabController {
 
     private void applyLoadedFile(Path file, int excelSheetIndex, boolean showErrorsInStatus) {
         try {
-            PlanInputTabularIo.TabularSheet tab = TaskInputSourceRawGridIo.readRaw(file, excelSheetIndex);
+            PlanInputTabularIo.TabularSheet tab =
+                    TaskInputSourceRawGridIo.applyProcessingActualsDisplaySteps(
+                            TaskInputSourceRawGridIo.readRaw(file, excelSheetIndex));
             List<TableColumnOrderPersistence.ColumnSpec> lay =
                     TableColumnOrderPersistence.loadLayout(
                             TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW);

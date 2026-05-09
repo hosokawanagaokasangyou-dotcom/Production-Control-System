@@ -213,6 +213,41 @@ public final class TaskInputSourceRawGridIo {
         return new PlanInputTabularIo.TabularSheet(headers, rows);
     }
 
+    /**
+     * Processing actuals tab: (1) drop the first 4 sheet rows, (2) treat the next row (original 5th row,
+     * 1-based) as column headers and remove it from the data body.
+     */
+    public static PlanInputTabularIo.TabularSheet applyProcessingActualsDisplaySteps(
+            PlanInputTabularIo.TabularSheet raw) {
+        Objects.requireNonNull(raw, "raw");
+        List<List<String>> rows = new ArrayList<>();
+        for (List<String> r : raw.rows()) {
+            rows.add(new ArrayList<>(r));
+        }
+        int maxCol = raw.headers().size();
+        for (List<String> r : rows) {
+            maxCol = Math.max(maxCol, r.size());
+        }
+        padRowsToWidth(rows, maxCol);
+
+        int dropHead = Math.min(4, rows.size());
+        if (dropHead > 0) {
+            rows.subList(0, dropHead).clear();
+        }
+
+        if (rows.isEmpty()) {
+            return new PlanInputTabularIo.TabularSheet(List.of(), List.of());
+        }
+
+        List<String> headerRow = rows.get(0);
+        List<String> headers = new ArrayList<>(headerRow.size());
+        for (String cell : headerRow) {
+            headers.add(cell != null ? cell : "");
+        }
+        rows.remove(0);
+        return new PlanInputTabularIo.TabularSheet(headers, rows);
+    }
+
     private static final DateTimeFormatter ALADDIN_HEADER_DATE_OUT =
             DateTimeFormatter.ofPattern("yyyy/MM/dd");
 
