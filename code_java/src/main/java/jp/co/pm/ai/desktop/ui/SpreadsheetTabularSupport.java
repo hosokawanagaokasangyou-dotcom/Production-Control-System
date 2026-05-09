@@ -9,15 +9,21 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
+import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.Parent;
+import javafx.scene.control.Label;
 import javafx.scene.control.TablePosition;
 import javafx.scene.control.TableView;
+import javafx.scene.control.Tooltip;
+import javafx.scene.layout.VBox;
 
 import org.controlsfx.control.spreadsheet.Grid;
 import org.controlsfx.control.spreadsheet.GridBase;
@@ -31,6 +37,15 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
  * Bridges tabular {@link ObservableList} rows to ControlsFX {@link SpreadsheetView} / {@link GridBase}.
  */
 public final class SpreadsheetTabularSupport {
+
+    /** Task-input Aladdin plan qty line (main calendar triple cell). */
+    private static final String DELIVERY_CAL_PLAN_LINE_STYLE = "-fx-text-fill: #1565C0; -fx-font-size: 10px;";
+
+    /** Actual-detail aggregated qty line. */
+    private static final String DELIVERY_CAL_ACTUAL_LINE_STYLE = "-fx-text-fill: #2E7D32; -fx-font-size: 10px;";
+
+    /** Result \u7d50\u679c_\u914d\u53f0\u8868.json (system dispatch) line. */
+    private static final String DELIVERY_CAL_DISPATCH_LINE_STYLE = "-fx-text-fill: #6A1B9A; -fx-font-size: 10px;";
 
     /** Grid row index reserved for ControlsFX column filters ({@link SpreadsheetView#setFilteredRow}). */
     public static final int SPREADSHEET_FILTER_ROW = 0;
@@ -409,6 +424,88 @@ public final class SpreadsheetTabularSupport {
         }
         grid.setRows(gridRows);
         return grid;
+    }
+
+    /**
+     * Read-only delivery-calendar main grid: date columns use a triple stack (task-input Aladdin / actual
+     * detail / dispatch JSON) with distinct colors; attribute columns are plain text.
+     */
+    public static GridBase buildReadOnlyDeliveryCalendarMainGrid(
+            List<String> headersRef, ObservableList<ObservableList<DeliveryCalendarMainCell>> rows) {
+        int cols = headersRef.size();
+        int rc = rows.size();
+        int gridRowsTotal = rc + 1;
+        GridBase grid = new GridBase(gridRowsTotal, cols);
+        grid.getColumnHeaders().clear();
+        grid.getColumnHeaders().addAll(headersRef);
+
+        List<ObservableList<SpreadsheetCell>> gridRows = new ArrayList<>(gridRowsTotal);
+
+        ObservableList<SpreadsheetCell> filterRow = FXCollections.observableArrayList();
+        for (int c = 0; c < cols; c++) {
+            SpreadsheetCell cell =
+                    SpreadsheetCellType.STRING.createCell(SPREADSHEET_FILTER_ROW, c, 1, 1, "");
+            cell.setEditable(false);
+            filterRow.add(cell);
+        }
+        gridRows.add(filterRow);
+
+        int firstData = spreadsheetFirstDataRowIndex();
+        for (int r = 0; r < rc; r++) {
+            int gridRow = firstData + r;
+            ObservableList<DeliveryCalendarMainCell> src = rows.get(r);
+            ObservableList<SpreadsheetCell> rowCells = FXCollections.observableArrayList();
+            for (int c = 0; c < cols; c++) {
+                DeliveryCalendarMainCell mc =
+                        c < src.size() && src.get(c) != null ? src.get(c) : new DeliveryCalendarMainCell.PlainText("");
+                if (mc instanceof DeliveryCalendarMainCell.TripleQty t) {
+                    String item = Stream.of(t.plan(), t.actual(), t.dispatch()).collect(Collectors.joining("\n"));
+                    SpreadsheetCell cell =
+                            SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, item);
+                    cell.setEditable(false);
+                    cell.setWrapText(true);
+                    cell.setCellGraphic(true);
+                    Node g = deliveryCalendarTripleGraphic(t);
+                    cell.setGraphic(g);
+                    Tooltip tt =
+                            new Tooltip(
+                                    "\u30bf\u30b9\u30af\u5165\u529b\uff08\u30a2\u30e9\u30b8\u30f3\u8a08\u753b\uff09 / "
+                                            + "\u5b9f\u7e3e\u660e\u7d30 / "
+                                            + "\u7d50\u679c_\u914d\u53f0\u8868.json");
+                    Tooltip.install(g, tt);
+                    rowCells.add(cell);
+                } else {
+                    String raw =
+                            mc instanceof DeliveryCalendarMainCell.PlainText pt ? pt.text() : "";
+                    SpreadsheetCell cell =
+                            SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, raw);
+                    cell.setEditable(false);
+                    cell.setCellGraphic(false);
+                    cell.setGraphic(null);
+                    rowCells.add(cell);
+                }
+            }
+            gridRows.add(rowCells);
+        }
+        grid.setRows(gridRows);
+        return grid;
+    }
+
+    private static Node deliveryCalendarTripleGraphic(DeliveryCalendarMainCell.TripleQty t) {
+        VBox box = new VBox(1);
+        box.setPadding(new Insets(2, 4, 2, 4));
+        Label plan = new Label(dashIfBlank(t.plan()));
+        plan.setStyle(DELIVERY_CAL_PLAN_LINE_STYLE);
+        Label actual = new Label(dashIfBlank(t.actual()));
+        actual.setStyle(DELIVERY_CAL_ACTUAL_LINE_STYLE);
+        Label dispatch = new Label(dashIfBlank(t.dispatch()));
+        dispatch.setStyle(DELIVERY_CAL_DISPATCH_LINE_STYLE);
+        box.getChildren().addAll(plan, actual, dispatch);
+        return box;
+    }
+
+    private static String dashIfBlank(String s) {
+        return (s == null || s.isBlank()) ? "\u2014" : s;
     }
 
     /**

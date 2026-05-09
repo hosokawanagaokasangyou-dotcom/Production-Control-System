@@ -28,6 +28,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
+import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCell;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 
@@ -236,21 +237,21 @@ public final class DeliveryCalendarViewTabController {
                 headers.add(c.asText(""));
             }
         }
-        ObservableList<ObservableList<String>> rowObs = FXCollections.observableArrayList();
+        ObservableList<ObservableList<DeliveryCalendarMainCell>> rowObs = FXCollections.observableArrayList();
         JsonNode rows = mainCal.get("rows");
         if (rows != null && rows.isArray()) {
             for (JsonNode row : rows) {
-                ObservableList<String> line = FXCollections.observableArrayList();
+                ObservableList<DeliveryCalendarMainCell> line = FXCollections.observableArrayList();
                 JsonNode cells = row.get("cells");
                 if (cells != null && cells.isArray()) {
                     for (JsonNode cell : cells) {
-                        line.add(cell.asText(""));
+                        line.add(parseDeliveryCalendarMainCell(cell));
                     }
                 }
                 rowObs.add(line);
             }
         }
-        GridBase grid = SpreadsheetTabularSupport.buildReadOnlyPlainGrid(headers, rowObs);
+        GridBase grid = SpreadsheetTabularSupport.buildReadOnlyDeliveryCalendarMainGrid(headers, rowObs);
         mainSpreadsheet.setGrid(grid);
         mainSpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
     }
@@ -280,5 +281,19 @@ public final class DeliveryCalendarViewTabController {
         GridBase grid = SpreadsheetTabularSupport.buildReadOnlyPlainGrid(headers, rowObs);
         compareSpreadsheet.setGrid(grid);
         compareSpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
+    }
+
+    private static DeliveryCalendarMainCell parseDeliveryCalendarMainCell(JsonNode cell) {
+        if (cell == null || cell.isNull() || cell.isMissingNode()) {
+            return new DeliveryCalendarMainCell.PlainText("");
+        }
+        if (cell.isObject() && cell.has("triple")) {
+            JsonNode t = cell.get("triple");
+            return new DeliveryCalendarMainCell.TripleQty(
+                    t.path("p").asText(""),
+                    t.path("a").asText(""),
+                    t.path("d").asText(""));
+        }
+        return new DeliveryCalendarMainCell.PlainText(cell.asText(""));
     }
 }

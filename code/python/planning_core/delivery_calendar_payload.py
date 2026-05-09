@@ -277,13 +277,11 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                     mk_to_display[mk] = _machine_display_from_plan_row(row)
 
         left_headers = list(core.RESULT_DISPATCH_TABLE_STATIC_HEADERS)
+        # One column per calendar day: JSON cell {"triple": {p,a,d}} stacked in JavaFX (plan / actual / dispatch).
         cal_cols: list[str] = []
-        suf_in = "\u6295\u5165"
-        suf_del = "\u7d0d\u5165"
-        suf_act = "\u5b9f\u7e3e"
         for d in sorted_dates:
             ds = d.isoformat() if isinstance(d, date) else str(d)
-            cal_cols.extend([f"{ds}_{suf_in}", f"{ds}_{suf_del}", f"{ds}_{suf_act}"])
+            cal_cols.append(ds)
 
         main_columns = left_headers + cal_cols
 
@@ -327,32 +325,22 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                 if core.TASK_COL_TASK_ID in left_headers:
                     left_cells[left_headers.index(core.TASK_COL_TASK_ID)] = tid
 
-            sp_due = None
-            an_due = None
-            qty_hint = None
-            if plan_row is not None:
-                sp_due = _parse_cell_date(plan_row.get(core.TASK_COL_SPECIFIED_DUE))
-                an_due = _parse_cell_date(plan_row.get(core.TASK_COL_ANSWER_DUE))
-                qty_hint = core._parse_optional_float_non_nan(plan_row.get(core.TASK_COL_QTY))
-
-            triples: list[str] = []
+            cal_cells: list[dict[str, Any]] = []
             for d in sorted_dates:
                 q_in = _qty_from_buckets_for_tid(buckets, mk, d, tid)
                 q_act = float(actual_agg.get((mk, d), {}).get(tid, 0.0))
-                q_na = 0.0
-                if qty_hint is not None:
-                    if sp_due == d or an_due == d:
-                        q_na = float(qty_hint)
-                triples.append(core._format_qty_short(q_in) if abs(q_in) > 1e-12 else "")
-                triples.append(core._format_qty_short(q_na) if abs(q_na) > 1e-12 else "")
-                triples.append(core._format_qty_short(q_act) if abs(q_act) > 1e-12 else "")
+                q_disp = float(dispatch_agg.get((mk, d, tid), 0.0))
+                tp = core._format_qty_short(q_in) if abs(q_in) > 1e-12 else ""
+                ta = core._format_qty_short(q_act) if abs(q_act) > 1e-12 else ""
+                td = core._format_qty_short(q_disp) if abs(q_disp) > 1e-12 else ""
+                cal_cells.append({"triple": {"p": tp, "a": ta, "d": td}})
 
             main_rows_out.append(
                 {
                     "kind": "data",
                     "machineKey": mk,
                     "requestId": tid,
-                    "cells": left_cells + triples,
+                    "cells": left_cells + cal_cells,
                 }
             )
 
