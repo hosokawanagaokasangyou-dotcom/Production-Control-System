@@ -519,7 +519,14 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             current_mk = mk_norm
             label = mk_to_display.get(mk_norm, mk_norm)
             sec_cells = [""] * len(left_headers)
-            if sec_cells:
+            # Section title is machine display: put it under \u6a5f\u68b0\u540d, not \u914d\u53f0\u8a66\u884c\u9806\u756a (col 0).
+            try:
+                mi = left_headers.index(core.TASK_COL_MACHINE_NAME)
+            except ValueError:
+                mi = -1
+            if mi >= 0:
+                sec_cells[mi] = label
+            elif sec_cells:
                 sec_cells[0] = label
             row_cells = sec_cells + [""] * len(cal_cols)
             main_rows_out.append({"kind": "section", "machineLabel": label, "cells": row_cells})
