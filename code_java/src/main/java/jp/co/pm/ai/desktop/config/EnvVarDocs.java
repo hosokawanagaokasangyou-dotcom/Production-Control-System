@@ -273,9 +273,6 @@ public final class EnvVarDocs {
                         + "（Excel アドイン/マクロ連携時。"
                         + "JavaFX での headless 段階2は通常関係なし）。");
         put(
-                "STAGE12_CMD_HIDE_WINDOW",
-                "VBA 経由の段階1/2 cmd を非表示（1=非表示）。");
-        put(
                 "PM_AI_CMD_PAUSE_ON_ERROR",
                 "CLI 終了時の pause（Windows）。"
                         + "0/false で無効化（workbook_env_bootstrap 同様）。");
@@ -299,15 +296,6 @@ public final class EnvVarDocs {
         put(
                 "STAGE2_SERIAL_DISPATCH_BY_TASK_ID",
                 "日内配台: 1=依頼NO出現順で直列（他依頼は進まない）。");
-        put(
-                "STAGE2_SKIP_SHEET_VISIBILITY_APPLY",
-                "段階2でシート表示設定の一括適用をスキップ（高速化）。");
-        put(
-                "STAGE2_SKIP_SNAPSHOT_EXPORT",
-                "段階2の pdf/csv スナップショット出力をスキップ。");
-        put(
-                "STAGE2_SKIP_MEMBER_SCHEDULE_IMPORT",
-                "個人別スケジュール取込みをスキップ。");
         put(
                 "PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE",
                 "B-2/B-3: 熱融着検査の設備占有制御。");

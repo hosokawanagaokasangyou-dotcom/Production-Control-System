@@ -112,7 +112,12 @@ public final class MainShellController {
                     "DEBUG_TASK_ID",
                     "TRACE_TEAM_ASSIGN_TASK_ID",
                     "EXCLUDE_RULES_TEST_E1234",
-                    "EXCLUDE_RULES_TEST_E1234_ROW");
+                    "EXCLUDE_RULES_TEST_E1234_ROW",
+                    "STAGE2_SKIP_SHEET_VISIBILITY_APPLY",
+                    "STAGE2_SKIP_SNAPSHOT_EXPORT",
+                    "STAGE2_SKIP_MEMBER_SCHEDULE_IMPORT",
+                    "STAGE12_CMD_HIDE_WINDOW",
+                    "EXCLUDE_RULES_TRY_OPENPYXL_SAVE");
 
     private static final List<String> BOOTSTRAP_ORDER =
             List.of(

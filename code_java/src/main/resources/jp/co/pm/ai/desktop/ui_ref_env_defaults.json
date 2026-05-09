@@ -114,25 +114,9 @@
     "value" : "1",
     "description" : "段階2後の列設定図形コピー（0 で無効）"
   }, {
-    "key" : "STAGE2_SKIP_SHEET_VISIBILITY_APPLY",
-    "value" : "1",
-    "description" : "1/true/yes/on=段階2の「設定_シート表示（一覧更新＋ブックへ適用）」をスキップ（高速化用）。既定 0。"
-  }, {
-    "key" : "STAGE2_SKIP_SNAPSHOT_EXPORT",
-    "value" : "0",
-    "description" : "1/true/yes/on=段階2のスナップショット（pdf/csv 出力）をスキップ（高速化用）。既定 0。"
-  }, {
-    "key" : "STAGE2_SKIP_MEMBER_SCHEDULE_IMPORT",
-    "value" : "1",
-    "description" : "1/true/yes/on=段階2の個人別スケジュール（member_schedule_*.xlsx の取り込み）をスキップ（高速化用）。既定 0。"
-  }, {
     "key" : "XLWINGS_SUSPEND_AUTO_CALCULATION",
     "value" : "1",
     "description" : "xlwings が Excel へ一括書き込み・保存する前後で自動計算を手動（完了時に復帰）。1/true/yes/on（既定）。0/false/no/off/無効 で無効（Calculation は変更しない）。"
-  }, {
-    "key" : "STAGE12_CMD_HIDE_WINDOW",
-    "value" : "0",
-    "description" : "段階1/2: VBA の cmd 1=非表示 0=画面上部にコンソール表示"
   }, {
     "key" : "PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE",
     "value" : "1",
@@ -334,9 +318,5 @@
     "key" : "PM_AI_SETUP_COMPLETION_MSGBOX",
     "value" : "1",
     "description" : "環境構築 setup_environment: Windows で成功時に完了メッセージ（MessageBox）を表示。0 false no off で無効"
-  }, {
-    "key" : "EXCLUDE_RULES_TRY_OPENPYXL_SAVE",
-    "value" : "",
-    "description" : "互換用（Python未使用・xlwingsのみ保存）"
   } ]
 }
