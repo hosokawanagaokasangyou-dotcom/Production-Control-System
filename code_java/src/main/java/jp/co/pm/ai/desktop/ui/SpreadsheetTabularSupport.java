@@ -704,6 +704,16 @@ public final class SpreadsheetTabularSupport {
     public static final double PLAN_RESULT_ROW_HEIGHT_PCT_MAX = 2000.0;
 
     /**
+     * 納期管理カレンダー（3 段セルグラフィック）向け：100% スライダー時のデータ行基準高さ（px）。24px では行に収まらず表示されない。
+     */
+    public static final double DELIVERY_CALENDAR_ROW_HEIGHT_BASE_PX = 96.0;
+
+    /**
+     * 納期管理カレンダー向けデータ行の最小高さ（px）。スライダーを下げてもこの下限で 3 段が読めるようにする。
+     */
+    public static final double DELIVERY_CALENDAR_ROW_HEIGHT_MIN_PX = 72.0;
+
+    /**
      * グリッド物理行数がこの値以上のとき、{@link #refreshSpreadsheetAfterRowPresentationChange} で {@link
      * SpreadsheetView#resizeRowsToDefault()} を呼ばない（大量行で Prism/SW のオフスクリーン確保がヒープを押し上げるため）。
      */
@@ -730,6 +740,18 @@ public final class SpreadsheetTabularSupport {
      */
     public static void applySpreadsheetGridRowHeightsAndWrap(
             GridBase grid, boolean cellWrapText, double rowHeightPercent) {
+        applySpreadsheetGridRowHeightsAndWrap(grid, cellWrapText, rowHeightPercent, 24.0, 0.0);
+    }
+
+    /**
+     * 同上。{@code baseDataRowHeightPx} は 100% 時のデータ行基準高さ、{@code minDataRowHeightPx} {@code > 0} でデータ行の下限 px。
+     */
+    public static void applySpreadsheetGridRowHeightsAndWrap(
+            GridBase grid,
+            boolean cellWrapText,
+            double rowHeightPercent,
+            double baseDataRowHeightPx,
+            double minDataRowHeightPx) {
         if (grid == null) {
             return;
         }
@@ -741,8 +763,10 @@ public final class SpreadsheetTabularSupport {
                 Math.min(
                         PLAN_RESULT_ROW_HEIGHT_PCT_MAX,
                         Math.max(PLAN_RESULT_ROW_HEIGHT_PCT_MIN, pct));
-        final double basePx = 24.0;
-        final double rowPx = basePx * (pct / 100.0);
+        final double basePx = baseDataRowHeightPx > 0 ? baseDataRowHeightPx : 24.0;
+        final double scaled = basePx * (pct / 100.0);
+        final double rowPx =
+                minDataRowHeightPx > 0 ? Math.max(minDataRowHeightPx, scaled) : scaled;
         final double filterRowPx = Math.min(rowPx, PLAN_RESULT_FILTER_ROW_MAX_HEIGHT_PX);
         grid.setRowHeightCallback(
                 row -> row == SPREADSHEET_FILTER_ROW ? filterRowPx : rowPx);
