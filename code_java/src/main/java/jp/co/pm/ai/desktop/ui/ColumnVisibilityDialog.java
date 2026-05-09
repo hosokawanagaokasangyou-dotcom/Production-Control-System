@@ -24,6 +24,8 @@ import javafx.stage.Window;
 
 /**
  * Per-column visibility editor for spreadsheet / {@link javafx.scene.control.TableView} columns (title-aligned).
+ *
+ * <p>Japanese UI strings use {@code \\uXXXX} so they survive toolchains where source encoding is not UTF-8.
  */
 public final class ColumnVisibilityDialog {
 
@@ -49,7 +51,7 @@ public final class ColumnVisibilityDialog {
             dialog.initOwner(owner);
         }
         dialog.initModality(Modality.WINDOW_MODAL);
-        dialog.setTitle("????");
+        dialog.setTitle("\u5217\u306e\u8868\u793a");
         DialogPane pane = dialog.getDialogPane();
         pane.getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
 
@@ -64,16 +66,18 @@ public final class ColumnVisibilityDialog {
             box.getChildren().add(cb);
         }
 
-        Label searchCaption = new Label("??:");
+        Label searchCaption = new Label("\u5217\u540d:");
         TextField searchField = new TextField();
-        searchField.setPromptText("?????");
+        searchField.setPromptText("\u5217\u540d\u3067\u691c\u7d22");
         HBox.setHgrow(searchField, Priority.ALWAYS);
         HBox searchRow = new HBox(8);
         searchRow.setAlignment(Pos.CENTER_LEFT);
         searchRow.getChildren().addAll(searchCaption, searchField);
 
-        Button selectAllButton = new Button("???????");
-        Button clearAllButton = new Button("??????????");
+        Button selectAllButton =
+                new Button("\u5168\u3066\u306e\u5217\u3092\u9078\u629e");
+        Button clearAllButton =
+                new Button("\u5168\u3066\u306e\u5217\u306e\u9078\u629e\u3092\u89e3\u9664");
         HBox bulkRow = new HBox(8);
         bulkRow.setAlignment(Pos.CENTER_LEFT);
         bulkRow.getChildren().addAll(selectAllButton, clearAllButton);
@@ -106,8 +110,8 @@ public final class ColumnVisibilityDialog {
 
         Label hint =
                 new Label(
-                        "???????????????????"
-                                + " ?????1??????????????");
+                        "\u8868\u793a\u3059\u308b\u5217\u306b\u30c1\u30a7\u30c3\u30af\u3092\u5165\u308c\u3066\u304f\u3060\u3055\u3044\u3002"
+                                + " \u5c11\u306a\u304f\u3068\u30821\u5217\u306f\u8868\u793a\u3059\u308b\u5fc5\u8981\u304c\u3042\u308a\u307e\u3059\u3002");
         hint.setWrapText(true);
         VBox scrollBody = new VBox(8, hint, box);
         ScrollPane sp = new ScrollPane(scrollBody);
@@ -138,9 +142,10 @@ public final class ColumnVisibilityDialog {
                                     new javafx.scene.control.Alert(
                                             javafx.scene.control.Alert.AlertType.WARNING);
                             a.initOwner(owner);
-                            a.setTitle("????");
+                            a.setTitle("\u5217\u306e\u8868\u793a");
                             a.setHeaderText(null);
-                            a.setContentText("??1??????????????");
+                            a.setContentText(
+                                    "\u6700\u4f4e1\u5217\u306f\u8868\u793a\u3059\u308b\u5fc5\u8981\u304c\u3042\u308a\u307e\u3059\u3002");
                             a.showAndWait();
                         }
                     });
