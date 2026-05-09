@@ -116,6 +116,12 @@
                     </VBox>
                 </content>
             </Tab>
+            <Tab closable="false" text="&#x914d;&#x53f0;&#x7d50;&#x679c;">
+                <content>
+                    <fx:include fx:id="deliveryCalendarResultDispatchTableTab"
+                                source="ResultDispatchTableTab.fxml"/>
+                </content>
+            </Tab>
             <Tab closable="false" text="&#x52a0;&#x5de5;&#x5b9f;&#x7e3e;">
                 <content>
                     <fx:include fx:id="processingActualsDataTab" source="ProcessingActualsDataTab.fxml"/>

@@ -123,6 +123,9 @@ public final class DeliveryCalendarViewTabController {
     private ProcessingActualsDataTabController processingActualsDataTabController;
 
     @FXML
+    private ResultDispatchTableTabController deliveryCalendarResultDispatchTableTabController;
+
+    @FXML
     private StackPane mainSpreadsheetHost;
 
     @FXML
@@ -387,6 +390,9 @@ public final class DeliveryCalendarViewTabController {
         }
         if (aladdinProcessingPlanDataTabController != null) {
             aladdinProcessingPlanDataTabController.bindShell(shell);
+        }
+        if (deliveryCalendarResultDispatchTableTabController != null) {
+            deliveryCalendarResultDispatchTableTabController.bindShell(shell);
         }
     }
 
