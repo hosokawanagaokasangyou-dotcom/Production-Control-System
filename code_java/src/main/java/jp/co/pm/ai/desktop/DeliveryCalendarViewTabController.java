@@ -1,8 +1,5 @@
 package jp.co.pm.ai.desktop;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,7 +12,6 @@ import java.util.function.Supplier;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -55,32 +51,6 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 public final class DeliveryCalendarViewTabController {
 
     private static final ObjectMapper JSON = new ObjectMapper();
-
-    // #region agent log
-    private static final String AGENT_DEBUG_LOG_PATH =
-            "/mnt/c/????AI??????_JAVA/.cursor/debug-ebddd7.log";
-
-    private static void agentDebugNdjson(
-            String hypothesisId, String location, String message, ObjectNode data) {
-        try {
-            ObjectNode root = JSON.createObjectNode();
-            root.put("sessionId", "ebddd7");
-            root.put("hypothesisId", hypothesisId);
-            root.put("location", location);
-            root.put("message", message);
-            root.put("timestamp", System.currentTimeMillis());
-            root.set("data", data);
-            Files.writeString(
-                    Path.of(AGENT_DEBUG_LOG_PATH),
-                    JSON.writeValueAsString(root) + "\n",
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.APPEND);
-        } catch (Exception ignored) {
-            // debug instrumentation only
-        }
-    }
-
-    // #endregion
 
     private static final Map<String, String> COMPARE_HEADER_JP = compareHeaderJp();
 
@@ -809,32 +779,6 @@ public final class DeliveryCalendarViewTabController {
             }
         }
 
-        // #region agent log
-        int tripleTotal = 0;
-        int tripleNonEmpty = 0;
-        for (ObservableList<DeliveryCalendarMainCell> line : mainRows) {
-            for (DeliveryCalendarMainCell c : line) {
-                if (c instanceof DeliveryCalendarMainCell.TripleQty t) {
-                    tripleTotal++;
-                    if (!t.plan().isBlank()
-                            || !t.actual().isBlank()
-                            || !t.dispatch().isBlank()) {
-                        tripleNonEmpty++;
-                    }
-                }
-            }
-        }
-        ObjectNode dbg = JSON.createObjectNode();
-        dbg.put("tripleTotal", tripleTotal);
-        dbg.put("tripleNonEmpty", tripleNonEmpty);
-        dbg.put("mainHeaderCount", mainHeadersRef.size());
-        agentDebugNdjson(
-                "H5",
-                "DeliveryCalendarViewTabController.loadMainCalendar",
-                "parsed cells before column reorder",
-                dbg);
-        // #endregion
-
         List<TableColumnOrderPersistence.ColumnSpec> lay =
                 TableColumnOrderPersistence.loadLayout(
                         TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN);
@@ -845,24 +789,6 @@ public final class DeliveryCalendarViewTabController {
                         TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN, beforeHeaders.size());
         List<String> titleOrder =
                 lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList();
-        // #region agent log
-        ObjectNode dbgOrder = JSON.createObjectNode();
-        dbgOrder.put("savedOrderSize", titleOrder.size());
-        StringBuilder sbOrder = new StringBuilder();
-        int lim = Math.min(12, titleOrder.size());
-        for (int i = 0; i < lim; i++) {
-            if (i > 0) {
-                sbOrder.append(" | ");
-            }
-            sbOrder.append(titleOrder.get(i));
-        }
-        dbgOrder.put("savedOrderSample", sbOrder.toString());
-        agentDebugNdjson(
-                "H6",
-                "DeliveryCalendarViewTabController.loadMainCalendar",
-                "persisted column title order sample",
-                dbgOrder);
-        // #endregion
         TableColumnOrderPersistence.applyLogicalColumnOrderDeliveryCalendar(
                 mainHeadersRef, mainRows, titleOrder);
         boolean[] visAfter =
