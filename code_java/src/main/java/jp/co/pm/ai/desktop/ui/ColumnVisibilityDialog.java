@@ -3,9 +3,11 @@ package jp.co.pm.ai.desktop.ui;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
@@ -13,6 +15,9 @@ import javafx.scene.control.Dialog;
 import javafx.scene.control.DialogPane;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.TextField;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Window;
@@ -44,13 +49,13 @@ public final class ColumnVisibilityDialog {
             dialog.initOwner(owner);
         }
         dialog.initModality(Modality.WINDOW_MODAL);
-        dialog.setTitle("\u5217\u306e\u8868\u793a");
+        dialog.setTitle("????");
         DialogPane pane = dialog.getDialogPane();
         pane.getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
 
         List<CheckBox> boxes = new ArrayList<>(n);
         VBox box = new VBox(6);
-        box.setPadding(new Insets(8));
+        box.setPadding(new Insets(0));
         for (int i = 0; i < n; i++) {
             String t = columnTitles.get(i) != null ? columnTitles.get(i) : "";
             CheckBox cb = new CheckBox((i + 1) + ": " + t);
@@ -58,15 +63,63 @@ public final class ColumnVisibilityDialog {
             boxes.add(cb);
             box.getChildren().add(cb);
         }
+
+        Label searchCaption = new Label("??:");
+        TextField searchField = new TextField();
+        searchField.setPromptText("?????");
+        HBox.setHgrow(searchField, Priority.ALWAYS);
+        HBox searchRow = new HBox(8);
+        searchRow.setAlignment(Pos.CENTER_LEFT);
+        searchRow.getChildren().addAll(searchCaption, searchField);
+
+        Button selectAllButton = new Button("???????");
+        Button clearAllButton = new Button("??????????");
+        HBox bulkRow = new HBox(8);
+        bulkRow.setAlignment(Pos.CENTER_LEFT);
+        bulkRow.getChildren().addAll(selectAllButton, clearAllButton);
+
+        Runnable applySearchFilter =
+                () -> {
+                    String raw = searchField.getText();
+                    for (int i = 0; i < n; i++) {
+                        CheckBox cb = boxes.get(i);
+                        String title = columnTitles.get(i) != null ? columnTitles.get(i) : "";
+                        boolean show = columnTitleMatchesSearch(title, raw);
+                        cb.setVisible(show);
+                        cb.setManaged(show);
+                    }
+                };
+        searchField.textProperty().addListener((obs, a, b) -> applySearchFilter.run());
+
+        selectAllButton.setOnAction(
+                e -> {
+                    for (CheckBox cb : boxes) {
+                        cb.setSelected(true);
+                    }
+                });
+        clearAllButton.setOnAction(
+                e -> {
+                    for (CheckBox cb : boxes) {
+                        cb.setSelected(false);
+                    }
+                });
+
         Label hint =
                 new Label(
-                        "\u8868\u793a\u3059\u308b\u5217\u306b\u30c1\u30a7\u30c3\u30af\u3092\u5165\u308c\u3066\u304f\u3060\u3055\u3044\u3002"
-                                + " \u5c11\u306a\u304f\u3068\u30821\u5217\u306f\u8868\u793a\u3059\u308b\u5fc5\u8981\u304c\u3042\u308a\u307e\u3059\u3002");
+                        "???????????????????"
+                                + " ?????1??????????????");
         hint.setWrapText(true);
-        ScrollPane sp = new ScrollPane(new VBox(8, hint, box));
+        VBox scrollBody = new VBox(8, hint, box);
+        ScrollPane sp = new ScrollPane(scrollBody);
         sp.setFitToWidth(true);
         sp.setPrefViewportHeight(Math.min(420, 28 * n + 80));
-        pane.setContent(sp);
+
+        VBox rootLayout = new VBox(8);
+        rootLayout.setPadding(new Insets(8));
+        rootLayout.getChildren().addAll(searchRow, bulkRow, sp);
+        pane.setContent(rootLayout);
+
+        applySearchFilter.run();
 
         Button okBtn = (Button) pane.lookupButton(ButtonType.OK);
         if (okBtn != null) {
@@ -85,10 +138,9 @@ public final class ColumnVisibilityDialog {
                                     new javafx.scene.control.Alert(
                                             javafx.scene.control.Alert.AlertType.WARNING);
                             a.initOwner(owner);
-                            a.setTitle("\u5217\u306e\u8868\u793a");
+                            a.setTitle("????");
                             a.setHeaderText(null);
-                            a.setContentText(
-                                    "\u6700\u4f4e1\u5217\u306f\u8868\u793a\u3059\u308b\u5fc5\u8981\u304c\u3042\u308a\u307e\u3059\u3002");
+                            a.setContentText("??1??????????????");
                             a.showAndWait();
                         }
                     });
@@ -116,5 +168,20 @@ public final class ColumnVisibilityDialog {
                 });
 
         return dialog.showAndWait();
+    }
+
+    /**
+     * Empty or blank query shows all rows; otherwise substring match on title (case-folded for ASCII).
+     */
+    static boolean columnTitleMatchesSearch(String columnTitle, String queryRaw) {
+        if (queryRaw == null || queryRaw.isBlank()) {
+            return true;
+        }
+        String q = queryRaw.strip();
+        String t = columnTitle != null ? columnTitle : "";
+        if (t.contains(q)) {
+            return true;
+        }
+        return t.toLowerCase(Locale.ROOT).contains(q.toLowerCase(Locale.ROOT));
     }
 }
