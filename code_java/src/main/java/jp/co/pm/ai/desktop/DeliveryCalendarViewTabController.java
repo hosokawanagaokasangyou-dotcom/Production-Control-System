@@ -41,7 +41,6 @@ import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
-import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 
 /**
@@ -203,8 +202,8 @@ public final class DeliveryCalendarViewTabController {
         compareSpreadsheet.prefWidthProperty().bind(compareSpreadsheetHost.widthProperty());
         compareSpreadsheet.prefHeightProperty().bind(compareSpreadsheetHost.heightProperty());
 
-        SpreadsheetThemeBridge.install(mainSpreadsheet);
-        SpreadsheetThemeBridge.install(compareSpreadsheet);
+        SpreadsheetTabularSupport.installDeliveryCalendarSpreadsheetChrome(mainSpreadsheet);
+        SpreadsheetTabularSupport.installDeliveryCalendarSpreadsheetChrome(compareSpreadsheet);
         mainSpreadsheet.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         compareSpreadsheet.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         SpreadsheetTabularSupport.installFullRowDataSelection(mainSpreadsheet);
@@ -513,7 +512,8 @@ public final class DeliveryCalendarViewTabController {
                             mainHeadersRef, persistedLayoutMain.get(), 112);
             final double widthDefault = 112;
             GridBase grid =
-                    SpreadsheetTabularSupport.buildReadOnlyDeliveryCalendarMainGrid(mainHeadersRef, mainRows);
+                    SpreadsheetTabularSupport.buildReadOnlyDeliveryCalendarMainGrid(
+                            mainHeadersRef, mainRows, headerColumnCountMain.get());
             TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs pres = mainPresentationPrefs.get();
             SpreadsheetTabularSupport.applySpreadsheetGridRowHeightsAndWrap(
                     grid, pres.cellWrapText(), pres.rowHeightPercent());
@@ -551,7 +551,9 @@ public final class DeliveryCalendarViewTabController {
                     TableColumnOrderPersistence.resolveWidthsForHeaders(
                             compareHeadersRef, persistedLayoutCompare.get(), 112);
             final double widthDefault = 112;
-            GridBase grid = SpreadsheetTabularSupport.buildReadOnlyPlainGrid(compareHeadersRef, compareRows);
+            GridBase grid =
+                    SpreadsheetTabularSupport.buildReadOnlyPlainGrid(
+                            compareHeadersRef, compareRows, headerColumnCountCompare.get());
             TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs pres =
                     comparePresentationPrefs.get();
             SpreadsheetTabularSupport.applySpreadsheetGridRowHeightsAndWrap(

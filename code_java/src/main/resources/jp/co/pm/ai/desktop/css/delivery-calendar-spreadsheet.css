@@ -1,0 +1,44 @@
+/*
+ * 納期管理ビュー専用: シーンに依らず固定配色。
+ * セル本文の背景色は SpreadsheetTabularSupport のインラインスタイルと併用。
+ */
+
+.delivery-calendar-spreadsheet.table-view.cell-spreadsheet {
+    -fx-background-color: #ffffff;
+}
+
+.delivery-calendar-spreadsheet .spreadsheet-cell {
+    -fx-border-color: #cccccc;
+}
+
+.delivery-calendar-spreadsheet VerticalHeader > Label,
+.delivery-calendar-spreadsheet VerticalHeader > Label.fixed {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: black;
+}
+
+.delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column,
+.delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.fixed {
+    -fx-background-color: #e8e8e8;
+    -fx-text-fill: black;
+}
+
+.delivery-calendar-spreadsheet VerticalHeader > Label.selected,
+.delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.selected,
+.delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.selected > Label {
+    -fx-background-color: #b8c8d8;
+    -fx-text-fill: black;
+}
+
+.delivery-calendar-spreadsheet .spreadsheet-cell:filled:selected,
+.delivery-calendar-spreadsheet .spreadsheet-cell:filled:focused:selected,
+.delivery-calendar-spreadsheet .spreadsheet-cell:filled:focused:selected:hover {
+    -fx-background-color: #b8c8d8;
+    -fx-text-fill: black;
+    -fx-border-color: #999999;
+}
+
+.delivery-calendar-spreadsheet CellView > .text-input.text-field,
+.delivery-calendar-spreadsheet CellView > .text-input.text-area {
+    -fx-text-fill: black;
+}

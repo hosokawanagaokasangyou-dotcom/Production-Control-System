@@ -38,14 +38,22 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
  */
 public final class SpreadsheetTabularSupport {
 
-    /** Task-input Aladdin plan qty line (main calendar triple cell). */
-    private static final String DELIVERY_CAL_PLAN_LINE_STYLE = "-fx-text-fill: #1565C0; -fx-font-size: 10px;";
+    /** \u7d0d\u671f\u7ba1\u7406\u30d3\u30e5\u30fc\u898b\u51fa\u884c\uff08\u30d5\u30a3\u30eb\u30bf\u884c\u542b\u3080\uff09: \u8584\u3044\u30b0\u30ec\u30fc \uff0b \u9ed2\u6587\u5b57 */
+    private static final String DC_STYLE_HEADER_ROW =
+            "-fx-background-color: #e8e8e8; -fx-text-fill: black;";
 
-    /** Actual-detail aggregated qty line. */
-    private static final String DELIVERY_CAL_ACTUAL_LINE_STYLE = "-fx-text-fill: #2E7D32; -fx-font-size: 10px;";
+    /** \u5148\u982d\u306e\u898b\u51fa\u3057\u5217\uff08\u5c5e\u6027\u5217\uff09: \u767d \uff0b \u9ed2 */
+    private static final String DC_STYLE_LEADING_COL =
+            "-fx-background-color: #ffffff; -fx-text-fill: black;";
 
-    /** Result \u7d50\u679c_\u914d\u53f0\u8868.json (system dispatch) line. */
-    private static final String DELIVERY_CAL_DISPATCH_LINE_STYLE = "-fx-text-fill: #6A1B9A; -fx-font-size: 10px;";
+    private static final String DC_STYLE_DATA_WHITE =
+            "-fx-background-color: #ffffff; -fx-text-fill: black;";
+
+    private static final String DC_STYLE_DATA_GREEN =
+            "-fx-background-color: #d4edd4; -fx-text-fill: black;";
+
+    /** \u4e09\u91cd\u30bb\u30eb\u5185\u5404\u884c\u30e9\u30d9\u30eb\uff08\u30c6\u30fc\u30de\u7121\u8996\u30fb\u9ed2\uff09 */
+    private static final String DC_TRIPLE_LABEL_STYLE = "-fx-text-fill: black; -fx-font-size: 10px;";
 
     /** Grid row index reserved for ControlsFX column filters ({@link SpreadsheetView#setFilteredRow}). */
     public static final int SPREADSHEET_FILTER_ROW = 0;
@@ -56,6 +64,26 @@ public final class SpreadsheetTabularSupport {
     }
 
     private SpreadsheetTabularSupport() {}
+
+    /**
+     * \u7d0d\u671f\u7ba1\u7406\u30d3\u30e5\u30fc\u306e {@link SpreadsheetView} \u306b\u56fa\u5b9a\u914d\u8272\u7528\u30b9\u30bf\u30a4\u30eb\u3092\u4ed8\u4e0e\u3059\u308b\uff08\u30b7\u30fc\u30f3\u30c6\u30fc\u30de\u306f\u7121\u8996\uff09\u3002
+     * {@link #buildReadOnlyDeliveryCalendarMainGrid} / {@link #buildReadOnlyPlainGrid}\uff08{@code deliveryLeadingColumns \u2265 0}\uff09\u3068\u7d44\u307f\u5408\u308f\u305b\u308b\u3002
+     */
+    public static void installDeliveryCalendarSpreadsheetChrome(SpreadsheetView view) {
+        Objects.requireNonNull(view, "view");
+        if (!view.getStyleClass().contains("delivery-calendar-spreadsheet")) {
+            view.getStyleClass().add("delivery-calendar-spreadsheet");
+        }
+        String url =
+                Objects.requireNonNull(
+                                SpreadsheetTabularSupport.class.getResource(
+                                        "/jp/co/pm/ai/desktop/css/delivery-calendar-spreadsheet.css"),
+                                "delivery-calendar-spreadsheet.css")
+                        .toExternalForm();
+        if (!view.getStylesheets().contains(url)) {
+            view.getStylesheets().add(url);
+        }
+    }
 
     /**
      * Enables ControlsFX per-column filters and row sorting (filter menu on column headers). Requires a filter
@@ -390,6 +418,18 @@ public final class SpreadsheetTabularSupport {
      */
     public static GridBase buildReadOnlyPlainGrid(
             List<String> headersRef, ObservableList<ObservableList<String>> rows) {
+        return buildReadOnlyPlainGrid(headersRef, rows, -1);
+    }
+
+    /**
+     * Same as {@link #buildReadOnlyPlainGrid(List, ObservableList)}; when {@code deliveryLeadingColumns >= 0},
+     * applies fixed delivery-calendar chrome (ignore theme): header/filter row light gray, leading columns white,
+     * other data cells white or light green when a non-negative number is present.
+     */
+    public static GridBase buildReadOnlyPlainGrid(
+            List<String> headersRef,
+            ObservableList<ObservableList<String>> rows,
+            int deliveryLeadingColumns) {
         int cols = headersRef.size();
         int rc = rows.size();
         int gridRowsTotal = rc + 1;
@@ -404,6 +444,9 @@ public final class SpreadsheetTabularSupport {
             SpreadsheetCell cell =
                     SpreadsheetCellType.STRING.createCell(SPREADSHEET_FILTER_ROW, c, 1, 1, "");
             cell.setEditable(false);
+            if (deliveryLeadingColumns >= 0) {
+                cell.setStyle(DC_STYLE_HEADER_ROW);
+            }
             filterRow.add(cell);
         }
         gridRows.add(filterRow);
@@ -418,6 +461,13 @@ public final class SpreadsheetTabularSupport {
                 SpreadsheetCell cell =
                         SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, raw);
                 cell.setEditable(false);
+                if (deliveryLeadingColumns >= 0) {
+                    if (c < deliveryLeadingColumns) {
+                        cell.setStyle(DC_STYLE_LEADING_COL);
+                    } else {
+                        cell.setStyle(deliveryCalendarDataStyleForDisplayText(raw));
+                    }
+                }
                 rowCells.add(cell);
             }
             gridRows.add(rowCells);
@@ -428,11 +478,17 @@ public final class SpreadsheetTabularSupport {
 
     /**
      * Read-only delivery-calendar main grid: date columns use a triple stack (task-input Aladdin / actual
-     * detail / dispatch JSON) with distinct colors; attribute columns are plain text.
+     * detail / dispatch JSON); attribute columns ({@code leadingColumnCount} wide) are plain text.
+     * Cell colors follow {@link #installDeliveryCalendarSpreadsheetChrome} (fixed palette, not theme).
+     *
+     * @param leadingColumnCount number of left fixed columns (must be {@code >= 0} and {@code <= cols})
      */
     public static GridBase buildReadOnlyDeliveryCalendarMainGrid(
-            List<String> headersRef, ObservableList<ObservableList<DeliveryCalendarMainCell>> rows) {
+            List<String> headersRef,
+            ObservableList<ObservableList<DeliveryCalendarMainCell>> rows,
+            int leadingColumnCount) {
         int cols = headersRef.size();
+        int lead = Math.max(0, Math.min(leadingColumnCount, cols));
         int rc = rows.size();
         int gridRowsTotal = rc + 1;
         GridBase grid = new GridBase(gridRowsTotal, cols);
@@ -446,6 +502,7 @@ public final class SpreadsheetTabularSupport {
             SpreadsheetCell cell =
                     SpreadsheetCellType.STRING.createCell(SPREADSHEET_FILTER_ROW, c, 1, 1, "");
             cell.setEditable(false);
+            cell.setStyle(DC_STYLE_HEADER_ROW);
             filterRow.add(cell);
         }
         gridRows.add(filterRow);
@@ -473,6 +530,14 @@ public final class SpreadsheetTabularSupport {
                                             + "\u5b9f\u7e3e\u660e\u7d30 / "
                                             + "\u7d50\u679c_\u914d\u53f0\u8868.json");
                     Tooltip.install(g, tt);
+                    if (c < lead) {
+                        cell.setStyle(DC_STYLE_LEADING_COL);
+                    } else {
+                        cell.setStyle(
+                                deliveryCalendarTripleQualifiesGreen(t)
+                                        ? DC_STYLE_DATA_GREEN
+                                        : DC_STYLE_DATA_WHITE);
+                    }
                     rowCells.add(cell);
                 } else {
                     String raw =
@@ -482,6 +547,11 @@ public final class SpreadsheetTabularSupport {
                     cell.setEditable(false);
                     cell.setCellGraphic(false);
                     cell.setGraphic(null);
+                    if (c < lead) {
+                        cell.setStyle(DC_STYLE_LEADING_COL);
+                    } else {
+                        cell.setStyle(deliveryCalendarDataStyleForDisplayText(raw));
+                    }
                     rowCells.add(cell);
                 }
             }
@@ -491,15 +561,49 @@ public final class SpreadsheetTabularSupport {
         return grid;
     }
 
+    private static String deliveryCalendarDataStyleForDisplayText(String raw) {
+        return deliveryCalendarCellQualifiesGreen(raw) ? DC_STYLE_DATA_GREEN : DC_STYLE_DATA_WHITE;
+    }
+
+    /**
+     * {@code 0} \u4ee5\u4e0a\u306e\u6570\u5024\u304c\u542b\u307e\u308c\u308b\u30bb\u30eb\u306f\u8584\u3044\u7dd1\uff08\u8907\u6570\u884c\u306f\u884c\u5358\u4f4d\u3067\u5224\u5b9a\uff09\u3002
+     */
+    private static boolean deliveryCalendarCellQualifiesGreen(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        for (String line : text.split("\\R")) {
+            String t = line.strip();
+            if (t.isEmpty() || "\u2014".equals(t) || "-".equals(t)) {
+                continue;
+            }
+            try {
+                double v = Double.parseDouble(t.replace(",", ""));
+                if (!Double.isNaN(v) && !Double.isInfinite(v) && v >= 0d) {
+                    return true;
+                }
+            } catch (NumberFormatException ignored) {
+                // next line
+            }
+        }
+        return false;
+    }
+
+    private static boolean deliveryCalendarTripleQualifiesGreen(DeliveryCalendarMainCell.TripleQty t) {
+        return deliveryCalendarCellQualifiesGreen(t.plan())
+                || deliveryCalendarCellQualifiesGreen(t.actual())
+                || deliveryCalendarCellQualifiesGreen(t.dispatch());
+    }
+
     private static Node deliveryCalendarTripleGraphic(DeliveryCalendarMainCell.TripleQty t) {
         VBox box = new VBox(1);
         box.setPadding(new Insets(2, 4, 2, 4));
         Label plan = new Label(dashIfBlank(t.plan()));
-        plan.setStyle(DELIVERY_CAL_PLAN_LINE_STYLE);
+        plan.setStyle(DC_TRIPLE_LABEL_STYLE);
         Label actual = new Label(dashIfBlank(t.actual()));
-        actual.setStyle(DELIVERY_CAL_ACTUAL_LINE_STYLE);
+        actual.setStyle(DC_TRIPLE_LABEL_STYLE);
         Label dispatch = new Label(dashIfBlank(t.dispatch()));
-        dispatch.setStyle(DELIVERY_CAL_DISPATCH_LINE_STYLE);
+        dispatch.setStyle(DC_TRIPLE_LABEL_STYLE);
         box.getChildren().addAll(plan, actual, dispatch);
         return box;
     }
