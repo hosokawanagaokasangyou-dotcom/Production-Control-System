@@ -6,7 +6,8 @@ import json
 import logging
 import sys
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+# INFO on stderr is merged into stdout by Java's ProcessBuilder.redirectErrorStream(true); keep quiet.
+logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(message)s")
 
 
 def main() -> int:
