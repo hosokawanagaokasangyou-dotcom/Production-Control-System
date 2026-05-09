@@ -3177,6 +3177,7 @@ public final class MainShellController {
                     resetEnvRowsToDefaults();
                     applyBundledPortableDefaultsIfPresent();
                     applyDesktopSession(DesktopSessionStateStore.load(), false);
+                    mainRunTabController.clearMainRunTabLog();
                     applyRepoFolderPathNormalization();
                     DesktopSessionStateStore.save(collectDesktopSession());
                     mainRunTabController.refreshAppVersionLabel();

@@ -587,6 +587,11 @@ public final class MainRunTabController {
 
     @FXML
     private void onClearLogButtonAction() {
+        clearMainRunTabLog();
+    }
+
+    /** メイン実行タブのログ一覧を空にする（クリアボタンと同一。ポータルバージョンアップ完了後など）。 */
+    void clearMainRunTabLog() {
         logLinesAll.clear();
         if (shell != null) {
             shell.scheduleDesktopSessionSave();
