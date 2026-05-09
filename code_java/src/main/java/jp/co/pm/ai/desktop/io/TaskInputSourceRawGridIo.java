@@ -5,10 +5,15 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
@@ -138,7 +143,8 @@ public final class TaskInputSourceRawGridIo {
     /**
      * Aladdin tab: (1) drop first 4 sheet rows, (2) copy row6 text into blank cells of row5,
      * (3) drop columns whose row6 label is speed/time, (4) drop the row6 line,
-     * (5) use the top remaining row as column headers and remove it from data rows.
+     * (5) in the top row, normalize date-like cells to {@code yyyy/MM/dd} using year from the
+     * first data row's \u53d7\u6ce8\u65e5 column, (6) use that top row as headers and remove it from data.
      */
     public static PlanInputTabularIo.TabularSheet applyAladdinProcessingPlanDisplaySteps(
             PlanInputTabularIo.TabularSheet raw) {
@@ -196,6 +202,9 @@ public final class TaskInputSourceRawGridIo {
             maxCol = Math.max(maxCol, r.size());
         }
         padRowsToWidth(rows, maxCol);
+        if (!rows.isEmpty()) {
+            normalizeAladdinHeaderRowDateCells(rows);
+        }
         if (rows.isEmpty()) {
             return new PlanInputTabularIo.TabularSheet(List.of(), rows);
         }
@@ -206,6 +215,123 @@ public final class TaskInputSourceRawGridIo {
         }
         rows.remove(0);
         return new PlanInputTabularIo.TabularSheet(headers, rows);
+    }
+
+    private static final DateTimeFormatter ALADDIN_HEADER_DATE_OUT =
+            DateTimeFormatter.ofPattern("yyyy/MM/dd");
+
+    private static final List<DateTimeFormatter> FLEX_DATE_IN =
+            List.of(
+                    DateTimeFormatter.ofPattern("yyyy/M/d"),
+                    DateTimeFormatter.ofPattern("yyyy/MM/dd"),
+                    DateTimeFormatter.ofPattern("yyyy/M/dd"),
+                    DateTimeFormatter.ofPattern("yyyy/MM/d"),
+                    DateTimeFormatter.ofPattern("yyyy.M.d"),
+                    DateTimeFormatter.ofPattern("yyyy.MM.dd"));
+
+    /** Month/day only (no year), aligned with first data row year from \u53d7\u6ce8\u65e5 column. */
+    private static final Pattern MONTH_DAY_SLASH = Pattern.compile("^\\s*(\\d{1,2})/(\\d{1,2})\\s*$");
+
+    /**
+     * Top row = future headers: cells that look like dates become {@code yyyy/MM/dd}. Year is taken
+     * from the first data row at the column whose header cell is \u53d7\u6ce8\u65e5. The literal header
+     * text cell \u53d7\u6ce8\u65e5 is left unchanged.
+     */
+    private static void normalizeAladdinHeaderRowDateCells(List<List<String>> rows) {
+        if (rows.size() < 2) {
+            return;
+        }
+        int mc = 0;
+        for (List<String> r : rows) {
+            mc = Math.max(mc, r.size());
+        }
+        padRowsToWidth(rows, mc);
+        List<String> top = rows.get(0);
+        int jIdx = indexOfJuchuBiColumn(top);
+        if (jIdx < 0) {
+            return;
+        }
+        List<String> firstData = rows.get(1);
+        String jVal = jIdx < firstData.size() && firstData.get(jIdx) != null ? firstData.get(jIdx) : "";
+        int year = extractYearFromJuchuDataCell(jVal);
+        if (year < 0) {
+            return;
+        }
+        for (int c = 0; c < top.size(); c++) {
+            if (c == jIdx) {
+                continue;
+            }
+            String raw = top.get(c) != null ? top.get(c) : "";
+            String out = formatAladdinHeaderDateCell(raw, year);
+            if (out != null) {
+                top.set(c, out);
+            }
+        }
+    }
+
+    private static int indexOfJuchuBiColumn(List<String> topRow) {
+        for (int i = 0; i < topRow.size(); i++) {
+            if ("\u53d7\u6ce8\u65e5".equals(normalizeAladdinHeaderCell(topRow.get(i)))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static int extractYearFromJuchuDataCell(String s) {
+        if (isBlankCell(s)) {
+            return -1;
+        }
+        LocalDate d = tryParseFlexibleDate(s.trim());
+        if (d != null) {
+            return d.getYear();
+        }
+        Matcher m = Pattern.compile("(20[0-9]{2})").matcher(s.trim());
+        if (m.find()) {
+            try {
+                return Integer.parseInt(m.group(1));
+            } catch (NumberFormatException ignored) {
+                return -1;
+            }
+        }
+        return -1;
+    }
+
+    private static LocalDate tryParseFlexibleDate(String t) {
+        for (DateTimeFormatter f : FLEX_DATE_IN) {
+            try {
+                return LocalDate.parse(t, f);
+            } catch (DateTimeParseException ignored) {
+                // next
+            }
+        }
+        return null;
+    }
+
+    /** Returns formatted date or null if left unchanged. */
+    private static String formatAladdinHeaderDateCell(String raw, int year) {
+        if (isBlankCell(raw)) {
+            return null;
+        }
+        String t = raw.trim();
+        if ("\u53d7\u6ce8\u65e5".equals(t)) {
+            return null;
+        }
+        LocalDate full = tryParseFlexibleDate(t);
+        if (full != null) {
+            return full.format(ALADDIN_HEADER_DATE_OUT);
+        }
+        Matcher md = MONTH_DAY_SLASH.matcher(t);
+        if (md.matches()) {
+            int month = Integer.parseInt(md.group(1));
+            int day = Integer.parseInt(md.group(2));
+            try {
+                return LocalDate.of(year, month, day).format(ALADDIN_HEADER_DATE_OUT);
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private static void padRowsToWidth(List<List<String>> rows, int width) {
