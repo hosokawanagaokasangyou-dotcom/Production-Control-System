@@ -18,6 +18,13 @@ if sys.version_info < (3, 14):
     )
     raise SystemExit(2)
 
+try:
+    from openpyxl_drawings_warning import suppress_openpyxl_drawingsml_userwarning
+
+    suppress_openpyxl_drawingsml_userwarning()
+except ImportError:
+    pass
+
 import ctypes
 import fnmatch
 import logging

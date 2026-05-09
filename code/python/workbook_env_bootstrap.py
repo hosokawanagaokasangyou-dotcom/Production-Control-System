@@ -15,6 +15,13 @@ import math
 import os
 import sys
 
+try:
+    from openpyxl_drawings_warning import suppress_openpyxl_drawingsml_userwarning
+
+    suppress_openpyxl_drawingsml_userwarning()
+except ImportError:
+    pass
+
 WORKBOOK_ENV_SHEET_NAME = "設定_環境変数"
 
 # planning_core と同一判定（openpyxl で当該ブックを開けない条件）
