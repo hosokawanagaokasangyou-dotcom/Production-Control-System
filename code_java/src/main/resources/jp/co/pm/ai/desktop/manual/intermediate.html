@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>オンラインマニュアル（慣れた人向け）</title>
+  <link rel="stylesheet" href="manual.css"/>
+</head>
+<body>
+
+<h1>オンラインマニュアル（慣れた人向け）</h1>
+<p class="muted">よく使う導線とつまずきどころだけを短く記載しています。</p>
+
+<article id="ch01">
+  <h2>はじめに・全体像</h2>
+  <ul>
+    <li>メインの往復は <a href="pm-desktop://tab/run">実行・ログ</a> ? 結果系ビュー。</li>
+    <li>タブの並びは「タブ整理」で好みに合わせ可能（セッションに保存）。</li>
+  </ul>
+</article>
+
+<article id="ch02">
+  <h2>実行・ログ</h2>
+  <ul>
+    <li>ログはフィルタで ERROR のみに絞るとトラブル時が速い。</li>
+    <li>段階実行中は他タブが無効になるため、長時間ジョブの前に設定タブを済ませる。</li>
+    <li><a href="pm-desktop://tab/run">実行・ログを開く</a></li>
+  </ul>
+</article>
+
+<article id="ch03">
+  <h2>環境設定（環境変数・メモリ・グローバル）</h2>
+  <p>ネットワークドライブのソースはキャッシュ（<code>.pm-ai-cache</code>）とセットで理解するとトラブル解析が速いです。</p>
+</article>
+
+<article id="ch04">
+  <h2>配台計画_タスク入力</h2>
+  <p>ブックを開き直したあと段階1へ。シート選択状態はセッションに載る場合があります。</p>
+</article>
+
+<article id="ch05">
+  <h2>マスタ読込サマリ</h2>
+  <p>段階1前後で差分が出たら、マスタ側のパス・タイムスタンプを疑う。</p>
+</article>
+
+<article id="ch06">
+  <h2>段階1（実行とログの見方）</h2>
+  <p>ログ末尾のエラーコードより、先に入力パスと <code>PM_AI_*</code> を確認。</p>
+</article>
+
+<article id="ch07">
+  <h2>段階1 成形結果</h2>
+  <p>ここで異常なら段階2に進まず入力／マスタへ戻る。</p>
+</article>
+
+<article id="ch08">
+  <h2>段階2（計画シミュレーション）</h2>
+  <p>Excel 書き出しの要否・フォントは実行タブ側のオプションとセットで確認。</p>
+</article>
+
+<article id="ch09">
+  <h2>計画結果ビューア・結果_配台表</h2>
+  <p>JSON の場所が分からないときは計画結果ビューアの「設定」アコーディオンからパスを確認。</p>
+</article>
+
+<article id="ch10">
+  <h2>配台計画手動修正</h2>
+  <p>内側タブを切り替えて「タスク×日付」と「工程+機械×日付」を使い分け。</p>
+</article>
+
+<article id="ch11">
+  <h2>設備ガント・納期管理ビュー・オペレーターカード</h2>
+  <p>納期管理ビューは子タブが多いので、タブ整理ツリーで名前と対応を確認すると良いです。</p>
+</article>
+
+<article id="ch12">
+  <h2>特別ルール・配台不要ルール・実績DATA</h2>
+  <p>特別ルールは Markdown 要約と列挙ファイルの整合に注意（リポジトリ運用）。</p>
+</article>
+
+</body>
+</html>

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.RadioButton?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.ToggleGroup?>
+<?import javafx.scene.control.TreeView?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.web.WebView?>
+
+<!-- オンラインマニュアル拱バンドル HTML挧 {@link OnlineManualTabController} -->
+<BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="jp.co.pm.ai.desktop.OnlineManualTabController"
+            styleClass="pm-online-manual">
+    <top>
+        <VBox spacing="6.0">
+            <padding>
+                <Insets bottom="6.0" left="8.0" right="8.0" top="8.0"/>
+            </padding>
+            <fx:define>
+                <ToggleGroup fx:id="manualDepthToggleGroup"/>
+            </fx:define>
+            <HBox alignment="CENTER_LEFT" spacing="10.0">
+                <Label text="閲覧拏度"/>
+                <RadioButton fx:id="depthBeginner" mnemonicParsing="false" selected="true"
+                             text="揄めて使う" toggleGroup="$manualDepthToggleGroup"/>
+                <RadioButton fx:id="depthIntermediate" mnemonicParsing="false"
+                             text="慣れた挈向け" toggleGroup="$manualDepthToggleGroup"/>
+                <RadioButton fx:id="depthAdvanced" mnemonicParsing="false"
+                             text="旡旛解杳" toggleGroup="$manualDepthToggleGroup"/>
+                <RadioButton fx:id="depthDeveloper" mnemonicParsing="false"
+                             text="開発者向け" toggleGroup="$manualDepthToggleGroup"/>
+            </HBox>
+            <Separator/>
+        </VBox>
+    </top>
+    <left>
+        <VBox prefWidth="260.0" minWidth="200.0" spacing="6.0">
+            <padding>
+                <Insets bottom="8.0" left="8.0" right="6.0" top="6.0"/>
+            </padding>
+            <Label styleClass="pm-heading-label" text="斛一覧拱業務の流れ挧"/>
+            <TreeView fx:id="chapterTree" VBox.vgrow="ALWAYS"/>
+        </VBox>
+    </left>
+    <center>
+        <WebView fx:id="manualWebView"/>
+    </center>
+    <bottom>
+        <HBox alignment="CENTER_LEFT" spacing="8.0">
+            <padding>
+                <Insets bottom="6.0" left="8.0" right="8.0" top="4.0"/>
+            </padding>
+            <Label fx:id="manualVersionLabel" styleClass="pm-muted-label" text=""/>
+        </HBox>
+    </bottom>
+</BorderPane>

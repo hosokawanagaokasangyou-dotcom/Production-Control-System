@@ -26,6 +26,8 @@ public enum MainShellTabId {
     GANTT_PERSON_BADGE_DESIGN("ganttPersonBadgeDesign"),
     OPERATOR_CARD("operatorCard"),
     DISPATCH_INTERACTIVE("dispatchInteractive"),
+    /** バンドル HTML のオンラインマニュアル（オフライン閲覧）。 */
+    USER_MANUAL("userManual"),
     /** メインシェル末尾の「タブ整理」（入れ子構成・色の編集用）。 */
     TAB_ORGANIZER("tabOrganizer");
 

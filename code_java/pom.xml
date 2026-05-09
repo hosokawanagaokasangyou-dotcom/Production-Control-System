@@ -110,6 +110,12 @@
           <version>${javafx.version}</version>
           <classifier>linux</classifier>
         </dependency>
+        <dependency>
+          <groupId>org.openjfx</groupId>
+          <artifactId>javafx-web</artifactId>
+          <version>${javafx.version}</version>
+          <classifier>linux</classifier>
+        </dependency>
       </dependencies>
     </profile>
     <profile>
@@ -147,6 +153,12 @@
         <dependency>
           <groupId>org.openjfx</groupId>
           <artifactId>javafx-fxml</artifactId>
+          <version>${javafx.version}</version>
+          <classifier>win</classifier>
+        </dependency>
+        <dependency>
+          <groupId>org.openjfx</groupId>
+          <artifactId>javafx-web</artifactId>
           <version>${javafx.version}</version>
           <classifier>win</classifier>
         </dependency>
@@ -190,6 +202,12 @@
           <version>${javafx.version}</version>
           <classifier>mac</classifier>
         </dependency>
+        <dependency>
+          <groupId>org.openjfx</groupId>
+          <artifactId>javafx-web</artifactId>
+          <version>${javafx.version}</version>
+          <classifier>mac</classifier>
+        </dependency>
       </dependencies>
     </profile>
   </profiles>
@@ -211,6 +229,20 @@
           </compilerArgs>
         </configuration>
       </plugin>
+
+      <!-- === 今回追加した部分（WSLドライブのJAR作成エラー回避） === -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.1</version>
+        <configuration>
+          <archive>
+            <addMavenDescriptor>false</addMavenDescriptor>
+          </archive>
+        </configuration>
+      </plugin>
+      <!-- ========================================================= -->
+
       <plugin>
         <groupId>org.openjfx</groupId>
         <artifactId>javafx-maven-plugin</artifactId>
