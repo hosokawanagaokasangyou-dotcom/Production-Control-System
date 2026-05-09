@@ -43,6 +43,31 @@ _ACT_PRODUCTION_DETAIL_LENGTH = "\u9577\u3055"
 
 __all__ = ("build_delivery_calendar_payload",)
 
+# #region agent log
+_AGENT_DEBUG_LOG_PATH = "/mnt/c/????AI??????_JAVA/.cursor/debug-ebddd7.log"
+
+
+def _agent_dbg_ndjson(hypothesis_id: str, location: str, message: str, data: dict[str, Any]) -> None:
+    import time
+
+    try:
+        payload = {
+            "sessionId": "ebddd7",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time.time() * 1000),
+        }
+        line = json.dumps(payload, ensure_ascii=False) + "\n"
+        with open(_AGENT_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(line)
+    except Exception:
+        pass
+
+
+# #endregion
+
 # Short weekday for calendar column titles (Mon=\u6708 ... Sun=\u65e5)
 _JP_WEEKDAY_SHORT = ("\u6708", "\u706b", "\u6c34", "\u6728", "\u91d1", "\u571f", "\u65e5")
 
@@ -333,6 +358,23 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             }
 
         dates_set = set(sorted_dates)
+        aladdin_col_info: list[dict[str, Any]] = []
+        if df_plan is not None and len(df_plan) > 0:
+            for col in df_plan.columns:
+                am = core._COMPARE_GANTT_ALADDIN_QTY_COL_RE.match(str(col))
+                if not am:
+                    continue
+                try:
+                    y, mo, dd = int(am.group(1)), int(am.group(2)), int(am.group(3))
+                    dk0 = date(y, mo, dd)
+                except ValueError:
+                    continue
+                aladdin_col_info.append(
+                    {
+                        "in_dates_set": dk0 in dates_set,
+                        "head": str(col)[:72],
+                    }
+                )
         _, buckets = core._build_compare_gantt_aladdin_qty_lookup(
             df_plan,
             dates_set,
@@ -443,6 +485,44 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                 }
             )
 
+        triple_total = 0
+        triple_nonempty = 0
+        for mr in main_rows_out:
+            if mr.get("kind") != "data":
+                continue
+            for cell in mr.get("cells") or []:
+                if isinstance(cell, dict) and "triple" in cell:
+                    triple_total += 1
+                    tr = cell.get("triple") or {}
+                    p0 = str(tr.get("p") or "").strip()
+                    a0 = str(tr.get("a") or "").strip()
+                    d0 = str(tr.get("d") or "").strip()
+                    if p0 or a0 or d0:
+                        triple_nonempty += 1
+
+        _agent_dbg_ndjson(
+            "H1-H4",
+            "delivery_calendar_payload.build_delivery_calendar_payload",
+            "plan actual buckets and triple counts",
+            {
+                "processing_plan_path": meta.get("processingPlanPath"),
+                "plan_df_rows": len(df_plan) if df_plan is not None else 0,
+                "plan_df_cols": len(df_plan.columns) if df_plan is not None else 0,
+                "sorted_dates_n": len(sorted_dates),
+                "aladdin_qty_col_matches": len(aladdin_col_info),
+                "aladdin_dk_in_dates_set": sum(
+                    1 for x in aladdin_col_info if x.get("in_dates_set")
+                ),
+                "bucket_keys": len(buckets),
+                "actual_df_rows": len(df_actual) if df_actual is not None else 0,
+                "actual_agg_machine_days": len(actual_agg),
+                "dispatch_agg_keys": len(dispatch_agg),
+                "triple_cells_total": triple_total,
+                "triple_cells_nonempty": triple_nonempty,
+                "aladdin_col_sample": [x.get("head") for x in aladdin_col_info[:5]],
+            },
+        )
+
         plan_agg: dict[tuple[str, date, str], float] = defaultdict(float)
         for (mk, dk), parts in buckets.items():
             for t, q in parts:
@@ -492,5 +572,11 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             "meta": meta,
         }
     except Exception as e:
+        _agent_dbg_ndjson(
+            "H-ERR",
+            "delivery_calendar_payload.build_delivery_calendar_payload",
+            "exception",
+            {"error": str(e), "type": type(e).__name__},
+        )
         _LOG.exception("delivery_calendar_payload")
         return {"ok": False, "error": str(e), "meta": meta}
