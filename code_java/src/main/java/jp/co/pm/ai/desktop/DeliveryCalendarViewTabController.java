@@ -21,13 +21,12 @@ import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Slider;
 import javafx.scene.control.TabPane;
-import javafx.scene.Node;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
@@ -108,6 +107,9 @@ public final class DeliveryCalendarViewTabController {
 
     @FXML
     private Label metaLabel;
+
+    @FXML
+    private ScrollPane metaScrollPane;
 
     @FXML
     private TabPane innerTabPane;
@@ -205,12 +207,10 @@ public final class DeliveryCalendarViewTabController {
         compareSpreadsheet.prefWidthProperty().bind(compareSpreadsheetHost.widthProperty());
         compareSpreadsheet.prefHeightProperty().bind(compareSpreadsheetHost.heightProperty());
 
-        if (metaLabel != null) {
+        if (metaScrollPane != null && metaLabel != null) {
+            metaScrollPane.setFitToWidth(true);
             metaLabel.setWrapText(true);
-            Node metaParent = metaLabel.getParent();
-            if (metaParent instanceof Region reg) {
-                metaLabel.maxWidthProperty().bind(reg.widthProperty());
-            }
+            metaLabel.prefWidthProperty().bind(metaScrollPane.widthProperty().subtract(18));
         }
 
         SpreadsheetTabularSupport.installDeliveryCalendarSpreadsheetChrome(mainSpreadsheet);

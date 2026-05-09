@@ -6,6 +6,7 @@
 <?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.Slider?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Tab?>
 <?import javafx.scene.control.TabPane?>
 <?import javafx.scene.control.TitledPane?>
@@ -29,7 +30,12 @@
             <TitledPane animated="false" expanded="false" text="&#x30e1;&#x30bf;&#x60c5;&#x5831;">
                 <content>
                     <VBox fillWidth="true" spacing="4.0">
-                        <Label fx:id="metaLabel" wrapText="true"/>
+                        <ScrollPane fx:id="metaScrollPane" fitToWidth="true" hbarPolicy="NEVER"
+                                    maxHeight="320.0" minViewportHeight="96.0"
+                                    prefViewportHeight="220.0"
+                                    style="-fx-background-color: transparent;">
+                            <Label fx:id="metaLabel" wrapText="true"/>
+                        </ScrollPane>
                     </VBox>
                 </content>
             </TitledPane>
