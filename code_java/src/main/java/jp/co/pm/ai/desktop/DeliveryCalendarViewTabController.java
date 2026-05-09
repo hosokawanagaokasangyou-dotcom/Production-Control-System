@@ -41,6 +41,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCell;
@@ -58,6 +59,12 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 public final class DeliveryCalendarViewTabController {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+
+    /**
+     * Cursor NDJSON filename {@code debug-&lt;id&gt;.log}; align with the active chat debug session id.
+     * Writes via {@link AgentDebugLog} so Windows JVM logs mirror to WSL workspace ({@code .cursor/rules/agent-debug-wsl-windows-mirror.mdc}).
+     */
+    private static final String DEBUG_SESSION_ID_OVERLAY = "ebddd7";
 
     private static final Map<String, String> COMPARE_HEADER_JP = compareHeaderJp();
 
@@ -1131,30 +1138,24 @@ public final class DeliveryCalendarViewTabController {
                 buildDispatchLookup(disHeaders, disRows);
 
         // region agent log
-        try {
-            Path debugLogPath =
-                    AppPaths.resolveRepoRoot(ui).resolve(".cursor").resolve("debug-ebddd7.log");
-            Files.createDirectories(debugLogPath.getParent());
-            java.io.FileWriter fw = new java.io.FileWriter(debugLogPath.toFile(), true);
-            fw.write(
-                    "{\"sessionId\":\"ebddd7\",\"hypothesisId\":\"OVERLAY\","
-                            + "\"location\":\"DeliveryCalendarViewTabController.java:overlayChildTabValues\","
-                            + "\"message\":\"lookup_sizes\","
-                            + "\"data\":{"
-                            + "\"planMachines\":" + planLookup.size()
-                            + ",\"actualMachines\":" + actualLookup.size()
-                            + ",\"dispatchMachines\":" + dispatchLookup.size()
-                            + ",\"calDateCols\":" + calDateByIdx.size()
-                            + ",\"mainRows\":" + mainRows.size()
-                            + ",\"aladdinJsonExists\":" + Files.isRegularFile(aladdinJsonPath)
-                            + ",\"actualsJsonExists\":" + Files.isRegularFile(actualsJsonPath)
-                            + ",\"dispatchJsonExists\":" + Files.isRegularFile(dispatchJsonPath)
-                            + ",\"dispatchSource\":\"" + dispatchSource + "\""
-                            + ",\"dispatchJsonPath\":\""
-                            + dispatchJsonPath.toString().replace("\\", "\\\\").replace("\"", "\\\"")
-                            + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n");
-            fw.close();
-        } catch (Exception _e) { /* ignore */ }
+        Map<String, Object> overlayData = new LinkedHashMap<>();
+        overlayData.put("planMachines", planLookup.size());
+        overlayData.put("actualMachines", actualLookup.size());
+        overlayData.put("dispatchMachines", dispatchLookup.size());
+        overlayData.put("calDateCols", calDateByIdx.size());
+        overlayData.put("mainRows", mainRows.size());
+        overlayData.put("aladdinJsonExists", Files.isRegularFile(aladdinJsonPath));
+        overlayData.put("actualsJsonExists", Files.isRegularFile(actualsJsonPath));
+        overlayData.put("dispatchJsonExists", Files.isRegularFile(dispatchJsonPath));
+        overlayData.put("dispatchSource", dispatchSource);
+        overlayData.put("dispatchJsonPath", dispatchJsonPath.toString());
+        AgentDebugLog.appendStructured(
+                ui,
+                DEBUG_SESSION_ID_OVERLAY,
+                "OVERLAY",
+                "DeliveryCalendarViewTabController.java:overlayChildTabValues",
+                "lookup_sizes",
+                overlayData);
         // endregion
 
         // Replace TripleQty cells with values from child tab data
