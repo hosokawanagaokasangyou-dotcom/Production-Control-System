@@ -1,14 +1,28 @@
 /*
- * ”[ŠúŠÇ—ƒrƒ…[ê—p: ƒV[ƒ“‚ÉˆË‚ç‚¸ŒÅ’è”zFB
- * ƒZƒ‹–{•¶‚Ì”wŒiF‚Í SpreadsheetTabularSupport ‚ÌƒCƒ“ƒ‰ƒCƒ“ƒXƒ^ƒCƒ‹‚Æ•¹—pB
+ * ?????????: ????????????
+ * ????????? SpreadsheetTabularSupport ??????????????
  */
 
 .delivery-calendar-spreadsheet.table-view.cell-spreadsheet {
     -fx-background-color: #ffffff;
 }
 
+/* ????????: ?????????????? text-fill ???????? */
 .delivery-calendar-spreadsheet .spreadsheet-cell {
     -fx-border-color: #cccccc;
+    -fx-text-fill: black;
+}
+
+.delivery-calendar-spreadsheet .spreadsheet-cell:filled {
+    -fx-text-fill: black;
+}
+
+.delivery-calendar-spreadsheet .spreadsheet-cell .label {
+    -fx-text-fill: black;
+}
+
+.delivery-calendar-spreadsheet .spreadsheet-cell .text {
+    -fx-fill: black;
 }
 
 .delivery-calendar-spreadsheet VerticalHeader > Label,
