@@ -482,6 +482,7 @@ public final class MainShellController {
         primaryStage.setOnShown(
                 e -> {
                     primaryStage.toFront();
+                    primaryStage.requestFocus();
                     tabPane.getSelectionModel().selectFirst();
                 });
 

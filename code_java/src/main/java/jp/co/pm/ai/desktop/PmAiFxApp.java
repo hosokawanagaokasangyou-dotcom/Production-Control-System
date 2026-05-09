@@ -174,7 +174,18 @@ public class PmAiFxApp extends Application {
         Runnable finish =
                 () -> {
                     splash.close();
-                    shell.appendBootMessage();
+                    Stage main = shell.primaryStageForDialogs();
+                    /* モーダルスプラッシュ解除直後は OS がフォーカスを他へ逃がすことがあるため、次パルスで前面化 */
+                    Platform.runLater(
+                            () ->
+                                    Platform.runLater(
+                                            () -> {
+                                                if (main != null && main.isShowing()) {
+                                                    main.toFront();
+                                                    main.requestFocus();
+                                                }
+                                                shell.appendBootMessage();
+                                            }));
                 };
         if (waitNs <= 0) {
             finish.run();
