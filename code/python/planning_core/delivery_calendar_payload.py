@@ -7,6 +7,7 @@ import json
 import logging
 import math
 import os
+import time
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime, timedelta
@@ -29,6 +30,29 @@ from planning_core.dispatch_workspace import (
 )
 
 _LOG = logging.getLogger(__name__)
+
+# region agent log
+_AGENT_DEBUG_LOG = "/mnt/c/????AI??????_JAVA/.cursor/debug-ebddd7.log"
+
+
+def _agent_debug_ndjson(hypothesis_id: str, location: str, message: str, data: dict) -> None:
+    """Append one NDJSON line for Cursor debug mode (ignore failures)."""
+    try:
+        payload = {
+            "sessionId": "ebddd7",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time.time() * 1000),
+        }
+        with open(_AGENT_DEBUG_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# endregion
 
 # Result dispatch JSON column names (avoid non-ASCII literals in this file on CP932 mounts)
 _DIS_JSON_MACH = "\u6a5f\u68b0\u540d"
@@ -270,15 +294,25 @@ def _aggregate_daily_actual_qty_aladdin_max(
         tid = core.planning_task_id_str_from_scalar(row.get(_ACT_COL_TID))
         if not tid:
             continue
-        proc = row.get(_ACT_COL_PROC)
-        if proc is None or (isinstance(proc, float) and pd.isna(proc)):
-            continue
-        proc_key = core._normalize_equipment_match_key(proc)
-        canonical = equip_lookup.get(proc_key)
-        if not canonical:
-            continue
-        _, mn = core._split_equipment_line_process_machine(str(canonical))
-        mk = core._normalize_equipment_match_key((mn or canonical).strip())
+        # Align with ``_build_compare_gantt_aladdin_qty_lookup``: buckets key by
+        # ``_normalize_equipment_match_key(TASK_COL_MACHINE_NAME)``. Prefer ??? on the row when present.
+        mk = ""
+        if core.TASK_COL_MACHINE_NAME in df.columns:
+            mv = row.get(core.TASK_COL_MACHINE_NAME)
+            if mv is not None and not (isinstance(mv, float) and pd.isna(mv)):
+                ms = str(mv).strip()
+                if ms:
+                    mk = core._normalize_equipment_match_key(ms)
+        if not mk:
+            proc = row.get(_ACT_COL_PROC)
+            if proc is None or (isinstance(proc, float) and pd.isna(proc)):
+                continue
+            proc_key = core._normalize_equipment_match_key(proc)
+            canonical = equip_lookup.get(proc_key)
+            if not canonical:
+                continue
+            _, mn = core._split_equipment_line_process_machine(str(canonical))
+            mk = core._normalize_equipment_match_key((mn or canonical).strip())
         if not mk:
             continue
         d = _row_actual_day(row)
@@ -428,6 +462,53 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             ),
         )
 
+        # region agent log
+        _agent_debug_ndjson(
+            "H3",
+            "delivery_calendar_payload.py:after_ordered_pairs",
+            "source_sizes",
+            {
+                "plan_rows": int(len(df_plan)) if df_plan is not None else 0,
+                "actual_detail_rows": int(len(df_actual)) if df_actual is not None else 0,
+                "sorted_dates_n": len(sorted_dates),
+                "buckets_day_slots": len(buckets),
+                "actual_agg_machine_days": len(actual_agg),
+                "dispatch_agg_keys": len(dispatch_agg),
+            },
+        )
+        bk_sample = [f"{a}|{b.isoformat()}" for (a, b) in list(buckets.keys())[:10]]
+        ak_sample = [f"{a}|{b.isoformat()}" for (a, b) in list(actual_agg.keys())[:10]]
+        _agent_debug_ndjson(
+            "H1_H2",
+            "delivery_calendar_payload.py:key_samples",
+            "bucket_vs_actual_agg_day_keys",
+            {"bucket_keys_sample": bk_sample, "actual_agg_keys_sample": ak_sample},
+        )
+        if ordered_pairs:
+            mk0, tid0 = ordered_pairs[0]
+            diag = []
+            for d in sorted_dates[:5]:
+                qi = _qty_from_buckets_for_tid(buckets, mk0, d, tid0)
+                qa = float(actual_agg.get((mk0, d), {}).get(tid0, 0.0))
+                qd = float(dispatch_agg.get((mk0, d, tid0), 0.0))
+                diag.append(
+                    {
+                        "d": d.isoformat() if isinstance(d, date) else str(d),
+                        "q_in": qi,
+                        "q_act": qa,
+                        "q_disp": qd,
+                        "has_bucket_day": (mk0, d) in buckets,
+                        "has_actual_day": (mk0, d) in actual_agg,
+                    }
+                )
+            _agent_debug_ndjson(
+                "H1_H2_H4",
+                "delivery_calendar_payload.py:first_pair_qty_probe",
+                "first_ordered_pair",
+                {"mk": mk0, "tid": tid0, "by_date": diag},
+            )
+        # endregion
+
         main_rows_out: list[dict[str, Any]] = []
         current_mk = ""
 
@@ -519,6 +600,29 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                     core._format_qty_short(delta),
                 ]
             )
+
+        # region agent log
+        trip = {"triple_cells": 0, "p_nonempty": 0, "a_nonempty": 0, "d_nonempty": 0}
+        for row in main_rows_out:
+            if row.get("kind") != "data":
+                continue
+            for cell in row.get("cells") or []:
+                if isinstance(cell, dict) and "triple" in cell:
+                    tr = cell["triple"]
+                    trip["triple_cells"] += 1
+                    if str(tr.get("p", "")).strip():
+                        trip["p_nonempty"] += 1
+                    if str(tr.get("a", "")).strip():
+                        trip["a_nonempty"] += 1
+                    if str(tr.get("d", "")).strip():
+                        trip["d_nonempty"] += 1
+        _agent_debug_ndjson(
+            "H5",
+            "delivery_calendar_payload.py:triple_field_counts",
+            "non_empty_counts",
+            trip,
+        )
+        # endregion
 
         return {
             "ok": True,
