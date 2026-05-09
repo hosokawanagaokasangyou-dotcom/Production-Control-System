@@ -89,7 +89,7 @@ public final class PlanInputTabularIo {
     }
 
     /** Minimal CSV: comma-separated, double-quote escape. */
-    private static void parseCsvLine(String line, List<String> out) {
+    static void parseCsvLine(String line, List<String> out) {
         out.clear();
         if (line.isEmpty()) {
             return;

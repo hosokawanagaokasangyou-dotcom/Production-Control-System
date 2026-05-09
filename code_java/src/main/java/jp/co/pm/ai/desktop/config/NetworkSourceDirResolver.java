@@ -315,6 +315,16 @@ public final class NetworkSourceDirResolver {
         return n.asText("").strip();
     }
 
+    /**
+     * {@link AppPaths#resolveTaskInputSourceDir(Map)} で得られるディレクトリ直下から、タスク入力候補拡張子のうち
+     * 更新時刻が最新のファイルを選ぶ。{@link #resolve(Map)} 内の {@code pickNewestTaskInputInDir} と同一ロジック。
+     *
+     * <p>{@code PM_AI_PROCESSING_PLAN_PATH} で単一ファイルが指定されている場合の優先は行わない（フォルダ内の最新のみ）。
+     */
+    public static Optional<Path> newestTaskInputFileInDirectory(Path taskInputSourceDir) {
+        return pickNewestTaskInputInDir(taskInputSourceDir);
+    }
+
     private static Optional<Path> pickNewestTaskInputInDir(Path dir) {
         if (!isAccessibleDir(dir)) {
             return Optional.empty();

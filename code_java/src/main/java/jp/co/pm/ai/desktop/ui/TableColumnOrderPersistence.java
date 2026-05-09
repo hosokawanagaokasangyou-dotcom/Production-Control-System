@@ -341,6 +341,8 @@ public final class TableColumnOrderPersistence {
         ACTUALS_STATUS("actualsStatus"),
         ENV_VARS("envVars"),
         RESULT_DISPATCH_TABLE("resultDispatchTable"),
+        /** PM_AI_TASK_INPUT_SOURCE_DIR 最新ファイルの生表（アラジン加工計画取得データ） */
+        ALADDIN_PROCESSING_PLAN_RAW("aladdinProcessingPlanRaw"),
         /** 配台計画手動修正タブ「タスク×日付」 */
         DISPATCH_INTERACTIVE_WIDE("dispatchInteractiveWide"),
         /** 配台計画手動修正タブ「工程+機械×日」 */

@@ -78,6 +78,12 @@
                         <fx:include fx:id="planInputTab" source="PlanInputTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabAladdinProcessingPlanData" closable="false"
+                     text="アラジン加工計画取得データ">
+                    <content>
+                        <fx:include fx:id="aladdinProcessingPlanDataTab" source="AladdinProcessingPlanDataTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabStage1Preview" closable="false"
                      text="段階1 成形結果">
                     <content>
