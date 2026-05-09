@@ -2241,7 +2241,8 @@ public final class MainShellController {
     }
 
     /**
-     * 環境タブをバンドル既定で再構築し永続化する（確認ダイアログなし）。{@link #resetEnvRowsToDefaults()} と初回起動マーカーから利用。
+     * 環境タブをバンドル既定で再構築し永続化する（確認ダイアログなし）。{@link #resetEnvRowsToDefaults()}・初回起動マーカー・工場出荷 UI
+     * リセットの途中から利用。
      *
      * @param persistSession false のとき {@code session-state.json} には書かない（工場出荷 UI リセットの途中で利用）。
      */
@@ -2282,6 +2283,9 @@ public final class MainShellController {
         uiEnvSaveDebounce.stop();
     }
 
+    /**
+     * 環境変数タブ「環境変数を初期化」の確定処理と同一（{@link #confirmAndResetEnvRowsToDefaults()} は確認ダイアログのみ追加）。
+     */
     private void resetEnvRowsToDefaults() {
         applyEnvRowsFullBundledResetAndPersist(true);
     }
@@ -3170,7 +3174,7 @@ public final class MainShellController {
                                 "[startup] バージョンアップ後のバンドル既定（タブ／列順／配台不要 JSON パス）の上書きに失敗: "
                                         + ex.getMessage());
                     }
-                    applyEnvRowsFullBundledResetAndPersist(false);
+                    resetEnvRowsToDefaults();
                     applyBundledPortableDefaultsIfPresent();
                     applyDesktopSession(DesktopSessionStateStore.load(), false);
                     applyRepoFolderPathNormalization();
