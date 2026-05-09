@@ -119,7 +119,7 @@ public final class TableColumnOrderPersistence {
     }
 
     /**
-     * 加工実績タブ「製品条件(内訳)」行フィルタの入力文字列（{@link TableId#PROCESSING_ACTUALS_DETAIL_RAW}）。
+     * 加工実績タブ「製品条件(内訳)」コンボの選択値（{@link TableId#PROCESSING_ACTUALS_DETAIL_RAW}）。空は「（全行）」。
      */
     public static String loadProcessingActualsProductConditionBreakdownFilter() {
         TableId id = TableId.PROCESSING_ACTUALS_DETAIL_RAW;
