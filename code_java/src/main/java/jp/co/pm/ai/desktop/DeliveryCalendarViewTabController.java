@@ -24,8 +24,10 @@ import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Slider;
 import javafx.scene.control.TabPane;
+import javafx.scene.Node;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
@@ -202,6 +204,14 @@ public final class DeliveryCalendarViewTabController {
         compareSpreadsheet.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
         compareSpreadsheet.prefWidthProperty().bind(compareSpreadsheetHost.widthProperty());
         compareSpreadsheet.prefHeightProperty().bind(compareSpreadsheetHost.heightProperty());
+
+        if (metaLabel != null) {
+            metaLabel.setWrapText(true);
+            Node metaParent = metaLabel.getParent();
+            if (metaParent instanceof Region reg) {
+                metaLabel.maxWidthProperty().bind(reg.widthProperty());
+            }
+        }
 
         SpreadsheetTabularSupport.installDeliveryCalendarSpreadsheetChrome(mainSpreadsheet);
         SpreadsheetTabularSupport.installDeliveryCalendarSpreadsheetChrome(compareSpreadsheet);
