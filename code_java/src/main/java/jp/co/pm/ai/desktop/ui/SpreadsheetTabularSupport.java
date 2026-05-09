@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -31,6 +32,8 @@ import org.controlsfx.control.spreadsheet.SpreadsheetCell;
 import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
+
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 
 /**
@@ -801,6 +804,15 @@ public final class SpreadsheetTabularSupport {
      * 小表向けの二重 {@link Platform#runLater} は NDJSON 上で追加の {@code resize_then_layout} 連打と相関したため廃止。
      */
     public static void refreshSpreadsheetAfterRowPresentationChange(SpreadsheetView view) {
+        refreshSpreadsheetAfterRowPresentationChange(view, false);
+    }
+
+    /**
+     * @param skipResizeRowsToDefault {@code true} のとき {@link SpreadsheetView#resizeRowsToDefault()} を呼ばない。
+     *         {@link GridBase#setRowHeightCallback} で行高を決めているビュー（納期管理カレンダー等）では既定の再適用で高さが潰れるため。
+     */
+    public static void refreshSpreadsheetAfterRowPresentationChange(
+            SpreadsheetView view, boolean skipResizeRowsToDefault) {
         if (view == null) {
             return;
         }
@@ -808,7 +820,10 @@ public final class SpreadsheetTabularSupport {
          * 呼び出し時点では Grid の行がまだ増えていないことがある（後から数千行になる）。
          * 閾値は flush 実行時に再評価する。1 パルスのみ（二重 runLater 無し）。
          */
-        Platform.runLater(() -> presentationFlushAfterRowPresentationChangeOnce(view));
+        Platform.runLater(
+                () ->
+                        presentationFlushAfterRowPresentationChangeOnce(
+                                view, skipResizeRowsToDefault));
     }
 
     private static int spreadsheetPhysicalRowCount(SpreadsheetView view) {
@@ -822,14 +837,32 @@ public final class SpreadsheetTabularSupport {
     /**
      * 行高・折り返し変更後の 1 パルス分（実行時点の行数で {@link SpreadsheetView#resizeRowsToDefault()} を抑止する）。
      */
-    private static void presentationFlushAfterRowPresentationChangeOnce(SpreadsheetView view) {
+    private static void presentationFlushAfterRowPresentationChangeOnce(
+            SpreadsheetView view, boolean skipResizeRowsToDefault) {
         if (view == null) {
             return;
         }
         int physicalRows = spreadsheetPhysicalRowCount(view);
         boolean skipResize = physicalRows >= PLAN_RESULT_REFRESH_SKIP_RESIZE_ROWS;
+        // #region agent log
+        if (skipResizeRowsToDefault) {
+            Map<String, Object> d = new LinkedHashMap<>();
+            d.put("physicalRows", physicalRows);
+            d.put("skipResize", skipResize);
+            d.put("runId", "post-fix-verify");
+            AgentDebugLog.appendStructured(
+                    Map.of(),
+                    "ebddd7",
+                    "H-fix",
+                    "SpreadsheetTabularSupport.presentationFlushAfterRowPresentationChangeOnce",
+                    "flush_skip_resizeRowsToDefault",
+                    d);
+        }
+        // #endregion
         if (!skipResize) {
-            view.resizeRowsToDefault();
+            if (!skipResizeRowsToDefault) {
+                view.resizeRowsToDefault();
+            }
             refreshEmbeddedTableViewsRecursive(view, 0);
         }
         view.requestLayout();

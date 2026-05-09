@@ -576,7 +576,8 @@ public final class DeliveryCalendarViewTabController {
                         SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                 mainSpreadsheet, headerColumnCountMain.get());
                         SpreadsheetTabularSupport.applyColumnFiltersWithDialog(mainSpreadsheet);
-                        SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(mainSpreadsheet);
+                        SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(
+                                mainSpreadsheet, true);
                         SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
                                 mainSpreadsheet,
                                 suppressMainPersistence::get,
