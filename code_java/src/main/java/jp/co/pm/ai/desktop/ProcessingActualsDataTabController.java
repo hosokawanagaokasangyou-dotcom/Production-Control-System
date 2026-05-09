@@ -49,8 +49,9 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 /**
  * Raw spreadsheet for the machining actual-detail workbook, resolved via {@link NetworkSourceDirResolver}
  * ({@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK} / {@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR}).
- * Display applies {@link TaskInputSourceRawGridIo#applyProcessingActualsDisplaySteps} then
- * {@link TaskInputSourceRawGridIo#applyProcessingActualsDateTimeColumns}. Optional sheet:
+ * Display applies {@link TaskInputSourceRawGridIo#applyProcessingActualsDisplaySteps}, then
+ * {@link TaskInputSourceRawGridIo#applyProcessingActualsDeduplicateKeyColumns} (same 工程名・機械名・依頼NO・加工日
+ * keeps first row only), then {@link TaskInputSourceRawGridIo#applyProcessingActualsDateTimeColumns}. Optional sheet:
  * {@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_SHEET}. Rows can be filtered by combo selection for column
  * {@link #HEADER_MANUFACTURING_CONDITION_BREAKDOWN}. FXML: {@code ProcessingActualsDataTab.fxml}.
  */
@@ -497,8 +498,9 @@ public final class ProcessingActualsDataTabController {
         try {
             PlanInputTabularIo.TabularSheet shaped =
                     TaskInputSourceRawGridIo.applyProcessingActualsDateTimeColumns(
-                            TaskInputSourceRawGridIo.applyProcessingActualsDisplaySteps(
-                                    TaskInputSourceRawGridIo.readRaw(file, excelSheetIndex)));
+                            TaskInputSourceRawGridIo.applyProcessingActualsDeduplicateKeyColumns(
+                                    TaskInputSourceRawGridIo.applyProcessingActualsDisplaySteps(
+                                            TaskInputSourceRawGridIo.readRaw(file, excelSheetIndex))));
             rememberShapedSnapshot(shaped);
             populateManufacturingConditionFilterChoices(shaped);
             PlanInputTabularIo.TabularSheet tab = applyManufacturingConditionFilter(shaped);
