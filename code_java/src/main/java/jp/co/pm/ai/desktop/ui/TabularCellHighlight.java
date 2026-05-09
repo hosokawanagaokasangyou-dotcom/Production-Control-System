@@ -31,16 +31,12 @@ public final class TabularCellHighlight {
 
     private TabularCellHighlight() {}
 
-    /** ControlsFX spreadsheet cell highlight for plan-input rules. */
-    public static void applyPlanInputSpreadsheetHighlight(SpreadsheetCell cell, String columnTitle, String text) {
+    /** ControlsFX spreadsheet: clears cell inline style (未加工列の緑塗りは廃止). */
+    public static void applyPlanInputSpreadsheetHighlight(SpreadsheetCell cell) {
         if (cell == null) {
             return;
         }
-        if (isUnprocessedColumnHeader(columnTitle) && isStrictPositiveNumber(text)) {
-            cell.setStyle(LIGHT_GREEN_STYLE);
-        } else {
-            cell.setStyle("");
-        }
+        cell.setStyle("");
     }
 
     /** ControlsFX spreadsheet cell highlight for Stage1 preview date columns. */
@@ -53,13 +49,6 @@ public final class TabularCellHighlight {
         } else {
             cell.setStyle("");
         }
-    }
-
-    static boolean isUnprocessedColumnHeader(String header) {
-        if (header == null) {
-            return false;
-        }
-        return "未加工".equals(header.strip());
     }
 
     /**
@@ -204,15 +193,7 @@ public final class TabularCellHighlight {
                     public void updateItem(String item, boolean empty) {
                         super.updateItem(item, empty);
                         if (table == null) {
-                            if (empty || item == null) {
-                                setStyle("");
-                                return;
-                            }
-                            if (isUnprocessedColumnHeader(columnTitle) && isStrictPositiveNumber(item)) {
-                                setStyle(LIGHT_GREEN_STYLE);
-                            } else {
-                                setStyle("");
-                            }
+                            setStyle("");
                             return;
                         }
                         if (empty || item == null) {
@@ -220,13 +201,8 @@ public final class TabularCellHighlight {
                             TableHeaderColumnStyle.applyBodyCellTint(this, table, column, hc);
                             return;
                         }
-                        if (isUnprocessedColumnHeader(columnTitle) && isStrictPositiveNumber(item)) {
-                            getStyleClass().remove(TableHeaderColumnStyle.HEADER_BODY_CELL_STYLE_CLASS);
-                            setStyle(LIGHT_GREEN_STYLE);
-                        } else {
-                            setStyle("");
-                            TableHeaderColumnStyle.applyBodyCellTint(this, table, column, hc);
-                        }
+                        setStyle("");
+                        TableHeaderColumnStyle.applyBodyCellTint(this, table, column, hc);
                     }
                 };
     }

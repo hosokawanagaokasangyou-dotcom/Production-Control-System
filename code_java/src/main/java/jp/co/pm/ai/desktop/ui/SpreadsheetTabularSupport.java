@@ -322,7 +322,7 @@ public final class SpreadsheetTabularSupport {
                 SpreadsheetCell cell =
                         SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, raw);
                 cell.setEditable(editable);
-                TabularCellHighlight.applyPlanInputSpreadsheetHighlight(cell, headersRef.get(c), raw);
+                TabularCellHighlight.applyPlanInputSpreadsheetHighlight(cell);
                 rowCells.add(cell);
             }
             gridRows.add(rowCells);
