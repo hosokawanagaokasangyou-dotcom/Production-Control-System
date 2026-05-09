@@ -1,9 +1,17 @@
 package jp.co.pm.ai.desktop;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.text.MessageFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Properties;
 
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
@@ -19,7 +27,10 @@ import javafx.scene.web.WebView;
 
 import jp.co.pm.ai.desktop.config.AppVersionInfo;
 
-/** バンドル HTML のオンラインマニュアル（{@code OnlineManualTab.fxml}）。 */
+/**
+ * Bundled HTML online manual ({@code OnlineManualTab.fxml}). Japanese UI strings live in
+ * {@code OnlineManualStrings.properties} (UTF-8) so the compiler never reads non-UTF8 source on Windows.
+ */
 public final class OnlineManualTabController {
 
     static final class ManualChapter {
@@ -52,24 +63,41 @@ public final class OnlineManualTabController {
         }
     }
 
+    private static final String MANUAL_STRINGS_PATH = "/jp/co/pm/ai/desktop/OnlineManualStrings.properties";
+
     private static final String MANUAL_BASE = "/jp/co/pm/ai/desktop/manual/";
 
     private static final String PM_DESKTOP_TAB_SCHEME = "pm-desktop://tab/";
 
-    private static final List<ManualChapter> CHAPTERS =
-            List.of(
-                    new ManualChapter("ch01", "はじめに・全体像"),
-                    new ManualChapter("ch02", "実行・ログ"),
-                    new ManualChapter("ch03", "環境設定（環境変数・メモリ・グローバル）"),
-                    new ManualChapter("ch04", "配台計画_タスク入力"),
-                    new ManualChapter("ch05", "マスタ読込サマリ"),
-                    new ManualChapter("ch06", "段階1（実行とログの見方）"),
-                    new ManualChapter("ch07", "段階1 成形結果"),
-                    new ManualChapter("ch08", "段階2（計画シミュレーション）"),
-                    new ManualChapter("ch09", "計画結果ビューア・結果_配台表"),
-                    new ManualChapter("ch10", "配台計画手動修正"),
-                    new ManualChapter("ch11", "設備ガント・納期管理ビュー・オペレーターカード"),
-                    new ManualChapter("ch12", "特別ルール・配台不要ルール・実績DATA"));
+    private static final Properties MANUAL_STRINGS = loadManualStringsUtf8();
+
+    private static final String[] CHAPTER_ANCHORS = {
+        "ch01", "ch02", "ch03", "ch04", "ch05", "ch06", "ch07", "ch08", "ch09", "ch10", "ch11", "ch12"
+    };
+
+    private static final List<ManualChapter> CHAPTERS = buildChapters();
+
+    private static Properties loadManualStringsUtf8() {
+        try (InputStream in =
+                OnlineManualTabController.class.getResourceAsStream(MANUAL_STRINGS_PATH)) {
+            Objects.requireNonNull(in, MANUAL_STRINGS_PATH);
+            Properties p = new Properties();
+            Reader r = new InputStreamReader(in, StandardCharsets.UTF_8);
+            p.load(r);
+            return p;
+        } catch (IOException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    private static List<ManualChapter> buildChapters() {
+        ManualChapter[] out = new ManualChapter[CHAPTER_ANCHORS.length];
+        for (int i = 0; i < CHAPTER_ANCHORS.length; i++) {
+            String a = CHAPTER_ANCHORS[i];
+            out[i] = new ManualChapter(a, MANUAL_STRINGS.getProperty(a, a));
+        }
+        return List.of(out);
+    }
 
     private MainShellController shell;
 
@@ -103,7 +131,7 @@ public final class OnlineManualTabController {
 
     private String currentAnchor = "ch01";
 
-    /** カスタムスキーム処理後に {@link WebEngine#load(String)} へ戻す直近のマニュアル URL。 */
+    /** Last manual URL restored after handling {@code pm-desktop://tab/...} navigation. */
     private volatile String lastLoadedManualUrl;
 
     private final ChangeListener<String> locationListener =
@@ -225,10 +253,15 @@ public final class OnlineManualTabController {
         lastLoadedManualUrl = url;
         URL resource = OnlineManualTabController.class.getResource(MANUAL_BASE + currentDepth.fileName);
         if (resource == null) {
-            webEngine.loadContent(
-                    "<html><meta charset=\"UTF-8\"><body><p>マニュアル HTML が見つかりません: "
-                            + escapeHtml(currentDepth.fileName)
-                            + "</p></body></html>");
+            String tmpl = MANUAL_STRINGS.getProperty("ui.missingHtml");
+            if (tmpl != null) {
+                webEngine.loadContent(
+                        MessageFormat.format(tmpl, escapeHtml(currentDepth.fileName)));
+            } else {
+                webEngine.loadContent(
+                        "<html><meta charset=\"UTF-8\"/><body><p>missing " + escapeHtml(currentDepth.fileName)
+                                + "</p></body></html>");
+            }
             return;
         }
         webEngine.load(url);
@@ -266,6 +299,8 @@ public final class OnlineManualTabController {
                         : Map.of();
         Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
         String v = AppVersionInfo.resolveDisplayedVersion(cwd, ui);
-        manualVersionLabel.setText("アプリ版: " + v + "（問い合わせ時に記載してください）");
+        String prefix = MANUAL_STRINGS.getProperty("ui.versionPrefix", "");
+        String suffix = MANUAL_STRINGS.getProperty("ui.versionSuffix", "");
+        manualVersionLabel.setText(prefix + v + suffix);
     }
 }
