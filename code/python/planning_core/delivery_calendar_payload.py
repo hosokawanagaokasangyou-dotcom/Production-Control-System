@@ -43,6 +43,17 @@ _ACT_PRODUCTION_DETAIL_LENGTH = "\u9577\u3055"
 
 __all__ = ("build_delivery_calendar_payload",)
 
+# Short weekday for calendar column titles (Mon=\u6708 ... Sun=\u65e5)
+_JP_WEEKDAY_SHORT = ("\u6708", "\u706b", "\u6c34", "\u6728", "\u91d1", "\u571f", "\u65e5")
+
+
+def _format_delivery_calendar_date_header(d: date) -> str:
+    """Display label like 2026\u5e744\u67081\u65e5(\u571f) for Spreadsheet column headers."""
+    if not isinstance(d, date):
+        return str(d)
+    w = _JP_WEEKDAY_SHORT[d.weekday()]
+    return f"{d.year}\u5e74{d.month}\u6708{d.day}\u65e5({w})"
+
 
 def _parse_cell_date(val) -> date | None:
     if val is None or (isinstance(val, float) and pd.isna(val)):
@@ -368,7 +379,7 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
         # One column per calendar day: JSON cell {"triple": {p,a,d}} stacked in JavaFX (plan / actual / dispatch).
         cal_cols: list[str] = []
         for d in sorted_dates:
-            ds = d.isoformat() if isinstance(d, date) else str(d)
+            ds = _format_delivery_calendar_date_header(d) if isinstance(d, date) else str(d)
             cal_cols.append(ds)
 
         main_columns = left_headers + cal_cols
@@ -465,7 +476,9 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                     mk,
                     disp_for_mk(mk),
                     tid,
-                    dk.isoformat(),
+                    _format_delivery_calendar_date_header(dk)
+                    if isinstance(dk, date)
+                    else str(dk),
                     core._format_qty_short(dq),
                     core._format_qty_short(pq),
                     core._format_qty_short(delta),
