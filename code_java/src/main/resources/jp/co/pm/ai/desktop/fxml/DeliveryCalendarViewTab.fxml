@@ -45,7 +45,7 @@
     </Accordion>
     <TabPane fx:id="innerTabPane" tabClosingPolicy="UNAVAILABLE" VBox.vgrow="ALWAYS">
         <tabs>
-            <Tab closable="false" text="&#x30ab;&#x30ec;&#x30f3;&#x30c0;&#x30fc;">
+            <Tab closable="false" text="&#x30a2;&#x30e9;&#x30fb;&#x5b9f;&#x7e3e;&#x30fb;&#x30b7;&#x30b9;&#x6bd4;&#x8f03;">
                 <content>
                     <VBox fillWidth="true" spacing="6.0">
                         <Accordion VBox.vgrow="NEVER">

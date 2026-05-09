@@ -34,6 +34,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
+import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.TaskInputSourceRawGridIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
@@ -440,6 +441,17 @@ public final class AladdinProcessingPlanDataTabController {
             PlanInputTabularIo.TabularSheet tab =
                     TaskInputSourceRawGridIo.applyAladdinProcessingPlanDisplaySteps(
                             TaskInputSourceRawGridIo.readRaw(file, excelSheetIndex));
+            // Persist shaped data (pre-permutation) for calendar overlay reuse
+            if (shell != null) {
+                try {
+                    java.nio.file.Path savePath =
+                            AppPaths.resolveShapedAladdinPlanJsonPath(shell.snapshotUiEnv());
+                    JsonTableIo.saveArrayTable(savePath, tab.headers(), tab.rows());
+                } catch (Exception saveEx) {
+                    shell.appendLog(
+                            "[aladdin-plan-data] shaped JSON save failed: " + saveEx.getMessage());
+                }
+            }
             List<TableColumnOrderPersistence.ColumnSpec> lay =
                     TableColumnOrderPersistence.loadLayout(
                             TableColumnOrderPersistence.TableId.ALADDIN_PROCESSING_PLAN_RAW);

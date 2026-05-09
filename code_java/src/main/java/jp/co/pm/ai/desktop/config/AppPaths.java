@@ -447,6 +447,29 @@ public final class AppPaths {
                 .normalize();
     }
 
+    /** Basename for the shaped Aladdin-plan cache JSON (colocated with the dispatch JSON). */
+    public static final String SHAPED_ALADDIN_PLAN_JSON_BASENAME = "shaped_aladdin_plan.json";
+
+    /** Basename for the shaped processing-actuals cache JSON (colocated with the dispatch JSON). */
+    public static final String SHAPED_PROCESSING_ACTUALS_JSON_BASENAME =
+            "shaped_processing_actuals.json";
+
+    /** Path of {@link #SHAPED_ALADDIN_PLAN_JSON_BASENAME} next to the dispatch table JSON. */
+    public static Path resolveShapedAladdinPlanJsonPath(Map<String, String> ui) {
+        return resolveResultDispatchTableDir(ui != null ? ui : Map.of())
+                .resolve(SHAPED_ALADDIN_PLAN_JSON_BASENAME)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /** Path of {@link #SHAPED_PROCESSING_ACTUALS_JSON_BASENAME} next to the dispatch table JSON. */
+    public static Path resolveShapedProcessingActualsJsonPath(Map<String, String> ui) {
+        return resolveResultDispatchTableDir(ui != null ? ui : Map.of())
+                .resolve(SHAPED_PROCESSING_ACTUALS_JSON_BASENAME)
+                .toAbsolutePath()
+                .normalize();
+    }
+
     /**
      * First existing {@code master.xlsm} / {@code master.xlsx} under {@link #resolveRepoRoot(Map)} ({@code plan/},
      * {@code code/}, or repo root). Used for JavaFX bootstrap hints only.

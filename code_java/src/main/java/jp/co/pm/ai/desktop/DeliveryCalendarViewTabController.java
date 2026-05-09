@@ -1,5 +1,7 @@
 package jp.co.pm.ai.desktop;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,6 +40,8 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
+import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCell;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
@@ -1030,17 +1034,17 @@ public final class DeliveryCalendarViewTabController {
     private static final String COL_DIS_QTY  = "\u5f53\u65e5\u914d\u53f0\u6570\u91cf"; // ??????
 
     /**
-     * Replaces triple-cell p/a/d values in {@link #mainRows} with quantities aggregated directly from
-     * the child tab controllers' shaped data (Aladdin plan, processing actuals, dispatch table).
-     * This is called after {@link #loadMainCalendar} so that column permutation has already been
-     * applied to {@link #mainHeadersRef}; row order is preserved and {@link #mainRowMeta} indices align.
+     * Replaces triple-cell p/a/d values in {@link #mainRows} using shaped JSON cache files written by
+     * child tabs on each load (falling back to in-memory child-tab data when the files are absent).
+     * This is called after {@link #loadMainCalendar} so column permutation is already applied to
+     * {@link #mainHeadersRef}; row order is unchanged so {@link #mainRowMeta} indices stay aligned.
      */
     private void overlayChildTabValues() {
         if (mainRowMeta.isEmpty() || mainHeadersRef.isEmpty()) {
             return;
         }
 
-        // Map column position ? normalised date string "yyyy/MM/dd" for every date column
+        // Map column position \u2192 normalised date string "yyyy/MM/dd" for every date column
         Map<Integer, String> calDateByIdx = new LinkedHashMap<>();
         for (int i = 0; i < mainHeadersRef.size(); i++) {
             String ds = parseDateHeader(mainHeadersRef.get(i));
@@ -1052,28 +1056,80 @@ public final class DeliveryCalendarViewTabController {
             return;
         }
 
-        // Build lookup tables from each child tab
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+
+        // --- Aladdin plan: prefer shaped JSON cache, fall back to in-memory ---
+        List<String> planHeaders;
+        List<List<String>> planRows;
+        Path aladdinJsonPath = AppPaths.resolveShapedAladdinPlanJsonPath(ui);
+        if (Files.isRegularFile(aladdinJsonPath)) {
+            try {
+                JsonTableIo.ArrayTable t = JsonTableIo.loadArrayTable(aladdinJsonPath);
+                planHeaders = t.columns();
+                planRows = t.rows();
+            } catch (Exception ex) {
+                if (shell != null) {
+                    shell.appendLog(
+                            "[delivery-calendar] aladdin shaped JSON load failed: " + ex.getMessage());
+                }
+                planHeaders = aladdinProcessingPlanDataTabController.getShapedHeaders();
+                planRows = aladdinProcessingPlanDataTabController.getShapedRows();
+            }
+        } else {
+            planHeaders = aladdinProcessingPlanDataTabController.getShapedHeaders();
+            planRows = aladdinProcessingPlanDataTabController.getShapedRows();
+        }
+
+        // --- Processing actuals: prefer shaped JSON cache, fall back to in-memory ---
+        List<String> actHeaders;
+        List<List<String>> actRows;
+        Path actualsJsonPath = AppPaths.resolveShapedProcessingActualsJsonPath(ui);
+        if (Files.isRegularFile(actualsJsonPath)) {
+            try {
+                JsonTableIo.ArrayTable t = JsonTableIo.loadArrayTable(actualsJsonPath);
+                actHeaders = t.columns();
+                actRows = t.rows();
+            } catch (Exception ex) {
+                if (shell != null) {
+                    shell.appendLog(
+                            "[delivery-calendar] actuals shaped JSON load failed: " + ex.getMessage());
+                }
+                actHeaders = processingActualsDataTabController.getUnfilteredShapedHeaders();
+                actRows = processingActualsDataTabController.getUnfilteredShapedRows();
+            }
+        } else {
+            actHeaders = processingActualsDataTabController.getUnfilteredShapedHeaders();
+            actRows = processingActualsDataTabController.getUnfilteredShapedRows();
+        }
+
+        // --- Dispatch: in-memory (controller already reads from \u7d50\u679c_\u914d\u53f0\u8868.json) ---
+        List<String> disHeaders = deliveryCalendarResultDispatchTableTabController.getShapedHeaders();
+        List<List<String>> disRows = deliveryCalendarResultDispatchTableTabController.getShapedRows();
+
         Map<String, Map<String, Map<String, Double>>> planLookup =
-                buildAladdinPlanLookup(
-                        aladdinProcessingPlanDataTabController.getShapedHeaders(),
-                        aladdinProcessingPlanDataTabController.getShapedRows());
-
+                buildAladdinPlanLookup(planHeaders, planRows);
         Map<String, Map<String, Map<String, Double>>> actualLookup =
-                buildActualLookup(
-                        processingActualsDataTabController.getUnfilteredShapedHeaders(),
-                        processingActualsDataTabController.getUnfilteredShapedRows());
-
+                buildActualLookup(actHeaders, actRows);
         Map<String, Map<String, Map<String, Double>>> dispatchLookup =
-                buildDispatchLookup(
-                        deliveryCalendarResultDispatchTableTabController.getShapedHeaders(),
-                        deliveryCalendarResultDispatchTableTabController.getShapedRows());
+                buildDispatchLookup(disHeaders, disRows);
 
         // region agent log
         try {
             java.io.FileWriter fw = new java.io.FileWriter(
                     "/mnt/c/\u5de5\u7a0b\u7ba1\u7406AI\u30d7\u30ed\u30b8\u30a7\u30af\u30c8_JAVA/.cursor/debug-ebddd7.log",
                     true);
-            fw.write("{\"sessionId\":\"ebddd7\",\"hypothesisId\":\"OVERLAY\",\"location\":\"DeliveryCalendarViewTabController.java:overlayChildTabValues\",\"message\":\"lookup_sizes\",\"data\":{\"planMachines\":" + planLookup.size() + ",\"actualMachines\":" + actualLookup.size() + ",\"dispatchMachines\":" + dispatchLookup.size() + ",\"calDateCols\":" + calDateByIdx.size() + ",\"mainRows\":" + mainRows.size() + "},\"timestamp\":" + System.currentTimeMillis() + "}\n");
+            fw.write("{\"sessionId\":\"ebddd7\",\"hypothesisId\":\"OVERLAY\","
+                    + "\"location\":\"DeliveryCalendarViewTabController.java:overlayChildTabValues\","
+                    + "\"message\":\"lookup_sizes\","
+                    + "\"data\":{"
+                    + "\"planMachines\":" + planLookup.size()
+                    + ",\"actualMachines\":" + actualLookup.size()
+                    + ",\"dispatchMachines\":" + dispatchLookup.size()
+                    + ",\"calDateCols\":" + calDateByIdx.size()
+                    + ",\"mainRows\":" + mainRows.size()
+                    + ",\"aladdinJsonExists\":" + Files.isRegularFile(aladdinJsonPath)
+                    + ",\"actualsJsonExists\":" + Files.isRegularFile(actualsJsonPath)
+                    + "},\"timestamp\":" + System.currentTimeMillis() + "}\n");
             fw.close();
         } catch (Exception _e) { /* ignore */ }
         // endregion

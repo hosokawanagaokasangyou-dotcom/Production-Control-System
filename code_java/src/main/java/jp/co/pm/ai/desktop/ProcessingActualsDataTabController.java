@@ -35,6 +35,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
+import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.TaskInputSourceRawGridIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
@@ -506,6 +507,18 @@ public final class ProcessingActualsDataTabController {
                             TaskInputSourceRawGridIo.applyProcessingActualsDisplaySteps(
                                     TaskInputSourceRawGridIo.readRaw(file, excelSheetIndex)));
             rememberShapedSnapshot(shaped);
+            // Persist unfiltered shaped data for calendar overlay reuse
+            if (shell != null) {
+                try {
+                    java.nio.file.Path savePath =
+                            AppPaths.resolveShapedProcessingActualsJsonPath(shell.snapshotUiEnv());
+                    JsonTableIo.saveArrayTable(savePath, shaped.headers(), shaped.rows());
+                } catch (Exception saveEx) {
+                    shell.appendLog(
+                            "[processing-actuals-detail] shaped JSON save failed: "
+                                    + saveEx.getMessage());
+                }
+            }
             populateManufacturingConditionFilterChoices(shaped);
             PlanInputTabularIo.TabularSheet filtered = applyManufacturingConditionFilter(shaped);
             PlanInputTabularIo.TabularSheet tab =

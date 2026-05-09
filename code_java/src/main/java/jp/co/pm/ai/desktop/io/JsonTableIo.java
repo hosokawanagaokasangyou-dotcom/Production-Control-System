@@ -138,7 +138,7 @@ public final class JsonTableIo {
      * Distinct operator names from workbook sheet keys (excluding sheets without the time-slot column).
      */
     public static List<String> memberOperatorNames(Map<String, SheetTable> memberSheets) {
-        final String timeCol = "時間帯";
+        final String timeCol = "\u6642\u9593\u5e2f";
         Set<String> keepOrder = new LinkedHashSet<>();
         for (Map.Entry<String, SheetTable> e : memberSheets.entrySet()) {
             if (e.getValue().columns().contains(timeCol)) {
@@ -146,5 +146,53 @@ public final class JsonTableIo {
             }
         }
         return List.copyOf(keepOrder);
+    }
+
+    /**
+     * Flat array-of-arrays table: {@code {"columns":[...], "rows":[[...],...]}}. Used to cache shaped
+     * Aladdin-plan and processing-actuals data next to the dispatch JSON for calendar overlay reuse.
+     */
+    public record ArrayTable(List<String> columns, List<List<String>> rows) {}
+
+    /**
+     * Writes {@code columns} + {@code rows} as a compact JSON array-of-arrays file.
+     * Creates parent directories if they do not exist.
+     */
+    public static void saveArrayTable(Path path, List<String> columns, List<List<String>> rows)
+            throws IOException {
+        com.fasterxml.jackson.databind.node.ObjectNode root = JSON.createObjectNode();
+        com.fasterxml.jackson.databind.node.ArrayNode colsNode = root.putArray("columns");
+        for (String c : columns) {
+            colsNode.add(c != null ? c : "");
+        }
+        com.fasterxml.jackson.databind.node.ArrayNode rowsNode = root.putArray("rows");
+        for (List<String> r : rows) {
+            com.fasterxml.jackson.databind.node.ArrayNode rowArr = rowsNode.addArray();
+            for (String v : r) {
+                rowArr.add(v != null ? v : "");
+            }
+        }
+        if (path.getParent() != null) {
+            Files.createDirectories(path.getParent());
+        }
+        Files.writeString(path, JSON.writeValueAsString(root), StandardCharsets.UTF_8);
+    }
+
+    /** Reads a file written by {@link #saveArrayTable}. */
+    public static ArrayTable loadArrayTable(Path path) throws IOException {
+        JsonNode root = JSON.readTree(Files.readString(path, StandardCharsets.UTF_8));
+        List<String> cols = new ArrayList<>();
+        for (JsonNode c : root.path("columns")) {
+            cols.add(c.asText(""));
+        }
+        List<List<String>> rows = new ArrayList<>();
+        for (JsonNode r : root.path("rows")) {
+            List<String> row = new ArrayList<>();
+            for (JsonNode v : r) {
+                row.add(v.asText(""));
+            }
+            rows.add(row);
+        }
+        return new ArrayTable(cols, rows);
     }
 }
