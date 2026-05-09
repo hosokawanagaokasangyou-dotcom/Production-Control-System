@@ -221,39 +221,16 @@ def _qty_from_buckets_for_tid(
 
 
 def _collect_sorted_dates(
-    df_plan: pd.DataFrame | None,
-    df_actual: pd.DataFrame | None,
+    _df_plan: pd.DataFrame | None,
+    _df_actual: pd.DataFrame | None,
 ) -> list:
-    """Calendar columns: contiguous days from (today - 14 days) through max(data, today)."""
-    display_start = date.today() - timedelta(days=14)
-    aladdin_dates: set[date] = set()
-    if df_plan is not None and len(df_plan) > 0:
-        for col in df_plan.columns:
-            m = core._COMPARE_GANTT_ALADDIN_QTY_COL_RE.match(
-                core._nfkc_column_aliases(str(col))
-            )
-            if m:
-                try:
-                    y, mo, dd = int(m.group(1)), int(m.group(2)), int(m.group(3))
-                    aladdin_dates.add(date(y, mo, dd))
-                except ValueError:
-                    continue
-    base_sorted = sorted(aladdin_dates)
-    merged = core._sorted_dates_union_actual_bounds_df(base_sorted, df_actual)
-    d_from = core._parse_env_optional_date(core.ENV_GANTT_ACTUAL_DETAIL_DATE_FROM)
-    d_to = core._parse_env_optional_date(core.ENV_GANTT_ACTUAL_DETAIL_DATE_TO)
-    merged = core._sorted_dates_filter_inclusive_range(merged, d_from, d_to)
-    if not merged and aladdin_dates:
-        merged = sorted(aladdin_dates)
+    """Calendar columns: contiguous days from (today - 14) through (today + 30), inclusive."""
     today = date.today()
-    if merged:
-        d_max = max(max(merged), today)
-    else:
-        d_max = display_start + timedelta(days=13)
-    d_max = max(d_max, display_start)
+    display_start = today - timedelta(days=14)
+    display_end = today + timedelta(days=30)
     out: list[date] = []
     d = display_start
-    while d <= d_max:
+    while d <= display_end:
         out.append(d)
         d += timedelta(days=1)
     # region agent log
@@ -263,9 +240,8 @@ def _collect_sorted_dates(
         "calendar_column_range",
         {
             "display_start": display_start.isoformat(),
-            "d_max": d_max.isoformat(),
+            "display_end": display_end.isoformat(),
             "n_days": len(out),
-            "merged_sample_n": len(merged) if merged else 0,
         },
     )
     # endregion
@@ -436,28 +412,33 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             sorted_dates,
         )
 
-        pair_plan_row: dict[tuple[str, str], Any] = {}
+        plan_pairs: set[tuple[str, str]] = set()
+        if df_plan is not None and len(df_plan) > 0:
+            for _, row in df_plan.iterrows():
+                mk = core._normalize_equipment_match_key(row.get(core.TASK_COL_MACHINE_NAME))
+                tid = core.planning_task_id_str_from_scalar(row.get(core.TASK_COL_TASK_ID))
+                if mk and tid:
+                    plan_pairs.add((mk, tid))
 
+        actual_pairs: set[tuple[str, str]] = set()
+        for (mk, _d), tmap in actual_agg.items():
+            for tid in tmap:
+                if mk and tid:
+                    actual_pairs.add((mk, tid))
+
+        eligible_pairs = plan_pairs | actual_pairs
+
+        pair_plan_row: dict[tuple[str, str], Any] = {}
         if df_plan is not None and len(df_plan) > 0:
             for _, row in df_plan.iterrows():
                 mk = core._normalize_equipment_match_key(row.get(core.TASK_COL_MACHINE_NAME))
                 tid = core.planning_task_id_str_from_scalar(row.get(core.TASK_COL_TASK_ID))
                 if not mk or not tid:
                     continue
+                if (mk, tid) not in eligible_pairs:
+                    continue
                 pair_plan_row[(mk, tid)] = row
-
-        for (mk, _d), parts in buckets.items():
-            for t, _q in parts:
-                tid = core.planning_task_id_str_from_scalar(t) or str(t).strip()
-                if mk and tid:
-                    pair_plan_row.setdefault((mk, tid), None)
-
-        for (mk, _d), tmap in actual_agg.items():
-            for tid in tmap:
-                if mk and tid:
-                    pair_plan_row.setdefault((mk, tid), None)
-
-        for mk, _d, tid in dispatch_agg.keys():
+        for (mk, tid) in eligible_pairs:
             pair_plan_row.setdefault((mk, tid), None)
 
         mk_to_display: dict[str, str] = {}

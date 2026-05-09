@@ -412,7 +412,7 @@ public final class DeliveryCalendarViewTabController {
             mainRowHeightSlider.setMin(lo);
             mainRowHeightSlider.setMax(hi);
             mainRowHeightSlider.setValue(pv);
-            mainRowHeightSlider.setMajorTickUnit(500);
+            mainRowHeightSlider.setMajorTickUnit(100);
             mainRowHeightSlider.setMinorTickCount(4);
             mainRowHeightSlider.setShowTickMarks(true);
             if (mainRowHeightPctLabel != null) {

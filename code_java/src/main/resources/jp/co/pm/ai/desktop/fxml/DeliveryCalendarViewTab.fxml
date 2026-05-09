@@ -61,8 +61,8 @@
                                             </HBox>
                                             <HBox alignment="CENTER_LEFT" spacing="10.0">
                                                 <Label text="&#x30c7;&#x30fc;&#x30bf;&#x884c;&#x306e;&#x9ad8;&#x3055;&#xff08;&#x4e00;&#x62ec;&#xff09;"/>
-                                                <Slider fx:id="mainRowHeightSlider" blockIncrement="50.0"
-                                                        majorTickUnit="500.0" max="10000.0" min="15.0"
+                                                <Slider fx:id="mainRowHeightSlider" blockIncrement="25.0"
+                                                        majorTickUnit="100.0" max="500.0" min="1.0"
                                                         prefWidth="420.0" showTickMarks="true"/>
                                                 <Label fx:id="mainRowHeightPctLabel" minWidth="52.0" text="100%"/>
                                                 <CheckBox fx:id="mainCellWrapCheck" mnemonicParsing="false"
