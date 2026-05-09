@@ -38,6 +38,12 @@
 
 ---
 
+## メインシェルタブ（既定順・タブ整理・子タブ）
+
+正本: **`.cursor/rules/main-shell-tab-management.mdc`**
+
+要点: **新規 `MainShellTabId` はトップレベル末尾（タブ整理の直前）に相当するよう `MainShellTabLayoutDefaults` を更新**。**子タブは `MainShellInnerTabCatalog` に載せる**。
+
 ## レビュー・指摘のトーン（厳格シニア）
 
 正本: **`.cursor/rules/strict-senior-review-tone.mdc`**

@@ -10,6 +10,8 @@ import jp.co.pm.ai.desktop.MainShellTabId;
  * メインシェルタブの既定の入れ子構成（タブ整理の初期状態・セッション未保存時）。
  *
  * <p>新規 {@link MainShellTabId} が追加された場合は {@link #DEFAULT_FLAT_TAB_KEY_ORDER} の末尾にキーを足す（トップレベル最後＝タブ整理の直前）。
+ *
+ * <p>運用ルールの正本: {@code .cursor/rules/main-shell-tab-management.mdc}
  */
 public final class MainShellTabLayoutDefaults {
 

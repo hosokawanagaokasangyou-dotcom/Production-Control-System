@@ -8,6 +8,8 @@ import jp.co.pm.ai.desktop.MainShellTabId;
  * メインシェル各タブ内の「子タブ」（{@link javafx.scene.control.TabPane}）見出しをタブ整理ツリーに載せるための一覧。
  *
  * <p>計画結果ビューアのように JSON 読込後にのみ現れるタブは代表ラベルで示す。
+ *
+ * <p>運用ルールの正本: {@code .cursor/rules/main-shell-tab-management.mdc}
  */
 public final class MainShellInnerTabCatalog {
 
