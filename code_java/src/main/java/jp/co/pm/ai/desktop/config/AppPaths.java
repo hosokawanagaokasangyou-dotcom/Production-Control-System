@@ -245,15 +245,18 @@ public final class AppPaths {
             KEY_COMPARE_GANTT_SNAPSHOT_DIR,
             KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR);
 
-    /** {@link #normalizedFolderEnvOverrides(Map)} の処理順（{@link #KEY_PM_AI_REPO_ROOT} を先に確定）。 */
+    /**
+     * {@link #normalizedFolderEnvOverrides(Map)} の処理順（{@link #KEY_PM_AI_REPO_ROOT} を先に確定）。
+     *
+     * <p>{@link #KEY_PM_AI_TASK_INPUT_SOURCE_DIR} / {@link #KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR} はネットワークソース正本のため
+     * 含めない（起動後は {@code MainShellController} 側で既定 UNC に固定する）。
+     */
     private static final List<String> FOLDER_PATH_NORMALIZE_ORDER =
             List.of(
                     KEY_PM_AI_REPO_ROOT,
                     KEY_PM_AI_CODE_PYTHON_DIR,
                     KEY_PM_AI_WORKSPACE,
                     KEY_PM_AI_OUTPUT_DIR,
-                    KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
-                    KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
                     KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
                     KEY_COMPARE_GANTT_SNAPSHOT_DIR);
 
@@ -762,11 +765,16 @@ public final class AppPaths {
      *       と一致する区切り以降を現在のリポジトリ根に再接続（サブパスのみ）</li>
      * </ul>
      *
+     * <p>{@link #KEY_PM_AI_TASK_INPUT_SOURCE_DIR} / {@link #KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR} はネットワークソース正本のため常に空を返す。
+     *
      * リポジトリ外を意図した相対パス（解決結果がリポジトリ根の外）は変更しない。
      */
     public static Optional<String> normalizeFolderEnvValue(Map<String, String> ui, String key, String rawValue) {
         String k = key != null ? key.trim() : "";
         if (!isFolderPathEnvKey(k)) {
+            return Optional.empty();
+        }
+        if (KEY_PM_AI_TASK_INPUT_SOURCE_DIR.equals(k) || KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR.equals(k)) {
             return Optional.empty();
         }
         String v = trim(rawValue);

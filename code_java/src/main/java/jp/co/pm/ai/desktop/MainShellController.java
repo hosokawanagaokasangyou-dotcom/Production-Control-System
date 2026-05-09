@@ -2775,9 +2775,11 @@ public final class MainShellController {
     }
 
     /**
-     * When folder env values ({@code PM_AI_*}) can be read as under the current repo, rewrites them to
-     * canonical absolute paths and saves the session (also syncs main-run script dir for
-     * {@code PM_AI_CODE_PYTHON_DIR}).
+     * フォルダ系 {@code PM_AI_*} のうち、リポジトリ基準へ補正できるものを更新する（{@link AppPaths#normalizedFolderEnvOverrides(Map)}）。
+     *
+     * <p>{@code PM_AI_TASK_INPUT_SOURCE_DIR} / {@code PM_AI_ACTUAL_DETAIL_SOURCE_DIR} は正規化対象外とし、同梱 {@code pm-ai-data}
+     * でない場合は {@link AppPaths#DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR} / {@link AppPaths#DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR}
+     * で上書きする。セッションへ保存する。
      */
     private void applyRepoFolderPathNormalization() {
         if (envRows == null) {
@@ -2787,9 +2789,6 @@ public final class MainShellController {
         try {
             Map<String, String> ui = collectUiEnv();
             Map<String, String> overrides = AppPaths.normalizedFolderEnvOverrides(ui);
-            if (overrides.isEmpty()) {
-                return;
-            }
             for (EnvVarRow row : envRows) {
                 String k = nz(row.getName());
                 if (overrides.containsKey(k)) {
@@ -2803,7 +2802,47 @@ public final class MainShellController {
         } finally {
             suppressEnvSessionPersistence.set(false);
         }
+        applyDefaultNetworkSourceDirsIgnoringNormalization();
         DesktopSessionStateStore.save(collectDesktopSession());
+    }
+
+    /**
+     * {@code pm-ai-data/code/python/task_extract_stage1.py} がある同梱レイアウトか。
+     *
+     * @see #applyBundledPortableDefaultsIfPresent()
+     */
+    private boolean bundledPortableStage1MarkerPresent() {
+        Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
+        Path marker =
+                cwd.resolve("pm-ai-data")
+                        .resolve("code")
+                        .resolve("python")
+                        .resolve("task_extract_stage1.py");
+        return Files.isRegularFile(marker);
+    }
+
+    /**
+     * ネットワークソース 2 変数をリポジトリ正規化の対象外とし、同梱でない環境では {@link AppPaths} の既定 UNC 文字列で上書きする。
+     */
+    private void applyDefaultNetworkSourceDirsIgnoringNormalization() {
+        if (envRows == null) {
+            return;
+        }
+        if (bundledPortableStage1MarkerPresent()) {
+            return;
+        }
+        Path task = Path.of(AppPaths.DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR).toAbsolutePath().normalize();
+        Path actual = Path.of(AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR).toAbsolutePath().normalize();
+        String ts = task.toString();
+        String as = actual.toString();
+        for (EnvVarRow r : envRows) {
+            String name = r.getName() != null ? r.getName().trim() : "";
+            if (AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR.equals(name)) {
+                r.setValue(ts);
+            } else if (AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR.equals(name)) {
+                r.setValue(as);
+            }
+        }
     }
 
     /**
@@ -3215,15 +3254,10 @@ public final class MainShellController {
         if (envRows == null) {
             return;
         }
-        Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
-        Path marker =
-                cwd.resolve("pm-ai-data")
-                        .resolve("code")
-                        .resolve("python")
-                        .resolve("task_extract_stage1.py");
-        if (!Files.isRegularFile(marker)) {
+        if (!bundledPortableStage1MarkerPresent()) {
             return;
         }
+        Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
         Path repo = cwd.resolve("pm-ai-data").toAbsolutePath().normalize();
         Path taskIn = repo.resolve("input").resolve("task-input");
         Path actualDetail = repo.resolve("input").resolve("actual-detail");
