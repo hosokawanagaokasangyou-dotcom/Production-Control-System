@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop.io;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,18 +17,33 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
+import javax.xml.parsers.ParserConfigurationException;
+
+import org.apache.poi.openxml4j.exceptions.OpenXML4JException;
+import org.apache.poi.openxml4j.opc.OPCPackage;
+import org.apache.poi.ooxml.util.SAXHelper;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.util.CellReference;
+import org.apache.poi.xssf.eventusermodel.ReadOnlySharedStringsTable;
+import org.apache.poi.xssf.eventusermodel.XSSFReader;
+import org.apache.poi.xssf.eventusermodel.XSSFSheetXMLHandler;
+import org.apache.poi.xssf.model.StylesTable;
+import org.apache.poi.xssf.usermodel.XSSFComment;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
+import org.xml.sax.XMLReader;
 
 /**
  * Raw sheet reader for {@link jp.co.pm.ai.desktop.config.AppPaths#KEY_PM_AI_TASK_INPUT_SOURCE_DIR}.
  * All sheet rows are data; synthetic headers use column index labels (see {@code readRaw} output).
+ *
+ * <p>OOXML（{@code .xlsx} 等）はユーザモデルによるブック全体の DOM 展開ではなく、
+ * {@link XSSFReader} / {@link XSSFSheetXMLHandler} による SAX ストリーミングでシートを読み、
+ * xmlbeans・ユーザモデル由来のピークメモリを抑える。
  */
 public final class TaskInputSourceRawGridIo {
 
@@ -62,12 +78,21 @@ public final class TaskInputSourceRawGridIo {
                 || low.endsWith(".xltm"))) {
             return List.of();
         }
-        try (Workbook wb = WorkbookFactory.create(path.toFile())) {
+        try (OPCPackage pkg = OPCPackage.open(path.toFile())) {
+            XSSFReader reader = new XSSFReader(pkg);
+            XSSFReader.SheetIterator sheets = reader.getSheetIterator();
             List<String> names = new ArrayList<>();
-            for (int i = 0; i < wb.getNumberOfSheets(); i++) {
-                names.add(wb.getSheetName(i));
+            while (sheets.hasNext()) {
+                InputStream is = sheets.next();
+                try {
+                    names.add(sheets.getSheetName());
+                } finally {
+                    is.close();
+                }
             }
             return names;
+        } catch (OpenXML4JException e) {
+            throw new IOException(e.getMessage(), e);
         }
     }
 
@@ -100,44 +125,119 @@ public final class TaskInputSourceRawGridIo {
         return new PlanInputTabularIo.TabularSheet(headers, rows);
     }
 
+    /**
+     * OOXML シートを SAX で読み、{@link PlanInputTabularIo.TabularSheet} に組み立てる。
+     *
+     * <p>シート終端まで {@link List} に保持するため行数が多い場合は依然として表データ分のヒープが必要。
+     * （{@link org.controlsfx.control.spreadsheet.SpreadsheetView} は全行グリッド前提のため、段階表示は別途。）
+     */
     private static PlanInputTabularIo.TabularSheet readExcelSheetRaw(Path path, int sheetIndex)
             throws IOException {
-        try (Workbook wb = WorkbookFactory.create(path.toFile())) {
-            if (sheetIndex < 0 || sheetIndex >= wb.getNumberOfSheets()) {
-                throw new IOException(
-                        "sheet index out of range: " + sheetIndex + " (sheets=" + wb.getNumberOfSheets() + ")");
-            }
-            Sheet sh = wb.getSheetAt(sheetIndex);
-            int lastRow = sh.getLastRowNum();
-            int maxCol = 0;
-            for (int r = 0; r <= lastRow; r++) {
-                Row row = sh.getRow(r);
-                if (row != null) {
-                    maxCol = Math.max(maxCol, row.getLastCellNum());
+        try (OPCPackage pkg = OPCPackage.open(path.toFile())) {
+            XSSFReader reader = new XSSFReader(pkg);
+            ReadOnlySharedStringsTable strings = new ReadOnlySharedStringsTable(pkg);
+            StylesTable styles = reader.getStylesTable();
+            XSSFReader.SheetIterator sheets = reader.getSheetIterator();
+            int i = 0;
+            while (sheets.hasNext()) {
+                InputStream stream = sheets.next();
+                try {
+                    if (i == sheetIndex) {
+                        return parseOoxmlSheetXml(stream, styles, strings);
+                    }
+                } finally {
+                    stream.close();
                 }
+                i++;
             }
-            if (maxCol < 0) {
-                maxCol = 0;
-            }
-            List<String> headers = new ArrayList<>();
-            for (int c = 0; c < maxCol; c++) {
-                headers.add("\u5217" + (c + 1));
-            }
-            List<List<String>> rows = new ArrayList<>();
-            for (int r = 0; r <= lastRow; r++) {
-                Row row = sh.getRow(r);
-                List<String> line = new ArrayList<>(maxCol);
-                for (int c = 0; c < maxCol; c++) {
-                    line.add(row == null ? "" : cellToString(row.getCell(c)));
-                }
-                rows.add(line);
-            }
-            return new PlanInputTabularIo.TabularSheet(headers, rows);
+            throw new IOException("sheet index out of range: " + sheetIndex + " (sheets=" + i + ")");
+        } catch (OpenXML4JException | SAXException e) {
+            throw new IOException(e.getMessage(), e);
         }
     }
 
-    private static String cellToString(Cell cell) {
-        return ExcelCellReadSupport.cellToDisplayString(cell);
+    private static PlanInputTabularIo.TabularSheet parseOoxmlSheetXml(
+            InputStream sheetInputStream, StylesTable styles, ReadOnlySharedStringsTable strings)
+            throws IOException {
+        DataFormatter formatter = new DataFormatter();
+        TreeMap<Integer, List<String>> rowMap = new TreeMap<>();
+        final int[] maxCol = {0};
+
+        XSSFSheetXMLHandler.SheetContentsHandler sheetHandler =
+                new XSSFSheetXMLHandler.SheetContentsHandler() {
+                    private List<String> rowCells;
+
+                    @Override
+                    public void startRow(int rowNum) {
+                        rowCells = new ArrayList<>();
+                    }
+
+                    @Override
+                    public void endRow(int rowNum) {
+                        List<String> line = rowCells != null ? rowCells : new ArrayList<>();
+                        rowMap.put(rowNum, line);
+                        rowCells = null;
+                    }
+
+                    @Override
+                    public void cell(String cellReference, String formattedValue, XSSFComment comment) {
+                        if (rowCells == null) {
+                            rowCells = new ArrayList<>();
+                        }
+                        CellReference ref = new CellReference(cellReference);
+                        int col = ref.getCol();
+                        String v =
+                                formattedValue != null
+                                        ? ExcelCellReadSupport.normalizeCommaDigitArtifacts(formattedValue)
+                                        : "";
+                        while (rowCells.size() <= col) {
+                            rowCells.add("");
+                        }
+                        rowCells.set(col, v);
+                        maxCol[0] = Math.max(maxCol[0], col + 1);
+                    }
+                };
+
+        try {
+            XMLReader xmlReader = SAXHelper.newXMLReader();
+            XSSFSheetXMLHandler xmlHandler =
+                    new XSSFSheetXMLHandler(styles, strings, sheetHandler, formatter, false);
+            xmlReader.setContentHandler(xmlHandler);
+            xmlReader.parse(new InputSource(sheetInputStream));
+        } catch (ParserConfigurationException | SAXException e) {
+            throw new IOException(e.getMessage(), e);
+        }
+
+        int mc = Math.max(0, maxCol[0]);
+        List<String> headers = new ArrayList<>();
+        for (int c = 0; c < mc; c++) {
+            headers.add("\u5217" + (c + 1));
+        }
+        List<List<String>> rows = new ArrayList<>();
+        if (rowMap.isEmpty()) {
+            return new PlanInputTabularIo.TabularSheet(headers, rows);
+        }
+        int lastRow = rowMap.lastKey();
+        for (int r = 0; r <= lastRow; r++) {
+            List<String> line = rowMap.get(r);
+            if (line == null) {
+                rows.add(padBlankRow(mc));
+            } else {
+                while (line.size() < mc) {
+                    line.add("");
+                }
+                rows.add(line);
+            }
+        }
+        return new PlanInputTabularIo.TabularSheet(headers, rows);
+    }
+
+    private static List<String> padBlankRow(int columnCount) {
+        List<String> line = new ArrayList<>(columnCount);
+        for (int c = 0; c < columnCount; c++) {
+            line.add("");
+        }
+        return line;
     }
 
     /**
