@@ -33,6 +33,9 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
         $ReleaseFolderRelativePrefix = $ReleaseFolderRelativePrefix.TrimEnd('\') + '/'
     }
 
+    # Must be defined before InitialInstall exclusions reference it (avoid $null -> excludes entire tree).
+    $referenceDirRel = 'code/' + (-join @([char]0x53C2, [char]0x7167, [char]0x7528)) + '/'
+
     # Directory prefixes (repo-relative, slash form, must end with '/').
     $excludedDirPrefixes = [System.Collections.Generic.List[string]]::new()
     foreach ($p in @(
@@ -57,7 +60,7 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
                 '.githooks/',
                 '.github/',
                 '.pm-ai-cache/network-source/',
-                'code/参照用/'
+                $referenceDirRel
             )) {
             $excludedDirPrefixes.Add($p)
         }
@@ -97,6 +100,16 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
         [char]0x8A2D, [char]0x5B9A, [char]0x5F,
         [char]0x74B0, [char]0x5883, [char]0x5909, [char]0x6570
     )
+    $xlwingsInstallBatRel = 'xlwings' + (-join @(
+            [char]0x30A4, [char]0x30F3, [char]0x30B9, [char]0x30C8,
+            [char]0x30FC, [char]0x30EB
+        )) + '.bat'
+    $workspaceLeaf = (-join @(
+            [char]0x5DE5, [char]0x7A0B, [char]0x7BA1, [char]0x7406,
+            'AI',
+            [char]0x30D7, [char]0x30ED, [char]0x30B8, [char]0x30A7,
+            [char]0x30AF, [char]0x30C8
+        )) + '.code-workspace'
 
     function Test-IsExcludedDir {
         param([string]$RelSlash)
@@ -132,7 +145,8 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
         $norm = $RelSlash -replace '\\', '/'
         if ($BundleKind -eq 'InitialInstall') {
             foreach ($x in @(
-                    'xlwingsインストール.bat',
+                    $xlwingsInstallBatRel,
+                    ('code/' + $workspaceLeaf),
                     'code/----AI------.code-workspace'
                 )) {
                 if ($norm.Equals($x, [StringComparison]::OrdinalIgnoreCase)) {
