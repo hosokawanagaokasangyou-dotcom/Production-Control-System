@@ -231,7 +231,9 @@
         <artifactId>javafx-maven-plugin</artifactId>
         <version>0.0.8</version>
         <configuration>
-          <mainClass>jp.co.pm.ai.desktop.PmAiFxApp</mainClass>
+          <!-- classpath 起動: JDK 17+ で javafx:run が target/classes を拾えず ClassNotFound になる事例への対策（Gluon README の Launcher パターン） -->
+          <mainClass>jp.co.pm.ai.desktop.Launcher</mainClass>
+          <runtimePathOption>classpath</runtimePathOption>
           <options>
             <option>-Dfile.encoding=UTF-8</option>
             <option>-Dprism.order=${javafx.prism.order}</option>
