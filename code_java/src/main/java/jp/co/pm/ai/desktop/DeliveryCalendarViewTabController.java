@@ -277,8 +277,7 @@ public final class DeliveryCalendarViewTabController {
                                                 TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN,
                                                 mainSpreadsheet,
                                                 () -> new ArrayList<>(mainHeadersRef),
-                                                deliveryCalendarDateColumnMandatoryMask(
-                                                        mainHeadersRef.size()))));
+                                                deliveryCalendarDateColumnMandatoryMask())));
 
         mainSpreadsheet.setGrid(new GridBase(0, 0));
 
@@ -713,21 +712,18 @@ public final class DeliveryCalendarViewTabController {
     }
 
     /**
-     * 「見出し列数」より右を日付列とみなす。列の表示ダイアログでは該当インデックスはチェック無効（非表示不可）。
+     * カレンダー日付形式の列ヘッダ（{@link #parseDateHeader} が非 null）に対応する列のみ必須表示（非表示不可）。
+     * 「見出し列数」は固定スクロール列数であり、属性列と日付列の境界ではない。
      * 読み込んだ表示状態にも {@link ColumnVisibilitySupport#mergeMandatoryIntoVisibility} で反映する。
      */
-    private boolean[] deliveryCalendarDateColumnMandatoryMask(int columnCount) {
-        if (columnCount <= 0) {
+    private boolean[] deliveryCalendarDateColumnMandatoryMask() {
+        if (mainHeadersRef == null || mainHeadersRef.isEmpty()) {
             return new boolean[0];
         }
-        int lead = headerColumnCountMain.get();
-        if (lead < 0) {
-            lead = 0;
-        }
-        lead = Math.min(lead, columnCount);
-        boolean[] m = new boolean[columnCount];
-        for (int i = lead; i < columnCount; i++) {
-            m[i] = true;
+        int n = mainHeadersRef.size();
+        boolean[] m = new boolean[n];
+        for (int i = 0; i < n; i++) {
+            m[i] = parseDateHeader(mainHeadersRef.get(i)) != null;
         }
         return m;
     }
@@ -747,7 +743,7 @@ public final class DeliveryCalendarViewTabController {
                         TableColumnOrderPersistence.loadColumnVisibility(
                                 TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN,
                                 mainHeadersRef.size()),
-                        deliveryCalendarDateColumnMandatoryMask(mainHeadersRef.size()));
+                        deliveryCalendarDateColumnMandatoryMask());
         SpreadsheetColumnReorderDialog.show(
                         ownerStage, new ArrayList<>(mainHeadersRef), visForDialog)
                 .ifPresent(
@@ -775,7 +771,7 @@ public final class DeliveryCalendarViewTabController {
         newVis =
                 ColumnVisibilitySupport.mergeMandatoryIntoVisibility(
                         newVis,
-                        deliveryCalendarDateColumnMandatoryMask(mainHeadersRef.size()));
+                        deliveryCalendarDateColumnMandatoryMask());
         TableColumnOrderPersistence.saveColumnVisibility(
                 TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN, newVis);
         List<Double> widths =
@@ -835,8 +831,7 @@ public final class DeliveryCalendarViewTabController {
                                                         TableColumnOrderPersistence.TableId
                                                                 .DELIVERY_CALENDAR_MAIN,
                                                         mainHeadersRef.size()),
-                                                deliveryCalendarDateColumnMandatoryMask(
-                                                        mainHeadersRef.size())));
+                                                deliveryCalendarDateColumnMandatoryMask()));
                     });
         } finally {
             suppressMainPersistence.set(false);
