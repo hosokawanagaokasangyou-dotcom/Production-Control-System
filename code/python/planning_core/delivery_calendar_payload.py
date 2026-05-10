@@ -8,6 +8,7 @@ import logging
 import math
 import os
 import time
+from pathlib import Path
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime, timedelta
@@ -82,6 +83,20 @@ _JP_WEEKDAY_SHORT = ("\u6708", "\u706b", "\u6c34", "\u6728", "\u91d1", "\u571f",
 
 
 # region agent log
+def _f73cbb_log_path_candidates() -> list[str]:
+    """Workspace path (WSL) plus repo-relative .cursor (Windows Python cannot open /mnt/c/...)."""
+    out: list[str] = [_DEBUG_F73CBB_LOG]
+    try:
+        root = Path(__file__).resolve().parent.parent.parent.parent
+        alt = root / ".cursor" / "debug-f73cbb.log"
+        s = str(alt)
+        if s not in out:
+            out.append(s)
+    except Exception:
+        pass
+    return out
+
+
 def _debug_ndjson_f73cbb(hypothesis_id: str, location: str, message: str, data: dict[str, Any]) -> None:
     """Append one NDJSON line for Cursor debug session f73cbb (ignore failures)."""
     try:
@@ -93,8 +108,16 @@ def _debug_ndjson_f73cbb(hypothesis_id: str, location: str, message: str, data: 
             "data": data,
             "timestamp": int(time.time() * 1000),
         }
-        with open(_DEBUG_F73CBB_LOG, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        line = json.dumps(payload, ensure_ascii=False) + "\n"
+        for path in _f73cbb_log_path_candidates():
+            try:
+                p = Path(path)
+                p.parent.mkdir(parents=True, exist_ok=True)
+                with open(path, "a", encoding="utf-8") as f:
+                    f.write(line)
+                return
+            except Exception:
+                continue
     except Exception:
         pass
 
