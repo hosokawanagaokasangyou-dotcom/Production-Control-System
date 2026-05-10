@@ -79,6 +79,8 @@ _DEBUG_F73CBB_LOG = "/mnt/c/\u5de5\u7a0b\u7ba1\u7406AI\u30d7\u30ed\u30b8\u30a7\u
 _DEBUG_PROBE_ENV = "PM_AI_DELIVERY_CALENDAR_PROBE_TASK"
 _ENV_CAL_PAST_DAYS = "PM_AI_DELIVERY_CALENDAR_PAST_DAYS"
 _ENV_CAL_FUTURE_DAYS = "PM_AI_DELIVERY_CALENDAR_FUTURE_DAYS"
+# Java ``JsonTableIo`` / ???????????????????? JSON
+_SHAPED_PROCESSING_ACTUALS_JSON_BASENAME = "shaped_processing_actuals.json"
 
 # Short weekday for calendar column titles (Mon=\u6708 ... Sun=\u65e5)
 _JP_WEEKDAY_SHORT = ("\u6708", "\u706b", "\u6c34", "\u6728", "\u91d1", "\u571f", "\u65e5")
@@ -765,6 +767,127 @@ def _equipment_sort_index(equipment_list: list, mk_normalized: str) -> int:
     return 10_000
 
 
+def _resolve_shaped_processing_actuals_json_path(processing_plan_path: str) -> str | None:
+    """Java ?????????????? ``shaped_processing_actuals.json`` ???????????"""
+    out_dir = resolve_result_dispatch_table_output_dir(processing_plan_path or "")
+    if not out_dir:
+        return None
+    p = os.path.join(out_dir, _SHAPED_PROCESSING_ACTUALS_JSON_BASENAME)
+    return os.path.abspath(p) if os.path.isfile(p) else None
+
+
+def _load_json_array_table(path: str) -> tuple[list[str], list[list[Any]]] | None:
+    """``JsonTableIo`` ?? ``{"columns","rows"}`` ????"""
+    try:
+        with open(path, encoding="utf-8") as f:
+            raw = json.load(f)
+    except Exception:
+        return None
+    cols = raw.get("columns")
+    rows = raw.get("rows")
+    if not isinstance(cols, list) or not isinstance(rows, list):
+        return None
+    out_cols = [str(c) if c is not None else "" for c in cols]
+    out_rows: list[list[Any]] = []
+    for r in rows:
+        if not isinstance(r, list):
+            continue
+        out_rows.append(list(r))
+    if not out_cols:
+        return None
+    return out_cols, out_rows
+
+
+def _header_nfkc_to_index(headers: list[str]) -> dict[str, int]:
+    m: dict[str, int] = {}
+    for i, h in enumerate(headers):
+        k = core._nfkc_column_aliases(str(h).strip())
+        if k not in m:
+            m[k] = i
+    return m
+
+
+def _json_row_cell_raw(
+    row: list[Any], idx: dict[str, int], header_aliases: tuple[str, ...]
+) -> Any | None:
+    for name in header_aliases:
+        nk = core._nfkc_column_aliases(name.strip())
+        j = idx.get(nk)
+        if j is None or j < 0:
+            continue
+        if j >= len(row):
+            continue
+        v = row[j]
+        if v is None:
+            continue
+        if isinstance(v, str) and not v.strip():
+            continue
+        return v
+    return None
+
+
+def _eligible_pairs_from_shaped_processing_actuals_json(
+    path: str,
+    sorted_dates: list,
+    equipment_list: list,
+) -> set[tuple[str, str]]:
+    """???????????????????????? (????, ??NO)?"""
+    out: set[tuple[str, str]] = set()
+    if not path or not sorted_dates:
+        return out
+    loaded = _load_json_array_table(path)
+    if not loaded:
+        return out
+    columns, rows = loaded
+    ncol = len(columns)
+    idx = _header_nfkc_to_index(columns)
+    equip_lookup = core._equipment_lookup_normalized_to_canonical(equipment_list)
+    dates_ok = set(sorted_dates)
+
+    tid_aliases = (
+        _ACT_COL_TID,
+        core.ACT_COL_TASK_ID,
+        "\u4f9d\u983c\uff2e\uff2f",  # ????
+    )
+    day_aliases = (_ACT_COL_DAY,)
+    start_aliases = (_ACT_COL_START_DT, core.ACT_COL_MACHINING_START_DT)
+
+    for row in rows:
+        while len(row) < ncol:
+            row.append(None)
+        raw_tid = _json_row_cell_raw(row, idx, tid_aliases)
+        tid = core.planning_task_id_str_from_scalar(raw_tid)
+        if not tid:
+            continue
+        start_raw = _json_row_cell_raw(row, idx, start_aliases)
+        day_raw = _json_row_cell_raw(row, idx, day_aliases)
+        d = _parse_cell_date(start_raw)
+        if d is None:
+            d = _parse_cell_date(day_raw)
+        if d is None or d not in dates_ok:
+            continue
+        proc_raw = _json_row_cell_raw(
+            row, idx, (_ACT_COL_PROC, core.ACT_COL_PROCESS, "\u5de5\u7a0b\u540d")
+        )
+        mach_raw = _json_row_cell_raw(
+            row, idx, (core.TASK_COL_MACHINE_NAME, "\u6a5f\u68b0\u540d")
+        )
+        df1 = pd.DataFrame(
+            [
+                {
+                    _ACT_COL_PROC: proc_raw,
+                    core.TASK_COL_MACHINE_NAME: mach_raw,
+                }
+            ]
+        )
+        mk, _src = _resolve_actual_detail_machine_key_for_delivery_calendar(
+            df1.iloc[0], df1, equip_lookup
+        )
+        if mk:
+            out.add((mk, tid))
+    return out
+
+
 def build_delivery_calendar_payload() -> dict[str, Any]:
     meta: dict[str, Any] = {}
     try:
@@ -851,6 +974,16 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                     actual_pairs.add((mk, tid))
 
         eligible_pairs = plan_pairs | actual_pairs
+
+        shaped_json_path = _resolve_shaped_processing_actuals_json_path(pp)
+        meta["shapedProcessingActualsJsonPath"] = (shaped_json_path or "")
+        pairs_from_shaped_json: set[tuple[str, str]] = set()
+        if shaped_json_path:
+            pairs_from_shaped_json = _eligible_pairs_from_shaped_processing_actuals_json(
+                shaped_json_path, sorted_dates, equipment_list
+            )
+        meta["deliveryCalendarEligiblePairsFromShapedJson"] = len(pairs_from_shaped_json)
+        eligible_pairs |= pairs_from_shaped_json
 
         _probe_lit = (os.environ.get(_DEBUG_PROBE_ENV) or "Y4-59").strip()
         if _probe_lit:
