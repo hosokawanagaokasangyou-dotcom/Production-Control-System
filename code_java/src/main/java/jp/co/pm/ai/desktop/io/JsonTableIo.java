@@ -160,6 +160,20 @@ public final class JsonTableIo {
      */
     public static void saveArrayTable(Path path, List<String> columns, List<List<String>> rows)
             throws IOException {
+        saveArrayTable(path, columns, rows, null);
+    }
+
+    /**
+     * Same as {@link #saveArrayTable(Path, List, List)}, optionally adds {@code columns_all} (full header list
+     * before column projection) for readers that need schema compatibility. Unknown JSON fields are ignored by
+     * {@link #loadArrayTable}.
+     */
+    public static void saveArrayTable(
+            Path path,
+            List<String> columns,
+            List<List<String>> rows,
+            List<String> columnsAllForCompat)
+            throws IOException {
         com.fasterxml.jackson.databind.node.ObjectNode root = JSON.createObjectNode();
         com.fasterxml.jackson.databind.node.ArrayNode colsNode = root.putArray("columns");
         for (String c : columns) {
@@ -170,6 +184,12 @@ public final class JsonTableIo {
             com.fasterxml.jackson.databind.node.ArrayNode rowArr = rowsNode.addArray();
             for (String v : r) {
                 rowArr.add(v != null ? v : "");
+            }
+        }
+        if (columnsAllForCompat != null && !columnsAllForCompat.isEmpty()) {
+            com.fasterxml.jackson.databind.node.ArrayNode all = root.putArray("columns_all");
+            for (String c : columnsAllForCompat) {
+                all.add(c != null ? c : "");
             }
         }
         if (path.getParent() != null) {

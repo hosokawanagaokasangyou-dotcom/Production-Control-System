@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -53,6 +54,7 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 /**
  * Raw spreadsheet for the machining actual-detail workbook, resolved via {@link NetworkSourceDirResolver}
  * ({@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK} / {@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR}).
+ * Shaped JSON on disk uses {@link #projectShapedForJsonExport}（表示列・先頭見出し列・必須見出し）and optional {@code columns_all}.
  * Display applies {@link TaskInputSourceRawGridIo#applyProcessingActualsDisplaySteps} then
  * {@link TaskInputSourceRawGridIo#applyProcessingActualsDateTimeColumns}, then the manufacturing-condition
  * combo filter, then {@link TaskInputSourceRawGridIo#applyProcessingActualsDedupeByQuadKey}. Optional sheet:
@@ -71,6 +73,21 @@ public final class ProcessingActualsDataTabController {
 
     /** Combo entry matching rows whose cell in the column is blank. */
     private static final String MANUFACTURING_CONDITION_EMPTY_DISPLAY = "\uff08\u7a7a\u767d\uff09";
+
+    /**
+     * キャッシュ JSON に必ず含める見出し（納期オーバーレイ・配台重複除去などが参照）。投影後も欠けないようにする。
+     */
+    private static final Set<String> PROCESSING_ACTUALS_JSON_REQUIRED_HEADERS =
+            Set.of(
+                    "\u5de5\u7a0b\u540d",
+                    "\u6a5f\u68b0\u540d",
+                    "\u4f9d\u983cNO",
+                    "\u4f9d\u983c\uff2e\uff2f",
+                    "\u52a0\u5de5\u65e5",
+                    "\u5b9f\u52a0\u5de5\u6570",
+                    "\u88fd\u9020\u6761\u4ef6(\u5185\u8a33)",
+                    "\u52a0\u5de5\u958b\u59cb\u65e5\u6642",
+                    "\u52a0\u5de5\u7d42\u4e86\u65e5\u6642");
 
     private static final String HINT_TEXT =
             "\u5148\u982d4\u884c\u3092\u9664\u53bb\u3057\u3001\u539f\u7a3f\u306e5\u884c\u76ee\u3092\u5217\u898b\u51fa\u3057\u306b\u3057\u307e\u3059\u3002"
@@ -671,26 +688,80 @@ public final class ProcessingActualsDataTabController {
         new Thread(task, "processing-actuals-sheet").start();
     }
 
+    /**
+     * キャッシュ用 JSON 向けに shaped を列投影する。含める列: 列表示 ON、または見出し列（先頭 {@link #headerColumnCount}
+     * 列）、またはオーバーレイ等が参照する必須見出し。順序は現在の {@link #headersRef} に合わせる。
+     */
+    private PlanInputTabularIo.TabularSheet projectShapedForJsonExport(PlanInputTabularIo.TabularSheet shaped) {
+        if (shaped == null || headersRef.isEmpty()) {
+            return shaped;
+        }
+        List<String> shHeaders = shaped.headers();
+        Map<String, Integer> titleToFirstIndex = new HashMap<>();
+        for (int i = 0; i < shHeaders.size(); i++) {
+            String key = shHeaders.get(i) != null ? shHeaders.get(i).strip() : "";
+            titleToFirstIndex.putIfAbsent(key, i);
+        }
+        boolean[] vis =
+                TableColumnOrderPersistence.loadColumnVisibility(
+                        TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW,
+                        headersRef.size());
+        int lead = Math.max(0, headerColumnCount.get());
+        List<String> outTitles = new ArrayList<>();
+        for (int i = 0; i < headersRef.size(); i++) {
+            String title = headersRef.get(i) != null ? headersRef.get(i).strip() : "";
+            boolean visible = i < vis.length && vis[i];
+            boolean headingCol = i < lead;
+            boolean required = PROCESSING_ACTUALS_JSON_REQUIRED_HEADERS.contains(title);
+            if (visible || headingCol || required) {
+                outTitles.add(headersRef.get(i));
+            }
+        }
+        if (outTitles.isEmpty()) {
+            return shaped;
+        }
+        List<List<String>> outRows = new ArrayList<>(shaped.rows().size());
+        for (List<String> row : shaped.rows()) {
+            List<String> line = new ArrayList<>(outTitles.size());
+            for (String colTitle : outTitles) {
+                String k = colTitle != null ? colTitle.strip() : "";
+                Integer ix = titleToFirstIndex.get(k);
+                if (ix == null) {
+                    line.add("");
+                } else {
+                    line.add(ix < row.size() && row.get(ix) != null ? row.get(ix) : "");
+                }
+            }
+            outRows.add(line);
+        }
+        return new PlanInputTabularIo.TabularSheet(outTitles, outRows);
+    }
+
     private void applyShapedToUi(
             PlanInputTabularIo.TabularSheet shaped, boolean showErrorsInStatus) {
         try {
             rememberShapedSnapshot(shaped);
-            if (shell != null) {
+            populateManufacturingConditionFilterChoices(shaped);
+            PlanInputTabularIo.TabularSheet filtered = applyManufacturingConditionFilter(shaped);
+            PlanInputTabularIo.TabularSheet tab =
+                    TaskInputSourceRawGridIo.applyProcessingActualsDedupeByQuadKey(filtered);
+            populateFromFilteredSheet(tab);
+            if (shell != null && !headersRef.isEmpty()) {
                 try {
                     java.nio.file.Path savePath =
                             AppPaths.resolveShapedProcessingActualsJsonPath(shell.snapshotUiEnv());
-                    JsonTableIo.saveArrayTable(savePath, shaped.headers(), shaped.rows());
+                    PlanInputTabularIo.TabularSheet projected = projectShapedForJsonExport(shaped);
+                    JsonTableIo.saveArrayTable(
+                            savePath,
+                            projected.headers(),
+                            projected.rows(),
+                            shaped.headers());
                 } catch (Exception saveEx) {
                     shell.appendLog(
                             "[processing-actuals-detail] shaped JSON save failed: "
                                     + saveEx.getMessage());
                 }
             }
-            populateManufacturingConditionFilterChoices(shaped);
-            PlanInputTabularIo.TabularSheet filtered = applyManufacturingConditionFilter(shaped);
-            PlanInputTabularIo.TabularSheet tab =
-                    TaskInputSourceRawGridIo.applyProcessingActualsDedupeByQuadKey(filtered);
-            populateFromFilteredSheet(tab);
         } catch (Exception ex) {
             if (showErrorsInStatus) {
                 statusLabel.setText("\u8aad\u8fbc\u30a8\u30e9\u30fc");
