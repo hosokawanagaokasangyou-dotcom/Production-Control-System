@@ -410,6 +410,8 @@ public final class TaskInputSourceRawGridIo {
     /**
      * Keeps the first row per key (process name, machine name, request no., processing date); drops later
      * duplicates. If any of those header columns is absent, returns the input unchanged.
+     * In {@link jp.co.pm.ai.desktop.ProcessingActualsDataTabController}, apply after the manufacturing-condition
+     * breakdown combo filter so duplicates are resolved within the filtered row set.
      */
     public static PlanInputTabularIo.TabularSheet applyProcessingActualsDedupeByQuadKey(
             PlanInputTabularIo.TabularSheet shaped) {

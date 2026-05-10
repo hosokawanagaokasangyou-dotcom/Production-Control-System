@@ -57,8 +57,12 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
  * ({@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK} / {@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR}).
  * Shaped JSON on disk uses {@link #projectShapedForJsonExport}（表示列・先頭見出し列・必須見出し）and optional {@code columns_all}.
  * Display applies {@link TaskInputSourceRawGridIo#applyProcessingActualsDisplaySteps} then
- * {@link TaskInputSourceRawGridIo#applyProcessingActualsDateTimeColumns}, then the manufacturing-condition
- * combo filter, then {@link TaskInputSourceRawGridIo#applyProcessingActualsDedupeByQuadKey}. Optional sheet:
+ * {@link TaskInputSourceRawGridIo#applyProcessingActualsDateTimeColumns} ({@link #shapeLoaded} と同一)。
+ * その後コントローラ側では（チャット履歴で確定した順）
+ * 製造条件(内訳)コンボによる行フィルタを先に適用し、続けて
+ * {@link TaskInputSourceRawGridIo#applyProcessingActualsDedupeByQuadKey} を適用してからグリッドへ載せる。
+ * メモリ／JSON のスナップショットはコンボ・重複除去の前（日時列まで済んだ shaped）を保持する。
+ * Optional sheet:
  * {@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_SHEET}. Rows can be filtered by combo selection for column
  * {@link #HEADER_MANUFACTURING_CONDITION_BREAKDOWN}. FXML: {@code ProcessingActualsDataTab.fxml}.
  */
@@ -102,7 +106,7 @@ public final class ProcessingActualsDataTabController {
                     + " \u9078\u629e\u5024\u306f\u81ea\u52d5\u4fdd\u5b58\u3055\u308c\u3001\u6b21\u56de\u8d77\u52d5\u6642\u306b\u5fa9\u5143\u3055\u308c\u307e\u3059\u3002"
                     + " \u52a0\u5de5\u65e5\u30fb\u958b\u59cb/\u7d42\u4e86\u306e\u6642\u5206\u304b\u3089"
                     + "\u52a0\u5de5\u958b\u59cb\u65e5\u6642\u30fb\u52a0\u5de5\u7d42\u4e86\u65e5\u6642\u5217\u3092\u4ed8\u52a0\u3057\u307e\u3059\u3002"
-                    + " \u88fd\u9020\u6761\u4ef6(\u5185\u8a33)\u3067\u7d5e\u308a\u8fbc\u3093\u3060\u5f8c\u3001\u540c\u4e00\u5de5\u7a0b\u540d\u30fb\u6a5f\u68b0\u540d\u30fb\u4f9d\u983cNO\u30fb\u52a0\u5de5\u65e5\u306e\u884c\u306f"
+                    + " \u7d9e\u308a\u8fbc\u307f\u5f8c\u3001\u540c\u4e00\u5de5\u7a0b\u540d\u30fb\u6a5f\u68b0\u540d\u30fb\u4f9d\u983cNO\uff08\u307e\u305f\u306f\u4f9d\u983c\uff2e\uff2f\uff09\u30fb\u52a0\u5de5\u65e5\u306e\u884c\u306f"
                     + "\u5148\u982d\u884c\u306e\u307f\u6b8b\u3057\u307e\u3059\u3002";
 
     /** {@link ColumnVisibilityDialog} / JSON と同一の必須見出しに対応するマスク（表示は強制）。 */
@@ -798,11 +802,11 @@ public final class ProcessingActualsDataTabController {
     private void applyShapedToUi(
             PlanInputTabularIo.TabularSheet shaped, boolean showErrorsInStatus) {
         try {
+            // 1) shapeLoaded 済み（先頭4行除去・5行目ヘッダ・日時列）。コンボ／四キー除去は未適用。
             rememberShapedSnapshot(shaped);
             populateManufacturingConditionFilterChoices(shaped);
-            PlanInputTabularIo.TabularSheet filtered = applyManufacturingConditionFilter(shaped);
-            PlanInputTabularIo.TabularSheet tab =
-                    TaskInputSourceRawGridIo.applyProcessingActualsDedupeByQuadKey(filtered);
+            // 2) 製造条件(内訳)コンボ → 3) 工程名・機械名・依頼NO・加工日の四キー重複は先頭行のみ（フィルタ後集合に対して）
+            PlanInputTabularIo.TabularSheet tab = applyManufacturingFilterThenQuadDedupe(shaped);
             populateFromFilteredSheet(tab);
             if (shell != null && !headersRef.isEmpty()) {
                 try {
@@ -831,6 +835,16 @@ public final class ProcessingActualsDataTabController {
             }
             applyEmpty();
         }
+    }
+
+    /**
+     * Applies manufacturing-condition combo filtering first, then quad-key dedupe on the remaining rows.
+     * Order（チャット履歴「4.と5.の順番を入れ替え」）: フィルタを先、重複除去を後。
+     */
+    private PlanInputTabularIo.TabularSheet applyManufacturingFilterThenQuadDedupe(
+            PlanInputTabularIo.TabularSheet shaped) {
+        PlanInputTabularIo.TabularSheet filtered = applyManufacturingConditionFilter(shaped);
+        return TaskInputSourceRawGridIo.applyProcessingActualsDedupeByQuadKey(filtered);
     }
 
     /**
@@ -957,9 +971,7 @@ public final class ProcessingActualsDataTabController {
         PlanInputTabularIo.TabularSheet shaped =
                 new PlanInputTabularIo.TabularSheet(
                         new ArrayList<>(unfilteredShapedHeaders), copyRows);
-        PlanInputTabularIo.TabularSheet filtered = applyManufacturingConditionFilter(shaped);
-        PlanInputTabularIo.TabularSheet tab =
-                TaskInputSourceRawGridIo.applyProcessingActualsDedupeByQuadKey(filtered);
+        PlanInputTabularIo.TabularSheet tab = applyManufacturingFilterThenQuadDedupe(shaped);
         populateFromFilteredSheet(tab);
     }
 
