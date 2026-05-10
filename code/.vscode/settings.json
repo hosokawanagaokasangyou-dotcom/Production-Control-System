@@ -1,7 +1,7 @@
 {
-  // ワークスペースをこのフォルダだけ開いたときの既定。既存ファイルは推測エンコーディングのまま
+  // 既定は UTF-8。推測は /mnt/c 等で CP932 と誤認しやすいため無効
   "files.encoding": "utf8",
-  "files.autoGuessEncoding": true,
+  "files.autoGuessEncoding": false,
   // Open in External App (YuTengjing.open-in-external-app)
   // Excel 2021: 本PCで EXCEL.EXE のパスを確認すること
   // 別PCや MSI 版ではパスが異なる場合がある（例: ...\Office16\EXCEL.EXE）
