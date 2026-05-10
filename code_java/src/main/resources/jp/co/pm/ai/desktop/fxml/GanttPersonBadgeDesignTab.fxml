@@ -10,9 +10,9 @@
 <?import javafx.scene.control.Slider?>
 <?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.control.Accordion?>
-<?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
 <VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
@@ -21,11 +21,11 @@
     <padding>
         <Insets bottom="8.0" left="12.0" right="12.0" top="8.0"/>
     </padding>
-    <Accordion fx:id="designAccordion" maxWidth="Infinity">
+    <Accordion fx:id="designAccordion" maxWidth="Infinity" VBox.vgrow="ALWAYS">
         <panes>
             <TitledPane animated="true" text="担当バッジの見た目" expanded="true">
                 <content>
-                    <VBox spacing="8.0">
+                    <VBox spacing="8.0" fillWidth="true">
                         <padding>
                             <Insets bottom="4.0" left="4.0" right="4.0" top="4.0"/>
                         </padding>
@@ -38,10 +38,6 @@
                                    text="マスタパスを解決しています…"/>
                         </HBox>
                         <TableView fx:id="badgeMemberTable" maxWidth="Infinity" prefHeight="240.0"/>
-                        <HBox alignment="CENTER_LEFT" spacing="12.0">
-                            <Label text="プレビュー"/>
-                            <HBox fx:id="badgePreviewBox" alignment="CENTER_LEFT" spacing="8.0"/>
-                        </HBox>
                         <FlowPane hgap="8.0" vgap="6.0" maxWidth="Infinity">
                             <HBox alignment="CENTER_LEFT" spacing="6.0">
                                 <Label prefWidth="140.0" text="フォント"/>
@@ -113,10 +109,16 @@
                             <Button fx:id="badgeResetDefaultsButton" mnemonicParsing="false"
                                     text="既定スタイルに戻す" onAction="#onBadgeResetDefaultsAction"/>
                         </HBox>
+                        <HBox alignment="CENTER_LEFT" spacing="12.0">
+                            <Label text="プレビュー"/>
+                        </HBox>
+                        <StackPane fx:id="badgePreviewBox" alignment="CENTER" minHeight="80.0"
+                                   maxWidth="Infinity" maxHeight="Infinity"
+                                   styleClass="pm-badge-preview-stage"
+                                   VBox.vgrow="ALWAYS"/>
                     </VBox>
                 </content>
             </TitledPane>
         </panes>
     </Accordion>
-    <BorderPane fx:id="badgeDesignBottomSpacer" VBox.vgrow="ALWAYS"/>
 </VBox>
