@@ -123,6 +123,9 @@ public final class GanttPersonBadgeDesignTabController {
     private Button badgeRandomizeButton;
 
     @FXML
+    private Button badgeRandomizeAllButton;
+
+    @FXML
     private Button badgeResetDefaultsButton;
 
     private MainShellController shell;
@@ -912,6 +915,95 @@ public final class GanttPersonBadgeDesignTabController {
                     Math.min(1.0, 0.75 + rnd.nextDouble() * 0.22));
         }
         return Color.hsb(rnd.nextDouble(360), 0.4 + rnd.nextDouble() * 0.45, 0.82 + rnd.nextDouble() * 0.15);
+    }
+
+    /**
+     * UI を経由せずに 1 件分のランダム {@link PersonBadgeStyle} を作る。
+     * 値域は {@link #onBadgeRandomizeAction()} と一致させ、一括ランダムでも見た目を揃える。
+     */
+    private PersonBadgeStyle randomPersonBadgeStyle(ThreadLocalRandom rnd) {
+        PersonBadgeStyle d = PersonBadgeStyle.defaultStyle();
+        String fontFam = "";
+        if (badgeFontCombo != null) {
+            ObservableList<String> items = badgeFontCombo.getItems();
+            if (items != null && items.size() > 1) {
+                int n = items.size();
+                int idx = rnd.nextInt(10) == 0 ? 0 : 1 + rnd.nextInt(n - 1);
+                String v = items.get(idx);
+                if (v != null && !FONT_COMBO_DEFAULT_LABEL.equals(v)) {
+                    fontFam = v.strip();
+                }
+            }
+        }
+        double fontPct = 52 + rnd.nextInt(95);
+        Color fill = randomBadgeFillColor(rnd);
+        Color text = randomBadgeTextColor(rnd, fill);
+        Color stroke = randomBadgeStrokeColor(rnd, fill);
+        double strokeWidth = Math.min(6.0, Math.round(rnd.nextDouble(0, 3.6) * 2.0) / 2.0);
+        double corner = rnd.nextInt(22);
+        boolean pill = rnd.nextBoolean();
+        Color glow = randomGlowColor(rnd, fill);
+        double rPct = 45 + rnd.nextInt(186);
+        double sPct = 35 + rnd.nextInt(166);
+        double opacityPct = 55 + rnd.nextInt(46);
+        double baseR = d.glowRadius();
+        double baseS = d.glowSpread();
+        double glowR = baseR * (rPct / 100.0);
+        double glowS = Math.min(1.0, Math.max(0.0, baseS * (sPct / 100.0)));
+        double opacity = Math.max(0.0, Math.min(1.0, opacityPct / 100.0));
+        return new PersonBadgeStyle(
+                fontFam,
+                fontPct,
+                colorToHex(fill),
+                colorToHex(text),
+                colorToHex(stroke),
+                strokeWidth,
+                corner,
+                pill,
+                colorToHex(glow),
+                glowR,
+                glowS,
+                opacity);
+    }
+
+    /**
+     * マスタ skills の全メンバー個別スタイルを一括ランダム化する。
+     * 先頭行「{@value #GLOBAL_EDIT_LABEL}」（globalStyle）は規定として変更しない。
+     */
+    @FXML
+    private void onBadgeRandomizeAllAction() {
+        if (masterMemberNames == null || masterMemberNames.isEmpty()) {
+            alert(
+                    Alert.AlertType.INFORMATION,
+                    "対象メンバーがありません",
+                    "skills メンバーが読み込まれていません。先に「skills メンバーを再読込」を実行してください。");
+            return;
+        }
+        ThreadLocalRandom rnd = ThreadLocalRandom.current();
+        suppress = true;
+        try {
+            for (String raw : masterMemberNames) {
+                String mk = PersonBadgeStyle.normalizeLabelKey(raw);
+                if (mk.isEmpty()) {
+                    continue;
+                }
+                perMemberStyles.put(mk, randomPersonBadgeStyle(rnd));
+            }
+            BadgeDesignTableItem sel =
+                    badgeMemberTable != null ? badgeMemberTable.getSelectionModel().getSelectedItem() : null;
+            if (sel != null && !sel.globalFallback) {
+                PersonBadgeStyle st = perMemberStyles.getOrDefault(sel.memberKeyNormalized, globalStyle);
+                pushStyleToUi(st);
+                syncLabelsFromSliders();
+            }
+        } finally {
+            suppress = false;
+        }
+        refreshPreview();
+        if (badgeMemberTable != null) {
+            badgeMemberTable.refresh();
+        }
+        saveAndRefresh();
     }
 
     @FXML

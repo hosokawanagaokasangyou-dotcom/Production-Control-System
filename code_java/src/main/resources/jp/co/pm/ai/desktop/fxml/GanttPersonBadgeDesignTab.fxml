@@ -107,6 +107,9 @@
                         <HBox spacing="8.0">
                             <Button fx:id="badgeRandomizeButton" mnemonicParsing="false"
                                     text="ランダム作成" onAction="#onBadgeRandomizeAction"/>
+                            <Button fx:id="badgeRandomizeAllButton" mnemonicParsing="false"
+                                    text="一括ランダム（マスタ全員・規定は除外）"
+                                    onAction="#onBadgeRandomizeAllAction"/>
                             <Button fx:id="badgeResetDefaultsButton" mnemonicParsing="false"
                                     text="既定スタイルに戻す" onAction="#onBadgeResetDefaultsAction"/>
                         </HBox>
