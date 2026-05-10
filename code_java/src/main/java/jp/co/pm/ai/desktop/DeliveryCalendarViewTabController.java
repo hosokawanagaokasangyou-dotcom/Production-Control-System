@@ -20,6 +20,9 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
+import javafx.scene.Parent;
+import javafx.scene.control.Accordion;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
@@ -30,6 +33,7 @@ import javafx.scene.control.Slider;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TablePosition;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.TitledPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
@@ -399,6 +403,36 @@ public final class DeliveryCalendarViewTabController {
             innerTabPane.getSelectionModel().select(index);
         } finally {
             suppressInnerTabSessionPersistence.set(false);
+        }
+    }
+
+    /**
+     * メインシェルで納期管理ビュータブへ切り替えたときに呼ぶ。内側 {@link #innerTabPane} 配下の
+     * {@link Accordion} / {@link TitledPane} を閉じる（配台・実績・アラジン各タブの「操作・ソース」等）。
+     */
+    public void collapseInnerSectionPanesOnShellSelect() {
+        Platform.runLater(
+                () -> {
+                    if (innerTabPane != null) {
+                        collapseTitledPanesAndAccordionsUnder(innerTabPane);
+                    }
+                });
+    }
+
+    private static void collapseTitledPanesAndAccordionsUnder(Node node) {
+        if (node == null) {
+            return;
+        }
+        if (node instanceof Accordion accordion) {
+            accordion.setExpandedPane(null);
+        }
+        if (node instanceof TitledPane titledPane) {
+            titledPane.setExpanded(false);
+        }
+        if (node instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
+                collapseTitledPanesAndAccordionsUnder(child);
+            }
         }
     }
 

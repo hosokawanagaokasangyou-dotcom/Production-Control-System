@@ -482,6 +482,10 @@ public final class MainShellController {
                             emitShellTabNavigation();
                             /* :selected 由来の -fx-text-fill がインラインより後勝ちになることがあるため再適用 */
                             refreshMainShellTabHeaderChromeFromStoredColors();
+                            if (newTab == mainShellTabDeliveryCalendar
+                                    && deliveryCalendarViewTabController != null) {
+                                deliveryCalendarViewTabController.collapseInnerSectionPanesOnShellSelect();
+                            }
                         });
         tabPane
                 .getTabs()
