@@ -243,7 +243,7 @@
       </plugin>
       <!-- ========================================================= -->
 
-      <!-- 開発時のクイック起動: mvn javafx:run -->
+      <!-- 開発時: mvn javafx:run。依存に javafx-web があるため JDK の jdk.jsobject / jdk.xml.dom をルートに追加（プラグイン既定は javafx モジュールのみ）。 -->
       <plugin>
         <groupId>org.openjfx</groupId>
         <artifactId>javafx-maven-plugin</artifactId>
@@ -257,12 +257,18 @@
             <option>-Xmx${jvm.max.heap}</option>
             <option>-XX:+HeapDumpOnOutOfMemoryError</option>
             <option>-XX:+UseStringDeduplication</option>
+            <!-- javafx.web が requires jdk.jsobject。プラグインが付与する add-modules と併せルートに含める -->
+            <option>--add-modules</option>
+            <option>jdk.jsobject,jdk.xml.dom</option>
+            <option>--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED</option>
+            <option>--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED</option>
+            <option>--add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED</option>
             <option>--enable-native-access=javafx.graphics</option>
           </options>
         </configuration>
       </plugin>
 
-      <!-- jpackage や WebView 利用時など、モジュールパスに jdk.jsobject / jdk.xml.dom を明示したい場合は exec:exec@pm-ai-desktop -->
+      <!-- jpackage や exec 起動（モジュールパス・classpath を pom と完全一致させたいとき） -->
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
