@@ -501,7 +501,7 @@ public final class ProcessingActualsDataTabController {
                         SpreadsheetTabularSupport.applyColumnWidths(spreadsheetView, widths, widthDefault);
                         SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                 spreadsheetView, headerColumnCount.get());
-                        SpreadsheetTabularSupport.applyColumnFilters(spreadsheetView);
+                        SpreadsheetTabularSupport.applyColumnFiltersWithDialog(spreadsheetView);
                         SpreadsheetTabularSupport.pinSpreadsheetFilterRow(spreadsheetView);
                         SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(spreadsheetView);
                         SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(spreadsheetView);

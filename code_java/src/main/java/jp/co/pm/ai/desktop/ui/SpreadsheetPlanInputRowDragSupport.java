@@ -154,6 +154,7 @@ public final class SpreadsheetPlanInputRowDragSupport {
                                 moveDataRow(dataRows, srcData, tgtData);
                                 spreadsheetView.setComparator(null);
                                 ExcelLikeSpreadsheetFilter.resetAllColumnSortMenus(spreadsheetView);
+                                DialogExcelLikeSpreadsheetFilter.resetAllColumnSortMenus(spreadsheetView);
                                 afterReorder.run();
                             }
                             success = true;

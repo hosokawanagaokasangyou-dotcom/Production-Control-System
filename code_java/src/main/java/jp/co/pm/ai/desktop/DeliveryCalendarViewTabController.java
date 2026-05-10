@@ -533,7 +533,7 @@ public final class DeliveryCalendarViewTabController {
                         SpreadsheetTabularSupport.applyColumnWidths(mainSpreadsheet, widths, widthDefault);
                         SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                 mainSpreadsheet, headerColumnCountMain.get());
-                        SpreadsheetTabularSupport.applyColumnFilters(mainSpreadsheet);
+                        SpreadsheetTabularSupport.applyColumnFiltersWithDialog(mainSpreadsheet);
                         SpreadsheetTabularSupport.pinSpreadsheetFilterRow(mainSpreadsheet);
                         SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(mainSpreadsheet);
                         SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(mainSpreadsheet);

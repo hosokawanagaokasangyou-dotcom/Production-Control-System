@@ -498,7 +498,8 @@ public final class SpreadsheetTabularSupport {
     }
 
     /**
-     * Read-only string grid with Excel-like column filters ({@link #applyColumnFilters}); no row highlighting.
+     * Read-only string grid with a filter placeholder row; after {@link SpreadsheetView#setGrid} apply
+     * {@link #applyColumnFiltersWithDialog} (計画結果ビュー等と同じダイアログ式) または {@link #applyColumnFilters}。行ハイライトなし。
      * Used for JSON-backed viewers such as {@code 結果_配台表.json}.
      */
     public static GridBase buildReadOnlyPlainGrid(

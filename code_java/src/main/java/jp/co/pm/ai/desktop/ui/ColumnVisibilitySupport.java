@@ -35,6 +35,17 @@ public final class ColumnVisibilitySupport {
         for (int i = n; i < cols.size(); i++) {
             setSpreadsheetColumnInnerVisible(cols.get(i), true);
         }
+        refreshSpreadsheetColumnReorderAfterVisibility(view);
+    }
+
+    private static void refreshSpreadsheetColumnReorderAfterVisibility(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        Object v = view.getProperties().get(SpreadsheetColumnDragReorderSupport.PROP_LEADING_FIXED);
+        if (v instanceof Integer ix && ix >= 0) {
+            SpreadsheetColumnDragReorderSupport.updateColumnReorderFlags(view, ix);
+        }
     }
 
     /** ControlsFX {@link SpreadsheetColumn} wraps a {@link TableColumn}; visibility is set on the inner column. */

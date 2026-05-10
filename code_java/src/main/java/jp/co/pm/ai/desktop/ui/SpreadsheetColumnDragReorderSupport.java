@@ -26,6 +26,12 @@ public final class SpreadsheetColumnDragReorderSupport {
 
     private static final String PROP_LISTENER = "pmSpreadsheetColumnReorderListener";
 
+    /**
+     * {@link #refreshAfterGridReady} が設定する先頭固定列数。{@link ColumnVisibilitySupport} が表示変更後に
+     * {@link #updateColumnReorderFlags(SpreadsheetView, int)} を呼ぶために参照する。
+     */
+    public static final String PROP_LEADING_FIXED = "pmSpreadsheetReorderLeadingFixed";
+
     private SpreadsheetColumnDragReorderSupport() {}
 
     /**
@@ -80,10 +86,8 @@ public final class SpreadsheetColumnDragReorderSupport {
             }
         }
         int fixed = Math.max(0, leadingFixedColumnCount);
-        for (int i = 0; i < cols.size(); i++) {
-            TableColumn<?, ?> col = cols.get(i);
-            col.setReorderable(i >= fixed);
-        }
+        view.getProperties().put(PROP_LEADING_FIXED, fixed);
+        updateColumnReorderFlags(view, fixed);
         ListChangeListener<TableColumn<?, ?>> listener =
                 c -> {
                     while (c.next()) {
@@ -110,6 +114,32 @@ public final class SpreadsheetColumnDragReorderSupport {
                 };
         cols.addListener(listener);
         view.getProperties().put(PROP_LISTENER, listener);
+    }
+
+    /**
+     * 先頭 {@code leadingFixedColumnCount} 列はドラッグ並べ替え不可。それ以外は列が表示されているときのみ
+     * 並べ替え可能（非表示列はヘッダが無いため対象外）。
+     */
+    public static void updateColumnReorderFlags(SpreadsheetView view, int leadingFixedColumnCount) {
+        if (view == null) {
+            return;
+        }
+        int expected = view.getColumns().size();
+        if (expected <= 0) {
+            return;
+        }
+        TableView<?> tv = findEmbeddedTableViewMatchingColumnCount(view, expected);
+        if (tv == null) {
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        ObservableList<TableColumn<?, ?>> cols =
+                (ObservableList<TableColumn<?, ?>>) (ObservableList<?>) tv.getColumns();
+        int fixed = Math.max(0, leadingFixedColumnCount);
+        for (int i = 0; i < cols.size(); i++) {
+            TableColumn<?, ?> col = cols.get(i);
+            col.setReorderable(i >= fixed && col.isVisible());
+        }
     }
 
     private static boolean isSameMultiset(List<String> a, List<String> b) {
