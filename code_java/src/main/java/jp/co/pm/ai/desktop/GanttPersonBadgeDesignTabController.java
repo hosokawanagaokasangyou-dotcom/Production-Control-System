@@ -920,8 +920,9 @@ public final class GanttPersonBadgeDesignTabController {
     /**
      * UI を経由せずに 1 件分のランダム {@link PersonBadgeStyle} を作る。
      * 値域は {@link #onBadgeRandomizeAction()} と一致させ、一括ランダムでも見た目を揃える。
+     * 文字サイズ％は一括ランダムで全員揃えるため引数で受け取る。
      */
-    private PersonBadgeStyle randomPersonBadgeStyle(ThreadLocalRandom rnd) {
+    private PersonBadgeStyle randomPersonBadgeStyle(ThreadLocalRandom rnd, double fontPct) {
         PersonBadgeStyle d = PersonBadgeStyle.defaultStyle();
         String fontFam = "";
         if (badgeFontCombo != null) {
@@ -935,7 +936,6 @@ public final class GanttPersonBadgeDesignTabController {
                 }
             }
         }
-        double fontPct = 52 + rnd.nextInt(95);
         Color fill = randomBadgeFillColor(rnd);
         Color text = randomBadgeTextColor(rnd, fill);
         Color stroke = randomBadgeStrokeColor(rnd, fill);
@@ -980,6 +980,7 @@ public final class GanttPersonBadgeDesignTabController {
             return;
         }
         ThreadLocalRandom rnd = ThreadLocalRandom.current();
+        double sharedFontPct = 52 + rnd.nextInt(95);
         suppress = true;
         try {
             for (String raw : masterMemberNames) {
@@ -987,7 +988,7 @@ public final class GanttPersonBadgeDesignTabController {
                 if (mk.isEmpty()) {
                     continue;
                 }
-                perMemberStyles.put(mk, randomPersonBadgeStyle(rnd));
+                perMemberStyles.put(mk, randomPersonBadgeStyle(rnd, sharedFontPct));
             }
             BadgeDesignTableItem sel =
                     badgeMemberTable != null ? badgeMemberTable.getSelectionModel().getSelectedItem() : null;
