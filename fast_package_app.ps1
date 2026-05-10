@@ -1283,7 +1283,8 @@ Remove-Item -Recurse -Force -LiteralPath $bundleOutInitial -ErrorAction Stop
 Remove-Item -Recurse -Force -LiteralPath $bundleOutUpgrade -ErrorAction Stop
 
 Write-Host "--- Done ---" -ForegroundColor Green
-Write-Host "Release: $ReleaseRoot — $($BundleInitialName).zip, $($BundleUpgradeName).zip, version.txt"
+# ASCII separator only: Windows PowerShell 5.1 conhost may mojibake U+2014 em dash in script UTF-8 output.
+Write-Host "Release: $ReleaseRoot - $($BundleInitialName).zip, $($BundleUpgradeName).zip, version.txt"
 Write-Host "Download cache: $cacheRoot"
 Write-Host "JVM: -Xms$jvmInitial -Xmx$jvmMax (same as pom.xml properties)"
 if ($PackageType -ne 'app-image') {
