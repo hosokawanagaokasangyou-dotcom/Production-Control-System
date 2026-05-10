@@ -44,7 +44,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCell;
@@ -63,27 +62,6 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 public final class DeliveryCalendarViewTabController {
 
     private static final ObjectMapper JSON = new ObjectMapper();
-
-    /** Cursor debug NDJSON session (delivery-calendar reload hang). */
-    private static final String AGENT_DEBUG_SESSION = "317502";
-
-    // #region agent log
-    private void agentDebugDeliveryCalendar(
-            String hypothesisId, String location, String message, Map<String, Object> data) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        if (data != null) {
-            payload.putAll(data);
-        }
-        payload.putAll(AgentDebugLog.debugHeapMap());
-        AgentDebugLog.appendStructured(
-                shell != null ? shell.snapshotUiEnv() : Map.of(),
-                AGENT_DEBUG_SESSION,
-                hypothesisId,
-                location,
-                message,
-                payload);
-    }
-    // #endregion
 
     /**
      * Child stdout lines {@code PM_AI_PROGRESS 0..100}. During Python subprocess, drives {@link #statusLabel} and
@@ -629,15 +607,6 @@ public final class DeliveryCalendarViewTabController {
     }
 
     private void hideDeliveryReloadProgress() {
-        // #region agent log
-        agentDebugDeliveryCalendar(
-                "H4",
-                "DeliveryCalendarViewTabController.hideDeliveryReloadProgress",
-                "beforeHide",
-                Map.of(
-                        "statusLabelText",
-                        statusLabel != null ? statusLabel.getText() : "(null)"));
-        // #endregion
         if (deliveryReloadProgressContainer == null) {
             return;
         }
@@ -650,13 +619,6 @@ public final class DeliveryCalendarViewTabController {
      * 一度も描画されないことがある。
      */
     private void scheduleHideDeliveryReloadProgress() {
-        // #region agent log
-        agentDebugDeliveryCalendar(
-                "H5",
-                "DeliveryCalendarViewTabController.scheduleHideDeliveryReloadProgress",
-                "invoked",
-                Map.of());
-        // #endregion
         Platform.runLater(() -> Platform.runLater(this::hideDeliveryReloadProgress));
     }
 
@@ -881,14 +843,6 @@ public final class DeliveryCalendarViewTabController {
     }
 
     private void applyMainCalendar(JsonNode root) {
-        // #region agent log
-        long __applyMainT0 = System.nanoTime();
-        agentDebugDeliveryCalendar(
-                "H1",
-                "DeliveryCalendarViewTabController.applyMainCalendar",
-                "enter",
-                Map.of("hasMainCalendarObject", root.get("mainCalendar") != null));
-        // #endregion
         statusLabel.setText("反映中… メイン表");
         setDeliveryReloadSegmentProgress(
                 deliveryReloadProgressMainCalendar, deliveryReloadPctMainCalendar, 0.0);
@@ -902,19 +856,6 @@ public final class DeliveryCalendarViewTabController {
         }
         setDeliveryReloadSegmentProgress(
                 deliveryReloadProgressMainCalendar, deliveryReloadPctMainCalendar, 1.0);
-        // #region agent log
-        agentDebugDeliveryCalendar(
-                "H1",
-                "DeliveryCalendarViewTabController.applyMainCalendar",
-                "exit",
-                Map.of(
-                        "elapsedMs",
-                        (System.nanoTime() - __applyMainT0) / 1_000_000L,
-                        "headerCount",
-                        mainHeadersRef.size(),
-                        "rowCount",
-                        mainRows.size()));
-        // #endregion
         statusLabel.setText("反映完了");
     }
 
@@ -1001,28 +942,7 @@ public final class DeliveryCalendarViewTabController {
      * {@link #mainHeadersRef}; row order is unchanged so {@link #mainRowMeta} indices stay aligned.
      */
     private void overlayChildTabValues() {
-        // #region agent log
-        long __overlayT0 = System.nanoTime();
-        agentDebugDeliveryCalendar(
-                "H2",
-                "DeliveryCalendarViewTabController.overlayChildTabValues",
-                "enter",
-                Map.of(
-                        "mainRowsSize",
-                        mainRows.size(),
-                        "headersSize",
-                        mainHeadersRef.size()));
-        // #endregion
         if (mainRowMeta.isEmpty() || mainHeadersRef.isEmpty()) {
-            // #region agent log
-            agentDebugDeliveryCalendar(
-                    "H2",
-                    "DeliveryCalendarViewTabController.overlayChildTabValues",
-                    "skipEmpty",
-                    Map.of(
-                            "elapsedMs",
-                            (System.nanoTime() - __overlayT0) / 1_000_000L));
-            // #endregion
             return;
         }
 
@@ -1139,13 +1059,6 @@ public final class DeliveryCalendarViewTabController {
                 row.set(j, new DeliveryCalendarMainCell.TripleQty(sp, sa, sd));
             }
         }
-        // #region agent log
-        agentDebugDeliveryCalendar(
-                "H2",
-                "DeliveryCalendarViewTabController.overlayChildTabValues",
-                "exit",
-                Map.of("elapsedMs", (System.nanoTime() - __overlayT0) / 1_000_000L));
-        // #endregion
     }
 
     private static double lookupQty(
