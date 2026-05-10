@@ -429,8 +429,17 @@ public final class TaskInputSourceRawGridIo {
     }
 
     /**
-     * Processing actuals tab: (1) drop the first 4 sheet rows, (2) treat the next row (original 5th row,
-     * 1-based) as column headers and remove it from the data body.
+     * First column-header row for processing actuals: any cell contains {@code 検査NO} (halfwidth or
+     * fullwidth {@code ＮＯ}).
+     */
+    private static final String INSPECTION_NO_MARKER = "\u691c\u67fbNO";
+
+    private static final String INSPECTION_NO_MARKER_FW = "\u691c\u67fb\uff2e\uff2f";
+
+    /**
+     * Processing actuals tab: (1) drop every sheet row strictly above the first row where any cell contains
+     * {@code 検査NO} / {@code 検査ＮＯ}. If no such row exists, drop the first 4 rows (legacy layout). (2)
+     * Treat the next row (first remaining row) as column headers and remove it from the data body.
      */
     public static PlanInputTabularIo.TabularSheet applyProcessingActualsDisplaySteps(
             PlanInputTabularIo.TabularSheet raw) {
@@ -445,7 +454,9 @@ public final class TaskInputSourceRawGridIo {
         }
         padRowsToWidth(rows, maxCol);
 
-        int dropHead = Math.min(4, rows.size());
+        int markerRow = indexOfFirstRowContainingInspectionNoMarker(rows);
+        int dropHead =
+                markerRow >= 0 ? markerRow : Math.min(4, rows.size());
         if (dropHead > 0) {
             rows.subList(0, dropHead).clear();
         }
@@ -461,6 +472,32 @@ public final class TaskInputSourceRawGridIo {
         }
         rows.remove(0);
         return new PlanInputTabularIo.TabularSheet(headers, rows);
+    }
+
+    /**
+     * Returns the 0-based index of the first row where any cell contains the inspection-number marker, or
+     * {@code -1} if none.
+     */
+    private static int indexOfFirstRowContainingInspectionNoMarker(List<List<String>> rows) {
+        for (int r = 0; r < rows.size(); r++) {
+            for (String cell : rows.get(r)) {
+                if (cellContainsInspectionNoMarker(cell)) {
+                    return r;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private static boolean cellContainsInspectionNoMarker(String cell) {
+        if (cell == null) {
+            return false;
+        }
+        String t = cell.strip();
+        if (t.isEmpty()) {
+            return false;
+        }
+        return t.contains(INSPECTION_NO_MARKER) || t.contains(INSPECTION_NO_MARKER_FW);
     }
 
     private static final DateTimeFormatter PROCESSING_DATETIME_OUT =
