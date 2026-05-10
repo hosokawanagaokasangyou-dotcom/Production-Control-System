@@ -575,7 +575,7 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
         $rmLines.Add('init_setting/ is included when present in repo (same as Initial). No bundled_session_ui_defaults / bundled_table_column_order from JAR in this profile (avoids clobbering user table/tab prefs on sync). code/exclude_rules.json still materialized from stage1 or JAR fallback.')
         $rmLines.Add('See package_workspace_copy.ps1 for exact rules.')
     }
-    $rmLines.Add('Excluded files (all profiles): *.log, ~$* (Excel lock).')
+    $rmLines.Add('Excluded files (all profiles): *.log, ~$* (Excel lock), *.hprof, *.hprof.* (JVM heap dumps), *.heapsnapshot, *.dump, *.mdmp, *.tmp, Thumbs.db, desktop.ini.')
     $rmLines.Add("This folder sits next to $($AppExeBaseName).exe.")
     $rmLines.Add('Release: Step 8 deletes existing version.txt and same-name ZIPs in pm-ai-package-release, then writes fresh copies; ZIPs omit pm-ai-data/version.txt. Interim bundle folders are removed after zipping.')
     $rmLines.Add('First launch: if the empty marker file next to this app exe exists, the desktop resets env-tab defaults once then deletes it (Initial install bundle only). See Java AppPaths.PORTABLE_FIRST_LAUNCH_MARKER_FILE.')

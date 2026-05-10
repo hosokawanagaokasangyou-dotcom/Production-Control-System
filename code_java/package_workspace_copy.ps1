@@ -90,7 +90,19 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
 
     $excludedFileNamePatterns = @(
         '*.log',
-        '~$*'
+        '~$*',
+        # JVM heap dumps (-XX:+HeapDumpOnOutOfMemoryError) and partitioned siblings (.p1 / .p2 / .p3 ...)
+        # These can reach multi-GB each on JavaFX / Maven runs and would otherwise inflate the portable ZIP.
+        '*.hprof',
+        '*.hprof.*',
+        # Chromium-style heap snapshots, generic dumps, and Windows minidumps.
+        '*.heapsnapshot',
+        '*.dump',
+        '*.mdmp',
+        # Generic tmp files and Windows Explorer metadata. ~$* already handles Office locks.
+        '*.tmp',
+        'Thumbs.db',
+        'desktop.ini'
     )
 
     # Env template TSV (must stay bundled in all modes). Built without non-ASCII literals in source.
