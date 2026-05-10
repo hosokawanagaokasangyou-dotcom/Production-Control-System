@@ -306,7 +306,8 @@ public final class DeliveryCalendarViewTabController {
 
     /**
      * メインシェルで納期管理ビュータブへ切り替えたときに呼ぶ。内側 {@link #innerTabPane} 配下の
-     * {@link Accordion} / {@link TitledPane} を閉じる（配台・実績・アラジン各タブの「操作・ソース」等）。
+     * {@link Accordion} / {@link TitledPane} のうち「操作・ソース」等を閉じる。
+     * 各子タブの「データ表」{@link TitledPane} は開いたままにする。
      */
     public void collapseInnerSectionPanesOnShellSelect() {
         Platform.runLater(
@@ -317,6 +318,9 @@ public final class DeliveryCalendarViewTabController {
                 });
     }
 
+    /** FXML の「データ表」{@link TitledPane} の見出し文言と一致させる。 */
+    private static final String INNER_TAB_DATA_TABLE_TITLED_PANE_TEXT = "データ表";
+
     private static void collapseTitledPanesAndAccordionsUnder(Node node) {
         if (node == null) {
             return;
@@ -325,7 +329,11 @@ public final class DeliveryCalendarViewTabController {
             accordion.setExpandedPane(null);
         }
         if (node instanceof TitledPane titledPane) {
-            titledPane.setExpanded(false);
+            if (INNER_TAB_DATA_TABLE_TITLED_PANE_TEXT.equals(titledPane.getText())) {
+                titledPane.setExpanded(true);
+            } else {
+                titledPane.setExpanded(false);
+            }
         }
         if (node instanceof Parent parent) {
             for (Node child : parent.getChildrenUnmodifiable()) {
