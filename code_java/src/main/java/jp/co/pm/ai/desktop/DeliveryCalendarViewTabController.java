@@ -341,6 +341,7 @@ public final class DeliveryCalendarViewTabController {
         }
         if (deliveryCalendarResultDispatchTableTabController != null) {
             deliveryCalendarResultDispatchTableTabController.bindShell(shell);
+            deliveryCalendarResultDispatchTableTabController.setResultDispatchRefreshButtonVisible(false);
         }
         ensureInnerTabPersistenceWired();
     }
@@ -711,8 +712,16 @@ public final class DeliveryCalendarViewTabController {
                 rebuildMainSpreadsheet();
             }
 
-            if (root.path("ok").asBoolean(false) && processingActualsDataTabController != null) {
-                processingActualsDataTabController.reloadProcessingActualsFromDisk();
+            if (root.path("ok").asBoolean(false)) {
+                if (deliveryCalendarResultDispatchTableTabController != null) {
+                    deliveryCalendarResultDispatchTableTabController.reloadResultDispatchTableFromDisk();
+                }
+                if (aladdinProcessingPlanDataTabController != null) {
+                    aladdinProcessingPlanDataTabController.reloadAladdinProcessingPlanFromDisk();
+                }
+                if (processingActualsDataTabController != null) {
+                    processingActualsDataTabController.reloadProcessingActualsFromDisk();
+                }
             }
 
             // #region agent log

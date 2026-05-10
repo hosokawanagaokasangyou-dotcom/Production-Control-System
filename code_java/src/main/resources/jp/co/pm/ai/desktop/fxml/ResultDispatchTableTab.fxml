@@ -18,7 +18,7 @@
     <padding>
         <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
     </padding>
-    <!-- 加工実績・アラジン子タブと同様: 2 TitledPane（同時展開可） -->
+    <!-- 2 TitledPane（同時展開可）。納期管理ビューに埋め込んだときは再読みボタンを非表示にし親の再読込に一本化 -->
     <TitledPane animated="true" expanded="true"
                 text="&#x64cd;&#x4f5c;&#x30fb;&#x30bd;&#x30fc;&#x30b9;">
         <content>

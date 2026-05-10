@@ -28,9 +28,6 @@
                     <padding>
                         <Insets bottom="4.0"/>
                     </padding>
-                    <Button fx:id="refreshButton" mnemonicParsing="false"
-                            text="&#x518d;&#x8aad;&#x307f;"
-                            onAction="#onRefreshButtonAction"/>
                     <Button mnemonicParsing="false"
                             text="&#x5217;&#x30d5;&#x30a3;&#x30eb;&#x30bf;&#x30fb;&#x4e26;&#x3079;&#x66ff;&#x3048;&#x89e3;&#x9664;"
                             onAction="#onClearColumnFiltersAction"/>

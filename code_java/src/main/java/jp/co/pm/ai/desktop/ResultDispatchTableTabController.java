@@ -159,6 +159,22 @@ public final class ResultDispatchTableTabController {
         Platform.runLater(this::reloadFromDisk);
     }
 
+    /**
+     * 納期管理ビューに埋め込んだときは親の「再読込」で JSON を更新するため、本タブの再読みボタンを隠す。
+     * メインシェル単独タブでは {@code true} のまま。
+     */
+    void setResultDispatchRefreshButtonVisible(boolean visible) {
+        if (refreshButton != null) {
+            refreshButton.setVisible(visible);
+            refreshButton.setManaged(visible);
+        }
+    }
+
+    /** 親（納期管理ビュー）の再読込成功後に呼ぶ。 */
+    public void reloadResultDispatchTableFromDisk() {
+        reloadFromDisk();
+    }
+
     private void onLeadingColumnCountCommitted(int n) {
         headerColumnCount.set(n);
         rebuildSpreadsheet();
@@ -349,7 +365,9 @@ public final class ResultDispatchTableTabController {
         if (shell == null) {
             return;
         }
-        refreshButton.setDisable(true);
+        if (refreshButton != null) {
+            refreshButton.setDisable(true);
+        }
         Map<String, String> ui = shell.snapshotUiEnv();
         Path path = AppPaths.resolveResultDispatchTableJsonPath(ui);
         pathLabel.setText(path.toString());
@@ -357,7 +375,9 @@ public final class ResultDispatchTableTabController {
             statusLabel.setText("ファイルなし");
             metaText.setText("");
             applyEmpty();
-            refreshButton.setDisable(false);
+            if (refreshButton != null) {
+                refreshButton.setDisable(false);
+            }
             return;
         }
         try {
@@ -373,7 +393,9 @@ public final class ResultDispatchTableTabController {
                 statusLabel.setText("JSON 構造が不正");
                 metaText.setText("");
                 applyEmpty();
-                refreshButton.setDisable(false);
+                if (refreshButton != null) {
+                    refreshButton.setDisable(false);
+                }
                 return;
             }
             List<String> headerOrder = new ArrayList<>();
@@ -443,7 +465,9 @@ public final class ResultDispatchTableTabController {
             shell.appendLog("[result-dispatch-json] " + ex.getMessage());
             applyEmpty();
         } finally {
-            refreshButton.setDisable(false);
+            if (refreshButton != null) {
+                refreshButton.setDisable(false);
+            }
         }
     }
 

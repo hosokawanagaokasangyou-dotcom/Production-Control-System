@@ -17,7 +17,6 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
-import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
@@ -58,9 +57,6 @@ public final class AladdinProcessingPlanDataTabController {
                     + "????????1???????????Excel ????????1?????????????????????????"
                     + " ????????????????????????????";
 
-
-    @FXML
-    private Button refreshButton;
 
     @FXML
     private Label statusLabel;
@@ -356,8 +352,8 @@ public final class AladdinProcessingPlanDataTabController {
         }
     }
 
-    @FXML
-    private void onRefreshButtonAction() {
+    /** 納期管理ビュー上部の「再読込」成功後に親から呼ばれる。 */
+    public void reloadAladdinProcessingPlanFromDisk() {
         reloadFromSourceDir();
     }
 
@@ -365,9 +361,7 @@ public final class AladdinProcessingPlanDataTabController {
         if (shell == null) {
             return;
         }
-        refreshButton.setDisable(true);
-        try {
-            Map<String, String> ui = shell.snapshotUiEnv();
+        Map<String, String> ui = shell.snapshotUiEnv();
             Path dir = AppPaths.resolveTaskInputSourceDir(ui);
             dirLabel.setText(dir != null ? dir.toString() : "(???)");
             if (dir == null || !Files.isDirectory(dir)) {
@@ -431,9 +425,6 @@ public final class AladdinProcessingPlanDataTabController {
                 sheetCombo.getItems().clear();
                 applyLoadedFile(file, 0, true);
             }
-        } finally {
-            refreshButton.setDisable(false);
-        }
     }
 
     private void applyLoadedFile(Path file, int excelSheetIndex, boolean showErrorsInStatus) {

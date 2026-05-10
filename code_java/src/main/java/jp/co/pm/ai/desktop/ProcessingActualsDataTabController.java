@@ -23,7 +23,6 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
-import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
@@ -125,9 +124,6 @@ public final class ProcessingActualsDataTabController {
         }
         return m;
     }
-
-    @FXML
-    private Button refreshButton;
 
     @FXML
     private Label statusLabel;
@@ -287,7 +283,7 @@ public final class ProcessingActualsDataTabController {
 
         /*
          * 起動時は xlsx を開かない（ヒープ・OOM 回避）。読込は納期管理ビュー上部の「再読込」成功時、
-         * または本タブの「再読み」から {@link #reloadFromSourceDir} を実行したときのみ。
+         * または {@link #reloadProcessingActualsFromDisk} が親から呼ばれたときのみ。
          */
         refreshSourcePathLabelsOnly();
     }
@@ -320,9 +316,7 @@ public final class ProcessingActualsDataTabController {
         Path file = resolved.get().toAbsolutePath().normalize();
         pathLabel.setText(file.toString());
         loadedPath = null;
-        statusLabel.setText(
-                "未読込 — 納期管理ビュー上部の「再読込」で Excel を読み込みます"
-                        + "（または本タブ内「再読み」）");
+        statusLabel.setText("未読込 — 納期管理ビュー上部の「再読込」で Excel を読み込みます");
         sheetCombo.getItems().clear();
         sheetCombo.setDisable(true);
         applyEmpty();
@@ -510,11 +504,6 @@ public final class ProcessingActualsDataTabController {
         }
     }
 
-    @FXML
-    private void onRefreshButtonAction() {
-        reloadFromSourceDir();
-    }
-
     /** Excel / CSV の読込・成形は POI が重いためワーカースレッドで実行する。 */
     private record ActualsReloadPayload(
             boolean excel,
@@ -580,7 +569,6 @@ public final class ProcessingActualsDataTabController {
         if (activeReloadTask != null) {
             activeReloadTask.cancel(true);
         }
-        refreshButton.setDisable(true);
         final long gen = reloadGeneration.incrementAndGet();
         final Map<String, String> uiSnap = new HashMap<>(shell.snapshotUiEnv());
 
@@ -595,7 +583,6 @@ public final class ProcessingActualsDataTabController {
             sheetCombo.getItems().clear();
             loadedPath = null;
             applyEmpty();
-            refreshButton.setDisable(false);
             return;
         }
         Path file = resolved.get().toAbsolutePath().normalize();
@@ -609,7 +596,6 @@ public final class ProcessingActualsDataTabController {
             sheetCombo.setDisable(true);
             sheetCombo.getItems().clear();
             applyEmpty();
-            refreshButton.setDisable(false);
             return;
         }
 
@@ -627,7 +613,6 @@ public final class ProcessingActualsDataTabController {
             sheetCombo.getItems().clear();
             loadedPath = null;
             applyEmpty();
-            refreshButton.setDisable(false);
             return;
         }
 
@@ -723,7 +708,6 @@ public final class ProcessingActualsDataTabController {
                         applyReloadPayloadOnFx(p, true);
                     } finally {
                         unbindLoadProgress();
-                        refreshButton.setDisable(false);
                     }
                 });
         task.setOnFailed(
@@ -745,14 +729,12 @@ public final class ProcessingActualsDataTabController {
                         applyEmpty();
                     } finally {
                         unbindLoadProgress();
-                        refreshButton.setDisable(false);
                     }
                 });
         task.setOnCancelled(
                 ev -> {
                     activeReloadTask = null;
                     unbindLoadProgress();
-                    refreshButton.setDisable(false);
                 });
         new Thread(task, "processing-actuals-reload").start();
     }
@@ -805,7 +787,6 @@ public final class ProcessingActualsDataTabController {
         if (activeReloadTask != null) {
             activeReloadTask.cancel(true);
         }
-        refreshButton.setDisable(true);
         final long gen = reloadGeneration.incrementAndGet();
         Task<PlanInputTabularIo.TabularSheet> task =
                 new Task<>() {
@@ -854,7 +835,6 @@ public final class ProcessingActualsDataTabController {
                         applyShapedToUi(shaped, showErrorsInStatus);
                     } finally {
                         unbindLoadProgress();
-                        refreshButton.setDisable(false);
                     }
                 });
         task.setOnFailed(
@@ -878,14 +858,12 @@ public final class ProcessingActualsDataTabController {
                         applyEmpty();
                     } finally {
                         unbindLoadProgress();
-                        refreshButton.setDisable(false);
                     }
                 });
         task.setOnCancelled(
                 ev -> {
                     activeReloadTask = null;
                     unbindLoadProgress();
-                    refreshButton.setDisable(false);
                 });
         new Thread(task, "processing-actuals-sheet").start();
     }
