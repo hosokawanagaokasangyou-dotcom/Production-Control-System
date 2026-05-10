@@ -3,11 +3,11 @@
 ## 前提
 
 - Python 3.10 以上
-- 連続スクショを含むフルパイプラインは **Windows デスクトップ**で実行すること（JavaFX が表示できること）
+- 画面は **手動**でキャプチャし、`manual/src/images` に **PNG** を置く（ファイル名は `pipeline-manifest.yaml` の `injections[].tab_key` と一致、例: `run.png`）。
 
 ## セットアップ
 
-推奨（Windows PowerShell、リポジトリ直下）:
+例（Windows PowerShell、リポジトリ直下）:
 
 ```text
 python -m venv manual\.venv
@@ -20,7 +20,7 @@ manual\.venv\Scripts\pip install -r manual\requirements.txt
 pip install -r manual/requirements.txt
 ```
 
-## 一括実行（推奨）
+## 一括生成（通常）
 
 リポジトリ直下で:
 
@@ -28,16 +28,16 @@ pip install -r manual/requirements.txt
 .\Publish-Manual.ps1
 ```
 
-生成物は `manual/html/`（ブラウザで `manual/html/index.html` を開く）。
+出力は `manual/html/`（ブラウザで `manual/html/index.html` を開く）。
 
 ## 設定
 
-`manual/pipeline-manifest.yaml` で撮影タブ（`MainShellTabId.key()`）・注入先 Markdown を編集する。
+`manual/pipeline-manifest.yaml` でプレースホルダ `<!-- MANUAL_SNAP:key -->` を画像参照へ置換する対応付けを行う（`tab_key` は `MainShellTabId.key()` に合わせる）。
 
-## フェーズだけ省略する場合
+## フェーズだけ個別にスキップする場合
 
 ```text
-.\Publish-Manual.ps1 -SkipSnap
+.\Publish-Manual.ps1 -SkipDataPrep
 ```
 
-など（`-SkipDataPrep` `-SkipSnap` `-SkipSync` `-SkipInject` `-SkipHtml`）。
+など。`-SkipDataPrep` `-SkipInject` `-SkipHtml`。

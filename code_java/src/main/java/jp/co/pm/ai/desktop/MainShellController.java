@@ -2497,7 +2497,6 @@ public final class MainShellController {
                     mainRunTabController.flushPendingSessionLogScroll();
                     Platform.runLater(mainRunTabController::flushPendingSessionLogScroll);
                 });
-        ManualDesktopSnapRunner.scheduleIfRequested(this);
     }
 
     /**

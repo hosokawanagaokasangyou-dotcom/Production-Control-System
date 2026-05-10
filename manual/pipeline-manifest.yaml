@@ -1,12 +1,8 @@
-# マニュアル自動公開パイプライン（Publish-Manual.ps1 / scripts/manual_publish.py）
-# snap_tab_keys: MainShellTabId.key() と一致（例: run, planInput）
+# マニュアル公開パイプライン（Publish-Manual.ps1 / scripts/manual_publish.py）
+#
+# 画像: 手動で PNG を manual/src/images に置く（ファイル名は injections の tab_key と一致、例: run.png）。
+# Markdown の <!-- MANUAL_SNAP:key --> は inject で画像参照に置換される。
 
-snap_tab_keys:
-  - run
-  - env
-
-# PNG を書き出すディレクトリ（リポジトリルートからの相対）
-snap_out_dir: manual/snap-out
 images_dir: manual/src/images
 
 # 任意: データ準備（ファイルコピー）。未使用なら空でよい。
