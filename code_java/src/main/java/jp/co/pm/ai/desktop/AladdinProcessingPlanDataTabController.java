@@ -46,16 +46,16 @@ import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 
 /**
- * {@link AppPaths#KEY_PM_AI_TASK_INPUT_SOURCE_DIR} ??????????????????????????? CSV ????
- * ????? {@link SpreadsheetView} ???????????? {@code AladdinProcessingPlanDataTab.fxml}?
+ * 環境変数 {@link AppPaths#KEY_PM_AI_TASK_INPUT_SOURCE_DIR} で指定するソースフォルダから最新の加工計画ファイルを読み込み、
+ * {@link SpreadsheetView} に表示する。レイアウトは {@code AladdinProcessingPlanDataTab.fxml}。
  */
 
 public final class AladdinProcessingPlanDataTabController {
 
     private static final String HINT_TEXT =
-            "PM_AI_TASK_INPUT_SOURCE_DIR ?????????????????DATA???????csv / xlsx ???"
-                    + "????????1???????????Excel ????????1?????????????????????????"
-                    + " ????????????????????????????";
+            "PM_AI_TASK_INPUT_SOURCE_DIR で解決したフォルダ内の最新ファイル（csv / xlsx）から加工計画DATAを読み込みます。"
+                    + " 複数ある場合は更新日時が最も新しいものを使います。"
+                    + " Excel は「Excel シート」でシートを選べます。Parquet は未対応です。";
 
 
     @FXML
@@ -261,7 +261,7 @@ public final class AladdinProcessingPlanDataTabController {
     private void onReorderColumns() {
         if (headersRef.isEmpty()) {
             if (shell != null) {
-                shell.appendLog("[aladdin-plan-data] ????????????????????");
+                shell.appendLog("[aladdin-plan-data] 列見出しが空のため並べ替えできません");
             }
             return;
         }
@@ -362,69 +362,69 @@ public final class AladdinProcessingPlanDataTabController {
             return;
         }
         Map<String, String> ui = shell.snapshotUiEnv();
-            Path dir = AppPaths.resolveTaskInputSourceDir(ui);
-            dirLabel.setText(dir != null ? dir.toString() : "(???)");
-            if (dir == null || !Files.isDirectory(dir)) {
-                statusLabel.setText("????????????");
-                pathLabel.setText("");
-                sheetCombo.setDisable(true);
-                sheetCombo.getItems().clear();
-                loadedPath = null;
-                applyEmpty();
-                return;
-            }
-            Optional<Path> newest = NetworkSourceDirResolver.newestTaskInputFileInDirectory(dir);
-            if (newest.isEmpty()) {
-                statusLabel.setText("????????");
-                pathLabel.setText("");
-                sheetCombo.setDisable(true);
-                sheetCombo.getItems().clear();
-                loadedPath = null;
-                applyEmpty();
-                return;
-            }
-            Path file = newest.get().toAbsolutePath().normalize();
-            loadedPath = file;
-            pathLabel.setText(file.toString());
+        Path dir = AppPaths.resolveTaskInputSourceDir(ui);
+        dirLabel.setText(dir != null ? dir.toString() : "(未設定)");
+        if (dir == null || !Files.isDirectory(dir)) {
+            statusLabel.setText("ソースフォルダがありません");
+            pathLabel.setText("");
+            sheetCombo.setDisable(true);
+            sheetCombo.getItems().clear();
+            loadedPath = null;
+            applyEmpty();
+            return;
+        }
+        Optional<Path> newest = NetworkSourceDirResolver.newestTaskInputFileInDirectory(dir);
+        if (newest.isEmpty()) {
+            statusLabel.setText("読込対象ファイルがありません");
+            pathLabel.setText("");
+            sheetCombo.setDisable(true);
+            sheetCombo.getItems().clear();
+            loadedPath = null;
+            applyEmpty();
+            return;
+        }
+        Path file = newest.get().toAbsolutePath().normalize();
+        loadedPath = file;
+        pathLabel.setText(file.toString());
 
-            String low = file.getFileName().toString().toLowerCase(Locale.ROOT);
-            if (low.endsWith(".pq") || low.endsWith(".parquet")) {
-                statusLabel.setText("Parquet ??????");
-                sheetCombo.setDisable(true);
-                sheetCombo.getItems().clear();
-                applyEmpty();
-                return;
-            }
+        String low = file.getFileName().toString().toLowerCase(Locale.ROOT);
+        if (low.endsWith(".pq") || low.endsWith(".parquet")) {
+            statusLabel.setText("Parquet は未対応です");
+            sheetCombo.setDisable(true);
+            sheetCombo.getItems().clear();
+            applyEmpty();
+            return;
+        }
 
-            if (isExcelPath(file)) {
-                suppressSheetUi.set(true);
-                try {
-                    List<String> names = TaskInputSourceRawGridIo.listExcelSheetNames(file);
-                    sheetCombo.getItems().setAll(names);
-                    sheetCombo.setDisable(names.isEmpty());
-                    if (!names.isEmpty()) {
-                        sheetCombo.getSelectionModel().select(0);
-                    }
-                } catch (IOException ex) {
-                    statusLabel.setText("????????");
-                    if (shell != null) {
-                        shell.appendLog(
-                                "[aladdin-plan-data] "
-                                        + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
-                    }
-                    sheetCombo.setDisable(true);
-                    sheetCombo.getItems().clear();
-                    applyEmpty();
-                    return;
-                } finally {
-                    suppressSheetUi.set(false);
+        if (isExcelPath(file)) {
+            suppressSheetUi.set(true);
+            try {
+                List<String> names = TaskInputSourceRawGridIo.listExcelSheetNames(file);
+                sheetCombo.getItems().setAll(names);
+                sheetCombo.setDisable(names.isEmpty());
+                if (!names.isEmpty()) {
+                    sheetCombo.getSelectionModel().select(0);
                 }
-                applyLoadedFile(file, sheetCombo.getSelectionModel().getSelectedIndex(), true);
-            } else {
+            } catch (IOException ex) {
+                statusLabel.setText("Excel シート一覧の取得に失敗しました");
+                if (shell != null) {
+                    shell.appendLog(
+                            "[aladdin-plan-data] "
+                                    + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+                }
                 sheetCombo.setDisable(true);
                 sheetCombo.getItems().clear();
-                applyLoadedFile(file, 0, true);
+                applyEmpty();
+                return;
+            } finally {
+                suppressSheetUi.set(false);
             }
+            applyLoadedFile(file, sheetCombo.getSelectionModel().getSelectedIndex(), true);
+        } else {
+            sheetCombo.setDisable(true);
+            sheetCombo.getItems().clear();
+            applyLoadedFile(file, 0, true);
+        }
     }
 
     private void applyLoadedFile(Path file, int excelSheetIndex, boolean showErrorsInStatus) {
@@ -470,15 +470,11 @@ public final class AladdinProcessingPlanDataTabController {
             TableColumnOrderPersistence.saveColumnVisibility(
                     TableColumnOrderPersistence.TableId.ALADDIN_PROCESSING_PLAN_RAW, visAfter);
 
-            statusLabel.setText(
-                    rows.size()
-                            + " \u884c \u00d7 "
-                            + headersRef.size()
-                            + " \u5217");
+            statusLabel.setText(rows.size() + " 行 × " + headersRef.size() + " 列");
             rebuildSpreadsheet();
         } catch (Exception ex) {
             if (showErrorsInStatus) {
-                statusLabel.setText("\u8aad\u8fbc\u30a8\u30e9\u30fc");
+                statusLabel.setText("読込エラー");
             }
             if (shell != null) {
                 shell.appendLog(
