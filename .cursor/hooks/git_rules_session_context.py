@@ -12,7 +12,8 @@ def main() -> None:
         "版管理対象を変更したターンでは .cursor/rules/git-commit-push-after-code-changes.mdc に従い、"
         "その依頼で触ったファイルを git add → commit → push し、応答で結果をユーザーに報告する。"
         "依頼外の差分が混在する場合はコミットを分けるかユーザーに確認。編集前のローカルコミットは不要。"
-        "AI がコミット文を生成する場合は日本語（.cursor/rules/git-commit-message-japanese.mdc）。\n"
+        "AI がコミット文を生成する場合は日本語のみ（規約は同ルール「コミットメッセージ規約」節）。"
+        ".pm-ai-cache/ は .cursor/rules/pm-ai-cache-network-source-tracking.mdc に従い追跡対象。\n"
     )
     sys.stdout.write(json.dumps({"additional_context": text}, ensure_ascii=False))
 

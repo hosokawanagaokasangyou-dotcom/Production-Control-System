@@ -4,17 +4,12 @@
 
 ## Git（コミット運用・メッセージ）
 
-**作業完了時（変更後）**: **`.cursor/rules/git-commit-push-after-code-changes.mdc`** — そのターンで変更・追加した版管理対象は **漏れなく `git add` → `commit` → `push`**。依頼外の差分が混在する場合はコミットを分け、応答で `git status` の要約を報告する。**`*.xlsm` に未コミットの変更がある場合も同ファイルに従い必ずコミット・push**（節「Excel マクロブック」）。**編集前のローカルコミットは不要**（旧ルールは `.cursor/rules/pre-edit-git-commit-push.mdc` に廃止旨を記載）。
+正本: **`.cursor/rules/git-commit-push-after-code-changes.mdc`**（変更後の `add` → `commit` → `push`、メッセージ規約、`*.xlsm` 取り扱い）／**`.cursor/rules/pm-ai-cache-network-source-tracking.mdc`**（`.pm-ai-cache/` 追跡）／**`.cursor/rules/version-txt-bump-on-commit.mdc`**（`version.txt` +0.01 自動バンプ、`scripts/git-hooks/pre-commit`）。
 
-要点（Generate 用）: **日本語のみ**（英語だけの件名は出さない）。1 行目は短い要約。必要なら `feat:` / `fix:` 等＋日本語説明。
-
-
-
-### version.txt 自動バンプ
-
-正本: **`.cursor/rules/version-txt-bump-on-commit.mdc`**
-
-要点: **`git commit` のたびにリポジトリ直下の `version.txt` を +0.01**。実装は `scripts/bump_version_txt.py` ＋ `scripts/git-hooks/pre-commit`。各クローンで一度 **`git config core.hooksPath scripts/git-hooks`** が必要。`--no-verify` で勝手にスキップしない。
+要点（Generate 用 = AI コミットメッセージ生成）:
+- **日本語のみ**。英語だけの件名は出さない。
+- 1 行目は短い要約。必要なら先頭に `feat:` / `fix:` / `chore:` / `docs:` / `refactor:` 等を付けてもよいが、その後の説明は日本語。
+- 詳細は空行のあとに箇条書き可。
 
 
 

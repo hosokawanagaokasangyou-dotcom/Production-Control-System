@@ -39,4 +39,3 @@ git config core.hooksPath scripts/git-hooks
 ## 関連ファイル（参照のみ）
 
 - `scripts/README-githooks.md` … 利用者向けの導入手順。
-- `.githooks/pre-commit` … 旧 `code/version.txt` 用（**こちらは本ルールとは別系統**）。`code/version.txt` は通常存在せず no-op になる。混同しない。

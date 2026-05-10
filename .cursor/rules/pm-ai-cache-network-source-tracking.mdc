@@ -1,0 +1,21 @@
+---
+description: .pm-ai-cache/（ネットワークソース代替キャッシュ）を Git の追跡対象として運用する
+alwaysApply: true
+---
+
+# `.pm-ai-cache/` ネットワークソースキャッシュの追跡ポリシー
+
+## 対象
+
+JavaFX デスクトップが `PM_AI_TASK_INPUT_SOURCE_DIR` / `PM_AI_ACTUAL_DETAIL_SOURCE_DIR` の代替として書き込む **`{リポジトリルート}/.pm-ai-cache/network-source/`**（メタ JSON、コピー済み xlsx / csv 等）。
+
+## ルール
+
+- **Git の追跡対象とする。** `.gitignore` に **含めない**。
+- `git status` に当該パスの差分が出ているときは、**依頼と無関係でも** チーム共有データとして `git add` → `commit` → `push` まで行う。
+- **コミットを分ける運用**: 依頼内容と無関係な `.pm-ai-cache/` 更新は、依頼コミットと **同一コミットに混ぜない**ほうが履歴が読みやすい。`chore: ネットワークソースキャッシュ更新` 等の日本語一行メッセージで先にコミット・push してから依頼コミットを作る。
+- 機微データ（個人情報・秘密情報）をコミットに含めない運用は **チームで別途決める**。容量にも注意。
+
+## 関連
+
+- `.cursor/rules/git-commit-push-after-code-changes.mdc` … 変更後 commit / push の正本。
