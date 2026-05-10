@@ -241,6 +241,46 @@ public final class TableColumnOrderPersistence {
             "deliveryCalendarMain_ui_pastDays";
     private static final String DELIVERY_CALENDAR_FUTURE_DAYS_KEY =
             "deliveryCalendarMain_ui_futureDays";
+    private static final String DELIVERY_CALENDAR_FONT_FAMILY_KEY =
+            "deliveryCalendarMain_ui_fontFamily";
+
+    /**
+     * 納期管理ビュー「アラ・実績・シス比較」表のフォントファミリ名（空文字＝既定）。
+     * 値変更時に SpreadsheetView 全体へインライン {@code -fx-font-family} で適用される。
+     */
+    public static String loadDeliveryCalendarFontFamily() {
+        try {
+            if (!Files.isRegularFile(STORE)) {
+                return "";
+            }
+            JsonNode root = JSON.readTree(STORE.toFile());
+            if (root == null || !root.isObject()) {
+                return "";
+            }
+            return root.path(DELIVERY_CALENDAR_FONT_FAMILY_KEY).asText("");
+        } catch (IOException e) {
+            return "";
+        }
+    }
+
+    public static void saveDeliveryCalendarFontFamily(String family) {
+        try {
+            Files.createDirectories(STORE.getParent());
+            ObjectNode root;
+            if (Files.isRegularFile(STORE)) {
+                JsonNode tree = JSON.readTree(STORE.toFile());
+                root =
+                        tree != null && tree.isObject()
+                                ? (ObjectNode) tree.deepCopy()
+                                : JSON.createObjectNode();
+            } else {
+                root = JSON.createObjectNode();
+            }
+            root.put(DELIVERY_CALENDAR_FONT_FAMILY_KEY, family != null ? family : "");
+            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
+        } catch (IOException ignored) {
+        }
+    }
 
     /** 納期管理ビュー「アラ・実績・シス比較」の日付ウィンドウを読み込む（キーが無ければ既定 14/30）。 */
     public static DeliveryCalendarDateWindowPrefs loadDeliveryCalendarDateWindowPrefs() {

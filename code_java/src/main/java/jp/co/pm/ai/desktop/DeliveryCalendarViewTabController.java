@@ -29,12 +29,14 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SelectionMode;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Slider;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.control.TitledPane;
+import javafx.scene.text.Font;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
@@ -184,6 +186,11 @@ public final class DeliveryCalendarViewTabController {
     @FXML
     private Label dateWindowRangeLabel;
 
+    @FXML
+    private ComboBox<String> mainFontFamilyCombo;
+
+    private final AtomicBoolean suppressFontFamilyPersistence = new AtomicBoolean(false);
+
     private MainShellController shell;
 
     private Stage ownerStage;
@@ -245,6 +252,7 @@ public final class DeliveryCalendarViewTabController {
         }
 
         SpreadsheetThemeBridge.install(mainSpreadsheet);
+        SpreadsheetTabularSupport.installDeliveryCalendarSpreadsheetChrome(mainSpreadsheet);
         // 閲覧用: MULTIPLE は範囲・見出し連動で選択表示が断片化しやすい（固定列あり時）
         mainSpreadsheet.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
 
@@ -270,6 +278,59 @@ public final class DeliveryCalendarViewTabController {
                 mainSpreadsheetHost, headerColumnCountMain::get);
 
         installDateWindowSpinners();
+        installFontFamilyCombo();
+    }
+
+    /**
+     * メイン表のフォントを ComboBox から選択し、{@link SpreadsheetView} 全体へ
+     * インライン {@code -fx-font-family} を適用する。値は即時セッション保存され、次回起動時に再適用される。
+     */
+    private void installFontFamilyCombo() {
+        if (mainFontFamilyCombo == null) {
+            return;
+        }
+        List<String> families = new ArrayList<>();
+        families.add("");
+        families.addAll(Font.getFamilies());
+        mainFontFamilyCombo.getItems().setAll(families);
+
+        String saved = TableColumnOrderPersistence.loadDeliveryCalendarFontFamily();
+        suppressFontFamilyPersistence.set(true);
+        try {
+            mainFontFamilyCombo.setValue(saved == null ? "" : saved);
+        } finally {
+            suppressFontFamilyPersistence.set(false);
+        }
+        applyMainFontFamily(saved);
+
+        mainFontFamilyCombo
+                .valueProperty()
+                .addListener(
+                        (obs, a, b) -> {
+                            if (suppressFontFamilyPersistence.get()) {
+                                return;
+                            }
+                            String fam = b == null ? "" : b.trim();
+                            TableColumnOrderPersistence.saveDeliveryCalendarFontFamily(fam);
+                            applyMainFontFamily(fam);
+                        });
+    }
+
+    /**
+     * メイン表 {@link SpreadsheetView} にフォントを適用する。空文字は既定（CSS／システム継承）に戻す。
+     * セル内グラフィック（{@link DeliveryCalendarMainCell.TripleQty} の VBox/Label）にも継承される。
+     */
+    private void applyMainFontFamily(String family) {
+        if (mainSpreadsheet == null) {
+            return;
+        }
+        if (family == null || family.isBlank()) {
+            mainSpreadsheet.setStyle("");
+            return;
+        }
+        // CSS インラインなので CSS シートより優先される
+        String escaped = family.replace("'", "\\'").replace("\"", "\\\"");
+        mainSpreadsheet.setStyle("-fx-font-family: '" + escaped + "';");
     }
 
     /**

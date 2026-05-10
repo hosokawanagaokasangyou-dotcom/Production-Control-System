@@ -566,7 +566,14 @@ public final class SpreadsheetTabularSupport {
     /**
      * Read-only delivery-calendar main grid: date columns use a triple stack (task-input Aladdin / actual
      * detail / dispatch JSON); attribute columns ({@code leadingColumnCount} wide) are plain text.
-     * Cell styling follows the scene theme ({@link SpreadsheetThemeBridge}); no fixed green/white palette.
+     *
+     * <p>配色（テーマ設定は無視・固定）:
+     * <ul>
+     *   <li>列見出し・行見出しは {@code installDeliveryCalendarSpreadsheetChrome} 由来 CSS で薄グレー＋黒</li>
+     *   <li>フィルタ行は {@link #DC_STYLE_HEADER_ROW}（薄グレー＋黒）</li>
+     *   <li>先頭固定列（{@code c < leadingColumnCount}）は {@link #DC_STYLE_LEADING_COL}（白＋黒）</li>
+     *   <li>日付列で空欄以外は {@link #DC_STYLE_DATA_GREEN}（薄緑＋黒）、空欄は {@link #DC_STYLE_DATA_WHITE}（白＋黒）</li>
+     * </ul>
      *
      * @param leadingColumnCount number of left fixed columns (must be {@code >= 0} and {@code <= cols})
      */
@@ -588,11 +595,13 @@ public final class SpreadsheetTabularSupport {
             SpreadsheetCell cell =
                     SpreadsheetCellType.STRING.createCell(SPREADSHEET_FILTER_ROW, c, 1, 1, "");
             cell.setEditable(false);
+            cell.setStyle(DC_STYLE_HEADER_ROW);
             filterRow.add(cell);
         }
         gridRows.add(filterRow);
 
         int firstData = spreadsheetFirstDataRowIndex();
+        int leading = Math.max(0, Math.min(cols, leadingColumnCount));
         for (int r = 0; r < rc; r++) {
             int gridRow = firstData + r;
             ObservableList<DeliveryCalendarMainCell> src = rows.get(r);
@@ -600,8 +609,10 @@ public final class SpreadsheetTabularSupport {
             for (int c = 0; c < cols; c++) {
                 DeliveryCalendarMainCell mc =
                         c < src.size() && src.get(c) != null ? src.get(c) : new DeliveryCalendarMainCell.PlainText("");
+                boolean isDateColumn = c >= leading;
                 if (mc instanceof DeliveryCalendarMainCell.TripleQty t) {
-                    String item = String.join("\n", deliveryCalendarTripleVisibleFormattedLines(t));
+                    List<String> visibleLines = deliveryCalendarTripleVisibleFormattedLines(t);
+                    String item = String.join("\n", visibleLines);
                     SpreadsheetCell cell =
                             SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, item);
                     cell.setEditable(false);
@@ -609,6 +620,10 @@ public final class SpreadsheetTabularSupport {
                     cell.setCellGraphic(true);
                     Node g = deliveryCalendarTripleGraphic(t);
                     cell.setGraphic(g);
+                    cell.setStyle(
+                            isDateColumn
+                                    ? (visibleLines.isEmpty() ? DC_STYLE_DATA_WHITE : DC_STYLE_DATA_GREEN)
+                                    : DC_STYLE_LEADING_COL);
                     Tooltip tt =
                             new Tooltip(
                                     "\u30a2\u30e9\u30b8\u30f3\u52a0\u5de5\u8a08\u753b\u53d6\u5f97\u30c7\u30fc\u30bf / "
@@ -624,6 +639,10 @@ public final class SpreadsheetTabularSupport {
                     cell.setEditable(false);
                     cell.setCellGraphic(false);
                     cell.setGraphic(null);
+                    cell.setStyle(
+                            isDateColumn
+                                    ? (raw == null || raw.isBlank() ? DC_STYLE_DATA_WHITE : DC_STYLE_DATA_GREEN)
+                                    : DC_STYLE_LEADING_COL);
                     rowCells.add(cell);
                 }
             }
