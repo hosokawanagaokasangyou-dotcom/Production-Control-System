@@ -64,7 +64,10 @@ public final class DeliveryCalendarViewTabController {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    /** Child stdout lines {@code PM_AI_PROGRESS 0..100}; shown in {@link #statusLabel} during Python phase. */
+    /**
+     * Child stdout lines {@code PM_AI_PROGRESS 0..100}. During Python, drives {@link #statusLabel} and the
+     * three delivery reload {@link ProgressBar}s (same overall fraction; JSON 反映時は各タブ別に上書き)。
+     */
     private static final String PM_AI_PROGRESS_PREFIX = "PM_AI_PROGRESS ";
 
     /**
@@ -661,33 +664,41 @@ public final class DeliveryCalendarViewTabController {
                     Integer.parseInt(t.substring(PM_AI_PROGRESS_PREFIX.length()).trim());
             pct = Math.max(0, Math.min(100, pct));
             statusLabel.setText("取得中… メイン表（生成） " + pct + "%");
+            /* Python はセグメント別ではなく全体％のみ通知するため、取得中は三本に同じ比率を反映する。 */
+            double frac = pct / 100.0;
+            setDeliveryReloadSegmentProgress(
+                    deliveryReloadProgressDispatch, deliveryReloadPctDispatch, frac);
+            setDeliveryReloadSegmentProgress(
+                    deliveryReloadProgressActuals, deliveryReloadPctActuals, frac);
+            setDeliveryReloadSegmentProgress(
+                    deliveryReloadProgressAladdin, deliveryReloadPctAladdin, frac);
             // #region agent log
             {
                 Map<String, Object> d = new LinkedHashMap<>();
                 d.put("parsedPct", pct);
-                d.put("rawLinePrefixLen", PM_AI_PROGRESS_PREFIX.length());
+                d.put("syncFraction", frac);
                 d.put(
-                        "dispatchBarAfterLabelOnly",
+                        "dispatchBar",
                         deliveryReloadProgressDispatch != null
                                 ? deliveryReloadProgressDispatch.getProgress()
                                 : -1.0);
                 d.put(
-                        "actualsBarAfterLabelOnly",
+                        "actualsBar",
                         deliveryReloadProgressActuals != null
                                 ? deliveryReloadProgressActuals.getProgress()
                                 : -1.0);
                 d.put(
-                        "aladdinBarAfterLabelOnly",
+                        "aladdinBar",
                         deliveryReloadProgressAladdin != null
                                 ? deliveryReloadProgressAladdin.getProgress()
                                 : -1.0);
-                d.put("codePathUpdatesSegmentBars", Boolean.FALSE);
+                d.put("segmentBarsSyncedFromPmAiProgress", Boolean.TRUE);
                 AgentDebugLog.appendStructured(
                         shell != null ? shell.snapshotUiEnv() : Map.of(),
                         "6c5eb9",
                         "H1",
                         "DeliveryCalendarViewTabController.handleDeliveryCalendarProgressLine",
-                        "pm_ai_progress_after_status_only",
+                        "pm_ai_progress_after_bars_sync",
                         d);
             }
             // #endregion
