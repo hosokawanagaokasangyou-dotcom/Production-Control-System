@@ -566,7 +566,7 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
     $rmLines.Add('Workspace mirror: package_workspace_copy.ps1 (shared with package_app.ps1).')
     $rmLines.Add('Master *.txt under code/ are always copied (see package_app_mandatory_code_paths.txt).')
     if ($BundleKind -eq 'InitialInstall') {
-        $rmLines.Add('Bundle profile: InitialInstall - excludes .git, .venv, .githooks, .github, .pm-ai-cache/network-source, .cursor, .vscode, code/VBA, code/参照用, code_java build/cache dirs, pm-ai-package-release/, output/, code/output/, code/python/output/, **/plan, **/plans, **/__pycache__, **/.pytest_cache, build_cache, root xlwings install bat, code workspace file (see package_workspace_copy.ps1).')
+        $rmLines.Add('Bundle profile: InitialInstall - excludes .git, **/.venv (any depth), .githooks, .github, .pm-ai-cache/network-source, .cursor, .vscode, code/VBA, code/参照用, code_java build/cache dirs, pm-ai-package-release/, output/, code/output/, code/python/output/, **/plan, **/plans, **/__pycache__, **/.pytest_cache, build_cache, root xlwings install bat, code workspace file (see package_workspace_copy.ps1).')
         $rmLines.Add('Note: dispatch outputs (plan/plans/output) are now excluded from InitialInstall as well as VersionUpgrade.')
         $rmLines.Add('init_setting/: copied from repo init_setting/ when present (session_defaults / table_column_defaults for package baselines).')
         $rmLines.Add('Desktop UI defaults (Initial install only in dist): pm-ai-data/config/bundled_session_ui_defaults.json and bundled_table_column_order.json from JAR resources. VersionUpgrade zip does not ship these two (user session files under ~/.pm-ai-desktop are not overwritten from bundle).')

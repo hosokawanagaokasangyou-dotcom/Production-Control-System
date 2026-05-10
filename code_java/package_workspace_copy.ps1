@@ -79,9 +79,11 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
 
     # Directory base names matched anywhere in the path.
     $excludedDirNames = [System.Collections.Generic.List[string]]::new()
-    foreach ($n in @('__pycache__', '.pytest_cache', 'build_cache')) {
+    foreach ($n in @('__pycache__', '.pytest_cache', 'build_cache', '.venv')) {
         $excludedDirNames.Add($n)
     }
+    # Note: repo-root prefix '.venv/' also exists in excludedDirPrefixes; '.venv' here excludes nested trees
+    # (e.g. manual/.venv/) which must not ship — portable runtime is pm-ai-data/runtime/python-embed only.
     # plan / plans are dev-time dispatch outputs; never ship in release bundles regardless of profile.
     if ($BundleKind -eq 'InitialInstall' -or $BundleKind -eq 'VersionUpgrade' -or $BundleKind -eq 'DeveloperMirror') {
         $excludedDirNames.Add('plan')
