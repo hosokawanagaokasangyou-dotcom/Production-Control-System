@@ -126,7 +126,7 @@ public final class AladdinProcessingPlanDataTabController {
         spreadsheetHost.getChildren().add(spreadsheetView);
         VBox.setVgrow(spreadsheetHost, Priority.ALWAYS);
 
-        spreadsheetView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        spreadsheetView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
         SpreadsheetThemeBridge.install(spreadsheetView);
 
         columnStripHost

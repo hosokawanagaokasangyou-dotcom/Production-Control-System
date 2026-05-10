@@ -119,7 +119,7 @@ public final class Stage1PreviewTabController {
         VBox.setVgrow(spreadsheetHost, Priority.ALWAYS);
 
         rows = FXCollections.observableArrayList();
-        spreadsheetView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        spreadsheetView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
         SpreadsheetThemeBridge.install(spreadsheetView);
 
         SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
