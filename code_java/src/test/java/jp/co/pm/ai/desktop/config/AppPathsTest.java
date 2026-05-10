@@ -2,8 +2,10 @@ package jp.co.pm.ai.desktop.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -95,6 +97,54 @@ class AppPathsTest {
         assertTrue(
                 s.endsWith("加工実績明細DATA"),
                 "suffix: " + p);
+    }
+
+    @Test
+    void actualDetailRawMaxBytes_defaultsToEightMiB() {
+        assertEquals(8L * 1024 * 1024, AppPaths.resolveActualDetailRawMaxBytes(Map.of()));
+    }
+
+    @Test
+    void actualDetailRawMaxBytes_acceptsSuffixAndZeroUnlimited() {
+        assertEquals(
+                16L * 1024 * 1024,
+                AppPaths.resolveActualDetailRawMaxBytes(
+                        Map.of(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES, "16M")));
+        assertEquals(
+                0L,
+                AppPaths.resolveActualDetailRawMaxBytes(
+                        Map.of(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES, "0")));
+    }
+
+    @Test
+    void actualDetailRawMaxBytes_invalidFallsBackToDefault() {
+        assertEquals(
+                AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES,
+                AppPaths.resolveActualDetailRawMaxBytes(
+                        Map.of(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES, "not-a-number")));
+    }
+
+    @Test
+    void parseEnvByteCountToLong_rejectsInvalid() {
+        assertTrue(AppPaths.parseEnvByteCountToLong("??") < 0);
+    }
+
+    @Test
+    void ensureActualDetailRawFileWithinLimit_throwsWhenTooLarge(@TempDir Path dir) throws Exception {
+        Path f = dir.resolve("huge.xlsx");
+        Files.write(f, new byte[500]);
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES, "100");
+        IOException ex =
+                assertThrows(IOException.class, () -> AppPaths.ensureActualDetailRawFileWithinLimit(f, ui));
+        assertTrue(ex.getMessage().contains("上限"), ex.getMessage());
+    }
+
+    @Test
+    void ensureActualDetailRawFileWithinLimit_skipsWhenMaxZero(@TempDir Path dir) throws Exception {
+        Path f = dir.resolve("any.xlsx");
+        Files.write(f, new byte[500]);
+        AppPaths.ensureActualDetailRawFileWithinLimit(
+                f, Map.of(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES, "0"));
     }
 
     @Test

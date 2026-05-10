@@ -125,6 +125,15 @@ public final class AppPaths {
     /** Optional sheet name inside {@link #KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK} (empty = first sheet). */
     public static final String KEY_PM_AI_ACTUAL_DETAIL_SHEET = "PM_AI_ACTUAL_DETAIL_SHEET";
 
+    /**
+     * 加工実績明細の元ファイル（Excel/CSV）を読む前のサイズ上限（バイト）。超過時は読込を中止してヒープ枯渇を防ぐ。
+     * 空または未設定で {@link #DEFAULT_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES}。0 以下で上限なし（チェックしない）。
+     */
+    public static final String KEY_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES = "PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES";
+
+    /** {@link #KEY_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES} の既定（8 MiB）。 */
+    public static final long DEFAULT_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES = 8L * 1024 * 1024;
+
     /** Optional absolute path to result-task JSON sidecar ({@code PM_AI_PLAN_RESULT_TASK_JSON_PATH}). */
     public static final String KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH = "PM_AI_PLAN_RESULT_TASK_JSON_PATH";
 
@@ -395,6 +404,103 @@ public final class AppPaths {
             return Path.of(override).toAbsolutePath().normalize();
         }
         return Path.of(DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR);
+    }
+
+    /**
+     * {@link #KEY_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES} を解決する。不正な値は {@link #DEFAULT_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES}
+     * にフォールバック。0 以下は「上限なし」。
+     */
+    public static long resolveActualDetailRawMaxBytes(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String raw = trim(u.get(KEY_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES));
+        if (raw.isEmpty()) {
+            return DEFAULT_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES;
+        }
+        long parsed = parseEnvByteCountToLong(raw);
+        if (parsed < 0) {
+            return DEFAULT_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES;
+        }
+        return parsed;
+    }
+
+    /**
+     * 加工実績元ファイルが上限を超えるとき {@link IOException} を送出する。上限が 0 以下のときは何もしない。
+     *
+     * @param file 実ファイル（通常は {@link Files#isRegularFile(Path, java.nio.file.LinkOption...)}）
+     */
+    public static void ensureActualDetailRawFileWithinLimit(Path file, Map<String, String> ui)
+            throws IOException {
+        long max = resolveActualDetailRawMaxBytes(ui);
+        if (max <= 0) {
+            return;
+        }
+        if (file == null || !Files.isRegularFile(file)) {
+            return;
+        }
+        long sz = Files.size(file);
+        if (sz > max) {
+            throw new IOException(
+                    "加工実績の元データが大きすぎます（"
+                            + sz
+                            + " バイト）。上限 "
+                            + max
+                            + " バイト（環境変数 "
+                            + KEY_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES
+                            + "）。値を引き上げるか、出力ファイルを分割してください。");
+        }
+    }
+
+    /**
+     * 環境変数のバイト数指定を解析する。{@code 8388608}、{@code 8M} / {@code 8MB}、{@code 8192K} 等。
+     *
+     * @return バイト数。0 は上限なし。「上限なし」は {@link #resolveActualDetailRawMaxBytes} がそのまま返す。
+     *     負値は解析失敗。
+     */
+    static long parseEnvByteCountToLong(String raw) {
+        if (raw == null) {
+            return -1;
+        }
+        String s = raw.strip().replace("_", "").replace(" ", "");
+        if (s.isEmpty()) {
+            return -1;
+        }
+        String upper = s.toUpperCase(Locale.ROOT);
+        long multiplier = 1;
+        if (upper.endsWith("GB")) {
+            multiplier = 1024L * 1024 * 1024;
+            s = s.substring(0, s.length() - 2).strip();
+        } else if (upper.endsWith("MB")) {
+            multiplier = 1024L * 1024;
+            s = s.substring(0, s.length() - 2).strip();
+        } else if (upper.endsWith("KB")) {
+            multiplier = 1024L;
+            s = s.substring(0, s.length() - 2).strip();
+        } else if (upper.endsWith("G")) {
+            multiplier = 1024L * 1024 * 1024;
+            s = s.substring(0, s.length() - 1).strip();
+        } else if (upper.endsWith("M")) {
+            multiplier = 1024L * 1024;
+            s = s.substring(0, s.length() - 1).strip();
+        } else if (upper.endsWith("K")) {
+            multiplier = 1024L;
+            s = s.substring(0, s.length() - 1).strip();
+        }
+        upper = s.toUpperCase(Locale.ROOT);
+        if (upper.endsWith("B") && s.length() > 1) {
+            char before = s.charAt(s.length() - 2);
+            if (!Character.isDigit(before)) {
+                s = s.substring(0, s.length() - 1).strip();
+            }
+        }
+        try {
+            long n = Long.parseLong(s);
+            if (n == 0) {
+                return 0;
+            }
+            return Math.multiplyExact(n, multiplier);
+        } catch (NumberFormatException | ArithmeticException e) {
+            return -1;
+        }
     }
 
     /**

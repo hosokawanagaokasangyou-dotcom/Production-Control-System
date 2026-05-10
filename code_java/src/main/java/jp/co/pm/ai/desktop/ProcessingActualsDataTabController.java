@@ -108,7 +108,8 @@ public final class ProcessingActualsDataTabController {
                     + " \u52a0\u5de5\u65e5\u30fb\u958b\u59cb/\u7d42\u4e86\u306e\u6642\u5206\u304b\u3089"
                     + "\u52a0\u5de5\u958b\u59cb\u65e5\u6642\u30fb\u52a0\u5de5\u7d42\u4e86\u65e5\u6642\u5217\u3092\u4ed8\u52a0\u3057\u307e\u3059\u3002"
                     + " \u7d9e\u308a\u8fbc\u307f\u5f8c\u3001\u540c\u4e00\u5de5\u7a0b\u540d\u30fb\u6a5f\u68b0\u540d\u30fb\u4f9d\u983cNO\uff08\u307e\u305f\u306f\u4f9d\u983c\uff2e\uff2f\uff09\u30fb\u52a0\u5de5\u65e5\u306e\u884c\u306f"
-                    + "\u5148\u982d\u884c\u306e\u307f\u6b8b\u3057\u307e\u3059\u3002";
+                    + "\u5148\u982d\u884c\u306e\u307f\u6b8b\u3057\u307e\u3059\u3002"
+                    + " PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES で元ファイルの読込上限（バイト、既定 8MiB、0 で無制限）を変更できます。";
 
     /** {@link ColumnVisibilityDialog} / JSON と同一の必須見出しに対応するマスク（表示は強制）。 */
     private boolean[] mandatoryVisibilityMaskForHeaders(List<String> headers) {
@@ -610,6 +611,24 @@ public final class ProcessingActualsDataTabController {
             return;
         }
 
+        try {
+            AppPaths.ensureActualDetailRawFileWithinLimit(file, uiSnap);
+        } catch (IOException ex) {
+            statusLabel.setText(
+                    ex.getMessage() != null && !ex.getMessage().isBlank()
+                            ? ex.getMessage()
+                            : "加工実績の元データが上限を超えているため読込を中止しました");
+            if (shell != null) {
+                shell.appendLog("[processing-actuals-detail] " + ex.getMessage());
+            }
+            sheetCombo.setDisable(true);
+            sheetCombo.getItems().clear();
+            loadedPath = null;
+            applyEmpty();
+            refreshButton.setDisable(false);
+            return;
+        }
+
         Task<ActualsReloadPayload> task =
                 new Task<>() {
                     @Override
@@ -763,6 +782,22 @@ public final class ProcessingActualsDataTabController {
         }
         int idx = sheetCombo.getSelectionModel().getSelectedIndex();
         if (idx < 0) {
+            return;
+        }
+        Map<String, String> uiSnap = new HashMap<>(shell.snapshotUiEnv());
+        try {
+            AppPaths.ensureActualDetailRawFileWithinLimit(path, uiSnap);
+        } catch (IOException ex) {
+            if (showErrorsInStatus) {
+                statusLabel.setText(
+                        ex.getMessage() != null && !ex.getMessage().isBlank()
+                                ? ex.getMessage()
+                                : "加工実績の元データが上限を超えているため読込を中止しました");
+            }
+            if (shell != null) {
+                shell.appendLog("[processing-actuals-detail] " + ex.getMessage());
+            }
+            applyEmpty();
             return;
         }
         if (activeReloadTask != null) {

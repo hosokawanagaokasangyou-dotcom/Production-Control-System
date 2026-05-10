@@ -171,6 +171,11 @@ public final class EnvVarDocs {
                 "加工実績明細DATAを読むブックのフルパス（指定時は"
                         + " PM_AI_ACTUAL_DETAIL_SOURCE_DIR より優先）。");
         put(
+                "PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES",
+                "JavaFX「加工実績」明細タブ: 元 Excel/CSV を POI で読む前のファイルサイズ上限（バイト）。"
+                        + "超過時は読込を中止しメッセージ表示（OOM 回避）。空または未設定で 8388608（8MiB）。"
+                        + "0 以下で上限なし。例: 16777216、16M、64MB。");
+        put(
                 "PM_AI_RESULT_DISPATCH_TABLE_DIR",
                 "Power Query _q結果_配台表 参照用の"
                         + " 結果_配台表.xlsx 出力先（マクロブック側に"
