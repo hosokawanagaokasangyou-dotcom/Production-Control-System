@@ -15,6 +15,7 @@
 #   .\fast_package_app.ps1 -WinConsole
 #   .\fast_package_app.ps1 -JpackageDest C:\pm-ai-out   # ASCII-only parent for jpackage --dest (if launchers missing)
 #   .\fast_package_app.ps1 -JdkRuntimeImage C:\path\to\jdk   # skip download; needs bin\java.exe and bin\jpackage.exe
+#   .\fast_package_app.ps1 -ZipFast   # faster ZIP (Fastest); default Optimal can take many minutes with no output
 # Env: PM_AI_JPACKAGE_DEST, PM_AI_JDK_RUNTIME_IMAGE (optional)
 
 # UTF-8 BOM: Windows PowerShell 5.1 parses this file as UTF-8. Body is ASCII-only; Japanese paths live in package_app_mandatory_code_paths.txt.
@@ -32,7 +33,10 @@ param(
     [string]$JdkRuntimeImage = '',
 
     # Parent directory for jpackage --dest only (must be ASCII-only on some JDK/Windows builds).
-    [string]$JpackageDest = ''
+    [string]$JpackageDest = '',
+
+    # Step 8 portable ZIP: Fastest is much quicker (jars/pyd are already compressed); Optimal shrinks slightly but can run long with no console output.
+    [switch]$ZipFast
 )
 
 $ErrorActionPreference = 'Stop'
@@ -561,13 +565,15 @@ function Compress-PortableBundleFolderToZip {
     .SYNOPSIS
       Zip an app-image folder; omits pm-ai-data/version.txt (release version is beside the zip).
       Removes ZipFilePath if present (-ErrorAction Stop), then creates a new file (CreateNew).
+      Writes progress every 200 files (large bundles can take several minutes).
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
         [string]$SourceDir,
         [Parameter(Mandatory = $true)]
-        [string]$ZipFilePath
+        [string]$ZipFilePath,
+        [System.IO.Compression.CompressionLevel]$CompressionLevel = [System.IO.Compression.CompressionLevel]::Optimal
     )
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -579,6 +585,10 @@ function Compress-PortableBundleFolderToZip {
     if (-not [string]::IsNullOrWhiteSpace($zipParent) -and -not (Test-Path -LiteralPath $zipParent)) {
         New-Item -ItemType Directory -Path $zipParent -Force | Out-Null
     }
+    $levelName = $CompressionLevel.ToString()
+    Write-Host "  Compressing with $levelName (large trees: allow several minutes; progress every 200 files)..." -ForegroundColor DarkGray
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $fileCount = 0
     $fs = [System.IO.File]::Open($ZipFilePath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
     try {
         $zip = New-Object System.IO.Compression.ZipArchive($fs, [System.IO.Compression.ZipArchiveMode]::Create, $false)
@@ -594,7 +604,12 @@ function Compress-PortableBundleFolderToZip {
                 if ($entryName -match '\.\./|^\.\.(/|\\)|(/|\\)\.\.(/|\\)') {
                     throw "Unsafe zip entry name: $entryName"
                 }
-                $entry = $zip.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+                $fileCount++
+                if (($fileCount % 200) -eq 0) {
+                    $elapsed = $sw.Elapsed.ToString('mm\:ss')
+                    Write-Host "  ... ZIP progress: $fileCount files ($elapsed)" -ForegroundColor DarkGray
+                }
+                $entry = $zip.CreateEntry($entryName, $CompressionLevel)
                 $es = $entry.Open()
                 try {
                     # OpenRead は共有が狭く、ウイルス対策・インデクサ等の短時間ロックで IOException になりやすい
@@ -632,6 +647,8 @@ function Compress-PortableBundleFolderToZip {
     finally {
         $fs.Dispose()
     }
+    $totalElapsed = $sw.Elapsed.ToString('mm\:ss')
+    Write-Host "  ZIP done: $fileCount files in $totalElapsed -> $ZipFilePath" -ForegroundColor DarkGray
 }
 
 $POM = Join-Path $CodeJavaRoot 'pom.xml'
@@ -1050,10 +1067,17 @@ else {
     Write-Warning "Repo version.txt missing; skipped copy to $ReleaseRoot"
 }
 
+$zipCompression = if ($ZipFast) {
+    [System.IO.Compression.CompressionLevel]::Fastest
+}
+else {
+    [System.IO.Compression.CompressionLevel]::Optimal
+}
+
 Write-Host "Zipping Initial -> $zipInitial" -ForegroundColor Cyan
-Compress-PortableBundleFolderToZip -SourceDir $bundleOutInitial -ZipFilePath $zipInitial
+Compress-PortableBundleFolderToZip -SourceDir $bundleOutInitial -ZipFilePath $zipInitial -CompressionLevel $zipCompression
 Write-Host "Zipping Upgrade -> $zipUpgrade" -ForegroundColor Cyan
-Compress-PortableBundleFolderToZip -SourceDir $bundleOutUpgrade -ZipFilePath $zipUpgrade
+Compress-PortableBundleFolderToZip -SourceDir $bundleOutUpgrade -ZipFilePath $zipUpgrade -CompressionLevel $zipCompression
 
 if (-not (Test-Path -LiteralPath $zipInitial) -or -not (Test-Path -LiteralPath $zipUpgrade)) {
     throw "ZIP output missing after compress (initial or upgrade)."
