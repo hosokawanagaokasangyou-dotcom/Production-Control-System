@@ -468,8 +468,19 @@ public final class ProcessingActualsDataTabController {
     }
 
     private void rebuildSpreadsheet() {
+        rebuildSpreadsheet(null);
+    }
+
+    /**
+     * @param runAfterPresentation グリッド設定後の {@link Platform#runLater} 内（列幅・フィルタ等の適用後）に呼ぶ。
+     *        親コントローラの進捗バーはこの後で進めないと、表の後追いレイアウトとずれる。
+     */
+    private void rebuildSpreadsheet(Runnable runAfterPresentation) {
         if (headersRef.isEmpty()) {
             spreadsheetView.setGrid(new GridBase(0, 0));
+            if (runAfterPresentation != null) {
+                runAfterPresentation.run();
+            }
             return;
         }
         suppressColumnPersistence.set(true);
@@ -510,6 +521,9 @@ public final class ProcessingActualsDataTabController {
                                                         headersRef.size()),
                                                 mandatoryVisibilityMaskForHeaders(
                                                         new ArrayList<>(headersRef))));
+                        if (runAfterPresentation != null) {
+                            runAfterPresentation.run();
+                        }
                     });
         } finally {
             suppressColumnPersistence.set(false);
@@ -721,19 +735,26 @@ public final class ProcessingActualsDataTabController {
         task.setOnSucceeded(
                 ev -> {
                     activeReloadTask = null;
+                    Runnable notifyParent =
+                            whenDone != null
+                                    ? () -> {
+                                        if (gen == reloadGeneration.get()) {
+                                            whenDone.run();
+                                        }
+                                    }
+                                    : null;
                     try {
                         if (gen != reloadGeneration.get()) {
                             return;
                         }
                         ActualsReloadPayload p = task.getValue();
                         if (p != null) {
-                            applyReloadPayloadOnFx(p, true);
+                            applyReloadPayloadOnFx(p, true, notifyParent);
+                        } else if (notifyParent != null) {
+                            notifyParent.run();
                         }
                     } finally {
                         unbindLoadProgress();
-                        if (whenDone != null && gen == reloadGeneration.get()) {
-                            whenDone.run();
-                        }
                     }
                 });
         task.setOnFailed(
@@ -772,6 +793,13 @@ public final class ProcessingActualsDataTabController {
     }
 
     private void applyReloadPayloadOnFx(ActualsReloadPayload p, boolean showErrorsInStatus) {
+        applyReloadPayloadOnFx(p, showErrorsInStatus, null);
+    }
+
+    private void applyReloadPayloadOnFx(
+            ActualsReloadPayload p,
+            boolean showErrorsInStatus,
+            Runnable runAfterSpreadsheetPresentation) {
         if (p.excel()) {
             suppressSheetUi.set(true);
             try {
@@ -787,7 +815,7 @@ public final class ProcessingActualsDataTabController {
             sheetCombo.setDisable(true);
             sheetCombo.getItems().clear();
         }
-        applyShapedToUi(p.shaped(), showErrorsInStatus);
+        applyShapedToUi(p.shaped(), showErrorsInStatus, runAfterSpreadsheetPresentation);
     }
 
     /** シートタブ変更時: 選択インデックスでブックを再読込（ワーカースレッド）。 */
@@ -951,15 +979,21 @@ public final class ProcessingActualsDataTabController {
         return new PlanInputTabularIo.TabularSheet(outTitles, outRows);
     }
 
+    private void applyShapedToUi(PlanInputTabularIo.TabularSheet shaped, boolean showErrorsInStatus) {
+        applyShapedToUi(shaped, showErrorsInStatus, null);
+    }
+
     private void applyShapedToUi(
-            PlanInputTabularIo.TabularSheet shaped, boolean showErrorsInStatus) {
+            PlanInputTabularIo.TabularSheet shaped,
+            boolean showErrorsInStatus,
+            Runnable runAfterSpreadsheetPresentation) {
         try {
             // 1) shapeLoaded 済み（検査NO行より前を除去、またはフォールバックで先頭4行除去 → ヘッダ行・日時列）。コンボ／四キー除去は未適用。
             rememberShapedSnapshot(shaped);
             populateManufacturingConditionFilterChoices(shaped);
             // 2) 製造条件(内訳)コンボ → 3) 工程名・機械名・依頼NO・加工日の四キー重複は先頭行のみ（フィルタ後集合に対して）
             PlanInputTabularIo.TabularSheet tab = applyManufacturingFilterThenQuadDedupe(shaped);
-            populateFromFilteredSheet(tab);
+            populateFromFilteredSheet(tab, runAfterSpreadsheetPresentation);
             if (shell != null && !headersRef.isEmpty()) {
                 try {
                     java.nio.file.Path savePath =
@@ -986,6 +1020,9 @@ public final class ProcessingActualsDataTabController {
                                 + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
             }
             applyEmpty();
+            if (runAfterSpreadsheetPresentation != null) {
+                runAfterSpreadsheetPresentation.run();
+            }
         }
     }
 
@@ -1128,6 +1165,11 @@ public final class ProcessingActualsDataTabController {
     }
 
     private void populateFromFilteredSheet(PlanInputTabularIo.TabularSheet tab) {
+        populateFromFilteredSheet(tab, null);
+    }
+
+    private void populateFromFilteredSheet(
+            PlanInputTabularIo.TabularSheet tab, Runnable runAfterSpreadsheetPresentation) {
         List<TableColumnOrderPersistence.ColumnSpec> lay =
                 TableColumnOrderPersistence.loadLayout(
                         TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW);
@@ -1166,7 +1208,7 @@ public final class ProcessingActualsDataTabController {
                         + headersRef.size()
                         + " \u5217"
                         + filterActiveSuffix());
-        rebuildSpreadsheet();
+        rebuildSpreadsheet(runAfterSpreadsheetPresentation);
     }
 
     private String filterActiveSuffix() {
