@@ -590,6 +590,33 @@ public final class DeliveryCalendarViewTabController {
             return;
         }
         resetDeliveryReloadTabSegments();
+        // #region agent log
+        {
+            Map<String, Object> d = new LinkedHashMap<>();
+            d.put(
+                    "dispatchBar",
+                    deliveryReloadProgressDispatch != null
+                            ? deliveryReloadProgressDispatch.getProgress()
+                            : -1.0);
+            d.put(
+                    "actualsBar",
+                    deliveryReloadProgressActuals != null
+                            ? deliveryReloadProgressActuals.getProgress()
+                            : -1.0);
+            d.put(
+                    "aladdinBar",
+                    deliveryReloadProgressAladdin != null
+                            ? deliveryReloadProgressAladdin.getProgress()
+                            : -1.0);
+            AgentDebugLog.appendStructured(
+                    shell != null ? shell.snapshotUiEnv() : Map.of(),
+                    "6c5eb9",
+                    "H2",
+                    "DeliveryCalendarViewTabController.showDeliveryReloadProgress",
+                    "after_resetDeliveryReloadTabSegments",
+                    d);
+        }
+        // #endregion
         deliveryReloadProgressContainer.setManaged(true);
         deliveryReloadProgressContainer.setVisible(true);
     }
@@ -634,6 +661,36 @@ public final class DeliveryCalendarViewTabController {
                     Integer.parseInt(t.substring(PM_AI_PROGRESS_PREFIX.length()).trim());
             pct = Math.max(0, Math.min(100, pct));
             statusLabel.setText("取得中… メイン表（生成） " + pct + "%");
+            // #region agent log
+            {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("parsedPct", pct);
+                d.put("rawLinePrefixLen", PM_AI_PROGRESS_PREFIX.length());
+                d.put(
+                        "dispatchBarAfterLabelOnly",
+                        deliveryReloadProgressDispatch != null
+                                ? deliveryReloadProgressDispatch.getProgress()
+                                : -1.0);
+                d.put(
+                        "actualsBarAfterLabelOnly",
+                        deliveryReloadProgressActuals != null
+                                ? deliveryReloadProgressActuals.getProgress()
+                                : -1.0);
+                d.put(
+                        "aladdinBarAfterLabelOnly",
+                        deliveryReloadProgressAladdin != null
+                                ? deliveryReloadProgressAladdin.getProgress()
+                                : -1.0);
+                d.put("codePathUpdatesSegmentBars", Boolean.FALSE);
+                AgentDebugLog.appendStructured(
+                        shell != null ? shell.snapshotUiEnv() : Map.of(),
+                        "6c5eb9",
+                        "H1",
+                        "DeliveryCalendarViewTabController.handleDeliveryCalendarProgressLine",
+                        "pm_ai_progress_after_status_only",
+                        d);
+            }
+            // #endregion
         } catch (NumberFormatException ignored) {
             // ignore malformed progress lines
         }
