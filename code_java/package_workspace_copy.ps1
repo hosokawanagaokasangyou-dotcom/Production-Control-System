@@ -60,6 +60,10 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
                 '.githooks/',
                 '.github/',
                 '.pm-ai-cache/network-source/',
+                # InitialInstall now also excludes developer-machine artifacts (was permissive; bloats release ZIP).
+                'output/',
+                'code/output/',
+                'code/python/output/',
                 $referenceDirRel
             )) {
             $excludedDirPrefixes.Add($p)
@@ -78,7 +82,8 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
     foreach ($n in @('__pycache__', '.pytest_cache', 'build_cache')) {
         $excludedDirNames.Add($n)
     }
-    if ($BundleKind -eq 'VersionUpgrade' -or $BundleKind -eq 'DeveloperMirror') {
+    # plan / plans are dev-time dispatch outputs; never ship in release bundles regardless of profile.
+    if ($BundleKind -eq 'InitialInstall' -or $BundleKind -eq 'VersionUpgrade' -or $BundleKind -eq 'DeveloperMirror') {
         $excludedDirNames.Add('plan')
         $excludedDirNames.Add('plans')
     }

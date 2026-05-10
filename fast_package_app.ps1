@@ -15,8 +15,11 @@
 #   .\fast_package_app.ps1 -WinConsole
 #   .\fast_package_app.ps1 -JpackageDest C:\pm-ai-out   # ASCII-only parent for jpackage --dest (if launchers missing)
 #   .\fast_package_app.ps1 -JdkRuntimeImage C:\path\to\jdk   # skip download; needs bin\java.exe and bin\jpackage.exe
-#   .\fast_package_app.ps1 -ZipOptimal   # Step 8 ZIP: smallest/slowest (Optimal); default is Fastest for large bundles
-#   .\fast_package_app.ps1 -ZipQuiet    # minimal console during ZIP (faster when invoked via WSL -> powershell.exe)
+#   .\fast_package_app.ps1 -ZipOptimal   # Step 8 ZIP: Deflate Optimal (smallest, much slower)
+#   .\fast_package_app.ps1 -ZipStore     # Step 8 ZIP: store-only (NO compression; emergency only, ~2.6x archive size for this bundle)
+#   .\fast_package_app.ps1 -ZipFast      # explicit Deflate Fastest (this is also the default)
+#   .\fast_package_app.ps1 -ZipQuiet     # minimal console during ZIP (faster when invoked via WSL -> powershell.exe)
+#   Step 8 zips Initial and Upgrade in parallel via Start-Job; child output is forwarded to the host.
 #   .\fast_package_app.ps1 -PackageReleaseParent G:\   # e.g. G:\pm-ai-package-release (folder created)
 #   .\fast_package_app.ps1 -PackageReleaseDir G:\pm-ai-package-release   # exact output folder
 #   When release output is not the repo default, download cache (JDK/JavaFX/Python) uses <release>\Cash_PMD instead of code_java\Cash_PMD.
@@ -42,10 +45,15 @@ param(
     # Parent directory for jpackage --dest only (must be ASCII-only on some JDK/Windows builds).
     [string]$JpackageDest = '',
 
-    # Step 8 portable ZIP: default Fastest (large trees finish in reasonable time). Use -ZipOptimal for smaller archives (much slower).
+    # Step 8 portable ZIP level (priority: Optimal > Store > Fast; default = Fastest / Deflate level=1).
+    # Empirical: this bundle has 594 MB raw -> 230 MB Deflate Fastest (38%). Site-packages .py text shrinks well,
+    # so NoCompression would inflate the archive ~2.6x. Real wall-clock win comes from running Initial and Upgrade
+    # zips in parallel (see Step 8). -ZipStore stays as an opt-in escape hatch when CPU is the only bottleneck.
     [switch]$ZipFast,
 
     [switch]$ZipOptimal,
+
+    [switch]$ZipStore,
 
     # Fewer progress lines (helps when running powershell.exe from WSL: console I/O can dominate).
     [switch]$ZipQuiet,
@@ -556,8 +564,8 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
     $rmLines.Add('Workspace mirror: package_workspace_copy.ps1 (shared with package_app.ps1).')
     $rmLines.Add('Master *.txt under code/ are always copied (see package_app_mandatory_code_paths.txt).')
     if ($BundleKind -eq 'InitialInstall') {
-        $rmLines.Add('Bundle profile: InitialInstall - excludes .git, .venv, .githooks, .github, .pm-ai-cache/network-source, .cursor, .vscode, code/VBA, code/参照用, code_java build/cache dirs, pm-ai-package-release/, **/__pycache__, **/.pytest_cache, build_cache, root xlwings install bat, code workspace file (see package_workspace_copy.ps1).')
-        $rmLines.Add('Does NOT exclude plan/plans or code/output (may include local artifacts if present).')
+        $rmLines.Add('Bundle profile: InitialInstall - excludes .git, .venv, .githooks, .github, .pm-ai-cache/network-source, .cursor, .vscode, code/VBA, code/参照用, code_java build/cache dirs, pm-ai-package-release/, output/, code/output/, code/python/output/, **/plan, **/plans, **/__pycache__, **/.pytest_cache, build_cache, root xlwings install bat, code workspace file (see package_workspace_copy.ps1).')
+        $rmLines.Add('Note: dispatch outputs (plan/plans/output) are now excluded from InitialInstall as well as VersionUpgrade.')
         $rmLines.Add('init_setting/: copied from repo init_setting/ when present (session_defaults / table_column_defaults for package baselines).')
         $rmLines.Add('Desktop UI defaults (Initial install only in dist): pm-ai-data/config/bundled_session_ui_defaults.json and bundled_table_column_order.json from JAR resources. VersionUpgrade zip does not ship these two (user session files under ~/.pm-ai-desktop are not overwritten from bundle).')
         $rmLines.Add('Exclude rules JSON (Initial + VersionUpgrade): pm-ai-data/code/exclude_rules.json (copy of code/json/stage1_exclude_rules.json when present, else JAR-resource fallback bundled_exclude_rules.json) for PM_AI_EXCLUDE_RULES_JSON bootstrap and post-sync session overwrite.')
@@ -624,7 +632,10 @@ function Compress-PortableBundleFolderToZip {
     .SYNOPSIS
       Zip an app-image folder; omits pm-ai-data/version.txt (release version is beside the zip).
       Removes ZipFilePath if present (-ErrorAction Stop), then creates a new file (CreateNew).
-      Progress interval: Optimal every 50 files; Fastest every 400 unless -ZipQuiet (then start/end only).
+      Default CompressionLevel = Fastest (Deflate level 1). Measured ratio on this bundle is ~38% so NoCompression
+      would inflate the ZIP by ~2.6x; speed is recovered by running Initial and Upgrade in parallel (Step 8).
+      Enumerates with [System.IO.Directory]::EnumerateFiles to avoid PowerShell pipeline / Get-ChildItem
+      overhead, and copies file streams with a 1 MiB buffer.
     #>
     [CmdletBinding()]
     param(
@@ -638,6 +649,7 @@ function Compress-PortableBundleFolderToZip {
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $sourceFull = (Resolve-Path -LiteralPath $SourceDir).Path.TrimEnd('\')
+    $sourceLen = $sourceFull.Length
     if (Test-Path -LiteralPath $ZipFilePath) {
         Remove-Item -LiteralPath $ZipFilePath -Force -ErrorAction Stop
     }
@@ -646,26 +658,41 @@ function Compress-PortableBundleFolderToZip {
         New-Item -ItemType Directory -Path $zipParent -Force | Out-Null
     }
     $levelName = $CompressionLevel.ToString()
-    $progEvery = 400
-    if ($CompressionLevel -eq [System.IO.Compression.CompressionLevel]::Optimal) {
-        $progEvery = 50
+    # Store/Fastest are I/O bound (cheap CPU); Optimal is CPU bound and slow per file.
+    $progEvery = if ($CompressionLevel -eq [System.IO.Compression.CompressionLevel]::Optimal) {
+        50
+    }
+    elseif ($CompressionLevel -eq [System.IO.Compression.CompressionLevel]::Fastest) {
+        400
+    }
+    else {
+        2000
     }
     $progHint = if ($QuietProgress) { ' (quiet: start/end only)' } else { " (progress every $progEvery files)" }
     Write-Host "  Compressing with $levelName$progHint..." -ForegroundColor DarkGray
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $fileCount = 0
-    $fs = [System.IO.File]::Open($ZipFilePath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+    $copyBufferSize = 1MB
+    $shareReadWriteDelete = [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
+    # Buffered FileStream output reduces small-write overhead on Store entries.
+    $fs = [System.IO.FileStream]::new(
+        $ZipFilePath,
+        [System.IO.FileMode]::CreateNew,
+        [System.IO.FileAccess]::Write,
+        [System.IO.FileShare]::None,
+        1MB,
+        [System.IO.FileOptions]::SequentialScan
+    )
     try {
-        $zip = New-Object System.IO.Compression.ZipArchive($fs, [System.IO.Compression.ZipArchiveMode]::Create, $false)
+        $zip = [System.IO.Compression.ZipArchive]::new($fs, [System.IO.Compression.ZipArchiveMode]::Create, $false)
         try {
-            Get-ChildItem -LiteralPath $sourceFull -Recurse -File -Force | ForEach-Object {
-                $full = $_.FullName
-                $rel = $full.Substring($sourceFull.Length).TrimStart('\')
-                $relNorm = $rel -replace '\\', '/'
-                if ($relNorm -ieq 'pm-ai-data/version.txt') {
-                    return
-                }
+            $enum = [System.IO.Directory]::EnumerateFiles($sourceFull, '*', [System.IO.SearchOption]::AllDirectories)
+            foreach ($full in $enum) {
+                $rel = $full.Substring($sourceLen).TrimStart('\')
                 $entryName = $rel -replace '\\', '/'
+                if ($entryName -ieq 'pm-ai-data/version.txt') {
+                    continue
+                }
                 if ($entryName -match '\.\./|^\.\.(/|\\)|(/|\\)\.\.(/|\\)') {
                     throw "Unsafe zip entry name: $entryName"
                 }
@@ -677,7 +704,7 @@ function Compress-PortableBundleFolderToZip {
                 $entry = $zip.CreateEntry($entryName, $CompressionLevel)
                 $es = $entry.Open()
                 try {
-                    # Fast path: OpenRead + CopyTo (matches older fast_package_app.ps1). Fallback only if OpenRead fails (AV lock on open).
+                    # Fast path: OpenRead. Retry with shared read on transient AV / indexer locks.
                     $srcFast = $null
                     try {
                         $srcFast = [System.IO.File]::OpenRead($full)
@@ -687,21 +714,20 @@ function Compress-PortableBundleFolderToZip {
                     }
                     if ($null -ne $srcFast) {
                         try {
-                            $srcFast.CopyTo($es)
+                            $srcFast.CopyTo($es, $copyBufferSize)
                         }
                         finally {
                             $srcFast.Dispose()
                         }
                     }
                     else {
-                        $share = [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
                         $maxAttempts = 6
                         $delayMs = 120
                         for ($a = 1; $a -le $maxAttempts; $a++) {
                             try {
-                                $srcFs = [System.IO.File]::Open($full, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $share)
+                                $srcFs = [System.IO.File]::Open($full, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $shareReadWriteDelete)
                                 try {
-                                    $srcFs.CopyTo($es)
+                                    $srcFs.CopyTo($es, $copyBufferSize)
                                 }
                                 finally {
                                     $srcFs.Dispose()
@@ -730,7 +756,9 @@ function Compress-PortableBundleFolderToZip {
         $fs.Dispose()
     }
     $totalElapsed = $sw.Elapsed.ToString('mm\:ss')
-    Write-Host "  ZIP done: $fileCount files in $totalElapsed -> $ZipFilePath" -ForegroundColor DarkGray
+    $zipBytes = (Get-Item -LiteralPath $ZipFilePath).Length
+    $zipMb = [math]::Round($zipBytes / 1MB, 1)
+    Write-Host "  ZIP done: $fileCount files, $zipMb MB in $totalElapsed -> $ZipFilePath" -ForegroundColor DarkGray
 }
 
 $POM = Join-Path $CodeJavaRoot 'pom.xml'
@@ -1173,12 +1201,22 @@ else {
     Write-Warning "Repo version.txt missing; skipped copy to $ReleaseRoot"
 }
 
-if ($ZipOptimal -and $ZipFast) {
-    Write-Warning '-ZipOptimal overrides -ZipFast (both set).'
+# Priority: Optimal > Store > Fast/default. Default = Fastest (Deflate level 1).
+# Bundle has been measured at ~38% compression with Fastest; switching to NoCompression inflates the archive
+# ~2.6x (594 MB raw vs 230 MB zipped). The real speedup comes from running Initial / Upgrade zips in parallel,
+# which is done below via Start-Job.
+$zipLevelSwitches = @()
+if ($ZipOptimal) { $zipLevelSwitches += '-ZipOptimal' }
+if ($ZipStore) { $zipLevelSwitches += '-ZipStore' }
+if ($ZipFast) { $zipLevelSwitches += '-ZipFast' }
+if ($zipLevelSwitches.Count -gt 1) {
+    Write-Warning ("Multiple ZIP level switches set ({0}); using priority Optimal > Store > Fast." -f ($zipLevelSwitches -join ', '))
 }
-# Default Fastest: Optimal on tens of thousands of files can appear hung (minutes between progress lines).
 $zipCompression = if ($ZipOptimal) {
     [System.IO.Compression.CompressionLevel]::Optimal
+}
+elseif ($ZipStore) {
+    [System.IO.Compression.CompressionLevel]::NoCompression
 }
 else {
     [System.IO.Compression.CompressionLevel]::Fastest
@@ -1186,10 +1224,54 @@ else {
 
 $zipQuiet = [bool]$ZipQuiet
 
-Write-Host "Zipping Initial -> $zipInitial" -ForegroundColor Cyan
-Compress-PortableBundleFolderToZip -SourceDir $bundleOutInitial -ZipFilePath $zipInitial -CompressionLevel $zipCompression -QuietProgress:$zipQuiet
-Write-Host "Zipping Upgrade -> $zipUpgrade" -ForegroundColor Cyan
-Compress-PortableBundleFolderToZip -SourceDir $bundleOutUpgrade -ZipFilePath $zipUpgrade -CompressionLevel $zipCompression -QuietProgress:$zipQuiet
+# Run Initial / Upgrade compression in parallel via background jobs (separate ZipArchives, no shared writes,
+# different source folders). Pass the Compress-PortableBundleFolderToZip body as the InitializationScript so
+# the same logic runs in each child runspace; CompressionLevel is shipped as its enum name (jobs serialize via
+# CLI XML and rehydrate value types best from primitives).
+$compressFnBody = ${function:Compress-PortableBundleFolderToZip}.ToString()
+$compressFnInit = [scriptblock]::Create("function Compress-PortableBundleFolderToZip {`n$compressFnBody`n}")
+$compressJobBlock = {
+    param(
+        [string]$SourceDir,
+        [string]$ZipFilePath,
+        [string]$LevelName,
+        [bool]$QuietProgress,
+        [string]$Label
+    )
+    $ErrorActionPreference = 'Stop'
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $level = [System.IO.Compression.CompressionLevel]::$LevelName
+    Write-Host ("[" + $Label + "] Zipping -> " + $ZipFilePath) -ForegroundColor Cyan
+    Compress-PortableBundleFolderToZip -SourceDir $SourceDir -ZipFilePath $ZipFilePath -CompressionLevel $level -QuietProgress:$QuietProgress
+}
+
+$zipLevelName = $zipCompression.ToString()
+Write-Host "--- Step 8: parallel ZIP (Initial + Upgrade via Start-Job; level=$zipLevelName) ---" -ForegroundColor Cyan
+$jobInitial = Start-Job -Name 'pmd-zip-initial' -InitializationScript $compressFnInit -ScriptBlock $compressJobBlock `
+    -ArgumentList $bundleOutInitial, $zipInitial, $zipLevelName, ([bool]$zipQuiet), 'Initial'
+$jobUpgrade = Start-Job -Name 'pmd-zip-upgrade' -InitializationScript $compressFnInit -ScriptBlock $compressJobBlock `
+    -ArgumentList $bundleOutUpgrade, $zipUpgrade, $zipLevelName, ([bool]$zipQuiet), 'Upgrade'
+$zipJobs = @($jobInitial, $jobUpgrade)
+try {
+    while ($zipJobs | Where-Object { $_.State -eq 'Running' -or $_.State -eq 'NotStarted' }) {
+        foreach ($j in $zipJobs) {
+            $j | Receive-Job
+        }
+        Start-Sleep -Milliseconds 1500
+    }
+    foreach ($j in $zipJobs) {
+        $j | Receive-Job -ErrorAction Stop
+    }
+    foreach ($j in $zipJobs) {
+        if ($j.State -ne 'Completed') {
+            throw ("ZIP job '{0}' ended in state {1}." -f $j.Name, $j.State)
+        }
+    }
+}
+finally {
+    Remove-Job -Job $zipJobs -Force -ErrorAction SilentlyContinue
+}
 
 if (-not (Test-Path -LiteralPath $zipInitial) -or -not (Test-Path -LiteralPath $zipUpgrade)) {
     throw "ZIP output missing after compress (initial or upgrade)."
