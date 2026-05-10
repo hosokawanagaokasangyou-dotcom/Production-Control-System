@@ -124,6 +124,38 @@ def _debug_ndjson_f73cbb(hypothesis_id: str, location: str, message: str, data: 
         pass
 
 
+def _resolve_actual_detail_machine_key_for_delivery_calendar(
+    row,
+    df: pd.DataFrame,
+    equip_lookup: dict,
+) -> tuple[str, str]:
+    """????: ??????????????????????????????????????
+
+    ``_aggregate_daily_actual_qty_aladdin_max`` ????????????????????
+    ???????????????????????????????????
+    """
+    proc = row.get(_ACT_COL_PROC)
+    if proc is not None and not (isinstance(proc, float) and pd.isna(proc)):
+        proc_key = core._normalize_equipment_match_key(proc)
+        canonical = equip_lookup.get(proc_key)
+        if canonical:
+            mach_raw = str(canonical).strip()
+            _, mn_part = core._split_equipment_line_process_machine(mach_raw)
+            mach_display = (mn_part or mach_raw).strip()
+            mk = core._normalize_equipment_match_key(mach_display)
+            if mk:
+                return mk, "proc_equip_lookup"
+    if core.TASK_COL_MACHINE_NAME in df.columns:
+        mv = row.get(core.TASK_COL_MACHINE_NAME)
+        if mv is not None and not (isinstance(mv, float) and pd.isna(mv)):
+            ms = str(mv).strip()
+            if ms:
+                mk = core._normalize_equipment_match_key(ms)
+                if mk:
+                    return mk, "row_machine_column"
+    return "", "none"
+
+
 def _classify_actual_row_for_delivery_calendar(
     row,
     df: pd.DataFrame,
@@ -154,33 +186,27 @@ def _classify_actual_row_for_delivery_calendar(
         if got != want:
             return "SKIP_FILTER_NOT_LENGTH", detail
 
-    mk = ""
-    if core.TASK_COL_MACHINE_NAME in df.columns:
-        mv = row.get(core.TASK_COL_MACHINE_NAME)
-        if mv is not None and not (isinstance(mv, float) and pd.isna(mv)):
-            ms = str(mv).strip()
-            if ms:
-                mk = core._normalize_equipment_match_key(ms)
+    proc_dbg = row.get(_ACT_COL_PROC)
+    detail["proc_raw"] = repr(proc_dbg)[:120]
+    detail["equip_canonical_hit"] = False
+    if proc_dbg is not None and not (isinstance(proc_dbg, float) and pd.isna(proc_dbg)):
+        pk = core._normalize_equipment_match_key(proc_dbg)
+        detail["proc_key_norm"] = pk[:80]
+        detail["equip_canonical_hit"] = bool(equip_lookup.get(pk))
     detail["machine_name_raw"] = (
         str(row.get(core.TASK_COL_MACHINE_NAME))[:120]
         if core.TASK_COL_MACHINE_NAME in df.columns
         else ""
     )
-    if not mk:
-        proc = row.get(_ACT_COL_PROC)
-        detail["proc_raw"] = repr(proc)[:120]
-        if proc is None or (isinstance(proc, float) and pd.isna(proc)):
-            return "SKIP_NO_MACHINE_NO_PROC", detail
-        proc_key = core._normalize_equipment_match_key(proc)
-        canonical = equip_lookup.get(proc_key)
-        detail["proc_key_norm"] = proc_key[:80]
-        detail["equip_canonical_hit"] = bool(canonical)
-        if not canonical:
-            return "SKIP_MACHINE_LOOKUP_MISS", detail
-        _, mn = core._split_equipment_line_process_machine(str(canonical))
-        mk = core._normalize_equipment_match_key((mn or canonical).strip())
+
+    mk, mk_src = _resolve_actual_detail_machine_key_for_delivery_calendar(row, df, equip_lookup)
+    detail["machine_key_resolution"] = mk_src
     detail["machine_key_norm"] = mk[:120] if mk else ""
     if not mk:
+        if proc_dbg is None or (isinstance(proc_dbg, float) and pd.isna(proc_dbg)):
+            return "SKIP_NO_MACHINE_NO_PROC", detail
+        if not detail["equip_canonical_hit"]:
+            return "SKIP_MACHINE_LOOKUP_MISS", detail
         return "SKIP_NO_MACHINE_KEY", detail
 
     d = _row_actual_day(row)
@@ -664,25 +690,11 @@ def _aggregate_daily_actual_qty_aladdin_max(
         tid = core.planning_task_id_str_from_scalar(row.get(_ACT_COL_TID))
         if not tid:
             continue
-        # Align with ``_build_compare_gantt_aladdin_qty_lookup``: buckets key by
-        # ``_normalize_equipment_match_key(TASK_COL_MACHINE_NAME)``. Prefer ??? on the row when present.
-        mk = ""
-        if core.TASK_COL_MACHINE_NAME in df.columns:
-            mv = row.get(core.TASK_COL_MACHINE_NAME)
-            if mv is not None and not (isinstance(mv, float) and pd.isna(mv)):
-                ms = str(mv).strip()
-                if ms:
-                    mk = core._normalize_equipment_match_key(ms)
-        if not mk:
-            proc = row.get(_ACT_COL_PROC)
-            if proc is None or (isinstance(proc, float) and pd.isna(proc)):
-                continue
-            proc_key = core._normalize_equipment_match_key(proc)
-            canonical = equip_lookup.get(proc_key)
-            if not canonical:
-                continue
-            _, mn = core._split_equipment_line_process_machine(str(canonical))
-            mk = core._normalize_equipment_match_key((mn or canonical).strip())
+        # Align machine key with ``_aggregate_actual_qty_for_aladdin_compare_from_detail_df``:
+        # ??????????????????????????JSON???????
+        mk, _src = _resolve_actual_detail_machine_key_for_delivery_calendar(
+            row, df, equip_lookup
+        )
         if not mk:
             continue
         d = _row_actual_day(row)
