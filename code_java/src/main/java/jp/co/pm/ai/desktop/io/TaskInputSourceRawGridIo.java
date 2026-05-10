@@ -1,8 +1,10 @@
 package jp.co.pm.ai.desktop.io;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,6 +20,8 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.DoubleConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -49,6 +53,9 @@ public final class TaskInputSourceRawGridIo {
 
     private TaskInputSourceRawGridIo() {}
 
+    private static final Pattern SHEET_DIMENSION_REF =
+            Pattern.compile("<dimension[^>]*\\sref=\"([^\"]+)\"", Pattern.CASE_INSENSITIVE);
+
     /**
      * Reads the selected file as a raw grid (CSV or Excel sheet by index).
      *
@@ -56,15 +63,26 @@ public final class TaskInputSourceRawGridIo {
      */
     public static PlanInputTabularIo.TabularSheet readRaw(Path path, int excelSheetIndex)
             throws IOException {
+        return readRaw(path, excelSheetIndex, null);
+    }
+
+    /**
+     * Same as {@link #readRaw(Path, int)}; {@code progress} receives {@code 0..1} while bytes/lines/rows are
+     * consumed (determinate when sheet dimension or line count is known).
+     *
+     * @param progress optional; not called from the JavaFX application thread
+     */
+    public static PlanInputTabularIo.TabularSheet readRaw(
+            Path path, int excelSheetIndex, DoubleConsumer progress) throws IOException {
         String low = path.getFileName().toString().toLowerCase(Locale.ROOT);
         if (low.endsWith(".csv")) {
-            return readCsvRaw(path);
+            return readCsvRaw(path, progress);
         }
         if (low.endsWith(".xlsx")
                 || low.endsWith(".xlsm")
                 || low.endsWith(".xltx")
                 || low.endsWith(".xltm")) {
-            return readExcelSheetRaw(path, excelSheetIndex);
+            return readExcelSheetRaw(path, excelSheetIndex, progress);
         }
         throw new IOException("unsupported extension (csv / xlsx / xlsm / xltx / xltm only): " + path);
     }
@@ -96,17 +114,50 @@ public final class TaskInputSourceRawGridIo {
         }
     }
 
+    private static long countUtf8Lines(Path path) throws IOException {
+        long n = 0;
+        try (BufferedReader r = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+            while (r.readLine() != null) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedIOException();
+                }
+                n++;
+            }
+        }
+        return Math.max(1L, n);
+    }
+
     private static PlanInputTabularIo.TabularSheet readCsvRaw(Path path) throws IOException {
+        return readCsvRaw(path, null);
+    }
+
+    private static PlanInputTabularIo.TabularSheet readCsvRaw(Path path, DoubleConsumer progress)
+            throws IOException {
+        long totalLines = 1;
+        if (progress != null) {
+            totalLines = countUtf8Lines(path);
+        }
         List<List<String>> allRows = new ArrayList<>();
         int maxCol = 0;
+        long lineIndex = 0;
         try (BufferedReader r = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
             String line;
             while ((line = r.readLine()) != null) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedIOException();
+                }
                 List<String> cells = new ArrayList<>();
                 PlanInputTabularIo.parseCsvLine(line, cells);
                 maxCol = Math.max(maxCol, cells.size());
                 allRows.add(cells);
+                lineIndex++;
+                if (progress != null) {
+                    progress.accept(Math.min(1.0, lineIndex / (double) totalLines));
+                }
             }
+        }
+        if (progress != null) {
+            progress.accept(1.0);
         }
         List<String> headers = new ArrayList<>();
         for (int c = 0; c < maxCol; c++) {
@@ -133,6 +184,11 @@ public final class TaskInputSourceRawGridIo {
      */
     private static PlanInputTabularIo.TabularSheet readExcelSheetRaw(Path path, int sheetIndex)
             throws IOException {
+        return readExcelSheetRaw(path, sheetIndex, null);
+    }
+
+    private static PlanInputTabularIo.TabularSheet readExcelSheetRaw(
+            Path path, int sheetIndex, DoubleConsumer progress) throws IOException {
         try (OPCPackage pkg = OPCPackage.open(path.toFile())) {
             XSSFReader reader = new XSSFReader(pkg);
             ReadOnlySharedStringsTable strings = new ReadOnlySharedStringsTable(pkg);
@@ -143,7 +199,9 @@ public final class TaskInputSourceRawGridIo {
                 InputStream stream = sheets.next();
                 try {
                     if (i == sheetIndex) {
-                        return parseOoxmlSheetXml(stream, styles, strings);
+                        BufferedInputStream bis = new BufferedInputStream(stream, 65536);
+                        int dimLastRow = peekDimensionLastRow0Based(bis);
+                        return parseOoxmlSheetXml(bis, styles, strings, progress, dimLastRow);
                     }
                 } finally {
                     stream.close();
@@ -156,12 +214,49 @@ public final class TaskInputSourceRawGridIo {
         }
     }
 
+    /**
+     * Reads the beginning of sheet XML for {@code <dimension ref="A1:ZZ99"/>} and returns the max 0-based row
+     * index from the range, or {@code -1} if not found.
+     */
+    static int peekDimensionLastRow0Based(BufferedInputStream bis) throws IOException {
+        bis.mark(262144);
+        byte[] buf = bis.readNBytes(262144);
+        bis.reset();
+        if (buf.length == 0) {
+            return -1;
+        }
+        String head = new String(buf, StandardCharsets.UTF_8);
+        return parseDimensionMaxRow0FromSheetXmlPrefix(head);
+    }
+
+    static int parseDimensionMaxRow0FromSheetXmlPrefix(String xmlHead) {
+        Matcher m = SHEET_DIMENSION_REF.matcher(xmlHead);
+        if (!m.find()) {
+            return -1;
+        }
+        String ref = m.group(1);
+        try {
+            if (ref.contains(":")) {
+                String end = ref.substring(ref.indexOf(':') + 1).strip();
+                return new CellReference(end).getRow();
+            }
+            return new CellReference(ref.strip()).getRow();
+        } catch (RuntimeException ignored) {
+            return -1;
+        }
+    }
+
     private static PlanInputTabularIo.TabularSheet parseOoxmlSheetXml(
-            InputStream sheetInputStream, StylesTable styles, ReadOnlySharedStringsTable strings)
+            InputStream sheetInputStream,
+            StylesTable styles,
+            ReadOnlySharedStringsTable strings,
+            DoubleConsumer progress,
+            int dimensionLastRow0BasedOrMinus1)
             throws IOException {
         DataFormatter formatter = new DataFormatter();
         TreeMap<Integer, List<String>> rowMap = new TreeMap<>();
         final int[] maxCol = {0};
+        final AtomicInteger sparseRows = new AtomicInteger(0);
 
         XSSFSheetXMLHandler.SheetContentsHandler sheetHandler =
                 new XSSFSheetXMLHandler.SheetContentsHandler() {
@@ -177,6 +272,18 @@ public final class TaskInputSourceRawGridIo {
                         List<String> line = rowCells != null ? rowCells : new ArrayList<>();
                         rowMap.put(rowNum, line);
                         rowCells = null;
+                        if (progress != null) {
+                            double frac;
+                            if (dimensionLastRow0BasedOrMinus1 >= 0) {
+                                int span =
+                                        Math.max(1, dimensionLastRow0BasedOrMinus1 + 1);
+                                frac = Math.min(1.0, (rowNum + 1.0) / span);
+                            } else {
+                                int n = sparseRows.incrementAndGet();
+                                frac = Math.min(0.97, Math.log1p(n) / Math.log1p(n + 4000.0));
+                            }
+                            progress.accept(frac);
+                        }
                     }
 
                     @Override
@@ -206,6 +313,10 @@ public final class TaskInputSourceRawGridIo {
             xmlReader.parse(new InputSource(sheetInputStream));
         } catch (ParserConfigurationException | SAXException e) {
             throw new IOException(e.getMessage(), e);
+        }
+
+        if (progress != null) {
+            progress.accept(1.0);
         }
 
         int mc = Math.max(0, maxCol[0]);

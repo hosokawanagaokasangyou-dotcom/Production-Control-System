@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -518,12 +519,22 @@ public final class ProcessingActualsDataTabController {
             int selectedSheetIndex,
             PlanInputTabularIo.TabularSheet shaped) {}
 
+    /** Display steps + datetime columns after {@link TaskInputSourceRawGridIo#readRaw(Path, int)}. */
+    private static PlanInputTabularIo.TabularSheet applyActualsShapingAfterRaw(
+            PlanInputTabularIo.TabularSheet raw) {
+        PlanInputTabularIo.TabularSheet stepped =
+                TaskInputSourceRawGridIo.applyProcessingActualsDisplaySteps(raw);
+        return TaskInputSourceRawGridIo.applyProcessingActualsDateTimeColumns(stepped);
+    }
+
     private static PlanInputTabularIo.TabularSheet shapeLoaded(Path file, int excelSheetIndex)
             throws IOException {
-        return TaskInputSourceRawGridIo.applyProcessingActualsDateTimeColumns(
-                TaskInputSourceRawGridIo.applyProcessingActualsDisplaySteps(
-                        TaskInputSourceRawGridIo.readRaw(file, excelSheetIndex)));
+        PlanInputTabularIo.TabularSheet raw =
+                TaskInputSourceRawGridIo.readRaw(file, excelSheetIndex);
+        return applyActualsShapingAfterRaw(raw);
     }
+
+    private static final long PROGRESS_MAX = 10_000L;
 
     private static int preferredSheetIndex(List<String> names, Map<String, String> ui) {
         if (names == null || names.isEmpty()) {
@@ -540,20 +551,23 @@ public final class ProcessingActualsDataTabController {
         return ix >= 0 ? ix : 0;
     }
 
-    private void showLoadProgress() {
-        if (loadProgressBar != null) {
-            loadProgressBar.setManaged(true);
-            loadProgressBar.setVisible(true);
-            loadProgressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
+    private void bindLoadProgressToTask(Task<?> task) {
+        if (loadProgressBar == null || task == null) {
+            return;
         }
+        loadProgressBar.setManaged(true);
+        loadProgressBar.setVisible(true);
+        loadProgressBar.progressProperty().bind(task.progressProperty());
     }
 
-    private void hideLoadProgress() {
-        if (loadProgressBar != null) {
-            loadProgressBar.setProgress(0);
-            loadProgressBar.setVisible(false);
-            loadProgressBar.setManaged(false);
+    private void unbindLoadProgress() {
+        if (loadProgressBar == null) {
+            return;
         }
+        loadProgressBar.progressProperty().unbind();
+        loadProgressBar.setProgress(0);
+        loadProgressBar.setVisible(false);
+        loadProgressBar.setManaged(false);
     }
 
     private void reloadFromSourceDir() {
@@ -600,10 +614,12 @@ public final class ProcessingActualsDataTabController {
                 new Task<>() {
                     @Override
                     protected ActualsReloadPayload call() throws Exception {
+                        updateProgress(0, PROGRESS_MAX);
                         if (isCancelled()) {
                             return null;
                         }
                         if (isExcelPath(file)) {
+                            updateProgress(100, PROGRESS_MAX);
                             List<String> names = TaskInputSourceRawGridIo.listExcelSheetNames(file);
                             if (names.isEmpty()) {
                                 throw new IOException("Excel \u306b\u30b7\u30fc\u30c8\u304c\u3042\u308a\u307e\u305b\u3093");
@@ -612,16 +628,66 @@ public final class ProcessingActualsDataTabController {
                             if (idx >= names.size()) {
                                 idx = 0;
                             }
-                            PlanInputTabularIo.TabularSheet shaped = shapeLoaded(file, idx);
+                            updateProgress(200, PROGRESS_MAX);
+                            PlanInputTabularIo.TabularSheet raw =
+                                    TaskInputSourceRawGridIo.readRaw(
+                                            file,
+                                            idx,
+                                            p -> {
+                                                if (isCancelled()) {
+                                                    throw new CancellationException();
+                                                }
+                                                long w =
+                                                        200L
+                                                                + (long)
+                                                                        Math.min(
+                                                                                7400L,
+                                                                                Math.round(p * 7400d));
+                                                updateProgress(w, PROGRESS_MAX);
+                                            });
+                            if (isCancelled()) {
+                                return null;
+                            }
+                            updateProgress(7700, PROGRESS_MAX);
+                            PlanInputTabularIo.TabularSheet stepped =
+                                    TaskInputSourceRawGridIo.applyProcessingActualsDisplaySteps(raw);
+                            updateProgress(8600, PROGRESS_MAX);
+                            PlanInputTabularIo.TabularSheet shaped =
+                                    TaskInputSourceRawGridIo.applyProcessingActualsDateTimeColumns(stepped);
+                            updateProgress(PROGRESS_MAX, PROGRESS_MAX);
                             return new ActualsReloadPayload(true, names, idx, shaped);
                         }
-                        PlanInputTabularIo.TabularSheet shaped = shapeLoaded(file, 0);
+                        PlanInputTabularIo.TabularSheet raw =
+                                TaskInputSourceRawGridIo.readRaw(
+                                        file,
+                                        0,
+                                        p -> {
+                                            if (isCancelled()) {
+                                                throw new CancellationException();
+                                            }
+                                            long w =
+                                                    (long)
+                                                            Math.min(
+                                                                    8200L,
+                                                                    Math.round(p * 8200d));
+                                            updateProgress(w, PROGRESS_MAX);
+                                        });
+                        if (isCancelled()) {
+                            return null;
+                        }
+                        updateProgress(8300, PROGRESS_MAX);
+                        PlanInputTabularIo.TabularSheet stepped =
+                                TaskInputSourceRawGridIo.applyProcessingActualsDisplaySteps(raw);
+                        updateProgress(9100, PROGRESS_MAX);
+                        PlanInputTabularIo.TabularSheet shaped =
+                                TaskInputSourceRawGridIo.applyProcessingActualsDateTimeColumns(stepped);
+                        updateProgress(PROGRESS_MAX, PROGRESS_MAX);
                         return new ActualsReloadPayload(false, List.of(), 0, shaped);
                     }
                 };
 
         activeReloadTask = task;
-        showLoadProgress();
+        bindLoadProgressToTask(task);
         task.setOnSucceeded(
                 ev -> {
                     activeReloadTask = null;
@@ -635,7 +701,7 @@ public final class ProcessingActualsDataTabController {
                         }
                         applyReloadPayloadOnFx(p, true);
                     } finally {
-                        hideLoadProgress();
+                        unbindLoadProgress();
                         refreshButton.setDisable(false);
                     }
                 });
@@ -657,9 +723,15 @@ public final class ProcessingActualsDataTabController {
                         }
                         applyEmpty();
                     } finally {
-                        hideLoadProgress();
+                        unbindLoadProgress();
                         refreshButton.setDisable(false);
                     }
+                });
+        task.setOnCancelled(
+                ev -> {
+                    activeReloadTask = null;
+                    unbindLoadProgress();
+                    refreshButton.setDisable(false);
                 });
         new Thread(task, "processing-actuals-reload").start();
     }
@@ -702,11 +774,38 @@ public final class ProcessingActualsDataTabController {
                 new Task<>() {
                     @Override
                     protected PlanInputTabularIo.TabularSheet call() throws Exception {
-                        return shapeLoaded(path, idx);
+                        updateProgress(0, PROGRESS_MAX);
+                        PlanInputTabularIo.TabularSheet raw =
+                                TaskInputSourceRawGridIo.readRaw(
+                                        path,
+                                        idx,
+                                        p -> {
+                                            if (isCancelled()) {
+                                                throw new CancellationException();
+                                            }
+                                            long w =
+                                                    150L
+                                                            + (long)
+                                                                    Math.min(
+                                                                            8050L,
+                                                                            Math.round(p * 8050d));
+                                            updateProgress(w, PROGRESS_MAX);
+                                        });
+                        if (isCancelled()) {
+                            return null;
+                        }
+                        updateProgress(8300, PROGRESS_MAX);
+                        PlanInputTabularIo.TabularSheet stepped =
+                                TaskInputSourceRawGridIo.applyProcessingActualsDisplaySteps(raw);
+                        updateProgress(9100, PROGRESS_MAX);
+                        PlanInputTabularIo.TabularSheet shaped =
+                                TaskInputSourceRawGridIo.applyProcessingActualsDateTimeColumns(stepped);
+                        updateProgress(PROGRESS_MAX, PROGRESS_MAX);
+                        return shaped;
                     }
                 };
         activeReloadTask = task;
-        showLoadProgress();
+        bindLoadProgressToTask(task);
         task.setOnSucceeded(
                 ev -> {
                     activeReloadTask = null;
@@ -717,7 +816,7 @@ public final class ProcessingActualsDataTabController {
                         PlanInputTabularIo.TabularSheet shaped = task.getValue();
                         applyShapedToUi(shaped, showErrorsInStatus);
                     } finally {
-                        hideLoadProgress();
+                        unbindLoadProgress();
                         refreshButton.setDisable(false);
                     }
                 });
@@ -741,9 +840,15 @@ public final class ProcessingActualsDataTabController {
                         }
                         applyEmpty();
                     } finally {
-                        hideLoadProgress();
+                        unbindLoadProgress();
                         refreshButton.setDisable(false);
                     }
+                });
+        task.setOnCancelled(
+                ev -> {
+                    activeReloadTask = null;
+                    unbindLoadProgress();
+                    refreshButton.setDisable(false);
                 });
         new Thread(task, "processing-actuals-sheet").start();
     }
