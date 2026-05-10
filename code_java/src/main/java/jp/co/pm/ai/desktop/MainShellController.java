@@ -334,6 +334,9 @@ public final class MainShellController {
 
     private final AtomicBoolean suppressEnvSessionPersistence = new AtomicBoolean(false);
 
+    /** 納期管理ビュー再読み込み中のタブ差し戻しで {@link TabPane} の選択リスナーを再入しない。 */
+    private final AtomicBoolean suppressDeliveryCalendarReloadTabGuard = new AtomicBoolean(false);
+
     /** メインシェル見出しのユーザー色にドロップシャドウ風グローを付ける（タブ整理のチェック）。 */
     private final AtomicBoolean mainShellTabOrganizerHeaderGlowEnabled = new AtomicBoolean(true);
 
@@ -492,6 +495,22 @@ public final class MainShellController {
                 .selectedItemProperty()
                 .addListener(
                         (obs, prevTab, newTab) -> {
+                            if (!suppressDeliveryCalendarReloadTabGuard.get()
+                                    && deliveryCalendarViewTabController != null
+                                    && mainShellTabDeliveryCalendar != null
+                                    && deliveryCalendarViewTabController
+                                            .isReloadBlockingMainShellTabNavigation()
+                                    && newTab != mainShellTabDeliveryCalendar) {
+                                suppressDeliveryCalendarReloadTabGuard.set(true);
+                                try {
+                                    tabPane.getSelectionModel().select(mainShellTabDeliveryCalendar);
+                                    appendLog(
+                                            "[delivery-calendar] 再読み込み完了まで他のメインタブへ切り替えできません");
+                                } finally {
+                                    suppressDeliveryCalendarReloadTabGuard.set(false);
+                                }
+                                return;
+                            }
                             emitShellTabNavigation();
                             /* :selected 由来の -fx-text-fill がインラインより後勝ちになることがあるため再適用 */
                             refreshMainShellTabHeaderChromeFromStoredColors();

@@ -210,6 +210,12 @@ public final class DeliveryCalendarViewTabController {
 
     private final AtomicBoolean suppressInnerTabSessionPersistence = new AtomicBoolean(false);
 
+    /**
+     * メインシェル最上段タブを「納期管理ビュー」以外へ切り替えさせない（再読み込みフル完了まで）。
+     * {@link #showDeliveryReloadProgress()} でオン、{@link #hideDeliveryReloadProgress()} でオフ。
+     */
+    private final AtomicBoolean reloadBlockingMainShellTabNavigation = new AtomicBoolean(false);
+
     private volatile boolean innerTabPersistenceWired;
 
     @FXML
@@ -274,6 +280,11 @@ public final class DeliveryCalendarViewTabController {
             deliveryCalendarResultDispatchTableTabController.setResultDispatchRefreshButtonVisible(false);
         }
         ensureInnerTabPersistenceWired();
+    }
+
+    /** メインシェルタブの切り替え抑止中（{@link MainShellController} が選択を差し戻す際に参照）。 */
+    boolean isReloadBlockingMainShellTabNavigation() {
+        return reloadBlockingMainShellTabNavigation.get();
     }
 
     private void ensureInnerTabPersistenceWired() {
@@ -470,7 +481,12 @@ public final class DeliveryCalendarViewTabController {
         if (ownerStage == null) {
             return;
         }
-        SpreadsheetColumnReorderDialog.show(ownerStage, new ArrayList<>(mainHeadersRef))
+        boolean[] visForDialog =
+                TableColumnOrderPersistence.loadColumnVisibility(
+                        TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN,
+                        mainHeadersRef.size());
+        SpreadsheetColumnReorderDialog.show(
+                        ownerStage, new ArrayList<>(mainHeadersRef), visForDialog)
                 .ifPresent(
                         perm -> {
                             List<String> oldHeaders = new ArrayList<>(mainHeadersRef);
@@ -599,6 +615,7 @@ public final class DeliveryCalendarViewTabController {
     }
 
     private void showDeliveryReloadProgress() {
+        reloadBlockingMainShellTabNavigation.set(true);
         if (deliveryReloadProgressContainer == null) {
             return;
         }
@@ -608,6 +625,7 @@ public final class DeliveryCalendarViewTabController {
     }
 
     private void hideDeliveryReloadProgress() {
+        reloadBlockingMainShellTabNavigation.set(false);
         if (deliveryReloadProgressContainer == null) {
             return;
         }
