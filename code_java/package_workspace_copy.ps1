@@ -234,13 +234,17 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
                 Copy-Item -LiteralPath $full -Destination $dst -Force
             }
             catch [System.IO.IOException] {
-                $hint = if ($_.Exception.Message -match '空き領域|space') {
-                    'コピー先ドライブの空き容量不足の可能性が高いです。古い pm-ai-package-release を削除する・別ドライブへ退避する・Windows のディスククリーンアップで空けてから再実行してください。'
+                # ASCII only: PS 5.1 loads this file as system ANSI unless UTF-8 BOM (see file header).
+                $ex = $_.Exception
+                $hr = [System.Runtime.InteropServices.Marshal]::GetHRForException($ex)
+                # 0x80070070 ERROR_DISK_FULL (works for localized IOException messages)
+                $hint = if ($hr -eq -2147024784 -or $ex.Message -match '(?i)\b(space|full)\b') {
+                    'Insufficient disk space likely: remove/move old pm-ai-package-release or free space on destination drive, then retry.'
                 }
                 else {
-                    'ファイルロックやパス長の問題の可能性もあります。'
+                    'Possible file lock or path-too-long; see paths below.'
                 }
-                throw ("ワークスペースミラーでファイルコピーに失敗しました。{0}`n元のエラー: {1}`nコピー元: {2}`nコピー先: {3}" -f $hint, $_.Exception.Message, $full, $dst)
+                throw ("Workspace mirror copy failed. $hint`nOriginal error: $($ex.Message)`nSource: $full`nDestination: $dst")
             }
         }
     }
@@ -268,13 +272,15 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
             Copy-Item -LiteralPath $src -Destination $dst -Force
         }
         catch [System.IO.IOException] {
-            $hint = if ($_.Exception.Message -match '空き領域|space') {
-                'コピー先ドライブの空き容量不足の可能性が高いです。古い pm-ai-package-release を削除する・別ドライブへ退避する・Windows のディスククリーンアップで空けてから再実行してください。'
+            $ex = $_.Exception
+            $hr = [System.Runtime.InteropServices.Marshal]::GetHRForException($ex)
+            $hint = if ($hr -eq -2147024784 -or $ex.Message -match '(?i)\b(space|full)\b') {
+                'Insufficient disk space likely: remove/move old pm-ai-package-release or free space on destination drive, then retry.'
             }
             else {
-                'ファイルロックやパス長の問題の可能性もあります。'
+                'Possible file lock or path-too-long; see paths below.'
             }
-            throw ("必須パス一覧からのコピーに失敗しました。{0}`n元のエラー: {1}`nコピー元: {2}`nコピー先: {3}" -f $hint, $_.Exception.Message, $src, $dst)
+            throw ("Mandatory-path copy failed. $hint`nOriginal error: $($ex.Message)`nSource: $src`nDestination: $dst")
         }
     }
 }
