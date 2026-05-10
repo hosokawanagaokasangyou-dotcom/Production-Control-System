@@ -20,7 +20,10 @@ import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.UserProfileStore;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 
-/** ユーザープロファイル（UI 設定の保存・読み出し）。保存先は {@code ~/.pm-ai-desktop/user-profiles}（アップデートで上書きされない）。 */
+/**
+ * ユーザープロファイル（UI 設定の保存・読み出し）。保存先は {@code ~/.pm-ai-desktop/user-profiles}
+ * （アップデートで上書きされない）。
+ */
 public final class UserProfilesTabController {
 
     @FXML
@@ -68,7 +71,8 @@ public final class UserProfilesTabController {
                                         setText(null);
                                         return;
                                     }
-                                    String extra = item.savedAtIso().isEmpty() ? "" : " ・ " + item.savedAtIso();
+                                    String extra =
+                                            item.savedAtIso().isEmpty() ? "" : " ・ " + item.savedAtIso();
                                     setText(item.displayLabel() + extra);
                                 }
                             });
@@ -88,7 +92,8 @@ public final class UserProfilesTabController {
         }
         try {
             shell.persistDesktopSessionNow();
-            ObjectNode sessionJson = DesktopSessionStateStore.toJsonObject(shell.snapshotDesktopSessionForExport());
+            ObjectNode sessionJson =
+                    DesktopSessionStateStore.toJsonObject(shell.snapshotDesktopSessionForExport());
             var tables = TableColumnOrderPersistence.readCurrentStoreRoot();
             String name = profileNameField != null ? profileNameField.getText() : "";
             UserProfileStore.saveProfile(name, sessionJson, tables);

@@ -17,21 +17,21 @@
     </padding>
     <center>
         <VBox spacing="12.0">
-            <Label style="-fx-font-weight: bold" text="ƒ†[ƒU[ƒvƒƒtƒ@ƒCƒ‹"/>
+            <Label style="-fx-font-weight: bold" text="ãƒ¦ãƒ¼ã‚¶ãƒ¼ãƒ—ãƒ­ãƒ•ã‚¡ã‚¤ãƒ«"/>
             <Label fx:id="hintLabel" wrapText="true" maxWidth="780"/>
             <Separator/>
-            <Label text="•Û‘¶Ï‚Ýƒvƒƒtƒ@ƒCƒ‹"/>
+            <Label text="ä¿å­˜æ¸ˆã¿ãƒ—ãƒ­ãƒ•ã‚¡ã‚¤ãƒ«"/>
             <ListView fx:id="profileListView" prefHeight="280.0" prefWidth="720.0"/>
             <HBox spacing="8.0">
-                <Button mnemonicParsing="false" onAction="#onRefreshAction" text="ˆê——XV"/>
+                <Button mnemonicParsing="false" onAction="#onRefreshAction" text="ä¸€è¦§æ›´æ–°"/>
             </HBox>
             <Separator/>
-            <Label text="–¼‘OiÈ—ªŽž‚Í•Û‘¶“úŽžE•b‚Ü‚Å‚ª–¼‘O‚É‚È‚è‚Ü‚·j"/>
-            <TextField fx:id="profileNameField" prefWidth="480.0" promptText="—á: ŒŸØ—pƒŒƒCƒAƒEƒg"/>
+            <Label text="åå‰ï¼ˆçœç•¥æ™‚ã¯ä¿å­˜æ—¥æ™‚ãƒ»ç§’ã¾ã§ãŒåå‰ã«ãªã‚Šã¾ã™ï¼‰"/>
+            <TextField fx:id="profileNameField" prefWidth="480.0" promptText="ä¾‹: æ¤œè¨¼ç”¨ãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆ"/>
             <HBox spacing="8.0">
-                <Button fx:id="saveButton" mnemonicParsing="false" onAction="#onSaveAction" text="Œ»Ý‚ÌÝ’è‚ð•Û‘¶"/>
-                <Button fx:id="loadButton" mnemonicParsing="false" onAction="#onLoadAction" text="‘I‘ð‚ð“Ç‚Ýo‚µ"/>
-                <Button fx:id="deleteButton" mnemonicParsing="false" onAction="#onDeleteAction" text="‘I‘ð‚ðíœ"/>
+                <Button fx:id="saveButton" mnemonicParsing="false" onAction="#onSaveAction" text="ç¾åœ¨ã®è¨­å®šã‚’ä¿å­˜"/>
+                <Button fx:id="loadButton" mnemonicParsing="false" onAction="#onLoadAction" text="é¸æŠžã‚’èª­ã¿å‡ºã—"/>
+                <Button fx:id="deleteButton" mnemonicParsing="false" onAction="#onDeleteAction" text="é¸æŠžã‚’å‰Šé™¤"/>
             </HBox>
         </VBox>
     </center>
