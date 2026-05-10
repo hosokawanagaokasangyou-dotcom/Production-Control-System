@@ -621,9 +621,12 @@ public final class DeliveryCalendarViewTabController {
         deliveryReloadProgressContainer.setManaged(false);
     }
 
-    /** 次のレイアウト脉冲でパネルを閉じる（同一フレームで閉じて子バーが描画されないのを避ける）。 */
+    /**
+     * パネルを閉じる処理を二脉冲先へ送る。単一 {@link Platform#runLater} では同一脉冲内で閉じ、子バーの更新が
+     * 一度も描画されないことがある。
+     */
     private void scheduleHideDeliveryReloadProgress() {
-        Platform.runLater(this::hideDeliveryReloadProgress);
+        Platform.runLater(() -> Platform.runLater(this::hideDeliveryReloadProgress));
     }
 
     private void resetDeliveryReloadTabSegments() {
@@ -757,6 +760,21 @@ public final class DeliveryCalendarViewTabController {
                 Platform.runLater(() -> runDeliveryReloadAladdinPhase(root, meta));
                 return;
             }
+
+            // #region agent log
+            if (shell != null) {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("okPayload", false);
+                d.put("errorText", root.path("error").asText(""));
+                AgentDebugLog.appendStructured(
+                        shell.snapshotUiEnv(),
+                        "progviz",
+                        "H_NOT_OK",
+                        "DeliveryCalendarViewTabController.applyPayloadBody",
+                        "skipped_tab_reload_chain_use_sync_main_only",
+                        d);
+            }
+            // #endregion
 
             applyMainCalendarAndAgentLog(root, meta);
             scheduleHideDeliveryReloadProgress();
