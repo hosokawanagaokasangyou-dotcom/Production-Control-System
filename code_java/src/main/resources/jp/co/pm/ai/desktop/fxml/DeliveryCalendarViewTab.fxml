@@ -8,6 +8,7 @@
 <?import javafx.scene.control.ProgressBar?>
 <?import javafx.scene.control.Slider?>
 <?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Spinner?>
 <?import javafx.scene.control.Tab?>
 <?import javafx.scene.control.TabPane?>
 <?import javafx.scene.control.TitledPane?>
@@ -94,6 +95,19 @@
                                         <Button fx:id="mainClearFiltersButton" mnemonicParsing="false"
                                                 onAction="#onClearMainFilters"
                                                 text="&#x5217;&#x30d5;&#x30a3;&#x30eb;&#x30bf;&#x30fb;&#x4e26;&#x3079;&#x66ff;&#x3048;&#x89e3;&#x9664;"/>
+                                    </HBox>
+                                    <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                        <Label text="&#x65e5;&#x4ed8;&#x7bc4;&#x56f2;&#xff08;&#x672c;&#x65e5;&#x57fa;&#x6e96;&#xff09;"/>
+                                        <Label text="&#x904e;&#x53bb;"/>
+                                        <Spinner fx:id="dateWindowPastDaysSpinner" editable="true"
+                                                 prefWidth="90.0"/>
+                                        <Label text="&#x65e5;&#x301c;&#x672a;&#x6765;"/>
+                                        <Spinner fx:id="dateWindowFutureDaysSpinner" editable="true"
+                                                 prefWidth="90.0"/>
+                                        <Label text="&#x65e5;"/>
+                                        <Label fx:id="dateWindowRangeLabel" style="-fx-text-fill: #666;"/>
+                                        <Label style="-fx-text-fill: #888; -fx-font-size: 10px;"
+                                               text="&#x518d;&#x8aad;&#x8fbc;&#x3067;&#x53cd;&#x6620;"/>
                                     </HBox>
                                     <HBox alignment="CENTER_LEFT" spacing="10.0">
                                         <Label text="&#x30c7;&#x30fc;&#x30bf;&#x884c;&#x306e;&#x9ad8;&#x3055;&#xff08;&#x4e00;&#x62ec;&#xff09;"/>

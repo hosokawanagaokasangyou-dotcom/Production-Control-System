@@ -215,6 +215,79 @@ public final class TableColumnOrderPersistence {
         }
     }
 
+    /**
+     * 納期管理ビュー「アラ・実績・シス比較」の日付ウィンドウ（本日基準の過去日数・未来日数）。
+     *
+     * <p>環境変数 {@code PM_AI_DELIVERY_CALENDAR_PAST_DAYS} / {@code PM_AI_DELIVERY_CALENDAR_FUTURE_DAYS}
+     * の上書き値として {@code pm_ai_delivery_calendar_view.py} に渡される。
+     */
+    public record DeliveryCalendarDateWindowPrefs(int pastDays, int futureDays) {
+        public static final int MIN = 1;
+        public static final int MAX = 800;
+        public static final int DEFAULT_PAST = 14;
+        public static final int DEFAULT_FUTURE = 30;
+
+        public static DeliveryCalendarDateWindowPrefs defaults() {
+            return new DeliveryCalendarDateWindowPrefs(DEFAULT_PAST, DEFAULT_FUTURE);
+        }
+
+        public DeliveryCalendarDateWindowPrefs {
+            pastDays = Math.max(MIN, Math.min(MAX, pastDays));
+            futureDays = Math.max(MIN, Math.min(MAX, futureDays));
+        }
+    }
+
+    private static final String DELIVERY_CALENDAR_PAST_DAYS_KEY =
+            "deliveryCalendarMain_ui_pastDays";
+    private static final String DELIVERY_CALENDAR_FUTURE_DAYS_KEY =
+            "deliveryCalendarMain_ui_futureDays";
+
+    /** 納期管理ビュー「アラ・実績・シス比較」の日付ウィンドウを読み込む（キーが無ければ既定 14/30）。 */
+    public static DeliveryCalendarDateWindowPrefs loadDeliveryCalendarDateWindowPrefs() {
+        try {
+            if (!Files.isRegularFile(STORE)) {
+                return DeliveryCalendarDateWindowPrefs.defaults();
+            }
+            JsonNode root = JSON.readTree(STORE.toFile());
+            if (root == null || !root.isObject()) {
+                return DeliveryCalendarDateWindowPrefs.defaults();
+            }
+            int past =
+                    root.path(DELIVERY_CALENDAR_PAST_DAYS_KEY)
+                            .asInt(DeliveryCalendarDateWindowPrefs.DEFAULT_PAST);
+            int future =
+                    root.path(DELIVERY_CALENDAR_FUTURE_DAYS_KEY)
+                            .asInt(DeliveryCalendarDateWindowPrefs.DEFAULT_FUTURE);
+            return new DeliveryCalendarDateWindowPrefs(past, future);
+        } catch (IOException e) {
+            return DeliveryCalendarDateWindowPrefs.defaults();
+        }
+    }
+
+    /** 納期管理ビュー「アラ・実績・シス比較」の日付ウィンドウを永続化する。 */
+    public static void saveDeliveryCalendarDateWindowPrefs(DeliveryCalendarDateWindowPrefs prefs) {
+        if (prefs == null) {
+            return;
+        }
+        try {
+            Files.createDirectories(STORE.getParent());
+            ObjectNode root;
+            if (Files.isRegularFile(STORE)) {
+                JsonNode tree = JSON.readTree(STORE.toFile());
+                root =
+                        tree != null && tree.isObject()
+                                ? (ObjectNode) tree.deepCopy()
+                                : JSON.createObjectNode();
+            } else {
+                root = JSON.createObjectNode();
+            }
+            root.put(DELIVERY_CALENDAR_PAST_DAYS_KEY, prefs.pastDays());
+            root.put(DELIVERY_CALENDAR_FUTURE_DAYS_KEY, prefs.futureDays());
+            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
+        } catch (IOException ignored) {
+        }
+    }
+
     /** 指定 {@link TableId} の Spreadsheet 行高・折り返しを永続化する。 */
     public static void saveSpreadsheetTabPresentationPrefs(
             TableId id, SpreadsheetTabPresentationPrefs prefs) {
