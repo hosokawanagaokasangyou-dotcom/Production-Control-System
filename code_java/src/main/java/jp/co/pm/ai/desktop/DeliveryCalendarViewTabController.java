@@ -702,6 +702,10 @@ public final class DeliveryCalendarViewTabController {
                 rebuildMainSpreadsheet();
             }
 
+            if (root.path("ok").asBoolean(false) && processingActualsDataTabController != null) {
+                processingActualsDataTabController.reloadProcessingActualsFromDisk();
+            }
+
         } catch (Exception e) {
             statusLabel.setText("parse: " + e.getMessage());
             if (shell != null) {

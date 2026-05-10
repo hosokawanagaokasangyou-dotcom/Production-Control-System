@@ -15,7 +15,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.collections.FXCollections;
@@ -33,7 +32,6 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
-import javafx.util.Duration;
 
 import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
@@ -245,13 +243,46 @@ public final class ProcessingActualsDataTabController {
         initSpreadsheetPresentationControls();
 
         /*
-         * 起動直後は他タブの JSON 復元などと同時にヒープを食い合わないよう、短く遅延してから読込む。
-         * POI 本体は {@link #reloadFromSourceDir} 内の Task でバックグラウンドスレッドへオフロードする。
+         * 起動時は xlsx を開かない（ヒープ・OOM 回避）。読込は納期管理ビュー上部の「再読込」成功時、
+         * または本タブの「再読み」から {@link #reloadFromSourceDir} を実行したときのみ。
          */
-        PauseTransition defer =
-                new PauseTransition(Duration.millis(1200));
-        defer.setOnFinished(e -> reloadFromSourceDir());
-        defer.play();
+        refreshSourcePathLabelsOnly();
+    }
+
+    /**
+     * 納期管理ビューで「再読込」が成功したあと、加工実績ブックを読み込むために親から呼ばれる。
+     */
+    public void reloadProcessingActualsFromDisk() {
+        reloadFromSourceDir();
+    }
+
+    /** POI でブックを開かず、解決済みパスと案内文言だけ更新する（起動時・セッション復元直後）。 */
+    private void refreshSourcePathLabelsOnly() {
+        if (shell == null) {
+            return;
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        Path dir = AppPaths.resolveActualDetailSourceDir(ui);
+        dirLabel.setText(dir != null ? dir.toString() : "(\u672a\u8a2d\u5b9a)");
+        NetworkSourceDirResolver.Result r = NetworkSourceDirResolver.resolve(ui);
+        Optional<Path> resolved = r.actualDetailPath();
+        if (resolved.isEmpty()) {
+            statusLabel.setText(
+                    "\u30d5\u30a1\u30a4\u30eb\u306a\u3057\u307e\u305f\u306f\u53c2\u7167\u4e0d\u53ef");
+            pathLabel.setText("");
+            loadedPath = null;
+            applyEmpty();
+            return;
+        }
+        Path file = resolved.get().toAbsolutePath().normalize();
+        pathLabel.setText(file.toString());
+        loadedPath = null;
+        statusLabel.setText(
+                "未読込 — 納期管理ビュー上部の「再読込」で Excel を読み込みます"
+                        + "（または本タブ内「再読み」）");
+        sheetCombo.getItems().clear();
+        sheetCombo.setDisable(true);
+        applyEmpty();
     }
 
     private void onLeadingColumnCountCommitted(int n) {
