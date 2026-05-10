@@ -54,6 +54,29 @@ public final class TableColumnOrderPersistence {
     private static final Path STORE =
             Paths.get(System.getProperty("user.home"), ".pm-ai-desktop", "table-column-order.json");
 
+    /** 現在の列順ストアを読む（無ければ空オブジェクト）。ユーザープロファイル保存用。 */
+    public static JsonNode readCurrentStoreRoot() {
+        try {
+            if (!Files.isRegularFile(STORE)) {
+                return JSON.createObjectNode();
+            }
+            JsonNode n = JSON.readTree(STORE.toFile());
+            return n != null && n.isObject() ? n : JSON.createObjectNode();
+        } catch (IOException e) {
+            return JSON.createObjectNode();
+        }
+    }
+
+    /** 列順ストアを丸ごと置換する（ユーザープロファイル読み出し用）。 */
+    public static void overwriteStoreRoot(JsonNode root) throws IOException {
+        ObjectNode out =
+                root != null && root.isObject()
+                        ? (ObjectNode) root.deepCopy()
+                        : JSON.createObjectNode();
+        Files.createDirectories(STORE.getParent());
+        JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), out);
+    }
+
     private static final String BUNDLED_TABLE_COLUMN_ORDER_RESOURCE =
             "/jp/co/pm/ai/desktop/config/bundled_table_column_order.json";
 
@@ -1233,6 +1256,38 @@ public final class TableColumnOrderPersistence {
         }
         Files.createDirectories(STORE.getParent());
         JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), ((ObjectNode) bundled).deepCopy());
+    }
+
+    /**
+     * ポータルアップデート直後: リポジトリ {@code init_setting/table_column_defaults.json}（配布同期で上書き済み）があれば
+     * それを {@link #STORE} に書き、無ければ {@link #portableBundleInitSettingDir()}、最後にバンドルマージへフォールバックする。
+     */
+    public static void overwriteTableColumnOrderStoreAfterPortableUpgrade(Map<String, String> ui) throws IOException {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path repo =
+                InitSettingPaths.resolveRepoInitSettingDir(u).resolve(InitSettingPaths.TABLE_COLUMN_DEFAULTS_FILE);
+        if (tryWriteTableColumnStoreFromPath(repo)) {
+            return;
+        }
+        Path portable =
+                InitSettingPaths.portableBundleInitSettingDir().resolve(InitSettingPaths.TABLE_COLUMN_DEFAULTS_FILE);
+        if (tryWriteTableColumnStoreFromPath(portable)) {
+            return;
+        }
+        overwriteTableColumnOrderStoreFromBundledAfterPortableUpgrade();
+    }
+
+    private static boolean tryWriteTableColumnStoreFromPath(Path file) throws IOException {
+        if (!Files.isRegularFile(file)) {
+            return false;
+        }
+        JsonNode n = JSON.readTree(file.toFile());
+        if (n == null || !n.isObject()) {
+            return false;
+        }
+        Files.createDirectories(STORE.getParent());
+        JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), ((ObjectNode) n).deepCopy());
+        return true;
     }
 
     /**

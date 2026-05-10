@@ -41,7 +41,8 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.MASTER_SUMMARY.key(),
                     MainShellTabId.EXCLUDE_RULES.key(),
                     MainShellTabId.SPECIAL_RULES.key(),
-                    MainShellTabId.ACTUALS_STATUS.key());
+                    MainShellTabId.ACTUALS_STATUS.key(),
+                    MainShellTabId.USER_PROFILES.key());
 
     /**
      * All {@link MainShellTabId} keys except {@link MainShellTabId#TAB_ORGANIZER}: DEFAULT order then any enum-only
@@ -84,7 +85,8 @@ public final class MainShellTabLayoutDefaults {
                         List.of(
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.ENV.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.MEMORY_SETTINGS.key(), ""),
-                                MainShellTabLayoutNode.tabNode(MainShellTabId.GLOBAL_SETTINGS.key(), ""))));
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.GLOBAL_SETTINGS.key(), ""),
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.USER_PROFILES.key(), ""))));
 
         top.add(
                 MainShellTabLayoutNode.groupNode(

@@ -30,7 +30,7 @@ class BundledDesktopUiDefaultsResourceTest {
             assertNotNull(in);
             JsonNode n = new ObjectMapper().readTree(in);
             assertTrue(n.path("mainShellTabOrder").isArray());
-            assertEquals(18, n.path("mainShellTabOrder").size());
+            assertEquals(19, n.path("mainShellTabOrder").size());
             assertTrue(n.path("mainShellTabTitleAliases").isObject());
         }
     }

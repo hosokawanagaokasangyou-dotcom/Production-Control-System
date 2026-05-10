@@ -66,6 +66,11 @@
                         <fx:include fx:id="globalSettingsTab" source="GlobalSettingsTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabUserProfiles" closable="false" text="ユーザープロファイル">
+                    <content>
+                        <fx:include fx:id="userProfilesTab" source="UserProfilesTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabMasterSummary" closable="false"
                      text="マスタ読込サマリ">
                     <content>

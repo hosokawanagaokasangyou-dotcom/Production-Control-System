@@ -57,6 +57,8 @@ import javafx.stage.Stage;
 import javafx.util.Duration;
 import javafx.util.StringConverter;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import jp.co.pm.ai.desktop.runtime.FxJvmMemoryStatusBar;
 
 import jp.co.pm.ai.desktop.audio.MacroCompleteChime;
@@ -76,6 +78,7 @@ import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 import jp.co.pm.ai.desktop.config.PortableBundleSelfUpdater;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
+import jp.co.pm.ai.desktop.config.InitSettingPersistence;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
@@ -189,6 +192,9 @@ public final class MainShellController {
     private GlobalSettingsTabController globalSettingsTabController;
 
     @FXML
+    private UserProfilesTabController userProfilesTabController;
+
+    @FXML
     private PlanInputTabController planInputTabController;
 
     @FXML
@@ -250,6 +256,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabGlobalSettings;
+
+    @FXML
+    private Tab mainShellTabUserProfiles;
 
     @FXML
     private Tab mainShellTabMasterSummary;
@@ -382,6 +391,9 @@ public final class MainShellController {
             memorySettingsTabController.bindShell(this);
             if (globalSettingsTabController != null) {
                 globalSettingsTabController.bindShell(this);
+            }
+            if (userProfilesTabController != null) {
+                userProfilesTabController.bindShell(this);
             }
             masterReadSummaryTabController.bindShell(this);
             planResultViewerTabController.bindShell(this);
@@ -914,6 +926,36 @@ public final class MainShellController {
         return collectDesktopSession();
     }
 
+    /**
+     * ユーザープロファイル読み出し: 列順 JSON と {@link DesktopSessionState} を適用し、テーマ・ログ・ガント等を追従させる。
+     *
+     * @throws IOException 列順ファイルの書き込みに失敗したとき
+     */
+    public void applyUserProfileSnapshot(DesktopSessionState state, JsonNode tableColumnOrderRoot)
+            throws IOException {
+        if (state == null) {
+            return;
+        }
+        TableColumnOrderPersistence.overwriteStoreRoot(tableColumnOrderRoot);
+        applyDesktopSession(state, true);
+        DesktopTheme t = DesktopTheme.fromStored(state.uiTheme());
+        pendingTheme = t;
+        if (themeCombo != null) {
+            themeCombo.setValue(t);
+        }
+        if (primaryScene != null) {
+            t.applyTo(primaryScene);
+        }
+        refreshThemeTrackedSecondaryScenes();
+        refreshPushButtonStylesheet();
+        refreshMainShellTabHeaderChromeFromStoredColors();
+        if (equipmentGanttGraphicTabController != null) {
+            equipmentGanttGraphicTabController.refreshGraphicForTheme();
+        }
+        mainRunTabController.refreshLogThemeCells();
+        persistDesktopSessionNow();
+    }
+
     Stage primaryStageForDialogs() {
         return primaryStage;
     }
@@ -998,6 +1040,9 @@ public final class MainShellController {
         if (t == mainShellTabGlobalSettings) {
             return MainShellTabId.GLOBAL_SETTINGS;
         }
+        if (t == mainShellTabUserProfiles) {
+            return MainShellTabId.USER_PROFILES;
+        }
         if (t == mainShellTabMasterSummary) {
             return MainShellTabId.MASTER_SUMMARY;
         }
@@ -1054,6 +1099,7 @@ public final class MainShellController {
             case ENV -> mainShellTabEnv;
             case MEMORY_SETTINGS -> mainShellTabMemorySettings;
             case GLOBAL_SETTINGS -> mainShellTabGlobalSettings;
+            case USER_PROFILES -> mainShellTabUserProfiles;
             case MASTER_SUMMARY -> mainShellTabMasterSummary;
             case PLAN_INPUT -> mainShellTabPlanInput;
             case STAGE1_PREVIEW -> mainShellTabStage1Preview;
@@ -3369,9 +3415,11 @@ public final class MainShellController {
                     }
                     wait.close();
                     try {
-                        DesktopSessionStateStore.applyPortableUpgradeBundledPolicyToSessionStore();
-                        TableColumnOrderPersistence
-                                .overwriteTableColumnOrderStoreFromBundledAfterPortableUpgrade();
+                        InitSettingPersistence.applyPortableUpgradeOverwriteFromPmAiData(
+                                localData, collectUiEnv());
+                        DesktopSessionStateStore.applyPortableUpgradeBundledPolicyToSessionStore(collectUiEnv());
+                        TableColumnOrderPersistence.overwriteTableColumnOrderStoreAfterPortableUpgrade(
+                                collectUiEnv());
                     } catch (IOException ex) {
                         appendLog(
                                 "[startup] バージョンアップ後のバンドル既定（タブ／列順／配台不要 JSON パス）の上書きに失敗: "
@@ -3385,7 +3433,8 @@ public final class MainShellController {
                     applyUncNetworkSourceDirDefaults();
                     DesktopSessionStateStore.save(collectDesktopSession());
                     mainRunTabController.refreshAppVersionLabel();
-                    appendLog("[startup] ポータル同期が完了しました（version.txt に従いファイルを更新）。環境変数はバンドル既定で初期化しました。");
+                    appendLog(
+                            "[startup] ポータル同期が完了しました（version.txt・pm-ai-data／init_setting をリポジトリへ反映）。環境変数はバンドル既定で初期化しました。");
                 });
         task.setOnFailed(
                 e -> {

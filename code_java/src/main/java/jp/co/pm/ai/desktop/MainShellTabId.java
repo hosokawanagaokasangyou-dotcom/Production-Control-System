@@ -12,6 +12,8 @@ public enum MainShellTabId {
     MEMORY_SETTINGS("memorySettings"),
     /** UI 全体の既定リセット・パッケージ既定の書き出し。 */
     GLOBAL_SETTINGS("globalSettings"),
+    /** ユーザープロファイル（UI 設定の保存・読み出し、{@code ~/.pm-ai-desktop/user-profiles}）。 */
+    USER_PROFILES("userProfiles"),
     MASTER_SUMMARY("masterSummary"),
     PLAN_INPUT("planInput"),
     STAGE1_PREVIEW("stage1Preview"),

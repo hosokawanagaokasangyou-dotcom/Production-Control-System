@@ -205,9 +205,20 @@ public final class DesktopSessionStateStore {
      * {@code bundled_session_ui_defaults.json} の各キーを {@link #STORE} に上書きし、
      * {@code pm-ai-data/code/exclude_rules.json} があれば {@code excludeRulesPath} と環境タブ相当の
      * {@link AppPaths#KEY_PM_AI_EXCLUDE_RULES_JSON} 行も最新の絶対パスへ更新する。
+     *
+     * <p>{@link #applyPortableUpgradeBundledPolicyToSessionStore(Map)} に {@code null} を渡すのと同じ。
      */
     public static void applyPortableUpgradeBundledPolicyToSessionStore() throws IOException {
-        JsonNode bundled = readMergedSessionUiDefaultsNode();
+        applyPortableUpgradeBundledPolicyToSessionStore(null);
+    }
+
+    /**
+     * {@link #applyPortableUpgradeBundledPolicyToSessionStore()} と同様だが、{@code ui} が非 null のときは
+     * {@link #readMergedSessionUiDefaultsNode(Map)} を用い、リポジトリ {@code init_setting/session_defaults.json}
+     * （アップデートで配布側が上書きした内容）をマージの最終層に含める。
+     */
+    public static void applyPortableUpgradeBundledPolicyToSessionStore(Map<String, String> ui) throws IOException {
+        JsonNode bundled = readMergedSessionUiDefaultsNode(ui);
         ObjectNode root;
         if (Files.isRegularFile(STORE)) {
             JsonNode cur = JSON.readTree(STORE.toFile());
@@ -271,6 +282,16 @@ public final class DesktopSessionStateStore {
         } catch (IOException e) {
             return null;
         }
+    }
+
+    /**
+     * ユーザープロファイル等、{@link #toJsonObject(DesktopSessionState)} 相当の JSON オブジェクトから復元する。
+     */
+    public static DesktopSessionState desktopSessionFromStoredJson(JsonNode root) {
+        if (root == null || !root.isObject()) {
+            return DesktopSessionState.empty();
+        }
+        return parseDesktopSessionState(root);
     }
 
     private static DesktopSessionState parseDesktopSessionState(JsonNode root) {
