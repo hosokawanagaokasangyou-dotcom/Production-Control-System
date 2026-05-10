@@ -63,26 +63,79 @@ public final class ExcelCellReadSupport {
     /**
      * {@link DataFormatter} can emit comma between every digit (e.g. {@code 3,0,0,0}). When every comma-separated
      * segment is exactly one digit, join digits. Normal thousands like {@code 1,234} are unchanged.
+     *
+     * <p>Excel の表示形式が小数を付けると {@code 8,0,0,0.00} のように最後のセグメントだけが {@code 0.00} になり、従来の
+     * 「全区画が1桁」判定に引っかからない。この場合は ASCII の {@code '.'} より後ろを小数部として除外してから整数部だけを結合する。
      */
     public static String normalizeCommaDigitArtifacts(String s) {
         if (s == null || s.isEmpty() || !s.contains(",")) {
             return s == null ? "" : s;
         }
         String t = s.trim();
-        String[] parts = t.split(",", -1);
+        int dot = indexOfTrailingAsciiDecimalSeparator(t);
+        String intPart = dot >= 0 ? t.substring(0, dot) : t;
+        String fracPart = dot >= 0 ? t.substring(dot) : "";
+
+        String collapsed = tryCollapseCommaSingleDigitInteger(intPart.trim());
+        if (collapsed != null) {
+            return collapsed + fracPart;
+        }
+        return s;
+    }
+
+    /**
+     * Returns index of {@code '.'} that starts the fractional part (only ASCII digits after it), or {@code -1}.
+     */
+    private static int indexOfTrailingAsciiDecimalSeparator(String t) {
+        for (int i = t.length() - 1; i >= 0; i--) {
+            if (t.charAt(i) != '.') {
+                continue;
+            }
+            String after = t.substring(i + 1);
+            if (!after.isEmpty() && allAsciiDigits(after)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static boolean allAsciiDigits(String after) {
+        for (int i = 0; i < after.length(); i++) {
+            char ch = after.charAt(i);
+            if (ch < '0' || ch > '9') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * @return collapsed digits-only integer string, or {@code null} if the pattern is not per-digit commas
+     */
+    private static String tryCollapseCommaSingleDigitInteger(String intPart) {
+        if (intPart.isEmpty() || !intPart.contains(",")) {
+            return null;
+        }
+        boolean neg = intPart.startsWith("-");
+        String u = neg ? intPart.substring(1).trim() : intPart;
+        if (u.isEmpty() || !u.contains(",")) {
+            return null;
+        }
+        String[] parts = u.split(",", -1);
         if (parts.length < 2) {
-            return s;
+            return null;
         }
         for (String p : parts) {
             String q = p.trim();
             if (q.length() != 1 || !Character.isDigit(q.charAt(0))) {
-                return s;
+                return null;
             }
         }
         StringBuilder sb = new StringBuilder(parts.length);
         for (String p : parts) {
             sb.append(p.trim());
         }
-        return sb.toString();
+        String digits = sb.toString();
+        return neg ? "-" + digits : digits;
     }
 }
