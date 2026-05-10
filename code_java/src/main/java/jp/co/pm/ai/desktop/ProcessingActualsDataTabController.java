@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import javafx.beans.binding.Bindings;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.collections.FXCollections;
@@ -193,6 +194,13 @@ public final class ProcessingActualsDataTabController {
 
     private volatile Task<?> activeReloadTask;
 
+    /**
+     * 親画面（例: 納期管理ビュー再読込のセグメントバー）へ {@link Task} の進捗を同期する。読込完了時に {@link #unbindLoadProgress()} で解除。
+     */
+    private ProgressBar progressMirrorBar;
+
+    private Label progressMirrorPctLabel;
+
     private volatile boolean presentationHooksInstalled;
 
     private final AtomicBoolean suppressFilterUi = new AtomicBoolean(false);
@@ -295,7 +303,7 @@ public final class ProcessingActualsDataTabController {
      * 納期管理ビューで「再読込」が成功したあと、加工実績ブックを読み込むために親から呼ばれる。
      */
     public void reloadProcessingActualsFromDisk() {
-        reloadFromSourceDir(null);
+        reloadFromSourceDir(null, null, null);
     }
 
     /**
@@ -303,7 +311,16 @@ public final class ProcessingActualsDataTabController {
      * を JavaFX アプリケーションスレッドで呼ぶ（バックグラウンド {@link Task} のため親の進捗バーと同期するため）。
      */
     public void reloadProcessingActualsFromDisk(Runnable whenDone) {
-        reloadFromSourceDir(whenDone);
+        reloadFromSourceDir(whenDone, null, null);
+    }
+
+    /**
+     * {@link #reloadProcessingActualsFromDisk(Runnable)} に加え、{@code mirrorProgress} / {@code mirrorPctLabel} を内部の読込
+     * {@link Task} の進捗と同期する（納期管理ビュー上部の「加工実績」セグメントなど）。
+     */
+    public void reloadProcessingActualsFromDisk(
+            Runnable whenDone, ProgressBar mirrorProgress, Label mirrorPctLabel) {
+        reloadFromSourceDir(whenDone, mirrorProgress, mirrorPctLabel);
     }
 
     /** POI でブックを開かず、解決済みパスと案内文言だけ更新する（起動時・セッション復元直後）。 */
@@ -419,7 +436,14 @@ public final class ProcessingActualsDataTabController {
             }
             return;
         }
-        SpreadsheetColumnReorderDialog.show(ownerStage, new ArrayList<>(headersRef))
+        boolean[] visForDialog =
+                ColumnVisibilitySupport.mergeMandatoryIntoVisibility(
+                        TableColumnOrderPersistence.loadColumnVisibility(
+                                TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW,
+                                headersRef.size()),
+                        mandatoryVisibilityMaskForHeaders(new ArrayList<>(headersRef)));
+        SpreadsheetColumnReorderDialog.show(
+                        ownerStage, new ArrayList<>(headersRef), visForDialog)
                 .ifPresent(
                         perm -> {
                             List<String> oldHeaders = new ArrayList<>(headersRef);
@@ -570,25 +594,47 @@ public final class ProcessingActualsDataTabController {
     }
 
     private void bindLoadProgressToTask(Task<?> task) {
-        if (loadProgressBar == null || task == null) {
+        if (task == null) {
             return;
         }
-        loadProgressBar.setManaged(true);
-        loadProgressBar.setVisible(true);
-        loadProgressBar.progressProperty().bind(task.progressProperty());
+        if (loadProgressBar != null) {
+            loadProgressBar.setManaged(true);
+            loadProgressBar.setVisible(true);
+            loadProgressBar.progressProperty().bind(task.progressProperty());
+        }
+        if (progressMirrorBar != null) {
+            progressMirrorBar.progressProperty().bind(task.progressProperty());
+        }
+        if (progressMirrorPctLabel != null) {
+            progressMirrorPctLabel
+                    .textProperty()
+                    .bind(
+                            Bindings.createStringBinding(
+                                    () ->
+                                            String.format(
+                                                    Locale.ROOT, "%.0f%%", task.getProgress() * 100.0),
+                                    task.progressProperty()));
+        }
     }
 
     private void unbindLoadProgress() {
-        if (loadProgressBar == null) {
-            return;
+        if (loadProgressBar != null) {
+            loadProgressBar.progressProperty().unbind();
+            loadProgressBar.setProgress(0);
+            loadProgressBar.setVisible(false);
+            loadProgressBar.setManaged(false);
         }
-        loadProgressBar.progressProperty().unbind();
-        loadProgressBar.setProgress(0);
-        loadProgressBar.setVisible(false);
-        loadProgressBar.setManaged(false);
+        if (progressMirrorBar != null) {
+            progressMirrorBar.progressProperty().unbind();
+        }
+        if (progressMirrorPctLabel != null) {
+            progressMirrorPctLabel.textProperty().unbind();
+        }
+        progressMirrorBar = null;
+        progressMirrorPctLabel = null;
     }
 
-    private void reloadFromSourceDir(Runnable whenDone) {
+    private void reloadFromSourceDir(Runnable whenDone, ProgressBar mirrorBar, Label mirrorPct) {
         if (shell == null) {
             if (whenDone != null) {
                 whenDone.run();
@@ -731,6 +777,8 @@ public final class ProcessingActualsDataTabController {
                 };
 
         activeReloadTask = task;
+        progressMirrorBar = mirrorBar;
+        progressMirrorPctLabel = mirrorPct;
         bindLoadProgressToTask(task);
         task.setOnSucceeded(
                 ev -> {
@@ -883,6 +931,8 @@ public final class ProcessingActualsDataTabController {
                     }
                 };
         activeReloadTask = task;
+        progressMirrorBar = null;
+        progressMirrorPctLabel = null;
         bindLoadProgressToTask(task);
         task.setOnSucceeded(
                 ev -> {

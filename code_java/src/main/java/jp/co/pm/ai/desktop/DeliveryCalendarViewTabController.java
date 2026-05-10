@@ -1134,14 +1134,17 @@ public final class DeliveryCalendarViewTabController {
                 return;
             }
             /*
-             * 加工実績は Task でバックグラウンド読込するため、完了まで親バーを 100% にしてはならない。
+             * 加工実績は Task でバックグラウンド読込する。親セグメントバーは {@link ProcessingActualsDataTabController}
+             * 側で Task の {@code progressProperty} にバインドし、完了時のコールバックで 100% に確定する。
              */
             processingActualsDataTabController.reloadProcessingActualsFromDisk(
                     () -> {
                         setDeliveryReloadSegmentProgress(
                                 deliveryReloadProgressActuals, deliveryReloadPctActuals, 1.0);
                         Platform.runLater(() -> runDeliveryReloadDispatchPhase(root, meta));
-                    });
+                    },
+                    deliveryReloadProgressActuals,
+                    deliveryReloadPctActuals);
         } catch (Throwable t) {
             if (shell != null) {
                 shell.appendLog("[delivery-calendar] 加工実績再読込 " + t.getMessage());
