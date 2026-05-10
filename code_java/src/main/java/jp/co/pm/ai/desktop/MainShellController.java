@@ -948,10 +948,10 @@ public final class MainShellController {
             PushButtonCssEmitter.deleteUserOverridesFileSilently();
 
             DesktopSessionState merged =
-                    DesktopSessionStateStore.buildFactoryResetSession(collectDesktopSession());
+                    DesktopSessionStateStore.buildFactoryResetSession(collectDesktopSession(), collectUiEnv());
             DesktopSessionStateStore.save(merged);
             applyDesktopSession(merged);
-            TableColumnOrderPersistence.materializeBundledDefaultsIfStoreMissing();
+            TableColumnOrderPersistence.materializeTableColumnStoreAfterFactoryReset(collectUiEnv());
             refreshPushButtonStylesheet();
             refreshThemeTrackedSecondaryScenes();
             persistDesktopSessionNow();

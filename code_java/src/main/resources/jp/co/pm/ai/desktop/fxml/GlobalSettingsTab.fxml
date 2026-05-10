@@ -21,7 +21,7 @@
             <Button fx:id="resetUiButton" mnemonicParsing="false" onAction="#onResetUiToFactoryAction"
                     text="デフォルトに戻す"/>
             <Label wrapText="true" maxWidth="720" style="-fx-text-fill: -fx-mid-text-color"
-                   text="環境変数タブはテンプレ既定へ戻ります。実行タブのパス・Python はその時点の値が維持されます（セッションの UI キーのみバンドル既定へ）。 ~/.pm-ai-desktop の列順・一部 JSON は削除されます。"/>
+                   text="環境変数タブはテンプレ既定へ戻ります。実行タブのパス・Python はその時点の値が維持されます。リポジトリ init_setting に「現在の状態をデフォルトとする」で書き出した JSON があるときは、可能な範囲でその内容へ復帰します（無い場合はバンドル既定）。 ~/.pm-ai-desktop の列順・一部 JSON は削除されます。"/>
             <Separator/>
             <Button fx:id="saveDefaultsButton" mnemonicParsing="false" onAction="#onSavePackageDefaultsAction"
                     text="現在の状態をデフォルトとする"/>

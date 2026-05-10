@@ -1256,6 +1256,29 @@ public final class TableColumnOrderPersistence {
     }
 
     /**
+     * 工場 UI リセット直後（ユーザーホームの {@link #STORE} を削除したあと）に呼ぶ。リポジトリの {@code
+     * init_setting/table_column_defaults.json} があればグローバル設定で書き出した内容を {@link #STORE} へ複製し、無ければ
+     * {@link #materializeBundledDefaultsIfStoreMissing()} にフォールバックする。
+     */
+    public static void materializeTableColumnStoreAfterFactoryReset(Map<String, String> ui) {
+        try {
+            Path exported =
+                    InitSettingPaths.resolveRepoInitSettingDir(ui != null ? ui : Map.of())
+                            .resolve(InitSettingPaths.TABLE_COLUMN_DEFAULTS_FILE);
+            if (Files.isRegularFile(exported)) {
+                JsonNode n = JSON.readTree(exported.toFile());
+                if (n != null && n.isObject()) {
+                    Files.createDirectories(STORE.getParent());
+                    JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), n);
+                    return;
+                }
+            }
+        } catch (IOException ignored) {
+        }
+        materializeBundledDefaultsIfStoreMissing();
+    }
+
+    /**
      * 優先順（後勝ち）: クラスパス {@code bundled_table_column_order.json} → {@code pm-ai-data/config} 同名 →
      * {@code init_setting/table_column_defaults.json} → {@code pm-ai-data/init_setting/table_column_defaults.json}。
      */

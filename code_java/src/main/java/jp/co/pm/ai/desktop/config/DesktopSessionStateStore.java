@@ -75,9 +75,19 @@ public final class DesktopSessionStateStore {
     /**
      * 優先順（後勝ち）: クラスパス {@code bundled_session_ui_defaults.json} → 旧バッジ既定 → {@code
      * pm-ai-data/config/bundled_session_ui_defaults.json} → 同 {@code bundled_session_badge_defaults.json} →
-     * {@code init_setting/session_defaults.json} → {@code pm-ai-data/init_setting/session_defaults.json}。
+     * {@code init_setting/session_defaults.json}（カレントディレクトリ基準）→ {@code
+     * pm-ai-data/init_setting/session_defaults.json}。
      */
     static JsonNode readMergedSessionUiDefaultsNode() {
+        return readMergedSessionUiDefaultsNode(null);
+    }
+
+    /**
+     * {@link #readMergedSessionUiDefaultsNode()} と同じマージに加え、{@code ui} が非 null のとき
+     * {@link InitSettingPaths#resolveRepoInitSettingDir(Map)}/{@link InitSettingPaths#SESSION_DEFAULTS_FILE} を
+     * <strong>最後</strong>に重ねる。グローバル設定の「現在の状態をデフォルトとする」書き出し先と工場リセットの参照先を揃える。
+     */
+    static JsonNode readMergedSessionUiDefaultsNode(Map<String, String> ui) {
         ObjectNode acc = JSON.createObjectNode();
         mergeSessionUiFromClasspath(acc, BUNDLED_SESSION_UI_DEFAULTS_RESOURCE);
         mergeSessionUiFromClasspath(acc, LEGACY_BUNDLED_SESSION_BADGE_DEFAULTS_RESOURCE);
@@ -95,6 +105,12 @@ public final class DesktopSessionStateStore {
                 acc,
                 InitSettingPaths.portableBundleInitSettingDir()
                         .resolve(InitSettingPaths.SESSION_DEFAULTS_FILE));
+        if (ui != null) {
+            mergeSessionUiFromPath(
+                    acc,
+                    InitSettingPaths.resolveRepoInitSettingDir(ui)
+                            .resolve(InitSettingPaths.SESSION_DEFAULTS_FILE));
+        }
         return acc.size() > 0 ? acc : null;
     }
 
@@ -129,9 +145,15 @@ public final class DesktopSessionStateStore {
         }
     }
 
-    /** 工場出荷 UI リセット用: マージ済み既定に対し、環境・実行パスだけ {@code bootstrap} を適用する。 */
-    public static DesktopSessionState buildFactoryResetSession(DesktopSessionState bootstrap) {
-        JsonNode merged = readMergedSessionUiDefaultsNode();
+    /**
+     * 工場出荷 UI リセット用: マージ済み既定に対し、環境・実行パスだけ {@code bootstrap} を適用する。
+     *
+     * @param ui 非 null のとき {@code resolveRepoInitSettingDir(ui)/session_defaults.json} をマージ最終層に含め、
+     *     グローバル設定で書き出した UI 既定に近づける
+     */
+    public static DesktopSessionState buildFactoryResetSession(
+            DesktopSessionState bootstrap, Map<String, String> ui) {
+        JsonNode merged = readMergedSessionUiDefaultsNode(ui);
         ObjectNode root =
                 merged != null && merged.isObject()
                         ? (ObjectNode) merged
