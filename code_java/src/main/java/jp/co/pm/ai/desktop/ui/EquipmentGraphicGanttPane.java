@@ -887,13 +887,17 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         badgeResolver,
                         ri,
                         gapPxEff,
-                        bandVertEff,
                         personBadgeDragAdjustEnabled,
                         timelineOuterPad,
                         canvasTimelineW,
                         rowCanvasH,
                         dragEff,
                         personBadgeDragDeltaSink);
+                /*
+                 * 帯内クランプ（clampBadgeLayoutYInBand）がスタック高≧帯のときオフセットを打ち消すため、
+                 * レイアウト後にオーバーレイPaneへ縦移動だけ適用する。
+                 */
+                badgePane.setTranslateY(bandVertEff);
             }
             StackPane rowStack = new StackPane(rowCanvas, badgePane);
             /*
@@ -1769,7 +1773,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             Function<String, PersonBadgeStyle> styleForLabel,
             int displayRowIndex,
             double personBadgeGapPx,
-            double personBadgeBandVerticalOffsetPx,
             boolean badgeDragAdjustEnabled,
             double timelineOuterPad,
             double timelinePaneWidth,
@@ -1904,9 +1907,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double badgeClampBottom = Math.min(desiredClampBottom, maxBottom);
 
             double ySegCursor =
-                    barTop
-                            + Math.max(0, (barH - totalStackH) / 2)
-                            + personBadgeBandVerticalOffsetPx;
+                    barTop + Math.max(0, (barH - totalStackH) / 2);
 
             for (int si = 0; si < segments.size(); si++) {
                 List<Integer> seg = segments.get(si);
