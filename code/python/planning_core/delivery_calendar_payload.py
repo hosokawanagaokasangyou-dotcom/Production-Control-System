@@ -463,6 +463,16 @@ def _date_bounds_from_plan_date_columns(df_plan: pd.DataFrame | None) -> tuple[d
     return min(found), max(found)
 
 
+def _today_delivery_calendar() -> date:
+    """Baseline calendar date aligned with JavaFX label (Asia/Tokyo). Fallback: local date.today()."""
+    try:
+        from zoneinfo import ZoneInfo
+
+        return datetime.now(ZoneInfo("Asia/Tokyo")).date()
+    except Exception:
+        return date.today()
+
+
 def _collect_sorted_dates(
     df_plan: pd.DataFrame | None,
     df_actual: pd.DataFrame | None,
@@ -474,7 +484,7 @@ def _collect_sorted_dates(
     The window is NOT merged with actual/plan data bounds: rows outside the
     fixed window do not appear in the table.
     """
-    today = date.today()
+    today = _today_delivery_calendar()
     past_days = _parse_calendar_window_int_env(_ENV_CAL_PAST_DAYS, 14, 1, 800)
     future_days = _parse_calendar_window_int_env(_ENV_CAL_FUTURE_DAYS, 30, 1, 800)
     display_start = today - timedelta(days=past_days)

@@ -2,6 +2,8 @@ package jp.co.pm.ai.desktop;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -9,6 +11,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -67,6 +70,9 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 public final class DeliveryCalendarViewTabController {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+
+    /** 「本日」および日付列ウィンドウの基準（日本の業務日）。 */
+    private static final ZoneId DELIVERY_CALENDAR_ZONE = ZoneId.of("Asia/Tokyo");
 
     /**
      * Child stdout lines {@code PM_AI_PROGRESS 0..100}. During Python subprocess, drives {@link #statusLabel} and
@@ -346,8 +352,8 @@ public final class DeliveryCalendarViewTabController {
         TableColumnOrderPersistence.DeliveryCalendarDateWindowPrefs loaded =
                 TableColumnOrderPersistence.loadDeliveryCalendarDateWindowPrefs();
 
-        configureDayCountSpinner(dateWindowPastDaysSpinner, loaded.pastDays());
-        configureDayCountSpinner(dateWindowFutureDaysSpinner, loaded.futureDays());
+        configureDayCountSpinner(dateWindowPastDaysSpinner, loaded.pastDays(), this::syncDayCountSpinnerFromEditor);
+        configureDayCountSpinner(dateWindowFutureDaysSpinner, loaded.futureDays(), this::syncDayCountSpinnerFromEditor);
 
         dateWindowPastDaysSpinner
                 .valueProperty()
@@ -356,14 +362,77 @@ public final class DeliveryCalendarViewTabController {
                 .valueProperty()
                 .addListener((o, a, b) -> persistDateWindowPrefsFromUi());
 
+        dateWindowPastDaysSpinner
+                .getEditor()
+                .textProperty()
+                .addListener((o, a, b) -> updateDateWindowRangeLabel());
+        dateWindowFutureDaysSpinner
+                .getEditor()
+                .textProperty()
+                .addListener((o, a, b) -> updateDateWindowRangeLabel());
+
         updateDateWindowRangeLabel();
     }
 
-    private static void configureDayCountSpinner(Spinner<Integer> spinner, int initial) {
+    /**
+     * editable {@link Spinner} は {@code increment(0)} ではエディタ入力が {@link Spinner#getValue()} に反映されない。
+     * フォーカス喪失時は {@link Spinner#commitValue()} で確定し、ラベル・永続化・子プロセス env と整合させる。
+     */
+    private void syncDayCountSpinnerFromEditor(Spinner<Integer> spinner) {
+        commitSpinnerIntegerValue(spinner);
+        persistDateWindowPrefsFromUi();
+    }
+
+    private static void commitSpinnerIntegerValue(Spinner<Integer> spinner) {
+        if (spinner == null || !spinner.isEditable()) {
+            return;
+        }
+        try {
+            spinner.commitValue();
+        } catch (IllegalArgumentException ex) {
+            Integer cur = spinner.getValue();
+            if (cur != null) {
+                spinner.getEditor().setText(Integer.toString(cur));
+            }
+        }
+    }
+
+    /**
+     * 表示中のエディタ文字列を優先して日数を解釈する（未確定入力でもラベルが実入力に追従する）。
+     * 空・解析不能時は {@link Spinner#getValue()}、それも無ければ {@code def}。
+     */
+    private static int parseDayCountSpinner(Spinner<Integer> spinner, int def) {
+        if (spinner == null) {
+            return def;
+        }
+        String raw = spinner.getEditor().getText();
+        if (raw != null) {
+            String t = raw.trim();
+            if (!t.isEmpty()) {
+                String digitsOnly = t.replaceAll("[^0-9]", "");
+                if (!digitsOnly.isEmpty()) {
+                    try {
+                        int v = Integer.parseInt(digitsOnly);
+                        int lo = TableColumnOrderPersistence.DeliveryCalendarDateWindowPrefs.MIN;
+                        int hi = TableColumnOrderPersistence.DeliveryCalendarDateWindowPrefs.MAX;
+                        return Math.max(lo, Math.min(hi, v));
+                    } catch (NumberFormatException ignored) {
+                        // fall through
+                    }
+                }
+            }
+        }
+        Integer val = spinner.getValue();
+        return val != null ? val : def;
+    }
+
+    private static void configureDayCountSpinner(
+            Spinner<Integer> spinner, int initial, Consumer<Spinner<Integer>> onFocusLost) {
         int min = TableColumnOrderPersistence.DeliveryCalendarDateWindowPrefs.MIN;
         int max = TableColumnOrderPersistence.DeliveryCalendarDateWindowPrefs.MAX;
         SpinnerValueFactory.IntegerSpinnerValueFactory vf =
                 new SpinnerValueFactory.IntegerSpinnerValueFactory(min, max, Math.max(min, Math.min(max, initial)));
+        vf.setAmountToStepBy(1);
         spinner.setValueFactory(vf);
         // editable=true の手入力で非数値を弾く
         TextFormatter<Integer> formatter =
@@ -378,13 +447,12 @@ public final class DeliveryCalendarViewTabController {
                             return text.matches("\\d{0,4}") ? change : null;
                         });
         spinner.getEditor().setTextFormatter(formatter);
-        // editor の確定値を value に反映（フォーカス外し時）
         spinner.getEditor()
                 .focusedProperty()
                 .addListener(
                         (obs, was, is) -> {
-                            if (Boolean.FALSE.equals(is)) {
-                                spinner.increment(0);
+                            if (Boolean.FALSE.equals(is) && onFocusLost != null) {
+                                onFocusLost.accept(spinner);
                             }
                         });
     }
@@ -393,16 +461,14 @@ public final class DeliveryCalendarViewTabController {
         if (dateWindowPastDaysSpinner == null || dateWindowFutureDaysSpinner == null) {
             return;
         }
-        Integer past = dateWindowPastDaysSpinner.getValue();
-        Integer future = dateWindowFutureDaysSpinner.getValue();
         int p =
-                past != null
-                        ? past
-                        : TableColumnOrderPersistence.DeliveryCalendarDateWindowPrefs.DEFAULT_PAST;
+                parseDayCountSpinner(
+                        dateWindowPastDaysSpinner,
+                        TableColumnOrderPersistence.DeliveryCalendarDateWindowPrefs.DEFAULT_PAST);
         int f =
-                future != null
-                        ? future
-                        : TableColumnOrderPersistence.DeliveryCalendarDateWindowPrefs.DEFAULT_FUTURE;
+                parseDayCountSpinner(
+                        dateWindowFutureDaysSpinner,
+                        TableColumnOrderPersistence.DeliveryCalendarDateWindowPrefs.DEFAULT_FUTURE);
         TableColumnOrderPersistence.saveDeliveryCalendarDateWindowPrefs(
                 new TableColumnOrderPersistence.DeliveryCalendarDateWindowPrefs(p, f));
         updateDateWindowRangeLabel();
@@ -414,19 +480,17 @@ public final class DeliveryCalendarViewTabController {
                 || dateWindowFutureDaysSpinner == null) {
             return;
         }
-        Integer past = dateWindowPastDaysSpinner.getValue();
-        Integer future = dateWindowFutureDaysSpinner.getValue();
         int p =
-                past != null
-                        ? past
-                        : TableColumnOrderPersistence.DeliveryCalendarDateWindowPrefs.DEFAULT_PAST;
+                parseDayCountSpinner(
+                        dateWindowPastDaysSpinner,
+                        TableColumnOrderPersistence.DeliveryCalendarDateWindowPrefs.DEFAULT_PAST);
         int f =
-                future != null
-                        ? future
-                        : TableColumnOrderPersistence.DeliveryCalendarDateWindowPrefs.DEFAULT_FUTURE;
-        java.time.LocalDate today = java.time.LocalDate.now();
-        java.time.LocalDate from = today.minusDays(p);
-        java.time.LocalDate to = today.plusDays(f);
+                parseDayCountSpinner(
+                        dateWindowFutureDaysSpinner,
+                        TableColumnOrderPersistence.DeliveryCalendarDateWindowPrefs.DEFAULT_FUTURE);
+        LocalDate today = LocalDate.now(DELIVERY_CALENDAR_ZONE);
+        LocalDate from = today.minusDays(p);
+        LocalDate to = today.plusDays(f);
         dateWindowRangeLabel.setText(
                 "（" + from + " 〜 " + to + " / 列数 " + (p + f + 1) + "）");
     }
@@ -761,22 +825,26 @@ public final class DeliveryCalendarViewTabController {
         if (req == null) {
             return req;
         }
-        Integer past =
-                dateWindowPastDaysSpinner != null ? dateWindowPastDaysSpinner.getValue() : null;
-        Integer future =
-                dateWindowFutureDaysSpinner != null ? dateWindowFutureDaysSpinner.getValue() : null;
-        if (past == null && future == null) {
+        if (dateWindowPastDaysSpinner == null && dateWindowFutureDaysSpinner == null) {
             return req;
         }
         Map<String, String> env = new LinkedHashMap<>();
         if (req.extraEnv() != null) {
             env.putAll(req.extraEnv());
         }
-        if (past != null) {
-            env.put("PM_AI_DELIVERY_CALENDAR_PAST_DAYS", String.valueOf((int) past));
+        if (dateWindowPastDaysSpinner != null) {
+            int p =
+                    parseDayCountSpinner(
+                            dateWindowPastDaysSpinner,
+                            TableColumnOrderPersistence.DeliveryCalendarDateWindowPrefs.DEFAULT_PAST);
+            env.put("PM_AI_DELIVERY_CALENDAR_PAST_DAYS", String.valueOf(p));
         }
-        if (future != null) {
-            env.put("PM_AI_DELIVERY_CALENDAR_FUTURE_DAYS", String.valueOf((int) future));
+        if (dateWindowFutureDaysSpinner != null) {
+            int f =
+                    parseDayCountSpinner(
+                            dateWindowFutureDaysSpinner,
+                            TableColumnOrderPersistence.DeliveryCalendarDateWindowPrefs.DEFAULT_FUTURE);
+            env.put("PM_AI_DELIVERY_CALENDAR_FUTURE_DAYS", String.valueOf(f));
         }
         return new RunRequest(
                 req.pythonExecutable(),
@@ -795,6 +863,8 @@ public final class DeliveryCalendarViewTabController {
         refreshButton.setDisable(true);
         showDeliveryReloadProgress();
         statusLabel.setText("取得中…");
+        commitSpinnerIntegerValue(dateWindowPastDaysSpinner);
+        commitSpinnerIntegerValue(dateWindowFutureDaysSpinner);
         RunRequest req = withDateWindowEnvOverride(requestFactory.get());
         PythonProcessRunner.runCaptureAsyncWithLineTap(
                         req,
