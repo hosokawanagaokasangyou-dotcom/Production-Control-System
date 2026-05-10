@@ -10,6 +10,10 @@ public sealed interface DeliveryCalendarMainCell
 
     record PlainText(String text) implements DeliveryCalendarMainCell {}
 
-    /** Raw quantity strings from delivery-calendar JSON {@code triple.p/a/d}; presentation adds prefixes. */
+    /**
+     * Raw quantity strings from delivery-calendar JSON {@code triple.p/a/d}; UI adds prefixes per line.
+     * Blank / zero lines may be omitted in the spreadsheet for readability (see {@link
+     * SpreadsheetTabularSupport#buildReadOnlyDeliveryCalendarMainGrid}).
+     */
     record TripleQty(String plan, String actual, String dispatch) implements DeliveryCalendarMainCell {}
 }

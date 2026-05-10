@@ -10,8 +10,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
@@ -61,7 +59,10 @@ public final class SpreadsheetTabularSupport {
     private static final String DC_STYLE_DATA_GREEN =
             "-fx-background-color: #d4edd4; -fx-text-fill: black;";
 
-    /** Date-column triple: lines shown as {@code (prefix)(qty)}; blanks show em dash after prefix. */
+    /**
+     * Date-column triple: lines shown as {@code (prefix)(qty)}. Lines with no value, dash placeholder, or
+     * numeric zero are omitted so non-empty cells stand out when scanning.
+     */
     private static final String DC_TRIPLE_PREFIX_PLAN = "(\u30a2\u30e9\u8a08\u753b)";
 
     private static final String DC_TRIPLE_PREFIX_ACTUAL = "(\u5b9f\u7e3e)";
@@ -600,14 +601,7 @@ public final class SpreadsheetTabularSupport {
                 DeliveryCalendarMainCell mc =
                         c < src.size() && src.get(c) != null ? src.get(c) : new DeliveryCalendarMainCell.PlainText("");
                 if (mc instanceof DeliveryCalendarMainCell.TripleQty t) {
-                    String item =
-                            Stream.of(
-                                            formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_PLAN, t.plan()),
-                                            formatDeliveryCalendarTripleLine(
-                                                    DC_TRIPLE_PREFIX_ACTUAL, t.actual()),
-                                            formatDeliveryCalendarTripleLine(
-                                                    DC_TRIPLE_PREFIX_DISPATCH, t.dispatch()))
-                                    .collect(Collectors.joining("\n"));
+                    String item = String.join("\n", deliveryCalendarTripleVisibleFormattedLines(t));
                     SpreadsheetCell cell =
                             SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, item);
                     cell.setEditable(false);
@@ -670,14 +664,56 @@ public final class SpreadsheetTabularSupport {
     private static Node deliveryCalendarTripleGraphic(DeliveryCalendarMainCell.TripleQty t) {
         VBox box = new VBox(1);
         box.setPadding(new Insets(2, 4, 2, 4));
-        Label plan =
-                new Label(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_PLAN, t.plan()));
-        Label actual =
-                new Label(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_ACTUAL, t.actual()));
-        Label dispatch =
-                new Label(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_DISPATCH, t.dispatch()));
-        box.getChildren().addAll(plan, actual, dispatch);
+        for (String line : deliveryCalendarTripleVisibleFormattedLines(t)) {
+            box.getChildren().add(new Label(line));
+        }
         return box;
+    }
+
+    /**
+     * Formatted triple lines (prefix + quantity) for UI only; skips blank / dash / zero quantities.
+     *
+     * @see #formatDeliveryCalendarTripleLine(String, String) used for inspector APIs without filtering
+     */
+    private static List<String> deliveryCalendarTripleVisibleFormattedLines(
+            DeliveryCalendarMainCell.TripleQty t) {
+        List<String> lines = new ArrayList<>(3);
+        if (!deliveryCalendarTripleQtyHidden(t.plan())) {
+            lines.add(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_PLAN, t.plan()));
+        }
+        if (!deliveryCalendarTripleQtyHidden(t.actual())) {
+            lines.add(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_ACTUAL, t.actual()));
+        }
+        if (!deliveryCalendarTripleQtyHidden(t.dispatch())) {
+            lines.add(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_DISPATCH, t.dispatch()));
+        }
+        return lines;
+    }
+
+    /**
+     * {@code true} when the quantity string should not produce a visible line (null/blank, em dash / hyphen
+     * alone, or parses as numeric zero).
+     */
+    private static boolean deliveryCalendarTripleQtyHidden(String qty) {
+        if (qty == null || qty.isBlank()) {
+            return true;
+        }
+        String s = qty.strip();
+        if (s.isEmpty()) {
+            return true;
+        }
+        if ("\u2014".equals(s) || "-".equals(s)) {
+            return true;
+        }
+        try {
+            double v = Double.parseDouble(s.replace(",", ""));
+            if (!Double.isNaN(v) && !Double.isInfinite(v)) {
+                return v == 0d;
+            }
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
+        return false;
     }
 
     /**
