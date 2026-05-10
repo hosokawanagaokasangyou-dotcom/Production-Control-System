@@ -35,6 +35,13 @@
     <!-- package_app.ps1: Temurin JDK zip for jpackage runtime-image (Windows x64). Empty = Adoptium API -->
     <pm.ai.bundle.jdk.windows.release>${maven.compiler.release}</pm.ai.bundle.jdk.windows.release>
     <pm.ai.bundle.jdk.windows.zip.url></pm.ai.bundle.jdk.windows.zip.url>
+    <!-- manual_publish パイプライン: exec 子 JVM に渡す（空なら撮影ロジックは無効） -->
+    <pm.ai.desktop.manual.snap.tabKeys></pm.ai.desktop.manual.snap.tabKeys>
+    <pm.ai.desktop.manual.snap.outputDir></pm.ai.desktop.manual.snap.outputDir>
+    <pm.ai.desktop.manual.snap.stageWidth>1800</pm.ai.desktop.manual.snap.stageWidth>
+    <pm.ai.desktop.manual.snap.stageHeight>900</pm.ai.desktop.manual.snap.stageHeight>
+    <pm.ai.desktop.manual.snap.pauseMillis>1500</pm.ai.desktop.manual.snap.pauseMillis>
+    <pm.ai.desktop.manual.snap.exitAfter>false</pm.ai.desktop.manual.snap.exitAfter>
   </properties>
 
   <dependencies>
@@ -272,6 +279,12 @@
                 <argument>-XX:+HeapDumpOnOutOfMemoryError</argument>
                 <argument>-XX:+UseStringDeduplication</argument>
                 <argument>-Dprism.order=${javafx.prism.order}</argument>
+                <argument>-Dpm.ai.desktop.manual.snap.tabKeys=${pm.ai.desktop.manual.snap.tabKeys}</argument>
+                <argument>-Dpm.ai.desktop.manual.snap.outputDir=${pm.ai.desktop.manual.snap.outputDir}</argument>
+                <argument>-Dpm.ai.desktop.manual.snap.stageWidth=${pm.ai.desktop.manual.snap.stageWidth}</argument>
+                <argument>-Dpm.ai.desktop.manual.snap.stageHeight=${pm.ai.desktop.manual.snap.stageHeight}</argument>
+                <argument>-Dpm.ai.desktop.manual.snap.pauseMillis=${pm.ai.desktop.manual.snap.pauseMillis}</argument>
+                <argument>-Dpm.ai.desktop.manual.snap.exitAfter=${pm.ai.desktop.manual.snap.exitAfter}</argument>
                 <argument>--module-path</argument>
                 <argument>${pm.ai.openjfx.module.path}</argument>
                 <argument>--add-modules</argument>

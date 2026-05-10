@@ -1,0 +1,22 @@
+# マニュアル自動公開パイプライン（Publish-Manual.ps1 / scripts/manual_publish.py）
+# snap_tab_keys: MainShellTabId.key() と一致（例: run, planInput）
+
+snap_tab_keys:
+  - run
+  - env
+
+# PNG を書き出すディレクトリ（リポジトリルートからの相対）
+snap_out_dir: manual/snap-out
+images_dir: manual/src/images
+
+# 任意: データ準備（ファイルコピー）。未使用なら空でよい。
+data_prep: []
+
+# Markdown への画像埋め込み（プレースホルダー <!-- MANUAL_SNAP:key --> を置換）
+injections:
+  - tab_key: run
+    markdown_file: manual/src/chapters/overview.md
+    caption: "実行・ログ"
+  - tab_key: env
+    markdown_file: manual/src/chapters/overview.md
+    caption: "環境変数"
