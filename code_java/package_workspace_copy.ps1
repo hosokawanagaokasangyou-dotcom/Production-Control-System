@@ -230,7 +230,18 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
             if (-not [string]::IsNullOrWhiteSpace($parent) -and -not (Test-Path -LiteralPath $parent)) {
                 New-Item -ItemType Directory -Path $parent -Force | Out-Null
             }
-            Copy-Item -LiteralPath $full -Destination $dst -Force
+            try {
+                Copy-Item -LiteralPath $full -Destination $dst -Force
+            }
+            catch [System.IO.IOException] {
+                $hint = if ($_.Exception.Message -match '空き領域|space') {
+                    'コピー先ドライブの空き容量不足の可能性が高いです。古い pm-ai-package-release を削除する・別ドライブへ退避する・Windows のディスククリーンアップで空けてから再実行してください。'
+                }
+                else {
+                    'ファイルロックやパス長の問題の可能性もあります。'
+                }
+                throw ("ワークスペースミラーでファイルコピーに失敗しました。{0}`n元のエラー: {1}`nコピー元: {2}`nコピー先: {3}" -f $hint, $_.Exception.Message, $full, $dst)
+            }
         }
     }
 
@@ -253,6 +264,17 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
         if (-not [string]::IsNullOrWhiteSpace($parent) -and -not (Test-Path -LiteralPath $parent)) {
             New-Item -ItemType Directory -Path $parent -Force | Out-Null
         }
-        Copy-Item -LiteralPath $src -Destination $dst -Force
+        try {
+            Copy-Item -LiteralPath $src -Destination $dst -Force
+        }
+        catch [System.IO.IOException] {
+            $hint = if ($_.Exception.Message -match '空き領域|space') {
+                'コピー先ドライブの空き容量不足の可能性が高いです。古い pm-ai-package-release を削除する・別ドライブへ退避する・Windows のディスククリーンアップで空けてから再実行してください。'
+            }
+            else {
+                'ファイルロックやパス長の問題の可能性もあります。'
+            }
+            throw ("必須パス一覧からのコピーに失敗しました。{0}`n元のエラー: {1}`nコピー元: {2}`nコピー先: {3}" -f $hint, $_.Exception.Message, $src, $dst)
+        }
     }
 }
