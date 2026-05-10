@@ -212,6 +212,8 @@ public final class DeliveryCalendarViewTabController {
 
     /**
      * メインシェル最上段タブを「納期管理ビュー」以外へ切り替えさせない（再読み込みフル完了まで）。
+     * あわせて他メインタブを {@link MainShellController#setDeliveryCalendarReloadGreyOutOtherMainTabs(boolean)}
+     * でグレーアウトする。
      * {@link #showDeliveryReloadProgress()} でオン、{@link #hideDeliveryReloadProgress()} でオフ。
      */
     private final AtomicBoolean reloadBlockingMainShellTabNavigation = new AtomicBoolean(false);
@@ -616,6 +618,9 @@ public final class DeliveryCalendarViewTabController {
 
     private void showDeliveryReloadProgress() {
         reloadBlockingMainShellTabNavigation.set(true);
+        if (shell != null) {
+            shell.setDeliveryCalendarReloadGreyOutOtherMainTabs(true);
+        }
         if (deliveryReloadProgressContainer == null) {
             return;
         }
@@ -626,6 +631,9 @@ public final class DeliveryCalendarViewTabController {
 
     private void hideDeliveryReloadProgress() {
         reloadBlockingMainShellTabNavigation.set(false);
+        if (shell != null) {
+            shell.setDeliveryCalendarReloadGreyOutOtherMainTabs(false);
+        }
         if (deliveryReloadProgressContainer == null) {
             return;
         }

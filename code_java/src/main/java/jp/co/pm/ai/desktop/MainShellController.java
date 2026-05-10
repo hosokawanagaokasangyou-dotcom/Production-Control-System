@@ -3075,6 +3075,22 @@ public final class MainShellController {
     }
 
     /**
+     * 納期管理ビュー再読み込み中に、メインシェル最上段の「納期管理ビュー」以外のタブを無効化してグレーアウトする。
+     *
+     * @param greyOut {@code true} で他タブを無効化、{@code false} で通常に戻す
+     */
+    void setDeliveryCalendarReloadGreyOutOtherMainTabs(boolean greyOut) {
+        if (tabPane == null || mainShellTabDeliveryCalendar == null) {
+            return;
+        }
+        for (Tab t : tabPane.getTabs()) {
+            if (t != mainShellTabDeliveryCalendar) {
+                t.setDisable(greyOut);
+            }
+        }
+    }
+
+    /**
      * メインシェルのタブを ID で選択する（配台試行ウィザードなどから）。
      */
     public void selectMainShellTab(MainShellTabId id) {
