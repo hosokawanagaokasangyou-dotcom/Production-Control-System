@@ -467,13 +467,15 @@ def _collect_sorted_dates(
     df_plan: pd.DataFrame | None,
     df_actual: pd.DataFrame | None,
 ) -> tuple[list[date], dict[str, Any]]:
-    """Calendar columns: rolling window merged with actual/plan data date bounds.
+    """Calendar columns: fixed window today-14 .. today+30.
 
-    Formerly fixed at today-14 .. today+30, which dropped actual rows older than 14 days from
-    aggregation (eligible_pairs / table rows disappeared even though ???? tab showed them).
+    Defaults: past_days=14 / future_days=30. Override individually via env
+    PM_AI_DELIVERY_CALENDAR_PAST_DAYS / PM_AI_DELIVERY_CALENDAR_FUTURE_DAYS.
+    The window is NOT merged with actual/plan data bounds: rows outside the
+    fixed window do not appear in the table.
     """
     today = date.today()
-    past_days = _parse_calendar_window_int_env(_ENV_CAL_PAST_DAYS, 45, 1, 800)
+    past_days = _parse_calendar_window_int_env(_ENV_CAL_PAST_DAYS, 14, 1, 800)
     future_days = _parse_calendar_window_int_env(_ENV_CAL_FUTURE_DAYS, 30, 1, 800)
     display_start = today - timedelta(days=past_days)
     display_end = today + timedelta(days=future_days)
@@ -481,27 +483,17 @@ def _collect_sorted_dates(
     mn_a, mx_a = _date_bounds_from_actual_df(df_actual)
     mn_p, mx_p = _date_bounds_from_plan_date_columns(df_plan)
 
-    merged_start = min([display_start] + ([mn_a] if mn_a else []) + ([mn_p] if mn_p else []))
-    merged_end = max([display_end] + ([mx_a] if mx_a else []) + ([mx_p] if mx_p else []))
-
-    abs_past = today - timedelta(days=800)
-    abs_future = today + timedelta(days=800)
-    merged_start = max(merged_start, abs_past)
-    merged_end = min(merged_end, abs_future)
-    if merged_end < merged_start:
-        merged_end = merged_start
-
     out: list[date] = []
-    d = merged_start
-    while d <= merged_end:
+    d = display_start
+    while d <= display_end:
         out.append(d)
         d += timedelta(days=1)
 
     range_meta = {
         "deliveryCalendarPastDaysDefault": past_days,
         "deliveryCalendarFutureDaysDefault": future_days,
-        "deliveryCalendarMergedStart": merged_start.isoformat(),
-        "deliveryCalendarMergedEnd": merged_end.isoformat(),
+        "deliveryCalendarMergedStart": display_start.isoformat(),
+        "deliveryCalendarMergedEnd": display_end.isoformat(),
         "deliveryCalendarActualBoundsMin": mn_a.isoformat() if mn_a else "",
         "deliveryCalendarActualBoundsMax": mx_a.isoformat() if mx_a else "",
         "deliveryCalendarPlanBoundsMin": mn_p.isoformat() if mn_p else "",
