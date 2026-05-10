@@ -26,9 +26,9 @@
     <log4j.version>2.24.3</log4j.version>
     <!-- NGCanvas + Prism GPU で RTTexture が null（NPE）になる環境があるため既定は sw。GPU 試行は pm.ai.javafx.prism.gpu を参照 -->
     <javafx.prism.order>sw</javafx.prism.order>
-    <!-- exec:exec@pm-ai-desktop / jpackage のヒープ上限（既定 3g。増やす例: -Djvm.max.heap=8g） -->
+    <!-- javafx:run / exec:exec@pm-ai-desktop / jpackage のヒープ上限（既定 3g。増やす例: -Djvm.max.heap=8g） -->
     <jvm.max.heap>4g</jvm.max.heap>
-    <!-- exec:exec@pm-ai-desktop / jpackage の初期ヒープ（-Xms。package_app.ps1 も同じ値を参照） -->
+    <!-- javafx:run / exec:exec@pm-ai-desktop / jpackage の初期ヒープ（-Xms。package_app.ps1 も同じ値を参照） -->
     <jvm.initial.heap>4g</jvm.initial.heap>
     <!-- package_app.ps1: Windows embeddable Python（amd64）。code/python/pyproject.toml の requires-python と整合 -->
     <pm.ai.bundle.python.embed.version>3.14.4</pm.ai.bundle.python.embed.version>
@@ -243,8 +243,26 @@
       </plugin>
       <!-- ========================================================= -->
 
-      <!-- javafx-maven-plugin 0.0.8 は非モジュール時 javafx.* 以外を classpath に回すため JDK26 の jdk.jsobject が欠落する。
-           dependency:build-classpath で org.openjfx 一式を 1 本の module path にまとめて exec で起動する（javafx:run の代替）。 -->
+      <!-- 開発時のクイック起動: mvn javafx:run -->
+      <plugin>
+        <groupId>org.openjfx</groupId>
+        <artifactId>javafx-maven-plugin</artifactId>
+        <version>0.0.8</version>
+        <configuration>
+          <mainClass>jp.co.pm.ai.desktop.PmAiFxApp</mainClass>
+          <options>
+            <option>-Dfile.encoding=UTF-8</option>
+            <option>-Dprism.order=${javafx.prism.order}</option>
+            <option>-Xms${jvm.initial.heap}</option>
+            <option>-Xmx${jvm.max.heap}</option>
+            <option>-XX:+HeapDumpOnOutOfMemoryError</option>
+            <option>-XX:+UseStringDeduplication</option>
+            <option>--enable-native-access=javafx.graphics</option>
+          </options>
+        </configuration>
+      </plugin>
+
+      <!-- jpackage や WebView 利用時など、モジュールパスに jdk.jsobject / jdk.xml.dom を明示したい場合は exec:exec@pm-ai-desktop -->
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
