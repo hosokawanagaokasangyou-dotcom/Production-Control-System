@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop.ui;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
@@ -103,21 +104,49 @@ public final class ColumnVisibilitySupport {
             TableColumnOrderPersistence.TableId tableId,
             SpreadsheetView view,
             Supplier<List<String>> headersSupplier) {
+        openSpreadsheetColumnVisibilityDialog(owner, tableId, view, headersSupplier, null);
+    }
+
+    /**
+     * @param mandatoryMask same length as headers when non-null; {@code true} means column cannot be hidden.
+     */
+    public static void openSpreadsheetColumnVisibilityDialog(
+            Window owner,
+            TableColumnOrderPersistence.TableId tableId,
+            SpreadsheetView view,
+            Supplier<List<String>> headersSupplier,
+            boolean[] mandatoryMask) {
         Objects.requireNonNull(view, "view");
         List<String> headers = headersSupplier != null ? headersSupplier.get() : List.of();
         if (headers == null || headers.isEmpty()) {
             return;
         }
         boolean[] vis = TableColumnOrderPersistence.loadColumnVisibility(tableId, headers.size());
-        ColumnVisibilityDialog.show(owner, headers, vis)
+        vis = mergeMandatoryIntoVisibility(vis, mandatoryMask);
+        ColumnVisibilityDialog.show(owner, headers, vis, mandatoryMask)
                 .ifPresent(
                         arr -> {
-                            TableColumnOrderPersistence.saveColumnVisibility(tableId, arr);
+                            boolean[] saved = mergeMandatoryIntoVisibility(arr, mandatoryMask);
+                            TableColumnOrderPersistence.saveColumnVisibility(tableId, saved);
                             applyColumnVisibilityToSpreadsheetWhenReady(
                                     view,
                                     () -> new ArrayList<>(headersSupplier.get()),
-                                    () -> arr);
+                                    () -> saved);
                         });
+    }
+
+    public static boolean[] mergeMandatoryIntoVisibility(boolean[] vis, boolean[] mandatoryMask) {
+        if (mandatoryMask == null || vis == null) {
+            return vis;
+        }
+        int n = Math.min(vis.length, mandatoryMask.length);
+        boolean[] out = Arrays.copyOf(vis, vis.length);
+        for (int i = 0; i < n; i++) {
+            if (mandatoryMask[i]) {
+                out[i] = true;
+            }
+        }
+        return out;
     }
 
     public static void openSpreadsheetColumnVisibilityDialogForScope(

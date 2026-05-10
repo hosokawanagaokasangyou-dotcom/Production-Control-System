@@ -105,6 +105,18 @@ public final class ProcessingActualsDataTabController {
                     + " \u88fd\u9020\u6761\u4ef6(\u5185\u8a33)\u3067\u7d5e\u308a\u8fbc\u3093\u3060\u5f8c\u3001\u540c\u4e00\u5de5\u7a0b\u540d\u30fb\u6a5f\u68b0\u540d\u30fb\u4f9d\u983cNO\u30fb\u52a0\u5de5\u65e5\u306e\u884c\u306f"
                     + "\u5148\u982d\u884c\u306e\u307f\u6b8b\u3057\u307e\u3059\u3002";
 
+    /** {@link ColumnVisibilityDialog} / JSON と同一の必須見出しに対応するマスク（表示は強制）。 */
+    private boolean[] mandatoryVisibilityMaskForHeaders(List<String> headers) {
+        if (headers == null) {
+            return null;
+        }
+        boolean[] m = new boolean[headers.size()];
+        for (int i = 0; i < headers.size(); i++) {
+            String t = headers.get(i) != null ? headers.get(i).strip() : "";
+            m[i] = PROCESSING_ACTUALS_JSON_REQUIRED_HEADERS.contains(t);
+        }
+        return m;
+    }
 
     @FXML
     private Button refreshButton;
@@ -215,7 +227,9 @@ public final class ProcessingActualsDataTabController {
                                                 ownerStage,
                                                 TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW,
                                                 spreadsheetView,
-                                                () -> new ArrayList<>(headersRef))));
+                                                () -> new ArrayList<>(headersRef),
+                                                mandatoryVisibilityMaskForHeaders(
+                                                        new ArrayList<>(headersRef)))));
 
         sheetCombo
                 .getSelectionModel()
@@ -409,10 +423,16 @@ public final class ProcessingActualsDataTabController {
         boolean[] oldVis =
                 TableColumnOrderPersistence.loadColumnVisibility(
                         TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW, oldHeaders.size());
+        oldVis =
+                ColumnVisibilitySupport.mergeMandatoryIntoVisibility(
+                        oldVis, mandatoryVisibilityMaskForHeaders(oldHeaders));
         List<TableColumnOrderPersistence.ColumnSpec> lay = persistedLayout.get();
         TableColumnOrderPersistence.applyLogicalColumnOrder(headersRef, rows, titleOrder);
         boolean[] newVis =
                 TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(oldHeaders, oldVis, titleOrder);
+        newVis =
+                ColumnVisibilitySupport.mergeMandatoryIntoVisibility(
+                        newVis, mandatoryVisibilityMaskForHeaders(headersRef));
         TableColumnOrderPersistence.saveColumnVisibility(
                 TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW, newVis);
         List<Double> widths =
@@ -470,9 +490,12 @@ public final class ProcessingActualsDataTabController {
                                 spreadsheetView,
                                 () -> new ArrayList<>(headersRef),
                                 () ->
-                                        TableColumnOrderPersistence.loadColumnVisibility(
-                                                TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW,
-                                                headersRef.size()));
+                                        ColumnVisibilitySupport.mergeMandatoryIntoVisibility(
+                                                TableColumnOrderPersistence.loadColumnVisibility(
+                                                        TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW,
+                                                        headersRef.size()),
+                                                mandatoryVisibilityMaskForHeaders(
+                                                        new ArrayList<>(headersRef))));
                     });
         } finally {
             suppressColumnPersistence.set(false);
@@ -736,9 +759,11 @@ public final class ProcessingActualsDataTabController {
             titleToFirstIndex.putIfAbsent(key, i);
         }
         boolean[] vis =
-                TableColumnOrderPersistence.loadColumnVisibility(
-                        TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW,
-                        headersRef.size());
+                ColumnVisibilitySupport.mergeMandatoryIntoVisibility(
+                        TableColumnOrderPersistence.loadColumnVisibility(
+                                TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW,
+                                headersRef.size()),
+                        mandatoryVisibilityMaskForHeaders(headersRef));
         int lead = Math.max(0, headerColumnCount.get());
         List<String> outTitles = new ArrayList<>();
         for (int i = 0; i < headersRef.size(); i++) {
@@ -948,6 +973,9 @@ public final class ProcessingActualsDataTabController {
                 TableColumnOrderPersistence.loadColumnVisibility(
                         TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW,
                         beforeHeaders.size());
+        visBefore =
+                ColumnVisibilitySupport.mergeMandatoryIntoVisibility(
+                        visBefore, mandatoryVisibilityMaskForHeaders(beforeHeaders));
         List<String> titleOrder =
                 lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList();
 
@@ -962,6 +990,9 @@ public final class ProcessingActualsDataTabController {
         boolean[] visAfter =
                 TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
                         beforeHeaders, visBefore, titleOrder);
+        visAfter =
+                ColumnVisibilitySupport.mergeMandatoryIntoVisibility(
+                        visAfter, mandatoryVisibilityMaskForHeaders(headersRef));
         TableColumnOrderPersistence.saveColumnVisibility(
                 TableColumnOrderPersistence.TableId.PROCESSING_ACTUALS_DETAIL_RAW, visAfter);
 

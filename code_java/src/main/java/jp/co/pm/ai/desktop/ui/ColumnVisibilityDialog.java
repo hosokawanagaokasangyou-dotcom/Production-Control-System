@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 
 import javafx.geometry.Insets;
@@ -37,14 +38,37 @@ public final class ColumnVisibilityDialog {
      */
     public static Optional<boolean[]> show(
             Window owner, List<String> columnTitles, boolean[] visibleInitial) {
-        if (columnTitles == null || columnTitles.isEmpty()) {
+        return show(owner, columnTitles, visibleInitial, null);
+    }
+
+    /**
+     * @param mandatoryVisible same length as titles; {@code true} means column must stay visible (checkbox
+     *     disabled). {@code null} or length mismatch: same as {@link #show(Window, List, boolean[])} without
+     *     locking.
+     */
+    public static Optional<boolean[]> show(
+            Window owner,
+            List<String> columnTitles,
+            boolean[] visibleInitial,
+            boolean[] mandatoryVisible) {
+        Objects.requireNonNull(columnTitles, "columnTitles");
+        if (columnTitles.isEmpty()) {
             return Optional.empty();
         }
         int n = columnTitles.size();
+        boolean[] mandatory =
+                mandatoryVisible != null && mandatoryVisible.length == n ? mandatoryVisible : null;
         boolean[] state = new boolean[n];
         Arrays.fill(state, true);
         if (visibleInitial != null && visibleInitial.length == n) {
             System.arraycopy(visibleInitial, 0, state, 0, n);
+        }
+        if (mandatory != null) {
+            for (int i = 0; i < n; i++) {
+                if (mandatory[i]) {
+                    state[i] = true;
+                }
+            }
         }
         Dialog<boolean[]> dialog = new Dialog<>();
         if (owner != null) {
@@ -60,8 +84,19 @@ public final class ColumnVisibilityDialog {
         box.setPadding(new Insets(0));
         for (int i = 0; i < n; i++) {
             String t = columnTitles.get(i) != null ? columnTitles.get(i) : "";
-            CheckBox cb = new CheckBox((i + 1) + ": " + t);
+            boolean locked = mandatory != null && mandatory[i];
+            CheckBox cb =
+                    new CheckBox(
+                            (i + 1)
+                                    + ": "
+                                    + t
+                                    + (locked
+                                            ? " (\u30ed\u30b8\u30c3\u30af\u5fc5\u9801\u30fb\u975e\u8868\u793a\u306b\u3067\u304d\u307e\u305b\u3093)"
+                                            : ""));
             cb.setSelected(state[i]);
+            if (locked) {
+                cb.setDisable(true);
+            }
             boxes.add(cb);
             box.getChildren().add(cb);
         }
@@ -103,7 +138,11 @@ public final class ColumnVisibilityDialog {
                 });
         clearAllButton.setOnAction(
                 e -> {
-                    for (CheckBox cb : boxes) {
+                    for (int i = 0; i < boxes.size(); i++) {
+                        CheckBox cb = boxes.get(i);
+                        if (mandatory != null && i < mandatory.length && mandatory[i]) {
+                            continue;
+                        }
                         cb.setSelected(false);
                     }
                 });
@@ -111,7 +150,10 @@ public final class ColumnVisibilityDialog {
         Label hint =
                 new Label(
                         "\u8868\u793a\u3059\u308b\u5217\u306b\u30c1\u30a7\u30c3\u30af\u3092\u5165\u308c\u3066\u304f\u3060\u3055\u3044\u3002"
-                                + " \u5c11\u306a\u304f\u3068\u30821\u5217\u306f\u8868\u793a\u3059\u308b\u5fc5\u8981\u304c\u3042\u308a\u307e\u3059\u3002");
+                                + " \u5c11\u306a\u304f\u3068\u30821\u5217\u306f\u8868\u793a\u3059\u308b\u5fc5\u8981\u304c\u3042\u308a\u307e\u3059\u3002"
+                                + (mandatory != null
+                                        ? " \u30ed\u30b8\u30c3\u30af\u5fc5\u9801\u306e\u5217\u306f\u975e\u8868\u793a\u306b\u3067\u304d\u307e\u305b\u3093\u3002"
+                                        : ""));
         hint.setWrapText(true);
         VBox scrollBody = new VBox(8, hint, box);
         ScrollPane sp = new ScrollPane(scrollBody);
@@ -158,7 +200,11 @@ public final class ColumnVisibilityDialog {
                     }
                     boolean[] out = new boolean[n];
                     for (int i = 0; i < n; i++) {
-                        out[i] = boxes.get(i).isSelected();
+                        boolean sel = boxes.get(i).isSelected();
+                        if (mandatory != null && mandatory[i]) {
+                            sel = true;
+                        }
+                        out[i] = sel;
                     }
                     int cnt = 0;
                     for (boolean b : out) {
