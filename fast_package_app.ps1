@@ -635,7 +635,7 @@ function Compress-PortableBundleFolderToZip {
       Zip an app-image folder; omits pm-ai-data/version.txt (release version is beside the zip).
       Removes ZipFilePath if present (-ErrorAction Stop), then creates a new file (CreateNew).
       Default CompressionLevel = Fastest (Deflate level 1). Measured ratio on this bundle is ~38% so NoCompression
-      would inflate the ZIP by ~2.6x; speed is recovered by running Initial and Upgrade in parallel (Step 8).
+      would inflate the ZIP by ~2.6x. Optional -ZipParallel compresses both ZIPs concurrently (experimental).
       Enumerates with [System.IO.Directory]::EnumerateFiles to avoid PowerShell pipeline / Get-ChildItem
       overhead, and copies file streams with a 1 MiB buffer.
     #>
@@ -675,7 +675,6 @@ function Compress-PortableBundleFolderToZip {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $fileCount = 0
     $copyBufferSize = 1MB
-    $shareReadWriteDelete = [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
     # Buffered FileStream output reduces small-write overhead on Store entries.
     $fs = [System.IO.FileStream]::new(
         $ZipFilePath,
@@ -698,6 +697,10 @@ function Compress-PortableBundleFolderToZip {
                 if ($entryName -match '\.\./|^\.\.(/|\\)|(/|\\)\.\.(/|\\)') {
                     throw "Unsafe zip entry name: $entryName"
                 }
+                if (-not (Test-Path -LiteralPath $full)) {
+                    Write-Warning "ZIP skip (file disappeared during enumeration): $full"
+                    continue
+                }
                 $fileCount++
                 if (-not $QuietProgress -and (($fileCount % $progEvery) -eq 0)) {
                     $elapsed = $sw.Elapsed.ToString('mm\:ss')
@@ -706,43 +709,42 @@ function Compress-PortableBundleFolderToZip {
                 $entry = $zip.CreateEntry($entryName, $CompressionLevel)
                 $es = $entry.Open()
                 try {
-                    # Fast path: OpenRead. Retry with shared read on transient AV / indexer locks.
-                    $srcFast = $null
-                    try {
-                        $srcFast = [System.IO.File]::OpenRead($full)
-                    }
-                    catch [System.IO.IOException] {
-                        $srcFast = $null
-                    }
-                    if ($null -ne $srcFast) {
+                    # Retry opening the source file only (Defender/indexer). Do not retry CopyTo — partial writes would corrupt the zip entry.
+                    $maxAttempts = 22
+                    $srcFs = $null
+                    for ($a = 1; $a -le $maxAttempts; $a++) {
                         try {
-                            $srcFast.CopyTo($es, $copyBufferSize)
+                            # Alternate FileShare — Read is usual for readers; ReadWrite|Delete helps AV-held files.
+                            $shareMode = if (($a % 3) -eq 1) {
+                                [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
+                            }
+                            else {
+                                [System.IO.FileShare]::Read
+                            }
+                            $srcFs = [System.IO.FileStream]::new(
+                                $full,
+                                [System.IO.FileMode]::Open,
+                                [System.IO.FileAccess]::Read,
+                                $shareMode,
+                                $copyBufferSize,
+                                [System.IO.FileOptions]::SequentialScan
+                            )
+                            break
                         }
-                        finally {
-                            $srcFast.Dispose()
+                        catch [System.IO.IOException], [System.UnauthorizedAccessException] {
+                            if ($a -eq $maxAttempts) {
+                                $detail = $_.Exception.Message
+                                throw ('ZIP open failed after {0} attempts (AV/indexer lock or path issue). Path: {1} Entry: {2} Detail: {3}' -f $maxAttempts, $full, $entryName, $detail)
+                            }
+                            $delayMs = [Math]::Min(2800, [int][Math]::Round(70 * [Math]::Pow(1.62, $a - 1)))
+                            Start-Sleep -Milliseconds $delayMs
                         }
                     }
-                    else {
-                        $maxAttempts = 6
-                        $delayMs = 120
-                        for ($a = 1; $a -le $maxAttempts; $a++) {
-                            try {
-                                $srcFs = [System.IO.File]::Open($full, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $shareReadWriteDelete)
-                                try {
-                                    $srcFs.CopyTo($es, $copyBufferSize)
-                                }
-                                finally {
-                                    $srcFs.Dispose()
-                                }
-                                break
-                            }
-                            catch [System.IO.IOException] {
-                                if ($a -eq $maxAttempts) {
-                                    throw
-                                }
-                                Start-Sleep -Milliseconds $delayMs
-                            }
-                        }
+                    try {
+                        $srcFs.CopyTo($es, $copyBufferSize)
+                    }
+                    finally {
+                        $srcFs.Dispose()
                     }
                 }
                 finally {
