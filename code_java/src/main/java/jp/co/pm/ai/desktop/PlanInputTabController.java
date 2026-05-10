@@ -504,10 +504,11 @@ public final class PlanInputTabController {
             Platform.runLater(
                     () -> {
                         SpreadsheetTabularSupport.applyColumnWidths(spreadsheetView, widths, widthDefault);
-                        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(spreadsheetView);
                         SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                 spreadsheetView, headerColumnCount.get());
                         SpreadsheetTabularSupport.applyColumnFiltersWithDialog(spreadsheetView);
+                        SpreadsheetTabularSupport.pinSpreadsheetFilterRow(spreadsheetView);
+                        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(spreadsheetView);
                         ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
                                 spreadsheetView,
                                 () -> new ArrayList<>(headersRef),

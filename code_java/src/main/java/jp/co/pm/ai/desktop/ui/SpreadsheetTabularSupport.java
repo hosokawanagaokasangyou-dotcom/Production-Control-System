@@ -192,9 +192,24 @@ public final class SpreadsheetTabularSupport {
     }
 
     /**
-     * ControlsFX embeds an inner {@link TableView} whose default constrained resize policy can block or fight
-     * interactive column resizing; unconstrained mode matches typical spreadsheet drag-to-resize expectations.
+     * 列フィルタ行（グリッド行 {@link #SPREADSHEET_FILTER_ROW}）を固定行に入れ、縦スクロールしても常に表示する。
+     * {@link #applyColumnFilters} / {@link #applyColumnFiltersWithDialog} と {@link SpreadsheetView#setFilteredRow}
+     * の後に呼ぶこと。
      */
+    public static void pinSpreadsheetFilterRow(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        int r = SPREADSHEET_FILTER_ROW;
+        if (!view.isRowFixable(r)) {
+            return;
+        }
+        ObservableList<Integer> fixed = view.getFixedRows();
+        if (!fixed.contains(Integer.valueOf(r))) {
+            fixed.add(0, r);
+        }
+    }
+
     /**
      * ControlsFX {@link SpreadsheetView} の内側 {@link TableView}（行＝グリッドの1行）を返す。
      */
@@ -211,6 +226,10 @@ public final class SpreadsheetTabularSupport {
         return null;
     }
 
+    /**
+     * 見出し列の固定（{@link #applyFixedLeadingColumns}）や列フィルタ適用後にスキンが分割されても、内側の {@link TableView}
+     * すべてに {@link TableView#UNCONSTRAINED_RESIZE_POLICY} を再度適用する必要がある。
+     */
     public static void applyUnconstrainedColumnResizePolicy(SpreadsheetView view) {
         if (view == null) {
             return;

@@ -880,10 +880,14 @@ public final class PlanResultViewerTabController {
                 TableColumnOrderPersistence.resolveWidthsForHeaders(
                         gridState.headersRef, gridState.persistedLayout.get(), 112);
         SpreadsheetTabularSupport.applyColumnWidths(sv, widths, 112);
-        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(sv);
         SpreadsheetTabularSupport.applyColumnFiltersWithDialog(sv);
-        SpreadsheetTabularSupport.applyFixedLeadingColumnsLater(
-                sv, gridState.headerColumnCount.get());
+        Platform.runLater(
+                () -> {
+                    SpreadsheetTabularSupport.applyFixedLeadingColumns(
+                            sv, gridState.headerColumnCount.get());
+                    SpreadsheetTabularSupport.pinSpreadsheetFilterRow(sv);
+                    SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(sv);
+                });
         applyPlanResultPresentation(sv);
         gridState.suppressPersistence.set(true);
         try {

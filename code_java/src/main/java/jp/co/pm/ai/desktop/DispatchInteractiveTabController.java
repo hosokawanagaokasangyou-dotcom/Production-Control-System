@@ -1385,14 +1385,12 @@ public final class DispatchInteractiveTabController {
             wideSpreadsheet.setGrid(w.grid());
             wideSpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
             SpreadsheetTabularSupport.applyColumnFiltersWithDialog(wideSpreadsheet);
-            SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(wideSpreadsheet);
             scheduleWideLayoutAfterColumnSync(w);
 
             ByDayGridBundle b = bundle.byDay();
             byDaySpreadsheet.setGrid(b.grid());
             byDaySpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
             SpreadsheetTabularSupport.applyColumnFiltersWithDialog(byDaySpreadsheet);
-            SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(byDaySpreadsheet);
             scheduleByDayLayoutAfterColumnSync(b);
 
             SpreadsheetTabularSupport.restoreHiddenRows(wideSpreadsheet, wideHiddenSnapshot);
@@ -1422,6 +1420,8 @@ public final class DispatchInteractiveTabController {
                     }
                     SpreadsheetTabularSupport.applyFixedLeadingColumns(
                             wideSpreadsheet, WIDE_STATIC_HEADERS.size());
+                    SpreadsheetTabularSupport.pinSpreadsheetFilterRow(wideSpreadsheet);
+                    SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(wideSpreadsheet);
                     applyDateColumnWidthsForBlockedDays(
                             wideSpreadsheet,
                             w.staticCols(),
@@ -1459,6 +1459,8 @@ public final class DispatchInteractiveTabController {
                     }
                     SpreadsheetTabularSupport.applyFixedLeadingColumns(
                             byDaySpreadsheet, BY_DAY_STATIC_HEADERS.size());
+                    SpreadsheetTabularSupport.pinSpreadsheetFilterRow(byDaySpreadsheet);
+                    SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(byDaySpreadsheet);
                     applyDateColumnWidthsForBlockedDays(
                             byDaySpreadsheet,
                             b.staticCols(),
