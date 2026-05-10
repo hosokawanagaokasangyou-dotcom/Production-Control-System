@@ -64,16 +64,8 @@ public final class DeliveryCalendarViewTabController {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    /** Child stdout lines {@code PM_AI_PROGRESS 0..100}; mapped to the Python phase of the overall bar. */
+    /** Child stdout lines {@code PM_AI_PROGRESS 0..100}; shown in {@link #statusLabel} during Python phase. */
     private static final String PM_AI_PROGRESS_PREFIX = "PM_AI_PROGRESS ";
-
-    /** Python subprocess contributes progress in {@code [0, PYTHON_PHASE_MAX)}; Java reload fills the rest. */
-    private static final double PYTHON_PHASE_MAX = 0.78;
-
-    private static final double JAVA_PHASE_DISPATCH = 0.84;
-    private static final double JAVA_PHASE_ALADDIN = 0.90;
-    private static final double JAVA_PHASE_ACTUALS = 0.94;
-    private static final double JAVA_PHASE_DONE = 1.0;
 
     /**
      * Cursor NDJSON filename {@code debug-&lt;id&gt;.log}; align with the active chat debug session id.
@@ -118,7 +110,25 @@ public final class DeliveryCalendarViewTabController {
     private Label statusLabel;
 
     @FXML
-    private ProgressBar deliveryReloadProgressBar;
+    private VBox deliveryReloadProgressContainer;
+
+    @FXML
+    private ProgressBar deliveryReloadProgressDispatch;
+
+    @FXML
+    private Label deliveryReloadPctDispatch;
+
+    @FXML
+    private ProgressBar deliveryReloadProgressActuals;
+
+    @FXML
+    private Label deliveryReloadPctActuals;
+
+    @FXML
+    private ProgressBar deliveryReloadProgressAladdin;
+
+    @FXML
+    private Label deliveryReloadPctAladdin;
 
     @FXML
     private Label metaLabel;
@@ -578,29 +588,39 @@ public final class DeliveryCalendarViewTabController {
     }
 
     private void showDeliveryReloadProgress() {
-        if (deliveryReloadProgressBar == null) {
+        if (deliveryReloadProgressContainer == null) {
             return;
         }
-        deliveryReloadProgressBar.setProgress(0);
-        deliveryReloadProgressBar.setManaged(true);
-        deliveryReloadProgressBar.setVisible(true);
+        resetDeliveryReloadTabSegments();
+        deliveryReloadProgressContainer.setManaged(true);
+        deliveryReloadProgressContainer.setVisible(true);
     }
 
     private void hideDeliveryReloadProgress() {
-        if (deliveryReloadProgressBar == null) {
+        if (deliveryReloadProgressContainer == null) {
             return;
         }
-        deliveryReloadProgressBar.setProgress(0);
-        deliveryReloadProgressBar.setVisible(false);
-        deliveryReloadProgressBar.setManaged(false);
+        resetDeliveryReloadTabSegments();
+        deliveryReloadProgressContainer.setVisible(false);
+        deliveryReloadProgressContainer.setManaged(false);
     }
 
-    private void setDeliveryReloadOverallProgress(double p) {
-        if (deliveryReloadProgressBar == null) {
+    private void resetDeliveryReloadTabSegments() {
+        setDeliveryReloadSegmentProgress(deliveryReloadProgressDispatch, deliveryReloadPctDispatch, 0.0);
+        setDeliveryReloadSegmentProgress(deliveryReloadProgressActuals, deliveryReloadPctActuals, 0.0);
+        setDeliveryReloadSegmentProgress(deliveryReloadProgressAladdin, deliveryReloadPctAladdin, 0.0);
+    }
+
+    private static void setDeliveryReloadSegmentProgress(
+            ProgressBar bar, Label pctLabel, double p) {
+        if (bar == null) {
             return;
         }
         double x = Math.max(0.0, Math.min(1.0, p));
-        deliveryReloadProgressBar.setProgress(x);
+        bar.setProgress(x);
+        if (pctLabel != null) {
+            pctLabel.setText(String.format("%.0f%%", x * 100.0));
+        }
     }
 
     private void handleDeliveryCalendarProgressLine(String line) {
@@ -615,9 +635,7 @@ public final class DeliveryCalendarViewTabController {
             int pct =
                     Integer.parseInt(t.substring(PM_AI_PROGRESS_PREFIX.length()).trim());
             pct = Math.max(0, Math.min(100, pct));
-            double overall = (pct / 100.0) * PYTHON_PHASE_MAX;
-            setDeliveryReloadOverallProgress(overall);
-            statusLabel.setText("取得中… " + pct + "%");
+            statusLabel.setText("取得中… メイン表（生成） " + pct + "%");
         } catch (NumberFormatException ignored) {
             // ignore malformed progress lines
         }
@@ -705,25 +723,35 @@ public final class DeliveryCalendarViewTabController {
             }
 
             if (root.path("ok").asBoolean(false)) {
-                statusLabel.setText("反映中… 配台結果");
-                setDeliveryReloadOverallProgress(JAVA_PHASE_DISPATCH);
+                statusLabel.setText("反映中… 配台結果タブ");
+                setDeliveryReloadSegmentProgress(
+                        deliveryReloadProgressDispatch, deliveryReloadPctDispatch, 0.0);
                 if (deliveryCalendarResultDispatchTableTabController != null) {
                     deliveryCalendarResultDispatchTableTabController.reloadResultDispatchTableFromDisk();
                 }
-                statusLabel.setText("反映中… アラジン加工計画");
-                setDeliveryReloadOverallProgress(JAVA_PHASE_ALADDIN);
+                setDeliveryReloadSegmentProgress(
+                        deliveryReloadProgressDispatch, deliveryReloadPctDispatch, 1.0);
+
+                statusLabel.setText("反映中… アラジン加工計画タブ");
+                setDeliveryReloadSegmentProgress(
+                        deliveryReloadProgressAladdin, deliveryReloadPctAladdin, 0.0);
                 if (aladdinProcessingPlanDataTabController != null) {
                     aladdinProcessingPlanDataTabController.reloadAladdinProcessingPlanFromDisk();
                 }
-                statusLabel.setText("反映中… 加工実績");
-                setDeliveryReloadOverallProgress(JAVA_PHASE_ACTUALS);
+                setDeliveryReloadSegmentProgress(
+                        deliveryReloadProgressAladdin, deliveryReloadPctAladdin, 1.0);
+
+                statusLabel.setText("反映中… 加工実績タブ");
+                setDeliveryReloadSegmentProgress(
+                        deliveryReloadProgressActuals, deliveryReloadPctActuals, 0.0);
                 if (processingActualsDataTabController != null) {
                     processingActualsDataTabController.reloadProcessingActualsFromDisk();
                 }
+                setDeliveryReloadSegmentProgress(
+                        deliveryReloadProgressActuals, deliveryReloadPctActuals, 1.0);
             }
 
             statusLabel.setText("反映中… アラ・実績・シス比較表");
-            setDeliveryReloadOverallProgress(0.97);
             JsonNode mainCal = root.get("mainCalendar");
             if (mainCal != null && mainCal.isObject()) {
                 loadMainCalendar(mainCal);
@@ -732,7 +760,6 @@ public final class DeliveryCalendarViewTabController {
                 mainRows.clear();
                 rebuildMainSpreadsheet();
             }
-            setDeliveryReloadOverallProgress(JAVA_PHASE_DONE);
 
             // #region agent log
             if (shell != null && root.path("ok").asBoolean(false)) {

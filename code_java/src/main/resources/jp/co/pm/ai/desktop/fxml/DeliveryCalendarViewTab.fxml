@@ -26,8 +26,26 @@
                 text="&#x518d;&#x8aad;&#x8fbc;"/>
         <Label fx:id="statusLabel"/>
     </HBox>
-    <ProgressBar fx:id="deliveryReloadProgressBar" maxWidth="Infinity" prefHeight="14.0"
-                 visible="false" managed="false"/>
+    <VBox fx:id="deliveryReloadProgressContainer" managed="false" spacing="3.0" visible="false">
+        <HBox alignment="CENTER_LEFT" spacing="8.0">
+            <Label minWidth="130.0" style="-fx-font-size: 11px;" text="配台結果"/>
+            <ProgressBar fx:id="deliveryReloadProgressDispatch" maxWidth="Infinity" prefHeight="12.0"
+                         HBox.hgrow="ALWAYS"/>
+            <Label fx:id="deliveryReloadPctDispatch" minWidth="38.0" style="-fx-font-size: 11px;" text="0%"/>
+        </HBox>
+        <HBox alignment="CENTER_LEFT" spacing="8.0">
+            <Label minWidth="130.0" style="-fx-font-size: 11px;" text="加工実績"/>
+            <ProgressBar fx:id="deliveryReloadProgressActuals" maxWidth="Infinity" prefHeight="12.0"
+                         HBox.hgrow="ALWAYS"/>
+            <Label fx:id="deliveryReloadPctActuals" minWidth="38.0" style="-fx-font-size: 11px;" text="0%"/>
+        </HBox>
+        <HBox alignment="CENTER_LEFT" spacing="8.0">
+            <Label minWidth="130.0" style="-fx-font-size: 11px;" text="アラジン加工計画"/>
+            <ProgressBar fx:id="deliveryReloadProgressAladdin" maxWidth="Infinity" prefHeight="12.0"
+                         HBox.hgrow="ALWAYS"/>
+            <Label fx:id="deliveryReloadPctAladdin" minWidth="38.0" style="-fx-font-size: 11px;" text="0%"/>
+        </HBox>
+    </VBox>
     <Accordion VBox.vgrow="NEVER">
         <panes>
             <TitledPane animated="false" expanded="false" text="&#x30e1;&#x30bf;&#x60c5;&#x5831;">
