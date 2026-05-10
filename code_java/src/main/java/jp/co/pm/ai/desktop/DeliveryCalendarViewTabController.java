@@ -276,7 +276,9 @@ public final class DeliveryCalendarViewTabController {
                                                 ownerStage,
                                                 TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN,
                                                 mainSpreadsheet,
-                                                () -> new ArrayList<>(mainHeadersRef))));
+                                                () -> new ArrayList<>(mainHeadersRef),
+                                                deliveryCalendarDateColumnMandatoryMask(
+                                                        mainHeadersRef.size()))));
 
         mainSpreadsheet.setGrid(new GridBase(0, 0));
 
@@ -710,6 +712,26 @@ public final class DeliveryCalendarViewTabController {
         rebuildMainSpreadsheet();
     }
 
+    /**
+     * 「見出し列数」より右を日付列とみなす。列の表示ダイアログでは該当インデックスはチェック無効（非表示不可）。
+     * 読み込んだ表示状態にも {@link ColumnVisibilitySupport#mergeMandatoryIntoVisibility} で反映する。
+     */
+    private boolean[] deliveryCalendarDateColumnMandatoryMask(int columnCount) {
+        if (columnCount <= 0) {
+            return new boolean[0];
+        }
+        int lead = headerColumnCountMain.get();
+        if (lead < 0) {
+            lead = 0;
+        }
+        lead = Math.min(lead, columnCount);
+        boolean[] m = new boolean[columnCount];
+        for (int i = lead; i < columnCount; i++) {
+            m[i] = true;
+        }
+        return m;
+    }
+
     private void onReorderMainColumns() {
         if (mainHeadersRef.isEmpty()) {
             if (shell != null) {
@@ -721,9 +743,11 @@ public final class DeliveryCalendarViewTabController {
             return;
         }
         boolean[] visForDialog =
-                TableColumnOrderPersistence.loadColumnVisibility(
-                        TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN,
-                        mainHeadersRef.size());
+                ColumnVisibilitySupport.mergeMandatoryIntoVisibility(
+                        TableColumnOrderPersistence.loadColumnVisibility(
+                                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN,
+                                mainHeadersRef.size()),
+                        deliveryCalendarDateColumnMandatoryMask(mainHeadersRef.size()));
         SpreadsheetColumnReorderDialog.show(
                         ownerStage, new ArrayList<>(mainHeadersRef), visForDialog)
                 .ifPresent(
@@ -748,6 +772,10 @@ public final class DeliveryCalendarViewTabController {
         boolean[] newVis =
                 TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
                         oldHeaders, oldVis, titleOrder);
+        newVis =
+                ColumnVisibilitySupport.mergeMandatoryIntoVisibility(
+                        newVis,
+                        deliveryCalendarDateColumnMandatoryMask(mainHeadersRef.size()));
         TableColumnOrderPersistence.saveColumnVisibility(
                 TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN, newVis);
         List<Double> widths =
@@ -802,9 +830,13 @@ public final class DeliveryCalendarViewTabController {
                                 mainSpreadsheet,
                                 () -> new ArrayList<>(mainHeadersRef),
                                 () ->
-                                        TableColumnOrderPersistence.loadColumnVisibility(
-                                                TableColumnOrderPersistence.TableId.DELIVERY_CALENDAR_MAIN,
-                                                mainHeadersRef.size()));
+                                        ColumnVisibilitySupport.mergeMandatoryIntoVisibility(
+                                                TableColumnOrderPersistence.loadColumnVisibility(
+                                                        TableColumnOrderPersistence.TableId
+                                                                .DELIVERY_CALENDAR_MAIN,
+                                                        mainHeadersRef.size()),
+                                                deliveryCalendarDateColumnMandatoryMask(
+                                                        mainHeadersRef.size())));
                     });
         } finally {
             suppressMainPersistence.set(false);
