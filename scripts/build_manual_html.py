@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""manual/src ?? Markdown ?? manual/html ???I?T?C?g?????o?????B"""
+# -*- coding: utf-8 -*-
+"""Build static HTML from manual/src Markdown into manual/html."""
 
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ from pathlib import Path
 try:
     import markdown
 except ImportError:
-    print("markdown ???K?v???: pip install -r manual/requirements.txt", file=sys.stderr)
+    print("markdown required: pip install -r manual/requirements.txt", file=sys.stderr)
     sys.exit(1)
 
 

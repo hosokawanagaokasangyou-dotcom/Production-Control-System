@@ -1,18 +1,14 @@
-# マニュアル公開パイプライン（Publish-Manual.ps1 / scripts/manual_publish.py）
-#
-# 画像: 手動で PNG を manual/src/images に置く（ファイル名は injections の tab_key と一致、例: run.png）。
-# Markdown の <!-- MANUAL_SNAP:key --> は inject で画像参照に置換される。
+# Manual publish (Publish-Manual.ps1 / scripts/manual_publish.py)
+# Put PNGs in manual/src/images as {tab_key}.png. inject replaces <!-- MANUAL_SNAP:key -->.
 
 images_dir: manual/src/images
 
-# 任意: データ準備（ファイルコピー）。未使用なら空でよい。
 data_prep: []
 
-# Markdown への画像埋め込み（プレースホルダー <!-- MANUAL_SNAP:key --> を置換）
 injections:
   - tab_key: run
     markdown_file: manual/src/chapters/overview.md
-    caption: "実行・ログ"
+    caption: "螳溯｡後�ｻ繝ｭ繧ｰ"
   - tab_key: env
     markdown_file: manual/src/chapters/overview.md
-    caption: "環境変数"
+    caption: "迺ｰ蠅�螟画焚"

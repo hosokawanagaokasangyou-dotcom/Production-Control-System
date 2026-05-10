@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-"""
-?}?j???A?????J?p?C?v???C???i?f?[?^?????EMD ?????EHTML ?????j?B
-?X?N???[???V???b?g??˜@?? manual/src/images ??u???BPowerShell ?? Publish-Manual.ps1 ??????B
-"""
+# -*- coding: utf-8 -*-
+"""Manual pipeline: data_prep, inject placeholders, build HTML. Run via Publish-Manual.ps1."""
 
 from __future__ import annotations
 
@@ -15,7 +13,7 @@ from pathlib import Path
 try:
     import yaml
 except ImportError:
-    print("PyYAML ???K?v???: pip install -r manual/requirements.txt", file=sys.stderr)
+    print("PyYAML required: pip install -r manual/requirements.txt", file=sys.stderr)
     sys.exit(1)
 
 
@@ -41,7 +39,7 @@ def run_data_prep(data: dict, root: Path) -> None:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="?}?j???A?????J?p?C?v???C??")
+    ap = argparse.ArgumentParser(description="Manual publish pipeline")
     ap.add_argument("--manifest", type=Path, default=Path("manual/pipeline-manifest.yaml"))
     ap.add_argument("--repo-root", type=Path, default=None)
     ap.add_argument("--skip-data-prep", action="store_true")
@@ -76,7 +74,7 @@ def main() -> None:
             check=True,
         )
 
-    print("[pipeline] ????")
+    print("[pipeline] done")
 
 
 if __name__ == "__main__":

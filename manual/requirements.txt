@@ -1,3 +1,3 @@
-# マニュアル HTML パイプライン（scripts/manual_publish.py 等）
+# Manual HTML pipeline deps (manual_publish.py, inject, build_manual_html)
 markdown>=3.7
 PyYAML>=6.0

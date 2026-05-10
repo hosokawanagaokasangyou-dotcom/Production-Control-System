@@ -5,7 +5,7 @@
 1. **画像** … `manual/src/images/` に、`tab_key` 名の PNG を置く（例: `run.png`, `env.png`）。アプリの該当画面を手動でスクショして保存する。
 2. **公開パイプライン** … `Publish-Manual.ps1`（または同等の Python）が次を順に実行する。
    - （任意）`data_prep` でファイルコピー
-   - **inject** … Markdown 内の `<!-- MANUAL_SNAP:キー -->` を `![](../images/キー.png)` に置き換え
+   - **inject** … Markdown 内の `<!-- MANUAL_SNAP:キー -->` を画像参照に置換
    - **HTML** … `manual/src` 以下の Markdown から `manual/html/` に静的サイトを出力
 
 完成したらブラウザで **`manual/html/index.html`** を開く。
@@ -15,7 +15,7 @@
 - Python **3.10 以上**
 - 依存: `pip install -r manual/requirements.txt`（`markdown`, `PyYAML`）
 
-## Windows（PowerShell）— リポジトリ直下で
+## Windows（PowerShell）— リポジトリ直下
 
 初回だけ仮想環境の例:
 
@@ -30,32 +30,28 @@ manual\.venv\Scripts\pip install -r manual\requirements.txt
 .\Publish-Manual.ps1
 ```
 
-一部だけスキップする例:
+## WSL / Linux — `pip install` が externally-managed で拒まれるとき
+
+Ubuntu 等ではシステムの Python に直接 `pip install` できません（PEP 668）。**必ず venv を使う**。
 
 ```text
-.\Publish-Manual.ps1 -SkipDataPrep
-```
-
-（`-SkipInject` … 置換を飛ばす／`-SkipHtml` … HTML 生成だけ飛ばす）
-
-## WSL / Linux（bash）— リポジトリ直下で
-
-```text
+python3 -m venv manual/.venv
+source manual/.venv/bin/activate
 pip install -r manual/requirements.txt
 python3 scripts/manual_publish.py
 ```
 
-マニフェストを変える場合:
-
-```text
-python3 scripts/manual_publish.py --manifest manual/pipeline-manifest.yaml
-```
+（Windows と同じく、`manual/.venv` を使うなら `Publish-Manual.ps1` は使わず上記 `python3` で問題ありません。）
 
 ## 設定の場所
 
-- **`manual/pipeline-manifest.yaml`** … どの Markdown のどのプレースホルダを、どのキャプションで画像にするか（`injections`）。
-- **`manual/src/chapters/*.md`** … 本文と `<!-- MANUAL_SNAP:run -->` などのマーカー。
+- **`manual/pipeline-manifest.yaml`** … `injections` でプレースホルダと Markdown を対応付ける。
+- **`manual/src/chapters/*.md`** … `<!-- MANUAL_SNAP:run -->` などのマーカー。
+
+## トラブル: `SyntaxError: Non-UTF-8 code ... manual_publish.py`
+
+リポジトリのスクリプトは **UTF-8** です。エディタを「UTF-8 で保存」に固定してください。`/mnt/c` 経由で CP932 保存すると文字化けし、Python が起動できなくなります。
 
 ## inject について
 
-初回はプレースホルダが **`![](画像)` に書き換わります**。すでに置換済みでマーカーが無い章は、inject はその行をスキップします（再びマーカーを書けば再度置換対象になります）。
+初回はプレースホルダが画像参照に書き換わります。マーカーを残したい場合は Git で元に戻すか、マーカーを手で再度書いてください。

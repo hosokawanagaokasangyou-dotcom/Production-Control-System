@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""pipeline-manifest.yaml に従い <!-- MANUAL_SNAP:key --> を Markdown 画像参照に置換する。"""
+# -*- coding: utf-8 -*-
+"""Replace <!-- MANUAL_SNAP:key --> in Markdown per pipeline-manifest.yaml."""
 
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
 try:
     import yaml
 except ImportError:
-    print("PyYAML が必要です: pip install -r manual/requirements.txt", file=sys.stderr)
+    print("PyYAML required: pip install -r manual/requirements.txt", file=sys.stderr)
     sys.exit(1)
 
 
