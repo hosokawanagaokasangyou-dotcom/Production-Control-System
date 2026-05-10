@@ -18,8 +18,8 @@
 #   .\fast_package_app.ps1 -ZipOptimal   # Step 8 ZIP: Deflate Optimal (smallest, much slower)
 #   .\fast_package_app.ps1 -ZipStore     # Step 8 ZIP: store-only (NO compression; emergency only, ~2.6x archive size for this bundle)
 #   .\fast_package_app.ps1 -ZipFast      # explicit Deflate Fastest (this is also the default)
-#   .\fast_package_app.ps1 -ZipQuiet     # minimal console during ZIP (faster when invoked via WSL -> powershell.exe)
-#   Step 8 zips Initial and Upgrade in parallel via Start-Job; child output is forwarded to the host.
+#   .\fast_package_app.ps1 -ZipQuiet     # minimal console during ZIP (faster when invoking powershell.exe from WSL)
+#   .\fast_package_app.ps1 -ZipParallel   # Step 8: zip Initial + Upgrade at once via Start-Job (experimental; may IOException on some PCs)
 #   .\fast_package_app.ps1 -PackageReleaseParent G:\   # e.g. G:\pm-ai-package-release (folder created)
 #   .\fast_package_app.ps1 -PackageReleaseDir G:\pm-ai-package-release   # exact output folder
 #   When release output is not the repo default, download cache (JDK/JavaFX/Python) uses <release>\Cash_PMD instead of code_java\Cash_PMD.
@@ -47,8 +47,7 @@ param(
 
     # Step 8 portable ZIP level (priority: Optimal > Store > Fast; default = Fastest / Deflate level=1).
     # Empirical: this bundle has 594 MB raw -> 230 MB Deflate Fastest (38%). Site-packages .py text shrinks well,
-    # so NoCompression would inflate the archive ~2.6x. Real wall-clock win comes from running Initial and Upgrade
-    # zips in parallel (see Step 8). -ZipStore stays as an opt-in escape hatch when CPU is the only bottleneck.
+    # so NoCompression would inflate the archive ~2.6x. Optional -ZipParallel runs both ZIPs via Start-Job (experimental).
     [switch]$ZipFast,
 
     [switch]$ZipOptimal,
@@ -57,6 +56,9 @@ param(
 
     # Fewer progress lines (helps when running powershell.exe from WSL: console I/O can dominate).
     [switch]$ZipQuiet,
+
+    # Step 8: run Initial + Upgrade ZIP creation in parallel (Start-Job). Default off — PS 5.1 jobs run out-of-process and can hit IOException on Unicode/long paths or AV locking.
+    [switch]$ZipParallel,
 
     # Output folder for pm-ai-package-release contents (ZIPs, version.txt, interim bundles). Overrides repo-root default.
     [string]$PackageReleaseDir = '',
@@ -1203,8 +1205,7 @@ else {
 
 # Priority: Optimal > Store > Fast/default. Default = Fastest (Deflate level 1).
 # Bundle has been measured at ~38% compression with Fastest; switching to NoCompression inflates the archive
-# ~2.6x (594 MB raw vs 230 MB zipped). The real speedup comes from running Initial / Upgrade zips in parallel,
-# which is done below via Start-Job.
+# ~2.6x (594 MB raw vs 230 MB zipped). Parallel ZIP is opt-in (-ZipParallel); default is sequential (reliable on PS 5.1).
 $zipLevelSwitches = @()
 if ($ZipOptimal) { $zipLevelSwitches += '-ZipOptimal' }
 if ($ZipStore) { $zipLevelSwitches += '-ZipStore' }
@@ -1224,53 +1225,52 @@ else {
 
 $zipQuiet = [bool]$ZipQuiet
 
-# Run Initial / Upgrade compression in parallel via background jobs (separate ZipArchives, no shared writes,
-# different source folders). Pass the Compress-PortableBundleFolderToZip body as the InitializationScript so
-# the same logic runs in each child runspace; CompressionLevel is shipped as its enum name (jobs serialize via
-# CLI XML and rehydrate value types best from primitives).
-$compressFnBody = ${function:Compress-PortableBundleFolderToZip}.ToString()
-$compressFnInit = [scriptblock]::Create("function Compress-PortableBundleFolderToZip {`n$compressFnBody`n}")
-$compressJobBlock = {
-    param(
-        [string]$SourceDir,
-        [string]$ZipFilePath,
-        [string]$LevelName,
-        [bool]$QuietProgress,
-        [string]$Label
-    )
-    $ErrorActionPreference = 'Stop'
-    Add-Type -AssemblyName System.IO.Compression
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $level = [System.IO.Compression.CompressionLevel]::$LevelName
-    Write-Host ("[" + $Label + "] Zipping -> " + $ZipFilePath) -ForegroundColor Cyan
-    Compress-PortableBundleFolderToZip -SourceDir $SourceDir -ZipFilePath $ZipFilePath -CompressionLevel $level -QuietProgress:$QuietProgress
-}
-
 $zipLevelName = $zipCompression.ToString()
-Write-Host "--- Step 8: parallel ZIP (Initial + Upgrade via Start-Job; level=$zipLevelName) ---" -ForegroundColor Cyan
-$jobInitial = Start-Job -Name 'pmd-zip-initial' -InitializationScript $compressFnInit -ScriptBlock $compressJobBlock `
-    -ArgumentList $bundleOutInitial, $zipInitial, $zipLevelName, ([bool]$zipQuiet), 'Initial'
-$jobUpgrade = Start-Job -Name 'pmd-zip-upgrade' -InitializationScript $compressFnInit -ScriptBlock $compressJobBlock `
-    -ArgumentList $bundleOutUpgrade, $zipUpgrade, $zipLevelName, ([bool]$zipQuiet), 'Upgrade'
-$zipJobs = @($jobInitial, $jobUpgrade)
-try {
-    while ($zipJobs | Where-Object { $_.State -eq 'Running' -or $_.State -eq 'NotStarted' }) {
+if ($ZipParallel) {
+    # Experimental: parallel ZIP via Start-Job. PS 5.1 jobs are separate processes; Unicode repo paths or AV
+    # can cause IOException inside ZipArchive — use default sequential path if this fails.
+    Write-Host "--- Step 8: parallel ZIP (Initial + Upgrade via Start-Job; level=$zipLevelName) ---" -ForegroundColor Cyan
+    $compressFnBody = ${function:Compress-PortableBundleFolderToZip}.ToString()
+    $compressFnInit = [scriptblock]::Create("function Compress-PortableBundleFolderToZip {`n$compressFnBody`n}")
+    $compressJobBlock = {
+        param(
+            [string]$SourceDir,
+            [string]$ZipFilePath,
+            [string]$LevelName,
+            [bool]$QuietProgress,
+            [string]$Label
+        )
+        $ErrorActionPreference = 'Stop'
+        Add-Type -AssemblyName System.IO.Compression
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $level = [System.IO.Compression.CompressionLevel]::$LevelName
+        Write-Host ("[" + $Label + "] Zipping -> " + $ZipFilePath) -ForegroundColor Cyan
+        Compress-PortableBundleFolderToZip -SourceDir $SourceDir -ZipFilePath $ZipFilePath -CompressionLevel $level -QuietProgress:$QuietProgress
+    }
+    $jobInitial = Start-Job -Name 'pmd-zip-initial' -InitializationScript $compressFnInit -ScriptBlock $compressJobBlock `
+        -ArgumentList $bundleOutInitial, $zipInitial, $zipLevelName, ([bool]$zipQuiet), 'Initial'
+    $jobUpgrade = Start-Job -Name 'pmd-zip-upgrade' -InitializationScript $compressFnInit -ScriptBlock $compressJobBlock `
+        -ArgumentList $bundleOutUpgrade, $zipUpgrade, $zipLevelName, ([bool]$zipQuiet), 'Upgrade'
+    $zipJobs = @($jobInitial, $jobUpgrade)
+    try {
+        Wait-Job -Job $zipJobs | Out-Null
         foreach ($j in $zipJobs) {
-            $j | Receive-Job
+            Receive-Job -Job $j -ErrorAction Continue | Out-Host
+            if ($j.State -ne 'Completed') {
+                throw ("ZIP job '{0}' ended in state {1}. Omit -ZipParallel (sequential is default)." -f $j.Name, $j.State)
+            }
         }
-        Start-Sleep -Milliseconds 1500
     }
-    foreach ($j in $zipJobs) {
-        $j | Receive-Job -ErrorAction Stop
-    }
-    foreach ($j in $zipJobs) {
-        if ($j.State -ne 'Completed') {
-            throw ("ZIP job '{0}' ended in state {1}." -f $j.Name, $j.State)
-        }
+    finally {
+        Remove-Job -Job $zipJobs -Force -ErrorAction SilentlyContinue
     }
 }
-finally {
-    Remove-Job -Job $zipJobs -Force -ErrorAction SilentlyContinue
+else {
+    Write-Host "--- Step 8: ZIP Initial then Upgrade (sequential; level=$zipLevelName) ---" -ForegroundColor Cyan
+    Write-Host "Zipping Initial -> $zipInitial" -ForegroundColor Cyan
+    Compress-PortableBundleFolderToZip -SourceDir $bundleOutInitial -ZipFilePath $zipInitial -CompressionLevel $zipCompression -QuietProgress:$zipQuiet
+    Write-Host "Zipping Upgrade -> $zipUpgrade" -ForegroundColor Cyan
+    Compress-PortableBundleFolderToZip -SourceDir $bundleOutUpgrade -ZipFilePath $zipUpgrade -CompressionLevel $zipCompression -QuietProgress:$zipQuiet
 }
 
 if (-not (Test-Path -LiteralPath $zipInitial) -or -not (Test-Path -LiteralPath $zipUpgrade)) {
