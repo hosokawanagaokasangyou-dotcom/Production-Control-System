@@ -20,7 +20,9 @@ public final class MainShellInnerTabCatalog {
     public static List<String> titledPaneLabelsUnderInnerTab(
             MainShellTabId parent, int innerTabIndex) {
         if (parent == MainShellTabId.DELIVERY_CALENDAR_VIEW && innerTabIndex == 0) {
-            return List.of("\u8868\u793a\u30fb\u5217\u8a2d\u5b9a");
+            return List.of(
+                    "\u64cd\u4f5c\u30fb\u30bd\u30fc\u30b9",
+                    "\u30c7\u30fc\u30bf\u8868");
         }
         if (parent == MainShellTabId.DELIVERY_CALENDAR_VIEW
                 && (innerTabIndex == 1 || innerTabIndex == 2 || innerTabIndex == 3)) {

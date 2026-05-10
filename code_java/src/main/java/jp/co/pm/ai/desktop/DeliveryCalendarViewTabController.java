@@ -50,6 +50,7 @@ import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCell;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
+import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
@@ -208,11 +209,8 @@ public final class DeliveryCalendarViewTabController {
         }
 
         SpreadsheetTabularSupport.installDeliveryCalendarSpreadsheetChrome(mainSpreadsheet);
+        SpreadsheetThemeBridge.install(mainSpreadsheet);
         mainSpreadsheet.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-        /*
-         * 全行選択の拡張はクリック列とフォーカス列のずれを招くため、メイン表では無効化する。
-         */
-        SpreadsheetTabularSupport.installFullRowDataSelection(mainSpreadsheet, () -> true);
 
         mainColumnStripHost
                 .getChildren()
@@ -346,8 +344,8 @@ public final class DeliveryCalendarViewTabController {
 
         suppressPresentationUiMain.set(true);
         try {
-            double lo = SpreadsheetTabularSupport.DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MIN;
-            double hi = SpreadsheetTabularSupport.DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MAX;
+            double lo = SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MIN;
+            double hi = SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MAX;
             double pv = lm.rowHeightPercent();
             if (Double.isNaN(pv) || pv <= 0) {
                 pv = 100.0;
@@ -356,7 +354,7 @@ public final class DeliveryCalendarViewTabController {
             mainRowHeightSlider.setMin(lo);
             mainRowHeightSlider.setMax(hi);
             mainRowHeightSlider.setValue(pv);
-            mainRowHeightSlider.setMajorTickUnit(100);
+            mainRowHeightSlider.setMajorTickUnit(250);
             mainRowHeightSlider.setMinorTickCount(4);
             mainRowHeightSlider.setShowTickMarks(true);
             if (mainRowHeightPctLabel != null) {
@@ -402,8 +400,8 @@ public final class DeliveryCalendarViewTabController {
         if (mainRowHeightSlider == null) {
             return;
         }
-        double lo = SpreadsheetTabularSupport.DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MIN;
-        double hi = SpreadsheetTabularSupport.DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MAX;
+        double lo = SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MIN;
+        double hi = SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MAX;
         double v =
                 Math.min(
                         hi,
@@ -504,8 +502,8 @@ public final class DeliveryCalendarViewTabController {
                     pres.rowHeightPercent(),
                     SpreadsheetTabularSupport.DELIVERY_CALENDAR_ROW_HEIGHT_BASE_PX,
                     SpreadsheetTabularSupport.DELIVERY_CALENDAR_ROW_HEIGHT_MIN_PX,
-                    SpreadsheetTabularSupport.DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MIN,
-                    SpreadsheetTabularSupport.DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MAX);
+                    SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MIN,
+                    SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MAX);
             mainSpreadsheet.setGrid(grid);
             mainSpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
 
@@ -515,7 +513,7 @@ public final class DeliveryCalendarViewTabController {
                         SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(mainSpreadsheet);
                         SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                 mainSpreadsheet, headerColumnCountMain.get());
-                        SpreadsheetTabularSupport.applyColumnFiltersWithDialog(mainSpreadsheet);
+                        SpreadsheetTabularSupport.applyColumnFilters(mainSpreadsheet);
                         SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(
                                 mainSpreadsheet, true);
                         SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(

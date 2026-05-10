@@ -49,34 +49,43 @@
         <tabs>
             <Tab closable="false" text="&#x30a2;&#x30e9;&#x30fb;&#x5b9f;&#x7e3e;&#x30fb;&#x30b7;&#x30b9;&#x6bd4;&#x8f03;">
                 <content>
-                    <VBox fillWidth="true" spacing="6.0">
-                        <Accordion VBox.vgrow="NEVER">
-                            <panes>
-                                <TitledPane animated="false" expanded="false"
-                                            text="&#x8868;&#x793a;&#x30fb;&#x5217;&#x8a2d;&#x5b9a;">
-                                    <content>
-                                        <VBox fillWidth="true" spacing="6.0">
-                                            <HBox alignment="CENTER_LEFT" spacing="8.0">
-                                                <Button fx:id="mainClearFiltersButton" mnemonicParsing="false"
-                                                        onAction="#onClearMainFilters"
-                                                        text="&#x5217;&#x30d5;&#x30a3;&#x30eb;&#x30bf;&#x30fb;&#x4e26;&#x3079;&#x66ff;&#x3048;&#x89e3;&#x9664;"/>
-                                            </HBox>
-                                            <HBox alignment="CENTER_LEFT" spacing="10.0">
-                                                <Label text="&#x30c7;&#x30fc;&#x30bf;&#x884c;&#x306e;&#x9ad8;&#x3055;&#xff08;&#x4e00;&#x62ec;&#xff09;"/>
-                                                <Slider fx:id="mainRowHeightSlider" blockIncrement="25.0"
-                                                        majorTickUnit="100.0" max="500.0" min="1.0"
-                                                        prefWidth="420.0" showTickMarks="true"/>
-                                                <Label fx:id="mainRowHeightPctLabel" minWidth="52.0" text="100%"/>
-                                                <CheckBox fx:id="mainCellWrapCheck" mnemonicParsing="false"
-                                                          text="&#x9577;&#x3044;&#x6587;&#x5b57;&#x5217;&#x3092;&#x6298;&#x308a;&#x8fd4;&#x3059;"/>
-                                            </HBox>
-                                            <HBox fx:id="mainColumnStripHost" spacing="0.0"/>
-                                        </VBox>
-                                    </content>
-                                </TitledPane>
-                            </panes>
-                        </Accordion>
-                        <StackPane fx:id="mainSpreadsheetHost" minHeight="240.0" VBox.vgrow="ALWAYS"/>
+                    <VBox fillWidth="true" maxHeight="Infinity" spacing="8.0">
+                        <padding>
+                            <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+                        </padding>
+                        <TitledPane animated="true" expanded="true"
+                                    text="&#x64cd;&#x4f5c;&#x30fb;&#x30bd;&#x30fc;&#x30b9;">
+                            <content>
+                                <VBox fillWidth="true" spacing="8.0">
+                                    <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                        <padding>
+                                            <Insets bottom="4.0"/>
+                                        </padding>
+                                        <Button fx:id="mainClearFiltersButton" mnemonicParsing="false"
+                                                onAction="#onClearMainFilters"
+                                                text="&#x5217;&#x30d5;&#x30a3;&#x30eb;&#x30bf;&#x30fb;&#x4e26;&#x3079;&#x66ff;&#x3048;&#x89e3;&#x9664;"/>
+                                    </HBox>
+                                    <HBox alignment="CENTER_LEFT" spacing="10.0">
+                                        <Label text="&#x30c7;&#x30fc;&#x30bf;&#x884c;&#x306e;&#x9ad8;&#x3055;&#xff08;&#x4e00;&#x62ec;&#xff09;"/>
+                                        <Slider fx:id="mainRowHeightSlider" blockIncrement="25.0"
+                                                majorTickUnit="250.0" max="2000.0" min="50.0"
+                                                prefWidth="240.0" showTickMarks="true"/>
+                                        <Label fx:id="mainRowHeightPctLabel" minWidth="52.0" text="100%"/>
+                                        <CheckBox fx:id="mainCellWrapCheck" mnemonicParsing="false"
+                                                  text="&#x9577;&#x3044;&#x6587;&#x5b57;&#x5217;&#x3092;&#x6298;&#x308a;&#x8fd4;&#x3059;"/>
+                                    </HBox>
+                                    <HBox fx:id="mainColumnStripHost" spacing="0.0"/>
+                                </VBox>
+                            </content>
+                        </TitledPane>
+                        <TitledPane animated="true" expanded="true" maxHeight="Infinity"
+                                    text="&#x30c7;&#x30fc;&#x30bf;&#x8868;" VBox.vgrow="ALWAYS">
+                            <content>
+                                <VBox fillWidth="true" maxHeight="Infinity">
+                                    <StackPane fx:id="mainSpreadsheetHost" minHeight="240.0" VBox.vgrow="ALWAYS"/>
+                                </VBox>
+                            </content>
+                        </TitledPane>
                     </VBox>
                 </content>
             </Tab>
