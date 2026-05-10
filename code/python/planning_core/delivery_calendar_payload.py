@@ -77,6 +77,8 @@ __all__ = ("build_delivery_calendar_payload",)
 # Debug session f73cbb: NDJSON path (workspace; Python subprocess may also resolve via repo)
 _DEBUG_F73CBB_LOG = "/mnt/c/\u5de5\u7a0b\u7ba1\u7406AI\u30d7\u30ed\u30b8\u30a7\u30af\u30c8_JAVA/.cursor/debug-f73cbb.log"
 _DEBUG_PROBE_ENV = "PM_AI_DELIVERY_CALENDAR_PROBE_TASK"
+_ENV_CAL_PAST_DAYS = "PM_AI_DELIVERY_CALENDAR_PAST_DAYS"
+_ENV_CAL_FUTURE_DAYS = "PM_AI_DELIVERY_CALENDAR_FUTURE_DAYS"
 
 # Short weekday for calendar column titles (Mon=\u6708 ... Sun=\u65e5)
 _JP_WEEKDAY_SHORT = ("\u6708", "\u706b", "\u6c34", "\u6728", "\u91d1", "\u571f", "\u65e5")
@@ -501,32 +503,120 @@ def _qty_from_buckets_for_tid(
     return s
 
 
+def _parse_calendar_window_int_env(name: str, default: int, lo: int, hi: int) -> int:
+    try:
+        raw = (os.environ.get(name) or "").strip()
+        v = int(raw) if raw else default
+        return max(lo, min(v, hi))
+    except (TypeError, ValueError):
+        return default
+
+
+def _date_bounds_from_actual_df(df_actual: pd.DataFrame | None) -> tuple[date | None, date | None]:
+    """Min/max calendar dates from ?????? / ??? (same precedence as _row_actual_day)."""
+    if df_actual is None or len(df_actual) == 0:
+        return None, None
+    s1 = pd.Series([pd.NaT] * len(df_actual))
+    if _ACT_COL_START_DT in df_actual.columns:
+        s1 = pd.to_datetime(df_actual[_ACT_COL_START_DT], errors="coerce")
+    s2 = pd.Series([pd.NaT] * len(df_actual))
+    if _ACT_COL_DAY in df_actual.columns:
+        s2 = pd.to_datetime(df_actual[_ACT_COL_DAY], errors="coerce")
+    eff = s1.where(s1.notna(), s2)
+    eff = pd.to_datetime(eff, errors="coerce")
+    valid = eff.dropna()
+    if len(valid) == 0:
+        return None, None
+    # tz-naive dates for comparison with date.today()-based windows
+    mn = valid.min().date()
+    mx = valid.max().date()
+    return mn, mx
+
+
+def _date_bounds_from_plan_date_columns(df_plan: pd.DataFrame | None) -> tuple[date | None, date | None]:
+    """Min/max of YYYY/MM/DD-style quantity columns (aligned with _build_compare_gantt_aladdin_qty_lookup)."""
+    if df_plan is None or len(df_plan) == 0:
+        return None, None
+    found: list[date] = []
+    for col in df_plan.columns:
+        col_key = core._nfkc_column_aliases(col)
+        m = core._COMPARE_GANTT_ALADDIN_QTY_COL_RE.match(str(col_key).strip())
+        if not m:
+            continue
+        try:
+            y, mo, dd = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            found.append(date(y, mo, dd))
+        except ValueError:
+            continue
+    if not found:
+        return None, None
+    return min(found), max(found)
+
+
 def _collect_sorted_dates(
-    _df_plan: pd.DataFrame | None,
-    _df_actual: pd.DataFrame | None,
-) -> list:
-    """Calendar columns: contiguous days from (today - 14) through (today + 30), inclusive."""
+    df_plan: pd.DataFrame | None,
+    df_actual: pd.DataFrame | None,
+) -> tuple[list[date], dict[str, Any]]:
+    """Calendar columns: rolling window merged with actual/plan data date bounds.
+
+    Formerly fixed at today-14 .. today+30, which dropped actual rows older than 14 days from
+    aggregation (eligible_pairs / table rows disappeared even though ???? tab showed them).
+    """
     today = date.today()
-    display_start = today - timedelta(days=14)
-    display_end = today + timedelta(days=30)
+    past_days = _parse_calendar_window_int_env(_ENV_CAL_PAST_DAYS, 45, 1, 800)
+    future_days = _parse_calendar_window_int_env(_ENV_CAL_FUTURE_DAYS, 30, 1, 800)
+    display_start = today - timedelta(days=past_days)
+    display_end = today + timedelta(days=future_days)
+
+    mn_a, mx_a = _date_bounds_from_actual_df(df_actual)
+    mn_p, mx_p = _date_bounds_from_plan_date_columns(df_plan)
+
+    merged_start = min([display_start] + ([mn_a] if mn_a else []) + ([mn_p] if mn_p else []))
+    merged_end = max([display_end] + ([mx_a] if mx_a else []) + ([mx_p] if mx_p else []))
+
+    abs_past = today - timedelta(days=800)
+    abs_future = today + timedelta(days=800)
+    merged_start = max(merged_start, abs_past)
+    merged_end = min(merged_end, abs_future)
+    if merged_end < merged_start:
+        merged_end = merged_start
+
     out: list[date] = []
-    d = display_start
-    while d <= display_end:
+    d = merged_start
+    while d <= merged_end:
         out.append(d)
         d += timedelta(days=1)
+
+    range_meta = {
+        "deliveryCalendarPastDaysDefault": past_days,
+        "deliveryCalendarFutureDaysDefault": future_days,
+        "deliveryCalendarMergedStart": merged_start.isoformat(),
+        "deliveryCalendarMergedEnd": merged_end.isoformat(),
+        "deliveryCalendarActualBoundsMin": mn_a.isoformat() if mn_a else "",
+        "deliveryCalendarActualBoundsMax": mx_a.isoformat() if mx_a else "",
+        "deliveryCalendarPlanBoundsMin": mn_p.isoformat() if mn_p else "",
+        "deliveryCalendarPlanBoundsMax": mx_p.isoformat() if mx_p else "",
+        "deliveryCalendarRollingStart": display_start.isoformat(),
+        "deliveryCalendarRollingEnd": display_end.isoformat(),
+        "deliveryCalendarColumnDayCount": len(out),
+    }
+
     # region agent log
     _agent_debug_ndjson(
         "H_CAL_RANGE",
         "delivery_calendar_payload.py:_collect_sorted_dates",
         "calendar_column_range",
         {
-            "display_start": display_start.isoformat(),
-            "display_end": display_end.isoformat(),
+            "merged_start": merged_start.isoformat(),
+            "merged_end": merged_end.isoformat(),
             "n_days": len(out),
+            "mn_a": mn_a.isoformat() if mn_a else None,
+            "mx_a": mx_a.isoformat() if mx_a else None,
+            "past_days": past_days,
         },
     )
     # endregion
-    return out
+    return out, range_meta
 
 
 def _machine_display_from_plan_row(row) -> str:
@@ -670,7 +760,8 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             int(len(df_actual)) if df_actual is not None else 0
         )
 
-        sorted_dates = _collect_sorted_dates(df_plan, df_actual)
+        sorted_dates, cal_range_meta = _collect_sorted_dates(df_plan, df_actual)
+        meta.update(cal_range_meta)
 
         skills_pack = core.load_skills_and_needs()
         equipment_list = skills_pack[2]
