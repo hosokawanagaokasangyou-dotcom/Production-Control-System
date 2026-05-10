@@ -44,7 +44,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCell;
@@ -70,12 +69,6 @@ public final class DeliveryCalendarViewTabController {
      * in {@link #applyPayloadBody}（アラジン→実績→配台→メイン表の順）。
      */
     private static final String PM_AI_PROGRESS_PREFIX = "PM_AI_PROGRESS ";
-
-    /**
-     * Cursor NDJSON filename {@code debug-&lt;id&gt;.log}; align with the active chat debug session id.
-     * Writes via {@link AgentDebugLog} so Windows JVM logs mirror to WSL workspace ({@code .cursor/rules/agent-debug-wsl-windows-mirror.mdc}).
-     */
-    private static final String DEBUG_SESSION_ID_OVERLAY = "ebddd7";
 
     /**
      * Child stderr is merged into stdout ({@link PythonProcessRunner#runCaptureAsync}); probe scripts may
@@ -747,7 +740,7 @@ public final class DeliveryCalendarViewTabController {
                     if (pretty.length() > 16000) {
                         pretty = pretty.substring(0, 16000) + "\n... (truncated)";
                     }
-                    sb.append("\n\n--- deliveryCalendarProbe (f73cbb) ---\n");
+                    sb.append("\n\n--- deliveryCalendarProbe ---\n");
                     sb.append(pretty);
                 }
                 metaLabel.setText(sb.toString());
@@ -761,7 +754,7 @@ public final class DeliveryCalendarViewTabController {
                 return;
             }
 
-            applyMainCalendarAndAgentLog(root, meta);
+            applyMainCalendar(root);
             scheduleHideDeliveryReloadProgress();
 
         } catch (Exception e) {
@@ -835,7 +828,7 @@ public final class DeliveryCalendarViewTabController {
             Platform.runLater(
                     () -> {
                         try {
-                            applyMainCalendarAndAgentLog(root, meta);
+                            applyMainCalendar(root);
                         } finally {
                             scheduleHideDeliveryReloadProgress();
                         }
@@ -849,7 +842,7 @@ public final class DeliveryCalendarViewTabController {
         }
     }
 
-    private void applyMainCalendarAndAgentLog(JsonNode root, JsonNode meta) {
+    private void applyMainCalendar(JsonNode root) {
         statusLabel.setText("反映中… メイン表");
         setDeliveryReloadSegmentProgress(
                 deliveryReloadProgressMainCalendar, deliveryReloadPctMainCalendar, 0.0);
@@ -863,26 +856,6 @@ public final class DeliveryCalendarViewTabController {
         }
         setDeliveryReloadSegmentProgress(
                 deliveryReloadProgressMainCalendar, deliveryReloadPctMainCalendar, 1.0);
-
-        // #region agent log
-        if (shell != null && root.path("ok").asBoolean(false)) {
-            Map<String, Object> dbg = new LinkedHashMap<>();
-            dbg.put("ok", true);
-            dbg.put(
-                    "actualDetailRowCount",
-                    meta != null && meta.isObject()
-                            ? meta.path("actualDetailRowCount").asInt(0)
-                            : -1);
-            dbg.put("pythonProbeNdjson", ".cursor/debug-f73cbb.log");
-            AgentDebugLog.appendStructured(
-                    shell.snapshotUiEnv(),
-                    "f73cbb",
-                    "H_JAVA_TRIGGER",
-                    "DeliveryCalendarViewTabController.applyPayload",
-                    "delivery_calendar_ok",
-                    dbg);
-        }
-        // #endregion
     }
 
     private void loadMainCalendar(JsonNode mainCal) {
@@ -1057,27 +1030,6 @@ public final class DeliveryCalendarViewTabController {
                 buildActualLookup(actHeaders, actRows);
         Map<String, Map<String, Map<String, Double>>> dispatchLookup =
                 buildDispatchLookup(disHeaders, disRows);
-
-        // region agent log
-        Map<String, Object> overlayData = new LinkedHashMap<>();
-        overlayData.put("planMachines", planLookup.size());
-        overlayData.put("actualMachines", actualLookup.size());
-        overlayData.put("dispatchMachines", dispatchLookup.size());
-        overlayData.put("calDateCols", calDateByIdx.size());
-        overlayData.put("mainRows", mainRows.size());
-        overlayData.put("aladdinJsonExists", Files.isRegularFile(aladdinJsonPath));
-        overlayData.put("actualsJsonExists", Files.isRegularFile(actualsJsonPath));
-        overlayData.put("dispatchJsonExists", Files.isRegularFile(dispatchJsonPath));
-        overlayData.put("dispatchSource", dispatchSource);
-        overlayData.put("dispatchJsonPath", dispatchJsonPath.toString());
-        AgentDebugLog.appendStructured(
-                ui,
-                DEBUG_SESSION_ID_OVERLAY,
-                "OVERLAY",
-                "DeliveryCalendarViewTabController.java:overlayChildTabValues",
-                "lookup_sizes",
-                overlayData);
-        // endregion
 
         // Replace TripleQty cells with values from child tab data
         for (int i = 0; i < mainRows.size(); i++) {
