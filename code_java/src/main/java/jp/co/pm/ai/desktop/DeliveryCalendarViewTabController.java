@@ -587,7 +587,7 @@ public final class DeliveryCalendarViewTabController {
                                         () -> {
                                             refreshButton.setDisable(false);
                                             if (err != null) {
-                                                hideDeliveryReloadProgress();
+                                                scheduleHideDeliveryReloadProgress();
                                                 statusLabel.setText("error: " + err.getMessage());
                                                 if (shell != null) {
                                                     shell.appendLog("[delivery-calendar] " + err.getMessage());
@@ -595,7 +595,7 @@ public final class DeliveryCalendarViewTabController {
                                                 return;
                                             }
                                             if (cap == null) {
-                                                hideDeliveryReloadProgress();
+                                                scheduleHideDeliveryReloadProgress();
                                                 statusLabel.setText("no result");
                                                 return;
                                             }
@@ -617,9 +617,13 @@ public final class DeliveryCalendarViewTabController {
         if (deliveryReloadProgressContainer == null) {
             return;
         }
-        resetDeliveryReloadTabSegments();
         deliveryReloadProgressContainer.setVisible(false);
         deliveryReloadProgressContainer.setManaged(false);
+    }
+
+    /** 次のレイアウト脉冲でパネルを閉じる（同一フレームで閉じて子バーが描画されないのを避ける）。 */
+    private void scheduleHideDeliveryReloadProgress() {
+        Platform.runLater(this::hideDeliveryReloadProgress);
     }
 
     private void resetDeliveryReloadTabSegments() {
@@ -669,11 +673,7 @@ public final class DeliveryCalendarViewTabController {
     }
 
     private void applyPayload(String stdout) {
-        try {
-            applyPayloadBody(stdout);
-        } finally {
-            hideDeliveryReloadProgress();
-        }
+        applyPayloadBody(stdout);
     }
 
     private void applyPayloadBody(String stdout) {
@@ -681,6 +681,7 @@ public final class DeliveryCalendarViewTabController {
         String trimmed = stdout != null ? stdout.trim() : "";
         if (trimmed.isEmpty()) {
             statusLabel.setText("empty stdout");
+            scheduleHideDeliveryReloadProgress();
             return;
         }
         try {
@@ -749,78 +750,127 @@ public final class DeliveryCalendarViewTabController {
                 metaLabel.setText(sb.toString());
             }
 
-            if (root.path("ok").asBoolean(false)) {
+            boolean okPayload = root.path("ok").asBoolean(false);
+            if (okPayload) {
                 setDeliveryReloadSegmentProgress(
                         deliveryReloadProgressPayloadPrep, deliveryReloadPctPayloadPrep, 1.0);
-
-                statusLabel.setText("反映中… アラジン加工計画タブ");
-                setDeliveryReloadSegmentProgress(
-                        deliveryReloadProgressAladdin, deliveryReloadPctAladdin, 0.0);
-                if (aladdinProcessingPlanDataTabController != null) {
-                    aladdinProcessingPlanDataTabController.reloadAladdinProcessingPlanFromDisk();
-                }
-                setDeliveryReloadSegmentProgress(
-                        deliveryReloadProgressAladdin, deliveryReloadPctAladdin, 1.0);
-
-                statusLabel.setText("反映中… 加工実績タブ");
-                setDeliveryReloadSegmentProgress(
-                        deliveryReloadProgressActuals, deliveryReloadPctActuals, 0.0);
-                if (processingActualsDataTabController != null) {
-                    processingActualsDataTabController.reloadProcessingActualsFromDisk();
-                }
-                setDeliveryReloadSegmentProgress(
-                        deliveryReloadProgressActuals, deliveryReloadPctActuals, 1.0);
-
-                statusLabel.setText("反映中… 配台結果タブ");
-                setDeliveryReloadSegmentProgress(
-                        deliveryReloadProgressDispatch, deliveryReloadPctDispatch, 0.0);
-                if (deliveryCalendarResultDispatchTableTabController != null) {
-                    deliveryCalendarResultDispatchTableTabController.reloadResultDispatchTableFromDisk();
-                }
-                setDeliveryReloadSegmentProgress(
-                        deliveryReloadProgressDispatch, deliveryReloadPctDispatch, 1.0);
+                Platform.runLater(() -> runDeliveryReloadAladdinPhase(root, meta));
+                return;
             }
 
-            statusLabel.setText("反映中… メイン表");
-            setDeliveryReloadSegmentProgress(
-                    deliveryReloadProgressMainCalendar, deliveryReloadPctMainCalendar, 0.0);
-            JsonNode mainCal = root.get("mainCalendar");
-            if (mainCal != null && mainCal.isObject()) {
-                loadMainCalendar(mainCal);
-            } else {
-                mainHeadersRef.clear();
-                mainRows.clear();
-                rebuildMainSpreadsheet();
-            }
-            setDeliveryReloadSegmentProgress(
-                    deliveryReloadProgressMainCalendar, deliveryReloadPctMainCalendar, 1.0);
-
-            // #region agent log
-            if (shell != null && root.path("ok").asBoolean(false)) {
-                Map<String, Object> dbg = new LinkedHashMap<>();
-                dbg.put("ok", true);
-                dbg.put(
-                        "actualDetailRowCount",
-                        meta != null && meta.isObject()
-                                ? meta.path("actualDetailRowCount").asInt(0)
-                                : -1);
-                dbg.put("pythonProbeNdjson", ".cursor/debug-f73cbb.log");
-                AgentDebugLog.appendStructured(
-                        shell.snapshotUiEnv(),
-                        "f73cbb",
-                        "H_JAVA_TRIGGER",
-                        "DeliveryCalendarViewTabController.applyPayload",
-                        "delivery_calendar_ok",
-                        dbg);
-            }
-            // #endregion
+            applyMainCalendarAndAgentLog(root, meta);
+            scheduleHideDeliveryReloadProgress();
 
         } catch (Exception e) {
             statusLabel.setText("parse: " + e.getMessage());
             if (shell != null) {
                 shell.appendLog("[delivery-calendar] parse " + e.getMessage());
             }
+            scheduleHideDeliveryReloadProgress();
         }
+    }
+
+    private void runDeliveryReloadAladdinPhase(JsonNode root, JsonNode meta) {
+        try {
+            statusLabel.setText("反映中… アラジン加工計画タブ");
+            setDeliveryReloadSegmentProgress(
+                    deliveryReloadProgressAladdin, deliveryReloadPctAladdin, 0.0);
+            if (aladdinProcessingPlanDataTabController != null) {
+                aladdinProcessingPlanDataTabController.reloadAladdinProcessingPlanFromDisk();
+            }
+            setDeliveryReloadSegmentProgress(
+                    deliveryReloadProgressAladdin, deliveryReloadPctAladdin, 1.0);
+            Platform.runLater(() -> runDeliveryReloadActualsPhase(root, meta));
+        } catch (Throwable t) {
+            if (shell != null) {
+                shell.appendLog("[delivery-calendar] アラジン再読込 " + t.getMessage());
+            }
+            statusLabel.setText("error: " + t.getMessage());
+            scheduleHideDeliveryReloadProgress();
+        }
+    }
+
+    private void runDeliveryReloadActualsPhase(JsonNode root, JsonNode meta) {
+        try {
+            statusLabel.setText("反映中… 加工実績タブ");
+            setDeliveryReloadSegmentProgress(
+                    deliveryReloadProgressActuals, deliveryReloadPctActuals, 0.0);
+            if (processingActualsDataTabController != null) {
+                processingActualsDataTabController.reloadProcessingActualsFromDisk();
+            }
+            setDeliveryReloadSegmentProgress(
+                    deliveryReloadProgressActuals, deliveryReloadPctActuals, 1.0);
+            Platform.runLater(() -> runDeliveryReloadDispatchPhase(root, meta));
+        } catch (Throwable t) {
+            if (shell != null) {
+                shell.appendLog("[delivery-calendar] 加工実績再読込 " + t.getMessage());
+            }
+            statusLabel.setText("error: " + t.getMessage());
+            scheduleHideDeliveryReloadProgress();
+        }
+    }
+
+    private void runDeliveryReloadDispatchPhase(JsonNode root, JsonNode meta) {
+        try {
+            statusLabel.setText("反映中… 配台結果タブ");
+            setDeliveryReloadSegmentProgress(
+                    deliveryReloadProgressDispatch, deliveryReloadPctDispatch, 0.0);
+            if (deliveryCalendarResultDispatchTableTabController != null) {
+                deliveryCalendarResultDispatchTableTabController.reloadResultDispatchTableFromDisk();
+            }
+            setDeliveryReloadSegmentProgress(
+                    deliveryReloadProgressDispatch, deliveryReloadPctDispatch, 1.0);
+            Platform.runLater(
+                    () -> {
+                        try {
+                            applyMainCalendarAndAgentLog(root, meta);
+                        } finally {
+                            scheduleHideDeliveryReloadProgress();
+                        }
+                    });
+        } catch (Throwable t) {
+            if (shell != null) {
+                shell.appendLog("[delivery-calendar] 配台結果再読込 " + t.getMessage());
+            }
+            statusLabel.setText("error: " + t.getMessage());
+            scheduleHideDeliveryReloadProgress();
+        }
+    }
+
+    private void applyMainCalendarAndAgentLog(JsonNode root, JsonNode meta) {
+        statusLabel.setText("反映中… メイン表");
+        setDeliveryReloadSegmentProgress(
+                deliveryReloadProgressMainCalendar, deliveryReloadPctMainCalendar, 0.0);
+        JsonNode mainCal = root.get("mainCalendar");
+        if (mainCal != null && mainCal.isObject()) {
+            loadMainCalendar(mainCal);
+        } else {
+            mainHeadersRef.clear();
+            mainRows.clear();
+            rebuildMainSpreadsheet();
+        }
+        setDeliveryReloadSegmentProgress(
+                deliveryReloadProgressMainCalendar, deliveryReloadPctMainCalendar, 1.0);
+
+        // #region agent log
+        if (shell != null && root.path("ok").asBoolean(false)) {
+            Map<String, Object> dbg = new LinkedHashMap<>();
+            dbg.put("ok", true);
+            dbg.put(
+                    "actualDetailRowCount",
+                    meta != null && meta.isObject()
+                            ? meta.path("actualDetailRowCount").asInt(0)
+                            : -1);
+            dbg.put("pythonProbeNdjson", ".cursor/debug-f73cbb.log");
+            AgentDebugLog.appendStructured(
+                    shell.snapshotUiEnv(),
+                    "f73cbb",
+                    "H_JAVA_TRIGGER",
+                    "DeliveryCalendarViewTabController.applyPayload",
+                    "delivery_calendar_ok",
+                    dbg);
+        }
+        // #endregion
     }
 
     private void loadMainCalendar(JsonNode mainCal) {
