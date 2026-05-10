@@ -28,7 +28,6 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.scene.text.Text;
 import javafx.stage.Stage;
 
 import org.controlsfx.control.spreadsheet.GridBase;
@@ -85,9 +84,6 @@ public final class ResultDispatchTableTabController {
 
     @FXML
     private StackPane spreadsheetHost;
-
-    @FXML
-    private Text metaText;
 
     private MainShellController shell;
 
@@ -373,7 +369,6 @@ public final class ResultDispatchTableTabController {
         pathLabel.setText(path.toString());
         if (!Files.isRegularFile(path)) {
             statusLabel.setText("ファイルなし");
-            metaText.setText("");
             applyEmpty();
             if (refreshButton != null) {
                 refreshButton.setDisable(false);
@@ -383,15 +378,10 @@ public final class ResultDispatchTableTabController {
         try {
             String raw = Files.readString(path, StandardCharsets.UTF_8);
             JsonNode root = JSON.readTree(raw);
-            String sheetName = textOr(root, "sheet_name");
-            String excelTable = textOr(root, "excel_table_name");
-            int formatVer = root.path("format_version").asInt(0);
-            int rowCountMeta = root.path("row_count").asInt(-1);
             JsonNode columnsNode = root.get("columns");
             JsonNode rowsNode = root.get("rows");
             if (columnsNode == null || !columnsNode.isArray() || rowsNode == null || !rowsNode.isArray()) {
                 statusLabel.setText("JSON 構造が不正");
-                metaText.setText("");
                 applyEmpty();
                 if (refreshButton != null) {
                     refreshButton.setDisable(false);
@@ -415,18 +405,6 @@ public final class ResultDispatchTableTabController {
                 }
                 rowMaps.add(row);
             }
-            String meta =
-                    "format_version="
-                            + formatVer
-                            + ", sheet_name="
-                            + sheetName
-                            + ", excel_table_name="
-                            + excelTable
-                            + ", row_count="
-                            + rowCountMeta
-                            + ", loaded_rows="
-                            + rowMaps.size();
-            metaText.setText(meta);
             statusLabel.setText(rowMaps.size() + " 行");
 
             headersRef.clear();
@@ -461,7 +439,6 @@ public final class ResultDispatchTableTabController {
             rebuildSpreadsheet();
         } catch (Exception ex) {
             statusLabel.setText("error");
-            metaText.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
             shell.appendLog("[result-dispatch-json] " + ex.getMessage());
             applyEmpty();
         } finally {
@@ -476,11 +453,6 @@ public final class ResultDispatchTableTabController {
         rows.clear();
         persistedLayout.set(List.of());
         spreadsheetView.setGrid(new GridBase(0, 0));
-    }
-
-    private static String textOr(JsonNode n, String field) {
-        JsonNode x = n.get(field);
-        return x == null || x.isNull() ? "" : x.asText("");
     }
 
     private static String formatCell(JsonNode n) {

@@ -9,7 +9,6 @@
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
-<?import javafx.scene.text.Text?>
 
 <!-- 結果_配台表.json: ControlsFX SpreadsheetView in {@link ResultDispatchTableTabController}. -->
 <VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
@@ -51,15 +50,8 @@
     <TitledPane animated="true" expanded="true" maxHeight="Infinity"
                 text="&#x30c7;&#x30fc;&#x30bf;&#x8868;" VBox.vgrow="ALWAYS">
         <content>
-            <VBox fillWidth="true">
+            <VBox fillWidth="true" maxHeight="Infinity">
                 <StackPane fx:id="spreadsheetHost" minHeight="240.0" VBox.vgrow="ALWAYS"/>
-                <VBox spacing="4.0">
-                    <VBox.margin>
-                        <Insets top="8.0"/>
-                    </VBox.margin>
-                    <Label text="メタ情報"/>
-                    <Text fx:id="metaText" wrappingWidth="880.0"/>
-                </VBox>
             </VBox>
         </content>
     </TitledPane>
