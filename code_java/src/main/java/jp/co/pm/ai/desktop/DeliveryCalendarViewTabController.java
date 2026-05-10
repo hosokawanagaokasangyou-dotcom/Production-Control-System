@@ -703,15 +703,6 @@ public final class DeliveryCalendarViewTabController {
                 metaLabel.setText(sb.toString());
             }
 
-            JsonNode mainCal = root.get("mainCalendar");
-            if (mainCal != null && mainCal.isObject()) {
-                loadMainCalendar(mainCal);
-            } else {
-                mainHeadersRef.clear();
-                mainRows.clear();
-                rebuildMainSpreadsheet();
-            }
-
             if (root.path("ok").asBoolean(false)) {
                 if (deliveryCalendarResultDispatchTableTabController != null) {
                     deliveryCalendarResultDispatchTableTabController.reloadResultDispatchTableFromDisk();
@@ -722,6 +713,15 @@ public final class DeliveryCalendarViewTabController {
                 if (processingActualsDataTabController != null) {
                     processingActualsDataTabController.reloadProcessingActualsFromDisk();
                 }
+            }
+
+            JsonNode mainCal = root.get("mainCalendar");
+            if (mainCal != null && mainCal.isObject()) {
+                loadMainCalendar(mainCal);
+            } else {
+                mainHeadersRef.clear();
+                mainRows.clear();
+                rebuildMainSpreadsheet();
             }
 
             // #region agent log
