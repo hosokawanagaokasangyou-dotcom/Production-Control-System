@@ -144,11 +144,6 @@
                         <fx:include fx:id="operatorCardTab" source="OperatorCardTab.fxml"/>
                     </content>
                 </Tab>
-                <Tab fx:id="mainShellTabOnlineManual" closable="false" text="オンラインマニュアル">
-                    <content>
-                        <fx:include fx:id="onlineManualTab" source="OnlineManualTab.fxml"/>
-                    </content>
-                </Tab>
                 <Tab fx:id="mainShellTabOrganizer" closable="false" text="タブ整理">
                     <content>
                         <fx:include fx:id="mainShellTabOrganizerPane" source="MainShellTabOrganizerTab.fxml"/>

@@ -4,7 +4,7 @@
   Windows 本番想定: PowerShell から工程管理 JavaFX デスクトップを起動する。
 
 .DESCRIPTION
-  同階層の mvnw.cmd で compile と exec:exec@pm-ai-desktop を実行します（JDK26 では javafx-maven-plugin の javafx:run が jdk.jsobject を欠くため）。pom の JVM オプション（-Xms/-Xmx、OOM 時ヒープダンプ等）がそのまま適用されます。
+  同階層の mvnw.cmd で compile と exec:exec@pm-ai-desktop を実行します。pom の JVM オプション（-Xms/-Xmx、OOM 時ヒープダンプ等）がそのまま適用されます。
 
   重要: このフォルダで実行するときはパスの先頭に .\ を付けます。
     .\run-pm-ai-desktop.ps1

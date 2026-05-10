@@ -110,12 +110,6 @@
           <version>${javafx.version}</version>
           <classifier>linux</classifier>
         </dependency>
-        <dependency>
-          <groupId>org.openjfx</groupId>
-          <artifactId>javafx-web</artifactId>
-          <version>${javafx.version}</version>
-          <classifier>linux</classifier>
-        </dependency>
       </dependencies>
     </profile>
     <profile>
@@ -153,12 +147,6 @@
         <dependency>
           <groupId>org.openjfx</groupId>
           <artifactId>javafx-fxml</artifactId>
-          <version>${javafx.version}</version>
-          <classifier>win</classifier>
-        </dependency>
-        <dependency>
-          <groupId>org.openjfx</groupId>
-          <artifactId>javafx-web</artifactId>
           <version>${javafx.version}</version>
           <classifier>win</classifier>
         </dependency>
@@ -202,12 +190,6 @@
           <version>${javafx.version}</version>
           <classifier>mac</classifier>
         </dependency>
-        <dependency>
-          <groupId>org.openjfx</groupId>
-          <artifactId>javafx-web</artifactId>
-          <version>${javafx.version}</version>
-          <classifier>mac</classifier>
-        </dependency>
       </dependencies>
     </profile>
   </profiles>
@@ -243,7 +225,7 @@
       </plugin>
       <!-- ========================================================= -->
 
-      <!-- 開発時: mvn javafx:run。依存に javafx-web があるため JDK の jdk.jsobject / jdk.xml.dom をルートに追加（プラグイン既定は javafx モジュールのみ）。 -->
+      <!-- 開発時: mvn javafx:run -->
       <plugin>
         <groupId>org.openjfx</groupId>
         <artifactId>javafx-maven-plugin</artifactId>
@@ -257,9 +239,6 @@
             <option>-Xmx${jvm.max.heap}</option>
             <option>-XX:+HeapDumpOnOutOfMemoryError</option>
             <option>-XX:+UseStringDeduplication</option>
-            <!-- javafx.web が requires jdk.jsobject。プラグインが付与する add-modules と併せルートに含める -->
-            <option>--add-modules</option>
-            <option>jdk.jsobject,jdk.xml.dom</option>
             <option>--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED</option>
             <option>--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED</option>
             <option>--add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED</option>
@@ -268,7 +247,7 @@
         </configuration>
       </plugin>
 
-      <!-- jpackage や exec 起動（モジュールパス・classpath を pom と完全一致させたいとき） -->
+      <!-- jpackage 用 exec 起動 -->
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
@@ -296,7 +275,7 @@
                 <argument>--module-path</argument>
                 <argument>${pm.ai.openjfx.module.path}</argument>
                 <argument>--add-modules</argument>
-                <argument>javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.swing,javafx.web,jdk.jsobject,jdk.xml.dom</argument>
+                <argument>javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.swing</argument>
                 <argument>--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED</argument>
                 <argument>--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED</argument>
                 <argument>--add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED</argument>

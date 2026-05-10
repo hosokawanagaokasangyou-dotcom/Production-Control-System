@@ -290,12 +290,6 @@ public final class MainShellController {
     private Tab mainShellTabOperatorCard;
 
     @FXML
-    private Tab mainShellTabOnlineManual;
-
-    @FXML
-    private OnlineManualTabController onlineManualTabController;
-
-    @FXML
     private Tab mainShellTabOrganizer;
 
     @FXML
@@ -402,9 +396,6 @@ public final class MainShellController {
             }
 
             operatorCardTabController.bindShell(this);
-            if (onlineManualTabController != null) {
-                onlineManualTabController.bindShell(this);
-            }
 
         mainRunTabController
                 .getWorkbookField()
@@ -1039,9 +1030,6 @@ public final class MainShellController {
         if (t == mainShellTabOperatorCard) {
             return MainShellTabId.OPERATOR_CARD;
         }
-        if (t == mainShellTabOnlineManual) {
-            return MainShellTabId.USER_MANUAL;
-        }
         if (t == mainShellTabOrganizer) {
             return MainShellTabId.TAB_ORGANIZER;
         }
@@ -1072,7 +1060,6 @@ public final class MainShellController {
             case EQUIPMENT_GANTT_GRAPHIC -> mainShellTabEquipmentGanttGraphic;
             case GANTT_PERSON_BADGE_DESIGN -> mainShellTabGanttPersonBadgeDesign;
             case OPERATOR_CARD -> mainShellTabOperatorCard;
-            case USER_MANUAL -> mainShellTabOnlineManual;
             case TAB_ORGANIZER -> mainShellTabOrganizer;
         };
     }
@@ -2920,13 +2907,6 @@ public final class MainShellController {
             m.put(k, row.getValue() != null ? row.getValue() : "");
         }
         return m;
-    }
-
-    /**
-     * {@link OnlineManualTabController} のフッタ（版表示）用。{@link #collectUiEnv()} と同一キー集合のコピー。
-     */
-    Map<String, String> snapshotUiEnvForManual() {
-        return Map.copyOf(collectUiEnv());
     }
 
     /**

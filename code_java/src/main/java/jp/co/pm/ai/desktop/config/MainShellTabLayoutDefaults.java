@@ -41,8 +41,7 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.MASTER_SUMMARY.key(),
                     MainShellTabId.EXCLUDE_RULES.key(),
                     MainShellTabId.SPECIAL_RULES.key(),
-                    MainShellTabId.ACTUALS_STATUS.key(),
-                    MainShellTabId.USER_MANUAL.key());
+                    MainShellTabId.ACTUALS_STATUS.key());
 
     /**
      * All {@link MainShellTabId} keys except {@link MainShellTabId#TAB_ORGANIZER}: DEFAULT order then any enum-only
@@ -104,8 +103,7 @@ public final class MainShellTabLayoutDefaults {
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.MASTER_SUMMARY.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.EXCLUDE_RULES.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.SPECIAL_RULES.key(), ""),
-                                MainShellTabLayoutNode.tabNode(MainShellTabId.ACTUALS_STATUS.key(), ""),
-                                MainShellTabLayoutNode.tabNode(MainShellTabId.USER_MANUAL.key(), ""))));
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.ACTUALS_STATUS.key(), ""))));
 
         return List.copyOf(top);
     }
