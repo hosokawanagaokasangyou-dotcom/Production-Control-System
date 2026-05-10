@@ -65,8 +65,9 @@ public final class DeliveryCalendarViewTabController {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     /**
-     * Child stdout lines {@code PM_AI_PROGRESS 0..100}. During Python, drives {@link #statusLabel} and
-     * {@link #deliveryReloadProgressMainGrid} only (メイン表生成). Tab reload bars update in {@link #applyPayloadBody}.
+     * Child stdout lines {@code PM_AI_PROGRESS 0..100}. During Python subprocess, drives {@link #statusLabel} and
+     * {@link #deliveryReloadProgressPayloadPrep} only. Tab reload and {@link #deliveryReloadProgressMainCalendar} update
+     * in {@link #applyPayloadBody}（アラジン→実績→配台→メイン表の順）。
      */
     private static final String PM_AI_PROGRESS_PREFIX = "PM_AI_PROGRESS ";
 
@@ -116,10 +117,16 @@ public final class DeliveryCalendarViewTabController {
     private VBox deliveryReloadProgressContainer;
 
     @FXML
-    private ProgressBar deliveryReloadProgressMainGrid;
+    private ProgressBar deliveryReloadProgressPayloadPrep;
 
     @FXML
-    private Label deliveryReloadPctMainGrid;
+    private Label deliveryReloadPctPayloadPrep;
+
+    @FXML
+    private ProgressBar deliveryReloadProgressMainCalendar;
+
+    @FXML
+    private Label deliveryReloadPctMainCalendar;
 
     @FXML
     private ProgressBar deliveryReloadProgressDispatch;
@@ -617,10 +624,15 @@ public final class DeliveryCalendarViewTabController {
 
     private void resetDeliveryReloadTabSegments() {
         setDeliveryReloadSegmentProgress(
-                deliveryReloadProgressMainGrid, deliveryReloadPctMainGrid, 0.0);
-        setDeliveryReloadSegmentProgress(deliveryReloadProgressDispatch, deliveryReloadPctDispatch, 0.0);
-        setDeliveryReloadSegmentProgress(deliveryReloadProgressActuals, deliveryReloadPctActuals, 0.0);
-        setDeliveryReloadSegmentProgress(deliveryReloadProgressAladdin, deliveryReloadPctAladdin, 0.0);
+                deliveryReloadProgressPayloadPrep, deliveryReloadPctPayloadPrep, 0.0);
+        setDeliveryReloadSegmentProgress(
+                deliveryReloadProgressAladdin, deliveryReloadPctAladdin, 0.0);
+        setDeliveryReloadSegmentProgress(
+                deliveryReloadProgressActuals, deliveryReloadPctActuals, 0.0);
+        setDeliveryReloadSegmentProgress(
+                deliveryReloadProgressDispatch, deliveryReloadPctDispatch, 0.0);
+        setDeliveryReloadSegmentProgress(
+                deliveryReloadProgressMainCalendar, deliveryReloadPctMainCalendar, 0.0);
     }
 
     private static void setDeliveryReloadSegmentProgress(
@@ -647,11 +659,10 @@ public final class DeliveryCalendarViewTabController {
             int pct =
                     Integer.parseInt(t.substring(PM_AI_PROGRESS_PREFIX.length()).trim());
             pct = Math.max(0, Math.min(100, pct));
-            statusLabel.setText("取得中… メイン表（生成） " + pct + "%");
+            statusLabel.setText("取得中… ペイロード準備 " + pct + "%");
             double frac = pct / 100.0;
-            /* PM_AI_PROGRESS はメイン表生成のみ。子タブ読込バーは applyPayloadBody で順に進める。 */
             setDeliveryReloadSegmentProgress(
-                    deliveryReloadProgressMainGrid, deliveryReloadPctMainGrid, frac);
+                    deliveryReloadProgressPayloadPrep, deliveryReloadPctPayloadPrep, frac);
         } catch (NumberFormatException ignored) {
             // ignore malformed progress lines
         }
@@ -740,15 +751,7 @@ public final class DeliveryCalendarViewTabController {
 
             if (root.path("ok").asBoolean(false)) {
                 setDeliveryReloadSegmentProgress(
-                        deliveryReloadProgressMainGrid, deliveryReloadPctMainGrid, 1.0);
-                statusLabel.setText("反映中… 配台結果タブ");
-                setDeliveryReloadSegmentProgress(
-                        deliveryReloadProgressDispatch, deliveryReloadPctDispatch, 0.0);
-                if (deliveryCalendarResultDispatchTableTabController != null) {
-                    deliveryCalendarResultDispatchTableTabController.reloadResultDispatchTableFromDisk();
-                }
-                setDeliveryReloadSegmentProgress(
-                        deliveryReloadProgressDispatch, deliveryReloadPctDispatch, 1.0);
+                        deliveryReloadProgressPayloadPrep, deliveryReloadPctPayloadPrep, 1.0);
 
                 statusLabel.setText("反映中… アラジン加工計画タブ");
                 setDeliveryReloadSegmentProgress(
@@ -767,9 +770,20 @@ public final class DeliveryCalendarViewTabController {
                 }
                 setDeliveryReloadSegmentProgress(
                         deliveryReloadProgressActuals, deliveryReloadPctActuals, 1.0);
+
+                statusLabel.setText("反映中… 配台結果タブ");
+                setDeliveryReloadSegmentProgress(
+                        deliveryReloadProgressDispatch, deliveryReloadPctDispatch, 0.0);
+                if (deliveryCalendarResultDispatchTableTabController != null) {
+                    deliveryCalendarResultDispatchTableTabController.reloadResultDispatchTableFromDisk();
+                }
+                setDeliveryReloadSegmentProgress(
+                        deliveryReloadProgressDispatch, deliveryReloadPctDispatch, 1.0);
             }
 
-            statusLabel.setText("反映中… アラ・実績・シス比較表");
+            statusLabel.setText("反映中… メイン表");
+            setDeliveryReloadSegmentProgress(
+                    deliveryReloadProgressMainCalendar, deliveryReloadPctMainCalendar, 0.0);
             JsonNode mainCal = root.get("mainCalendar");
             if (mainCal != null && mainCal.isObject()) {
                 loadMainCalendar(mainCal);
@@ -778,6 +792,8 @@ public final class DeliveryCalendarViewTabController {
                 mainRows.clear();
                 rebuildMainSpreadsheet();
             }
+            setDeliveryReloadSegmentProgress(
+                    deliveryReloadProgressMainCalendar, deliveryReloadPctMainCalendar, 1.0);
 
             // #region agent log
             if (shell != null && root.path("ok").asBoolean(false)) {

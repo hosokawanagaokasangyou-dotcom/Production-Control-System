@@ -28,16 +28,16 @@
     </HBox>
     <VBox fx:id="deliveryReloadProgressContainer" managed="false" spacing="3.0" visible="false">
         <HBox alignment="CENTER_LEFT" spacing="8.0">
-            <Label minWidth="130.0" style="-fx-font-size: 11px;" text="メイン表（生成）"/>
-            <ProgressBar fx:id="deliveryReloadProgressMainGrid" maxWidth="Infinity" prefHeight="12.0"
+            <Label minWidth="130.0" style="-fx-font-size: 11px;" text="ペイロード準備"/>
+            <ProgressBar fx:id="deliveryReloadProgressPayloadPrep" maxWidth="Infinity" prefHeight="12.0"
                          HBox.hgrow="ALWAYS"/>
-            <Label fx:id="deliveryReloadPctMainGrid" minWidth="38.0" style="-fx-font-size: 11px;" text="0%"/>
+            <Label fx:id="deliveryReloadPctPayloadPrep" minWidth="38.0" style="-fx-font-size: 11px;" text="0%"/>
         </HBox>
         <HBox alignment="CENTER_LEFT" spacing="8.0">
-            <Label minWidth="130.0" style="-fx-font-size: 11px;" text="配台結果"/>
-            <ProgressBar fx:id="deliveryReloadProgressDispatch" maxWidth="Infinity" prefHeight="12.0"
+            <Label minWidth="130.0" style="-fx-font-size: 11px;" text="アラジン加工計画"/>
+            <ProgressBar fx:id="deliveryReloadProgressAladdin" maxWidth="Infinity" prefHeight="12.0"
                          HBox.hgrow="ALWAYS"/>
-            <Label fx:id="deliveryReloadPctDispatch" minWidth="38.0" style="-fx-font-size: 11px;" text="0%"/>
+            <Label fx:id="deliveryReloadPctAladdin" minWidth="38.0" style="-fx-font-size: 11px;" text="0%"/>
         </HBox>
         <HBox alignment="CENTER_LEFT" spacing="8.0">
             <Label minWidth="130.0" style="-fx-font-size: 11px;" text="加工実績"/>
@@ -46,10 +46,16 @@
             <Label fx:id="deliveryReloadPctActuals" minWidth="38.0" style="-fx-font-size: 11px;" text="0%"/>
         </HBox>
         <HBox alignment="CENTER_LEFT" spacing="8.0">
-            <Label minWidth="130.0" style="-fx-font-size: 11px;" text="アラジン加工計画"/>
-            <ProgressBar fx:id="deliveryReloadProgressAladdin" maxWidth="Infinity" prefHeight="12.0"
+            <Label minWidth="130.0" style="-fx-font-size: 11px;" text="配台結果"/>
+            <ProgressBar fx:id="deliveryReloadProgressDispatch" maxWidth="Infinity" prefHeight="12.0"
                          HBox.hgrow="ALWAYS"/>
-            <Label fx:id="deliveryReloadPctAladdin" minWidth="38.0" style="-fx-font-size: 11px;" text="0%"/>
+            <Label fx:id="deliveryReloadPctDispatch" minWidth="38.0" style="-fx-font-size: 11px;" text="0%"/>
+        </HBox>
+        <HBox alignment="CENTER_LEFT" spacing="8.0">
+            <Label minWidth="130.0" style="-fx-font-size: 11px;" text="メイン表"/>
+            <ProgressBar fx:id="deliveryReloadProgressMainCalendar" maxWidth="Infinity" prefHeight="12.0"
+                         HBox.hgrow="ALWAYS"/>
+            <Label fx:id="deliveryReloadPctMainCalendar" minWidth="38.0" style="-fx-font-size: 11px;" text="0%"/>
         </HBox>
     </VBox>
     <Accordion VBox.vgrow="NEVER">
