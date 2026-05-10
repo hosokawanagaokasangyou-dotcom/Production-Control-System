@@ -597,12 +597,27 @@ function Compress-PortableBundleFolderToZip {
                 $entry = $zip.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
                 $es = $entry.Open()
                 try {
-                    $srcFs = [System.IO.File]::OpenRead($full)
-                    try {
-                        $srcFs.CopyTo($es)
-                    }
-                    finally {
-                        $srcFs.Dispose()
+                    # OpenRead は共有が狭く、ウイルス対策・インデクサ等の短時間ロックで IOException になりやすい
+                    $share = [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
+                    $maxAttempts = 6
+                    $delayMs = 120
+                    for ($a = 1; $a -le $maxAttempts; $a++) {
+                        try {
+                            $srcFs = [System.IO.File]::Open($full, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $share)
+                            try {
+                                $srcFs.CopyTo($es)
+                            }
+                            finally {
+                                $srcFs.Dispose()
+                            }
+                            break
+                        }
+                        catch [System.IO.IOException] {
+                            if ($a -eq $maxAttempts) {
+                                throw
+                            }
+                            Start-Sleep -Milliseconds $delayMs
+                        }
                     }
                 }
                 finally {
