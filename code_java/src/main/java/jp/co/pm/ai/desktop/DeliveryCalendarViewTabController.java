@@ -706,6 +706,26 @@ public final class DeliveryCalendarViewTabController {
                 processingActualsDataTabController.reloadProcessingActualsFromDisk();
             }
 
+            // #region agent log
+            if (shell != null && root.path("ok").asBoolean(false)) {
+                Map<String, Object> dbg = new LinkedHashMap<>();
+                dbg.put("ok", true);
+                dbg.put(
+                        "actualDetailRowCount",
+                        meta != null && meta.isObject()
+                                ? meta.path("actualDetailRowCount").asInt(0)
+                                : -1);
+                dbg.put("pythonProbeNdjson", ".cursor/debug-f73cbb.log");
+                AgentDebugLog.appendStructured(
+                        shell.snapshotUiEnv(),
+                        "f73cbb",
+                        "H_JAVA_TRIGGER",
+                        "DeliveryCalendarViewTabController.applyPayload",
+                        "delivery_calendar_ok",
+                        dbg);
+            }
+            // #endregion
+
         } catch (Exception e) {
             statusLabel.setText("parse: " + e.getMessage());
             if (shell != null) {

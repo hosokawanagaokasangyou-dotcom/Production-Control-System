@@ -73,8 +73,210 @@ _ACT_PRODUCTION_DETAIL_LENGTH = "\u9577\u3055"
 
 __all__ = ("build_delivery_calendar_payload",)
 
+# Debug session f73cbb: NDJSON path (workspace; Python subprocess may also resolve via repo)
+_DEBUG_F73CBB_LOG = "/mnt/c/\u5de5\u7a0b\u7ba1\u7406AI\u30d7\u30ed\u30b8\u30a7\u30af\u30c8_JAVA/.cursor/debug-f73cbb.log"
+_DEBUG_PROBE_ENV = "PM_AI_DELIVERY_CALENDAR_PROBE_TASK"
+
 # Short weekday for calendar column titles (Mon=\u6708 ... Sun=\u65e5)
 _JP_WEEKDAY_SHORT = ("\u6708", "\u706b", "\u6c34", "\u6728", "\u91d1", "\u571f", "\u65e5")
+
+
+# region agent log
+def _debug_ndjson_f73cbb(hypothesis_id: str, location: str, message: str, data: dict[str, Any]) -> None:
+    """Append one NDJSON line for Cursor debug session f73cbb (ignore failures)."""
+    try:
+        payload = {
+            "sessionId": "f73cbb",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time.time() * 1000),
+        }
+        with open(_DEBUG_F73CBB_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+def _classify_actual_row_for_delivery_calendar(
+    row,
+    df: pd.DataFrame,
+    equip_lookup: dict,
+    date_ok: set | None,
+) -> tuple[str, dict[str, Any]]:
+    """Mirror _aggregate_daily_actual_qty_aladdin_max row acceptance; return (reason_code, detail).
+
+    reason_code: ACCEPT or SKIP_* (hypotheses H_FILTER, H_MACHINE, H_DATE, H_TID, H_QTY).
+    """
+    detail: dict[str, Any] = {}
+    raw_tid = row.get(_ACT_COL_TID)
+    detail["raw_tid_repr"] = repr(raw_tid)[:200]
+    tid = core.planning_task_id_str_from_scalar(raw_tid)
+    detail["norm_tid"] = tid
+    if not tid:
+        return "SKIP_NO_TID", detail
+
+    has_filter_col = _ACT_COL_PRODUCTION_DETAIL in df.columns
+    if has_filter_col:
+        cond = row.get(_ACT_COL_PRODUCTION_DETAIL)
+        detail["prod_detail_raw"] = repr(cond)[:120]
+        if cond is None or (isinstance(cond, float) and pd.isna(cond)):
+            return "SKIP_FILTER_NA_COND", detail
+        want = core._nfkc_column_aliases(_ACT_PRODUCTION_DETAIL_LENGTH)
+        got = core._nfkc_column_aliases(str(cond)).strip()
+        detail["prod_detail_nfkc"] = got[:80]
+        if got != want:
+            return "SKIP_FILTER_NOT_LENGTH", detail
+
+    mk = ""
+    if core.TASK_COL_MACHINE_NAME in df.columns:
+        mv = row.get(core.TASK_COL_MACHINE_NAME)
+        if mv is not None and not (isinstance(mv, float) and pd.isna(mv)):
+            ms = str(mv).strip()
+            if ms:
+                mk = core._normalize_equipment_match_key(ms)
+    detail["machine_name_raw"] = (
+        str(row.get(core.TASK_COL_MACHINE_NAME))[:120]
+        if core.TASK_COL_MACHINE_NAME in df.columns
+        else ""
+    )
+    if not mk:
+        proc = row.get(_ACT_COL_PROC)
+        detail["proc_raw"] = repr(proc)[:120]
+        if proc is None or (isinstance(proc, float) and pd.isna(proc)):
+            return "SKIP_NO_MACHINE_NO_PROC", detail
+        proc_key = core._normalize_equipment_match_key(proc)
+        canonical = equip_lookup.get(proc_key)
+        detail["proc_key_norm"] = proc_key[:80]
+        detail["equip_canonical_hit"] = bool(canonical)
+        if not canonical:
+            return "SKIP_MACHINE_LOOKUP_MISS", detail
+        _, mn = core._split_equipment_line_process_machine(str(canonical))
+        mk = core._normalize_equipment_match_key((mn or canonical).strip())
+    detail["machine_key_norm"] = mk[:120] if mk else ""
+    if not mk:
+        return "SKIP_NO_MACHINE_KEY", detail
+
+    d = _row_actual_day(row)
+    detail["day_iso"] = d.isoformat() if d is not None else ""
+    detail["start_dt_raw"] = repr(row.get(_ACT_COL_START_DT))[:80]
+    detail["proc_day_raw"] = repr(row.get(_ACT_COL_DAY))[:80]
+    if d is None:
+        return "SKIP_NO_DAY", detail
+    if date_ok is not None and d not in date_ok:
+        detail["window_min"] = min(date_ok).isoformat() if date_ok else ""
+        detail["window_max"] = max(date_ok).isoformat() if date_ok else ""
+        return "SKIP_DAY_OUT_OF_RANGE", detail
+
+    try:
+        q = core.parse_float_safe(row.get(_ACT_COL_QTY), None)
+    except Exception:
+        q = None
+    detail["qty_parsed"] = q
+    if q is None:
+        return "SKIP_BAD_QTY_PARSE", detail
+    try:
+        qf = float(q)
+    except (TypeError, ValueError):
+        return "SKIP_BAD_QTY_COERCE", detail
+    if qf <= 1e-12 or math.isnan(qf):
+        return "SKIP_QTY_NON_POSITIVE", detail
+
+    return "ACCEPT", detail
+
+
+def _probe_task_rows_delivery_calendar(
+    df_actual: pd.DataFrame | None,
+    equipment_list,
+    sorted_dates: list,
+    probe_literal: str,
+    actual_agg: dict,
+    plan_pairs: set[tuple[str, str]],
+    eligible_pairs: set[tuple[str, str]],
+) -> None:
+    """Log per-row pipeline outcome for rows matching probe task id (default Y4-59)."""
+    if df_actual is None or len(df_actual) == 0:
+        _debug_ndjson_f73cbb(
+            "H_SETUP",
+            "delivery_calendar_payload.py:_probe_task_rows",
+            "df_actual_empty",
+            {"probe": probe_literal},
+        )
+        return
+
+    probe_norm = core.planning_task_id_str_from_scalar(probe_literal)
+    equip_lookup = core._equipment_lookup_normalized_to_canonical(equipment_list)
+    date_ok = set(sorted_dates) if sorted_dates else None
+
+    matched_count = 0
+    reason_counts: dict[str, int] = {}
+    for row_idx, row in df_actual.iterrows():
+        ntid = core.planning_task_id_str_from_scalar(row.get(_ACT_COL_TID))
+        raw_s = str(row.get(_ACT_COL_TID) if row.get(_ACT_COL_TID) is not None else "")
+        if ntid != probe_norm and probe_literal not in raw_s and not (
+            probe_norm and probe_norm in raw_s
+        ):
+            continue
+        matched_count += 1
+        code, detail = _classify_actual_row_for_delivery_calendar(row, df_actual, equip_lookup, date_ok)
+        reason_counts[code] = reason_counts.get(code, 0) + 1
+        if "FILTER" in code:
+            hyp = "H_FILTER"
+        elif "MACHINE" in code or code == "SKIP_NO_MACHINE_NO_PROC":
+            hyp = "H_MACHINE"
+        elif "DAY" in code:
+            hyp = "H_DATE"
+        elif "TID" in code:
+            hyp = "H_TID"
+        elif "QTY" in code or "BAD" in code:
+            hyp = "H_QTY"
+        else:
+            hyp = "H_OTHER"
+        _debug_ndjson_f73cbb(
+            hyp,
+            "delivery_calendar_payload.py:_probe_task_rows",
+            "row_classified",
+            {"code": code, "df_index": row_idx, **detail},
+        )
+
+    _debug_ndjson_f73cbb(
+        "H_SETUP",
+        "delivery_calendar_payload.py:_probe_task_rows",
+        "probe_summary",
+        {
+            "probe_literal": probe_literal,
+            "probe_norm": probe_norm,
+            "df_actual_rows": len(df_actual),
+            "matched_row_count": matched_count,
+            "calendar_day_count": len(sorted_dates),
+            "reason_counts_after_scan": reason_counts,
+        },
+    )
+
+    in_actual_agg = False
+    for (_mk, _d), tmap in actual_agg.items():
+        if probe_norm and probe_norm in tmap:
+            in_actual_agg = True
+            break
+
+    pairs_with_probe = [(a, b) for (a, b) in eligible_pairs if b == probe_norm]
+    _debug_ndjson_f73cbb(
+        "H_RESULT",
+        "delivery_calendar_payload.py:_probe_task_rows",
+        "aggregation_eligibility",
+        {
+            "probe_norm": probe_norm,
+            "in_actual_agg_buckets": in_actual_agg,
+            "plan_pairs_contains_probe": any(b == probe_norm for (_a, b) in plan_pairs),
+            "eligible_pairs_for_probe": pairs_with_probe[:20],
+            "eligible_pair_count_for_probe": len(pairs_with_probe),
+            "reason_counts": reason_counts,
+        },
+    )
+
+
+# endregion
 
 
 def _format_delivery_calendar_date_header(d: date) -> str:
@@ -427,6 +629,18 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                     actual_pairs.add((mk, tid))
 
         eligible_pairs = plan_pairs | actual_pairs
+
+        _probe_lit = (os.environ.get(_DEBUG_PROBE_ENV) or "Y4-59").strip()
+        if _probe_lit:
+            _probe_task_rows_delivery_calendar(
+                df_actual if df_actual is not None else None,
+                equipment_list,
+                sorted_dates,
+                _probe_lit,
+                actual_agg,
+                plan_pairs,
+                eligible_pairs,
+            )
 
         pair_plan_row: dict[tuple[str, str], Any] = {}
         if df_plan is not None and len(df_plan) > 0:
