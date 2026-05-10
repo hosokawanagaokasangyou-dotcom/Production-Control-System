@@ -6,14 +6,14 @@ import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-/** {@link TaskInputSourceRawGridIo#applyProcessingActualsDeduplicateKeyColumns}. */
+/** {@link TaskInputSourceRawGridIo#applyProcessingActualsDedupeByQuadKey}. */
 class TaskInputSourceRawGridIoProcessingActualsTest {
 
-    private static final String H_PROC = "\u5de5\u7a0b\u540d";
-    private static final String H_MACH = "\u6a5f\u68b0\u540d";
-    private static final String H_REQ = "\u4f9d\u983cNO";
-    private static final String H_DATE = "\u52a0\u5de5\u65e5";
-    private static final String H_OTHER = "\u305d\u306e\u4ed6";
+    private static final String H_PROC = "工程名";
+    private static final String H_MACH = "機械名";
+    private static final String H_REQ = "依頼NO";
+    private static final String H_DATE = "加工日";
+    private static final String H_OTHER = "その他";
 
     @Test
     void dedupe_keepsFirstAmongDuplicates() {
@@ -25,7 +25,7 @@ class TaskInputSourceRawGridIoProcessingActualsTest {
 
         PlanInputTabularIo.TabularSheet in = new PlanInputTabularIo.TabularSheet(headers, rows);
         PlanInputTabularIo.TabularSheet out =
-                TaskInputSourceRawGridIo.applyProcessingActualsDeduplicateKeyColumns(in);
+                TaskInputSourceRawGridIo.applyProcessingActualsDedupeByQuadKey(in);
 
         Assertions.assertEquals(2, out.rows().size());
         Assertions.assertEquals("a", out.rows().get(0).get(4));
@@ -41,21 +41,21 @@ class TaskInputSourceRawGridIoProcessingActualsTest {
                         List.of("P1", "M1", "2025/1/1"));
         PlanInputTabularIo.TabularSheet in = new PlanInputTabularIo.TabularSheet(headers, rows);
         PlanInputTabularIo.TabularSheet out =
-                TaskInputSourceRawGridIo.applyProcessingActualsDeduplicateKeyColumns(in);
+                TaskInputSourceRawGridIo.applyProcessingActualsDedupeByQuadKey(in);
 
         Assertions.assertEquals(2, out.rows().size());
     }
 
     @Test
     void dedupe_acceptsFullwidthIraiHeaderAlias() {
-        List<String> headers = List.of(H_PROC, H_MACH, "\u4f9d\u983c\uff2e\uff2f", H_DATE);
+        List<String> headers = List.of(H_PROC, H_MACH, "依頼ＮＯ", H_DATE);
         List<List<String>> rows = new ArrayList<>();
         rows.add(List.of("P1", "M1", "R1", "2025/1/1"));
         rows.add(List.of("P1", "M1", "R1", "2025/1/1"));
 
         PlanInputTabularIo.TabularSheet in = new PlanInputTabularIo.TabularSheet(headers, rows);
         PlanInputTabularIo.TabularSheet out =
-                TaskInputSourceRawGridIo.applyProcessingActualsDeduplicateKeyColumns(in);
+                TaskInputSourceRawGridIo.applyProcessingActualsDedupeByQuadKey(in);
 
         Assertions.assertEquals(1, out.rows().size());
     }
