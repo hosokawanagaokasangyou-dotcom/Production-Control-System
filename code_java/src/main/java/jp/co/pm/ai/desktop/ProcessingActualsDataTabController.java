@@ -26,6 +26,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Slider;
 import javafx.scene.layout.HBox;
@@ -110,6 +111,9 @@ public final class ProcessingActualsDataTabController {
 
     @FXML
     private Label statusLabel;
+
+    @FXML
+    private ProgressBar loadProgressBar;
 
     @FXML
     private Label dirLabel;
@@ -509,6 +513,22 @@ public final class ProcessingActualsDataTabController {
         return ix >= 0 ? ix : 0;
     }
 
+    private void showLoadProgress() {
+        if (loadProgressBar != null) {
+            loadProgressBar.setManaged(true);
+            loadProgressBar.setVisible(true);
+            loadProgressBar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
+        }
+    }
+
+    private void hideLoadProgress() {
+        if (loadProgressBar != null) {
+            loadProgressBar.setProgress(0);
+            loadProgressBar.setVisible(false);
+            loadProgressBar.setManaged(false);
+        }
+    }
+
     private void reloadFromSourceDir() {
         if (shell == null) {
             return;
@@ -574,39 +594,45 @@ public final class ProcessingActualsDataTabController {
                 };
 
         activeReloadTask = task;
+        showLoadProgress();
         task.setOnSucceeded(
                 ev -> {
                     activeReloadTask = null;
-                    if (gen != reloadGeneration.get()) {
+                    try {
+                        if (gen != reloadGeneration.get()) {
+                            return;
+                        }
+                        ActualsReloadPayload p = task.getValue();
+                        if (p == null) {
+                            return;
+                        }
+                        applyReloadPayloadOnFx(p, true);
+                    } finally {
+                        hideLoadProgress();
                         refreshButton.setDisable(false);
-                        return;
                     }
-                    ActualsReloadPayload p = task.getValue();
-                    if (p == null) {
-                        refreshButton.setDisable(false);
-                        return;
-                    }
-                    applyReloadPayloadOnFx(p, true);
-                    refreshButton.setDisable(false);
                 });
         task.setOnFailed(
                 ev -> {
                     activeReloadTask = null;
-                    if (gen != reloadGeneration.get()) {
+                    try {
+                        if (gen != reloadGeneration.get()) {
+                            return;
+                        }
+                        Throwable ex = task.getException();
+                        statusLabel.setText("\u8aad\u8fbc\u30a8\u30e9\u30fc");
+                        if (shell != null) {
+                            shell.appendLog(
+                                    "[processing-actuals-detail] "
+                                            + (ex != null && ex.getMessage() != null
+                                                    ? ex.getMessage()
+                                                    : String.valueOf(ex)));
+                        }
+                        applyEmpty();
+                    } finally {
+                        hideLoadProgress();
                         refreshButton.setDisable(false);
-                        return;
                     }
-                    Throwable ex = task.getException();
-                    statusLabel.setText("\u8aad\u8fbc\u30a8\u30e9\u30fc");
-                    if (shell != null) {
-                        shell.appendLog(
-                                "[processing-actuals-detail] "
-                                        + (ex != null && ex.getMessage() != null
-                                                ? ex.getMessage()
-                                                : String.valueOf(ex)));
-                    }
-                    applyEmpty();
-                    refreshButton.setDisable(false);
                 });
         new Thread(task, "processing-actuals-reload").start();
     }
@@ -653,37 +679,44 @@ public final class ProcessingActualsDataTabController {
                     }
                 };
         activeReloadTask = task;
+        showLoadProgress();
         task.setOnSucceeded(
                 ev -> {
                     activeReloadTask = null;
-                    if (gen != reloadGeneration.get()) {
+                    try {
+                        if (gen != reloadGeneration.get()) {
+                            return;
+                        }
+                        PlanInputTabularIo.TabularSheet shaped = task.getValue();
+                        applyShapedToUi(shaped, showErrorsInStatus);
+                    } finally {
+                        hideLoadProgress();
                         refreshButton.setDisable(false);
-                        return;
                     }
-                    PlanInputTabularIo.TabularSheet shaped = task.getValue();
-                    applyShapedToUi(shaped, showErrorsInStatus);
-                    refreshButton.setDisable(false);
                 });
         task.setOnFailed(
                 ev -> {
                     activeReloadTask = null;
-                    if (gen != reloadGeneration.get()) {
+                    try {
+                        if (gen != reloadGeneration.get()) {
+                            return;
+                        }
+                        Throwable ex = task.getException();
+                        if (showErrorsInStatus) {
+                            statusLabel.setText("\u8aad\u8fbc\u30a8\u30e9\u30fc");
+                        }
+                        if (shell != null) {
+                            shell.appendLog(
+                                    "[processing-actuals-detail] "
+                                            + (ex != null && ex.getMessage() != null
+                                                    ? ex.getMessage()
+                                                    : String.valueOf(ex)));
+                        }
+                        applyEmpty();
+                    } finally {
+                        hideLoadProgress();
                         refreshButton.setDisable(false);
-                        return;
                     }
-                    Throwable ex = task.getException();
-                    if (showErrorsInStatus) {
-                        statusLabel.setText("\u8aad\u8fbc\u30a8\u30e9\u30fc");
-                    }
-                    if (shell != null) {
-                        shell.appendLog(
-                                "[processing-actuals-detail] "
-                                        + (ex != null && ex.getMessage() != null
-                                                ? ex.getMessage()
-                                                : String.valueOf(ex)));
-                    }
-                    applyEmpty();
-                    refreshButton.setDisable(false);
                 });
         new Thread(task, "processing-actuals-sheet").start();
     }

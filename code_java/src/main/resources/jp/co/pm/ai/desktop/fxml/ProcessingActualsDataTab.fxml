@@ -7,6 +7,7 @@
 <?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressBar?>
 <?import javafx.scene.control.Slider?>
 <?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.layout.HBox?>
@@ -35,6 +36,8 @@
                             onAction="#onClearColumnFiltersAction"/>
                     <Label fx:id="statusLabel"/>
                 </HBox>
+                <ProgressBar fx:id="loadProgressBar" maxWidth="Infinity" prefHeight="8.0"
+                             visible="false" managed="false"/>
                 <HBox alignment="CENTER_LEFT" spacing="8.0">
                     <Label text="&#x30bd;&#x30fc;&#x30b9;&#x30d5;&#x30a9;&#x30eb;&#x30c0;"/>
                     <Label fx:id="dirLabel" wrapText="true"/>
