@@ -86,6 +86,12 @@ _SHAPED_PROCESSING_ACTUALS_JSON_BASENAME = "shaped_processing_actuals.json"
 _JP_WEEKDAY_SHORT = ("\u6708", "\u706b", "\u6c34", "\u6728", "\u91d1", "\u571f", "\u65e5")
 
 
+def _pm_ai_progress(pct: int) -> None:
+    """Emit one ASCII line for JavaFX ProgressBar (not JSON). Uses merged child stdout."""
+    p = max(0, min(100, int(pct)))
+    print(f"PM_AI_PROGRESS {p}", flush=True)
+
+
 # region agent log
 def _f73cbb_log_path_candidates() -> list[str]:
     """Workspace path (WSL) plus repo-relative .cursor (Windows Python cannot open /mnt/c/...)."""
@@ -891,6 +897,7 @@ def _eligible_pairs_from_shaped_processing_actuals_json(
 def build_delivery_calendar_payload() -> dict[str, Any]:
     meta: dict[str, Any] = {}
     try:
+        _pm_ai_progress(2)
         df_plan = _read_plan_tasks_from_processing_plan_env()
         pp = (os.environ.get(ENV_PROCESSING_PLAN_PATH) or "").strip()
         meta["processingPlanPath"] = pp
@@ -899,6 +906,7 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
         meta["dispatchJsonPath"] = dispatch_path or ""
         _disp_header, disp_rows = _load_dispatch_json_rows(dispatch_path)
         dispatch_agg = _aggregate_dispatch_quantities(disp_rows)
+        _pm_ai_progress(16)
 
         df_actual = core.load_machining_actual_detail_df()
         if (
@@ -934,13 +942,16 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
         meta["actualDetailRowCount"] = (
             int(len(df_actual)) if df_actual is not None else 0
         )
+        _pm_ai_progress(28)
 
         sorted_dates, cal_range_meta = _collect_sorted_dates(df_plan, df_actual)
         meta.update(cal_range_meta)
+        _pm_ai_progress(38)
 
         skills_pack = core.load_skills_and_needs()
         equipment_list = skills_pack[2]
         if not equipment_list:
+            _pm_ai_progress(100)
             return {
                 "ok": False,
                 "error": "equipment_list empty (check master.xlsm)",
@@ -952,12 +963,14 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             df_plan,
             dates_set,
         )
+        _pm_ai_progress(52)
 
         actual_agg = _aggregate_daily_actual_qty_aladdin_max(
             df_actual if df_actual is not None else pd.DataFrame(),
             equipment_list,
             sorted_dates,
         )
+        _pm_ai_progress(62)
 
         plan_pairs: set[tuple[str, str]] = set()
         if df_plan is not None and len(df_plan) > 0:
@@ -984,6 +997,7 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             )
         meta["deliveryCalendarEligiblePairsFromShapedJson"] = len(pairs_from_shaped_json)
         eligible_pairs |= pairs_from_shaped_json
+        _pm_ai_progress(72)
 
         _probe_lit = (os.environ.get(_DEBUG_PROBE_ENV) or "Y4-59").strip()
         if _probe_lit:
@@ -1089,6 +1103,7 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
 
         main_rows_out: list[dict[str, Any]] = []
         current_mk = ""
+        _pm_ai_progress(78)
 
         def flush_section(mk_norm: str):
             nonlocal current_mk
@@ -1109,7 +1124,11 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             row_cells = sec_cells + [""] * len(cal_cols)
             main_rows_out.append({"kind": "section", "machineLabel": label, "cells": row_cells})
 
-        for mk, tid in ordered_pairs:
+        n_pairs = len(ordered_pairs)
+        for idx, (mk, tid) in enumerate(ordered_pairs):
+            if n_pairs > 600 and idx > 0 and idx % 400 == 0:
+                span = 78 + min(11, int(11 * idx / max(1, n_pairs)))
+                _pm_ai_progress(span)
             plan_row = pair_plan_row.get((mk, tid))
             flush_section(mk)
 
@@ -1144,6 +1163,7 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                 }
             )
 
+        _pm_ai_progress(90)
         plan_agg: dict[tuple[str, date, str], float] = defaultdict(float)
         for (mk, dk), parts in buckets.items():
             for t, q in parts:
@@ -1183,9 +1203,10 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                     core._format_qty_short(dq),
                     core._format_qty_short(pq),
                     core._format_qty_short(delta),
-                ]
-            )
+                    ]
+                )
 
+        _pm_ai_progress(96)
         # region agent log
         trip = {"triple_cells": 0, "p_nonempty": 0, "a_nonempty": 0, "d_nonempty": 0}
         for row in main_rows_out:
@@ -1209,6 +1230,7 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
         )
         # endregion
 
+        _pm_ai_progress(100)
         return {
             "ok": True,
             "mainCalendar": {"columns": main_columns, "rows": main_rows_out},

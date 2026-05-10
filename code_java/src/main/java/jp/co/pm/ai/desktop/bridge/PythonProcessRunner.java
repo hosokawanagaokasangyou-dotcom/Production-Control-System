@@ -112,6 +112,16 @@ public final class PythonProcessRunner {
      * probe scripts (e.g. {@code pm_ai_actuals_status.py}).
      */
     public static CompletableFuture<CapturedResult> runCaptureAsync(RunRequest req) {
+        return runCaptureAsyncWithLineTap(req, null);
+    }
+
+    /**
+     * Like {@link #runCaptureAsync}, but invokes {@code lineTap} for each stdout line as it is read
+     * (worker thread — use {@link Platform#runLater} in the consumer for UI updates). Does not alter the
+     * captured stdout text (tap is observation-only).
+     */
+    public static CompletableFuture<CapturedResult> runCaptureAsyncWithLineTap(
+            RunRequest req, Consumer<String> lineTap) {
         Objects.requireNonNull(req, "req");
         if (!Files.isDirectory(req.scriptDirectory)) {
             return CompletableFuture.failedFuture(
@@ -133,7 +143,7 @@ public final class PythonProcessRunner {
                         pb.redirectErrorStream(true);
                         mergeUiEnvIntoProcess(pb, req.extraEnv);
                         Process p = pb.start();
-                        String out = readStreamFully(p.getInputStream());
+                        String out = readStreamFullyWithTap(p.getInputStream(), lineTap);
                         int code = p.waitFor();
                         return new CapturedResult(code, out);
                     } catch (Exception e) {
@@ -145,12 +155,16 @@ public final class PythonProcessRunner {
 
     public record CapturedResult(int exitCode, String stdout) {}
 
-    private static String readStreamFully(InputStream in) throws IOException {
+    private static String readStreamFullyWithTap(InputStream in, Consumer<String> lineTap)
+            throws IOException {
         try (BufferedReader r = new BufferedReader(
                 new InputStreamReader(in, StandardCharsets.UTF_8))) {
             StringBuilder sb = new StringBuilder();
             String line;
             while ((line = r.readLine()) != null) {
+                if (lineTap != null) {
+                    lineTap.accept(line);
+                }
                 sb.append(line).append('\n');
             }
             return sb.toString();

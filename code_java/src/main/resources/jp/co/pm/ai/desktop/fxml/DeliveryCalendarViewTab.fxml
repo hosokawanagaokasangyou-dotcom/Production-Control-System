@@ -5,6 +5,7 @@
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressBar?>
 <?import javafx.scene.control.Slider?>
 <?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Tab?>
@@ -26,6 +27,8 @@
                 text="&#x518d;&#x8aad;&#x8fbc;"/>
         <Label fx:id="statusLabel"/>
     </HBox>
+    <ProgressBar fx:id="deliveryReloadProgressBar" maxWidth="Infinity" prefHeight="14.0"
+                 visible="false" managed="false"/>
     <Accordion VBox.vgrow="NEVER">
         <panes>
             <TitledPane animated="false" expanded="false" text="&#x30e1;&#x30bf;&#x60c5;&#x5831;">

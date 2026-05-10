@@ -23,6 +23,7 @@ import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Slider;
@@ -59,6 +60,17 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 public final class DeliveryCalendarViewTabController {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+
+    /** Child stdout lines {@code PM_AI_PROGRESS 0..100}; mapped to the Python phase of the overall bar. */
+    private static final String PM_AI_PROGRESS_PREFIX = "PM_AI_PROGRESS ";
+
+    /** Python subprocess contributes progress in {@code [0, PYTHON_PHASE_MAX)}; Java reload fills the rest. */
+    private static final double PYTHON_PHASE_MAX = 0.78;
+
+    private static final double JAVA_PHASE_DISPATCH = 0.84;
+    private static final double JAVA_PHASE_ALADDIN = 0.90;
+    private static final double JAVA_PHASE_ACTUALS = 0.94;
+    private static final double JAVA_PHASE_DONE = 1.0;
 
     /**
      * Cursor NDJSON filename {@code debug-&lt;id&gt;.log}; align with the active chat debug session id.
@@ -101,6 +113,9 @@ public final class DeliveryCalendarViewTabController {
 
     @FXML
     private Label statusLabel;
+
+    @FXML
+    private ProgressBar deliveryReloadProgressBar;
 
     @FXML
     private Label metaLabel;
@@ -602,19 +617,24 @@ public final class DeliveryCalendarViewTabController {
     @FXML
     private void onRefreshButtonAction() {
         if (requestFactory == null) {
-            statusLabel.setText("\u521d\u671f\u5316\u5f85\u3061");
+            statusLabel.setText("初期化待ち");
             return;
         }
         refreshButton.setDisable(true);
-        statusLabel.setText("\u53d6\u5f97\u4e2d...");
+        showDeliveryReloadProgress();
+        statusLabel.setText("取得中…");
         RunRequest req = requestFactory.get();
-        PythonProcessRunner.runCaptureAsync(req)
+        PythonProcessRunner.runCaptureAsyncWithLineTap(
+                        req,
+                        line ->
+                                Platform.runLater(() -> handleDeliveryCalendarProgressLine(line)))
                 .whenComplete(
                         (cap, err) ->
                                 Platform.runLater(
                                         () -> {
                                             refreshButton.setDisable(false);
                                             if (err != null) {
+                                                hideDeliveryReloadProgress();
                                                 statusLabel.setText("error: " + err.getMessage());
                                                 if (shell != null) {
                                                     shell.appendLog("[delivery-calendar] " + err.getMessage());
@@ -622,15 +642,70 @@ public final class DeliveryCalendarViewTabController {
                                                 return;
                                             }
                                             if (cap == null) {
+                                                hideDeliveryReloadProgress();
                                                 statusLabel.setText("no result");
                                                 return;
                                             }
-                                            statusLabel.setText("exit=" + cap.exitCode());
                                             applyPayload(cap.stdout());
+                                            statusLabel.setText("exit=" + cap.exitCode());
                                         }));
     }
 
+    private void showDeliveryReloadProgress() {
+        if (deliveryReloadProgressBar == null) {
+            return;
+        }
+        deliveryReloadProgressBar.setProgress(0);
+        deliveryReloadProgressBar.setManaged(true);
+        deliveryReloadProgressBar.setVisible(true);
+    }
+
+    private void hideDeliveryReloadProgress() {
+        if (deliveryReloadProgressBar == null) {
+            return;
+        }
+        deliveryReloadProgressBar.setProgress(0);
+        deliveryReloadProgressBar.setVisible(false);
+        deliveryReloadProgressBar.setManaged(false);
+    }
+
+    private void setDeliveryReloadOverallProgress(double p) {
+        if (deliveryReloadProgressBar == null) {
+            return;
+        }
+        double x = Math.max(0.0, Math.min(1.0, p));
+        deliveryReloadProgressBar.setProgress(x);
+    }
+
+    private void handleDeliveryCalendarProgressLine(String line) {
+        if (line == null) {
+            return;
+        }
+        String t = line.strip();
+        if (!t.startsWith(PM_AI_PROGRESS_PREFIX)) {
+            return;
+        }
+        try {
+            int pct =
+                    Integer.parseInt(t.substring(PM_AI_PROGRESS_PREFIX.length()).trim());
+            pct = Math.max(0, Math.min(100, pct));
+            double overall = (pct / 100.0) * PYTHON_PHASE_MAX;
+            setDeliveryReloadOverallProgress(overall);
+            statusLabel.setText("取得中… " + pct + "%");
+        } catch (NumberFormatException ignored) {
+            // ignore malformed progress lines
+        }
+    }
+
     private void applyPayload(String stdout) {
+        try {
+            applyPayloadBody(stdout);
+        } finally {
+            hideDeliveryReloadProgress();
+        }
+    }
+
+    private void applyPayloadBody(String stdout) {
         metaLabel.setText("");
         String trimmed = stdout != null ? stdout.trim() : "";
         if (trimmed.isEmpty()) {
@@ -704,17 +779,25 @@ public final class DeliveryCalendarViewTabController {
             }
 
             if (root.path("ok").asBoolean(false)) {
+                statusLabel.setText("反映中… 配台結果");
+                setDeliveryReloadOverallProgress(JAVA_PHASE_DISPATCH);
                 if (deliveryCalendarResultDispatchTableTabController != null) {
                     deliveryCalendarResultDispatchTableTabController.reloadResultDispatchTableFromDisk();
                 }
+                statusLabel.setText("反映中… アラジン加工計画");
+                setDeliveryReloadOverallProgress(JAVA_PHASE_ALADDIN);
                 if (aladdinProcessingPlanDataTabController != null) {
                     aladdinProcessingPlanDataTabController.reloadAladdinProcessingPlanFromDisk();
                 }
+                statusLabel.setText("反映中… 加工実績");
+                setDeliveryReloadOverallProgress(JAVA_PHASE_ACTUALS);
                 if (processingActualsDataTabController != null) {
                     processingActualsDataTabController.reloadProcessingActualsFromDisk();
                 }
             }
 
+            statusLabel.setText("反映中… アラ・実績・シス比較表");
+            setDeliveryReloadOverallProgress(0.97);
             JsonNode mainCal = root.get("mainCalendar");
             if (mainCal != null && mainCal.isObject()) {
                 loadMainCalendar(mainCal);
@@ -723,6 +806,7 @@ public final class DeliveryCalendarViewTabController {
                 mainRows.clear();
                 rebuildMainSpreadsheet();
             }
+            setDeliveryReloadOverallProgress(JAVA_PHASE_DONE);
 
             // #region agent log
             if (shell != null && root.path("ok").asBoolean(false)) {
