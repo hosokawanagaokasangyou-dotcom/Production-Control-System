@@ -690,6 +690,15 @@ public final class DeliveryCalendarViewTabController {
                 String disp = meta.path("dispatchJsonPath").asText("");
                 sb.append("\u7d50\u679c_\u914d\u53f0\u8868.json: ")
                         .append(disp.isEmpty() ? noneResolved : disp);
+                JsonNode deliveryProbe = meta.get("deliveryCalendarProbe");
+                if (deliveryProbe != null && deliveryProbe.isObject()) {
+                    String pretty = deliveryProbe.toPrettyString();
+                    if (pretty.length() > 16000) {
+                        pretty = pretty.substring(0, 16000) + "\n... (truncated)";
+                    }
+                    sb.append("\n\n--- deliveryCalendarProbe (f73cbb) ---\n");
+                    sb.append(pretty);
+                }
                 metaLabel.setText(sb.toString());
             }
 

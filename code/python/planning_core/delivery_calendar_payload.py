@@ -217,8 +217,19 @@ def _probe_task_rows_delivery_calendar(
     actual_agg: dict,
     plan_pairs: set[tuple[str, str]],
     eligible_pairs: set[tuple[str, str]],
-) -> None:
-    """Log per-row pipeline outcome for rows matching probe task id (default Y4-59)."""
+) -> dict[str, Any]:
+    """Log per-row pipeline outcome for rows matching probe task id (default Y4-59).
+
+    Also returns a JSON-serializable summary for meta[\"deliveryCalendarProbe\"] (runtime evidence when NDJSON file path fails from Python subprocess).
+    """
+    empty_out: dict[str, Any] = {
+        "probe_literal": probe_literal,
+        "probe_norm": core.planning_task_id_str_from_scalar(probe_literal),
+        "matched_row_count": 0,
+        "reason_counts": {},
+        "note": "df_actual_empty",
+        "log_path_candidates": _f73cbb_log_path_candidates(),
+    }
     if df_actual is None or len(df_actual) == 0:
         _debug_ndjson_f73cbb(
             "H_SETUP",
@@ -226,7 +237,7 @@ def _probe_task_rows_delivery_calendar(
             "df_actual_empty",
             {"probe": probe_literal},
         )
-        return
+        return empty_out
 
     probe_norm = core.planning_task_id_str_from_scalar(probe_literal)
     equip_lookup = core._equipment_lookup_normalized_to_canonical(equipment_list)
@@ -234,6 +245,7 @@ def _probe_task_rows_delivery_calendar(
 
     matched_count = 0
     reason_counts: dict[str, int] = {}
+    row_samples: list[dict[str, Any]] = []
     for row_idx, row in df_actual.iterrows():
         ntid = core.planning_task_id_str_from_scalar(row.get(_ACT_COL_TID))
         raw_s = str(row.get(_ACT_COL_TID) if row.get(_ACT_COL_TID) is not None else "")
@@ -262,6 +274,17 @@ def _probe_task_rows_delivery_calendar(
             "row_classified",
             {"code": code, "df_index": row_idx, **detail},
         )
+        if len(row_samples) < 12:
+            row_samples.append(
+                {
+                    "code": code,
+                    "df_index": str(row_idx),
+                    "norm_tid": detail.get("norm_tid"),
+                    "machine_key_norm": (detail.get("machine_key_norm") or "")[:80],
+                    "day_iso": detail.get("day_iso"),
+                    "prod_detail_nfkc": (detail.get("prod_detail_nfkc") or "")[:40],
+                }
+            )
 
     _debug_ndjson_f73cbb(
         "H_SETUP",
@@ -284,6 +307,8 @@ def _probe_task_rows_delivery_calendar(
             break
 
     pairs_with_probe = [(a, b) for (a, b) in eligible_pairs if b == probe_norm]
+    plan_has_probe = any(b == probe_norm for (_a, b) in plan_pairs)
+    elig_sample = [[a, b] for a, b in pairs_with_probe[:20]]
     _debug_ndjson_f73cbb(
         "H_RESULT",
         "delivery_calendar_payload.py:_probe_task_rows",
@@ -291,12 +316,43 @@ def _probe_task_rows_delivery_calendar(
         {
             "probe_norm": probe_norm,
             "in_actual_agg_buckets": in_actual_agg,
-            "plan_pairs_contains_probe": any(b == probe_norm for (_a, b) in plan_pairs),
+            "plan_pairs_contains_probe": plan_has_probe,
             "eligible_pairs_for_probe": pairs_with_probe[:20],
             "eligible_pair_count_for_probe": len(pairs_with_probe),
             "reason_counts": reason_counts,
         },
     )
+
+    diagnosis = ""
+    if matched_count == 0:
+        diagnosis = (
+            "NO_ROWS_MATCH_PROBE: no row matched this probe on TASK_ID column "
+            "(check spelling / PM_AI_DELIVERY_CALENDAR_PROBE_TASK)."
+        )
+    elif reason_counts.get("ACCEPT", 0) >= 1 and in_actual_agg:
+        diagnosis = "ACTUAL_AGG_INCLUDES_PROBE: rows accepted by classifier and present in aggregation buckets."
+    elif reason_counts.get("ACCEPT", 0) >= 1 and not in_actual_agg:
+        diagnosis = "INCONSISTENT_ACCEPT_BUT_NOT_IN_AGG: classifier ACCEPT but not in actual_agg (investigate aggregation vs classify)."
+    elif reason_counts:
+        top = max(reason_counts.items(), key=lambda kv: kv[1])[0]
+        diagnosis = f"Dominant_skip={top} (see reason_counts and row_samples)."
+
+    out: dict[str, Any] = {
+        "probe_literal": probe_literal,
+        "probe_norm": probe_norm,
+        "matched_row_count": matched_count,
+        "reason_counts": dict(sorted(reason_counts.items())),
+        "row_samples": row_samples,
+        "in_actual_agg_buckets": in_actual_agg,
+        "plan_pairs_contains_probe": plan_has_probe,
+        "eligible_pair_count_for_probe": len(pairs_with_probe),
+        "eligible_pairs_sample": elig_sample,
+        "df_actual_rows": len(df_actual),
+        "calendar_day_count": len(sorted_dates),
+        "diagnosis": diagnosis,
+        "log_path_candidates": _f73cbb_log_path_candidates(),
+    }
+    return out
 
 
 # endregion
@@ -655,7 +711,7 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
 
         _probe_lit = (os.environ.get(_DEBUG_PROBE_ENV) or "Y4-59").strip()
         if _probe_lit:
-            _probe_task_rows_delivery_calendar(
+            meta["deliveryCalendarProbe"] = _probe_task_rows_delivery_calendar(
                 df_actual if df_actual is not None else None,
                 equipment_list,
                 sorted_dates,
