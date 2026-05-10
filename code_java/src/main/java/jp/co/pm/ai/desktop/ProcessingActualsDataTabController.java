@@ -295,7 +295,15 @@ public final class ProcessingActualsDataTabController {
      * 納期管理ビューで「再読込」が成功したあと、加工実績ブックを読み込むために親から呼ばれる。
      */
     public void reloadProcessingActualsFromDisk() {
-        reloadFromSourceDir();
+        reloadFromSourceDir(null);
+    }
+
+    /**
+     * {@link #reloadProcessingActualsFromDisk()} と同じ読込だが、ワーカー完了または同期ガード終了後に {@code whenDone}
+     * を JavaFX アプリケーションスレッドで呼ぶ（バックグラウンド {@link Task} のため親の進捗バーと同期するため）。
+     */
+    public void reloadProcessingActualsFromDisk(Runnable whenDone) {
+        reloadFromSourceDir(whenDone);
     }
 
     /** POI でブックを開かず、解決済みパスと案内文言だけ更新する（起動時・セッション復元直後）。 */
@@ -566,8 +574,11 @@ public final class ProcessingActualsDataTabController {
         loadProgressBar.setManaged(false);
     }
 
-    private void reloadFromSourceDir() {
+    private void reloadFromSourceDir(Runnable whenDone) {
         if (shell == null) {
+            if (whenDone != null) {
+                whenDone.run();
+            }
             return;
         }
         if (activeReloadTask != null) {
@@ -587,6 +598,9 @@ public final class ProcessingActualsDataTabController {
             sheetCombo.getItems().clear();
             loadedPath = null;
             applyEmpty();
+            if (whenDone != null) {
+                whenDone.run();
+            }
             return;
         }
         Path file = resolved.get().toAbsolutePath().normalize();
@@ -600,6 +614,9 @@ public final class ProcessingActualsDataTabController {
             sheetCombo.setDisable(true);
             sheetCombo.getItems().clear();
             applyEmpty();
+            if (whenDone != null) {
+                whenDone.run();
+            }
             return;
         }
 
@@ -617,6 +634,9 @@ public final class ProcessingActualsDataTabController {
             sheetCombo.getItems().clear();
             loadedPath = null;
             applyEmpty();
+            if (whenDone != null) {
+                whenDone.run();
+            }
             return;
         }
 
@@ -706,12 +726,14 @@ public final class ProcessingActualsDataTabController {
                             return;
                         }
                         ActualsReloadPayload p = task.getValue();
-                        if (p == null) {
-                            return;
+                        if (p != null) {
+                            applyReloadPayloadOnFx(p, true);
                         }
-                        applyReloadPayloadOnFx(p, true);
                     } finally {
                         unbindLoadProgress();
+                        if (whenDone != null && gen == reloadGeneration.get()) {
+                            whenDone.run();
+                        }
                     }
                 });
         task.setOnFailed(
@@ -733,12 +755,18 @@ public final class ProcessingActualsDataTabController {
                         applyEmpty();
                     } finally {
                         unbindLoadProgress();
+                        if (whenDone != null && gen == reloadGeneration.get()) {
+                            whenDone.run();
+                        }
                     }
                 });
         task.setOnCancelled(
                 ev -> {
                     activeReloadTask = null;
                     unbindLoadProgress();
+                    if (whenDone != null && gen == reloadGeneration.get()) {
+                        whenDone.run();
+                    }
                 });
         new Thread(task, "processing-actuals-reload").start();
     }

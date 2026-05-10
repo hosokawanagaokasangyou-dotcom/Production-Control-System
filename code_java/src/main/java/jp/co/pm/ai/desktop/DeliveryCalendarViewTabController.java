@@ -761,21 +761,6 @@ public final class DeliveryCalendarViewTabController {
                 return;
             }
 
-            // #region agent log
-            if (shell != null) {
-                Map<String, Object> d = new LinkedHashMap<>();
-                d.put("okPayload", false);
-                d.put("errorText", root.path("error").asText(""));
-                AgentDebugLog.appendStructured(
-                        shell.snapshotUiEnv(),
-                        "progviz",
-                        "H_NOT_OK",
-                        "DeliveryCalendarViewTabController.applyPayloadBody",
-                        "skipped_tab_reload_chain_use_sync_main_only",
-                        d);
-            }
-            // #endregion
-
             applyMainCalendarAndAgentLog(root, meta);
             scheduleHideDeliveryReloadProgress();
 
@@ -813,12 +798,21 @@ public final class DeliveryCalendarViewTabController {
             statusLabel.setText("反映中… 加工実績タブ");
             setDeliveryReloadSegmentProgress(
                     deliveryReloadProgressActuals, deliveryReloadPctActuals, 0.0);
-            if (processingActualsDataTabController != null) {
-                processingActualsDataTabController.reloadProcessingActualsFromDisk();
+            if (processingActualsDataTabController == null) {
+                setDeliveryReloadSegmentProgress(
+                        deliveryReloadProgressActuals, deliveryReloadPctActuals, 1.0);
+                Platform.runLater(() -> runDeliveryReloadDispatchPhase(root, meta));
+                return;
             }
-            setDeliveryReloadSegmentProgress(
-                    deliveryReloadProgressActuals, deliveryReloadPctActuals, 1.0);
-            Platform.runLater(() -> runDeliveryReloadDispatchPhase(root, meta));
+            /*
+             * 加工実績は Task でバックグラウンド読込するため、完了まで親バーを 100% にしてはならない。
+             */
+            processingActualsDataTabController.reloadProcessingActualsFromDisk(
+                    () -> {
+                        setDeliveryReloadSegmentProgress(
+                                deliveryReloadProgressActuals, deliveryReloadPctActuals, 1.0);
+                        Platform.runLater(() -> runDeliveryReloadDispatchPhase(root, meta));
+                    });
         } catch (Throwable t) {
             if (shell != null) {
                 shell.appendLog("[delivery-calendar] 加工実績再読込 " + t.getMessage());
