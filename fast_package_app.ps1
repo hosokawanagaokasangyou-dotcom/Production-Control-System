@@ -3,7 +3,7 @@
 # Prerequisites:
 #   - Run build on Windows (OpenJFX win classifier required).
 #   - Maven uses JAVA_HOME on PATH (compile must match maven.compiler.release).
-#   - Bundled JVM: Temurin JDK zip -> code_java/Cash_PMD -> jpackage --runtime-image. Override: -JdkRuntimeImage or PM_AI_JDK_RUNTIME_IMAGE.
+#   - Bundled JVM: Temurin JDK zip -> Cash_PMD (code_java or next to release output) -> jpackage --runtime-image. Override: -JdkRuntimeImage or PM_AI_JDK_RUNTIME_IMAGE.
 #   - JavaFX: OpenJFX Windows win jars downloaded from Maven Central into package_input (same version as pom javafx.version).
 #   - For --type exe/msi: WiX Toolset on PATH (candle/light).
 #   - Bundled Python: pip runs at build time - internet on first run or empty cache.
@@ -18,6 +18,7 @@
 #   .\fast_package_app.ps1 -ZipFast   # faster ZIP (Fastest); default Optimal can take many minutes with no output
 #   .\fast_package_app.ps1 -PackageReleaseParent G:\   # e.g. G:\pm-ai-package-release (folder created)
 #   .\fast_package_app.ps1 -PackageReleaseDir G:\pm-ai-package-release   # exact output folder
+#   When release output is not the repo default, download cache (JDK/JavaFX/Python) uses <release>\Cash_PMD instead of code_java\Cash_PMD.
 # Env: PM_AI_JPACKAGE_DEST, PM_AI_JDK_RUNTIME_IMAGE (optional)
 # Env: PM_AI_PACKAGE_RELEASE_DIR (full path), PM_AI_PACKAGE_RELEASE_PARENT (parent of pm-ai-package-release folder)
 
@@ -32,7 +33,7 @@ param(
     # キャッシュを無視して強制的に再ダウンロードする場合に使用します
     [switch]$RefreshCache,
 
-    # JDK root for --runtime-image (bin\java.exe). Empty = download per pom.xml into code_java/Cash_PMD.
+    # JDK root for --runtime-image (bin\java.exe). Empty = download per pom.xml into Cash_PMD (see cache layout near ReleaseRoot).
     [string]$JdkRuntimeImage = '',
 
     # Parent directory for jpackage --dest only (must be ASCII-only on some JDK/Windows builds).
@@ -465,7 +466,9 @@ function Copy-BundleToDist {
         [string]$BundleKind,
         [string]$MandatoryPathsFile,
         [string]$ReleaseFolderRelativePrefix,
-        [string]$AppExeBaseName = 'PMD'
+        [string]$AppExeBaseName = 'PMD',
+        # README hint only: where JDK/JavaFX/Python embed cache lived on the machine that ran fast_package_app.ps1
+        [string]$PackagingCacheRoot = ''
     )
 
     if ([string]::IsNullOrWhiteSpace($PythonEmbedSourceDir) -or -not (Test-Path -LiteralPath $PythonEmbedSourceDir)) {
@@ -541,7 +544,8 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
     $rmLines.Add('Release: Step 8 deletes existing version.txt and same-name ZIPs in pm-ai-package-release, then writes fresh copies; ZIPs omit pm-ai-data/version.txt. Interim bundle folders are removed after zipping.')
     $rmLines.Add('First launch: if the empty marker file next to this app exe exists, the desktop resets env-tab defaults once then deletes it (Initial install bundle only). See Java AppPaths.PORTABLE_FIRST_LAUNCH_MARKER_FILE.')
     $rmLines.Add('Portable sync: PM_AI_PORTABLE_BUNDLE_SOURCE_DIR may be a folder (repo root layout under pm-ai-data on share) or a path to PMD_version_upgrade.zip with version.txt beside the zip.')
-    $rmLines.Add('Python: pm-ai-data\runtime\python-embed\python.exe (build cache: code_java\Cash_PMD, not bundled).')
+    $cacheReadme = if (-not [string]::IsNullOrWhiteSpace($PackagingCacheRoot)) { $PackagingCacheRoot } else { 'code_java\Cash_PMD (default)' }
+    $rmLines.Add("Python: pm-ai-data\runtime\python-embed\python.exe (JDK/JavaFX/Python embed cache on builder: $cacheReadme; not bundled).")
     $rmLines.Add('Default inputs: input\task-input , input\actual-detail.')
     $rmLines.Add('Per-user session data: ~/.pm-ai-desktop (initialized per machine/user).')
     $rmLines.Add('')
@@ -747,14 +751,20 @@ $packageInput = Join-Path $CodeJavaRoot 'package_input'
 Copy-JpackageInputDirectory -RootPath $CodeJavaRoot -MainJarName $proj.MainJar -DestPath $packageInput
 
 New-Item -ItemType Directory -Path $ReleaseRoot -Force | Out-Null
-# Download cache (JDK/JavaFX/Python embed) lives under code_java/Cash_PMD; pm-ai-package-release ends with ZIPs + version.txt only.
-$cacheRoot = Join-Path $CodeJavaRoot 'Cash_PMD'
-New-Item -ItemType Directory -Path $cacheRoot -Force | Out-Null
-$legacyCashUnderRelease = Join-Path $ReleaseRoot 'Cash_PMD'
-if (Test-Path -LiteralPath $legacyCashUnderRelease) {
-    Write-Host "--- Remove legacy Cash_PMD under $ReleaseDirName (cache moved to code_java\Cash_PMD) ---" -ForegroundColor DarkGray
-    Remove-Item -Recurse -Force -LiteralPath $legacyCashUnderRelease -ErrorAction SilentlyContinue
+# Download cache (JDK/JavaFX/Python embed): default code_java\Cash_PMD; when release output is overridden, <release>\Cash_PMD (same drive as ZIP output).
+if ($ReleaseRoot -eq $releaseDefault) {
+    $cacheRoot = Join-Path $CodeJavaRoot 'Cash_PMD'
+    $legacyCashUnderRelease = Join-Path $ReleaseRoot 'Cash_PMD'
+    if (Test-Path -LiteralPath $legacyCashUnderRelease) {
+        Write-Host "--- Remove legacy Cash_PMD under $ReleaseDirName (cache moved to code_java\Cash_PMD) ---" -ForegroundColor DarkGray
+        Remove-Item -Recurse -Force -LiteralPath $legacyCashUnderRelease -ErrorAction SilentlyContinue
+    }
 }
+else {
+    $cacheRoot = Join-Path $ReleaseRoot 'Cash_PMD'
+    Write-Host "Download cache (co-located with release output): $cacheRoot" -ForegroundColor Cyan
+}
+New-Item -ItemType Directory -Path $cacheRoot -Force | Out-Null
 
 Write-Host "--- Step 3: JavaFX Windows runtime (Maven Central win jars -> package_input) ---" -ForegroundColor Cyan
 $javafxVer = Expand-PomPropertyPlaceholder -Raw ([string]$pomProps['javafx.version']) -Props $pomProps
@@ -818,7 +828,7 @@ elseif ($WorkspaceRoot -match '[^\x00-\x7F]') {
 }
 $usedStagingForJpackage = ($jpkgDestParent -ne $distFinal)
 
-# Remove only prior jpackage app folder and bundle outputs (download cache is code_java\Cash_PMD, not under $ReleaseRoot).
+# Remove only prior jpackage app folder and bundle outputs (Cash_PMD is not removed here).
 $bundleOutInitial = Join-Path $ReleaseRoot $BundleInitialName
 $bundleOutUpgrade = Join-Path $ReleaseRoot $BundleUpgradeName
 $pathsToClean = @()
@@ -1052,9 +1062,11 @@ Write-Host "--- Remove intermediate folder $($APP_NAME) ---" -ForegroundColor Da
 Remove-Item -Recurse -Force -LiteralPath $publishedBundleRoot -ErrorAction SilentlyContinue
 
 Copy-BundleToDist -WorkspaceRootPath $WorkspaceRoot -DistAppRoot $bundleOutInitial -PythonEmbedSourceDir $pythonSrc `
-    -BundleKind InitialInstall -MandatoryPathsFile $mandatoryFile -ReleaseFolderRelativePrefix $relPref -AppExeBaseName $APP_NAME
+    -BundleKind InitialInstall -MandatoryPathsFile $mandatoryFile -ReleaseFolderRelativePrefix $relPref -AppExeBaseName $APP_NAME `
+    -PackagingCacheRoot $cacheRoot
 Copy-BundleToDist -WorkspaceRootPath $WorkspaceRoot -DistAppRoot $bundleOutUpgrade -PythonEmbedSourceDir $pythonSrc `
-    -BundleKind VersionUpgrade -MandatoryPathsFile $mandatoryFile -ReleaseFolderRelativePrefix $relPref -AppExeBaseName $APP_NAME
+    -BundleKind VersionUpgrade -MandatoryPathsFile $mandatoryFile -ReleaseFolderRelativePrefix $relPref -AppExeBaseName $APP_NAME `
+    -PackagingCacheRoot $cacheRoot
 
 $javafxVerForLauncher = Expand-PomPropertyPlaceholder -Raw ([string]$pomProps['javafx.version']) -Props $pomProps
 if ([string]::IsNullOrWhiteSpace($javafxVerForLauncher)) {
