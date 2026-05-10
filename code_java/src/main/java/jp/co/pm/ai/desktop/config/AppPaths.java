@@ -131,8 +131,8 @@ public final class AppPaths {
      */
     public static final String KEY_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES = "PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES";
 
-    /** {@link #KEY_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES} の既定（8 MiB）。 */
-    public static final long DEFAULT_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES = 8L * 1024 * 1024;
+    /** {@link #KEY_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES} の既定（20 MiB）。 */
+    public static final long DEFAULT_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES = 20L * 1024 * 1024;
 
     /** Optional absolute path to result-task JSON sidecar ({@code PM_AI_PLAN_RESULT_TASK_JSON_PATH}). */
     public static final String KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH = "PM_AI_PLAN_RESULT_TASK_JSON_PATH";
@@ -199,7 +199,8 @@ public final class AppPaths {
     public static final String KEY_PM_AI_CMD_PAUSE_ON_ERROR = "PM_AI_CMD_PAUSE_ON_ERROR";
 
     /**
-     * ポータブル配布（{@code pm-ai-data}）の正本リポジトリルート（ネットワーク共有等）。{@link #VERSION_TXT_FILE_NAME} で版比較し、新しいときのみ起動時同期する。フォルダ系だが {@link #FOLDER_PATH_ENV_KEYS} には含めない（ルート付け替えで破綻するため）。
+     * ポータブル配布（{@code pm-ai-data}）の正本。推奨はバージョンアップ用 ZIP、手入力では展開済み正本フォルダも使える。
+     * {@link #VERSION_TXT_FILE_NAME} で版比較し、新しいときのみ起動時同期する。
      */
     public static final String KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR = "PM_AI_PORTABLE_BUNDLE_SOURCE_DIR";
 
@@ -208,7 +209,7 @@ public final class AppPaths {
      * {@code version.txt} を置く {@code pm-ai-package-release} フォルダを指す。ユーザーが上書き可能。
      */
     public static final String DEFAULT_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR =
-            "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\pm-ai-package-release";
+            "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\pm-ai-package-release\\PMD_version_upgrade.zip";
 
     /**
      * {@link #KEY_PM_AI_TASK_INPUT_SOURCE_DIR} が空のときの既定（工場共有・生産計画問合せフォルダ）。{@code plan/01_*.m} のパスと揃える。
@@ -254,8 +255,7 @@ public final class AppPaths {
             KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
             KEY_PM_AI_OUTPUT_DIR,
             KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
-            KEY_COMPARE_GANTT_SNAPSHOT_DIR,
-            KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR);
+            KEY_COMPARE_GANTT_SNAPSHOT_DIR);
 
     /**
      * {@link #normalizedFolderEnvOverrides(Map)} の処理順（{@link #KEY_PM_AI_REPO_ROOT} を先に確定）。
@@ -290,6 +290,7 @@ public final class AppPaths {
         s.add(KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH);
         s.add(KEY_PM_AI_CURSOR_DEBUG_LOG);
         s.add(KEY_PM_AI_DEBUG_LOG_MIRROR);
+        s.add(KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR);
         s.addAll(TABULAR_DATA_TABLE_PATH_KEYS);
         return Set.copyOf(s);
     }
@@ -451,7 +452,7 @@ public final class AppPaths {
     }
 
     /**
-     * 環境変数のバイト数指定を解析する。{@code 8388608}、{@code 8M} / {@code 8MB}、{@code 8192K} 等。
+     * 環境変数のバイト数指定を解析する。{@code 20971520}、{@code 20M} / {@code 20MB}、{@code 8192K} 等。
      *
      * @return バイト数。0 は上限なし。「上限なし」は {@link #resolveActualDetailRawMaxBytes} がそのまま返す。
      *     負値は解析失敗。

@@ -256,7 +256,7 @@
   }, {
     "key" : "PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES",
     "value" : "",
-    "description" : "JavaFX 加工実績明細タブ: 元 xlsx/xlsm/csv の読込前サイズ上限（バイト）。空で 8388608（8MiB）。0 で無制限。16M / 64MB 等。"
+    "description" : "JavaFX 加工実績明細タブ: 元 xlsx/xlsm/csv の読込前サイズ上限（バイト）。空で 20971520（20MiB）。0 で無制限。16M / 64MB 等。"
   }, {
     "key" : "COMPARE_GANTT_SNAPSHOT_DIR",
     "value" : "",

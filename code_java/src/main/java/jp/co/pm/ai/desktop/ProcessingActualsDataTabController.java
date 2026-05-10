@@ -110,7 +110,7 @@ public final class ProcessingActualsDataTabController {
                     + "\u52a0\u5de5\u958b\u59cb\u65e5\u6642\u30fb\u52a0\u5de5\u7d42\u4e86\u65e5\u6642\u5217\u3092\u4ed8\u52a0\u3057\u307e\u3059\u3002"
                     + " \u7d9e\u308a\u8fbc\u307f\u5f8c\u3001\u540c\u4e00\u5de5\u7a0b\u540d\u30fb\u6a5f\u68b0\u540d\u30fb\u4f9d\u983cNO\uff08\u307e\u305f\u306f\u4f9d\u983c\uff2e\uff2f\uff09\u30fb\u52a0\u5de5\u65e5\u306e\u884c\u306f"
                     + "\u5148\u982d\u884c\u306e\u307f\u6b8b\u3057\u307e\u3059\u3002"
-                    + " PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES で元ファイルの読込上限（バイト、既定 8MiB、0 で無制限）を変更できます。";
+                    + " PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES で元ファイルの読込上限（バイト、既定 20MiB、0 で無制限）を変更できます。";
 
     /** {@link ColumnVisibilityDialog} / JSON と同一の必須見出しに対応するマスク（表示は強制）。 */
     private boolean[] mandatoryVisibilityMaskForHeaders(List<String> headers) {

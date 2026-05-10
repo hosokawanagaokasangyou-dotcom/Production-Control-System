@@ -100,8 +100,8 @@ class AppPathsTest {
     }
 
     @Test
-    void actualDetailRawMaxBytes_defaultsToEightMiB() {
-        assertEquals(8L * 1024 * 1024, AppPaths.resolveActualDetailRawMaxBytes(Map.of()));
+    void actualDetailRawMaxBytes_defaultsToTwentyMiB() {
+        assertEquals(20L * 1024 * 1024, AppPaths.resolveActualDetailRawMaxBytes(Map.of()));
     }
 
     @Test

@@ -173,7 +173,7 @@ public final class EnvVarDocs {
         put(
                 "PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES",
                 "JavaFX「加工実績」明細タブ: 元 Excel/CSV を POI で読む前のファイルサイズ上限（バイト）。"
-                        + "超過時は読込を中止しメッセージ表示（OOM 回避）。空または未設定で 8388608（8MiB）。"
+                        + "超過時は読込を中止しメッセージ表示（OOM 回避）。空または未設定で 20971520（20MiB）。"
                         + "0 以下で上限なし。例: 16777216、16M、64MB。");
         put(
                 "PM_AI_RESULT_DISPATCH_TABLE_DIR",
