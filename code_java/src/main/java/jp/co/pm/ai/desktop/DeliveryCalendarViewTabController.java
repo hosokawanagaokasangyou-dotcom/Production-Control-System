@@ -915,6 +915,7 @@ public final class DeliveryCalendarViewTabController {
                         "rowCount",
                         mainRows.size()));
         // #endregion
+        statusLabel.setText("反映完了");
     }
 
     private void loadMainCalendar(JsonNode mainCal) {
