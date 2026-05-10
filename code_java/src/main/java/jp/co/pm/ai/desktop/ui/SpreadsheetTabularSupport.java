@@ -51,9 +51,6 @@ public final class SpreadsheetTabularSupport {
     private static final String DC_STYLE_DATA_GREEN =
             "-fx-background-color: #d4edd4; -fx-text-fill: black;";
 
-    /** \u4e09\u91cd\u30bb\u30eb\u5185\u5404\u884c\u30e9\u30d9\u30eb\uff08\u30c6\u30fc\u30de\u7121\u8996\u30fb\u9ed2\uff09 */
-    private static final String DC_TRIPLE_LABEL_STYLE = "-fx-text-fill: black; -fx-font-size: 10px;";
-
     /** Date-column triple: lines shown as {@code (prefix)(qty)}; blanks show em dash after prefix. */
     private static final String DC_TRIPLE_PREFIX_PLAN = "(\u30a2\u30e9\u8a08\u753b)";
 
@@ -72,8 +69,8 @@ public final class SpreadsheetTabularSupport {
     private SpreadsheetTabularSupport() {}
 
     /**
-     * \u7d0d\u671f\u7ba1\u7406\u30d3\u30e5\u30fc\u306e {@link SpreadsheetView} \u306b\u56fa\u5b9a\u914d\u8272\u7528\u30b9\u30bf\u30a4\u30eb\u3092\u4ed8\u4e0e\u3059\u308b\uff08\u30b7\u30fc\u30f3\u30c6\u30fc\u30de\u306f\u7121\u8996\uff09\u3002
-     * {@link #buildReadOnlyDeliveryCalendarMainGrid} / {@link #buildReadOnlyPlainGrid}\uff08{@code deliveryLeadingColumns \u2265 0}\uff09\u3068\u7d44\u307f\u5408\u308f\u305b\u308b\u3002
+     * \u7d0d\u671f\u7ba1\u7406\u30d3\u30e5\u30fc\u7528\u306e\u88dc\u52a9\u30b9\u30bf\u30a4\u30eb\uff08\u73fe\u5728\u306f\u672a\u4f7f\u7528\u3002\u5c65\u6b74\u7684 API\uff09\u3002
+     * \u8868\u306e\u898b\u305f\u76ee\u306f {@link SpreadsheetThemeBridge} \u306b\u63c3\u3048\u308b\u3002
      */
     public static void installDeliveryCalendarSpreadsheetChrome(SpreadsheetView view) {
         Objects.requireNonNull(view, "view");
@@ -485,7 +482,7 @@ public final class SpreadsheetTabularSupport {
     /**
      * Read-only delivery-calendar main grid: date columns use a triple stack (task-input Aladdin / actual
      * detail / dispatch JSON); attribute columns ({@code leadingColumnCount} wide) are plain text.
-     * Cell colors follow {@link #installDeliveryCalendarSpreadsheetChrome} (fixed palette, not theme).
+     * Cell styling follows the scene theme ({@link SpreadsheetThemeBridge}); no fixed green/white palette.
      *
      * @param leadingColumnCount number of left fixed columns (must be {@code >= 0} and {@code <= cols})
      */
@@ -494,7 +491,6 @@ public final class SpreadsheetTabularSupport {
             ObservableList<ObservableList<DeliveryCalendarMainCell>> rows,
             int leadingColumnCount) {
         int cols = headersRef.size();
-        int lead = Math.max(0, Math.min(leadingColumnCount, cols));
         int rc = rows.size();
         int gridRowsTotal = rc + 1;
         GridBase grid = new GridBase(gridRowsTotal, cols);
@@ -508,7 +504,6 @@ public final class SpreadsheetTabularSupport {
             SpreadsheetCell cell =
                     SpreadsheetCellType.STRING.createCell(SPREADSHEET_FILTER_ROW, c, 1, 1, "");
             cell.setEditable(false);
-            cell.setStyle(DC_STYLE_HEADER_ROW);
             filterRow.add(cell);
         }
         gridRows.add(filterRow);
@@ -543,14 +538,6 @@ public final class SpreadsheetTabularSupport {
                                             + "\u52a0\u5de5\u5b9f\u7e3e / "
                                             + "\u914d\u53f0\u7d50\u679c\uff08\u7d50\u679c_\u914d\u53f0\u8868.json\uff09");
                     Tooltip.install(g, tt);
-                    if (c < lead) {
-                        cell.setStyle(DC_STYLE_LEADING_COL);
-                    } else {
-                        cell.setStyle(
-                                deliveryCalendarTripleQualifiesGreen(t)
-                                        ? DC_STYLE_DATA_GREEN
-                                        : DC_STYLE_DATA_WHITE);
-                    }
                     rowCells.add(cell);
                 } else {
                     String raw =
@@ -560,11 +547,6 @@ public final class SpreadsheetTabularSupport {
                     cell.setEditable(false);
                     cell.setCellGraphic(false);
                     cell.setGraphic(null);
-                    if (c < lead) {
-                        cell.setStyle(DC_STYLE_LEADING_COL);
-                    } else {
-                        cell.setStyle(deliveryCalendarDataStyleForDisplayText(raw));
-                    }
                     rowCells.add(cell);
                 }
             }
@@ -602,24 +584,15 @@ public final class SpreadsheetTabularSupport {
         return false;
     }
 
-    private static boolean deliveryCalendarTripleQualifiesGreen(DeliveryCalendarMainCell.TripleQty t) {
-        return deliveryCalendarCellQualifiesGreen(t.plan())
-                || deliveryCalendarCellQualifiesGreen(t.actual())
-                || deliveryCalendarCellQualifiesGreen(t.dispatch());
-    }
-
     private static Node deliveryCalendarTripleGraphic(DeliveryCalendarMainCell.TripleQty t) {
         VBox box = new VBox(1);
         box.setPadding(new Insets(2, 4, 2, 4));
         Label plan =
                 new Label(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_PLAN, t.plan()));
-        plan.setStyle(DC_TRIPLE_LABEL_STYLE);
         Label actual =
                 new Label(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_ACTUAL, t.actual()));
-        actual.setStyle(DC_TRIPLE_LABEL_STYLE);
         Label dispatch =
                 new Label(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_DISPATCH, t.dispatch()));
-        dispatch.setStyle(DC_TRIPLE_LABEL_STYLE);
         box.getChildren().addAll(plan, actual, dispatch);
         return box;
     }
@@ -737,24 +710,6 @@ public final class SpreadsheetTabularSupport {
 
     /** 計画結果スプレッドシートの行高さ％の上限（既定行高に対する倍率）。 */
     public static final double PLAN_RESULT_ROW_HEIGHT_PCT_MAX = 2000.0;
-
-    /**
-     * \u7d0d\u671f\u7ba1\u7406\u30d3\u30e5\u30fc\u300c\u30a2\u30e9\u30fb\u5b9f\u7e3e\u30fb\u30b7\u30b9\u6bd4\u8f03\u300d\u30e1\u30a4\u30f3\u8868\u306e\u884c\u9ad8\u3055\u30b9\u30e9\u30a4\u30c0\u30fc\u7bc4\u56f2\uff08%\uff09\u3002
-     */
-    public static final double DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MIN = 1.0;
-
-    /** Upper bound (\u0025) for {@link #DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MIN} slider pair; clamp in grid apply. */
-    public static final double DELIVERY_CALENDAR_MAIN_ROW_HEIGHT_PCT_MAX = 500.0;
-
-    /**
-     * \u7d0d\u671f\u7ba1\u7406\u30ab\u30ec\u30f3\u30c0\u30fc\uff083 \u6bb5\u30bb\u30eb\u30b0\u30e9\u30d5\u30a3\u30c3\u30af\uff09\u5411\u3051\uff1a100% \u30b9\u30e9\u30a4\u30c0\u30fc\u6642\u306e\u30c7\u30fc\u30bf\u884c\u57fa\u6e96\u9ad8\u3055\uff08px\uff09\u300224px \u3067\u306f\u884c\u306b\u53ce\u307e\u3089\u305a\u8868\u793a\u3055\u308c\u306a\u3044\u3002
-     */
-    public static final double DELIVERY_CALENDAR_ROW_HEIGHT_BASE_PX = 96.0;
-
-    /**
-     * 納期管理カレンダー向けデータ行の最小高さ（px）。スライダーを下げてもこの下限で 3 段が読めるようにする。
-     */
-    public static final double DELIVERY_CALENDAR_ROW_HEIGHT_MIN_PX = 72.0;
 
     /**
      * グリッド物理行数がこの値以上のとき、{@link #refreshSpreadsheetAfterRowPresentationChange} で {@link

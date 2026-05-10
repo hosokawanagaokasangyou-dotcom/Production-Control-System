@@ -205,12 +205,9 @@ public final class DeliveryCalendarViewTabController {
 
     @FXML
     private void initialize() {
-        StackPane.setAlignment(mainSpreadsheet, Pos.TOP_LEFT);
+        StackPane.setAlignment(mainSpreadsheet, Pos.CENTER_LEFT);
         mainSpreadsheetHost.getChildren().setAll(mainSpreadsheet);
         VBox.setVgrow(mainSpreadsheetHost, Priority.ALWAYS);
-        mainSpreadsheet.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
-        mainSpreadsheet.prefWidthProperty().bind(mainSpreadsheetHost.widthProperty());
-        mainSpreadsheet.prefHeightProperty().bind(mainSpreadsheetHost.heightProperty());
 
         if (metaScrollPane != null && metaLabel != null) {
             metaScrollPane.setFitToWidth(true);
@@ -218,7 +215,6 @@ public final class DeliveryCalendarViewTabController {
             metaLabel.prefWidthProperty().bind(metaScrollPane.widthProperty().subtract(18));
         }
 
-        SpreadsheetTabularSupport.installDeliveryCalendarSpreadsheetChrome(mainSpreadsheet);
         SpreadsheetThemeBridge.install(mainSpreadsheet);
         mainSpreadsheet.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
 
@@ -507,13 +503,7 @@ public final class DeliveryCalendarViewTabController {
                             mainHeadersRef, mainRows, headerColumnCountMain.get());
             TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs pres = mainPresentationPrefs.get();
             SpreadsheetTabularSupport.applySpreadsheetGridRowHeightsAndWrap(
-                    grid,
-                    pres.cellWrapText(),
-                    pres.rowHeightPercent(),
-                    SpreadsheetTabularSupport.DELIVERY_CALENDAR_ROW_HEIGHT_BASE_PX,
-                    SpreadsheetTabularSupport.DELIVERY_CALENDAR_ROW_HEIGHT_MIN_PX,
-                    SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MIN,
-                    SpreadsheetTabularSupport.PLAN_RESULT_ROW_HEIGHT_PCT_MAX);
+                    grid, pres.cellWrapText(), pres.rowHeightPercent());
             mainSpreadsheet.setGrid(grid);
             mainSpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
 
@@ -524,8 +514,7 @@ public final class DeliveryCalendarViewTabController {
                         SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                 mainSpreadsheet, headerColumnCountMain.get());
                         SpreadsheetTabularSupport.applyColumnFilters(mainSpreadsheet);
-                        SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(
-                                mainSpreadsheet, true);
+                        SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(mainSpreadsheet);
                         SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
                                 mainSpreadsheet,
                                 suppressMainPersistence::get,
