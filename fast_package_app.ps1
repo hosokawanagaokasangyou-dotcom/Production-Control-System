@@ -16,6 +16,7 @@
 #   .\fast_package_app.ps1 -JpackageDest C:\pm-ai-out   # ASCII-only parent for jpackage --dest (if launchers missing)
 #   .\fast_package_app.ps1 -JdkRuntimeImage C:\path\to\jdk   # skip download; needs bin\java.exe and bin\jpackage.exe
 #   .\fast_package_app.ps1 -ZipOptimal   # Step 8 ZIP: smallest/slowest (Optimal); default is Fastest for large bundles
+#   .\fast_package_app.ps1 -ZipQuiet    # minimal console during ZIP (faster when invoked via WSL -> powershell.exe)
 #   .\fast_package_app.ps1 -PackageReleaseParent G:\   # e.g. G:\pm-ai-package-release (folder created)
 #   .\fast_package_app.ps1 -PackageReleaseDir G:\pm-ai-package-release   # exact output folder
 #   When release output is not the repo default, download cache (JDK/JavaFX/Python) uses <release>\Cash_PMD instead of code_java\Cash_PMD.
@@ -45,6 +46,9 @@ param(
     [switch]$ZipFast,
 
     [switch]$ZipOptimal,
+
+    # Fewer progress lines (helps when running powershell.exe from WSL: console I/O can dominate).
+    [switch]$ZipQuiet,
 
     # Output folder for pm-ai-package-release contents (ZIPs, version.txt, interim bundles). Overrides repo-root default.
     [string]$PackageReleaseDir = '',
@@ -620,7 +624,7 @@ function Compress-PortableBundleFolderToZip {
     .SYNOPSIS
       Zip an app-image folder; omits pm-ai-data/version.txt (release version is beside the zip).
       Removes ZipFilePath if present (-ErrorAction Stop), then creates a new file (CreateNew).
-      Writes progress every 100 files (Optimal can spend minutes between lines on huge trees).
+      Progress interval: Optimal every 50 files; Fastest every 400 unless -ZipQuiet (then start/end only).
     #>
     [CmdletBinding()]
     param(
@@ -628,7 +632,8 @@ function Compress-PortableBundleFolderToZip {
         [string]$SourceDir,
         [Parameter(Mandatory = $true)]
         [string]$ZipFilePath,
-        [System.IO.Compression.CompressionLevel]$CompressionLevel = [System.IO.Compression.CompressionLevel]::Fastest
+        [System.IO.Compression.CompressionLevel]$CompressionLevel = [System.IO.Compression.CompressionLevel]::Fastest,
+        [switch]$QuietProgress
     )
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -641,8 +646,12 @@ function Compress-PortableBundleFolderToZip {
         New-Item -ItemType Directory -Path $zipParent -Force | Out-Null
     }
     $levelName = $CompressionLevel.ToString()
-    $progEvery = if ($CompressionLevel -eq [System.IO.Compression.CompressionLevel]::Optimal) { 50 } else { 100 }
-    Write-Host "  Compressing with $levelName (progress every $progEvery files; Optimal can take 30+ min on huge bundles)..." -ForegroundColor DarkGray
+    $progEvery = 400
+    if ($CompressionLevel -eq [System.IO.Compression.CompressionLevel]::Optimal) {
+        $progEvery = 50
+    }
+    $progHint = if ($QuietProgress) { ' (quiet: start/end only)' } else { " (progress every $progEvery files)" }
+    Write-Host "  Compressing with $levelName$progHint..." -ForegroundColor DarkGray
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $fileCount = 0
     $fs = [System.IO.File]::Open($ZipFilePath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
@@ -661,33 +670,50 @@ function Compress-PortableBundleFolderToZip {
                     throw "Unsafe zip entry name: $entryName"
                 }
                 $fileCount++
-                if (($fileCount % $progEvery) -eq 0) {
+                if (-not $QuietProgress -and (($fileCount % $progEvery) -eq 0)) {
                     $elapsed = $sw.Elapsed.ToString('mm\:ss')
                     Write-Host "  ... ZIP progress: $fileCount files ($elapsed)" -ForegroundColor DarkGray
                 }
                 $entry = $zip.CreateEntry($entryName, $CompressionLevel)
                 $es = $entry.Open()
                 try {
-                    # OpenRead は共有が狭く、ウイルス対策・インデクサ等の短時間ロックで IOException になりやすい
-                    $share = [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
-                    $maxAttempts = 6
-                    $delayMs = 120
-                    for ($a = 1; $a -le $maxAttempts; $a++) {
+                    # Fast path: OpenRead + CopyTo (matches older fast_package_app.ps1). Fallback only if OpenRead fails (AV lock on open).
+                    $srcFast = $null
+                    try {
+                        $srcFast = [System.IO.File]::OpenRead($full)
+                    }
+                    catch [System.IO.IOException] {
+                        $srcFast = $null
+                    }
+                    if ($null -ne $srcFast) {
                         try {
-                            $srcFs = [System.IO.File]::Open($full, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $share)
-                            try {
-                                $srcFs.CopyTo($es)
-                            }
-                            finally {
-                                $srcFs.Dispose()
-                            }
-                            break
+                            $srcFast.CopyTo($es)
                         }
-                        catch [System.IO.IOException] {
-                            if ($a -eq $maxAttempts) {
-                                throw
+                        finally {
+                            $srcFast.Dispose()
+                        }
+                    }
+                    else {
+                        $share = [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
+                        $maxAttempts = 6
+                        $delayMs = 120
+                        for ($a = 1; $a -le $maxAttempts; $a++) {
+                            try {
+                                $srcFs = [System.IO.File]::Open($full, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $share)
+                                try {
+                                    $srcFs.CopyTo($es)
+                                }
+                                finally {
+                                    $srcFs.Dispose()
+                                }
+                                break
                             }
-                            Start-Sleep -Milliseconds $delayMs
+                            catch [System.IO.IOException] {
+                                if ($a -eq $maxAttempts) {
+                                    throw
+                                }
+                                Start-Sleep -Milliseconds $delayMs
+                            }
                         }
                     }
                 }
@@ -1158,10 +1184,12 @@ else {
     [System.IO.Compression.CompressionLevel]::Fastest
 }
 
+$zipQuiet = [bool]$ZipQuiet
+
 Write-Host "Zipping Initial -> $zipInitial" -ForegroundColor Cyan
-Compress-PortableBundleFolderToZip -SourceDir $bundleOutInitial -ZipFilePath $zipInitial -CompressionLevel $zipCompression
+Compress-PortableBundleFolderToZip -SourceDir $bundleOutInitial -ZipFilePath $zipInitial -CompressionLevel $zipCompression -QuietProgress:$zipQuiet
 Write-Host "Zipping Upgrade -> $zipUpgrade" -ForegroundColor Cyan
-Compress-PortableBundleFolderToZip -SourceDir $bundleOutUpgrade -ZipFilePath $zipUpgrade -CompressionLevel $zipCompression
+Compress-PortableBundleFolderToZip -SourceDir $bundleOutUpgrade -ZipFilePath $zipUpgrade -CompressionLevel $zipCompression -QuietProgress:$zipQuiet
 
 if (-not (Test-Path -LiteralPath $zipInitial) -or -not (Test-Path -LiteralPath $zipUpgrade)) {
     throw "ZIP output missing after compress (initial or upgrade)."
