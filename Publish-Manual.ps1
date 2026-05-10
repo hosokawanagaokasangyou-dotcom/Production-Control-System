@@ -7,6 +7,11 @@
   リポジトリ直下から実行する。
     .\Publish-Manual.ps1
 
+  本スクリプトはマニュアル HTML パイプラインのみです。JavaFX デスクトップのパッケージングはリポジトリ直下の fast_package_app.ps1 を使います。
+  成果物・キャッシュを G ドライブ側にまとめる例:
+    .\fast_package_app.ps1 -PackageReleaseParent G:\
+  または環境変数 PM_AI_PACKAGE_RELEASE_PARENT / PM_AI_PACKAGE_RELEASE_DIR。キャッシュだけ別パスにする場合は PM_AI_CASH_PMD または -CashPmdDir。
+
   事前に Python 3.10+ と依存を用意する。
     pip install -r manual/requirements.txt
 

@@ -19,8 +19,10 @@
 #   .\fast_package_app.ps1 -PackageReleaseParent G:\   # e.g. G:\pm-ai-package-release (folder created)
 #   .\fast_package_app.ps1 -PackageReleaseDir G:\pm-ai-package-release   # exact output folder
 #   When release output is not the repo default, download cache (JDK/JavaFX/Python) uses <release>\Cash_PMD instead of code_java\Cash_PMD.
+#   Override cache only: -CashPmdDir or PM_AI_CASH_PMD (wins over co-located / code_java rules).
 # Env: PM_AI_JPACKAGE_DEST, PM_AI_JDK_RUNTIME_IMAGE (optional)
 # Env: PM_AI_PACKAGE_RELEASE_DIR (full path), PM_AI_PACKAGE_RELEASE_PARENT (parent of pm-ai-package-release folder)
+# Env: PM_AI_CASH_PMD (full path to Cash_PMD folder)
 
 # UTF-8 BOM: Windows PowerShell 5.1 parses this file as UTF-8. Body is ASCII-only; Japanese paths live in package_app_mandatory_code_paths.txt.
 [CmdletBinding()]
@@ -46,17 +48,31 @@ param(
     [string]$PackageReleaseDir = '',
 
     # Parent directory only; actual folder is <parent>\pm-ai-package-release (created). Ignored if -PackageReleaseDir is set.
-    [string]$PackageReleaseParent = ''
+    [string]$PackageReleaseParent = '',
+
+    # JDK/JavaFX/Python download cache folder (optional). Overrides code_java\Cash_PMD and <release>\Cash_PMD. Env: PM_AI_CASH_PMD.
+    [string]$CashPmdDir = ''
 )
 
 $ErrorActionPreference = 'Stop'
 
 # Script lives at repo root; Maven project is code_java/.
 $ScriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Get-Location }
-$WorkspaceRoot = $ScriptRoot
+try {
+    $WorkspaceRoot = [System.IO.Path]::GetFullPath($ScriptRoot.Trim())
+}
+catch {
+    $WorkspaceRoot = $ScriptRoot
+}
 $CodeJavaRoot = Join-Path $WorkspaceRoot 'code_java'
 $ReleaseDirName = 'pm-ai-package-release'
 $releaseDefault = Join-Path $WorkspaceRoot $ReleaseDirName
+try {
+    $releaseDefault = [System.IO.Path]::GetFullPath($releaseDefault.Trim())
+}
+catch {
+    # keep joined path
+}
 if (-not [string]::IsNullOrWhiteSpace($PackageReleaseDir)) {
     $ReleaseRoot = $PackageReleaseDir.Trim().TrimEnd('\', '/')
 }
@@ -72,7 +88,13 @@ elseif (-not [string]::IsNullOrWhiteSpace($env:PM_AI_PACKAGE_RELEASE_PARENT)) {
 else {
     $ReleaseRoot = $releaseDefault
 }
-if ($ReleaseRoot -ne $releaseDefault) {
+try {
+    $ReleaseRoot = [System.IO.Path]::GetFullPath($ReleaseRoot.Trim())
+}
+catch {
+    # keep trimmed path
+}
+if (-not [string]::Equals($ReleaseRoot, $releaseDefault, [System.StringComparison]::OrdinalIgnoreCase)) {
     Write-Host "Release output directory (override): $ReleaseRoot" -ForegroundColor Cyan
 }
 $BundleInitialName = 'PMD_initial_install'
@@ -751,8 +773,24 @@ $packageInput = Join-Path $CodeJavaRoot 'package_input'
 Copy-JpackageInputDirectory -RootPath $CodeJavaRoot -MainJarName $proj.MainJar -DestPath $packageInput
 
 New-Item -ItemType Directory -Path $ReleaseRoot -Force | Out-Null
-# Download cache (JDK/JavaFX/Python embed): default code_java\Cash_PMD; when release output is overridden, <release>\Cash_PMD (same drive as ZIP output).
-if ($ReleaseRoot -eq $releaseDefault) {
+# Download cache: explicit -CashPmdDir / PM_AI_CASH_PMD; else code_java\Cash_PMD when release folder is the default; else <ReleaseRoot>\Cash_PMD.
+$cashExplicit = ''
+if (-not [string]::IsNullOrWhiteSpace($CashPmdDir)) {
+    $cashExplicit = $CashPmdDir.Trim().TrimEnd('\', '/')
+}
+elseif (-not [string]::IsNullOrWhiteSpace($env:PM_AI_CASH_PMD)) {
+    $cashExplicit = $env:PM_AI_CASH_PMD.Trim().TrimEnd('\', '/')
+}
+if (-not [string]::IsNullOrWhiteSpace($cashExplicit)) {
+    try {
+        $cacheRoot = [System.IO.Path]::GetFullPath($cashExplicit.Trim())
+    }
+    catch {
+        $cacheRoot = $cashExplicit
+    }
+    Write-Host "Download cache (explicit -CashPmdDir / PM_AI_CASH_PMD): $cacheRoot" -ForegroundColor Cyan
+}
+elseif ([string]::Equals($ReleaseRoot, $releaseDefault, [System.StringComparison]::OrdinalIgnoreCase)) {
     $cacheRoot = Join-Path $CodeJavaRoot 'Cash_PMD'
     $legacyCashUnderRelease = Join-Path $ReleaseRoot 'Cash_PMD'
     if (Test-Path -LiteralPath $legacyCashUnderRelease) {
