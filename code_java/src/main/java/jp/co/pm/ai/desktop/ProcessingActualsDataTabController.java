@@ -4,16 +4,20 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.text.Collator;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.TreeSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import javafx.animation.PauseTransition;
 import javafx.application.Platform;
+import javafx.concurrent.Task;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
@@ -29,6 +33,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
@@ -148,6 +153,11 @@ public final class ProcessingActualsDataTabController {
 
     private volatile Path loadedPath;
 
+    /** 重複した古い {@link Task} の結果を UI に適用しないための世代番号。 */
+    private final AtomicLong reloadGeneration = new AtomicLong();
+
+    private volatile Task<?> activeReloadTask;
+
     private volatile boolean presentationHooksInstalled;
 
     private final AtomicBoolean suppressFilterUi = new AtomicBoolean(false);
@@ -203,7 +213,7 @@ public final class ProcessingActualsDataTabController {
                             if (idx < 0) {
                                 return;
                             }
-                            Platform.runLater(() -> applyLoadedFile(loadedPath, idx, false));
+                            reloadSheetFromDiskAsync(false);
                         });
 
         if (manufacturingConditionBreakdownFilterCombo != null) {
@@ -234,7 +244,14 @@ public final class ProcessingActualsDataTabController {
 
         initSpreadsheetPresentationControls();
 
-        Platform.runLater(this::reloadFromSourceDir);
+        /*
+         * 起動直後は他タブの JSON 復元などと同時にヒープを食い合わないよう、短く遅延してから読込む。
+         * POI 本体は {@link #reloadFromSourceDir} 内の Task でバックグラウンドスレッドへオフロードする。
+         */
+        PauseTransition defer =
+                new PauseTransition(Duration.millis(1200));
+        defer.setOnFinished(e -> reloadFromSourceDir());
+        defer.play();
     }
 
     private void onLeadingColumnCountCommitted(int n) {
@@ -415,99 +432,218 @@ public final class ProcessingActualsDataTabController {
         reloadFromSourceDir();
     }
 
-    private void reloadFromSourceDir() {
-        if (shell == null) {
-            return;
-        }
-        refreshButton.setDisable(true);
-        try {
-            Map<String, String> ui = shell.snapshotUiEnv();
-            Path dir = AppPaths.resolveActualDetailSourceDir(ui);
-            dirLabel.setText(dir != null ? dir.toString() : "(\u672a\u8a2d\u5b9a)");
-            NetworkSourceDirResolver.Result r = NetworkSourceDirResolver.resolve(ui);
-            Optional<Path> resolved = r.actualDetailPath();
-            if (resolved.isEmpty()) {
-                statusLabel.setText("\u30d5\u30a1\u30a4\u30eb\u306a\u3057\u307e\u305f\u306f\u53c2\u7167\u4e0d\u53ef");
-                pathLabel.setText("");
-                sheetCombo.setDisable(true);
-                sheetCombo.getItems().clear();
-                loadedPath = null;
-                applyEmpty();
-                return;
-            }
-            Path file = resolved.get().toAbsolutePath().normalize();
-            loadedPath = file;
-            pathLabel.setText(file.toString());
+    /** Excel / CSV の読込・成形は POI が重いためワーカースレッドで実行する。 */
+    private record ActualsReloadPayload(
+            boolean excel,
+            List<String> sheetNames,
+            int selectedSheetIndex,
+            PlanInputTabularIo.TabularSheet shaped) {}
 
-            String low = file.getFileName().toString().toLowerCase(Locale.ROOT);
-            if (low.endsWith(".pq") || low.endsWith(".parquet")) {
-                statusLabel.setText("Parquet \u672a\u5bfe\u5fdc");
-                sheetCombo.setDisable(true);
-                sheetCombo.getItems().clear();
-                applyEmpty();
-                return;
-            }
-
-            if (isExcelPath(file)) {
-                suppressSheetUi.set(true);
-                try {
-                    List<String> names = TaskInputSourceRawGridIo.listExcelSheetNames(file);
-                    sheetCombo.getItems().setAll(names);
-                    sheetCombo.setDisable(names.isEmpty());
-                    if (!names.isEmpty()) {
-                        sheetCombo.getSelectionModel().select(0);
-                        selectPreferredSheet(ui, names);
-                    }
-                } catch (IOException ex) {
-                    statusLabel.setText("\u30b7\u30fc\u30c8\u4e00\u89a7\u30a8\u30e9\u30fc");
-                    if (shell != null) {
-                        shell.appendLog(
-                                "[processing-actuals-detail] "
-                                        + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
-                    }
-                    sheetCombo.setDisable(true);
-                    sheetCombo.getItems().clear();
-                    applyEmpty();
-                    return;
-                } finally {
-                    suppressSheetUi.set(false);
-                }
-                applyLoadedFile(file, sheetCombo.getSelectionModel().getSelectedIndex(), true);
-            } else {
-                sheetCombo.setDisable(true);
-                sheetCombo.getItems().clear();
-                applyLoadedFile(file, 0, true);
-            }
-        } finally {
-            refreshButton.setDisable(false);
-        }
+    private static PlanInputTabularIo.TabularSheet shapeLoaded(Path file, int excelSheetIndex)
+            throws IOException {
+        return TaskInputSourceRawGridIo.applyProcessingActualsDateTimeColumns(
+                TaskInputSourceRawGridIo.applyProcessingActualsDisplaySteps(
+                        TaskInputSourceRawGridIo.readRaw(file, excelSheetIndex)));
     }
 
-    private void selectPreferredSheet(Map<String, String> ui, List<String> names) {
-        if (sheetCombo == null || names == null || names.isEmpty() || ui == null) {
-            return;
+    private static int preferredSheetIndex(List<String> names, Map<String, String> ui) {
+        if (names == null || names.isEmpty()) {
+            return 0;
         }
-        String want = ui.get(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SHEET);
+        String want = ui != null ? ui.get(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SHEET) : null;
         if (want != null) {
             want = want.strip();
         }
         if (want == null || want.isEmpty()) {
-            return;
+            return 0;
         }
         int ix = names.indexOf(want);
-        if (ix >= 0) {
-            sheetCombo.getSelectionModel().select(ix);
-        }
+        return ix >= 0 ? ix : 0;
     }
 
-    private void applyLoadedFile(Path file, int excelSheetIndex, boolean showErrorsInStatus) {
+    private void reloadFromSourceDir() {
+        if (shell == null) {
+            return;
+        }
+        if (activeReloadTask != null) {
+            activeReloadTask.cancel(true);
+        }
+        refreshButton.setDisable(true);
+        final long gen = reloadGeneration.incrementAndGet();
+        final Map<String, String> uiSnap = new HashMap<>(shell.snapshotUiEnv());
+
+        Path dir = AppPaths.resolveActualDetailSourceDir(uiSnap);
+        dirLabel.setText(dir != null ? dir.toString() : "(\u672a\u8a2d\u5b9a)");
+        NetworkSourceDirResolver.Result r = NetworkSourceDirResolver.resolve(uiSnap);
+        Optional<Path> resolved = r.actualDetailPath();
+        if (resolved.isEmpty()) {
+            statusLabel.setText("\u30d5\u30a1\u30a4\u30eb\u306a\u3057\u307e\u305f\u306f\u53c2\u7167\u4e0d\u53ef");
+            pathLabel.setText("");
+            sheetCombo.setDisable(true);
+            sheetCombo.getItems().clear();
+            loadedPath = null;
+            applyEmpty();
+            refreshButton.setDisable(false);
+            return;
+        }
+        Path file = resolved.get().toAbsolutePath().normalize();
+        loadedPath = file;
+        pathLabel.setText(file.toString());
+        statusLabel.setText("\u8aad\u8fbc\u4e2d\u2026");
+
+        String low = file.getFileName().toString().toLowerCase(Locale.ROOT);
+        if (low.endsWith(".pq") || low.endsWith(".parquet")) {
+            statusLabel.setText("Parquet \u672a\u5bfe\u5fdc");
+            sheetCombo.setDisable(true);
+            sheetCombo.getItems().clear();
+            applyEmpty();
+            refreshButton.setDisable(false);
+            return;
+        }
+
+        Task<ActualsReloadPayload> task =
+                new Task<>() {
+                    @Override
+                    protected ActualsReloadPayload call() throws Exception {
+                        if (isCancelled()) {
+                            return null;
+                        }
+                        if (isExcelPath(file)) {
+                            List<String> names = TaskInputSourceRawGridIo.listExcelSheetNames(file);
+                            if (names.isEmpty()) {
+                                throw new IOException("Excel \u306b\u30b7\u30fc\u30c8\u304c\u3042\u308a\u307e\u305b\u3093");
+                            }
+                            int idx = preferredSheetIndex(names, uiSnap);
+                            if (idx >= names.size()) {
+                                idx = 0;
+                            }
+                            PlanInputTabularIo.TabularSheet shaped = shapeLoaded(file, idx);
+                            return new ActualsReloadPayload(true, names, idx, shaped);
+                        }
+                        PlanInputTabularIo.TabularSheet shaped = shapeLoaded(file, 0);
+                        return new ActualsReloadPayload(false, List.of(), 0, shaped);
+                    }
+                };
+
+        activeReloadTask = task;
+        task.setOnSucceeded(
+                ev -> {
+                    activeReloadTask = null;
+                    if (gen != reloadGeneration.get()) {
+                        refreshButton.setDisable(false);
+                        return;
+                    }
+                    ActualsReloadPayload p = task.getValue();
+                    if (p == null) {
+                        refreshButton.setDisable(false);
+                        return;
+                    }
+                    applyReloadPayloadOnFx(p, true);
+                    refreshButton.setDisable(false);
+                });
+        task.setOnFailed(
+                ev -> {
+                    activeReloadTask = null;
+                    if (gen != reloadGeneration.get()) {
+                        refreshButton.setDisable(false);
+                        return;
+                    }
+                    Throwable ex = task.getException();
+                    statusLabel.setText("\u8aad\u8fbc\u30a8\u30e9\u30fc");
+                    if (shell != null) {
+                        shell.appendLog(
+                                "[processing-actuals-detail] "
+                                        + (ex != null && ex.getMessage() != null
+                                                ? ex.getMessage()
+                                                : String.valueOf(ex)));
+                    }
+                    applyEmpty();
+                    refreshButton.setDisable(false);
+                });
+        new Thread(task, "processing-actuals-reload").start();
+    }
+
+    private void applyReloadPayloadOnFx(ActualsReloadPayload p, boolean showErrorsInStatus) {
+        if (p.excel()) {
+            suppressSheetUi.set(true);
+            try {
+                sheetCombo.getItems().setAll(p.sheetNames());
+                sheetCombo.setDisable(p.sheetNames().isEmpty());
+                if (!p.sheetNames().isEmpty()) {
+                    sheetCombo.getSelectionModel().select(p.selectedSheetIndex());
+                }
+            } finally {
+                suppressSheetUi.set(false);
+            }
+        } else {
+            sheetCombo.setDisable(true);
+            sheetCombo.getItems().clear();
+        }
+        applyShapedToUi(p.shaped(), showErrorsInStatus);
+    }
+
+    /** シートタブ変更時: 選択インデックスでブックを再読込（ワーカースレッド）。 */
+    private void reloadSheetFromDiskAsync(boolean showErrorsInStatus) {
+        Path path = loadedPath;
+        if (shell == null || path == null || !isExcelPath(path)) {
+            return;
+        }
+        int idx = sheetCombo.getSelectionModel().getSelectedIndex();
+        if (idx < 0) {
+            return;
+        }
+        if (activeReloadTask != null) {
+            activeReloadTask.cancel(true);
+        }
+        refreshButton.setDisable(true);
+        final long gen = reloadGeneration.incrementAndGet();
+        Task<PlanInputTabularIo.TabularSheet> task =
+                new Task<>() {
+                    @Override
+                    protected PlanInputTabularIo.TabularSheet call() throws Exception {
+                        return shapeLoaded(path, idx);
+                    }
+                };
+        activeReloadTask = task;
+        task.setOnSucceeded(
+                ev -> {
+                    activeReloadTask = null;
+                    if (gen != reloadGeneration.get()) {
+                        refreshButton.setDisable(false);
+                        return;
+                    }
+                    PlanInputTabularIo.TabularSheet shaped = task.getValue();
+                    applyShapedToUi(shaped, showErrorsInStatus);
+                    refreshButton.setDisable(false);
+                });
+        task.setOnFailed(
+                ev -> {
+                    activeReloadTask = null;
+                    if (gen != reloadGeneration.get()) {
+                        refreshButton.setDisable(false);
+                        return;
+                    }
+                    Throwable ex = task.getException();
+                    if (showErrorsInStatus) {
+                        statusLabel.setText("\u8aad\u8fbc\u30a8\u30e9\u30fc");
+                    }
+                    if (shell != null) {
+                        shell.appendLog(
+                                "[processing-actuals-detail] "
+                                        + (ex != null && ex.getMessage() != null
+                                                ? ex.getMessage()
+                                                : String.valueOf(ex)));
+                    }
+                    applyEmpty();
+                    refreshButton.setDisable(false);
+                });
+        new Thread(task, "processing-actuals-sheet").start();
+    }
+
+    private void applyShapedToUi(
+            PlanInputTabularIo.TabularSheet shaped, boolean showErrorsInStatus) {
         try {
-            PlanInputTabularIo.TabularSheet shaped =
-                    TaskInputSourceRawGridIo.applyProcessingActualsDateTimeColumns(
-                            TaskInputSourceRawGridIo.applyProcessingActualsDisplaySteps(
-                                    TaskInputSourceRawGridIo.readRaw(file, excelSheetIndex)));
             rememberShapedSnapshot(shaped);
-            // Persist unfiltered shaped data for calendar overlay reuse
             if (shell != null) {
                 try {
                     java.nio.file.Path savePath =
