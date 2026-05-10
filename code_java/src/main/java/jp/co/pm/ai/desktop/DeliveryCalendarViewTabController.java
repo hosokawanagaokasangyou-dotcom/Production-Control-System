@@ -258,7 +258,7 @@ public final class DeliveryCalendarViewTabController {
         }
 
         SpreadsheetThemeBridge.install(mainSpreadsheet);
-        SpreadsheetTabularSupport.installDeliveryCalendarSpreadsheetChrome(mainSpreadsheet);
+        SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome(mainSpreadsheet);
         // 閲覧用: MULTIPLE は範囲・見出し連動で選択表示が断片化しやすい（固定列あり時）
         mainSpreadsheet.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
 

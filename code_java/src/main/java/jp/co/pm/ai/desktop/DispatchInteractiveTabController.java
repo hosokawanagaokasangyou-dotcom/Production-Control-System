@@ -254,6 +254,8 @@ public final class DispatchInteractiveTabController {
 
         SpreadsheetThemeBridge.install(wideSpreadsheet);
         SpreadsheetThemeBridge.install(byDaySpreadsheet);
+        SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome(wideSpreadsheet);
+        SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome(byDaySpreadsheet);
 
         wideSpreadsheet.getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
         byDaySpreadsheet.getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
@@ -1256,6 +1258,7 @@ public final class DispatchInteractiveTabController {
                     SpreadsheetCellType.STRING.createCell(
                             SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW, c, 1, 1, "");
             cell.setEditable(false);
+            cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_FILTER_ROW);
             filterRow.add(cell);
         }
         gridRows.add(filterRow);
@@ -1279,6 +1282,7 @@ public final class DispatchInteractiveTabController {
                 SpreadsheetCell cell =
                         SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, raw != null ? raw : "");
                 cell.setEditable(c > 0);
+                cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_LEADING_COL);
                 line.add(cell);
             }
             for (int di = 0; di < dayCount; di++) {
@@ -1319,6 +1323,7 @@ public final class DispatchInteractiveTabController {
                     SpreadsheetCellType.STRING.createCell(
                             SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW, c, 1, 1, "");
             cell.setEditable(false);
+            cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_FILTER_ROW);
             filterRow.add(cell);
         }
         gridRows.add(filterRow);
@@ -1346,14 +1351,17 @@ public final class DispatchInteractiveTabController {
             SpreadsheetCell c0 =
                     SpreadsheetCellType.STRING.createCell(gridRow, 0, 1, 1, br.process());
             c0.setEditable(false);
+            c0.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_LEADING_COL);
             line.add(c0);
             SpreadsheetCell c1 =
                     SpreadsheetCellType.STRING.createCell(gridRow, 1, 1, 1, br.machine());
             c1.setEditable(false);
+            c1.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_LEADING_COL);
             line.add(c1);
             SpreadsheetCell c2 =
                     SpreadsheetCellType.STRING.createCell(gridRow, 2, 1, 1, br.processingContent());
             c2.setEditable(false);
+            c2.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_LEADING_COL);
             line.add(c2);
             for (int di = 0; di < dayCount; di++) {
                 double dayAmt = br.getAmount(di);
@@ -1582,9 +1590,9 @@ public final class DispatchInteractiveTabController {
             WideRow wr, int dateIdx, SpreadsheetCell cell, boolean staffHighlight) {
         double q = wr.getAmount(dateIdx);
         if (staffHighlight && q > 1e-9) {
-            cell.setStyle("-fx-background-color: #ffe0e0;");
+            cell.setStyle("-fx-background-color: #ffe0e0; -fx-text-fill: black;");
         } else {
-            cell.setStyle("");
+            cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_DATA_WHITE);
         }
     }
 
@@ -1731,9 +1739,9 @@ public final class DispatchInteractiveTabController {
             ByDayRow br, int dateIdx, SpreadsheetCell cell, boolean staffHighlight) {
         double q = br.getAmount(dateIdx);
         if (staffHighlight && q > 1e-9) {
-            cell.setStyle("-fx-background-color: #ffe0e0;");
+            cell.setStyle("-fx-background-color: #ffe0e0; -fx-text-fill: black;");
         } else {
-            cell.setStyle("");
+            cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_DATA_WHITE);
         }
     }
 

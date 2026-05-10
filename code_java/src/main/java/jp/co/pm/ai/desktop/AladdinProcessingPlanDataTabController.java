@@ -128,6 +128,7 @@ public final class AladdinProcessingPlanDataTabController {
 
         spreadsheetView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
         SpreadsheetThemeBridge.install(spreadsheetView);
+        SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome(spreadsheetView);
 
         columnStripHost
                 .getChildren()
@@ -268,7 +269,12 @@ public final class AladdinProcessingPlanDataTabController {
             }
             return;
         }
-        SpreadsheetColumnReorderDialog.show(ownerStage, new ArrayList<>(headersRef))
+        boolean[] visForDialog =
+                TableColumnOrderPersistence.loadColumnVisibility(
+                        TableColumnOrderPersistence.TableId.ALADDIN_PROCESSING_PLAN_RAW,
+                        headersRef.size());
+        SpreadsheetColumnReorderDialog.show(
+                        ownerStage, new ArrayList<>(headersRef), visForDialog)
                 .ifPresent(
                         perm -> {
                             List<String> oldHeaders = new ArrayList<>(headersRef);
@@ -322,7 +328,9 @@ public final class AladdinProcessingPlanDataTabController {
                             headersRef, persistedLayout.get(), 112);
             final double widthDefault = 112;
 
-            GridBase grid = SpreadsheetTabularSupport.buildReadOnlyPlainGrid(headersRef, rows);
+            GridBase grid =
+                    SpreadsheetTabularSupport.buildReadOnlyPlainGrid(
+                            headersRef, rows, headerColumnCount.get());
             TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs pres = spreadsheetTabPrefs.get();
             SpreadsheetTabularSupport.applySpreadsheetGridRowHeightsAndWrap(
                     grid, pres.cellWrapText(), pres.rowHeightPercent());

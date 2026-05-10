@@ -1,66 +1,62 @@
 /*
- * ???????????????????? SpreadsheetView ??
- * SpreadsheetTabularSupport.installDeliveryCalendarSpreadsheetChrome ????
- * ????????????????????????????
+ * ControlsFX SpreadsheetView: fixed light palette (theme-independent).
+ * Applied via SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome (style class pm-ai-readable-spreadsheet).
  */
 
-.delivery-calendar-spreadsheet.table-view.cell-spreadsheet {
+.pm-ai-readable-spreadsheet.table-view.cell-spreadsheet {
     -fx-background-color: #ffffff;
 }
 
-/* ????: ????? text-fill ?????? */
-.delivery-calendar-spreadsheet .spreadsheet-cell {
+.pm-ai-readable-spreadsheet .spreadsheet-cell {
     -fx-border-color: #cccccc;
     -fx-text-fill: black;
 }
 
-.delivery-calendar-spreadsheet .spreadsheet-cell:filled {
+.pm-ai-readable-spreadsheet .spreadsheet-cell:filled {
     -fx-text-fill: black;
 }
 
-.delivery-calendar-spreadsheet .spreadsheet-cell .label {
+.pm-ai-readable-spreadsheet .spreadsheet-cell .label {
     -fx-text-fill: black;
 }
 
-.delivery-calendar-spreadsheet .spreadsheet-cell .text {
+.pm-ai-readable-spreadsheet .spreadsheet-cell .text {
     -fx-fill: black;
 }
 
-/* ???????VerticalHeader? */
-.delivery-calendar-spreadsheet VerticalHeader > Label,
-.delivery-calendar-spreadsheet VerticalHeader > Label.fixed {
+.pm-ai-readable-spreadsheet VerticalHeader > Label,
+.pm-ai-readable-spreadsheet VerticalHeader > Label.fixed {
     -fx-background-color: #e8e8e8;
     -fx-text-fill: black;
 }
 
-/* ???????HorizontalHeaderColumn? */
-.delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column,
-.delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.fixed {
+.pm-ai-readable-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column,
+.pm-ai-readable-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.fixed {
     -fx-background-color: #e8e8e8;
     -fx-text-fill: black;
 }
 
-.delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column .label,
-.delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.fixed .label {
+.pm-ai-readable-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column .label,
+.pm-ai-readable-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.fixed .label {
     -fx-text-fill: black;
 }
 
-.delivery-calendar-spreadsheet VerticalHeader > Label.selected,
-.delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.selected,
-.delivery-calendar-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.selected > Label {
+.pm-ai-readable-spreadsheet VerticalHeader > Label.selected,
+.pm-ai-readable-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.selected,
+.pm-ai-readable-spreadsheet HorizontalHeaderColumn > TableColumnHeader.column-header.table-column.selected > Label {
     -fx-background-color: #d0d0d0;
     -fx-text-fill: black;
 }
 
-.delivery-calendar-spreadsheet .spreadsheet-cell:filled:selected,
-.delivery-calendar-spreadsheet .spreadsheet-cell:filled:focused:selected,
-.delivery-calendar-spreadsheet .spreadsheet-cell:filled:focused:selected:hover {
+.pm-ai-readable-spreadsheet .spreadsheet-cell:filled:selected,
+.pm-ai-readable-spreadsheet .spreadsheet-cell:filled:focused:selected,
+.pm-ai-readable-spreadsheet .spreadsheet-cell:filled:focused:selected:hover {
     -fx-background-color: #b8c8d8;
     -fx-text-fill: black;
     -fx-border-color: #999999;
 }
 
-.delivery-calendar-spreadsheet CellView > .text-input.text-field,
-.delivery-calendar-spreadsheet CellView > .text-input.text-area {
+.pm-ai-readable-spreadsheet CellView > .text-input.text-field,
+.pm-ai-readable-spreadsheet CellView > .text-input.text-area {
     -fx-text-fill: black;
 }

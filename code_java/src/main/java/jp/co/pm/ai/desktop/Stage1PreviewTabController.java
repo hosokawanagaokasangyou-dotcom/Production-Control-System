@@ -121,6 +121,7 @@ public final class Stage1PreviewTabController {
         rows = FXCollections.observableArrayList();
         spreadsheetView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
         SpreadsheetThemeBridge.install(spreadsheetView);
+        SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome(spreadsheetView);
 
         SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
                 spreadsheetHost, headerColumnCount::get);
@@ -269,7 +270,11 @@ public final class Stage1PreviewTabController {
             shell.appendLog("[stage1-preview] 列がありません（先に読み込み）");
             return;
         }
-        SpreadsheetColumnReorderDialog.show(ownerStage, new ArrayList<>(headersRef))
+        boolean[] visForDialog =
+                TableColumnOrderPersistence.loadColumnVisibility(
+                        TableColumnOrderPersistence.TableId.STAGE1_PREVIEW, headersRef.size());
+        SpreadsheetColumnReorderDialog.show(
+                        ownerStage, new ArrayList<>(headersRef), visForDialog)
                 .ifPresent(
                         perm -> {
                             List<String> oldHeaders = new ArrayList<>(headersRef);
@@ -429,7 +434,9 @@ public final class Stage1PreviewTabController {
                             headersRef, persistedLayout.get(), colW);
             final double widthDefault = colW;
 
-            GridBase grid = SpreadsheetTabularSupport.buildStage1PreviewGrid(headersRef, rows);
+            GridBase grid =
+                    SpreadsheetTabularSupport.buildStage1PreviewGrid(
+                            headersRef, rows, headerColumnCount.get());
             TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs pres =
                     spreadsheetTabPrefs.get();
             SpreadsheetTabularSupport.applySpreadsheetGridRowHeightsAndWrap(

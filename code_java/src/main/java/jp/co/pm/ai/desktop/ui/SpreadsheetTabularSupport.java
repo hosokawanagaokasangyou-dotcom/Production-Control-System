@@ -59,6 +59,13 @@ public final class SpreadsheetTabularSupport {
     private static final String DC_STYLE_DATA_GREEN =
             "-fx-background-color: #d4edd4; -fx-text-fill: black;";
 
+    /** {@link #installPmAiReadableSpreadsheetChrome}／グリッド構築用に外部へ公開する固定配色（テーマ非依存）。 */
+    public static final String READABLE_STYLE_FILTER_ROW = DC_STYLE_HEADER_ROW;
+
+    public static final String READABLE_STYLE_LEADING_COL = DC_STYLE_LEADING_COL;
+    public static final String READABLE_STYLE_DATA_WHITE = DC_STYLE_DATA_WHITE;
+    public static final String READABLE_STYLE_DATA_GREEN = DC_STYLE_DATA_GREEN;
+
     /**
      * Date-column triple: lines shown as {@code (prefix)(qty)}. Lines with no value, dash placeholder, or
      * numeric zero are omitted so non-empty cells stand out when scanning.
@@ -80,13 +87,13 @@ public final class SpreadsheetTabularSupport {
     private SpreadsheetTabularSupport() {}
 
     /**
-     * \u7d0d\u671f\u7ba1\u7406\u30d3\u30e5\u30fc\u7528\u306e\u88dc\u52a9\u30b9\u30bf\u30a4\u30eb\uff08\u73fe\u5728\u306f\u672a\u4f7f\u7528\u3002\u5c65\u6b74\u7684 API\uff09\u3002
-     * \u8868\u306e\u898b\u305f\u76ee\u306f {@link SpreadsheetThemeBridge} \u306b\u63c3\u3048\u308b\u3002
+     * 固定配色（薄グレー見出し・白地・黒字）を SpreadsheetView に適用する。{@link SpreadsheetThemeBridge#install}
+     * の直後に呼ぶとテーマ由来のセル色を上書きする。
      */
-    public static void installDeliveryCalendarSpreadsheetChrome(SpreadsheetView view) {
+    public static void installPmAiReadableSpreadsheetChrome(SpreadsheetView view) {
         Objects.requireNonNull(view, "view");
-        if (!view.getStyleClass().contains("delivery-calendar-spreadsheet")) {
-            view.getStyleClass().add("delivery-calendar-spreadsheet");
+        if (!view.getStyleClass().contains("pm-ai-readable-spreadsheet")) {
+            view.getStyleClass().add("pm-ai-readable-spreadsheet");
         }
         String url =
                 Objects.requireNonNull(
@@ -97,6 +104,12 @@ public final class SpreadsheetTabularSupport {
         if (!view.getStylesheets().contains(url)) {
             view.getStylesheets().add(url);
         }
+    }
+
+    /** @deprecated {@link #installPmAiReadableSpreadsheetChrome(SpreadsheetView)} を使用。 */
+    @Deprecated
+    public static void installDeliveryCalendarSpreadsheetChrome(SpreadsheetView view) {
+        installPmAiReadableSpreadsheetChrome(view);
     }
 
     /**
@@ -421,8 +434,16 @@ public final class SpreadsheetTabularSupport {
         installFullRowDataSelection(view, null);
     }
 
+    /**
+     * 配台計画タスク入力の編集可能グリッド。フィルタ行・見出し列数に応じた配色は納期管理ビュー表と同一系統。
+     *
+     * @param leadingColumnCount 先頭から固定する属性列の本数（{@code 0} なら日付列のみのデータ配色）
+     */
     public static GridBase buildPlanInputGrid(
-            List<String> headersRef, ObservableList<ObservableList<String>> rows, boolean editable) {
+            List<String> headersRef,
+            ObservableList<ObservableList<String>> rows,
+            boolean editable,
+            int leadingColumnCount) {
         int cols = headersRef.size();
         int rc = rows.size();
         int gridRowsTotal = rc + 1;
@@ -437,10 +458,12 @@ public final class SpreadsheetTabularSupport {
             SpreadsheetCell cell =
                     SpreadsheetCellType.STRING.createCell(SPREADSHEET_FILTER_ROW, c, 1, 1, "");
             cell.setEditable(false);
+            cell.setStyle(READABLE_STYLE_FILTER_ROW);
             filterRow.add(cell);
         }
         gridRows.add(filterRow);
 
+        int lead = Math.max(0, Math.min(leadingColumnCount, cols));
         int firstData = spreadsheetFirstDataRowIndex();
         for (int r = 0; r < rc; r++) {
             int gridRow = firstData + r;
@@ -451,7 +474,11 @@ public final class SpreadsheetTabularSupport {
                 SpreadsheetCell cell =
                         SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, raw);
                 cell.setEditable(editable);
-                TabularCellHighlight.applyPlanInputSpreadsheetHighlight(cell);
+                if (c < lead) {
+                    cell.setStyle(READABLE_STYLE_LEADING_COL);
+                } else {
+                    cell.setStyle(deliveryCalendarDataStyleForDisplayText(raw));
+                }
                 rowCells.add(cell);
             }
             gridRows.add(rowCells);
@@ -460,7 +487,11 @@ public final class SpreadsheetTabularSupport {
         return grid;
     }
 
-    public static GridBase buildStage1PreviewGrid(List<String> headersRef, ObservableList<ObservableList<String>> rows) {
+    /**
+     * 段階1成形結果プレビュー。日付系見出しかつ正の数値セルは薄緑で強調（従来の Stage1 ルールを維持）。
+     */
+    public static GridBase buildStage1PreviewGrid(
+            List<String> headersRef, ObservableList<ObservableList<String>> rows, int leadingColumnCount) {
         int cols = headersRef.size();
         int rc = rows.size();
         int gridRowsTotal = rc + 1;
@@ -475,10 +506,12 @@ public final class SpreadsheetTabularSupport {
             SpreadsheetCell cell =
                     SpreadsheetCellType.STRING.createCell(SPREADSHEET_FILTER_ROW, c, 1, 1, "");
             cell.setEditable(false);
+            cell.setStyle(READABLE_STYLE_FILTER_ROW);
             filterRow.add(cell);
         }
         gridRows.add(filterRow);
 
+        int lead = Math.max(0, Math.min(leadingColumnCount, cols));
         int firstData = spreadsheetFirstDataRowIndex();
         for (int r = 0; r < rc; r++) {
             int gridRow = firstData + r;
@@ -486,10 +519,18 @@ public final class SpreadsheetTabularSupport {
             ObservableList<SpreadsheetCell> rowCells = FXCollections.observableArrayList();
             for (int c = 0; c < cols; c++) {
                 String raw = c < src.size() && src.get(c) != null ? src.get(c) : "";
+                String headerTitle = headersRef.get(c);
                 SpreadsheetCell cell =
                         SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, raw);
                 cell.setEditable(false);
-                TabularCellHighlight.applyStage1SpreadsheetHighlight(cell, headersRef.get(c), raw);
+                if (c < lead) {
+                    cell.setStyle(READABLE_STYLE_LEADING_COL);
+                } else if (TabularCellHighlight.isStage1DateColumnHeader(headerTitle)
+                        && TabularCellHighlight.isStrictPositiveNumber(raw)) {
+                    cell.setStyle(READABLE_STYLE_DATA_GREEN);
+                } else {
+                    cell.setStyle(READABLE_STYLE_DATA_WHITE);
+                }
                 rowCells.add(cell);
             }
             gridRows.add(rowCells);
@@ -505,7 +546,7 @@ public final class SpreadsheetTabularSupport {
      */
     public static GridBase buildReadOnlyPlainGrid(
             List<String> headersRef, ObservableList<ObservableList<String>> rows) {
-        return buildReadOnlyPlainGrid(headersRef, rows, -1);
+        return buildReadOnlyPlainGrid(headersRef, rows, 0);
     }
 
     /**
@@ -569,7 +610,7 @@ public final class SpreadsheetTabularSupport {
      *
      * <p>配色（テーマ設定は無視・固定）:
      * <ul>
-     *   <li>列見出し・行見出しは {@code installDeliveryCalendarSpreadsheetChrome} 由来 CSS で薄グレー＋黒</li>
+     *   <li>列見出し・行見出しは {@link #installPmAiReadableSpreadsheetChrome} 由来 CSS で薄グレー＋黒</li>
      *   <li>フィルタ行は {@link #DC_STYLE_HEADER_ROW}（薄グレー＋黒）</li>
      *   <li>先頭固定列（{@code c < leadingColumnCount}）は {@link #DC_STYLE_LEADING_COL}（白＋黒）</li>
      *   <li>日付列で空欄以外は {@link #DC_STYLE_DATA_GREEN}（薄緑＋黒）、空欄は {@link #DC_STYLE_DATA_WHITE}（白＋黒）</li>
@@ -781,6 +822,7 @@ public final class SpreadsheetTabularSupport {
             SpreadsheetCell cell =
                     SpreadsheetCellType.STRING.createCell(SPREADSHEET_FILTER_ROW, c, 1, 1, "");
             cell.setEditable(false);
+            cell.setStyle(READABLE_STYLE_FILTER_ROW);
             filterRow.add(cell);
         }
         gridRows.add(filterRow);

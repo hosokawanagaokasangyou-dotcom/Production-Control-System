@@ -137,6 +137,7 @@ public final class PlanInputTabController {
                 spreadsheetView,
                 SpreadsheetPlanInputRowDragSupport::skipFullRowExpansionDuringPlanInputRowDrag);
         SpreadsheetThemeBridge.install(spreadsheetView);
+        SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome(spreadsheetView);
         SpreadsheetPlanInputRowDragSupport.install(
                 spreadsheetView,
                 SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex(),
@@ -332,7 +333,11 @@ public final class PlanInputTabController {
                             + "並べ替えられません");
             return;
         }
-                        SpreadsheetColumnReorderDialog.show(ownerStage, new ArrayList<>(headersRef))
+        boolean[] visForDialog =
+                TableColumnOrderPersistence.loadColumnVisibility(
+                        TableColumnOrderPersistence.TableId.PLAN_INPUT, headersRef.size());
+        SpreadsheetColumnReorderDialog.show(
+                        ownerStage, new ArrayList<>(headersRef), visForDialog)
                 .ifPresent(
                         perm -> {
                             List<String> oldHeaders = new ArrayList<>(headersRef);
@@ -496,7 +501,9 @@ public final class PlanInputTabController {
                             headersRef, persistedLayout.get(), colW);
             final double widthDefault = colW;
 
-            GridBase grid = SpreadsheetTabularSupport.buildPlanInputGrid(headersRef, rows, false);
+            GridBase grid =
+                    SpreadsheetTabularSupport.buildPlanInputGrid(
+                            headersRef, rows, false, headerColumnCount.get());
             gridChangeHandler =
                     SpreadsheetTabularSupport.newRowsSyncHandler(
                             rows, headersRef, SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex());

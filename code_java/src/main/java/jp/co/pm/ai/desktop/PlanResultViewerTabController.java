@@ -574,7 +574,9 @@ public final class PlanResultViewerTabController {
                         try {
                             GridBase grid =
                                     SpreadsheetTabularSupport.buildReadOnlyPlainGrid(
-                                            gridState.headersRef, gridState.rows);
+                                            gridState.headersRef,
+                                            gridState.rows,
+                                            gridState.headerColumnCount.get());
                             sv.setGrid(grid);
                             Platform.runLater(
                                     () ->
@@ -645,8 +647,13 @@ public final class PlanResultViewerTabController {
                             }
                             return;
                         }
+                        boolean[] visForDialog =
+                                TableColumnOrderPersistence.loadColumnVisibilityForScope(
+                                        gridState.scopeKey, gridState.headersRef.size());
                         SpreadsheetColumnReorderDialog.show(
-                                        ownerStage, new ArrayList<>(gridState.headersRef))
+                                        ownerStage,
+                                        new ArrayList<>(gridState.headersRef),
+                                        visForDialog)
                                 .ifPresent(
                                         perm -> {
                                             List<String> oldHeaders =
@@ -704,6 +711,7 @@ public final class PlanResultViewerTabController {
                         built[0] = true;
                         SpreadsheetView sv = new SpreadsheetView();
                         SpreadsheetThemeBridge.install(sv);
+                        SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome(sv);
                         applyPlanResultPresentation(sv);
                         sv.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
                         tableSvRef.set(sv);
@@ -711,7 +719,9 @@ public final class PlanResultViewerTabController {
                         try {
                             GridBase grid =
                                     SpreadsheetTabularSupport.buildReadOnlyPlainGrid(
-                                            gridState.headersRef, gridState.rows);
+                                            gridState.headersRef,
+                                            gridState.rows,
+                                            gridState.headerColumnCount.get());
                             sv.setGrid(grid);
                             Platform.runLater(
                                     () -> {
@@ -745,6 +755,7 @@ public final class PlanResultViewerTabController {
                         built[1] = true;
                         SpreadsheetView sv = new SpreadsheetView();
                         SpreadsheetThemeBridge.install(sv);
+                        SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome(sv);
                         applyPlanResultPresentation(sv);
                         sv.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
                         ganttSvRef.set(sv);
