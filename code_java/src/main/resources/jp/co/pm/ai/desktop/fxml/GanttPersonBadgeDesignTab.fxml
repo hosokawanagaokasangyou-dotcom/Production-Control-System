@@ -12,7 +12,6 @@
 <?import javafx.scene.control.Accordion?>
 <?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
-<?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
 <VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
@@ -37,7 +36,6 @@
                             <Label fx:id="masterWorkbookPathLabel" maxWidth="560.0" wrapText="true"
                                    text="マスタパスを解決しています…"/>
                         </HBox>
-                        <TableView fx:id="badgeMemberTable" maxWidth="Infinity" prefHeight="240.0"/>
                         <FlowPane hgap="8.0" vgap="6.0" maxWidth="Infinity">
                             <HBox alignment="CENTER_LEFT" spacing="6.0">
                                 <Label prefWidth="140.0" text="フォント"/>
@@ -109,12 +107,7 @@
                             <Button fx:id="badgeResetDefaultsButton" mnemonicParsing="false"
                                     text="既定スタイルに戻す" onAction="#onBadgeResetDefaultsAction"/>
                         </HBox>
-                        <HBox alignment="CENTER_LEFT" spacing="12.0">
-                            <Label text="プレビュー"/>
-                        </HBox>
-                        <StackPane fx:id="badgePreviewBox" alignment="CENTER" minHeight="80.0"
-                                   maxWidth="Infinity" maxHeight="Infinity"
-                                   styleClass="pm-badge-preview-stage"
+                        <TableView fx:id="badgeMemberTable" maxWidth="Infinity" maxHeight="Infinity"
                                    VBox.vgrow="ALWAYS"/>
                     </VBox>
                 </content>

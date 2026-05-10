@@ -30,7 +30,6 @@ import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TitledPane;
-import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.util.Duration;
@@ -61,9 +60,6 @@ public final class GanttPersonBadgeDesignTabController {
 
     @FXML
     private TableView<BadgeDesignTableItem> badgeMemberTable;
-
-    @FXML
-    private StackPane badgePreviewBox;
 
     @FXML
     private ComboBox<String> badgeFontCombo;
@@ -150,10 +146,6 @@ public final class GanttPersonBadgeDesignTabController {
 
     private boolean autoLoadedSkillsOnce;
 
-    private double lastPreviewWidthForRedraw = -1.0;
-
-    private double lastPreviewHeightForRedraw = -1.0;
-
     static final class BadgeDesignTableItem {
         final boolean globalFallback;
         final String memberKeyNormalized;
@@ -182,7 +174,6 @@ public final class GanttPersonBadgeDesignTabController {
         populateFontCombo();
 
         attachListeners();
-        attachPreviewResizeListener();
         suppress = true;
         try {
             rebuildTableItems();
@@ -194,33 +185,6 @@ public final class GanttPersonBadgeDesignTabController {
         } finally {
             suppress = false;
         }
-        refreshPreview();
-    }
-
-    /**
-     * プレビューエリア（{@link #badgePreviewBox}）のサイズ変動に追従して再描画する。
-     * 変動量が小さいときはスキップして、再描画 → サイズ変動 → 再描画…の振動を抑える。
-     */
-    private void attachPreviewResizeListener() {
-        if (badgePreviewBox == null) {
-            return;
-        }
-        badgePreviewBox.widthProperty().addListener((o, a, b) -> maybeRefreshPreviewOnResize());
-        badgePreviewBox.heightProperty().addListener((o, a, b) -> maybeRefreshPreviewOnResize());
-    }
-
-    private void maybeRefreshPreviewOnResize() {
-        if (badgePreviewBox == null) {
-            return;
-        }
-        double w = badgePreviewBox.getWidth();
-        double h = badgePreviewBox.getHeight();
-        if (Math.abs(w - lastPreviewWidthForRedraw) < 6.0
-                && Math.abs(h - lastPreviewHeightForRedraw) < 4.0) {
-            return;
-        }
-        lastPreviewWidthForRedraw = w;
-        lastPreviewHeightForRedraw = h;
         refreshPreview();
     }
 
@@ -1071,41 +1035,12 @@ public final class GanttPersonBadgeDesignTabController {
     }
 
     private void refreshPreview() {
-        if (badgePreviewBox == null) {
-            return;
-        }
         if (!suppress) {
             commitUiToTarget();
         }
-        badgePreviewBox.getChildren().clear();
-        BadgeDesignTableItem sel =
-                badgeMemberTable != null ? badgeMemberTable.getSelectionModel().getSelectedItem() : null;
-        String txt = previewBadgeText(sel);
-        PersonBadgeStyle st = buildStyleFromUiFields();
-        double rowLabelFontPx = computePreviewRowLabelFontPx();
-        badgePreviewBox
-                .getChildren()
-                .add(PersonBadgeNodeFactory.createBadge(txt, st, 1.0, rowLabelFontPx));
-    }
-
-    /**
-     * プレビュー領域の現在サイズに応じてバッジの基準フォント px を算出する。
-     * 高さが取れない初期描画時はフォールバックの 13.0 を返す。
-     */
-    private double computePreviewRowLabelFontPx() {
-        if (badgePreviewBox == null) {
-            return 13.0;
+        if (badgeMemberTable != null) {
+            badgeMemberTable.refresh();
         }
-        double h = badgePreviewBox.getHeight();
-        double w = badgePreviewBox.getWidth();
-        if (h <= 1.0 && w <= 1.0) {
-            return 13.0;
-        }
-        double byHeight = h * 0.6;
-        double byWidth = w * 0.35;
-        double base = Math.min(byHeight > 0 ? byHeight : Double.MAX_VALUE,
-                                byWidth > 0 ? byWidth : Double.MAX_VALUE);
-        return Math.max(13.0, Math.min(360.0, base));
     }
 
     /** プレビューに載せる文字（選択行のメンバー名由来）。 */
