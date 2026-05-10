@@ -65,8 +65,8 @@ public final class DeliveryCalendarViewTabController {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     /**
-     * Child stdout lines {@code PM_AI_PROGRESS 0..100}. During Python, drives {@link #statusLabel} and the
-     * three delivery reload {@link ProgressBar}s (same overall fraction; JSON 反映時は各タブ別に上書き)。
+     * Child stdout lines {@code PM_AI_PROGRESS 0..100}. During Python, drives {@link #statusLabel} and
+     * {@link #deliveryReloadProgressMainGrid} only (メイン表生成). Tab reload bars update in {@link #applyPayloadBody}.
      */
     private static final String PM_AI_PROGRESS_PREFIX = "PM_AI_PROGRESS ";
 
@@ -114,6 +114,12 @@ public final class DeliveryCalendarViewTabController {
 
     @FXML
     private VBox deliveryReloadProgressContainer;
+
+    @FXML
+    private ProgressBar deliveryReloadProgressMainGrid;
+
+    @FXML
+    private Label deliveryReloadPctMainGrid;
 
     @FXML
     private ProgressBar deliveryReloadProgressDispatch;
@@ -597,6 +603,11 @@ public final class DeliveryCalendarViewTabController {
         {
             Map<String, Object> d = new LinkedHashMap<>();
             d.put(
+                    "mainGridBar",
+                    deliveryReloadProgressMainGrid != null
+                            ? deliveryReloadProgressMainGrid.getProgress()
+                            : -1.0);
+            d.put(
                     "dispatchBar",
                     deliveryReloadProgressDispatch != null
                             ? deliveryReloadProgressDispatch.getProgress()
@@ -634,6 +645,8 @@ public final class DeliveryCalendarViewTabController {
     }
 
     private void resetDeliveryReloadTabSegments() {
+        setDeliveryReloadSegmentProgress(
+                deliveryReloadProgressMainGrid, deliveryReloadPctMainGrid, 0.0);
         setDeliveryReloadSegmentProgress(deliveryReloadProgressDispatch, deliveryReloadPctDispatch, 0.0);
         setDeliveryReloadSegmentProgress(deliveryReloadProgressActuals, deliveryReloadPctActuals, 0.0);
         setDeliveryReloadSegmentProgress(deliveryReloadProgressAladdin, deliveryReloadPctAladdin, 0.0);
@@ -664,19 +677,20 @@ public final class DeliveryCalendarViewTabController {
                     Integer.parseInt(t.substring(PM_AI_PROGRESS_PREFIX.length()).trim());
             pct = Math.max(0, Math.min(100, pct));
             statusLabel.setText("取得中… メイン表（生成） " + pct + "%");
-            /* Python はセグメント別ではなく全体％のみ通知するため、取得中は三本に同じ比率を反映する。 */
             double frac = pct / 100.0;
+            /* PM_AI_PROGRESS はメイン表生成のみ。子タブ読込バーは applyPayloadBody で順に進める。 */
             setDeliveryReloadSegmentProgress(
-                    deliveryReloadProgressDispatch, deliveryReloadPctDispatch, frac);
-            setDeliveryReloadSegmentProgress(
-                    deliveryReloadProgressActuals, deliveryReloadPctActuals, frac);
-            setDeliveryReloadSegmentProgress(
-                    deliveryReloadProgressAladdin, deliveryReloadPctAladdin, frac);
+                    deliveryReloadProgressMainGrid, deliveryReloadPctMainGrid, frac);
             // #region agent log
             {
                 Map<String, Object> d = new LinkedHashMap<>();
                 d.put("parsedPct", pct);
-                d.put("syncFraction", frac);
+                d.put("mainGridFraction", frac);
+                d.put(
+                        "mainGridBar",
+                        deliveryReloadProgressMainGrid != null
+                                ? deliveryReloadProgressMainGrid.getProgress()
+                                : -1.0);
                 d.put(
                         "dispatchBar",
                         deliveryReloadProgressDispatch != null
@@ -692,13 +706,12 @@ public final class DeliveryCalendarViewTabController {
                         deliveryReloadProgressAladdin != null
                                 ? deliveryReloadProgressAladdin.getProgress()
                                 : -1.0);
-                d.put("segmentBarsSyncedFromPmAiProgress", Boolean.TRUE);
                 AgentDebugLog.appendStructured(
                         shell != null ? shell.snapshotUiEnv() : Map.of(),
                         "6c5eb9",
                         "H1",
                         "DeliveryCalendarViewTabController.handleDeliveryCalendarProgressLine",
-                        "pm_ai_progress_after_bars_sync",
+                        "pm_ai_progress_main_grid_only",
                         d);
             }
             // #endregion
@@ -789,6 +802,8 @@ public final class DeliveryCalendarViewTabController {
             }
 
             if (root.path("ok").asBoolean(false)) {
+                setDeliveryReloadSegmentProgress(
+                        deliveryReloadProgressMainGrid, deliveryReloadPctMainGrid, 1.0);
                 statusLabel.setText("反映中… 配台結果タブ");
                 setDeliveryReloadSegmentProgress(
                         deliveryReloadProgressDispatch, deliveryReloadPctDispatch, 0.0);
