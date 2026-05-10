@@ -15,7 +15,7 @@
 #   .\fast_package_app.ps1 -WinConsole
 #   .\fast_package_app.ps1 -JpackageDest C:\pm-ai-out   # ASCII-only parent for jpackage --dest (if launchers missing)
 #   .\fast_package_app.ps1 -JdkRuntimeImage C:\path\to\jdk   # skip download; needs bin\java.exe and bin\jpackage.exe
-#   .\fast_package_app.ps1 -ZipFast   # faster ZIP (Fastest); default Optimal can take many minutes with no output
+#   .\fast_package_app.ps1 -ZipOptimal   # Step 8 ZIP: smallest/slowest (Optimal); default is Fastest for large bundles
 #   .\fast_package_app.ps1 -PackageReleaseParent G:\   # e.g. G:\pm-ai-package-release (folder created)
 #   .\fast_package_app.ps1 -PackageReleaseDir G:\pm-ai-package-release   # exact output folder
 #   When release output is not the repo default, download cache (JDK/JavaFX/Python) uses <release>\Cash_PMD instead of code_java\Cash_PMD.
@@ -41,8 +41,10 @@ param(
     # Parent directory for jpackage --dest only (must be ASCII-only on some JDK/Windows builds).
     [string]$JpackageDest = '',
 
-    # Step 8 portable ZIP: Fastest is much quicker (jars/pyd are already compressed); Optimal shrinks slightly but can run long with no console output.
+    # Step 8 portable ZIP: default Fastest (large trees finish in reasonable time). Use -ZipOptimal for smaller archives (much slower).
     [switch]$ZipFast,
+
+    [switch]$ZipOptimal,
 
     # Output folder for pm-ai-package-release contents (ZIPs, version.txt, interim bundles). Overrides repo-root default.
     [string]$PackageReleaseDir = '',
@@ -618,7 +620,7 @@ function Compress-PortableBundleFolderToZip {
     .SYNOPSIS
       Zip an app-image folder; omits pm-ai-data/version.txt (release version is beside the zip).
       Removes ZipFilePath if present (-ErrorAction Stop), then creates a new file (CreateNew).
-      Writes progress every 200 files (large bundles can take several minutes).
+      Writes progress every 100 files (Optimal can spend minutes between lines on huge trees).
     #>
     [CmdletBinding()]
     param(
@@ -626,7 +628,7 @@ function Compress-PortableBundleFolderToZip {
         [string]$SourceDir,
         [Parameter(Mandatory = $true)]
         [string]$ZipFilePath,
-        [System.IO.Compression.CompressionLevel]$CompressionLevel = [System.IO.Compression.CompressionLevel]::Optimal
+        [System.IO.Compression.CompressionLevel]$CompressionLevel = [System.IO.Compression.CompressionLevel]::Fastest
     )
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -639,7 +641,8 @@ function Compress-PortableBundleFolderToZip {
         New-Item -ItemType Directory -Path $zipParent -Force | Out-Null
     }
     $levelName = $CompressionLevel.ToString()
-    Write-Host "  Compressing with $levelName (large trees: allow several minutes; progress every 200 files)..." -ForegroundColor DarkGray
+    $progEvery = if ($CompressionLevel -eq [System.IO.Compression.CompressionLevel]::Optimal) { 50 } else { 100 }
+    Write-Host "  Compressing with $levelName (progress every $progEvery files; Optimal can take 30+ min on huge bundles)..." -ForegroundColor DarkGray
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $fileCount = 0
     $fs = [System.IO.File]::Open($ZipFilePath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
@@ -658,7 +661,7 @@ function Compress-PortableBundleFolderToZip {
                     throw "Unsafe zip entry name: $entryName"
                 }
                 $fileCount++
-                if (($fileCount % 200) -eq 0) {
+                if (($fileCount % $progEvery) -eq 0) {
                     $elapsed = $sw.Elapsed.ToString('mm\:ss')
                     Write-Host "  ... ZIP progress: $fileCount files ($elapsed)" -ForegroundColor DarkGray
                 }
@@ -1144,11 +1147,15 @@ else {
     Write-Warning "Repo version.txt missing; skipped copy to $ReleaseRoot"
 }
 
-$zipCompression = if ($ZipFast) {
-    [System.IO.Compression.CompressionLevel]::Fastest
+if ($ZipOptimal -and $ZipFast) {
+    Write-Warning '-ZipOptimal overrides -ZipFast (both set).'
+}
+# Default Fastest: Optimal on tens of thousands of files can appear hung (minutes between progress lines).
+$zipCompression = if ($ZipOptimal) {
+    [System.IO.Compression.CompressionLevel]::Optimal
 }
 else {
-    [System.IO.Compression.CompressionLevel]::Optimal
+    [System.IO.Compression.CompressionLevel]::Fastest
 }
 
 Write-Host "Zipping Initial -> $zipInitial" -ForegroundColor Cyan
