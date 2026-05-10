@@ -18,3 +18,7 @@ pm-ai-package-release/
 /cash_PMD/
 /code_java/PMD_fast/
 /code_java/Cash_PMD/
+
+# JVM heap dumps（コミットしない）
+*.hprof
+*.hprof.*
