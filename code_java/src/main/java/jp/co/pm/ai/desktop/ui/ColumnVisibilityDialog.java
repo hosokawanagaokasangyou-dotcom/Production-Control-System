@@ -7,6 +7,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
@@ -56,8 +57,7 @@ public final class ColumnVisibilityDialog {
             return Optional.empty();
         }
         int n = columnTitles.size();
-        boolean[] mandatory =
-                mandatoryVisible != null && mandatoryVisible.length == n ? mandatoryVisible : null;
+        boolean[] mandatory = normalizeMandatoryMask(mandatoryVisible, n);
         boolean[] state = new boolean[n];
         Arrays.fill(state, true);
         if (visibleInitial != null && visibleInitial.length == n) {
@@ -95,6 +95,14 @@ public final class ColumnVisibilityDialog {
                                             : ""));
             cb.setSelected(state[i]);
             if (locked) {
+                // Disable alone can fail to block toggles in some cases; keep selection pinned.
+                cb.selectedProperty()
+                        .addListener(
+                                (obs, was, now) -> {
+                                    if (Boolean.FALSE.equals(now)) {
+                                        Platform.runLater(() -> cb.setSelected(true));
+                                    }
+                                });
                 cb.setDisable(true);
             }
             boxes.add(cb);
@@ -219,6 +227,20 @@ public final class ColumnVisibilityDialog {
                 });
 
         return dialog.showAndWait();
+    }
+
+    /**
+     * Pads or truncates {@code raw} to {@code columnCount}. {@code null} stays {@code null}; otherwise returns a
+     * new array of length {@code columnCount} (missing indices are {@code false}).
+     */
+    static boolean[] normalizeMandatoryMask(boolean[] raw, int columnCount) {
+        if (raw == null || columnCount <= 0) {
+            return null;
+        }
+        boolean[] out = new boolean[columnCount];
+        int copy = Math.min(columnCount, raw.length);
+        System.arraycopy(raw, 0, out, 0, copy);
+        return out;
     }
 
     /**

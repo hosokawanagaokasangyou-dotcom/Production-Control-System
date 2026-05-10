@@ -122,11 +122,13 @@ public final class ColumnVisibilitySupport {
             return;
         }
         boolean[] vis = TableColumnOrderPersistence.loadColumnVisibility(tableId, headers.size());
-        vis = mergeMandatoryIntoVisibility(vis, mandatoryMask);
-        ColumnVisibilityDialog.show(owner, headers, vis, mandatoryMask)
+        boolean[] mandatoryAligned =
+                ColumnVisibilityDialog.normalizeMandatoryMask(mandatoryMask, headers.size());
+        vis = mergeMandatoryIntoVisibility(vis, mandatoryAligned);
+        ColumnVisibilityDialog.show(owner, headers, vis, mandatoryAligned)
                 .ifPresent(
                         arr -> {
-                            boolean[] saved = mergeMandatoryIntoVisibility(arr, mandatoryMask);
+                            boolean[] saved = mergeMandatoryIntoVisibility(arr, mandatoryAligned);
                             TableColumnOrderPersistence.saveColumnVisibility(tableId, saved);
                             applyColumnVisibilityToSpreadsheetWhenReady(
                                     view,
@@ -139,10 +141,9 @@ public final class ColumnVisibilitySupport {
         if (mandatoryMask == null || vis == null) {
             return vis;
         }
-        int n = Math.min(vis.length, mandatoryMask.length);
         boolean[] out = Arrays.copyOf(vis, vis.length);
-        for (int i = 0; i < n; i++) {
-            if (mandatoryMask[i]) {
+        for (int i = 0; i < vis.length; i++) {
+            if (i < mandatoryMask.length && mandatoryMask[i]) {
                 out[i] = true;
             }
         }
