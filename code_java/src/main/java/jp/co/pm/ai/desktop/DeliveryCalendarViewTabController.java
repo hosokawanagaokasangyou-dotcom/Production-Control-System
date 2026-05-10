@@ -31,8 +31,6 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Slider;
 import javafx.scene.control.TabPane;
-import javafx.scene.control.TablePosition;
-import javafx.scene.control.TextArea;
 import javafx.scene.control.TitledPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -154,9 +152,6 @@ public final class DeliveryCalendarViewTabController {
     @FXML
     private HBox mainColumnStripHost;
 
-    @FXML
-    private TextArea mainSelectedCellInfo;
-
     private MainShellController shell;
 
     private Stage ownerStage;
@@ -215,9 +210,7 @@ public final class DeliveryCalendarViewTabController {
         SpreadsheetTabularSupport.installDeliveryCalendarSpreadsheetChrome(mainSpreadsheet);
         mainSpreadsheet.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         /*
-         * \u5168\u884c\u9078\u629e\u62e1\u5f35\u306f\u30af\u30ea\u30c3\u30af\u5217\u3068 TablePosition \u306e\u5217\u304c\u305a\u308c\u308b
-         * \uff08\u62e1\u5f35\u5f8c\u306e\u30d5\u30a9\u30fc\u30ab\u30b9\u304c\u5148\u982d\u5217\u306b\u79fb\u308b\u305f\u3081\uff09\u3002
-         * \u4e0b\u90e8\u306e\u30bb\u30eb\u5185\u5bb9\u8868\u793a\u3068\u5408\u308f\u305b\u308b\u305f\u3081\u3001\u30e1\u30a4\u30f3\u8868\u3067\u306e\u307f\u62e1\u5f35\u3092\u7121\u52b9\u5316\u3002
+         * 全行選択の拡張はクリック列とフォーカス列のずれを招くため、メイン表では無効化する。
          */
         SpreadsheetTabularSupport.installFullRowDataSelection(mainSpreadsheet, () -> true);
 
@@ -238,105 +231,6 @@ public final class DeliveryCalendarViewTabController {
                                                 () -> new ArrayList<>(mainHeadersRef))));
 
         mainSpreadsheet.setGrid(new GridBase(0, 0));
-
-        installMainSelectedCellInfoListener();
-    }
-
-    /**
-     * \u9078\u629e\u30bb\u30eb\u306e\u30e2\u30c7\u30eb\u5024\uff08{@link DeliveryCalendarMainCell.TripleQty} \u307e\u305f\u306f
-     * {@link DeliveryCalendarMainCell.PlainText}\uff09\u3092 {@link #mainSelectedCellInfo} \u306b\u8868\u793a\u3059\u308b\u3002
-     */
-    private void installMainSelectedCellInfoListener() {
-        if (mainSelectedCellInfo == null) {
-            return;
-        }
-        mainSelectedCellInfo.setText("\u30bb\u30eb\u3092\u30af\u30ea\u30c3\u30af\u3059\u308b\u3068\u3001"
-                + "\u305d\u306e\u30bb\u30eb\u306e\u30e2\u30c7\u30eb\u4e0a\u306e\u5024\u304c\u3053\u3053\u306b\u51fa\u307e\u3059\u3002");
-        mainSpreadsheet
-                .getSelectionModel()
-                .getSelectedCells()
-                .addListener(
-                        (javafx.collections.ListChangeListener<? super TablePosition>) ch ->
-                                Platform.runLater(this::refreshMainSelectedCellInfo));
-    }
-
-    private void refreshMainSelectedCellInfo() {
-        if (mainSelectedCellInfo == null) {
-            return;
-        }
-        var sm = mainSpreadsheet.getSelectionModel();
-        TablePosition<?, ?> pos = sm.getFocusedCell();
-        if (pos == null || pos.getRow() < 0) {
-            var sel = sm.getSelectedCells();
-            if (sel == null || sel.isEmpty()) {
-                mainSelectedCellInfo.setText("(\u672a\u9078\u629e)");
-                return;
-            }
-            pos = sel.getFirst();
-        }
-        if (pos == null || pos.getRow() < 0) {
-            mainSelectedCellInfo.setText("(\u672a\u9078\u629e)");
-            return;
-        }
-        /* TablePosition#getRow \u306f\u30d3\u30e5\u30fc\u884c\u3002\u30b0\u30ea\u30c3\u30c9\u884c\u306f SpreadsheetView#getModelRow \u3092\u4f7f\u3046\u3002 */
-        int viewRow = pos.getRow();
-        int gridRow = mainSpreadsheet.getModelRow(viewRow);
-        int col = pos.getColumn();
-        int firstData = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
-        StringBuilder sb = new StringBuilder();
-        String header = (col >= 0 && col < mainHeadersRef.size()) ? mainHeadersRef.get(col) : "";
-        sb.append("viewRow=").append(viewRow)
-                .append("  gridRow=").append(gridRow)
-                .append("  col=").append(col)
-                .append("  header=").append(header)
-                .append('\n');
-        if (gridRow < 0) {
-            sb.append("(\u884c\u306e\u89e3\u6c7a\u5931\u8d25 viewRow=").append(viewRow).append(")");
-            mainSelectedCellInfo.setText(sb.toString());
-            return;
-        }
-        if (gridRow < firstData) {
-            sb.append("(\u30d5\u30a3\u30eb\u30bf\u884c)");
-            mainSelectedCellInfo.setText(sb.toString());
-            return;
-        }
-        int dataRow = gridRow - firstData;
-        if (dataRow < 0 || dataRow >= mainRows.size()) {
-            sb.append("(\u30c7\u30fc\u30bf\u884c\u30aa\u30fc\u30d0\u30fc)");
-            mainSelectedCellInfo.setText(sb.toString());
-            return;
-        }
-        ObservableList<DeliveryCalendarMainCell> line = mainRows.get(dataRow);
-        if (col < 0 || col >= line.size()) {
-            sb.append("(\u5217\u30aa\u30fc\u30d0\u30fc)");
-            mainSelectedCellInfo.setText(sb.toString());
-            return;
-        }
-        DeliveryCalendarMainCell mc = line.get(col);
-        sb.append("dataRow=").append(dataRow).append('\n');
-        if (mc instanceof DeliveryCalendarMainCell.TripleQty t) {
-            sb.append("type: TripleQty\n")
-                    .append("  ")
-                    .append(SpreadsheetTabularSupport.deliveryCalendarPlanLineForInspector(t.plan()))
-                    .append('\n')
-                    .append("  ")
-                    .append(SpreadsheetTabularSupport.deliveryCalendarActualLineForInspector(t.actual()))
-                    .append('\n')
-                    .append("  ")
-                    .append(SpreadsheetTabularSupport.deliveryCalendarDispatchLineForInspector(t.dispatch()))
-                    .append('\n');
-        } else if (mc instanceof DeliveryCalendarMainCell.PlainText pt) {
-            sb.append("type: PlainText\n").append("  text: ").append(quoteForCellInfo(pt.text())).append('\n');
-        } else {
-            sb.append("type: (null)\n");
-        }
-        mainSelectedCellInfo.setText(sb.toString());
-    }
-
-    private static String quoteForCellInfo(String s) {
-        if (s == null) return "(null)";
-        if (s.isEmpty()) return "(\u7a7a\u6587\u5b57)  len=0";
-        return "\"" + s + "\"  len=" + s.length();
     }
 
     void bindShell(MainShellController shell) {
