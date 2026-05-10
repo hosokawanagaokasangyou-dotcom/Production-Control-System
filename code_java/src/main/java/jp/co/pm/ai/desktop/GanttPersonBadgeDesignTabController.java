@@ -980,7 +980,10 @@ public final class GanttPersonBadgeDesignTabController {
             return;
         }
         ThreadLocalRandom rnd = ThreadLocalRandom.current();
-        double sharedFontPct = 52 + rnd.nextInt(95);
+        double sharedFontPct =
+                badgeFontPctSlider != null
+                        ? badgeFontPctSlider.getValue()
+                        : PersonBadgeStyle.defaultStyle().fontPercent();
         suppress = true;
         try {
             for (String raw : masterMemberNames) {
