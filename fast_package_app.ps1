@@ -16,7 +16,10 @@
 #   .\fast_package_app.ps1 -JpackageDest C:\pm-ai-out   # ASCII-only parent for jpackage --dest (if launchers missing)
 #   .\fast_package_app.ps1 -JdkRuntimeImage C:\path\to\jdk   # skip download; needs bin\java.exe and bin\jpackage.exe
 #   .\fast_package_app.ps1 -ZipFast   # faster ZIP (Fastest); default Optimal can take many minutes with no output
+#   .\fast_package_app.ps1 -PackageReleaseParent G:\   # e.g. G:\pm-ai-package-release (folder created)
+#   .\fast_package_app.ps1 -PackageReleaseDir G:\pm-ai-package-release   # exact output folder
 # Env: PM_AI_JPACKAGE_DEST, PM_AI_JDK_RUNTIME_IMAGE (optional)
+# Env: PM_AI_PACKAGE_RELEASE_DIR (full path), PM_AI_PACKAGE_RELEASE_PARENT (parent of pm-ai-package-release folder)
 
 # UTF-8 BOM: Windows PowerShell 5.1 parses this file as UTF-8. Body is ASCII-only; Japanese paths live in package_app_mandatory_code_paths.txt.
 [CmdletBinding()]
@@ -36,7 +39,13 @@ param(
     [string]$JpackageDest = '',
 
     # Step 8 portable ZIP: Fastest is much quicker (jars/pyd are already compressed); Optimal shrinks slightly but can run long with no console output.
-    [switch]$ZipFast
+    [switch]$ZipFast,
+
+    # Output folder for pm-ai-package-release contents (ZIPs, version.txt, interim bundles). Overrides repo-root default.
+    [string]$PackageReleaseDir = '',
+
+    # Parent directory only; actual folder is <parent>\pm-ai-package-release (created). Ignored if -PackageReleaseDir is set.
+    [string]$PackageReleaseParent = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -46,7 +55,25 @@ $ScriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Get-Location }
 $WorkspaceRoot = $ScriptRoot
 $CodeJavaRoot = Join-Path $WorkspaceRoot 'code_java'
 $ReleaseDirName = 'pm-ai-package-release'
-$ReleaseRoot = Join-Path $WorkspaceRoot $ReleaseDirName
+$releaseDefault = Join-Path $WorkspaceRoot $ReleaseDirName
+if (-not [string]::IsNullOrWhiteSpace($PackageReleaseDir)) {
+    $ReleaseRoot = $PackageReleaseDir.Trim().TrimEnd('\', '/')
+}
+elseif (-not [string]::IsNullOrWhiteSpace($env:PM_AI_PACKAGE_RELEASE_DIR)) {
+    $ReleaseRoot = $env:PM_AI_PACKAGE_RELEASE_DIR.Trim().TrimEnd('\', '/')
+}
+elseif (-not [string]::IsNullOrWhiteSpace($PackageReleaseParent)) {
+    $ReleaseRoot = Join-Path ($PackageReleaseParent.Trim().TrimEnd('\', '/')) $ReleaseDirName
+}
+elseif (-not [string]::IsNullOrWhiteSpace($env:PM_AI_PACKAGE_RELEASE_PARENT)) {
+    $ReleaseRoot = Join-Path ($env:PM_AI_PACKAGE_RELEASE_PARENT.Trim().TrimEnd('\', '/')) $ReleaseDirName
+}
+else {
+    $ReleaseRoot = $releaseDefault
+}
+if ($ReleaseRoot -ne $releaseDefault) {
+    Write-Host "Release output directory (override): $ReleaseRoot" -ForegroundColor Cyan
+}
 $BundleInitialName = 'PMD_initial_install'
 $BundleUpgradeName = 'PMD_version_upgrade'
 
