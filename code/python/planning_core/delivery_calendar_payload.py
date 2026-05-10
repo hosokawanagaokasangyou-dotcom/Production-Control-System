@@ -125,7 +125,7 @@ def _debug_ndjson_f73cbb(hypothesis_id: str, location: str, message: str, data: 
 
 
 def _resolve_actual_detail_machine_key_for_delivery_calendar(
-    row,
+    row: pd.Series,
     df: pd.DataFrame,
     equip_lookup: dict,
 ) -> tuple[str, str]:
@@ -134,7 +134,7 @@ def _resolve_actual_detail_machine_key_for_delivery_calendar(
     ``_aggregate_daily_actual_qty_aladdin_max`` ????????????????????
     ???????????????????????????????????
     """
-    proc = row.get(_ACT_COL_PROC)
+    proc = _row_scalar_first(row, _ACT_COL_PROC)
     if proc is not None and not (isinstance(proc, float) and pd.isna(proc)):
         proc_key = core._normalize_equipment_match_key(proc)
         canonical = equip_lookup.get(proc_key)
@@ -146,7 +146,7 @@ def _resolve_actual_detail_machine_key_for_delivery_calendar(
             if mk:
                 return mk, "proc_equip_lookup"
     if core.TASK_COL_MACHINE_NAME in df.columns:
-        mv = row.get(core.TASK_COL_MACHINE_NAME)
+        mv = _row_scalar_first(row, core.TASK_COL_MACHINE_NAME)
         if mv is not None and not (isinstance(mv, float) and pd.isna(mv)):
             ms = str(mv).strip()
             if ms:
@@ -167,7 +167,7 @@ def _classify_actual_row_for_delivery_calendar(
     reason_code: ACCEPT or SKIP_* (hypotheses H_FILTER, H_MACHINE, H_DATE, H_TID, H_QTY).
     """
     detail: dict[str, Any] = {}
-    raw_tid = row.get(_ACT_COL_TID)
+    raw_tid = _row_scalar_first(row, _ACT_COL_TID)
     detail["raw_tid_repr"] = repr(raw_tid)[:200]
     tid = core.planning_task_id_str_from_scalar(raw_tid)
     detail["norm_tid"] = tid
@@ -176,7 +176,7 @@ def _classify_actual_row_for_delivery_calendar(
 
     has_filter_col = _ACT_COL_PRODUCTION_DETAIL in df.columns
     if has_filter_col:
-        cond = row.get(_ACT_COL_PRODUCTION_DETAIL)
+        cond = _row_scalar_first(row, _ACT_COL_PRODUCTION_DETAIL)
         detail["prod_detail_raw"] = repr(cond)[:120]
         if cond is None or (isinstance(cond, float) and pd.isna(cond)):
             return "SKIP_FILTER_NA_COND", detail
@@ -186,7 +186,7 @@ def _classify_actual_row_for_delivery_calendar(
         if got != want:
             return "SKIP_FILTER_NOT_LENGTH", detail
 
-    proc_dbg = row.get(_ACT_COL_PROC)
+    proc_dbg = _row_scalar_first(row, _ACT_COL_PROC)
     detail["proc_raw"] = repr(proc_dbg)[:120]
     detail["equip_canonical_hit"] = False
     if proc_dbg is not None and not (isinstance(proc_dbg, float) and pd.isna(proc_dbg)):
@@ -194,7 +194,7 @@ def _classify_actual_row_for_delivery_calendar(
         detail["proc_key_norm"] = pk[:80]
         detail["equip_canonical_hit"] = bool(equip_lookup.get(pk))
     detail["machine_name_raw"] = (
-        str(row.get(core.TASK_COL_MACHINE_NAME))[:120]
+        str(_row_scalar_first(row, core.TASK_COL_MACHINE_NAME))[:120]
         if core.TASK_COL_MACHINE_NAME in df.columns
         else ""
     )
@@ -211,8 +211,8 @@ def _classify_actual_row_for_delivery_calendar(
 
     d = _row_actual_day(row)
     detail["day_iso"] = d.isoformat() if d is not None else ""
-    detail["start_dt_raw"] = repr(row.get(_ACT_COL_START_DT))[:80]
-    detail["proc_day_raw"] = repr(row.get(_ACT_COL_DAY))[:80]
+    detail["start_dt_raw"] = repr(_row_scalar_first(row, _ACT_COL_START_DT))[:80]
+    detail["proc_day_raw"] = repr(_row_scalar_first(row, _ACT_COL_DAY))[:80]
     if d is None:
         return "SKIP_NO_DAY", detail
     if date_ok is not None and d not in date_ok:
@@ -221,7 +221,7 @@ def _classify_actual_row_for_delivery_calendar(
         return "SKIP_DAY_OUT_OF_RANGE", detail
 
     try:
-        q = core.parse_float_safe(row.get(_ACT_COL_QTY), None)
+        q = core.parse_float_safe(_row_scalar_first(row, _ACT_COL_QTY), None)
     except Exception:
         q = None
     detail["qty_parsed"] = q
@@ -275,8 +275,9 @@ def _probe_task_rows_delivery_calendar(
     reason_counts: dict[str, int] = {}
     row_samples: list[dict[str, Any]] = []
     for row_idx, row in df_actual.iterrows():
-        ntid = core.planning_task_id_str_from_scalar(row.get(_ACT_COL_TID))
-        raw_s = str(row.get(_ACT_COL_TID) if row.get(_ACT_COL_TID) is not None else "")
+        _tid_cell = _row_scalar_first(row, _ACT_COL_TID)
+        ntid = core.planning_task_id_str_from_scalar(_tid_cell)
+        raw_s = str(_tid_cell if _tid_cell is not None else "")
         if ntid != probe_norm and probe_literal not in raw_s and not (
             probe_norm and probe_norm in raw_s
         ):
@@ -645,17 +646,47 @@ def _collect_sorted_dates(
     return out, range_meta
 
 
+def _dataframe_drop_duplicate_column_labels_keep_first(
+    df: pd.DataFrame | None,
+) -> pd.DataFrame | None:
+    """Excel ???????????????? iterrows/.get ? Series ?????NO??????"""
+    if df is None or len(df) == 0:
+        return df
+    if not df.columns.duplicated().any():
+        return df
+    return df.loc[:, ~df.columns.duplicated()].copy()
+
+
+def _row_scalar_first(row: pd.Series, key: str):
+    """Duplicate column labels -> row[key] is Series; take first non-null cell."""
+    if key not in row.index:
+        return None
+    v = row[key]
+    if isinstance(v, pd.Series):
+        for item in v:
+            if item is None:
+                continue
+            try:
+                if isinstance(item, float) and pd.isna(item):
+                    continue
+            except (TypeError, ValueError):
+                continue
+            return item
+        return None
+    return v
+
+
 def _machine_display_from_plan_row(row) -> str:
     v = row.get(core.TASK_COL_MACHINE_NAME)
     return str(v).strip() if v is not None and not (isinstance(v, float) and pd.isna(v)) else ""
 
 
-def _row_actual_day(row) -> date | None:
+def _row_actual_day(row: pd.Series) -> date | None:
     """Per Power Query: ???? = DateTime.Date(??????)????? ??? ?? fallback?"""
-    d = _parse_cell_date(row.get(_ACT_COL_START_DT))
+    d = _parse_cell_date(_row_scalar_first(row, _ACT_COL_START_DT))
     if d is not None:
         return d
-    return _parse_cell_date(row.get(_ACT_COL_DAY))
+    return _parse_cell_date(_row_scalar_first(row, _ACT_COL_DAY))
 
 
 def _aggregate_daily_actual_qty_aladdin_max(
@@ -680,14 +711,14 @@ def _aggregate_daily_actual_qty_aladdin_max(
     grouped: dict[tuple[str, date, str], float] = defaultdict(float)
     for _, row in df.iterrows():
         if has_filter_col:
-            cond = row.get(_ACT_COL_PRODUCTION_DETAIL)
+            cond = _row_scalar_first(row, _ACT_COL_PRODUCTION_DETAIL)
             if cond is None or (isinstance(cond, float) and pd.isna(cond)):
                 continue
             want = core._nfkc_column_aliases(_ACT_PRODUCTION_DETAIL_LENGTH)
             got = core._nfkc_column_aliases(str(cond)).strip()
             if got != want:
                 continue
-        tid = core.planning_task_id_str_from_scalar(row.get(_ACT_COL_TID))
+        tid = core.planning_task_id_str_from_scalar(_row_scalar_first(row, _ACT_COL_TID))
         if not tid:
             continue
         # Align machine key with ``_aggregate_actual_qty_for_aladdin_compare_from_detail_df``:
@@ -703,7 +734,7 @@ def _aggregate_daily_actual_qty_aladdin_max(
         if date_ok is not None and d not in date_ok:
             continue
         try:
-            q = core.parse_float_safe(row.get(_ACT_COL_QTY), None)
+            q = core.parse_float_safe(_row_scalar_first(row, _ACT_COL_QTY), None)
         except Exception:
             q = None
         if q is None:
@@ -747,6 +778,15 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
         dispatch_agg = _aggregate_dispatch_quantities(disp_rows)
 
         df_actual = core.load_machining_actual_detail_df()
+        if (
+            df_actual is not None
+            and len(df_actual) > 0
+            and df_actual.columns.duplicated().any()
+        ):
+            meta["actualDetailDuplicateColumnLabelsDropped"] = int(
+                df_actual.columns.duplicated().sum()
+            )
+            df_actual = _dataframe_drop_duplicate_column_labels_keep_first(df_actual)
         _tiw = core._excel_plan_input_wb()
         _ad_resolved = resolve_actual_detail_workbook_path(_tiw)
         # Always emit strings so JavaFX meta label can show rows (null omits keys / hasNonNull skips).
