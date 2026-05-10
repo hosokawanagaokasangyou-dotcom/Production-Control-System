@@ -602,38 +602,6 @@ public final class DeliveryCalendarViewTabController {
             return;
         }
         resetDeliveryReloadTabSegments();
-        // #region agent log
-        {
-            Map<String, Object> d = new LinkedHashMap<>();
-            d.put(
-                    "mainGridBar",
-                    deliveryReloadProgressMainGrid != null
-                            ? deliveryReloadProgressMainGrid.getProgress()
-                            : -1.0);
-            d.put(
-                    "dispatchBar",
-                    deliveryReloadProgressDispatch != null
-                            ? deliveryReloadProgressDispatch.getProgress()
-                            : -1.0);
-            d.put(
-                    "actualsBar",
-                    deliveryReloadProgressActuals != null
-                            ? deliveryReloadProgressActuals.getProgress()
-                            : -1.0);
-            d.put(
-                    "aladdinBar",
-                    deliveryReloadProgressAladdin != null
-                            ? deliveryReloadProgressAladdin.getProgress()
-                            : -1.0);
-            AgentDebugLog.appendStructured(
-                    shell != null ? shell.snapshotUiEnv() : Map.of(),
-                    "6c5eb9",
-                    "H2",
-                    "DeliveryCalendarViewTabController.showDeliveryReloadProgress",
-                    "after_resetDeliveryReloadTabSegments",
-                    d);
-        }
-        // #endregion
         deliveryReloadProgressContainer.setManaged(true);
         deliveryReloadProgressContainer.setVisible(true);
     }
@@ -684,40 +652,6 @@ public final class DeliveryCalendarViewTabController {
             /* PM_AI_PROGRESS はメイン表生成のみ。子タブ読込バーは applyPayloadBody で順に進める。 */
             setDeliveryReloadSegmentProgress(
                     deliveryReloadProgressMainGrid, deliveryReloadPctMainGrid, frac);
-            // #region agent log
-            {
-                Map<String, Object> d = new LinkedHashMap<>();
-                d.put("parsedPct", pct);
-                d.put("mainGridFraction", frac);
-                d.put(
-                        "mainGridBar",
-                        deliveryReloadProgressMainGrid != null
-                                ? deliveryReloadProgressMainGrid.getProgress()
-                                : -1.0);
-                d.put(
-                        "dispatchBar",
-                        deliveryReloadProgressDispatch != null
-                                ? deliveryReloadProgressDispatch.getProgress()
-                                : -1.0);
-                d.put(
-                        "actualsBar",
-                        deliveryReloadProgressActuals != null
-                                ? deliveryReloadProgressActuals.getProgress()
-                                : -1.0);
-                d.put(
-                        "aladdinBar",
-                        deliveryReloadProgressAladdin != null
-                                ? deliveryReloadProgressAladdin.getProgress()
-                                : -1.0);
-                AgentDebugLog.appendStructured(
-                        shell != null ? shell.snapshotUiEnv() : Map.of(),
-                        "6c5eb9",
-                        "H1",
-                        "DeliveryCalendarViewTabController.handleDeliveryCalendarProgressLine",
-                        "pm_ai_progress_main_grid_only",
-                        d);
-            }
-            // #endregion
         } catch (NumberFormatException ignored) {
             // ignore malformed progress lines
         }
