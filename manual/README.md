@@ -55,3 +55,18 @@ python3 scripts/manual_publish.py
 ## inject について
 
 初回はプレースホルダが画像参照に書き換わります。マーカーを残したい場合は Git で元に戻すか、マーカーを手で再度書いてください。
+
+## トラブル: Windows で `did not find executable at '/usr/bin\python.exe'`
+
+`manual/.venv` を **WSL で作成した**あとに Windows の PowerShell から `Publish-Manual.ps1` を実行すると、`pyvenv.cfg` の `home` が Linux パスになり、このエラーになります。
+
+**対処**: PowerShell で `manual\.venv` フォルダごと削除し、**Windows 上で** venv を作り直す。
+
+```text
+Remove-Item -Recurse -Force manual\.venv
+python -m venv manual\.venv
+manual\.venv\Scripts\pip install -r manualequirements.txt
+.\Publish-Manual.ps1
+```
+
+WSL と Windows で **同じ `manual/.venv` を共有しない**でください。
