@@ -9,9 +9,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
+import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
@@ -23,7 +25,9 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TablePosition;
 import javafx.scene.control.TableView;
 import javafx.scene.control.Tooltip;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.util.Duration;
 
 import org.controlsfx.control.spreadsheet.Grid;
 import org.controlsfx.control.spreadsheet.GridBase;
@@ -36,6 +40,12 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
  * Bridges tabular {@link ObservableList} rows to ControlsFX {@link SpreadsheetView} / {@link GridBase}.
  */
 public final class SpreadsheetTabularSupport {
+
+    /**
+     * {@link #installSpreadsheetChromeRelayoutDebouncerForHost(StackPane, IntSupplier)} を同一 StackPane に二重適用しないためのマーカー。
+     */
+    private static final String SPREADSHEET_HOST_RELAYOUT_HOOK =
+            "jp.co.pm.ai.desktop.spreadsheetHostRelayoutHook";
 
     /** 納期管理: フィルタ行（列見出しと同じ薄いグレー） */
     private static final String DC_STYLE_HEADER_ROW =
@@ -208,6 +218,59 @@ public final class SpreadsheetTabularSupport {
         if (!fixed.contains(Integer.valueOf(r))) {
             fixed.add(0, r);
         }
+    }
+
+    /**
+     * 見出し列固定・フィルタ行ピン・UNCONSTRAINED 列幅をまとめて適用する。
+     * TitledPane／アコーディオン開閉後など、レイアウトでスキンが組み替わったあとに再度呼ぶこと。
+     */
+    public static void reapplySpreadsheetColumnChrome(SpreadsheetView view, int headerColumnCount) {
+        if (view == null) {
+            return;
+        }
+        applyFixedLeadingColumns(view, headerColumnCount);
+        pinSpreadsheetFilterRow(view);
+        applyUnconstrainedColumnResizePolicy(view);
+    }
+
+    /**
+     * StackPane ホストのレイアウトが変わったあと（デバウンス）に {@link #reapplySpreadsheetColumnChrome} を実行する。
+     * ホストの先頭子が {@link SpreadsheetView} のときのみ適用する（子が差し替わっても最新の先頭子を参照する）。
+     */
+    public static void installSpreadsheetChromeRelayoutDebouncerForHost(
+            StackPane host, IntSupplier headerColumnCountSupplier) {
+        Objects.requireNonNull(host, "host");
+        if (Boolean.TRUE.equals(host.getProperties().get(SPREADSHEET_HOST_RELAYOUT_HOOK))) {
+            return;
+        }
+        host.getProperties().put(SPREADSHEET_HOST_RELAYOUT_HOOK, Boolean.TRUE);
+
+        PauseTransition debounce = new PauseTransition(Duration.millis(120));
+        Runnable flush =
+                () ->
+                        Platform.runLater(
+                                () -> {
+                                    if (host.getChildren().isEmpty()) {
+                                        return;
+                                    }
+                                    Node ch = host.getChildren().get(0);
+                                    if (!(ch instanceof SpreadsheetView sv)) {
+                                        return;
+                                    }
+                                    int hc =
+                                            headerColumnCountSupplier != null
+                                                    ? Math.max(0, headerColumnCountSupplier.getAsInt())
+                                                    : 0;
+                                    reapplySpreadsheetColumnChrome(sv, hc);
+                                });
+        debounce.setOnFinished(e -> flush.run());
+
+        host.layoutBoundsProperty()
+                .addListener(
+                        (obs, o, n) -> {
+                            debounce.stop();
+                            debounce.playFromStart();
+                        });
     }
 
     /**

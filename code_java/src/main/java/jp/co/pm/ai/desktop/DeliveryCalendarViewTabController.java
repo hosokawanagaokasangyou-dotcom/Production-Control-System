@@ -244,6 +244,9 @@ public final class DeliveryCalendarViewTabController {
                                                 () -> new ArrayList<>(mainHeadersRef))));
 
         mainSpreadsheet.setGrid(new GridBase(0, 0));
+
+        SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
+                mainSpreadsheetHost, headerColumnCountMain::get);
     }
 
     void bindShell(MainShellController shell) {

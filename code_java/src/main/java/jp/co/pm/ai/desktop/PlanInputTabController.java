@@ -145,6 +145,9 @@ public final class PlanInputTabController {
                     renumberDispatchTrialOrderColumn();
                     rebuildSpreadsheet();
                 });
+
+        SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
+                spreadsheetHost, headerColumnCount::get);
     }
 
     /** Renumbers dispatch-trial-order column to 1..n after row reorder (DnD, etc.). */

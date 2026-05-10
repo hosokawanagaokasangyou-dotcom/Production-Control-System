@@ -235,6 +235,9 @@ public final class ProcessingActualsDataTabController {
                                                 mandatoryVisibilityMaskForHeaders(
                                                         new ArrayList<>(headersRef)))));
 
+        SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
+                spreadsheetHost, headerColumnCount::get);
+
         sheetCombo
                 .getSelectionModel()
                 .selectedIndexProperty()

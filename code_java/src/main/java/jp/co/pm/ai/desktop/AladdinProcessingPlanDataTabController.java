@@ -145,6 +145,9 @@ public final class AladdinProcessingPlanDataTabController {
                                                 spreadsheetView,
                                                 () -> new ArrayList<>(headersRef))));
 
+        SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
+                spreadsheetHost, headerColumnCount::get);
+
         sheetCombo
                 .getSelectionModel()
                 .selectedIndexProperty()

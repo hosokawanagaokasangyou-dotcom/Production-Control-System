@@ -722,6 +722,8 @@ public final class PlanResultViewerTabController {
                                                 planResultColumnDragHandler.get());
                                         tableHost.getChildren().setAll(sv);
                                         StackPane.setAlignment(sv, Pos.CENTER_LEFT);
+                                        SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
+                                                tableHost, gridState.headerColumnCount::get);
                                     });
                         } finally {
                             gridState.suppressPersistence.set(false);
@@ -764,6 +766,8 @@ public final class PlanResultViewerTabController {
                                                 planResultColumnDragHandler.get());
                                         ganttHost.getChildren().setAll(sv);
                                         StackPane.setAlignment(sv, Pos.CENTER_LEFT);
+                                        SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
+                                                ganttHost, gridState.headerColumnCount::get);
                                     });
                         } finally {
                             gridState.suppressPersistence.set(false);

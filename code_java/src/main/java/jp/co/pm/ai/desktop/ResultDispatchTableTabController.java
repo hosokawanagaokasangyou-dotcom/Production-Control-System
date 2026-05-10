@@ -138,6 +138,9 @@ public final class ResultDispatchTableTabController {
                                                 TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE,
                                                 spreadsheetView,
                                                 () -> new ArrayList<>(headersRef))));
+
+        SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
+                spreadsheetHost, headerColumnCount::get);
     }
 
     void bindShell(MainShellController shell) {

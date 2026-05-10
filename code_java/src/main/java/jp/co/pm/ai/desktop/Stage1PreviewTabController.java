@@ -121,6 +121,9 @@ public final class Stage1PreviewTabController {
         rows = FXCollections.observableArrayList();
         spreadsheetView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         SpreadsheetThemeBridge.install(spreadsheetView);
+
+        SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
+                spreadsheetHost, headerColumnCount::get);
     }
 
     private static String buildHintText() {

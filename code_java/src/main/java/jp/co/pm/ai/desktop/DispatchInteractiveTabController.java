@@ -260,6 +260,11 @@ public final class DispatchInteractiveTabController {
         SpreadsheetTabularSupport.installFullRowDataSelection(wideSpreadsheet);
         SpreadsheetTabularSupport.installFullRowDataSelection(byDaySpreadsheet);
 
+        SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
+                wideSpreadsheetHost, WIDE_STATIC_HEADERS::size);
+        SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
+                byDaySpreadsheetHost, BY_DAY_STATIC_HEADERS::size);
+
         staffCheckToggle
                 .selectedProperty()
                 .addListener(
