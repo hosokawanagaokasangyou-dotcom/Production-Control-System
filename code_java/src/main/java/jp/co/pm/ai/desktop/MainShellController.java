@@ -43,6 +43,7 @@ import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
+import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.TreeItem;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -922,15 +923,17 @@ public final class MainShellController {
      * リセット後の環境タブから再収集する。
      */
     public void performGlobalUiFactoryReset() {
-        Alert confirm = new Alert(AlertType.CONFIRMATION);
-        confirm.initOwner(primaryStage);
-        applyAlertStylesheetsFromOwner(confirm);
-        confirm.setTitle("Confirm");
-        confirm.setHeaderText(null);
-        confirm.setContentText(
-                "Reset UI (tabs, tables, theme, …) to bundled defaults and restore env tab from template. Continue?");
-        Optional<ButtonType> ans = confirm.showAndWait();
-        if (ans.isEmpty() || ans.get() != ButtonType.OK) {
+        TextInputDialog dialog = new TextInputDialog();
+        if (primaryStage != null) {
+            dialog.initOwner(primaryStage);
+        }
+        dialog.setTitle("確認");
+        dialog.setHeaderText(null);
+        dialog.setContentText(
+                "タブ・表・テーマ等をバンドル既定に戻し、環境変数タブをテンプレートに戻します。"
+                        + "誤操作防止のため、次のパスワードを入力してください。\nパスワード: 111");
+        Optional<String> ans = dialog.showAndWait();
+        if (ans.isEmpty() || !"111".equals(ans.get().trim())) {
             return;
         }
 
@@ -959,9 +962,9 @@ public final class MainShellController {
         Alert done = new Alert(AlertType.INFORMATION);
         done.initOwner(primaryStage);
         applyAlertStylesheetsFromOwner(done);
-        done.setTitle("Done");
+        done.setTitle("完了");
         done.setHeaderText(null);
-        done.setContentText("UI reset to defaults.");
+        done.setContentText("UI を既定に戻しました。");
         done.showAndWait();
     }
 
