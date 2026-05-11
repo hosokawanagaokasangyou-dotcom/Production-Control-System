@@ -121,6 +121,14 @@ public final class DispatchInteractiveTabController {
     /** Fully-blocked (holiday) date columns: stay narrow but wide enough for a short header glyph. */
     private static final double MIN_BLOCKED_DATE_COLUMN_WIDTH_PX = 40.0;
 
+    /** 日付列で数量が正のとき（人員チェック OFF の通常表示）。 */
+    private static final String DATE_CELL_STYLE_POSITIVE_QTY =
+            "-fx-background-color: #e8f5e9; -fx-text-fill: black;";
+
+    /** 人員チェック ON かつ数量が正のとき（警告を優先し緑より手前に表示）。 */
+    private static final String DATE_CELL_STYLE_STAFF_HIGHLIGHT =
+            "-fx-background-color: #ffe0e0; -fx-text-fill: black;";
+
     private static final List<String> WIDE_STATIC_HEADERS =
             List.of(
                     ResultDispatchSchema.COL_DISPATCH_TRIAL_ORDER,
@@ -1648,7 +1656,9 @@ public final class DispatchInteractiveTabController {
             WideRow wr, int dateIdx, SpreadsheetCell cell, boolean staffHighlight) {
         double q = wr.getAmount(dateIdx);
         if (staffHighlight && q > 1e-9) {
-            cell.setStyle("-fx-background-color: #ffe0e0; -fx-text-fill: black;");
+            cell.setStyle(DATE_CELL_STYLE_STAFF_HIGHLIGHT);
+        } else if (q > 1e-9) {
+            cell.setStyle(DATE_CELL_STYLE_POSITIVE_QTY);
         } else {
             cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_DATA_WHITE);
         }
@@ -1797,7 +1807,9 @@ public final class DispatchInteractiveTabController {
             ByDayRow br, int dateIdx, SpreadsheetCell cell, boolean staffHighlight) {
         double q = br.getAmount(dateIdx);
         if (staffHighlight && q > 1e-9) {
-            cell.setStyle("-fx-background-color: #ffe0e0; -fx-text-fill: black;");
+            cell.setStyle(DATE_CELL_STYLE_STAFF_HIGHLIGHT);
+        } else if (q > 1e-9) {
+            cell.setStyle(DATE_CELL_STYLE_POSITIVE_QTY);
         } else {
             cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_DATA_WHITE);
         }
