@@ -36,6 +36,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.scene.text.Font;
 import javafx.util.Duration;
+import javafx.util.StringConverter;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,6 +53,7 @@ import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
+import jp.co.pm.ai.desktop.ui.EquipmentGanttPersonBadgeWireDashStyle;
 import jp.co.pm.ai.desktop.ui.GanttSheetKind;
 
 /**
@@ -213,6 +215,18 @@ public final class EquipmentGanttGraphicTabController {
     @FXML
     private Label graphicPersonBadgeBandVerticalOffsetLabel;
 
+    @FXML
+    private TextField graphicPersonBadgeWireColorField;
+
+    @FXML
+    private Slider graphicPersonBadgeWireWidthSlider;
+
+    @FXML
+    private Label graphicPersonBadgeWireWidthLabel;
+
+    @FXML
+    private ComboBox<EquipmentGanttPersonBadgeWireDashStyle> graphicPersonBadgeWireDashCombo;
+
     /** 日付列幅スライダー上限（px）。0 は自動計測 */
     private static final double DATE_COL_WIDTH_SLIDER_MAX = 220;
 
@@ -221,6 +235,10 @@ public final class EquipmentGanttGraphicTabController {
 
     /** Shift+ホイール横スクロール感度（％）。100＝従来のステップ相当 */
     private static final double SHIFT_WHEEL_H_SCROLL_MIN = 50;
+
+    /** ワイヤー太さスライダー上限（px）。{@link DesktopSessionState#MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX} と整合 */
+    private static final double WIRE_WIDTH_SLIDER_MAX =
+            DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX;
 
     private static final double SHIFT_WHEEL_H_SCROLL_MAX = 1000;
 
@@ -396,6 +414,64 @@ public final class EquipmentGanttGraphicTabController {
                                 scheduleEquipmentGraphicPersist();
                             });
         }
+        configurePersonBadgeWireToolbar(graphicCommitted);
+    }
+
+    private void configurePersonBadgeWireToolbar(Runnable graphicCommitted) {
+        if (graphicPersonBadgeWireDashCombo != null) {
+            graphicPersonBadgeWireDashCombo
+                    .getItems()
+                    .setAll(EquipmentGanttPersonBadgeWireDashStyle.values());
+            graphicPersonBadgeWireDashCombo.setConverter(
+                    new StringConverter<>() {
+                        @Override
+                        public String toString(EquipmentGanttPersonBadgeWireDashStyle o) {
+                            return o != null ? o.labelJa() : "";
+                        }
+
+                        @Override
+                        public EquipmentGanttPersonBadgeWireDashStyle fromString(String s) {
+                            return EquipmentGanttPersonBadgeWireDashStyle.SOLID;
+                        }
+                    });
+            graphicPersonBadgeWireDashCombo
+                    .getSelectionModel()
+                    .select(EquipmentGanttPersonBadgeWireDashStyle.SOLID);
+            graphicPersonBadgeWireDashCombo
+                    .getSelectionModel()
+                    .selectedItemProperty()
+                    .addListener((o, a, b) -> graphicCommitted.run());
+        }
+        if (graphicPersonBadgeWireWidthSlider != null) {
+            graphicPersonBadgeWireWidthSlider.setMax(WIRE_WIDTH_SLIDER_MAX);
+            SliderCommittedChangeSupport.install(
+                    graphicPersonBadgeWireWidthSlider,
+                    () -> {
+                        if (graphicPersonBadgeWireWidthLabel != null) {
+                            graphicPersonBadgeWireWidthLabel.setText(
+                                    formatPersonBadgeWireWidthLabel(
+                                            graphicPersonBadgeWireWidthSlider.getValue()));
+                        }
+                    },
+                    graphicCommitted);
+        }
+        if (graphicPersonBadgeWireColorField != null) {
+            graphicPersonBadgeWireColorField
+                    .focusedProperty()
+                    .addListener(
+                            (o, was, now) -> {
+                                if (!now && Boolean.TRUE.equals(was)) {
+                                    graphicCommitted.run();
+                                }
+                            });
+        }
+    }
+
+    private static String formatPersonBadgeWireWidthLabel(double sliderValue) {
+        if (!Double.isFinite(sliderValue) || sliderValue < 0.05) {
+            return "自動";
+        }
+        return String.format("%.2fpx", sliderValue);
     }
 
     private void populateEquipmentGraphicBarFontComboItems() {
@@ -509,6 +585,28 @@ public final class EquipmentGanttGraphicTabController {
         }
         if (personBadgeWireShowCheckBox != null) {
             personBadgeWireShowCheckBox.setSelected(s.equipmentGanttPersonBadgeWireEnabled());
+        }
+        if (graphicPersonBadgeWireColorField != null) {
+            graphicPersonBadgeWireColorField.setText(s.equipmentGanttPersonBadgeWireStrokeHex());
+        }
+        if (graphicPersonBadgeWireWidthSlider != null) {
+            double ww = s.equipmentGanttPersonBadgeWireWidthPx();
+            if (!Double.isFinite(ww) || ww <= 1e-6) {
+                graphicPersonBadgeWireWidthSlider.setValue(0d);
+            } else {
+                graphicPersonBadgeWireWidthSlider.setValue(
+                        Math.min(ww, WIRE_WIDTH_SLIDER_MAX));
+            }
+            if (graphicPersonBadgeWireWidthLabel != null) {
+                graphicPersonBadgeWireWidthLabel.setText(
+                        formatPersonBadgeWireWidthLabel(graphicPersonBadgeWireWidthSlider.getValue()));
+            }
+        }
+        if (graphicPersonBadgeWireDashCombo != null) {
+            EquipmentGanttPersonBadgeWireDashStyle d =
+                    EquipmentGanttPersonBadgeWireDashStyle.fromStored(
+                            s.equipmentGanttPersonBadgeWireDashStyleKey());
+            graphicPersonBadgeWireDashCombo.getSelectionModel().select(d);
         }
         double bgap = s.equipmentGanttPersonBadgeGapPx();
         if (graphicPersonBadgeGapSlider != null) {
@@ -643,6 +741,35 @@ public final class EquipmentGanttGraphicTabController {
     boolean snapshotEquipmentGanttPersonBadgeWireEnabled() {
         return personBadgeWireShowCheckBox == null
                 || personBadgeWireShowCheckBox.isSelected();
+    }
+
+    String snapshotEquipmentGanttPersonBadgeWireStrokeHex() {
+        if (graphicPersonBadgeWireColorField == null) {
+            return "";
+        }
+        String t = graphicPersonBadgeWireColorField.getText();
+        return t != null ? t.strip() : "";
+    }
+
+    double snapshotEquipmentGanttPersonBadgeWireWidthPx() {
+        if (graphicPersonBadgeWireWidthSlider == null) {
+            return DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX;
+        }
+        double v = graphicPersonBadgeWireWidthSlider.getValue();
+        return !Double.isFinite(v) || v < 0.05
+                ? DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX
+                : Math.min(v, WIRE_WIDTH_SLIDER_MAX);
+    }
+
+    String snapshotEquipmentGanttPersonBadgeWireDashStyleKey() {
+        if (graphicPersonBadgeWireDashCombo == null) {
+            return DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_DASH_STYLE_KEY;
+        }
+        EquipmentGanttPersonBadgeWireDashStyle sel =
+                graphicPersonBadgeWireDashCombo.getSelectionModel().getSelectedItem();
+        return sel != null
+                ? sel.storedKey()
+                : DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_DASH_STYLE_KEY;
     }
 
     double snapshotEquipmentGanttPersonBadgeGapPx() {
@@ -1039,6 +1166,9 @@ public final class EquipmentGanttGraphicTabController {
                         dragEffective,
                         equipmentGanttBadgeDragDeltas,
                         dragSink,
+                        snapshotEquipmentGanttPersonBadgeWireStrokeHex(),
+                        snapshotEquipmentGanttPersonBadgeWireWidthPx(),
+                        snapshotEquipmentGanttPersonBadgeWireDashStyleKey(),
                         snapshotEquipmentGanttPersonBadgeWireEnabled());
         if (Boolean.getBoolean("pm.ai.gantt.profile")) {
             long ms = (System.nanoTime() - buildT0) / 1_000_000L;

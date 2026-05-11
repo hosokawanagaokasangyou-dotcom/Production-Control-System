@@ -341,6 +341,12 @@ public final class DesktopSessionStateStore {
                         root,
                         "equipmentGanttPersonBadgeWireEnabled",
                         DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_ENABLED),
+                text(root, "equipmentGanttPersonBadgeWireStrokeHex"),
+                optionalDouble(
+                        root,
+                        "equipmentGanttPersonBadgeWireWidthPx",
+                        DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX),
+                text(root, "equipmentGanttPersonBadgeWireDashStyleKey"),
                 text(root, "equipmentGanttPersonBadgeFontFamily"),
                 optionalDouble(root, "equipmentGanttPersonBadgeFontPercent", 0d),
                 text(root, "equipmentGanttPersonBadgeFillHex"),
@@ -801,6 +807,21 @@ public final class DesktopSessionStateStore {
         root.put(
                 "equipmentGanttPersonBadgeWireEnabled",
                 state.equipmentGanttPersonBadgeWireEnabled());
+        put(root, "equipmentGanttPersonBadgeWireStrokeHex", state.equipmentGanttPersonBadgeWireStrokeHex());
+        double wWire = state.equipmentGanttPersonBadgeWireWidthPx();
+        if (Double.isFinite(wWire)) {
+            root.put(
+                    "equipmentGanttPersonBadgeWireWidthPx",
+                    Math.min(
+                            Math.max(0d, wWire),
+                            DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX));
+        }
+        String dashKey = state.equipmentGanttPersonBadgeWireDashStyleKey();
+        root.put(
+                "equipmentGanttPersonBadgeWireDashStyleKey",
+                dashKey != null && !dashKey.isBlank()
+                        ? dashKey.strip()
+                        : DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_DASH_STYLE_KEY);
         put(root, "equipmentGanttPersonBadgeFontFamily", state.equipmentGanttPersonBadgeFontFamily());
         double bpf = state.equipmentGanttPersonBadgeFontPercent();
         if (Double.isFinite(bpf) && bpf > 0 && bpf <= 300) {

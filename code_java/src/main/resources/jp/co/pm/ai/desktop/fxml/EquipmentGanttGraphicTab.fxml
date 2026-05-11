@@ -109,6 +109,22 @@
                                 <Label fx:id="graphicPersonBadgeBandVerticalOffsetLabel" text="+0px"/>
                             </HBox>
                             <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="156.0" text="ワイヤー色"/>
+                                <TextField fx:id="graphicPersonBadgeWireColorField" prefWidth="148.0"
+                                           promptText="#空欄でテーマ色"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="156.0" text="ワイヤー太さ"/>
+                                <Slider fx:id="graphicPersonBadgeWireWidthSlider" blockIncrement="0.25"
+                                        max="12.0" min="0.0" prefWidth="96.0"
+                                        showTickLabels="false" showTickMarks="false" value="0.0"/>
+                                <Label fx:id="graphicPersonBadgeWireWidthLabel" text="自動"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="156.0" text="ワイヤー線種"/>
+                                <ComboBox fx:id="graphicPersonBadgeWireDashCombo" prefWidth="120.0"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
                                 <Label prefWidth="156.0" text="日付列幅"/>
                                 <Slider fx:id="graphicDateColSlider" blockIncrement="1.0"
                                         max="220.0" min="0.0" prefWidth="88.0"

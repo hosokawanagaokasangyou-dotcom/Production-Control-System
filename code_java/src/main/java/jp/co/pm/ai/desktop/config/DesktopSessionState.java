@@ -52,6 +52,9 @@ import java.util.Map;
  * @param equipmentGanttPersonBadgeDragAdjustEnabled 担当バッジをマウスドラッグで移動するモード（データ同一ならずれはセッションに保存される）
  * @param equipmentGanttPersonBadgeEnabled 設備ガント・担当バッジ表示のオンオフ
  * @param equipmentGanttPersonBadgeWireEnabled 担当バッジとチャートバーをワイヤーで結ぶ（バッジ表示時のみ有効）
+ * @param equipmentGanttPersonBadgeWireStrokeHex ワイヤー色（#RRGGBB / #RRGGBBAA、空はテーマのバー枠色＋既定不透明度）
+ * @param equipmentGanttPersonBadgeWireWidthPx ワイヤー太さ（px、{@code 0} または非正はズームに応じた自動）
+ * @param equipmentGanttPersonBadgeWireDashStyleKey 線種（{@code SOLID}|{@code DASHED}|{@code DOTTED}|{@code DASH_DOT}、空は SOLID）
  * @param equipmentGanttPersonBadgeFontFamily バッジ文字フォント（空は既定ファミリ）
  * @param equipmentGanttPersonBadgeFontPercent バッジ文字サイズ（行ラベル基準の%、0 は未保存として既定 85）
  * @param equipmentGanttPersonBadgeFillHex バッジ背景色（#RRGGBB）
@@ -120,6 +123,9 @@ public record DesktopSessionState(
         boolean equipmentGanttPersonBadgeDragAdjustEnabled,
         boolean equipmentGanttPersonBadgeEnabled,
         boolean equipmentGanttPersonBadgeWireEnabled,
+        String equipmentGanttPersonBadgeWireStrokeHex,
+        double equipmentGanttPersonBadgeWireWidthPx,
+        String equipmentGanttPersonBadgeWireDashStyleKey,
         String equipmentGanttPersonBadgeFontFamily,
         double equipmentGanttPersonBadgeFontPercent,
         String equipmentGanttPersonBadgeFillHex,
@@ -160,6 +166,25 @@ public record DesktopSessionState(
     /** 設備ガント・バッジワイヤー表示の既定（視認性向上のため既定 ON）。 */
     public static final boolean DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_ENABLED = true;
 
+    /** ワイヤー色が未指定のときテーマのバー枠色に乗せる不透明度。 */
+    public static final double DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_THEME_OPACITY = 0.45;
+
+    /** ワイヤー太さが {@code 0} のときの自動太さの係数（{@code max(下限, 係数 * zoom)}）。 */
+    public static final double DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_AUTO_WIDTH_FACTOR = 0.65;
+
+    public static final double DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_AUTO_WIDTH_MIN_PX = 0.75;
+
+    /** ワイヤー太さの手動指定時の上限（px）。 */
+    public static final double MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX = 12.0;
+
+    /** ワイヤー色・線種の既定（空はテーマ／SOLID）。 */
+    public static final String DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_STROKE_HEX = "";
+
+    /** {@code 0} は {@link #DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_AUTO_WIDTH_FACTOR} による自動太さ。 */
+    public static final double DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX = 0d;
+
+    public static final String DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_DASH_STYLE_KEY = "SOLID";
+
     public DesktopSessionState {
         equipmentGanttPersonBadgeStylesByLabel =
                 equipmentGanttPersonBadgeStylesByLabel == null || equipmentGanttPersonBadgeStylesByLabel.isEmpty()
@@ -192,6 +217,14 @@ public record DesktopSessionState(
                         : Map.copyOf(equipmentGanttBadgeDragDeltas);
         equipmentGanttPlanJsonPath =
                 equipmentGanttPlanJsonPath != null ? equipmentGanttPlanJsonPath.strip() : "";
+        equipmentGanttPersonBadgeWireStrokeHex =
+                equipmentGanttPersonBadgeWireStrokeHex != null
+                        ? equipmentGanttPersonBadgeWireStrokeHex.strip()
+                        : "";
+        equipmentGanttPersonBadgeWireDashStyleKey =
+                equipmentGanttPersonBadgeWireDashStyleKey != null
+                        ? equipmentGanttPersonBadgeWireDashStyleKey.strip()
+                        : "";
     }
 
     /**
@@ -290,6 +323,9 @@ public record DesktopSessionState(
                 false,
                 true,
                 DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_ENABLED,
+                DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_STROKE_HEX,
+                DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX,
+                DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_DASH_STYLE_KEY,
                 "",
                 d.fontPercent(),
                 d.fillHex(),
@@ -364,6 +400,9 @@ public record DesktopSessionState(
                 equipmentGanttPersonBadgeDragAdjustEnabled(),
                 equipmentGanttPersonBadgeEnabled(),
                 equipmentGanttPersonBadgeWireEnabled(),
+                equipmentGanttPersonBadgeWireStrokeHex(),
+                equipmentGanttPersonBadgeWireWidthPx(),
+                equipmentGanttPersonBadgeWireDashStyleKey(),
                 equipmentGanttPersonBadgeFontFamily(),
                 equipmentGanttPersonBadgeFontPercent(),
                 equipmentGanttPersonBadgeFillHex(),

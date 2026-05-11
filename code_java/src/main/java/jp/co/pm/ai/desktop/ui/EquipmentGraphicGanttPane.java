@@ -109,8 +109,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     public static final double DEFAULT_PERSON_BADGE_GAP_PX =
             DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX;
 
-    /** バッジワイヤーの不透明度（{@link #fillBar} のストローク色に乗算）。 */
-    private static final double PERSON_BADGE_WIRE_OPACITY = 0.45;
 
     private static final Group MEASURE_ROOT = new Group();
     private static final Scene MEASURE_SCENE = new Scene(MEASURE_ROOT, 4000, 4000);
@@ -491,6 +489,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 false,
                 null,
                 null,
+                DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_STROKE_HEX,
+                DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX,
+                DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_DASH_STYLE_KEY,
                 DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_ENABLED);
     }
 
@@ -536,6 +537,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 false,
                 null,
                 null,
+                DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_STROKE_HEX,
+                DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX,
+                DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_DASH_STYLE_KEY,
                 DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_ENABLED);
     }
 
@@ -554,6 +558,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      * @param personBadgeDragAdjustEnabled バッジをドラッグで移動する
      * @param personBadgeDragDeltas {@link #computeDataFingerprint} が同一のとき適用するドラッグずれ（{@code null} で空）
      * @param personBadgeDragDeltaSink ドラッグ確定時にずれを通知（{@code null} で保存しない）
+     * @param personBadgeWireStrokeHexOrEmpty ワイヤー色（#RRGGBB、空はテーマのバー枠色）
+     * @param personBadgeWireWidthPxOrZero {@code 0} または非正でズーム連動の既定太さ
+     * @param personBadgeWireDashStyleKeyOrEmpty {@link EquipmentGanttPersonBadgeWireDashStyle} の名前（空は SOLID）
      * @param showPersonBadgeWires 担当バッジとチャートバーをワイヤーで結ぶ（{@code showPersonBadges} が false のとき無効）
      */
     public static BorderPane build(
@@ -578,6 +585,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             boolean personBadgeDragAdjustEnabled,
             Map<String, EquipmentGanttBadgeDragDelta> personBadgeDragDeltas,
             BiConsumer<String, EquipmentGanttBadgeDragDelta> personBadgeDragDeltaSink,
+            String personBadgeWireStrokeHexOrEmpty,
+            double personBadgeWireWidthPxOrZero,
+            String personBadgeWireDashStyleKeyOrEmpty,
             boolean showPersonBadgeWires) {
         BorderPane root = new BorderPane();
         root.setCache(false);
@@ -610,13 +620,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         barFontPercent,
                         headerHeightPercent);
         GanttPalette palette = GanttPalette.forTheme(theme);
-        Color personBadgeWireStroke =
-                Color.color(
-                        palette.barStroke().getRed(),
-                        palette.barStroke().getGreen(),
-                        palette.barStroke().getBlue(),
-                        PERSON_BADGE_WIRE_OPACITY);
-        boolean personBadgeWiresEffective = showPersonBadges && showPersonBadgeWires;
+        EquipmentGanttPersonBadgeWireDashStyle wireDashResolved =
+                EquipmentGanttPersonBadgeWireDashStyle.fromStored(
+                        personBadgeWireDashStyleKeyOrEmpty);
+        Color wireColorResolved =
+                resolvePersonBadgeWireColor(palette, personBadgeWireStrokeHexOrEmpty);
         Font barFont = resolveBarFont(barFontFamily, layout.barFontSize);
 
         double gapPxEff = personBadgeGapPx;
@@ -671,6 +679,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         if (slotWidthScale < 1.0 - 1e-12) {
             layout = layout.scaleSlotWidth(slotWidthScale);
         }
+
+        double wireWidthResolved =
+                resolvePersonBadgeWireWidthPx(layout.zoom(), personBadgeWireWidthPxOrZero);
+        PersonBadgeWirePaint personBadgeWirePaint =
+                new PersonBadgeWirePaint(wireColorResolved, wireWidthResolved, wireDashResolved);
+        boolean personBadgeWiresEffective = showPersonBadges && showPersonBadgeWires;
 
         List<MachineColumnPlan> machPlans =
                 computeMachineColumnPlans(effCols, parsed.displayRows());
@@ -909,7 +923,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         dragEff,
                         personBadgeDragDeltaSink,
                         personBadgeWiresEffective,
-                        personBadgeWireStroke);
+                        personBadgeWiresEffective ? personBadgeWirePaint : null);
                 /*
                  * 帯内クランプ（clampBadgeLayoutYInBand）がスタック高≧帯のときオフセットを打ち消すため、
                  * レイアウト後にオーバーレイPaneへ縦移動だけ適用する。
@@ -1785,6 +1799,40 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private record BadgeWirePlacement(
             Line wireLineOrNull, StackPane badge, double anchorX, double anchorY) {}
 
+    private record PersonBadgeWirePaint(
+            Color color,
+            double strokeWidthPx,
+            EquipmentGanttPersonBadgeWireDashStyle dashStyle) {}
+
+    private static Color resolvePersonBadgeWireColor(GanttPalette palette, String hexOrEmpty) {
+        String h = hexOrEmpty != null ? hexOrEmpty.strip() : "";
+        if (!h.isEmpty()) {
+            try {
+                return Color.web(h);
+            } catch (IllegalArgumentException | NullPointerException ignored) {
+                // fall through to theme
+            }
+        }
+        return Color.color(
+                palette.barStroke().getRed(),
+                palette.barStroke().getGreen(),
+                palette.barStroke().getBlue(),
+                DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_THEME_OPACITY);
+    }
+
+    private static double resolvePersonBadgeWireWidthPx(double zoom, double widthPxOrZero) {
+        if (!Double.isFinite(widthPxOrZero) || widthPxOrZero <= 1e-6) {
+            return Math.max(
+                    DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_AUTO_WIDTH_MIN_PX,
+                    DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_AUTO_WIDTH_FACTOR
+                            * zoom);
+        }
+        return Math.clamp(
+                widthPxOrZero,
+                0.25,
+                DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX);
+    }
+
     private static double barAnchorCenterX(LayoutMetrics layout, BarRun run) {
         return EquipmentGanttWireAnchorMath.barAnchorCenterX(
                 layout.slotWidth(), layout.zoom(), run.fromSlot(), run.toSlot());
@@ -1832,7 +1880,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             Map<String, EquipmentGanttBadgeDragDelta> dragDeltas,
             BiConsumer<String, EquipmentGanttBadgeDragDelta> dragDeltaSink,
             boolean personBadgeWiresEnabled,
-            Color personBadgeWireColor) {
+            PersonBadgeWirePaint wirePaintOrNull) {
         if (overlay == null
                 || styleForLabel == null
                 || badgeSlotTexts == null
@@ -1859,9 +1907,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             if (frag.isEmpty()) {
                 continue;
             }
-            boolean wireThisRun =
-                    personBadgeWiresEnabled
-                            && personBadgeWireColor != null;
+            boolean wireThisRun = personBadgeWiresEnabled && wirePaintOrNull != null;
             double anchorX = 0d;
             double anchorY = 0d;
             if (wireThisRun) {
@@ -2029,9 +2075,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     sp.setLayoutY(lyUse);
                     Line wireLine = null;
                     if (wireThisRun) {
+                        PersonBadgeWirePaint paint = wirePaintOrNull;
                         wireLine = new Line(anchorX, anchorY, anchorX, anchorY);
-                        wireLine.setStroke(personBadgeWireColor);
-                        wireLine.setStrokeWidth(Math.max(0.75, 0.65 * layout.zoom));
+                        wireLine.setStroke(paint.color());
+                        wireLine.setStrokeWidth(paint.strokeWidthPx());
+                        paint.dashStyle().applyTo(wireLine, layout.zoom);
                         wireLine.setMouseTransparent(true);
                         wireLine.setPickOnBounds(false);
                     }
