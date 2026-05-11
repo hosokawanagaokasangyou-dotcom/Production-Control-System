@@ -52,7 +52,7 @@ __all__ = ("build_delivery_calendar_payload",)
 _DEBUG_PROBE_ENV = "PM_AI_DELIVERY_CALENDAR_PROBE_TASK"
 _ENV_CAL_PAST_DAYS = "PM_AI_DELIVERY_CALENDAR_PAST_DAYS"
 _ENV_CAL_FUTURE_DAYS = "PM_AI_DELIVERY_CALENDAR_FUTURE_DAYS"
-# Java ``JsonTableIo`` / ???????????????????? JSON
+# Java JsonTableIo / shaped_processing_actuals companion JSON basename
 _SHAPED_PROCESSING_ACTUALS_JSON_BASENAME = "shaped_processing_actuals.json"
 
 # Short weekday for calendar column titles (Mon=\u6708 ... Sun=\u65e5)

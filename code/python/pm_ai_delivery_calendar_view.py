@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 
 # python -P / PYTHONSAFEPATH ではスクリプト所在ディレクトリが sys.path に入らない。
 # 同梱 embed 実行時は JAVA 側の PYTHONPATH が効かない／限定されることがあるため、段階1/2 と同様に明示する。
@@ -38,13 +39,67 @@ def _agent_debug_ndjson(payload: dict) -> None:
 
 def main() -> int:
     try:
+        _py_dir = Path(__file__).resolve().parent
+        _dcp_source = _py_dir / "planning_core" / "delivery_calendar_payload.py"
+        try:
+            _dcp_source.read_bytes().decode("utf-8")
+        except OSError as oe:
+            msg = f"delivery_calendar_payload.py を読めません ({_dcp_source}): {oe}"
+            _agent_debug_ndjson(
+                {
+                    "hypothesisId": "H-bytes",
+                    "location": "pm_ai_delivery_calendar_view.py:utf8-precheck",
+                    "message": "source_os_error",
+                    "data": {"path": str(_dcp_source), "detail": str(oe)},
+                }
+            )
+            print(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "error": msg,
+                        "meta": {"badSourcePath": str(_dcp_source)},
+                    },
+                    ensure_ascii=False,
+                ),
+                flush=True,
+            )
+            return 1
+        except UnicodeDecodeError as ude:
+            msg = (
+                "delivery_calendar_payload.py が UTF-8 として不正です（別フォルダの古いコピーを実行している可能性）。"
+                f" path={_dcp_source} ; {ude}"
+            )
+            _agent_debug_ndjson(
+                {
+                    "hypothesisId": "H-bytes",
+                    "location": "pm_ai_delivery_calendar_view.py:utf8-precheck",
+                    "message": "utf8_decode_error",
+                    "data": {"path": str(_dcp_source), "detail": str(ude)},
+                }
+            )
+            print(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "error": msg,
+                        "meta": {"badSourcePath": str(_dcp_source)},
+                    },
+                    ensure_ascii=False,
+                ),
+                flush=True,
+            )
+            return 1
         # #region agent log
         _agent_debug_ndjson(
             {
                 "hypothesisId": "H-src",
                 "location": "pm_ai_delivery_calendar_view.py:pre-import",
                 "message": "import_start",
-                "data": {"sys_path0": sys.path[0] if sys.path else ""},
+                "data": {
+                    "sys_path0": sys.path[0] if sys.path else "",
+                    "precheckSourcePath": str(_dcp_source),
+                },
             }
         )
         # #endregion
