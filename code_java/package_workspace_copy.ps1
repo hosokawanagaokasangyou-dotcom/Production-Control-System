@@ -89,6 +89,10 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
         $excludedDirNames.Add('plan')
         $excludedDirNames.Add('plans')
     }
+    # User profile exports under repo (e.g. init_setting/user-profiles/) must not ship in InitialInstall / VersionUpgrade ZIPs.
+    if ($BundleKind -eq 'InitialInstall' -or $BundleKind -eq 'VersionUpgrade') {
+        $excludedDirNames.Add('user-profiles')
+    }
 
     $excludedFileNamePatterns = @(
         '*.log',

@@ -52,6 +52,13 @@ class PortableBundleSelfUpdaterTest {
     }
 
     @Test
+    void excludes_init_setting_user_profiles_tree() {
+        assertTrue(PortableBundleSelfUpdater.isExcludedPath(Path.of("init_setting/user-profiles")));
+        assertTrue(PortableBundleSelfUpdater.isExcludedPath(Path.of("init_setting/user-profiles/a.json")));
+        assertFalse(PortableBundleSelfUpdater.isExcludedPath(Path.of("init_setting/session_defaults.json")));
+    }
+
+    @Test
     void readLocalBundleVersion_fallsBackToCwdWhenPmAiDataMissing(@TempDir Path tmp) throws IOException {
         Path pm = tmp.resolve("pm-ai-data");
         Files.createDirectories(pm);

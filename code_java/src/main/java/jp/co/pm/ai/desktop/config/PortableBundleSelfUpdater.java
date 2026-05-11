@@ -238,6 +238,9 @@ public final class PortableBundleSelfUpdater {
         if (unix.equals("input") || unix.startsWith("input/")) {
             return true;
         }
+        if (unix.equals("init_setting/user-profiles") || unix.startsWith("init_setting/user-profiles/")) {
+            return true;
+        }
         if (unix.equals("code/log") || unix.startsWith("code/log/")) {
             return true;
         }

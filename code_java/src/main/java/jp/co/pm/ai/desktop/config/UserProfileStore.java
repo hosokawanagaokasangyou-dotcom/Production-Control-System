@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * ユーザープロファイル（{@code ~/.pm-ai-desktop/user-profiles/*.json}）。アップデート同期の対象外で、配布の上書きを受けない。
+ * 初回インストール／バージョンアップ用 ZIP のワークスペースミラーでも {@code user-profiles} ディレクトリは同梱しない（{@code package_workspace_copy.ps1} / {@code fast_package_app.ps1}）。
  */
 public final class UserProfileStore {
 

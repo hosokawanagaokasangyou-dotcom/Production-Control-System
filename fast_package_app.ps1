@@ -530,7 +530,8 @@ function Copy-BundleToDist {
     if (Test-Path -LiteralPath $initSrc) {
         Write-Host "--- robocopy init_setting -> pm-ai-data\init_setting ($BundleKind) ---" -ForegroundColor Cyan
         New-Item -ItemType Directory -Path $initDst -Force | Out-Null
-        & robocopy $initSrc $initDst /E /NFL /NDL /NJH /NJS /nc /ns /np | Out-Host
+        # Exclude mirrored user-profile dumps if present under init_setting (same semantics as ~/.pm-ai-desktop/user-profiles).
+        & robocopy $initSrc $initDst /E /XD user-profiles /NFL /NDL /NJH /NJS /nc /ns /np | Out-Host
         $rcInit = $LASTEXITCODE
         if ($rcInit -ge 8) {
             throw "robocopy init_setting failed (exit $rcInit)"
@@ -569,13 +570,13 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
     if ($BundleKind -eq 'InitialInstall') {
         $rmLines.Add('Bundle profile: InitialInstall - excludes .git, **/.venv (any depth), .githooks, .github, .pm-ai-cache/network-source, .cursor, .vscode, code/VBA, code/参照用, code_java build/cache dirs, pm-ai-package-release/, output/, code/output/, code/python/output/, **/plan, **/plans, **/__pycache__, **/.pytest_cache, build_cache, root xlwings install bat, code workspace file (see package_workspace_copy.ps1).')
         $rmLines.Add('Note: dispatch outputs (plan/plans/output) are now excluded from InitialInstall as well as VersionUpgrade.')
-        $rmLines.Add('init_setting/: copied from repo init_setting/ when present (session_defaults / table_column_defaults for package baselines).')
+        $rmLines.Add('init_setting/: copied from repo init_setting/ when present (session_defaults / table_column_defaults for package baselines). Subfolder user-profiles/ is excluded (machine-local profile exports).')
         $rmLines.Add('Desktop UI defaults (Initial install only in dist): pm-ai-data/config/bundled_session_ui_defaults.json and bundled_table_column_order.json from JAR resources. VersionUpgrade zip does not ship these two (user session files under ~/.pm-ai-desktop are not overwritten from bundle).')
         $rmLines.Add('Exclude rules JSON (Initial + VersionUpgrade): pm-ai-data/code/exclude_rules.json (copy of code/json/stage1_exclude_rules.json when present, else JAR-resource fallback bundled_exclude_rules.json) for PM_AI_EXCLUDE_RULES_JSON bootstrap and post-sync session overwrite.')
     }
     else {
         $rmLines.Add('Bundle profile: VersionUpgrade - also excludes **/plan, **/plans, code/output/, repo output/, code/python/output/, .pm-ai-cache/, config/bundled_session_ui_defaults.json, config/bundled_table_column_order.json (if present in tree), extra env-var TSVs (template TSV still bundled), .env.')
-        $rmLines.Add('init_setting/ is included when present in repo (same as Initial). No bundled_session_ui_defaults / bundled_table_column_order from JAR in this profile (avoids clobbering user table/tab prefs on sync). code/exclude_rules.json still materialized from stage1 or JAR fallback.')
+        $rmLines.Add('init_setting/ is included when present in repo (same as Initial; user-profiles/ under init_setting excluded). No bundled_session_ui_defaults / bundled_table_column_order from JAR in this profile (avoids clobbering user table/tab prefs on sync). code/exclude_rules.json still materialized from stage1 or JAR fallback.')
         $rmLines.Add('See package_workspace_copy.ps1 for exact rules.')
     }
     $rmLines.Add('Excluded files (all profiles): *.log, ~$* (Excel lock), *.hprof, *.hprof.* (JVM heap dumps), *.heapsnapshot, *.dump, *.mdmp, *.tmp, Thumbs.db, desktop.ini.')
