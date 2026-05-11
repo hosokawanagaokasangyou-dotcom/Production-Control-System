@@ -15,7 +15,6 @@ import json
 import os
 import subprocess
 import sys
-import time
 import traceback
 from pathlib import Path
 
@@ -103,54 +102,6 @@ def main() -> int:
             json.dumps(shortage_payload, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
-        # #region agent log
-        try:
-            _dbg = Path(__file__).resolve().parents[2] / ".cursor" / "debug-41bffb.log"
-
-            def _pick_y525(seq):
-                if not seq:
-                    return []
-                out = []
-                for x in seq:
-                    if not isinstance(x, dict):
-                        continue
-                    tid = str(x.get("task_id") or "")
-                    if "Y5-25" in tid:
-                        out.append(
-                            {
-                                "task_id": tid,
-                                "machine_name": str(x.get("machine_name") or ""),
-                                "date": str(x.get("date") or x.get("dispatch_date") or ""),
-                            }
-                        )
-                return out
-
-            _line = {
-                "sessionId": "41bffb",
-                "hypothesisId": "H1-H3",
-                "location": "dispatch_interactive_trial.py:after_shortage_write",
-                "message": "shortage_payload summary (Python)",
-                "data": {
-                    "op_n": len(shortage_payload.get("op_shortage") or []),
-                    "as_n": len(shortage_payload.get("as_shortage") or []),
-                    "dq_n": len(shortage_payload.get("dispatch_qty_shortfall") or []),
-                    "op_y525": _pick_y525(shortage_payload.get("op_shortage")),
-                    "as_y525": _pick_y525(shortage_payload.get("as_shortage")),
-                    "dq_y525": [
-                        x
-                        for x in (shortage_payload.get("dispatch_qty_shortfall") or [])
-                        if isinstance(x, dict)
-                        and "Y5-25" in str(x.get("task_id") or "")
-                    ],
-                },
-                "timestamp": int(time.time() * 1000),
-            }
-            _dbg.parent.mkdir(parents=True, exist_ok=True)
-            with open(_dbg, "a", encoding="utf-8") as _df:
-                _df.write(json.dumps(_line, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
-        # #endregion
         print("[dispatch trial] 不足情報JSONを書き出しました。", flush=True)
     except Exception as e:
         if pc is not None and type(e).__name__ == "PlanningValidationError":
