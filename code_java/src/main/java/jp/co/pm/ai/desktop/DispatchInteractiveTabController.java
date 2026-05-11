@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,11 +14,14 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -40,7 +44,9 @@ import javafx.scene.control.ListView;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TabPane;
+import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableCell;
+import javafx.scene.control.TableView;
 import javafx.scene.control.TablePosition;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
@@ -73,6 +79,8 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialConsistency;
+import jp.co.pm.ai.desktop.dispatch.DispatchTrialShortages;
+import jp.co.pm.ai.desktop.dispatch.DispatchTrialShortages.DispatchQtyShortfallRow;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchJsonIo;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
@@ -124,6 +132,10 @@ public final class DispatchInteractiveTabController {
     /** 日付列で数量が正のとき。 */
     private static final String DATE_CELL_STYLE_POSITIVE_QTY =
             "-fx-background-color: #e8f5e9; -fx-text-fill: black;";
+
+    /** 配台試行でタイムライン実績が目標に届かないセル。 */
+    private static final String DATE_CELL_STYLE_SHORTFALL =
+            "-fx-background-color: #b71c1c; -fx-text-fill: white; -fx-font-weight: bold;";
 
     private static final List<String> WIDE_STATIC_HEADERS =
             List.of(
@@ -200,6 +212,12 @@ public final class DispatchInteractiveTabController {
     private Label jsonPathLabel;
 
     @FXML
+    private VBox dispatchShortfallPanel;
+
+    @FXML
+    private TableView<DispatchQtyShortfallRow> dispatchShortfallTable;
+
+    @FXML
     private TabPane innerTabPane;
 
     private final AtomicBoolean suppressInnerTabSessionPersistence = new AtomicBoolean(false);
@@ -234,6 +252,12 @@ public final class DispatchInteractiveTabController {
     /** Parallel to {@link #wideProfiles} rows in the wide grid. */
     private final List<WideRow> wideRowItems = new ArrayList<>();
 
+    private List<DispatchQtyShortfallRow> lastDispatchShortfallRows = List.of();
+
+    private final Set<String> dispatchWideShortfallKeys = new HashSet<>();
+
+    private final Set<String> dispatchByDayShortfallKeys = new HashSet<>();
+
     @FXML
     private void initialize() {
         StackPane.setAlignment(wideSpreadsheet, Pos.TOP_LEFT);
@@ -267,6 +291,12 @@ public final class DispatchInteractiveTabController {
 
         installWideDnDHandlers();
         installByDayDoubleClickHandler();
+
+        if (dispatchShortfallTable != null) {
+            installDispatchShortfallColumns(dispatchShortfallTable);
+            dispatchShortfallTable.setColumnResizePolicy(
+                    TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        }
     }
 
     void bindShell(MainShellController shell) {
@@ -821,6 +851,7 @@ public final class DispatchInteractiveTabController {
                         logList.scrollTo(logLines.size() - 1);
                         reloadFromDiskQuiet(
                                 () -> {
+                                    showDispatchQtyShortfallDialogIfNeeded(owner);
                                     DispatchTrialConsistency.CheckResult cr =
                                             DispatchTrialConsistency.compareDocuments(
                                                     trialInputSnapshot, doc);
@@ -928,6 +959,7 @@ public final class DispatchInteractiveTabController {
         if (!Files.isRegularFile(p)) {
             statusLabel.setText("ファイルなし");
             doc = ResultDispatchDocument.empty();
+            clearDispatchShortfallUi();
             rebuildGrids();
             clearDispatchDocDirty();
             return;
@@ -948,6 +980,7 @@ public final class DispatchInteractiveTabController {
                     ReloadBundle b = task.getValue();
                     doc = b.doc();
                     statusLabel.setText(doc.rows().size() + " 行");
+                    applyDispatchShortfallFromDisk(jsonPath);
                     rebuildGrids();
                     clearDispatchDocDirty();
                     hideReloadProgress();
@@ -963,6 +996,7 @@ public final class DispatchInteractiveTabController {
                     shell.appendLog(
                             "[dispatch-editor] load failed: "
                                     + (ex != null ? ex.getMessage() : ""));
+                    clearDispatchShortfallUi();
                     rebuildGrids();
                     clearDispatchDocDirty();
                     hideReloadProgress();
@@ -1645,6 +1679,10 @@ public final class DispatchInteractiveTabController {
     }
 
     private void applyWideCellStyle(WideRow wr, int dateIdx, SpreadsheetCell cell) {
+        if (isWideDispatchShortfall(wr, dateIdx)) {
+            cell.setStyle(DATE_CELL_STYLE_SHORTFALL);
+            return;
+        }
         double q = wr.getAmount(dateIdx);
         if (q > 1e-9) {
             cell.setStyle(DATE_CELL_STYLE_POSITIVE_QTY);
@@ -1793,12 +1831,192 @@ public final class DispatchInteractiveTabController {
     }
 
     private void applyByDayCellStyle(ByDayRow br, int dateIdx, SpreadsheetCell cell) {
+        if (isByDayDispatchShortfall(br, dateIdx)) {
+            cell.setStyle(DATE_CELL_STYLE_SHORTFALL);
+            return;
+        }
         double q = br.getAmount(dateIdx);
         if (q > 1e-9) {
             cell.setStyle(DATE_CELL_STYLE_POSITIVE_QTY);
         } else {
             cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_DATA_WHITE);
         }
+    }
+
+    private boolean isWideDispatchShortfall(WideRow wr, int dateIdx) {
+        if (dispatchWideShortfallKeys.isEmpty()
+                || dateIdx < 0
+                || dateIdx >= dateAxis.size()) {
+            return false;
+        }
+        String tid = wr.getStatic("依頼NO");
+        String mach = wr.getStatic(ResultDispatchSchema.COL_MACHINE);
+        LocalDate d = dateAxis.get(dateIdx);
+        String key =
+                DispatchTrialShortages.wideShortfallKey(tid, mach, d.toString());
+        return dispatchWideShortfallKeys.contains(key);
+    }
+
+    private boolean isByDayDispatchShortfall(ByDayRow br, int dateIdx) {
+        if (dispatchByDayShortfallKeys.isEmpty()
+                || dateIdx < 0
+                || dateIdx >= dateAxis.size()) {
+            return false;
+        }
+        String mach = br.machine();
+        LocalDate d = dateAxis.get(dateIdx);
+        return dispatchByDayShortfallKeys.contains(
+                DispatchTrialShortages.byDayShortfallKey(mach, d.toString()));
+    }
+
+    private void installDispatchShortfallColumns(TableView<DispatchQtyShortfallRow> tv) {
+        if (tv == null) {
+            return;
+        }
+        tv.getColumns().clear();
+        TableColumn<DispatchQtyShortfallRow, String> c0 = new TableColumn<>("依頼NO");
+        c0.setCellValueFactory(
+                cd -> new ReadOnlyObjectWrapper<>(Objects.toString(cd.getValue().taskId(), "")));
+        TableColumn<DispatchQtyShortfallRow, String> c1 = new TableColumn<>("機械名");
+        c1.setCellValueFactory(
+                cd -> new ReadOnlyObjectWrapper<>(Objects.toString(cd.getValue().machineName(), "")));
+        TableColumn<DispatchQtyShortfallRow, String> c2 = new TableColumn<>("配台日");
+        c2.setCellValueFactory(
+                cd ->
+                        new ReadOnlyObjectWrapper<>(
+                                Objects.toString(cd.getValue().dispatchDateIso(), "")));
+        TableColumn<DispatchQtyShortfallRow, String> c3 = new TableColumn<>("目標(m)");
+        c3.setCellValueFactory(
+                cd ->
+                        new ReadOnlyObjectWrapper<>(
+                                formatShortfallMeters(cd.getValue().targetM())));
+        TableColumn<DispatchQtyShortfallRow, String> c4 = new TableColumn<>("実績(m)");
+        c4.setCellValueFactory(
+                cd ->
+                        new ReadOnlyObjectWrapper<>(
+                                formatShortfallMeters(cd.getValue().doneM())));
+        TableColumn<DispatchQtyShortfallRow, String> c5 = new TableColumn<>("不足(m)");
+        c5.setCellValueFactory(
+                cd ->
+                        new ReadOnlyObjectWrapper<>(
+                                formatShortfallMeters(cd.getValue().shortfallM())));
+        TableColumn<DispatchQtyShortfallRow, String> c6 = new TableColumn<>("補足");
+        c6.setPrefWidth(280);
+        c6.setCellValueFactory(
+                cd -> new ReadOnlyObjectWrapper<>(Objects.toString(cd.getValue().note(), "")));
+        tv.getColumns().addAll(c0, c1, c2, c3, c4, c5, c6);
+    }
+
+    private static String formatShortfallMeters(double m) {
+        if (Double.isNaN(m) || Double.isInfinite(m)) {
+            return "";
+        }
+        if (Math.abs(m - Math.rint(m)) < 1e-6) {
+            return Long.toString((long) Math.rint(m));
+        }
+        return String.format("%.3f", m);
+    }
+
+    /** {@code 結果_配台表.json} と同じフォルダの {@code dispatch_trial_shortages.json} から未達行を読み UI に反映する。 */
+    private void applyDispatchShortfallFromDisk(Path resultDispatchJson) {
+        if (resultDispatchJson == null) {
+            clearDispatchShortfallUi();
+            return;
+        }
+        Path shortagePath = resultDispatchJson.resolveSibling("dispatch_trial_shortages.json");
+        if (!Files.isRegularFile(shortagePath)) {
+            clearDispatchShortfallUi();
+            return;
+        }
+        try {
+            DispatchTrialShortages.FullBundle fb = DispatchTrialShortages.readFull(shortagePath);
+            List<DispatchQtyShortfallRow> rows = fb.dispatchQtyShortfall();
+            applyDispatchShortfallRows(rows);
+        } catch (IOException e) {
+            clearDispatchShortfallUi();
+        }
+    }
+
+    private void applyDispatchShortfallRows(List<DispatchQtyShortfallRow> rows) {
+        lastDispatchShortfallRows = rows != null ? List.copyOf(rows) : List.of();
+        dispatchWideShortfallKeys.clear();
+        dispatchByDayShortfallKeys.clear();
+        for (DispatchQtyShortfallRow r : lastDispatchShortfallRows) {
+            dispatchWideShortfallKeys.add(
+                    DispatchTrialShortages.wideShortfallKey(
+                            r.taskId(), r.machineName(), r.dispatchDateIso()));
+            dispatchByDayShortfallKeys.add(
+                    DispatchTrialShortages.byDayShortfallKey(
+                            r.machineName(), r.dispatchDateIso()));
+        }
+        if (dispatchShortfallTable != null) {
+            dispatchShortfallTable.getItems().setAll(lastDispatchShortfallRows);
+        }
+        boolean vis = !lastDispatchShortfallRows.isEmpty();
+        if (dispatchShortfallPanel != null) {
+            dispatchShortfallPanel.setVisible(vis);
+            dispatchShortfallPanel.setManaged(vis);
+        }
+    }
+
+    private void clearDispatchShortfallUi() {
+        lastDispatchShortfallRows = List.of();
+        dispatchWideShortfallKeys.clear();
+        dispatchByDayShortfallKeys.clear();
+        if (dispatchShortfallTable != null) {
+            dispatchShortfallTable.getItems().clear();
+        }
+        if (dispatchShortfallPanel != null) {
+            dispatchShortfallPanel.setVisible(false);
+            dispatchShortfallPanel.setManaged(false);
+        }
+    }
+
+    /**
+     * 配台試行（段階3）成功後、未達があるときにモーダル表示する。{@link DispatchTrialUnassignedWizard} より前。
+     *
+     * <p>手動確認の目安: 機械カレンダー等でブロックされる暦日に当日配台数量を置いて試行し、該当の日付セルが赤表示になり、
+     * ツールバー下サマリ表と本ダイアログに同一内容が並ぶこと。
+     */
+    private void showDispatchQtyShortfallDialogIfNeeded(Stage owner) {
+        if (lastDispatchShortfallRows == null || lastDispatchShortfallRows.isEmpty()) {
+            return;
+        }
+        TableView<DispatchQtyShortfallRow> tv = new TableView<>();
+        installDispatchShortfallColumns(tv);
+        tv.getItems().setAll(lastDispatchShortfallRows);
+        tv.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+
+        Label head =
+                new Label(
+                        "次の暦日で、タイムライン上の割付が目標メートルに届きませんでした。"
+                                + " 機械カレンダー・人員・その他ブロックでその日に追加できなかった可能性があります。");
+        head.setWrapText(true);
+        head.setStyle("-fx-font-size: 13px;");
+        BorderPane root = new BorderPane();
+        root.setTop(head);
+        BorderPane.setMargin(head, new Insets(10, 14, 8, 14));
+        root.setCenter(tv);
+        BorderPane.setMargin(tv, new Insets(0, 14, 14, 14));
+
+        Stage st = new Stage();
+        if (owner != null) {
+            st.initOwner(owner);
+        }
+        st.initModality(Modality.APPLICATION_MODAL);
+        st.setTitle("配台数量未達（タイムライン実績）");
+        Scene sc = new Scene(root, 920, 520);
+        if (shell != null) {
+            shell.registerThemeTrackedScene(sc);
+        }
+        st.setScene(sc);
+        st.setOnHidden(
+                ev -> {
+                    if (shell != null) {
+                        shell.unregisterThemeTrackedScene(sc);
+                    }
+                });
+        st.showAndWait();
     }
 
     private void installWideDnDHandlers() {

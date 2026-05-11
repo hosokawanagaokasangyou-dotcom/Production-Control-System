@@ -79,12 +79,18 @@ def main() -> int:
             else None,
         )
         snap = pc.interactive_trial_shortages_snapshot()
+        md_snap = pc.interactive_trial_meters_done_snapshot()
+        dispatch_qty_shortfall = pc.compute_interactive_trial_dispatch_qty_shortfall(
+            targets if targets else None,
+            md_snap if md_snap else None,
+        )
         shortage_payload: dict = {
             "format_version": 2,
             "source_json": str(path),
             "note": "interactive trial via planning_core._generate_plan_impl",
             "op_shortage": snap["op_shortage"],
             "as_shortage": snap["as_shortage"],
+            "dispatch_qty_shortfall": dispatch_qty_shortfall,
         }
         if isinstance(paths, dict):
             shortage_payload["production_plan"] = str(paths.get("production_plan") or "")
@@ -112,6 +118,7 @@ def main() -> int:
                         "error": msg,
                         "op_shortage": snap["op_shortage"],
                         "as_shortage": snap["as_shortage"],
+                        "dispatch_qty_shortfall": [],
                     },
                     ensure_ascii=False,
                     indent=2,

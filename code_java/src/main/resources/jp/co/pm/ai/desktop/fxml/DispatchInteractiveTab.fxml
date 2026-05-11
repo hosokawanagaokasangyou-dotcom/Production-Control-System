@@ -12,6 +12,7 @@
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
+<?import javafx.scene.control.TableView?>
 <?import org.controlsfx.control.spreadsheet.SpreadsheetView?>
 
 <VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
@@ -56,6 +57,10 @@
                      visible="false" managed="false"/>
     </HBox>
     <Label fx:id="jsonPathLabel" wrapText="true"/>
+    <VBox fx:id="dispatchShortfallPanel" fillWidth="true" spacing="6.0" visible="false" managed="false">
+        <Label style="-fx-font-weight: bold;" text="配台数量未達（タイムライン実績）"/>
+        <TableView fx:id="dispatchShortfallTable" maxHeight="240.0" minHeight="120.0" prefHeight="160.0"/>
+    </VBox>
     <TabPane fx:id="innerTabPane" tabClosingPolicy="UNAVAILABLE" VBox.vgrow="ALWAYS">
         <tabs>
             <Tab closable="false" text="タスク×日付">

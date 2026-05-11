@@ -93,6 +93,8 @@ _STAGE2_MACHINE_CALENDAR_CACHE: dict | None = None
 # - 人不足は op_shortage / as_shortage に記録。
 _INTERACTIVE_TRIAL_OP_SHORTAGE: list[dict] = []
 _INTERACTIVE_TRIAL_AS_SHORTAGE: list[dict] = []
+# 試行終了時の _interactive_trial_meters_done のコピー（targets との突合用）
+_LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT: dict[tuple[str, str, date], float] = {}
 
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
@@ -23854,6 +23856,57 @@ def interactive_trial_shortages_snapshot() -> dict:
     }
 
 
+def interactive_trial_meters_done_snapshot() -> dict[tuple[str, str, date], float]:
+    """配台試行でタイムラインが記録した暦日別メートル達成（試行終了直後のスナップショット）。"""
+    return dict(_LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT)
+
+
+def compute_interactive_trial_dispatch_qty_shortfall(
+    targets: dict[tuple[str, str, date], float] | None,
+    meters_done: dict[tuple[str, str, date], float] | None,
+    *,
+    eps: float = 1e-3,
+) -> list[dict]:
+    """
+    interactive_dispatch_targets（目標メートル）と meters_done を突き合わせ、
+    目標を満たせない暦日キーを一覧化する（JavaFX 未達ハイライト用）。
+    """
+    out: list[dict] = []
+    if not targets:
+        return out
+    md = meters_done or {}
+    for k, target_m in targets.items():
+        if not isinstance(k, tuple) or len(k) != 3:
+            continue
+        tid, mach, dd = k[0], k[1], k[2]
+        try:
+            tgt = float(target_m or 0.0)
+        except (TypeError, ValueError):
+            tgt = 0.0
+        try:
+            done_m = float(md.get(k, 0.0))
+        except (TypeError, ValueError):
+            done_m = 0.0
+        gap = tgt - done_m
+        if gap > eps:
+            date_iso = dd.isoformat() if isinstance(dd, date) else str(dd)
+            out.append(
+                {
+                    "task_id": str(tid or ""),
+                    "machine_name": str(mach or ""),
+                    "dispatch_date": date_iso,
+                    "target_m": tgt,
+                    "done_m": done_m,
+                    "shortfall_m": gap,
+                    "note": (
+                        "タイムライン上の割付が目標メートルに達していません"
+                        "（機械カレンダー・人員・その他ブロック等）。"
+                    ),
+                }
+            )
+    return out
+
+
 def _apply_result_dispatch_table_excel_table(ws, *, table_display_name: str) -> None:
     """
     結果_配台表シートの Excel テーブルを更新する。
@@ -29767,9 +29820,11 @@ def _generate_plan_impl(
     # 配台トレース（設定シート A3:A26 のみ）はメンバー0人等で早期 return しても
     # execution_log に残るよご skills 読込より剝で確定・ログれる。
     global TRACE_SCHEDULE_TASK_IDS, DEBUG_DISPATCH_ONLY_TASK_IDS
+    global _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT
     if interactive_relax_intraday or interactive_dispatch_targets is not None:
         _INTERACTIVE_TRIAL_OP_SHORTAGE.clear()
         _INTERACTIVE_TRIAL_AS_SHORTAGE.clear()
+        _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT.clear()
     _wb_trace = _excel_plan_input_wb()
     _ids_from_sheet = _read_trace_schedule_task_ids_from_config_sheet(_wb_trace)
     TRACE_SCHEDULE_TASK_IDS = frozenset(
@@ -32345,6 +32400,9 @@ def _generate_plan_impl(
     except Exception as e:
         logging.warning("結果_配台表: 加工計画DATA 読込に失敗したため空欄補完をスキップ: %s", e)
         df_src_for_dispatch = None
+    if _interactive_dispatch_trial_env_active():
+        _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT.clear()
+        _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT.update(_interactive_trial_meters_done)
     df_dispatch = build_result_dispatch_table_dataframe(
         timeline_events,
         sorted_tasks_for_result,
