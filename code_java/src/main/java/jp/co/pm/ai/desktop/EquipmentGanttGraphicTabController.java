@@ -993,10 +993,21 @@ public final class EquipmentGanttGraphicTabController {
             }
             if (plan == null) {
                 statusLabel.setText("このフォルダに 計画*.json（または旧 production_plan_multi_day*.json）がありません: " + dir);
+                if (shell != null) {
+                    shell.appendLog(
+                            "[equipment-gantt-graphic] ガント同期をスキップ: 出力フォルダに計画JSONがありません（"
+                                    + dir
+                                    + "）");
+                }
                 return;
             }
         } catch (Exception ex) {
             statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            if (shell != null) {
+                shell.appendLog(
+                        "[equipment-gantt-graphic] ガント同期エラー: "
+                                + (ex.getMessage() != null ? ex.getMessage() : ex));
+            }
             return;
         }
         reloadFromFields();
@@ -1106,6 +1117,16 @@ public final class EquipmentGanttGraphicTabController {
                             + sheetUsed
                             + " / 対象シート数="
                             + names.size());
+            if (shell != null) {
+                shell.appendLog(
+                        "[equipment-gantt-graphic] ガントを更新: "
+                                + planPath.getFileName()
+                                + "（対象シート数="
+                                + names.size()
+                                + ", 表示="
+                                + sheetUsed
+                                + "）");
+            }
             collapseSourceAccordionAfterSuccessfulLoad();
         } catch (Exception ex) {
             resetGraphicState("エラー");

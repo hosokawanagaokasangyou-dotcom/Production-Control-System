@@ -53,6 +53,7 @@ public final class ResultDispatchJsonIo {
             }
         }
         migrateTrialOrderColumn(headerOrder, rowMaps);
+        migrateMemberNameColumn(headerOrder, rowMaps);
         ResultDispatchDocument doc = new ResultDispatchDocument(headerOrder, rowMaps);
         doc.setFormatVersion(formatVer);
         doc.setSheetName(sheetName);
@@ -84,6 +85,25 @@ public final class ResultDispatchJsonIo {
         String text = JSON.writerWithDefaultPrettyPrinter().writeValueAsString(root) + "\n";
         Files.createDirectories(path.getParent());
         Files.writeString(path, text, StandardCharsets.UTF_8);
+    }
+
+    /** Legacy JSON without {@code メンバー名}: insert after {@code 加工終了日時}. */
+    private static void migrateMemberNameColumn(List<String> headerOrder, List<Map<String, String>> rowMaps) {
+        final String col = "メンバー名";
+        if (headerOrder.contains(col)) {
+            return;
+        }
+        int anchor = headerOrder.indexOf("加工終了日時");
+        int insertAt = anchor < 0 ? headerOrder.size() : anchor + 1;
+        headerOrder.add(insertAt, col);
+        for (Map<String, String> row : rowMaps) {
+            LinkedHashMap<String, String> nu = new LinkedHashMap<>();
+            for (String h : headerOrder) {
+                nu.put(h, row.getOrDefault(h, ""));
+            }
+            row.clear();
+            row.putAll(nu);
+        }
     }
 
     /** Legacy JSON without {@link ResultDispatchSchema#COL_DISPATCH_TRIAL_ORDER}: insert column at index 0. */

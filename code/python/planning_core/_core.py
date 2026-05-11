@@ -1506,6 +1506,7 @@ RESULT_DISPATCH_TABLE_STATIC_HEADERS: tuple[str, ...] = (
     "原反投入場所",
     "加工開始日時",
     "加工終了日時",
+    "メンバー名",
 )
 # 結果_配台表: 日付列（yyyy/mm/dd 表示・列幅確保）
 RESULT_DISPATCH_TABLE_DATE_HEADERS = frozenset(
@@ -23563,7 +23564,7 @@ def _dispatch_table_cell_from_sources(
     col_name: str,
 ):
     """結果_配台表の静的列: 加工計画DATA→計画入力→task_queue の順に補完。"""
-    if col_name in ("加工開始日時", "加工終了日時"):
+    if col_name in ("加工開始日時", "加工終了日時", "メンバー名"):
         return ""
     # 1) 加工計画DATA
     if src_row is not None:
@@ -23687,6 +23688,7 @@ def build_result_dispatch_table_dataframe(
     agg: dict[tuple[str, str, date], float] = defaultdict(float)
     bound_min: dict[tuple[str, str, date], datetime] = {}
     bound_max: dict[tuple[str, str, date], datetime] = {}
+    member_ops: dict[tuple[str, str, date], list[str]] = defaultdict(list)
     for ev in timeline_events:
         if not _is_machining_timeline_event(ev):
             continue
@@ -23704,6 +23706,11 @@ def build_result_dispatch_table_dataframe(
             continue
         key = (tid, eq, cd)
         agg[key] += float(qty)
+        op_raw = " ".join(str(ev.get("op") or "").split()).strip()
+        if op_raw:
+            lst = member_ops[key]
+            if op_raw not in lst:
+                lst.append(op_raw)
         st0, ed0 = _timeline_event_start_end_dt(ev)
         if st0 is not None:
             prev = bound_min.get(key)
@@ -23778,6 +23785,7 @@ def build_result_dispatch_table_dataframe(
         row_key = (tid_k, eq_k, day_k)
         r["加工開始日時"] = _fmt_dispatch_table_datetime(bound_min.get(row_key))
         r["加工終了日時"] = _fmt_dispatch_table_datetime(bound_max.get(row_key))
+        r["メンバー名"] = "、".join(member_ops.get(row_key, []))
         r["配台日"] = day_k
         r["当日配台数量"] = float(qty_sum)
         rows.append(r)
@@ -24117,6 +24125,8 @@ def _result_dispatch_table_column_width(header: str) -> float:
         return 16.0
     if h in ("加工開始日時", "加工終了日時"):
         return 17.0
+    if h == "メンバー名":
+        return 14.0
     return min(max(float(len(h)) + 3.0, 10.0), 28.0)
 
 

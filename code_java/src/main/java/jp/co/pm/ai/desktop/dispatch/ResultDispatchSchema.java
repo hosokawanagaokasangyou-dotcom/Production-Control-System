@@ -44,7 +44,8 @@ public final class ResultDispatchSchema {
                     "計画合計",
                     "原反投入場所",
                     "加工開始日時",
-                    "加工終了日時");
+                    "加工終了日時",
+                    "メンバー名");
 
     private ResultDispatchSchema() {}
 
