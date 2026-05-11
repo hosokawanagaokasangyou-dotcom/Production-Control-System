@@ -3291,6 +3291,12 @@ public final class MainShellController {
         }
     }
 
+    /**
+     * 実行・ログタブなど「実体の exe が取れるとよい」用途。{@code pm-ai-data/runtime/python-embed/python.exe} があればそれを返す。
+     *
+     * <p>環境変数タブのブートストラップ既定は {@link #defaultPythonCommandForEnvBootstrap()} を使う（常に {@code python}
+     * / {@code python3}）。初期化で長い絶対パスが入り込むのを防ぐため。
+     */
     private static String defaultOsPython() {
         Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
         Path bundledWin =
@@ -3301,6 +3307,11 @@ public final class MainShellController {
         if (Files.isRegularFile(bundledWin)) {
             return bundledWin.toAbsolutePath().normalize().toString();
         }
+        return defaultPythonCommandForEnvBootstrap();
+    }
+
+    /** 環境変数 {@code PM_AI_PYTHON} の既定表示・初期化値（PATH 上のコマンド名のみ）。 */
+    private static String defaultPythonCommandForEnvBootstrap() {
         return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")
                 ? "python"
                 : "python3";
@@ -3624,7 +3635,7 @@ public final class MainShellController {
         }
         switch (k) {
             case AppPaths.KEY_PM_AI_PYTHON -> {
-                return defaultOsPython();
+                return defaultPythonCommandForEnvBootstrap();
             }
             case AppPaths.KEY_PM_AI_REPO_ROOT -> {
                 return AppPaths.resolveRepoRoot(u).toString();
