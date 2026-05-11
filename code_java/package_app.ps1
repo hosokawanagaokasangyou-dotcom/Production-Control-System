@@ -7,6 +7,8 @@
 #   - JavaFX: OpenJFX Windows win jars downloaded from Maven Central into package_input (same version as pom javafx.version).
 #   - For --type exe/msi: WiX Toolset on PATH (candle/light).
 #   - Bundled Python: pip runs at build time - internet on first run or empty cache.
+#     build_cache name includes a fingerprint of code/python/requirements.txt so dependency changes
+#     invalidate the embed cache even when -SkipPythonPrepare is used (new folder => full pip).
 #
 # Usage:
 #   .\package_app.ps1
@@ -216,17 +218,17 @@ function Ensure-PythonEmbedCache {
         [bool]$Skip
     )
 
-    $dest = Join-Path $CacheRoot "python-embed-$PythonVersion-amd64"
-    $pyExe = Join-Path $dest 'python.exe'
     $req = Join-Path $WorkspaceRootPath 'code\python\requirements.txt'
+    if (-not (Test-Path -LiteralPath $req)) {
+        throw "requirements.txt not found: $req"
+    }
+    $reqFp = Get-PmAiRequirementsFingerprint -RequirementsPath $req
+    $dest = Join-Path $CacheRoot ("python-embed-{0}-amd64-req{1}" -f $PythonVersion, $reqFp)
+    $pyExe = Join-Path $dest 'python.exe'
 
     if ($Skip -and (Test-Path -LiteralPath $pyExe)) {
         Write-Host "SkipPythonPrepare: using cache: $dest" -ForegroundColor DarkGray
         return [string]$dest
-    }
-
-    if (-not (Test-Path -LiteralPath $req)) {
-        throw "requirements.txt not found: $req"
     }
 
     New-Item -ItemType Directory -Path $CacheRoot -Force | Out-Null

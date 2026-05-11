@@ -1,6 +1,36 @@
 # Shared workspace mirror for portable pm-ai-data (used by fast_package_app.ps1 at repo root and package_app.ps1).
 # UTF-8 BOM expected when edited from Windows PowerShell 5.1.
 
+function Get-PmAiRequirementsFingerprint {
+    <#
+    .SYNOPSIS
+      Short stable fingerprint of requirements.txt for Python embed build_cache directory names.
+      When code/python/requirements.txt changes, the cache path changes so pip is re-run even with -SkipPythonPrepare.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RequirementsPath
+    )
+    if (-not (Test-Path -LiteralPath $RequirementsPath)) {
+        return 'noreq'
+    }
+    $bytes = [System.IO.File]::ReadAllBytes($RequirementsPath)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = $sha.ComputeHash($bytes)
+    }
+    finally {
+        $sha.Dispose()
+    }
+    $sb = New-Object System.Text.StringBuilder
+    $take = [Math]::Min(8, $hash.Length)
+    for ($i = 0; $i -lt $take; $i++) {
+        [void]$sb.Append($hash[$i].ToString('x2'))
+    }
+    return $sb.ToString()
+}
+
 function Copy-WorkspaceTreeWithExplicitExclusions {
     <#
     .SYNOPSIS
