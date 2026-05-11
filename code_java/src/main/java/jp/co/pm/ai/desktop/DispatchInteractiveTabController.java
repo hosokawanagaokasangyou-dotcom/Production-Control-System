@@ -256,6 +256,9 @@ public final class DispatchInteractiveTabController {
 
     private List<DispatchQtyShortfallRow> lastDispatchShortfallRows = List.of();
 
+    /** {@link DispatchTrialShortages.FullBundle#shortageHints()}（op_shortage / as_shortage）。試行後ダイアログ用。 */
+    private List<DispatchTrialShortages.ShortageHint> lastDispatchShortageHints = List.of();
+
     private final Set<String> dispatchWideShortfallKeys = new HashSet<>();
 
     private final Set<String> dispatchByDayShortfallKeys = new HashSet<>();
@@ -867,6 +870,7 @@ public final class DispatchInteractiveTabController {
                         reloadFromDiskQuiet(
                                 () -> {
                                     showDispatchQtyShortfallDialogIfNeeded(owner);
+                                    showDispatchShortageHintsDialogIfNeeded(owner);
                                     DispatchTrialConsistency.CheckResult cr =
                                             DispatchTrialConsistency.compareDocuments(
                                                     trialInputSnapshot, doc);
@@ -2087,6 +2091,7 @@ public final class DispatchInteractiveTabController {
                 // debug-only
             }
             // #endregion
+            lastDispatchShortageHints = List.copyOf(fb.shortageHints());
             applyDispatchShortfallRows(rows);
         } catch (IOException e) {
             clearDispatchShortfallUi();
@@ -2117,6 +2122,7 @@ public final class DispatchInteractiveTabController {
 
     private void clearDispatchShortfallUi() {
         lastDispatchShortfallRows = List.of();
+        lastDispatchShortageHints = List.of();
         dispatchWideShortfallKeys.clear();
         dispatchByDayShortfallKeys.clear();
         if (dispatchShortfallTable != null) {
@@ -2184,6 +2190,91 @@ public final class DispatchInteractiveTabController {
         st.initModality(Modality.APPLICATION_MODAL);
         st.setTitle("配台数量未達（タイムライン実績）");
         Scene sc = new Scene(root, 920, 520);
+        if (shell != null) {
+            shell.registerThemeTrackedScene(sc);
+        }
+        st.setScene(sc);
+        st.setOnHidden(
+                ev -> {
+                    if (shell != null) {
+                        shell.unregisterThemeTrackedScene(sc);
+                    }
+                });
+        st.showAndWait();
+    }
+
+    /**
+     * 配台試行後、{@code dispatch_trial_shortages.json} の op_shortage / as_shortage が空でなければモーダルで示す。
+     * メートル未達（{@link #showDispatchQtyShortfallDialogIfNeeded}）とは別系統。
+     */
+    private void showDispatchShortageHintsDialogIfNeeded(Stage owner) {
+        // #region agent log
+        try {
+            Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+            boolean skip =
+                    lastDispatchShortageHints == null || lastDispatchShortageHints.isEmpty();
+            AgentDebugLog.appendStructured(
+                    ui,
+                    "41bffb",
+                    "post-fix",
+                    "DispatchInteractiveTabController.showDispatchShortageHintsDialogIfNeeded",
+                    skip
+                            ? "skip modal: no op/as shortage hints"
+                            : "show modal: op/as shortage hints",
+                    Map.of(
+                            "hintsCount",
+                            lastDispatchShortageHints == null
+                                    ? -1
+                                    : lastDispatchShortageHints.size()));
+        } catch (Throwable ignored) {
+            // debug-only
+        }
+        // #endregion
+        if (lastDispatchShortageHints == null || lastDispatchShortageHints.isEmpty()) {
+            return;
+        }
+        TableView<DispatchTrialShortages.ShortageHint> tv = new TableView<>();
+        tv.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+
+        TableColumn<DispatchTrialShortages.ShortageHint, String> h0 = new TableColumn<>("依頼NO");
+        h0.setCellValueFactory(
+                cd ->
+                        new ReadOnlyObjectWrapper<>(
+                                Objects.toString(cd.getValue().taskId(), "")));
+        TableColumn<DispatchTrialShortages.ShortageHint, String> h1 = new TableColumn<>("理由");
+        h1.setPrefWidth(220);
+        h1.setCellValueFactory(
+                cd ->
+                        new ReadOnlyObjectWrapper<>(
+                                Objects.toString(cd.getValue().reason(), "")));
+        TableColumn<DispatchTrialShortages.ShortageHint, String> h2 = new TableColumn<>("補足");
+        h2.setPrefWidth(380);
+        h2.setCellValueFactory(
+                cd ->
+                        new ReadOnlyObjectWrapper<>(
+                                Objects.toString(cd.getValue().detail(), "")));
+        tv.getColumns().addAll(h0, h1, h2);
+        tv.getItems().setAll(lastDispatchShortageHints);
+
+        Label head =
+                new Label(
+                        "フォーム候補不足（op_shortage）または人数は足りるが割当不可（as_shortage）として記録された件です。"
+                                + " メートル目標未達とは別に検出されます。");
+        head.setWrapText(true);
+        head.setStyle("-fx-font-size: 13px;");
+        BorderPane root = new BorderPane();
+        root.setTop(head);
+        BorderPane.setMargin(head, new Insets(10, 14, 8, 14));
+        root.setCenter(tv);
+        BorderPane.setMargin(tv, new Insets(0, 14, 14, 14));
+
+        Stage st = new Stage();
+        if (owner != null) {
+            st.initOwner(owner);
+        }
+        st.initModality(Modality.APPLICATION_MODAL);
+        st.setTitle("人員・割当不足（試行スナップショット）");
+        Scene sc = new Scene(root, 920, 480);
         if (shell != null) {
             shell.registerThemeTrackedScene(sc);
         }
