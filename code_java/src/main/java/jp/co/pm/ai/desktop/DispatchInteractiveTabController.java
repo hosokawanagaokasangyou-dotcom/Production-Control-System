@@ -1023,13 +1023,9 @@ public final class DispatchInteractiveTabController {
 
     private Path resolvePythonExeForShell(MainShellController shellRef) {
         if (shellRef == null) {
-            return Path.of("python3");
+            return MainShellController.defaultPythonPathWhenShellMissing();
         }
-        String py = shellRef.snapshotUiEnv().get(AppPaths.KEY_PM_AI_PYTHON);
-        if (py != null && !py.isBlank()) {
-            return Path.of(py.trim());
-        }
-        return Path.of("python3");
+        return shellRef.resolveStagePythonExecutablePath();
     }
 
     private Path resolvePythonExe() {

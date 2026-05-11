@@ -427,7 +427,8 @@ public final class MainShellController {
                 .setText(firstNonBlank(ui0.get(AppPaths.KEY_PM_AI_PYTHON), defaultOsPython()));
         mainRunTabController
                 .getPythonExeField()
-                .setPromptText("Python executable (未設定時は環境変数 PM_AI_PYTHON)");
+                .setPromptText(
+                        "Python 実行ファイル（優先: 環境変数 PM_AI_PYTHON → この欄 → 同梱 embed または PATH の python）");
         mainRunTabController
                 .getScriptDirField()
                 .setText(
@@ -2603,11 +2604,7 @@ public final class MainShellController {
                     uiRun.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
                 }
             }
-            Path py =
-                    Path.of(
-                            firstNonBlank(
-                                    uiRun.get(AppPaths.KEY_PM_AI_PYTHON),
-                                    mainRunTabController.getPythonExeField().getText().trim()));
+            Path py = resolveStagePythonExecutablePath(uiRun);
             Path dir =
                     Path.of(
                             firstNonBlank(
@@ -2880,11 +2877,7 @@ public final class MainShellController {
     /** Probe script {@code master_read_summary.py}: same env merge as stage1/2. */
     RunRequest buildMasterReadSummaryRequest() {
         Map<String, String> uiRun = collectUiEnv();
-        Path py =
-                Path.of(
-                        firstNonBlank(
-                                uiRun.get(AppPaths.KEY_PM_AI_PYTHON),
-                                mainRunTabController.getPythonExeField().getText().trim()));
+        Path py = resolveStagePythonExecutablePath(uiRun);
         Path dir =
                 Path.of(
                         firstNonBlank(
@@ -2902,11 +2895,7 @@ public final class MainShellController {
     /** Probe script {@code pm_ai_actuals_status.py}: same env merge as stage1/2. */
     RunRequest buildActualsStatusRequest() {
         Map<String, String> uiRun = collectUiEnv();
-        Path py =
-                Path.of(
-                        firstNonBlank(
-                                uiRun.get(AppPaths.KEY_PM_AI_PYTHON),
-                                mainRunTabController.getPythonExeField().getText().trim()));
+        Path py = resolveStagePythonExecutablePath(uiRun);
         Path dir =
                 Path.of(
                         firstNonBlank(
@@ -2919,11 +2908,7 @@ public final class MainShellController {
     /** pm_ai_delivery_calendar_view.py: same env merge as stage1/2 / actuals status. */
     RunRequest buildDeliveryCalendarRequest() {
         Map<String, String> uiRun = collectUiEnv();
-        Path py =
-                Path.of(
-                        firstNonBlank(
-                                uiRun.get(AppPaths.KEY_PM_AI_PYTHON),
-                                mainRunTabController.getPythonExeField().getText().trim()));
+        Path py = resolveStagePythonExecutablePath(uiRun);
         Path dir =
                 Path.of(
                         firstNonBlank(
@@ -3313,6 +3298,38 @@ public final class MainShellController {
             return bundledWin.toAbsolutePath().normalize().toString();
         }
         return defaultPythonCommandForEnvBootstrap();
+    }
+
+    /**
+     * 段階1/2・プローブスクリプト起動時の Python 実行ファイル。
+     *
+     * <p>優先順: 環境変数タブの {@link AppPaths#KEY_PM_AI_PYTHON} → 実行・ログタブの入力欄 → {@link
+     * #defaultOsPython()}（{@code pm-ai-data/runtime/python-embed/python.exe} または PATH の {@code python} /
+     * {@code python3}）。{@code PM_AI_PYTHON} を空にしても、実行タブの既定または同梱ランタイムで動くのはこのため。
+     */
+    public Path resolveStagePythonExecutablePath(Map<String, String> ui) {
+        String runTab =
+                mainRunTabController != null && mainRunTabController.getPythonExeField() != null
+                        ? mainRunTabController.getPythonExeField().getText().strip()
+                        : "";
+        return Path.of(
+                firstNonBlank(
+                        ui != null ? ui.get(AppPaths.KEY_PM_AI_PYTHON) : null,
+                        runTab,
+                        defaultOsPython()));
+    }
+
+    /** {@link #resolveStagePythonExecutablePath(Map)} を現在の環境変数タブの値で解決する。 */
+    public Path resolveStagePythonExecutablePath() {
+        return resolveStagePythonExecutablePath(collectUiEnv());
+    }
+
+    /**
+     * シェル未結線など {@link MainShellController} が無いときのフォールバック（テスト・退避経路）。{@link
+     * #defaultOsPython()} と同じ。
+     */
+    public static Path defaultPythonPathWhenShellMissing() {
+        return Path.of(defaultOsPython());
     }
 
     /** 環境変数 {@code PM_AI_PYTHON} の既定表示・初期化値（PATH 上のコマンド名のみ）。 */

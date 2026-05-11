@@ -18,8 +18,11 @@ public final class EnvVarDocs {
     static {
         put(
                 "PM_AI_PYTHON",
-                "本アプリの「Python」入力と連動。"
-                        + "子プロセスの python 命令に使用。");
+                "段階1/2 等の子プロセスで使う Python 実行ファイル。"
+                        + "値が空のときは実行・ログタブの「Python 実行ファイル」、"
+                        + "それも空なら pm-ai-data/runtime/python-embed/python.exe（存在時）または PATH の python/python3。"
+                        + "環境変数タブを空にしても実行できるのはこのフォールバックのため。"
+                        + "初期表示で python と出ることはブートストラップ表示用で、実行時は上記の優先順で解決。");
         put(
                 "PM_AI_CODE_PYTHON_DIR",
                 "スクリプト根（task_extract_stage1.py 等）。"
