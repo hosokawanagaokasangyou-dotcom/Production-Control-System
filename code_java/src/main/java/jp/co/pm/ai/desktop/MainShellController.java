@@ -2240,6 +2240,7 @@ public final class MainShellController {
         envRows.setAll(restored);
         stripRemovedEnvVarRows(envRows);
         mergeMissingBootstrapEnvRows();
+        ensureBootstrapDefaultValuesVisible(collectUiEnv());
     }
 
     /**
@@ -2504,6 +2505,7 @@ public final class MainShellController {
         // テンプレ再構築だけでは ui_ref 空行等で欠ける場合があるため、工場共有 UNC を確実に入れる
         // （ポータル版アップ完了時の applyUncNetworkSourceDirDefaults と同趣旨）
         applyUncNetworkSourceDirDefaults();
+        ensureBootstrapDefaultValuesVisible(collectUiEnv());
         applyRepoFolderPathNormalization();
         if (persistSession) {
             DesktopSessionStateStore.save(collectDesktopSession());
@@ -3590,34 +3592,105 @@ public final class MainShellController {
         if (r.getValue() != null && !r.getValue().isBlank()) {
             return;
         }
+        String v = bootstrapDefaultValueForKey(k, ui);
+        if (!v.isBlank()) {
+            r.setValue(v);
+        }
+    }
+
+    /**
+     * 環境変数タブ「値」列に出すブートストラップ既定（新規行・空欄補完・初期化と同一ソース）。
+     *
+     * @param ui リポジトリ根などの解決に使う（空マップ可）
+     */
+    private static String bootstrapDefaultValueForKey(String k, Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        if (k == null || k.isBlank()) {
+            return "";
+        }
         switch (k) {
-            case AppPaths.KEY_PM_AI_PYTHON -> r.setValue(defaultOsPython());
-            case AppPaths.KEY_PM_AI_REPO_ROOT -> r.setValue(AppPaths.resolveRepoRoot(ui).toString());
-            case AppPaths.KEY_PM_AI_CODE_PYTHON_DIR -> r.setValue(AppPaths.resolvePythonScriptDir(ui).toString());
-            case AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR ->
-                    r.setValue(AppPaths.resolveResultDispatchTableDir(ui).toString());
-            case AppPaths.KEY_PM_AI_OUTPUT_DIR -> r.setValue(AppPaths.resolveDefaultOutputDir(ui).toString());
+            case AppPaths.KEY_PM_AI_PYTHON -> {
+                return defaultOsPython();
+            }
+            case AppPaths.KEY_PM_AI_REPO_ROOT -> {
+                return AppPaths.resolveRepoRoot(u).toString();
+            }
+            case AppPaths.KEY_PM_AI_CODE_PYTHON_DIR -> {
+                return AppPaths.resolvePythonScriptDir(u).toString();
+            }
+            case AppPaths.KEY_PM_AI_WORKSPACE -> {
+                return "";
+            }
+            case AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR -> {
+                return AppPaths.DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR;
+            }
+            case AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH -> {
+                return "";
+            }
+            case AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR -> {
+                return AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR;
+            }
+            case AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR -> {
+                return AppPaths.resolveResultDispatchTableDir(u).toString();
+            }
+            case AppPaths.KEY_PM_AI_OUTPUT_DIR -> {
+                return AppPaths.resolveDefaultOutputDir(u).toString();
+            }
             case AppPaths.KEY_GEMINI_CREDENTIALS_JSON -> {
                 Path cand =
-                        AppPaths.resolveRepoRoot(ui)
-                                .resolve("code")
-                                .resolve("gemini_credentials.encrypted.json");
-                if (Files.isRegularFile(cand)) {
-                    r.setValue(cand.toAbsolutePath().normalize().toString());
-                }
+                        AppPaths.resolveRepoRoot(u).resolve("code").resolve("gemini_credentials.encrypted.json");
+                return Files.isRegularFile(cand)
+                        ? cand.toAbsolutePath().normalize().toString()
+                        : "";
             }
-            case AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON ->
-                    AppPaths.resolveDefaultExcludeRulesJsonPath(ui).ifPresent(p -> r.setValue(p.toString()));
-            case AppPaths.KEY_PM_AI_MASTER_WORKBOOK ->
-                    AppPaths.resolveMasterWorkbookCandidate(ui).ifPresent(p -> r.setValue(p.toString()));
-            case AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET -> r.setValue("1");
-            case AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR ->
-                    r.setValue(AppPaths.DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR);
-            case AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR ->
-                    r.setValue(AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR);
+            case AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON -> {
+                return AppPaths.resolveDefaultExcludeRulesJsonPath(u).map(Path::toString).orElse("");
+            }
+            case AppPaths.KEY_PM_AI_MASTER_WORKBOOK -> {
+                return AppPaths.resolveMasterWorkbookCandidate(u).map(Path::toString).orElse("");
+            }
+            case AppPaths.KEY_PM_AI_COLUMN_CONFIG_WORKBOOK,
+                    AppPaths.KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK,
+                    AppPaths.KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV -> {
+                return "";
+            }
+            case AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET -> {
+                return "1";
+            }
+            case AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON,
+                    AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH -> {
+                return "";
+            }
+            case AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR -> {
+                return AppPaths.DEFAULT_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR;
+            }
             default -> {
-                /* PM_AI_WORKSPACE stays empty */
-                /* PM_AI_PORTABLE_BUNDLE_SOURCE_DIR は空＝同期しないため、既定は newBootstrapRow のみ */
+                return "";
+            }
+        }
+    }
+
+    /**
+     * {@link #BOOTSTRAP_ORDER} に載る行のうち値が空のものへ {@link #bootstrapDefaultValueForKey} を適用する。
+     * セッション復元後など、テーブルに空セルが残る場合の再補完に使う。
+     */
+    private void ensureBootstrapDefaultValuesVisible(Map<String, String> ui) {
+        if (envRows == null) {
+            return;
+        }
+        Map<String, String> ctx = ui != null ? ui : Map.of();
+        for (EnvVarRow row : envRows) {
+            String k = row.getName() != null ? row.getName().trim() : "";
+            if (k.isEmpty() || !BOOTSTRAP_KEY_SET.contains(k)) {
+                continue;
+            }
+            String cur = row.getValue();
+            if (cur != null && !cur.isBlank()) {
+                continue;
+            }
+            String v = bootstrapDefaultValueForKey(k, ctx);
+            if (!v.isBlank()) {
+                row.setValue(v);
             }
         }
     }
@@ -3626,45 +3699,7 @@ public final class MainShellController {
         EnvVarRow r = new EnvVarRow();
         r.setName(k);
         r.setDescription(EnvVarDocs.mergeDescriptions("", k));
-        switch (k) {
-            case AppPaths.KEY_PM_AI_PYTHON -> r.setValue(defaultOsPython());
-            case AppPaths.KEY_PM_AI_REPO_ROOT -> r.setValue(AppPaths.resolveRepoRoot(ui).toString());
-            case AppPaths.KEY_PM_AI_CODE_PYTHON_DIR -> r.setValue(AppPaths.resolvePythonScriptDir(ui).toString());
-            case AppPaths.KEY_PM_AI_WORKSPACE -> r.setValue("");
-            case AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR ->
-                    r.setValue(AppPaths.DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR);
-            case AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH -> r.setValue("");
-            case AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR ->
-                    r.setValue(AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR);
-            case AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR ->
-                    r.setValue(AppPaths.resolveResultDispatchTableDir(ui).toString());
-            case AppPaths.KEY_PM_AI_OUTPUT_DIR -> r.setValue(AppPaths.resolveDefaultOutputDir(ui).toString());
-            case AppPaths.KEY_GEMINI_CREDENTIALS_JSON -> {
-                Path cand =
-                        AppPaths.resolveRepoRoot(ui)
-                                .resolve("code")
-                                .resolve("gemini_credentials.encrypted.json");
-                r.setValue(
-                        Files.isRegularFile(cand)
-                                ? cand.toAbsolutePath().normalize().toString()
-                                : "");
-            }
-            case AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON ->
-                    r.setValue(
-                            AppPaths.resolveDefaultExcludeRulesJsonPath(ui)
-                                    .map(Path::toString)
-                                    .orElse(""));
-            case AppPaths.KEY_PM_AI_MASTER_WORKBOOK ->
-                    r.setValue(
-                            AppPaths.resolveMasterWorkbookCandidate(ui).map(Path::toString).orElse(""));
-            case AppPaths.KEY_PM_AI_COLUMN_CONFIG_WORKBOOK,
-                    AppPaths.KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK,
-                    AppPaths.KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV -> r.setValue("");
-            case AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET -> r.setValue("1");
-            case AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR ->
-                    r.setValue(AppPaths.DEFAULT_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR);
-            default -> r.setValue("");
-        }
+        r.setValue(bootstrapDefaultValueForKey(k, ui));
         return r;
     }
 }
