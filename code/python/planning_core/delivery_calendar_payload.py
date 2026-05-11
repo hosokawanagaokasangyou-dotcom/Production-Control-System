@@ -892,9 +892,13 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                 if mk and mk not in mk_to_display:
                     mk_to_display[mk] = _machine_display_from_plan_row(row)
 
-        # ????????????????????1?=??ù??????????
+        # Main-grid left: omit timeline columns (calendar cells carry schedule / dispatch quantities).
         _DELIVERY_CALENDAR_MAIN_LEFT_EXCLUDED = frozenset(
-            {"??????", "??????", "?????"}
+            {
+                "\u52a0\u5de5\u958b\u59cb\u65e5\u6642",
+                "\u52a0\u5de5\u7d42\u4e86\u65e5\u6642",
+                "\u30e1\u30f3\u30d0\u30fc\u540d",
+            }
         )
         left_headers = [
             h
