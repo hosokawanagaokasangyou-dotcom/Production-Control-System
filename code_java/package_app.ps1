@@ -471,6 +471,14 @@ function Copy-BundleToDist {
     if ($rc2 -ge 8) {
         throw "robocopy python-embed failed (exit $rc2)"
     }
+    $verifyPyEmbed = Join-Path $data 'runtime\python-embed\python.exe'
+    if (-not (Test-Path -LiteralPath $verifyPyEmbed)) {
+        throw @"
+Bundle incomplete: Python embed missing after robocopy.
+Expected: $verifyPyEmbed
+PythonEmbedSourceDir: $PythonEmbedSourceDir
+"@
+    }
 
     $readme = Join-Path $data 'README_PORTABLE.txt'
     @(

@@ -559,6 +559,14 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
     if ($rc2 -ge 8) {
         throw "robocopy python-embed failed (exit $rc2)"
     }
+    $verifyPyEmbed = Join-Path $data 'runtime\python-embed\python.exe'
+    if (-not (Test-Path -LiteralPath $verifyPyEmbed)) {
+        throw @"
+Bundle incomplete: Python embed missing after robocopy.
+Expected: $verifyPyEmbed
+PythonEmbedSourceDir: $PythonEmbedSourceDir
+"@
+    }
 
     $readme = Join-Path $data 'README_PORTABLE.txt'
     $rmLines = [System.Collections.Generic.List[string]]::new()
@@ -585,7 +593,7 @@ Ensure the repo workspace contains code/python/planning_core (clone depth / spar
     $rmLines.Add('First launch: if the empty marker file next to this app exe exists, the desktop resets env-tab defaults once then deletes it (Initial install bundle only). See Java AppPaths.PORTABLE_FIRST_LAUNCH_MARKER_FILE.')
     $rmLines.Add('Portable sync: PM_AI_PORTABLE_BUNDLE_SOURCE_DIR may be a folder (repo root layout under pm-ai-data on share) or a path to PMD_version_upgrade.zip with version.txt beside the zip.')
     $cacheReadme = if (-not [string]::IsNullOrWhiteSpace($PackagingCacheRoot)) { $PackagingCacheRoot } else { 'code_java\Cash_PMD (default)' }
-    $rmLines.Add("Python: pm-ai-data\runtime\python-embed\python.exe (JDK/JavaFX/Python embed cache on builder: $cacheReadme; not bundled).")
+    $rmLines.Add("Python: bundled under pm-ai-data\runtime\python-embed\ (official embed zip + pip; builder cache: $cacheReadme). Not the JVM: exe-side runtime\ is Java only.")
     $rmLines.Add('Default inputs: input\task-input , input\actual-detail.')
     $rmLines.Add('Per-user session data: ~/.pm-ai-desktop (initialized per machine/user).')
     $rmLines.Add('')
