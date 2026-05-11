@@ -12,8 +12,7 @@ import java.util.Map;
  * @param stage1PreviewSheet Stage1 preview sheet name
  * @param excludeRulesPath PM_AI_EXCLUDE_RULES_JSON path (editor tab)
  * @param mainRunWorkbook task-input workbook field on run tab
- * @param mainRunPythonExe Python executable field
- * @param mainRunScriptDir code/python directory field
+ * @param mainRunScriptDir code/python directory field（編集は環境変数タブの {@code PM_AI_CODE_PYTHON_DIR}）
  * @param windowWidth last main window width ({@code 0} if unknown / use default scene size)
  * @param windowHeight last main window height ({@code 0} if unknown)
  * @param windowX last window X ({@link Double#NaN} if unknown / keep toolkit placement)
@@ -83,7 +82,6 @@ public record DesktopSessionState(
         String stage1PreviewSheet,
         String excludeRulesPath,
         String mainRunWorkbook,
-        String mainRunPythonExe,
         String mainRunScriptDir,
         double windowWidth,
         double windowHeight,
@@ -251,7 +249,6 @@ public record DesktopSessionState(
                 "",
                 "",
                 "",
-                "",
                 0d,
                 0d,
                 Double.NaN,
@@ -324,7 +321,6 @@ public record DesktopSessionState(
                 bootstrap.stage1PreviewSheet(),
                 bootstrap.excludeRulesPath(),
                 bootstrap.mainRunWorkbook(),
-                bootstrap.mainRunPythonExe(),
                 bootstrap.mainRunScriptDir(),
                 windowWidth(),
                 windowHeight(),

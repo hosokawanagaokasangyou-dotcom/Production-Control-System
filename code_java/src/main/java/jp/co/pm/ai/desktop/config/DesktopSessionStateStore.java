@@ -171,7 +171,6 @@ public final class DesktopSessionStateStore {
         put(root, "stage1PreviewSheet", state.stage1PreviewSheet());
         put(root, "excludeRulesPath", state.excludeRulesPath());
         put(root, "mainRunWorkbook", state.mainRunWorkbook());
-        put(root, "mainRunPythonExe", state.mainRunPythonExe());
         put(root, "mainRunScriptDir", state.mainRunScriptDir());
         put(root, "uiTheme", state.uiTheme());
         put(root, "logFontFamily", state.logFontFamily());
@@ -302,7 +301,6 @@ public final class DesktopSessionStateStore {
                 text(root, "stage1PreviewSheet"),
                 text(root, "excludeRulesPath"),
                 text(root, "mainRunWorkbook"),
-                text(root, "mainRunPythonExe"),
                 text(root, "mainRunScriptDir"),
                 optionalDouble(root, "windowWidth", 0d),
                 optionalDouble(root, "windowHeight", 0d),

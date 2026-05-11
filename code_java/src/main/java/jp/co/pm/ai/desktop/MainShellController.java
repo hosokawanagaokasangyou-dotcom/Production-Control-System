@@ -423,13 +423,6 @@ public final class MainShellController {
                 .getWorkbookField()
                 .setText(AppPaths.resolveTaskInputWorkbook(ui0).map(Path::toString).orElse(""));
         mainRunTabController
-                .getPythonExeField()
-                .setText(firstNonBlank(ui0.get(AppPaths.KEY_PM_AI_PYTHON), defaultOsPython()));
-        mainRunTabController
-                .getPythonExeField()
-                .setPromptText(
-                        "Python 実行ファイル（優先: 環境変数 PM_AI_PYTHON → この欄 → 同梱 embed または PATH の python）");
-        mainRunTabController
                 .getScriptDirField()
                 .setText(
                         firstNonBlank(
@@ -640,9 +633,6 @@ public final class MainShellController {
         if (nonBlank(s.mainRunWorkbook())) {
             mainRunTabController.getWorkbookField().setText(s.mainRunWorkbook());
         }
-        if (nonBlank(s.mainRunPythonExe())) {
-            mainRunTabController.getPythonExeField().setText(s.mainRunPythonExe());
-        }
         if (nonBlank(s.mainRunScriptDir())) {
             mainRunTabController.getScriptDirField().setText(s.mainRunScriptDir());
         }
@@ -740,7 +730,6 @@ public final class MainShellController {
                 stage1PreviewTabController.snapshotStage1PreviewSheet(),
                 excludeRulesTabController.snapshotExcludeRulesPath(),
                 nz(mainRunTabController.getWorkbookField().getText()),
-                nz(mainRunTabController.getPythonExeField().getText()),
                 nz(mainRunTabController.getScriptDirField().getText()),
                 primaryStage.getWidth(),
                 primaryStage.getHeight(),
@@ -2498,11 +2487,6 @@ public final class MainShellController {
             }
             Map<String, String> ui = collectUiEnv();
             mainRunTabController
-                    .getPythonExeField()
-                    .setText(
-                            firstNonBlank(
-                                    ui.get(AppPaths.KEY_PM_AI_PYTHON), defaultOsPython()));
-            mainRunTabController
                     .getScriptDirField()
                     .setText(
                             firstNonBlank(
@@ -3303,19 +3287,13 @@ public final class MainShellController {
     /**
      * 段階1/2・プローブスクリプト起動時の Python 実行ファイル。
      *
-     * <p>優先順: 環境変数タブの {@link AppPaths#KEY_PM_AI_PYTHON} → 実行・ログタブの入力欄 → {@link
-     * #defaultOsPython()}（{@code pm-ai-data/runtime/python-embed/python.exe} または PATH の {@code python} /
-     * {@code python3}）。{@code PM_AI_PYTHON} を空にしても、実行タブの既定または同梱ランタイムで動くのはこのため。
+     * <p>優先順: 環境変数タブの {@link AppPaths#KEY_PM_AI_PYTHON} → {@link #defaultOsPython()}（{@code
+     * pm-ai-data/runtime/python-embed/python.exe} または PATH の {@code python} / {@code python3}）。
      */
     public Path resolveStagePythonExecutablePath(Map<String, String> ui) {
-        String runTab =
-                mainRunTabController != null && mainRunTabController.getPythonExeField() != null
-                        ? mainRunTabController.getPythonExeField().getText().strip()
-                        : "";
         return Path.of(
                 firstNonBlank(
                         ui != null ? ui.get(AppPaths.KEY_PM_AI_PYTHON) : null,
-                        runTab,
                         defaultOsPython()));
     }
 

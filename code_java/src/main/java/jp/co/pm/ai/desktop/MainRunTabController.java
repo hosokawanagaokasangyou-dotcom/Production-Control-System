@@ -62,9 +62,6 @@ public final class MainRunTabController {
     private TextField workbookField;
 
     @FXML
-    private TextField pythonExeField;
-
-    @FXML
     private TextField scriptDirField;
 
     @FXML
@@ -600,10 +597,6 @@ public final class MainRunTabController {
 
     TextField getWorkbookField() {
         return workbookField;
-    }
-
-    TextField getPythonExeField() {
-        return pythonExeField;
     }
 
     TextField getScriptDirField() {
