@@ -58,9 +58,11 @@ def main() -> int:
 
     shortage_path = path.with_name("dispatch_trial_shortages.json")
 
+    # import が途中で失敗すると except PlanningValidationError が UnboundLocalError になるため、
+    # 例外クラス名で分岐する（PlanningValidationError は try 内で import しない）。
+    pc = None
     try:
         import planning_core as pc
-        from planning_core.bootstrap import PlanningValidationError
 
         print("[dispatch trial] 計画タスクを読み込み、表データをマージ中…", flush=True)
         tasks_df = pc.load_planning_tasks_df()
@@ -100,36 +102,36 @@ def main() -> int:
             encoding="utf-8",
         )
         print("[dispatch trial] 不足情報JSONを書き出しました。", flush=True)
-    except PlanningValidationError as e:
-        msg = str(e).strip() or "PlanningValidationError"
-        print(msg, file=sys.stderr)
-        try:
-            pc._write_stage2_blocking_message(msg)
-        except Exception:
-            pass
-        try:
-            snap = pc.interactive_trial_shortages_snapshot()
-            shortage_path.write_text(
-                json.dumps(
-                    {
-                        "format_version": 2,
-                        "source_json": str(path),
-                        "note": "validation failed before/during stage2",
-                        "error": msg,
-                        "op_shortage": snap["op_shortage"],
-                        "as_shortage": snap["as_shortage"],
-                        "dispatch_qty_shortfall": [],
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-        except Exception:
-            pass
-        return 3
     except Exception as e:
+        if pc is not None and type(e).__name__ == "PlanningValidationError":
+            msg = str(e).strip() or "PlanningValidationError"
+            print(msg, file=sys.stderr)
+            try:
+                pc._write_stage2_blocking_message(msg)
+            except Exception:
+                pass
+            try:
+                snap = pc.interactive_trial_shortages_snapshot()
+                shortage_path.write_text(
+                    json.dumps(
+                        {
+                            "format_version": 2,
+                            "source_json": str(path),
+                            "note": "validation failed before/during stage2",
+                            "error": msg,
+                            "op_shortage": snap["op_shortage"],
+                            "as_shortage": snap["as_shortage"],
+                            "dispatch_qty_shortfall": [],
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+            except Exception:
+                pass
+            return 3
         print(f"dispatch trial failed: {e}", file=sys.stderr)
         traceback.print_exc()
         return 1
