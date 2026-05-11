@@ -404,6 +404,27 @@ class AppPathsTest {
                 AppPaths.findPortablePythonEmbedExecutable(nested).orElseThrow());
     }
 
+    /** 親が 12 段あるケース（既定の上位探索幅ギリギリ）。 */
+    @Test
+    void findPortablePythonEmbedExecutable_walksUpElevenNestedDirs(@TempDir Path root) throws IOException {
+        Path install = root.resolve("bundleRoot");
+        Path exe =
+                install.resolve("pm-ai-data")
+                        .resolve("runtime")
+                        .resolve("python-embed")
+                        .resolve("python.exe");
+        Files.createDirectories(exe.getParent());
+        Files.createFile(exe);
+        Path deep = install;
+        for (int i = 0; i < 11; i++) {
+            deep = deep.resolve("n" + i);
+        }
+        Files.createDirectories(deep);
+        assertEquals(
+                exe.toAbsolutePath().normalize(),
+                AppPaths.findPortablePythonEmbedExecutable(deep).orElseThrow());
+    }
+
     @Test
     void findPortablePythonEmbedExecutable_missingReturnsEmpty(@TempDir Path tmp) {
         assertTrue(AppPaths.findPortablePythonEmbedExecutable(tmp.resolve("no_embed_here")).isEmpty());

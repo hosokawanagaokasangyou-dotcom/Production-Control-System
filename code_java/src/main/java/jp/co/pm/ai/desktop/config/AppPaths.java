@@ -241,6 +241,11 @@ public final class AppPaths {
     public static final String VERSION_TXT_FILE_NAME = "version.txt";
 
     /**
+     * {@code user.dir} 等から同梱パス（{@code pm-ai-data/runtime/python-embed}・{@code code/python}）を探すときの、親ディレクトリ方向の最大ステップ数。
+     */
+    private static final int BUNDLED_ANCHOR_WALK_MAX_PARENT_HOPS = 12;
+
+    /**
      * 初回インストール用バンドルに同梱する空マーカー（{@code PMD.exe} と同階層）。存在時のみ起動時に環境タブを既定へリセットし、成功後に削除する。
      */
     public static final String PORTABLE_FIRST_LAUNCH_MARKER_FILE = "初回起動.txt";
@@ -384,7 +389,7 @@ public final class AppPaths {
 
     /**
      * ポータブル同梱の Python embed（{@code pm-ai-data/runtime/python-embed/python.exe}）を {@code start}
-     * から親ディレクトリへ最大 8 段まで辿って探す。
+     * から親ディレクトリへ最大 {@value #BUNDLED_ANCHOR_WALK_MAX_PARENT_HOPS} 段まで辿って探す。
      *
      * <p>ショートカット起動などで {@code user.dir} がインストール根の直下でない場合でも検出できるようにする。
      *
@@ -395,7 +400,7 @@ public final class AppPaths {
             return Optional.empty();
         }
         Path cur = start.toAbsolutePath().normalize();
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0; i < BUNDLED_ANCHOR_WALK_MAX_PARENT_HOPS; i++) {
             Path exe =
                     cur.resolve("pm-ai-data")
                             .resolve("runtime")
@@ -1104,7 +1109,7 @@ public final class AppPaths {
 
     private static Optional<Path> findCodePythonFrom(Path start) {
         Path cur = start;
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0; i < BUNDLED_ANCHOR_WALK_MAX_PARENT_HOPS; i++) {
             Path candidate = cur.resolve("code").resolve("python");
             if (Files.isDirectory(candidate) && Files.isRegularFile(candidate.resolve("task_extract_stage1.py"))) {
                 return Optional.of(candidate.toAbsolutePath().normalize());
