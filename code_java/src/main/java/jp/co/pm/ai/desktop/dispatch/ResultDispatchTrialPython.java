@@ -2,9 +2,9 @@ package jp.co.pm.ai.desktop.dispatch;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -53,19 +53,25 @@ public final class ResultDispatchTrialPython {
         pb.redirectErrorStream(true);
         PythonProcessRunner.mergeUiEnvIntoProcess(pb, extraUiEnv, pythonScriptDir);
         Process p = pb.start();
-        String out;
+        String mergedOut = "";
+        String lastLine = "";
         try (BufferedReader br =
                 new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             String last = "";
+            StringBuilder merged = new StringBuilder();
             while ((line = br.readLine()) != null) {
                 if (logLine != null) {
                     logLine.accept(line);
                 }
+                if (merged.length() > 0) {
+                    merged.append('\n');
+                }
+                merged.append(line);
                 last = line;
             }
-            // 先頭の案内行は捨て、最終行（不足情報 JSON パス）だけを戻り値にする
-            out = last != null ? last.trim() : "";
+            mergedOut = merged.toString();
+            lastLine = last != null ? last.trim() : "";
         }
         boolean finished = p.waitFor(600, TimeUnit.SECONDS);
         if (!finished) {
@@ -73,9 +79,44 @@ public final class ResultDispatchTrialPython {
             throw new IllegalStateException("dispatch_interactive_trial.py timeout");
         }
         if (p.exitValue() != 0) {
+            String hint = trialFailureHint(mergedOut, pythonExe);
             throw new IllegalStateException(
-                    "dispatch_interactive_trial.py exit " + p.exitValue() + ": " + out);
+                    "dispatch_interactive_trial.py exit "
+                            + p.exitValue()
+                            + ": "
+                            + mergedOut
+                            + hint);
         }
-        return out;
+        return lastLine;
+    }
+
+    /**
+     * Appends short remediation hints for common embed-site-packages issues (stderr is merged into {@code
+     * out}).
+     */
+    private static String trialFailureHint(String mergedOut, Path pythonExe) {
+        if (mergedOut == null || mergedOut.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        if (mergedOut.contains("No module named 'pydantic'")) {
+            sb.append("\n対処: 同梱 Python に依存を入れる。例: \"")
+                    .append(pythonExe)
+                    .append("\" -m pip install pydantic\n")
+                    .append("またはリポジトリの code/python/requirements.txt を ")
+                    .append("\"")
+                    .append(pythonExe)
+                    .append(
+                            "\" -m pip install -r （リポジトリルート）\\\\code\\\\python\\\\requirements.txt で一括。\n")
+                    .append("Windows では scripts/pm_ai_embed_pip_install.ps1 も利用可。\n");
+        }
+        if (mergedOut.contains("pywin32_bootstrap") || mergedOut.contains("pywin32.pth")) {
+            sb.append(
+                    "pywin32.pth 警告: pywin32 が不完全です。例: \"")
+                    .append(pythonExe)
+                    .append("\" -m pip install --upgrade --force-reinstall pywin32\n")
+                    .append("配台試行のみで COM が不要なら、Lib\\\\site-packages\\\\pywin32.pth をリネームして無効化してもよい場合があります。\n");
+        }
+        return sb.toString();
     }
 }
