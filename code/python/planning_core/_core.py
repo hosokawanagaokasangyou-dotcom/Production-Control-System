@@ -23689,6 +23689,10 @@ def build_result_dispatch_table_dataframe(
     bound_min: dict[tuple[str, str, date], datetime] = {}
     bound_max: dict[tuple[str, str, date], datetime] = {}
     member_ops: dict[tuple[str, str, date], list[str]] = defaultdict(list)
+    # region agent log
+    _probe_tid_sub = "Y5-25"
+    _y525_ev_probe: dict[tuple[str, str, date], dict] = {}
+    # endregion
     for ev in timeline_events:
         if not _is_machining_timeline_event(ev):
             continue
@@ -23711,7 +23715,32 @@ def build_result_dispatch_table_dataframe(
             lst = member_ops[key]
             if op_raw not in lst:
                 lst.append(op_raw)
+        _ml = ev.get("member_labels")
+        if isinstance(_ml, (list, tuple)):
+            for _raw in _ml:
+                _lab = " ".join(str(_raw or "").split()).strip()
+                if _lab:
+                    _lst = member_ops[key]
+                    if _lab not in _lst:
+                        _lst.append(_lab)
         st0, ed0 = _timeline_event_start_end_dt(ev)
+        # region agent log
+        if _probe_tid_sub in tid:
+            pr = _y525_ev_probe.setdefault(
+                key,
+                {"ev_count": 0, "samples": []},
+            )
+            pr["ev_count"] += 1
+            if len(pr["samples"]) < 8:
+                pr["samples"].append(
+                    {
+                        "op": str(ev.get("op") or ""),
+                        "start_dt": str(ev.get("start_dt") or ""),
+                        "end_dt": str(ev.get("end_dt") or ""),
+                        "ml": ev.get("member_labels"),
+                    }
+                )
+        # endregion
         if st0 is not None:
             prev = bound_min.get(key)
             if prev is None or st0 < prev:
@@ -23788,6 +23817,36 @@ def build_result_dispatch_table_dataframe(
         r["メンバー名"] = "、".join(member_ops.get(row_key, []))
         r["配台日"] = day_k
         r["当日配台数量"] = float(qty_sum)
+        # region agent log
+        if _probe_tid_sub in tid_k:
+            try:
+                import json as _json_dbg
+                from pathlib import Path as _PathDbg
+
+                _log_path = _PathDbg(__file__).resolve().parents[3] / ".cursor" / "debug-41bffb.log"
+                _log_path.parent.mkdir(parents=True, exist_ok=True)
+                _payload = {
+                    "sessionId": "41bffb",
+                    "hypothesisId": "H1-H2-H4",
+                    "location": "planning_core._core.build_result_dispatch_table_dataframe",
+                    "message": "y5-25_dispatch_row",
+                    "timestamp": int(__import__("time").time() * 1000),
+                    "data": {
+                        "tid": tid_k,
+                        "eq": eq_k,
+                        "day": str(day_k),
+                        "bound_min": str(bound_min.get(row_key)),
+                        "bound_max": str(bound_max.get(row_key)),
+                        "fmt_end": r.get("加工終了日時"),
+                        "member_joined": r.get("メンバー名"),
+                        "probe": _y525_ev_probe.get(row_key),
+                    },
+                }
+                with open(_log_path, "a", encoding="utf-8") as _lf:
+                    _lf.write(_json_dbg.dumps(_payload, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+        # endregion
         rows.append(r)
     return pd.DataFrame(rows, columns=cols)
 
@@ -24480,6 +24539,93 @@ def _dataframe_from_interactive_dispatch_json_rows(
     return df_out.reindex(columns=ordered + extra)
 
 
+def _norm_dispatch_meta_date_key(val) -> str:
+    """依頼NO×機械×配台日のキー用に暦日を yyyy-mm-dd に寄せる。"""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return ""
+    if isinstance(val, datetime):
+        return val.date().isoformat()
+    if isinstance(val, date):
+        return val.isoformat()
+    ts = pd.to_datetime(val, errors="coerce")
+    if not pd.isna(ts) and hasattr(ts, "date"):
+        try:
+            return ts.date().isoformat()
+        except Exception:
+            pass
+    s = str(val).strip()
+    if not s:
+        return ""
+    ts2 = pd.to_datetime(s, errors="coerce")
+    if not pd.isna(ts2) and hasattr(ts2, "date"):
+        try:
+            return ts2.date().isoformat()
+        except Exception:
+            pass
+    return s
+
+
+def _dispatch_meta_join_key_from_mapping(row: dict) -> tuple[str, str, str]:
+    tid = _interactive_norm_cell(row.get(TASK_COL_TASK_ID))
+    mach = _interactive_norm_cell(row.get(TASK_COL_MACHINE_NAME))
+    dd_s = _norm_dispatch_meta_date_key(row.get("配台日"))
+    return (tid, mach, dd_s)
+
+
+def _overlay_timeline_meta_onto_interactive_dispatch_df(
+    df_out: pd.DataFrame,
+    df_sim: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    インタラクティブ配台試行で入力 JSON を正とする際、加工開始／終了／メンバー名だけは
+    タイムライン集約（df_sim）で上書きする。入力 JSON に残った古い終了時刻・単一名を是正する。
+    """
+    if (
+        df_sim is None
+        or getattr(df_sim, "empty", True)
+        or df_out is None
+        or getattr(df_out, "empty", True)
+    ):
+        return df_out
+    meta_cols = ("加工開始日時", "加工終了日時", "メンバー名")
+    need_cols = {TASK_COL_TASK_ID, TASK_COL_MACHINE_NAME, "配台日"}
+    if not need_cols.issubset(set(df_sim.columns)) or not need_cols.issubset(set(df_out.columns)):
+        return df_out
+    if not all(c in df_sim.columns for c in meta_cols):
+        return df_out
+    lookup: dict[tuple[str, str, str], dict[str, object]] = {}
+    for _, sim_row in df_sim.iterrows():
+        d = sim_row.to_dict()
+        k = _dispatch_meta_join_key_from_mapping(d)
+        if not k[0]:
+            continue
+        lookup[k] = {c: sim_row.get(c) for c in meta_cols}
+
+    out = df_out.copy()
+    for pos in range(len(out)):
+        k = _dispatch_meta_join_key_from_mapping(out.iloc[pos].to_dict())
+        meta = lookup.get(k)
+        if not meta:
+            continue
+        for c in meta_cols:
+            v = meta.get(c)
+            if v is None:
+                continue
+            if isinstance(v, float) and pd.isna(v):
+                continue
+            sv = str(v).strip()
+            if not sv or sv.lower() == "nan":
+                continue
+            try:
+                ci = out.columns.get_loc(c)
+                if isinstance(ci, slice):
+                    continue
+                out.iloc[pos, ci] = v
+            except Exception:
+                continue
+    return out
+
+
 def _interactive_dispatch_trial_use_editor_rows_for_result_table(
     df_sim: pd.DataFrame,
     json_rows: list | None,
@@ -24498,6 +24644,7 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
         json_columns,
         fallback_columns_from=df_sim,
     )
+    df_out = _overlay_timeline_meta_onto_interactive_dispatch_df(df_out, df_sim)
     logging.info(
         "インタラクティブ配台試行: 結果_配台表は入力 JSON rows を採用しました（%s 行）。",
         len(df_out),
