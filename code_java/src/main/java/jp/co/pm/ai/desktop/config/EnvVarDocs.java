@@ -21,7 +21,7 @@ public final class EnvVarDocs {
                 "段階1/2 等の子プロセスで使う Python 実行ファイル。編集は環境変数タブのみ（実行・ログタブに Python 入力は無い）。"
                         + "値が空のときは pm-ai-data/runtime/python-embed/python.exe（存在時）または PATH の python/python3。"
                         + "環境変数タブを空にしても動くのはこのフォールバックのため。"
-                        + "初期表示で python と出ることはブートストラップ用で、実行時は PM_AI_PYTHON→既定 embed/PATH の順で解決。");
+                        + "初期化・空欄補完では同梱 embed があればその絶対パスが既定値として入る（無いときは PATH の python/python3）。");
         put(
                 "PM_AI_CODE_PYTHON_DIR",
                 "スクリプト根（task_extract_stage1.py 等）。"

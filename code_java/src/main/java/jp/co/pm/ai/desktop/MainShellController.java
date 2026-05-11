@@ -3266,10 +3266,10 @@ public final class MainShellController {
     }
 
     /**
-     * 実行・ログタブなど「実体の exe が取れるとよい」用途。{@code pm-ai-data/runtime/python-embed/python.exe} があればそれを返す。
+     * 同梱 Python embed または PATH 上のコマンド。{@code pm-ai-data/runtime/python-embed/python.exe} が存在すれば絶対パスを返す。
      *
-     * <p>環境変数タブのブートストラップ既定は {@link #defaultPythonCommandForEnvBootstrap()} を使う（常に {@code python}
-     * / {@code python3}）。初期化で長い絶対パスが入り込むのを防ぐため。
+     * <p>環境変数タブのブートストラップ既定（初期化・空欄補完）もこの戻り値を使い、ポータル配布では {@code PM_AI_PYTHON} に
+     * embed パスが入る。無い場合のみ {@link #defaultPythonCommandForEnvBootstrap()}。
      */
     private static String defaultOsPython() {
         Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
@@ -3310,7 +3310,9 @@ public final class MainShellController {
         return Path.of(defaultOsPython());
     }
 
-    /** 環境変数 {@code PM_AI_PYTHON} の既定表示・初期化値（PATH 上のコマンド名のみ）。 */
+    /**
+     * 同梱 embed が無いときの {@code PM_AI_PYTHON} 向け短いコマンド名（{@code defaultOsPython} の最終フォールバック）。
+     */
     private static String defaultPythonCommandForEnvBootstrap() {
         return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")
                 ? "python"
@@ -3635,7 +3637,7 @@ public final class MainShellController {
         }
         switch (k) {
             case AppPaths.KEY_PM_AI_PYTHON -> {
-                return defaultPythonCommandForEnvBootstrap();
+                return defaultOsPython();
             }
             case AppPaths.KEY_PM_AI_REPO_ROOT -> {
                 return AppPaths.resolveRepoRoot(u).toString();
