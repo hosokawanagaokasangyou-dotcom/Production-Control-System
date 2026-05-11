@@ -646,6 +646,9 @@ public final class DispatchInteractiveTabController {
         AtomicBoolean finished = new AtomicBoolean(false);
         AtomicBoolean trialLogWindowReady = new AtomicBoolean(false);
 
+        ObservableList<String> logLines = FXCollections.observableArrayList();
+        logLines.add("[配台試行] 処理を開始しました。");
+
         Button copyLogBtn = new Button("ログをコピー");
         copyLogBtn.setTooltip(new Tooltip("ログ一覧の全文をクリップボードにコピーします"));
         copyLogBtn.setOnAction(
@@ -689,9 +692,6 @@ public final class DispatchInteractiveTabController {
                     } catch (Throwable ignored) {
                     }
                 };
-
-        ObservableList<String> logLines = FXCollections.observableArrayList();
-        logLines.add("[配台試行] 処理を開始しました。");
 
         ListView<String> logList = new ListView<>(logLines);
         logList.setEditable(false);
