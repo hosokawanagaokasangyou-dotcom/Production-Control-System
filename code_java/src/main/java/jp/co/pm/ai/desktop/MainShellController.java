@@ -1029,7 +1029,12 @@ public final class MainShellController {
             DesktopSessionState merged =
                     DesktopSessionStateStore.buildFactoryResetSession(collectDesktopSession(), collectUiEnv());
             DesktopSessionStateStore.save(merged);
-            applyDesktopSession(merged);
+            /*
+             * 環境変数タブは直前の applyEnvRowsFullBundledResetAndPersist で既にテンプレ＋ブートストラップ済み。
+             * applyUiEnvRowsFromSession（true）でセッションを再適用すると、マージ JSON の uiEnvRows 欠落や
+             * 早期 return と相性が悪く、アップグレード直後に「初期化されていない」ように見えることがあるため false。
+             */
+            applyDesktopSession(merged, false);
             TableColumnOrderPersistence.materializeTableColumnStoreAfterFactoryReset(collectUiEnv());
             refreshPushButtonStylesheet();
             refreshThemeTrackedSecondaryScenes();
