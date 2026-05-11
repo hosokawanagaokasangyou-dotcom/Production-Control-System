@@ -797,13 +797,6 @@ public final class DispatchInteractiveTabController {
                             }
                         });
 
-        logStage.setOnCloseRequest(
-                ev -> {
-                    if (!finished.get()) {
-                        ev.consume();
-                    }
-                });
-
         Label fontCap = new Label("フォント");
         Label sizeCap = new Label("サイズ");
         HBox toolBar = new HBox(8, fontCap, fontFamilyCombo, sizeCap, fontSizeSpinner);
@@ -834,6 +827,9 @@ public final class DispatchInteractiveTabController {
 
         final ResultDispatchDocument trialInputSnapshot = doc.copy();
 
+        @SuppressWarnings("unchecked")
+        final Task<String>[] trialTaskHolder = new Task[] {null};
+
         Task<String> task =
                 new Task<>() {
                     @Override
@@ -855,6 +851,17 @@ public final class DispatchInteractiveTabController {
                                                 }));
                     }
                 };
+        trialTaskHolder[0] = task;
+
+        logStage.setOnCloseRequest(
+                ev -> {
+                    Task<String> t = trialTaskHolder[0];
+                    boolean workerStillRunning = t != null && !t.isDone();
+                    if (!finished.get() && workerStillRunning) {
+                        ev.consume();
+                    }
+                });
+
         task.setOnSucceeded(
                 e -> {
                     try {
@@ -870,43 +877,62 @@ public final class DispatchInteractiveTabController {
                         logList.scrollTo(logLines.size() - 1);
                         reloadFromDiskQuiet(
                                 () -> {
-                                    showDispatchQtyShortfallDialogIfNeeded(owner);
-                                    showDispatchShortageHintsDialogIfNeeded(owner);
-                                    DispatchTrialConsistency.CheckResult cr =
-                                            DispatchTrialConsistency.compareDocuments(
-                                                    trialInputSnapshot, doc);
-                                    if (cr.consistent()) {
-                                        logLines.add("");
-                                        logLines.add(
-                                                "[整合性] 保存済み表と試行後の成果物（結果_配台表.json）は、"
-                                                        + "依頼NO×機械名の当日配台数量合計および配台試行順番（工程別最小値）の観点で一致しました。");
-                                        shell.appendLog(
-                                                "[dispatch-editor] trial: 整合性OK（保存表と再読込JSONの数量・試行順）");
-                                    } else {
-                                        logLines.add("");
-                                        logLines.add(
-                                                "[整合性] 保存済み表と試行後の成果物に差異があります（詳細は下記）:");
-                                        for (String dl : cr.detailLines()) {
-                                            logLines.add(dl);
+                                    try {
+                                        showDispatchQtyShortfallDialogIfNeeded(owner);
+                                        showDispatchShortageHintsDialogIfNeeded(owner);
+                                        DispatchTrialConsistency.CheckResult cr =
+                                                DispatchTrialConsistency.compareDocuments(
+                                                        trialInputSnapshot, doc);
+                                        if (cr.consistent()) {
+                                            logLines.add("");
+                                            logLines.add(
+                                                    "[整合性] 保存済み表と試行後の成果物（結果_配台表.json）は、"
+                                                            + "依頼NO×機械名の当日配台数量合計および配台試行順番（工程別最小値）の観点で一致しました。");
+                                            shell.appendLog(
+                                                    "[dispatch-editor] trial: 整合性OK（保存表と再読込JSONの数量・試行順）");
+                                        } else {
+                                            logLines.add("");
+                                            logLines.add(
+                                                    "[整合性] 保存済み表と試行後の成果物に差異があります（詳細は下記）:");
+                                            for (String dl : cr.detailLines()) {
+                                                logLines.add(dl);
+                                            }
+                                            Alert warn = new Alert(AlertType.WARNING);
+                                            warn.setTitle("配台試行: 整合性確認");
+                                            warn.setHeaderText(
+                                                    "試行前の保存内容と、試行後に読み込んだ結果_配台表.json に差異があります。");
+                                            warn.setContentText(String.join("\n", cr.detailLines()));
+                                            warn.show();
+                                            shell.appendLog(
+                                                    "[dispatch-editor] trial: 整合性に差異あり（"
+                                                            + cr.detailLines().size()
+                                                            + " 件）— ログ・ダイアログ参照");
                                         }
-                                        Alert warn = new Alert(AlertType.WARNING);
-                                        warn.setTitle("配台試行: 整合性確認");
-                                        warn.setHeaderText(
-                                                "試行前の保存内容と、試行後に読み込んだ結果_配台表.json に差異があります。");
-                                        warn.setContentText(String.join("\n", cr.detailLines()));
-                                        warn.show();
+                                        int last = logLines.size() - 1;
+                                        if (last >= 0) {
+                                            logList.scrollTo(last);
+                                        }
+                                        DispatchTrialUnassignedWizard.showIfNeeded(
+                                                owner, shell, Path.of(shortagesPath));
+                                    } catch (Throwable upex) {
+                                        String em =
+                                                upex.getMessage() != null
+                                                        ? upex.getMessage()
+                                                        : upex.getClass().getSimpleName();
+                                        logLines.add("");
+                                        logLines.add("[配台試行] 試行後処理で例外: " + em);
                                         shell.appendLog(
-                                                "[dispatch-editor] trial: 整合性に差異あり（"
-                                                        + cr.detailLines().size()
-                                                        + " 件）— ログ・ダイアログ参照");
+                                                "[dispatch-editor] trial post-run: " + em);
                                     }
-                                    int last = logLines.size() - 1;
-                                    if (last >= 0) {
-                                        logList.scrollTo(last);
-                                    }
-                                    DispatchTrialUnassignedWizard.showIfNeeded(
-                                            owner, shell, Path.of(shortagesPath));
                                 });
+                    } catch (Throwable sucEx) {
+                        String em =
+                                sucEx.getMessage() != null
+                                        ? sucEx.getMessage()
+                                        : sucEx.getClass().getSimpleName();
+                        logLines.add("");
+                        logLines.add("[配台試行] 成功ハンドラ内例外: " + em);
+                        shell.appendLog("[dispatch-editor] trial onSucceeded: " + em);
                     } finally {
                         releaseTrialModal.run();
                     }
@@ -921,7 +947,21 @@ public final class DispatchInteractiveTabController {
                         logLines.add("");
                         logLines.add("[配台試行] エラーで終了しました。");
                         logLines.add(msg);
+                        if (ex != null) {
+                            java.io.StringWriter sw = new java.io.StringWriter();
+                            ex.printStackTrace(new java.io.PrintWriter(sw));
+                            String stack = sw.toString();
+                            int max = 8000;
+                            if (stack.length() > max) {
+                                stack = stack.substring(0, max) + "\n... (truncated)";
+                            }
+                            logLines.add(stack);
+                        }
                         logList.scrollTo(logLines.size() - 1);
+                    } catch (Throwable handlerEx) {
+                        shell.appendLog(
+                                "[dispatch-editor] trial onFailed handler: "
+                                        + handlerEx.getMessage());
                     } finally {
                         releaseTrialModal.run();
                     }

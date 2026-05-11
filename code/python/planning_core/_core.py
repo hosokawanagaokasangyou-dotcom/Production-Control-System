@@ -1504,6 +1504,8 @@ RESULT_DISPATCH_TABLE_STATIC_HEADERS: tuple[str, ...] = (
     "実出来高",
     "計画合計",
     "原反投入場所",
+    "加工開始日時",
+    "加工終了日時",
 )
 # 結果_配台表: 日付列（yyyy/mm/dd 表示・列幅確保）
 RESULT_DISPATCH_TABLE_DATE_HEADERS = frozenset(
@@ -23561,6 +23563,8 @@ def _dispatch_table_cell_from_sources(
     col_name: str,
 ):
     """結果_配台表の静的列: 加工計画DATA→計画入力→task_queue の順に補完。"""
+    if col_name in ("加工開始日時", "加工終了日時"):
+        return ""
     # 1) 加工計画DATA
     if src_row is not None:
         try:
@@ -23636,6 +23640,35 @@ def _dispatch_table_cell_from_sources(
     return ""
 
 
+def _timeline_event_start_end_dt(ev: dict) -> tuple[datetime | None, datetime | None]:
+    """加工タイムラインイベントの開始・終了（配台表 1 行＝暦日集約の min/max に使用）。"""
+    st = ev.get("start_dt")
+    ed = ev.get("end_dt")
+    if isinstance(st, datetime):
+        pass
+    elif isinstance(st, date):
+        st = datetime(st.year, st.month, st.day)
+    else:
+        st = None
+    if isinstance(ed, datetime):
+        pass
+    elif isinstance(ed, date):
+        ed = datetime(ed.year, ed.month, ed.day, 23, 59, 59)
+    else:
+        ed = None
+    return st, ed
+
+
+def _fmt_dispatch_table_datetime(dt) -> str:
+    if dt is None:
+        return ""
+    if isinstance(dt, datetime):
+        return dt.strftime("%Y/%m/%d %H:%M")
+    if isinstance(dt, date):
+        return dt.strftime("%Y/%m/%d")
+    return str(dt).strip()
+
+
 def build_result_dispatch_table_dataframe(
     timeline_events: list | None,
     sorted_tasks_for_result: list | None,
@@ -23652,6 +23685,8 @@ def build_result_dispatch_table_dataframe(
     if not timeline_events:
         return pd.DataFrame(columns=cols)
     agg: dict[tuple[str, str, date], float] = defaultdict(float)
+    bound_min: dict[tuple[str, str, date], datetime] = {}
+    bound_max: dict[tuple[str, str, date], datetime] = {}
     for ev in timeline_events:
         if not _is_machining_timeline_event(ev):
             continue
@@ -23667,7 +23702,17 @@ def build_result_dispatch_table_dataframe(
         qty = _dispatch_table_event_qty_m(ev)
         if qty <= 1e-18:
             continue
-        agg[(tid, eq, cd)] += float(qty)
+        key = (tid, eq, cd)
+        agg[key] += float(qty)
+        st0, ed0 = _timeline_event_start_end_dt(ev)
+        if st0 is not None:
+            prev = bound_min.get(key)
+            if prev is None or st0 < prev:
+                bound_min[key] = st0
+        if ed0 is not None:
+            prev_m = bound_max.get(key)
+            if prev_m is None or ed0 > prev_m:
+                bound_max[key] = ed0
     if not agg:
         return pd.DataFrame(columns=cols)
     plan_lookup = _build_plan_input_row_lookup_for_dispatch_table(tasks_df)
@@ -23730,6 +23775,9 @@ def build_result_dispatch_table_dataframe(
             r[TASK_COL_MACHINE] = proc
         if not str(r.get(TASK_COL_MACHINE_NAME) or "").strip():
             r[TASK_COL_MACHINE_NAME] = (t.get("machine_name") if t else "") or ""
+        row_key = (tid_k, eq_k, day_k)
+        r["加工開始日時"] = _fmt_dispatch_table_datetime(bound_min.get(row_key))
+        r["加工終了日時"] = _fmt_dispatch_table_datetime(bound_max.get(row_key))
         r["配台日"] = day_k
         r["当日配台数量"] = float(qty_sum)
         rows.append(r)
@@ -24067,6 +24115,8 @@ def _result_dispatch_table_column_width(header: str) -> float:
         return 11.0
     if h == "原反投入場所":
         return 16.0
+    if h in ("加工開始日時", "加工終了日時"):
+        return 17.0
     return min(max(float(len(h)) + 3.0, 10.0), 28.0)
 
 

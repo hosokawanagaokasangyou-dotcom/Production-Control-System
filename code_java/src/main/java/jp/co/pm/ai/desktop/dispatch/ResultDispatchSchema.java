@@ -42,7 +42,9 @@ public final class ResultDispatchSchema {
                     "加工完了区分",
                     "実出来高",
                     "計画合計",
-                    "原反投入場所");
+                    "原反投入場所",
+                    "加工開始日時",
+                    "加工終了日時");
 
     private ResultDispatchSchema() {}
 
