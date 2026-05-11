@@ -45,7 +45,6 @@ import javafx.scene.control.TablePosition;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextInputDialog;
-import javafx.scene.control.ToggleButton;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.DragEvent;
@@ -191,9 +190,6 @@ public final class DispatchInteractiveTabController {
     private Button wideRowDownButton;
 
     @FXML
-    private ToggleButton staffCheckToggle;
-
-    @FXML
     private Label statusLabel;
 
     @FXML
@@ -267,44 +263,6 @@ public final class DispatchInteractiveTabController {
                 wideSpreadsheetHost, WIDE_STATIC_HEADERS::size);
         SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
                 byDaySpreadsheetHost, BY_DAY_STATIC_HEADERS::size);
-
-        staffCheckToggle
-                .selectedProperty()
-                .addListener(
-                        (obs, o, n) -> {
-                            final int myGen = ++gridRebuildGeneration;
-                            statusLabel.setText("人員チェック反映中...");
-                            showReloadProgress();
-                            Task<FullGridRebuild> task =
-                                    new Task<>() {
-                                        @Override
-                                        protected FullGridRebuild call() {
-                                            return buildFullGridRebuild(Boolean.TRUE.equals(n));
-                                        }
-                                    };
-                            task.setOnSucceeded(
-                                    ev -> {
-                                        if (myGen != gridRebuildGeneration) {
-                                            hideReloadProgress();
-                                            return;
-                                        }
-                                        applyFullGridRebuild(task.getValue());
-                                        hideReloadProgress();
-                                        statusLabel.setText(doc.rows().size() + " 行");
-                                    });
-                            task.setOnFailed(
-                                    ev -> {
-                                        Throwable ex = task.getException();
-                                        if (shell != null && ex != null) {
-                                            shell.appendLog(
-                                                    "[dispatch-editor] staff-check rebuild: "
-                                                            + ex.getMessage());
-                                        }
-                                        hideReloadProgress();
-                                        statusLabel.setText("反映エラー");
-                                    });
-                            new Thread(task, "dispatch-editor-staff-grid").start();
-                        });
 
         installWideDnDHandlers();
         installByDayDoubleClickHandler();
@@ -1060,9 +1018,6 @@ public final class DispatchInteractiveTabController {
         if (wideRowDownButton != null) {
             wideRowDownButton.setDisable(disabled);
         }
-        if (staffCheckToggle != null) {
-            staffCheckToggle.setDisable(disabled);
-        }
     }
 
     private void markDispatchDocDirty() {
@@ -1141,7 +1096,7 @@ public final class DispatchInteractiveTabController {
 
     private void rebuildGrids() {
         gridRebuildGeneration++;
-        FullGridRebuild bundle = buildFullGridRebuild(staffCheckToggle.isSelected());
+        FullGridRebuild bundle = buildFullGridRebuild(false);
         applyFullGridRebuild(bundle);
     }
 

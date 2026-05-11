@@ -7,7 +7,6 @@
 <?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.control.Tab?>
 <?import javafx.scene.control.TabPane?>
-<?import javafx.scene.control.ToggleButton?>
 <?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
@@ -50,12 +49,6 @@
                 <Tooltip text="選択行を下へ（試行順）"/>
             </tooltip>
         </Button>
-        <ToggleButton fx:id="staffCheckToggle" mnemonicParsing="false"
-                      text="人員チェック">
-            <tooltip>
-                <Tooltip text="マスタ読込・計画結果連携後にOP/AS不足を表示予定。現時点はヒントのみ。"/>
-            </tooltip>
-        </ToggleButton>
         <Label fx:id="statusLabel"/>
         <ProgressIndicator fx:id="busyIndicator" prefHeight="22.0" prefWidth="22.0"
                            visible="false" managed="false"/>
