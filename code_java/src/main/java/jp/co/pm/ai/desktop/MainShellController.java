@@ -998,6 +998,23 @@ public final class MainShellController {
             return;
         }
 
+        performGlobalUiFactoryResetWithoutConfirmation();
+
+        Alert done = new Alert(AlertType.INFORMATION);
+        done.initOwner(primaryStage);
+        applyAlertStylesheetsFromOwner(done);
+        done.setTitle("完了");
+        done.setHeaderText(null);
+        done.setContentText("UI を既定に戻しました。");
+        done.showAndWait();
+    }
+
+    /**
+     * グローバル設定タブ「デフォルトに戻す」と同一の処理（確認ダイアログ・完了アラートなし）。
+     *
+     * <p>ポータブル自動バージョンアップ完了後に呼び出し、バンドル／{@code init_setting} 既定へ UI を揃える。
+     */
+    private void performGlobalUiFactoryResetWithoutConfirmation() {
         suppressEnvSessionPersistence.set(true);
         try {
             applyEnvRowsFullBundledResetAndPersist(false);
@@ -1019,14 +1036,6 @@ public final class MainShellController {
         } finally {
             suppressEnvSessionPersistence.set(false);
         }
-
-        Alert done = new Alert(AlertType.INFORMATION);
-        done.initOwner(primaryStage);
-        applyAlertStylesheetsFromOwner(done);
-        done.setTitle("完了");
-        done.setHeaderText(null);
-        done.setContentText("UI を既定に戻しました。");
-        done.showAndWait();
     }
 
     /** プッシュボタンのユーザー CSS をメインシーンに適用し直す（テーマ変更後も最後尾で上書き）。 */
@@ -3460,16 +3469,16 @@ public final class MainShellController {
                                 "[startup] バージョンアップ後のバンドル既定（タブ／列順／配台不要 JSON パス）の上書きに失敗: "
                                         + ex.getMessage());
                     }
-                    resetEnvRowsToDefaults();
+                    performGlobalUiFactoryResetWithoutConfirmation();
                     applyBundledPortableDefaultsIfPresent();
-                    applyDesktopSession(DesktopSessionStateStore.load(), false);
                     mainRunTabController.clearMainRunTabLog();
                     applyRepoFolderPathNormalization();
                     applyUncNetworkSourceDirDefaults();
                     DesktopSessionStateStore.save(collectDesktopSession());
                     mainRunTabController.refreshAppVersionLabel();
                     appendLog(
-                            "[startup] ポータル同期が完了しました（version.txt・pm-ai-data／init_setting をリポジトリへ反映）。環境変数はバンドル既定で初期化しました。");
+                            "[startup] ポータル同期が完了しました（version.txt・pm-ai-data／init_setting をリポジトリへ反映）。"
+                                    + "グローバル設定「デフォルトに戻す」相当で UI をバンドル既定へ揃えました。");
                 });
         task.setOnFailed(
                 e -> {
