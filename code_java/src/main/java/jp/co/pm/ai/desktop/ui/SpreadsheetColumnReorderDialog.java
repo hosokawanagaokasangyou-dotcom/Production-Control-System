@@ -41,13 +41,57 @@ public final class SpreadsheetColumnReorderDialog {
      * @return permutation: visual position {@code j} uses original column index {@code result.get(j)}
      */
     public static Optional<List<Integer>> show(Window owner, List<String> headers) {
+        return show(owner, headers, null);
+    }
+
+    /**
+     * Same as {@link #show(Window, List)} but only visible columns are listed in the dialog. Hidden columns
+     * keep their original relative order and trail at the end of the returned permutation.
+     *
+     * @param visible per-original-index visibility flag (length = {@code headers.size()}); {@code null}
+     *     treats all columns as visible (legacy behavior)
+     * @return full-length permutation of {@code [0..headers.size())}: visible original indices in
+     *     user-chosen order followed by hidden original indices in their original relative order; empty
+     *     when nothing is visible to reorder.
+     */
+    public static Optional<List<Integer>> show(
+            Window owner, List<String> headers, boolean[] visible) {
+        return showWithFixedLeading(owner, headers, visible, 0);
+    }
+
+    /**
+     * 先頭 {@code fixedLeadingColumnCount} 列は順序固定とし、それ以降の列だけを一覧で並べ替える（配台手動修正の日付列など）。
+     *
+     * @return 全体の列インデックスの並び（位置 {@code j} の元インデックスは {@code result.get(j)}）。先頭固定分は {@code
+     *     0..fixed-1} がそのまま先頭に並ぶ。
+     */
+    public static Optional<List<Integer>> showWithFixedLeading(
+            Window owner, List<String> headers, boolean[] visible, int fixedLeadingColumnCount) {
+        return showImpl(owner, headers, visible, fixedLeadingColumnCount);
+    }
+
+    private static Optional<List<Integer>> showImpl(
+            Window owner, List<String> headers, boolean[] visible, int fixedLeadingColumnCount) {
         if (headers == null || headers.isEmpty()) {
             return Optional.empty();
         }
         int n = headers.size();
+        int fixed = Math.min(Math.max(0, fixedLeadingColumnCount), n);
+        if (fixed >= n) {
+            return Optional.empty();
+        }
+        List<Integer> hiddenIdx = new ArrayList<>();
         ObservableList<Integer> perm = FXCollections.observableArrayList();
-        for (int i = 0; i < n; i++) {
-            perm.add(i);
+        for (int i = fixed; i < n; i++) {
+            boolean isVisible = visible == null || i >= visible.length || visible[i];
+            if (isVisible) {
+                perm.add(i);
+            } else {
+                hiddenIdx.add(i);
+            }
+        }
+        if (perm.isEmpty()) {
+            return Optional.empty();
         }
 
         Dialog<List<Integer>> dialog = new Dialog<>();
@@ -58,7 +102,7 @@ public final class SpreadsheetColumnReorderDialog {
         pane.getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
 
         ListView<Integer> list = new ListView<>(perm);
-        list.setPrefHeight(Math.min(420, 28 * n + 40));
+        list.setPrefHeight(Math.min(420, 28 * perm.size() + 40));
         list.setCellFactory(
                 lv ->
                         new ListCell<>() {
@@ -149,9 +193,13 @@ public final class SpreadsheetColumnReorderDialog {
                     }
                 });
 
-        Label hint =
-                new Label(
-                        "表示順は左から。↑↓または行のドラッグ＆ドロップで入れ替え。");
+        String hintText =
+                fixed > 0
+                        ? ("先頭の固定列（"
+                                + fixed
+                                + "列）は並べ替え対象外です。↑↓または行のドラッグ＆ドロップで可動列の順序を変更します。")
+                        : "表示順は左から。↑↓または行のドラッグ＆ドロップで入れ替え。";
+        Label hint = new Label(hintText);
         hint.setWrapText(true);
 
         GridPane grid = new GridPane();
@@ -170,7 +218,13 @@ public final class SpreadsheetColumnReorderDialog {
         dialog.setResultConverter(
                 btn -> {
                     if (btn == ButtonType.OK) {
-                        return new ArrayList<>(perm);
+                        List<Integer> result = new ArrayList<>();
+                        for (int i = 0; i < fixed; i++) {
+                            result.add(i);
+                        }
+                        result.addAll(perm);
+                        result.addAll(hiddenIdx);
+                        return result;
                     }
                     return null;
                 });

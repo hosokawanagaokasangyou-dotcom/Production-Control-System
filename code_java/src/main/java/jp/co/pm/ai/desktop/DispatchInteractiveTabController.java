@@ -83,6 +83,7 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
+import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetRowReorderDragGhost;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
@@ -366,8 +367,18 @@ public final class DispatchInteractiveTabController {
         clearColumnFiltersAndSort();
     }
 
+    /** 子タブに応じて「列の表示」ダイアログを開く（FXML: 列の表示）。 */
     @FXML
-    private void onWideColumnVisibilityAction() {
+    private void onColumnVisibilityAction() {
+        int tab = innerTabPane != null ? innerTabPane.getSelectionModel().getSelectedIndex() : 0;
+        if (tab <= 0) {
+            openWideColumnVisibilityDialog();
+        } else {
+            openByDayColumnVisibilityDialog();
+        }
+    }
+
+    private void openWideColumnVisibilityDialog() {
         Stage st = shell != null ? shell.getPrimaryStage() : null;
         ColumnVisibilitySupport.openSpreadsheetColumnVisibilityDialog(
                 st,
@@ -376,14 +387,110 @@ public final class DispatchInteractiveTabController {
                 () -> new ArrayList<>(buildWideColumnLabelsForAxis(dateAxis)));
     }
 
-    @FXML
-    private void onByDayColumnVisibilityAction() {
+    private void openByDayColumnVisibilityDialog() {
         Stage st = shell != null ? shell.getPrimaryStage() : null;
         ColumnVisibilitySupport.openSpreadsheetColumnVisibilityDialog(
                 st,
                 TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_BY_DAY,
                 byDaySpreadsheet,
                 () -> new ArrayList<>(buildByDayColumnLabelsForAxis(dateAxis)));
+    }
+
+    /**
+     * 列の並べ替えダイアログ（先頭固定列の外側＝主に日付列）。ヘッダドラッグ並べ替えと同じく日付軸と JSON 保存用レイアウトを更新する。
+     */
+    @FXML
+    private void onColumnReorderAction() {
+        Stage st = shell != null ? shell.getPrimaryStage() : null;
+        if (dateAxis.isEmpty()) {
+            if (shell != null) {
+                shell.appendLog("[dispatch-editor] 列の並べ替え: 表示する列がありません（JSON を読み込んでください）");
+            }
+            return;
+        }
+        int tab = innerTabPane != null ? innerTabPane.getSelectionModel().getSelectedIndex() : 0;
+        boolean wideMode = tab <= 0;
+        List<String> headers =
+                wideMode
+                        ? new ArrayList<>(buildWideColumnLabelsForAxis(dateAxis))
+                        : new ArrayList<>(buildByDayColumnLabelsForAxis(dateAxis));
+        int fixed =
+                wideMode ? WIDE_STATIC_HEADERS.size() : BY_DAY_STATIC_HEADERS.size();
+        TableColumnOrderPersistence.TableId tid =
+                wideMode
+                        ? TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_WIDE
+                        : TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_BY_DAY;
+        boolean[] vis = TableColumnOrderPersistence.loadColumnVisibility(tid, headers.size());
+        Optional<List<Integer>> choice =
+                SpreadsheetColumnReorderDialog.showWithFixedLeading(st, headers, vis, fixed);
+        if (choice.isEmpty()) {
+            boolean anyMovableVisible = false;
+            for (int i = fixed; i < headers.size(); i++) {
+                if (vis == null || i >= vis.length || vis[i]) {
+                    anyMovableVisible = true;
+                    break;
+                }
+            }
+            if (!anyMovableVisible && shell != null) {
+                shell.appendLog(
+                        "[dispatch-editor] 並べ替え対象の列がすべて非表示です。「列の表示」で日付列を表示してください。");
+            }
+            return;
+        }
+        applyDispatchInteractiveReorderPermutation(choice.get(), headers, wideMode);
+    }
+
+    private void applyDispatchInteractiveReorderPermutation(
+            List<Integer> perm, List<String> headersSnapshot, boolean wideMode) {
+        if (perm == null || headersSnapshot == null || perm.size() != headersSnapshot.size()) {
+            return;
+        }
+        List<String> titleOrder = new ArrayList<>(perm.size());
+        for (Integer idx : perm) {
+            if (idx == null || idx < 0 || idx >= headersSnapshot.size()) {
+                return;
+            }
+            titleOrder.add(headersSnapshot.get(idx));
+        }
+        TableColumnOrderPersistence.TableId tid =
+                wideMode
+                        ? TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_WIDE
+                        : TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_BY_DAY;
+        boolean[] oldVis =
+                TableColumnOrderPersistence.loadColumnVisibility(tid, headersSnapshot.size());
+        boolean[] newVis =
+                TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
+                        headersSnapshot, oldVis, titleOrder);
+        TableColumnOrderPersistence.saveColumnVisibility(tid, newVis);
+
+        List<LocalDate> computed = computeDateAxisList();
+        int staticCols = wideMode ? WIDE_STATIC_HEADERS.size() : BY_DAY_STATIC_HEADERS.size();
+        List<LocalDate> dates = parseDateTailAsDates(titleOrder, staticCols);
+        if (dates == null || !sameMultisetLocalDate(dates, computed)) {
+            return;
+        }
+        if (wideMode && !wideStaticPrefixMatches(titleOrder)) {
+            return;
+        }
+        if (!wideMode && !byDayStaticPrefixMatches(titleOrder)) {
+            return;
+        }
+        if (dates.equals(preferredDateAxisOrder)) {
+            persistDispatchColumnLayouts(
+                    wideMode ? titleOrder : buildWideColumnLabelsForAxis(dates),
+                    wideMode ? buildByDayColumnLabelsForAxis(dates) : titleOrder);
+            return;
+        }
+        preferredDateAxisOrder = new ArrayList<>(dates);
+        persistDispatchColumnLayouts(
+                wideMode ? titleOrder : buildWideColumnLabelsForAxis(dates),
+                wideMode ? buildByDayColumnLabelsForAxis(dates) : titleOrder);
+        suppressColumnReorderPersistence.set(true);
+        try {
+            rebuildGrids();
+        } finally {
+            suppressColumnReorderPersistence.set(false);
+        }
     }
 
     /**

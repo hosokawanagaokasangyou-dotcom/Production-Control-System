@@ -26,10 +26,10 @@
                 onAction="#onLoadAction"/>
         <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
                 onAction="#onClearColumnFiltersAction"/>
-        <Button mnemonicParsing="false" text="列の表示（タスク×日付）"
-                onAction="#onWideColumnVisibilityAction"/>
-        <Button mnemonicParsing="false" text="列の表示（工程×日）"
-                onAction="#onByDayColumnVisibilityAction"/>
+        <Button mnemonicParsing="false" text="列の並べ替え"
+                onAction="#onColumnReorderAction"/>
+        <Button mnemonicParsing="false" text="列の表示"
+                onAction="#onColumnVisibilityAction"/>
         <Button fx:id="saveButton" mnemonicParsing="false" text="保存 (JSON+xlsx)"
                 onAction="#onSaveAction"/>
         <Button fx:id="stage2RunButton" mnemonicParsing="false" text="段階2 実行"
