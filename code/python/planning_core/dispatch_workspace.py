@@ -154,7 +154,9 @@ def resolve_processing_plan_path_from_env() -> str | None:
     Effective PM_AI_PROCESSING_PLAN_PATH:
 
     1. If PM_AI_PROCESSING_PLAN_PATH points to an existing file -> normalize to absolute and set env.
-    2. Else if PM_AI_TASK_INPUT_SOURCE_DIR is a directory -> pick newest tabular file there,
+    2. Else if PM_AI_TASK_INPUT_SOURCE_DIR is empty -> same as Java AppPaths: use
+       DEFAULT_TASK_INPUT_SOURCE_DIR, then if that path is a directory pick newest tabular file there.
+    3. Else if PM_AI_TASK_INPUT_SOURCE_DIR is a directory -> pick newest tabular file there,
        set PM_AI_PROCESSING_PLAN_PATH to that path (stage1 / load_tasks_df use it).
 
     Returns the resolved absolute path, or None if no file was resolved.
@@ -172,7 +174,8 @@ def resolve_processing_plan_path_from_env() -> str | None:
 
     src = (os.environ.get(ENV_TASK_INPUT_SOURCE_DIR) or "").strip()
     if not src:
-        return None
+        # Java AppPaths.resolveTaskInputSourceDir と同じ既定 UNC（実績側 resolve_actual_detail_workbook_path に揃える）
+        src = DEFAULT_TASK_INPUT_SOURCE_DIR
     src_abs = os.path.normpath(os.path.abspath(src))
     if not os.path.isdir(src_abs):
         _LOG.warning("PM_AI_TASK_INPUT_SOURCE_DIR is not a directory: %r", src)

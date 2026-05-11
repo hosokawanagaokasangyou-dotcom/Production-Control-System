@@ -27,9 +27,9 @@
     <!-- NGCanvas + Prism GPU で RTTexture が null（NPE）になる環境があるため既定は sw。GPU 試行は pm.ai.javafx.prism.gpu を参照 -->
     <javafx.prism.order>sw</javafx.prism.order>
     <!-- javafx:run / exec:exec@pm-ai-desktop / jpackage のヒープ上限（既定 3g。増やす例: -Djvm.max.heap=8g） -->
-    <jvm.max.heap>4g</jvm.max.heap>
+    <jvm.max.heap>5g</jvm.max.heap>
     <!-- javafx:run / exec:exec@pm-ai-desktop / jpackage の初期ヒープ（-Xms。package_app.ps1 も同じ値を参照） -->
-    <jvm.initial.heap>4g</jvm.initial.heap>
+    <jvm.initial.heap>5g</jvm.initial.heap>
     <!-- package_app.ps1: Windows embeddable Python（amd64）。code/python/pyproject.toml の requires-python と整合 -->
     <pm.ai.bundle.python.embed.version>3.14.4</pm.ai.bundle.python.embed.version>
     <!-- package_app.ps1: Temurin JDK zip for jpackage runtime-image (Windows x64). Empty = Adoptium API -->
