@@ -121,13 +121,9 @@ public final class DispatchInteractiveTabController {
     /** Fully-blocked (holiday) date columns: stay narrow but wide enough for a short header glyph. */
     private static final double MIN_BLOCKED_DATE_COLUMN_WIDTH_PX = 40.0;
 
-    /** 日付列で数量が正のとき（人員チェック OFF の通常表示）。 */
+    /** 日付列で数量が正のとき。 */
     private static final String DATE_CELL_STYLE_POSITIVE_QTY =
             "-fx-background-color: #e8f5e9; -fx-text-fill: black;";
-
-    /** 人員チェック ON かつ数量が正のとき（警告を優先し緑より手前に表示）。 */
-    private static final String DATE_CELL_STYLE_STAFF_HIGHLIGHT =
-            "-fx-background-color: #ffe0e0; -fx-text-fill: black;";
 
     private static final List<String> WIDE_STATIC_HEADERS =
             List.of(
@@ -157,9 +153,6 @@ public final class DispatchInteractiveTabController {
     private record ByDayGridBundle(GridBase grid, boolean[] blockedCols, int staticCols, int dayCount) {}
 
     private record FullGridRebuild(List<LocalDate> axis, WideGridBundle wide, ByDayGridBundle byDay) {}
-
-    /** Invalidates in-flight async grid rebuilds (e.g. staff toggle) when a synchronous rebuild runs. */
-    private volatile int gridRebuildGeneration;
 
     /**
      * In-memory {@link #doc} differs from last successful「保存」to disk. Dispatch trial reads JSON from disk, so the
@@ -1103,8 +1096,7 @@ public final class DispatchInteractiveTabController {
     }
 
     private void rebuildGrids() {
-        gridRebuildGeneration++;
-        FullGridRebuild bundle = buildFullGridRebuild(false);
+        FullGridRebuild bundle = buildFullGridRebuild();
         applyFullGridRebuild(bundle);
     }
 
@@ -1122,10 +1114,10 @@ public final class DispatchInteractiveTabController {
         return range;
     }
 
-    private FullGridRebuild buildFullGridRebuild(boolean staffHighlight) {
+    private FullGridRebuild buildFullGridRebuild() {
         List<LocalDate> axis = axisForRebuild();
-        WideGridBundle wide = buildWideGridModel(axis, staffHighlight);
-        ByDayGridBundle byDay = buildByDayGridModel(axis, staffHighlight);
+        WideGridBundle wide = buildWideGridModel(axis);
+        ByDayGridBundle byDay = buildByDayGridModel(axis);
         return new FullGridRebuild(axis, wide, byDay);
     }
 
@@ -1296,7 +1288,7 @@ public final class DispatchInteractiveTabController {
         }
     }
 
-    private WideGridBundle buildWideGridModel(List<LocalDate> axis, boolean staffHighlight) {
+    private WideGridBundle buildWideGridModel(List<LocalDate> axis) {
         List<Map<String, String>> profiles = new ArrayList<>();
         List<WideRow> rowItems = new ArrayList<>();
         List<String> cols = doc.columns();
@@ -1358,7 +1350,7 @@ public final class DispatchInteractiveTabController {
                 SpreadsheetCell cell =
                         SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, qtxt);
                 cell.setEditable(false);
-                applyWideCellStyle(wr, di, cell, staffHighlight);
+                applyWideCellStyle(wr, di, cell);
                 line.add(cell);
             }
             gridRows.add(line);
@@ -1369,7 +1361,7 @@ public final class DispatchInteractiveTabController {
         return new WideGridBundle(grid, profiles, rowItems, wideBlockedCols, staticCols, dayCount);
     }
 
-    private ByDayGridBundle buildByDayGridModel(List<LocalDate> axis, boolean staffHighlight) {
+    private ByDayGridBundle buildByDayGridModel(List<LocalDate> axis) {
         List<Map.Entry<String, String>> keys = ResultDispatchPivot.sortedProcessMachineKeys(doc.rows());
         int staticCols = BY_DAY_STATIC_HEADERS.size();
         int dayCount = axis.size();
@@ -1436,7 +1428,7 @@ public final class DispatchInteractiveTabController {
                 SpreadsheetCell cell =
                         SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, qtxt);
                 cell.setEditable(false);
-                applyByDayCellStyle(br, di, cell, staffHighlight);
+                applyByDayCellStyle(br, di, cell);
                 line.add(cell);
             }
             gridRows.add(line);
@@ -1652,12 +1644,9 @@ public final class DispatchInteractiveTabController {
         }
     }
 
-    private void applyWideCellStyle(
-            WideRow wr, int dateIdx, SpreadsheetCell cell, boolean staffHighlight) {
+    private void applyWideCellStyle(WideRow wr, int dateIdx, SpreadsheetCell cell) {
         double q = wr.getAmount(dateIdx);
-        if (staffHighlight && q > 1e-9) {
-            cell.setStyle(DATE_CELL_STYLE_STAFF_HIGHLIGHT);
-        } else if (q > 1e-9) {
+        if (q > 1e-9) {
             cell.setStyle(DATE_CELL_STYLE_POSITIVE_QTY);
         } else {
             cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_DATA_WHITE);
@@ -1803,12 +1792,9 @@ public final class DispatchInteractiveTabController {
         return wideSpreadsheet.getModelColumn(viewCol);
     }
 
-    private void applyByDayCellStyle(
-            ByDayRow br, int dateIdx, SpreadsheetCell cell, boolean staffHighlight) {
+    private void applyByDayCellStyle(ByDayRow br, int dateIdx, SpreadsheetCell cell) {
         double q = br.getAmount(dateIdx);
-        if (staffHighlight && q > 1e-9) {
-            cell.setStyle(DATE_CELL_STYLE_STAFF_HIGHLIGHT);
-        } else if (q > 1e-9) {
+        if (q > 1e-9) {
             cell.setStyle(DATE_CELL_STYLE_POSITIVE_QTY);
         } else {
             cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_DATA_WHITE);
