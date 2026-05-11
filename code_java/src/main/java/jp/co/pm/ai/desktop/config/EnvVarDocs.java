@@ -20,6 +20,8 @@ public final class EnvVarDocs {
                 "PM_AI_PYTHON",
                 "段階1/2 等の子プロセスで使う Python 実行ファイル（パスは実行ファイル。フォルダのみ指定すると実行時に python.exe 等へ補正）。"
                         + "編集は環境変数タブのみ（実行・ログタブに Python 入力は無い）。"
+                        + "開発で OS にインストールした Python だけを使うときは、ここにその python.exe の絶対パスを設定すると、"
+                        + "ワークスペース近傍で検出される同梱 embed より優先される（空のままだと embed が先に採用されることがある）。"
                         + "値が空のときは pm-ai-data/runtime/python-embed/python.exe（存在時）または PATH の python/python3。"
                         + "環境変数タブを空にしても動くのはこのフォールバックのため。"
                         + "初期化・空欄補完では pm-ai-data/runtime/python-embed/python.exe を user.dir から親ディレクトリへ最大12段まで辿って探索し、見つかれば絶対パスで入れる（ショートカットで user.dir が bin 等になる場合のため）。"
