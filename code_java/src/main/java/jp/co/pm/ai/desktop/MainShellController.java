@@ -2662,6 +2662,8 @@ public final class MainShellController {
                                                     if (reloadAfterStage1PlanInput != null) {
                                                         reloadAfterStage1PlanInput.run();
                                                     }
+                                                    invalidateDeliveryCalendarAfterPipelineRun();
+                                                    refreshEquipmentGanttGraphicAfterPipelineRun();
                                                     MacroCompleteChime.playIfAvailable(collectUiEnv());
                                                     showStageCompletionDialog(
                                                             "段階1 完了",
@@ -2669,6 +2671,8 @@ public final class MainShellController {
                                                 }
                                                 if (STAGE2.equals(script) && c == 0) {
                                                     refreshStage2OutputArtifacts();
+                                                    invalidateDeliveryCalendarAfterPipelineRun();
+                                                    refreshEquipmentGanttGraphicAfterPipelineRun();
                                                     if (dispatchInteractiveTabController != null) {
                                                         dispatchInteractiveTabController
                                                                 .reloadTableFromDiskAfterExternalUpdate();
@@ -3226,6 +3230,24 @@ public final class MainShellController {
      */
     void refreshRunTabStage2ArtifactLinks() {
         refreshStage2OutputArtifacts();
+    }
+
+    /**
+     * 段階1/2/3 実行後に納期管理ビューを「再読み込みボタンまで全面オーバーレイ」にする（古い表の誤閲覧防止）。
+     */
+    void invalidateDeliveryCalendarAfterPipelineRun() {
+        if (deliveryCalendarViewTabController != null) {
+            deliveryCalendarViewTabController.markStaleUntilManualReload();
+        }
+    }
+
+    /**
+     * 既定出力の最新計画 JSON で設備ガント（グラフィック）を再読み込みする。段階2・配台試行完了後に呼ぶ。
+     */
+    void refreshEquipmentGanttGraphicAfterPipelineRun() {
+        if (equipmentGanttGraphicTabController != null) {
+            equipmentGanttGraphicTabController.syncLatestPlanJsonFromOutputDirAndReload();
+        }
     }
 
     private void refreshStage2OutputArtifacts() {

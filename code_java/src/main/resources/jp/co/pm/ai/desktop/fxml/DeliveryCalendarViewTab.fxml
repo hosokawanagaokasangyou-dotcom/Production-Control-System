@@ -77,7 +77,8 @@
             </TitledPane>
         </panes>
     </Accordion>
-    <TabPane fx:id="innerTabPane" tabClosingPolicy="UNAVAILABLE" VBox.vgrow="ALWAYS">
+    <StackPane VBox.vgrow="ALWAYS">
+        <TabPane fx:id="innerTabPane" tabClosingPolicy="UNAVAILABLE" maxHeight="Infinity" maxWidth="Infinity">
         <tabs>
             <Tab closable="false" text="&#x30a2;&#x30e9;&#x30fb;&#x5b9f;&#x7e3e;&#x30fb;&#x30b7;&#x30b9;&#x6bd4;&#x8f03;">
                 <content>
@@ -159,5 +160,19 @@
                 </content>
             </Tab>
         </tabs>
-    </TabPane>
+        </TabPane>
+        <VBox fx:id="pipelineStaleOverlay" alignment="CENTER" spacing="16.0" managed="false" visible="false"
+              style="-fx-background-color: rgba(250,250,252,0.98);">
+            <padding>
+                <Insets bottom="24.0" left="24.0" right="24.0" top="24.0"/>
+            </padding>
+            <Label fx:id="pipelineStaleOverlayTitle" maxWidth="560.0" wrapText="true"
+                   style="-fx-font-size: 15px; -fx-font-weight: bold;"
+                   text="表示を保留しています"/>
+            <Label maxWidth="560.0" wrapText="true" style="-fx-font-size: 13px; -fx-text-fill: #444;"
+                   text="段階1・段階2、または配台試行（段階3）実行の直後は、再読み込み前のデータを表示しません。古い表に基づく誤判断を防ぐためです。"/>
+            <Label maxWidth="560.0" wrapText="true" style="-fx-font-size: 13px; -fx-text-fill: #333;"
+                   text="最新を見るには、上の「再読み込み」ボタンを押してください。"/>
+        </VBox>
+    </StackPane>
 </VBox>

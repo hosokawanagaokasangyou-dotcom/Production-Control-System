@@ -861,6 +861,8 @@ public final class DispatchInteractiveTabController {
                         String shortagesPath = task.getValue();
                         statusLabel.setText("配台試行完了");
                         shell.refreshRunTabStage2ArtifactLinks();
+                        shell.invalidateDeliveryCalendarAfterPipelineRun();
+                        shell.refreshEquipmentGanttGraphicAfterPipelineRun();
                         shell.appendLog("[dispatch-editor] trial: " + shortagesPath);
                         logLines.add("");
                         logLines.add("[配台試行] 正常終了しました。");

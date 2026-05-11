@@ -160,6 +160,12 @@ public final class DeliveryCalendarViewTabController {
     private TabPane innerTabPane;
 
     @FXML
+    private VBox pipelineStaleOverlay;
+
+    @FXML
+    private Label pipelineStaleOverlayTitle;
+
+    @FXML
     private AladdinProcessingPlanDataTabController aladdinProcessingPlanDataTabController;
 
     @FXML
@@ -919,6 +925,30 @@ public final class DeliveryCalendarViewTabController {
                                         }));
     }
 
+    /**
+     * 段階1/2/3 実行後に呼ぶ。子タブの表を再読み込みするまで全面オーバーレイで隠す（古いデータの誤閲覧防止）。
+     */
+    public void markStaleUntilManualReload() {
+        Platform.runLater(
+                () -> {
+                    if (pipelineStaleOverlay != null) {
+                        pipelineStaleOverlay.setManaged(true);
+                        pipelineStaleOverlay.setVisible(true);
+                        pipelineStaleOverlay.toFront();
+                    }
+                    if (pipelineStaleOverlayTitle != null) {
+                        pipelineStaleOverlayTitle.setText("表示を保留しています");
+                    }
+                });
+    }
+
+    private void clearPipelineStaleOverlayAfterSuccessfulReload() {
+        if (pipelineStaleOverlay != null) {
+            pipelineStaleOverlay.setVisible(false);
+            pipelineStaleOverlay.setManaged(false);
+        }
+    }
+
     private void showDeliveryReloadProgress() {
         reloadBlockingMainShellTabNavigation.set(true);
         if (shell != null) {
@@ -1202,6 +1232,7 @@ public final class DeliveryCalendarViewTabController {
         setDeliveryReloadSegmentProgress(
                 deliveryReloadProgressMainCalendar, deliveryReloadPctMainCalendar, 1.0);
         statusLabel.setText("反映完了");
+        clearPipelineStaleOverlayAfterSuccessfulReload();
     }
 
     private void loadMainCalendar(JsonNode mainCal) {

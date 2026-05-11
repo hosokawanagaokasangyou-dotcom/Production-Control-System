@@ -973,6 +973,14 @@ public final class EquipmentGanttGraphicTabController {
 
     @FXML
     private void onSyncLatestButtonAction() {
+        syncLatestPlanJsonFromOutputDirAndReload();
+    }
+
+    /**
+     * 既定出力フォルダの最新 {@code 計画*.json} を選択してグラフィックを再構築する。「同期して最新を表示」と同一。
+     * 段階2・配台試行（段階3）完了後にメインシェルから呼び、ディスク上の最新計画を確実に反映する。
+     */
+    void syncLatestPlanJsonFromOutputDirAndReload() {
         if (shell == null) {
             return;
         }
