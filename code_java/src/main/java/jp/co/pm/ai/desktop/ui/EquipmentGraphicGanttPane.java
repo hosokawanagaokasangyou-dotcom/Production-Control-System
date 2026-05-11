@@ -45,6 +45,7 @@ import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
+import javafx.scene.shape.Line;
 
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
@@ -107,6 +108,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     /** 担当バッジの横方向固定間隔（px）。実体は {@link DesktopSessionState#DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX}。 */
     public static final double DEFAULT_PERSON_BADGE_GAP_PX =
             DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX;
+
+    /** バッジワイヤーの不透明度（{@link #fillBar} のストローク色に乗算）。 */
+    private static final double PERSON_BADGE_WIRE_OPACITY = 0.45;
 
     private static final Group MEASURE_ROOT = new Group();
     private static final Scene MEASURE_SCENE = new Scene(MEASURE_ROOT, 4000, 4000);
@@ -486,7 +490,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX,
                 false,
                 null,
-                null);
+                null,
+                DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_ENABLED);
     }
 
     /**
@@ -530,7 +535,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX,
                 false,
                 null,
-                null);
+                null,
+                DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_ENABLED);
     }
 
     /**
@@ -548,6 +554,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      * @param personBadgeDragAdjustEnabled バッジをドラッグで移動する
      * @param personBadgeDragDeltas {@link #computeDataFingerprint} が同一のとき適用するドラッグずれ（{@code null} で空）
      * @param personBadgeDragDeltaSink ドラッグ確定時にずれを通知（{@code null} で保存しない）
+     * @param showPersonBadgeWires 担当バッジとチャートバーをワイヤーで結ぶ（{@code showPersonBadges} が false のとき無効）
      */
     public static BorderPane build(
             List<String> columns,
@@ -570,7 +577,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double personBadgeBandVerticalOffsetPx,
             boolean personBadgeDragAdjustEnabled,
             Map<String, EquipmentGanttBadgeDragDelta> personBadgeDragDeltas,
-            BiConsumer<String, EquipmentGanttBadgeDragDelta> personBadgeDragDeltaSink) {
+            BiConsumer<String, EquipmentGanttBadgeDragDelta> personBadgeDragDeltaSink,
+            boolean showPersonBadgeWires) {
         BorderPane root = new BorderPane();
         root.setCache(false);
         RepairedGanttTable repairedTable = RepairedGanttTable.from(columns, rows, badgeSlotRowsRaw);
@@ -602,6 +610,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         barFontPercent,
                         headerHeightPercent);
         GanttPalette palette = GanttPalette.forTheme(theme);
+        Color personBadgeWireStroke =
+                Color.color(
+                        palette.barStroke().getRed(),
+                        palette.barStroke().getGreen(),
+                        palette.barStroke().getBlue(),
+                        PERSON_BADGE_WIRE_OPACITY);
+        boolean personBadgeWiresEffective = showPersonBadges && showPersonBadgeWires;
         Font barFont = resolveBarFont(barFontFamily, layout.barFontSize);
 
         double gapPxEff = personBadgeGapPx;
@@ -892,7 +907,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         canvasTimelineW,
                         rowCanvasH,
                         dragEff,
-                        personBadgeDragDeltaSink);
+                        personBadgeDragDeltaSink,
+                        personBadgeWiresEffective,
+                        personBadgeWireStroke);
                 /*
                  * 帯内クランプ（clampBadgeLayoutYInBand）がスタック高≧帯のときオフセットを打ち消すため、
                  * レイアウト後にオーバーレイPaneへ縦移動だけ適用する。
@@ -1765,6 +1782,41 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         }
     }
 
+    private record BadgeWirePlacement(
+            Line wireLineOrNull, StackPane badge, double anchorX, double anchorY) {}
+
+    private static double barAnchorCenterX(LayoutMetrics layout, BarRun run) {
+        return EquipmentGanttWireAnchorMath.barAnchorCenterX(
+                layout.slotWidth(), layout.zoom(), run.fromSlot(), run.toSlot());
+    }
+
+    private static double barAnchorCenterY(double timelineOuterPad, LayoutMetrics layout) {
+        return EquipmentGanttWireAnchorMath.barAnchorCenterY(
+                timelineOuterPad, layout.rowHeight(), layout.zoom());
+    }
+
+    private static void installPersonBadgeWireListeners(
+            Line line, StackPane sp, double anchorX, double anchorY) {
+        if (line == null || sp == null) {
+            return;
+        }
+        line.setStartX(anchorX);
+        line.setStartY(anchorY);
+        Runnable sync =
+                () -> {
+                    Bounds cb = badgeDragClampBounds(sp);
+                    double halfW = cb.getWidth() <= 1e-9 ? 0 : cb.getWidth() / 2;
+                    double halfH = cb.getHeight() <= 1e-9 ? 0 : cb.getHeight() / 2;
+                    double ex = sp.getLayoutX() + cb.getMinX() + halfW;
+                    double ey = sp.getLayoutY() + cb.getMinY() + halfH;
+                    line.setEndX(ex);
+                    line.setEndY(ey);
+                };
+        sp.layoutXProperty().addListener(obs -> sync.run());
+        sp.layoutYProperty().addListener(obs -> sync.run());
+        sync.run();
+    }
+
     private static void layoutPersonBadgeOverlay(
             Pane overlay,
             List<String> badgeSlotTexts,
@@ -1778,7 +1830,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double timelinePaneWidth,
             double overlayPaneHeight,
             Map<String, EquipmentGanttBadgeDragDelta> dragDeltas,
-            BiConsumer<String, EquipmentGanttBadgeDragDelta> dragDeltaSink) {
+            BiConsumer<String, EquipmentGanttBadgeDragDelta> dragDeltaSink,
+            boolean personBadgeWiresEnabled,
+            Color personBadgeWireColor) {
         if (overlay == null
                 || styleForLabel == null
                 || badgeSlotTexts == null
@@ -1794,6 +1848,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
          * 別バーのバッジ同士が同じ Y 帯で重なる。論理矩形を蓄積して右へ押し出す。
          */
         List<BoundingBox> placedBadgeLogicalRects = new ArrayList<>();
+        List<BadgeWirePlacement> wirePlacementBatch = new ArrayList<>();
         for (BarRun run : runs) {
             if (run.kind() == BarKind.BREAK) {
                 continue;
@@ -1803,6 +1858,15 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             badgeSlotTexts, run.fromSlot(), run.toSlot());
             if (frag.isEmpty()) {
                 continue;
+            }
+            boolean wireThisRun =
+                    personBadgeWiresEnabled
+                            && personBadgeWireColor != null;
+            double anchorX = 0d;
+            double anchorY = 0d;
+            if (wireThisRun) {
+                anchorX = barAnchorCenterX(layout, run);
+                anchorY = barAnchorCenterY(timelineOuterPad, layout);
             }
             List<String> parts = PersonNameBadgeText.splitBadgeCell(frag);
             if (parts.isEmpty()) {
@@ -1963,7 +2027,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     lyUse = clampBadgeLayoutYInBand(lyUse, cb, barTop, badgeClampBottom);
                     sp.setLayoutX(lx);
                     sp.setLayoutY(lyUse);
-                    overlay.getChildren().add(sp);
+                    Line wireLine = null;
+                    if (wireThisRun) {
+                        wireLine = new Line(anchorX, anchorY, anchorX, anchorY);
+                        wireLine.setStroke(personBadgeWireColor);
+                        wireLine.setStrokeWidth(Math.max(0.75, 0.65 * layout.zoom));
+                        wireLine.setMouseTransparent(true);
+                        wireLine.setPickOnBounds(false);
+                    }
+                    wirePlacementBatch.add(
+                            new BadgeWirePlacement(wireLine, sp, anchorX, anchorY));
                     if (badgeDragAdjustEnabled) {
                         sp.setMouseTransparent(false);
                         sp.setCursor(Cursor.DEFAULT);
@@ -1986,6 +2059,20 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     xVis = visualLeft + advance;
                 }
                 ySegCursor += segHeights.get(si) + segmentGapEff;
+            }
+        }
+        for (BadgeWirePlacement wp : wirePlacementBatch) {
+            if (wp.wireLineOrNull() != null) {
+                overlay.getChildren().add(wp.wireLineOrNull());
+            }
+        }
+        for (BadgeWirePlacement wp : wirePlacementBatch) {
+            overlay.getChildren().add(wp.badge());
+        }
+        for (BadgeWirePlacement wp : wirePlacementBatch) {
+            if (wp.wireLineOrNull() != null) {
+                installPersonBadgeWireListeners(
+                        wp.wireLineOrNull(), wp.badge(), wp.anchorX(), wp.anchorY());
             }
         }
     }

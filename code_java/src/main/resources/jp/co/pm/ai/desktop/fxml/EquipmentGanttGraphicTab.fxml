@@ -36,6 +36,8 @@
                             <CheckBox fx:id="personBadgeShowCheckBox" mnemonicParsing="false"
                                       text="担当バッジを表示" selected="true"
                                       onAction="#onPersonBadgeShowAction"/>
+                            <CheckBox fx:id="personBadgeWireShowCheckBox" mnemonicParsing="false"
+                                      text="バッジワイヤー表示" selected="true"/>
                             <CheckBox fx:id="personBadgeDragAdjustCheckBox" mnemonicParsing="false"
                                       text="バッジをドラッグで移動（再描画でリセット）"/>
                             <Button fx:id="reloadButton" mnemonicParsing="false" text="再読み"

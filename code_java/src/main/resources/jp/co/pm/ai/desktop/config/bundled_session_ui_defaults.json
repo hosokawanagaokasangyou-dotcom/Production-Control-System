@@ -36,6 +36,7 @@
   "equipmentGanttPersonBadgeBandVerticalOffsetPx": 0,
   "equipmentGanttPersonBadgeDragAdjustEnabled": false,
   "equipmentGanttPersonBadgeEnabled": true,
+  "equipmentGanttPersonBadgeWireEnabled": true,
   "equipmentGanttPersonBadgeFontPercent": 85,
   "equipmentGanttPersonBadgeFillHex": "#2563eb",
   "equipmentGanttPersonBadgeTextHex": "#f8fafc",

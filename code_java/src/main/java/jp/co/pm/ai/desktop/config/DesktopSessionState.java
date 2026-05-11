@@ -51,6 +51,7 @@ import java.util.Map;
  * @param equipmentGanttBadgeDragDeltas データ同一時のみ有効な担当バッジのドラッグずれ（キーはバッジ安定 ID）
  * @param equipmentGanttPersonBadgeDragAdjustEnabled 担当バッジをマウスドラッグで移動するモード（データ同一ならずれはセッションに保存される）
  * @param equipmentGanttPersonBadgeEnabled 設備ガント・担当バッジ表示のオンオフ
+ * @param equipmentGanttPersonBadgeWireEnabled 担当バッジとチャートバーをワイヤーで結ぶ（バッジ表示時のみ有効）
  * @param equipmentGanttPersonBadgeFontFamily バッジ文字フォント（空は既定ファミリ）
  * @param equipmentGanttPersonBadgeFontPercent バッジ文字サイズ（行ラベル基準の%、0 は未保存として既定 85）
  * @param equipmentGanttPersonBadgeFillHex バッジ背景色（#RRGGBB）
@@ -118,6 +119,7 @@ public record DesktopSessionState(
         Map<String, EquipmentGanttBadgeDragDelta> equipmentGanttBadgeDragDeltas,
         boolean equipmentGanttPersonBadgeDragAdjustEnabled,
         boolean equipmentGanttPersonBadgeEnabled,
+        boolean equipmentGanttPersonBadgeWireEnabled,
         String equipmentGanttPersonBadgeFontFamily,
         double equipmentGanttPersonBadgeFontPercent,
         String equipmentGanttPersonBadgeFillHex,
@@ -154,6 +156,9 @@ public record DesktopSessionState(
     public static final double MIN_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX = -48.0;
 
     public static final double MAX_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX = 48.0;
+
+    /** 設備ガント・バッジワイヤー表示の既定（視認性向上のため既定 ON）。 */
+    public static final boolean DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_ENABLED = true;
 
     public DesktopSessionState {
         equipmentGanttPersonBadgeStylesByLabel =
@@ -284,6 +289,7 @@ public record DesktopSessionState(
                 Map.of(),
                 false,
                 true,
+                DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_ENABLED,
                 "",
                 d.fontPercent(),
                 d.fillHex(),
@@ -357,6 +363,7 @@ public record DesktopSessionState(
                 equipmentGanttBadgeDragDeltas(),
                 equipmentGanttPersonBadgeDragAdjustEnabled(),
                 equipmentGanttPersonBadgeEnabled(),
+                equipmentGanttPersonBadgeWireEnabled(),
                 equipmentGanttPersonBadgeFontFamily(),
                 equipmentGanttPersonBadgeFontPercent(),
                 equipmentGanttPersonBadgeFillHex(),

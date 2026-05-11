@@ -142,6 +142,9 @@ public final class EquipmentGanttGraphicTabController {
     private CheckBox personBadgeDragAdjustCheckBox;
 
     @FXML
+    private CheckBox personBadgeWireShowCheckBox;
+
+    @FXML
     private Slider graphicZoomSlider;
 
     @FXML
@@ -384,6 +387,15 @@ public final class EquipmentGanttGraphicTabController {
                                 scheduleEquipmentGraphicPersist();
                             });
         }
+        if (personBadgeWireShowCheckBox != null) {
+            personBadgeWireShowCheckBox
+                    .selectedProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                flushGraphicRebuildNow();
+                                scheduleEquipmentGraphicPersist();
+                            });
+        }
     }
 
     private void populateEquipmentGraphicBarFontComboItems() {
@@ -494,6 +506,9 @@ public final class EquipmentGanttGraphicTabController {
         }
         if (personBadgeShowCheckBox != null) {
             personBadgeShowCheckBox.setSelected(s.equipmentGanttPersonBadgeEnabled());
+        }
+        if (personBadgeWireShowCheckBox != null) {
+            personBadgeWireShowCheckBox.setSelected(s.equipmentGanttPersonBadgeWireEnabled());
         }
         double bgap = s.equipmentGanttPersonBadgeGapPx();
         if (graphicPersonBadgeGapSlider != null) {
@@ -623,6 +638,11 @@ public final class EquipmentGanttGraphicTabController {
 
     boolean snapshotEquipmentGanttPersonBadgeEnabled() {
         return personBadgeShowCheckBox == null || personBadgeShowCheckBox.isSelected();
+    }
+
+    boolean snapshotEquipmentGanttPersonBadgeWireEnabled() {
+        return personBadgeWireShowCheckBox == null
+                || personBadgeWireShowCheckBox.isSelected();
     }
 
     double snapshotEquipmentGanttPersonBadgeGapPx() {
@@ -1018,7 +1038,8 @@ public final class EquipmentGanttGraphicTabController {
                         snapshotEquipmentGanttPersonBadgeBandVerticalOffsetPx(),
                         dragEffective,
                         equipmentGanttBadgeDragDeltas,
-                        dragSink);
+                        dragSink,
+                        snapshotEquipmentGanttPersonBadgeWireEnabled());
         if (Boolean.getBoolean("pm.ai.gantt.profile")) {
             long ms = (System.nanoTime() - buildT0) / 1_000_000L;
             if (shell != null) {

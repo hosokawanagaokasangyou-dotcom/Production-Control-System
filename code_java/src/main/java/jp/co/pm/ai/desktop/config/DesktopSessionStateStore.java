@@ -337,6 +337,10 @@ public final class DesktopSessionStateStore {
                 loadEquipmentGanttBadgeDragDeltas(root),
                 optionalBoolean(root, "equipmentGanttPersonBadgeDragAdjustEnabled", false),
                 optionalBoolean(root, "equipmentGanttPersonBadgeEnabled", true),
+                optionalBoolean(
+                        root,
+                        "equipmentGanttPersonBadgeWireEnabled",
+                        DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_ENABLED),
                 text(root, "equipmentGanttPersonBadgeFontFamily"),
                 optionalDouble(root, "equipmentGanttPersonBadgeFontPercent", 0d),
                 text(root, "equipmentGanttPersonBadgeFillHex"),
@@ -794,6 +798,9 @@ public final class DesktopSessionStateStore {
                 "equipmentGanttPersonBadgeDragAdjustEnabled",
                 state.equipmentGanttPersonBadgeDragAdjustEnabled());
         root.put("equipmentGanttPersonBadgeEnabled", state.equipmentGanttPersonBadgeEnabled());
+        root.put(
+                "equipmentGanttPersonBadgeWireEnabled",
+                state.equipmentGanttPersonBadgeWireEnabled());
         put(root, "equipmentGanttPersonBadgeFontFamily", state.equipmentGanttPersonBadgeFontFamily());
         double bpf = state.equipmentGanttPersonBadgeFontPercent();
         if (Double.isFinite(bpf) && bpf > 0 && bpf <= 300) {
