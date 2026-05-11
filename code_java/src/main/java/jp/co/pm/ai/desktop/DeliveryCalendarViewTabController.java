@@ -915,8 +915,7 @@ public final class DeliveryCalendarViewTabController {
                                                 statusLabel.setText("no result");
                                                 return;
                                             }
-                                            applyPayload(cap.stdout());
-                                            statusLabel.setText("exit=" + cap.exitCode());
+                                            applyPayload(cap.stdout(), cap.exitCode());
                                         }));
     }
 
@@ -999,22 +998,30 @@ public final class DeliveryCalendarViewTabController {
         }
     }
 
-    private void applyPayload(String stdout) {
-        applyPayloadBody(stdout);
+    private void applyPayload(String stdout, int exitCode) {
+        applyPayloadBody(stdout, exitCode);
     }
 
-    private void applyPayloadBody(String stdout) {
+    private void applyPayloadBody(String stdout, int exitCode) {
         metaLabel.setText("");
         String trimmed = stdout != null ? stdout.trim() : "";
         if (trimmed.isEmpty()) {
-            statusLabel.setText("empty stdout");
+            statusLabel.setText("empty stdout (exit=" + exitCode + ")");
             scheduleHideDeliveryReloadProgress();
             return;
         }
         try {
             JsonNode root = parseDeliveryCalendarPayloadRoot(trimmed);
-            if (!root.path("ok").asBoolean(false)) {
-                statusLabel.setText(root.path("error").asText("failed"));
+            boolean okPayload0 = root.path("ok").asBoolean(false);
+            String err0 = root.path("error").asText("");
+            if (!okPayload0) {
+                statusLabel.setText(
+                        "exit="
+                                + exitCode
+                                + ": "
+                                + (err0.isEmpty() ? "failed" : err0));
+            } else {
+                statusLabel.setText("exit=" + exitCode);
             }
             JsonNode meta = root.get("meta");
             if (meta != null && meta.isObject()) {
@@ -1023,6 +1030,11 @@ public final class DeliveryCalendarViewTabController {
                 String defaultDirSuffix =
                         " \uff08\u74b0\u5883\u5909\u6570\u7a7a\u6b04\u30fb\u65e2\u5b9a\u30d5\u30a9\u30eb\u30c0\uff09";
                 StringBuilder sb = new StringBuilder();
+                if (!okPayload0 && !err0.isEmpty()) {
+                    sb.append("\u3010\u30da\u30a4\u30ed\u30fc\u30c9\u751f\u6210\u5931\u6557\u3011\n")
+                            .append(err0)
+                            .append("\n\n");
+                }
                 String taskEff = meta.path("pmAiTaskInputSourceDirEffective").asText("");
                 if (taskEff.isEmpty()) {
                     taskEff = meta.path("pmAiTaskInputSourceDir").asText("");
@@ -1077,8 +1089,7 @@ public final class DeliveryCalendarViewTabController {
                 metaLabel.setText(sb.toString());
             }
 
-            boolean okPayload = root.path("ok").asBoolean(false);
-            if (okPayload) {
+            if (okPayload0) {
                 setDeliveryReloadSegmentProgress(
                         deliveryReloadProgressPayloadPrep, deliveryReloadPctPayloadPrep, 1.0);
                 Platform.runLater(() -> runDeliveryReloadAladdinPhase(root, meta));
