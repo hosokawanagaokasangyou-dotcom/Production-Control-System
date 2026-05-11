@@ -386,4 +386,26 @@ class AppPathsTest {
         Files.createDirectories(embed);
         assertEquals("", AppPaths.normalizePmAiPythonExecutable(embed.toString()));
     }
+
+    @Test
+    void findPortablePythonEmbedExecutable_walksUpFromNestedDir(@TempDir Path root) throws IOException {
+        Path install = root.resolve("PortableApp");
+        Path exe =
+                install.resolve("pm-ai-data")
+                        .resolve("runtime")
+                        .resolve("python-embed")
+                        .resolve("python.exe");
+        Files.createDirectories(exe.getParent());
+        Files.createFile(exe);
+        Path nested = install.resolve("launcher").resolve("bin");
+        Files.createDirectories(nested);
+        assertEquals(
+                exe.toAbsolutePath().normalize(),
+                AppPaths.findPortablePythonEmbedExecutable(nested).orElseThrow());
+    }
+
+    @Test
+    void findPortablePythonEmbedExecutable_missingReturnsEmpty(@TempDir Path tmp) {
+        assertTrue(AppPaths.findPortablePythonEmbedExecutable(tmp.resolve("no_embed_here")).isEmpty());
+    }
 }

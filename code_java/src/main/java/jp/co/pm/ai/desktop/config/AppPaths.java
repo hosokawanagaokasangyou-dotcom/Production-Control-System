@@ -383,6 +383,37 @@ public final class AppPaths {
     }
 
     /**
+     * ポータブル同梱の Python embed（{@code pm-ai-data/runtime/python-embed/python.exe}）を {@code start}
+     * から親ディレクトリへ最大 8 段まで辿って探す。
+     *
+     * <p>ショートカット起動などで {@code user.dir} がインストール根の直下でない場合でも検出できるようにする。
+     *
+     * @return 見つかったときは正規化済み絶対パス
+     */
+    public static Optional<Path> findPortablePythonEmbedExecutable(Path start) {
+        if (start == null) {
+            return Optional.empty();
+        }
+        Path cur = start.toAbsolutePath().normalize();
+        for (int i = 0; i < 8; i++) {
+            Path exe =
+                    cur.resolve("pm-ai-data")
+                            .resolve("runtime")
+                            .resolve("python-embed")
+                            .resolve("python.exe");
+            if (Files.isRegularFile(exe)) {
+                return Optional.of(exe.toAbsolutePath().normalize());
+            }
+            Path parent = cur.getParent();
+            if (parent == null || Objects.equals(parent, cur)) {
+                break;
+            }
+            cur = parent;
+        }
+        return Optional.empty();
+    }
+
+    /**
      * {@code ui} from the env tab; {@code null} or empty map uses directory walk only (no overrides).
      */
     public static Path resolvePythonScriptDir(Map<String, String> ui) {

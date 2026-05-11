@@ -3273,6 +3273,10 @@ public final class MainShellController {
      */
     private static String defaultOsPython() {
         Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
+        Optional<Path> portableEmbed = AppPaths.findPortablePythonEmbedExecutable(cwd);
+        if (portableEmbed.isPresent()) {
+            return portableEmbed.get().toString();
+        }
         Path bundledWin =
                 cwd.resolve("pm-ai-data")
                         .resolve("runtime")
@@ -3285,12 +3289,16 @@ public final class MainShellController {
     }
 
     /**
-     * 環境変数初期化・空欄補完用の {@code PM_AI_PYTHON}。ポータル配布（{@link PortableBundleSelfUpdater#isPortableBundleLayout}
-     * が真）はインストール根（{@code user.dir}）からの相対パス {@code pm-ai-data/runtime/python-embed/python.exe} を返す。
-     * それ以外は {@link #defaultOsPython()}。
+     * 環境変数初期化・空欄補完用の {@code PM_AI_PYTHON}。同梱 embed が見つかればその絶対パス（{@code user.dir} の親を辿る検出を含む）。
+     * 見つからず {@link PortableBundleSelfUpdater#isPortableBundleLayout(Path)} がインストール根で真なら相対パス {@code
+     * pm-ai-data/runtime/python-embed/python.exe}。それ以外は {@link #defaultOsPython()}。
      */
     private static String defaultPmAiPythonForBootstrap() {
         Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
+        Optional<Path> portableEmbed = AppPaths.findPortablePythonEmbedExecutable(cwd);
+        if (portableEmbed.isPresent()) {
+            return portableEmbed.get().toString();
+        }
         if (PortableBundleSelfUpdater.isPortableBundleLayout(cwd)) {
             return Path.of("pm-ai-data", "runtime", "python-embed", "python.exe").toString();
         }
