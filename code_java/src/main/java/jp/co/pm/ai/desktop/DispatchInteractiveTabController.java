@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -89,6 +90,7 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchPivot;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
@@ -2096,11 +2098,38 @@ public final class DispatchInteractiveTabController {
     private void applyDispatchShortfallFromDisk(Path resultDispatchJson) {
         if (resultDispatchJson == null) {
             clearDispatchShortfallUi();
+            // #region agent log
+            AgentDebugLog.appendStructured(
+                    shell != null ? shell.snapshotUiEnv() : Map.of(),
+                    "41bffb",
+                    "H4",
+                    "DispatchInteractiveTabController.applyDispatchShortfallFromDisk",
+                    "resultDispatchJson null",
+                    Map.of("shortageFileExists", false));
+            // #endregion
             return;
         }
         Path shortagePath = resultDispatchJson.resolveSibling("dispatch_trial_shortages.json");
         if (!Files.isRegularFile(shortagePath)) {
             clearDispatchShortfallUi();
+            // #region agent log
+            try {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("shortagePath", shortagePath.toString());
+                d.put("shortageFileExists", false);
+                d.put("hintsTotal", 0);
+                d.put("hintsY25", 0);
+                AgentDebugLog.appendStructured(
+                        shell != null ? shell.snapshotUiEnv() : Map.of(),
+                        "41bffb",
+                        "H4",
+                        "DispatchInteractiveTabController.applyDispatchShortfallFromDisk",
+                        "dispatch_trial_shortages.json missing",
+                        d);
+            } catch (Throwable ignored) {
+                // debug-only
+            }
+            // #endregion
             return;
         }
         try {
@@ -2108,8 +2137,47 @@ public final class DispatchInteractiveTabController {
             List<DispatchQtyShortfallRow> rows = fb.dispatchQtyShortfall();
             lastDispatchShortageHints = List.copyOf(fb.shortageHints());
             applyDispatchShortfallRows(rows);
+            // #region agent log
+            try {
+                int hintsTotal = fb.shortageHints().size();
+                int hintsY25 = 0;
+                for (DispatchTrialShortages.ShortageHint h : fb.shortageHints()) {
+                    String tid = h.taskId() != null ? h.taskId() : "";
+                    if (tid.contains("Y5-25")) {
+                        hintsY25++;
+                    }
+                }
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("shortagePath", shortagePath.toString());
+                d.put("shortageFileExists", true);
+                d.put("hintsTotal", hintsTotal);
+                d.put("hintsY25", hintsY25);
+                AgentDebugLog.appendStructured(
+                        shell != null ? shell.snapshotUiEnv() : Map.of(),
+                        "41bffb",
+                        "H4",
+                        "DispatchInteractiveTabController.applyDispatchShortfallFromDisk",
+                        "shortages loaded",
+                        d);
+            } catch (Throwable ignored) {
+                // debug-only
+            }
+            // #endregion
         } catch (IOException e) {
             clearDispatchShortfallUi();
+            // #region agent log
+            AgentDebugLog.appendStructured(
+                    shell != null ? shell.snapshotUiEnv() : Map.of(),
+                    "41bffb",
+                    "H4",
+                    "DispatchInteractiveTabController.applyDispatchShortfallFromDisk",
+                    "readFull IOException",
+                    Map.of(
+                            "shortagePath",
+                            shortagePath.toString(),
+                            "message",
+                            e.getMessage() != null ? e.getMessage() : ""));
+            // #endregion
         }
     }
 
@@ -2201,6 +2269,24 @@ public final class DispatchInteractiveTabController {
      * メートル未達（{@link #showDispatchQtyShortfallDialogIfNeeded}）とは別系統。
      */
     private void showDispatchShortageHintsDialogIfNeeded(Stage owner) {
+        // #region agent log
+        try {
+            int n = lastDispatchShortageHints == null ? 0 : lastDispatchShortageHints.size();
+            boolean skip = lastDispatchShortageHints == null || lastDispatchShortageHints.isEmpty();
+            Map<String, Object> d = new LinkedHashMap<>();
+            d.put("hintsCount", n);
+            d.put("dialogSkippedEmpty", skip);
+            AgentDebugLog.appendStructured(
+                    shell != null ? shell.snapshotUiEnv() : Map.of(),
+                    "41bffb",
+                    "H5",
+                    "DispatchInteractiveTabController.showDispatchShortageHintsDialogIfNeeded",
+                    "before modal",
+                    d);
+        } catch (Throwable ignored) {
+            // debug-only
+        }
+        // #endregion
         if (lastDispatchShortageHints == null || lastDispatchShortageHints.isEmpty()) {
             return;
         }

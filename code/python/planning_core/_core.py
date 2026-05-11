@@ -24118,11 +24118,50 @@ def _interactive_append_machining_end_after_member_shift_shortages(
     インタラクティブ配台試行: 加工セグメント終了が、割り当てメンバーの勤務 end_dt を超えるとき
     as_shortage に記録する（JavaFX の dispatch_trial_shortages.json 連携）。
     """
+    # #region agent log
+    try:
+        import json as _jd
+        import time as _t_dbg
+
+        _p_dbg = "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-41bffb.log"
+        _ea = _interactive_dispatch_trial_env_active()
+        _tn = len(timeline_events) if timeline_events else 0
+        _an = len(attendance_data) if attendance_data else 0
+        with open(_p_dbg, "a", encoding="utf-8") as _df:
+            _df.write(
+                _jd.dumps(
+                    {
+                        "sessionId": "41bffb",
+                        "hypothesisId": "H1",
+                        "location": "_interactive_append_machining_end_after_member_shift_shortages:entry",
+                        "message": "gates",
+                        "data": {
+                            "env_active": _ea,
+                            "timeline_n": _tn,
+                            "attendance_days_n": _an,
+                        },
+                        "timestamp": int(_t_dbg.time() * 1000),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+    except Exception:
+        pass
+    # #endregion
     if not _interactive_dispatch_trial_env_active():
         return
     if not timeline_events or not attendance_data:
         return
     seen: set[tuple[str, str, str, str]] = set()
+    _as_before = len(_INTERACTIVE_TRIAL_AS_SHORTAGE)
+    _dbg_focus = "Y5-25"
+    _y25_machining_ev = 0
+    _y25_skip_not_in_att = 0
+    _y25_skip_not_working = 0
+    _y25_skip_no_mem_end = 0
+    _y25_skip_no_violation = 0
+    _y25_recorded = 0
     for ev in timeline_events:
         if not _is_machining_timeline_event(ev):
             continue
@@ -24136,25 +24175,38 @@ def _interactive_append_machining_end_after_member_shift_shortages(
         if not day_att:
             continue
         tid = str(ev.get("task_id") or "").strip()
+        _is_y25 = _dbg_focus in tid
+        if _is_y25:
+            _y25_machining_ev += 1
         mach_line = str(ev.get("machine") or "").strip()
         mach_occ = str(ev.get("machine_occupancy_key") or "").strip()
         proc_field = mach_line
         mn_field = mach_occ
         for mm in _timeline_event_assigned_member_names(ev):
             if mm not in day_att:
+                if _is_y25:
+                    _y25_skip_not_in_att += 1
                 continue
             entry = day_att[mm]
             if not entry.get("is_working"):
+                if _is_y25:
+                    _y25_skip_not_working += 1
                 continue
             mem_end = entry.get("end_dt")
             if not isinstance(mem_end, datetime):
+                if _is_y25:
+                    _y25_skip_no_mem_end += 1
                 continue
             if ev_end <= mem_end:
+                if _is_y25:
+                    _y25_skip_no_violation += 1
                 continue
             key = (tid, cal_d.isoformat(), proc_field, mm)
             if key in seen:
                 continue
             seen.add(key)
+            if _is_y25:
+                _y25_recorded += 1
             rec = {
                 "task_id": tid,
                 "date": cal_d.isoformat(),
@@ -24169,6 +24221,38 @@ def _interactive_append_machining_end_after_member_shift_shortages(
                 "capable_headcount": 1,
             }
             _INTERACTIVE_TRIAL_AS_SHORTAGE.append(rec)
+    # #region agent log
+    try:
+        import json as _jd2
+        import time as _t2
+
+        _p2 = "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-41bffb.log"
+        with open(_p2, "a", encoding="utf-8") as _df2:
+            _df2.write(
+                _jd2.dumps(
+                    {
+                        "sessionId": "41bffb",
+                        "hypothesisId": "H2-H3",
+                        "location": "_interactive_append_machining_end_after_member_shift_shortages:summary",
+                        "message": "y5-25_focus_and_as_delta",
+                        "data": {
+                            "as_shortage_delta": len(_INTERACTIVE_TRIAL_AS_SHORTAGE) - _as_before,
+                            "y25_machining_events": _y25_machining_ev,
+                            "y25_skip_member_not_in_day_att": _y25_skip_not_in_att,
+                            "y25_skip_not_working": _y25_skip_not_working,
+                            "y25_skip_no_mem_end": _y25_skip_no_mem_end,
+                            "y25_skip_ev_end_not_after_mem_end": _y25_skip_no_violation,
+                            "y25_records_appended": _y25_recorded,
+                        },
+                        "timestamp": int(_t2.time() * 1000),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+    except Exception:
+        pass
+    # #endregion
 
 
 def interactive_trial_shortages_snapshot() -> dict:
