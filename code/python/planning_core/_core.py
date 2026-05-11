@@ -473,6 +473,26 @@ def _resolve_gemini_credentials_json_path() -> str | None:
     return None
 
 
+# #region agent log
+def _agent_debug_ndjson_gemini_cred(payload: dict) -> None:
+    """Session a07f8d: Gemini 証明書解決のランタイム証跡（秘密は書かない）。"""
+    try:
+        log_path = "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-a07f8d.log"
+        row = {
+            "sessionId": "a07f8d",
+            "timestamp": int(time_module.time() * 1000),
+            "location": "planning_core/_core.py:gemini_cred",
+            **payload,
+        }
+        with open(log_path, "a", encoding="utf-8") as lf:
+            lf.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# #endregion
+
+
 def _read_task_ids_from_config_sheet_column(
     wb_path: str,
     column_index: int,
@@ -757,7 +777,19 @@ def _decrypt_gemini_credentials_v2(
     try:
         fkey = _derive_fernet_key_from_passphrase(passphrase, salt, iterations)
         plain = Fernet(fkey).decrypt(token_s.encode("ascii"))
-    except Exception:
+    except Exception as ex:
+        # #region agent log
+        _agent_debug_ndjson_gemini_cred(
+            {
+                "message": "gemini_decrypt_failed",
+                "hypothesisId": "H2_decrypt_or_fernet",
+                "data": {
+                    "exc_type": type(ex).__name__,
+                    "json_basename": os.path.basename(json_path or ""),
+                },
+            }
+        )
+        # #endregion
         logging.debug("Gemini: 暗号化証明書の復号処理に失敗しました（%s）。", json_path)
         return None
     try:
@@ -846,6 +878,30 @@ if not API_KEY:
         " 参考型: gemini_credentials.example.json / 参照用/python/encrypt_gemini_credentials.py（暗号化）。",
         GEMINI_CREDENTIALS_ENCRYPTED_FILENAME,
     )
+
+# #region agent log
+_gemini_env_raw = os.environ.get("GEMINI_CREDENTIALS_JSON") or ""
+_gemini_env = _gemini_env_raw.strip()
+_agent_debug_ndjson_gemini_cred(
+    {
+        "message": "gemini_credentials_init_summary",
+        "hypothesisId": "H1_env_chdir_relative_path",
+        "data": {
+            "cwd": os.getcwd(),
+            "env_set": bool(_gemini_env),
+            "env_len": len(_gemini_env),
+            "env_starts_at": _gemini_env.startswith("@"),
+            "resolved": _cred_path or "",
+            "resolved_isfile": bool(_cred_path and os.path.isfile(_cred_path)),
+            "api_key_loaded": bool(API_KEY),
+            "used_encrypted": _used_encrypted_credentials,
+            "pm_ai_workspace_nonempty": bool(
+                (os.environ.get("PM_AI_WORKSPACE") or "").strip()
+            ),
+        },
+    }
+)
+# #endregion
 
 RESULT_SHEET_GANTT_NAME = "結果_設備ガント"
 # 結果_設備ガントの横軸タイムスロット幅（分）
