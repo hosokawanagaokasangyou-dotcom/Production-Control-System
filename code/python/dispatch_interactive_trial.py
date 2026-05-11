@@ -4,9 +4,10 @@
 
 - 段階2の配台ループは変更せず、試行専用の環境・カレンダー解釈・結果表上書きで差し替える。
 - 配台試行順は入力 JSON を正とする。結果_配台表は timeline の暦日集約を基準とし、入力が依頼×機械あたり 1 行のときも潰さない（planning_core）。
-- 機械カレンダーは * / ＊ / ※ のセルのみ占有。工場枠は master A12/B12 開始・同日 23:59 まで延長可。
-  加工が暦日をまたぐ場合は PlanningValidationError で中止。
-- 人員不足は interactive_trial_shortages_snapshot の op_shortage / as_shortage に記録。
+- 機械カレンダーは * / ＊ / ※ のセルのみ占有。列0にスロット行が無い時刻は配台不可。空セルは行がある時間帯で配台可。
+  工場枠は master A12/B12 開始・同日 23:59 まで延長可。加工が暦日をまたぐ場合は PlanningValidationError で中止。
+- 指定数量はタイムライン集計と突き合わせ、依頼NO×機械の合計不一致時は PlanningValidationError。
+- 人員不足は interactive_trial_shortages_snapshot の op_shortage（フォーム0件）/ as_shortage（人数は足りるが割当不可）に記録。
 """
 from __future__ import annotations
 

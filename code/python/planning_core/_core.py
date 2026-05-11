@@ -88,9 +88,12 @@ _STAGE2_MACHINE_CALENDAR_CACHE: dict | None = None
 # JavaFX 結果_配台表.json からのインタラクティブ配台試行（dispatch_interactive_trial.py）。
 # - 段階2の配台ループ本体は変更しない。試行はフラグ・読込・結果表の上書きで差し替える。
 # - 配台試行順は入力 JSON を正とする。結果_配台表は timeline の暦日行を基準とし、入力が 1 行に潰れないようマージする。
-# - 機械カレンダーは * 系セルのみ占有。工場枠は master A12/B12 開始・同日 23:59 まで拡張可、暦日跨ぎ加工は中止。
+# - 機械カレンダー: * / ＊ / ※ のみ占有とみなす。列0にスロット行が無い時刻（工場計画窓内）は配台不可。
+#   空セルはスロット行がある時間帯では配台可（* 以外の文字は無視）。
+# - 指定数量は結果タイムラインと突き合わせ、依頼NO×機械の合計が一致しないとき PlanningValidationError。
+# - 工場枠は master A12/B12 開始・同日 23:59 まで拡張可、暦日跨ぎ加工は中止。
 # - 配台試行時はチーム終業上限を同日 23:59 まで緩め、機械空きが退勤より遅い場合でも同日フォーム探索する。
-# - 人不足は op_shortage / as_shortage に記録。
+# - 人不足は op_shortage（フォーム候補不足）/ as_shortage（人数は足りるが割当不可）に記録。
 _INTERACTIVE_TRIAL_OP_SHORTAGE: list[dict] = []
 _INTERACTIVE_TRIAL_AS_SHORTAGE: list[dict] = []
 # 試行終了時の _interactive_trial_meters_done のコピー（targets との突合用）
@@ -266,6 +269,11 @@ MACHINE_CALENDAR_SLOT_MINUTES = 30
 # ``generate_plan`` 開始時に再設定。date -> 設備キー -> [ (start, end), ... ] 半開区間 [start, end)
 _MACHINE_CALENDAR_BLOCKS_BY_DATE: dict[
     date, dict[str, list[tuple[datetime, datetime]]]
+] = {}
+# インタラクティブ配台試行: master「機械カレンダー」列0のスロット行から得た暦日ごとの定義済み時間（マージ済み）。
+# キーが無い暦日はシートに当該日の行が無い → 工場計画窓全体をブロックする。
+_MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE: dict[
+    date, list[tuple[datetime, datetime]]
 ] = {}
 
 # master.xlsm: 機械との日次始業準備（分）。依頼切替の準備・後始末は廃止（シートは未読込）。
@@ -22507,6 +22515,36 @@ def _merge_machine_calendar_intervals(
     return out
 
 
+def _half_open_gaps_in_window(
+    w0: datetime,
+    w1: datetime,
+    covered_merged: list[tuple[datetime, datetime]],
+) -> list[tuple[datetime, datetime]]:
+    """
+    半開区間 [w0,w1) から、マージ済み sorted covered_merged の合併を除いた部分を返す。
+    covered_merged は [w0,w1) 内とみなしてよい（クリップ済み）前提。
+    """
+    if w0 >= w1:
+        return []
+    if not covered_merged:
+        return [(w0, w1)]
+    gaps: list[tuple[datetime, datetime]] = []
+    cur = w0
+    for s, e in covered_merged:
+        if e <= cur:
+            continue
+        if s >= w1:
+            break
+        if cur < s:
+            gaps.append((cur, min(s, w1)))
+        cur = max(cur, e)
+        if cur >= w1:
+            return gaps
+    if cur < w1:
+        gaps.append((cur, w1))
+    return gaps
+
+
 def _bump_dt_past_machine_calendar_blocks(
     t: datetime,
     blocks: list[tuple[datetime, datetime]],
@@ -22671,7 +22709,10 @@ def load_machine_calendar_occupancy_blocks(
 
     interactive_only_asterisk_occupancy:
         True のとき（配台試行）非空セルのうち * / ＊ / ※ のみを占有とする。数値・他文字は無視。
+        列0にスロット行が無い時刻（工場計画窓内）はブロックとみなす（`_interactive_augment_machine_calendar_day_blocks`）。
     """
+    global _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE
+    _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = {}
     if not master_path or not os.path.isfile(master_path):
         return {}
     # region stage2 cache
@@ -22687,11 +22728,17 @@ def load_machine_calendar_occupancy_blocks(
             int(st.st_mtime),
             int(st.st_size),
             hashlib.sha256(eq_sig.encode("utf-8")).hexdigest(),
+            "ia1" if interactive_only_asterisk_occupancy else "ia0",
         )
         if (
             isinstance(_STAGE2_MACHINE_CALENDAR_CACHE, dict)
             and _STAGE2_MACHINE_CALENDAR_CACHE.get("sig") == sig
         ):
+            idef = _STAGE2_MACHINE_CALENDAR_CACHE.get("interactive_defined")
+            if isinstance(idef, dict):
+                _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = idef
+            else:
+                _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = {}
             return _STAGE2_MACHINE_CALENDAR_CACHE.get("value") or {}
     except Exception:
         sig = None
@@ -22703,7 +22750,11 @@ def load_machine_calendar_occupancy_blocks(
             # region stage2 cache
             try:
                 if sig is not None:
-                    _STAGE2_MACHINE_CALENDAR_CACHE = {"sig": sig, "value": out0}
+                    _STAGE2_MACHINE_CALENDAR_CACHE = {
+                        "sig": sig,
+                        "value": out0,
+                        "interactive_defined": {},
+                    }
             except Exception:
                 pass
             # endregion stage2 cache
@@ -22715,7 +22766,11 @@ def load_machine_calendar_occupancy_blocks(
         # region stage2 cache
         try:
             if sig is not None:
-                _STAGE2_MACHINE_CALENDAR_CACHE = {"sig": sig, "value": out0}
+                _STAGE2_MACHINE_CALENDAR_CACHE = {
+                    "sig": sig,
+                    "value": out0,
+                    "interactive_defined": {},
+                }
         except Exception:
             pass
         # endregion stage2 cache
@@ -22725,7 +22780,11 @@ def load_machine_calendar_occupancy_blocks(
         # region stage2 cache
         try:
             if sig is not None:
-                _STAGE2_MACHINE_CALENDAR_CACHE = {"sig": sig, "value": out0}
+                _STAGE2_MACHINE_CALENDAR_CACHE = {
+                    "sig": sig,
+                    "value": out0,
+                    "interactive_defined": {},
+                }
         except Exception:
             pass
         # endregion stage2 cache
@@ -22775,12 +22834,17 @@ def load_machine_calendar_occupancy_blocks(
         # region stage2 cache
         try:
             if sig is not None:
-                _STAGE2_MACHINE_CALENDAR_CACHE = {"sig": sig, "value": out0}
+                _STAGE2_MACHINE_CALENDAR_CACHE = {
+                    "sig": sig,
+                    "value": out0,
+                    "interactive_defined": {},
+                }
         except Exception:
             pass
         # endregion stage2 cache
         return out0
 
+    defined_slot_windows_by_day = defaultdict(list)
     acc: dict[date, dict[str, list[tuple[datetime, datetime]]]] = defaultdict(
         lambda: defaultdict(list)
     )
@@ -22792,6 +22856,12 @@ def load_machine_calendar_occupancy_blocks(
             day_d = slot0.date()
         except Exception:
             continue
+        slot_end_row = slot0 + timedelta(minutes=MACHINE_CALENDAR_SLOT_MINUTES)
+        _clipped_row = _clip_machine_calendar_slot_to_factory_window(
+            day_d, slot0, slot_end_row
+        )
+        if _clipped_row:
+            defined_slot_windows_by_day[day_d].append(_clipped_row)
         for c, eq_key in col_to_eq.items():
             if c >= raw.shape[1]:
                 continue
@@ -22827,10 +22897,21 @@ def load_machine_calendar_occupancy_blocks(
         for pk, iv in phys_accum.items():
             merged_all[pk] = _merge_machine_calendar_intervals(iv)
         out[d] = merged_all
+    if interactive_only_asterisk_occupancy:
+        _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = {
+            d: _merge_machine_calendar_intervals(vs)
+            for d, vs in defined_slot_windows_by_day.items()
+        }
+    else:
+        _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = {}
     # region stage2 cache
     try:
         if sig is not None:
-            _STAGE2_MACHINE_CALENDAR_CACHE = {"sig": sig, "value": out}
+            _STAGE2_MACHINE_CALENDAR_CACHE = {
+                "sig": sig,
+                "value": out,
+                "interactive_defined": dict(_MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE),
+            }
     except Exception:
         pass
     # endregion stage2 cache
@@ -22846,7 +22927,10 @@ def _apply_machine_calendar_floor_for_date(
     machine_calendar_plan_end: datetime | None = None,
 ) -> None:
     """当日のタイムラインシード後」機械カレンダー占有で設備空し下限を繰り上きる。"""
-    day_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
+    raw_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
+    day_blocks = _interactive_augment_machine_calendar_day_blocks(
+        current_date, raw_blocks, equipment_list
+    )
     if not day_blocks:
         return
     candidates: set[str] = set()
@@ -22907,7 +22991,13 @@ def _machine_calendar_occ_blocks_full_plan_window(
     当日の機械カレンダー占有は計画窓 [始業, min(終業,稼働メンバー終了) ) 全体を塞ね」
     しの設備では当日 1 本も加工を入れられないとし True。
     """
-    day_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
+    raw_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
+    day_blocks = _interactive_augment_machine_calendar_day_blocks(
+        current_date,
+        raw_blocks,
+        None,
+        extra_occ_keys=[occ_key],
+    )
     if not day_blocks:
         return False
     blocks = _machine_calendar_blocks_for_occ_key(day_blocks, occ_key)
@@ -23041,10 +23131,16 @@ def _bump_machine_avail_after_roll_for_calendar(
     machine_day_floor: datetime | None = None,
 ) -> None:
     """ロール確定直後: 終了時刻はカレンダー占有スロット内なら終端まで繰り上き。"""
-    day_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
+    raw_blocks = _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date)
+    eq_s = str(eq_line).strip() if eq_line is not None else ""
+    day_blocks = _interactive_augment_machine_calendar_day_blocks(
+        current_date,
+        raw_blocks,
+        None,
+        extra_occ_keys=[eq_s] if eq_s else None,
+    )
     if not day_blocks:
         return
-    eq_s = str(eq_line).strip() if eq_line is not None else ""
     if not eq_s:
         return
     blocks = day_blocks.get(eq_s)
@@ -23780,14 +23876,10 @@ def _interactive_validate_dispatch_quantities(
             if abs(act_v - exp_v) <= lim:
                 continue
             msg = (
-                "インタラクティブ配台試行: 数量不一致（依頼NO×機械名の合計） "
-                f"{k}: 期待={exp_v} 実際={act_v}"
+                "インタラクティブ配台試行: 指定数量不一致（依頼NO×機械名の合計） "
+                f"{k}: 指定={exp_v} タイムライン実績={act_v}"
             )
-            logging.warning(msg)
-            try:
-                print(msg, file=sys.stderr, flush=True)
-            except Exception:
-                pass
+            raise PlanningValidationError(msg)
         return
 
     for k, exp_v in expected.items():
@@ -24197,6 +24289,58 @@ def _write_dispatch_table_standalone_xlsx(df_dispatch: pd.DataFrame, target_dir:
 def _interactive_dispatch_trial_env_active() -> bool:
     v = (os.environ.get("PM_AI_INTERACTIVE_DISPATCH_TRIAL") or "").strip().lower()
     return v in ("1", "true", "yes", "on")
+
+
+def _interactive_machine_calendar_gap_blocks(day_d: date) -> list[tuple[datetime, datetime]]:
+    """
+    インタラクティブ配台試行: 機械カレンダーにスロット行が無い時刻（工場計画窓内）は配台不可。
+    列0で定義されたスロットの合併の**外側**をブロック区間として返す。
+    シートに当該暦日が一切無いときは計画窓全体。
+    """
+    if not _interactive_dispatch_trial_env_active():
+        return []
+    union = _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE.get(day_d)
+    w0 = datetime.combine(day_d, DEFAULT_START_TIME)
+    w1 = datetime.combine(day_d, DEFAULT_END_TIME)
+    if union is None:
+        return [(w0, w1)]
+    merged_u = _merge_machine_calendar_intervals(list(union))
+    if not merged_u:
+        return [(w0, w1)]
+    return _half_open_gaps_in_window(w0, w1, merged_u)
+
+
+def _interactive_augment_machine_calendar_day_blocks(
+    day_d: date,
+    day_blocks: dict[str, list[tuple[datetime, datetime]]] | None,
+    equipment_list: list | None,
+    *,
+    extra_occ_keys: list[str] | None = None,
+) -> dict[str, list[tuple[datetime, datetime]]]:
+    """インタラクティブ試行時のみ、未定義時刻ブロックを全対象設備キーへマージする。"""
+    db = dict(day_blocks or {})
+    if not _interactive_dispatch_trial_env_active():
+        return db
+    gaps = _interactive_machine_calendar_gap_blocks(day_d)
+    if not gaps:
+        return db
+    keys: set[str] = set(db.keys())
+    for el in equipment_list or []:
+        ek = str(el).strip()
+        if ek:
+            keys.add(ek)
+            pk = _equipment_line_key_to_physical_occupancy_key(ek)
+            if pk:
+                keys.add(pk)
+    for ok in extra_occ_keys or []:
+        o = str(ok).strip()
+        if o:
+            keys.add(o)
+    if not keys:
+        return db
+    for k in keys:
+        db[k] = _merge_machine_calendar_intervals((db.get(k) or []) + gaps)
+    return db
 
 
 def _interactive_trial_relax_team_end_limit_to_eod(
@@ -29912,6 +30056,7 @@ def _generate_plan_impl(
         )
         return
     global _MACHINE_CALENDAR_BLOCKS_BY_DATE
+    global _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE
     global _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE
     global _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE
     global _STAGE2_REGULAR_SHIFT_START
@@ -29930,6 +30075,7 @@ def _generate_plan_impl(
             "機械カレンダー: 読込例外のため、占有なしとして続行しした (%s)", e
         )
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
+        _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = {}
     try:
         _t_ds0 = time_module.perf_counter()
         (
@@ -29977,6 +30123,7 @@ def _generate_plan_impl(
         )
     if interactive_relax_intraday:
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
+        _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = {}
         DEFAULT_START_TIME = time(0, 0)
         DEFAULT_END_TIME = time(23, 59)
         logging.warning(

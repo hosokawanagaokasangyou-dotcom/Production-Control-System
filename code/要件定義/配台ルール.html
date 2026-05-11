@@ -153,9 +153,20 @@
     </div>
   </details>
 
+  <section id="interactive-stage3" class="card" aria-labelledby="h-interactive">
+    <h2 id="h-interactive">インタラクティブ配台試行（段階3）</h2>
+    <p class="queue-note">JavaFX の結果_配台表 JSON を入力とする試行（<span class="file">code/python/dispatch_interactive_trial.py</span>）。実装の正は <span class="file">python/planning_core/_core.py</span>（環境変数 <code>PM_AI_INTERACTIVE_DISPATCH_TRIAL</code>）。</p>
+    <ul>
+      <li><strong>指定数量</strong>: タイムライン上の加工数量は <strong>依頼NO×機械名の合計</strong> が入力 JSON と一致することを検証する（不一致時は <code>PlanningValidationError</code>）。目標メートル未達は <code>dispatch_qty_shortfall</code> で別途一覧。</li>
+      <li><strong>機械カレンダー</strong>（マスタ「機械カレンダー」）: <code>*</code> / <code>＊</code> / <code>※</code> のセルのみ占有（ブロック）。<strong>空セル</strong>は、当該時間に<strong>スロット行（列0）</strong>がある場合に限り配台可能。<strong>シートにスロット行が無い時刻</strong>（工場計画窓内）は配台不可としてブロック。</li>
+      <li><strong>人員不足</strong>: <code>op_shortage</code>（フォーム候補が必要人数に足りない）と <code>as_shortage</code>（候補人数は足りるが組み合わせで割当不可）を区別。</li>
+    </ul>
+  </section>
+
   <nav class="toc" aria-label="目次">
     <strong>目次</strong>
     <ol>
+      <li><a href="#interactive-stage3">インタラクティブ配台試行（段階3）</a></li>
       <li><a href="#rev-2026-03">改定（2026-03）要約</a></li>
       <li><a href="#queue-order">タスクの並び（グローバルキューと日内）</a></li>
       <li><a href="#day-flow">日内割付・環境変数</a></li>
