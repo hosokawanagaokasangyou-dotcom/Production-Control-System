@@ -23689,10 +23689,6 @@ def build_result_dispatch_table_dataframe(
     bound_min: dict[tuple[str, str, date], datetime] = {}
     bound_max: dict[tuple[str, str, date], datetime] = {}
     member_ops: dict[tuple[str, str, date], list[str]] = defaultdict(list)
-    # region agent log
-    _probe_tid_sub = "Y5-25"
-    _y525_ev_probe: dict[tuple[str, str, date], dict] = {}
-    # endregion
     for ev in timeline_events:
         if not _is_machining_timeline_event(ev):
             continue
@@ -23724,23 +23720,6 @@ def build_result_dispatch_table_dataframe(
                     if _lab not in _lst:
                         _lst.append(_lab)
         st0, ed0 = _timeline_event_start_end_dt(ev)
-        # region agent log
-        if _probe_tid_sub in tid:
-            pr = _y525_ev_probe.setdefault(
-                key,
-                {"ev_count": 0, "samples": []},
-            )
-            pr["ev_count"] += 1
-            if len(pr["samples"]) < 8:
-                pr["samples"].append(
-                    {
-                        "op": str(ev.get("op") or ""),
-                        "start_dt": str(ev.get("start_dt") or ""),
-                        "end_dt": str(ev.get("end_dt") or ""),
-                        "ml": ev.get("member_labels"),
-                    }
-                )
-        # endregion
         if st0 is not None:
             prev = bound_min.get(key)
             if prev is None or st0 < prev:
@@ -23817,36 +23796,6 @@ def build_result_dispatch_table_dataframe(
         r["メンバー名"] = "、".join(member_ops.get(row_key, []))
         r["配台日"] = day_k
         r["当日配台数量"] = float(qty_sum)
-        # region agent log
-        if _probe_tid_sub in tid_k:
-            try:
-                import json as _json_dbg
-                from pathlib import Path as _PathDbg
-
-                _log_path = _PathDbg(__file__).resolve().parents[3] / ".cursor" / "debug-41bffb.log"
-                _log_path.parent.mkdir(parents=True, exist_ok=True)
-                _payload = {
-                    "sessionId": "41bffb",
-                    "hypothesisId": "H1-H2-H4",
-                    "location": "planning_core._core.build_result_dispatch_table_dataframe",
-                    "message": "y5-25_dispatch_row",
-                    "timestamp": int(__import__("time").time() * 1000),
-                    "data": {
-                        "tid": tid_k,
-                        "eq": eq_k,
-                        "day": str(day_k),
-                        "bound_min": str(bound_min.get(row_key)),
-                        "bound_max": str(bound_max.get(row_key)),
-                        "fmt_end": r.get("加工終了日時"),
-                        "member_joined": r.get("メンバー名"),
-                        "probe": _y525_ev_probe.get(row_key),
-                    },
-                }
-                with open(_log_path, "a", encoding="utf-8") as _lf:
-                    _lf.write(_json_dbg.dumps(_payload, ensure_ascii=False) + "\n")
-            except Exception:
-                pass
-        # endregion
         rows.append(r)
     return pd.DataFrame(rows, columns=cols)
 
