@@ -2501,6 +2501,9 @@ public final class MainShellController {
             envResetInProgress.set(false);
             suppressEnvSessionPersistence.set(false);
         }
+        // テンプレ再構築だけでは ui_ref 空行等で欠ける場合があるため、工場共有 UNC を確実に入れる
+        // （ポータル版アップ完了時の applyUncNetworkSourceDirDefaults と同趣旨）
+        applyUncNetworkSourceDirDefaults();
         applyRepoFolderPathNormalization();
         if (persistSession) {
             DesktopSessionStateStore.save(collectDesktopSession());
@@ -3065,7 +3068,8 @@ public final class MainShellController {
      * ネットワークソース 2 変数を {@link AppPaths#DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR} /
      * {@link AppPaths#DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR} のリテラルへ書き換える（UNC は {@link Path} 経由にしない）。
      *
-     * <p>環境タブでこの 2 変数をコードから書き換えるのは、ポータル自動バージョンアップ完了時とここだけとする。
+     * <p>環境タブでこの 2 変数をコードから書き換えるのは、ポータル自動バージョンアップ完了時・
+     * {@link #applyEnvRowsFullBundledResetAndPersist(boolean)}（環境変数を初期化）とする。
      */
     private void applyUncNetworkSourceDirDefaults() {
         if (envRows == null) {
@@ -3607,6 +3611,10 @@ public final class MainShellController {
             case AppPaths.KEY_PM_AI_MASTER_WORKBOOK ->
                     AppPaths.resolveMasterWorkbookCandidate(ui).ifPresent(p -> r.setValue(p.toString()));
             case AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET -> r.setValue("1");
+            case AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR ->
+                    r.setValue(AppPaths.DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR);
+            case AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR ->
+                    r.setValue(AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR);
             default -> {
                 /* PM_AI_WORKSPACE stays empty */
                 /* PM_AI_PORTABLE_BUNDLE_SOURCE_DIR は空＝同期しないため、既定は newBootstrapRow のみ */
@@ -3623,9 +3631,11 @@ public final class MainShellController {
             case AppPaths.KEY_PM_AI_REPO_ROOT -> r.setValue(AppPaths.resolveRepoRoot(ui).toString());
             case AppPaths.KEY_PM_AI_CODE_PYTHON_DIR -> r.setValue(AppPaths.resolvePythonScriptDir(ui).toString());
             case AppPaths.KEY_PM_AI_WORKSPACE -> r.setValue("");
-            case AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR -> r.setValue("");
+            case AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR ->
+                    r.setValue(AppPaths.DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR);
             case AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH -> r.setValue("");
-            case AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR -> r.setValue("");
+            case AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR ->
+                    r.setValue(AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR);
             case AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR ->
                     r.setValue(AppPaths.resolveResultDispatchTableDir(ui).toString());
             case AppPaths.KEY_PM_AI_OUTPUT_DIR -> r.setValue(AppPaths.resolveDefaultOutputDir(ui).toString());
