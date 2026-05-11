@@ -535,6 +535,22 @@
     -fx-text-fill: -fx-dark-text-color;
 }
 
+/*
+ * 選択中タブの強調（最上段・入れ子・着色タブ共通）。
+ * pokeShellTabHeaderBackground のインラインは -fx-background-color / -fx-text-fill / -fx-effect しか
+ * 触らないため、border と font-weight を CSS 側で指定すれば着色タブにも乗る。
+ * テーマ CSS は scene 先頭に挿入されるため、本ルール（後発）が同セレクタなら勝つ。
+ */
+.tab-pane > .tab-header-area > .headers-region > .tab:selected {
+    -fx-border-color: -fx-accent;
+    -fx-border-width: 0 0 3 0;
+    -fx-border-insets: 0 0 0 0;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab:selected .tab-label {
+    -fx-font-weight: bold;
+}
+
 /* メインシェル：グループ内の第2段 TabPane */
 .tab-pane.pm-main-shell-inner-tab-pane {
     -fx-padding: 2 0 0 0;
