@@ -38,12 +38,12 @@ def _derive_fernet_key(passphrase: str, salt: bytes, iterations: int) -> bytes:
 
 
 def main() -> int:
-    if sys.version_info < (3, 14):
+    if sys.version_info < (3, 10):
         v = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
         print(
-            "Python 3.14 以上が必要です（現在 "
+            "Python 3.10 以上が必要です（現在 "
             + v
-            + "）。例: py -3.14 encrypt_gemini_credentials.py …",
+            + "）。例: py -3.12 encrypt_gemini_credentials.py …",
             file=sys.stderr,
         )
         return 2
@@ -76,9 +76,9 @@ def main() -> int:
     except ImportError:
         print(
             "cryptography が未インストールです。次を実行してください:\n"
-            "  py -3.14 -m pip install cryptography\n"
+            "  py -m pip install cryptography\n"
             "または:\n"
-            "  py -3.14 -m pip install -r python\\requirements.txt",
+            "  py -m pip install -r python\\requirements.txt",
             file=sys.stderr,
         )
         return 1

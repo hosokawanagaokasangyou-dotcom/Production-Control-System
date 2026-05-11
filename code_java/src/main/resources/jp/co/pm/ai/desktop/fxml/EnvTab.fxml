@@ -39,6 +39,8 @@
                         onAction="#onAddMissingEnvVarsButtonAction"/>
                 <Button fx:id="resetEnvDefaultsButton" mnemonicParsing="false"
                         onAction="#onResetEnvDefaultsButtonAction"/>
+                <Button fx:id="encryptGeminiCredentialsButton" mnemonicParsing="false"
+                        onAction="#onEncryptGeminiCredentialsAction"/>
             </HBox>
         </VBox>
     </center>

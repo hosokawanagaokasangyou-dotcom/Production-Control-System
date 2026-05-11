@@ -2,10 +2,13 @@ package jp.co.pm.ai.desktop;
 
 import java.awt.Desktop;
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javafx.application.Platform;
@@ -16,11 +19,14 @@ import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
+import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TableView;
 import javafx.scene.control.cell.TextFieldTableCell;
@@ -36,6 +42,7 @@ import javafx.util.StringConverter;
 import org.controlsfx.control.table.TableFilter;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.crypto.GeminiCredentialsV2Crypto;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.FileChooserForEnvKey;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
@@ -116,6 +123,9 @@ public final class EnvTabController {
     @FXML
     private Button resetEnvDefaultsButton;
 
+    @FXML
+    private Button encryptGeminiCredentialsButton;
+
     private Stage ownerStage;
     private MainShellController shell;
     private ObservableList<EnvVarRow> envRows;
@@ -144,6 +154,9 @@ public final class EnvTabController {
         delRowButton.setText("行を削除");
         addMissingEnvVarsButton.setText("不足している環境変数を追加");
         resetEnvDefaultsButton.setText("環境変数を初期化");
+        if (encryptGeminiCredentialsButton != null) {
+            encryptGeminiCredentialsButton.setText("Gemini API キーを暗号化保存");
+        }
         wireTable();
     }
 
@@ -529,6 +542,84 @@ public final class EnvTabController {
     @FXML
     private void onClearColumnFiltersAction() {
         clearColumnFiltersAndSort();
+    }
+
+    @FXML
+    private void onEncryptGeminiCredentialsAction() {
+        if (shell == null || ownerStage == null) {
+            return;
+        }
+        Path target = resolveGeminiCredentialsJsonOutputPath();
+        Dialog<String> dialog = new Dialog<>();
+        dialog.initOwner(ownerStage);
+        dialog.setTitle("Gemini 認証 JSON を暗号化保存");
+        Label hint =
+                new Label(
+                        "暗号化は planning_core（Python）と互換の形式です。保存先は GEMINI_CREDENTIALS_JSON が優先、"
+                                + "未設定時はリポジトリ code 配下の gemini_credentials.encrypted.json です。");
+        hint.setWrapText(true);
+        Label pathLab = new Label(target.toString());
+        pathLab.setWrapText(true);
+        PasswordField pf = new PasswordField();
+        pf.setPromptText("Gemini API キー（平文）");
+        VBox box = new VBox(8, hint, new Label("保存先:"), pathLab, new Label("API キー:"), pf);
+        dialog.getDialogPane().setContent(box);
+        dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
+        dialog.setResultConverter(
+                bt -> {
+                    if (bt != ButtonType.OK) {
+                        return null;
+                    }
+                    String t = pf.getText();
+                    return t != null ? t.strip() : "";
+                });
+        Optional<String> opt = dialog.showAndWait();
+        if (opt.isEmpty()) {
+            return;
+        }
+        String apiKey = opt.get();
+        if (apiKey.isEmpty()) {
+            alertFolderOpen(ownerStage, AlertType.WARNING, "API キーが空です。");
+            return;
+        }
+        try {
+            GeminiCredentialsV2Crypto.writeEncryptedCredentials(target, apiKey);
+            alertFolderOpen(
+                    ownerStage,
+                    AlertType.INFORMATION,
+                    "暗号化 JSON を書き込みました。\n" + target);
+        } catch (IllegalArgumentException | IOException | GeneralSecurityException ex) {
+            String msg =
+                    ex.getMessage() != null && !ex.getMessage().isBlank()
+                            ? ex.getMessage()
+                            : ex.getClass().getSimpleName();
+            alertFolderOpen(ownerStage, AlertType.ERROR, "書き込みに失敗しました: " + msg);
+        }
+    }
+
+    /**
+     * {@link AppPaths#KEY_GEMINI_CREDENTIALS_JSON} の値があればそのパス。空ならリポジトリ {@code
+     * code/gemini_credentials.encrypted.json}。
+     */
+    private Path resolveGeminiCredentialsJsonOutputPath() {
+        if (envRows != null) {
+            for (EnvVarRow r : envRows) {
+                String k = r.getName() != null ? r.getName().strip() : "";
+                if (AppPaths.KEY_GEMINI_CREDENTIALS_JSON.equals(k)) {
+                    String v = r.getValue();
+                    if (v != null && !v.isBlank()) {
+                        return Path.of(v.strip()).toAbsolutePath().normalize();
+                    }
+                    break;
+                }
+            }
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        return AppPaths.resolveRepoRoot(ui)
+                .resolve("code")
+                .resolve("gemini_credentials.encrypted.json")
+                .toAbsolutePath()
+                .normalize();
     }
 
     /**
