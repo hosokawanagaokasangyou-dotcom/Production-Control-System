@@ -10,7 +10,7 @@ import java.util.Optional;
 public final class AppVersionInfo {
 
     /** Fallback when version.txt cannot be read (ASCII only: avoids javac errors if source file encoding breaks on Windows). */
-    static final String VERSION_UNKNOWN = "--";
+    public static final String VERSION_UNKNOWN = "--";
 
     private AppVersionInfo() {}
 

@@ -33,6 +33,16 @@
                 <Button fx:id="loadButton" mnemonicParsing="false" onAction="#onLoadAction" text="選択を読み出し"/>
                 <Button fx:id="deleteButton" mnemonicParsing="false" onAction="#onDeleteAction" text="選択を削除"/>
             </HBox>
+            <Separator/>
+            <Label style="-fx-font-weight: bold" text="ファイルとのやり取り"/>
+            <HBox spacing="8.0">
+                <Button mnemonicParsing="false" onAction="#onExportSelectedToFileAction" text="選択をファイルへエクスポート"/>
+                <Button mnemonicParsing="false" onAction="#onExportCurrentToFileAction" text="現在の設定をファイルへエクスポート"/>
+            </HBox>
+            <HBox spacing="8.0">
+                <Button mnemonicParsing="false" onAction="#onImportFromFileApplyAction" text="ファイルから適用"/>
+                <Button mnemonicParsing="false" onAction="#onImportFromFileAddAction" text="ファイルを一覧に追加"/>
+            </HBox>
         </VBox>
     </center>
 </BorderPane>
