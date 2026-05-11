@@ -100,7 +100,7 @@ public final class ResultDispatchTrialPython {
         }
         StringBuilder sb = new StringBuilder();
         if (mergedOut.contains("No module named 'pydantic'")) {
-            sb.append("\n対処: 同梱 Python に依存を入れる。例: \"")
+            sb.append("\n対処: ログ先頭の「Python 実行ファイル」と同じパスに pip install すること（別の python に入れると解消しません）。例: \"")
                     .append(pythonExe)
                     .append("\" -m pip install pydantic\n")
                     .append("またはリポジトリの code/python/requirements.txt を ")
@@ -108,7 +108,8 @@ public final class ResultDispatchTrialPython {
                     .append(pythonExe)
                     .append(
                             "\" -m pip install -r （リポジトリルート）\\\\code\\\\python\\\\requirements.txt で一括。\n")
-                    .append("Windows では scripts/pm_ai_embed_pip_install.ps1 も利用可。\n");
+                    .append("Windows では scripts/pm_ai_embed_pip_install.ps1 も利用可。-PythonExe に上記パスを指定。\n")
+                    .append("環境変数タブの PM_AI_PYTHON が別インタープリターを指していないかも確認してください。\n");
         }
         if (mergedOut.contains("pywin32_bootstrap") || mergedOut.contains("pywin32.pth")) {
             sb.append(

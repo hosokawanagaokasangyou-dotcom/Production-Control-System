@@ -611,6 +611,7 @@ public final class DispatchInteractiveTabController {
         statusLabel.setText("配台試行中...");
         showReloadProgress();
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
+        final Path trialPythonExe = resolvePythonExe();
 
         Stage owner = shell.getPrimaryStage();
         Stage logStage = new Stage();
@@ -632,6 +633,7 @@ public final class DispatchInteractiveTabController {
 
         ObservableList<String> logLines = FXCollections.observableArrayList();
         logLines.add("[配台試行] 処理を開始しました。");
+        logLines.add("[配台試行] Python 実行ファイル: " + trialPythonExe.toAbsolutePath().normalize());
 
         Button copyLogBtn = new Button("ログをコピー");
         copyLogBtn.setTooltip(new Tooltip("ログ一覧の全文をクリップボードにコピーします"));
@@ -832,7 +834,7 @@ public final class DispatchInteractiveTabController {
                 new Task<>() {
                     @Override
                     protected String call() throws Exception {
-                        Path pyExe = resolvePythonExe();
+                        Path pyExe = trialPythonExe;
                         Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
                         Map<String, String> pyEnv = shell.snapshotDispatchTrialPythonEnv();
                         return ResultDispatchTrialPython.runTrial(
