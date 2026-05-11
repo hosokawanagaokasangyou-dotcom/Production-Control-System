@@ -3291,10 +3291,9 @@ public final class MainShellController {
      * pm-ai-data/runtime/python-embed/python.exe} または PATH の {@code python} / {@code python3}）。
      */
     public Path resolveStagePythonExecutablePath(Map<String, String> ui) {
-        return Path.of(
-                firstNonBlank(
-                        ui != null ? ui.get(AppPaths.KEY_PM_AI_PYTHON) : null,
-                        defaultOsPython()));
+        String raw = ui != null ? ui.get(AppPaths.KEY_PM_AI_PYTHON) : null;
+        String normalized = AppPaths.normalizePmAiPythonExecutable(raw);
+        return Path.of(firstNonBlank(normalized, defaultOsPython()));
     }
 
     /** {@link #resolveStagePythonExecutablePath(Map)} を現在の環境変数タブの値で解決する。 */

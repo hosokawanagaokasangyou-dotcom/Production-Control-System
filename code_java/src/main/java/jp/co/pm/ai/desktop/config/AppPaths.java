@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop.config;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -345,6 +346,40 @@ public final class AppPaths {
     /** Result-task column config CSV. */
     public static boolean isCsvFilePathEnvKey(String key) {
         return key != null && KEY_PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV.equals(key.trim());
+    }
+
+    /**
+     * {@code PM_AI_PYTHON} がディレクトリ（例: {@code pm-ai-data/runtime/python-embed}）のみを指しているとき、配下の
+     * {@code python.exe} / {@code python3} / {@code python} に置き換える。{@link ProcessBuilder} は実行ファイルが必要で、
+     * フォルダパスだと Windows でアクセス拒否（CreateProcess error=5）になる。
+     *
+     * @return 実行ファイルの絶対パス。フォルダだがインタプリタが無いときは空（呼び出し側で既定へフォールバック）。
+     */
+    public static String normalizePmAiPythonExecutable(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        String trimmed = raw.strip();
+        Path p;
+        try {
+            p = Path.of(trimmed);
+        } catch (InvalidPathException e) {
+            return trimmed;
+        }
+        try {
+            if (Files.isDirectory(p)) {
+                for (String leaf : List.of("python.exe", "python3", "python")) {
+                    Path cand = p.resolve(leaf);
+                    if (Files.isRegularFile(cand)) {
+                        return cand.toAbsolutePath().normalize().toString();
+                    }
+                }
+                return "";
+            }
+        } catch (SecurityException e) {
+            return trimmed;
+        }
+        return trimmed;
     }
 
     /**

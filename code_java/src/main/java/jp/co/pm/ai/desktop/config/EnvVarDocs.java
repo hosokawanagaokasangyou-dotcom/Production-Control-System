@@ -18,7 +18,8 @@ public final class EnvVarDocs {
     static {
         put(
                 "PM_AI_PYTHON",
-                "段階1/2 等の子プロセスで使う Python 実行ファイル。編集は環境変数タブのみ（実行・ログタブに Python 入力は無い）。"
+                "段階1/2 等の子プロセスで使う Python 実行ファイル（パスは実行ファイル。フォルダのみ指定すると実行時に python.exe 等へ補正）。"
+                        + "編集は環境変数タブのみ（実行・ログタブに Python 入力は無い）。"
                         + "値が空のときは pm-ai-data/runtime/python-embed/python.exe（存在時）または PATH の python/python3。"
                         + "環境変数タブを空にしても動くのはこのフォールバックのため。"
                         + "初期化・空欄補完では同梱 embed があればその絶対パスが既定値として入る（無いときは PATH の python/python3）。");

@@ -359,4 +359,31 @@ class AppPathsTest {
                 AppPaths.normalizeFolderEnvValue(ui, AppPaths.KEY_PM_AI_OUTPUT_DIR, "../outside");
         assertFalse(n.isPresent());
     }
+
+    @Test
+    void normalizePmAiPythonExecutable_folderResolvesToPythonExe(@TempDir Path tmp) throws IOException {
+        Path embed = tmp.resolve("python-embed");
+        Files.createDirectories(embed);
+        Path exe = embed.resolve("python.exe");
+        Files.createFile(exe);
+        assertEquals(
+                exe.toAbsolutePath().normalize().toString(),
+                AppPaths.normalizePmAiPythonExecutable(embed.toString()));
+    }
+
+    @Test
+    void normalizePmAiPythonExecutable_plainExePathUnchanged(@TempDir Path tmp) throws IOException {
+        Path exe = tmp.resolve("python.exe");
+        Files.createFile(exe);
+        String s = exe.toAbsolutePath().normalize().toString();
+        assertEquals(s, AppPaths.normalizePmAiPythonExecutable(s));
+    }
+
+    @Test
+    void normalizePmAiPythonExecutable_folderWithoutInterpreterReturnsEmpty(@TempDir Path tmp)
+            throws IOException {
+        Path embed = tmp.resolve("python-embed");
+        Files.createDirectories(embed);
+        assertEquals("", AppPaths.normalizePmAiPythonExecutable(embed.toString()));
+    }
 }
