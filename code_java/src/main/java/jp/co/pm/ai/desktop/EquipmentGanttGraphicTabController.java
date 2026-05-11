@@ -23,6 +23,7 @@ import javafx.scene.input.ScrollEvent;
 import javafx.scene.control.Accordion;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ColorPicker;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Slider;
@@ -34,6 +35,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.util.Duration;
 import javafx.util.StringConverter;
@@ -216,7 +218,10 @@ public final class EquipmentGanttGraphicTabController {
     private Label graphicPersonBadgeBandVerticalOffsetLabel;
 
     @FXML
-    private TextField graphicPersonBadgeWireColorField;
+    private CheckBox graphicPersonBadgeWireThemeColorCheckBox;
+
+    @FXML
+    private ColorPicker graphicPersonBadgeWireColorPicker;
 
     @FXML
     private Slider graphicPersonBadgeWireWidthSlider;
@@ -455,16 +460,37 @@ public final class EquipmentGanttGraphicTabController {
                     },
                     graphicCommitted);
         }
-        if (graphicPersonBadgeWireColorField != null) {
-            graphicPersonBadgeWireColorField
-                    .focusedProperty()
+        if (graphicPersonBadgeWireThemeColorCheckBox != null) {
+            graphicPersonBadgeWireThemeColorCheckBox
+                    .selectedProperty()
                     .addListener(
-                            (o, was, now) -> {
-                                if (!now && Boolean.TRUE.equals(was)) {
+                            (o, a, b) -> {
+                                updateWireColorPickerDisabledFromThemeToggle();
+                                if (!suppressGraphicRebuild) {
                                     graphicCommitted.run();
                                 }
                             });
         }
+        if (graphicPersonBadgeWireColorPicker != null) {
+            graphicPersonBadgeWireColorPicker
+                    .valueProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (!suppressGraphicRebuild) {
+                                    graphicCommitted.run();
+                                }
+                            });
+        }
+        updateWireColorPickerDisabledFromThemeToggle();
+    }
+
+    /** テーマ色モードのときはパレットを無効化（保存は空文字＝レンダラ側でテーマ色）。 */
+    private void updateWireColorPickerDisabledFromThemeToggle() {
+        if (graphicPersonBadgeWireColorPicker == null || graphicPersonBadgeWireThemeColorCheckBox == null) {
+            return;
+        }
+        graphicPersonBadgeWireColorPicker.setDisable(
+                graphicPersonBadgeWireThemeColorCheckBox.isSelected());
     }
 
     private static String formatPersonBadgeWireWidthLabel(double sliderValue) {
@@ -586,9 +612,23 @@ public final class EquipmentGanttGraphicTabController {
         if (personBadgeWireShowCheckBox != null) {
             personBadgeWireShowCheckBox.setSelected(s.equipmentGanttPersonBadgeWireEnabled());
         }
-        if (graphicPersonBadgeWireColorField != null) {
-            graphicPersonBadgeWireColorField.setText(s.equipmentGanttPersonBadgeWireStrokeHex());
+        String wireHex = s.equipmentGanttPersonBadgeWireStrokeHex();
+        boolean wireTheme = wireHex == null || wireHex.isBlank();
+        if (graphicPersonBadgeWireThemeColorCheckBox != null) {
+            graphicPersonBadgeWireThemeColorCheckBox.setSelected(wireTheme);
         }
+        if (graphicPersonBadgeWireColorPicker != null) {
+            if (!wireTheme) {
+                try {
+                    graphicPersonBadgeWireColorPicker.setValue(Color.web(wireHex.strip()));
+                } catch (IllegalArgumentException | NullPointerException ignored) {
+                    graphicPersonBadgeWireColorPicker.setValue(Color.web("#64748b"));
+                }
+            } else {
+                graphicPersonBadgeWireColorPicker.setValue(Color.web("#64748b"));
+            }
+        }
+        updateWireColorPickerDisabledFromThemeToggle();
         if (graphicPersonBadgeWireWidthSlider != null) {
             double ww = s.equipmentGanttPersonBadgeWireWidthPx();
             if (!Double.isFinite(ww) || ww <= 1e-6) {
@@ -744,11 +784,28 @@ public final class EquipmentGanttGraphicTabController {
     }
 
     String snapshotEquipmentGanttPersonBadgeWireStrokeHex() {
-        if (graphicPersonBadgeWireColorField == null) {
+        if (graphicPersonBadgeWireThemeColorCheckBox != null
+                && graphicPersonBadgeWireThemeColorCheckBox.isSelected()) {
             return "";
         }
-        String t = graphicPersonBadgeWireColorField.getText();
-        return t != null ? t.strip() : "";
+        if (graphicPersonBadgeWireColorPicker == null) {
+            return "";
+        }
+        Color c = graphicPersonBadgeWireColorPicker.getValue();
+        return c != null ? formatWireColorToWebHex(c) : "";
+    }
+
+    /** ColorPicker の値をセッション用の #RRGGBB / #RRGGBBAA に変換する。 */
+    private static String formatWireColorToWebHex(Color c) {
+        int r = (int) Math.round(c.getRed() * 255);
+        int g = (int) Math.round(c.getGreen() * 255);
+        int b = (int) Math.round(c.getBlue() * 255);
+        double op = c.getOpacity();
+        if (op >= 1.0 - 1e-3) {
+            return String.format("#%02x%02x%02x", r, g, b);
+        }
+        int a = (int) Math.round(op * 255);
+        return String.format("#%02x%02x%02x%02x", r, g, b, a);
     }
 
     double snapshotEquipmentGanttPersonBadgeWireWidthPx() {

@@ -7,6 +7,7 @@
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.TitledPane?>
+<?import javafx.scene.control.ColorPicker?>
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Slider?>
 <?import javafx.scene.layout.BorderPane?>
@@ -110,8 +111,11 @@
                             </HBox>
                             <HBox alignment="CENTER_LEFT" spacing="8.0">
                                 <Label prefWidth="156.0" text="ワイヤー色"/>
-                                <TextField fx:id="graphicPersonBadgeWireColorField" prefWidth="148.0"
-                                           promptText="#空欄でテーマ色"/>
+                                <CheckBox fx:id="graphicPersonBadgeWireThemeColorCheckBox"
+                                          mnemonicParsing="false" selected="true"
+                                          text="テーマに合わせる"/>
+                                <ColorPicker fx:id="graphicPersonBadgeWireColorPicker"
+                                             prefWidth="148.0"/>
                             </HBox>
                             <HBox alignment="CENTER_LEFT" spacing="8.0">
                                 <Label prefWidth="156.0" text="ワイヤー太さ"/>
