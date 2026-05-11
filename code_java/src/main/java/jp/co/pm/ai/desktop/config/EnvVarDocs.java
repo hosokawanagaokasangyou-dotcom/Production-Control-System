@@ -22,7 +22,8 @@ public final class EnvVarDocs {
                         + "編集は環境変数タブのみ（実行・ログタブに Python 入力は無い）。"
                         + "値が空のときは pm-ai-data/runtime/python-embed/python.exe（存在時）または PATH の python/python3。"
                         + "環境変数タブを空にしても動くのはこのフォールバックのため。"
-                        + "初期化・空欄補完では同梱 embed があればその絶対パスが既定値として入る（無いときは PATH の python/python3）。");
+                        + "初期化・空欄補完ではポータル配布なら pm-ai-data/runtime/python-embed/python.exe をインストール根からの相対パスで入れる。"
+                        + "開発などでは同梱 exe が取れたら絶対パス、無ければ PATH の python/python3。");
         put(
                 "PM_AI_CODE_PYTHON_DIR",
                 "スクリプト根（task_extract_stage1.py 等）。"

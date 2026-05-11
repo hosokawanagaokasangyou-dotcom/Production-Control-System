@@ -3268,8 +3268,8 @@ public final class MainShellController {
     /**
      * 同梱 Python embed または PATH 上のコマンド。{@code pm-ai-data/runtime/python-embed/python.exe} が存在すれば絶対パスを返す。
      *
-     * <p>環境変数タブのブートストラップ既定（初期化・空欄補完）もこの戻り値を使い、ポータル配布では {@code PM_AI_PYTHON} に
-     * embed パスが入る。無い場合のみ {@link #defaultPythonCommandForEnvBootstrap()}。
+     * <p>子プロセス起動のフォールバック（値未設定時）に使う。ブートストラップ表示は {@link
+     * #defaultPmAiPythonForBootstrap(Map)}。無い場合のみ {@link #defaultPythonCommandForEnvBootstrap()}。
      */
     private static String defaultOsPython() {
         Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
@@ -3282,6 +3282,19 @@ public final class MainShellController {
             return bundledWin.toAbsolutePath().normalize().toString();
         }
         return defaultPythonCommandForEnvBootstrap();
+    }
+
+    /**
+     * 環境変数初期化・空欄補完用の {@code PM_AI_PYTHON}。ポータル配布（{@link PortableBundleSelfUpdater#isPortableBundleLayout}
+     * が真）はインストール根（{@code user.dir}）からの相対パス {@code pm-ai-data/runtime/python-embed/python.exe} を返す。
+     * それ以外は {@link #defaultOsPython()}。
+     */
+    private static String defaultPmAiPythonForBootstrap() {
+        Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
+        if (PortableBundleSelfUpdater.isPortableBundleLayout(cwd)) {
+            return Path.of("pm-ai-data", "runtime", "python-embed", "python.exe").toString();
+        }
+        return defaultOsPython();
     }
 
     /**
@@ -3636,7 +3649,7 @@ public final class MainShellController {
         }
         switch (k) {
             case AppPaths.KEY_PM_AI_PYTHON -> {
-                return defaultOsPython();
+                return defaultPmAiPythonForBootstrap();
             }
             case AppPaths.KEY_PM_AI_REPO_ROOT -> {
                 return AppPaths.resolveRepoRoot(u).toString();
