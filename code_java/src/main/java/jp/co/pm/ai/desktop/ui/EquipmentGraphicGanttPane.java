@@ -53,13 +53,12 @@ import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.EquipmentGanttBadgeDragDelta;
 import java.util.function.Function;
 
-import javafx.animation.PauseTransition;
+import javafx.animation.AnimationTimer;
 import javafx.application.Platform;
 import javafx.geometry.BoundingBox;
 import javafx.geometry.Bounds;
 import javafx.geometry.Point2D;
 import javafx.scene.Node;
-import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
@@ -1082,7 +1081,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
         final LayoutMetrics layoutViewport = layout;
 
-        PauseTransition viewportRepaintDebounce = new PauseTransition(Duration.millis(16));
+        /*
+         * スクロール由来の再描画は PauseTransition ではなく AnimationTimer でフレームに合わせて共通化する。
+         * pending を立てて timer を start し、handle で 1 回だけ paint したら stop してアイドル時はパルスを消費しない。
+         */
+        final boolean[] viewportRepaintPending = {false};
         Runnable paintTimelineViewport =
                 () -> {
                     long t0Ns = System.nanoTime();
@@ -1139,11 +1142,23 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                         + viewportRowSpecs.size());
                     }
                 };
-        viewportRepaintDebounce.setOnFinished(e -> paintTimelineViewport.run());
+        AnimationTimer viewportRepaintFrameTimer =
+                new AnimationTimer() {
+                    @Override
+                    public void handle(long now) {
+                        if (!viewportRepaintPending[0]) {
+                            stop();
+                            return;
+                        }
+                        viewportRepaintPending[0] = false;
+                        paintTimelineViewport.run();
+                        stop();
+                    }
+                };
         Runnable scheduleViewportRepaint =
                 () -> {
-                    viewportRepaintDebounce.stop();
-                    viewportRepaintDebounce.playFromStart();
+                    viewportRepaintPending[0] = true;
+                    viewportRepaintFrameTimer.start();
                 };
         rightBodyScroll.hvalueProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
         rightBodyScroll.vvalueProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
