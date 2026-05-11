@@ -232,6 +232,12 @@ public final class EquipmentGanttGraphicTabController {
     @FXML
     private ComboBox<EquipmentGanttPersonBadgeWireDashStyle> graphicPersonBadgeWireDashCombo;
 
+    @FXML
+    private Slider graphicPersonBadgeWireMaxLengthSlider;
+
+    @FXML
+    private Label graphicPersonBadgeWireMaxLengthLabel;
+
     /** 日付列幅スライダー上限（px）。0 は自動計測 */
     private static final double DATE_COL_WIDTH_SLIDER_MAX = 220;
 
@@ -244,6 +250,10 @@ public final class EquipmentGanttGraphicTabController {
     /** ワイヤー太さスライダー上限（px）。{@link DesktopSessionState#MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX} と整合 */
     private static final double WIRE_WIDTH_SLIDER_MAX =
             DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX;
+
+    /** ワイヤー長上限スライダー（px）。{@link DesktopSessionState#MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX} と整合 */
+    private static final double WIRE_MAX_LENGTH_SLIDER_MAX =
+            DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX;
 
     private static final double SHIFT_WHEEL_H_SCROLL_MAX = 1000;
 
@@ -460,6 +470,19 @@ public final class EquipmentGanttGraphicTabController {
                     },
                     graphicCommitted);
         }
+        if (graphicPersonBadgeWireMaxLengthSlider != null) {
+            graphicPersonBadgeWireMaxLengthSlider.setMax(WIRE_MAX_LENGTH_SLIDER_MAX);
+            SliderCommittedChangeSupport.install(
+                    graphicPersonBadgeWireMaxLengthSlider,
+                    () -> {
+                        if (graphicPersonBadgeWireMaxLengthLabel != null) {
+                            graphicPersonBadgeWireMaxLengthLabel.setText(
+                                    formatPersonBadgeWireMaxLengthLabel(
+                                            graphicPersonBadgeWireMaxLengthSlider.getValue()));
+                        }
+                    },
+                    graphicCommitted);
+        }
         if (graphicPersonBadgeWireThemeColorCheckBox != null) {
             graphicPersonBadgeWireThemeColorCheckBox
                     .selectedProperty()
@@ -498,6 +521,13 @@ public final class EquipmentGanttGraphicTabController {
             return "自動";
         }
         return String.format("%.2fpx", sliderValue);
+    }
+
+    private static String formatPersonBadgeWireMaxLengthLabel(double sliderValue) {
+        if (!Double.isFinite(sliderValue) || sliderValue < 0.5) {
+            return "無制限";
+        }
+        return String.format("%.0fpx", sliderValue);
     }
 
     private void populateEquipmentGraphicBarFontComboItems() {
@@ -647,6 +677,20 @@ public final class EquipmentGanttGraphicTabController {
                     EquipmentGanttPersonBadgeWireDashStyle.fromStored(
                             s.equipmentGanttPersonBadgeWireDashStyleKey());
             graphicPersonBadgeWireDashCombo.getSelectionModel().select(d);
+        }
+        if (graphicPersonBadgeWireMaxLengthSlider != null) {
+            double wMax = s.equipmentGanttPersonBadgeWireMaxLengthPx();
+            if (!Double.isFinite(wMax) || wMax < 0) {
+                graphicPersonBadgeWireMaxLengthSlider.setValue(0d);
+            } else {
+                graphicPersonBadgeWireMaxLengthSlider.setValue(
+                        Math.min(wMax, WIRE_MAX_LENGTH_SLIDER_MAX));
+            }
+            if (graphicPersonBadgeWireMaxLengthLabel != null) {
+                graphicPersonBadgeWireMaxLengthLabel.setText(
+                        formatPersonBadgeWireMaxLengthLabel(
+                                graphicPersonBadgeWireMaxLengthSlider.getValue()));
+            }
         }
         double bgap = s.equipmentGanttPersonBadgeGapPx();
         if (graphicPersonBadgeGapSlider != null) {
@@ -827,6 +871,17 @@ public final class EquipmentGanttGraphicTabController {
         return sel != null
                 ? sel.storedKey()
                 : DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_DASH_STYLE_KEY;
+    }
+
+    double snapshotEquipmentGanttPersonBadgeWireMaxLengthPx() {
+        if (graphicPersonBadgeWireMaxLengthSlider == null) {
+            return DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX;
+        }
+        double v = graphicPersonBadgeWireMaxLengthSlider.getValue();
+        if (!Double.isFinite(v) || v < 0) {
+            return DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX;
+        }
+        return Math.min(v, WIRE_MAX_LENGTH_SLIDER_MAX);
     }
 
     double snapshotEquipmentGanttPersonBadgeGapPx() {
@@ -1226,6 +1281,7 @@ public final class EquipmentGanttGraphicTabController {
                         snapshotEquipmentGanttPersonBadgeWireStrokeHex(),
                         snapshotEquipmentGanttPersonBadgeWireWidthPx(),
                         snapshotEquipmentGanttPersonBadgeWireDashStyleKey(),
+                        snapshotEquipmentGanttPersonBadgeWireMaxLengthPx(),
                         snapshotEquipmentGanttPersonBadgeWireEnabled());
         if (Boolean.getBoolean("pm.ai.gantt.profile")) {
             long ms = (System.nanoTime() - buildT0) / 1_000_000L;

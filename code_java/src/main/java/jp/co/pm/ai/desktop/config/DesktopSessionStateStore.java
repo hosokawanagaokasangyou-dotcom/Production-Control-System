@@ -347,6 +347,7 @@ public final class DesktopSessionStateStore {
                         "equipmentGanttPersonBadgeWireWidthPx",
                         DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX),
                 text(root, "equipmentGanttPersonBadgeWireDashStyleKey"),
+                loadEquipmentGanttPersonBadgeWireMaxLengthPx(root),
                 text(root, "equipmentGanttPersonBadgeFontFamily"),
                 optionalDouble(root, "equipmentGanttPersonBadgeFontPercent", 0d),
                 text(root, "equipmentGanttPersonBadgeFillHex"),
@@ -694,6 +695,18 @@ public final class DesktopSessionStateStore {
                 DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX);
     }
 
+    private static double loadEquipmentGanttPersonBadgeWireMaxLengthPx(JsonNode root) {
+        double v =
+                optionalDouble(
+                        root,
+                        "equipmentGanttPersonBadgeWireMaxLengthPx",
+                        DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX);
+        if (!Double.isFinite(v) || v < 0) {
+            return DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX;
+        }
+        return Math.min(v, DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX);
+    }
+
     /**
      * 旧「重なり量 0〜80%」を、おおよそ同程度の疎さになるよう固定間隔（px）に変換する移行用。
      */
@@ -822,6 +835,14 @@ public final class DesktopSessionStateStore {
                 dashKey != null && !dashKey.isBlank()
                         ? dashKey.strip()
                         : DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_DASH_STYLE_KEY);
+        double wMaxLen = state.equipmentGanttPersonBadgeWireMaxLengthPx();
+        if (Double.isFinite(wMaxLen) && wMaxLen >= 0) {
+            root.put(
+                    "equipmentGanttPersonBadgeWireMaxLengthPx",
+                    Math.min(
+                            wMaxLen,
+                            DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX));
+        }
         put(root, "equipmentGanttPersonBadgeFontFamily", state.equipmentGanttPersonBadgeFontFamily());
         double bpf = state.equipmentGanttPersonBadgeFontPercent();
         if (Double.isFinite(bpf) && bpf > 0 && bpf <= 300) {

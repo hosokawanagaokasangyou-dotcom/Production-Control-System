@@ -129,6 +129,14 @@
                                 <ComboBox fx:id="graphicPersonBadgeWireDashCombo" prefWidth="120.0"/>
                             </HBox>
                             <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="156.0" text="ワイヤー最大長"/>
+                                <Slider fx:id="graphicPersonBadgeWireMaxLengthSlider"
+                                        blockIncrement="10.0" majorTickUnit="200.0" max="1200.0"
+                                        min="0.0" prefWidth="96.0" showTickLabels="false"
+                                        showTickMarks="false" value="0.0"/>
+                                <Label fx:id="graphicPersonBadgeWireMaxLengthLabel" text="無制限"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
                                 <Label prefWidth="156.0" text="日付列幅"/>
                                 <Slider fx:id="graphicDateColSlider" blockIncrement="1.0"
                                         max="220.0" min="0.0" prefWidth="88.0"

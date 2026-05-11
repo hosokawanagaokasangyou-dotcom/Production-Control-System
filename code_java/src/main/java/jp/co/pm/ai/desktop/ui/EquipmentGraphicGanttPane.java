@@ -492,6 +492,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_STROKE_HEX,
                 DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX,
                 DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_DASH_STYLE_KEY,
+                DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX,
                 DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_ENABLED);
     }
 
@@ -540,6 +541,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_STROKE_HEX,
                 DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX,
                 DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_DASH_STYLE_KEY,
+                DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX,
                 DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_ENABLED);
     }
 
@@ -561,6 +563,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      * @param personBadgeWireStrokeHexOrEmpty ワイヤー色（#RRGGBB、空はテーマのバー枠色）
      * @param personBadgeWireWidthPxOrZero {@code 0} または非正でズーム連動の既定太さ
      * @param personBadgeWireDashStyleKeyOrEmpty {@link EquipmentGanttPersonBadgeWireDashStyle} の名前（空は SOLID）
+     * @param personBadgeWireMaxLengthPxOrZero バッジ中心とバーアンカー間のワイヤー長上限（px）。{@code 0} または非正は無制限
      * @param showPersonBadgeWires 担当バッジとチャートバーをワイヤーで結ぶ（{@code showPersonBadges} が false のとき無効）
      */
     public static BorderPane build(
@@ -588,6 +591,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             String personBadgeWireStrokeHexOrEmpty,
             double personBadgeWireWidthPxOrZero,
             String personBadgeWireDashStyleKeyOrEmpty,
+            double personBadgeWireMaxLengthPxOrZero,
             boolean showPersonBadgeWires) {
         BorderPane root = new BorderPane();
         root.setCache(false);
@@ -685,6 +689,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         PersonBadgeWirePaint personBadgeWirePaint =
                 new PersonBadgeWirePaint(wireColorResolved, wireWidthResolved, wireDashResolved);
         boolean personBadgeWiresEffective = showPersonBadges && showPersonBadgeWires;
+
+        double personBadgeWireMaxLengthPxEff = personBadgeWireMaxLengthPxOrZero;
+        if (!Double.isFinite(personBadgeWireMaxLengthPxEff) || personBadgeWireMaxLengthPxEff < 0d) {
+            personBadgeWireMaxLengthPxEff = 0d;
+        } else {
+            personBadgeWireMaxLengthPxEff =
+                    Math.min(
+                            personBadgeWireMaxLengthPxEff,
+                            DesktopSessionState.MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX);
+        }
 
         List<MachineColumnPlan> machPlans =
                 computeMachineColumnPlans(effCols, parsed.displayRows());
@@ -923,7 +937,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         dragEff,
                         personBadgeDragDeltaSink,
                         personBadgeWiresEffective,
-                        personBadgeWiresEffective ? personBadgeWirePaint : null);
+                        personBadgeWiresEffective ? personBadgeWirePaint : null,
+                        personBadgeWireMaxLengthPxEff);
                 /*
                  * 帯内クランプ（clampBadgeLayoutYInBand）がスタック高≧帯のときオフセットを打ち消すため、
                  * レイアウト後にオーバーレイPaneへ縦移動だけ適用する。
@@ -1880,7 +1895,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             Map<String, EquipmentGanttBadgeDragDelta> dragDeltas,
             BiConsumer<String, EquipmentGanttBadgeDragDelta> dragDeltaSink,
             boolean personBadgeWiresEnabled,
-            PersonBadgeWirePaint wirePaintOrNull) {
+            PersonBadgeWirePaint wirePaintOrNull,
+            double personBadgeWireMaxLengthPxOrZero) {
         if (overlay == null
                 || styleForLabel == null
                 || badgeSlotTexts == null
@@ -2071,6 +2087,20 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     }
                     lx = clampBadgeLayoutX(lx, cb, timelinePaneWidth);
                     lyUse = clampBadgeLayoutYInBand(lyUse, cb, barTop, badgeClampBottom);
+                    if (wireThisRun && personBadgeWireMaxLengthPxOrZero > 1e-6) {
+                        double[] wxy =
+                                clampBadgeLayoutToWireMaxLength(
+                                        lx,
+                                        lyUse,
+                                        cb,
+                                        anchorX,
+                                        anchorY,
+                                        personBadgeWireMaxLengthPxOrZero);
+                        lx = wxy[0];
+                        lyUse = wxy[1];
+                        lx = clampBadgeLayoutX(lx, cb, timelinePaneWidth);
+                        lyUse = clampBadgeLayoutYInBand(lyUse, cb, barTop, badgeClampBottom);
+                    }
                     sp.setLayoutX(lx);
                     sp.setLayoutY(lyUse);
                     Line wireLine = null;
@@ -2101,7 +2131,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 defaultLayoutX,
                                 defaultLayoutY,
                                 badgeKey,
-                                dragDeltaSink);
+                                dragDeltaSink,
+                                wireThisRun ? anchorX : 0d,
+                                wireThisRun ? anchorY : 0d,
+                                wireThisRun ? personBadgeWireMaxLengthPxOrZero : 0d);
                     }
                     double advance = stepW + gapPx;
                     xVis = visualLeft + advance;
@@ -2217,7 +2250,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double defaultLayoutX,
             double defaultLayoutY,
             String badgeKey,
-            BiConsumer<String, EquipmentGanttBadgeDragDelta> dragDeltaSink) {
+            BiConsumer<String, EquipmentGanttBadgeDragDelta> dragDeltaSink,
+            double wireAnchorX,
+            double wireAnchorY,
+            double personBadgeWireMaxLengthPxOrZero) {
         final double[] press = new double[4];
         final boolean[] dragged = {false};
         final boolean[] armed = {false};
@@ -2295,6 +2331,20 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     double nx = clampBadgeLayoutX(press[2] + dx, local, paneWidth);
                     double ny =
                             clampBadgeLayoutYInBand(press[3] + dy, local, bandTop, bandBottom);
+                    if (personBadgeWireMaxLengthPxOrZero > 1e-6) {
+                        double[] wxy =
+                                clampBadgeLayoutToWireMaxLength(
+                                        nx,
+                                        ny,
+                                        local,
+                                        wireAnchorX,
+                                        wireAnchorY,
+                                        personBadgeWireMaxLengthPxOrZero);
+                        nx = wxy[0];
+                        ny = wxy[1];
+                        nx = clampBadgeLayoutX(nx, local, paneWidth);
+                        ny = clampBadgeLayoutYInBand(ny, local, bandTop, bandBottom);
+                    }
                     sp.setLayoutX(nx);
                     sp.setLayoutY(ny);
                     e.consume();
@@ -2399,6 +2449,42 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             ly += bandTop - top;
         }
         return ly;
+    }
+
+    /**
+     * バッジ論理中心とワイヤー始点（バー中心）の距離が {@code maxLenPx} を超えないよう layoutX/Y を縮める。
+     * {@code maxLenPx} が非正または非有限のときは何もしない。
+     */
+    private static double[] clampBadgeLayoutToWireMaxLength(
+            double layoutX,
+            double layoutY,
+            Bounds cb,
+            double anchorX,
+            double anchorY,
+            double maxLenPx) {
+        if (cb == null
+                || !Double.isFinite(maxLenPx)
+                || maxLenPx <= 1e-6
+                || !Double.isFinite(anchorX)
+                || !Double.isFinite(anchorY)) {
+            return new double[] {layoutX, layoutY};
+        }
+        double halfW = cb.getWidth() <= 1e-9 ? 0 : cb.getWidth() / 2;
+        double halfH = cb.getHeight() <= 1e-9 ? 0 : cb.getHeight() / 2;
+        double cx = layoutX + cb.getMinX() + halfW;
+        double cy = layoutY + cb.getMinY() + halfH;
+        double dx = cx - anchorX;
+        double dy = cy - anchorY;
+        double dist = Math.hypot(dx, dy);
+        if (dist <= maxLenPx + 1e-6) {
+            return new double[] {layoutX, layoutY};
+        }
+        double scale = maxLenPx / dist;
+        double ncx = anchorX + dx * scale;
+        double ncy = anchorY + dy * scale;
+        double nlx = ncx - cb.getMinX() - halfW;
+        double nly = ncy - cb.getMinY() - halfH;
+        return new double[] {nlx, nly};
     }
 
     private static void drawTimelineRow(

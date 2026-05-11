@@ -55,6 +55,7 @@ import java.util.Map;
  * @param equipmentGanttPersonBadgeWireStrokeHex ワイヤー色（#RRGGBB / #RRGGBBAA、空はテーマのバー枠色＋既定不透明度）
  * @param equipmentGanttPersonBadgeWireWidthPx ワイヤー太さ（px、{@code 0} または非正はズームに応じた自動）
  * @param equipmentGanttPersonBadgeWireDashStyleKey 線種（{@code SOLID}|{@code DASHED}|{@code DOTTED}|{@code DASH_DOT}、空は SOLID）
+ * @param equipmentGanttPersonBadgeWireMaxLengthPx バッジ中心とバーアンカー間のワイヤー長の上限（px）。{@code 0} は無制限
  * @param equipmentGanttPersonBadgeFontFamily バッジ文字フォント（空は既定ファミリ）
  * @param equipmentGanttPersonBadgeFontPercent バッジ文字サイズ（行ラベル基準の%、0 は未保存として既定 85）
  * @param equipmentGanttPersonBadgeFillHex バッジ背景色（#RRGGBB）
@@ -126,6 +127,7 @@ public record DesktopSessionState(
         String equipmentGanttPersonBadgeWireStrokeHex,
         double equipmentGanttPersonBadgeWireWidthPx,
         String equipmentGanttPersonBadgeWireDashStyleKey,
+        double equipmentGanttPersonBadgeWireMaxLengthPx,
         String equipmentGanttPersonBadgeFontFamily,
         double equipmentGanttPersonBadgeFontPercent,
         String equipmentGanttPersonBadgeFillHex,
@@ -185,6 +187,14 @@ public record DesktopSessionState(
 
     public static final String DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_DASH_STYLE_KEY = "SOLID";
 
+    /**
+     * ワイヤー長上限の既定（px）。{@code 0} は無制限（バッジをバーから離してもクランプしない）。
+     */
+    public static final double DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX = 0d;
+
+    /** UI スライダーおよび保存値のワイヤー長上限（px）。 */
+    public static final double MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX = 1200d;
+
     public DesktopSessionState {
         equipmentGanttPersonBadgeStylesByLabel =
                 equipmentGanttPersonBadgeStylesByLabel == null || equipmentGanttPersonBadgeStylesByLabel.isEmpty()
@@ -225,6 +235,13 @@ public record DesktopSessionState(
                 equipmentGanttPersonBadgeWireDashStyleKey != null
                         ? equipmentGanttPersonBadgeWireDashStyleKey.strip()
                         : "";
+        equipmentGanttPersonBadgeWireMaxLengthPx =
+                Double.isFinite(equipmentGanttPersonBadgeWireMaxLengthPx)
+                                && equipmentGanttPersonBadgeWireMaxLengthPx >= 0
+                        ? Math.min(
+                                equipmentGanttPersonBadgeWireMaxLengthPx,
+                                MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX)
+                        : DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX;
     }
 
     /**
@@ -326,6 +343,7 @@ public record DesktopSessionState(
                 DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_STROKE_HEX,
                 DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_WIDTH_PX,
                 DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_DASH_STYLE_KEY,
+                DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX,
                 "",
                 d.fontPercent(),
                 d.fillHex(),
@@ -403,6 +421,7 @@ public record DesktopSessionState(
                 equipmentGanttPersonBadgeWireStrokeHex(),
                 equipmentGanttPersonBadgeWireWidthPx(),
                 equipmentGanttPersonBadgeWireDashStyleKey(),
+                equipmentGanttPersonBadgeWireMaxLengthPx(),
                 equipmentGanttPersonBadgeFontFamily(),
                 equipmentGanttPersonBadgeFontPercent(),
                 equipmentGanttPersonBadgeFillHex(),

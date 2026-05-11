@@ -772,6 +772,7 @@ public final class MainShellController {
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttPersonBadgeWireStrokeHex(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttPersonBadgeWireWidthPx(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttPersonBadgeWireDashStyleKey(),
+                equipmentGanttGraphicTabController.snapshotEquipmentGanttPersonBadgeWireMaxLengthPx(),
                 snapshotPersonBadgeFontFamily(),
                 snapshotPersonBadgeFontPercent(),
                 snapshotPersonBadgeFillHex(),
