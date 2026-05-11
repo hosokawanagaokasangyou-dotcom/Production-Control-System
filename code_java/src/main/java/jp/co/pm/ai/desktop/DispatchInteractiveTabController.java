@@ -1209,6 +1209,11 @@ public final class DispatchInteractiveTabController {
     }
 
     private FullGridRebuild buildFullGridRebuild() {
+        ResultDispatchPivot.mergeDispatchRowsByWideIdentity(
+                doc.columns(),
+                doc.rows(),
+                ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+        ResultDispatchNormalizer.normalizeInPlace(doc.columns(), doc.rows());
         List<LocalDate> axis = axisForRebuild();
         WideGridBundle wide = buildWideGridModel(axis);
         ByDayGridBundle byDay = buildByDayGridModel(axis);
@@ -1386,7 +1391,11 @@ public final class DispatchInteractiveTabController {
         List<Map<String, String>> profiles = new ArrayList<>();
         List<WideRow> rowItems = new ArrayList<>();
         List<String> cols = doc.columns();
-        profiles.addAll(ResultDispatchPivot.distinctTaskProfiles(cols, doc.rows()));
+        profiles.addAll(
+                ResultDispatchPivot.distinctWideTaskProfiles(
+                        cols,
+                        doc.rows(),
+                        ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS));
         profiles.sort(
                 Comparator.comparing(DispatchInteractiveTabController::parseTrialOrderKey)
                         .thenComparing(p -> ResultDispatchNormalizer.staticGroupKey(cols, p)));
@@ -1421,8 +1430,11 @@ public final class DispatchInteractiveTabController {
             WideRow wr = new WideRow(profile, axis.size());
             for (int j = 0; j < axis.size(); j++) {
                 double v =
-                        ResultDispatchPivot.sumQuantityForProfileAndDate(
-                                cols, doc.rows(), profile, axis.get(j));
+                        ResultDispatchPivot.sumQuantityForProfileAndDateForWideMerge(
+                                doc.rows(),
+                                profile,
+                                axis.get(j),
+                                ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
                 wr.setAmount(j, v);
             }
             rowItems.add(wr);
@@ -1765,13 +1777,15 @@ public final class DispatchInteractiveTabController {
 
     /** Ensures each profile row maps to sequential trial order and pushes into doc rows. */
     private void assignSequentialTrialOrdersForProfiles(List<Map<String, String>> profiles) {
-        List<String> cols = doc.columns();
         for (int i = 0; i < profiles.size(); i++) {
             String ord = Integer.toString(i + 1);
             Map<String, String> prof = profiles.get(i);
             prof.put(ResultDispatchSchema.COL_DISPATCH_TRIAL_ORDER, ord);
             for (Map<String, String> row : doc.rows()) {
-                if (ResultDispatchPivot.matchesTaskProfileExceptTrialOrder(cols, prof, row)) {
+                if (ResultDispatchPivot.matchesWideMergeIdentity(
+                        prof,
+                        row,
+                        ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS)) {
                     row.put(ResultDispatchSchema.COL_DISPATCH_TRIAL_ORDER, ord);
                 }
             }
@@ -2572,10 +2586,31 @@ public final class DispatchInteractiveTabController {
         LocalDate toDay = dateAxis.get(targetDateIdx);
 
         double fromSum =
-                ResultDispatchPivot.sumQuantityForProfileAndDate(cols, doc.rows(), fromProfile, fromDay);
-        double toSum = ResultDispatchPivot.sumQuantityForProfileAndDate(cols, doc.rows(), toProfile, toDay);
-        ResultDispatchPivot.upsertAllocation(cols, doc.rows(), fromProfile, fromDay, fromSum - amt);
-        ResultDispatchPivot.upsertAllocation(cols, doc.rows(), toProfile, toDay, toSum + amt);
+                ResultDispatchPivot.sumQuantityForProfileAndDateForWideMerge(
+                        doc.rows(),
+                        fromProfile,
+                        fromDay,
+                        ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+        double toSum =
+                ResultDispatchPivot.sumQuantityForProfileAndDateForWideMerge(
+                        doc.rows(),
+                        toProfile,
+                        toDay,
+                        ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+        ResultDispatchPivot.upsertAllocationForWideMerge(
+                cols,
+                doc.rows(),
+                fromProfile,
+                fromDay,
+                fromSum - amt,
+                ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+        ResultDispatchPivot.upsertAllocationForWideMerge(
+                cols,
+                doc.rows(),
+                toProfile,
+                toDay,
+                toSum + amt,
+                ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
         ResultDispatchNormalizer.normalizeInPlace(cols, doc.rows());
         statusLabel.setText("moved");
         rebuildGrids();

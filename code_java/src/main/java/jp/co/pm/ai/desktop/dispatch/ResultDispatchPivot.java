@@ -18,6 +18,18 @@ public final class ResultDispatchPivot {
 
     private ResultDispatchPivot() {}
 
+    /**
+     * 「タスク×日付」ワイド表で同一タスクとみなす列（配台試行順・メンバー名・加工開始終了など日別メタは含めない）。
+     */
+    public static final List<String> DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS =
+            List.of(
+                    ResultDispatchSchema.COL_PROCESS,
+                    ResultDispatchSchema.COL_MACHINE,
+                    "加工内容",
+                    "依頼NO",
+                    "換算数量",
+                    "計画合計");
+
     /** Distinct task rows (static columns only), insertion order. */
     public static List<Map<String, String>> distinctTaskProfiles(List<String> columns, List<Map<String, String>> rows) {
         String dc = ResultDispatchSchema.COL_DISPATCH_DATE;
@@ -38,6 +50,79 @@ public final class ResultDispatchPivot {
             }
         }
         return out;
+    }
+
+    /**
+     * 「タスク×日付」用: {@link #DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS} が一致する行は同一プロファイルにまとめる。
+     */
+    public static List<Map<String, String>> distinctWideTaskProfiles(
+            List<String> columns, List<Map<String, String>> rows, List<String> mergeIdentityHeaders) {
+        String dc = ResultDispatchSchema.COL_DISPATCH_DATE;
+        String qc = ResultDispatchSchema.COL_DISPATCH_QTY;
+        Set<String> seen = new LinkedHashSet<>();
+        List<Map<String, String>> out = new ArrayList<>();
+        for (Map<String, String> row : rows) {
+            String gk = wideMergeIdentityKey(row, mergeIdentityHeaders);
+            if (seen.add(gk)) {
+                LinkedHashMap<String, String> profile = new LinkedHashMap<>();
+                for (String col : columns) {
+                    if (col.equals(dc) || col.equals(qc)) {
+                        continue;
+                    }
+                    profile.put(col, nz(row.get(col)));
+                }
+                out.add(profile);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 同一タスク（ワイド同一性）かつ同一配台日の行を 1 行にまとめ、数量を合算する。読込直後・再描画前に呼ぶ。
+     */
+    public static void mergeDispatchRowsByWideIdentity(
+            List<String> columns, List<Map<String, String>> rows, List<String> mergeIdentityHeaders) {
+        if (rows.isEmpty()) {
+            return;
+        }
+        String dc = ResultDispatchSchema.COL_DISPATCH_DATE;
+        String qc = ResultDispatchSchema.COL_DISPATCH_QTY;
+        Map<String, Map<String, String>> buckets = new LinkedHashMap<>();
+        for (Map<String, String> row : new ArrayList<>(rows)) {
+            String mid = wideMergeIdentityKey(row, mergeIdentityHeaders);
+            String dk = nz(row.get(dc));
+            String key = mid + "\u0000" + dk;
+            Map<String, String> existing = buckets.get(key);
+            if (existing == null) {
+                buckets.put(key, new LinkedHashMap<>(row));
+            } else {
+                double q1 = ResultDispatchNormalizer.parseDouble(existing.get(qc));
+                double q2 = ResultDispatchNormalizer.parseDouble(row.get(qc));
+                existing.put(qc, ResultDispatchNormalizer.formatQty(q1 + q2));
+            }
+        }
+        rows.clear();
+        rows.addAll(buckets.values());
+    }
+
+    static String wideMergeIdentityKey(Map<String, String> row, List<String> mergeIdentityHeaders) {
+        StringBuilder sb = new StringBuilder();
+        for (String h : mergeIdentityHeaders) {
+            sb.append('\u0001');
+            sb.append(nz(row.get(h)));
+        }
+        return sb.toString();
+    }
+
+    /** {@code mergeIdentityHeaders} に列挙した項目がすべて一致するか（ワイド「同一タスク」判定）。 */
+    public static boolean matchesWideMergeIdentity(
+            Map<String, String> profile, Map<String, String> row, List<String> mergeIdentityHeaders) {
+        for (String h : mergeIdentityHeaders) {
+            if (!nz(profile.get(h)).equals(nz(row.get(h)))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public static List<LocalDate> distinctDates(List<Map<String, String>> rows) {
@@ -77,6 +162,29 @@ public final class ResultDispatchPivot {
         String ds = date.toString();
         for (Map<String, String> row : rows) {
             if (!profileMatches(columns, taskProfile, row, dc, qc)) {
+                continue;
+            }
+            String rd = nz(row.get(dc));
+            if (!ds.equals(rd) && !ds.equals(normalizeDateCell(rd))) {
+                continue;
+            }
+            sum += ResultDispatchNormalizer.parseDouble(row.get(qc));
+        }
+        return sum;
+    }
+
+    /** {@link #sumQuantityForProfileAndDate} のワイド版: メタ列の不一致で同一タスクが分断されていても合算する。 */
+    public static double sumQuantityForProfileAndDateForWideMerge(
+            List<Map<String, String>> rows,
+            Map<String, String> taskProfile,
+            LocalDate date,
+            List<String> mergeIdentityHeaders) {
+        String dc = ResultDispatchSchema.COL_DISPATCH_DATE;
+        String qc = ResultDispatchSchema.COL_DISPATCH_QTY;
+        double sum = 0;
+        String ds = date.toString();
+        for (Map<String, String> row : rows) {
+            if (!matchesWideMergeIdentity(taskProfile, row, mergeIdentityHeaders)) {
                 continue;
             }
             String rd = nz(row.get(dc));
@@ -176,6 +284,46 @@ public final class ResultDispatchPivot {
             String rd = nz(row.get(dc));
             boolean sameDate = ds.equals(rd) || ds.equals(normalizeDateCell(rd));
             if (sameDate && profileMatches(columns, taskProfile, row, dc, qc)) {
+                continue;
+            }
+            keep.add(row);
+        }
+        rows.clear();
+        rows.addAll(keep);
+        if (qty > 1e-9) {
+            LinkedHashMap<String, String> neo = new LinkedHashMap<>();
+            for (String col : columns) {
+                if (col.equals(dc)) {
+                    neo.put(col, ds);
+                } else if (col.equals(qc)) {
+                    neo.put(col, ResultDispatchNormalizer.formatQty(qty));
+                } else {
+                    neo.put(col, nz(taskProfile.get(col)));
+                }
+            }
+            rows.add(neo);
+        }
+        ResultDispatchNormalizer.normalizeInPlace(columns, rows);
+    }
+
+    /**
+     * {@link #upsertAllocation} のワイド版: 同一タスク判定に {@link #matchesWideMergeIdentity} を使う。
+     */
+    public static void upsertAllocationForWideMerge(
+            List<String> columns,
+            List<Map<String, String>> rows,
+            Map<String, String> taskProfile,
+            LocalDate date,
+            double qty,
+            List<String> mergeIdentityHeaders) {
+        String dc = ResultDispatchSchema.COL_DISPATCH_DATE;
+        String qc = ResultDispatchSchema.COL_DISPATCH_QTY;
+        String ds = date.toString();
+        List<Map<String, String>> keep = new ArrayList<>();
+        for (Map<String, String> row : rows) {
+            String rd = nz(row.get(dc));
+            boolean sameDate = ds.equals(rd) || ds.equals(normalizeDateCell(rd));
+            if (sameDate && matchesWideMergeIdentity(taskProfile, row, mergeIdentityHeaders)) {
                 continue;
             }
             keep.add(row);
