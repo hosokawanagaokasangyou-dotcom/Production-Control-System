@@ -254,31 +254,26 @@ function Ensure-PythonEmbedCache {
     Invoke-WebRequest -Uri 'https://bootstrap.pypa.io/get-pip.py' -OutFile $getPip -UseBasicParsing
 
     Push-Location $dest
+    $prevEa = $ErrorActionPreference
     try {
-        # PS 5.1 + ErrorAction Stop: python stderr WARNING may trigger NativeCommandError.
-        $prevEa = $ErrorActionPreference
-        try {
-            $ErrorActionPreference = 'SilentlyContinue'
-            $env:PIP_NO_WARN_SCRIPT_LOCATION = '1'
-            & .\python.exe $getPip *> $null
-            if ($LASTEXITCODE -ne 0) {
-                throw 'get-pip failed.'
-            }
-            & .\python.exe -m pip install -q --upgrade pip --no-warn-script-location *> $null
-            if ($LASTEXITCODE -ne 0) {
-                throw 'pip upgrade failed.'
-            }
-            & .\python.exe -m pip install -q -r $req --no-warn-script-location *> $null
-            if ($LASTEXITCODE -ne 0) {
-                throw 'pip install -r requirements.txt failed.'
-            }
+        $ErrorActionPreference = 'SilentlyContinue'
+        $env:PIP_NO_WARN_SCRIPT_LOCATION = '1'
+        & .\python.exe $getPip 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw 'get-pip failed.'
         }
-        finally {
-            $ErrorActionPreference = $prevEa
-            Remove-Item Env:PIP_NO_WARN_SCRIPT_LOCATION -ErrorAction SilentlyContinue
+        & .\python.exe -m pip install -q --upgrade pip --no-warn-script-location 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw 'pip upgrade failed.'
+        }
+        & .\python.exe -m pip install -q -r $req --no-warn-script-location 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw 'pip install -r requirements.txt failed.'
         }
     }
     finally {
+        $ErrorActionPreference = $prevEa
+        Remove-Item Env:PIP_NO_WARN_SCRIPT_LOCATION -ErrorAction SilentlyContinue
         Pop-Location
     }
 
@@ -309,7 +304,7 @@ function Build-PmAiDesktopLauncherBatContent {
     $xmx = Normalize-JvmHeapToken $JvmMax
 
     # javafx.web は javafx.media に requires するため、media の win.jar と add-modules が必須
-    [string[]] $javaFxWinJarNames = @(
+    $javaFxWinJarNames = @(
         'javafx-base', 'javafx-controls', 'javafx-fxml', 'javafx-graphics', 'javafx-media',
         'javafx-swing', 'javafx-web', 'jdk-jsobject'
     )
@@ -347,7 +342,9 @@ function Build-PmAiDesktopLauncherBatContent {
     $lines.Add('')
     $lines.Add(':have_java')
     $lines.Add('')
-    $modPathSegments = @($javaFxWinJarNames | ForEach-Object { '%ROOT%\app\' + $_ + '-' + $jv + '-win.jar' })
+    $modPathSegments = foreach ($name in $javaFxWinJarNames) {
+        "%ROOT%\app\$name-$jv-win.jar"
+    }
     $lines.Add('set "PM_AI_JFX_MODPATH=' + ($modPathSegments -join ';') + '"')
     $lines.Add('')
     # Must match jpackage --java-options ($javaOpts): JavaFX --module-path/--add-modules + ControlsFX (internal JavaFX) opens/exports.
@@ -375,7 +372,7 @@ function Sync-JavaFxWindowsRuntimeFromMavenCentral {
         [bool]$Skip
     )
 
-    [string[]] $javaFxWinJarNames = @(
+    $javaFxWinJarNames = @(
         'javafx-base',
         'javafx-controls',
         'javafx-fxml',
