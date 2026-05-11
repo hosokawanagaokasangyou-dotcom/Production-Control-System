@@ -51,7 +51,7 @@ public final class ResultDispatchTrialPython {
                         jsonPath.toAbsolutePath().toString());
         pb.directory(pythonScriptDir.toFile());
         pb.redirectErrorStream(true);
-        PythonProcessRunner.mergeUiEnvIntoProcess(pb, extraUiEnv);
+        PythonProcessRunner.mergeUiEnvIntoProcess(pb, extraUiEnv, pythonScriptDir);
         Process p = pb.start();
         String out;
         try (BufferedReader br =

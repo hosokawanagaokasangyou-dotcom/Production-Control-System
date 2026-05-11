@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.bridge;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -15,6 +16,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -79,6 +81,15 @@ public final class PythonProcessRunner {
      * then force UTF-8 stdio and unbuffered Python output (Windows-safe Japanese logging).
      */
     public static void mergeUiEnvIntoProcess(ProcessBuilder pb, Map<String, String> extraEnv) {
+        mergeUiEnvIntoProcess(pb, extraEnv, null);
+    }
+
+    /**
+     * @param codePythonDir {@code PM_AI_CODE_PYTHON_DIR} 相当（{@code planning_core} の親ディレクトリ）。指定時は
+     *     {@code PYTHONPATH} の先頭へ追加し、{@code No module named 'planning_core'} を防ぐ。
+     */
+    public static void mergeUiEnvIntoProcess(
+            ProcessBuilder pb, Map<String, String> extraEnv, Path codePythonDir) {
         Map<String, String> env = new HashMap<>(pb.environment());
         stripInheritedPmAiEnvUnlessInUi(env, extraEnv);
         if (extraEnv != null) {
@@ -93,7 +104,54 @@ public final class PythonProcessRunner {
         env.put("PYTHONUTF8", "1");
         env.put("PYTHONIOENCODING", "utf-8");
         env.put("PYTHONUNBUFFERED", "1");
+        prependCodePythonDirOnPythonPath(env, codePythonDir);
         pb.environment().putAll(env);
+    }
+
+    /**
+     * {@code planning_core} を import できるよう、子プロセスの {@code PYTHONPATH} 先頭に {@code code/python} を載せる。
+     */
+    static void prependCodePythonDirOnPythonPath(Map<String, String> env, Path codePythonDir) {
+        if (env == null || codePythonDir == null) {
+            return;
+        }
+        Path norm;
+        try {
+            norm = codePythonDir.toAbsolutePath().normalize();
+        } catch (RuntimeException e) {
+            return;
+        }
+        if (!Files.isDirectory(norm)) {
+            return;
+        }
+        String root = norm.toString();
+        String sep = File.pathSeparator;
+        String cur = env.get("PYTHONPATH");
+        if (cur == null || cur.isBlank()) {
+            env.put("PYTHONPATH", root);
+            return;
+        }
+        if (cur.equals(root)) {
+            return;
+        }
+        if (cur.startsWith(root + sep)) {
+            return;
+        }
+        for (String seg : cur.split(Pattern.quote(sep))) {
+            String s = seg != null ? seg.strip() : "";
+            if (s.isEmpty()) {
+                continue;
+            }
+            try {
+                Path p = Path.of(s).toAbsolutePath().normalize();
+                if (Files.isDirectory(p) && Files.isSameFile(p, norm)) {
+                    return;
+                }
+            } catch (Exception ignored) {
+                /* fall through */
+            }
+        }
+        env.put("PYTHONPATH", root + sep + cur);
     }
 
     /**
@@ -141,7 +199,7 @@ public final class PythonProcessRunner {
                         ProcessBuilder pb = new ProcessBuilder(cmd);
                         pb.directory(req.scriptDirectory.toFile());
                         pb.redirectErrorStream(true);
-                        mergeUiEnvIntoProcess(pb, req.extraEnv);
+                        mergeUiEnvIntoProcess(pb, req.extraEnv, req.scriptDirectory);
                         Process p = pb.start();
                         String out = readStreamFullyWithTap(p.getInputStream(), lineTap);
                         int code = p.waitFor();
@@ -202,7 +260,7 @@ public final class PythonProcessRunner {
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.directory(req.scriptDirectory.toFile());
         pb.redirectErrorStream(true);
-        mergeUiEnvIntoProcess(pb, req.extraEnv);
+        mergeUiEnvIntoProcess(pb, req.extraEnv, req.scriptDirectory);
 
         Consumer<String> safeOut = lineConsumer != null ? lineConsumer : s -> {};
         return CompletableFuture.supplyAsync(
