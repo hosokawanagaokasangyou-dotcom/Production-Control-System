@@ -1087,6 +1087,24 @@ public final class DeliveryCalendarViewTabController {
                             .append(err0)
                             .append("\n\n");
                 }
+                String badSrc = meta.path("badSourcePath").asText("");
+                if (!badSrc.isEmpty()) {
+                    sb.append("badSourcePath\u0020\u0028UTF-8\u524d\u691c\u67fb\u5bfe\u8c61\u0029: ")
+                            .append(badSrc)
+                            .append("\n");
+                }
+                String importOrigin = meta.path("importOrigin").asText("");
+                if (!importOrigin.isEmpty()) {
+                    sb.append("importOrigin\u0020\u0028\u30ed\u30fc\u30c0\u304c\u8aad\u307f\u8fbc\u3093\u3060\u30bd\u30fc\u30b9\u0029: ")
+                            .append(importOrigin)
+                            .append("\n");
+                }
+                JsonNode pkgLocs = meta.get("packageSearchLocations");
+                if (pkgLocs != null && pkgLocs.isArray() && pkgLocs.size() > 0) {
+                    sb.append("packageSearchLocations: ")
+                            .append(pkgLocs.toString())
+                            .append("\n");
+                }
                 String taskEff = meta.path("pmAiTaskInputSourceDirEffective").asText("");
                 if (taskEff.isEmpty()) {
                     taskEff = meta.path("pmAiTaskInputSourceDir").asText("");

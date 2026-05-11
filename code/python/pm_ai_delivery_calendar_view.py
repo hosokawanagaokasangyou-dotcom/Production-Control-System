@@ -132,18 +132,37 @@ def main() -> int:
         return 0 if out.get("ok") else 2
     except Exception as e:
         logging.exception("pm_ai_delivery_calendar_view")
+        meta_out: dict = {}
+        try:
+            _pd = Path(__file__).resolve().parent
+            meta_out["badSourcePath"] = str(_pd / "planning_core" / "delivery_calendar_payload.py")
+        except Exception:
+            pass
+        try:
+            import importlib.util as _iu
+
+            _spec = _iu.find_spec("planning_core.delivery_calendar_payload")
+            if _spec is not None:
+                _org = getattr(_spec, "origin", None)
+                if _org:
+                    meta_out["importOrigin"] = str(_org)
+                _loc = getattr(_spec, "submodule_search_locations", None)
+                if _loc:
+                    meta_out["packageSearchLocations"] = [str(x) for x in _loc]
+        except Exception:
+            pass
         # #region agent log
         _agent_debug_ndjson(
             {
                 "hypothesisId": "H-err",
                 "location": "pm_ai_delivery_calendar_view.py:except",
                 "message": type(e).__name__,
-                "data": {"error": str(e)[:2000]},
+                "data": {"error": str(e)[:2000], **meta_out},
             }
         )
         # #endregion
         print(
-            json.dumps({"ok": False, "error": str(e), "meta": {}}, ensure_ascii=False),
+            json.dumps({"ok": False, "error": str(e), "meta": meta_out}, ensure_ascii=False),
             flush=True,
         )
         return 1
