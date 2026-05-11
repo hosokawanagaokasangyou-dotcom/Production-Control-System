@@ -37,9 +37,8 @@ _DIS_JSON_TID = "\u4f9d\u983cNO"
 _DIS_JSON_DAY = "\u914d\u53f0\u65e5"
 _DIS_JSON_QTY = "\u5f53\u65e5\u914d\u53f0\u6570\u91cf"
 
-# Actual-detail (NO-(roll)-betsu raw) column names referenced from the Power Query in z?[:
-#   Wv = Group({?NO, H, Ht}, max(H)) where Ht = DateTime.Date(HJn)
-#   tB^: () == "" ?
+# Actual-detail (per-request roll-level raw) column names; must match Power Query in the task workbook.
+#   Aggregation/filter shapes follow the Excel query (Group by request id / process / day, etc.).
 _ACT_COL_TID = "\u4f9d\u983cNO"
 _ACT_COL_PROC = "\u5de5\u7a0b\u540d"
 _ACT_COL_QTY = "\u5b9f\u52a0\u5de5\u6570"
