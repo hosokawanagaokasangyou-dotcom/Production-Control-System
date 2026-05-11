@@ -24084,6 +24084,93 @@ def _interactive_append_team_shortage_op_as(
         _INTERACTIVE_TRIAL_AS_SHORTAGE.append(rec)
 
 
+def _timeline_event_assigned_member_names(ev: dict) -> list[str]:
+    """加工タイムラインイベントに割り当てられたメンバー名（主担当・補助）。"""
+    sl = ev.get("subs_list")
+    if isinstance(sl, list) and sl:
+        names: list[str] = []
+        op = " ".join(str(ev.get("op") or "").split()).strip()
+        if op:
+            names.append(op)
+        for s in sl:
+            ss = " ".join(str(s).split()).strip()
+            if ss and ss not in names:
+                names.append(ss)
+        return names
+    out: list[str] = []
+    op = " ".join(str(ev.get("op") or "").split()).strip()
+    if op:
+        out.append(op)
+    sub_raw = str(ev.get("sub") or "").strip()
+    if sub_raw:
+        for part in sub_raw.split(","):
+            s = " ".join(part.split()).strip()
+            if s and s not in out:
+                out.append(s)
+    return out
+
+
+def _interactive_append_machining_end_after_member_shift_shortages(
+    timeline_events: list | None,
+    attendance_data: dict | None,
+) -> None:
+    """
+    インタラクティブ配台試行: 加工セグメント終了が、割り当てメンバーの勤務 end_dt を超えるとき
+    as_shortage に記録する（JavaFX の dispatch_trial_shortages.json 連携）。
+    """
+    if not _interactive_dispatch_trial_env_active():
+        return
+    if not timeline_events or not attendance_data:
+        return
+    seen: set[tuple[str, str, str, str]] = set()
+    for ev in timeline_events:
+        if not _is_machining_timeline_event(ev):
+            continue
+        ev_end = ev.get("end_dt")
+        if not isinstance(ev_end, datetime):
+            continue
+        cal_d = _timeline_event_calendar_date(ev)
+        if cal_d is None:
+            continue
+        day_att = attendance_data.get(cal_d)
+        if not day_att:
+            continue
+        tid = str(ev.get("task_id") or "").strip()
+        mach_line = str(ev.get("machine") or "").strip()
+        mach_occ = str(ev.get("machine_occupancy_key") or "").strip()
+        proc_field = mach_line
+        mn_field = mach_occ
+        for mm in _timeline_event_assigned_member_names(ev):
+            if mm not in day_att:
+                continue
+            entry = day_att[mm]
+            if not entry.get("is_working"):
+                continue
+            mem_end = entry.get("end_dt")
+            if not isinstance(mem_end, datetime):
+                continue
+            if ev_end <= mem_end:
+                continue
+            key = (tid, cal_d.isoformat(), proc_field, mm)
+            if key in seen:
+                continue
+            seen.add(key)
+            rec = {
+                "task_id": tid,
+                "date": cal_d.isoformat(),
+                "process": proc_field,
+                "machine_name": mn_field,
+                "reason": (
+                    "加工終了が退勤後（"
+                    f"{mm} 退勤 {mem_end.strftime('%H:%M')} / "
+                    f"加工終了 {ev_end.strftime('%H:%M')}）"
+                ),
+                "required_headcount": 1,
+                "capable_headcount": 1,
+            }
+            _INTERACTIVE_TRIAL_AS_SHORTAGE.append(rec)
+
+
 def interactive_trial_shortages_snapshot() -> dict:
     return {
         "op_shortage": list(_INTERACTIVE_TRIAL_OP_SHORTAGE),
@@ -32802,6 +32889,9 @@ def _generate_plan_impl(
         )
     if interactive_relax_intraday or interactive_dispatch_targets is not None:
         _interactive_validate_timeline_midnight_if_interactive(timeline_events)
+    _interactive_append_machining_end_after_member_shift_shortages(
+        timeline_events, attendance_data
+    )
     df_ai_log = pd.DataFrame(list(ai_log_data.items()), columns=["項目", "内容"])
 
     from planning_core.workbook_payload import (
