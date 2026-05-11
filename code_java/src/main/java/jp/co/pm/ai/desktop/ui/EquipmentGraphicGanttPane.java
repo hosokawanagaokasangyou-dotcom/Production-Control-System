@@ -45,6 +45,7 @@ import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
+import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
 
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
@@ -1812,7 +1813,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     private record BadgeWirePlacement(
-            Line wireLineOrNull, StackPane badge, double anchorX, double anchorY) {}
+            Line wireLineOrNull,
+            Circle anchorDotOrNull,
+            StackPane badge,
+            double anchorX,
+            double anchorY) {}
 
     private record PersonBadgeWirePaint(
             Color color,
@@ -1856,6 +1861,21 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static double barAnchorCenterY(double timelineOuterPad, LayoutMetrics layout) {
         return EquipmentGanttWireAnchorMath.barAnchorCenterY(
                 timelineOuterPad, layout.rowHeight(), layout.zoom());
+    }
+
+    /**
+     * ワイヤー始点（バー中心アンカー）を示す小さな塗り円。線色と同一の塗りに細い縁を付ける。
+     */
+    private static Circle createPersonBadgeWireAnchorDot(
+            double anchorX, double anchorY, Color wireFill, double zoom) {
+        double r = Math.clamp(1.5 + 0.55 * zoom, 2.0, 4.5);
+        Circle c = new Circle(anchorX, anchorY, r);
+        c.setFill(wireFill);
+        c.setStroke(Color.color(0, 0, 0, 0.22));
+        c.setStrokeWidth(Math.max(0.45, 0.35 * zoom));
+        c.setMouseTransparent(true);
+        c.setPickOnBounds(false);
+        return c;
     }
 
     private static void installPersonBadgeWireListeners(
@@ -2032,9 +2052,25 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double desiredClampBottom = barTop + Math.max(barH, totalStackH);
             double badgeClampBottom = Math.min(desiredClampBottom, maxBottom);
 
+            /*
+             * ドラッグ・レイアウト確定時の縦クランプを帯よりやや広げ、バッジを上下へ動かしやすくする。
+             * 上端は Pane 上端 0、下端は行 Pane の下端まで。
+             */
+            double badgeBandVerticalExtraPx = Math.max(36.0, 11.0 * layout.zoom);
+            double badgeDragBandTop = Math.max(0.0, barTop - badgeBandVerticalExtraPx);
+            double paneBottomLimit =
+                    Double.isFinite(overlayPaneHeight) && overlayPaneHeight > insetBottom + 1e-6
+                            ? overlayPaneHeight - insetBottom
+                            : Double.POSITIVE_INFINITY;
+            double badgeDragBandBottom =
+                    Double.isFinite(paneBottomLimit)
+                            ? Math.min(badgeClampBottom + badgeBandVerticalExtraPx, paneBottomLimit)
+                            : badgeClampBottom + badgeBandVerticalExtraPx;
+
             double ySegCursor =
                     barTop + Math.max(0, (barH - totalStackH) / 2);
 
+            boolean anchorDotPlacedForRun = false;
             for (int si = 0; si < segments.size(); si++) {
                 List<Integer> seg = segments.get(si);
                 double segRowMax = 1.0;
@@ -2054,7 +2090,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                     + (segRowMax - stackH) / 2;
                     double ly =
                             clampBadgeLayoutYInBand(
-                                    yTop - b.getMinY(), b, barTop, badgeClampBottom);
+                                    yTop - b.getMinY(),
+                                    b,
+                                    badgeDragBandTop,
+                                    badgeDragBandBottom);
                     double visualLeft = xVis;
                     Bounds logicalSize = badgeDragClampBounds(sp);
                     BoundingBox proposed =
@@ -2086,7 +2125,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         lyUse += sv.dy();
                     }
                     lx = clampBadgeLayoutX(lx, cb, timelinePaneWidth);
-                    lyUse = clampBadgeLayoutYInBand(lyUse, cb, barTop, badgeClampBottom);
+                    lyUse =
+                            clampBadgeLayoutYInBand(
+                                    lyUse, cb, badgeDragBandTop, badgeDragBandBottom);
                     if (wireThisRun && personBadgeWireMaxLengthPxOrZero > 1e-6) {
                         double[] wxy =
                                 clampBadgeLayoutToWireMaxLength(
@@ -2099,11 +2140,17 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         lx = wxy[0];
                         lyUse = wxy[1];
                         lx = clampBadgeLayoutX(lx, cb, timelinePaneWidth);
-                        lyUse = clampBadgeLayoutYInBand(lyUse, cb, barTop, badgeClampBottom);
+                        lyUse =
+                                clampBadgeLayoutYInBand(
+                                        lyUse,
+                                        cb,
+                                        badgeDragBandTop,
+                                        badgeDragBandBottom);
                     }
                     sp.setLayoutX(lx);
                     sp.setLayoutY(lyUse);
                     Line wireLine = null;
+                    Circle anchorDot = null;
                     if (wireThisRun) {
                         PersonBadgeWirePaint paint = wirePaintOrNull;
                         wireLine = new Line(anchorX, anchorY, anchorX, anchorY);
@@ -2112,9 +2159,15 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         paint.dashStyle().applyTo(wireLine, layout.zoom);
                         wireLine.setMouseTransparent(true);
                         wireLine.setPickOnBounds(false);
+                        if (!anchorDotPlacedForRun) {
+                            anchorDot =
+                                    createPersonBadgeWireAnchorDot(
+                                            anchorX, anchorY, paint.color(), layout.zoom);
+                            anchorDotPlacedForRun = true;
+                        }
                     }
                     wirePlacementBatch.add(
-                            new BadgeWirePlacement(wireLine, sp, anchorX, anchorY));
+                            new BadgeWirePlacement(wireLine, anchorDot, sp, anchorX, anchorY));
                     if (badgeDragAdjustEnabled) {
                         sp.setMouseTransparent(false);
                         sp.setCursor(Cursor.DEFAULT);
@@ -2125,8 +2178,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         installBadgeDragHandlers(
                                 sp,
                                 badgeDragClampBounds(sp),
-                                barTop,
-                                badgeClampBottom,
+                                badgeDragBandTop,
+                                badgeDragBandBottom,
                                 timelinePaneWidth,
                                 defaultLayoutX,
                                 defaultLayoutY,
@@ -2145,6 +2198,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         for (BadgeWirePlacement wp : wirePlacementBatch) {
             if (wp.wireLineOrNull() != null) {
                 overlay.getChildren().add(wp.wireLineOrNull());
+            }
+        }
+        for (BadgeWirePlacement wp : wirePlacementBatch) {
+            if (wp.anchorDotOrNull() != null) {
+                overlay.getChildren().add(wp.anchorDotOrNull());
             }
         }
         for (BadgeWirePlacement wp : wirePlacementBatch) {
