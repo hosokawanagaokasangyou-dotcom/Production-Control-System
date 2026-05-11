@@ -76,6 +76,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
@@ -2046,6 +2047,46 @@ public final class DispatchInteractiveTabController {
         try {
             DispatchTrialShortages.FullBundle fb = DispatchTrialShortages.readFull(shortagePath);
             List<DispatchQtyShortfallRow> rows = fb.dispatchQtyShortfall();
+            // #region agent log
+            try {
+                Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+                long y25Qty =
+                        rows.stream()
+                                .filter(
+                                        r ->
+                                                r.taskId() != null
+                                                        && r.taskId().contains("Y5-25"))
+                                .count();
+                long y25Hint =
+                        fb.shortageHints().stream()
+                                .filter(
+                                        h ->
+                                                h.taskId() != null
+                                                        && h.taskId().contains("Y5-25"))
+                                .count();
+                List<String> hintTids =
+                        fb.shortageHints().stream()
+                                .map(DispatchTrialShortages.ShortageHint::taskId)
+                                .filter(Objects::nonNull)
+                                .limit(15)
+                                .toList();
+                AgentDebugLog.appendStructured(
+                        ui,
+                        "41bffb",
+                        "H1-H5",
+                        "DispatchInteractiveTabController.applyDispatchShortfallFromDisk",
+                        "dispatch_trial_shortages.json parsed after trial/reload",
+                        Map.ofEntries(
+                                Map.entry("shortagePath", shortagePath.toString()),
+                                Map.entry("dispatchQtyShortfallCount", rows.size()),
+                                Map.entry("shortageHintsCount", fb.shortageHints().size()),
+                                Map.entry("y5_25_dispatch_qty_rows", y25Qty),
+                                Map.entry("y5_25_shortage_hint_rows", y25Hint),
+                                Map.entry("hintTaskIdSample", hintTids.toString())));
+            } catch (Throwable ignored) {
+                // debug-only
+            }
+            // #endregion
             applyDispatchShortfallRows(rows);
         } catch (IOException e) {
             clearDispatchShortfallUi();
@@ -2094,6 +2135,28 @@ public final class DispatchInteractiveTabController {
      * ツールバー下サマリ表と本ダイアログに同一内容が並ぶこと。
      */
     private void showDispatchQtyShortfallDialogIfNeeded(Stage owner) {
+        // #region agent log
+        try {
+            Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+            boolean skip =
+                    lastDispatchShortfallRows == null || lastDispatchShortfallRows.isEmpty();
+            AgentDebugLog.appendStructured(
+                    ui,
+                    "41bffb",
+                    "H2",
+                    "DispatchInteractiveTabController.showDispatchQtyShortfallDialogIfNeeded",
+                    skip
+                            ? "skip modal: no dispatch_qty_shortfall rows"
+                            : "show modal: dispatch_qty_shortfall present",
+                    Map.of(
+                            "lastDispatchQtyShortfallCount",
+                            lastDispatchShortfallRows == null
+                                    ? -1
+                                    : lastDispatchShortfallRows.size()));
+        } catch (Throwable ignored) {
+            // debug-only
+        }
+        // #endregion
         if (lastDispatchShortfallRows == null || lastDispatchShortfallRows.isEmpty()) {
             return;
         }
