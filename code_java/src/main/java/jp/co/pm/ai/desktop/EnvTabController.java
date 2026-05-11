@@ -90,6 +90,9 @@ public final class EnvTabController {
     private Label hintLabel;
 
     @FXML
+    private Label userDirLabel;
+
+    @FXML
     private Label envSearchLabel;
 
     @FXML
@@ -127,6 +130,9 @@ public final class EnvTabController {
         this.shell = shell;
         this.ownerStage = shell.getPrimaryStage();
         this.envRows = shell.getEnvRows();
+        if (userDirLabel != null) {
+            userDirLabel.setText(System.getProperty("user.dir", "."));
+        }
         hintLabel.setText(ENV_HINT_TEXT);
         if (envSearchLabel != null) {
             envSearchLabel.setText("検索");

@@ -17,6 +17,10 @@
     </padding>
     <center>
         <VBox fillWidth="true" spacing="8.0">
+            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                <Label text="user.dir"/>
+                <Label fx:id="userDirLabel" wrapText="true" maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+            </HBox>
             <Label fx:id="hintLabel" wrapText="true"/>
             <HBox alignment="CENTER_LEFT" spacing="8.0">
                 <Label fx:id="envSearchLabel"/>
