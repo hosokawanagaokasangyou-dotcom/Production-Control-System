@@ -52,7 +52,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCell;
@@ -1046,27 +1045,6 @@ public final class DeliveryCalendarViewTabController {
             boolean okPayload0 = root.path("ok").asBoolean(false);
             String err0 = root.path("error").asText("");
             if (!okPayload0) {
-                // #region agent log
-                try {
-                    String ep = err0;
-                    if (ep.length() > 800) {
-                        ep = ep.substring(0, 800);
-                    }
-                    Map<String, Object> dbg = new LinkedHashMap<>();
-                    dbg.put("exitCode", exitCode);
-                    dbg.put("errorSnippet", ep);
-                    dbg.put("payloadOk", false);
-                    AgentDebugLog.appendStructured(
-                            shell != null ? shell.snapshotUiEnv() : Map.of(),
-                            "delcal01",
-                            "H-java-stderr-json",
-                            "DeliveryCalendarViewTabController.applyPayloadBody",
-                            "python ok=false",
-                            dbg);
-                } catch (Throwable ignored) {
-                    // debug-only
-                }
-                // #endregion
                 statusLabel.setText(
                         "exit="
                                 + exitCode
@@ -1170,26 +1148,6 @@ public final class DeliveryCalendarViewTabController {
             scheduleHideDeliveryReloadProgress();
 
         } catch (Exception e) {
-            // #region agent log
-            try {
-                String msg = e.getMessage() != null ? e.getMessage() : "";
-                if (msg.length() > 800) {
-                    msg = msg.substring(0, 800);
-                }
-                Map<String, Object> dbg = new LinkedHashMap<>();
-                dbg.put("exception", e.getClass().getSimpleName());
-                dbg.put("message", msg);
-                AgentDebugLog.appendStructured(
-                        shell != null ? shell.snapshotUiEnv() : Map.of(),
-                        "delcal01",
-                        "H-java-parse",
-                        "DeliveryCalendarViewTabController.applyPayloadBody",
-                        "stdout json parse failed",
-                        dbg);
-            } catch (Throwable ignored) {
-                // debug-only
-            }
-            // #endregion
             statusLabel.setText("parse: " + e.getMessage());
             if (shell != null) {
                 shell.appendLog("[delivery-calendar] parse " + e.getMessage());
