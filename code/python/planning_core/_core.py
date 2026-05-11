@@ -23670,6 +23670,76 @@ def _fmt_dispatch_table_datetime(dt) -> str:
     return str(dt).strip()
 
 
+def _primary_op_for_equipment_schedule_dispatch_row(
+    tl_expanded: list,
+    tid: str,
+    eq: str,
+    day: date,
+) -> str:
+    """
+    結果_設備毎の時間割と同じ設備列キー・暦日で、開始が最も早い加工イベントの主担当（op）。
+    `_expand_timeline_events_for_equipment_grid` 済みリストを渡すこと。
+    """
+    tid_s = str(tid or "").strip()
+    eq_s = str(eq or "").strip()
+    best_op = ""
+    best_st = None
+    for e in tl_expanded or []:
+        if not _is_machining_timeline_event(e):
+            continue
+        if str(e.get("task_id") or "").strip() != tid_s:
+            continue
+        if str(e.get("machine") or "").strip() != eq_s:
+            continue
+        d0 = e.get("date")
+        if d0 is None:
+            continue
+        if isinstance(d0, datetime):
+            d0 = d0.date()
+        elif not isinstance(d0, date):
+            continue
+        if d0 != day:
+            continue
+        st = e.get("start_dt")
+        if not isinstance(st, datetime):
+            continue
+        op = " ".join(str(e.get("op") or "").split()).strip()
+        if not op:
+            continue
+        if best_st is None or st < best_st:
+            best_st = st
+            best_op = op
+    return best_op
+
+
+def _format_dispatch_table_member_like_equipment_schedule(
+    tid_k: str,
+    eq_k: str,
+    day_k: date,
+    tl_expanded: list,
+    unify_sub_map: dict,
+    member_ops_fallback: list[str],
+) -> str:
+    """
+    結果_設備毎の時間割の加工セル（進度バー表示行）と同じ文字列組み立て:
+    [{task_id}] 主:{op} 補:{unified_sub}
+    ``unified_sub`` は `_equipment_schedule_unified_sub_string_map` と同一キー (date, machine, task_id)。
+    """
+    sub_full = unify_sub_map.get((day_k, eq_k, tid_k))
+    if sub_full is None:
+        sub_full = ""
+    sub_full = str(sub_full).strip()
+    sub_text = f" 補:{sub_full}" if sub_full else ""
+    pop = _primary_op_for_equipment_schedule_dispatch_row(
+        tl_expanded, tid_k, eq_k, day_k
+    )
+    if pop:
+        return f"[{tid_k}] 主:{pop}{sub_text}"
+    if member_ops_fallback:
+        return "、".join(member_ops_fallback)
+    return ""
+
+
 def build_result_dispatch_table_dataframe(
     timeline_events: list | None,
     sorted_tasks_for_result: list | None,
@@ -23730,6 +23800,8 @@ def build_result_dispatch_table_dataframe(
                 bound_max[key] = ed0
     if not agg:
         return pd.DataFrame(columns=cols)
+    _tl_exp_dispatch = _expand_timeline_events_for_equipment_grid(timeline_events or [])
+    _unify_sub_dispatch = _equipment_schedule_unified_sub_string_map(_tl_exp_dispatch)
     plan_lookup = _build_plan_input_row_lookup_for_dispatch_table(tasks_df)
     src_lookup3, src_lookup2 = _build_source_task_row_lookups_for_dispatch_table(df_src)
     rows: list[dict] = []
@@ -23793,7 +23865,14 @@ def build_result_dispatch_table_dataframe(
         row_key = (tid_k, eq_k, day_k)
         r["加工開始日時"] = _fmt_dispatch_table_datetime(bound_min.get(row_key))
         r["加工終了日時"] = _fmt_dispatch_table_datetime(bound_max.get(row_key))
-        r["メンバー名"] = "、".join(member_ops.get(row_key, []))
+        r["メンバー名"] = _format_dispatch_table_member_like_equipment_schedule(
+            tid_k,
+            eq_k,
+            day_k,
+            _tl_exp_dispatch,
+            _unify_sub_dispatch,
+            member_ops.get(row_key, []),
+        )
         r["配台日"] = day_k
         r["当日配台数量"] = float(qty_sum)
         rows.append(r)
