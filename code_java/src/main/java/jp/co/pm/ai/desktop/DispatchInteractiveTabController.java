@@ -297,6 +297,7 @@ public final class DispatchInteractiveTabController {
             installDispatchShortfallColumns(dispatchShortfallTable);
             dispatchShortfallTable.setColumnResizePolicy(
                     TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+            wireDispatchShortfallSelectionToWideGrid();
         }
     }
 
@@ -1785,7 +1786,108 @@ public final class DispatchInteractiveTabController {
                     sm.clearSelection();
                     sm.clearAndSelect(viewRow, scol);
                     sm.focus(viewRow, scol);
+                    scrollWideSpreadsheetCellIntoView(viewRow, scol);
                 });
+    }
+
+    /**
+     * 未達サマリ表で選択した依頼NO・機械・配台日に対応するワイドグリッドのセルを選択・フォーカスする。
+     */
+    private void wireDispatchShortfallSelectionToWideGrid() {
+        if (dispatchShortfallTable == null) {
+            return;
+        }
+        dispatchShortfallTable
+                .getSelectionModel()
+                .selectedItemProperty()
+                .addListener((obs, prev, row) -> focusWideSpreadsheetOnDispatchShortfallRow(row));
+    }
+
+    /**
+     * {@link DispatchTrialShortages#wideShortfallKey} と同一規則でプロファイル行を特定する。
+     *
+     * @return {@link #wideProfiles} インデックス、無ければ -1
+     */
+    private int findWideProfileIndexMatchingShortfall(DispatchQtyShortfallRow row) {
+        if (row == null || wideProfiles.isEmpty()) {
+            return -1;
+        }
+        String expected =
+                DispatchTrialShortages.wideShortfallKey(
+                        row.taskId(), row.machineName(), row.dispatchDateIso());
+        for (int i = 0; i < wideProfiles.size(); i++) {
+            Map<String, String> p = wideProfiles.get(i);
+            String candidate =
+                    DispatchTrialShortages.wideShortfallKey(
+                            p.get("依頼NO"),
+                            p.get(ResultDispatchSchema.COL_MACHINE),
+                            row.dispatchDateIso());
+            if (expected.equals(candidate)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 列同期が直後に終わっていないときは数パルス待ってからフォーカスする（{@link #scheduleWideLayoutAfterColumnSync}
+     * と同趣旨）。
+     */
+    private void scheduleFocusWideCellWhenShortfallReady(int profileIdx, int modelCol) {
+        final int[] attempts = {0};
+        final Runnable[] job = new Runnable[1];
+        job[0] =
+                () -> {
+                    attempts[0]++;
+                    var cols = wideSpreadsheet.getColumns();
+                    boolean colsReady =
+                            !cols.isEmpty()
+                                    && modelCol >= 0
+                                    && modelCol < cols.size()
+                                    && profileIdx >= 0
+                                    && profileIdx < wideProfiles.size();
+                    if (!colsReady) {
+                        if (attempts[0] < 48) {
+                            Platform.runLater(job[0]);
+                        }
+                        return;
+                    }
+                    focusWideProfileCellAfterReorder(profileIdx, modelCol);
+                };
+        Platform.runLater(job[0]);
+    }
+
+    private void focusWideSpreadsheetOnDispatchShortfallRow(DispatchQtyShortfallRow row) {
+        if (row == null || wideProfiles.isEmpty() || dateAxis.isEmpty()) {
+            return;
+        }
+        int profileIdx = findWideProfileIndexMatchingShortfall(row);
+        if (profileIdx < 0) {
+            return;
+        }
+        LocalDate targetDate;
+        try {
+            targetDate = LocalDate.parse(row.dispatchDateIso().trim());
+        } catch (DateTimeParseException e) {
+            return;
+        }
+        int dateIdx = dateAxis.indexOf(targetDate);
+        if (dateIdx < 0) {
+            return;
+        }
+        int staticCols = WIDE_STATIC_HEADERS.size();
+        int modelCol = staticCols + dateIdx * DAY_SLOT_COLUMNS;
+        applyInnerTabSelectedIndex(0);
+        scheduleFocusWideCellWhenShortfallReady(profileIdx, modelCol);
+    }
+
+    /** ControlsFX の {@link SpreadsheetView#scrollToRow} / {@link SpreadsheetView#scrollToColumn} で見える位置へ寄せる。 */
+    private void scrollWideSpreadsheetCellIntoView(int viewRow, SpreadsheetColumn scol) {
+        if (scol == null || viewRow < 0) {
+            return;
+        }
+        wideSpreadsheet.scrollToRow(viewRow);
+        wideSpreadsheet.scrollToColumn(scol);
     }
 
     private int selectedWideProfileIndex() {
