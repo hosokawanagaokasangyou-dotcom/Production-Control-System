@@ -146,8 +146,7 @@ GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
 # =========================================================
 # 【設定】APIキー / 基本ルール / ファイル名
 # =========================================================
-# Gemini API キーは GEMINI_CREDENTIALS_JSON、または PM_AI_PLAN_INPUT_PATH がブックのときその同階層の暗号化 JSON から解決（他は workspace 等の既定解決）。
-# 未設定時のみ移行用に環境変数 GEMINI_API_KEY を参照。
+# Gemini API キーは GEMINI_CREDENTIALS_JSON、または PM_AI_PLAN_INPUT_PATH がブックのときその同階層の暗号化 JSON から解決（他は workspace 等の既定解決）。環境変数 GEMINI_API_KEY は参照しない。
 
 # Gemini API のモデルコード（Google AI for Developers のモデルページの Model code に準拠）
 # https://ai.google.dev/gemini-api/docs/models
@@ -6325,7 +6324,7 @@ def analyze_global_priority_override_comment(
         )
 
     if not API_KEY:
-        logging.info("GEMINI_API_KEY 未設定のため、メイン再優先特記の AI 解析をスキップしました。")
+        logging.info("Gemini API キーが未設定のため、メイン再優先特記の AI 解析をスキップしました。")
         if ai_sheet_sink is not None:
             ai_sheet_sink["メイン再優先特記_AI_API"] = "なし（APIキー未設定・工場休業のみルール補完）"
             ai_sheet_sink["メイン再優先特記_Geminiモデル"] = "—（API キー未設定）"
@@ -11274,7 +11273,7 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
     )
 
     if not API_KEY:
-        logging.info("GEMINI_API_KEY 未設定のため、タスク特別指定のAI解析をスキップしました。")
+        logging.info("Gemini API キーが未設定のため、タスク特別指定のAI解析をスキップしました。")
         if ai_sheet_sink is not None:
             ai_sheet_sink["特別指定備考_AI_API"] = "なし（APIキー未設定）"
             ai_sheet_sink["特別指定備考_Geminiモデル"] = "—（API キー未設定）"
@@ -18300,9 +18299,9 @@ def load_attendance_and_analyze(members):
         elif not API_KEY:
             ai_parsed = {}
             ai_log["勤怠備考_AI_API"] = "なし"
-            ai_log["勤怠備考_AI_詳細"] = "GEMINI_API_KEY未設定のため勤怠備考AIをスキップ"
+            ai_log["勤怠備考_AI_詳細"] = "Gemini API キー未設定のため勤怠備考AIをスキップ"
             ai_log["勤怠備考_Geminiモデル"] = "—（API キー未設定）"
-            logging.info("GEMINI_API_KEY 未設定のため備考AI解析をスキップしました。")
+            logging.info("Gemini API キーが未設定のため備考AI解析をスキップしました。")
         else:
             logging.info(
                 "■ AIが複数日の特記事項を解析中...（対象 %d 件）",

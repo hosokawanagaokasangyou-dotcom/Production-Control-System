@@ -324,10 +324,6 @@
     "value" : "5",
     "description" : "終業直前: このロール数以上は当日回せないとき新規加工を始めない（残ロール≦この値でも拒否）。ASSIGN_END_OF_DAY_DEFER_MINUTES>0 時"
   }, {
-    "name" : "GEMINI_API_KEY",
-    "value" : "",
-    "description" : "移行用: マクロブック「設定」B1 の JSON にキーが無い場合のみ参照（通常は JSON 推奨）"
-  }, {
     "name" : "GEMINI_PRICE_USD_IN_PER_M",
     "value" : "0.075",
     "description" : ""
