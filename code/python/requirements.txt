@@ -7,4 +7,5 @@ python-calamine>=0.2.0
 openpyxl>=3.1
 xlwings>=0.30
 google-genai>=1.0
+pydantic>=2.0
 cryptography>=42.0

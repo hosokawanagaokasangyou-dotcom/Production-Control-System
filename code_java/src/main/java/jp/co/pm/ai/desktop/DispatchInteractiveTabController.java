@@ -76,7 +76,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
@@ -103,8 +102,6 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
  * process+machine-by-day).
  */
 public final class DispatchInteractiveTabController {
-
-    private static final String AGENT_DEBUG_SESSION = "41bffb";
 
     private record ReloadBundle(ResultDispatchDocument doc) {}
 
@@ -616,19 +613,6 @@ public final class DispatchInteractiveTabController {
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
 
         Stage owner = shell.getPrimaryStage();
-        // #region agent log
-        AgentDebugLog.appendStructured(
-                shell.snapshotUiEnv(),
-                AGENT_DEBUG_SESSION,
-                "H1-owner-stage",
-                "DispatchInteractiveTabController.onDispatchTrialAction",
-                "trial_start",
-                Map.of(
-                        "ownerNull",
-                        Boolean.valueOf(owner == null),
-                        "screenPrimaryNull",
-                        Boolean.valueOf(Screen.getPrimary() == null)));
-        // #endregion
         Stage logStage = new Stage();
         logStage.initOwner(owner);
         logStage.initModality(Modality.APPLICATION_MODAL);
@@ -657,19 +641,6 @@ public final class DispatchInteractiveTabController {
                     ClipboardContent cc = new ClipboardContent();
                     cc.putString(joined);
                     Clipboard.getSystemClipboard().setContent(cc);
-                    // #region agent log
-                    AgentDebugLog.appendStructured(
-                            shell.snapshotUiEnv(),
-                            AGENT_DEBUG_SESSION,
-                            "H-copy",
-                            "DispatchInteractiveTabController.onDispatchTrialAction",
-                            "trial_log_clipboard_copy",
-                            Map.of(
-                                    "lineCount",
-                                    Integer.valueOf(logLines.size()),
-                                    "charCount",
-                                    Integer.valueOf(joined.length())));
-                    // #endregion
                 });
 
         Button closeBtn = new Button("閉じる");
@@ -854,19 +825,6 @@ public final class DispatchInteractiveTabController {
                     saveTrialLogUiSnapshot.run();
                 });
         logStage.show();
-        // #region agent log
-        AgentDebugLog.appendStructured(
-                shell.snapshotUiEnv(),
-                AGENT_DEBUG_SESSION,
-                "H2-log-window",
-                "DispatchInteractiveTabController.onDispatchTrialAction",
-                "trial_log_window_shown",
-                Map.of(
-                        "sceneW",
-                        Double.valueOf(sceneW),
-                        "sceneH",
-                        Double.valueOf(sceneH)));
-        // #endregion
 
         final ResultDispatchDocument trialInputSnapshot = doc.copy();
 
@@ -895,18 +853,6 @@ public final class DispatchInteractiveTabController {
                 e -> {
                     try {
                         String shortagesPath = task.getValue();
-                        // #region agent log
-                        AgentDebugLog.appendStructured(
-                                shell.snapshotUiEnv(),
-                                AGENT_DEBUG_SESSION,
-                                "H3-task-ok",
-                                "DispatchInteractiveTabController.onDispatchTrialAction",
-                                "trial_python_ok",
-                                Map.of(
-                                        "shortagesPathEmpty",
-                                        Boolean.valueOf(
-                                                shortagesPath == null || shortagesPath.isBlank())));
-                        // #endregion
                         statusLabel.setText("配台試行完了");
                         shell.refreshRunTabStage2ArtifactLinks();
                         shell.appendLog("[dispatch-editor] trial: " + shortagesPath);
@@ -960,22 +906,6 @@ public final class DispatchInteractiveTabController {
                 e -> {
                     try {
                         Throwable ex = task.getException();
-                        // #region agent log
-                        AgentDebugLog.appendStructured(
-                                shell.snapshotUiEnv(),
-                                AGENT_DEBUG_SESSION,
-                                "H4-task-fail",
-                                "DispatchInteractiveTabController.onDispatchTrialAction",
-                                "trial_python_failed",
-                                Map.of(
-                                        "exceptionClass",
-                                        ex != null ? ex.getClass().getSimpleName() : "null",
-                                        "messagePresent",
-                                        Boolean.valueOf(
-                                                ex != null
-                                                        && ex.getMessage() != null
-                                                        && !ex.getMessage().isBlank())));
-                        // #endregion
                         statusLabel.setText("配台試行エラー");
                         String msg = ex != null ? ex.getMessage() : "(不明)";
                         shell.appendLog("[dispatch-editor] trial failed: " + msg);
