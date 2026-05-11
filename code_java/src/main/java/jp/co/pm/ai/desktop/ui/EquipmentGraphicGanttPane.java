@@ -129,6 +129,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     /** 横スクロールの見えている範囲の前後に確保するスロット数（部分描画のマージン）。 */
     private static final int VIEWPORT_SLOT_MARGIN = 48;
 
+    /** 縦スクロールでタイムライン行を部分描画するときの余白（px、コンテンツ座標）。 */
+    private static final double VIEWPORT_VERTICAL_MARGIN_PX = 80.0;
+
     private static final String PROFILE_PROP = "pm.ai.gantt.profile";
 
     /**
@@ -159,6 +162,38 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             return new int[] {0, slotCount - 1};
         }
         return new int[] {from, to};
+    }
+
+    /**
+     * タイムライン行（右ボディグリッド上の Y 範囲）が、縦スクロールの見えている範囲と交差するか。
+     * レイアウト未確定などで判定できないときは true（全行描画にフォールバック）。
+     */
+    private static boolean intersectsVerticalViewport(
+            ScrollPane sp, double rowContentMinY, double rowHeight, double marginPx) {
+        if (sp == null || !Double.isFinite(rowContentMinY) || !Double.isFinite(rowHeight)) {
+            return true;
+        }
+        if (rowHeight <= 1e-9) {
+            return true;
+        }
+        Node content = sp.getContent();
+        Bounds vp = sp.getViewportBounds();
+        if (content == null || vp == null || vp.getHeight() <= 1.0) {
+            return true;
+        }
+        double contentH = content.getLayoutBounds().getHeight();
+        double viewportH = vp.getHeight();
+        if (!Double.isFinite(contentH) || contentH <= 1.0) {
+            return true;
+        }
+        double excess = Math.max(0.0, contentH - viewportH);
+        double scrollPy = excess > 1e-6 ? sp.getVvalue() * excess : 0.0;
+        double m = Math.max(0.0, marginPx);
+        double visTop = scrollPy - m;
+        double visBottom = scrollPy + viewportH + m;
+        double rowTop = rowContentMinY;
+        double rowBottom = rowContentMinY + rowHeight;
+        return rowBottom > visTop && rowTop < visBottom;
     }
 
     /**
@@ -779,6 +814,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         int machineColorSeq = -1;
         int gridR = 0;
         int timelineCanvasRowCount = 0;
+        /** {@link #rightBodyGrid} 内コンテンツ座標でのタイムライン列の累積 Y（セクション行・データ行の高さを積む）。 */
+        double gridTimelineContentY = 0.0;
         List<ViewportRowSpec> viewportRowSpecs = new ArrayList<>();
         for (int ri = 0; ri < parsed.displayRows().size(); ri++) {
             DisplayRow dr = parsed.displayRows().get(ri);
@@ -806,6 +843,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     GridPane.setColumnSpan(banR, 2);
                 }
                 gridR++;
+                gridTimelineContentY += layout.sectionRowHeight;
                 continue;
             }
 
@@ -904,6 +942,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             fitFontIntoColumn(pl, procTxt, procW - 8, cellBodyH - 4, layout.rowLabelFontSize);
 
             double rowCanvasH = Math.max(1.0, cellBodyH);
+            double timelineRowContentMinY = gridTimelineContentY;
+            List<String> cellsInSlots = dr.cellsInSlots();
+            List<BarRun> cachedBarRuns = collectBarRuns(cellsInSlots);
+            int slotCountForRow = cellsInSlots.size();
             Canvas rowCanvas = new Canvas(canvasTimelineW, rowCanvasH);
             timelineCanvasRowCount++;
             rowCanvas.setCache(false);
@@ -911,9 +953,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     new ViewportRowSpec(
                             rowCanvas,
                             timelineOuterPad,
-                            dr.cellsInSlots(),
                             machineGroupIndex,
-                            rowCanvasH));
+                            rowCanvasH,
+                            timelineRowContentMinY,
+                            slotCountForRow,
+                            cachedBarRuns));
 
             Pane badgePane = new Pane();
             /*
@@ -986,6 +1030,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 rightBodyGrid.add(progBox, 1, gridR);
             }
             gridR++;
+            gridTimelineContentY += cellBodyH;
         }
 
         ScrollPane leftBodyScroll = new ScrollPane(leftBodyGrid);
@@ -1037,9 +1082,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
         final LayoutMetrics layoutViewport = layout;
 
-        PauseTransition viewportRepaintDebounce = new PauseTransition(Duration.millis(32));
+        PauseTransition viewportRepaintDebounce = new PauseTransition(Duration.millis(16));
         Runnable paintTimelineViewport =
                 () -> {
+                    long t0Ns = System.nanoTime();
+                    int paintedRows = 0;
                     int nSlots = slotColCount;
                     int[] vr =
                             visibleSlotRangeInclusive(
@@ -1058,12 +1105,21 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             vr[0],
                             vr[1]);
                     for (ViewportRowSpec s : viewportRowSpecs) {
+                        if (!intersectsVerticalViewport(
+                                rightBodyScroll,
+                                s.contentMinY(),
+                                s.rowH(),
+                                VIEWPORT_VERTICAL_MARGIN_PX)) {
+                            continue;
+                        }
+                        paintedRows++;
                         GraphicsContext gcx = s.canvas().getGraphicsContext2D();
                         gcx.clearRect(0, 0, canvasTimelineW, s.rowH());
                         gcx.translate(0, s.outerPad());
                         drawTimelineRow(
                                 gcx,
-                                s.slotTexts(),
+                                s.barRuns(),
+                                s.slotCount(),
                                 s.machineGroupIndex(),
                                 layoutViewport,
                                 palette,
@@ -1073,7 +1129,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         gcx.translate(0, -s.outerPad());
                     }
                     if (Boolean.getBoolean(PROFILE_PROP)) {
-                        /* プロファイル用: -Dpm.ai.gantt.profile=true */
+                        long elapsedMs = (System.nanoTime() - t0Ns) / 1_000_000L;
+                        System.err.println(
+                                "[gantt-profile] paintTimelineViewport ms="
+                                        + elapsedMs
+                                        + " rowsPainted="
+                                        + paintedRows
+                                        + "/"
+                                        + viewportRowSpecs.size());
                     }
                 };
         viewportRepaintDebounce.setOnFinished(e -> paintTimelineViewport.run());
@@ -1083,7 +1146,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     viewportRepaintDebounce.playFromStart();
                 };
         rightBodyScroll.hvalueProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
+        rightBodyScroll.vvalueProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
         rightBodyScroll.widthProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
+        rightBodyScroll.heightProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
         Platform.runLater(paintTimelineViewport);
 
         double shiftSens =
@@ -2547,14 +2612,15 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
     private static void drawTimelineRow(
             GraphicsContext gc,
-            List<String> slotTexts,
+            List<BarRun> barRuns,
+            int slotCount,
             int machineGroupIndex,
             LayoutMetrics layout,
             GanttPalette palette,
             Font barFont,
             int slotVisibleFrom,
             int slotVisibleToIncl) {
-        int n = slotTexts.size();
+        int n = Math.max(0, slotCount);
         int vf = Math.max(0, slotVisibleFrom);
         int vt = Math.min(n - 1, slotVisibleToIncl);
         if (vf > vt) {
@@ -2574,7 +2640,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             gc.strokeLine(i * layout.slotWidth, 0, i * layout.slotWidth, layout.rowHeight);
         }
 
-        List<BarRun> runs = collectBarRuns(slotTexts);
+        List<BarRun> runs = barRuns != null ? barRuns : List.of();
         for (BarRun run : runs) {
             if (run.toSlot() < vf || run.fromSlot() > vt) {
                 continue;
@@ -2937,9 +3003,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private record ViewportRowSpec(
             Canvas canvas,
             double outerPad,
-            List<String> slotTexts,
             int machineGroupIndex,
-            double rowH) {}
+            double rowH,
+            double contentMinY,
+            int slotCount,
+            List<BarRun> barRuns) {}
 
     /**
      * {@link #build} と {@link #computeDataFingerprint} で同一の pandas 救済を適用した列・行・担当バッジ列。
