@@ -2241,6 +2241,7 @@ public final class MainShellController {
         stripRemovedEnvVarRows(envRows);
         mergeMissingBootstrapEnvRows();
         ensureBootstrapDefaultValuesVisible(collectUiEnv());
+        ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
     }
 
     /**
@@ -2293,6 +2294,7 @@ public final class MainShellController {
         out.addAll(trailingEmpty);
         envRows.setAll(out);
         stripRemovedEnvVarRows(envRows);
+        ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
     }
 
     /**
@@ -2383,6 +2385,7 @@ public final class MainShellController {
         out.addAll(trailingEmpty);
         envRows.setAll(out);
         stripRemovedEnvVarRows(envRows);
+        ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
     }
 
     /** Debounced session flush when run-tab log font changes. */
@@ -2506,6 +2509,7 @@ public final class MainShellController {
         // （ポータル版アップ完了時の applyUncNetworkSourceDirDefaults と同趣旨）
         applyUncNetworkSourceDirDefaults();
         ensureBootstrapDefaultValuesVisible(collectUiEnv());
+        ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
         applyRepoFolderPathNormalization();
         if (persistSession) {
             DesktopSessionStateStore.save(collectDesktopSession());
@@ -3575,6 +3579,9 @@ public final class MainShellController {
         if (rows.isEmpty()) {
             rows.add(new EnvVarRow());
         }
+        if (rows == envRows) {
+            ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
+        }
     }
 
     private static void stripRemovedEnvVarRows(ObservableList<EnvVarRow> rows) {
@@ -3693,6 +3700,90 @@ public final class MainShellController {
                 row.setValue(v);
             }
         }
+    }
+
+    /**
+     * {@code ui_ref_env_defaults.json} 由来の行のうち、ブートストラップ以外で「空欄＝planning_core / AppPaths の既定と同じ意味」のキーへ、
+     * 値列に解決済みの既定を表示する（子プロセスへ渡す意味は従来どおりで、未設定と同じキーは空のままにするものは触らない）。
+     */
+    private void ensureUiRefOptionalDisplayDefaultsVisible(Map<String, String> ui) {
+        if (envRows == null) {
+            return;
+        }
+        Map<String, String> ctx = ui != null ? ui : Map.of();
+        for (EnvVarRow row : envRows) {
+            String k = row.getName() != null ? row.getName().trim() : "";
+            if (k.isEmpty()) {
+                continue;
+            }
+            String cur = row.getValue();
+            if (cur != null && !cur.isBlank()) {
+                continue;
+            }
+            String v = optionalUiRefDisplayDefaultForKey(k, ctx);
+            if (!v.isBlank()) {
+                row.setValue(v);
+            }
+        }
+    }
+
+    /**
+     * {@link #ensureUiRefOptionalDisplayDefaultsVisible} 用。キーごとの表示既定（実ファイルがあるときのみパスを返すものあり）。
+     */
+    private static String optionalUiRefDisplayDefaultForKey(String k, Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        if (k == null || k.isBlank()) {
+            return "";
+        }
+        Path codeDir = AppPaths.resolveRepoRoot(u).resolve("code");
+        return switch (k) {
+            case AppPaths.KEY_MASTER_WORKBOOK_FILE -> "master.xlsm";
+            case PlanInputTabController.ENV_TASK_PLAN_SHEET ->
+                    PlanInputTabController.DEFAULT_PLAN_INPUT_SHEET_NAME;
+            case "MASTER_SPEED_SHEET_NAME" -> "speed";
+            case "MASTER_SPEED_FIRST_EXCEL_COL" -> "4";
+            case AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK ->
+                    AppPaths.summaryAiDispatchXlsmPath(u).toString();
+            case "RAW_FABRIC_WIDTH_TABLE_PATH" -> {
+                Path p = codeDir.resolve("使用原反, 加工幅.txt");
+                yield Files.isRegularFile(p)
+                        ? p.toAbsolutePath().normalize().toString()
+                        : "";
+            }
+            case "ROLL_UNIT_BY_USED_RAW_TABLE_PATH" -> {
+                String out = "";
+                for (String fn :
+                        List.of("使用原反,ロール単位の長さ.txt", "使用原反, ロール単位の長さ.txt")) {
+                    Path p = codeDir.resolve(fn);
+                    if (Files.isRegularFile(p)) {
+                        out = p.toAbsolutePath().normalize().toString();
+                        break;
+                    }
+                }
+                yield out;
+            }
+            case "PRODUCT_WIDTH_TABLE_PATH" -> {
+                Path p = codeDir.resolve("製品名, 製品幅.txt");
+                yield Files.isRegularFile(p)
+                        ? p.toAbsolutePath().normalize().toString()
+                        : "";
+            }
+            case "PRODUCT_LENGTH_TABLE_PATH" -> {
+                Path p = codeDir.resolve("製品名,製品長.txt");
+                yield Files.isRegularFile(p)
+                        ? p.toAbsolutePath().normalize().toString()
+                        : "";
+            }
+            case "PRODUCT_THICKNESS_TABLE_PATH" -> {
+                Path p = codeDir.resolve("製品名,製品厚み.txt");
+                yield Files.isRegularFile(p)
+                        ? p.toAbsolutePath().normalize().toString()
+                        : "";
+            }
+            case "DISPATCH_TRIAL_PATTERN_LIST_SHEET" -> "配台試行順_パターン一覧";
+            case "DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET" -> "配台試行順_パターン別段階2";
+            default -> "";
+        };
     }
 
     private static EnvVarRow newBootstrapRow(String k, Map<String, String> ui) {
