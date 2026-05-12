@@ -446,17 +446,58 @@ def _gemini_credentials_json_path_next_to_workbook(wb_path: str) -> str | None:
     )
 
 
+def _normalize_gemini_credentials_json_env_value(raw: str) -> str:
+    """GEMINI_CREDENTIALS_JSON の値から前後空白・先頭 @・外側の引用符を除く（UI 貼り付け用）。"""
+    s = (raw or "").strip()
+    if s.startswith("@"):
+        s = s[1:].strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in "\"'":
+        s = s[1:-1].strip()
+    return s
+
+
+def _resolve_explicit_gemini_credentials_path(normalized_explicit: str) -> str:
+    """
+    環境変数で明示された証明書 JSON の絶対パス（無い場合も返す）。
+
+    bootstrap が PM_AI_WORKSPACE へ chdir した後に import されるため、相対パスは cwd 基準で外れやすい。
+    ファイルが見つからないときは PM_AI_REPO_ROOT 配下を追加で試す。
+    """
+    s = (normalized_explicit or "").strip()
+    if not s:
+        return ""
+    primary = os.path.normpath(os.path.abspath(s))
+    if os.path.isfile(primary):
+        return primary
+    repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
+    if not repo:
+        return primary
+    try:
+        repo_abs = os.path.normpath(os.path.abspath(repo))
+    except Exception:
+        return primary
+    if not os.path.isabs(s):
+        under_repo = os.path.normpath(os.path.join(repo_abs, s))
+        if os.path.isfile(under_repo):
+            return under_repo
+        base_only = os.path.normpath(os.path.join(repo_abs, os.path.basename(s)))
+        if base_only != under_repo and os.path.isfile(base_only):
+            return base_only
+    return primary
+
+
 def _resolve_gemini_credentials_json_path() -> str | None:
     """
     Gemini 証明書 JSON の候補パス。
 
-    1) GEMINI_CREDENTIALS_JSON … 暗号化/平文の証明書ファイルへの絶対または相対パス（最優先）。
+    1) GEMINI_CREDENTIALS_JSON … 暗号化/平文の証明書ファイルへの絶対または相対パス（最優先。先頭 @ や外側引用符を除去。相対は cwd のあと PM_AI_REPO_ROOT 基準でも探索）。
     2) PM_AI_PLAN_INPUT_PATH ブック（Excel）と同階層の GEMINI_CREDENTIALS_ENCRYPTED_FILENAME
     3) PM_AI_WORKSPACE 直下の同ファイル名（JavaFX ランチャー向け）
     """
-    explicit = (os.environ.get("GEMINI_CREDENTIALS_JSON") or "").strip()
+    explicit_in = (os.environ.get("GEMINI_CREDENTIALS_JSON") or "").strip()
+    explicit = _normalize_gemini_credentials_json_env_value(explicit_in)
     if explicit:
-        return os.path.normpath(os.path.abspath(explicit))
+        return _resolve_explicit_gemini_credentials_path(explicit)
     plan_wb = plan_input_workbook_path_for_excel_ops()
     if plan_wb:
         return os.path.normpath(
@@ -475,17 +516,49 @@ def _resolve_gemini_credentials_json_path() -> str | None:
 
 # #region agent log
 def _agent_debug_ndjson_gemini_cred(payload: dict) -> None:
-    """Session a07f8d: Gemini 証明書解決のランタイム証跡（秘密は書かない）。"""
+    """Session a07f8d: Gemini 証明書解決のランタイム証跡（秘密は書かない）。Windows 子でも書けるよう複数パスに試行。"""
     try:
-        log_path = "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-a07f8d.log"
         row = {
             "sessionId": "a07f8d",
             "timestamp": int(time_module.time() * 1000),
             "location": "planning_core/_core.py:gemini_cred",
             **payload,
         }
-        with open(log_path, "a", encoding="utf-8") as lf:
-            lf.write(json.dumps(row, ensure_ascii=False) + "\n")
+        line = json.dumps(row, ensure_ascii=False) + "\n"
+        paths: list[str] = [
+            "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-a07f8d.log",
+        ]
+        rr = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
+        if rr:
+            try:
+                paths.append(
+                    os.path.normpath(
+                        os.path.join(os.path.abspath(rr), ".cursor", "debug-a07f8d.log")
+                    )
+                )
+            except Exception:
+                pass
+        try:
+            paths.append(
+                os.path.normpath(
+                    os.path.join(os.getcwd(), ".cursor", "debug-a07f8d.log")
+                )
+            )
+        except Exception:
+            pass
+        seen: set[str] = set()
+        for log_path in paths:
+            if not log_path or log_path in seen:
+                continue
+            seen.add(log_path)
+            try:
+                d = os.path.dirname(log_path)
+                if d:
+                    os.makedirs(d, exist_ok=True)
+                with open(log_path, "a", encoding="utf-8") as lf:
+                    lf.write(line)
+            except Exception:
+                continue
     except Exception:
         pass
 
@@ -882,10 +955,21 @@ if not API_KEY:
 # #region agent log
 _gemini_env_raw = os.environ.get("GEMINI_CREDENTIALS_JSON") or ""
 _gemini_env = _gemini_env_raw.strip()
+_gem_norm = _normalize_gemini_credentials_json_env_value(_gemini_env_raw)
+_gem_primary_only = (
+    os.path.normpath(os.path.abspath(_gem_norm)) if _gem_norm else ""
+)
+_repo_rel_fallback = bool(
+    _gem_norm
+    and not os.path.isabs(_gem_norm)
+    and _cred_path
+    and _gem_primary_only != os.path.normpath(_cred_path)
+    and os.path.isfile(_cred_path)
+)
 _agent_debug_ndjson_gemini_cred(
     {
         "message": "gemini_credentials_init_summary",
-        "hypothesisId": "H1_env_chdir_relative_path",
+        "hypothesisId": "post_fix_verify",
         "data": {
             "cwd": os.getcwd(),
             "env_set": bool(_gemini_env),
@@ -898,6 +982,7 @@ _agent_debug_ndjson_gemini_cred(
             "pm_ai_workspace_nonempty": bool(
                 (os.environ.get("PM_AI_WORKSPACE") or "").strip()
             ),
+            "repo_relative_fallback_used": _repo_rel_fallback,
         },
     }
 )

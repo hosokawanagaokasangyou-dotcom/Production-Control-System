@@ -3711,10 +3711,15 @@ public final class MainShellController {
                 return AppPaths.resolveDefaultOutputDir(u).toString();
             }
             case AppPaths.KEY_GEMINI_CREDENTIALS_JSON -> {
-                Path cand =
-                        AppPaths.resolveRepoRoot(u).resolve("code").resolve("gemini_credentials.encrypted.json");
-                return Files.isRegularFile(cand)
-                        ? cand.toAbsolutePath().normalize().toString()
+                Path root = AppPaths.resolveRepoRoot(u);
+                Path underCode =
+                        root.resolve("code").resolve("gemini_credentials.encrypted.json");
+                if (Files.isRegularFile(underCode)) {
+                    return underCode.toAbsolutePath().normalize().toString();
+                }
+                Path atRoot = root.resolve("gemini_credentials.encrypted.json");
+                return Files.isRegularFile(atRoot)
+                        ? atRoot.toAbsolutePath().normalize().toString()
                         : "";
             }
             case AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON -> {
