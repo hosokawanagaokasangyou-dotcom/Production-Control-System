@@ -312,9 +312,8 @@ public final class SpreadsheetTabularSupport {
             return;
         }
         /*
-         * SpreadsheetView may host more than one embedded TableView (e.g. fixed vs scrollable columns).
-         * Applying UNCONSTRAINED only to the first child left the other at the default CONSTRAINED policy,
-         * which blocks interactive column resize for part of the grid.
+         * SpreadsheetView 配下のスキンに複数の TableView が現れる場合や、列可視性変更後にポリシーが
+         * CONSTRAINED に戻る場合がある。サブツリー内の TableView すべてに UNCONSTRAINED を適用する。
          */
         setUnconstrainedOnEmbeddedTableViews(view, 0);
         for (SpreadsheetColumn col : view.getColumns()) {
@@ -328,7 +327,6 @@ public final class SpreadsheetTabularSupport {
         }
         if (n instanceof TableView<?> tv) {
             tv.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
-            return;
         }
         if (n instanceof Parent p) {
             for (Node c : p.getChildrenUnmodifiable()) {
