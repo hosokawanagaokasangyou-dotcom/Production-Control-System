@@ -51,8 +51,6 @@ import javafx.util.StringConverter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
-
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.EquipmentGanttBadgeDragDelta;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
@@ -1152,26 +1150,6 @@ public final class EquipmentGanttGraphicTabController {
             if (shell != null) {
                 shell.appendLog("[equipment-gantt-graphic] " + ex.getMessage());
             }
-            // #region agent log
-            {
-                Map<String, Object> d = new LinkedHashMap<>();
-                d.put("ex", ex.getClass().getName());
-                String msg = ex.getMessage();
-                d.put("message", msg != null ? msg : "");
-                d.put(
-                        "planPath",
-                        planJsonField != null
-                                ? planJsonField.getText().strip()
-                                : "");
-                AgentDebugLog.appendStructured(
-                        shell != null ? shell.snapshotUiEnv() : Map.of(),
-                        "1ecccd",
-                        "D",
-                        "EquipmentGanttGraphicTabController.reloadFromFields",
-                        "graphic reload failed",
-                        d);
-            }
-            // #endregion
         } finally {
             reloadButton.setDisable(false);
             syncLatestButton.setDisable(false);
