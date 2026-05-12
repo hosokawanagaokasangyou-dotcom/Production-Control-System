@@ -3,7 +3,12 @@ package jp.co.pm.ai.desktop.config;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
+
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class FactorySiteTest {
 
@@ -28,5 +33,23 @@ class FactorySiteTest {
     void toStringUsesJapaneseLabel() {
         assertEquals("湖南工場", FactorySite.KONAN.toString());
         assertEquals("国分工場", FactorySite.KOKUBU.toString());
+    }
+
+    @Test
+    void konanPmAiMasterWorkbookEnvValueEmpty() {
+        assertEquals("", FactorySite.KONAN.pmAiMasterWorkbookEnvValue(Map.of()));
+    }
+
+    @Test
+    void kokubuPmAiMasterWorkbookEnvValueUnderRepoCode(@TempDir Path repo) throws Exception {
+        Files.createDirectories(repo.resolve("code"));
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, repo.toString());
+        assertEquals(
+                repo.resolve("code")
+                        .resolve("国分master.xlsm")
+                        .normalize()
+                        .toAbsolutePath()
+                        .toString(),
+                FactorySite.KOKUBU.pmAiMasterWorkbookEnvValue(ui));
     }
 }

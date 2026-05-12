@@ -1,5 +1,8 @@
 package jp.co.pm.ai.desktop.config;
 
+import java.nio.file.Path;
+import java.util.Map;
+
 /**
  * 工場別の環境タブ既定（ネットワークソース・バージョンアップ正本 ZIP・マスタ名）。
  *
@@ -73,5 +76,26 @@ public enum FactorySite {
     /** {@link AppPaths#KEY_MASTER_WORKBOOK_FILE}（basename）。 */
     public String masterWorkbookFileBasename() {
         return masterWorkbookFileBasename;
+    }
+
+    /**
+     * {@link AppPaths#KEY_PM_AI_MASTER_WORKBOOK} 環境タブへ書く既定。
+     *
+     * <p>湖南は空（{@code MASTER_WORKBOOK_FILE} の basename のみで解決）。国分は
+     * {@code (リポジトリルート)/code/(}{@link #masterWorkbookFileBasename()}{@code )} の絶対パス文字列。
+     *
+     * @param ui {@link AppPaths#resolveRepoRoot(Map)} に必要なキーを含む（未設定時は cwd 系の既定）
+     */
+    public String pmAiMasterWorkbookEnvValue(Map<String, String> ui) {
+        if (this != KOKUBU) {
+            return "";
+        }
+        Path p =
+                AppPaths.resolveRepoRoot(ui != null ? ui : Map.of())
+                        .resolve("code")
+                        .resolve(masterWorkbookFileBasename)
+                        .normalize()
+                        .toAbsolutePath();
+        return p.toString();
     }
 }

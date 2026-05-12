@@ -3193,6 +3193,7 @@ public final class MainShellController {
         String actual = site.actualDetailSourceDir();
         String portable = site.portableBundleSourceDir();
         String masterBasename = site.masterWorkbookFileBasename();
+        String pmAiMaster = site.pmAiMasterWorkbookEnvValue(collectUiEnv());
         for (EnvVarRow r : envRows) {
             String name = r.getName() != null ? r.getName().trim() : "";
             if (AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR.equals(name)) {
@@ -3204,7 +3205,7 @@ public final class MainShellController {
             } else if (AppPaths.KEY_MASTER_WORKBOOK_FILE.equals(name)) {
                 r.setValue(masterBasename != null ? masterBasename : "");
             } else if (AppPaths.KEY_PM_AI_MASTER_WORKBOOK.equals(name)) {
-                r.setValue("");
+                r.setValue(pmAiMaster != null ? pmAiMaster : "");
             }
         }
     }
