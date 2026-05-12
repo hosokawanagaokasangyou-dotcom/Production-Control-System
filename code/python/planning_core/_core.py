@@ -22328,6 +22328,9 @@ def _equipment_line_lower_dispatch_trial_still_pending(
     より尝さい試行順の行は **当日の機械カレンダーの値で計画窓を全日占有**（しの設備は当日スロットゼロ）なら
     「競坈の残」とみなさない（グローバル試行順とあゝせで他設備は全日止まるのを防し）。
     """
+    if _interactive_dispatch_trial_env_active():
+        # インタラクティブ試行: JSON の行順を優先し、同一設備上で他依頼の低試行順保留で抑止しない。
+        return False
     line = (machine_occ_key or "").strip()
     if not line:
         return False
@@ -22447,6 +22450,10 @@ def _task_blocked_by_global_dispatch_trial_order(
     min_dispatch_effective: プール＋プローブで求ゝた実効最尝試行順（未指定時は安価フィルタのみの最尝）。
     """
     if not STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT:
+        return False
+    # インタラクティブ配台試行: 入力 JSON の行ごとの配台試行順を正とする。他依頼NOの dto=1 が
+    # プールに残るだけで V5-4 dto=2 が全日 eligible から落ちるのを防ぐ（グローバル最尝試行順は使わない）。
+    if _interactive_dispatch_trial_env_active():
         return False
     if min_dispatch_effective is not None:
         m = min_dispatch_effective
