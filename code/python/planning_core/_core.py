@@ -33054,6 +33054,22 @@ def _generate_plan_impl(
         logging.warning("結果_配台表: 加工計画DATA 読込に失敗したため空欄補完をスキップ: %s", e)
         df_src_for_dispatch = None
     if _interactive_dispatch_trial_env_active():
+        # 試行中の meters_done は _cap_key 解決で「JSON の配台日」と異なるキーへ載ることがある。
+        # 未達一覧はタイムライン上の暦日×依頼×工程×機械で再集計し、短い検証（dispatch_qty_shortfall）と整合させる。
+        if interactive_dispatch_targets:
+            try:
+                _reco_md = _interactive_trial_recompute_meters_done_from_timeline(
+                    timeline_events,
+                    task_queue,
+                    interactive_dispatch_targets,
+                )
+                _interactive_trial_meters_done.clear()
+                _interactive_trial_meters_done.update(_reco_md)
+            except Exception as _e_md_reco:
+                logging.warning(
+                    "インタラクティブ試行: meters_done のタイムライン再集計に失敗しました（累積キーのままスナップショット）: %s",
+                    _e_md_reco,
+                )
         _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT.clear()
         _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT.update(_interactive_trial_meters_done)
     df_dispatch = build_result_dispatch_table_dataframe(
