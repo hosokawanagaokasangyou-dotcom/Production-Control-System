@@ -966,7 +966,7 @@ public final class DispatchInteractiveTabController {
                         logLines.add("[配台試行] 正常終了しました。");
                         logLines.add("不足情報JSON: " + shortagesPath);
                         logList.scrollTo(logLines.size() - 1);
-                        reloadFromDiskQuiet(
+                        reloadFromDiskQuietAfterDispatchTrial(
                                 () -> {
                                     try {
                                         showDispatchQtyShortfallDialogIfNeeded(owner);
@@ -1094,14 +1094,27 @@ public final class DispatchInteractiveTabController {
     }
 
     private void reloadFromDiskQuiet() {
-        reloadFromDiskQuiet(null);
+        reloadFromDiskQuiet(null, false);
+    }
+
+    /**
+     * 配台試行（段階3）正常終了後のみ: {@code dispatch_trial_shortages.json} を結果 JSON と同階層から読み、未達表・赤セル
+     * ヒントを同期する。通常の「再読み」や段階2後の再同期では {@link #reloadFromDiskQuiet()} を使い、古い不足 JSON
+     * を読まない。
+     */
+    private void reloadFromDiskQuietAfterDispatchTrial(Runnable afterSuccessOnFxThread) {
+        reloadFromDiskQuiet(afterSuccessOnFxThread, true);
     }
 
     /**
      * Reloads JSON from disk asynchronously; runs {@code afterSuccessOnFxThread} on the FX thread after grids are
      * rebuilt (only when load succeeds).
+     *
+     * @param applyDispatchTrialShortfallJson true のときのみ隣接の {@code dispatch_trial_shortages.json} を読む（配台試行
+     *     直後）。false のときは未達表・セル赤表示用キーをクリアする（再読み・外部更新後など、メイン JSON と不足 JSON
+     *     の生成タイミングがずれていると誤表示になるため）。
      */
-    private void reloadFromDiskQuiet(Runnable afterSuccessOnFxThread) {
+    private void reloadFromDiskQuiet(Runnable afterSuccessOnFxThread, boolean applyDispatchTrialShortfallJson) {
         if (shell == null) {
             return;
         }
@@ -1137,7 +1150,11 @@ public final class DispatchInteractiveTabController {
                     } else {
                         statusLabel.setText(doc.rows().size() + " 行");
                     }
-                    applyDispatchShortfallFromDisk(jsonPath);
+                    if (applyDispatchTrialShortfallJson) {
+                        applyDispatchShortfallFromDisk(jsonPath);
+                    } else {
+                        clearDispatchShortfallUi();
+                    }
                     rebuildGrids();
                     clearDispatchDocDirty();
                     hideReloadProgress();
