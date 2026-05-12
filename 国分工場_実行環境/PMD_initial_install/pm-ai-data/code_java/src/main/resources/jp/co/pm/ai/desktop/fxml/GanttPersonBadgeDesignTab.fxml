@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ColorPicker?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.Slider?>
+<?import javafx.scene.control.TitledPane?>
+<?import javafx.scene.control.Accordion?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="jp.co.pm.ai.desktop.GanttPersonBadgeDesignTabController"
+      fillWidth="true" spacing="8.0">
+    <padding>
+        <Insets bottom="8.0" left="12.0" right="12.0" top="8.0"/>
+    </padding>
+    <Accordion fx:id="designAccordion" maxWidth="Infinity" VBox.vgrow="ALWAYS">
+        <panes>
+            <TitledPane animated="true" text="担当バッジの見た目" expanded="true">
+                <content>
+                    <VBox spacing="8.0" fillWidth="true">
+                        <padding>
+                            <Insets bottom="4.0" left="4.0" right="4.0" top="4.0"/>
+                        </padding>
+                        <Label styleClass="pm-plan-result-viewer-hint-inline"
+                               text="master.xls(x/m) の skills メンバーとバッジ表示の対応一覧です。行を選んで下のスライダで編集します（自動保存）。ガント上はバッジ文字が同一の複数名があるときのみ従来のバッジ別設定を参照します。"/>
+                        <HBox alignment="CENTER_LEFT" spacing="8.0">
+                            <Button fx:id="reloadSkillsMembersButton" mnemonicParsing="false"
+                                    text="skills メンバーを再読込" onAction="#onReloadSkillsMembersAction"/>
+                            <Label fx:id="masterWorkbookPathLabel" maxWidth="560.0" wrapText="true"
+                                   text="マスタパスを解決しています…"/>
+                        </HBox>
+                        <FlowPane hgap="8.0" vgap="6.0" maxWidth="Infinity">
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="フォント"/>
+                                <ComboBox fx:id="badgeFontCombo" editable="false" prefWidth="220.0"
+                                          promptText="既定ファミリ"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="文字サイズ％"/>
+                                <Slider fx:id="badgeFontPctSlider" blockIncrement="5.0" max="160.0"
+                                        min="40.0" prefWidth="120.0" value="85.0"/>
+                                <Label fx:id="badgeFontPctLabel" text="85%"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="背景色"/>
+                                <ColorPicker fx:id="badgeFillPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="文字色"/>
+                                <ColorPicker fx:id="badgeTextPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="枠色"/>
+                                <ColorPicker fx:id="badgeStrokePicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="枠太さ"/>
+                                <Slider fx:id="badgeStrokeSlider" blockIncrement="0.5" max="6.0"
+                                        min="0.0" prefWidth="100.0" value="1.0"/>
+                                <Label fx:id="badgeStrokeLabel" text="1.0"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="角丸"/>
+                                <Slider fx:id="badgeCornerSlider" blockIncrement="1.0" max="24.0"
+                                        min="0.0" prefWidth="100.0" value="6.0"/>
+                                <Label fx:id="badgeCornerLabel" text="6"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <CheckBox fx:id="badgePillCheck" mnemonicParsing="false" text="ピル形状"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="透明度％"/>
+                                <Slider fx:id="badgeOpacityPctSlider" blockIncrement="5.0" max="100.0"
+                                        min="0.0" prefWidth="120.0" value="100.0"/>
+                                <Label fx:id="badgeOpacityPctLabel" text="100%"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="グロー色"/>
+                                <ColorPicker fx:id="badgeGlowColorPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="グロー半径（基準比）"/>
+                                <Slider fx:id="badgeGlowRadiusPctSlider" blockIncrement="5.0" max="400.0"
+                                        min="0.0" prefWidth="120.0" value="100.0"/>
+                                <Label fx:id="badgeGlowRadiusPctLabel" text="100%"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="グロー spread（基準比）"/>
+                                <Slider fx:id="badgeGlowSpreadPctSlider" blockIncrement="5.0" max="400.0"
+                                        min="0.0" prefWidth="120.0" value="100.0"/>
+                                <Label fx:id="badgeGlowSpreadPctLabel" text="100%"/>
+                            </HBox>
+                        </FlowPane>
+                        <HBox spacing="8.0">
+                            <Button fx:id="badgeRandomizeButton" mnemonicParsing="false"
+                                    text="ランダム作成" onAction="#onBadgeRandomizeAction"/>
+                            <Button fx:id="badgeRandomizeAllButton" mnemonicParsing="false"
+                                    text="一括ランダム（マスタ全員・規定は除外）"
+                                    onAction="#onBadgeRandomizeAllAction"/>
+                            <Button fx:id="badgeResetDefaultsButton" mnemonicParsing="false"
+                                    text="既定スタイルに戻す" onAction="#onBadgeResetDefaultsAction"/>
+                        </HBox>
+                        <TableView fx:id="badgeMemberTable" maxWidth="Infinity" maxHeight="Infinity"
+                                   VBox.vgrow="ALWAYS"/>
+                    </VBox>
+                </content>
+            </TitledPane>
+        </panes>
+    </Accordion>
+</VBox>

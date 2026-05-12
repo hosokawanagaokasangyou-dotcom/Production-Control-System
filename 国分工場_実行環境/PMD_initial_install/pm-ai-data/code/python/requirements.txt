@@ -1,0 +1,13 @@
+# 工程管理AI テストコード（planning_core / 段階1・2 / 環境構築 setup_environment.py）
+# ランタイム: Python 3.14 以上（pyproject.toml の requires-python と整合）
+# 数値・表計算: numpy は pandas の依存だが、環境によって明示指定した方が確実に入る
+numpy>=1.24
+pandas>=2.2
+python-calamine>=0.2.0
+openpyxl>=3.1
+xlwings>=0.30
+google-genai>=1.0
+# google-genai / httpx 系の推移依存。環境によってのみ欠けるため明示（No module named 'sniffio' 対策）
+sniffio>=1.3.0
+pydantic>=2.0
+cryptography>=42.0

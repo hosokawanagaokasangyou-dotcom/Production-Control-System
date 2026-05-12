@@ -1,0 +1,14 @@
+# Manual publish (Publish-Manual.ps1 / scripts/manual_publish.py)
+# Put PNGs in manual/src/images as {tab_key}.png. inject replaces <!-- MANUAL_SNAP:key -->.
+
+images_dir: manual/src/images
+
+data_prep: []
+
+injections:
+  - tab_key: run
+    markdown_file: manual/src/chapters/overview.md
+    caption: "実行・ログ"
+  - tab_key: env
+    markdown_file: manual/src/chapters/overview.md
+    caption: "環境変数"

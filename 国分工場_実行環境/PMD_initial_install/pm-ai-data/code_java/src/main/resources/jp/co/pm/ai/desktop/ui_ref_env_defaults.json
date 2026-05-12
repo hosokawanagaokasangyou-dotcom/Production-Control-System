@@ -1,0 +1,322 @@
+{
+  "source_workbook" : "Production-Control-System/plan/UI参照用_生産管理_AI配台(RC1).xlsx (snapshot; regenerate with GenerateUiRefEnvDefaultsJson)",
+  "sheet" : "設定_環境変数",
+  "entries" : [ {
+    "key" : "GEMINI_CREDENTIALS_JSON",
+    "value" : "",
+    "description" : "Gemini 暗号化証明書 JSON（例: gemini_credentials.encrypted.json）のフルパス。未設定時はマクロブック同階層または PM_AI_WORKSPACE 直下を参照。"
+  }, {
+    "key" : "PM_AI_EXCLUDE_RULES_JSON",
+    "value" : "",
+    "description" : "段階1の配台不要ルールを JSON に寄せる場合のフルパス（list または {\"rules\":[...]}）。既定は code/exclude_rules.json（実在時）、無ければ code/json/stage1_exclude_rules.json（実在時）。有効時はマクロブックの「設定_配台不要工程」Excel 保守も省略。"
+  }, {
+    "key" : "PM_AI_EXCEL_TRACE_TASK_ID",
+    "value" : "",
+    "description" : "段階2 Excel 生成デバッグ: 追跡する依頼NO（例 Y5-14）。JavaFX「環境変数」タブのみ。空で無効。有効時 .cursor/debug-excel-trace.log に EX1/EX4/EX5（df vs サイドカーJSON 差分）等。詳細は EnvVarDocs。"
+  }, {
+    "key" : "PM_AI_PLAN_RESULT_TASK_JSON",
+    "value" : "",
+    "description" : "段階2 の production_plan_*.xlsx と同名ベースの 結果_タスク一覧.json（サイドカー）の読み書き。0/false/no/off/none で無効（無効時はサイドカー非出力・Excel 優先）。未設定で有効。"
+  }, {
+    "key" : "PM_AI_PLAN_RESULT_TASK_JSON_PATH",
+    "value" : "",
+    "description" : "結果_タスク一覧 JSON を読む絶対パス（実在時は xlsx 横のサイドカーより優先）。空なら未使用。"
+  }, {
+    "key" : "PM_AI_OUTPUT_DIR",
+    "value" : "",
+    "description" : "段階1/2の成果物フォルダ（plan_input_tasks.xlsx、計画*.xlsx、人員*.xlsx 等）。空のときは planning_core.bootstrap と同じ解決（PM_AI_REPO_ROOT 直下の output、または cwd 基準の output）。フルパス推奨。「フォルダ...」で選択可。"
+  }, {
+    "key" : "PM_AI_MASTER_WORKBOOK",
+    "value" : "",
+    "description" : "マスタブック（master.xlsm 等）のフルパス。MASTER_WORKBOOK_FILE より優先。環境変数タブの「ファイル...」で .xlsm/.xlsx を選択可。内容の要約は「マスタ読込サマリ」タブの「サマリを更新」で planning_core 基準の JSON を表示（人が読みやすい形に整形）。"
+  }, {
+    "key" : "PM_AI_COLUMN_CONFIG_WORKBOOK",
+    "value" : "",
+    "description" : "列設定_結果_タスク一覧 を含むブック。PM_AI_PLAN_INPUT_PATH と別ファイルのときに指定。空なら input_resolution の既定探索。"
+  }, {
+    "key" : "PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK",
+    "value" : "",
+    "description" : "計画シートのデータ抽出時刻列を読む元ブック（空なら planning_core の input_resolution が PM_AI_PLAN_INPUT_PATH 等から解決）。"
+  }, {
+    "key" : "PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV",
+    "value" : "",
+    "description" : "結果_タスク一覧の列表示設定 CSV のフルパス。実在時は列設定シート読みをスキップ可。"
+  }, {
+    "key" : "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK",
+    "value" : "",
+    "description" : "実行・ログタブの「開く」で開くサマリ用マクロブック（.xlsm）のフルパス。空のときは PM_AI_REPO_ROOT 下 code/サマリ_AI配台.xlsm。ファイル名のみのときは code/ からの相対として解決。"
+  }, {
+    "key" : "PM_AI_SKIP_WORKBOOK_ENV_SHEET",
+    "value" : "1",
+    "description" : "1/true 等で workbook_env_bootstrap がマクロ「設定_環境変数」シートを読まず、JavaFX タブの値のみ子プロセスへ渡す。空のときランチャーは子へ 1 を付与。"
+  }, {
+    "key" : "MASTER_WORKBOOK_FILE",
+    "value" : "",
+    "description" : "マスタブックのファイル名（空なら master.xlsm）。マクロブック所在フォルダ基準の相対可（basename のみ推奨）。planning_core と VBA のマスタ参照で共通。PM_AI_MASTER_WORKBOOK 未指定時の解決に使う。マスタ読込サマリタブの表示と一致確認に利用。"
+  }, {
+    "key" : "TASK_PLAN_SHEET",
+    "value" : "",
+    "description" : "配台計画シート名（空なら既定 配台計画_タスク入力）"
+  }, {
+    "key" : "PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY",
+    "value" : "",
+    "description" : "1/true/yes/on/y のとき配台試行順更新で post_load（計画シートの事後変形）をスキップする用途。"
+  }, {
+    "key" : "MASTER_USE_SPEED_SHEET",
+    "value" : "1",
+    "description" : "0=master.xlsm speed による加工速度上書きをしない"
+  }, {
+    "key" : "MASTER_SPEED_SHEET_NAME",
+    "value" : "",
+    "description" : "空なら既定シート名 speed"
+  }, {
+    "key" : "MASTER_SPEED_FIRST_EXCEL_COL",
+    "value" : "",
+    "description" : "空なら 4（D 列から設備列）"
+  }, {
+    "key" : "RAW_FABRIC_WIDTH_TABLE_PATH",
+    "value" : "",
+    "description" : "原反幅 CSV のフルパス（空なら既定ファイル名をマクロブック同フォルダ等で探索）"
+  }, {
+    "key" : "ROLL_UNIT_BY_USED_RAW_TABLE_PATH",
+    "value" : "",
+    "description" : "使用原反→ロール単位長さ(m) CSV のフルパス（空なら「使用原反,ロール単位の長さ.txt」をマクロブック同フォルダ・カレント・code で探索）"
+  }, {
+    "key" : "PRODUCT_WIDTH_TABLE_PATH",
+    "value" : "",
+    "description" : "製品幅 CSV のフルパス（同上）"
+  }, {
+    "key" : "PRODUCT_LENGTH_TABLE_PATH",
+    "value" : "",
+    "description" : "製品長 CSV のフルパス（同上）"
+  }, {
+    "key" : "PRODUCT_THICKNESS_TABLE_PATH",
+    "value" : "",
+    "description" : "製品厚み CSV のフルパス（同上）"
+  }, {
+    "key" : "STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST",
+    "value" : "1",
+    "description" : "日内配台: 1=試行順優先マルチパス（既定） 0=従来ソート"
+  }, {
+    "key" : "STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT",
+    "value" : "1",
+    "description" : "1（既定）=配台試行順の「枠」より大きい順は割り込まない。0 等で緩和。"
+  }, {
+    "key" : "STAGE2_SERIAL_DISPATCH_BY_TASK_ID",
+    "value" : "0",
+    "description" : "1=依頼NO直列"
+  }, {
+    "key" : "STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK",
+    "value" : "0",
+    "description" : "段階2の「当日」に macro_now: 既定 0=日付のみ（時刻は始業に正規化）。1=データ抽出時刻の時分まで反映する旧挙動。"
+  }, {
+    "key" : "STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT",
+    "value" : "1",
+    "description" : "段階2後の列設定図形コピー（0 で無効）"
+  }, {
+    "key" : "XLWINGS_SUSPEND_AUTO_CALCULATION",
+    "value" : "1",
+    "description" : "xlwings が Excel へ一括書き込み・保存する前後で自動計算を手動（完了時に復帰）。1/true/yes/on（既定）。0/false/no/off/無効 で無効（Calculation は変更しない）。"
+  }, {
+    "key" : "PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE",
+    "value" : "1",
+    "description" : "§B-2/§B-3 設備占有（0 で無効）"
+  }, {
+    "key" : "PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS",
+    "value" : "1",
+    "description" : "B-2/3 ECと後続の担当者分離（0 で無効）"
+  }, {
+    "key" : "WIP_LIMIT_EC_BEFORE_INSP_ROLLS",
+    "value" : "20",
+    "description" : "工程間 WIP: EC 前〜検査までのロール上限（0 以下で無効）"
+  }, {
+    "key" : "WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE",
+    "value" : "task_id",
+    "description" : "L11 集計: task_id=当該依頼NO行のみ（既定） task_id_head=接頭辞グループ global=全依頼合算"
+  }, {
+    "key" : "WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS",
+    "value" : "20",
+    "description" : "同上: スリット〜SEC 間のロール上限（0 以下で無効）"
+  }, {
+    "key" : "SLIT_BEFORE_SEC_MIN_SLIT_ROLLS",
+    "value" : "5",
+    "description" : "L10 B-4.1: 加工内容スリット→SEC の依頼で、同一依頼内（スリット完了−SEC完了）がこの値未満の間は SEC を候補から除外。0 以下で無効"
+  }, {
+    "key" : "WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS",
+    "value" : "20",
+    "description" : "B-6: 接続〜SEC 間の総ロール WIP 上限（0 以下で無効）"
+  }, {
+    "key" : "CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS",
+    "value" : "5",
+    "description" : "B-6.1: 加工内容接続→SEC の依頼で、同一依頼内（接続完了−SEC完了）がこの値未満の間は SEC を候補から除外。0 以下で無効"
+  }, {
+    "key" : "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF",
+    "value" : "0",
+    "description" : "1=人数最優先（従来）"
+  }, {
+    "key" : "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES",
+    "value" : "60",
+    "description" : "スラック分（0 で開始のみ）"
+  }, {
+    "key" : "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW",
+    "value" : "0",
+    "description" : "1=need追加人数行を無視"
+  }, {
+    "key" : "TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS",
+    "value" : "",
+    "description" : "1=メインで req+追加上限まで探索"
+  }, {
+    "key" : "TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY",
+    "value" : "1",
+    "description" : "0=計画シート必要人数も参照"
+  }, {
+    "key" : "TEAM_ASSIGN_USE_MASTER_COMBO_SHEET",
+    "value" : "1",
+    "description" : "0=組合せ表プリセットを使わない"
+  }, {
+    "key" : "DISPATCH_INTERVAL_MIRROR_ENFORCE",
+    "value" : "1",
+    "description" : "1=配台中の占有区間ミラーで二重検査（0 で無効）"
+  }, {
+    "key" : "DISPATCH_TRIAL_PATTERN_LIST_SHEET",
+    "value" : "",
+    "description" : "同: 出力シート名（空なら既定 配台試行順_パターン一覧）"
+  }, {
+    "key" : "DISPATCH_TRIAL_PATTERN_LIST_NO_EXCEL_TABLE",
+    "value" : "",
+    "description" : "1=true 等で Excel の表（ListObject）を付けない（説明行の結合・見出し太字は実施）"
+  }, {
+    "key" : "DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET",
+    "value" : "",
+    "description" : "パターン別段階2バッチ: マクロブックに作成するサマリシート名（空なら既定 配台試行順_パターン別段階2）"
+  }, {
+    "key" : "DISPATCH_PATTERN_STAGE2_MAX_PATTERNS",
+    "value" : "20",
+    "description" : "パターン別段階2バッチのみ: P1～P4（＋R*）を含む最大シミュレーション件数（1～50、既定 20）。一覧シートの列挙件数には影響しない"
+  }, {
+    "key" : "DISPATCH_PATTERN_SCORE_WEIGHT_DUE",
+    "value" : "3",
+    "description" : "参考スコア(自動) の納期遵守率(%)の重み（空なら 3）"
+  }, {
+    "key" : "DISPATCH_PATTERN_SCORE_WEIGHT_MEMBER",
+    "value" : "1",
+    "description" : "参考スコア: メンバー平均作業割合(%)の重み（空なら 1）"
+  }, {
+    "key" : "DISPATCH_PATTERN_SCORE_WEIGHT_EQUIP",
+    "value" : "0.0001",
+    "description" : "参考スコア: 設備稼働セル数（参考）の重み。単位が大きいため小さめ推奨（空なら 0.0001）"
+  }, {
+    "key" : "GANTT_COLOR_MODE",
+    "value" : "",
+    "description" : "結果_設備ガント: 空またはmonotone=従来淡色、full=依頼NO単位の帯色・周辺を鮮やかに"
+  }, {
+    "key" : "GANTT_PRINT_ONE_PAGE_PER_DAY",
+    "value" : "1",
+    "description" : "設備ガント系の印刷: 1/true/yes/on/y で縦を「表示した暦日の数」ページに合わせる（横1ページ・日境界の手動改ページと併用。機械が多いと縮小が強い）。GANTT_PRINT_SCALE_PERCENT 指定時は Python 側では無効"
+  }, {
+    "key" : "GANTT_PRINT_SCALE_PERCENT",
+    "value" : "",
+    "description" : "10〜400 の整数で印刷スケール%を固定（任意）。指定時は上記「1日1ページ」調整より優先。"
+  }, {
+    "key" : "GANTT_HDR_ROW_HEIGHT_PT",
+    "value" : "38",
+    "description" : "設備ガント系のヘッダ行の高さ（ポイント）"
+  }, {
+    "key" : "GANTT_MACHINE_ROW_HEIGHT_PT",
+    "value" : "60",
+    "description" : "設備ガント系の機械行の高さ（ポイント）"
+  }, {
+    "key" : "GANTT_TIMELINE_SHAPE_LABELS",
+    "value" : "1",
+    "description" : "タイムライン上の依頼NO等を角丸シェイプで描画（xlwings）。0 でセルのみ。"
+  }, {
+    "key" : "GANTT_TIMELINE_LABELS_DAY_FLATTEN",
+    "value" : "1",
+    "description" : "1（既定）=日ブロック単位で画像に集約して負荷低減。0=従来の大量シェイプ。"
+  }, {
+    "key" : "GANTT_DAY_IMAGE_CHROMA_TRANSPARENT",
+    "value" : "0",
+    "description" : "1=日別画像にクロマキー敷き色で透明化を試す（上級）"
+  }, {
+    "key" : "GANTT_DAY_IMAGE_CHROMA_HEX",
+    "value" : "FF00FF",
+    "description" : "上記の敷き色（RRGGBB、既定マゼンタ）"
+  }, {
+    "key" : "GANTT_DAY_IMAGE_COPY_PICTURE_FORMAT",
+    "value" : "",
+    "description" : "CopyPicture 形式: picture または bitmap（空なら既定 EMF 系）"
+  }, {
+    "key" : "GANTT_ACTUAL_DETAIL_DATE_FROM",
+    "value" : "",
+    "description" : "結果_設備ガント_実績明細: 表示する暦日の開始（空＝下限なし）。例 2026-04-01 または 2026/4/1"
+  }, {
+    "key" : "GANTT_ACTUAL_DETAIL_DATE_TO",
+    "value" : "",
+    "description" : "結果_設備ガント_実績明細: 表示する暦日の終了（空＝上限なし）。段階2の xlsx 生成時のみ有効"
+  }, {
+    "key" : "PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES",
+    "value" : "",
+    "description" : "JavaFX 加工実績明細タブ: 元 xlsx/xlsm/csv の読込前サイズ上限（バイト）。空で 20971520（20MiB）。0 で無制限。16M / 64MB 等。"
+  }, {
+    "key" : "COMPARE_GANTT_SNAPSHOT_DIR",
+    "value" : "",
+    "description" : "plan_compare_gantt_from_snapshot.py: スナップショットフォルダ（未指定時の既定）"
+  }, {
+    "key" : "COMPARE_GANTT_ACTUAL_SHAPE_LINE_PT",
+    "value" : "2.5",
+    "description" : "比較用ガントの実績ライン太さ（ポイント）"
+  }, {
+    "key" : "ASSIGN_END_OF_DAY_DEFER_MINUTES",
+    "value" : "45",
+    "description" : "終業まで残りこの分数以下のときに上記と組み合わせる。0で明示無効"
+  }, {
+    "key" : "ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS",
+    "value" : "5",
+    "description" : "終業直前: このロール数以上は当日回せないとき新規加工を始めない（残ロール≦この値でも拒否）。ASSIGN_END_OF_DAY_DEFER_MINUTES>0 時"
+  }, {
+    "key" : "GEMINI_PRICE_USD_IN_PER_M",
+    "value" : "0.075"
+  }, {
+    "key" : "GEMINI_PRICE_USD_OUT_PER_M",
+    "value" : "0.3"
+  }, {
+    "key" : "GEMINI_JPY_PER_USD",
+    "value" : "160"
+  }, {
+    "key" : "GEMINI_MODEL",
+    "value" : "",
+    "description" : "単一モデルに固定（空なら planning_core の精度順フォールバック列を使用）"
+  }, {
+    "key" : "GEMINI_MODEL_TRY_ORDER",
+    "value" : "",
+    "description" : "カンマ区切りで試行順を上書き（例: gemini-2.5-pro,gemini-2.5-flash）。上級者向け。マクロブック「設定」D/E で有効行がある場合はシート優先"
+  }, {
+    "key" : "GEMINI_PRE_REQUEST_JITTER_MAX_SEC",
+    "value" : "0.75",
+    "description" : "503/429 等対策: 呼び出し直前の最大ジッター秒。0 で無効。"
+  }, {
+    "key" : "GEMINI_RETRY_BACKOFF_BASE_SEC",
+    "value" : "2",
+    "description" : "再試行の指数バックオフ基底（秒）"
+  }, {
+    "key" : "GEMINI_PROGRESS_LOG_INTERVAL_SEC",
+    "value" : "12",
+    "description" : "Gemini 応答待ちのハートビートログ間隔（秒）。0 で無効"
+  }, {
+    "key" : "GEMINI_RETRY_MAX_ATTEMPTS",
+    "value" : "3",
+    "description" : "同一モデルあたりの最大試行回数（既定 3）。使い切ったら次モデルへ"
+  }, {
+    "key" : "GEMINI_REQUEST_TIMEOUT_SEC",
+    "value" : "240",
+    "description" : "Gemini generate_content の HTTP タイムアウト（秒）。超過時は同一モデルを再試行し、試行上限後は次モデルへ。0 で SDK 既定（非推奨）"
+  }, {
+    "key" : "PM_AI_CMD_PAUSE_ON_ERROR",
+    "value" : "1",
+    "description" : "環境構築 setup_environment: 終了時（成功・失敗とも）に pause／Enter 待ち。0 false no off で無効。その他の CLI は従来どおり非0時のみ pause。pip 成功後にシートを読むため初回 pip 失敗時は OS 環境変数のみ有効"
+  }, {
+    "key" : "PM_AI_SETUP_COMPLETION_MSGBOX",
+    "value" : "1",
+    "description" : "環境構築 setup_environment: Windows で成功時に完了メッセージ（MessageBox）を表示。0 false no off で無効"
+  } ]
+}

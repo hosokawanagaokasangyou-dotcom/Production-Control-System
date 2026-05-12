@@ -1,0 +1,6 @@
+# Java sources: UTF-8 in repo; normalize line endings (avoids mixed CRLF/LF noise on Windows).
+*.java text eol=lf
+
+# Git hooks must be LF-terminated (otherwise '/usr/bin/env: bash\r' on POSIX).
+scripts/git-hooks/** text eol=lf
+*.sh text eol=lf

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressBar?>
+<?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.Tooltip?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.control.TableView?>
+<?import org.controlsfx.control.spreadsheet.SpreadsheetView?>
+
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="jp.co.pm.ai.desktop.DispatchInteractiveTabController"
+      fillWidth="true" spacing="8.0">
+    <padding>
+        <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+    </padding>
+    <HBox alignment="CENTER_LEFT" spacing="8.0">
+        <Button fx:id="loadButton" mnemonicParsing="false" text="再読み"
+                onAction="#onLoadAction"/>
+        <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
+                onAction="#onClearColumnFiltersAction"/>
+        <Button mnemonicParsing="false" text="列の並べ替え"
+                onAction="#onColumnReorderAction"/>
+        <Button mnemonicParsing="false" text="列の表示"
+                onAction="#onColumnVisibilityAction"/>
+        <Button mnemonicParsing="false" text="段階2必須列チェック"
+                onAction="#onEnsureStage2RequiredColumnsAction"/>
+        <Button fx:id="saveButton" mnemonicParsing="false" text="保存 (JSON+xlsx)"
+                onAction="#onSaveAction"/>
+        <Button fx:id="stage2RunButton" mnemonicParsing="false" text="段階2 実行"
+                styleClass="pm-stage-run-button,pm-stage-run-2"
+                onAction="#onStage2RunButtonAction"/>
+        <Button fx:id="dispatchTrialButton" mnemonicParsing="false" text="段階3へ"
+                styleClass="pm-stage-run-button,pm-stage-run-3"
+                onAction="#onDispatchTrialAction"/>
+        <Button fx:id="wideRowUpButton" mnemonicParsing="false" text="↑"
+                onAction="#onWideRowUpAction">
+            <tooltip>
+                <Tooltip text="選択行を上へ（試行順）"/>
+            </tooltip>
+        </Button>
+        <Button fx:id="wideRowDownButton" mnemonicParsing="false" text="↓"
+                onAction="#onWideRowDownAction">
+            <tooltip>
+                <Tooltip text="選択行を下へ（試行順）"/>
+            </tooltip>
+        </Button>
+        <Label fx:id="statusLabel"/>
+        <ProgressIndicator fx:id="busyIndicator" prefHeight="22.0" prefWidth="22.0"
+                           visible="false" managed="false"/>
+        <ProgressBar fx:id="reloadProgressBar" maxWidth="Infinity" prefWidth="220.0"
+                     visible="false" managed="false"/>
+    </HBox>
+    <Label fx:id="jsonPathLabel" wrapText="true"/>
+    <VBox fx:id="dispatchShortfallPanel" fillWidth="true" spacing="6.0" visible="false" managed="false">
+        <Label style="-fx-font-weight: bold;" text="配台数量未達（タイムライン実績）"/>
+        <TableView fx:id="dispatchShortfallTable" maxHeight="240.0" minHeight="120.0" prefHeight="160.0"/>
+    </VBox>
+    <TabPane fx:id="innerTabPane" tabClosingPolicy="UNAVAILABLE" VBox.vgrow="ALWAYS">
+        <tabs>
+            <Tab closable="false" text="タスク×日付">
+                <content>
+                    <BorderPane>
+                        <center>
+                            <StackPane fx:id="wideSpreadsheetHost" maxHeight="Infinity" maxWidth="Infinity"
+                                       minHeight="200.0"/>
+                        </center>
+                    </BorderPane>
+                </content>
+            </Tab>
+            <Tab closable="false" text="工程+機械×日">
+                <content>
+                    <BorderPane>
+                        <center>
+                            <StackPane fx:id="byDaySpreadsheetHost" maxHeight="Infinity" maxWidth="Infinity"
+                                       minHeight="200.0"/>
+                        </center>
+                    </BorderPane>
+                </content>
+            </Tab>
+        </tabs>
+    </TabPane>
+</VBox>

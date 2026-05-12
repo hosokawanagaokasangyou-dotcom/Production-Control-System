@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Accordion?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.RadioButton?>
+<?import javafx.scene.control.Slider?>
+<?import javafx.scene.control.Spinner?>
+<?import javafx.scene.control.ToggleGroup?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TitledPane?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<!-- 計画結果 JSON ビューア（入れ子タブ） {@link PlanResultViewerTabController} -->
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="jp.co.pm.ai.desktop.PlanResultViewerTabController"
+      fillWidth="true" spacing="4.0" styleClass="pm-plan-result-viewer">
+    <padding>
+        <Insets bottom="8.0" left="12.0" right="12.0" top="8.0"/>
+    </padding>
+    <!-- 常時表示：再読み・検索のみ -->
+    <HBox alignment="CENTER_LEFT" spacing="8.0">
+        <Button fx:id="reloadButton" mnemonicParsing="false" text="再読み"
+                onAction="#onReloadButtonAction"/>
+        <Button fx:id="syncLatestButton" mnemonicParsing="false"
+                text="最新JSONを検索"
+                onAction="#onSyncLatestButtonAction"/>
+        <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
+                onAction="#onClearColumnFiltersAction"/>
+        <Label styleClass="pm-plan-result-viewer-hint-inline"
+               text="フォント・行・JSONパスは下のアコーディオンで設定"/>
+    </HBox>
+    <Accordion fx:id="sourceAccordion" maxWidth="Infinity" VBox.vgrow="NEVER">
+        <panes>
+            <TitledPane fx:id="sourceTitledPane" animated="true"
+                        text="設定（表示・JSONパス）"
+                        expanded="false">
+                <content>
+                    <VBox fillWidth="true" spacing="6.0" styleClass="pm-plan-result-viewer-source-body">
+                        <padding>
+                            <Insets bottom="4.0" left="4.0" right="4.0" top="4.0"/>
+                        </padding>
+                        <fx:define>
+                            <ToggleGroup fx:id="planResultCellModeGroup"/>
+                        </fx:define>
+                        <Label text="表フォント"/>
+                        <HBox alignment="CENTER_LEFT" spacing="8.0">
+                            <ComboBox fx:id="planResultFontFamilyCombo" prefWidth="280.0"/>
+                            <Label text="サイズ"/>
+                            <Spinner fx:id="planResultFontSizeSpinner" prefWidth="72.0"/>
+                        </HBox>
+                        <Label text="データ行の高さ（一括）"/>
+                        <HBox alignment="CENTER_LEFT" spacing="10.0">
+                            <Slider fx:id="planResultRowHeightSlider" blockIncrement="25.0"
+                                    majorTickUnit="250.0" max="2000.0" min="50.0"
+                                    prefWidth="280.0" showTickMarks="true"/>
+                            <Label fx:id="planResultRowHeightPctLabel" minWidth="52.0" text="100%"/>
+                        </HBox>
+                        <Label text="長い文字列の表示"/>
+                        <HBox alignment="CENTER_LEFT" spacing="16.0">
+                            <RadioButton fx:id="planResultCellWrapRadio" mnemonicParsing="false"
+                                         text="折り返す" toggleGroup="$planResultCellModeGroup"/>
+                            <RadioButton fx:id="planResultCellClipRadio" mnemonicParsing="false"
+                                         text="見切れ（1行）" toggleGroup="$planResultCellModeGroup"/>
+                        </HBox>
+                        <Separator/>
+                        <Label text="計画*.json"/>
+                        <HBox alignment="CENTER_LEFT" spacing="8.0">
+                            <TextField fx:id="planJsonField" maxWidth="Infinity" prefWidth="560.0"
+                                       promptText="*.json" HBox.hgrow="ALWAYS"/>
+                            <Button fx:id="browsePlanButton" mnemonicParsing="false" text="参照..."
+                                    onAction="#onBrowsePlanJsonAction"/>
+                        </HBox>
+                        <Label text="member_schedule*.json"/>
+                        <HBox alignment="CENTER_LEFT" spacing="8.0">
+                            <TextField fx:id="memberJsonField" maxWidth="Infinity" prefWidth="560.0"
+                                       promptText="*.json" HBox.hgrow="ALWAYS"/>
+                            <Button fx:id="browseMemberButton" mnemonicParsing="false" text="参照..."
+                                    onAction="#onBrowseMemberJsonAction"/>
+                        </HBox>
+                        <Label fx:id="hintLabel" wrapText="true"/>
+                    </VBox>
+                </content>
+            </TitledPane>
+        </panes>
+    </Accordion>
+    <Label fx:id="statusLabel" wrapText="true"/>
+    <BorderPane fx:id="contentPane" minHeight="400.0" VBox.vgrow="ALWAYS"/>
+</VBox>

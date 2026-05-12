@@ -1,0 +1,147 @@
+# -*- coding: utf-8 -*-
+"""
+段階1: 加工計画DATA から未完了タスクを抽出し output/plan_input_tasks.xlsx を生成する。
+マクロで当ファイルをブックへ取り込み、「配台計画_タスク入力」で特別指定を編集した後、段階2を実行する。
+
+環境: planning_core と同様、openpyxl（閉じたブックの I/O）と、保存ロック時の xlwings 同期を使用する。
+初回はリポジトリの requirements.txt を pip し、Excel デスクトップ版を用意すること。
+"""
+import ctypes
+import os
+import sys
+import traceback
+from datetime import datetime
+
+# python -P / PYTHONSAFEPATH ではスクリプト所在ディレクトリが sys.path に入らない。
+# 同梱の planning_core / workbook_env_bootstrap を確実に解決する。
+_py_here = os.path.dirname(os.path.abspath(__file__))
+if _py_here:
+    sys.path.insert(0, _py_here)
+
+# planning_core は import 途中（FileHandler より前）で落ちると execution_log が作られない。
+# VBA は「ログ無し」を判定するため、読み込み前に必ず log/execution_log.txt を用意する。
+def _repo_root_for_stage1() -> str:
+    d = os.path.dirname(os.path.abspath(__file__))
+    return os.path.dirname(d) if os.path.basename(d).lower() == "python" else d
+
+
+def _execution_log_paths_stage1() -> list[str]:
+    """VBA が読む log と同じ候補（PM_AI_WORKSPACE を最優先、次にマクロブックのフォルダ）。"""
+    paths: list[str] = []
+    ws_dir = (os.environ.get("PM_AI_WORKSPACE") or "").strip()
+    if ws_dir:
+        paths.append(os.path.join(os.path.abspath(ws_dir), "log", "execution_log.txt"))
+    wb = (os.environ.get("TASK_INPUT_WORKBOOK") or "").strip()
+    if wb:
+        paths.append(
+            os.path.join(os.path.dirname(os.path.abspath(wb)), "log", "execution_log.txt")
+        )
+    paths.append(
+        os.path.join(_repo_root_for_stage1(), "log", "execution_log.txt")
+    )
+    seen: set[str] = set()
+    out: list[str] = []
+    for p in paths:
+        key = os.path.normcase(os.path.abspath(p))
+        if key not in seen:
+            seen.add(key)
+            out.append(p)
+    return out
+
+
+def _append_execution_log_line(level: str, msg: str) -> None:
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"{ts} - {level} - {msg}\n"
+    last_err: OSError | None = None
+    for path in _execution_log_paths_stage1():
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "a", encoding="utf-8-sig", newline="\n") as f:
+                f.write(line)
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except OSError:
+                    pass
+            return
+        except OSError as ex:
+            last_err = ex
+    print(f"log/execution_log.txt へ書けません: {last_err}", file=sys.stderr)
+
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+try:
+    import workbook_env_bootstrap as _wbe
+
+    _wbe.apply_from_task_input_workbook()
+except Exception:
+    pass
+
+if os.name == "nt":
+    hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+    if hwnd:
+        ctypes.windll.user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 3)
+
+try:
+    _append_execution_log_line(
+        "INFO", "段階1: task_extract_stage1 起動（planning_core 読み込み前）"
+    )
+except OSError as ex:
+    print(f"log/execution_log.txt を開けません: {ex}", file=sys.stderr)
+
+try:
+    import planning_core as pc
+except Exception:
+    _err_head = (
+        f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - ERROR - "
+        "planning_core の import に失敗しました\n"
+    )
+    _tb = traceback.format_exc()
+    for path in _execution_log_paths_stage1():
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "a", encoding="utf-8-sig", newline="\n") as f:
+                f.write(_err_head)
+                f.write(_tb)
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except OSError:
+                    pass
+        except OSError:
+            pass
+    traceback.print_exc()
+    sys.exit(1)
+
+
+def main():
+    from planning_core.dispatch_workspace import resolve_processing_plan_path_from_env
+
+    resolve_processing_plan_path_from_env()
+    _proc = (os.environ.get("PM_AI_PROCESSING_PLAN_PATH") or "").strip()
+    if not _proc or not os.path.isfile(_proc):
+        print(
+            "タスク入力ファイルが解決できません。PM_AI_PROCESSING_PLAN_PATH を実在する表形式ファイルにするか、"
+            "PM_AI_TASK_INPUT_SOURCE_DIR を指定してください（TASK_INPUT_WORKBOOK は段階1で使用しません）。",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    try:
+        ok = pc.run_stage1_extract()
+    except FileNotFoundError as e:
+        print(str(e).strip() or "マスタブックが見つかりません。", file=sys.stderr)
+        sys.exit(2)
+    except pc.PlanningValidationError as e:
+        msg = str(e).strip() or "マスタ skills の検証で中断しました。"
+        if not os.path.isfile(pc.stage2_blocking_message_path):
+            pc._write_stage2_blocking_message(msg)
+        print(msg, file=sys.stderr)
+        sys.exit(3)
+    sys.exit(0 if ok else 1)
+
+
+if __name__ == "__main__":
+    import workbook_env_bootstrap as _wbe_exit
+
+    sys.exit(_wbe_exit.run_cli_with_optional_pause_on_error(main))

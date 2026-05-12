@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0",
+  "document": "dispatch-plan-column-manifest",
+  "sheets": [
+    {
+      "id": "machining_plan_data",
+      "excelSheetName": "\u52a0\u5de5\u8a08\u753bDATA",
+      "columns": [
+        {
+          "headerKey": "\u4f9d\u983cNO",
+          "pythonConstantHint": "TASK_COL_TASK_ID",
+          "javaProperty": "taskId",
+          "valueKind": "string",
+          "nullable": false
+        },
+        {
+          "headerKey": "\u63db\u7b97\u6570\u91cf",
+          "pythonConstantHint": "TASK_COL_QTY",
+          "javaProperty": "convertedQty",
+          "valueKind": "decimal",
+          "nullable": true
+        }
+      ]
+    }
+  ]
+}

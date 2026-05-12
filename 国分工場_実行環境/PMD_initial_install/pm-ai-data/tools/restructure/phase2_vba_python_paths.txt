@@ -1,0 +1,5 @@
+Phase 2-I 概要
+
+- code/VBA/マスターファイル 配下の master_xlsm_VBA.bas 等には apply_/xlwings_console_runner 等の参照なし（grep）。
+- 参照用モジュール分割（code/参照用/モジュール分割バージョン/*.bas）の CP932 テキストを、隔離後の `参照用\python\*.py` / os.path.join(...,'参照用','python',...) に追従。
+- 変換スクリプト: tools/restructure/fix_vba_ref_python_paths_cp932.py（CP932 維持のため Unicode エスケープで記述）。

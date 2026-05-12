@@ -1,0 +1,9 @@
+# planning_core および同階層スクリプトのランタイム宣言（pip / uv / IDE が参照）
+[project]
+name = "planning-ai-testcode"
+version = "0.0.0"
+description = "工程管理AI テストコード（配台シミュレーション等）"
+requires-python = ">=3.14,<4"
+dependencies = []
+
+# 依存パッケージの正本は requirements.txt（VBA「環境構築」・setup_environment.py）

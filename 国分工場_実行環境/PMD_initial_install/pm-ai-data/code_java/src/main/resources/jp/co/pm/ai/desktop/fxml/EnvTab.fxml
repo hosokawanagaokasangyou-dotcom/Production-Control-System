@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<!-- Hint and button captions are set in EnvTabController (\u escapes) for encoding safety. -->
+<BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="jp.co.pm.ai.desktop.EnvTabController">
+    <padding>
+        <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+    </padding>
+    <center>
+        <VBox fillWidth="true" spacing="8.0">
+            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                <Label text="user.dir"/>
+                <Label fx:id="userDirLabel" wrapText="true" maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+            </HBox>
+            <Label fx:id="hintLabel" wrapText="true"/>
+            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                <Label fx:id="envSearchLabel"/>
+                <TextField fx:id="envSearchField" maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+                <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
+                        onAction="#onClearColumnFiltersAction"/>
+            </HBox>
+            <HBox fx:id="columnStripHost" spacing="0.0"/>
+            <TableView fx:id="envTable" minHeight="180.0" prefHeight="260.0"/>
+            <HBox spacing="8.0">
+                <Button fx:id="addRowButton" mnemonicParsing="false"
+                        onAction="#onAddRowButtonAction"/>
+                <Button fx:id="delRowButton" mnemonicParsing="false"
+                        onAction="#onDelRowButtonAction"/>
+                <Button fx:id="addMissingEnvVarsButton" mnemonicParsing="false"
+                        onAction="#onAddMissingEnvVarsButtonAction"/>
+                <Button fx:id="resetEnvDefaultsButton" mnemonicParsing="false"
+                        onAction="#onResetEnvDefaultsButtonAction"/>
+                <Button fx:id="encryptGeminiCredentialsButton" mnemonicParsing="false"
+                        onAction="#onEncryptGeminiCredentialsAction"/>
+            </HBox>
+        </VBox>
+    </center>
+</BorderPane>

@@ -1,0 +1,8 @@
+フォルダ構造整理 Phase 0-A 基準値（実施日時: 作業セッション）
+
+./code_java mvn -B test: SUCCESS (exit 0)
+./code/python pytest tests/ -q --tb=short: SUCCESS (exit 0)
+
+詳細ログ:
+- tools/restructure/mvn_baseline.log
+- tools/restructure/pytest_baseline.log
