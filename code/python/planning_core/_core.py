@@ -23954,6 +23954,58 @@ def _interactive_dispatch_target_process_key(v) -> str:
     return _normalize_process_name_for_rule_match(_interactive_norm_cell(v))
 
 
+def _interactive_dispatch_resolve_cap_key(
+    *,
+    interactive_dispatch_targets: dict,
+    interactive_trial_meters_done: dict | None,
+    tid: str,
+    proc: str,
+    mach: str,
+    current_date,
+) -> tuple | None:
+    """
+    JSON の配台日キーと実作業暦日がずれるとき、日次キャップ・meters_done の格納キーを決める。
+
+    - 暦日 current_date と一致するキーが targets にあればそれを使う（呼び出し側で先に判定可）。
+    - 無い場合は同一 (依頼NO, 工程, 機械) で current_date 以前の配台日キーを新しい順に見て、
+      目標メートルに未達の最初のキーを使う（前日の窓に収まらず翌暦日にまたいだ割付を同一 JSON 日に計上する）。
+    - いずれの過去キーも満たしている場合は、そのブロックで最も新しい過去キーを返す（残余の計上先）。
+    """
+    if isinstance(current_date, datetime):
+        cur_d = current_date.date()
+    elif isinstance(current_date, date):
+        cur_d = current_date
+    else:
+        return None
+    past: list[tuple[date, tuple]] = []
+    for kk in interactive_dispatch_targets:
+        if not isinstance(kk, tuple) or len(kk) != 4:
+            continue
+        if kk[0] != tid or kk[1] != proc or kk[2] != mach:
+            continue
+        d = kk[3]
+        if not isinstance(d, date):
+            continue
+        if d <= cur_d:
+            past.append((d, kk))
+    if not past:
+        return None
+    past.sort(key=lambda x: x[0], reverse=True)
+    done_dict = interactive_trial_meters_done or {}
+    for _d, kk in past:
+        try:
+            cap_m = float(interactive_dispatch_targets[kk])
+        except (TypeError, ValueError):
+            cap_m = 0.0
+        try:
+            done_m = float(done_dict.get(kk, 0.0))
+        except (TypeError, ValueError):
+            done_m = 0.0
+        if done_m < cap_m - 1e-5:
+            return kk
+    return past[0][1]
+
+
 _DEBUG_NDJSON_COUNTS: defaultdict[str, int] = defaultdict(int)
 _DEBUG_NDJSON_MAX_PER_HYPOTHESIS: dict[str, int] = {
     "H_cap_key_miss": 12,
@@ -28306,7 +28358,19 @@ def _trial_order_first_schedule_pass(
             _tid_iv = _interactive_norm_cell(str(task.get("task_id") or ""))
             _proc_iv = _interactive_dispatch_target_process_key(task.get("machine"))
             _mach_iv = _interactive_norm_cell(str(task.get("machine_name") or ""))
-            _cap_key = (_tid_iv, _proc_iv, _mach_iv, current_date)
+            _raw_cap_key = (_tid_iv, _proc_iv, _mach_iv, current_date)
+            _cap_key = _raw_cap_key
+            if _iv_cap and _raw_cap_key not in interactive_dispatch_targets:
+                _resolved_ck = _interactive_dispatch_resolve_cap_key(
+                    interactive_dispatch_targets=interactive_dispatch_targets,
+                    interactive_trial_meters_done=interactive_trial_meters_done,
+                    tid=_tid_iv,
+                    proc=_proc_iv,
+                    mach=_mach_iv,
+                    current_date=current_date,
+                )
+                if _resolved_ck is not None:
+                    _cap_key = _resolved_ck
             # #region agent log
             if (
                 _iv_cap
