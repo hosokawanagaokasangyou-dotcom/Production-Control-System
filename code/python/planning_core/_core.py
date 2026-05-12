@@ -515,50 +515,90 @@ def _resolve_gemini_credentials_json_path() -> str | None:
 
 
 # #region agent log
+def _agent_debug_session_id() -> str:
+    """Cursor デバッグセッション ID。未設定時は Java AgentDebugLog.DEFAULT_SESSION_ID と同じ。"""
+    for key in ("PM_AI_AGENT_DEBUG_SESSION_ID", "CURSOR_DEBUG_SESSION_ID"):
+        v = (os.environ.get(key) or "").strip()
+        if v:
+            return v
+    return "e04a1d"
+
+
+def _agent_debug_resolve_ndjson_log_path(session_id: str) -> str:
+    """
+    NDJSON ログファイルパス（AgentDebugLog.resolveNdjsonPath と同一順・パス直書き禁止）。
+
+    正本: .cursor/rules/agent-debug-ndjson-logging.mdc
+    """
+    sid = (session_id or "").strip() or "e04a1d"
+    file_name = f"debug-{sid}.log"
+    for env_key in ("CURSOR_DEBUG_LOG", "PM_AI_DEBUG_LOG"):
+        raw = (os.environ.get(env_key) or "").strip()
+        if raw:
+            return os.path.normpath(os.path.abspath(raw))
+    ui_path = (os.environ.get("PM_AI_CURSOR_DEBUG_LOG") or "").strip()
+    if ui_path:
+        return os.path.normpath(os.path.abspath(ui_path))
+    repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
+    if repo:
+        repo_abs = os.path.normpath(os.path.abspath(repo))
+        leaf = os.path.basename(repo_abs)
+        parent = os.path.dirname(repo_abs)
+        if parent and leaf.lower() == "production-control-system":
+            return os.path.normpath(os.path.join(parent, ".cursor", file_name))
+        return os.path.normpath(os.path.join(repo_abs, ".cursor", file_name))
+    return os.path.normpath(os.path.join(os.getcwd(), ".cursor", file_name))
+
+
+def _agent_debug_write_ndjson_line(line: str, session_id: str) -> None:
+    """
+    1 行追記。主パス失敗時は user.home/.cursor へ。成功後 PM_AI_DEBUG_LOG_MIRROR があれば追記。
+
+    WSL ミラー（UNC）は Java 側 AgentDebugLog の責務（agent-debug-wsl-windows-mirror.mdc）。
+    """
+    sid = (session_id or "").strip() or "e04a1d"
+    file_name = f"debug-{sid}.log"
+
+    def try_write(path: str) -> bool:
+        try:
+            parent = os.path.dirname(path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            with open(path, "a", encoding="utf-8") as lf:
+                lf.write(line)
+            return True
+        except OSError:
+            return False
+
+    primary = _agent_debug_resolve_ndjson_log_path(sid)
+    written = primary if try_write(primary) else ""
+    if not written:
+        home = os.path.expanduser("~")
+        if home and home != "~":
+            fb = os.path.normpath(os.path.join(home, ".cursor", file_name))
+            if try_write(fb):
+                written = fb
+    if not written:
+        return
+    mirror = (os.environ.get("PM_AI_DEBUG_LOG_MIRROR") or "").strip()
+    if mirror:
+        mp = os.path.normpath(os.path.abspath(mirror))
+        if mp != os.path.normpath(written):
+            try_write(mp)
+
+
 def _agent_debug_ndjson_gemini_cred(payload: dict) -> None:
-    """Session a07f8d: Gemini 証明書解決のランタイム証跡（秘密は書かない）。Windows 子でも書けるよう複数パスに試行。"""
+    """Gemini 証明書解決の一時計測（秘密は書かない）。ログパスは環境変数経由のみ。"""
     try:
+        sid = _agent_debug_session_id()
         row = {
-            "sessionId": "a07f8d",
+            **payload,
+            "sessionId": sid,
             "timestamp": int(time_module.time() * 1000),
             "location": "planning_core/_core.py:gemini_cred",
-            **payload,
         }
         line = json.dumps(row, ensure_ascii=False) + "\n"
-        paths: list[str] = [
-            "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-a07f8d.log",
-        ]
-        rr = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
-        if rr:
-            try:
-                paths.append(
-                    os.path.normpath(
-                        os.path.join(os.path.abspath(rr), ".cursor", "debug-a07f8d.log")
-                    )
-                )
-            except Exception:
-                pass
-        try:
-            paths.append(
-                os.path.normpath(
-                    os.path.join(os.getcwd(), ".cursor", "debug-a07f8d.log")
-                )
-            )
-        except Exception:
-            pass
-        seen: set[str] = set()
-        for log_path in paths:
-            if not log_path or log_path in seen:
-                continue
-            seen.add(log_path)
-            try:
-                d = os.path.dirname(log_path)
-                if d:
-                    os.makedirs(d, exist_ok=True)
-                with open(log_path, "a", encoding="utf-8") as lf:
-                    lf.write(line)
-            except Exception:
-                continue
+        _agent_debug_write_ndjson_line(line, sid)
     except Exception:
         pass
 
