@@ -169,8 +169,8 @@ public final class DispatchInteractiveTabController {
     private record FullGridRebuild(List<LocalDate> axis, WideGridBundle wide, ByDayGridBundle byDay) {}
 
     /**
-     * In-memory {@link #doc} differs from last successful「保存」to disk. Dispatch trial reads JSON from disk, so the
-     * button stays disabled until save (row order, cell edits, DnD moves, etc.).
+     * In-memory {@link #doc} differs from last successful「保存」to disk（行順・セル編集・DnD 等）。
+     * 配台試行は開始時に表を JSON へ自動同期するため、試行ボタンは未保存でも押下可能。
      */
     private boolean dispatchDocDirtySinceSave;
 
@@ -866,6 +866,12 @@ public final class DispatchInteractiveTabController {
                 new Task<>() {
                     @Override
                     protected String call() throws Exception {
+                        ResultDispatchJsonIo.write(jsonPath, doc.copy());
+                        if (shell != null) {
+                            shell.appendLog(
+                                    "[dispatch-editor] trial: 試行前にメモリ上の表を JSON に同期 "
+                                            + jsonPath.toAbsolutePath().normalize());
+                        }
                         Path pyExe = trialPythonExe;
                         Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
                         Map<String, String> pyEnv = shell.snapshotDispatchTrialPythonEnv();
@@ -1168,16 +1174,17 @@ public final class DispatchInteractiveTabController {
         applyDispatchTrialButtonEnabledState();
     }
 
-    /** Dispatch trial reads JSON from disk; disable until「保存」while the editor has unsaved changes. */
+    /** 配台試行ボタン: パイプライン実行中のみ無効。未保存でも試行開始時に JSON へ同期する。 */
     private void applyDispatchTrialButtonEnabledState() {
         if (dispatchTrialButton == null) {
             return;
         }
-        boolean block = reloadInteractionDisabled || dispatchDocDirtySinceSave;
-        dispatchTrialButton.setDisable(block);
+        dispatchTrialButton.setDisable(reloadInteractionDisabled);
         if (dispatchDocDirtySinceSave && !reloadInteractionDisabled) {
             dispatchTrialButton.setTooltip(
-                    new Tooltip("表の変更を段階3に反映するには、先に「保存 (JSON+xlsx)」を押してください。"));
+                    new Tooltip(
+                            "未保存の編集があります。配台試行は開始時に表の内容を結果_配台表.json に自動同期します。"
+                                    + " Excel (xlsx) も更新する場合は「保存 (JSON+xlsx)」を押してください。"));
         } else {
             dispatchTrialButton.setTooltip(null);
         }

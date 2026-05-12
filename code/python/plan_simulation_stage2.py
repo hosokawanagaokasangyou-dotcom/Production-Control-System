@@ -30,7 +30,9 @@ import planning_core as pc
 
 def main():
     try:
-        pc.generate_plan()
+        from planning_core.stage2_identical_dispatch_runner import run_stage2_generate_plan
+
+        run_stage2_generate_plan()
     except FileNotFoundError as e:
         print(str(e).strip() or "マスタブックが見つかりません。", file=sys.stderr)
         sys.exit(2)

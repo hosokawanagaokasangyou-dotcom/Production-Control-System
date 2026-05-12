@@ -22328,7 +22328,7 @@ def _equipment_line_lower_dispatch_trial_still_pending(
     より尝さい試行順の行は **当日の機械カレンダーの値で計画窓を全日占有**（しの設備は当日スロットゼロ）なら
     「競坈の残」とみなさない（グローバル試行順とあゝせで他設備は全日止まるのを防し）。
     """
-    if _interactive_dispatch_trial_env_active():
+    if _interactive_trial_calendar_legacy_active():
         # インタラクティブ試行: JSON の行順を優先し、同一設備上で他依頼の低試行順保留で抑止しない。
         return False
     line = (machine_occ_key or "").strip()
@@ -22453,7 +22453,7 @@ def _task_blocked_by_global_dispatch_trial_order(
         return False
     # インタラクティブ配台試行: 入力 JSON の行ごとの配台試行順を正とする。他依頼NOの dto=1 が
     # プールに残るだけで V5-4 dto=2 が全日 eligible から落ちるのを防ぐ（グローバル最尝試行順は使わない）。
-    if _interactive_dispatch_trial_env_active():
+    if _interactive_trial_calendar_legacy_active():
         return False
     if min_dispatch_effective is not None:
         m = min_dispatch_effective
@@ -24675,13 +24675,28 @@ def _interactive_dispatch_trial_env_active() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
+def _interactive_stage2_parity_active() -> bool:
+    """段階3を段階2と同一の機械カレンダー・工場枠（終業延長を含む）で回す（runner が設定）。"""
+    v = (os.environ.get("PM_AI_INTERACTIVE_TRIAL_STAGE2_PARITY") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def _interactive_trial_calendar_legacy_active() -> bool:
+    """
+    True のときのみ、従来のインタラクティブ試行専用の機械カレンダー解釈
+    （※占有のみ・未定義スロットの全日ブロック・終業 23:59 延長など）を使う。
+    段階2同一パリティでは False。
+    """
+    return _interactive_dispatch_trial_env_active() and not _interactive_stage2_parity_active()
+
+
 def _interactive_machine_calendar_gap_blocks(day_d: date) -> list[tuple[datetime, datetime]]:
     """
     インタラクティブ配台試行: 機械カレンダーにスロット行が無い時刻（工場計画窓内）は配台不可。
     列0で定義されたスロットの合併の**外側**をブロック区間として返す。
     シートに当該暦日が一切無いときは計画窓全体。
     """
-    if not _interactive_dispatch_trial_env_active():
+    if not _interactive_trial_calendar_legacy_active():
         return []
     union = _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE.get(day_d)
     w0 = datetime.combine(day_d, DEFAULT_START_TIME)
@@ -24703,7 +24718,7 @@ def _interactive_augment_machine_calendar_day_blocks(
 ) -> dict[str, list[tuple[datetime, datetime]]]:
     """インタラクティブ試行時のみ、未定義時刻ブロックを全対象設備キーへマージする。"""
     db = dict(day_blocks or {})
-    if not _interactive_dispatch_trial_env_active():
+    if not _interactive_trial_calendar_legacy_active():
         return db
     gaps = _interactive_machine_calendar_gap_blocks(day_d)
     if not gaps:
@@ -24734,7 +24749,7 @@ def _interactive_trial_relax_team_end_limit_to_eod(
     デスクトップ配台試行のみ: 出勤簿の終業より遅く機械が空く場合でも同日ロールを試せるよう、
     チーム終業上限を当日 23:59 まで引き上げる（暦日跨ぎ加工は別チェックでエラー）。
     """
-    if not _interactive_dispatch_trial_env_active():
+    if not _interactive_trial_calendar_legacy_active():
         return team_end_limit
     cap = datetime.combine(current_date, time(23, 59))
     return cap if team_end_limit < cap else team_end_limit
@@ -29209,15 +29224,14 @@ def generate_plan():
     """
     段階2のメイン処理。戻り値なし（ログ・Excel 出力で完絝）。
 
+    オーケストレーションの正本は ``planning_core.stage2_identical_dispatch_runner``。
+
     前提: 環境変数 TASK_INPUT_WORKBOOK、カレントディレクトリがスクリプトフォルダ。
     出力: ``output_dir`` 直下の ``計画*.xlsx`` / ``人員*.xlsx``（実行直前に同名パターンを削除しようとする。ファイル名は短い日本語接頭辞＋時刻で実行ごとに一意）、および log/execution_log.txt。
     """
-    master_abs = _master_workbook_path_resolved()
-    try:
-        with _override_default_factory_hours_from_master(master_abs):
-            _generate_plan_impl()
-    finally:
-        pass
+    from planning_core.stage2_identical_dispatch_runner import run_stage2_generate_plan
+
+    run_stage2_generate_plan()
 
 def refresh_equipment_gantt_actual_detail_only() -> str:
     """
@@ -30561,7 +30575,7 @@ def _generate_plan_impl(
     global DEFAULT_START_TIME, DEFAULT_END_TIME
     try:
         _t_cal0 = time_module.perf_counter()
-        _trial_env = _interactive_dispatch_trial_env_active()
+        _trial_env = _interactive_trial_calendar_legacy_active()
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
             _master_workbook_path_resolved(),
             equipment_list,
@@ -30627,7 +30641,7 @@ def _generate_plan_impl(
             "インタラクティブ配台試行: 工場枠を全日(00:00-23:59)に拡大し、"
             "機械カレンダー占有を無視します（サブプロセス終了で既定値に戻ります）。"
         )
-    elif _interactive_dispatch_trial_env_active():
+    elif _interactive_trial_calendar_legacy_active():
         # デスクトップ配台試行（dispatch_interactive_trial）既定: 全日緩和は使わず master 工場枠＋同日延長
         _mp_cal = _master_path_stage2
         _ns, _ne = _read_master_main_factory_operating_times(_mp_cal)
@@ -30916,7 +30930,11 @@ def _generate_plan_impl(
     _due_shift_cap_warned_tids: set[str] = set()
     _interactive_trial_pair_dates = None
     _interactive_trial_meters_done: dict[tuple[str, str, str, date], float] = {}
-    if _interactive_dispatch_trial_env_active() and interactive_dispatch_targets:
+    if (
+        _interactive_dispatch_trial_env_active()
+        and not _interactive_stage2_parity_active()
+        and interactive_dispatch_targets
+    ):
         # 段階3: JSON の暦日集合だけへ eligible を絞ると、依存で遅れた暦日が集合に無く
         # 全日スキップされうる（例: V5-4）。日次目標 m は interactive_dispatch_targets のキャップで担保。
         # 従来の暦日絞り: PM_AI_INTERACTIVE_TRIAL_PAIR_DATES=1
