@@ -23947,6 +23947,62 @@ def _interactive_dispatch_target_process_key(v) -> str:
     return _normalize_process_name_for_rule_match(_interactive_norm_cell(v))
 
 
+_DEBUG_NDJSON_COUNTS: defaultdict[str, int] = defaultdict(int)
+_DEBUG_NDJSON_MAX_PER_HYPOTHESIS: dict[str, int] = {
+    "H_cap_key_miss": 12,
+    "H_proc_key_merge": 4,
+}
+
+
+def _resolve_cursor_debug_ndjson_log_path(session_id: str = "0941fe") -> str | None:
+    """WSL/Windows 双方で書けるよう env 優先、なければリポジトリ直下 .cursor/debug-<id>.log。"""
+    for _env in ("CURSOR_DEBUG_LOG", "PM_AI_DEBUG_LOG", "PM_AI_CURSOR_DEBUG_LOG"):
+        _p = (os.environ.get(_env) or "").strip()
+        if _p:
+            return _p
+    try:
+        _root = pathlib.Path(__file__).resolve().parents[3]
+        _cand = _root / ".cursor" / f"debug-{session_id}.log"
+        _cand.parent.mkdir(parents=True, exist_ok=True)
+        return str(_cand)
+    except Exception:
+        return None
+
+
+def _append_cursor_debug_ndjson(
+    session_id: str,
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict,
+) -> None:
+    _lim = _DEBUG_NDJSON_MAX_PER_HYPOTHESIS.get(
+        hypothesis_id, max(_DEBUG_NDJSON_MAX_PER_HYPOTHESIS.values())
+    )
+    if _DEBUG_NDJSON_COUNTS[hypothesis_id] >= _lim:
+        return
+    _path = _resolve_cursor_debug_ndjson_log_path(session_id)
+    if not _path:
+        return
+    try:
+        _DEBUG_NDJSON_COUNTS[hypothesis_id] += 1
+        _line = json.dumps(
+            {
+                "sessionId": session_id,
+                "hypothesisId": hypothesis_id,
+                "location": location,
+                "message": message,
+                "data": data,
+                "timestamp": int(time_module.time() * 1000),
+            },
+            ensure_ascii=False,
+        )
+        with open(_path, "a", encoding="utf-8") as _lf:
+            _lf.write(_line + "\n")
+    except Exception:
+        pass
+
+
 def _interactive_parse_dispatch_date_cell(val) -> date | None:
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return None
@@ -24025,32 +24081,14 @@ def merge_interactive_result_dispatch_json_into_tasks_df(
         if k in order_map:
             df.at[idx, _dto] = str(order_map[k])
     # #region agent log
-    try:
-        import json as _json_0941fe
-        import time as _time_0941fe
-
-        _sk = [[str(x) for x in _t] for _t in list(targets.keys())[:8]]
-        with open(
-            "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-0941fe.log",
-            "a",
-            encoding="utf-8",
-        ) as _lf:
-            _lf.write(
-                _json_0941fe.dumps(
-                    {
-                        "sessionId": "0941fe",
-                        "hypothesisId": "H_proc_key_merge",
-                        "location": "merge_interactive_result_dispatch_json_into_tasks_df",
-                        "message": "targets after merge",
-                        "data": {"n_targets": len(targets), "sample_keys": _sk},
-                        "timestamp": int(_time_0941fe.time() * 1000),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
+    _sk = [[str(x) for x in _t] for _t in list(targets.keys())[:8]]
+    _append_cursor_debug_ndjson(
+        "0941fe",
+        "H_proc_key_merge",
+        "merge_interactive_result_dispatch_json_into_tasks_df",
+        "targets after merge",
+        {"n_targets": len(targets), "sample_keys": _sk},
+    )
     # #endregion
     return df, dict(targets)
 
@@ -28256,6 +28294,40 @@ def _trial_order_first_schedule_pass(
             _proc_iv = _interactive_dispatch_target_process_key(task.get("machine"))
             _mach_iv = _interactive_norm_cell(str(task.get("machine_name") or ""))
             _cap_key = (_tid_iv, _proc_iv, _mach_iv, current_date)
+            # #region agent log
+            if (
+                _iv_cap
+                and interactive_dispatch_targets is not None
+                and _cap_key not in interactive_dispatch_targets
+            ):
+                _near = [
+                    [str(x) for x in kk]
+                    for kk in interactive_dispatch_targets
+                    if isinstance(kk, tuple)
+                    and len(kk) == 4
+                    and kk[0] == _tid_iv
+                    and kk[2] == _mach_iv
+                    and kk[3] == current_date
+                ][:8]
+                if _near:
+                    _append_cursor_debug_ndjson(
+                        "0941fe",
+                        "H_cap_key_miss",
+                        "_drain_rolls_for_task",
+                        "cap tuple not in targets; same tid+mach+date in targets",
+                        {
+                            "cap_key": [
+                                str(_tid_iv),
+                                str(_proc_iv),
+                                str(_mach_iv),
+                                current_date.isoformat()
+                                if isinstance(current_date, date)
+                                else str(current_date),
+                            ],
+                            "same_tid_mach_date_keys": _near,
+                        },
+                    )
+            # #endregion
             if _iv_cap and _cap_key in interactive_dispatch_targets:
                 try:
                     _cap_m = float(interactive_dispatch_targets[_cap_key])
