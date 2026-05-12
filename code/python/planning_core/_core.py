@@ -23950,6 +23950,8 @@ def _interactive_dispatch_target_process_key(v) -> str:
 _DEBUG_NDJSON_COUNTS: defaultdict[str, int] = defaultdict(int)
 _DEBUG_NDJSON_MAX_PER_HYPOTHESIS: dict[str, int] = {
     "H_cap_key_miss": 12,
+    "H_cap_absent": 20,
+    "H_post_plan_shortfall": 3,
     "H_proc_key_merge": 4,
 }
 
@@ -28327,6 +28329,32 @@ def _trial_order_first_schedule_pass(
                             "same_tid_mach_date_keys": _near,
                         },
                     )
+                else:
+                    _same_tid = [
+                        [str(x) for x in kk]
+                        for kk in interactive_dispatch_targets
+                        if isinstance(kk, tuple)
+                        and len(kk) == 4
+                        and kk[0] == _tid_iv
+                    ][:12]
+                    if _same_tid:
+                        _append_cursor_debug_ndjson(
+                            "0941fe",
+                            "H_cap_absent",
+                            "_drain_rolls_for_task",
+                            "cap tuple not in targets; other keys same tid",
+                            {
+                                "cap_key": [
+                                    str(_tid_iv),
+                                    str(_proc_iv),
+                                    str(_mach_iv),
+                                    current_date.isoformat()
+                                    if isinstance(current_date, date)
+                                    else str(current_date),
+                                ],
+                                "keys_same_tid": _same_tid,
+                            },
+                        )
             # #endregion
             if _iv_cap and _cap_key in interactive_dispatch_targets:
                 try:
@@ -33100,6 +33128,20 @@ def _generate_plan_impl(
         _interactive_validate_dispatch_quantities(
             df_dispatch, interactive_dispatch_targets
         )
+    # #region agent log
+    if interactive_dispatch_targets and _interactive_dispatch_trial_env_active():
+        _sf_dbg = compute_interactive_trial_dispatch_qty_shortfall(
+            interactive_dispatch_targets,
+            dict(_interactive_trial_meters_done),
+        )
+        _append_cursor_debug_ndjson(
+            "0941fe",
+            "H_post_plan_shortfall",
+            "_generate_plan_impl",
+            "dispatch_qty_shortfall end",
+            {"n_shortfalls": len(_sf_dbg), "sample": _sf_dbg[:25]},
+        )
+    # #endregion
     if interactive_relax_intraday or interactive_dispatch_targets is not None:
         _interactive_validate_timeline_midnight_if_interactive(timeline_events)
     _interactive_append_machining_end_after_member_shift_shortages(
