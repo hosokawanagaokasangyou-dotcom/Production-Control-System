@@ -4,9 +4,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
+
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 /**
  * {@code gantt_render_contract} の {@code encode_value} 互換の JSON ノードを
@@ -29,15 +33,53 @@ public final class GanttContractValueDecoder {
                 }
                 if ("datetime".equals(kind)) {
                     String s = n.get("v").asText();
-                    if (s.length() >= 19) {
-                        return LocalDateTime.parse(s.substring(0, 19));
+                    try {
+                        if (s.length() >= 19) {
+                            return LocalDateTime.parse(s.substring(0, 19));
+                        }
+                        return LocalDateTime.parse(s);
+                    } catch (RuntimeException ex) {
+                        // #region agent log
+                        Map<String, Object> d = new LinkedHashMap<>();
+                        d.put(
+                                "raw",
+                                s == null
+                                        ? ""
+                                        : (s.length() > 120 ? s.substring(0, 120) : s));
+                        d.put("err", ex.getClass().getSimpleName() + ":" + ex.getMessage());
+                        AgentDebugLog.appendStructured(
+                                Map.of(),
+                                "1ecccd",
+                                "B",
+                                "GanttContractValueDecoder.decodeValue:datetime",
+                                "LocalDateTime.parse failed",
+                                d);
+                        // #endregion
+                        throw ex;
                     }
-                    return LocalDateTime.parse(s);
                 }
                 if ("time".equals(kind)) {
                     String s = n.get("v").asText();
                     if (s.length() >= 5) {
-                        return LocalTime.parse(s.length() > 8 ? s.substring(0, 8) : s);
+                        String frag = s.length() > 8 ? s.substring(0, 8) : s;
+                        try {
+                            return LocalTime.parse(frag);
+                        } catch (RuntimeException ex) {
+                            // #region agent log
+                            Map<String, Object> d = new LinkedHashMap<>();
+                            d.put("raw", s.length() > 120 ? s.substring(0, 120) : s);
+                            d.put("frag", frag);
+                            d.put("err", ex.getClass().getSimpleName() + ":" + ex.getMessage());
+                            AgentDebugLog.appendStructured(
+                                    Map.of(),
+                                    "1ecccd",
+                                    "C",
+                                    "GanttContractValueDecoder.decodeValue:time",
+                                    "LocalTime.parse failed",
+                                    d);
+                            // #endregion
+                            throw ex;
+                        }
                     }
                 }
                 if ("tuple".equals(kind)) {

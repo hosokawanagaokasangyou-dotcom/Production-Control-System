@@ -76,6 +76,8 @@ import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
+
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
@@ -2111,6 +2113,33 @@ public final class DispatchInteractiveTabController {
         try {
             DispatchTrialShortages.FullBundle fb = DispatchTrialShortages.readFull(shortagePath);
             List<DispatchQtyShortfallRow> rows = fb.dispatchQtyShortfall();
+            // #region agent log
+            {
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("rowCount", rows != null ? rows.size() : 0);
+                if (rows != null && !rows.isEmpty()) {
+                    DispatchQtyShortfallRow s0 = rows.get(0);
+                    d.put(
+                            "sample",
+                            s0.taskId()
+                                    + "|"
+                                    + s0.machineName()
+                                    + "|"
+                                    + s0.dispatchDateIso()
+                                    + "|tgt="
+                                    + s0.targetM()
+                                    + "|done="
+                                    + s0.doneM());
+                }
+                AgentDebugLog.appendStructured(
+                        shell != null ? shell.snapshotUiEnv() : Map.of(),
+                        "1ecccd",
+                        "A",
+                        "DispatchInteractiveTabController.applyDispatchShortfallFromDisk",
+                        "dispatch_qty_shortfall loaded",
+                        d);
+            }
+            // #endregion
             lastDispatchShortageHints = List.copyOf(fb.shortageHints());
             applyDispatchShortfallRows(rows);
         } catch (IOException e) {
