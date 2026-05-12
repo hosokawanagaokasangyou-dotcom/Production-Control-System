@@ -18,6 +18,36 @@ import os
 import traceback
 from pathlib import Path
 
+# #region agent log
+_DEBUG_SESSION_ID = "d0d097"
+
+
+def _append_debug_ndjson(hypothesis_id: str, location: str, message: str, data: dict) -> None:
+    try:
+        import json as _json
+        import time as _time
+
+        log_path = (Path(__file__).resolve().parents[3] / ".cursor" / f"debug-{_DEBUG_SESSION_ID}.log")
+        line = _json.dumps(
+            {
+                "sessionId": _DEBUG_SESSION_ID,
+                "hypothesisId": hypothesis_id,
+                "location": location,
+                "message": message,
+                "data": data,
+                "timestamp": int(_time.time() * 1000),
+            },
+            ensure_ascii=False,
+        ) + "\n"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(line)
+    except Exception:
+        pass
+
+
+# #endregion
+
 # Runner が設定する環境変数（_core 側で参照）
 ENV_INTERACTIVE_TRIAL_STAGE2_PARITY = "PM_AI_INTERACTIVE_TRIAL_STAGE2_PARITY"
 
@@ -61,6 +91,40 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
         return 1, None
     json_columns = raw.get("columns") if isinstance(raw, dict) else None
 
+    # #region agent log
+    _nb_date = _nb_qty = 0
+    _samples: list[dict] = []
+    for _i, _r in enumerate(rows[:8] if isinstance(rows, list) else []):
+        if not isinstance(_r, dict):
+            continue
+        _ds = str(_r.get("配台日") or "").strip()
+        _qs = str(_r.get("当日配台数量") or "").strip()
+        if _ds:
+            _nb_date += 1
+        if _qs:
+            _nb_qty += 1
+        if len(_samples) < 5:
+            _samples.append(
+                {
+                    "i": _i,
+                    "依頼NO": str(_r.get("依頼NO") or "")[:24],
+                    "配台日": _ds[:40],
+                    "当日配台数量": _qs[:24],
+                }
+            )
+    _append_debug_ndjson(
+        "B",
+        "stage2_identical_dispatch_runner.run_interactive",
+        "json_rows before merge (配台日/当日配台数量)",
+        {
+            "json_row_list_len": len(rows) if isinstance(rows, list) else -1,
+            "nonblank_dispatch_date": _nb_date,
+            "nonblank_dispatch_qty": _nb_qty,
+            "sample_rows": _samples,
+        },
+    )
+    # #endregion
+
     os.environ["PM_AI_INTERACTIVE_DISPATCH_TRIAL"] = "1"
     os.environ[ENV_INTERACTIVE_TRIAL_STAGE2_PARITY] = "1"
 
@@ -72,6 +136,17 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
         merged_df, targets = pc.merge_interactive_result_dispatch_json_into_tasks_df(
             tasks_df, rows
         )
+        # #region agent log
+        _prev: list[dict] = []
+        for _i, (_k, _v) in enumerate(list(targets.items())[:10]):
+            _prev.append({"key_repr": repr(_k)[:100], "target_m": float(_v)})
+        _append_debug_ndjson(
+            "B",
+            "stage2_identical_dispatch_runner.run_interactive",
+            "after merge_interactive (targets from 配台日+当日配台数量)",
+            {"targets_count": len(targets), "targets_preview": _prev},
+        )
+        # #endregion
         print("[dispatch trial] 段階2同一条件で配台を実行中…（時間がかかる場合があります）", flush=True)
         master_abs = pc._master_workbook_path_resolved()
         with pc._override_default_factory_hours_from_master(master_abs):

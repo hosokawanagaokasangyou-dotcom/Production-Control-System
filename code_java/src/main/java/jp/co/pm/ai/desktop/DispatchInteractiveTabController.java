@@ -90,6 +90,7 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage2ColumnSupport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
@@ -872,6 +873,53 @@ public final class DispatchInteractiveTabController {
                                     "[dispatch-editor] trial: 試行前にメモリ上の表を JSON に同期 "
                                             + jsonPath.toAbsolutePath().normalize());
                         }
+                        // #region agent log
+                        {
+                            int rowCount = doc.rows().size();
+                            int nonBlankDate = 0;
+                            int nonBlankQty = 0;
+                            List<String> samples = new ArrayList<>();
+                            int si = 0;
+                            for (Map<String, String> row : doc.rows()) {
+                                String d = row.get(ResultDispatchSchema.COL_DISPATCH_DATE);
+                                String q = row.get(ResultDispatchSchema.COL_DISPATCH_QTY);
+                                if (d != null && !d.isBlank()) {
+                                    nonBlankDate++;
+                                }
+                                if (q != null && !q.isBlank()) {
+                                    nonBlankQty++;
+                                }
+                                if (si < 4) {
+                                    String tid = row.getOrDefault("依頼NO", "");
+                                    String ds = d != null ? d : "";
+                                    String qs = q != null ? q : "";
+                                    if (ds.length() > 28) {
+                                        ds = ds.substring(0, 28) + "…";
+                                    }
+                                    if (qs.length() > 16) {
+                                        qs = qs.substring(0, 16) + "…";
+                                    }
+                                    samples.add("i" + si + " tid=" + tid + " 配台日=" + ds + " 当日=" + qs);
+                                    si++;
+                                }
+                            }
+                            Map<String, Object> payload = new LinkedHashMap<>();
+                            payload.put("rowCount", rowCount);
+                            payload.put("nonBlankDispatchDate", nonBlankDate);
+                            payload.put("nonBlankDispatchQtyCell", nonBlankQty);
+                            payload.put("sampleRows", samples);
+                            payload.put(
+                                    "jsonPath",
+                                    jsonPath.toAbsolutePath().normalize().toString());
+                            AgentDebugLog.appendStructured(
+                                    shell != null ? shell.snapshotUiEnv() : Map.of(),
+                                    "d0d097",
+                                    "A",
+                                    "DispatchInteractiveTabController.dispatchTrialTask.call",
+                                    "post-write doc stats (配台日/当日配台数量)",
+                                    payload);
+                        }
+                        // #endregion
                         Path pyExe = trialPythonExe;
                         Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
                         Map<String, String> pyEnv = shell.snapshotDispatchTrialPythonEnv();
