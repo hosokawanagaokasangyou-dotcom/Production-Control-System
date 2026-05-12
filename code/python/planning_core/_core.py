@@ -23942,20 +23942,128 @@ def _interactive_norm_cell(v) -> str:
     return unicodedata.normalize("NFKC", str(v).strip())
 
 
-def _agent_debug_ndjson_log_path_0941fe() -> str | None:
-    """Windows / WSL 両方で書けるよう、固定 /mnt パスは使わない。"""
-    p = (os.environ.get("CURSOR_DEBUG_LOG") or os.environ.get("PM_AI_DEBUG_LOG") or "").strip()
-    if p:
-        return p
+# Cursor デバッグ NDJSON: ``.cursor/rules/agent-debug-ndjson-logging.mdc`` / ``agent-debug-wsl-windows-mirror.mdc``
+# に揃えた解決順（Java ``AgentDebugLog.resolveNdjsonPath`` 相当）とミラー追記。
+_AGENT_DEBUG_NDJSON_SESSION_ID = "0941fe"
+
+
+def _resolve_repo_root_for_agent_debug_ndjson() -> pathlib.Path:
     rr = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
     if rr:
-        return str(pathlib.Path(rr) / ".cursor" / "debug-0941fe.log")
+        return pathlib.Path(rr).expanduser().resolve()
+    return pathlib.Path(__file__).resolve().parents[3]
+
+
+def _resolve_agent_debug_ndjson_primary_path() -> pathlib.Path | None:
+    """
+    first hit（Java AgentDebugLog と同一順）:
+    1. CURSOR_DEBUG_LOG / PM_AI_DEBUG_LOG
+    2. PM_AI_CURSOR_DEBUG_LOG（AppPaths.KEY_PM_AI_CURSOR_DEBUG_LOG）
+    3. parent(repo)/.cursor/…（repo 葉が Production-Control-System のとき）
+    4. repo/.cursor/debug-<session>.log
+    """
+    sid = (_AGENT_DEBUG_NDJSON_SESSION_ID or "0941fe").strip() or "0941fe"
+    file_name = f"debug-{sid}.log"
+    for _ek in ("CURSOR_DEBUG_LOG", "PM_AI_DEBUG_LOG"):
+        v = (os.environ.get(_ek) or "").strip()
+        if v:
+            return pathlib.Path(v).expanduser().resolve()
+    v2 = (os.environ.get("PM_AI_CURSOR_DEBUG_LOG") or "").strip()
+    if v2:
+        return pathlib.Path(v2).expanduser().resolve()
     try:
-        here = pathlib.Path(__file__).resolve()
-        root = here.parents[3]
-        return str(root / ".cursor" / "debug-0941fe.log")
+        repo = _resolve_repo_root_for_agent_debug_ndjson()
     except Exception:
         return None
+    if repo.name.casefold() == "production-control-system" and repo.parent is not None:
+        return (repo.parent / ".cursor" / file_name).resolve()
+    return (repo / ".cursor" / file_name).resolve()
+
+
+def _agent_debug_ndjson_fallback_home_path() -> pathlib.Path:
+    sid = (_AGENT_DEBUG_NDJSON_SESSION_ID or "0941fe").strip() or "0941fe"
+    return (pathlib.Path.home() / ".cursor" / f"debug-{sid}.log").resolve()
+
+
+def _agent_debug_wsl_unc_mirror_enabled() -> bool:
+    v = (os.environ.get("PM_AI_DEBUG_LOG_WSL_UNC") or "").strip().lower()
+    if not v:
+        return True
+    return v not in ("0", "false", "off")
+
+
+def _windows_build_wsl_unc_path(
+    windows_abs_normalized: str, distro: str, unc_root_prefix: str
+) -> str | None:
+    if not distro or not windows_abs_normalized or len(windows_abs_normalized) < 3:
+        return None
+    dl = windows_abs_normalized[0]
+    if not (dl.isalpha() and windows_abs_normalized[1] == ":"):
+        return None
+    tail = windows_abs_normalized[2:].replace("/", "\\")
+    if not tail.startswith("\\"):
+        tail = "\\" + tail
+    root = unc_root_prefix.rstrip("\\") + "\\"
+    return f"{root}{distro.strip()}\\mnt\\{dl.lower()}{tail}"
+
+
+def _agent_debug_collect_mirror_paths(written: pathlib.Path) -> list[pathlib.Path]:
+    out: list[pathlib.Path] = []
+    mv = (os.environ.get("PM_AI_DEBUG_LOG_MIRROR") or "").strip()
+    if mv:
+        out.append(pathlib.Path(mv).expanduser().resolve())
+    if os.name != "nt" or not _agent_debug_wsl_unc_mirror_enabled():
+        return out
+    try:
+        wabs = str(written.resolve())
+    except Exception:
+        wabs = str(written)
+    distro = (os.environ.get("PM_AI_WSL_DISTRO") or os.environ.get("WSL_DISTRO_NAME") or "").strip()
+    if not distro:
+        return out
+    for pref in ("\\\\wsl$\\", "\\\\wsl.localhost\\"):
+        unc = _windows_build_wsl_unc_path(wabs, distro, pref)
+        if unc:
+            out.append(pathlib.Path(unc))
+    return out
+
+
+def _agent_debug_ndjson_append_line(line: str) -> None:
+    """一次パスへ追記し、失敗時のみ user.home/.cursor へ。成功後にミラー先へ同一行を追記。"""
+    primary = _resolve_agent_debug_ndjson_primary_path()
+    candidates: list[pathlib.Path] = []
+    if primary is not None:
+        candidates.append(primary)
+    candidates.append(_agent_debug_ndjson_fallback_home_path())
+    written: pathlib.Path | None = None
+    for cand in candidates:
+        try:
+            cand.parent.mkdir(parents=True, exist_ok=True)
+            with open(cand, "a", encoding="utf-8") as fp:
+                fp.write(line)
+            written = cand
+            break
+        except OSError:
+            continue
+    if written is None:
+        return
+    for m in _agent_debug_collect_mirror_paths(written):
+        try:
+            if m.resolve() == written.resolve():
+                continue
+        except Exception:
+            pass
+        try:
+            if written.exists() and m.exists() and os.path.samefile(written, m):
+                continue
+        except Exception:
+            pass
+        try:
+            m.parent.mkdir(parents=True, exist_ok=True)
+            with open(m, "a", encoding="utf-8") as fp:
+                fp.write(line)
+        except OSError:
+            pass
 
 
 def _agent_debug_ndjson_0941fe(
@@ -23969,20 +24077,15 @@ def _agent_debug_ndjson_0941fe(
     import time
 
     try:
-        _log_p = _agent_debug_ndjson_log_path_0941fe()
-        if not _log_p:
-            return
-        pathlib.Path(_log_p).parent.mkdir(parents=True, exist_ok=True)
         payload = {
-            "sessionId": "0941fe",
+            "sessionId": _AGENT_DEBUG_NDJSON_SESSION_ID,
             "timestamp": int(time.time() * 1000),
             "hypothesisId": hypothesis_id,
             "location": location,
             "message": message,
             "data": data or {},
         }
-        with open(_log_p, "a", encoding="utf-8") as _agent_dbg_f:
-            _agent_dbg_f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        _agent_debug_ndjson_append_line(json.dumps(payload, ensure_ascii=False) + "\n")
     except Exception:
         pass
     # #endregion
