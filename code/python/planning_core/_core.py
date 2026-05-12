@@ -97,7 +97,7 @@ _STAGE2_MACHINE_CALENDAR_CACHE: dict | None = None
 _INTERACTIVE_TRIAL_OP_SHORTAGE: list[dict] = []
 _INTERACTIVE_TRIAL_AS_SHORTAGE: list[dict] = []
 # 試行終了時の _interactive_trial_meters_done のコピー（targets との突合用）
-_LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT: dict[tuple[str, str, date], float] = {}
+_LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT: dict[tuple[str, str, str, date], float] = {}
 
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
@@ -23942,155 +23942,6 @@ def _interactive_norm_cell(v) -> str:
     return unicodedata.normalize("NFKC", str(v).strip())
 
 
-# Cursor デバッグ NDJSON: ``.cursor/rules/agent-debug-ndjson-logging.mdc`` / ``agent-debug-wsl-windows-mirror.mdc``
-# に揃えた解決順（Java ``AgentDebugLog.resolveNdjsonPath`` 相当）とミラー追記。
-_AGENT_DEBUG_NDJSON_SESSION_ID = "0941fe"
-
-
-def _resolve_repo_root_for_agent_debug_ndjson() -> pathlib.Path:
-    rr = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
-    if rr:
-        return pathlib.Path(rr).expanduser().resolve()
-    return pathlib.Path(__file__).resolve().parents[3]
-
-
-def _resolve_agent_debug_ndjson_primary_path() -> pathlib.Path | None:
-    """
-    first hit（Java AgentDebugLog と同一順）:
-    1. CURSOR_DEBUG_LOG / PM_AI_DEBUG_LOG
-    2. PM_AI_CURSOR_DEBUG_LOG（AppPaths.KEY_PM_AI_CURSOR_DEBUG_LOG）
-    3. parent(repo)/.cursor/…（repo 葉が Production-Control-System のとき）
-    4. repo/.cursor/debug-<session>.log
-    """
-    sid = (_AGENT_DEBUG_NDJSON_SESSION_ID or "0941fe").strip() or "0941fe"
-    file_name = f"debug-{sid}.log"
-    for _ek in ("CURSOR_DEBUG_LOG", "PM_AI_DEBUG_LOG"):
-        v = (os.environ.get(_ek) or "").strip()
-        if v:
-            return pathlib.Path(v).expanduser().resolve()
-    v2 = (os.environ.get("PM_AI_CURSOR_DEBUG_LOG") or "").strip()
-    if v2:
-        return pathlib.Path(v2).expanduser().resolve()
-    try:
-        repo = _resolve_repo_root_for_agent_debug_ndjson()
-    except Exception:
-        return None
-    if repo.name.casefold() == "production-control-system" and repo.parent is not None:
-        return (repo.parent / ".cursor" / file_name).resolve()
-    return (repo / ".cursor" / file_name).resolve()
-
-
-def _agent_debug_ndjson_fallback_home_path() -> pathlib.Path:
-    sid = (_AGENT_DEBUG_NDJSON_SESSION_ID or "0941fe").strip() or "0941fe"
-    return (pathlib.Path.home() / ".cursor" / f"debug-{sid}.log").resolve()
-
-
-def _agent_debug_wsl_unc_mirror_enabled() -> bool:
-    v = (os.environ.get("PM_AI_DEBUG_LOG_WSL_UNC") or "").strip().lower()
-    if not v:
-        return True
-    return v not in ("0", "false", "off")
-
-
-def _windows_build_wsl_unc_path(
-    windows_abs_normalized: str, distro: str, unc_root_prefix: str
-) -> str | None:
-    if not distro or not windows_abs_normalized or len(windows_abs_normalized) < 3:
-        return None
-    dl = windows_abs_normalized[0]
-    if not (dl.isalpha() and windows_abs_normalized[1] == ":"):
-        return None
-    tail = windows_abs_normalized[2:].replace("/", "\\")
-    if not tail.startswith("\\"):
-        tail = "\\" + tail
-    root = unc_root_prefix.rstrip("\\") + "\\"
-    return f"{root}{distro.strip()}\\mnt\\{dl.lower()}{tail}"
-
-
-def _agent_debug_collect_mirror_paths(written: pathlib.Path) -> list[pathlib.Path]:
-    out: list[pathlib.Path] = []
-    mv = (os.environ.get("PM_AI_DEBUG_LOG_MIRROR") or "").strip()
-    if mv:
-        out.append(pathlib.Path(mv).expanduser().resolve())
-    if os.name != "nt" or not _agent_debug_wsl_unc_mirror_enabled():
-        return out
-    try:
-        wabs = str(written.resolve())
-    except Exception:
-        wabs = str(written)
-    distro = (os.environ.get("PM_AI_WSL_DISTRO") or os.environ.get("WSL_DISTRO_NAME") or "").strip()
-    if not distro:
-        return out
-    for pref in ("\\\\wsl$\\", "\\\\wsl.localhost\\"):
-        unc = _windows_build_wsl_unc_path(wabs, distro, pref)
-        if unc:
-            out.append(pathlib.Path(unc))
-    return out
-
-
-def _agent_debug_ndjson_append_line(line: str) -> None:
-    """一次パスへ追記し、失敗時のみ user.home/.cursor へ。成功後にミラー先へ同一行を追記。"""
-    primary = _resolve_agent_debug_ndjson_primary_path()
-    candidates: list[pathlib.Path] = []
-    if primary is not None:
-        candidates.append(primary)
-    candidates.append(_agent_debug_ndjson_fallback_home_path())
-    written: pathlib.Path | None = None
-    for cand in candidates:
-        try:
-            cand.parent.mkdir(parents=True, exist_ok=True)
-            with open(cand, "a", encoding="utf-8") as fp:
-                fp.write(line)
-            written = cand
-            break
-        except OSError:
-            continue
-    if written is None:
-        return
-    for m in _agent_debug_collect_mirror_paths(written):
-        try:
-            if m.resolve() == written.resolve():
-                continue
-        except Exception:
-            pass
-        try:
-            if written.exists() and m.exists() and os.path.samefile(written, m):
-                continue
-        except Exception:
-            pass
-        try:
-            m.parent.mkdir(parents=True, exist_ok=True)
-            with open(m, "a", encoding="utf-8") as fp:
-                fp.write(line)
-        except OSError:
-            pass
-
-
-def _agent_debug_ndjson_0941fe(
-    hypothesis_id: str,
-    location: str,
-    message: str,
-    data: dict | None = None,
-) -> None:
-    # #region agent log
-    import json
-    import time
-
-    try:
-        payload = {
-            "sessionId": _AGENT_DEBUG_NDJSON_SESSION_ID,
-            "timestamp": int(time.time() * 1000),
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data or {},
-        }
-        _agent_debug_ndjson_append_line(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-    # #endregion
-
-
 def _interactive_parse_dispatch_date_cell(val) -> date | None:
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return None
@@ -24109,10 +23960,10 @@ def _interactive_parse_dispatch_date_cell(val) -> date | None:
 
 def merge_interactive_result_dispatch_json_into_tasks_df(
     tasks_df: "pd.DataFrame", json_rows: list
-) -> tuple["pd.DataFrame", dict[tuple[str, str, date], float]]:
+) -> tuple["pd.DataFrame", dict[tuple[str, str, str, date], float]]:
     """
     結果_配台表.json の rows から配台試行順番を tasks_df に反映し、
-    (依頼NO, 機械名, 配台日) ごとの目標数量を集約して返す。
+    (依頼NO, 工程名, 機械名, 配台日) ごとの目標数量（換算 m）を集約して返す。
     """
     if tasks_df is None or getattr(tasks_df, "empty", True):
         return tasks_df, {}
@@ -24124,18 +23975,13 @@ def merge_interactive_result_dispatch_json_into_tasks_df(
         # 計画入力（xlsx 等）では数値列 float64 になることがあり、文字列を代入すると pandas 2.x で失敗する
         df[_dto] = df[_dto].astype(object)
     order_map: dict[tuple[str, str, str], int] = {}
-    targets: dict[tuple[str, str, date], float] = defaultdict(float)
-    _v5_json_samples: list[dict] = []
-    _v5_tid_only_taskid_col: int = 0
+    targets: dict[tuple[str, str, str, date], float] = defaultdict(float)
     for r in json_rows or []:
         if not isinstance(r, dict):
             continue
         tid = _interactive_norm_cell(r.get(TASK_COL_TASK_ID)) or _interactive_norm_cell(
             r.get("タスクID")
         )
-        tid_alt = _interactive_norm_cell(r.get("タスクID"))
-        if tid_alt == "V5-4" and tid != "V5-4":
-            _v5_tid_only_taskid_col += 1
         proc = _interactive_norm_cell(r.get(TASK_COL_MACHINE))
         mach = _interactive_norm_cell(r.get(TASK_COL_MACHINE_NAME))
         dto_raw = r.get(RESULT_TASK_COL_DISPATCH_TRIAL_ORDER)
@@ -24162,21 +24008,7 @@ def merge_interactive_result_dispatch_json_into_tasks_df(
         except (TypeError, ValueError):
             qty_v = 0.0
         if dd is not None and tid and mach and qty_v > 1e-18:
-            targets[(tid, mach, dd)] += float(qty_v)
-        if (tid == "V5-4" or tid_alt == "V5-4") and len(_v5_json_samples) < 8:
-            _v5_json_samples.append(
-                {
-                    "依頼NO_norm": tid,
-                    "タスクID_norm": tid_alt,
-                    "工程名": proc,
-                    "機械名": mach,
-                    "dto": dto_v,
-                    "配台日": dd.isoformat() if isinstance(dd, date) else None,
-                    "qty": qty_v,
-                }
-            )
-    n_v5_plan = 0
-    n_v5_dto_filled = 0
+            targets[(tid, proc, mach, dd)] += float(qty_v)
     for idx in df.index:
         row = df.loc[idx]
         tid = _interactive_norm_cell(planning_task_id_str_from_plan_row(row))
@@ -24185,29 +24017,6 @@ def merge_interactive_result_dispatch_json_into_tasks_df(
         k = (tid, proc, mach)
         if k in order_map:
             df.at[idx, _dto] = str(order_map[k])
-        if tid == "V5-4":
-            n_v5_plan += 1
-            if str(df.at[idx, _dto] or "").strip():
-                n_v5_dto_filled += 1
-    # #region agent log
-    _agent_debug_ndjson_0941fe(
-        "H1",
-        "_core.py:merge_interactive_result_dispatch_json_into_tasks_df",
-        "interactive merge V5-4 summary",
-        {
-            "v5_json_samples": _v5_json_samples,
-            "v5_rows_タスクIDのみで依頼NO不一致": _v5_tid_only_taskid_col,
-            "v5_targets": {
-                repr(k): float(v) for k, v in targets.items() if k and k[0] == "V5-4"
-            },
-            "v5_order_map": {
-                repr(k): int(v) for k, v in order_map.items() if k and k[0] == "V5-4"
-            },
-            "v5_plan_rows": n_v5_plan,
-            "v5_plan_rows_dto_filled": n_v5_dto_filled,
-        },
-    )
-    # #endregion
     return df, dict(targets)
 
 
@@ -24232,7 +24041,7 @@ def _interactive_aggregate_dispatch_targets_from_df(
 
 def _interactive_validate_dispatch_quantities(
     df_dispatch: pd.DataFrame,
-    expected: dict[tuple[str, str, date], float],
+    expected: dict[tuple[str, ...], float],
     *,
     eps: float = 1e-3,
 ) -> None:
@@ -24249,10 +24058,18 @@ def _interactive_validate_dispatch_quantities(
     )
 
     def _sum_by_task_machine(
-        src: dict[tuple[str, str, date], float],
+        src: dict[tuple[str, ...], float],
     ) -> dict[tuple[str, str], float]:
         acc: dict[tuple[str, str], float] = defaultdict(float)
-        for (tid, mach, _dd), v in src.items():
+        for key, v in src.items():
+            if not isinstance(key, tuple):
+                continue
+            if len(key) == 4:
+                tid, _proc, mach, _dd = key[0], key[1], key[2], key[3]
+            elif len(key) == 3:
+                tid, mach, _dd = key[0], key[1], key[2]
+            else:
+                continue
             acc[(tid, mach)] += float(v)
         return dict(acc)
 
@@ -24275,7 +24092,23 @@ def _interactive_validate_dispatch_quantities(
             raise PlanningValidationError(msg)
         return
 
-    for k, exp_v in expected.items():
+    exp_by_day: dict[tuple[str, str, date], float] = defaultdict(float)
+    for key, v in expected.items():
+        if not isinstance(key, tuple):
+            continue
+        if len(key) == 4:
+            tid, _proc, mach, dd = key[0], key[1], key[2], key[3]
+        elif len(key) == 3:
+            tid, mach, dd = key[0], key[1], key[2]
+        else:
+            continue
+        if not isinstance(dd, date):
+            continue
+        try:
+            exp_by_day[(tid, mach, dd)] += float(v)
+        except (TypeError, ValueError):
+            continue
+    for k, exp_v in exp_by_day.items():
         act_v = actual.get(k, 0.0)
         if abs(act_v - exp_v) <= eps:
             continue
@@ -24428,14 +24261,14 @@ def interactive_trial_shortages_snapshot() -> dict:
     }
 
 
-def interactive_trial_meters_done_snapshot() -> dict[tuple[str, str, date], float]:
+def interactive_trial_meters_done_snapshot() -> dict[tuple[str, str, str, date], float]:
     """配台試行でタイムラインが記録した暦日別メートル達成（試行終了直後のスナップショット）。"""
     return dict(_LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT)
 
 
 def compute_interactive_trial_dispatch_qty_shortfall(
-    targets: dict[tuple[str, str, date], float] | None,
-    meters_done: dict[tuple[str, str, date], float] | None,
+    targets: dict[tuple[str, str, str, date], float] | None,
+    meters_done: dict[tuple[str, str, str, date], float] | None,
     *,
     eps: float = 1e-3,
 ) -> list[dict]:
@@ -24448,9 +24281,9 @@ def compute_interactive_trial_dispatch_qty_shortfall(
         return out
     md = meters_done or {}
     for k, target_m in targets.items():
-        if not isinstance(k, tuple) or len(k) != 3:
+        if not isinstance(k, tuple) or len(k) != 4:
             continue
-        tid, mach, dd = k[0], k[1], k[2]
+        tid, proc, mach, dd = k[0], k[1], k[2], k[3]
         try:
             tgt = float(target_m or 0.0)
         except (TypeError, ValueError):
@@ -24465,6 +24298,7 @@ def compute_interactive_trial_dispatch_qty_shortfall(
             out.append(
                 {
                     "task_id": str(tid or ""),
+                    "process": str(proc or ""),
                     "machine_name": str(mach or ""),
                     "dispatch_date": date_iso,
                     "target_m": tgt,
@@ -24853,7 +24687,15 @@ def _interactive_trial_pair_dates_from_targets(
     out: dict[tuple[str, str], set[date]] = {}
     if not targets:
         return out
-    for (tid, mach, dd) in targets.keys():
+    for key in targets.keys():
+        if not isinstance(key, tuple):
+            continue
+        if len(key) == 4:
+            tid, _proc, mach, dd = key[0], key[1], key[2], key[3]
+        elif len(key) == 3:
+            tid, mach, dd = key[0], key[1], key[2]
+        else:
+            continue
         k = (_interactive_norm_cell(tid), _interactive_norm_cell(mach))
         if k not in out:
             out[k] = set()
@@ -26580,19 +26422,6 @@ def _trial_order_flow_eligible_tasks(
             mach_n = _interactive_norm_cell(str(task.get("machine_name") or ""))
             _pd = interactive_trial_pair_dates.get((tid_n, mach_n))
             if _pd is not None and current_date not in _pd:
-                if tid_n == "V5-4":
-                    # #region agent log
-                    _agent_debug_ndjson_0941fe(
-                        "H2",
-                        "_core.py:_trial_order_flow_eligible_tasks:pair_dates_skip",
-                        "V5-4 skipped (not in JSON target dates for this machine)",
-                        {
-                            "machine_name_norm": mach_n,
-                            "current_date": current_date.isoformat(),
-                            "allowed_dates": sorted(x.isoformat() for x in sorted(_pd)),
-                        },
-                    )
-                    # #endregion
                 continue
         # L11: 検査前WIPが限界以上なら EC をブロック（集計は AGGREGATE_MODE）
         if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
@@ -28108,19 +27937,6 @@ def _tasks_in_min_pending_dispatch_pool(
             mach_n = _interactive_norm_cell(str(t.get("machine_name") or ""))
             _pd = interactive_trial_pair_dates.get((tid_n, mach_n))
             if _pd is not None and current_date not in _pd:
-                if tid_n == "V5-4":
-                    # #region agent log
-                    _agent_debug_ndjson_0941fe(
-                        "H2",
-                        "_core.py:_tasks_in_min_pending_dispatch_pool:pair_dates_skip",
-                        "V5-4 skipped (not in JSON target dates for this machine)",
-                        {
-                            "machine_name_norm": mach_n,
-                            "current_date": current_date.isoformat(),
-                            "allowed_dates": sorted(x.isoformat() for x in sorted(_pd)),
-                        },
-                    )
-                    # #endregion
                 continue
         sdr = t.get("start_date_req")
         if not isinstance(sdr, date) or sdr > current_date:
@@ -28402,8 +28218,9 @@ def _trial_order_first_schedule_pass(
                 and interactive_trial_meters_done is not None
             )
             _tid_iv = _interactive_norm_cell(str(task.get("task_id") or ""))
+            _proc_iv = _interactive_norm_cell(str(task.get("machine") or ""))
             _mach_iv = _interactive_norm_cell(str(task.get("machine_name") or ""))
-            _cap_key = (_tid_iv, _mach_iv, current_date)
+            _cap_key = (_tid_iv, _proc_iv, _mach_iv, current_date)
             if _iv_cap and _cap_key in interactive_dispatch_targets:
                 try:
                     _cap_m = float(interactive_dispatch_targets[_cap_key])
@@ -28412,20 +28229,6 @@ def _trial_order_first_schedule_pass(
                     _cap_m = 0.0
                     _done_m = 0.0
                 if _done_m >= _cap_m - 1e-5:
-                    if _tid_iv == "V5-4":
-                        # #region agent log
-                        _agent_debug_ndjson_0941fe(
-                            "H3",
-                            "_core.py:_drain_rolls_for_task:interactive_cap_done",
-                            "V5-4 drain stop: daily target meters reached",
-                            {
-                                "machine": _mach_iv,
-                                "date": current_date.isoformat(),
-                                "cap_m": _cap_m,
-                                "done_m": _done_m,
-                            },
-                        )
-                        # #endregion
                     break
                 try:
                     _um_lim = float(task.get("unit_m") or 0)
@@ -28434,22 +28237,6 @@ def _trial_order_first_schedule_pass(
                 if _um_lim > 1e-12:
                     _rem_m = max(0.0, _cap_m - _done_m)
                     if _rem_m + 1e-9 < _um_lim:
-                        if _tid_iv == "V5-4":
-                            # #region agent log
-                            _agent_debug_ndjson_0941fe(
-                                "H3",
-                                "_core.py:_drain_rolls_for_task:interactive_cap_remain_lt_unit",
-                                "V5-4 drain stop: remainder below unit_m",
-                                {
-                                    "machine": _mach_iv,
-                                    "date": current_date.isoformat(),
-                                    "cap_m": _cap_m,
-                                    "done_m": _done_m,
-                                    "rem_m": _rem_m,
-                                    "unit_m": _um_lim,
-                                },
-                            )
-                            # #endregion
                         break
             res = _assign_one_roll_trial_order_flow(
                 task,
@@ -28924,12 +28711,12 @@ def _interactive_trial_recompute_meters_done_from_timeline(
     timeline_events: list,
     task_queue: list,
     targets: dict | None,
-) -> dict[tuple[str, str, date], float]:
+) -> dict[tuple[str, str, str, date], float]:
     """
-    インタラクティブ試行: timeline の加工イベントから (依頼NO, 機械名, 暦日) 別の換算mを再集計する。
+    インタラクティブ試行: timeline の加工イベントから (依頼NO, 工程名, 機械名, 暦日) 別の換算mを再集計する。
     納期シフト等で timeline からイベントが削除されたときに meters 追跡を整合させる。
     """
-    acc: dict[tuple[str, str, date], float] = {}
+    acc: dict[tuple[str, str, str, date], float] = {}
     if not targets:
         return acc
     want = set(targets.keys())
@@ -28940,11 +28727,12 @@ def _interactive_trial_recompute_meters_done_from_timeline(
         tsk = _task_dict_for_timeline_event(ev, task_queue)
         if tsk is None:
             continue
+        proc_n = _interactive_norm_cell(tsk.get("machine"))
         mach_n = _interactive_norm_cell(tsk.get("machine_name"))
         d = ev.get("date")
         if not isinstance(d, date):
             continue
-        k = (tid, mach_n, d)
+        k = (tid, proc_n, mach_n, d)
         if k not in want:
             continue
         try:
@@ -31049,7 +30837,7 @@ def _generate_plan_impl(
     _due_shift_exhausted_requests: set[str] = set()
     _due_shift_cap_warned_tids: set[str] = set()
     _interactive_trial_pair_dates = None
-    _interactive_trial_meters_done: dict[tuple[str, str, date], float] = {}
+    _interactive_trial_meters_done: dict[tuple[str, str, str, date], float] = {}
     if _interactive_dispatch_trial_env_active() and interactive_dispatch_targets:
         # 段階3: JSON の暦日集合だけへ eligible を絞ると、依存で遅れた暦日が集合に無く
         # 全日スキップされうる（例: V5-4）。日次目標 m は interactive_dispatch_targets のキャップで担保。
@@ -31063,23 +30851,6 @@ def _generate_plan_impl(
             _interactive_trial_pair_dates = _interactive_trial_pair_dates_from_targets(
                 interactive_dispatch_targets
             )
-    # #region agent log
-    _v5_pd: dict[str, list[str]] = {}
-    if _interactive_trial_pair_dates:
-        for _pk, _pds in _interactive_trial_pair_dates.items():
-            if _pk and _pk[0] == "V5-4":
-                _v5_pd[f"{_pk[0]}|{_pk[1]}"] = sorted(d.isoformat() for d in sorted(_pds))
-    _agent_debug_ndjson_0941fe(
-        "H2",
-        "_core.py:_generate_plan_impl:interactive_pair_dates_init",
-        "V5-4 pair_dates after targets",
-        {
-            "has_pair_dates": bool(_interactive_trial_pair_dates),
-            "v5_pair_dates_by_machine": _v5_pd,
-            "pair_dates_strict_env": (os.environ.get("PM_AI_INTERACTIVE_TRIAL_PAIR_DATES") or "").strip(),
-        },
-    )
-    # #endregion
     _outer_retry_round = 0
     while True:
         _dispatch_trace_begin_outer_round(_outer_retry_round)
