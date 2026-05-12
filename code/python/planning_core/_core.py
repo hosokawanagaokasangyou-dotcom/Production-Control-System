@@ -23955,6 +23955,7 @@ _DEBUG_NDJSON_MAX_PER_HYPOTHESIS: dict[str, int] = {
     "H_proc_key_merge": 4,
     "H_v54_in_queue": 4,
     "H_v54_drain_step": 80,
+    "H_v54_day_filter": 12,
 }
 
 
@@ -28331,7 +28332,7 @@ def _trial_order_first_schedule_pass(
                             "same_tid_mach_date_keys": _near,
                         },
                     )
-                else:
+                elif _tid_iv == "V5-4":
                     _same_tid = [
                         [str(x) for x in kk]
                         for kk in interactive_dispatch_targets
@@ -31193,6 +31194,66 @@ def _generate_plan_impl(
                     _pending_rows,
                 )
             pending_total = sum(1 for t in task_queue if t["remaining_units"] > 0)
+            # #region agent log
+            if (
+                _interactive_dispatch_trial_env_active()
+                and isinstance(current_date, date)
+                and current_date.isoformat() in ("2026-05-12", "2026-05-13", "2026-05-14")
+            ):
+                _v54_today = [
+                    {
+                        "proc": str(t.get("machine") or ""),
+                        "mach": str(t.get("machine_name") or ""),
+                        "remaining_units": float(t.get("remaining_units") or 0),
+                        "dispatch_trial_order": int(
+                            t.get("dispatch_trial_order") or 0
+                        ),
+                        "start_date_req": str(t.get("start_date_req") or ""),
+                    }
+                    for t in tasks_today
+                    if str(t.get("task_id") or "").strip() == "V5-4"
+                ]
+                _v54_pending = [
+                    {
+                        "proc": str(t.get("machine") or ""),
+                        "mach": str(t.get("machine_name") or ""),
+                        "remaining_units": float(t.get("remaining_units") or 0),
+                        "dispatch_trial_order": int(
+                            t.get("dispatch_trial_order") or 0
+                        ),
+                        "start_date_req": str(t.get("start_date_req") or ""),
+                    }
+                    for t in task_queue
+                    if str(t.get("task_id") or "").strip() == "V5-4"
+                    and float(t.get("remaining_units") or 0) > 1e-12
+                ]
+                _active_tid_dbg = None
+                if STAGE2_SERIAL_DISPATCH_BY_TASK_ID and _serial_order_tids:
+                    for _tid in _serial_order_tids:
+                        if any(
+                            float(x.get("remaining_units") or 0) > 1e-12
+                            for x in task_queue
+                            if str(x.get("task_id", "") or "").strip() == _tid
+                        ):
+                            _active_tid_dbg = _tid
+                            break
+                _append_cursor_debug_ndjson(
+                    "0941fe",
+                    "H_v54_day_filter",
+                    "_generate_plan_impl/day_loop",
+                    "V5-4 day filter snapshot",
+                    {
+                        "date": current_date.isoformat(),
+                        "tasks_today_n": len(tasks_today),
+                        "stage2_serial_enabled": bool(
+                            STAGE2_SERIAL_DISPATCH_BY_TASK_ID
+                        ),
+                        "active_serial_tid": _active_tid_dbg,
+                        "v54_in_tasks_today": _v54_today,
+                        "v54_in_task_queue_pending": _v54_pending,
+                    },
+                )
+            # #endregion
             if not tasks_today:
                 earliest_wait = min(
                     [t["start_date_req"] for t in task_queue if t["remaining_units"] > 0],
