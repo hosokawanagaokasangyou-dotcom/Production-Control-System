@@ -545,6 +545,10 @@ public final class DispatchInteractiveTabController {
 
     @FXML
     private void onLoadAction() {
+        if (reloadInteractionDisabled) {
+            return;
+        }
+        resetTableDisplayBeforeReload("再読込中（表示をクリア）");
         reloadFromDiskQuiet();
     }
 
@@ -1156,10 +1160,8 @@ public final class DispatchInteractiveTabController {
         new Thread(task, "dispatch-editor-reload").start();
     }
 
-    /**
-     * 段階2パイプライン開始時に、古い行を誤認しないよう表の表示を空にする（JSON パスラベルは維持）。
-     */
-    void resetTableDisplayForStage2Run() {
+    /** 再読込や段階2開始の直前に、メモリ上の表を空表示へ戻す（JSON パスラベルは維持）。 */
+    private void resetTableDisplayBeforeReload(String statusText) {
         if (shell == null) {
             return;
         }
@@ -1172,8 +1174,15 @@ public final class DispatchInteractiveTabController {
         rebuildGrids();
         clearDispatchDocDirty();
         if (statusLabel != null) {
-            statusLabel.setText("段階2実行中（表示をクリア）");
+            statusLabel.setText(statusText);
         }
+    }
+
+    /**
+     * 段階2パイプライン開始時に、古い行を誤認しないよう表の表示を空にする（JSON パスラベルは維持）。
+     */
+    void resetTableDisplayForStage2Run() {
+        resetTableDisplayBeforeReload("段階2実行中（表示をクリア）");
     }
 
     /**
