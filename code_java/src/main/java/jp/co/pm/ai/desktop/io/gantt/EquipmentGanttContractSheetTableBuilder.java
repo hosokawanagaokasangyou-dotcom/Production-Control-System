@@ -19,6 +19,7 @@ import java.util.TreeSet;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 /**
  * {@code *_equipment_gantt_contract.json}（設備ガント描画契約）から、
@@ -44,6 +45,16 @@ public final class EquipmentGanttContractSheetTableBuilder {
     private static final String COL_TASK = "タスク概覝";
 
     private static final int SLOT_MINUTES = 10;
+
+    /** 1 暦日あたりの分（壁時計）。スロット列の上限計算に使う。 */
+    private static final int MINUTES_PER_DAY = 24 * 60;
+
+    /**
+     * 暦日内で最後に許容するスロット開始の「0:00 からの分」。{@link #ceilToSlot} が 24:00 相当まで丸めて
+     * {@link LocalTime#of(int, int)} が HourOfDay=24 で落ちるのを防ぐ（ランタイム証拠: debug-1ecccd hypothesis D）。
+     */
+    private static final int LAST_SLOT_START_MINUTE_OF_DAY = MINUTES_PER_DAY - SLOT_MINUTES;
+
     private static final LocalTime FALLBACK_DAY_START = LocalTime.of(8, 0);
     private static final LocalTime FALLBACK_DAY_END = LocalTime.of(21, 0);
 
@@ -475,6 +486,21 @@ public final class EquipmentGanttContractSheetTableBuilder {
         int rem = m % SLOT_MINUTES;
         if (rem != 0) {
             m += SLOT_MINUTES - rem;
+        }
+        if (m > LAST_SLOT_START_MINUTE_OF_DAY) {
+            // #region agent log
+            AgentDebugLog.appendStructured(
+                    Map.of(),
+                    "1ecccd",
+                    "F",
+                    "EquipmentGanttContractSheetTableBuilder.ceilToSlot",
+                    "post-fix: clamped slot ceiling to last start of day",
+                    Map.of(
+                            "runId", "post-fix",
+                            "roundedMinute", m,
+                            "lastSlotStartMinute", LAST_SLOT_START_MINUTE_OF_DAY));
+            // #endregion
+            m = LAST_SLOT_START_MINUTE_OF_DAY;
         }
         return LocalTime.of(m / 60, m % 60);
     }
