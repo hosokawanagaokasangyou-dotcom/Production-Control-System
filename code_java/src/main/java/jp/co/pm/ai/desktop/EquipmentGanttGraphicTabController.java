@@ -1394,7 +1394,7 @@ public final class EquipmentGanttGraphicTabController {
         ObservableList<ObservableList<String>> fullRows = toObservableRows(lastGraphicSheet);
         List<String> cols = lastGraphicSheet.columns();
         List<List<Integer>> groups =
-                EquipmentGanttPrintDaySlices.rowIndexGroupsOnePagePerDay(fullRows);
+                EquipmentGanttPrintDaySlices.rowIndexGroupsOnePagePerDay(cols, fullRows);
         if (groups.isEmpty()) {
             if (statusLabel != null) {
                 statusLabel.setText("印刷する行がありません。");

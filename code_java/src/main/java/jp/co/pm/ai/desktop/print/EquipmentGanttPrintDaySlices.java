@@ -11,8 +11,9 @@ import javafx.collections.ObservableList;
 /**
  * 設備ガント（グラフィック）の印刷用に、1 ページあたりの行インデックス束を求める。
  *
- * <p>契約 JSON 由来の表では暦日ごとにセクション行（区切り）が挿入されるため、セクション行を境界として
- * 塊に分ける（1 塊＝A3 横 1 ページ）。セクション行が 1 行も無いときは表全体を 1 塊とする。
+ * <p>契約 JSON 由来の表では暦日ごとに「日付」列に {@code 【yyyy/M/d】} 形式のバナー行が挿入される。
+ * Excel 由来で ■ 等のセクション行がある場合も境界とする。境界ごとに 1 塊＝A3 横 1 ページ。
+ * 境界行が 1 行も無いときは表全体を 1 塊とする。
  */
 public final class EquipmentGanttPrintDaySlices {
 
@@ -44,24 +45,42 @@ public final class EquipmentGanttPrintDaySlices {
     }
 
     /**
+     * 暦日ごとの印刷ページの境界行。{@link jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane} のセクション行に加え、
+     * 設備ガント契約 JSON が挿入する「日付」列のみの {@code 【yyyy/M/d】} バナー行も境界とする。
+     */
+    public static boolean isPrintDayBoundaryRow(
+            List<String> columns, ObservableList<String> row) {
+        if (isSectionLikeRow(row)) {
+            return true;
+        }
+        int dateCol = columns != null ? columns.indexOf("日付") : -1;
+        if (dateCol < 0 || row == null || dateCol >= row.size()) {
+            return false;
+        }
+        String dv = row.get(dateCol) != null ? row.get(dateCol).strip() : "";
+        return BRACKETED_PLAIN_DATE_LABEL.matcher(dv).matches();
+    }
+
+    /**
      * 各行が属する「印刷ページ」の行インデックスリスト（先頭からの順）。
      *
-     * @param rows シート行（列順は呼び出し側の表と一致）
+     * @param columns シート列見出し（「日付」列で暦日バナーを検出する）
+     * @param rows シート行（列順は {@code columns} と一致）
      */
     public static List<List<Integer>> rowIndexGroupsOnePagePerDay(
-            ObservableList<ObservableList<String>> rows) {
+            List<String> columns, ObservableList<ObservableList<String>> rows) {
         List<List<Integer>> out = new ArrayList<>();
         if (rows == null || rows.isEmpty()) {
             return out;
         }
-        boolean anySection = false;
+        boolean anyBoundary = false;
         for (ObservableList<String> row : rows) {
-            if (row != null && isSectionLikeRow(row)) {
-                anySection = true;
+            if (isPrintDayBoundaryRow(columns, row)) {
+                anyBoundary = true;
                 break;
             }
         }
-        if (!anySection) {
+        if (!anyBoundary) {
             List<Integer> all = new ArrayList<>(rows.size());
             for (int i = 0; i < rows.size(); i++) {
                 all.add(i);
@@ -72,7 +91,7 @@ public final class EquipmentGanttPrintDaySlices {
         List<Integer> cur = new ArrayList<>();
         for (int i = 0; i < rows.size(); i++) {
             ObservableList<String> row = rows.get(i);
-            if (row != null && isSectionLikeRow(row)) {
+            if (isPrintDayBoundaryRow(columns, row)) {
                 if (!cur.isEmpty()) {
                     out.add(cur);
                     cur = new ArrayList<>();
