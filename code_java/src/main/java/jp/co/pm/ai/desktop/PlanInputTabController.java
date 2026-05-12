@@ -484,6 +484,8 @@ public final class PlanInputTabController {
         if (headersRef.isEmpty()) {
             detachGridHandler();
             GridBase empty = new GridBase(0, 0);
+            // DnD 直後など setGrid 内の選択検証が旧インデックスで IndexOutOfBounds になるのを防ぐ
+            spreadsheetView.getSelectionModel().clearSelection();
             spreadsheetView.setGrid(empty);
             currentGrid = empty;
             return;
@@ -509,6 +511,7 @@ public final class PlanInputTabController {
                             rows, headersRef, SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex());
             grid.addEventHandler(GridChange.GRID_CHANGE_EVENT, gridChangeHandler);
             currentGrid = grid;
+            spreadsheetView.getSelectionModel().clearSelection();
             spreadsheetView.setGrid(grid);
 
             Platform.runLater(

@@ -3,6 +3,7 @@ package jp.co.pm.ai.desktop.ui;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javafx.application.Platform;
 import javafx.collections.ObservableList;
 import javafx.scene.Node;
 import javafx.scene.control.TableCell;
@@ -155,7 +156,8 @@ public final class SpreadsheetPlanInputRowDragSupport {
                                 spreadsheetView.setComparator(null);
                                 ExcelLikeSpreadsheetFilter.resetAllColumnSortMenus(spreadsheetView);
                                 DialogExcelLikeSpreadsheetFilter.resetAllColumnSortMenus(spreadsheetView);
-                                afterReorder.run();
+                                // setGrid を DnD ジェスチャー中に同期的に走らせると、選択検証で IndexOutOfBounds になることがある
+                                Platform.runLater(afterReorder);
                             }
                             success = true;
                         }
