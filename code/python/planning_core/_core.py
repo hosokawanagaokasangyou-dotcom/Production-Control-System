@@ -24006,68 +24006,6 @@ def _interactive_dispatch_resolve_cap_key(
     return past[0][1]
 
 
-_DEBUG_NDJSON_COUNTS: defaultdict[str, int] = defaultdict(int)
-_DEBUG_NDJSON_MAX_PER_HYPOTHESIS: dict[str, int] = {
-    "H_cap_key_miss": 12,
-    "H_cap_absent": 20,
-    "H_post_plan_shortfall": 3,
-    "H_proc_key_merge": 4,
-    "H_v54_in_queue": 4,
-    "H_v54_drain_step": 12,
-    "H_v54_day_filter": 12,
-    "H_v54_block_probe": 12,
-}
-
-
-def _resolve_cursor_debug_ndjson_log_path(session_id: str = "0941fe") -> str | None:
-    """WSL/Windows 双方で書けるよう env 優先、なければリポジトリ直下 .cursor/debug-<id>.log。"""
-    for _env in ("CURSOR_DEBUG_LOG", "PM_AI_DEBUG_LOG", "PM_AI_CURSOR_DEBUG_LOG"):
-        _p = (os.environ.get(_env) or "").strip()
-        if _p:
-            return _p
-    try:
-        _root = pathlib.Path(__file__).resolve().parents[3]
-        _cand = _root / ".cursor" / f"debug-{session_id}.log"
-        _cand.parent.mkdir(parents=True, exist_ok=True)
-        return str(_cand)
-    except Exception:
-        return None
-
-
-def _append_cursor_debug_ndjson(
-    session_id: str,
-    hypothesis_id: str,
-    location: str,
-    message: str,
-    data: dict,
-) -> None:
-    _lim = _DEBUG_NDJSON_MAX_PER_HYPOTHESIS.get(
-        hypothesis_id, max(_DEBUG_NDJSON_MAX_PER_HYPOTHESIS.values())
-    )
-    if _DEBUG_NDJSON_COUNTS[hypothesis_id] >= _lim:
-        return
-    _path = _resolve_cursor_debug_ndjson_log_path(session_id)
-    if not _path:
-        return
-    try:
-        _DEBUG_NDJSON_COUNTS[hypothesis_id] += 1
-        _line = json.dumps(
-            {
-                "sessionId": session_id,
-                "hypothesisId": hypothesis_id,
-                "location": location,
-                "message": message,
-                "data": data,
-                "timestamp": int(time_module.time() * 1000),
-            },
-            ensure_ascii=False,
-        )
-        with open(_path, "a", encoding="utf-8") as _lf:
-            _lf.write(_line + "\n")
-    except Exception:
-        pass
-
-
 def _interactive_parse_dispatch_date_cell(val) -> date | None:
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return None
@@ -24145,16 +24083,6 @@ def merge_interactive_result_dispatch_json_into_tasks_df(
         k = (tid, proc, mach)
         if k in order_map:
             df.at[idx, _dto] = str(order_map[k])
-    # #region agent log
-    _sk = [[str(x) for x in _t] for _t in list(targets.keys())[:8]]
-    _append_cursor_debug_ndjson(
-        "0941fe",
-        "H_proc_key_merge",
-        "merge_interactive_result_dispatch_json_into_tasks_df",
-        "targets after merge",
-        {"n_targets": len(targets), "sample_keys": _sk},
-    )
-    # #endregion
     return df, dict(targets)
 
 
@@ -28371,95 +28299,6 @@ def _trial_order_first_schedule_pass(
                 )
                 if _resolved_ck is not None:
                     _cap_key = _resolved_ck
-            # #region agent log
-            if (
-                _iv_cap
-                and interactive_dispatch_targets is not None
-                and _cap_key not in interactive_dispatch_targets
-            ):
-                _near = [
-                    [str(x) for x in kk]
-                    for kk in interactive_dispatch_targets
-                    if isinstance(kk, tuple)
-                    and len(kk) == 4
-                    and kk[0] == _tid_iv
-                    and kk[2] == _mach_iv
-                    and kk[3] == current_date
-                ][:8]
-                if _near:
-                    _append_cursor_debug_ndjson(
-                        "0941fe",
-                        "H_cap_key_miss",
-                        "_drain_rolls_for_task",
-                        "cap tuple not in targets; same tid+mach+date in targets",
-                        {
-                            "cap_key": [
-                                str(_tid_iv),
-                                str(_proc_iv),
-                                str(_mach_iv),
-                                current_date.isoformat()
-                                if isinstance(current_date, date)
-                                else str(current_date),
-                            ],
-                            "same_tid_mach_date_keys": _near,
-                        },
-                    )
-                elif _tid_iv == "V5-4":
-                    _same_tid = [
-                        [str(x) for x in kk]
-                        for kk in interactive_dispatch_targets
-                        if isinstance(kk, tuple)
-                        and len(kk) == 4
-                        and kk[0] == _tid_iv
-                    ][:12]
-                    if _same_tid:
-                        _append_cursor_debug_ndjson(
-                            "0941fe",
-                            "H_cap_absent",
-                            "_drain_rolls_for_task",
-                            "cap tuple not in targets; other keys same tid",
-                            {
-                                "cap_key": [
-                                    str(_tid_iv),
-                                    str(_proc_iv),
-                                    str(_mach_iv),
-                                    current_date.isoformat()
-                                    if isinstance(current_date, date)
-                                    else str(current_date),
-                                ],
-                                "keys_same_tid": _same_tid,
-                            },
-                        )
-            # #endregion
-            _iv_v54_dbg = bool(
-                _interactive_dispatch_trial_env_active() and _tid_iv == "V5-4"
-            )
-            # #region agent log
-            if _iv_v54_dbg:
-                _append_cursor_debug_ndjson(
-                    "0941fe",
-                    "H_v54_drain_step",
-                    "_drain_rolls_for_task/entry",
-                    "V5-4 drain step entry",
-                    {
-                        "event": "entry",
-                        "date": current_date.isoformat()
-                        if isinstance(current_date, date)
-                        else str(current_date),
-                        "proc": str(_proc_iv),
-                        "mach": str(_mach_iv),
-                        "remaining_units": float(task.get("remaining_units") or 0),
-                        "unit_m": float(task.get("unit_m") or 0),
-                        "rolls_done": int(rolls_done),
-                        "iv_cap": bool(_iv_cap),
-                        "cap_in_targets": bool(
-                            _iv_cap
-                            and interactive_dispatch_targets is not None
-                            and _cap_key in interactive_dispatch_targets
-                        ),
-                    },
-                )
-            # #endregion
             if _iv_cap and _cap_key in interactive_dispatch_targets:
                 try:
                     _cap_m = float(interactive_dispatch_targets[_cap_key])
@@ -28468,20 +28307,6 @@ def _trial_order_first_schedule_pass(
                     _cap_m = 0.0
                     _done_m = 0.0
                 if _done_m >= _cap_m - 1e-5:
-                    # #region agent log
-                    if _iv_v54_dbg:
-                        _append_cursor_debug_ndjson(
-                            "0941fe",
-                            "H_v54_drain_step",
-                            "_drain_rolls_for_task/cap_done",
-                            "V5-4 break: daily cap already done",
-                            {
-                                "event": "cap_done",
-                                "cap_m": _cap_m,
-                                "done_m": _done_m,
-                            },
-                        )
-                    # #endregion
                     break
                 try:
                     _um_lim = float(task.get("unit_m") or 0)
@@ -28490,22 +28315,6 @@ def _trial_order_first_schedule_pass(
                 if _um_lim > 1e-12:
                     _rem_m = max(0.0, _cap_m - _done_m)
                     if _rem_m + 1e-9 < _um_lim:
-                        # #region agent log
-                        if _iv_v54_dbg:
-                            _append_cursor_debug_ndjson(
-                                "0941fe",
-                                "H_v54_drain_step",
-                                "_drain_rolls_for_task/cap_short_of_one_roll",
-                                "V5-4 break: remaining-m < unit_m",
-                                {
-                                    "event": "cap_short",
-                                    "cap_m": _cap_m,
-                                    "done_m": _done_m,
-                                    "rem_m": _rem_m,
-                                    "unit_m": _um_lim,
-                                },
-                            )
-                        # #endregion
                         break
             res = _assign_one_roll_trial_order_flow(
                 task,
@@ -28530,16 +28339,6 @@ def _trial_order_first_schedule_pass(
                 timeline_events=timeline_events,
             )
             if res is None:
-                # #region agent log
-                if _iv_v54_dbg:
-                    _append_cursor_debug_ndjson(
-                        "0941fe",
-                        "H_v54_drain_step",
-                        "_drain_rolls_for_task/assign_none",
-                        "V5-4 break: assign_one_roll_trial_order_flow returned None",
-                        {"event": "assign_none"},
-                    )
-                # #endregion
                 break
             done_units = 1
             if task.get("roll_pipeline_inspection") or task.get(
@@ -31057,45 +30856,6 @@ def _generate_plan_impl(
     _apply_dispatch_trial_order_for_generate_plan(
         task_queue, req_map, need_rules, need_combo_col_index
     )
-    # #region agent log
-    if _interactive_dispatch_trial_env_active():
-        _v54_rows_dbg: list[dict] = []
-        for _t in task_queue:
-            if _interactive_norm_cell(str(_t.get("task_id") or "")) != "V5-4":
-                continue
-            _v54_rows_dbg.append(
-                {
-                    "task_id": str(_t.get("task_id") or ""),
-                    "machine": str(_t.get("machine") or ""),
-                    "machine_name": str(_t.get("machine_name") or ""),
-                    "unit_m": float(_t.get("unit_m") or 0.0),
-                    "initial_remaining_units": float(
-                        _t.get("initial_remaining_units") or 0.0
-                    ),
-                    "remaining_units": float(_t.get("remaining_units") or 0.0),
-                    "dispatch_trial_order": int(_t.get("dispatch_trial_order") or 0),
-                    "dispatch_trial_order_from_sheet": (
-                        None
-                        if _t.get("dispatch_trial_order_from_sheet") is None
-                        else int(_t.get("dispatch_trial_order_from_sheet"))
-                    ),
-                    "start_date_req": str(_t.get("start_date_req") or ""),
-                    "due_basis_date": str(_t.get("due_basis_date") or ""),
-                    "roll_pipeline_ec": bool(_t.get("roll_pipeline_ec")),
-                    "roll_pipeline_inspection": bool(
-                        _t.get("roll_pipeline_inspection")
-                    ),
-                    "roll_pipeline_rewind": bool(_t.get("roll_pipeline_rewind")),
-                }
-            )
-        _append_cursor_debug_ndjson(
-            "0941fe",
-            "H_v54_in_queue",
-            "_generate_plan_impl/after_apply_dto",
-            "V5-4 rows in task_queue",
-            {"n": len(_v54_rows_dbg), "rows": _v54_rows_dbg},
-        )
-    # #endregion
     if DEBUG_TASK_ID:
         dbg_items = [t for t in task_queue if str(t.get("task_id", "")).strip() == DEBUG_TASK_ID]
         if dbg_items:
@@ -31266,131 +31026,6 @@ def _generate_plan_impl(
                     _pending_rows,
                 )
             pending_total = sum(1 for t in task_queue if t["remaining_units"] > 0)
-            # #region agent log
-            if (
-                _interactive_dispatch_trial_env_active()
-                and isinstance(current_date, date)
-                and current_date.isoformat() in ("2026-05-12", "2026-05-13", "2026-05-14")
-            ):
-                _v54_today = [
-                    {
-                        "proc": str(t.get("machine") or ""),
-                        "mach": str(t.get("machine_name") or ""),
-                        "remaining_units": float(t.get("remaining_units") or 0),
-                        "dispatch_trial_order": int(
-                            t.get("dispatch_trial_order") or 0
-                        ),
-                        "start_date_req": str(t.get("start_date_req") or ""),
-                    }
-                    for t in tasks_today
-                    if str(t.get("task_id") or "").strip() == "V5-4"
-                ]
-                _v54_pending = [
-                    {
-                        "proc": str(t.get("machine") or ""),
-                        "mach": str(t.get("machine_name") or ""),
-                        "remaining_units": float(t.get("remaining_units") or 0),
-                        "dispatch_trial_order": int(
-                            t.get("dispatch_trial_order") or 0
-                        ),
-                        "start_date_req": str(t.get("start_date_req") or ""),
-                    }
-                    for t in task_queue
-                    if str(t.get("task_id") or "").strip() == "V5-4"
-                    and float(t.get("remaining_units") or 0) > 1e-12
-                ]
-                _active_tid_dbg = None
-                if STAGE2_SERIAL_DISPATCH_BY_TASK_ID and _serial_order_tids:
-                    for _tid in _serial_order_tids:
-                        if any(
-                            float(x.get("remaining_units") or 0) > 1e-12
-                            for x in task_queue
-                            if str(x.get("task_id", "") or "").strip() == _tid
-                        ):
-                            _active_tid_dbg = _tid
-                            break
-                _append_cursor_debug_ndjson(
-                    "0941fe",
-                    "H_v54_day_filter",
-                    "_generate_plan_impl/day_loop",
-                    "V5-4 day filter snapshot",
-                    {
-                        "date": current_date.isoformat(),
-                        "tasks_today_n": len(tasks_today),
-                        "stage2_serial_enabled": bool(
-                            STAGE2_SERIAL_DISPATCH_BY_TASK_ID
-                        ),
-                        "active_serial_tid": _active_tid_dbg,
-                        "v54_in_tasks_today": _v54_today,
-                        "v54_in_task_queue_pending": _v54_pending,
-                    },
-                )
-                for _t_v54 in task_queue:
-                    if (
-                        str(_t_v54.get("task_id") or "").strip() != "V5-4"
-                        or float(_t_v54.get("remaining_units") or 0) <= 1e-12
-                    ):
-                        continue
-                    _tm_v54 = _t_v54.get("machine")
-                    _eqt_v54 = str(
-                        _t_v54.get("equipment_line_key") or _tm_v54 or ""
-                    ).strip() or (_tm_v54 or "")
-                    _occ_v54 = (
-                        _machine_occupancy_key_resolve(_t_v54, _eqt_v54) or ""
-                    ).strip()
-                    _mc_blocks_today_for_occ = (
-                        _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date, {})
-                        if isinstance(_MACHINE_CALENDAR_BLOCKS_BY_DATE, dict)
-                        else {}
-                    )
-                    _block_count = 0
-                    _block_sample: list[str] = []
-                    try:
-                        _ivs = list(_mc_blocks_today_for_occ.get(_occ_v54) or [])
-                        _block_count = len(_ivs)
-                        for s, e in _ivs[:4]:
-                            try:
-                                _block_sample.append(
-                                    f"{s.strftime('%H:%M')}-{e.strftime('%H:%M')}"
-                                )
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-                    try:
-                        _fully = bool(
-                            _task_fully_machine_calendar_blocked_on_date(
-                                _t_v54, current_date, daily_status, members
-                            )
-                        )
-                    except Exception as _e_mcb:
-                        _fully = False
-                        _block_sample.append(f"err:{type(_e_mcb).__name__}")
-                    try:
-                        _dep_block = bool(
-                            _task_not_yet_schedulable_due_to_dependency_or_b2_room(
-                                _t_v54, task_queue
-                            )
-                        )
-                    except Exception:
-                        _dep_block = False
-                    _append_cursor_debug_ndjson(
-                        "0941fe",
-                        "H_v54_block_probe",
-                        "_generate_plan_impl/day_loop",
-                        "V5-4 block probe",
-                        {
-                            "date": current_date.isoformat(),
-                            "proc": str(_tm_v54 or ""),
-                            "mach": str(_t_v54.get("machine_name") or ""),
-                            "occ_key": _occ_v54,
-                            "fully_machine_calendar_blocked": _fully,
-                            "dep_or_b2_blocked": _dep_block,
-                            "mc_block_count_for_occ": _block_count,
-                            "mc_block_sample": _block_sample,
-                        },
-                    )
-            # #endregion
             if not tasks_today:
                 earliest_wait = min(
                     [t["start_date_req"] for t in task_queue if t["remaining_units"] > 0],
@@ -33436,20 +33071,6 @@ def _generate_plan_impl(
         _interactive_validate_dispatch_quantities(
             df_dispatch, interactive_dispatch_targets
         )
-    # #region agent log
-    if interactive_dispatch_targets and _interactive_dispatch_trial_env_active():
-        _sf_dbg = compute_interactive_trial_dispatch_qty_shortfall(
-            interactive_dispatch_targets,
-            dict(_interactive_trial_meters_done),
-        )
-        _append_cursor_debug_ndjson(
-            "0941fe",
-            "H_post_plan_shortfall",
-            "_generate_plan_impl",
-            "dispatch_qty_shortfall end",
-            {"n_shortfalls": len(_sf_dbg), "sample": _sf_dbg[:25]},
-        )
-    # #endregion
     if interactive_relax_intraday or interactive_dispatch_targets is not None:
         _interactive_validate_timeline_midnight_if_interactive(timeline_events)
     _interactive_append_machining_end_after_member_shift_shortages(
