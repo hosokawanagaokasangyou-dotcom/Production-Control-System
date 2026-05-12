@@ -23942,6 +23942,22 @@ def _interactive_norm_cell(v) -> str:
     return unicodedata.normalize("NFKC", str(v).strip())
 
 
+def _agent_debug_ndjson_log_path_0941fe() -> str | None:
+    """Windows / WSL 両方で書けるよう、固定 /mnt パスは使わない。"""
+    p = (os.environ.get("CURSOR_DEBUG_LOG") or os.environ.get("PM_AI_DEBUG_LOG") or "").strip()
+    if p:
+        return p
+    rr = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
+    if rr:
+        return str(pathlib.Path(rr) / ".cursor" / "debug-0941fe.log")
+    try:
+        here = pathlib.Path(__file__).resolve()
+        root = here.parents[3]
+        return str(root / ".cursor" / "debug-0941fe.log")
+    except Exception:
+        return None
+
+
 def _agent_debug_ndjson_0941fe(
     hypothesis_id: str,
     location: str,
@@ -23953,6 +23969,10 @@ def _agent_debug_ndjson_0941fe(
     import time
 
     try:
+        _log_p = _agent_debug_ndjson_log_path_0941fe()
+        if not _log_p:
+            return
+        pathlib.Path(_log_p).parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "sessionId": "0941fe",
             "timestamp": int(time.time() * 1000),
@@ -23961,11 +23981,7 @@ def _agent_debug_ndjson_0941fe(
             "message": message,
             "data": data or {},
         }
-        with open(
-            "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-0941fe.log",
-            "a",
-            encoding="utf-8",
-        ) as _agent_dbg_f:
+        with open(_log_p, "a", encoding="utf-8") as _agent_dbg_f:
             _agent_dbg_f.write(json.dumps(payload, ensure_ascii=False) + "\n")
     except Exception:
         pass
@@ -24011,7 +24027,9 @@ def merge_interactive_result_dispatch_json_into_tasks_df(
     for r in json_rows or []:
         if not isinstance(r, dict):
             continue
-        tid = _interactive_norm_cell(r.get(TASK_COL_TASK_ID))
+        tid = _interactive_norm_cell(r.get(TASK_COL_TASK_ID)) or _interactive_norm_cell(
+            r.get("タスクID")
+        )
         tid_alt = _interactive_norm_cell(r.get("タスクID"))
         if tid_alt == "V5-4" and tid != "V5-4":
             _v5_tid_only_taskid_col += 1
@@ -24725,6 +24743,9 @@ def _interactive_trial_pair_dates_from_targets(
     """
     結果_配台表 JSON 由来の targets に現れる (依頼NO, 機械名) ごとの配台日集合。
     キーに含まれない行は暦日制限をかけない（従来どおり段階2に委ねる）。
+
+    段階3（PM_AI_INTERACTIVE_DISPATCH_TRIAL）では既定で本マップを割当フィルタに使わない。
+    有効化は環境変数 PM_AI_INTERACTIVE_TRIAL_PAIR_DATES=1。
     """
     out: dict[tuple[str, str], set[date]] = {}
     if not targets:
@@ -30927,9 +30948,18 @@ def _generate_plan_impl(
     _interactive_trial_pair_dates = None
     _interactive_trial_meters_done: dict[tuple[str, str, date], float] = {}
     if _interactive_dispatch_trial_env_active() and interactive_dispatch_targets:
-        _interactive_trial_pair_dates = _interactive_trial_pair_dates_from_targets(
-            interactive_dispatch_targets
-        )
+        # 段階3: JSON の暦日集合だけへ eligible を絞ると、依存で遅れた暦日が集合に無く
+        # 全日スキップされうる（例: V5-4）。日次目標 m は interactive_dispatch_targets のキャップで担保。
+        # 従来の暦日絞り: PM_AI_INTERACTIVE_TRIAL_PAIR_DATES=1
+        if (os.environ.get("PM_AI_INTERACTIVE_TRIAL_PAIR_DATES") or "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        ):
+            _interactive_trial_pair_dates = _interactive_trial_pair_dates_from_targets(
+                interactive_dispatch_targets
+            )
     # #region agent log
     _v5_pd: dict[str, list[str]] = {}
     if _interactive_trial_pair_dates:
@@ -30943,6 +30973,7 @@ def _generate_plan_impl(
         {
             "has_pair_dates": bool(_interactive_trial_pair_dates),
             "v5_pair_dates_by_machine": _v5_pd,
+            "pair_dates_strict_env": (os.environ.get("PM_AI_INTERACTIVE_TRIAL_PAIR_DATES") or "").strip(),
         },
     )
     # #endregion
