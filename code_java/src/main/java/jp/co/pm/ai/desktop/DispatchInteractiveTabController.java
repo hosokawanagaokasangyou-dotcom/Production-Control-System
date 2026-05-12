@@ -549,7 +549,8 @@ public final class DispatchInteractiveTabController {
             return;
         }
         resetTableDisplayBeforeReload("再読込中（表示をクリア）");
-        reloadFromDiskQuiet();
+        // 同一パルスで即 reload すると、空グリッドのレイアウト前に onSucceeded が走り「クリアされない」ように見える
+        Platform.runLater(this::reloadFromDiskQuiet);
     }
 
     @FXML
@@ -1165,6 +1166,8 @@ public final class DispatchInteractiveTabController {
         if (shell == null) {
             return;
         }
+        clearColumnFiltersAndSort();
+        preferredDateAxisOrder = null;
         Path p = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
         if (jsonPathLabel != null) {
             jsonPathLabel.setText(p.toString());
@@ -1176,6 +1179,8 @@ public final class DispatchInteractiveTabController {
         if (statusLabel != null) {
             statusLabel.setText(statusText);
         }
+        wideSpreadsheet.requestLayout();
+        byDaySpreadsheet.requestLayout();
     }
 
     /**
@@ -1674,8 +1679,12 @@ public final class DispatchInteractiveTabController {
 
     private void applyFullGridRebuild(FullGridRebuild bundle) {
         suppressDispatchGridDirty.set(true);
-        BitSet wideHiddenSnapshot = SpreadsheetTabularSupport.snapshotHiddenRows(wideSpreadsheet);
-        BitSet byDayHiddenSnapshot = SpreadsheetTabularSupport.snapshotHiddenRows(byDaySpreadsheet);
+        // 行0件の空グリッドへ切り替えるとき、旧グリッドの行非表示状態を復元すると表示が不整合になることがある
+        boolean emptyWide = bundle.wide().profiles().isEmpty();
+        BitSet wideHiddenSnapshot =
+                emptyWide ? new BitSet() : SpreadsheetTabularSupport.snapshotHiddenRows(wideSpreadsheet);
+        BitSet byDayHiddenSnapshot =
+                emptyWide ? new BitSet() : SpreadsheetTabularSupport.snapshotHiddenRows(byDaySpreadsheet);
         try {
             dateAxis.clear();
             dateAxis.addAll(bundle.axis());
