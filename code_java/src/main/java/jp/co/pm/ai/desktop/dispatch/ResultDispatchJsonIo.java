@@ -63,6 +63,7 @@ public final class ResultDispatchJsonIo {
     }
 
     public static void write(Path path, ResultDispatchDocument doc) throws Exception {
+        ResultDispatchStage2ColumnSupport.ensureStage2RequiredColumns(doc);
         ObjectNode root = JSON.createObjectNode();
         root.put("format_version", doc.formatVersion());
         root.put("sheet_name", doc.sheetName());

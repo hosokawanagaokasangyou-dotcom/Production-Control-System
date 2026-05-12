@@ -88,6 +88,7 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPivot;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage2ColumnSupport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
@@ -507,7 +508,38 @@ public final class DispatchInteractiveTabController {
         if (shell == null) {
             return;
         }
+        boolean repaired = ResultDispatchStage2ColumnSupport.ensureStage2RequiredColumns(doc);
+        if (repaired) {
+            rebuildGrids();
+            markDispatchDocDirty();
+            Alert a = new Alert(AlertType.INFORMATION);
+            a.setTitle("段階2必須列");
+            a.setHeaderText(null);
+            a.setContentText(
+                    "段階2で参照する列を補いました。JSON を「保存」してから「段階2 実行」を再度押してください。");
+            if (shell.getPrimaryStage() != null) {
+                a.initOwner(shell.getPrimaryStage());
+            }
+            a.showAndWait();
+            return;
+        }
         shell.triggerStage2();
+    }
+
+    @FXML
+    private void onEnsureStage2RequiredColumnsAction() {
+        if (reloadInteractionDisabled) {
+            return;
+        }
+        if (ResultDispatchStage2ColumnSupport.ensureStage2RequiredColumns(doc)) {
+            rebuildGrids();
+            markDispatchDocDirty();
+            if (statusLabel != null) {
+                statusLabel.setText("段階2必須列を補完しました（保存してください）");
+            }
+        } else if (statusLabel != null) {
+            statusLabel.setText("段階2必須列は揃っています");
+        }
     }
 
     @FXML
@@ -1039,7 +1071,13 @@ public final class DispatchInteractiveTabController {
                 ev -> {
                     ReloadBundle b = task.getValue();
                     doc = b.doc();
-                    statusLabel.setText(doc.rows().size() + " 行");
+                    if (ResultDispatchStage2ColumnSupport.ensureStage2RequiredColumns(doc)) {
+                        markDispatchDocDirty();
+                        statusLabel.setText(
+                                doc.rows().size() + " 行（段階2必須列を補完しました。保存してください）");
+                    } else {
+                        statusLabel.setText(doc.rows().size() + " 行");
+                    }
                     applyDispatchShortfallFromDisk(jsonPath);
                     rebuildGrids();
                     clearDispatchDocDirty();

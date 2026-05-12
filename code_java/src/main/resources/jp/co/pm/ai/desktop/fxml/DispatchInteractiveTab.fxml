@@ -30,6 +30,8 @@
                 onAction="#onColumnReorderAction"/>
         <Button mnemonicParsing="false" text="列の表示"
                 onAction="#onColumnVisibilityAction"/>
+        <Button mnemonicParsing="false" text="段階2必須列チェック"
+                onAction="#onEnsureStage2RequiredColumnsAction"/>
         <Button fx:id="saveButton" mnemonicParsing="false" text="保存 (JSON+xlsx)"
                 onAction="#onSaveAction"/>
         <Button fx:id="stage2RunButton" mnemonicParsing="false" text="段階2 実行"
