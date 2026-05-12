@@ -40,6 +40,7 @@ import javafx.scene.control.TitledPane;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.Parent;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.scene.paint.Color;
@@ -61,6 +62,7 @@ import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttSheetBundle;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.print.EquipmentGanttPrintDaySlices;
+import jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageWrapper;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
 import jp.co.pm.ai.desktop.ui.EquipmentGanttPersonBadgeWireDashStyle;
@@ -1458,7 +1460,9 @@ public final class EquipmentGanttGraphicTabController {
                                 badgeRowsForCurrentGraphic, idxGroup, slotCols);
                 BorderPane page =
                         buildEquipmentGanttBorderPane(cols, slice, badgeSlice, false);
-                if (!job.printPage(layout, page)) {
+                Parent printRoot =
+                        EquipmentGanttPrintPageWrapper.fitGanttToSinglePrintablePage(page, layout);
+                if (!job.printPage(layout, printRoot)) {
                     if (shell != null) {
                         shell.appendLog(
                                 "[equipment-gantt-graphic] printPage が false を返しました（"
@@ -1485,7 +1489,7 @@ public final class EquipmentGanttGraphicTabController {
             statusLabel.setText(
                     "印刷ジョブを送信しました（A3 横向き・"
                             + okPages
-                            + " ページ、暦日ブロックごとに分割）。");
+                            + " ページ。各ページは暦日単位で分割し、用紙 1 枚に収まるよう縮小します）。");
         }
     }
 

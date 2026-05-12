@@ -1,8 +1,10 @@
 package jp.co.pm.ai.desktop.print;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javafx.collections.FXCollections;
@@ -13,12 +15,17 @@ import javafx.collections.ObservableList;
  *
  * <p>契約 JSON 由来の表では暦日ごとに「日付」列に {@code 【yyyy/M/d】} 形式のバナー行が挿入される。
  * Excel 由来で ■ 等のセクション行がある場合も境界とする。境界ごとに 1 塊＝A3 横 1 ページ。
- * 境界行が 1 行も無いときは表全体を 1 塊とする。
+ * 境界行が無いときは「日付」列の繰り上がり（暦日キー変化）で塊に分ける。いずれも無ければ表全体を 1 塊。
  */
 public final class EquipmentGanttPrintDaySlices {
 
     private static final Pattern BRACKETED_PLAIN_DATE_LABEL =
-            Pattern.compile("^\\s*【\\s*\\d{4}[/\\-]\\d{1,2}[/\\-]\\d{1,2}\\s*】\\s*$");
+            Pattern.compile(
+                    "^\\s*【\\s*(\\d{4})\\s*[/\\-]\\s*(\\d{1,2})\\s*[/\\-]\\s*(\\d{1,2})\\s*】\\s*$");
+
+    /** Excel 等で括弧無しの {@code yyyy/M/d} を日付列に入れる場合の抽出用 */
+    private static final Pattern LOOSE_YMD =
+            Pattern.compile("(\\d{4})[/\\-.](\\d{1,2})[/\\-.](\\d{1,2})");
 
     private EquipmentGanttPrintDaySlices() {}
 
@@ -53,12 +60,45 @@ public final class EquipmentGanttPrintDaySlices {
         if (isSectionLikeRow(row)) {
             return true;
         }
+        if (row == null) {
+            return false;
+        }
+        for (int c = 0; c < Math.min(4, row.size()); c++) {
+            String s = row.get(c) != null ? row.get(c).strip() : "";
+            if (BRACKETED_PLAIN_DATE_LABEL.matcher(s).matches()) {
+                return true;
+            }
+        }
         int dateCol = columns != null ? columns.indexOf("日付") : -1;
-        if (dateCol < 0 || row == null || dateCol >= row.size()) {
+        if (dateCol < 0 || dateCol >= row.size()) {
             return false;
         }
         String dv = row.get(dateCol) != null ? row.get(dateCol).strip() : "";
-        return BRACKETED_PLAIN_DATE_LABEL.matcher(dv).matches();
+        if (BRACKETED_PLAIN_DATE_LABEL.matcher(dv).matches()) {
+            return true;
+        }
+        if (!dv.isEmpty() && normalizeYmdKey(dv) != null && rowLooksLikeDayBannerRow(row, dateCol)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 日付列以外にデータがほとんど無い行を、括弧無しの暦日見出しとみなす。
+     */
+    private static boolean rowLooksLikeDayBannerRow(ObservableList<String> row, int dateCol) {
+        int nonEmptyOthers = 0;
+        for (int c = 0; c < Math.min(row.size(), 12); c++) {
+            if (c == dateCol) {
+                continue;
+            }
+            String s = row.get(c) != null ? row.get(c).strip() : "";
+            if (s.isEmpty() || "—".equals(s) || "-".equals(s)) {
+                continue;
+            }
+            nonEmptyOthers++;
+        }
+        return nonEmptyOthers <= 1;
     }
 
     /**
@@ -81,12 +121,7 @@ public final class EquipmentGanttPrintDaySlices {
             }
         }
         if (!anyBoundary) {
-            List<Integer> all = new ArrayList<>(rows.size());
-            for (int i = 0; i < rows.size(); i++) {
-                all.add(i);
-            }
-            out.add(all);
-            return out;
+            return groupsByCarriedCalendarChange(columns, rows);
         }
         List<Integer> cur = new ArrayList<>();
         for (int i = 0; i < rows.size(); i++) {
@@ -159,5 +194,103 @@ public final class EquipmentGanttPrintDaySlices {
             row.add(s);
         }
         return Collections.unmodifiableList(row);
+    }
+
+    private static String[] carriedAtEachRow(
+            List<String> columns, ObservableList<ObservableList<String>> rows) {
+        int dateCol = columns != null ? columns.indexOf("日付") : -1;
+        String[] out = new String[rows.size()];
+        String cd = "";
+        for (int i = 0; i < rows.size(); i++) {
+            ObservableList<String> row = rows.get(i);
+            if (row == null) {
+                out[i] = cd;
+                continue;
+            }
+            if (isSectionLikeRow(row)) {
+                out[i] = cd;
+                continue;
+            }
+            if (dateCol >= 0 && row.size() > dateCol) {
+                String dv = row.get(dateCol) != null ? row.get(dateCol).strip() : "";
+                if (!dv.isEmpty()) {
+                    cd = dv;
+                }
+            }
+            out[i] = cd;
+        }
+        return out;
+    }
+
+    /** 抽出できなければ null（空文字列は null） */
+    private static String normalizeYmdKey(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String s = raw.strip();
+        if (s.startsWith("【")) {
+            int end = s.indexOf('】');
+            if (end > 1) {
+                s = s.substring(1, end).strip();
+            }
+        }
+        Matcher m = LOOSE_YMD.matcher(s);
+        if (m.find()) {
+            try {
+                int y = Integer.parseInt(m.group(1));
+                int mo = Integer.parseInt(m.group(2));
+                int d = Integer.parseInt(m.group(3));
+                return LocalDate.of(y, mo, d).toString();
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 【…】や ■ 境界が無い表で、繰り上がり日付（正規化した暦日）が変わる位置でページを分ける。
+     */
+    private static List<List<Integer>> groupsByCarriedCalendarChange(
+            List<String> columns, ObservableList<ObservableList<String>> rows) {
+        String[] carried = carriedAtEachRow(columns, rows);
+        List<List<Integer>> groups = new ArrayList<>();
+        List<Integer> cur = new ArrayList<>();
+        String prevKey = null;
+        for (int i = 0; i < rows.size(); i++) {
+            ObservableList<String> row = rows.get(i);
+            if (isSectionLikeRow(row)) {
+                if (!cur.isEmpty()) {
+                    groups.add(new ArrayList<>(cur));
+                    cur.clear();
+                }
+                prevKey = null;
+                cur.add(i);
+                continue;
+            }
+            String key = normalizeYmdKey(carried[i]);
+            if (!cur.isEmpty()
+                    && key != null
+                    && prevKey != null
+                    && !prevKey.equals(key)) {
+                groups.add(new ArrayList<>(cur));
+                cur.clear();
+            }
+            cur.add(i);
+            if (key != null) {
+                prevKey = key;
+            }
+        }
+        if (!cur.isEmpty()) {
+            groups.add(cur);
+        }
+        if (groups.isEmpty()) {
+            List<Integer> all = new ArrayList<>(rows.size());
+            for (int i = 0; i < rows.size(); i++) {
+                all.add(i);
+            }
+            groups.add(all);
+        }
+        return groups;
     }
 }
