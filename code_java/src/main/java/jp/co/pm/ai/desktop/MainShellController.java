@@ -359,7 +359,7 @@ public final class MainShellController {
             new AtomicReference<>(1.0);
 
     private final PauseTransition uiEnvSaveDebounce = new PauseTransition(Duration.millis(400));
-    /** Assigned in {@link #installUiEnvAutoSave()} for {@link #resetEnvRowsToDefaults()}. */
+    /** Assigned in {@link #installUiEnvAutoSave()} for debounced {@link #scheduleDesktopSessionSave()}. */
     private Runnable uiEnvPersistSchedule;
     private final AtomicBoolean envResetInProgress = new AtomicBoolean(false);
 
@@ -1103,7 +1103,7 @@ public final class MainShellController {
     private void performGlobalUiFactoryResetWithoutConfirmation() {
         suppressEnvSessionPersistence.set(true);
         try {
-            applyEnvRowsFullBundledResetAndPersist(false);
+            applyEnvRowsFullBundledResetAndPersist(false, FactorySite.KONAN);
             try {
                 Files.deleteIfExists(TableColumnOrderPersistence.userHomeStorePath());
             } catch (IOException ignored) {
@@ -2565,16 +2565,54 @@ public final class MainShellController {
         if (ans.isEmpty() || ans.get() != ButtonType.OK) {
             return;
         }
-        resetEnvRowsToDefaults();
+        Optional<FactorySite> siteOpt = promptFactorySiteChoiceForEnvDefaults();
+        FactorySite site = siteOpt.orElse(FactorySite.KONAN);
+        if (siteOpt.isEmpty()) {
+            appendLog("[env] 工場既定の選択をキャンセルしたため湖南工場の既定を適用します。");
+        }
+        applyEnvRowsFullBundledResetAndPersist(true, site);
     }
 
     /**
-     * 環境タブをバンドル既定で再構築し永続化する（確認ダイアログなし）。{@link #resetEnvRowsToDefaults()}・初回起動マーカー・工場出荷 UI
-     * リセットの途中から利用。
+     * 湖南／国分工場の環境タブ既定を選択する共通 {@link javafx.scene.control.ChoiceDialog}。
+     *
+     * @return OK 時は選択した工場。キャンセル時は empty。
+     */
+    private Optional<FactorySite> promptFactorySiteChoice(String title, String contentText) {
+        if (primaryStage == null) {
+            return Optional.of(FactorySite.KONAN);
+        }
+        ChoiceDialog<FactorySite> d =
+                new ChoiceDialog<>(FactorySite.KONAN, List.of(FactorySite.values()));
+        d.initOwner(primaryStage);
+        applyAlertStylesheetsFromOwner(d);
+        d.setTitle(title);
+        d.setHeaderText(null);
+        d.setContentText(contentText);
+        d.setSelectedItem(FactorySite.KONAN);
+        return d.showAndWait();
+    }
+
+    /**
+     * 環境変数初期化（バンドル既定へ戻す）直前: 湖南／国分の工場既定を選ばせる。
+     *
+     * @return OK 時は選択した工場。キャンセル時は empty（呼び出し側で湖南とみなす）。
+     */
+    private Optional<FactorySite> promptFactorySiteChoiceForEnvDefaults() {
+        return promptFactorySiteChoice(
+                "環境変数を初期値に戻す",
+                "ネットワークの計画／実績フォルダ・自動バージョンアップ用 ZIP・マスタの既定を、利用する工場に合わせて選んでください。\n"
+                        + "（キャンセルした場合は湖南工場の既定を適用します。）");
+    }
+
+    /**
+     * 環境タブをバンドル既定で再構築し永続化する（確認ダイアログなし）。初回起動マーカー・工場出荷 UI リセット・ポータル
+     * アップグレード直後などから利用。
      *
      * @param persistSession false のとき {@code session-state.json} には書かない（工場出荷 UI リセットの途中で利用）。
+     * @param factorySite テンプレ再構築後に適用する工場別ネットワーク／マスタ既定（湖南＝従来のコード既定）
      */
-    private void applyEnvRowsFullBundledResetAndPersist(boolean persistSession) {
+    private void applyEnvRowsFullBundledResetAndPersist(boolean persistSession, FactorySite factorySite) {
         if (envRows == null) {
             return;
         }
@@ -2599,9 +2637,8 @@ public final class MainShellController {
             envResetInProgress.set(false);
             suppressEnvSessionPersistence.set(false);
         }
-        // テンプレ再構築だけでは ui_ref 空行等で欠ける場合があるため、工場共有 UNC を確実に入れる
-        // （ポータル版アップ完了時はユーザー選択の工場で上書きする）
-        applyFactorySitePortableAndNetworkDefaults(FactorySite.KONAN);
+        // テンプレ再構築だけでは ui_ref 空行等で欠ける場合があるため、工場別の共有 UNC 等を確実に入れる
+        applyFactorySitePortableAndNetworkDefaults(factorySite);
         ensureBootstrapDefaultValuesVisible(collectUiEnv());
         ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
         applyRepoFolderPathNormalization();
@@ -2610,13 +2647,6 @@ public final class MainShellController {
         }
         mainRunTabController.refreshOpenWorkbookHintLabels();
         uiEnvSaveDebounce.stop();
-    }
-
-    /**
-     * 環境変数タブ「環境変数を初期化」の確定処理と同一（{@link #confirmAndResetEnvRowsToDefaults()} は確認ダイアログのみ追加）。
-     */
-    private void resetEnvRowsToDefaults() {
-        applyEnvRowsFullBundledResetAndPersist(true);
     }
 
     void appendBootMessage() {
@@ -3181,7 +3211,7 @@ public final class MainShellController {
      * 工場別のネットワークソース・バージョンアップ正本 ZIP・マスタ basename を環境タブへ書き込む（UNC は {@link Path} 経由にしない）。
      *
      * <p>環境タブでこれらをコードから書き換えるのは、ポータル自動バージョンアップ完了時・
-     * {@link #applyEnvRowsFullBundledResetAndPersist(boolean)}（環境変数を初期化＝湖南既定）とする。
+     * {@link #applyEnvRowsFullBundledResetAndPersist(boolean, FactorySite)}（環境変数を初期化）とする。
      *
      * @param site 選択された工場（湖南＝従来既定）
      */
@@ -3216,21 +3246,11 @@ public final class MainShellController {
      * @return OK 時は選択した工場。キャンセル時は empty（呼び出し側で湖南とみなす）。
      */
     private Optional<FactorySite> promptFactorySiteAfterPortableUpgrade() {
-        if (primaryStage == null) {
-            return Optional.of(FactorySite.KONAN);
-        }
-        ChoiceDialog<FactorySite> d =
-                new ChoiceDialog<>(FactorySite.KONAN, List.of(FactorySite.values()));
-        d.initOwner(primaryStage);
-        applyAlertStylesheetsFromOwner(d);
-        d.setTitle("自動バージョンアップ");
-        d.setHeaderText(null);
-        d.setContentText(
+        return promptFactorySiteChoice(
+                "自動バージョンアップ",
                 "バージョンアップが完了しました。\n"
                         + "ネットワークの計画／実績フォルダ・自動バージョンアップ用 ZIP・マスタファイル名の既定を、利用する工場に合わせて選んでください。\n"
                         + "（キャンセルした場合は湖南工場の既定のままです。）");
-        d.setSelectedItem(FactorySite.KONAN);
-        return d.showAndWait();
     }
 
     /**
@@ -3532,7 +3552,7 @@ public final class MainShellController {
             return;
         }
         try {
-            applyEnvRowsFullBundledResetAndPersist(true);
+            applyEnvRowsFullBundledResetAndPersist(true, FactorySite.KONAN);
             applyBundledPortableDefaultsIfPresent();
             applyRepoFolderPathNormalization();
             DesktopSessionStateStore.save(collectDesktopSession());
