@@ -6,6 +6,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javafx.application.Platform;
@@ -111,6 +112,12 @@ public final class MainRunTabController {
 
     @FXML
     private Label appVersionLabel;
+
+    @FXML
+    private Label masterWorkbookOpenHintLabel;
+
+    @FXML
+    private Label summaryWorkbookOpenHintLabel;
 
     private final ObservableList<String> logLinesAll = FXCollections.observableArrayList();
     private final FilteredList<String> logLinesVisible =
@@ -421,6 +428,30 @@ public final class MainRunTabController {
     void bindShell(MainShellController shell) {
         this.shell = shell;
         refreshAppVersionLabel();
+        refreshOpenWorkbookHintLabels();
+    }
+
+    /**
+     * 実行・ログタブの「開く」横ラベルを環境変数（マスタ名・サマリブック）に合わせて更新する。
+     */
+    void refreshOpenWorkbookHintLabels() {
+        if (shell == null) {
+            return;
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        if (masterWorkbookOpenHintLabel != null) {
+            String alt = ui.getOrDefault(AppPaths.KEY_PM_AI_MASTER_WORKBOOK, "").trim();
+            if (!alt.isEmpty()) {
+                masterWorkbookOpenHintLabel.setText(Path.of(alt).getFileName().toString());
+            } else {
+                String mf = ui.getOrDefault(AppPaths.KEY_MASTER_WORKBOOK_FILE, "").trim();
+                masterWorkbookOpenHintLabel.setText(mf.isEmpty() ? "master.xlsm" : mf);
+            }
+        }
+        if (summaryWorkbookOpenHintLabel != null) {
+            summaryWorkbookOpenHintLabel.setText(
+                    AppPaths.summaryAiDispatchXlsmPath(ui).getFileName().toString());
+        }
     }
 
     /** 実行・ログタブの {@code version.txt} 表示を更新する（ポータブル同期後など）。 */
@@ -528,7 +559,7 @@ public final class MainRunTabController {
             return;
         }
         Path p =
-                AppPaths.resolveMasterWorkbookPathResolved(
+                AppPaths.resolveMasterWorkbookPathForDesktopOpen(
                         shell.snapshotUiEnv(),
                         shell.effectiveTaskInputWorkbookPathForShell());
         if (!Files.isRegularFile(p)) {

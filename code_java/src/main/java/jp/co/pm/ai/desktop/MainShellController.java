@@ -691,6 +691,7 @@ public final class MainShellController {
         if (mainShellTabOrganizerPaneController != null) {
             mainShellTabOrganizerPaneController.syncHeaderGlowControlsFromShell();
         }
+        mainRunTabController.refreshOpenWorkbookHintLabels();
         Platform.runLater(() -> excludeRulesTabController.tryStartupLoadFromPathField());
     }
 
@@ -847,7 +848,7 @@ public final class MainShellController {
      */
     public Path resolveMasterWorkbookIfPresent() {
         Path p =
-                AppPaths.resolveMasterWorkbookPathResolved(
+                AppPaths.resolveMasterWorkbookPathForDesktopOpen(
                         collectUiEnv(), nz(mainRunTabController.getWorkbookField().getText()));
         return Files.isRegularFile(p) ? p.toAbsolutePath().normalize() : null;
     }
@@ -2496,6 +2497,9 @@ public final class MainShellController {
                     if (!suppressEnvSessionPersistence.get()) {
                         DesktopSessionStateStore.save(collectDesktopSession());
                     }
+                    if (mainRunTabController != null) {
+                        mainRunTabController.refreshOpenWorkbookHintLabels();
+                    }
                 });
         Runnable schedule = () -> uiEnvSaveDebounce.playFromStart();
         this.uiEnvPersistSchedule = schedule;
@@ -2604,6 +2608,7 @@ public final class MainShellController {
         if (persistSession) {
             DesktopSessionStateStore.save(collectDesktopSession());
         }
+        mainRunTabController.refreshOpenWorkbookHintLabels();
         uiEnvSaveDebounce.stop();
     }
 
@@ -3712,6 +3717,7 @@ public final class MainShellController {
                     applyRepoFolderPathNormalization();
                     DesktopSessionStateStore.save(collectDesktopSession());
                     mainRunTabController.refreshAppVersionLabel();
+                    mainRunTabController.refreshOpenWorkbookHintLabels();
                     appendLog(
                             "[startup] ポータル同期が完了しました（version.txt・pm-ai-data／init_setting をリポジトリへ反映）。"
                                     + "グローバル設定「デフォルトに戻す」相当で UI をバンドル既定へ揃えました。"

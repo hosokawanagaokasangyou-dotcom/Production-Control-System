@@ -262,6 +262,34 @@ class AppPathsTest {
     }
 
     @Test
+    void resolveMasterWorkbookPathForDesktopOpen_findsCodeWhenTaskInputInOutput(@TempDir Path tmp)
+            throws Exception {
+        Path code = tmp.resolve("code");
+        Path py = code.resolve("python");
+        Files.createDirectories(py);
+        Files.createFile(py.resolve("task_extract_stage1.py"));
+        Path out = tmp.resolve("output");
+        Files.createDirectories(out);
+        Path planInOutput = out.resolve("計画2605122.xlsx");
+        Files.createFile(planInOutput);
+        Path kokubu = code.resolve("国分master.xlsm");
+        Files.createFile(kokubu);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        tmp.toString(),
+                        AppPaths.KEY_MASTER_WORKBOOK_FILE,
+                        "国分master.xlsm");
+        Path wrong = AppPaths.resolveMasterWorkbookPathResolved(ui, planInOutput.toString());
+        assertEquals(out.resolve("国分master.xlsm").normalize().toAbsolutePath(), wrong);
+        assertFalse(Files.isRegularFile(wrong));
+        Path fixed =
+                AppPaths.resolveMasterWorkbookPathForDesktopOpen(ui, planInOutput.toString());
+        assertEquals(kokubu.toAbsolutePath().normalize(), fixed);
+        assertTrue(Files.isRegularFile(fixed));
+    }
+
+    @Test
     void summaryAiDispatchXlsmPath_defaultsUnderCode(@TempDir Path fakeRepo) throws Exception {
         Path code = fakeRepo.resolve("code").resolve("python");
         Files.createDirectories(code);

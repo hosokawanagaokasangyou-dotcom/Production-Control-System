@@ -728,6 +728,56 @@ public final class AppPaths {
     }
 
     /**
+     * 実行・ログタブやマスタ読込サマリの「Excel を開く」用のマスタ解決。
+     *
+     * <p>{@link #resolveMasterWorkbookPathResolved} は planning_core と揃え {@link #resolveEffectivePlanningCwd} を
+     * 基準にするため、段階2の production_plan が {@code output/} 配下にあると basename のマスタが
+     * {@code output/国分master.xlsm} のように誤解決し得る。本メソッドはまず同一解決を試し、ファイルが無ければ
+     * {@code code/python} の親（{@code code/}）、リポジトリ {@code code/}・{@code plan/}・ルートを順に探す。
+     */
+    public static Path resolveMasterWorkbookPathForDesktopOpen(Map<String, String> ui, String taskInputWorkbookPath) {
+        Path primary = resolveMasterWorkbookPathResolved(ui, taskInputWorkbookPath);
+        if (Files.isRegularFile(primary)) {
+            return primary;
+        }
+        Map<String, String> u = ui != null ? ui : Map.of();
+        if (!trim(u.get(KEY_PM_AI_MASTER_WORKBOOK)).isEmpty()) {
+            return primary;
+        }
+        String mf = trim(u.get(KEY_MASTER_WORKBOOK_FILE));
+        if (mf.isEmpty()) {
+            mf = "master.xlsm";
+        }
+        if (mf.startsWith("\\\\")) {
+            return primary;
+        }
+        Path mfPath = Path.of(mf);
+        if (mfPath.isAbsolute()) {
+            return primary;
+        }
+        Path pyDir = resolvePythonScriptDir(u);
+        Path codeBesidePython = pyDir.getParent();
+        Path root = resolveRepoRoot(u);
+        Path[] bases =
+                new Path[] {
+                    codeBesidePython,
+                    root.resolve("code"),
+                    root.resolve("plan"),
+                    root,
+                };
+        for (Path base : bases) {
+            if (base == null || !Files.isDirectory(base)) {
+                continue;
+            }
+            Path c = base.resolve(mf).normalize().toAbsolutePath();
+            if (Files.isRegularFile(c)) {
+                return c;
+            }
+        }
+        return primary;
+    }
+
+    /**
      * Stage1/2 の既定出力ディレクトリ（{@link #KEY_PM_AI_OUTPUT_DIR} または {@link #resolveRepoRoot(Map)} の直下
      * {@code output}）。
      */

@@ -51,9 +51,9 @@
                         <Button mnemonicParsing="false" onAction="#onOpenStage2MemberScheduleAction" text="エクセルを開く" />
                     </HBox>
                     <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="3">
-                       <Label text="master.xlsm" />
+                       <Label fx:id="masterWorkbookOpenHintLabel" text="master.xlsm" />
                         <Button mnemonicParsing="false" onAction="#onOpenMasterWorkbookAction" text="エクセルを開く" />
-                       <Label text="サマリ_AI配台.xlsm" />
+                       <Label fx:id="summaryWorkbookOpenHintLabel" text="サマリ_AI配台.xlsm" />
                         <Button mnemonicParsing="false" onAction="#onOpenSummaryAiDispatchAction" text="エクセルを開く" />
                     </HBox>
                     <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="4" />

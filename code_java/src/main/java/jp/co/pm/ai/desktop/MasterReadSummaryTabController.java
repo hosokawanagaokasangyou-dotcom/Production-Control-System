@@ -1189,7 +1189,7 @@ public final class MasterReadSummaryTabController {
         if (target == null || !Files.isRegularFile(target)) {
             Map<String, String> ui = shell.snapshotUiEnv();
             target =
-                    AppPaths.resolveMasterWorkbookPathResolved(
+                    AppPaths.resolveMasterWorkbookPathForDesktopOpen(
                             ui, shell.effectiveTaskInputWorkbookPathForShell());
         }
         if (!Files.isRegularFile(target)) {
