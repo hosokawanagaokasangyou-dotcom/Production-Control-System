@@ -94,24 +94,29 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
     # #region agent log
     _nb_date = _nb_qty = 0
     _samples: list[dict] = []
-    for _i, _r in enumerate(rows[:8] if isinstance(rows, list) else []):
-        if not isinstance(_r, dict):
-            continue
-        _ds = str(_r.get("配台日") or "").strip()
-        _qs = str(_r.get("当日配台数量") or "").strip()
-        if _ds:
-            _nb_date += 1
-        if _qs:
-            _nb_qty += 1
-        if len(_samples) < 5:
-            _samples.append(
-                {
-                    "i": _i,
-                    "依頼NO": str(_r.get("依頼NO") or "")[:24],
-                    "配台日": _ds[:40],
-                    "当日配台数量": _qs[:24],
-                }
-            )
+    if isinstance(rows, list):
+        for _r in rows:
+            if isinstance(_r, dict):
+                _ds = str(_r.get("配台日") or "").strip()
+                _qs = str(_r.get("当日配台数量") or "").strip()
+                if _ds:
+                    _nb_date += 1
+                if _qs:
+                    _nb_qty += 1
+        for _i, _r in enumerate(rows[:8]):
+            if not isinstance(_r, dict):
+                continue
+            _ds = str(_r.get("配台日") or "").strip()
+            _qs = str(_r.get("当日配台数量") or "").strip()
+            if len(_samples) < 5:
+                _samples.append(
+                    {
+                        "i": _i,
+                        "依頼NO": str(_r.get("依頼NO") or "")[:24],
+                        "配台日": _ds[:40],
+                        "当日配台数量": _qs[:24],
+                    }
+                )
     _append_debug_ndjson(
         "B",
         "stage2_identical_dispatch_runner.run_interactive",
