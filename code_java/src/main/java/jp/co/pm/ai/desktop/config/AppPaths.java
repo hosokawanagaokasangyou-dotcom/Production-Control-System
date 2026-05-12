@@ -702,19 +702,33 @@ public final class AppPaths {
     /**
      * Same resolution as {@code planning_core._core._master_workbook_path_resolved} for the given env and
      * effective macro-book path.
+     *
+     * <p>{@link #KEY_MASTER_WORKBOOK_FILE} が空でないときは、既存の {@link #KEY_PM_AI_MASTER_WORKBOOK} が指すファイル名と
+     * 一致する場合に限り絶対パスを採用する（空のときは従来どおり絶対パス優先）。これにより、ブートストラップで残った
+     * {@code master.xlsm} の絶対パスが {@code 国分master.xlsm} 指定を潰さない。
      */
     public static Path resolveMasterWorkbookPathResolved(Map<String, String> ui, String taskInputWorkbookPath) {
         Map<String, String> u = ui != null ? ui : Map.of();
+        String mfRaw = trim(u.get(KEY_MASTER_WORKBOOK_FILE));
+        String mf = mfRaw.isEmpty() ? "master.xlsm" : mfRaw;
         String alt = trim(u.get(KEY_PM_AI_MASTER_WORKBOOK));
         if (!alt.isEmpty()) {
             Path ap = Path.of(alt).toAbsolutePath().normalize();
             if (Files.isRegularFile(ap)) {
-                return ap;
+                /*
+                 * MASTER が未指定のときは従来どおり絶対パスをそのまま採用。
+                 * MASTER を明示したのに PM_AI が別名（例: master.xlsm）のまま残っていると、
+                 * ブートストラップの候補が優先されて国分 master 等が無視されるため、ファイル名が一致するときだけ PM_AI を採用する。
+                 */
+                if (mfRaw.isEmpty()) {
+                    return ap;
+                }
+                String mBase = Path.of(mf).getFileName().toString();
+                String aBase = ap.getFileName().toString();
+                if (aBase.equalsIgnoreCase(mBase)) {
+                    return ap;
+                }
             }
-        }
-        String mf = trim(u.get(KEY_MASTER_WORKBOOK_FILE));
-        if (mf.isEmpty()) {
-            mf = "master.xlsm";
         }
         Path cwd = resolveEffectivePlanningCwd(u, taskInputWorkbookPath);
         if (mf.startsWith("\\\\")) {

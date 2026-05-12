@@ -262,6 +262,29 @@ class AppPathsTest {
     }
 
     @Test
+    void resolveMasterWorkbookPathResolved_explicitMasterBasenameIgnoresStalePmAiAbsolute(@TempDir Path tmp)
+            throws Exception {
+        Path code = tmp.resolve("code");
+        Path py = code.resolve("python");
+        Files.createDirectories(py);
+        Files.createFile(py.resolve("task_extract_stage1.py"));
+        Path masterDefault = code.resolve("master.xlsm");
+        Path kokubu = code.resolve("国分master.xlsm");
+        Files.createFile(masterDefault);
+        Files.createFile(kokubu);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        tmp.toString(),
+                        AppPaths.KEY_PM_AI_MASTER_WORKBOOK,
+                        masterDefault.toString(),
+                        AppPaths.KEY_MASTER_WORKBOOK_FILE,
+                        "国分master.xlsm");
+        Path p = AppPaths.resolveMasterWorkbookPathResolved(ui, "");
+        assertEquals(kokubu.toAbsolutePath().normalize(), p);
+    }
+
+    @Test
     void resolveMasterWorkbookPathForDesktopOpen_findsCodeWhenTaskInputInOutput(@TempDir Path tmp)
             throws Exception {
         Path code = tmp.resolve("code");
