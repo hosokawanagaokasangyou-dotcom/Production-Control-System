@@ -26,10 +26,13 @@ class GeminiCredentialsV2CryptoTest {
     @Test
     void canDecryptRepositoryBundledEncryptedJsonIfPresent() throws Exception {
         Path cwd = Path.of("").toAbsolutePath();
-        Path bundled =
+        Path root =
                 cwd.getFileName() != null && "code_java".equals(cwd.getFileName().toString())
-                        ? cwd.getParent().resolve("code/gemini_credentials.encrypted.json")
-                        : cwd.resolve("code/gemini_credentials.encrypted.json");
+                        ? cwd.getParent()
+                        : cwd;
+        Path underCode = root.resolve("code").resolve("gemini_credentials.encrypted.json");
+        Path atRoot = root.resolve("gemini_credentials.encrypted.json");
+        Path bundled = Files.isRegularFile(underCode) ? underCode : atRoot;
         assumeTrue(Files.isRegularFile(bundled), "repo bundled credentials: " + bundled);
         String json = Files.readString(bundled);
         String key =

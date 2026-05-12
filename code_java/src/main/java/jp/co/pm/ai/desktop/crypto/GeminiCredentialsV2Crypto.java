@@ -151,7 +151,7 @@ public final class GeminiCredentialsV2Crypto {
         byte[] token = Arrays.copyOf(basic, basic.length + hmac.length);
         System.arraycopy(hmac, 0, token, basic.length, hmac.length);
 
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(token);
+        return Base64.getUrlEncoder().encodeToString(token);
     }
 
     static byte[] fernetDecrypt(String tokenUrlSafeB64, String passphrase, byte[] salt, int iterations)

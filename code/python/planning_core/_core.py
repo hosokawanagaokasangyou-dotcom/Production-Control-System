@@ -514,98 +514,6 @@ def _resolve_gemini_credentials_json_path() -> str | None:
     return None
 
 
-# #region agent log
-def _agent_debug_session_id() -> str:
-    """Cursor デバッグセッション ID。未設定時は Java AgentDebugLog.DEFAULT_SESSION_ID と同じ。"""
-    for key in ("PM_AI_AGENT_DEBUG_SESSION_ID", "CURSOR_DEBUG_SESSION_ID"):
-        v = (os.environ.get(key) or "").strip()
-        if v:
-            return v
-    return "e04a1d"
-
-
-def _agent_debug_resolve_ndjson_log_path(session_id: str) -> str:
-    """
-    NDJSON ログファイルパス（AgentDebugLog.resolveNdjsonPath と同一順・パス直書き禁止）。
-
-    正本: .cursor/rules/agent-debug-ndjson-logging.mdc
-    """
-    sid = (session_id or "").strip() or "e04a1d"
-    file_name = f"debug-{sid}.log"
-    for env_key in ("CURSOR_DEBUG_LOG", "PM_AI_DEBUG_LOG"):
-        raw = (os.environ.get(env_key) or "").strip()
-        if raw:
-            return os.path.normpath(os.path.abspath(raw))
-    ui_path = (os.environ.get("PM_AI_CURSOR_DEBUG_LOG") or "").strip()
-    if ui_path:
-        return os.path.normpath(os.path.abspath(ui_path))
-    repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
-    if repo:
-        repo_abs = os.path.normpath(os.path.abspath(repo))
-        leaf = os.path.basename(repo_abs)
-        parent = os.path.dirname(repo_abs)
-        if parent and leaf.lower() == "production-control-system":
-            return os.path.normpath(os.path.join(parent, ".cursor", file_name))
-        return os.path.normpath(os.path.join(repo_abs, ".cursor", file_name))
-    return os.path.normpath(os.path.join(os.getcwd(), ".cursor", file_name))
-
-
-def _agent_debug_write_ndjson_line(line: str, session_id: str) -> None:
-    """
-    1 行追記。主パス失敗時は user.home/.cursor へ。成功後 PM_AI_DEBUG_LOG_MIRROR があれば追記。
-
-    WSL ミラー（UNC）は Java 側 AgentDebugLog の責務（agent-debug-wsl-windows-mirror.mdc）。
-    """
-    sid = (session_id or "").strip() or "e04a1d"
-    file_name = f"debug-{sid}.log"
-
-    def try_write(path: str) -> bool:
-        try:
-            parent = os.path.dirname(path)
-            if parent:
-                os.makedirs(parent, exist_ok=True)
-            with open(path, "a", encoding="utf-8") as lf:
-                lf.write(line)
-            return True
-        except OSError:
-            return False
-
-    primary = _agent_debug_resolve_ndjson_log_path(sid)
-    written = primary if try_write(primary) else ""
-    if not written:
-        home = os.path.expanduser("~")
-        if home and home != "~":
-            fb = os.path.normpath(os.path.join(home, ".cursor", file_name))
-            if try_write(fb):
-                written = fb
-    if not written:
-        return
-    mirror = (os.environ.get("PM_AI_DEBUG_LOG_MIRROR") or "").strip()
-    if mirror:
-        mp = os.path.normpath(os.path.abspath(mirror))
-        if mp != os.path.normpath(written):
-            try_write(mp)
-
-
-def _agent_debug_ndjson_gemini_cred(payload: dict) -> None:
-    """Gemini 証明書解決の一時計測（秘密は書かない）。ログパスは環境変数経由のみ。"""
-    try:
-        sid = _agent_debug_session_id()
-        row = {
-            **payload,
-            "sessionId": sid,
-            "timestamp": int(time_module.time() * 1000),
-            "location": "planning_core/_core.py:gemini_cred",
-        }
-        line = json.dumps(row, ensure_ascii=False) + "\n"
-        _agent_debug_write_ndjson_line(line, sid)
-    except Exception:
-        pass
-
-
-# #endregion
-
-
 def _read_task_ids_from_config_sheet_column(
     wb_path: str,
     column_index: int,
@@ -853,6 +761,22 @@ def _credentials_json_is_encrypted_v2(data: dict) -> bool:
     )
 
 
+def _fernet_ciphertext_ascii_for_decrypt(token_s: str) -> str:
+    """
+    JSON に格納された Fernet トークン（ASCII）を cryptography 向けに正規化する。
+
+    Java の Base64.getUrlEncoder().withoutPadding() で書いた ciphertext は長さが 4 の倍数でなく
+    InvalidToken / Incorrect padding になり得るため、末尾に '=' を補う。
+    """
+    s = (token_s or "").strip().replace(" ", "").replace("\n", "").replace("\r", "")
+    if not s:
+        return s
+    pad = (-len(s)) % 4
+    if pad:
+        s += "=" * pad
+    return s
+
+
 def _decrypt_gemini_credentials_v2(
     data: dict, passphrase: str, json_path: str
 ) -> dict | None:
@@ -889,20 +813,9 @@ def _decrypt_gemini_credentials_v2(
         return None
     try:
         fkey = _derive_fernet_key_from_passphrase(passphrase, salt, iterations)
-        plain = Fernet(fkey).decrypt(token_s.encode("ascii"))
-    except Exception as ex:
-        # #region agent log
-        _agent_debug_ndjson_gemini_cred(
-            {
-                "message": "gemini_decrypt_failed",
-                "hypothesisId": "H2_decrypt_or_fernet",
-                "data": {
-                    "exc_type": type(ex).__name__,
-                    "json_basename": os.path.basename(json_path or ""),
-                },
-            }
-        )
-        # #endregion
+        token_norm = _fernet_ciphertext_ascii_for_decrypt(token_s)
+        plain = Fernet(fkey).decrypt(token_norm.encode("ascii"))
+    except Exception:
         logging.debug("Gemini: 暗号化証明書の復号処理に失敗しました（%s）。", json_path)
         return None
     try:
@@ -991,42 +904,6 @@ if not API_KEY:
         " 参考型: gemini_credentials.example.json / 参照用/python/encrypt_gemini_credentials.py（暗号化）。",
         GEMINI_CREDENTIALS_ENCRYPTED_FILENAME,
     )
-
-# #region agent log
-_gemini_env_raw = os.environ.get("GEMINI_CREDENTIALS_JSON") or ""
-_gemini_env = _gemini_env_raw.strip()
-_gem_norm = _normalize_gemini_credentials_json_env_value(_gemini_env_raw)
-_gem_primary_only = (
-    os.path.normpath(os.path.abspath(_gem_norm)) if _gem_norm else ""
-)
-_repo_rel_fallback = bool(
-    _gem_norm
-    and not os.path.isabs(_gem_norm)
-    and _cred_path
-    and _gem_primary_only != os.path.normpath(_cred_path)
-    and os.path.isfile(_cred_path)
-)
-_agent_debug_ndjson_gemini_cred(
-    {
-        "message": "gemini_credentials_init_summary",
-        "hypothesisId": "post_fix_verify",
-        "data": {
-            "cwd": os.getcwd(),
-            "env_set": bool(_gemini_env),
-            "env_len": len(_gemini_env),
-            "env_starts_at": _gemini_env.startswith("@"),
-            "resolved": _cred_path or "",
-            "resolved_isfile": bool(_cred_path and os.path.isfile(_cred_path)),
-            "api_key_loaded": bool(API_KEY),
-            "used_encrypted": _used_encrypted_credentials,
-            "pm_ai_workspace_nonempty": bool(
-                (os.environ.get("PM_AI_WORKSPACE") or "").strip()
-            ),
-            "repo_relative_fallback_used": _repo_rel_fallback,
-        },
-    }
-)
-# #endregion
 
 RESULT_SHEET_GANTT_NAME = "結果_設備ガント"
 # 結果_設備ガントの横軸タイムスロット幅（分）
