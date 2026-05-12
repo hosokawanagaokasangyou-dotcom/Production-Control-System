@@ -558,6 +558,50 @@ public final class TableColumnOrderPersistence {
         return STORE;
     }
 
+    private static final List<String> PLAN_WORKSPACE_COLUMN_ORDER_JSON_KEYS =
+            List.of(
+                    TableId.DISPATCH_INTERACTIVE_WIDE.jsonKey(),
+                    TableId.DISPATCH_INTERACTIVE_BY_DAY.jsonKey(),
+                    TableId.RESULT_DISPATCH_TABLE.jsonKey());
+
+    /**
+     * 配台ワークスペース用スナップショット: 配台手動修正・結果_配台表タブの列順／幅だけを
+     * {@link #readCurrentStoreRoot()} から抽出する。
+     */
+    public static ObjectNode capturePlanWorkspaceColumnOrderPartial() {
+        JsonNode root = readCurrentStoreRoot();
+        ObjectNode out = JSON.createObjectNode();
+        if (root == null || !root.isObject()) {
+            return out;
+        }
+        for (String k : PLAN_WORKSPACE_COLUMN_ORDER_JSON_KEYS) {
+            JsonNode v = root.get(k);
+            if (v != null && !v.isNull()) {
+                out.set(k, v.deepCopy());
+            }
+        }
+        return out;
+    }
+
+    /**
+     * {@link #STORE} に {@code partial} のキーを上書きマージする（他の表キーは維持）。
+     *
+     * @throws IOException 書き込み失敗時
+     */
+    public static void mergePlanWorkspaceColumnOrderPartial(JsonNode partial) throws IOException {
+        if (partial == null || !partial.isObject() || partial.size() == 0) {
+            return;
+        }
+        JsonNode cur = readCurrentStoreRoot();
+        ObjectNode base =
+                cur != null && cur.isObject()
+                        ? (ObjectNode) cur.deepCopy()
+                        : JSON.createObjectNode();
+        partial.fields().forEachRemaining(e -> base.set(e.getKey(), e.getValue().deepCopy()));
+        Files.createDirectories(STORE.getParent());
+        JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), base);
+    }
+
     /**
      * init_setting 書き出し用: バンドル既定（クラスパス・{@code pm-ai-data/config}・既存 {@code init_setting}）
      * に、ユーザーホームの {@link #STORE} を上乗せマージしたルート（ユーザー値が優先）。

@@ -42,7 +42,8 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.EXCLUDE_RULES.key(),
                     MainShellTabId.SPECIAL_RULES.key(),
                     MainShellTabId.ACTUALS_STATUS.key(),
-                    MainShellTabId.USER_PROFILES.key());
+                    MainShellTabId.USER_PROFILES.key(),
+                    MainShellTabId.PLAN_WORKSPACE_HISTORY.key());
 
     /**
      * All {@link MainShellTabId} keys except {@link MainShellTabId#TAB_ORGANIZER}: DEFAULT order then any enum-only
@@ -67,6 +68,7 @@ public final class MainShellTabLayoutDefaults {
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.EQUIPMENT_GANTT_GRAPHIC.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.DELIVERY_CALENDAR_VIEW.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.OPERATOR_CARD.key(), ""));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_WORKSPACE_HISTORY.key(), ""));
 
         top.add(
                 MainShellTabLayoutNode.groupNode(

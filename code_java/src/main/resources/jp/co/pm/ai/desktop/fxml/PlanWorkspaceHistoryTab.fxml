@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+      spacing="10.0"
+      fx:controller="jp.co.pm.ai.desktop.PlanWorkspaceHistoryTabController">
+    <padding>
+        <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+    </padding>
+    <Label styleClass="pm-section-title" text="配台ワークスペースのスナップショット"
+           wrapText="true"/>
+    <Label text="現在の「配台計画_タスク入力」パス・設備ガント（バッジ位置・倍率・列幅など）・配台手動修正／結果_配台表の列順をまとめて保存します。復元は正規の結果 JSON を上書きします。"
+           wrapText="true"/>
+    <Separator/>
+    <HBox spacing="8.0" alignment="CENTER_LEFT">
+        <Label text="新規ラベル"/>
+        <TextField fx:id="newSnapshotLabelField" prefWidth="360.0" promptText="任意（例: 段階2直後）"/>
+        <Button fx:id="captureButton" mnemonicParsing="false" onAction="#onCaptureSnapshotAction" text="スナップショットを保存"/>
+    </HBox>
+    <Label fx:id="storePathLabel" styleClass="pm-muted-label" wrapText="true"/>
+    <Separator/>
+    <Label text="履歴（新しい順）"/>
+    <ListView fx:id="snapshotListView" prefHeight="360.0" VBox.vgrow="ALWAYS"/>
+    <HBox spacing="8.0" alignment="CENTER_LEFT">
+        <Button fx:id="restoreButton" mnemonicParsing="false" onAction="#onRestoreSnapshotAction" text="この時点に戻す"/>
+        <Button fx:id="renameButton" mnemonicParsing="false" onAction="#onRenameSnapshotAction" text="ラベル変更"/>
+        <Button fx:id="deleteButton" mnemonicParsing="false" onAction="#onDeleteSnapshotAction" text="削除"/>
+        <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshListAction" text="一覧更新"/>
+    </HBox>
+</VBox>

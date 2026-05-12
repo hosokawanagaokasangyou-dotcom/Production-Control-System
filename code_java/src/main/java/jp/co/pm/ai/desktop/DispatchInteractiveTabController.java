@@ -1071,6 +1071,11 @@ public final class DispatchInteractiveTabController {
         reloadFromDiskQuiet();
     }
 
+    /** 配台ワークスペース用スナップショット: メモリ上の配台表ドキュメントのコピー（UI スレッド）。 */
+    public ResultDispatchDocument copyDispatchDocumentForSnapshot() {
+        return doc.copy();
+    }
+
     private void showReloadProgress() {
         if (reloadProgressBar != null) {
             reloadProgressBar.setManaged(true);

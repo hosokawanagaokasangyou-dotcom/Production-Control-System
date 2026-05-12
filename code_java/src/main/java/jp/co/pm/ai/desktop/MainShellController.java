@@ -78,12 +78,15 @@ import jp.co.pm.ai.desktop.config.PushButtonDesignPrefs;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 import jp.co.pm.ai.desktop.config.PortableBundleSelfUpdater;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
+import jp.co.pm.ai.desktop.config.PlanWorkspaceSessionFragment;
+import jp.co.pm.ai.desktop.config.PlanWorkspaceSnapshotStore;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.InitSettingPersistence;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
@@ -241,6 +244,9 @@ public final class MainShellController {
     private OperatorCardTabController operatorCardTabController;
 
     @FXML
+    private PlanWorkspaceHistoryTabController planWorkspaceHistoryTabController;
+
+    @FXML
     private Tab mainShellTabRun;
 
     @FXML
@@ -299,6 +305,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabOperatorCard;
+
+    @FXML
+    private Tab mainShellTabPlanWorkspaceHistory;
 
     @FXML
     private Tab mainShellTabOrganizer;
@@ -440,6 +449,9 @@ public final class MainShellController {
         deliveryCalendarViewTabController.bindShell(this);
         resultDispatchTableTabController.bindShell(this);
         dispatchInteractiveTabController.bindShell(this);
+        if (planWorkspaceHistoryTabController != null) {
+            planWorkspaceHistoryTabController.bindShell(this);
+        }
 
         primaryStage.setMinWidth(640);
         primaryStage.setMinHeight(480);
@@ -931,6 +943,49 @@ public final class MainShellController {
         DesktopSessionStateStore.save(collectDesktopSession());
     }
 
+    /** 配台ワークスペース用スナップショットに書き出す現在の配台表ドキュメント（未初期化時は {@code null}）。 */
+    public ResultDispatchDocument snapshotDispatchDocumentForPlanWorkspace() {
+        return dispatchInteractiveTabController != null
+                ? dispatchInteractiveTabController.copyDispatchDocumentForSnapshot()
+                : null;
+    }
+
+    /**
+     * スナップショットの内容で正規の結果_配台表 JSON と関連 UI 状態（配台入力・ガント・列順断片）を復元する。
+     *
+     * @throws IOException 入出力エラー
+     */
+    public void restorePlanWorkspaceSnapshot(PlanWorkspaceSnapshotStore.PlanWorkspaceSnapshotEntry entry)
+            throws IOException {
+        if (entry == null) {
+            return;
+        }
+        Path snapJson = PlanWorkspaceSnapshotStore.resultDispatchJsonPath(entry);
+        if (!Files.isRegularFile(snapJson)) {
+            throw new IOException("スナップショットに result_dispatch.json がありません");
+        }
+        JsonNode colPart = PlanWorkspaceSnapshotStore.readColumnOrderPartial(entry);
+        TableColumnOrderPersistence.mergePlanWorkspaceColumnOrderPartial(colPart);
+
+        Path canonical = AppPaths.resolveResultDispatchTableJsonPath(collectUiEnv());
+        Path parent = canonical.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        Files.copy(snapJson, canonical, StandardCopyOption.REPLACE_EXISTING);
+
+        PlanWorkspaceSessionFragment frag = PlanWorkspaceSnapshotStore.readSessionFragment(entry);
+        DesktopSessionState merged = frag.mergeOnto(collectDesktopSession());
+        applyDesktopSession(merged, false);
+        if (dispatchInteractiveTabController != null) {
+            dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
+        }
+        if (resultDispatchTableTabController != null) {
+            resultDispatchTableTabController.reloadResultDispatchTableFromDisk();
+        }
+        persistDesktopSessionNow();
+    }
+
     /** グローバル設定の「現在の状態をデフォルトとする」実行直前にローカル {@code session-state.json} を同期する。 */
     public void preparePackageDefaultsExport() {
         persistDesktopSessionNow();
@@ -1019,6 +1074,7 @@ public final class MainShellController {
             } catch (IOException ignored) {
             }
             DispatchTrialLogUiStore.deleteStoreSilently();
+            PlanWorkspaceSnapshotStore.deleteAllSilently();
             PushButtonCssEmitter.deleteUserOverridesFileSilently();
 
             DesktopSessionState merged =
@@ -1099,6 +1155,9 @@ public final class MainShellController {
         if (t == mainShellTabDispatchInteractive) {
             return MainShellTabId.DISPATCH_INTERACTIVE;
         }
+        if (t == mainShellTabPlanWorkspaceHistory) {
+            return MainShellTabId.PLAN_WORKSPACE_HISTORY;
+        }
         if (t == mainShellTabPlanResultViewer) {
             return MainShellTabId.PLAN_RESULT_VIEWER;
         }
@@ -1138,6 +1197,7 @@ public final class MainShellController {
             case DELIVERY_CALENDAR_VIEW -> mainShellTabDeliveryCalendar;
             case RESULT_DISPATCH -> mainShellTabResultDispatch;
             case DISPATCH_INTERACTIVE -> mainShellTabDispatchInteractive;
+            case PLAN_WORKSPACE_HISTORY -> mainShellTabPlanWorkspaceHistory;
             case PLAN_RESULT_VIEWER -> mainShellTabPlanResultViewer;
             case EQUIPMENT_GANTT_GRAPHIC -> mainShellTabEquipmentGanttGraphic;
             case GANTT_PERSON_BADGE_DESIGN -> mainShellTabGanttPersonBadgeDesign;

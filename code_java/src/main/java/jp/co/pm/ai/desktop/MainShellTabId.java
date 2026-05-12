@@ -28,6 +28,8 @@ public enum MainShellTabId {
     GANTT_PERSON_BADGE_DESIGN("ganttPersonBadgeDesign"),
     OPERATOR_CARD("operatorCard"),
     DISPATCH_INTERACTIVE("dispatchInteractive"),
+    /** 配台ワークスペースのスナップショット履歴（結果 JSON・ガント表示・列順の復元）。 */
+    PLAN_WORKSPACE_HISTORY("planWorkspaceHistory"),
     /** メインシェル末尾の「タブ整理」（入れ子構成・色の編集用）。 */
     TAB_ORGANIZER("tabOrganizer");
 

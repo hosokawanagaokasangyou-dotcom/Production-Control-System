@@ -149,6 +149,12 @@
                         <fx:include fx:id="operatorCardTab" source="OperatorCardTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabPlanWorkspaceHistory" closable="false"
+                     text="配台ワークスペース履歴">
+                    <content>
+                        <fx:include fx:id="planWorkspaceHistoryTab" source="PlanWorkspaceHistoryTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabOrganizer" closable="false" text="タブ整理">
                     <content>
                         <fx:include fx:id="mainShellTabOrganizerPane" source="MainShellTabOrganizerTab.fxml"/>
