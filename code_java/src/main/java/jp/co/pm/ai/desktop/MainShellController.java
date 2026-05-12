@@ -35,8 +35,10 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
+import javafx.scene.control.Dialog;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Labeled;
@@ -72,6 +74,7 @@ import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.JvmMemoryLogStore;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutDefaults;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
+import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PushButtonCssEmitter;
 import jp.co.pm.ai.desktop.config.PushButtonDesignPrefs;
@@ -2593,8 +2596,8 @@ public final class MainShellController {
             suppressEnvSessionPersistence.set(false);
         }
         // テンプレ再構築だけでは ui_ref 空行等で欠ける場合があるため、工場共有 UNC を確実に入れる
-        // （ポータル版アップ完了時の applyUncNetworkSourceDirDefaults と同趣旨）
-        applyUncNetworkSourceDirDefaults();
+        // （ポータル版アップ完了時はユーザー選択の工場で上書きする）
+        applyFactorySitePortableAndNetworkDefaults(FactorySite.KONAN);
         ensureBootstrapDefaultValuesVisible(collectUiEnv());
         ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
         applyRepoFolderPathNormalization();
@@ -2926,16 +2929,16 @@ public final class MainShellController {
         alert.showAndWait();
     }
 
-    /** メインウィンドウと同じテーマ CSS をダイアログに載せる（Alert は別 Scene のため未設定だと配色がずれる） */
-    private void applyAlertStylesheetsFromOwner(Alert alert) {
-        if (primaryStage == null) {
+    /** メインウィンドウと同じテーマ CSS をダイアログに載せる（Alert / ChoiceDialog は別 Scene のため未設定だと配色がずれる） */
+    private void applyAlertStylesheetsFromOwner(Dialog<?> dialog) {
+        if (primaryStage == null || dialog == null) {
             return;
         }
         Scene ownerScene = primaryStage.getScene();
         if (ownerScene == null) {
             return;
         }
-        var paneSheets = alert.getDialogPane().getStylesheets();
+        var paneSheets = dialog.getDialogPane().getStylesheets();
         for (String url : ownerScene.getStylesheets()) {
             if (!paneSheets.contains(url)) {
                 paneSheets.add(url);
@@ -3128,7 +3131,7 @@ public final class MainShellController {
      * フォルダ系 {@code PM_AI_*} のうち、リポジトリ基準へ補正できるものを更新する（{@link AppPaths#normalizedFolderEnvOverrides(Map)}）。
      *
      * <p>{@code PM_AI_TASK_INPUT_SOURCE_DIR} / {@code PM_AI_ACTUAL_DETAIL_SOURCE_DIR} は {@link AppPaths#normalizedFolderEnvOverrides(Map)}
-     * の対象外のためここでは変更しない（バージョンアップ完了時の {@link #applyUncNetworkSourceDirDefaults()} とフォルダ選択のみで更新）。
+     * の対象外のためここでは変更しない（バージョンアップ完了時の {@link #applyFactorySitePortableAndNetworkDefaults(FactorySite)} とフォルダ選択のみで更新）。
      */
     private void applyRepoFolderPathNormalization() {
         if (envRows == null) {
@@ -3170,26 +3173,58 @@ public final class MainShellController {
     }
 
     /**
-     * ネットワークソース 2 変数を {@link AppPaths#DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR} /
-     * {@link AppPaths#DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR} のリテラルへ書き換える（UNC は {@link Path} 経由にしない）。
+     * 工場別のネットワークソース・バージョンアップ正本 ZIP・マスタ basename を環境タブへ書き込む（UNC は {@link Path} 経由にしない）。
      *
-     * <p>環境タブでこの 2 変数をコードから書き換えるのは、ポータル自動バージョンアップ完了時・
-     * {@link #applyEnvRowsFullBundledResetAndPersist(boolean)}（環境変数を初期化）とする。
+     * <p>環境タブでこれらをコードから書き換えるのは、ポータル自動バージョンアップ完了時・
+     * {@link #applyEnvRowsFullBundledResetAndPersist(boolean)}（環境変数を初期化＝湖南既定）とする。
+     *
+     * @param site 選択された工場（湖南＝従来既定）
      */
-    private void applyUncNetworkSourceDirDefaults() {
-        if (envRows == null) {
+    private void applyFactorySitePortableAndNetworkDefaults(FactorySite site) {
+        if (envRows == null || site == null) {
             return;
         }
-        String task = AppPaths.DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR;
-        String actual = AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR;
+        String task = site.taskInputSourceDir();
+        String actual = site.actualDetailSourceDir();
+        String portable = site.portableBundleSourceDir();
+        String masterBasename = site.masterWorkbookFileBasename();
         for (EnvVarRow r : envRows) {
             String name = r.getName() != null ? r.getName().trim() : "";
             if (AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR.equals(name)) {
                 r.setValue(task);
             } else if (AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR.equals(name)) {
                 r.setValue(actual);
+            } else if (AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR.equals(name)) {
+                r.setValue(portable);
+            } else if (AppPaths.KEY_MASTER_WORKBOOK_FILE.equals(name)) {
+                r.setValue(masterBasename != null ? masterBasename : "");
+            } else if (AppPaths.KEY_PM_AI_MASTER_WORKBOOK.equals(name)) {
+                r.setValue("");
             }
         }
+    }
+
+    /**
+     * ポータブル自動バージョンアップ完了直後: 湖南／国分の環境タブ既定をユーザーに選ばせる。
+     *
+     * @return OK 時は選択した工場。キャンセル時は empty（呼び出し側で湖南とみなす）。
+     */
+    private Optional<FactorySite> promptFactorySiteAfterPortableUpgrade() {
+        if (primaryStage == null) {
+            return Optional.of(FactorySite.KONAN);
+        }
+        ChoiceDialog<FactorySite> d =
+                new ChoiceDialog<>(FactorySite.KONAN, List.of(FactorySite.values()));
+        d.initOwner(primaryStage);
+        applyAlertStylesheetsFromOwner(d);
+        d.setTitle("自動バージョンアップ");
+        d.setHeaderText(null);
+        d.setContentText(
+                "バージョンアップが完了しました。\n"
+                        + "ネットワークの計画／実績フォルダ・自動バージョンアップ用 ZIP・マスタファイル名の既定を、利用する工場に合わせて選んでください。\n"
+                        + "（キャンセルした場合は湖南工場の既定のままです。）");
+        d.setSelectedItem(FactorySite.KONAN);
+        return d.showAndWait();
     }
 
     /**
@@ -3665,12 +3700,24 @@ public final class MainShellController {
                     applyBundledPortableDefaultsIfPresent();
                     mainRunTabController.clearMainRunTabLog();
                     applyRepoFolderPathNormalization();
-                    applyUncNetworkSourceDirDefaults();
+                    Optional<FactorySite> chosenOpt = promptFactorySiteAfterPortableUpgrade();
+                    FactorySite siteAfterUpgrade = chosenOpt.orElse(FactorySite.KONAN);
+                    if (chosenOpt.isEmpty()) {
+                        appendLog(
+                                "[startup] 工場既定の選択をキャンセルしたため湖南工場の既定を適用します。");
+                    }
+                    applyFactorySitePortableAndNetworkDefaults(siteAfterUpgrade);
+                    ensureBootstrapDefaultValuesVisible(collectUiEnv());
+                    ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
+                    applyRepoFolderPathNormalization();
                     DesktopSessionStateStore.save(collectDesktopSession());
                     mainRunTabController.refreshAppVersionLabel();
                     appendLog(
                             "[startup] ポータル同期が完了しました（version.txt・pm-ai-data／init_setting をリポジトリへ反映）。"
-                                    + "グローバル設定「デフォルトに戻す」相当で UI をバンドル既定へ揃えました。");
+                                    + "グローバル設定「デフォルトに戻す」相当で UI をバンドル既定へ揃えました。"
+                                    + " 工場既定: "
+                                    + siteAfterUpgrade.displayLabelJa()
+                                    + "。");
                 });
         task.setOnFailed(
                 e -> {
@@ -3882,11 +3929,32 @@ public final class MainShellController {
             if (cur != null && !cur.isBlank()) {
                 continue;
             }
+            if (AppPaths.KEY_PM_AI_MASTER_WORKBOOK.equals(k)) {
+                String mf = envTabValueTrimmed(AppPaths.KEY_MASTER_WORKBOOK_FILE);
+                if (!mf.isEmpty()) {
+                    continue;
+                }
+            }
             String v = bootstrapDefaultValueForKey(k, ctx);
             if (!v.isBlank()) {
                 row.setValue(v);
             }
         }
+    }
+
+    /** 環境タブの現在行からキーに対応する値を trim して返す（無ければ空）。 */
+    private String envTabValueTrimmed(String key) {
+        if (envRows == null || key == null || key.isBlank()) {
+            return "";
+        }
+        for (EnvVarRow row : envRows) {
+            String n = row.getName() != null ? row.getName().trim() : "";
+            if (key.equals(n)) {
+                String v = row.getValue();
+                return v != null ? v.trim() : "";
+            }
+        }
+        return "";
     }
 
     /**
