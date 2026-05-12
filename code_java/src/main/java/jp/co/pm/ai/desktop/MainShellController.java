@@ -2671,6 +2671,15 @@ public final class MainShellController {
         }
         activeRunStageScript = script;
         applyRunTabGating();
+        if (STAGE2.equals(script) && dispatchInteractiveTabController != null) {
+            Runnable clearDispatch =
+                    () -> dispatchInteractiveTabController.resetTableDisplayForStage2Run();
+            if (Platform.isFxApplicationThread()) {
+                clearDispatch.run();
+            } else {
+                Platform.runLater(clearDispatch);
+            }
+        }
         try {
             Map<String, String> uiRun = collectUiEnv();
             if (STAGE2.equals(script)) {
@@ -2739,6 +2748,11 @@ public final class MainShellController {
                                                         .getStatusLabel()
                                                         .setText("failed: " + err.getMessage());
                                                 appendLog("[end] exceptional exit");
+                                                if (STAGE2.equals(script)
+                                                        && dispatchInteractiveTabController != null) {
+                                                    dispatchInteractiveTabController
+                                                            .reloadTableFromDiskAfterExternalUpdate();
+                                                }
                                             } else {
                                                 int c = code != null ? code : -1;
                                                 mainRunTabController
@@ -2760,18 +2774,21 @@ public final class MainShellController {
                                                             "段階1 完了",
                                                             "段階1 の処理が正常終了しました。");
                                                 }
-                                                if (STAGE2.equals(script) && c == 0) {
-                                                    refreshStage2OutputArtifacts();
-                                                    invalidateDeliveryCalendarAfterPipelineRun();
-                                                    refreshEquipmentGanttGraphicAfterPipelineRun();
+                                                if (STAGE2.equals(script)) {
+                                                    if (c == 0) {
+                                                        refreshStage2OutputArtifacts();
+                                                        invalidateDeliveryCalendarAfterPipelineRun();
+                                                        refreshEquipmentGanttGraphicAfterPipelineRun();
+                                                        MacroCompleteChime.playIfAvailable(
+                                                                collectUiEnv());
+                                                        showStageCompletionDialog(
+                                                                "段階2 完了",
+                                                                "段階2 の処理が正常終了しました。");
+                                                    }
                                                     if (dispatchInteractiveTabController != null) {
                                                         dispatchInteractiveTabController
                                                                 .reloadTableFromDiskAfterExternalUpdate();
                                                     }
-                                                    MacroCompleteChime.playIfAvailable(collectUiEnv());
-                                                    showStageCompletionDialog(
-                                                            "段階2 完了",
-                                                            "段階2 の処理が正常終了しました。");
                                                 }
                                             }
                                         });
@@ -2781,7 +2798,14 @@ public final class MainShellController {
             activeRunStageScript = null;
             activeStageChildProcess.set(null);
             appendLog("[error] runStage: " + t.getMessage());
-            javafx.application.Platform.runLater(this::applyRunTabGating);
+            boolean stage2 = STAGE2.equals(script);
+            Platform.runLater(
+                    () -> {
+                        applyRunTabGating();
+                        if (stage2 && dispatchInteractiveTabController != null) {
+                            dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
+                        }
+                    });
         }
     }
 

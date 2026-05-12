@@ -1157,7 +1157,27 @@ public final class DispatchInteractiveTabController {
     }
 
     /**
-     * 実行・ログから段階2を実行して {@code 結果_配台表.json} が更新されたあと、当タブの表をディスクから再読込する。
+     * 段階2パイプライン開始時に、古い行を誤認しないよう表の表示を空にする（JSON パスラベルは維持）。
+     */
+    void resetTableDisplayForStage2Run() {
+        if (shell == null) {
+            return;
+        }
+        Path p = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
+        if (jsonPathLabel != null) {
+            jsonPathLabel.setText(p.toString());
+        }
+        doc = ResultDispatchDocument.empty();
+        clearDispatchShortfallUi();
+        rebuildGrids();
+        clearDispatchDocDirty();
+        if (statusLabel != null) {
+            statusLabel.setText("段階2実行中（表示をクリア）");
+        }
+    }
+
+    /**
+     * 外部で {@code 結果_配台表.json} が更新されたあと、当タブの表をディスクから再読込する（段階2終了後の再同期やワークスペース復元後など）。
      */
     void reloadTableFromDiskAfterExternalUpdate() {
         reloadFromDiskQuiet();
