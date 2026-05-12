@@ -119,9 +119,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     public record EquipmentGanttScrollState(double hValue, double vValue) {}
 
     /** 時刻軸（右ペイン）の {@link ScrollPane}。縦スクロールは左ペインと双方向バインド済み。 */
-    public record EquipmentGanttViewHandles(ScrollPane timelineScroll, Runnable scheduleViewportRepaint) {
-        public EquipmentGanttViewHandles(ScrollPane timelineScroll) {
-            this(timelineScroll, null);
+    public record EquipmentGanttViewHandles(
+            ScrollPane leftBodyScroll,
+            ScrollPane timelineScroll,
+            Runnable scheduleViewportRepaint) {
+        /** @deprecated 左スクロールが不要な呼び出し向け。印刷では左も展開するため {@link #EquipmentGanttViewHandles(ScrollPane, ScrollPane, Runnable)} を使う。 */
+        @Deprecated
+        public EquipmentGanttViewHandles(ScrollPane timelineScroll, Runnable scheduleViewportRepaint) {
+            this(null, timelineScroll, scheduleViewportRepaint);
         }
     }
 
@@ -1198,7 +1203,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         mainColumn.setPadding(new Insets(4));
         mainColumn.setCache(false);
         root.setCenter(mainColumn);
-        root.setUserData(new EquipmentGanttViewHandles(rightBodyScroll, scheduleViewportRepaint));
+        root.setUserData(
+                new EquipmentGanttViewHandles(
+                        leftBodyScroll, rightBodyScroll, scheduleViewportRepaint));
 
         Label hint =
                 new Label(

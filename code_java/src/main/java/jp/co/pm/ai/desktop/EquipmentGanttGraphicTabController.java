@@ -1449,6 +1449,7 @@ public final class EquipmentGanttGraphicTabController {
         PageLayout layout =
                 printer.createPageLayout(
                         Paper.A3, PageOrientation.LANDSCAPE, Printer.MarginType.DEFAULT);
+        job.getJobSettings().setPageLayout(layout);
 
         int okPages = 0;
         try {
