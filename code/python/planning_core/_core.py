@@ -23953,6 +23953,8 @@ _DEBUG_NDJSON_MAX_PER_HYPOTHESIS: dict[str, int] = {
     "H_cap_absent": 20,
     "H_post_plan_shortfall": 3,
     "H_proc_key_merge": 4,
+    "H_v54_in_queue": 4,
+    "H_v54_drain_step": 80,
 }
 
 
@@ -28356,6 +28358,35 @@ def _trial_order_first_schedule_pass(
                             },
                         )
             # #endregion
+            _iv_v54_dbg = bool(
+                _interactive_dispatch_trial_env_active() and _tid_iv == "V5-4"
+            )
+            # #region agent log
+            if _iv_v54_dbg:
+                _append_cursor_debug_ndjson(
+                    "0941fe",
+                    "H_v54_drain_step",
+                    "_drain_rolls_for_task/entry",
+                    "V5-4 drain step entry",
+                    {
+                        "event": "entry",
+                        "date": current_date.isoformat()
+                        if isinstance(current_date, date)
+                        else str(current_date),
+                        "proc": str(_proc_iv),
+                        "mach": str(_mach_iv),
+                        "remaining_units": float(task.get("remaining_units") or 0),
+                        "unit_m": float(task.get("unit_m") or 0),
+                        "rolls_done": int(rolls_done),
+                        "iv_cap": bool(_iv_cap),
+                        "cap_in_targets": bool(
+                            _iv_cap
+                            and interactive_dispatch_targets is not None
+                            and _cap_key in interactive_dispatch_targets
+                        ),
+                    },
+                )
+            # #endregion
             if _iv_cap and _cap_key in interactive_dispatch_targets:
                 try:
                     _cap_m = float(interactive_dispatch_targets[_cap_key])
@@ -28364,6 +28395,20 @@ def _trial_order_first_schedule_pass(
                     _cap_m = 0.0
                     _done_m = 0.0
                 if _done_m >= _cap_m - 1e-5:
+                    # #region agent log
+                    if _iv_v54_dbg:
+                        _append_cursor_debug_ndjson(
+                            "0941fe",
+                            "H_v54_drain_step",
+                            "_drain_rolls_for_task/cap_done",
+                            "V5-4 break: daily cap already done",
+                            {
+                                "event": "cap_done",
+                                "cap_m": _cap_m,
+                                "done_m": _done_m,
+                            },
+                        )
+                    # #endregion
                     break
                 try:
                     _um_lim = float(task.get("unit_m") or 0)
@@ -28372,6 +28417,22 @@ def _trial_order_first_schedule_pass(
                 if _um_lim > 1e-12:
                     _rem_m = max(0.0, _cap_m - _done_m)
                     if _rem_m + 1e-9 < _um_lim:
+                        # #region agent log
+                        if _iv_v54_dbg:
+                            _append_cursor_debug_ndjson(
+                                "0941fe",
+                                "H_v54_drain_step",
+                                "_drain_rolls_for_task/cap_short_of_one_roll",
+                                "V5-4 break: remaining-m < unit_m",
+                                {
+                                    "event": "cap_short",
+                                    "cap_m": _cap_m,
+                                    "done_m": _done_m,
+                                    "rem_m": _rem_m,
+                                    "unit_m": _um_lim,
+                                },
+                            )
+                        # #endregion
                         break
             res = _assign_one_roll_trial_order_flow(
                 task,
@@ -28396,6 +28457,16 @@ def _trial_order_first_schedule_pass(
                 timeline_events=timeline_events,
             )
             if res is None:
+                # #region agent log
+                if _iv_v54_dbg:
+                    _append_cursor_debug_ndjson(
+                        "0941fe",
+                        "H_v54_drain_step",
+                        "_drain_rolls_for_task/assign_none",
+                        "V5-4 break: assign_one_roll_trial_order_flow returned None",
+                        {"event": "assign_none"},
+                    )
+                # #endregion
                 break
             done_units = 1
             if task.get("roll_pipeline_inspection") or task.get(
@@ -30913,6 +30984,45 @@ def _generate_plan_impl(
     _apply_dispatch_trial_order_for_generate_plan(
         task_queue, req_map, need_rules, need_combo_col_index
     )
+    # #region agent log
+    if _interactive_dispatch_trial_env_active():
+        _v54_rows_dbg: list[dict] = []
+        for _t in task_queue:
+            if _interactive_norm_cell(str(_t.get("task_id") or "")) != "V5-4":
+                continue
+            _v54_rows_dbg.append(
+                {
+                    "task_id": str(_t.get("task_id") or ""),
+                    "machine": str(_t.get("machine") or ""),
+                    "machine_name": str(_t.get("machine_name") or ""),
+                    "unit_m": float(_t.get("unit_m") or 0.0),
+                    "initial_remaining_units": float(
+                        _t.get("initial_remaining_units") or 0.0
+                    ),
+                    "remaining_units": float(_t.get("remaining_units") or 0.0),
+                    "dispatch_trial_order": int(_t.get("dispatch_trial_order") or 0),
+                    "dispatch_trial_order_from_sheet": (
+                        None
+                        if _t.get("dispatch_trial_order_from_sheet") is None
+                        else int(_t.get("dispatch_trial_order_from_sheet"))
+                    ),
+                    "start_date_req": str(_t.get("start_date_req") or ""),
+                    "due_basis_date": str(_t.get("due_basis_date") or ""),
+                    "roll_pipeline_ec": bool(_t.get("roll_pipeline_ec")),
+                    "roll_pipeline_inspection": bool(
+                        _t.get("roll_pipeline_inspection")
+                    ),
+                    "roll_pipeline_rewind": bool(_t.get("roll_pipeline_rewind")),
+                }
+            )
+        _append_cursor_debug_ndjson(
+            "0941fe",
+            "H_v54_in_queue",
+            "_generate_plan_impl/after_apply_dto",
+            "V5-4 rows in task_queue",
+            {"n": len(_v54_rows_dbg), "rows": _v54_rows_dbg},
+        )
+    # #endregion
     if DEBUG_TASK_ID:
         dbg_items = [t for t in task_queue if str(t.get("task_id", "")).strip() == DEBUG_TASK_ID]
         if dbg_items:
