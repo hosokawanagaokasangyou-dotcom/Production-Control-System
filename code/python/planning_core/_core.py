@@ -23954,8 +23954,9 @@ _DEBUG_NDJSON_MAX_PER_HYPOTHESIS: dict[str, int] = {
     "H_post_plan_shortfall": 3,
     "H_proc_key_merge": 4,
     "H_v54_in_queue": 4,
-    "H_v54_drain_step": 80,
+    "H_v54_drain_step": 12,
     "H_v54_day_filter": 12,
+    "H_v54_block_probe": 12,
 }
 
 
@@ -31253,6 +31254,71 @@ def _generate_plan_impl(
                         "v54_in_task_queue_pending": _v54_pending,
                     },
                 )
+                for _t_v54 in task_queue:
+                    if (
+                        str(_t_v54.get("task_id") or "").strip() != "V5-4"
+                        or float(_t_v54.get("remaining_units") or 0) <= 1e-12
+                    ):
+                        continue
+                    _tm_v54 = _t_v54.get("machine")
+                    _eqt_v54 = str(
+                        _t_v54.get("equipment_line_key") or _tm_v54 or ""
+                    ).strip() or (_tm_v54 or "")
+                    _occ_v54 = (
+                        _machine_occupancy_key_resolve(_t_v54, _eqt_v54) or ""
+                    ).strip()
+                    _mc_blocks_today_for_occ = (
+                        _MACHINE_CALENDAR_BLOCKS_BY_DATE.get(current_date, {})
+                        if isinstance(_MACHINE_CALENDAR_BLOCKS_BY_DATE, dict)
+                        else {}
+                    )
+                    _block_count = 0
+                    _block_sample: list[str] = []
+                    try:
+                        _ivs = list(_mc_blocks_today_for_occ.get(_occ_v54) or [])
+                        _block_count = len(_ivs)
+                        for s, e in _ivs[:4]:
+                            try:
+                                _block_sample.append(
+                                    f"{s.strftime('%H:%M')}-{e.strftime('%H:%M')}"
+                                )
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                    try:
+                        _fully = bool(
+                            _task_fully_machine_calendar_blocked_on_date(
+                                _t_v54, current_date, daily_status, members
+                            )
+                        )
+                    except Exception as _e_mcb:
+                        _fully = False
+                        _block_sample.append(f"err:{type(_e_mcb).__name__}")
+                    try:
+                        _dep_block = bool(
+                            _task_not_yet_schedulable_due_to_dependency_or_b2_room(
+                                _t_v54, task_queue
+                            )
+                        )
+                    except Exception:
+                        _dep_block = False
+                    _append_cursor_debug_ndjson(
+                        "0941fe",
+                        "H_v54_block_probe",
+                        "_generate_plan_impl/day_loop",
+                        "V5-4 block probe",
+                        {
+                            "date": current_date.isoformat(),
+                            "proc": str(_tm_v54 or ""),
+                            "mach": str(_t_v54.get("machine_name") or ""),
+                            "occ_key": _occ_v54,
+                            "fully_machine_calendar_blocked": _fully,
+                            "dep_or_b2_blocked": _dep_block,
+                            "mc_block_count_for_occ": _block_count,
+                            "mc_block_sample": _block_sample,
+                        },
+                    )
             # #endregion
             if not tasks_today:
                 earliest_wait = min(
