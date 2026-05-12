@@ -9,8 +9,8 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.regex.Pattern;
 
 import javafx.animation.PauseTransition;
@@ -19,6 +19,13 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
+import javafx.print.PageLayout;
+import javafx.print.PageOrientation;
+import javafx.print.Paper;
+import javafx.print.Printer;
+import javafx.print.PrinterJob;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.control.Accordion;
 import javafx.scene.control.Button;
@@ -53,6 +60,7 @@ import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttContractSheetTableBuilder;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttSheetBundle;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
+import jp.co.pm.ai.desktop.print.EquipmentGanttPrintDaySlices;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
 import jp.co.pm.ai.desktop.ui.EquipmentGanttPersonBadgeWireDashStyle;
@@ -93,6 +101,12 @@ public final class EquipmentGanttGraphicTabController {
 
     @FXML
     private Button syncLatestButton;
+
+    @FXML
+    private Button printGanttButton;
+
+    @FXML
+    private Button exportGanttPdfButton;
 
     @FXML
     private TextField planJsonField;
@@ -1246,21 +1260,7 @@ public final class EquipmentGanttGraphicTabController {
         EquipmentGraphicGanttPane.HorizontalZoomAnchor zoomAnchor = pendingHorizontalZoomAnchor;
         pendingHorizontalZoomAnchor = null;
 
-        double zoom = graphicZoomSlider != null ? graphicZoomSlider.getValue() / 100.0 : 1.0;
-        double rowPct = graphicRowHeightSlider != null ? graphicRowHeightSlider.getValue() : 100d;
-        double slotPct = graphicSlotWidthSlider != null ? graphicSlotWidthSlider.getValue() : 100d;
-        double headerPct =
-                graphicHeaderHeightSlider != null ? graphicHeaderHeightSlider.getValue() : 100d;
-        double barFp =
-                graphicBarFontPctSlider != null ? graphicBarFontPctSlider.getValue() : 100d;
-        DesktopTheme theme =
-                shell != null ? shell.currentDesktopTheme() : DesktopTheme.LIGHT;
         ObservableList<ObservableList<String>> rows = toObservableRows(st);
-        Function<String, PersonBadgeStyle> badgeResolver =
-                shell != null
-                        ? shell.personBadgeStyleResolverForGantt()
-                        : (String __) -> PersonBadgeStyle.defaultStyle();
-        boolean showBadges = snapshotEquipmentGanttPersonBadgeEnabled();
 
         String fpNow =
                 EquipmentGraphicGanttPane.computeDataFingerprint(
@@ -1270,48 +1270,13 @@ public final class EquipmentGanttGraphicTabController {
         }
         equipmentGanttGraphicDataFingerprint = fpNow;
 
-        boolean dragEffective = effectivePersonBadgeDragAdjustEnabled();
-        java.util.function.BiConsumer<String, EquipmentGanttBadgeDragDelta> dragSink =
-                dragEffective
-                        ? (k, d) -> {
-                            if (Math.abs(d.dx()) < 1e-6 && Math.abs(d.dy()) < 1e-6) {
-                                equipmentGanttBadgeDragDeltas.remove(k);
-                            } else {
-                                equipmentGanttBadgeDragDeltas.put(k, d);
-                            }
-                            scheduleEquipmentGraphicPersist();
-                        }
-                        : null;
-
         long buildT0 = System.nanoTime();
         BorderPane gantt =
-                EquipmentGraphicGanttPane.build(
+                buildEquipmentGanttBorderPane(
                         st.columns(),
                         rows,
-                        theme,
-                        zoom,
-                        rowPct,
-                        slotPct,
-                        snapshotEquipmentGanttBarFontFamily(),
-                        barFp,
-                        headerPct,
-                        snapshotEquipmentGanttDateColWidth(),
-                        snapshotEquipmentGanttMachineColWidth(),
-                        snapshotEquipmentGanttProcessColWidth(),
-                        snapshotEquipmentGanttShiftWheelHScrollPercent(),
                         badgeRowsForCurrentGraphic,
-                        showBadges,
-                        badgeResolver,
-                        snapshotEquipmentGanttPersonBadgeGapPx(),
-                        snapshotEquipmentGanttPersonBadgeBandVerticalOffsetPx(),
-                        dragEffective,
-                        equipmentGanttBadgeDragDeltas,
-                        dragSink,
-                        snapshotEquipmentGanttPersonBadgeWireStrokeHex(),
-                        snapshotEquipmentGanttPersonBadgeWireWidthPx(),
-                        snapshotEquipmentGanttPersonBadgeWireDashStyleKey(),
-                        snapshotEquipmentGanttPersonBadgeWireMaxLengthPx(),
-                        snapshotEquipmentGanttPersonBadgeWireEnabled());
+                        effectivePersonBadgeDragAdjustEnabled());
         if (Boolean.getBoolean("pm.ai.gantt.profile")) {
             long ms = (System.nanoTime() - buildT0) / 1_000_000L;
             if (shell != null) {
@@ -1333,6 +1298,218 @@ public final class EquipmentGanttGraphicTabController {
                 && h.scheduleViewportRepaint() != null) {
             Platform.runLater(h.scheduleViewportRepaint());
         }
+    }
+
+    /**
+     * 設備ガント（グラフィック）の {@link EquipmentGraphicGanttPane#build} を、現在のツールバー設定で行う。
+     *
+     * @param interactiveDragBadges false のとき印刷用（ドラッグずれの保存を行わない）
+     */
+    private BorderPane buildEquipmentGanttBorderPane(
+            List<String> columns,
+            ObservableList<ObservableList<String>> rows,
+            List<List<String>> badgeSlotRowsSlice,
+            boolean interactiveDragBadges) {
+        double zoom = graphicZoomSlider != null ? graphicZoomSlider.getValue() / 100.0 : 1.0;
+        double rowPct = graphicRowHeightSlider != null ? graphicRowHeightSlider.getValue() : 100d;
+        double slotPct = graphicSlotWidthSlider != null ? graphicSlotWidthSlider.getValue() : 100d;
+        double headerPct =
+                graphicHeaderHeightSlider != null ? graphicHeaderHeightSlider.getValue() : 100d;
+        double barFp =
+                graphicBarFontPctSlider != null ? graphicBarFontPctSlider.getValue() : 100d;
+        DesktopTheme theme =
+                shell != null ? shell.currentDesktopTheme() : DesktopTheme.LIGHT;
+        java.util.function.Function<String, PersonBadgeStyle> badgeResolver =
+                shell != null
+                        ? shell.personBadgeStyleResolverForGantt()
+                        : (String __) -> PersonBadgeStyle.defaultStyle();
+        boolean showBadges = snapshotEquipmentGanttPersonBadgeEnabled();
+
+        boolean dragEffective =
+                interactiveDragBadges && effectivePersonBadgeDragAdjustEnabled();
+        java.util.function.BiConsumer<String, EquipmentGanttBadgeDragDelta> dragSink =
+                dragEffective
+                        ? (k, d) -> {
+                            if (Math.abs(d.dx()) < 1e-6 && Math.abs(d.dy()) < 1e-6) {
+                                equipmentGanttBadgeDragDeltas.remove(k);
+                            } else {
+                                equipmentGanttBadgeDragDeltas.put(k, d);
+                            }
+                            scheduleEquipmentGraphicPersist();
+                        }
+                        : null;
+        java.util.Map<String, EquipmentGanttBadgeDragDelta> dragMap =
+                dragEffective ? equipmentGanttBadgeDragDeltas : java.util.Map.of();
+
+        return EquipmentGraphicGanttPane.build(
+                columns,
+                rows,
+                theme,
+                zoom,
+                rowPct,
+                slotPct,
+                snapshotEquipmentGanttBarFontFamily(),
+                barFp,
+                headerPct,
+                snapshotEquipmentGanttDateColWidth(),
+                snapshotEquipmentGanttMachineColWidth(),
+                snapshotEquipmentGanttProcessColWidth(),
+                snapshotEquipmentGanttShiftWheelHScrollPercent(),
+                badgeSlotRowsSlice,
+                showBadges,
+                badgeResolver,
+                snapshotEquipmentGanttPersonBadgeGapPx(),
+                snapshotEquipmentGanttPersonBadgeBandVerticalOffsetPx(),
+                dragEffective,
+                dragMap,
+                dragSink,
+                snapshotEquipmentGanttPersonBadgeWireStrokeHex(),
+                snapshotEquipmentGanttPersonBadgeWireWidthPx(),
+                snapshotEquipmentGanttPersonBadgeWireDashStyleKey(),
+                snapshotEquipmentGanttPersonBadgeWireMaxLengthPx(),
+                snapshotEquipmentGanttPersonBadgeWireEnabled());
+    }
+
+    @FXML
+    private void onPrintGanttAction() {
+        runEquipmentGanttPrintJob(false);
+    }
+
+    @FXML
+    private void onExportGanttPdfAction() {
+        runEquipmentGanttPrintJob(true);
+    }
+
+    private void runEquipmentGanttPrintJob(boolean preselectPdfPrinter) {
+        if (lastGraphicSheet == null) {
+            if (statusLabel != null) {
+                statusLabel.setText("先に JSON を読み込んでください。");
+            }
+            return;
+        }
+        Stage stage = ownerStage != null ? ownerStage : (shell != null ? shell.getPrimaryStage() : null);
+        if (stage == null) {
+            return;
+        }
+        ObservableList<ObservableList<String>> fullRows = toObservableRows(lastGraphicSheet);
+        List<String> cols = lastGraphicSheet.columns();
+        List<List<Integer>> groups =
+                EquipmentGanttPrintDaySlices.rowIndexGroupsOnePagePerDay(fullRows);
+        if (groups.isEmpty()) {
+            if (statusLabel != null) {
+                statusLabel.setText("印刷する行がありません。");
+            }
+            return;
+        }
+        int slotCols = EquipmentGraphicGanttPane.countTimeSlotHeadersInColumns(cols);
+        if (slotCols <= 0) {
+            if (statusLabel != null) {
+                statusLabel.setText("時刻列（HH:MM）が無いため印刷できません。");
+            }
+            return;
+        }
+
+        PrinterJob job = PrinterJob.createPrinterJob();
+        if (job == null) {
+            if (statusLabel != null) {
+                statusLabel.setText("印刷ジョブを作成できませんでした。");
+            }
+            return;
+        }
+        if (preselectPdfPrinter) {
+            Printer pdf = findLikelyPdfPrinter();
+            if (pdf != null) {
+                job.setPrinter(pdf);
+            } else {
+                Alert info = new Alert(AlertType.INFORMATION);
+                info.setTitle("PDF へ出力");
+                info.setHeaderText(null);
+                info.setContentText(
+                        "一覧から「Microsoft Print to PDF」など PDF 用プリンターを選んでください。\n"
+                                + "（環境によっては名前が異なります）");
+                info.initOwner(stage);
+                info.showAndWait();
+            }
+        }
+        if (!job.showPrintDialog(stage)) {
+            if (statusLabel != null) {
+                statusLabel.setText("印刷をキャンセルしました。");
+            }
+            return;
+        }
+        Printer printer = job.getPrinter();
+        if (printer == null) {
+            if (statusLabel != null) {
+                statusLabel.setText("プリンターが選択されていません。");
+            }
+            return;
+        }
+        PageLayout layout =
+                printer.createPageLayout(
+                        Paper.A3, PageOrientation.LANDSCAPE, Printer.MarginType.DEFAULT);
+
+        int okPages = 0;
+        try {
+            for (List<Integer> idxGroup : groups) {
+                ObservableList<ObservableList<String>> slice =
+                        EquipmentGanttPrintDaySlices.sliceRowsByIndices(fullRows, idxGroup);
+                List<List<String>> badgeSlice =
+                        EquipmentGanttPrintDaySlices.sliceBadgeRowsAligned(
+                                badgeRowsForCurrentGraphic, idxGroup, slotCols);
+                BorderPane page =
+                        buildEquipmentGanttBorderPane(cols, slice, badgeSlice, false);
+                if (!job.printPage(layout, page)) {
+                    if (shell != null) {
+                        shell.appendLog(
+                                "[equipment-gantt-graphic] printPage が false を返しました（"
+                                        + (okPages + 1)
+                                        + " ページ目）");
+                    }
+                    break;
+                }
+                okPages++;
+            }
+        } catch (Exception ex) {
+            String msg = ex.getMessage() != null ? ex.getMessage() : ex.toString();
+            if (statusLabel != null) {
+                statusLabel.setText("印刷エラー: " + msg);
+            }
+            if (shell != null) {
+                shell.appendLog("[equipment-gantt-graphic] print: " + msg);
+            }
+            return;
+        } finally {
+            job.endJob();
+        }
+        if (statusLabel != null) {
+            statusLabel.setText(
+                    "印刷ジョブを送信しました（A3 横向き・"
+                            + okPages
+                            + " ページ、暦日ブロックごとに分割）。");
+        }
+    }
+
+    private static Printer findLikelyPdfPrinter() {
+        Printer fallback = null;
+        for (Printer p : Printer.getAllPrinters()) {
+            if (p == null) {
+                continue;
+            }
+            String n = p.getName();
+            if (n == null) {
+                continue;
+            }
+            String low = n.toLowerCase(Locale.ROOT);
+            if (low.contains("pdf") || low.contains("pdfwriter")) {
+                if (low.contains("microsoft") || low.contains("windows")) {
+                    return p;
+                }
+                if (fallback == null) {
+                    fallback = p;
+                }
+            }
+        }
+        return fallback;
     }
 
     private void installGraphicWheelZoomIfNeeded() {

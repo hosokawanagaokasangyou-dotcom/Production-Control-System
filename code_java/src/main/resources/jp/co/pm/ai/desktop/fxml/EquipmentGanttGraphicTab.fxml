@@ -46,6 +46,12 @@
                             <Button fx:id="syncLatestButton" mnemonicParsing="false"
                                     text="最新JSONを検索"
                                     onAction="#onSyncLatestButtonAction"/>
+                            <Button fx:id="printGanttButton" mnemonicParsing="false"
+                                    text="印刷（A3横・1日／ページ）"
+                                    onAction="#onPrintGanttAction"/>
+                            <Button fx:id="exportGanttPdfButton" mnemonicParsing="false"
+                                    text="PDFへ…"
+                                    onAction="#onExportGanttPdfAction"/>
                             <Label styleClass="pm-plan-result-viewer-hint-inline"
                                    text="計画*.json の設備ガント系シートを表示"/>
                         </HBox>

@@ -2934,6 +2934,25 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     /**
+     * 列見出しのうち HH:MM 形式のタイムライン列の個数（印刷のバッジ行幅合わせ等）。
+     *
+     * @param columns シート列見出し
+     * @return 0 以上
+     */
+    public static int countTimeSlotHeadersInColumns(List<String> columns) {
+        if (columns == null || columns.isEmpty()) {
+            return 0;
+        }
+        int n = 0;
+        for (String c : columns) {
+            if (parseTimeHeader(c) != null) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /**
      * production_plan JSON が pandas 由来で列名が Unnamed:0 のみのとき、Excel 上の
      * 「日付 / 機械名 / … / HH:MM …」行を列見出し行として採用する（read_excel header=0 ミスアラインの救済）。
      */
