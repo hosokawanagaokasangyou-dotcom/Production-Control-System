@@ -23942,6 +23942,11 @@ def _interactive_norm_cell(v) -> str:
     return unicodedata.normalize("NFKC", str(v).strip())
 
 
+def _interactive_dispatch_target_process_key(v) -> str:
+    """段階3の目標・キャップキー用。工程名を NFKC のうえルール照合と同一に正規化する。"""
+    return _normalize_process_name_for_rule_match(_interactive_norm_cell(v))
+
+
 def _interactive_parse_dispatch_date_cell(val) -> date | None:
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return None
@@ -23982,7 +23987,7 @@ def merge_interactive_result_dispatch_json_into_tasks_df(
         tid = _interactive_norm_cell(r.get(TASK_COL_TASK_ID)) or _interactive_norm_cell(
             r.get("タスクID")
         )
-        proc = _interactive_norm_cell(r.get(TASK_COL_MACHINE))
+        proc = _interactive_dispatch_target_process_key(r.get(TASK_COL_MACHINE))
         mach = _interactive_norm_cell(r.get(TASK_COL_MACHINE_NAME))
         dto_raw = r.get(RESULT_TASK_COL_DISPATCH_TRIAL_ORDER)
         try:
@@ -24012,11 +24017,41 @@ def merge_interactive_result_dispatch_json_into_tasks_df(
     for idx in df.index:
         row = df.loc[idx]
         tid = _interactive_norm_cell(planning_task_id_str_from_plan_row(row))
-        proc = _interactive_norm_cell(_planning_df_cell_scalar(row, TASK_COL_MACHINE))
+        proc = _interactive_dispatch_target_process_key(
+            _planning_df_cell_scalar(row, TASK_COL_MACHINE)
+        )
         mach = _interactive_norm_cell(_planning_df_cell_scalar(row, TASK_COL_MACHINE_NAME))
         k = (tid, proc, mach)
         if k in order_map:
             df.at[idx, _dto] = str(order_map[k])
+    # #region agent log
+    try:
+        import json as _json_0941fe
+        import time as _time_0941fe
+
+        _sk = [[str(x) for x in _t] for _t in list(targets.keys())[:8]]
+        with open(
+            "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-0941fe.log",
+            "a",
+            encoding="utf-8",
+        ) as _lf:
+            _lf.write(
+                _json_0941fe.dumps(
+                    {
+                        "sessionId": "0941fe",
+                        "hypothesisId": "H_proc_key_merge",
+                        "location": "merge_interactive_result_dispatch_json_into_tasks_df",
+                        "message": "targets after merge",
+                        "data": {"n_targets": len(targets), "sample_keys": _sk},
+                        "timestamp": int(_time_0941fe.time() * 1000),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+    except Exception:
+        pass
+    # #endregion
     return df, dict(targets)
 
 
@@ -28218,7 +28253,7 @@ def _trial_order_first_schedule_pass(
                 and interactive_trial_meters_done is not None
             )
             _tid_iv = _interactive_norm_cell(str(task.get("task_id") or ""))
-            _proc_iv = _interactive_norm_cell(str(task.get("machine") or ""))
+            _proc_iv = _interactive_dispatch_target_process_key(task.get("machine"))
             _mach_iv = _interactive_norm_cell(str(task.get("machine_name") or ""))
             _cap_key = (_tid_iv, _proc_iv, _mach_iv, current_date)
             if _iv_cap and _cap_key in interactive_dispatch_targets:
@@ -28727,7 +28762,7 @@ def _interactive_trial_recompute_meters_done_from_timeline(
         tsk = _task_dict_for_timeline_event(ev, task_queue)
         if tsk is None:
             continue
-        proc_n = _interactive_norm_cell(tsk.get("machine"))
+        proc_n = _interactive_dispatch_target_process_key(tsk.get("machine"))
         mach_n = _interactive_norm_cell(tsk.get("machine_name"))
         d = ev.get("date")
         if not isinstance(d, date):
