@@ -87,6 +87,7 @@ import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
@@ -962,7 +963,10 @@ public final class MainShellController {
         }
         Path snapJson = PlanWorkspaceSnapshotStore.resultDispatchJsonPath(entry);
         if (!Files.isRegularFile(snapJson)) {
-            throw new IOException("スナップショットに result_dispatch.json がありません");
+            throw new IOException(
+                    "スナップショットに "
+                            + AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME
+                            + "（旧 result_dispatch.json）がありません");
         }
         JsonNode colPart = PlanWorkspaceSnapshotStore.readColumnOrderPartial(entry);
         TableColumnOrderPersistence.mergePlanWorkspaceColumnOrderPartial(colPart);
@@ -974,6 +978,8 @@ public final class MainShellController {
         }
         Files.copy(snapJson, canonical, StandardCopyOption.REPLACE_EXISTING);
 
+        tryExportResultDispatchTableXlsxNearJson(canonical);
+
         PlanWorkspaceSessionFragment frag = PlanWorkspaceSnapshotStore.readSessionFragment(entry);
         DesktopSessionState merged = frag.mergeOnto(collectDesktopSession());
         applyDesktopSession(merged, false);
@@ -984,6 +990,31 @@ public final class MainShellController {
             resultDispatchTableTabController.reloadResultDispatchTableFromDisk();
         }
         persistDesktopSessionNow();
+    }
+
+    /**
+     * {@code export_result_dispatch_from_json.py} 経由で、指定 JSON と同階層に {@code 結果_配台表.xlsx} を書き出す（段階2の
+     * {@code planning_core._write_dispatch_table_standalone_xlsx} と同一経路）。失敗時はログのみ。
+     */
+    public void tryExportResultDispatchTableXlsxNearJson(Path jsonPath) {
+        if (jsonPath == null) {
+            return;
+        }
+        try {
+            Path pyExe = resolveStagePythonExecutablePath();
+            Path pyDir = AppPaths.resolvePythonScriptDir(collectUiEnv());
+            String line = ResultDispatchPythonExport.exportXlsxNearJson(jsonPath, pyExe, pyDir);
+            if (line != null && !line.isBlank()) {
+                appendLog("[結果_配台表] xlsx 同期待ち（段階2と同一 export）: " + line.trim());
+            } else {
+                appendLog(
+                        "[結果_配台表] xlsx 同期待ち: export_result_dispatch_from_json が失敗または未配置（JSON のみ更新）");
+            }
+        } catch (Exception ex) {
+            appendLog(
+                    "[結果_配台表] xlsx 同期スキップ: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName()));
+        }
     }
 
     /** グローバル設定の「現在の状態をデフォルトとする」実行直前にローカル {@code session-state.json} を同期する。 */

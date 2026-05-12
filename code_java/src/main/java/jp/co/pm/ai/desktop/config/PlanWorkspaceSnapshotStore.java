@@ -151,8 +151,9 @@ public final class PlanWorkspaceSnapshotStore {
 
         Files.copy(
                 resultDispatchJsonSource,
-                dir.resolve("result_dispatch.json"),
+                dir.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME),
                 StandardCopyOption.REPLACE_EXISTING);
+        Files.deleteIfExists(dir.resolve("result_dispatch.json"));
 
         JSON.writerWithDefaultPrettyPrinter()
                 .writeValue(dir.resolve("session_fragment.json").toFile(), fragment);
@@ -204,8 +205,21 @@ public final class PlanWorkspaceSnapshotStore {
         return n != null && n.isObject() ? n : JSON.createObjectNode();
     }
 
+    /**
+     * スナップショット内の配台表 JSON（段階2と同一ファイル名 {@link AppPaths#RESULT_DISPATCH_TABLE_JSON_BASENAME}。
+     * 旧版 {@code result_dispatch.json} のみのフォルダは後方互換で解決する）。
+     */
     public static Path resultDispatchJsonPath(PlanWorkspaceSnapshotEntry entry) {
-        return entry.resolveDirectory().resolve("result_dispatch.json");
+        Path dir = entry.resolveDirectory();
+        Path preferred = dir.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME);
+        Path legacy = dir.resolve("result_dispatch.json");
+        if (Files.isRegularFile(preferred)) {
+            return preferred;
+        }
+        if (Files.isRegularFile(legacy)) {
+            return legacy;
+        }
+        return preferred;
     }
 
     private static String text(JsonNode n, String key) {

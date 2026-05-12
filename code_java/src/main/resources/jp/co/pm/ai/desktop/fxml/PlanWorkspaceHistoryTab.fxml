@@ -17,7 +17,7 @@
     </padding>
     <Label styleClass="pm-section-title" text="配台ワークスペースのスナップショット"
            wrapText="true"/>
-    <Label text="現在の「配台計画_タスク入力」パス・設備ガント（バッジ位置・倍率・列幅など）・配台手動修正／結果_配台表の列順をまとめて保存します。復元は正規の結果 JSON を上書きします。"
+    <Label text="現在の「配台計画_タスク入力」パス・設備ガント（バッジ位置・倍率・列幅など）・配台手動修正／結果_配台表の列順をまとめて保存します。配台表は段階2と同じファイル名（結果_配台表.json）で格納し、可能なら同一スクリプトで 結果_配台表.xlsx もスナップショット内に出力します。復元は正規ディレクトリの JSON／xlsx を更新します。"
            wrapText="true"/>
     <Separator/>
     <HBox spacing="8.0" alignment="CENTER_LEFT">

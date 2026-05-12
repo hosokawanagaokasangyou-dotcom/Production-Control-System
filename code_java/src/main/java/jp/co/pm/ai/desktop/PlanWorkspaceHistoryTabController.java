@@ -125,7 +125,10 @@ public final class PlanWorkspaceHistoryTabController {
             Path tmp = Files.createTempFile("pm-plan-workspace-snap-", ".json");
             try {
                 ResultDispatchJsonIo.write(tmp, doc);
-                PlanWorkspaceSnapshotStore.appendSnapshot(label, frag, colPart, tmp);
+                PlanWorkspaceSnapshotEntry created =
+                        PlanWorkspaceSnapshotStore.appendSnapshot(label, frag, colPart, tmp);
+                shell.tryExportResultDispatchTableXlsxNearJson(
+                        PlanWorkspaceSnapshotStore.resultDispatchJsonPath(created));
             } finally {
                 Files.deleteIfExists(tmp);
             }
@@ -164,6 +167,7 @@ public final class PlanWorkspaceHistoryTabController {
                         + "・正規の結果_配台表 JSON（\n"
                         + canonical
                         + "）\n"
+                        + "・同階層の 結果_配台表.xlsx（段階2と同一の export_result_dispatch_from_json 経路で再生成を試みます）\n"
                         + "・配台計画入力パス・段階1プレビュー・設備ガント表示・担当バッジ位置・列順（該当キーのみ）\n"
                         + "実行タブのブックパス等は維持されます。\n"
                         + "続行しますか？");
