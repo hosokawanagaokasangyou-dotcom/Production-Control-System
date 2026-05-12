@@ -23942,6 +23942,36 @@ def _interactive_norm_cell(v) -> str:
     return unicodedata.normalize("NFKC", str(v).strip())
 
 
+def _agent_debug_ndjson_0941fe(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict | None = None,
+) -> None:
+    # #region agent log
+    import json
+    import time
+
+    try:
+        payload = {
+            "sessionId": "0941fe",
+            "timestamp": int(time.time() * 1000),
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+        }
+        with open(
+            "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-0941fe.log",
+            "a",
+            encoding="utf-8",
+        ) as _agent_dbg_f:
+            _agent_dbg_f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # #endregion
+
+
 def _interactive_parse_dispatch_date_cell(val) -> date | None:
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return None
@@ -23976,10 +24006,15 @@ def merge_interactive_result_dispatch_json_into_tasks_df(
         df[_dto] = df[_dto].astype(object)
     order_map: dict[tuple[str, str, str], int] = {}
     targets: dict[tuple[str, str, date], float] = defaultdict(float)
+    _v5_json_samples: list[dict] = []
+    _v5_tid_only_taskid_col: int = 0
     for r in json_rows or []:
         if not isinstance(r, dict):
             continue
         tid = _interactive_norm_cell(r.get(TASK_COL_TASK_ID))
+        tid_alt = _interactive_norm_cell(r.get("タスクID"))
+        if tid_alt == "V5-4" and tid != "V5-4":
+            _v5_tid_only_taskid_col += 1
         proc = _interactive_norm_cell(r.get(TASK_COL_MACHINE))
         mach = _interactive_norm_cell(r.get(TASK_COL_MACHINE_NAME))
         dto_raw = r.get(RESULT_TASK_COL_DISPATCH_TRIAL_ORDER)
@@ -24007,6 +24042,20 @@ def merge_interactive_result_dispatch_json_into_tasks_df(
             qty_v = 0.0
         if dd is not None and tid and mach and qty_v > 1e-18:
             targets[(tid, mach, dd)] += float(qty_v)
+        if (tid == "V5-4" or tid_alt == "V5-4") and len(_v5_json_samples) < 8:
+            _v5_json_samples.append(
+                {
+                    "依頼NO_norm": tid,
+                    "タスクID_norm": tid_alt,
+                    "工程名": proc,
+                    "機械名": mach,
+                    "dto": dto_v,
+                    "配台日": dd.isoformat() if isinstance(dd, date) else None,
+                    "qty": qty_v,
+                }
+            )
+    n_v5_plan = 0
+    n_v5_dto_filled = 0
     for idx in df.index:
         row = df.loc[idx]
         tid = _interactive_norm_cell(planning_task_id_str_from_plan_row(row))
@@ -24015,6 +24064,29 @@ def merge_interactive_result_dispatch_json_into_tasks_df(
         k = (tid, proc, mach)
         if k in order_map:
             df.at[idx, _dto] = str(order_map[k])
+        if tid == "V5-4":
+            n_v5_plan += 1
+            if str(df.at[idx, _dto] or "").strip():
+                n_v5_dto_filled += 1
+    # #region agent log
+    _agent_debug_ndjson_0941fe(
+        "H1",
+        "_core.py:merge_interactive_result_dispatch_json_into_tasks_df",
+        "interactive merge V5-4 summary",
+        {
+            "v5_json_samples": _v5_json_samples,
+            "v5_rows_タスクIDのみで依頼NO不一致": _v5_tid_only_taskid_col,
+            "v5_targets": {
+                repr(k): float(v) for k, v in targets.items() if k and k[0] == "V5-4"
+            },
+            "v5_order_map": {
+                repr(k): int(v) for k, v in order_map.items() if k and k[0] == "V5-4"
+            },
+            "v5_plan_rows": n_v5_plan,
+            "v5_plan_rows_dto_filled": n_v5_dto_filled,
+        },
+    )
+    # #endregion
     return df, dict(targets)
 
 
@@ -26384,6 +26456,19 @@ def _trial_order_flow_eligible_tasks(
             mach_n = _interactive_norm_cell(str(task.get("machine_name") or ""))
             _pd = interactive_trial_pair_dates.get((tid_n, mach_n))
             if _pd is not None and current_date not in _pd:
+                if tid_n == "V5-4":
+                    # #region agent log
+                    _agent_debug_ndjson_0941fe(
+                        "H2",
+                        "_core.py:_trial_order_flow_eligible_tasks:pair_dates_skip",
+                        "V5-4 skipped (not in JSON target dates for this machine)",
+                        {
+                            "machine_name_norm": mach_n,
+                            "current_date": current_date.isoformat(),
+                            "allowed_dates": sorted(x.isoformat() for x in sorted(_pd)),
+                        },
+                    )
+                    # #endregion
                 continue
         # L11: 検査前WIPが限界以上なら EC をブロック（集計は AGGREGATE_MODE）
         if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
@@ -27899,6 +27984,19 @@ def _tasks_in_min_pending_dispatch_pool(
             mach_n = _interactive_norm_cell(str(t.get("machine_name") or ""))
             _pd = interactive_trial_pair_dates.get((tid_n, mach_n))
             if _pd is not None and current_date not in _pd:
+                if tid_n == "V5-4":
+                    # #region agent log
+                    _agent_debug_ndjson_0941fe(
+                        "H2",
+                        "_core.py:_tasks_in_min_pending_dispatch_pool:pair_dates_skip",
+                        "V5-4 skipped (not in JSON target dates for this machine)",
+                        {
+                            "machine_name_norm": mach_n,
+                            "current_date": current_date.isoformat(),
+                            "allowed_dates": sorted(x.isoformat() for x in sorted(_pd)),
+                        },
+                    )
+                    # #endregion
                 continue
         sdr = t.get("start_date_req")
         if not isinstance(sdr, date) or sdr > current_date:
@@ -28190,6 +28288,20 @@ def _trial_order_first_schedule_pass(
                     _cap_m = 0.0
                     _done_m = 0.0
                 if _done_m >= _cap_m - 1e-5:
+                    if _tid_iv == "V5-4":
+                        # #region agent log
+                        _agent_debug_ndjson_0941fe(
+                            "H3",
+                            "_core.py:_drain_rolls_for_task:interactive_cap_done",
+                            "V5-4 drain stop: daily target meters reached",
+                            {
+                                "machine": _mach_iv,
+                                "date": current_date.isoformat(),
+                                "cap_m": _cap_m,
+                                "done_m": _done_m,
+                            },
+                        )
+                        # #endregion
                     break
                 try:
                     _um_lim = float(task.get("unit_m") or 0)
@@ -28198,6 +28310,22 @@ def _trial_order_first_schedule_pass(
                 if _um_lim > 1e-12:
                     _rem_m = max(0.0, _cap_m - _done_m)
                     if _rem_m + 1e-9 < _um_lim:
+                        if _tid_iv == "V5-4":
+                            # #region agent log
+                            _agent_debug_ndjson_0941fe(
+                                "H3",
+                                "_core.py:_drain_rolls_for_task:interactive_cap_remain_lt_unit",
+                                "V5-4 drain stop: remainder below unit_m",
+                                {
+                                    "machine": _mach_iv,
+                                    "date": current_date.isoformat(),
+                                    "cap_m": _cap_m,
+                                    "done_m": _done_m,
+                                    "rem_m": _rem_m,
+                                    "unit_m": _um_lim,
+                                },
+                            )
+                            # #endregion
                         break
             res = _assign_one_roll_trial_order_flow(
                 task,
@@ -30802,6 +30930,22 @@ def _generate_plan_impl(
         _interactive_trial_pair_dates = _interactive_trial_pair_dates_from_targets(
             interactive_dispatch_targets
         )
+    # #region agent log
+    _v5_pd: dict[str, list[str]] = {}
+    if _interactive_trial_pair_dates:
+        for _pk, _pds in _interactive_trial_pair_dates.items():
+            if _pk and _pk[0] == "V5-4":
+                _v5_pd[f"{_pk[0]}|{_pk[1]}"] = sorted(d.isoformat() for d in sorted(_pds))
+    _agent_debug_ndjson_0941fe(
+        "H2",
+        "_core.py:_generate_plan_impl:interactive_pair_dates_init",
+        "V5-4 pair_dates after targets",
+        {
+            "has_pair_dates": bool(_interactive_trial_pair_dates),
+            "v5_pair_dates_by_machine": _v5_pd,
+        },
+    )
+    # #endregion
     _outer_retry_round = 0
     while True:
         _dispatch_trace_begin_outer_round(_outer_retry_round)
