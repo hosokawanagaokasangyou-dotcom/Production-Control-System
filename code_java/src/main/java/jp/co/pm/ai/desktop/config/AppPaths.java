@@ -181,6 +181,12 @@ public final class AppPaths {
     public static final String KEY_PM_AI_STAGE2_WRITE_EXCEL = "PM_AI_STAGE2_WRITE_EXCEL";
 
     /**
+     * 段階2の実行エンジン。未設定・空・{@code python}（大小無視）で従来どおり Python 子プロセス（{@code
+     * plan_simulation_stage2.py}）。{@code java} のとき JVM 内の {@code jp.co.pm.ai.planning.stage2} 実装を使い Python 段階2は起動しない。
+     */
+    public static final String KEY_PM_AI_STAGE2_ENGINE = "PM_AI_STAGE2_ENGINE";
+
+    /**
      * 段階2の Excel 成果物（結果ブック）のフォントファミリ。空のときは planning_core の {@code RESULT_BOOK_FONT_NAME}（BIZ
      * UDゴシック）相当。JavaFX 実行タブのコンボで上書き可。
      */
@@ -1021,6 +1027,19 @@ public final class AppPaths {
             }
         }
         return pickMacroWorkbook(resolveRepoRoot(u));
+    }
+
+    /**
+     * {@link #KEY_PM_AI_STAGE2_ENGINE} が {@code java}（大小無視）のとき真。未設定・空・{@code python} は偽（従来の Python
+     * 子プロセス段階2）。
+     */
+    public static boolean stage2EngineUsesJava(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String v = trim(u.get(KEY_PM_AI_STAGE2_ENGINE));
+        if (v.isEmpty()) {
+            return false;
+        }
+        return "java".equalsIgnoreCase(v);
     }
 
     private static String trim(String s) {

@@ -1,0 +1,29 @@
+package jp.co.pm.ai.planning.stage2;
+
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
+import jp.co.pm.ai.desktop.config.AppPaths;
+
+/** 段階2関連の環境変数トークン解釈（Python planning_core の truthy / 無効トークンに概ね整合）。 */
+public final class Stage2EnvParsing {
+
+    private static final Set<String> OFF =
+            Set.of("0", "false", "no", "off", "none", "n");
+
+    private Stage2EnvParsing() {}
+
+    public static boolean envEnabled(String key, Map<String, String> ui, boolean defaultWhenUnset) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String raw = u.get(key);
+        if (raw == null || raw.isBlank()) {
+            return defaultWhenUnset;
+        }
+        return !OFF.contains(raw.strip().toLowerCase(Locale.ROOT));
+    }
+
+    public static boolean stage2WriteExcel(Map<String, String> ui) {
+        return envEnabled(AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL, ui, true);
+    }
+}

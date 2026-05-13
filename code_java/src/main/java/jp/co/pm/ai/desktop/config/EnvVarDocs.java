@@ -269,6 +269,11 @@ public final class EnvVarDocs {
                         + " 起動時に本変数を上書きする。"
                         + " 0 のときは設備ガント（計画・実績明細）系シートは作成しない（処理時間の削減）。");
         put(
+                "PM_AI_STAGE2_ENGINE",
+                "段階2の実行エンジン。未設定・空・python（大小無視）で従来どおり Python 子プロセス（plan_simulation_stage2.py）。"
+                        + " java のとき JVM 内の jp.co.pm.ai.planning.stage2 を起動し Python 段階2は使わない。"
+                        + " 配台コアの完全な Python 同等は段階的に拡張する（現状は入力読取・最小成果物・JSON ミラーの足場）。");
+        put(
                 "PM_AI_XLWINGS_STAGE2_DISABLED",
                 "1/true/yes/on で段階2後の xlwings"
                         + "（列設定シート図形複製等、Excel COM/アドイン連携用）"

@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -96,6 +97,8 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
+import jp.co.pm.ai.planning.stage2.Stage2JavaEngine;
+import jp.co.pm.ai.planning.stage2.Stage2RunContext;
 
 /**
  * Main window controller（従来は {@link PmAiFxApp} 内蔵だった業務ロジックを分離）。
@@ -141,7 +144,8 @@ public final class MainShellController {
                     AppPaths.KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK,
                     AppPaths.KEY_PM_AI_PLAN_WORKBOOK_JSON,
                     AppPaths.KEY_PM_AI_MEMBER_SCHEDULE_JSON,
-                    AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON);
+                    AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON,
+                    AppPaths.KEY_PM_AI_STAGE2_ENGINE);
 
     private static final String PREFIX_CHILD = "[child] ";
     private static final String NDJSON_START = PREFIX_CHILD + "{";
@@ -376,6 +380,9 @@ public final class MainShellController {
 
     /** Python child process while stage 1/2 is running; cleared on completion or interrupt. */
     private final AtomicReference<Process> activeStageChildProcess = new AtomicReference<>();
+
+    private final AtomicReference<CompletableFuture<Integer>> activeStage2JavaFuture =
+            new AtomicReference<>();
 
     /** {@link #childEnvForPython(Map)} の直近結果（実行タブのキャッシュ表示・ログ用）。 */
     private NetworkSourceDirResolver.Result lastNetworkSourceResolution;
@@ -2785,12 +2792,6 @@ public final class MainShellController {
                     uiRun.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
                 }
             }
-            Path py = resolveStagePythonExecutablePath(uiRun);
-            Path dir =
-                    Path.of(
-                            firstNonBlank(
-                                    uiRun.get(AppPaths.KEY_PM_AI_CODE_PYTHON_DIR),
-                                    mainRunTabController.getScriptDirField().getText().trim()));
             String wb = effectiveTaskInputWorkbookPath();
             appendLog("--- start: " + script + " ---");
             if (STAGE1.equals(script) || STAGE2.equals(script)) {
@@ -2815,6 +2816,47 @@ public final class MainShellController {
                                 ? uiBadgeDesignTabController.snapshotStage1NetworkCacheBadgeLabel()
                                 : "キャッシュ");
             }
+            if (STAGE2.equals(script) && AppPaths.stage2EngineUsesJava(uiRun)) {
+                appendStageChildResolvedEnvForRun(script, childEnv);
+                mainRunTabController.getStatusLabel().setText("実行中…");
+                ArrayDeque<String> recentJavaLines = new ArrayDeque<>(STAGE_CHILD_LOG_TAIL_MAX + 4);
+                Stage2RunContext jctx =
+                        new Stage2RunContext(
+                                uiRun,
+                                wb,
+                                line -> {
+                                    synchronized (recentJavaLines) {
+                                        while (recentJavaLines.size() >= STAGE_CHILD_LOG_TAIL_MAX) {
+                                            recentJavaLines.removeFirst();
+                                        }
+                                        recentJavaLines.addLast(line);
+                                    }
+                                    appendLog(line);
+                                });
+                appendLog(
+                        "[stage2-java] PM_AI_STAGE2_ENGINE=java — JVM 内 jp.co.pm.ai.planning.stage2 を実行します（Python 子プロセスなし）。");
+                CompletableFuture<Integer> jf = CompletableFuture.supplyAsync(() -> Stage2JavaEngine.run(jctx));
+                activeStage2JavaFuture.set(jf);
+                jf.whenComplete(
+                        (code, err) -> {
+                            final List<String> tailSnap;
+                            synchronized (recentJavaLines) {
+                                tailSnap = new ArrayList<>(recentJavaLines);
+                            }
+                            runLock.set(false);
+                            activeRunStageScript = null;
+                            activeStage2JavaFuture.set(null);
+                            javafx.application.Platform.runLater(
+                                    () -> completeStageRunOnFx(script, code, err, tailSnap));
+                        });
+                return;
+            }
+            Path py = resolveStagePythonExecutablePath(uiRun);
+            Path dir =
+                    Path.of(
+                            firstNonBlank(
+                                    uiRun.get(AppPaths.KEY_PM_AI_CODE_PYTHON_DIR),
+                                    mainRunTabController.getScriptDirField().getText().trim()));
             appendStageChildResolvedEnvForRun(script, childEnv);
             RunRequest req = new RunRequest(py, dir, script, wb, childEnv);
             mainRunTabController.getStatusLabel().setText("実行中…");
@@ -2849,86 +2891,13 @@ public final class MainShellController {
                                 activeRunStageScript = null;
                                 activeStageChildProcess.set(null);
                                 javafx.application.Platform.runLater(
-                                        () -> {
-                                            applyRunTabGating();
-                                            if (err != null) {
-                                                mainRunTabController
-                                                        .getStatusLabel()
-                                                        .setText(
-                                                                "failed: "
-                                                                        + (err.getMessage() != null
-                                                                                ? err.getMessage()
-                                                                                : err.toString()));
-                                                appendLog(
-                                                        "[end] exceptional exit: "
-                                                                + (err.getMessage() != null
-                                                                        ? err.getMessage()
-                                                                        : err.toString()));
-                                                if (STAGE2.equals(script)
-                                                        && dispatchInteractiveTabController != null) {
-                                                    dispatchInteractiveTabController
-                                                            .reloadTableFromDiskAfterExternalUpdate();
-                                                }
-                                            } else {
-                                                int c = code != null ? code : -1;
-                                                mainRunTabController
-                                                        .getStatusLabel()
-                                                        .setText(exitCodeLegend(c));
-                                                appendLog("[end] exitCode=" + c + " " + exitHint(c));
-                                                if (STAGE1.equals(script) && c == 0) {
-                                                    applyStage1ExcludeRulesJsonToEnvTab();
-                                                    if (reloadAfterStage1Preview != null) {
-                                                        reloadAfterStage1Preview.run();
-                                                    }
-                                                    if (reloadAfterStage1PlanInput != null) {
-                                                        reloadAfterStage1PlanInput.run();
-                                                    }
-                                                    invalidateDeliveryCalendarAfterPipelineRun();
-                                                    refreshEquipmentGanttGraphicAfterPipelineRun();
-                                                    MacroCompleteChime.playIfAvailable(collectUiEnv());
-                                                    selectMainShellTab(MainShellTabId.PLAN_INPUT);
-                                                    showStageCompletionDialog(
-                                                            "段階1 完了",
-                                                            "段階1 の処理が正常終了しました。");
-                                                }
-                                                if (STAGE2.equals(script)) {
-                                                    if (c == 0) {
-                                                        refreshStage2OutputArtifacts();
-                                                        invalidateDeliveryCalendarAfterPipelineRun();
-                                                        refreshEquipmentGanttGraphicAfterPipelineRun();
-                                                        MacroCompleteChime.playIfAvailable(
-                                                                collectUiEnv());
-                                                        showStageCompletionDialog(
-                                                                "段階2 完了",
-                                                                "段階2 の処理が正常終了しました。");
-                                                    }
-                                                    if (dispatchInteractiveTabController != null) {
-                                                        dispatchInteractiveTabController
-                                                                .reloadTableFromDiskAfterExternalUpdate();
-                                                    }
-                                                }
-                                            }
-                                            boolean stage12 =
-                                                    STAGE1.equals(script) || STAGE2.equals(script);
-                                            boolean failed =
-                                                    err != null
-                                                            || (code != null && code.intValue() != 0);
-                                            if (stage12 && failed) {
-                                                appendLog(
-                                                        "[ui] 段階処理が異常終了しました。エラーダイアログを表示します。");
-                                                selectMainShellTab(MainShellTabId.RUN);
-                                                showStageFailureDialog(
-                                                        script,
-                                                        err != null ? null : code,
-                                                        err,
-                                                        tailSnap);
-                                            }
-                                        });
+                                        () -> completeStageRunOnFx(script, code, err, tailSnap));
                             });
         } catch (Throwable t) {
             runLock.set(false);
             activeRunStageScript = null;
             activeStageChildProcess.set(null);
+            activeStage2JavaFuture.set(null);
             appendLog("[error] runStage: " + t.getMessage());
             boolean stage2 = STAGE2.equals(script);
             boolean stage1 = STAGE1.equals(script);
@@ -2946,10 +2915,75 @@ public final class MainShellController {
         }
     }
 
+    private void completeStageRunOnFx(String script, Integer code, Throwable err, List<String> tailSnap) {
+        applyRunTabGating();
+        if (err != null) {
+            mainRunTabController
+                    .getStatusLabel()
+                    .setText(
+                            "failed: "
+                                    + (err.getMessage() != null ? err.getMessage() : err.toString()));
+            appendLog(
+                    "[end] exceptional exit: "
+                            + (err.getMessage() != null ? err.getMessage() : err.toString()));
+            if (STAGE2.equals(script) && dispatchInteractiveTabController != null) {
+                dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
+            }
+        } else {
+            int c = code != null ? code : -1;
+            mainRunTabController.getStatusLabel().setText(exitCodeLegend(c));
+            appendLog("[end] exitCode=" + c + " " + exitHint(c));
+            if (STAGE1.equals(script) && c == 0) {
+                applyStage1ExcludeRulesJsonToEnvTab();
+                if (reloadAfterStage1Preview != null) {
+                    reloadAfterStage1Preview.run();
+                }
+                if (reloadAfterStage1PlanInput != null) {
+                    reloadAfterStage1PlanInput.run();
+                }
+                invalidateDeliveryCalendarAfterPipelineRun();
+                refreshEquipmentGanttGraphicAfterPipelineRun();
+                MacroCompleteChime.playIfAvailable(collectUiEnv());
+                selectMainShellTab(MainShellTabId.PLAN_INPUT);
+                showStageCompletionDialog("段階1 完了", "段階1 の処理が正常終了しました。");
+            }
+            if (STAGE2.equals(script)) {
+                if (c == 0) {
+                    refreshStage2OutputArtifacts();
+                    invalidateDeliveryCalendarAfterPipelineRun();
+                    refreshEquipmentGanttGraphicAfterPipelineRun();
+                    MacroCompleteChime.playIfAvailable(collectUiEnv());
+                    showStageCompletionDialog("段階2 完了", "段階2 の処理が正常終了しました。");
+                }
+                if (dispatchInteractiveTabController != null) {
+                    if (c == 0) {
+                        dispatchInteractiveTabController.reloadTableFromDiskAfterStage2Success();
+                    } else {
+                        dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
+                    }
+                }
+            }
+        }
+        boolean stage12 = STAGE1.equals(script) || STAGE2.equals(script);
+        boolean failed = err != null || (code != null && code.intValue() != 0);
+        if (stage12 && failed) {
+            appendLog("[ui] 段階処理が異常終了しました。エラーダイアログを表示します。");
+            selectMainShellTab(MainShellTabId.RUN);
+            showStageFailureDialog(script, err != null ? null : code, err, tailSnap);
+        }
+    }
+
     /**
      * 段階1/2 実行中の Python 子プロセスを終了する（ツールバー・実行・ログの「中断」）。
      */
     void cancelActiveStageRun() {
+        boolean didSomething = false;
+        CompletableFuture<Integer> jf = activeStage2JavaFuture.get();
+        if (jf != null && !jf.isDone()) {
+            appendLog("[interrupt] 段階2 Java エンジンの Future をキャンセルします…");
+            jf.cancel(true);
+            didSomething = true;
+        }
         Process child = activeStageChildProcess.get();
         if (child != null && child.isAlive()) {
             appendLog("[interrupt] 段階1/2 の子プロセスを終了します…");
@@ -2958,8 +2992,10 @@ public final class MainShellController {
             } catch (Exception ex) {
                 appendLog("[interrupt] 子プロセス終了に失敗: " + ex.getMessage());
             }
-        } else {
-            appendLog("[interrupt] 終了対象の子プロセスがありません。");
+            didSomething = true;
+        }
+        if (!didSomething) {
+            appendLog("[interrupt] 終了対象の子プロセス / Java 実行がありません。");
         }
     }
 

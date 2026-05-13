@@ -3,6 +3,9 @@ package jp.co.pm.ai.desktop.io;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -19,6 +22,17 @@ public final class Stage2OutputNaming {
     public static final int STAMP_DIGITS = 16;
 
     private Stage2OutputNaming() {}
+
+    /**
+     * Python {@code format_stage2_stamp} と同形の 16 桁（yyMMddHHmmss ＋実行時刻の下位 4 桁。Java は {@link
+     * LocalDateTime#getNano} をマイクロ秒相当に縮約）。
+     */
+    public static String formatStage2Stamp(LocalDateTime baseWallClock, LocalDateTime runWallClock) {
+        DateTimeFormatter coreFmt = DateTimeFormatter.ofPattern("yyMMddHHmmss", Locale.ROOT);
+        String core = baseWallClock.format(coreFmt);
+        int frac = (runWallClock.getNano() / 1000) % 10000;
+        return core + String.format(Locale.ROOT, "%04d", frac);
+    }
 
     static boolean isDigitStem(String s) {
         if (s == null || s.length() != STAMP_DIGITS) {

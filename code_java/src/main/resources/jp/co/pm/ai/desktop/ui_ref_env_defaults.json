@@ -14,6 +14,10 @@
     "value" : "",
     "description" : "段階2 Excel 生成デバッグ: 追跡する依頼NO（例 Y5-14）。JavaFX「環境変数」タブのみ。空で無効。有効時 .cursor/debug-excel-trace.log に EX1/EX4/EX5（df vs サイドカーJSON 差分）等。詳細は EnvVarDocs。"
   }, {
+    "key" : "PM_AI_STAGE2_ENGINE",
+    "value" : "",
+    "description" : "段階2エンジン: 空/python=従来の Python 子プロセス。java=JVM 内 jp.co.pm.ai.planning.stage2（Python 段階2は起動しない）。配台コアは段階的拡張。"
+  }, {
     "key" : "PM_AI_PLAN_RESULT_TASK_JSON",
     "value" : "",
     "description" : "段階2 の production_plan_*.xlsx と同名ベースの 結果_タスク一覧.json（サイドカー）の読み書き。0/false/no/off/none で無効（無効時はサイドカー非出力・Excel 優先）。未設定で有効。"
