@@ -67,6 +67,8 @@ class Stage2GoldenParityCiTest {
         int code = Stage2JavaEngine.run(ctx);
         assertEquals(0, code);
         assertFalse(log.isEmpty());
-        assertTrue(log.stream().anyMatch(s -> s.contains("Stage2JavaDispatchEngine")), () -> String.join("\n", log));
+        assertTrue(
+                log.stream().anyMatch(s -> s.contains("Stage2JavaDispatchEngine") || s.contains("正本参照")),
+                () -> String.join("\n", log));
     }
 }

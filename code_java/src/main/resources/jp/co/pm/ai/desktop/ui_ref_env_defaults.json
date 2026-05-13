@@ -26,6 +26,10 @@
     "value" : "0",
     "description" : "1 のときのみ JUnit Stage2GoldenParityCiTest が有効。scripts/stage2_golden_parity_ci.sh 用。通常は 0。"
   }, {
+    "key" : "PM_AI_STAGE2_HEADLESS_CI",
+    "value" : "0",
+    "description" : "1 のときのみ JUnit Stage2HeadlessParityCiTest が有効（Python→Java 同一検証ランナー）。scripts/stage2_headless_parity_ci.sh 用。通常は 0。"
+  }, {
     "key" : "PM_AI_PLAN_RESULT_TASK_JSON",
     "value" : "",
     "description" : "段階2 の production_plan_*.xlsx と同名ベースの 結果_タスク一覧.json（サイドカー）の読み書き。0/false/no/off/none で無効（無効時はサイドカー非出力・Excel 優先）。未設定で有効。"

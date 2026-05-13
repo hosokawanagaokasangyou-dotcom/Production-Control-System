@@ -12,3 +12,5 @@
 7. CI でゴールデン系テストを追加実行する場合: 環境変数 `PM_AI_STAGE2_GOLDEN_CI=1` を付けて `scripts/stage2_golden_parity_ci.sh` を実行（詳細はスクリプト先頭コメント）。
 
 8. ヘッドレス同一検証（JavaFX 不要）: `Stage2HeadlessParityRunner` が Python 段階2→Java 段階2の順実行と JSON／xlsx 比較を担う。リポジトリルートで必要な `PM_AI_*` をエクスポートしたうえで `scripts/stage2_headless_parity.sh` を実行（第1引数は `PM_AI_CODE_PYTHON_DIR` が空のときのスクリプトディレクトリ）。Maven 直叩きなら `mvn -f code_java/pom.xml exec:java -Dexec.classpathScope=runtime -Dexec.mainClass=jp.co.pm.ai.planning.stage2.cli.Stage2HeadlessParityMain`。
+
+9. CI でヘッドレス同一検証ランナー（JUnit）を追加する場合: `PM_AI_STAGE2_HEADLESS_CI=1` と import 可能な Python（3.14+ 推奨）を用意し `scripts/stage2_headless_parity_ci.sh` を実行。GitHub Actions の `stage2-headless-parity` ジョブ参照。

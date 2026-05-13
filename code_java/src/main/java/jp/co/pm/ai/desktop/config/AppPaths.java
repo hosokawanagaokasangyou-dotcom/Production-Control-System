@@ -197,6 +197,12 @@ public final class AppPaths {
     public static final String KEY_PM_AI_STAGE2_GOLDEN_CI = "PM_AI_STAGE2_GOLDEN_CI";
 
     /**
+     * CI 用: {@code 1} のときのみ {@code Stage2HeadlessParityCiTest} が有効。Python 3.14+ と {@code planning_core} の import
+     * が前提（GitHub Actions では deadsnakes + pip を参照）。
+     */
+    public static final String KEY_PM_AI_STAGE2_HEADLESS_CI = "PM_AI_STAGE2_HEADLESS_CI";
+
+    /**
      * 段階2の Excel 成果物（結果ブック）のフォントファミリ。空のときは planning_core の {@code RESULT_BOOK_FONT_NAME}（BIZ
      * UDゴシック）相当。JavaFX 実行タブのコンボで上書き可。
      */

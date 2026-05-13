@@ -5,6 +5,11 @@
     task_queue_expected.json   … Stage2TaskQueueBuilder が出す依頼NO列の期待（移植進捗用）
     （任意）expected/          … Python 段階2を承認済みとして保存する計画 primary JSON 等。容量が大きい場合はリポジトリ外のパスを README に記すのみでも可
 
+■ 収録例（task_queue_expected.json）
+  case_minimal … 1 依頼・工程あり
+  case_two_tasks … 2 依頼の出現順
+  case_skip_empty_process … 工程名が空の行はスキップ（Python TASK_COL_MACHINE 空ゲートに相当）
+
 ■ case_id の付け方
   英小文字・数字・アンダースコア。例: case_minimal, case_konan_202605
 

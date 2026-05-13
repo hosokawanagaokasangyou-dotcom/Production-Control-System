@@ -279,6 +279,11 @@ public final class EnvVarDocs {
                 "1 のときのみ JUnit `Stage2GoldenParityCiTest` が有効化される（通常の mvn test ではスキップ扱い）。"
                         + " `scripts/stage2_golden_parity_ci.sh` から設定して CI で段階2 Java 足場の回帰を追加する用途。");
         put(
+                "PM_AI_STAGE2_HEADLESS_CI",
+                "1 のときのみ JUnit `Stage2HeadlessParityCiTest` が有効化される（Python→Java の同一検証ランナーを CI で叩く）。"
+                        + " `planning_core` を import できる Python（3.14+ 推奨）が必要。未設定または import 失敗時はテストをスキップする。"
+                        + " `scripts/stage2_headless_parity_ci.sh` を参照。");
+        put(
                 "PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH",
                 "段階2で PM_AI_STAGE2_ENGINE=java のときのみ有効。1/true/on/yes のとき、JVM 内 PassThrough ではなく"
                         + " Python plan_simulation_stage2.py（_generate_plan_impl 正本）を子プロセスで実行し、"

@@ -21,7 +21,9 @@ public interface Stage2DispatchLoop {
         public void run(Stage2InputSnapshot snap, List<Stage2QueuedTask> taskQueue, Stage2RunContext ctx) {
             ctx.log(
                     "[stage2-java] dispatch_loop: placeholder（試行順・日内割付は未移植） task_queue_size="
-                            + (taskQueue != null ? taskQueue.size() : 0));
+                            + (taskQueue != null ? taskQueue.size() : 0)
+                            + " — 正本: "
+                            + Stage2PlanningCorePyBands.TRIAL_ORDER_FIRST_SCHEDULE_PASS);
         }
     }
 }

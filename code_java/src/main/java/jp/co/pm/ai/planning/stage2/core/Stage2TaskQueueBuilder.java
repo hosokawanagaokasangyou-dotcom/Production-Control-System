@@ -16,6 +16,11 @@ import jp.co.pm.ai.planning.stage2.input.Stage2InputSnapshot;
 public final class Stage2TaskQueueBuilder {
 
     private static final String PRIMARY_REQUEST_HEADER = "依頼NO";
+    /**
+     * Python {@code TASK_COL_MACHINE}（{@code planning_core/_core.py}）に相当する配台計画列。空セルの行は
+     * {@code build_task_queue_from_planning_df} の {@code not machine} ゲートに合わせキューへ載せない。
+     */
+    private static final String PRIMARY_PROCESS_HEADER = "工程名";
 
     private Stage2TaskQueueBuilder() {}
 
@@ -24,6 +29,7 @@ public final class Stage2TaskQueueBuilder {
         List<String> headers = tab.headers();
         List<List<String>> rows = tab.rows();
         int col = findRequestIdColumn(headers);
+        int procCol = findProcessNameColumn(headers);
         List<Stage2QueuedTask> out = new ArrayList<>();
         if (col < 0 || rows == null) {
             return out;
@@ -31,9 +37,19 @@ public final class Stage2TaskQueueBuilder {
         Set<String> seen = new LinkedHashSet<>();
         int excelRow = 2;
         for (List<String> row : rows) {
-            String id = col < row.size() && row.get(col) != null ? row.get(col).strip() : "";
-            if (!id.isEmpty() && seen.add(id)) {
-                out.add(new Stage2QueuedTask(excelRow, id));
+            boolean skipRow = false;
+            if (procCol >= 0) {
+                String proc =
+                        procCol < row.size() && row.get(procCol) != null ? row.get(procCol).strip() : "";
+                if (proc.isEmpty()) {
+                    skipRow = true;
+                }
+            }
+            if (!skipRow) {
+                String id = col < row.size() && row.get(col) != null ? row.get(col).strip() : "";
+                if (!id.isEmpty() && seen.add(id)) {
+                    out.add(new Stage2QueuedTask(excelRow, id));
+                }
             }
             excelRow++;
         }
@@ -45,6 +61,22 @@ public final class Stage2TaskQueueBuilder {
      */
     public static List<String> requestIdsInOrder(List<Stage2QueuedTask> tasks) {
         return tasks.stream().map(Stage2QueuedTask::requestId).toList();
+    }
+
+    /**
+     * 工程名列（Python TASK_COL_MACHINE）。見出しが無いときは {@code -1}（ゲート無効・従来互換）。
+     */
+    static int findProcessNameColumn(List<String> headers) {
+        if (headers == null) {
+            return -1;
+        }
+        for (int i = 0; i < headers.size(); i++) {
+            String h = normalizeHeader(headers.get(i));
+            if (PRIMARY_PROCESS_HEADER.equals(h)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     static int findRequestIdColumn(List<String> headers) {
