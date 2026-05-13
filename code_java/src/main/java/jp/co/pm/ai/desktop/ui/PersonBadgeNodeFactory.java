@@ -8,6 +8,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
+import jp.co.pm.ai.desktop.runtime.PrismPipelineHints;
 
 /** 担当バッジ用の小型 {@link StackPane} を組み立てる。 */
 public final class PersonBadgeNodeFactory {
@@ -44,14 +45,20 @@ public final class PersonBadgeNodeFactory {
                         "-fx-background-color: %s; -fx-background-radius: %s; %s",
                         esc(st.fillHex(), "#2563eb"), rad, borderPart));
 
-        DropShadow glow = new DropShadow();
-        glow.setColor(safeColor(st.glowColorHex(), Color.web("#38bdf8")));
-        glow.setRadius(Math.max(0, st.glowRadius()));
-        double spRead = st.glowSpread();
-        if (spRead >= 0 && spRead <= 1) {
-            glow.setSpread(spRead);
+        /*
+         * ハードウェア Prism（es2 / d3d / metal 先頭）では DropShadow が maskTex NPE を誘発することがあるため付与しない。
+         * sw 先頭や未設定のときだけグローを付ける。
+         */
+        if (!PrismPipelineHints.hardwareRasterizerFirst()) {
+            DropShadow glow = new DropShadow();
+            glow.setColor(safeColor(st.glowColorHex(), Color.web("#38bdf8")));
+            glow.setRadius(Math.max(0, st.glowRadius()));
+            double spRead = st.glowSpread();
+            if (spRead >= 0 && spRead <= 1) {
+                glow.setSpread(spRead);
+            }
+            sp.setEffect(glow);
         }
-        sp.setEffect(glow);
 
         double op = st.opacity();
         sp.setOpacity(
