@@ -21,13 +21,15 @@ import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.planning.stage2.Stage2ExitCodes;
 import jp.co.pm.ai.planning.stage2.Stage2RunContext;
 import jp.co.pm.ai.planning.stage2.input.Stage2InputSnapshot;
+import jp.co.pm.ai.planning.stage2.output.Stage2EquipmentGanttContractPlaceholder;
 import jp.co.pm.ai.planning.stage2.output.Stage2WorkbookJsonWriter;
 
 /**
  * 日内配台のプレースホルダ: 計画入力を「結果_タスク一覧」シートに転写し、メンバーごとの空スケジュール表を載せた成果物を出力する。
  *
- * <p>本経路は Python {@code _generate_plan_impl} 相当の完全置換ではない。設備ガント用の兄弟 JSON（{@code …設.json}、
- * {@code kwargs_packed.timeline_events} 等）は出力しないため、設備ガントタブは Python 段階2の成果物が必要。
+ * <p>本経路は Python {@code _generate_plan_impl} 相当の完全置換ではない。計画ブック JSON をミラーする場合のみ、設備ガント契約
+ * （計画 JSON と兄弟の「設」付き JSON）を Python と同型の<strong>空イベント</strong>プレースホルダとして出力する。実イベント・本番ガントは
+ * {@code PM_AI_STAGE2_ENGINE=python} を推奨。
  */
 public final class Stage2PassThroughPlanner {
 
@@ -46,8 +48,8 @@ public final class Stage2PassThroughPlanner {
         Path memberJson = outputDir.resolve(memberBase + ".json");
 
         ctx.log(
-                "[stage2-java] 注意: 本 Java 足場は配台コア未移植。設備ガントは兄弟の「…設.json」（timeline_events）が"
-                        + " 必要ですが未出力です。本番ガントは PM_AI_STAGE2_ENGINE=python を推奨。");
+                "[stage2-java] 注意: 本 Java 足場は配台コア未移植。計画 JSON ミラー時は設備ガント契約 JSON（空イベント）を"
+                        + " プレースホルダ出力します。本番のタイムラインは PM_AI_STAGE2_ENGINE=python を推奨。");
         // #region agent log
         PlanInputTabularIo.TabularSheet tasks = snap.planningTasksSheet();
         List<String> hdr = tasks.headers();
@@ -67,17 +69,6 @@ public final class Stage2PassThroughPlanner {
                 "Stage2PassThroughPlanner.run",
                 "java pass-through workbook shape (single plan sheet)",
                 sizeData);
-        Map<String, Object> ganttData = new LinkedHashMap<>();
-        ganttData.put("planJsonPath", planJson.toString());
-        ganttData.put("expectedContractSibling", planBase + "設.json");
-        ganttData.put("equipmentGanttContractWritten", false);
-        AgentDebugLog.appendStructured(
-                ctx.uiEnv(),
-                DEBUG_SESSION_ID,
-                "H_gantt",
-                "Stage2PassThroughPlanner.run",
-                "java pass-through does not emit equipment gantt contract JSON",
-                ganttData);
         // #endregion
 
         writePlanWorkbook(planXlsx, tasks);
@@ -100,6 +91,9 @@ public final class Stage2PassThroughPlanner {
                 Files.deleteIfExists(planXlsx);
             }
             ctx.log("[stage2-java] 計画ブック JSON: " + planJson);
+            Path contractJson = outputDir.resolve(planBase + "設.json");
+            Stage2EquipmentGanttContractPlaceholder.write(contractJson, runNow.toLocalDate());
+            ctx.log("[stage2-java] 設備ガント契約 JSON（プレースホルダ）: " + contractJson);
         } else {
             ctx.log("[stage2-java] PM_AI_PLAN_WORKBOOK_JSON 無効 — 計画 JSON はスキップ。");
             if (!ctx.stage2WriteExcel()) {
@@ -129,6 +123,23 @@ public final class Stage2PassThroughPlanner {
             Files.deleteIfExists(planXlsx);
             Files.deleteIfExists(memberXlsx);
         }
+
+        // #region agent log
+        Path contractSibling = outputDir.resolve(planBase + "設.json");
+        Map<String, Object> ganttPost = new LinkedHashMap<>();
+        ganttPost.put("planJsonPath", planJson.toString());
+        ganttPost.put("contractPath", contractSibling.toString());
+        ganttPost.put(
+                "equipmentGanttContractWritten",
+                ctx.mirrorPlanWorkbookJson() && Files.isRegularFile(contractSibling));
+        AgentDebugLog.appendStructured(
+                ctx.uiEnv(),
+                DEBUG_SESSION_ID,
+                "H_gantt",
+                "Stage2PassThroughPlanner.run",
+                "equipment gantt contract file state after stage2-java outputs",
+                ganttPost);
+        // #endregion
 
         ctx.log("[stage2-java] 完了（stamp=" + stamp + "）。本経路は配台アルゴリズムの段階移植用の足場です。");
         return Stage2ExitCodes.OK;

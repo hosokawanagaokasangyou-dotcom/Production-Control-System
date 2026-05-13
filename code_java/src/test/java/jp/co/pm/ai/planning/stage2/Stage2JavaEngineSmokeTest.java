@@ -57,9 +57,21 @@ class Stage2JavaEngineSmokeTest {
             List<Path> files = stream.toList();
             assertTrue(
                     files.stream().anyMatch(p -> p.getFileName().toString().startsWith("計画") && p.toString().endsWith(".xlsx")));
+            assertTrue(
+                    files.stream()
+                            .anyMatch(
+                                    p ->
+                                            p.getFileName().toString().startsWith("計画")
+                                                    && p.toString().endsWith("設.json")));
             Path json =
                     files.stream()
-                            .filter(p -> p.getFileName().toString().startsWith("計画") && p.toString().endsWith(".json"))
+                            .filter(
+                                    p -> {
+                                        String n = p.getFileName().toString();
+                                        return n.startsWith("計画")
+                                                && n.endsWith(".json")
+                                                && !n.endsWith("設.json");
+                                    })
                             .findFirst()
                             .orElseThrow();
             JsonNode rootNode = MAPPER.readTree(Files.readString(json, StandardCharsets.UTF_8));
