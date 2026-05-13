@@ -99,6 +99,7 @@ import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
 import jp.co.pm.ai.planning.stage2.Stage2JavaEngine;
 import jp.co.pm.ai.planning.stage2.Stage2RunContext;
+import jp.co.pm.ai.planning.stage2.parity.Stage2ProductionPlanJsonParity;
 
 /**
  * Main window controller（従来は {@link PmAiFxApp} 内蔵だった業務ロジックを分離）。
@@ -114,6 +115,9 @@ public final class MainShellController {
 
     private static final String STAGE1 = "task_extract_stage1.py";
     private static final String STAGE2 = "plan_simulation_stage2.py";
+
+    /** 段階2 Python→Java 連続実行と計画 JSON 突合（{@link #triggerStage2JavaPythonParity}）。 */
+    private static final String STAGE2_PARITY = "stage2_java_python_parity";
 
     /** 段階1実行前ログに出す「入力解決に関わる」環境変数キー（子プロセスへ渡る値）。 */
     private static final List<String> STAGE1_CHILD_INPUT_ENV_KEYS =
@@ -3012,7 +3016,7 @@ public final class MainShellController {
     private void applyRunTabGating() {
         String script = activeRunStageScript;
         boolean stage1Running = STAGE1.equals(script);
-        boolean stage2Running = STAGE2.equals(script);
+        boolean stage2Running = STAGE2.equals(script) || STAGE2_PARITY.equals(script);
         if (mainRunTabController != null) {
             mainRunTabController.setStageRunProgressVisible(stage1Running, stage2Running);
         }
@@ -3066,7 +3070,11 @@ public final class MainShellController {
             }
             if (shellStageProgressLabel != null) {
                 shellStageProgressLabel.setText(
-                        stage1Running ? "段階1 実行中…" : "段階2 実行中…");
+                        stage1Running
+                                ? "段階1 実行中…"
+                                : (STAGE2_PARITY.equals(activeRunStageScript)
+                                        ? "Java/Python 同一検証中…"
+                                        : "段階2 実行中…"));
             }
             if (shellStageCancelButton != null) {
                 shellStageCancelButton.setManaged(true);
@@ -3111,11 +3119,16 @@ public final class MainShellController {
         List<String> keys =
                 STAGE1.equals(script)
                         ? STAGE1_CHILD_INPUT_ENV_KEYS
-                        : (STAGE2.equals(script) ? STAGE2_CHILD_INPUT_ENV_KEYS : List.of());
+                        : ((STAGE2.equals(script) || STAGE2_PARITY.equals(script))
+                                ? STAGE2_CHILD_INPUT_ENV_KEYS
+                                : List.of());
         if (keys.isEmpty()) {
             return;
         }
-        String ja = STAGE1.equals(script) ? "段階1" : "段階2";
+        String ja =
+                STAGE1.equals(script)
+                        ? "段階1"
+                        : (STAGE2_PARITY.equals(script) ? "同一検証" : "段階2");
         appendLog("--- " + ja + " 子プロセス入力（環境変数キー → 渡す値）---");
         for (String k : keys) {
             String v = childEnv != null ? childEnv.get(k) : null;
@@ -3679,6 +3692,233 @@ public final class MainShellController {
             return;
         }
         runStage(STAGE2);
+    }
+
+    /**
+     * 同一入力で Python 段階2のあと Java 段階2を順に実行し、出力された計画 primary JSON をツリー比較する。
+     * 環境タブの {@link AppPaths#KEY_PM_AI_STAGE2_ENGINE} は検証中に上書きされる（python → java）。
+     */
+    void triggerStage2JavaPythonParity() {
+        if (dispatchInteractiveTabController != null
+                && dispatchInteractiveTabController.isDispatchDocDirtySinceSave()) {
+            appendLog(
+                    "[stage2-parity] 配台計画手動修正に未保存の変更があります。JSON を「保存」するか「再読み」後に実行してください。");
+            return;
+        }
+        if (!runLock.compareAndSet(false, true)) {
+            appendLog("[busy] already running (single flight).");
+            return;
+        }
+        activeRunStageScript = STAGE2_PARITY;
+        applyRunTabGating();
+        if (dispatchInteractiveTabController != null) {
+            Runnable clearDispatch =
+                    () -> dispatchInteractiveTabController.resetTableDisplayForStage2Run();
+            if (Platform.isFxApplicationThread()) {
+                clearDispatch.run();
+            } else {
+                Platform.runLater(clearDispatch);
+            }
+        }
+        Map<String, String> uiRun = new HashMap<>(collectUiEnv());
+        uiRun.put(
+                AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL,
+                mainRunTabController.snapshotStage2WriteExcel() ? "1" : "0");
+        String resultFont = mainRunTabController.snapshotStage2ResultBookFont();
+        if (resultFont != null && !resultFont.isBlank()) {
+            uiRun.put(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT, resultFont.trim());
+        } else {
+            uiRun.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
+        }
+        final String wb = effectiveTaskInputWorkbookPath();
+        final String scriptDirFallback =
+                mainRunTabController.getScriptDirField().getText() != null
+                        ? mainRunTabController.getScriptDirField().getText().trim()
+                        : "";
+        mainRunTabController.getStatusLabel().setText("同一検証…");
+        appendLog("--- start: 段階2 Java/Python 同一検証（Python → Java、計画JSON比較）---");
+        CompletableFuture.supplyAsync(() -> runStage2ParityWorker(uiRun, wb, scriptDirFallback))
+                .whenComplete(
+                        (result, err) ->
+                                Platform.runLater(() -> completeStage2ParityOnFx(result, err)));
+    }
+
+    private record Stage2ParityOutcome(
+            Throwable fatalError, Stage2ProductionPlanJsonParity.CompareResult compare) {
+
+        static Stage2ParityOutcome fatal(Throwable t) {
+            return new Stage2ParityOutcome(t, null);
+        }
+
+        static Stage2ParityOutcome compared(Stage2ProductionPlanJsonParity.CompareResult c) {
+            return new Stage2ParityOutcome(null, c);
+        }
+    }
+
+    private Stage2ParityOutcome runStage2ParityWorker(
+            Map<String, String> uiRun, String wb, String scriptDirFallback) {
+        try {
+            refreshNetworkSourceDirListingSkipsBeforeStageRun(uiRun);
+            Map<String, String> childBase = childEnvForPython(uiRun);
+            if (lastNetworkSourceResolution != null) {
+                for (String line : lastNetworkSourceResolution.logLines()) {
+                    appendLog(line);
+                }
+            }
+            Path outDir = AppPaths.defaultPlanningOutputDir(childBase);
+            long floorBeforePy = Stage2OutputNaming.maxPrimaryPlanJsonLastModifiedMillis(outDir);
+
+            Map<String, String> childPy = new HashMap<>(childBase);
+            childPy.put(AppPaths.KEY_PM_AI_STAGE2_ENGINE, "python");
+            appendLog("[stage2-parity] (1) Python 段階2 を実行します…");
+            appendStageChildResolvedEnvForRun(STAGE2_PARITY, childPy);
+            int pyCode = joinPythonStage2(childPy, wb, uiRun, scriptDirFallback);
+            appendLog("[stage2-parity] Python exitCode=" + pyCode + " " + exitHint(pyCode));
+            if (pyCode != 0) {
+                return Stage2ParityOutcome.fatal(
+                        new IllegalStateException(
+                                "Python 段階2が失敗したため比較を中止しました (exit=" + pyCode + ")."));
+            }
+            Path pyJson = Stage2OutputNaming.newestPrimaryPlanJsonAfter(outDir, floorBeforePy);
+            if (pyJson == null || !Files.isRegularFile(pyJson)) {
+                return Stage2ParityOutcome.fatal(
+                        new IOException("Python 実行後も新しい計画 JSON が見つかりません: " + outDir));
+            }
+            appendLog("[stage2-parity] Python 計画JSON: " + pyJson);
+
+            long floorBeforeJava = Stage2OutputNaming.maxPrimaryPlanJsonLastModifiedMillis(outDir);
+
+            Map<String, String> childJava = new HashMap<>(childBase);
+            childJava.put(AppPaths.KEY_PM_AI_STAGE2_ENGINE, "java");
+            appendLog("[stage2-parity] (2) Java 段階2 を実行します…");
+            appendLog(
+                    "[stage2-java] PM_AI_STAGE2_ENGINE=java — JVM 内 jp.co.pm.ai.planning.stage2（同一検証）");
+            Stage2RunContext jctx = new Stage2RunContext(childJava, wb, this::appendLog);
+            int javaCode = Stage2JavaEngine.run(jctx);
+            appendLog("[stage2-parity] Java exitCode=" + javaCode + " " + exitHint(javaCode));
+            if (javaCode != 0) {
+                return Stage2ParityOutcome.fatal(
+                        new IllegalStateException(
+                                "Java 段階2が失敗したため比較を中止しました (exit=" + javaCode + ")."));
+            }
+            Path javaJson = Stage2OutputNaming.newestPrimaryPlanJsonAfter(outDir, floorBeforeJava);
+            if (javaJson == null || !Files.isRegularFile(javaJson)) {
+                return Stage2ParityOutcome.fatal(
+                        new IOException("Java 実行後も新しい計画 JSON が見つかりません: " + outDir));
+            }
+            appendLog("[stage2-parity] Java 計画JSON: " + javaJson);
+
+            Stage2ProductionPlanJsonParity.CompareResult cmp =
+                    Stage2ProductionPlanJsonParity.compareFiles(pyJson, javaJson);
+            return Stage2ParityOutcome.compared(cmp);
+        } catch (Throwable ex) {
+            return Stage2ParityOutcome.fatal(ex);
+        }
+    }
+
+    private int joinPythonStage2(
+            Map<String, String> childEnv, String wb, Map<String, String> uiRun, String scriptDirFallback)
+            throws Exception {
+        Path py = resolveStagePythonExecutablePath(uiRun);
+        Path dir =
+                Path.of(
+                        firstNonBlank(
+                                uiRun.get(AppPaths.KEY_PM_AI_CODE_PYTHON_DIR), scriptDirFallback));
+        RunRequest req = new RunRequest(py, dir, STAGE2, wb, childEnv);
+        CompletableFuture<Integer> fut =
+                PythonProcessRunner.runAsync(
+                        req,
+                        line -> {
+                            if (line.startsWith(NDJSON_START)) {
+                                String payload = line.substring(PREFIX_CHILD.length());
+                                IpcStdoutTap.handleLine(payload, this::appendLog);
+                            } else {
+                                appendLog(line);
+                            }
+                        },
+                        ex -> appendLog("[error] " + ex.getMessage()),
+                        activeStageChildProcess::set);
+        int code = fut.join();
+        activeStageChildProcess.set(null);
+        return code;
+    }
+
+    private void completeStage2ParityOnFx(Stage2ParityOutcome result, Throwable asyncErr) {
+        runLock.set(false);
+        activeRunStageScript = null;
+        activeStageChildProcess.set(null);
+        applyRunTabGating();
+        Throwable err = asyncErr;
+        if (err != null && err instanceof java.util.concurrent.CompletionException ce && ce.getCause() != null) {
+            err = ce.getCause();
+        }
+        if (err != null) {
+            appendLog(
+                    "[stage2-parity] 異常終了: "
+                            + (err.getMessage() != null ? err.getMessage() : err.toString()));
+            mainRunTabController.getStatusLabel().setText("同一検証: 失敗（ログ参照）");
+            if (dispatchInteractiveTabController != null) {
+                dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
+            }
+            selectMainShellTab(MainShellTabId.RUN);
+            Alert alert = new Alert(AlertType.ERROR);
+            alert.initOwner(primaryStage);
+            applyAlertStylesheetsFromOwner(alert);
+            alert.setTitle("段階2 同一検証");
+            alert.setHeaderText(null);
+            alert.setContentText(err.getMessage() != null ? err.getMessage() : err.toString());
+            alert.showAndWait();
+            return;
+        }
+        if (result != null && result.fatalError() != null) {
+            Throwable fe = result.fatalError();
+            appendLog(
+                    "[stage2-parity] 異常終了: "
+                            + (fe.getMessage() != null ? fe.getMessage() : fe.toString()));
+            mainRunTabController.getStatusLabel().setText("同一検証: 失敗（ログ参照）");
+            if (dispatchInteractiveTabController != null) {
+                dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
+            }
+            selectMainShellTab(MainShellTabId.RUN);
+            Alert alert = new Alert(AlertType.ERROR);
+            alert.initOwner(primaryStage);
+            applyAlertStylesheetsFromOwner(alert);
+            alert.setTitle("段階2 同一検証");
+            alert.setHeaderText(null);
+            alert.setContentText(fe.getMessage() != null ? fe.getMessage() : fe.toString());
+            alert.showAndWait();
+            return;
+        }
+        if (result == null || result.compare() == null) {
+            appendLog("[stage2-parity] 内部エラー: 比較結果がありません");
+            mainRunTabController.getStatusLabel().setText("同一検証: 内部エラー");
+            return;
+        }
+        Stage2ProductionPlanJsonParity.CompareResult cmp = result.compare();
+        appendLog("[stage2-parity] 比較結果: " + (cmp.identical() ? "計画JSON一致" : "不一致"));
+        mainRunTabController
+                .getStatusLabel()
+                .setText(cmp.identical() ? "同一検証: 計画JSON一致" : "同一検証: 計画JSON不一致");
+        appendLog("[end] 同一検証 exit=0 (success)");
+        if (cmp.identical()) {
+            refreshStage2OutputArtifacts();
+            invalidateDeliveryCalendarAfterPipelineRun();
+            refreshEquipmentGanttGraphicAfterPipelineRun();
+        }
+        if (dispatchInteractiveTabController != null) {
+            if (cmp.identical()) {
+                dispatchInteractiveTabController.reloadTableFromDiskAfterStage2Success();
+            } else {
+                dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
+            }
+        }
+        Alert alert = new Alert(cmp.identical() ? AlertType.INFORMATION : AlertType.WARNING);
+        alert.initOwner(primaryStage);
+        applyAlertStylesheetsFromOwner(alert);
+        alert.setTitle(cmp.identical() ? "段階2 同一検証: 一致" : "段階2 同一検証: 不一致");
+        alert.setHeaderText(null);
+        alert.setContentText(cmp.summary());
+        alert.showAndWait();
     }
 
     /**

@@ -143,6 +143,63 @@ public final class Stage2OutputNaming {
         return newerOf(a, b);
     }
 
+    /** 計画系 primary JSON（新命名・旧命名）か。 */
+    public static boolean acceptsPrimaryPlanJson(Path path) {
+        return matchesPrimary(path, PLAN_PREFIX, ".json") || isLegacyPlanJson(path);
+    }
+
+    /**
+     * ディレクトリ内の計画 primary JSON の {@link Files#getLastModifiedTime} の最大値。該当なし・ディレクトリ不正時は
+     * {@code 0}。
+     */
+    public static long maxPrimaryPlanJsonLastModifiedMillis(Path dir) throws IOException {
+        if (dir == null || !Files.isDirectory(dir)) {
+            return 0L;
+        }
+        long max = 0L;
+        try (Stream<Path> stream = Files.list(dir)) {
+            java.util.Iterator<Path> it = stream.iterator();
+            while (it.hasNext()) {
+                Path p = it.next();
+                if (!Files.isRegularFile(p) || !acceptsPrimaryPlanJson(p)) {
+                    continue;
+                }
+                max = Math.max(max, Files.getLastModifiedTime(p).toMillis());
+            }
+        }
+        return max;
+    }
+
+    /**
+     * {@code lastModified} が {@code strictlyAfterMillis} より大きい計画 primary JSON のうち最新（同時刻はパス文字列で
+     * 後勝ち）。無ければ {@code null}。
+     */
+    public static Path newestPrimaryPlanJsonAfter(Path dir, long strictlyAfterMillis) throws IOException {
+        if (dir == null || !Files.isDirectory(dir)) {
+            return null;
+        }
+        Path best = null;
+        long bestTime = Long.MIN_VALUE;
+        try (Stream<Path> stream = Files.list(dir)) {
+            java.util.Iterator<Path> it = stream.iterator();
+            while (it.hasNext()) {
+                Path p = it.next();
+                if (!Files.isRegularFile(p) || !acceptsPrimaryPlanJson(p)) {
+                    continue;
+                }
+                long t = Files.getLastModifiedTime(p).toMillis();
+                if (t <= strictlyAfterMillis) {
+                    continue;
+                }
+                if (t > bestTime || (t == bestTime && best != null && p.toString().compareTo(best.toString()) > 0)) {
+                    bestTime = t;
+                    best = p;
+                }
+            }
+        }
+        return best;
+    }
+
     /** 新命名または旧命名の個人別ブック（xlsx）のうち最新。 */
     public static Path newestPrimaryMemberXlsx(Path dir) throws IOException {
         Path a = newestMatching(dir, p -> matchesPrimary(p, MEMBER_PREFIX, ".xlsx"));

@@ -101,6 +101,9 @@ public final class PlanInputTabController {
     private Button stage2RunButton;
 
     @FXML
+    private Button stage2JavaPythonParityButton;
+
+    @FXML
     private HBox columnStripHost;
 
     @FXML
@@ -142,6 +145,7 @@ public final class PlanInputTabController {
         hintLabel.setText(HINT_TEXT);
 
         installStageRunButtonDepth(stage2RunButton, Color.rgb(194, 65, 12, 0.35));
+        installStageRunButtonDepth(stage2JavaPythonParityButton, Color.rgb(72, 110, 160, 0.32));
 
         StackPane.setAlignment(spreadsheetView, Pos.CENTER_LEFT);
         spreadsheetHost.getChildren().add(spreadsheetView);
@@ -269,17 +273,36 @@ public final class PlanInputTabController {
     }
 
     private void applyStage2RunButtonEnabledState() {
-        if (stage2RunButton == null) {
+        if (stage2RunButton == null && stage2JavaPythonParityButton == null) {
             return;
         }
         boolean disable = stage2RunPipelineBusy || stage2BlockedByDispatchUnsavedEdit;
-        stage2RunButton.setDisable(disable);
+        if (stage2RunButton != null) {
+            stage2RunButton.setDisable(disable);
+        }
+        if (stage2JavaPythonParityButton != null) {
+            stage2JavaPythonParityButton.setDisable(disable);
+        }
         if (stage2BlockedByDispatchUnsavedEdit && !stage2RunPipelineBusy) {
-            stage2RunButton.setTooltip(
+            Tooltip blockedTip =
                     new Tooltip(
-                            "配台計画手動修正タブに未保存の変更があります。「保存 (JSON+xlsx)」または「再読み」で確定してから実行してください。"));
+                            "配台計画手動修正タブに未保存の変更があります。「保存 (JSON+xlsx)」または「再読み」で確定してから実行してください。");
+            if (stage2RunButton != null) {
+                stage2RunButton.setTooltip(blockedTip);
+            }
+            if (stage2JavaPythonParityButton != null) {
+                stage2JavaPythonParityButton.setTooltip(blockedTip);
+            }
         } else {
-            stage2RunButton.setTooltip(null);
+            if (stage2RunButton != null) {
+                stage2RunButton.setTooltip(null);
+            }
+            if (stage2JavaPythonParityButton != null) {
+                stage2JavaPythonParityButton.setTooltip(
+                        new Tooltip(
+                                "同一入力で Python 段階2のあと Java 段階2を実行し、計画 primary JSON をツリー比較します。"
+                                        + " 環境タブの PM_AI_STAGE2_ENGINE は検証中のみ上書きされます。"));
+            }
         }
     }
 
@@ -287,6 +310,13 @@ public final class PlanInputTabController {
     private void onStage2RunButtonAction() {
         if (shell != null) {
             shell.triggerStage2();
+        }
+    }
+
+    @FXML
+    private void onStage2JavaPythonParityButtonAction() {
+        if (shell != null) {
+            shell.triggerStage2JavaPythonParity();
         }
     }
 
