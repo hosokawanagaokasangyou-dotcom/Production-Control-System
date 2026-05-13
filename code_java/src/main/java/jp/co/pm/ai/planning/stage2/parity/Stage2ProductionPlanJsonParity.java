@@ -9,7 +9,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * 段階2の計画 JSON（Python / Java いずれのエンジン）をツリー比較する。{@link JsonNode#equals} による構造一致判定。
+ * 段階2の JSON（Python / Java いずれのエンジン）をツリー比較する。{@link JsonNode#equals} による構造一致判定。
  */
 public final class Stage2ProductionPlanJsonParity {
 
@@ -17,12 +17,10 @@ public final class Stage2ProductionPlanJsonParity {
 
     private Stage2ProductionPlanJsonParity() {}
 
-    public record CompareResult(boolean identical, String summary) {}
-
     /**
      * 両ファイルを UTF-8 JSON として読み、ツリー全体が等しいか判定する。大きいファイルでもストリーム読み。
      */
-    public static CompareResult compareFiles(Path a, Path b) throws IOException {
+    public static Stage2ParityCheckResult compareFiles(Path a, Path b) throws IOException {
         JsonNode na;
         JsonNode nb;
         try (InputStream ia = Files.newInputStream(a);
@@ -31,9 +29,9 @@ public final class Stage2ProductionPlanJsonParity {
             nb = MAPPER.readTree(ib);
         }
         if (na.equals(nb)) {
-            return new CompareResult(
+            return new Stage2ParityCheckResult(
                     true,
-                    "計画JSON（ツリー全体）が一致しました。\n\nA: "
+                    "JSON（ツリー全体）が一致しました。\n\nA: "
                             + a
                             + "\nB: "
                             + b
@@ -44,9 +42,9 @@ public final class Stage2ProductionPlanJsonParity {
         }
         String va = textOrDash(na.get("format_version"));
         String vb = textOrDash(nb.get("format_version"));
-        return new CompareResult(
+        return new Stage2ParityCheckResult(
                 false,
-                "計画JSON が一致しません（ツリー比較）。\n\nA: "
+                "JSON が一致しません（ツリー比較）。\n\nA: "
                         + a
                         + "\n  format_version="
                         + va

@@ -94,12 +94,18 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
+import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
+import jp.co.pm.ai.planning.stage2.Stage2EnvParsing;
 import jp.co.pm.ai.planning.stage2.Stage2JavaEngine;
 import jp.co.pm.ai.planning.stage2.Stage2RunContext;
+import jp.co.pm.ai.planning.stage2.parity.Stage2ParityBundle;
+import jp.co.pm.ai.planning.stage2.parity.Stage2ParityCheckResult;
+import jp.co.pm.ai.planning.stage2.parity.Stage2PlanInputUiParity;
 import jp.co.pm.ai.planning.stage2.parity.Stage2ProductionPlanJsonParity;
+import jp.co.pm.ai.planning.stage2.parity.Stage2WorkbookSemanticParity;
 
 /**
  * Main window controller（従来は {@link PmAiFxApp} 内蔵だった業務ロジックを分離）。
@@ -3695,7 +3701,7 @@ public final class MainShellController {
     }
 
     /**
-     * 同一入力で Python 段階2のあと Java 段階2を順に実行し、出力された計画 primary JSON をツリー比較する。
+     * 同一入力で Python 段階2のあと Java 段階2を順に実行し、計画／人員の JSON・xlsx と配台計画タブの表と入力ファイルの一致を検証する。
      * 環境タブの {@link AppPaths#KEY_PM_AI_STAGE2_ENGINE} は検証中に上書きされる（python → java）。
      */
     void triggerStage2JavaPythonParity() {
@@ -3730,34 +3736,50 @@ public final class MainShellController {
         } else {
             uiRun.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
         }
+        final PlanInputTabularIo.TabularSheet uiTabularSnapshot =
+                planInputTabController != null
+                        ? planInputTabController.snapshotTabularSheetForParity()
+                        : null;
         final String wb = effectiveTaskInputWorkbookPath();
         final String scriptDirFallback =
                 mainRunTabController.getScriptDirField().getText() != null
                         ? mainRunTabController.getScriptDirField().getText().trim()
                         : "";
         mainRunTabController.getStatusLabel().setText("同一検証…");
-        appendLog("--- start: 段階2 Java/Python 同一検証（Python → Java、計画JSON比較）---");
-        CompletableFuture.supplyAsync(() -> runStage2ParityWorker(uiRun, wb, scriptDirFallback))
+        appendLog("--- start: 段階2 Java/Python 同一検証（Python → Java、JSON・Excel・入力表）---");
+        CompletableFuture.supplyAsync(
+                        () -> runStage2ParityWorker(uiRun, wb, scriptDirFallback, uiTabularSnapshot))
                 .whenComplete(
                         (result, err) ->
                                 Platform.runLater(() -> completeStage2ParityOnFx(result, err)));
     }
 
-    private record Stage2ParityOutcome(
-            Throwable fatalError, Stage2ProductionPlanJsonParity.CompareResult compare) {
+    private record Stage2ParityOutcome(Throwable fatalError, Stage2ParityBundle bundle) {
 
         static Stage2ParityOutcome fatal(Throwable t) {
             return new Stage2ParityOutcome(t, null);
         }
 
-        static Stage2ParityOutcome compared(Stage2ProductionPlanJsonParity.CompareResult c) {
-            return new Stage2ParityOutcome(null, c);
+        static Stage2ParityOutcome compared(Stage2ParityBundle b) {
+            return new Stage2ParityOutcome(null, b);
         }
     }
 
     private Stage2ParityOutcome runStage2ParityWorker(
-            Map<String, String> uiRun, String wb, String scriptDirFallback) {
+            Map<String, String> uiRun,
+            String wb,
+            String scriptDirFallback,
+            PlanInputTabularIo.TabularSheet uiTabularSnapshot) {
         try {
+            if (uiTabularSnapshot == null) {
+                return Stage2ParityOutcome.fatal(
+                        new IllegalStateException("配台計画タブが未初期化のため同一検証を中止しました。"));
+            }
+            if (wb == null || wb.isBlank()) {
+                return Stage2ParityOutcome.fatal(
+                        new IllegalStateException(
+                                "PM_AI_PLAN_INPUT_PATH が空です。配台計画タブでタスク入力パスを設定してください。"));
+            }
             refreshNetworkSourceDirListingSkipsBeforeStageRun(uiRun);
             Map<String, String> childBase = childEnvForPython(uiRun);
             if (lastNetworkSourceResolution != null) {
@@ -3766,7 +3788,22 @@ public final class MainShellController {
                 }
             }
             Path outDir = AppPaths.defaultPlanningOutputDir(childBase);
+            String paritySheet =
+                    firstNonBlank(
+                            childBase.get(PlanInputTabController.ENV_TASK_PLAN_SHEET),
+                            PlanInputTabController.DEFAULT_PLAN_INPUT_SHEET_NAME);
+            Stage2ParityCheckResult planInputCmp =
+                    Stage2PlanInputUiParity.compareUiToDisk(
+                            uiTabularSnapshot, Path.of(wb.trim()), paritySheet);
+            appendLog(
+                    planInputCmp.identical()
+                            ? "[stage2-parity] 配台計画タブの表と入力ファイル: 一致"
+                            : "[stage2-parity] 配台計画タブの表と入力ファイル: 不一致（Python/Java は入力ファイルを読みます）");
+
             long floorBeforePy = Stage2OutputNaming.maxPrimaryPlanJsonLastModifiedMillis(outDir);
+            long floorMemJsonPy = Stage2OutputNaming.maxPrimaryMemberJsonLastModifiedMillis(outDir);
+            long floorPlanXlsxPy = Stage2OutputNaming.maxPrimaryPlanXlsxLastModifiedMillis(outDir);
+            long floorMemXlsxPy = Stage2OutputNaming.maxPrimaryMemberXlsxLastModifiedMillis(outDir);
 
             Map<String, String> childPy = new HashMap<>(childBase);
             childPy.put(AppPaths.KEY_PM_AI_STAGE2_ENGINE, "python");
@@ -3787,6 +3824,9 @@ public final class MainShellController {
             appendLog("[stage2-parity] Python 計画JSON: " + pyJson);
 
             long floorBeforeJava = Stage2OutputNaming.maxPrimaryPlanJsonLastModifiedMillis(outDir);
+            long floorMemJsonJava = Stage2OutputNaming.maxPrimaryMemberJsonLastModifiedMillis(outDir);
+            long floorPlanXlsxJava = Stage2OutputNaming.maxPrimaryPlanXlsxLastModifiedMillis(outDir);
+            long floorMemXlsxJava = Stage2OutputNaming.maxPrimaryMemberXlsxLastModifiedMillis(outDir);
 
             Map<String, String> childJava = new HashMap<>(childBase);
             childJava.put(AppPaths.KEY_PM_AI_STAGE2_ENGINE, "java");
@@ -3808,9 +3848,70 @@ public final class MainShellController {
             }
             appendLog("[stage2-parity] Java 計画JSON: " + javaJson);
 
-            Stage2ProductionPlanJsonParity.CompareResult cmp =
+            Stage2ParityCheckResult planJsonCmp =
                     Stage2ProductionPlanJsonParity.compareFiles(pyJson, javaJson);
-            return Stage2ParityOutcome.compared(cmp);
+
+            Stage2ParityCheckResult memberJsonCmp = null;
+            if (Stage2EnvParsing.envEnabled(AppPaths.KEY_PM_AI_MEMBER_SCHEDULE_JSON, childBase, true)) {
+                Path pyMemberJson =
+                        Stage2OutputNaming.newestPrimaryMemberJsonAfter(outDir, floorMemJsonPy);
+                Path javaMemberJson =
+                        Stage2OutputNaming.newestPrimaryMemberJsonAfter(outDir, floorMemJsonJava);
+                if (pyMemberJson == null
+                        || !Files.isRegularFile(pyMemberJson)
+                        || javaMemberJson == null
+                        || !Files.isRegularFile(javaMemberJson)) {
+                    return Stage2ParityOutcome.fatal(
+                            new IOException(
+                                    "人員 JSON が見つかりません（PM_AI_MEMBER_SCHEDULE_JSON 有効時）。dir="
+                                            + outDir));
+                }
+                memberJsonCmp =
+                        Stage2ProductionPlanJsonParity.compareFiles(pyMemberJson, javaMemberJson);
+            }
+
+            Stage2ParityCheckResult planWorkbookCmp = null;
+            Stage2ParityCheckResult memberWorkbookCmp = null;
+            if (Stage2EnvParsing.stage2WriteExcel(childBase)) {
+                Path pyPlanXlsx =
+                        Stage2OutputNaming.newestPrimaryPlanXlsxAfter(outDir, floorPlanXlsxPy);
+                Path javaPlanXlsx =
+                        Stage2OutputNaming.newestPrimaryPlanXlsxAfter(outDir, floorPlanXlsxJava);
+                if (pyPlanXlsx == null
+                        || !Files.isRegularFile(pyPlanXlsx)
+                        || javaPlanXlsx == null
+                        || !Files.isRegularFile(javaPlanXlsx)) {
+                    return Stage2ParityOutcome.fatal(
+                            new IOException(
+                                    "計画 xlsx が見つかりません（PM_AI_STAGE2_WRITE_EXCEL 有効時）。dir="
+                                            + outDir));
+                }
+                planWorkbookCmp = Stage2WorkbookSemanticParity.compareXlsx(pyPlanXlsx, javaPlanXlsx);
+
+                Path pyMemberXlsx =
+                        Stage2OutputNaming.newestPrimaryMemberXlsxAfter(outDir, floorMemXlsxPy);
+                Path javaMemberXlsx =
+                        Stage2OutputNaming.newestPrimaryMemberXlsxAfter(outDir, floorMemXlsxJava);
+                if (pyMemberXlsx == null
+                        || !Files.isRegularFile(pyMemberXlsx)
+                        || javaMemberXlsx == null
+                        || !Files.isRegularFile(javaMemberXlsx)) {
+                    return Stage2ParityOutcome.fatal(
+                            new IOException(
+                                    "人員 xlsx が見つかりません（PM_AI_STAGE2_WRITE_EXCEL 有効時）。dir="
+                                            + outDir));
+                }
+                memberWorkbookCmp =
+                        Stage2WorkbookSemanticParity.compareXlsx(pyMemberXlsx, javaMemberXlsx);
+            }
+
+            return Stage2ParityOutcome.compared(
+                    new Stage2ParityBundle(
+                            planInputCmp,
+                            planJsonCmp,
+                            memberJsonCmp,
+                            planWorkbookCmp,
+                            memberWorkbookCmp));
         } catch (Throwable ex) {
             return Stage2ParityOutcome.fatal(ex);
         }
@@ -3889,35 +3990,41 @@ public final class MainShellController {
             alert.showAndWait();
             return;
         }
-        if (result == null || result.compare() == null) {
+        if (result == null || result.bundle() == null) {
             appendLog("[stage2-parity] 内部エラー: 比較結果がありません");
             mainRunTabController.getStatusLabel().setText("同一検証: 内部エラー");
             return;
         }
-        Stage2ProductionPlanJsonParity.CompareResult cmp = result.compare();
-        appendLog("[stage2-parity] 比較結果: " + (cmp.identical() ? "計画JSON一致" : "不一致"));
+        Stage2ParityBundle bundle = result.bundle();
+        for (String line : bundle.logLines()) {
+            appendLog(line);
+        }
+        boolean allPass = bundle.allPass();
+        appendLog(
+                "[stage2-parity] 総合: "
+                        + (allPass ? "全項目一致" : "不一致あり（詳細は上記各行）"));
         mainRunTabController
                 .getStatusLabel()
-                .setText(cmp.identical() ? "同一検証: 計画JSON一致" : "同一検証: 計画JSON不一致");
+                .setText(allPass ? "同一検証: 全項目一致" : "同一検証: 不一致あり");
         appendLog("[end] 同一検証 exit=0 (success)");
-        if (cmp.identical()) {
+        if (allPass) {
             refreshStage2OutputArtifacts();
             invalidateDeliveryCalendarAfterPipelineRun();
             refreshEquipmentGanttGraphicAfterPipelineRun();
         }
         if (dispatchInteractiveTabController != null) {
-            if (cmp.identical()) {
+            if (allPass) {
                 dispatchInteractiveTabController.reloadTableFromDiskAfterStage2Success();
             } else {
                 dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
             }
         }
-        Alert alert = new Alert(cmp.identical() ? AlertType.INFORMATION : AlertType.WARNING);
+        Alert alert = new Alert(allPass ? AlertType.INFORMATION : AlertType.WARNING);
         alert.initOwner(primaryStage);
         applyAlertStylesheetsFromOwner(alert);
-        alert.setTitle(cmp.identical() ? "段階2 同一検証: 一致" : "段階2 同一検証: 不一致");
+        alert.setTitle(allPass ? "段階2 同一検証: 一致" : "段階2 同一検証: 不一致");
         alert.setHeaderText(null);
-        alert.setContentText(cmp.summary());
+        alert.setContentText(bundle.summary());
         alert.showAndWait();
     }
 

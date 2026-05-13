@@ -19,7 +19,7 @@ class Stage2ProductionPlanJsonParityTest {
         String json = "{\"format_version\":2,\"sheets\":[]}";
         Files.writeString(a, json, StandardCharsets.UTF_8);
         Files.writeString(b, json, StandardCharsets.UTF_8);
-        Stage2ProductionPlanJsonParity.CompareResult r = Stage2ProductionPlanJsonParity.compareFiles(a, b);
+        Stage2ParityCheckResult r = Stage2ProductionPlanJsonParity.compareFiles(a, b);
         assertTrue(r.identical());
     }
 
@@ -29,7 +29,7 @@ class Stage2ProductionPlanJsonParityTest {
         Path b = root.resolve("b.json");
         Files.writeString(a, "{\"format_version\":2}", StandardCharsets.UTF_8);
         Files.writeString(b, "{\"format_version\":3}", StandardCharsets.UTF_8);
-        Stage2ProductionPlanJsonParity.CompareResult r = Stage2ProductionPlanJsonParity.compareFiles(a, b);
+        Stage2ParityCheckResult r = Stage2ProductionPlanJsonParity.compareFiles(a, b);
         assertFalse(r.identical());
     }
 }

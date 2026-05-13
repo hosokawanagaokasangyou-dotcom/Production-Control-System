@@ -153,6 +153,25 @@ public final class Stage2OutputNaming {
      * {@code 0}。
      */
     public static long maxPrimaryPlanJsonLastModifiedMillis(Path dir) throws IOException {
+        return maxLastModifiedMillis(dir, Stage2OutputNaming::acceptsPrimaryPlanJson);
+    }
+
+    /** 計画 primary xlsx（新命名・旧命名）の更新時刻の最大値。 */
+    public static long maxPrimaryPlanXlsxLastModifiedMillis(Path dir) throws IOException {
+        return maxLastModifiedMillis(dir, Stage2OutputNaming::acceptsPrimaryPlanXlsx);
+    }
+
+    /** 人員 primary JSON（新命名・旧命名）の更新時刻の最大値。 */
+    public static long maxPrimaryMemberJsonLastModifiedMillis(Path dir) throws IOException {
+        return maxLastModifiedMillis(dir, Stage2OutputNaming::acceptsPrimaryMemberJson);
+    }
+
+    /** 人員 primary xlsx（新命名・旧命名）の更新時刻の最大値。 */
+    public static long maxPrimaryMemberXlsxLastModifiedMillis(Path dir) throws IOException {
+        return maxLastModifiedMillis(dir, Stage2OutputNaming::acceptsPrimaryMemberXlsx);
+    }
+
+    private static long maxLastModifiedMillis(Path dir, Predicate<Path> accept) throws IOException {
         if (dir == null || !Files.isDirectory(dir)) {
             return 0L;
         }
@@ -161,7 +180,7 @@ public final class Stage2OutputNaming {
             java.util.Iterator<Path> it = stream.iterator();
             while (it.hasNext()) {
                 Path p = it.next();
-                if (!Files.isRegularFile(p) || !acceptsPrimaryPlanJson(p)) {
+                if (!Files.isRegularFile(p) || !accept.test(p)) {
                     continue;
                 }
                 max = Math.max(max, Files.getLastModifiedTime(p).toMillis());
@@ -175,6 +194,41 @@ public final class Stage2OutputNaming {
      * 後勝ち）。無ければ {@code null}。
      */
     public static Path newestPrimaryPlanJsonAfter(Path dir, long strictlyAfterMillis) throws IOException {
+        return newestArtifactAfter(dir, strictlyAfterMillis, Stage2OutputNaming::acceptsPrimaryPlanJson);
+    }
+
+    /** {@code strictlyAfterMillis} より新しい計画 primary xlsx のうち最新。 */
+    public static Path newestPrimaryPlanXlsxAfter(Path dir, long strictlyAfterMillis) throws IOException {
+        return newestArtifactAfter(dir, strictlyAfterMillis, Stage2OutputNaming::acceptsPrimaryPlanXlsx);
+    }
+
+    /** {@code strictlyAfterMillis} より新しい人員 primary JSON のうち最新。 */
+    public static Path newestPrimaryMemberJsonAfter(Path dir, long strictlyAfterMillis) throws IOException {
+        return newestArtifactAfter(dir, strictlyAfterMillis, Stage2OutputNaming::acceptsPrimaryMemberJson);
+    }
+
+    /** {@code strictlyAfterMillis} より新しい人員 primary xlsx のうち最新。 */
+    public static Path newestPrimaryMemberXlsxAfter(Path dir, long strictlyAfterMillis) throws IOException {
+        return newestArtifactAfter(dir, strictlyAfterMillis, Stage2OutputNaming::acceptsPrimaryMemberXlsx);
+    }
+
+    /** 計画 primary xlsx（新命名または旧英語名）。 */
+    public static boolean acceptsPrimaryPlanXlsx(Path path) {
+        return matchesPrimary(path, PLAN_PREFIX, ".xlsx") || isLegacyPlanXlsx(path);
+    }
+
+    /** 人員 primary JSON（新命名または旧英語名）。 */
+    public static boolean acceptsPrimaryMemberJson(Path path) {
+        return matchesPrimary(path, MEMBER_PREFIX, ".json") || isLegacyMemberJson(path);
+    }
+
+    /** 人員 primary xlsx（新命名または旧英語名）。 */
+    public static boolean acceptsPrimaryMemberXlsx(Path path) {
+        return matchesPrimary(path, MEMBER_PREFIX, ".xlsx") || isLegacyMemberXlsx(path);
+    }
+
+    private static Path newestArtifactAfter(Path dir, long strictlyAfterMillis, Predicate<Path> accept)
+            throws IOException {
         if (dir == null || !Files.isDirectory(dir)) {
             return null;
         }
@@ -184,7 +238,7 @@ public final class Stage2OutputNaming {
             java.util.Iterator<Path> it = stream.iterator();
             while (it.hasNext()) {
                 Path p = it.next();
-                if (!Files.isRegularFile(p) || !acceptsPrimaryPlanJson(p)) {
+                if (!Files.isRegularFile(p) || !accept.test(p)) {
                     continue;
                 }
                 long t = Files.getLastModifiedTime(p).toMillis();

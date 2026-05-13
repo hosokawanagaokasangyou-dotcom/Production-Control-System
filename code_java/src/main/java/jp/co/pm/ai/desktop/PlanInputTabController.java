@@ -735,6 +735,24 @@ public final class PlanInputTabController {
         return pathField.getText() != null ? pathField.getText().trim() : "";
     }
 
+    /**
+     * 段階2 Java/Python 同一検証用: 現在の見出しと行のスナップショット（FX アプリケーションスレッドからのみ呼ぶ）。
+     */
+    public PlanInputTabularIo.TabularSheet snapshotTabularSheetForParity() {
+        List<List<String>> dataRows = new ArrayList<>();
+        for (ObservableList<String> r : rows) {
+            List<String> copy = new ArrayList<>(r);
+            while (copy.size() < headersRef.size()) {
+                copy.add("");
+            }
+            while (copy.size() > headersRef.size()) {
+                copy.remove(copy.size() - 1);
+            }
+            dataRows.add(copy);
+        }
+        return new PlanInputTabularIo.TabularSheet(new ArrayList<>(headersRef), dataRows);
+    }
+
     String snapshotPlanInputSheet() {
         return sheetField.getText() != null ? sheetField.getText().trim() : "";
     }
