@@ -36,21 +36,27 @@ class EquipmentGanttWireAnchorMathTest {
     }
 
     @Test
-    void personBadgeRadialAngles_fullCircle_startsUpperRight45() {
+    void personBadgeRadialAngles_startsUpperRight45_clockwise30Deg() {
+        double step = Math.PI / 6.0;
+
         double[] a1 = EquipmentGanttWireAnchorMath.personBadgeRadialAnglesRad(1);
         assertEquals(1, a1.length);
         assertEquals(-Math.PI / 4, a1[0], 1e-9);
 
+        double[] a2 = EquipmentGanttWireAnchorMath.personBadgeRadialAnglesRad(2);
+        assertEquals(-Math.PI / 4, a2[0], 1e-9);
+        assertEquals(-Math.PI / 4 + step, a2[1], 1e-9);
+
         double[] a4 = EquipmentGanttWireAnchorMath.personBadgeRadialAnglesRad(4);
         assertEquals(4, a4.length);
         assertEquals(-Math.PI / 4, a4[0], 1e-9);
-        double step = Math.PI / 2;
         for (int i = 1; i < 4; i++) {
             assertEquals(a4[i - 1] + step, a4[i], 1e-9);
         }
 
-        double[] a2 = EquipmentGanttWireAnchorMath.personBadgeRadialAnglesRad(2);
-        assertEquals(-Math.PI / 4, a2[0], 1e-9);
-        assertEquals(3 * Math.PI / 4, a2[1], 1e-9);
+        double[] a13 = EquipmentGanttWireAnchorMath.personBadgeRadialAnglesRad(13);
+        assertEquals(13, a13.length);
+        assertEquals(-Math.PI / 4 + 12 * step, a13[12], 1e-9);
+        assertEquals(-Math.PI / 4 + 2 * Math.PI, a13[12], 1e-9);
     }
 }

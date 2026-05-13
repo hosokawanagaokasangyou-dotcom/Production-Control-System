@@ -2029,7 +2029,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     /**
-     * ワイヤー有効時: バッジをアンカーから一定距離の円周上に、全周等間隔（円環状）で配置する（開始は右上がり45°、横並び初期配置の代替）。
+     * ワイヤー有効時: バッジをアンカーから一定距離の円周上に円環配置する（①右上45°起点 ②時計回り30°刻み。横並び初期配置の代替）。
      */
     private static void layoutPersonBadgesRadialForRun(
             int displayRowIndex,
