@@ -12,4 +12,16 @@ public final class Stage2ExitCodes {
     public static final int GENERAL_FAILURE = 1;
 
     private Stage2ExitCodes() {}
+
+    /** ログ用の短い終了コード説明（同一検証・手動実行のコンソール出力向け）。 */
+    public static String hint(int code) {
+        return switch (code) {
+            case OK -> "(success)";
+            case GENERAL_FAILURE -> "(general failure)";
+            case FILE_NOT_FOUND -> "(fatal / missing master or processing-plan file)";
+            case VALIDATION -> "(PlanningValidationError)";
+            case 9 -> "(user cancel)";
+            default -> "";
+        };
+    }
 }

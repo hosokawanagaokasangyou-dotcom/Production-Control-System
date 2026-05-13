@@ -69,6 +69,8 @@ import jp.co.pm.ai.desktop.runtime.FxJvmMemoryStatusBar;
 import jp.co.pm.ai.desktop.audio.MacroCompleteChime;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
+import jp.co.pm.ai.desktop.bridge.Stage2PythonChildEnv;
+import jp.co.pm.ai.desktop.bridge.StagePythonExecutable;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
@@ -98,14 +100,10 @@ import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
-import jp.co.pm.ai.planning.stage2.Stage2EnvParsing;
 import jp.co.pm.ai.planning.stage2.Stage2JavaEngine;
 import jp.co.pm.ai.planning.stage2.Stage2RunContext;
+import jp.co.pm.ai.planning.stage2.parity.Stage2HeadlessParityRunner;
 import jp.co.pm.ai.planning.stage2.parity.Stage2ParityBundle;
-import jp.co.pm.ai.planning.stage2.parity.Stage2ParityCheckResult;
-import jp.co.pm.ai.planning.stage2.parity.Stage2PlanInputUiParity;
-import jp.co.pm.ai.planning.stage2.parity.Stage2ProductionPlanJsonParity;
-import jp.co.pm.ai.planning.stage2.parity.Stage2WorkbookSemanticParity;
 
 /**
  * Main window controller（従来は {@link PmAiFxApp} 内蔵だった業務ロジックを分離）。
@@ -162,10 +160,6 @@ public final class MainShellController {
 
     /** 段階1／2 失敗ダイアログに載せる子プロセス出力の末尾行数上限（リングバッファ）。 */
     private static final int STAGE_CHILD_LOG_TAIL_MAX = 48;
-
-    /** Legacy keys removed from the env tab and never passed to Python children. */
-    private static final Set<String> REMOVED_ENV_VAR_KEYS =
-            Set.of("TASK_INPUT_WORKBOOK", "PM_AI_TASK_INPUT_WORKBOOK");
 
     /**
      * Dropped from the env tab (defaults and session); not used in normal operation. Python still accepts
@@ -2361,7 +2355,8 @@ public final class MainShellController {
 
     private static boolean omitEnvRowKey(String name) {
         String k = name != null ? name.trim() : "";
-        return REMOVED_ENV_VAR_KEYS.contains(k) || DROPPED_ENV_TAB_ROW_KEYS.contains(k);
+        return Stage2PythonChildEnv.LEGACY_WORKBOOK_KEYS_STRIPPED_FOR_PYTHON_CHILD.contains(k)
+                || DROPPED_ENV_TAB_ROW_KEYS.contains(k);
     }
 
     private List<UiEnvRowSnapshot> snapshotUiEnvRows() {
@@ -3253,7 +3248,8 @@ public final class MainShellController {
 
     /**
      * Optional macro-book path from the main-run tab (sheet probe, master path resolution in Java UI).
-     * Stage 1/2 child processes do not receive legacy {@link #REMOVED_ENV_VAR_KEYS}; use
+     * Stage 1/2 child processes do not receive legacy {@link
+     * jp.co.pm.ai.desktop.bridge.Stage2PythonChildEnv#LEGACY_WORKBOOK_KEYS_STRIPPED_FOR_PYTHON_CHILD}; use
      * {@code PM_AI_PLAN_INPUT_PATH} and related keys from the env tab. {@link PythonProcessRunner} ignores the
      * workbook component of {@link PythonProcessRunner.RunRequest} for environment injection.
      */
@@ -3318,32 +3314,22 @@ public final class MainShellController {
     }
 
     /**
-     * Env tab keys passed to Python; strips legacy workbook keys ({@link #REMOVED_ENV_VAR_KEYS}).
+     * Env tab keys passed to Python; strips legacy workbook keys（{@link
+     * jp.co.pm.ai.desktop.bridge.Stage2PythonChildEnv#LEGACY_WORKBOOK_KEYS_STRIPPED_FOR_PYTHON_CHILD}）。
      * If {@code PM_AI_PLAN_INPUT_PATH} / {@code TASK_PLAN_SHEET} are unset in the env tab, values from
      * the 配台計画_タスク入力 tab are applied so that stage-2 uses the
      * file the user is editing there.
      */
     private Map<String, String> childEnvForPython(Map<String, String> ui) {
         Map<String, String> m = new HashMap<>(ui);
-        for (String k : REMOVED_ENV_VAR_KEYS) {
-            m.remove(k);
-        }
-        String skip = m.get(AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET);
-        if (skip == null || skip.isBlank()) {
-            m.put(AppPaths.KEY_PM_AI_SKIP_WORKBOOK_ENV_SHEET, "1");
-        }
+        Stage2PythonChildEnv.stripLegacyWorkbookKeys(m);
+        Stage2PythonChildEnv.ensureSkipWorkbookEnvSheetDefault(m);
         overlayPlanInputTabPathsIfEnvBlank(m);
-        NetworkSourceDirResolver.Result netRes =
-                NetworkSourceDirResolver.resolve(
+        lastNetworkSourceResolution =
+                Stage2PythonChildEnv.applyNetworkSourceAndChildPause(
                         m,
                         startupSkipTaskInputSourceDirListing,
                         startupSkipActualDetailSourceDirListing);
-        lastNetworkSourceResolution = netRes;
-        NetworkSourceDirResolver.applyToEnv(m, netRes);
-        // Windows で pause が有効だと、stdin が TTY でない子プロセスが os.system("pause") でブロックし、
-        // stdout が閉じないままになる。readStreamBlocking が終わらず段階1/2 が「実行中」のまま固定される。
-        // ログは実行・ログタブに出るため、JavaFX から起動する子プロセスでは常に無効化する。
-        m.put(AppPaths.KEY_PM_AI_CMD_PAUSE_ON_ERROR, "0");
         return m;
     }
 
@@ -3782,139 +3768,17 @@ public final class MainShellController {
                     appendLog(line);
                 }
             }
-            String parityPlanPath =
-                    firstNonBlank(childBase.get(AppPaths.KEY_PM_AI_PLAN_INPUT_PATH), "").strip();
-            if (parityPlanPath.isEmpty()) {
-                return Stage2ParityOutcome.fatal(
-                        new IllegalStateException(
-                                "PM_AI_PLAN_INPUT_PATH が空です。配台計画タブまたは環境タブでタスク入力パスを設定してください。"));
+            Map<String, String> childPyProbe = new HashMap<>(childBase);
+            childPyProbe.put(AppPaths.KEY_PM_AI_STAGE2_ENGINE, "python");
+            appendStageChildResolvedEnvForRun(STAGE2_PARITY, childPyProbe);
+
+            Stage2HeadlessParityRunner.Outcome out =
+                    Stage2HeadlessParityRunner.run(
+                            childBase, wb, scriptDirFallback, uiTabularSnapshot, this::appendLog);
+            if (out.fatalError() != null) {
+                return Stage2ParityOutcome.fatal(out.fatalError());
             }
-            Path outDir = AppPaths.defaultPlanningOutputDir(childBase);
-            String paritySheet =
-                    firstNonBlank(
-                            childBase.get(PlanInputTabController.ENV_TASK_PLAN_SHEET),
-                            PlanInputTabController.DEFAULT_PLAN_INPUT_SHEET_NAME);
-            appendLog("[stage2-parity] 入力照合対象（子 env の PM_AI_PLAN_INPUT_PATH）: " + parityPlanPath);
-            Stage2ParityCheckResult planInputCmp =
-                    Stage2PlanInputUiParity.compareUiToDisk(
-                            uiTabularSnapshot, Path.of(parityPlanPath), paritySheet);
-            appendLog(
-                    planInputCmp.identical()
-                            ? "[stage2-parity] 配台計画タブの表と入力ファイル: 一致"
-                            : "[stage2-parity] 配台計画タブの表と入力ファイル: 不一致（Python/Java は入力ファイルを読みます）");
-
-            long floorBeforePy = Stage2OutputNaming.maxPrimaryPlanJsonLastModifiedMillis(outDir);
-            long floorMemJsonPy = Stage2OutputNaming.maxPrimaryMemberJsonLastModifiedMillis(outDir);
-            long floorPlanXlsxPy = Stage2OutputNaming.maxPrimaryPlanXlsxLastModifiedMillis(outDir);
-            long floorMemXlsxPy = Stage2OutputNaming.maxPrimaryMemberXlsxLastModifiedMillis(outDir);
-
-            Map<String, String> childPy = new HashMap<>(childBase);
-            childPy.put(AppPaths.KEY_PM_AI_STAGE2_ENGINE, "python");
-            appendLog("[stage2-parity] (1) Python 段階2 を実行します…");
-            appendStageChildResolvedEnvForRun(STAGE2_PARITY, childPy);
-            int pyCode = joinPythonStage2(childPy, wb, uiRun, scriptDirFallback);
-            appendLog("[stage2-parity] Python exitCode=" + pyCode + " " + exitHint(pyCode));
-            if (pyCode != 0) {
-                return Stage2ParityOutcome.fatal(
-                        new IllegalStateException(
-                                "Python 段階2が失敗したため比較を中止しました (exit=" + pyCode + ")."));
-            }
-            Path pyJson = Stage2OutputNaming.newestPrimaryPlanJsonAfter(outDir, floorBeforePy);
-            if (pyJson == null || !Files.isRegularFile(pyJson)) {
-                return Stage2ParityOutcome.fatal(
-                        new IOException("Python 実行後も新しい計画 JSON が見つかりません: " + outDir));
-            }
-            appendLog("[stage2-parity] Python 計画JSON: " + pyJson);
-
-            long floorBeforeJava = Stage2OutputNaming.maxPrimaryPlanJsonLastModifiedMillis(outDir);
-            long floorMemJsonJava = Stage2OutputNaming.maxPrimaryMemberJsonLastModifiedMillis(outDir);
-            long floorPlanXlsxJava = Stage2OutputNaming.maxPrimaryPlanXlsxLastModifiedMillis(outDir);
-            long floorMemXlsxJava = Stage2OutputNaming.maxPrimaryMemberXlsxLastModifiedMillis(outDir);
-
-            Map<String, String> childJava = new HashMap<>(childBase);
-            childJava.put(AppPaths.KEY_PM_AI_STAGE2_ENGINE, "java");
-            appendLog("[stage2-parity] (2) Java 段階2 を実行します…");
-            appendLog(
-                    "[stage2-java] PM_AI_STAGE2_ENGINE=java — JVM 内 jp.co.pm.ai.planning.stage2（同一検証）");
-            Stage2RunContext jctx = new Stage2RunContext(childJava, wb, this::appendLog);
-            int javaCode = Stage2JavaEngine.run(jctx);
-            appendLog("[stage2-parity] Java exitCode=" + javaCode + " " + exitHint(javaCode));
-            if (javaCode != 0) {
-                return Stage2ParityOutcome.fatal(
-                        new IllegalStateException(
-                                "Java 段階2が失敗したため比較を中止しました (exit=" + javaCode + ")."));
-            }
-            Path javaJson = Stage2OutputNaming.newestPrimaryPlanJsonAfter(outDir, floorBeforeJava);
-            if (javaJson == null || !Files.isRegularFile(javaJson)) {
-                return Stage2ParityOutcome.fatal(
-                        new IOException("Java 実行後も新しい計画 JSON が見つかりません: " + outDir));
-            }
-            appendLog("[stage2-parity] Java 計画JSON: " + javaJson);
-
-            Stage2ParityCheckResult planJsonCmp =
-                    Stage2ProductionPlanJsonParity.compareFiles(pyJson, javaJson);
-
-            Stage2ParityCheckResult memberJsonCmp = null;
-            if (Stage2EnvParsing.envEnabled(AppPaths.KEY_PM_AI_MEMBER_SCHEDULE_JSON, childBase, true)) {
-                Path pyMemberJson =
-                        Stage2OutputNaming.newestPrimaryMemberJsonAfter(outDir, floorMemJsonPy);
-                Path javaMemberJson =
-                        Stage2OutputNaming.newestPrimaryMemberJsonAfter(outDir, floorMemJsonJava);
-                if (pyMemberJson == null
-                        || !Files.isRegularFile(pyMemberJson)
-                        || javaMemberJson == null
-                        || !Files.isRegularFile(javaMemberJson)) {
-                    return Stage2ParityOutcome.fatal(
-                            new IOException(
-                                    "人員 JSON が見つかりません（PM_AI_MEMBER_SCHEDULE_JSON 有効時）。dir="
-                                            + outDir));
-                }
-                memberJsonCmp =
-                        Stage2ProductionPlanJsonParity.compareFiles(pyMemberJson, javaMemberJson);
-            }
-
-            Stage2ParityCheckResult planWorkbookCmp = null;
-            Stage2ParityCheckResult memberWorkbookCmp = null;
-            if (Stage2EnvParsing.stage2WriteExcel(childBase)) {
-                Path pyPlanXlsx =
-                        Stage2OutputNaming.newestPrimaryPlanXlsxAfter(outDir, floorPlanXlsxPy);
-                Path javaPlanXlsx =
-                        Stage2OutputNaming.newestPrimaryPlanXlsxAfter(outDir, floorPlanXlsxJava);
-                if (pyPlanXlsx == null
-                        || !Files.isRegularFile(pyPlanXlsx)
-                        || javaPlanXlsx == null
-                        || !Files.isRegularFile(javaPlanXlsx)) {
-                    return Stage2ParityOutcome.fatal(
-                            new IOException(
-                                    "計画 xlsx が見つかりません（PM_AI_STAGE2_WRITE_EXCEL 有効時）。dir="
-                                            + outDir));
-                }
-                planWorkbookCmp = Stage2WorkbookSemanticParity.compareXlsx(pyPlanXlsx, javaPlanXlsx);
-
-                Path pyMemberXlsx =
-                        Stage2OutputNaming.newestPrimaryMemberXlsxAfter(outDir, floorMemXlsxPy);
-                Path javaMemberXlsx =
-                        Stage2OutputNaming.newestPrimaryMemberXlsxAfter(outDir, floorMemXlsxJava);
-                if (pyMemberXlsx == null
-                        || !Files.isRegularFile(pyMemberXlsx)
-                        || javaMemberXlsx == null
-                        || !Files.isRegularFile(javaMemberXlsx)) {
-                    return Stage2ParityOutcome.fatal(
-                            new IOException(
-                                    "人員 xlsx が見つかりません（PM_AI_STAGE2_WRITE_EXCEL 有効時）。dir="
-                                            + outDir));
-                }
-                memberWorkbookCmp =
-                        Stage2WorkbookSemanticParity.compareXlsx(pyMemberXlsx, javaMemberXlsx);
-            }
-
-            return Stage2ParityOutcome.compared(
-                    new Stage2ParityBundle(
-                            planInputCmp,
-                            planJsonCmp,
-                            memberJsonCmp,
-                            planWorkbookCmp,
-                            memberWorkbookCmp));
+            return Stage2ParityOutcome.compared(out.bundle());
         } catch (Throwable ex) {
             return Stage2ParityOutcome.fatal(ex);
         }
@@ -3923,7 +3787,7 @@ public final class MainShellController {
     private int joinPythonStage2(
             Map<String, String> childEnv, String wb, Map<String, String> uiRun, String scriptDirFallback)
             throws Exception {
-        Path py = resolveStagePythonExecutablePath(uiRun);
+        Path py = StagePythonExecutable.resolve(uiRun);
         Path dir =
                 Path.of(
                         firstNonBlank(
@@ -4104,55 +3968,12 @@ public final class MainShellController {
     }
 
     /**
-     * 同梱 Python embed または PATH 上のコマンド。{@code pm-ai-data/runtime/python-embed/python.exe} が存在すれば絶対パスを返す。
-     *
-     * <p>子プロセス起動のフォールバック（値未設定時）に使う。ブートストラップ表示は {@link
-     * #defaultPmAiPythonForBootstrap(Map)}。無い場合のみ {@link #defaultPythonCommandForEnvBootstrap()}。
-     */
-    private static String defaultOsPython() {
-        Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
-        Optional<Path> portableEmbed = AppPaths.findPortablePythonEmbedExecutable(cwd);
-        if (portableEmbed.isPresent()) {
-            return portableEmbed.get().toString();
-        }
-        Path bundledWin =
-                cwd.resolve("pm-ai-data")
-                        .resolve("runtime")
-                        .resolve("python-embed")
-                        .resolve("python.exe");
-        if (Files.isRegularFile(bundledWin)) {
-            return bundledWin.toAbsolutePath().normalize().toString();
-        }
-        return defaultPythonCommandForEnvBootstrap();
-    }
-
-    /**
-     * 環境変数初期化・空欄補完用の {@code PM_AI_PYTHON}。同梱 embed が見つかればその絶対パス（{@code user.dir} の親を辿る検出を含む）。
-     * 見つからず {@link PortableBundleSelfUpdater#isPortableBundleLayout(Path)} がインストール根で真なら相対パス {@code
-     * pm-ai-data/runtime/python-embed/python.exe}。それ以外は {@link #defaultOsPython()}。
-     */
-    private static String defaultPmAiPythonForBootstrap() {
-        Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
-        Optional<Path> portableEmbed = AppPaths.findPortablePythonEmbedExecutable(cwd);
-        if (portableEmbed.isPresent()) {
-            return portableEmbed.get().toString();
-        }
-        if (PortableBundleSelfUpdater.isPortableBundleLayout(cwd)) {
-            return Path.of("pm-ai-data", "runtime", "python-embed", "python.exe").toString();
-        }
-        return defaultOsPython();
-    }
-
-    /**
      * 段階1/2・プローブスクリプト起動時の Python 実行ファイル。
      *
-     * <p>優先順: 環境変数タブの {@link AppPaths#KEY_PM_AI_PYTHON} → {@link #defaultOsPython()}（{@code
-     * pm-ai-data/runtime/python-embed/python.exe} または PATH の {@code python} / {@code python3}）。
+     * @see StagePythonExecutable#resolve(Map)
      */
     public Path resolveStagePythonExecutablePath(Map<String, String> ui) {
-        String raw = ui != null ? ui.get(AppPaths.KEY_PM_AI_PYTHON) : null;
-        String normalized = AppPaths.normalizePmAiPythonExecutable(raw);
-        return Path.of(firstNonBlank(normalized, defaultOsPython()));
+        return StagePythonExecutable.resolve(ui);
     }
 
     /** {@link #resolveStagePythonExecutablePath(Map)} を現在の環境変数タブの値で解決する。 */
@@ -4161,20 +3982,12 @@ public final class MainShellController {
     }
 
     /**
-     * シェル未結線など {@link MainShellController} が無いときのフォールバック（テスト・退避経路）。{@link
-     * #defaultOsPython()} と同じ。
+     * シェル未結線など {@link MainShellController} が無いときのフォールバック（テスト・退避経路）。
+     *
+     * @see StagePythonExecutable#defaultPythonPathWhenShellMissing()
      */
     public static Path defaultPythonPathWhenShellMissing() {
-        return Path.of(defaultOsPython());
-    }
-
-    /**
-     * 同梱 embed が無いときの {@code PM_AI_PYTHON} 向け短いコマンド名（{@code defaultOsPython} の最終フォールバック）。
-     */
-    private static String defaultPythonCommandForEnvBootstrap() {
-        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")
-                ? "python"
-                : "python3";
+        return StagePythonExecutable.defaultPythonPathWhenShellMissing();
     }
 
     private void maybePortableFirstLaunchEnvInit() {
@@ -4508,7 +4321,7 @@ public final class MainShellController {
         }
         switch (k) {
             case AppPaths.KEY_PM_AI_PYTHON -> {
-                return defaultPmAiPythonForBootstrap();
+                return StagePythonExecutable.defaultPmAiPythonForBootstrap();
             }
             case AppPaths.KEY_PM_AI_REPO_ROOT -> {
                 return AppPaths.resolveRepoRoot(u).toString();
