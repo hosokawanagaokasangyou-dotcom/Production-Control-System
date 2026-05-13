@@ -1171,7 +1171,7 @@ PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME = "製品名,製品厚み.txt"
 PRODUCT_THICKNESS_TABLE_PATH_ENV = "PRODUCT_THICKNESS_TABLE_PATH"
 # 配台計算で使う換算数量の下限（m）。正の値でこれ未満のときはこの値に引き上げる（段階1）。
 PLANNING_MIN_QTY_M = 100.0
-# ロール単位長さを 100m 単位に切り上げるときの刻み（段階1）。例: 40→100, 125→200。
+# 換算数量（配台用内部）や矯正ロジックの比較用に使う 100m 刻みの切り上げ。ロール単位長さ列への切上げは行わない。
 ROLL_UNIT_LENGTH_CEIL_STEP_M = 100.0
 # 製品名から寸法（NNNxMM 等）を解釈できないときの 1 ロール長(m)。換算数量へは落とさない（FEL 品番で 2000 等になるのを防ぐ）。
 INFER_ROLL_UNIT_LENGTH_DEFAULT_NO_MATCH_M = 100.0
@@ -4804,7 +4804,8 @@ def _floor_positive_m_to_planning_minimum(val: float, minimum: float) -> float:
 def _ceil_roll_unit_length_m_to_next_step(roll_m: float, step_m: float = None) -> float:
     """
     正の長さ(m)を step の倍数に切り上げ（下二桁繰り上げ: step=100 のとき 40→100, 125→200）。
-    段階1の **ロール単位長さ** と、段階2の **換算数量（配台用内部）** で共用（刻みは `ROLL_UNIT_LENGTH_CEIL_STEP_M`）。
+    **換算数量（配台用内部）**・未加工≤0 時の残量算定・矯正ロジックの比較などで使用する。
+    **ロール単位長さ**列には適用しない（シート・推定・補正の値をそのまま用いる）。
     """
     v = parse_float_safe(roll_m, 0.0)
     if v <= 0:
@@ -4817,48 +4818,12 @@ def _ceil_roll_unit_length_m_to_next_step(roll_m: float, step_m: float = None) -
     return float(math.ceil(v / step) * step)
 
 
-def _ceil_roll_unit_length_plan_sheet_cell(val):
-    """DataFrame セル用。空・非数値はそのまま。正の数値は ROLL_UNIT_LENGTH_CEIL_STEP_M 倍数に切り上げ。"""
-    if val is None:
-        return val
-    if isinstance(val, str):
-        s = val.strip()
-        if not s or s.lower() in ("nan", "none"):
-            return val
-    try:
-        x = float(val)
-    except (TypeError, ValueError):
-        return val
-    if x <= 0:
-        return val
-    return _ceil_roll_unit_length_m_to_next_step(x)
-
-
-def _apply_roll_unit_length_ceil_step_to_plan_df(df: pd.DataFrame) -> None:
-    """
-    段階1 DataFrame の ロール単位長さ 列を、マージ後も含めて切り上げ正規化する。
-
-    「使用原反,ロール単位の長さ.txt」に登録がある行は、CSV の m を正として
-    ``ROLL_UNIT_LENGTH_CEIL_STEP_M`` の切上げを行わない（例: 250→300 にしない）。
-    """
-    col = PLAN_COL_ROLL_UNIT_LENGTH
-    if df is None or df.empty or col not in df.columns:
-        return
-    for i in df.index:
-        if TASK_COL_USED_RAW in df.columns:
-            _ur_c = df.at[i, TASK_COL_USED_RAW]
-            if _lookup_roll_unit_length_m_from_used_raw(_ur_c) is not None:
-                continue
-        df.at[i, col] = _ceil_roll_unit_length_plan_sheet_cell(df.at[i, col])
-
-
 def _stage1_roll_length_for_planning_row(row) -> float:
     """
     段階1: 加工計画由来の1行から ロール単位長さ(m)を計算（``run_stage1_extract`` の merge 前と同一式）。
 
-    使用原反が「使用原反,ロール単位の長さ.txt」に登録されているときは、
-    推定・換算救済（``_coerce_roll_unit_m_when_converted_qty_below_roll``）後の値を
-    ``ROLL_UNIT_LENGTH_CEIL_STEP_M`` へ切上げせずそのまま返す。
+    使用原反テーブル・製品名寸法・``_coerce_roll_unit_m_when_converted_qty_below_roll`` まで適用した値を
+    **100m 切上げせず**そのまま返す。
     """
     _pn_stage1 = row.get(TASK_COL_PRODUCT, None)
     _used_raw_s1 = row.get(TASK_COL_USED_RAW, None)
@@ -4887,10 +4852,7 @@ def _stage1_roll_length_for_planning_row(row) -> float:
         _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
     if _roll_len <= 0:
         _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
-    _tbl_roll = _lookup_roll_unit_length_m_from_used_raw(_used_raw_s1)
-    if _tbl_roll is not None and float(_tbl_roll) > 0:
-        return float(_roll_len)
-    return float(_ceil_roll_unit_length_m_to_next_step(_roll_len))
+    return float(_roll_len)
 
 
 def _heal_stage1_roll_unit_if_width_ceiling_merge_spurious(out_df: "pd.DataFrame") -> None:
@@ -15987,10 +15949,8 @@ def run_stage1_extract():
         raise
     out_df = _merge_plan_sheet_user_overrides(out_df)
     _apply_master_speed_sheet_to_plan_df(out_df, log_prefix="段階1")
-    _apply_roll_unit_length_ceil_step_to_plan_df(out_df)
     _heal_stage1_roll_unit_no_dim_when_roll_matches_qty_mistake(out_df)
     _heal_stage1_roll_unit_if_width_ceiling_merge_spurious(out_df)
-    _apply_roll_unit_length_ceil_step_to_plan_df(out_df)
     _refresh_plan_reference_columns(out_df, req_map, need_rules)
     try:
         _apply_auto_exclude_bunkatsu_duplicate_machine(out_df, log_prefix="段階1")
