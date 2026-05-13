@@ -3775,11 +3775,6 @@ public final class MainShellController {
                 return Stage2ParityOutcome.fatal(
                         new IllegalStateException("配台計画タブが未初期化のため同一検証を中止しました。"));
             }
-            if (wb == null || wb.isBlank()) {
-                return Stage2ParityOutcome.fatal(
-                        new IllegalStateException(
-                                "PM_AI_PLAN_INPUT_PATH が空です。配台計画タブでタスク入力パスを設定してください。"));
-            }
             refreshNetworkSourceDirListingSkipsBeforeStageRun(uiRun);
             Map<String, String> childBase = childEnvForPython(uiRun);
             if (lastNetworkSourceResolution != null) {
@@ -3787,14 +3782,22 @@ public final class MainShellController {
                     appendLog(line);
                 }
             }
+            String parityPlanPath =
+                    firstNonBlank(childBase.get(AppPaths.KEY_PM_AI_PLAN_INPUT_PATH), "").strip();
+            if (parityPlanPath.isEmpty()) {
+                return Stage2ParityOutcome.fatal(
+                        new IllegalStateException(
+                                "PM_AI_PLAN_INPUT_PATH が空です。配台計画タブまたは環境タブでタスク入力パスを設定してください。"));
+            }
             Path outDir = AppPaths.defaultPlanningOutputDir(childBase);
             String paritySheet =
                     firstNonBlank(
                             childBase.get(PlanInputTabController.ENV_TASK_PLAN_SHEET),
                             PlanInputTabController.DEFAULT_PLAN_INPUT_SHEET_NAME);
+            appendLog("[stage2-parity] 入力照合対象（子 env の PM_AI_PLAN_INPUT_PATH）: " + parityPlanPath);
             Stage2ParityCheckResult planInputCmp =
                     Stage2PlanInputUiParity.compareUiToDisk(
-                            uiTabularSnapshot, Path.of(wb.trim()), paritySheet);
+                            uiTabularSnapshot, Path.of(parityPlanPath), paritySheet);
             appendLog(
                     planInputCmp.identical()
                             ? "[stage2-parity] 配台計画タブの表と入力ファイル: 一致"
