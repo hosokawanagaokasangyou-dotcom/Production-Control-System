@@ -3,12 +3,10 @@ package jp.co.pm.ai.planning.stage2.input;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.SkillsSheetMemberReader;
 import jp.co.pm.ai.planning.stage2.Stage2RunContext;
@@ -58,26 +56,6 @@ public final class Stage2InputLoader {
                             + sheetUsed
                             + "」を読みます（Python _resolve_tabular_sheet_name_calamine と同趣旨）。");
         }
-        // #region agent log
-        try {
-            LinkedHashMap<String, Object> d = new LinkedHashMap<>();
-            d.put("envTaskPlanSheetRaw", ui.get(ENV_TASK_PLAN_SHEET));
-            d.put("requestedSheetBeforeRead", sheet);
-            d.put("resolvedSheetUsed", sheetUsed);
-            d.put("sheetFallbackApplied", Boolean.valueOf(!sheet.equals(sheetUsed)));
-            d.put("looksLikeHaigoTypo", sheet.contains("配合") && !sheet.contains("配台"));
-            d.put("equalsOfficialDefault", DEFAULT_PLAN_SHEET.equals(sheet));
-            AgentDebugLog.appendStructured(
-                    ui,
-                    "b59b51",
-                    "H4-verify",
-                    "Stage2InputLoader.load",
-                    "after PlanInputTabularIo.readWithResolvedSheet",
-                    d);
-        } catch (Throwable ignored) {
-            // debug-only
-        }
-        // #endregion
 
         return new Stage2InputSnapshot(
                 master,

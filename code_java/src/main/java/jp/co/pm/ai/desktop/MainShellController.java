@@ -96,7 +96,6 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
 import jp.co.pm.ai.planning.stage2.Stage2JavaEngine;
 import jp.co.pm.ai.planning.stage2.Stage2RunContext;
@@ -3336,48 +3335,21 @@ public final class MainShellController {
      */
     private void overlayPlanInputTabPathsIfEnvBlank(Map<String, String> m) {
         String pipKey = PlanInputTabController.ENV_PM_AI_PLAN_INPUT_PATH;
-        String pipBefore = m.get(pipKey);
-        String tpsKey = PlanInputTabController.ENV_TASK_PLAN_SHEET;
-        String tpsBefore = m.get(tpsKey);
-        String tabPathSnap = planInputTabController.snapshotPlanInputPath();
-        String tabSheetSnap = planInputTabController.snapshotPlanInputSheet();
-
-        if (pipBefore == null || pipBefore.isBlank()) {
-            String tab = tabPathSnap;
+        String pip = m.get(pipKey);
+        if (pip == null || pip.isBlank()) {
+            String tab = planInputTabController.snapshotPlanInputPath();
             if (tab != null && !tab.isBlank()) {
                 m.put(pipKey, tab.trim());
             }
         }
-        if (tpsBefore == null || tpsBefore.isBlank()) {
-            String tabSheet = tabSheetSnap;
+        String tpsKey = PlanInputTabController.ENV_TASK_PLAN_SHEET;
+        String tps = m.get(tpsKey);
+        if (tps == null || tps.isBlank()) {
+            String tabSheet = planInputTabController.snapshotPlanInputSheet();
             if (tabSheet != null && !tabSheet.isBlank()) {
                 m.put(tpsKey, tabSheet.trim());
             }
         }
-
-        // #region agent log
-        try {
-            LinkedHashMap<String, Object> d = new LinkedHashMap<>();
-            d.put("pipBefore", pipBefore != null ? pipBefore : "");
-            d.put("pipAfter", m.get(pipKey) != null ? m.get(pipKey) : "");
-            d.put("tpsBefore", tpsBefore != null ? tpsBefore : "");
-            d.put("tpsAfter", m.get(tpsKey) != null ? m.get(tpsKey) : "");
-            d.put("tabSnapshotPath", tabPathSnap != null ? tabPathSnap : "");
-            d.put("tabSnapshotSheet", tabSheetSnap != null ? tabSheetSnap : "");
-            d.put(
-                    "overlaySkippedSheetBecauseEnvNonempty",
-                    !(tpsBefore == null || tpsBefore.isBlank()));
-            AgentDebugLog.appendStructured(
-                    m,
-                    "b59b51",
-                    "H1-H3",
-                    "MainShellController.overlayPlanInputTabPathsIfEnvBlank",
-                    "overlay plan path / task sheet",
-                    d);
-        } catch (Throwable ignored) {
-            // debug-only
-        }
-        // #endregion
     }
 
     /**

@@ -7,12 +7,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
@@ -177,47 +173,19 @@ public final class PlanInputTabularIo {
             if (sh == null && wb.getNumberOfSheets() == 1) {
                 sh = wb.getSheetAt(0);
                 usedSheetName = sh.getSheetName();
-                // #region agent log
-                try {
-                    LinkedHashMap<String, Object> d = new LinkedHashMap<>();
-                    d.put("requestedSheet", sheetName);
-                    d.put("fallbackSheet", usedSheetName);
-                    d.put("singleSheetFallback", Boolean.TRUE);
-                    AgentDebugLog.appendStructured(
-                            Map.of(),
-                            "b59b51",
-                            "H4-verify",
-                            "PlanInputTabularIo.readExcelResolved",
-                            "single sheet fallback (parity with Python _resolve_tabular_sheet_name_calamine)",
-                            d);
-                } catch (Throwable ignored) {
-                    // debug-only
-                }
-                // #endregion
             }
             if (sh == null) {
-                // #region agent log
-                try {
-                    List<String> names = new ArrayList<>();
-                    for (int i = 0; i < wb.getNumberOfSheets(); i++) {
-                        names.add(wb.getSheetName(i));
-                    }
-                    LinkedHashMap<String, Object> d = new LinkedHashMap<>();
-                    d.put("requestedSheet", sheetName);
-                    d.put("workbookPath", path.toString());
-                    d.put("sheetNamesInWorkbook", names);
-                    AgentDebugLog.appendStructured(
-                            Map.of(),
-                            "b59b51",
-                            "H4",
-                            "PlanInputTabularIo.readExcelResolved",
-                            "sheet missing",
-                            d);
-                } catch (Throwable ignored) {
-                    // debug-only
+                List<String> names = new ArrayList<>();
+                for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+                    names.add(wb.getSheetName(i));
                 }
-                // #endregion
-                throw new IOException("sheet not found: \"" + sheetName + "\" in " + path);
+                throw new IOException(
+                        "sheet not found: \""
+                                + sheetName
+                                + "\" in "
+                                + path
+                                + "; sheets="
+                                + names);
             }
             Row h = sh.getRow(0);
             if (h == null) {
