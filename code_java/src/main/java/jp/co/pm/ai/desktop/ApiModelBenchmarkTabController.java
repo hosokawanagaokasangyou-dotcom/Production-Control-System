@@ -43,16 +43,20 @@ public final class ApiModelBenchmarkTabController {
 
     private static final List<String> DEFAULT_MODELS =
             List.of(
-                    "gemini-2.5-flash",
+                    "gemini-3.1-flash-lite",
+                    "gemini-3.1-flash-lite-preview",
                     "gemini-2.5-flash-lite",
-                    "gemini-2.0-flash",
                     "gemini-2.0-flash-lite");
 
     /**
      * {@code planning_core/_core.py} の {@code GEMINI_MODEL_IDS_BY_QUALITY} と同一順（再試行のフォールバック列）。
      */
     private static final List<String> PLANNING_CORE_GEMINI_MODEL_IDS_BY_QUALITY =
-            List.of("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro");
+            List.of(
+                    "gemini-3.1-flash-lite",
+                    "gemini-3.1-flash-lite-preview",
+                    "gemini-2.5-flash-lite",
+                    "gemini-2.0-flash-lite");
 
     private MainShellController shell;
 
