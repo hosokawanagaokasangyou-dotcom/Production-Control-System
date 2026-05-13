@@ -8,7 +8,8 @@ import java.util.function.Consumer;
 import jp.co.pm.ai.desktop.config.AppPaths;
 
 /**
- * 段階2 Java エンジンへの入力。{@code collectUiEnv()} 互換マップと、マスタ解決に使うタスク入力ブックパス、ログシンクを保持する。
+ * 段階2 Java エンジンへの入力。段階2 Python 子プロセスに渡すのと同じマージ済み env（環境タブが空のとき配台計画タブからの
+ * {@code PM_AI_PLAN_INPUT_PATH} 補完、ネットワークソース解決など）を渡すこと。マスタ解決用のタスク入力ブックパスとログシンクを保持する。
  */
 public final class Stage2RunContext {
 

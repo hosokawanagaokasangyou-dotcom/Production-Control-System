@@ -2820,9 +2820,11 @@ public final class MainShellController {
                 appendStageChildResolvedEnvForRun(script, childEnv);
                 mainRunTabController.getStatusLabel().setText("実行中…");
                 ArrayDeque<String> recentJavaLines = new ArrayDeque<>(STAGE_CHILD_LOG_TAIL_MAX + 4);
+                // Python 子プロセスと同じ childEnv（配台計画タブからの PM_AI_PLAN_INPUT_PATH 補完・ネットワークソース解決を含む）を渡す。
+                // uiRun のみだと環境タブで PM_AI_PLAN_INPUT_PATH が空のとき Java 段階2だけ空になり失敗する。
                 Stage2RunContext jctx =
                         new Stage2RunContext(
-                                uiRun,
+                                childEnv,
                                 wb,
                                 line -> {
                                     synchronized (recentJavaLines) {
