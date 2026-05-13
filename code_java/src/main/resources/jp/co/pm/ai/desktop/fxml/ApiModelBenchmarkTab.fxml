@@ -5,8 +5,11 @@
 <?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressBar?>
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.Spinner?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextArea?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
@@ -21,13 +24,19 @@
         <VBox fillWidth="true" spacing="10.0">
             <Label wrapText="true" text="Gemini の generateContent（REST v1beta）を連続呼び出しし、往復レイテンシを計測します。API キーは環境変数 GEMINI_CREDENTIALS_JSON の JSON（暗号化形式）から復号します（パスフレーズは planning_core と同一の既定値）。429 はクォータ超過、404 はモデル ID 不正または未提供のことが多いです。"/>
             <Label fx:id="credentialsPathLabel" style="-fx-text-fill: -fx-mid-text-color" wrapText="true" text=""/>
+            <HBox alignment="CENTER_LEFT" spacing="10.0" fillWidth="true">
+                <ProgressBar fx:id="benchProgressBar" maxWidth="Infinity" prefWidth="320.0" visible="false" managed="false"/>
+                <Label fx:id="benchRunningLabel" style="-fx-text-fill: -fx-mid-text-color" text="" visible="false" managed="false"/>
+                <Button fx:id="cancelBenchButton" mnemonicParsing="false" onAction="#onCancelBench" text="中断" disable="true"/>
+            </HBox>
+            <CheckBox fx:id="completionNotifyCheck" mnemonicParsing="false" text="完了時にダイアログで通知" selected="true"/>
             <Separator/>
             <HBox alignment="CENTER_LEFT" spacing="8.0">
                 <Label text="モデル"/>
                 <ComboBox fx:id="modelCombo" editable="true" prefWidth="360.0"/>
             </HBox>
             <Label style="-fx-text-fill: -fx-mid-text-color" wrapText="true"
-                   text="「全モデル一括」は ComboBox のドロップダウン一覧に並ぶモデル ID を上から順に実行します（候補の編集・追加・削除で対象が変わります）。"/>
+                   text="「全モデル一括」は ComboBox のドロップダウン一覧に並ぶモデル ID を上から順に実行します（候補の編集・追加・削除で対象が変わります）。中断は進行中の HTTP 応答が返るまで待ちます。"/>
             <HBox alignment="CENTER_LEFT" spacing="8.0">
                 <Label text="試行回数"/>
                 <Spinner fx:id="runsSpinner" editable="true" prefWidth="100.0"/>
@@ -48,8 +57,10 @@
             <TextArea fx:id="promptArea" prefRowCount="4" wrapText="true"
                       text="次の文を一言で要約してください。本ベンチマークはレイテンシ計測用の短いリクエストです。"/>
             <Label text="結果ログ" style="-fx-font-weight: bold"/>
-            <TextArea fx:id="logArea" editable="false" prefRowCount="18" wrapText="true" VBox.vgrow="ALWAYS"
+            <TextArea fx:id="logArea" editable="false" prefRowCount="10" wrapText="true" VBox.vgrow="ALWAYS"
                       style="-fx-font-family: monospace"/>
+            <Label text="ランキング（成功モデルを平均レイテンシ昇順、失敗は末尾）" style="-fx-font-weight: bold"/>
+            <TableView fx:id="rankingTable" prefHeight="200.0" VBox.vgrow="NEVER"/>
             <Label fx:id="summaryLabel" wrapText="true" text=""/>
         </VBox>
     </center>
