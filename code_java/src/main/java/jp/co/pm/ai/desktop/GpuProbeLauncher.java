@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.management.ManagementFactory;
@@ -8,15 +9,20 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 /**
- * 現在の JVM と同じクラスパスで {@link JavaFxGpuProbeApp} を子プロセス起動し、GPU Prism が Canvas で動くか判定する。
+ * 現在の JVM と同等の依存解決で {@link JavaFxGpuProbeApp} を子プロセス起動し、GPU Prism が Canvas で動くか判定する。
+ *
+ * <p>{@code javafx:run}（クラスパス JavaFX）のように {@code jdk.module.path} が空で OpenJFX が {@code java.class.path}
+ * に載っている場合は、子だけ {@code --module-path} に OpenJFX を切り出し {@code exec:exec} と同型のモジュール起動にする。
  */
 final class GpuProbeLauncher {
 
@@ -159,6 +165,7 @@ final class GpuProbeLauncher {
         d.put("parentClasspathHasOpenjfx", cp.contains("openjfx") || cp.contains("javafx"));
         d.put("jdkModulePathLen", System.getProperty("jdk.module.path", "").length());
         d.put("jdkFeature", jdkFeatureVersion());
+        d.put("probeCmdHasModulePath", cmd.contains("--module-path"));
         return d;
     }
 
@@ -219,11 +226,58 @@ final class GpuProbeLauncher {
 
         cmd.add("-Dfile.encoding=UTF-8");
         cmd.add("-Dprism.order=" + prismGpuOrderForProbe());
+
+        /*
+         * exec:exec@pm-ai-desktop と同様: OpenJFX を module-path に載せ、プローブ本体は -classpath 側の無名モジュール。
+         * 親が jdk.module.path 付きなら継承済みのため従来どおり単一 -classpath のみ。
+         */
+        if (!System.getProperty("jdk.module.path", "").isBlank()) {
+            cmd.add("-classpath");
+            cmd.add(cp);
+            cmd.add(JavaFxGpuProbeApp.class.getName());
+            return cmd;
+        }
+
+        LinkedHashSet<String> openJfx = new LinkedHashSet<>();
+        LinkedHashSet<String> rest = new LinkedHashSet<>();
+        for (String seg : splitClasspathSegments(cp)) {
+            String lower = seg.toLowerCase(Locale.ROOT);
+            if (lower.contains("openjfx") || lower.contains("javafx-")) {
+                openJfx.add(seg);
+            } else {
+                rest.add(seg);
+            }
+        }
+        if (!openJfx.isEmpty()) {
+            cmd.add("--module-path");
+            cmd.add(String.join(File.pathSeparator, openJfx));
+            cmd.add("--add-modules");
+            cmd.add("javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.swing");
+            cmd.add("--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED");
+            cmd.add("--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED");
+            cmd.add("--add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED");
+            cmd.add("--enable-native-access=javafx.graphics");
+            cmd.add("-classpath");
+            cmd.add(String.join(File.pathSeparator, rest));
+            cmd.add(JavaFxGpuProbeApp.class.getName());
+            return cmd;
+        }
+
         cmd.add("-classpath");
         cmd.add(cp);
         cmd.add(JavaFxGpuProbeApp.class.getName());
 
         return cmd;
+    }
+
+    private static List<String> splitClasspathSegments(String cp) {
+        List<String> out = new ArrayList<>();
+        for (String s : cp.split(Pattern.quote(File.pathSeparator))) {
+            if (s != null && !s.isBlank()) {
+                out.add(s);
+            }
+        }
+        return out;
     }
 
     /**
