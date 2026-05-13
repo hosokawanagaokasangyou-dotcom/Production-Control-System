@@ -241,9 +241,10 @@
             <option>-Xmx${jvm.max.heap}</option>
             <option>-XX:+HeapDumpOnOutOfMemoryError</option>
             <option>-XX:+UseStringDeduplication</option>
-            <!-- runtimePathOption=CLASSPATH: OpenJFX は無名モジュール。名前付きモジュール向け add-opens は
-                 Unknown module になるため付与しない。JDK 22+ のネイティブ読込は ALL-UNNAMED（子プローブ JVM と整合）。 -->
-            <option>--enable-native-access=ALL-UNNAMED</option>
+            <option>--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED</option>
+            <option>--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED</option>
+            <option>--add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED</option>
+            <option>--enable-native-access=javafx.graphics</option>
           </options>
         </configuration>
       </plugin>
