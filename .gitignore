@@ -19,6 +19,9 @@ pm-ai-package-release/
 /code_java/PMD_fast/
 /code_java/Cash_PMD/
 
+# 国分 PMD 初期一式の jlink イメージ（GitHub 100MB 制限超のため履歴に含めない）
+国分工場_実行環境/PMD_initial_install/runtime/lib/modules
+
 # JVM heap dumps（コミットしない）
 *.hprof
 *.hprof.*
