@@ -73,4 +73,5 @@ fi
 
 cd "$PM_AI_CODE_PYTHON_DIR"
 echo "[stage2-verify] 使用する Python: $PY_BIN ($("$PY_BIN" -c 'import sys; print(sys.version)' | head -1))" >&2
+echo "[stage2-verify] ModuleNotFoundError のときは（この Python に対して）: \"${PY_BIN}\" -m pip install -r \"${PM_AI_REPO_ROOT}/code/python/requirements.txt\"" >&2
 exec "$PY_BIN" plan_simulation_stage2.py
