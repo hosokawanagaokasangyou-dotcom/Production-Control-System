@@ -4,7 +4,6 @@ import pandas as pd
 from datetime import datetime, timedelta, time, date
 from collections import Counter, defaultdict
 import itertools
-import functools
 import csv
 import json
 import copy
@@ -151,7 +150,7 @@ GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
 # Gemini API のモデルコード（Google AI for Developers のモデルページの Model code に準拠）
 # https://ai.google.dev/gemini-api/docs/models
 # 既定の試行順: Flash → Flash-Lite → Pro（各モデル失敗・試行上限後に次点へ）。
-# マクロブック「設定」シート D/E で有効行があるときはそちらを優先。
+# 環境変数 GEMINI_MODEL（単一）／GEMINI_MODEL_TRY_ORDER（カンマ区切り）で上書き可。
 # 利用不可・同一モデルの試行上限消化後は _gemini_generate_content_with_retry が次点へ進む。
 GEMINI_MODEL_IDS_BY_QUALITY: tuple[str, ...] = (
     "gemini-2.5-flash",
@@ -373,12 +372,6 @@ APP_CONFIG_SHEET_NAME = "設定"
 # 「設定」シート A/B 列: 配台トレース（A）・デバッグ配台（B）で読む依頼NOの行範囲（両端を含む）。
 CONFIG_SHEET_TASK_IDS_FIRST_ROW = 3
 CONFIG_SHEET_TASK_IDS_LAST_ROW = 26
-# 「設定」シート D3 以降: Gemini 試行モデル ID（Google の model code）。E 列が真の行だけを上から順に試行する。
-# （A/B 列は配台トレース・デバッグ依頼NO用のため、モデル一覧は D/E に配置）
-GEMINI_MODEL_SHEET_COL_MODEL = 4  # D
-GEMINI_MODEL_SHEET_COL_ENABLE = 5  # E
-GEMINI_MODEL_SHEET_FIRST_ROW = 3
-GEMINI_MODEL_SHEET_MAX_ROWS = 40
 # 暗号化認証 JSON（format_version 2）の復号は常にこの定数のみ（社内手順のパスフレーズと一致させる。ログ・UI に出さない）。
 _GEMINI_CREDENTIALS_PASSPHRASE_FIXED = "nagaoka1234"
 _GEMINI_CREDENTIALS_PBKDF2_ITERATIONS_DEFAULT = 480_000
@@ -388,40 +381,6 @@ def _config_cell_text(v) -> str:
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return ""
     return str(v).strip()
-
-
-def _config_cell_truthy_enabled(v) -> bool:
-    """設定シートの「試行に含める」列。Excel の TRUE / チェックボックス / 1 等を真とみなす。"""
-    if v is True:
-        return True
-    if v is False:
-        return False
-    if isinstance(v, (int, float)) and not pd.isna(v):
-        try:
-            return int(round(float(v))) != 0
-        except (TypeError, ValueError):
-            return False
-    s = _config_cell_text(v)
-    if not s:
-        return False
-    u = s.lower()
-    if u in (
-        "1",
-        "true",
-        "yes",
-        "y",
-        "on",
-        "○",
-        "〇",
-        "はい",
-        "有効",
-        "含む",
-        "試行",
-    ):
-        return True
-    if u in ("0", "false", "no", "n", "off", "×", "いいえ", "無効", "除外"):
-        return False
-    return False
 
 
 def _resolve_path_relative_to_workbook(wb_path: str, user_path: str) -> str:
@@ -616,84 +575,6 @@ def _read_debug_dispatch_task_ids_from_config_sheet(wb_path: str) -> list[str]:
         "B",
         openpyxl_skip_hint="デバッグ配台は「設定」シート B 列を openpyxl で読めないため無効（全件配台）です。",
     )
-
-
-@functools.lru_cache(maxsize=32)
-def _read_gemini_model_try_chain_from_settings_sheet_cached(
-    wb_path_norm: str, mtime_key: int
-) -> tuple[str, ...]:
-    """「設定」!D:E から試行モデル列を読む。mtime_key でブック保存後にキャッシュ無効化。"""
-    out: list[str] = []
-    if not wb_path_norm or not os.path.isfile(wb_path_norm):
-        return tuple()
-    if _workbook_should_skip_openpyxl_io(wb_path_norm):
-        logging.info(
-            "Gemini 試行モデル: ブックに「%s」があるため「%s」!D:E を openpyxl で読めません（既定モデル列を使用）。",
-            OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
-            APP_CONFIG_SHEET_NAME,
-        )
-        return tuple()
-    try:
-        keep_vba = str(wb_path_norm).lower().endswith(".xlsm")
-        wb = load_workbook(
-            wb_path_norm, read_only=True, data_only=True, keep_vba=keep_vba
-        )
-        try:
-            if APP_CONFIG_SHEET_NAME not in wb.sheetnames:
-                return tuple()
-            ws = wb[APP_CONFIG_SHEET_NAME]
-            consecutive_empty = 0
-            last = GEMINI_MODEL_SHEET_FIRST_ROW + GEMINI_MODEL_SHEET_MAX_ROWS
-            for r in range(GEMINI_MODEL_SHEET_FIRST_ROW, last):
-                mid = _config_cell_text(
-                    ws.cell(row=r, column=GEMINI_MODEL_SHEET_COL_MODEL).value
-                )
-                en_raw = ws.cell(row=r, column=GEMINI_MODEL_SHEET_COL_ENABLE).value
-                if not mid:
-                    consecutive_empty += 1
-                    if consecutive_empty >= 20:
-                        break
-                    continue
-                consecutive_empty = 0
-                if not _config_cell_truthy_enabled(en_raw):
-                    continue
-                out.append(mid)
-        finally:
-            wb.close()
-    except Exception as ex:
-        logging.warning(
-            "Gemini 試行モデル: 「%s」!D%d:E を読めません（既定モデル列を使用）: %s",
-            APP_CONFIG_SHEET_NAME,
-            GEMINI_MODEL_SHEET_FIRST_ROW,
-            ex,
-        )
-        return tuple()
-    return tuple(out)
-
-
-def _read_gemini_model_try_chain_from_settings_sheet(wb_path: str) -> tuple[str, ...] | None:
-    """マクロブック「設定」シートの D/E 列で有効化されたモデルを上から返す。1 件も無ければ None。"""
-    p = (wb_path or "").strip()
-    if not p:
-        return None
-    try:
-        norm = os.path.normpath(os.path.abspath(p))
-    except Exception:
-        norm = p
-    try:
-        mkey = int(os.path.getmtime(norm))
-    except OSError:
-        mkey = 0
-    chain = _read_gemini_model_try_chain_from_settings_sheet_cached(norm, mkey)
-    if not chain:
-        return None
-    logging.info(
-        "Gemini 試行モデル: 「%s」シート D/E から %s 件を読み込みました（順: %s）。",
-        APP_CONFIG_SHEET_NAME,
-        len(chain),
-        ", ".join(chain),
-    )
-    return chain
 
 
 def _show_stage2_debug_dispatch_mode_dialog(task_ids_sorted: list[str]) -> None:
@@ -4330,17 +4211,12 @@ def _gemini_try_order_from_env() -> tuple[str, ...] | None:
 
 
 def _gemini_effective_model_chain(model: str | None) -> tuple[str, ...]:
-    """引数 model があればそれのみ。なければ GEMINI_MODEL、設定シート D/E、環境変数の順で決定。"""
+    """引数 model があればそれのみ。なければ GEMINI_MODEL、GEMINI_MODEL_TRY_ORDER、コード既定の順で決定。"""
     if model is not None and str(model).strip():
         return (str(model).strip(),)
     pinned = (os.environ.get("GEMINI_MODEL") or "").strip()
     if pinned:
         return (pinned,)
-    sheet_chain = _read_gemini_model_try_chain_from_settings_sheet(
-        (_excel_plan_input_wb() or "").strip()
-    )
-    if sheet_chain:
-        return sheet_chain
     ovr = _gemini_try_order_from_env()
     if ovr is not None:
         return ovr
@@ -4417,9 +4293,8 @@ def _gemini_generate_content_with_retry(
 ):
     """generate_content を再試行する（Gemini generateContent 共通）。
 
-    - モデル列: マクロブック「設定」シート D/E で有効化した ID（上から順）、なければ
-      GEMINI_MODEL_IDS_BY_QUALITY（既定: Flash → Flash-Lite → Pro）。環境変数 GEMINI_MODEL で単一固定、
-      GEMINI_MODEL_TRY_ORDER（カンマ区切り）で上書き可。引数 model を渡したときはその1件のみ。
+    - モデル列: 環境変数 **GEMINI_MODEL**（単一固定）→ **GEMINI_MODEL_TRY_ORDER**（カンマ区切り）→
+      **GEMINI_MODEL_IDS_BY_QUALITY**（コード既定: Flash → Flash-Lite → Pro）。引数 ``model`` を渡したときはその1件のみ。
     - 同一モデルあたり最大 _GEMINI_RETRY_MAX_ATTEMPTS 回（既定 3、GEMINI_RETRY_MAX_ATTEMPTS で変更）。
       そのモデルで試行を使い切ったら、列の次のモデルへ進む（試すモデルがなくなるまで）。
     - モデル未提供（404 等）は直ちに次モデルへ進む。

@@ -285,11 +285,11 @@
   }, {
     "key" : "GEMINI_MODEL",
     "value" : "",
-    "description" : "単一モデルに固定（空なら planning_core の精度順フォールバック列を使用）"
+    "description" : "単一モデルに固定。空のときは GEMINI_MODEL_TRY_ORDER、さらに空なら planning_core のコード既定列"
   }, {
     "key" : "GEMINI_MODEL_TRY_ORDER",
     "value" : "",
-    "description" : "カンマ区切りで試行順を上書き（例: gemini-2.5-pro,gemini-2.5-flash）。上級者向け。マクロブック「設定」D/E で有効行がある場合はシート優先"
+    "description" : "カンマ区切りで試行順（例: gemini-2.5-pro,gemini-2.5-flash）。GEMINI_MODEL 未設定時のみ有効。両方空ならコード既定列"
   }, {
     "key" : "GEMINI_PRE_REQUEST_JITTER_MAX_SEC",
     "value" : "0.75",

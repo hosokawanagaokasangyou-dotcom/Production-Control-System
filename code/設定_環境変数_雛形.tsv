@@ -63,8 +63,8 @@ EXCLUDE_RULES_TEST_E1234_ROW	9	上記の対象行（2 未満は 9 に丸め）
 GEMINI_PRICE_USD_IN_PER_M	0.075	Gemini 入力トークン単価（USD / 100 万トークン）。コスト試算用。
 GEMINI_PRICE_USD_OUT_PER_M	0.30	Gemini 出力トークン単価（USD / 100 万トークン）。コスト試算用。
 GEMINI_JPY_PER_USD	150	試算の円換算レート
-GEMINI_MODEL		単一モデルに固定（空なら精度順フォールバック列を使用）
-GEMINI_MODEL_TRY_ORDER		カンマ区切りで試行順を上書き。マクロ「設定」D/E に有効行がある場合はシート優先。
+GEMINI_MODEL		単一モデルに固定（空なら GEMINI_MODEL_TRY_ORDER、さらに空ならコード既定の精度順フォールバック列）
+GEMINI_MODEL_TRY_ORDER		カンマ区切りで試行順を指定（GEMINI_MODEL 未設定時のみ有効）。空ならコード既定列を使用。
 GEMINI_PRE_REQUEST_JITTER_MAX_SEC	0.75	503/429 等対策: 呼び出し直前の最大ジッター秒。0 で無効。
 GEMINI_RETRY_BACKOFF_BASE_SEC	2.0	再試行の指数バックオフ基底（秒）
 GEMINI_PROGRESS_LOG_INTERVAL_SEC	12	応答待ちハートビートログ間隔（秒）。0 で無効。

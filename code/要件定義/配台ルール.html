@@ -349,7 +349,7 @@
       <tbody>
         <tr><td><code>加工計画DATA</code></td><td>段階1の抽出元。</td></tr>
         <tr><td><code>配台計画_タスク入力</code></td><td>段階1出力・段階2入力（既定。環境変数 <code>TASK_PLAN_SHEET</code> で変更可）。AX:AY はグローバルコメント解析の参照表示のみ。</td></tr>
-        <tr><td><code>設定</code></td><td>B1＝証明書パス、D/E 列＝Gemini モデル一覧、A3以降＝トレース依頼NO、B3以降＝デバッグ依頼NO。</td></tr>
+        <tr><td><code>設定</code></td><td>Gemini 証明書はブック同階層の固定ファイル名等（B1 は参照しない）。試行モデルは <code>GEMINI_MODEL</code>／<code>GEMINI_MODEL_TRY_ORDER</code> またはコード既定。A3以降＝トレース依頼NO、B3以降＝デバッグ依頼NO。</td></tr>
         <tr><td><code>設定_環境変数</code></td><td>A＝変数名、B＝値（import 前に <code>os.environ</code>）。</td></tr>
         <tr><td><code>設定_配台不要工程</code></td><td>工程名・機械名・配台不要・配台不要ロジック・ロジック式。</td></tr>
         <tr><td><code>列設定_結果_タスク一覧</code></td><td>列名・表示。</td></tr>
