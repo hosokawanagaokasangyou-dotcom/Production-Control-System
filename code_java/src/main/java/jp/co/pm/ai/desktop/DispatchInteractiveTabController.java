@@ -150,6 +150,7 @@ public final class DispatchInteractiveTabController {
                     "加工内容",
                     "依頼NO",
                     "換算数量",
+                    "実加工数",
                     "計画合計");
 
     /** 「工程+機械×日」ビューの先頭固定列（日付ブロックの直前まで）。 */

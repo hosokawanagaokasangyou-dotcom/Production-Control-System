@@ -28,6 +28,7 @@ public final class ResultDispatchPivot {
                     "加工内容",
                     "依頼NO",
                     "換算数量",
+                    "実加工数",
                     "計画合計");
 
     /** Distinct task rows (static columns only), insertion order. */
