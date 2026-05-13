@@ -1,19 +1,14 @@
 package jp.co.pm.ai.desktop;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.lang.management.ManagementFactory;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
-
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 /**
  * 現在の JVM と同じクラスパスで {@link JavaFxGpuProbeApp} を子プロセス起動し、GPU Prism が Canvas で動くか判定する。
@@ -21,11 +16,6 @@ import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 final class GpuProbeLauncher {
 
     private static final int PROBE_TIMEOUT_SEC = 45;
-
-    /** Cursor デバッグセッション用 NDJSON（{@code .cursor/debug-afb084.log}）。 */
-    private static final String AGENT_DEBUG_SESSION = "afb084";
-
-    private static final int STDERR_CAPTURE_MAX = 96_000;
 
     private GpuProbeLauncher() {}
 
@@ -44,60 +34,25 @@ final class GpuProbeLauncher {
         pb.redirectOutput(ProcessBuilder.Redirect.PIPE);
         pb.redirectError(ProcessBuilder.Redirect.PIPE);
         Process process = null;
-        ByteArrayOutputStream outBuf = new ByteArrayOutputStream();
-        ByteArrayOutputStream errBuf = new ByteArrayOutputStream();
         try {
             process = pb.start();
-            Thread tout = drainStreamToBuffer(process.getInputStream(), outBuf, STDERR_CAPTURE_MAX);
-            Thread terr = drainStreamToBuffer(process.getErrorStream(), errBuf, STDERR_CAPTURE_MAX);
+            drainStream(process.getInputStream());
+            drainStream(process.getErrorStream());
             boolean done = process.waitFor(PROBE_TIMEOUT_SEC, TimeUnit.SECONDS);
-            joinQuietly(tout, 8_000);
-            joinQuietly(terr, 8_000);
             if (!done) {
                 process.destroyForcibly();
                 PrismGpuBootstrapStatus.recordSoftwareAfterProbe("GPU テストタイムアウト");
-                // #region agent log
-                logGpuProbeNdjson(
-                        "H-timeout",
-                        "GpuProbeLauncher.runGpuCanvasProbe",
-                        "GPU probe timed out",
-                        probeLogData(cmd, -1, outBuf, errBuf));
-                // #endregion
                 return false;
             }
             int code = process.exitValue();
             if (code != 0) {
                 PrismGpuBootstrapStatus.recordSoftwareAfterProbe("GPU テスト終了コード=" + code);
-                // #region agent log
-                logGpuProbeNdjson(
-                        "H-child-exit-nonzero",
-                        "GpuProbeLauncher.runGpuCanvasProbe",
-                        "GPU probe child exited non-zero",
-                        probeLogData(cmd, code, outBuf, errBuf));
-                // #endregion
                 return false;
             }
-            // #region agent log
-            logGpuProbeNdjson(
-                    "H-probe-ok",
-                    "GpuProbeLauncher.runGpuCanvasProbe",
-                    "GPU probe child exit 0",
-                    probeLogData(cmd, 0, outBuf, errBuf));
-            // #endregion
             return true;
         } catch (Exception e) {
             PrismGpuBootstrapStatus.recordSoftwareAfterProbe(
                     "GPU テスト例外: " + e.getClass().getSimpleName() + ": " + e.getMessage());
-            // #region agent log
-            Map<String, Object> d = probeLogData(cmd, null, outBuf, errBuf);
-            d.put("parentException", e.getClass().getName());
-            d.put("parentExceptionMessage", String.valueOf(e.getMessage()));
-            logGpuProbeNdjson(
-                    "H-parent-io",
-                    "GpuProbeLauncher.runGpuCanvasProbe",
-                    "GPU probe parent IOException/Interrupted",
-                    d);
-            // #endregion
             return false;
         } finally {
             if (process != null && process.isAlive()) {
@@ -106,23 +61,12 @@ final class GpuProbeLauncher {
         }
     }
 
-    private static Thread drainStreamToBuffer(InputStream in, ByteArrayOutputStream dest, int maxBytes) {
+    private static void drainStream(InputStream in) {
         Thread t =
                 new Thread(
                         () -> {
                             try (in) {
-                                byte[] buf = new byte[8192];
-                                int n;
-                                while ((n = in.read(buf)) >= 0) {
-                                    synchronized (dest) {
-                                        int room = maxBytes - dest.size();
-                                        if (room <= 0) {
-                                            continue;
-                                        }
-                                        int take = Math.min(n, room);
-                                        dest.write(buf, 0, take);
-                                    }
-                                }
+                                in.transferTo(OutputStream.nullOutputStream());
                             } catch (IOException ignored) {
                                 // ignore
                             }
@@ -130,51 +74,6 @@ final class GpuProbeLauncher {
                         "gpu-probe-drain");
         t.setDaemon(true);
         t.start();
-        return t;
-    }
-
-    private static void joinQuietly(Thread t, long millis) {
-        if (t == null) {
-            return;
-        }
-        try {
-            t.join(millis);
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    private static Map<String, Object> probeLogData(
-            List<String> cmd, Integer exitCode, ByteArrayOutputStream outBuf, ByteArrayOutputStream errBuf) {
-        Map<String, Object> d = new LinkedHashMap<>();
-        d.put("exitCode", exitCode);
-        d.put("javaHome", System.getProperty("java.home", ""));
-        d.put("osName", System.getProperty("os.name", ""));
-        d.put("prismOrderInProbeCmd", prismGpuOrderForProbe());
-        d.put("childStdoutUtf8", utf8Bounded(outBuf, 24_000));
-        d.put("childStderrUtf8", utf8Bounded(errBuf, 48_000));
-        d.put("probeJavaExe", cmd.isEmpty() ? "" : cmd.get(0));
-        return d;
-    }
-
-    private static String utf8Bounded(ByteArrayOutputStream buf, int maxChars) {
-        if (buf == null) {
-            return "";
-        }
-        byte[] raw;
-        synchronized (buf) {
-            raw = buf.toByteArray();
-        }
-        String s = new String(raw, StandardCharsets.UTF_8);
-        if (s.length() <= maxChars) {
-            return s;
-        }
-        return s.substring(0, maxChars) + "\n…(truncated)";
-    }
-
-    private static void logGpuProbeNdjson(
-            String hypothesisId, String location, String message, Map<String, ?> data) {
-        AgentDebugLog.appendStructured(Map.of(), AGENT_DEBUG_SESSION, hypothesisId, location, message, data);
     }
 
     private static List<String> buildCommand() {
