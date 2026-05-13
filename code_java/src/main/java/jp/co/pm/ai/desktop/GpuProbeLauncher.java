@@ -154,7 +154,20 @@ final class GpuProbeLauncher {
         d.put("childStdoutUtf8", utf8Bounded(outBuf, 24_000));
         d.put("childStderrUtf8", utf8Bounded(errBuf, 48_000));
         d.put("probeJavaExe", cmd.isEmpty() ? "" : cmd.get(0));
+        String cp = System.getProperty("java.class.path", "");
+        d.put("parentClasspathLen", cp.length());
+        d.put("parentClasspathHasOpenjfx", cp.contains("openjfx") || cp.contains("javafx"));
+        d.put("jdkModulePathLen", System.getProperty("jdk.module.path", "").length());
+        d.put("jdkFeature", jdkFeatureVersion());
         return d;
+    }
+
+    private static int jdkFeatureVersion() {
+        try {
+            return Runtime.version().feature();
+        } catch (Throwable ignored) {
+            return 21;
+        }
     }
 
     private static String utf8Bounded(ByteArrayOutputStream buf, int maxChars) {
@@ -192,6 +205,15 @@ final class GpuProbeLauncher {
 
         List<String> cmd = new ArrayList<>();
         cmd.add(javaExe.toString());
+
+        /*
+         * JDK 22+ でクラスパス上の JavaFX（無名モジュール）がネイティブを System::load する際、
+         * 子プローブだけフラグが無いと「ランタイム不足」扱いで終了することがある（親は Maven が
+         * --enable-native-access を付けるが javafx.graphics は無名構成では Unknown module になり得る）。
+         */
+        if (jdkFeatureVersion() >= 22) {
+            cmd.add("--enable-native-access=ALL-UNNAMED");
+        }
 
         appendInheritedJvmOptions(cmd, ManagementFactory.getRuntimeMXBean().getInputArguments());
 
