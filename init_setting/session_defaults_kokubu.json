@@ -1,0 +1,622 @@
+{
+  "planInputPath" : "C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx",
+  "planInputSheet" : "タスク一覧",
+  "stage1PreviewPath" : "C:\\工程管理AIプロジェクト_JAVA\\output\\stage1_task_input_table.xlsx",
+  "stage1PreviewSheet" : "タスク入力整形",
+  "excludeRulesPath" : "C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json",
+  "mainRunWorkbook" : "C:\\工程管理AIプロジェクト_JAVA\\master.xlsm",
+  "mainRunScriptDir" : "C:\\工程管理AIプロジェクト_JAVA\\code\\python",
+  "uiTheme" : "midnight-blue",
+  "logFontSize" : 12.0,
+  "mainRunLogFilter" : "ALL",
+  "mainRunLogScroll" : 0.0,
+  "mainRunStage2ProductionPlan" : "C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605131149442655.xlsx",
+  "mainRunStage2MemberSchedule" : "C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605131149442655.xlsx",
+  "mainRunStage2WriteExcel" : true,
+  "mainRunStage2ResultBookFont" : "Meiryo UI",
+  "uiEnvRows" : [ {
+    "name" : "PM_AI_PYTHON",
+    "value" : "python",
+    "description" : "段階1/2 等の子プロセスで使う Python 実行ファイル（パスは実行ファイル。フォルダのみ指定すると実行時に python.exe 等へ補正）。編集は環境変数タブのみ（実行・ログタブに Python 入力は無い）。値が空のとき: まず user.dir 周辺で pm-ai-data/runtime/python-embed/python.exe が実在すればそれを使い、無ければ OS の PATH 上の python / python3（開発ツリーに python-embed を置いていない場合はここに落ちる）。複数 Python を PATH で切り替えている／特定の python.exe に固定したいときは、本変数にその絶対パスを明示する。環境変数タブを空にしても動くのはこのフォールバックのため。初期化・空欄補完では pm-ai-data/runtime/python-embed/python.exe を user.dir から親ディレクトリへ最大12段まで辿って探索し、見つかれば絶対パスで入れる（ショートカットで user.dir が bin 等になる場合のため）。見つからずインストール根がポータル配布なら相対パス。開発などでは同梱 exe が取れたら絶対パス、無ければ PATH の python/python3。"
+  }, {
+    "name" : "PM_AI_REPO_ROOT",
+    "value" : "C:\\工程管理AIプロジェクト_JAVA",
+    "description" : "Production-Control-System の親（リポジトリ根）。PM_AI_CODE_PYTHON_DIR 未指定時の推定に使用。"
+  }, {
+    "name" : "PM_AI_OUTPUT_DIR",
+    "value" : "C:\\工程管理AIプロジェクト_JAVA\\output",
+    "description" : "段階1/2の成果物フォルダ（plan_input_tasks.xlsx、計画*.xlsx、人員*.xlsx 等）。空のときは planning_core.bootstrap と同じ解決（PM_AI_REPO_ROOT 直下の output、または cwd 基準の output）。フルパス推奨。「フォルダ...」で選択可。 — 段階1/2 の出力先（plan_input_tasks.xlsx 等、従来 code/output に相当）。未設定時は PM_AI_REPO_ROOT 直下の output（JavaFX と planning_core.bootstrap と同解決）。"
+  }, {
+    "name" : "PM_AI_CODE_PYTHON_DIR",
+    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\python",
+    "description" : "スクリプト根（task_extract_stage1.py 等）。自動検出は user.dir から code/python を探す。"
+  }, {
+    "name" : "PM_AI_WORKSPACE",
+    "value" : "",
+    "description" : "配台作業ルート（Python の cwd、ログ/output、Gemini 証明書の搜索先。JavaFX と planning_core.bootstrap で最優先される。未指定時は PM_AI_CODE_PYTHON_DIR の親（code）から推定する場合が多い。"
+  }, {
+    "name" : "GEMINI_CREDENTIALS_JSON",
+    "value" : "C:\\工程管理AIプロジェクト_JAVA\\gemini_credentials.encrypted.json",
+    "description" : "Gemini 暗号化証明書 JSON（例: gemini_credentials.encrypted.json）のフルパス。未設定時はマクロブック同階層または PM_AI_WORKSPACE 直下を参照。 — Gemini 暗号化証明書 JSON（例: gemini_credentials.encrypted.json）のフルパス。planning_core で最優先。JavaFX 環境変数タブの「ファイル...」で選択可。"
+  }, {
+    "name" : "PM_AI_EXCLUDE_RULES_JSON",
+    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json",
+    "description" : "段階1の配台不要ルールを JSON に寄せる場合のフルパス（list または {\"rules\":[...]}）。既定は code/exclude_rules.json（実在時）、無ければ code/json/stage1_exclude_rules.json（実在時）。有効時はマクロブックの「設定_配台不要工程」Excel 保守も省略。 — 段階1（run_stage1_extract）で master.xlsm 「設定_配台不要工程」を json/stage1_exclude_rules.json へ書き出し、本変数を その絶対パスに自動設定（子プロセス内）。 手動でも UTF-8 JSON（list または {\"rules\":[...]}、 列構造は設定シートと同槗。 有効ファイルがあれば read_excel 経路を省略可。 JavaFX 環境変数タブの既定は code/exclude_rules.json（実在時）、無ければ code/json/stage1_exclude_rules.json（実在時）。 JavaFX は「ファイル...」で選択可。"
+  }, {
+    "name" : "PM_AI_MASTER_WORKBOOK",
+    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\国分master.xlsm",
+    "description" : "マスタブック（master.xlsm 等）のフルパス。MASTER_WORKBOOK_FILE より優先。環境変数タブの「ファイル...」で .xlsm/.xlsx を選択可。内容の要約は「マスタ読込サマリ」タブの「サマリを更新」で planning_core 基準の JSON を表示（人が読みやすい形に整形）。 — master 系 .xlsm の絶対パス（実在ファイルのとき MASTER_WORKBOOK_FILE より優先。planning_core の マスタ読込・機械カレンダー等に使用。 JavaFX の「マスタ読込サマリ」タブで内容を確認可。"
+  }, {
+    "name" : "PM_AI_COLUMN_CONFIG_WORKBOOK",
+    "value" : "",
+    "description" : "列設定_結果_タスク一覧 を含むブック。PM_AI_PLAN_INPUT_PATH と別ファイルのときに指定。空なら input_resolution の既定探索。 — 列設定_結果_タスク一覧シートを含む xlsx/xlsm。PM_AI_PLAN_INPUT_PATH と異なる列設定専用ブックを指す場合。"
+  }, {
+    "name" : "PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK",
+    "value" : "",
+    "description" : "計画シートのデータ抽出時刻列を読む元ブック（空なら planning_core の input_resolution が PM_AI_PLAN_INPUT_PATH 等から解決）。 — 加工計画DATA等から「データ抽出時間」列を読むブック（未指定時は planning_core の input_resolution による探索、PM_AI_PLAN_INPUT_PATH など）。"
+  }, {
+    "name" : "PM_AI_RESULT_TASK_COLUMN_CONFIG_CSV",
+    "value" : "",
+    "description" : "結果_タスク一覧の列表示設定 CSV のフルパス。実在時は列設定シート読みをスキップ可。 — 結果_タスク一覧の列設定（列名、表示列を持つ CSV。あれば列設定シート読みをスキップ。"
+  }, {
+    "name" : "PM_AI_SKIP_WORKBOOK_ENV_SHEET",
+    "value" : "1",
+    "description" : "1/true 等で workbook_env_bootstrap がマクロ「設定_環境変数」シートを読まず、JavaFX タブの値のみ子プロセスへ渡す。空のときランチャーは子へ 1 を付与。 — 1/true 等で workbook_env_bootstrap がマクロブックの「設定_環境変数」シートを読まない。JavaFX 環境変数タブが子プロセスの源。 空のときランチャーは 1 を付与。 OS 環境変数へは書き込まない運用を前提。"
+  }, {
+    "name" : "PM_AI_TASK_INPUT_SOURCE_DIR",
+    "value" : "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\計画",
+    "description" : "PQ-A 加工計画DATA取得元（plan/01_*.m の Folder.Files と同系）。未設定時は \\\\192.168.0.101\\共有...●DATA\\生産計画問合せ。JavaFX 初期値は AppPaths.resolveTaskInputSourceDir。Python は PM_AI_PROCESSING_PLAN_PATH が未設定または存在しないとき、このフォルダ内 CSV/Parquet/xlsx 等のうち更新時刻が最新の1件をタスク入力に使用。「納期管理ビュー」タブの計画側アラジン数量もこの解決パス由来の加工計画シートを参照する。"
+  }, {
+    "name" : "PM_AI_PROCESSING_PLAN_PATH",
+    "value" : "",
+    "description" : "段階1用：加工計画DATA相当の表（CSV/Parquet/xlsx）。Python は未設定またはファイル無しのとき、PM_AI_TASK_INPUT_SOURCE_DIR 内の最新表を自動でこの変数に設定（dispatch_workspace.resolve_processing_plan_path_from_env）。run_stage1_extract はこのパス（または SOURCE_DIR解決の実在ファイル）が必要。配台不要は master.xlsm から json/stage1_exclude_rules.json に書き出し。 正式な列構成は plan/01_加工計画DATA_単一ファイル.m と同等の Power Query 成形後の加工計画DATA相当。生の問合せ xlsx を直接指定する場合は Python 側でヘッダー行・列名の救済のみ（PQ の複合見出しや日付列名の展開は再現しない）。確実に合わせるときはクエリ更新後の CSV 等のパスを指定すること。"
+  }, {
+    "name" : "PM_AI_ACTUAL_DETAIL_SOURCE_DIR",
+    "value" : "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\実績",
+    "description" : "加工実績明細DATA 出力元（plan/02__q*.m の Folder.Files と同系）。planning_core はこのフォルダ内の最新 xlsx/xlsm を実績明細読込の元にする。 PM_AI_ACTUALS_DATA_WORKBOOK 未設定時は加工実績DATA 読込も同じ最新ファイルを使用。未設定時は 002  加工G\\●検査表作成\\加工実績明細DATA系 UNC。PM_AI_ACTUAL_DETAIL_WORKBOOK で単一ファイルを優先。"
+  }, {
+    "name" : "PM_AI_RESULT_DISPATCH_TABLE_DIR",
+    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\output",
+    "description" : "Power Query _q結果_配台表 参照用の 結果_配台表.xlsx 出力先（マクロブック側に フォルダパス名を合わせる場合）。未設定時は段階2は PM_AI_WORKSPACE または PM_AI_PLAN_INPUT_PATH 親階層に合わせる場合がある、JavaFX 初期値は PM_AI_REPO_ROOT 下の code/output（例: Production-Control-System/code/output/結果_配台表.xlsx 同階層に 結果_配台表.json も出力）。「納期管理ビュー」の計画比較サブタブはこのフォルダ直下の 結果_配台表.json とタスク入力ソースのアラジン日別数量を突き合わせる。"
+  }, {
+    "name" : "PM_AI_PLAN_RESULT_TASK_JSON",
+    "value" : "",
+    "description" : "段階2 の production_plan_*.xlsx と同名ベースの 結果_タスク一覧.json（サイドカー）の読み書き。0/false/no/off/none で無効（無効時はサイドカー非出力・Excel 優先）。未設定で有効。 — 段階2 出力 production_plan_*.xlsx と同名ベースの 結果_タスク一覧.json（サイドカー）読み書き：0/false/no/off/none で無効。有効時は再読込を JSON 優先にして Excel I/O を削減。"
+  }, {
+    "name" : "PM_AI_PLAN_RESULT_TASK_JSON_PATH",
+    "value" : "",
+    "description" : "結果_タスク一覧 JSON を読む絶対パス（実在時は xlsx 横のサイドカーより優先）。空なら未使用。 — read_result_task_dataframe が読む JSON の絶対パス（実在ファイルのとき 出力 xlsx 横のサイドカーパスより優先）。"
+  }, {
+    "name" : "PM_AI_PORTABLE_BUNDLE_SOURCE_DIR",
+    "value" : "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\pm-ai-package-release\\PMD_version_upgrade.zip",
+    "description" : "ポータブル配布（PMD.exe と pm-ai-data）向け。正本は次のいずれか。（1）リポジトリルートのフォルダパス（UNC 可）。直下の version.txt とローカル pm-ai-data を比較し、新しいときのみ起動時に pm-ai-data を同期する。（2）バージョンアップ用の .zip ファイルのパス（配布は固定名 PMD_version_upgrade.zip を推奨。バージョンは ZIP と同じフォルダの外付け version.txt で区別）。起動時に ZIP を自動展開してから pm-ai-data に同期する。空のときは自動更新しない（情報表示のみ）。"
+  }, {
+    "name" : "PM_AI_EXCEL_TRACE_TASK_ID",
+    "value" : "",
+    "description" : "段階2 Excel 生成デバッグ: 追跡する依頼NO（例 Y5-14）。JavaFX「環境変数」タブのみ。空で無効。有効時 .cursor/debug-excel-trace.log に EX1/EX4/EX5（df vs サイドカーJSON 差分）等。詳細は EnvVarDocs。 — 段階2（配台試行含む）の Excel 生成経路を 1 依頼で追跡するデバッグ用依頼NO（例: Y5-14）。本アプリの「環境変数」タブにのみ設定（子プロセスへ引き渡し）。OS の PM_AI_* は起動に使わない（空のまま推奨）。有効時は .cursor/debug-excel-trace.log に NDJSON（EX1=df_tasks、EX4=サイドカー JSON、EX5=両者のセル差分）。全ブック JSON（PM_AI_PLAN_WORKBOOK_JSON）とは別。"
+  }, {
+    "name" : "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK",
+    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\国分サマリ_AI配台.xlsx",
+    "description" : "実行・ログタブの「開く」で開くサマリ用ブック（.xlsx 等）のフルパス。空のときは PM_AI_REPO_ROOT 下 code/サマリ_AI配台.xlsx。ファイル名のみのときは code/ からの相対として解決。 — 実行・ログタブの「開く」（サマリ AI 配台 等）が開くブックの絶対パス（.xlsx 等）。 空で code/ 下の サマリ_AI配台.xlsx（PM_AI_REPO_ROOT 準拠）。 ファイル名のみのときは code/ からの相対パスとして解決。"
+  }, {
+    "name" : "MASTER_WORKBOOK_FILE",
+    "value" : "国分master.xlsm",
+    "description" : "マスタブックのファイル名（空なら master.xlsm）。マクロブック所在フォルダ基準の相対可（basename のみ推奨）。planning_core と VBA のマスタ参照で共通。PM_AI_MASTER_WORKBOOK 未指定時の解決に使う。マスタ読込サマリタブの表示と一致確認に利用。 — master.xlsm のファイル名（空で master.xlsm）。マクロブック階層からの相対パス可。 PM_AI_MASTER_WORKBOOK 未指定時の解決に使用。 「マスタ読込サマリ」タブと連動。"
+  }, {
+    "name" : "TASK_PLAN_SHEET",
+    "value" : "配台計画_タスク入力",
+    "description" : "配台計画シート名（空なら既定 配台計画_タスク入力） — 配台計画シート名（空で既定名）。"
+  }, {
+    "name" : "PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY",
+    "value" : "",
+    "description" : "1/true/yes/on/y のとき配台試行順更新で post_load（計画シートの事後変形）をスキップする用途。 — 配台試行順更新時に post_load（事後変形）をスキップ。"
+  }, {
+    "name" : "MASTER_USE_SPEED_SHEET",
+    "value" : "1",
+    "description" : "0=master.xlsm speed による加工速度上書きをしない — master 内 speed シートによる加工速度上書きを有効化。"
+  }, {
+    "name" : "MASTER_SPEED_SHEET_NAME",
+    "value" : "speed",
+    "description" : "空なら既定シート名 speed"
+  }, {
+    "name" : "MASTER_SPEED_FIRST_EXCEL_COL",
+    "value" : "4",
+    "description" : "空なら 4（D 列から設備列）"
+  }, {
+    "name" : "RAW_FABRIC_WIDTH_TABLE_PATH",
+    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反, 加工幅.txt",
+    "description" : "原反幅 CSV のフルパス（空なら既定ファイル名をマクロブック同フォルダ等で探索） — 原反幅 CSV（planning_core の外部表参照）。"
+  }, {
+    "name" : "ROLL_UNIT_BY_USED_RAW_TABLE_PATH",
+    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反,ロール単位の長さ.txt",
+    "description" : "使用原反→ロール単位長さ(m) CSV のフルパス（空なら「使用原反,ロール単位の長さ.txt」をマクロブック同フォルダ・カレント・code で探索）"
+  }, {
+    "name" : "PRODUCT_WIDTH_TABLE_PATH",
+    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\製品名, 製品幅.txt",
+    "description" : "製品幅 CSV のフルパス（同上） — 製品幅 CSV。空だとマクロブック階層で探索。"
+  }, {
+    "name" : "PRODUCT_LENGTH_TABLE_PATH",
+    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品長.txt",
+    "description" : "製品長 CSV のフルパス（同上）"
+  }, {
+    "name" : "PRODUCT_THICKNESS_TABLE_PATH",
+    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品厚み.txt",
+    "description" : "製品厚み CSV のフルパス（同上）"
+  }, {
+    "name" : "STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST",
+    "value" : "1",
+    "description" : "日内配台: 1=試行順優先マルチパス（既定） 0=従来ソート — 日内配台フロー: 1=試行順優先マルチパス（既定）、0=従来ソート。"
+  }, {
+    "name" : "STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT",
+    "value" : "1",
+    "description" : "1（既定）=配台試行順の「枠」より大きい順は割り込まない。0 等で緩和。 — 配台試行順の「枠」より大きい順への割り込み制限。"
+  }, {
+    "name" : "STAGE2_SERIAL_DISPATCH_BY_TASK_ID",
+    "value" : "0",
+    "description" : "1=依頼NO直列 — 日内配台: 1=依頼NO出現順で直列（他依頼は進まない）。"
+  }, {
+    "name" : "STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK",
+    "value" : "0",
+    "description" : "段階2の「当日」に macro_now: 既定 0=日付のみ（時刻は始業に正規化）。1=データ抽出時刻の時分まで反映する旧挙動。"
+  }, {
+    "name" : "STAGE2_COPY_COLUMN_CONFIG_SHAPES_FROM_INPUT",
+    "value" : "1",
+    "description" : "段階2後の列設定図形コピー（0 で無効） — 段階2後、列設定シートの図形を xlwings で複製（Excel アドイン/マクロ連携時。JavaFX での headless 段階2は通常関係なし）。"
+  }, {
+    "name" : "XLWINGS_SUSPEND_AUTO_CALCULATION",
+    "value" : "1",
+    "description" : "xlwings が Excel へ一括書き込み・保存する前後で自動計算を手動（完了時に復帰）。1/true/yes/on（既定）。0/false/no/off/無効 で無効（Calculation は変更しない）。 — xlwings が Excel 書き込み前後で自動計算を手動に切替えるか（Excel アドイン連携時のみ意味がある。JavaFX から子プロセスで Excel を操作しない限り実質未使用）。"
+  }, {
+    "name" : "PLANNING_B1_INSPECTION_EXCLUSIVE_MACHINE",
+    "value" : "1",
+    "description" : "§B-2/§B-3 設備占有（0 で無効） — B-2/B-3: 熱融着検査の設備占有制御。"
+  }, {
+    "name" : "PLANNING_B2_EC_FOLLOWER_DISJOINT_TEAMS",
+    "value" : "1",
+    "description" : "B-2/3 ECと後続の担当者分離（0 で無効） — B-2/B-3: EC と後続工程の担当者集合を分離。"
+  }, {
+    "name" : "WIP_LIMIT_EC_BEFORE_INSP_ROLLS",
+    "value" : "20",
+    "description" : "工程間 WIP: EC 前〜検査までのロール上限（0 以下で無効） — 工程間 WIP: EC前〜検査までのロール上限。"
+  }, {
+    "name" : "WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE",
+    "value" : "task_id",
+    "description" : "L11 集計: task_id=当該依頼NO行のみ（既定） task_id_head=接頭辞グループ global=全依頼合算"
+  }, {
+    "name" : "WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS",
+    "value" : "20",
+    "description" : "同上: スリット〜SEC 間のロール上限（0 以下で無効）"
+  }, {
+    "name" : "SLIT_BEFORE_SEC_MIN_SLIT_ROLLS",
+    "value" : "5",
+    "description" : "L10 B-4.1: 加工内容スリット→SEC の依頼で、同一依頼内（スリット完了−SEC完了）がこの値未満の間は SEC を候補から除外。0 以下で無効"
+  }, {
+    "name" : "WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS",
+    "value" : "20",
+    "description" : "B-6: 接続〜SEC 間の総ロール WIP 上限（0 以下で無効）"
+  }, {
+    "name" : "CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS",
+    "value" : "5",
+    "description" : "B-6.1: 加工内容接続→SEC の依頼で、同一依頼内（接続完了−SEC完了）がこの値未満の間は SEC を候補から除外。0 以下で無効"
+  }, {
+    "name" : "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF",
+    "value" : "0",
+    "description" : "1=人数最優先（従来）"
+  }, {
+    "name" : "TEAM_ASSIGN_START_SLACK_WAIT_MINUTES",
+    "value" : "60",
+    "description" : "スラック分（0 で開始のみ）"
+  }, {
+    "name" : "TEAM_ASSIGN_IGNORE_NEED_SURPLUS_ROW",
+    "value" : "0",
+    "description" : "1=need追加人数行を無視"
+  }, {
+    "name" : "TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS",
+    "value" : "",
+    "description" : "1=メインで req+追加上限まで探索"
+  }, {
+    "name" : "TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY",
+    "value" : "1",
+    "description" : "0=計画シート必要人数も参照"
+  }, {
+    "name" : "TEAM_ASSIGN_USE_MASTER_COMBO_SHEET",
+    "value" : "1",
+    "description" : "0=組合せ表プリセットを使わない"
+  }, {
+    "name" : "DISPATCH_INTERVAL_MIRROR_ENFORCE",
+    "value" : "1",
+    "description" : "1=配台中の占有区間ミラーで二重検査（0 で無効）"
+  }, {
+    "name" : "DISPATCH_TRIAL_PATTERN_LIST_SHEET",
+    "value" : "配台試行順_パターン一覧",
+    "description" : "同: 出力シート名（空なら既定 配台試行順_パターン一覧）"
+  }, {
+    "name" : "DISPATCH_TRIAL_PATTERN_LIST_NO_EXCEL_TABLE",
+    "value" : "",
+    "description" : "1=true 等で Excel の表（ListObject）を付けない（説明行の結合・見出し太字は実施）"
+  }, {
+    "name" : "DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET",
+    "value" : "配台試行順_パターン別段階2",
+    "description" : "パターン別段階2バッチ: マクロブックに作成するサマリシート名（空なら既定 配台試行順_パターン別段階2）"
+  }, {
+    "name" : "DISPATCH_PATTERN_STAGE2_MAX_PATTERNS",
+    "value" : "20",
+    "description" : "パターン別段階2バッチのみ: P1～P4（＋R*）を含む最大シミュレーション件数（1～50、既定 20）。一覧シートの列挙件数には影響しない"
+  }, {
+    "name" : "DISPATCH_PATTERN_SCORE_WEIGHT_DUE",
+    "value" : "3",
+    "description" : "参考スコア(自動) の納期遵守率(%)の重み（空なら 3）"
+  }, {
+    "name" : "DISPATCH_PATTERN_SCORE_WEIGHT_MEMBER",
+    "value" : "1",
+    "description" : "参考スコア: メンバー平均作業割合(%)の重み（空なら 1）"
+  }, {
+    "name" : "DISPATCH_PATTERN_SCORE_WEIGHT_EQUIP",
+    "value" : "0.0001",
+    "description" : "参考スコア: 設備稼働セル数（参考）の重み。単位が大きいため小さめ推奨（空なら 0.0001）"
+  }, {
+    "name" : "GANTT_COLOR_MODE",
+    "value" : "",
+    "description" : "結果_設備ガント: 空またはmonotone=従来淡色、full=依頼NO単位の帯色・周辺を鮮やかに"
+  }, {
+    "name" : "GANTT_PRINT_ONE_PAGE_PER_DAY",
+    "value" : "1",
+    "description" : "設備ガント系の印刷: 1/true/yes/on/y で縦を「表示した暦日の数」ページに合わせる（横1ページ・日境界の手動改ページと併用。機械が多いと縮小が強い）。GANTT_PRINT_SCALE_PERCENT 指定時は Python 側では無効"
+  }, {
+    "name" : "GANTT_PRINT_SCALE_PERCENT",
+    "value" : "",
+    "description" : "10〜400 の整数で印刷スケール%を固定（任意）。指定時は上記「1日1ページ」調整より優先。"
+  }, {
+    "name" : "GANTT_HDR_ROW_HEIGHT_PT",
+    "value" : "38",
+    "description" : "設備ガント系のヘッダ行の高さ（ポイント）"
+  }, {
+    "name" : "GANTT_MACHINE_ROW_HEIGHT_PT",
+    "value" : "60",
+    "description" : "設備ガント系の機械行の高さ（ポイント）"
+  }, {
+    "name" : "GANTT_TIMELINE_SHAPE_LABELS",
+    "value" : "1",
+    "description" : "タイムライン上の依頼NO等を角丸シェイプで描画（xlwings）。0 でセルのみ。"
+  }, {
+    "name" : "GANTT_TIMELINE_LABELS_DAY_FLATTEN",
+    "value" : "1",
+    "description" : "1（既定）=日ブロック単位で画像に集約して負荷低減。0=従来の大量シェイプ。"
+  }, {
+    "name" : "GANTT_DAY_IMAGE_CHROMA_TRANSPARENT",
+    "value" : "0",
+    "description" : "1=日別画像にクロマキー敷き色で透明化を試す（上級）"
+  }, {
+    "name" : "GANTT_DAY_IMAGE_CHROMA_HEX",
+    "value" : "FF00FF",
+    "description" : "上記の敷き色（RRGGBB、既定マゼンタ）"
+  }, {
+    "name" : "GANTT_DAY_IMAGE_COPY_PICTURE_FORMAT",
+    "value" : "",
+    "description" : "CopyPicture 形式: picture または bitmap（空なら既定 EMF 系）"
+  }, {
+    "name" : "GANTT_ACTUAL_DETAIL_DATE_FROM",
+    "value" : "",
+    "description" : "結果_設備ガント_実績明細: 表示する暦日の開始（空＝下限なし）。例 2026-04-01 または 2026/4/1 — 納期管理ビュー／実績明細ガント共通：実績側で表示する暦日の開始（空＝下限なし）。 planning_core の ENV と同じ。"
+  }, {
+    "name" : "GANTT_ACTUAL_DETAIL_DATE_TO",
+    "value" : "",
+    "description" : "結果_設備ガント_実績明細: 表示する暦日の終了（空＝上限なし）。段階2の xlsx 生成時のみ有効 — 納期管理ビュー／実績明細ガント共通：実績側で表示する暦日の終了（空＝上限なし）。"
+  }, {
+    "name" : "PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES",
+    "value" : "",
+    "description" : "JavaFX 加工実績明細タブ: 元 xlsx/xlsm/csv の読込前サイズ上限（バイト）。空で 20971520（20MiB）。0 で無制限。16M / 64MB 等。 — JavaFX「加工実績」明細タブ: 元 Excel/CSV を POI で読む前のファイルサイズ上限（バイト）。超過時は読込を中止しメッセージ表示（OOM 回避）。空または未設定で 20971520（20MiB）。0 以下で上限なし。例: 16777216、16M、64MB。"
+  }, {
+    "name" : "COMPARE_GANTT_SNAPSHOT_DIR",
+    "value" : "",
+    "description" : "plan_compare_gantt_from_snapshot.py: スナップショットフォルダ（未指定時の既定） — plan_compare_gantt_from_snapshot.py: 比較元の日時フォルダ（pdf 配下の最新を選択可）。"
+  }, {
+    "name" : "COMPARE_GANTT_ACTUAL_SHAPE_LINE_PT",
+    "value" : "2.5",
+    "description" : "比較用ガントの実績ライン太さ（ポイント）"
+  }, {
+    "name" : "ASSIGN_END_OF_DAY_DEFER_MINUTES",
+    "value" : "45",
+    "description" : "終業まで残りこの分数以下のときに上記と組み合わせる。0で明示無効"
+  }, {
+    "name" : "ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS",
+    "value" : "5",
+    "description" : "終業直前: このロール数以上は当日回せないとき新規加工を始めない（残ロール≦この値でも拒否）。ASSIGN_END_OF_DAY_DEFER_MINUTES>0 時"
+  }, {
+    "name" : "GEMINI_PRICE_USD_IN_PER_M",
+    "value" : "0.075",
+    "description" : ""
+  }, {
+    "name" : "GEMINI_PRICE_USD_OUT_PER_M",
+    "value" : "0.3",
+    "description" : ""
+  }, {
+    "name" : "GEMINI_JPY_PER_USD",
+    "value" : "160",
+    "description" : ""
+  }, {
+    "name" : "GEMINI_MODEL",
+    "value" : "",
+    "description" : "単一モデルに固定。空のときは GEMINI_MODEL_TRY_ORDER、さらに空なら planning_core のコード既定列"
+  }, {
+    "name" : "GEMINI_MODEL_TRY_ORDER",
+    "value" : "",
+    "description" : "カンマ区切りで試行順（例: gemini-2.5-pro,gemini-2.5-flash）。GEMINI_MODEL 未設定時のみ有効。両方空ならコード既定列"
+  }, {
+    "name" : "GEMINI_PRE_REQUEST_JITTER_MAX_SEC",
+    "value" : "0.75",
+    "description" : "503/429 等対策: 呼び出し直前の最大ジッター秒。0 で無効。"
+  }, {
+    "name" : "GEMINI_RETRY_BACKOFF_BASE_SEC",
+    "value" : "2",
+    "description" : "再試行の指数バックオフ基底（秒）"
+  }, {
+    "name" : "GEMINI_PROGRESS_LOG_INTERVAL_SEC",
+    "value" : "12",
+    "description" : "Gemini 応答待ちのハートビートログ間隔（秒）。0 で無効"
+  }, {
+    "name" : "GEMINI_RETRY_MAX_ATTEMPTS",
+    "value" : "3",
+    "description" : "同一モデルあたりの最大試行回数（既定 3）。使い切ったら次モデルへ"
+  }, {
+    "name" : "GEMINI_REQUEST_TIMEOUT_SEC",
+    "value" : "240",
+    "description" : "Gemini generate_content の HTTP タイムアウト（秒）。超過時は同一モデルを再試行し、試行上限後は次モデルへ。0 で SDK 既定（非推奨）"
+  }, {
+    "name" : "PM_AI_CMD_PAUSE_ON_ERROR",
+    "value" : "1",
+    "description" : "環境構築 setup_environment: 終了時（成功・失敗とも）に pause／Enter 待ち。0 false no off で無効。その他の CLI は従来どおり非0時のみ pause。pip 成功後にシートを読むため初回 pip 失敗時は OS 環境変数のみ有効 — CLI 終了時の pause（Windows）。0/false で無効化（workbook_env_bootstrap 同様）。JavaFX デスクトップが起動する Python 子プロセスでは、環境タブの値に関わらず 0 に固定（pause によるハング防止）。"
+  }, {
+    "name" : "PM_AI_SETUP_COMPLETION_MSGBOX",
+    "value" : "1",
+    "description" : "環境構築 setup_environment: Windows で成功時に完了メッセージ（MessageBox）を表示。0 false no off で無効"
+  } ],
+  "mainShellTabOrder" : [ "run", "planInput", "dispatchInteractive", "equipmentGanttGraphic", "deliveryCalendarView", "operatorCard", "uiBadgeDesign", "pushButtonDesign", "ganttPersonBadgeDesign", "env", "memorySettings", "globalSettings", "userProfiles", "planResultViewer", "stage1Preview", "resultDispatch", "masterSummary", "excludeRules", "specialRules", "actualsStatus", "planWorkspaceHistory", "apiModelBenchmark" ],
+  "mainShellTabLayout" : [ {
+    "kind" : "tab",
+    "color" : "#008080",
+    "id" : "run"
+  }, {
+    "kind" : "tab",
+    "color" : "#996600",
+    "id" : "planInput"
+  }, {
+    "kind" : "tab",
+    "color" : "#0000ff",
+    "id" : "dispatchInteractive"
+  }, {
+    "kind" : "tab",
+    "color" : "#003300",
+    "id" : "equipmentGanttGraphic"
+  }, {
+    "kind" : "tab",
+    "color" : "#331a80",
+    "id" : "deliveryCalendarView"
+  }, {
+    "kind" : "tab",
+    "color" : "#000080",
+    "id" : "operatorCard"
+  }, {
+    "kind" : "group",
+    "title" : "バッジ設定",
+    "children" : [ {
+      "kind" : "tab",
+      "id" : "uiBadgeDesign"
+    }, {
+      "kind" : "tab",
+      "id" : "pushButtonDesign"
+    }, {
+      "kind" : "tab",
+      "id" : "ganttPersonBadgeDesign"
+    } ]
+  }, {
+    "kind" : "group",
+    "title" : "環境設定",
+    "children" : [ {
+      "kind" : "tab",
+      "id" : "env"
+    }, {
+      "kind" : "tab",
+      "id" : "memorySettings"
+    }, {
+      "kind" : "tab",
+      "id" : "globalSettings"
+    }, {
+      "kind" : "tab",
+      "color" : "#ff00ff",
+      "id" : "userProfiles"
+    } ]
+  }, {
+    "kind" : "group",
+    "title" : "結果情報",
+    "children" : [ {
+      "kind" : "tab",
+      "id" : "planResultViewer"
+    }, {
+      "kind" : "tab",
+      "id" : "stage1Preview"
+    }, {
+      "kind" : "tab",
+      "id" : "resultDispatch"
+    } ]
+  }, {
+    "kind" : "group",
+    "title" : "その他",
+    "children" : [ {
+      "kind" : "tab",
+      "id" : "masterSummary"
+    }, {
+      "kind" : "tab",
+      "id" : "excludeRules"
+    }, {
+      "kind" : "tab",
+      "id" : "specialRules"
+    }, {
+      "kind" : "tab",
+      "id" : "actualsStatus"
+    } ]
+  }, {
+    "kind" : "tab",
+    "id" : "planWorkspaceHistory"
+  }, {
+    "kind" : "tab",
+    "id" : "apiModelBenchmark"
+  } ],
+  "innerTabSelectedIndexByShellTabKey" : {
+    "deliveryCalendarView" : 1,
+    "dispatchInteractive" : 0
+  },
+  "equipmentGanttGraphicZoomPercent" : 121.15384798783523,
+  "equipmentGanttBarFontFamily" : "Meiryo UI",
+  "equipmentGanttBarFontPercent" : 98.78049594600026,
+  "equipmentGanttRowHeightPercent" : 200.0,
+  "equipmentGanttHeaderHeightPercent" : 100.0,
+  "equipmentGanttSlotWidthPercent" : 297.5609703761775,
+  "equipmentGanttShiftWheelHScrollPercent" : 200.0,
+  "equipmentGanttPersonBadgeGapPx" : 32.78048706054687,
+  "equipmentGanttPersonBadgeBandVerticalOffsetPx" : -8.975611244759897,
+  "equipmentGanttGraphicDataFingerprint" : "bb2f11a11bf3d87e130b6b57f1c66de59dc4610c36393c916ecda496fa2856a3",
+  "equipmentGanttPersonBadgeDragAdjustEnabled" : true,
+  "equipmentGanttPersonBadgeEnabled" : true,
+  "equipmentGanttPersonBadgeWireEnabled" : true,
+  "equipmentGanttPersonBadgeWireStrokeHex" : "#ccffff",
+  "equipmentGanttPersonBadgeWireWidthPx" : 1.756097979661895,
+  "equipmentGanttPersonBadgeWireDashStyleKey" : "SOLID",
+  "equipmentGanttPersonBadgeWireMaxLengthPx" : 360.97562836437686,
+  "equipmentGanttPersonBadgeFontPercent" : 88.0188639658802,
+  "equipmentGanttPersonBadgeFillHex" : "#2563eb",
+  "equipmentGanttPersonBadgeTextHex" : "#f8fafc",
+  "equipmentGanttPersonBadgeStrokeHex" : "#1d4ed8",
+  "equipmentGanttPersonBadgeStrokeWidth" : 1.0,
+  "equipmentGanttPersonBadgeCornerRadius" : 6.0,
+  "equipmentGanttPersonBadgePill" : false,
+  "equipmentGanttPersonBadgeGlowColorHex" : "#38bdf8",
+  "equipmentGanttPersonBadgeGlowRadius" : 0.0,
+  "equipmentGanttPersonBadgeGlowSpread" : 0.28,
+  "equipmentGanttPersonBadgeOpacity" : 1.0,
+  "equipmentGanttPersonBadgeStylesByMemberKey" : {
+    "菅沼 めぐみ" : {
+      "fontFamily" : "Eras Light ITC",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#21417f",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#07183a",
+      "strokeWidth" : 1.5,
+      "cornerRadius" : 21.0,
+      "pill" : true,
+      "glowColorHex" : "#6b96e9",
+      "glowRadius" : 0.0,
+      "glowSpread" : 0.3472,
+      "opacity" : 0.66
+    },
+    "冨田 裕子" : {
+      "fontFamily" : "HG創英角ｺﾞｼｯｸUB",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#582664",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#2f0e37",
+      "strokeWidth" : 1.5,
+      "cornerRadius" : 12.0,
+      "pill" : false,
+      "glowColorHex" : "#b44fcd",
+      "glowRadius" : 0.0,
+      "glowSpread" : 0.1148,
+      "opacity" : 0.58
+    },
+    "宮島  剛" : {
+      "fontFamily" : "",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#429a13",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#1c5100",
+      "strokeWidth" : 1.0,
+      "cornerRadius" : 20.0,
+      "pill" : true,
+      "glowColorHex" : "#99ed78",
+      "glowRadius" : 0.0,
+      "glowSpread" : 0.56,
+      "opacity" : 0.82
+    },
+    "森岡 真由美" : {
+      "fontFamily" : "Cooper Black",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#3e806a",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#173b2f",
+      "strokeWidth" : 3.0,
+      "cornerRadius" : 2.0,
+      "pill" : true,
+      "glowColorHex" : "#69e6bb",
+      "glowRadius" : 0.0,
+      "glowSpread" : 0.5348,
+      "opacity" : 0.66
+    },
+    "竹内 正美" : {
+      "fontFamily" : "Broadway",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#298b64",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#093926",
+      "strokeWidth" : 3.5,
+      "cornerRadius" : 16.0,
+      "pill" : true,
+      "glowColorHex" : "#6356eb",
+      "glowRadius" : 0.0,
+      "glowSpread" : 0.392,
+      "opacity" : 0.76
+    },
+    "森下  誠" : {
+      "fontFamily" : "Myanmar Text",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#97455f",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#4b1a2a",
+      "strokeWidth" : 0.0,
+      "cornerRadius" : 17.0,
+      "pill" : true,
+      "glowColorHex" : "#8153d4",
+      "glowRadius" : 0.0,
+      "glowSpread" : 0.4592,
+      "opacity" : 0.94
+    },
+    "図司 智子" : {
+      "fontFamily" : "Segoe UI Semibold",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#562c6b",
+      "textHex" : "#edf7b4",
+      "strokeHex" : "#2a1137",
+      "strokeWidth" : 3.5,
+      "cornerRadius" : 13.0,
+      "pill" : true,
+      "glowColorHex" : "#db6261",
+      "glowRadius" : 0.0,
+      "glowSpread" : 0.48440000000000005,
+      "opacity" : 1.0
+    }
+  },
+  "equipmentGanttPlanJsonPath" : "C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605131149442655.json",
+  "stage1NetworkCacheBadgeLabel" : "キャッシュ",
+  "stage1NetworkCacheBadgeStyle" : {
+    "fontFamily" : "",
+    "fontPercent" : 92.0,
+    "fillHex" : "#ea580c",
+    "textHex" : "#fffbeb",
+    "strokeHex" : "#c2410c",
+    "strokeWidth" : 1.2,
+    "cornerRadius" : 8.0,
+    "pill" : false,
+    "glowColorHex" : "#fdba74",
+    "glowRadius" : 12.0,
+    "glowSpread" : 0.22000000000000003,
+    "opacity" : 1.0
+  },
+  "mainShellTabOrganizerHeaderGlow" : true,
+  "mainShellTabOrganizerHeaderGlowStrength" : 1.0,
+  "memoryMonitorEnabled" : true,
+  "memoryMonitorIntervalSec" : 5,
+  "nextLaunchHeapMaxMiB" : 5120,
+  "windowWidth" : 2574.666748046875,
+  "windowHeight" : 1406.6666259765625,
+  "windowX" : -7.333333492279053,
+  "windowY" : -7.333333492279053
+}
