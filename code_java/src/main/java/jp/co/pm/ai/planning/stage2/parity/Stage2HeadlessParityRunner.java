@@ -15,6 +15,7 @@ import jp.co.pm.ai.desktop.bridge.StagePythonExecutable;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
+import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
 import jp.co.pm.ai.planning.stage2.Stage2EnvParsing;
 import jp.co.pm.ai.planning.stage2.Stage2ExitCodes;
 import jp.co.pm.ai.planning.stage2.Stage2JavaEngine;
@@ -216,7 +217,8 @@ public final class Stage2HeadlessParityRunner {
                                 childEnv.get(AppPaths.KEY_PM_AI_CODE_PYTHON_DIR), scriptDirFallback));
         RunRequest req =
                 new RunRequest(py, dir, SCRIPT_STAGE2, taskInputWorkbookPath != null ? taskInputWorkbookPath : "", childEnv);
-        return PythonProcessRunner.runBlockingSameThread(req, log);
+        return PythonProcessRunner.runBlockingSameThread(
+                req, line -> IpcStdoutTap.handleLine(line, log));
     }
 
     private static String firstNonBlank(String... parts) {
