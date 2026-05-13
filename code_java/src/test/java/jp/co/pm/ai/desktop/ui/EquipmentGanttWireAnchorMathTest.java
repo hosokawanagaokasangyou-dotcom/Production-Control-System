@@ -36,8 +36,8 @@ class EquipmentGanttWireAnchorMathTest {
     }
 
     @Test
-    void personBadgeRadialAngles_startsUpperRight45_clockwise30Deg() {
-        double step = Math.PI / 6.0;
+    void personBadgeRadialAngles_startsUpperRight45_clockwise45Deg() {
+        double step = Math.PI / 4.0;
 
         double[] a1 = EquipmentGanttWireAnchorMath.personBadgeRadialAnglesRad(1);
         assertEquals(1, a1.length);
@@ -54,9 +54,9 @@ class EquipmentGanttWireAnchorMathTest {
             assertEquals(a4[i - 1] + step, a4[i], 1e-9);
         }
 
-        double[] a13 = EquipmentGanttWireAnchorMath.personBadgeRadialAnglesRad(13);
-        assertEquals(13, a13.length);
-        assertEquals(-Math.PI / 4 + 12 * step, a13[12], 1e-9);
-        assertEquals(-Math.PI / 4 + 2 * Math.PI, a13[12], 1e-9);
+        double[] a9 = EquipmentGanttWireAnchorMath.personBadgeRadialAnglesRad(9);
+        assertEquals(9, a9.length);
+        assertEquals(-Math.PI / 4 + 8 * step, a9[8], 1e-9);
+        assertEquals(-Math.PI / 4 + 2 * Math.PI, a9[8], 1e-9);
     }
 }

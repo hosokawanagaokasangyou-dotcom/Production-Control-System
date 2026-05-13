@@ -26,14 +26,14 @@ public final class EquipmentGanttWireAnchorMath {
     /** 円環配置で最初のバッジを置く方向（ラジアン）。画面で右上がり 45°（+X と上方向の中間、{@code atan2} 基準）。 */
     private static final double PERSON_BADGE_RING_START_ANGLE_RAD = -Math.PI / 4.0;
 
-    /** 円環配置で隣接バッジの角度差（ラジアン）。画面で<strong>時計回り</strong>に {@code 30°}。 */
-    private static final double PERSON_BADGE_RING_STEP_CLOCKWISE_RAD = Math.PI / 6.0;
+    /** 円環配置で隣接バッジの角度差（ラジアン）。画面で<strong>時計回り</strong>に {@code 45°}。 */
+    private static final double PERSON_BADGE_RING_STEP_CLOCKWISE_RAD = Math.PI / 4.0;
 
     /**
      * 担当バッジをワイヤーアンカー周りの円環上に配置するための角度列（ラジアン）。
      *
      * <p>JavaFX 座標系（+X 右、+Y 下）。①最初のバッジは<strong>右上がり 45°</strong>（{@code -π/4}）。②そこから<strong>時計回りに
-     * 30°</strong>（{@code π/6}）ずつ進める。バッジ数が 13 以上のとき角が一周して同じ方向に重なる場合がある。
+     * 45°</strong>（{@code π/4}）ずつ進める。バッジ数が 9 以上のとき角が一周して同じ方向に重なる場合がある。
      *
      * @param badgeCount バッジ数（正の整数想定）
      */
