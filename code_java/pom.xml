@@ -24,7 +24,7 @@
     <junit.version>5.12.2</junit.version>
     <!-- poi-ooxml が運ぶ log4j-api と同一に揃える（log4j-core 無しだと API がプロバイダ不足になり ERROR になる） -->
     <log4j.version>2.24.3</log4j.version>
-    <!-- NGCanvas + Prism GPU で RTTexture が null（NPE）になる環境があるため既定は sw。GPU 試行は pm.ai.javafx.prism.gpu を参照 -->
+    <!-- NGCanvas + Prism GPU で RTTexture が null（NPE）になる環境があるため既定は sw。Windows で GPU 採用時は本体が es2 を d3d より先に試す。GPU 試行は pm.ai.javafx.prism.gpu を参照 -->
     <javafx.prism.order>sw</javafx.prism.order>
     <!-- javafx:run / exec:exec@pm-ai-desktop / jpackage のヒープ上限（既定 3g。増やす例: -Djvm.max.heap=8g） -->
     <jvm.max.heap>5g</jvm.max.heap>

@@ -754,7 +754,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         double timelineWidth = slotColCount * layout.slotWidth;
         /*
          * 幅・高さが 0 に近い／Prism の Canvas バックバッファ生成失敗時に NGCanvas で NPE になるのを避ける。
-         * GPU ドライバ由来の不具合が残る場合は JVM に -Dprism.order=sw を試す。
+         * D3D 先頭時に Effect 付き NGRegion で maskTex NPE になる場合は、本体既定の es2,d3d,sw か -Dprism.order=sw を試す。
          */
         final double canvasTimelineW = Math.max(1.0, timelineWidth);
         final double canvasHeaderH = Math.max(1.0, layout.headerHeight);
