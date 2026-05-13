@@ -4,16 +4,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.SkillsSheetEquipmentListReader;
@@ -22,6 +15,7 @@ import jp.co.pm.ai.planning.stage2.Stage2ExitCodes;
 import jp.co.pm.ai.planning.stage2.Stage2RunContext;
 import jp.co.pm.ai.planning.stage2.input.Stage2InputSnapshot;
 import jp.co.pm.ai.planning.stage2.output.Stage2EquipmentGanttContractPlaceholder;
+import jp.co.pm.ai.planning.stage2.output.Stage2PythonishMemberWorkbookLayout;
 import jp.co.pm.ai.planning.stage2.output.Stage2PythonishPlanWorkbookLayout;
 import jp.co.pm.ai.planning.stage2.output.Stage2WorkbookJsonWriter;
 
@@ -54,7 +48,12 @@ public final class Stage2PassThroughPlanner {
                 SkillsSheetEquipmentListReader.readEquipmentProcPlusMachineCombos(snap.masterPath());
         Stage2PythonishPlanWorkbookLayout.write(
                 planXlsx, tasks, equipmentCombos, snap.memberDisplayNames());
-        writeMemberWorkbook(memberXlsx, snap.memberDisplayNames());
+        Stage2PythonishMemberWorkbookLayout.write(
+                memberXlsx,
+                snap.memberDisplayNames(),
+                runNow.toLocalDate(),
+                snap.factoryStart(),
+                snap.factoryEnd());
 
         if (ctx.stage2WriteExcel()) {
             ctx.log("[stage2-java] 成果 xlsx: " + planXlsx + " | " + memberXlsx);
@@ -108,62 +107,5 @@ public final class Stage2PassThroughPlanner {
 
         ctx.log("[stage2-java] 完了（stamp=" + stamp + "）。本経路は配台アルゴリズムの段階移植用の足場です。");
         return Stage2ExitCodes.OK;
-    }
-
-    private static void writeMemberWorkbook(Path path, List<String> members) throws IOException {
-        Files.createDirectories(path.getParent());
-        List<String> headers = List.of("日付", "内容");
-        Set<String> used = new HashSet<>();
-        try (XSSFWorkbook wb = new XSSFWorkbook()) {
-            for (String m : members) {
-                String base = sanitizeSheetName(m);
-                String name = base;
-                int i = 2;
-                while (used.contains(name)) {
-                    name = base + "_" + i++;
-                }
-                used.add(name);
-                Sheet sh = wb.createSheet(name);
-                writeTabular(sh, headers, List.of());
-            }
-            try (var os = Files.newOutputStream(path)) {
-                wb.write(os);
-            }
-        }
-    }
-
-    private static String sanitizeSheetName(String name) {
-        String n = name == null ? "member" : name.strip();
-        if (n.isEmpty()) {
-            n = "member";
-        }
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < n.length() && sb.length() < 28; i++) {
-            char c = n.charAt(i);
-            if (c == '[' || c == ']' || c == '*' || c == '/' || c == '\\' || c == '?') {
-                sb.append('_');
-            } else {
-                sb.append(c);
-            }
-        }
-        return sb.toString();
-    }
-
-    private static void writeTabular(Sheet sh, List<String> headers, List<List<String>> rows) {
-        Row hr = sh.createRow(0);
-        for (int c = 0; c < headers.size(); c++) {
-            Cell cell = hr.createCell(c);
-            String v = headers.get(c);
-            cell.setCellValue(v != null ? v : "");
-        }
-        int r = 1;
-        for (List<String> rowVals : rows) {
-            Row rr = sh.createRow(r++);
-            for (int c = 0; c < headers.size(); c++) {
-                Cell cell = rr.createCell(c);
-                String v = c < rowVals.size() && rowVals.get(c) != null ? rowVals.get(c) : "";
-                cell.setCellValue(v);
-            }
-        }
     }
 }

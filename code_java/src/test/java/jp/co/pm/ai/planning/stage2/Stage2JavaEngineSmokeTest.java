@@ -90,6 +90,21 @@ class Stage2JavaEngineSmokeTest {
                 assertEquals("結果_設備毎の時間割", wb.getSheetAt(0).getSheetName());
                 assertEquals("結果_タスク一覧", wb.getSheetAt(5).getSheetName());
             }
+            Path memberXlsx =
+                    files.stream()
+                            .filter(
+                                    p -> {
+                                        String n = p.getFileName().toString();
+                                        return n.startsWith("人員") && n.endsWith(".xlsx");
+                                    })
+                            .findFirst()
+                            .orElseThrow();
+            try (var mwb = new XSSFWorkbook(Files.newInputStream(memberXlsx))) {
+                assertTrue(mwb.getNumberOfSheets() >= 1);
+                assertEquals(
+                        "時間帯",
+                        mwb.getSheetAt(0).getRow(0).getCell(0).getStringCellValue());
+            }
             JsonNode rootNode = MAPPER.readTree(Files.readString(json, StandardCharsets.UTF_8));
             assertEquals(2, rootNode.get("format_version").asInt());
             assertTrue(rootNode.has("sheets"));
