@@ -208,6 +208,10 @@ final class GpuProbeLauncher {
      * exec:exec@pm-ai-desktop や従来の JavaFX 起動が付ける JavaFX モジュール解決用オプションを子へ継承する。
      *
      * <p>継承しないと子プロセスだけ {@code javafx.application.Application} が解決できず GPU プローブが誤って不合格になる。
+     *
+     * <p>{@code --add-opens}/{@code --add-exports}/{@code --enable-native-access}/{@code --patch-module} のうち
+     * {@code javafx.*} モジュールを対象にするものは継承しない。親がクラスパス上の JavaFX で動いていると子だけ
+     * 「Unknown module: javafx.*」となりランタイム不足扱いで終了するため。
      */
     private static void appendInheritedJvmOptions(List<String> cmd, List<String> inputArgs) {
         for (int i = 0; i < inputArgs.size(); i++) {
@@ -233,13 +237,42 @@ final class GpuProbeLauncher {
                 }
                 continue;
             }
-            if (arg.startsWith("--add-opens")
-                    || arg.startsWith("--add-exports")
-                    || arg.startsWith("--enable-native-access=")
-                    || arg.startsWith("--patch-module")) {
-                cmd.add(arg);
+            if ("--add-opens".equals(arg) || "--add-exports".equals(arg)) {
+                if (i + 1 < inputArgs.size()) {
+                    String next = inputArgs.get(i + 1);
+                    if (!next.startsWith("-")) {
+                        if (!referencesJavaFxModuleSpec(next)) {
+                            cmd.add(arg);
+                            cmd.add(next);
+                        }
+                        i++;
+                    }
+                }
+                continue;
+            }
+            if (arg.startsWith("--add-opens=") || arg.startsWith("--add-exports=")) {
+                if (!referencesJavaFxModuleSpec(arg)) {
+                    cmd.add(arg);
+                }
+                continue;
+            }
+            if (arg.startsWith("--enable-native-access=")) {
+                if (!referencesJavaFxModuleSpec(arg)) {
+                    cmd.add(arg);
+                }
+                continue;
+            }
+            if (arg.startsWith("--patch-module")) {
+                if (!referencesJavaFxModuleSpec(arg)) {
+                    cmd.add(arg);
+                }
             }
         }
+    }
+
+    /** {@code javafx.} モジュール名を対象にした JVM 引数か（プローブ子では未ロードのため除外する）。 */
+    private static boolean referencesJavaFxModuleSpec(String arg) {
+        return arg != null && arg.contains("javafx.");
     }
 
     private static String prismGpuOrderForProbe() {
