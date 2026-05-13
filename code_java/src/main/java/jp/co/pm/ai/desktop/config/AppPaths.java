@@ -193,6 +193,9 @@ public final class AppPaths {
     public static final String KEY_PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH =
             "PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH";
 
+    /** CI 用: {@code 1} のときのみ {@code Stage2GoldenParityCiTest} が有効（JUnit {@code EnabledIfEnvironmentVariable}）。 */
+    public static final String KEY_PM_AI_STAGE2_GOLDEN_CI = "PM_AI_STAGE2_GOLDEN_CI";
+
     /**
      * 段階2の Excel 成果物（結果ブック）のフォントファミリ。空のときは planning_core の {@code RESULT_BOOK_FONT_NAME}（BIZ
      * UDゴシック）相当。JavaFX 実行タブのコンボで上書き可。

@@ -272,7 +272,12 @@ public final class EnvVarDocs {
                 "PM_AI_STAGE2_ENGINE",
                 "段階2の実行エンジン。未設定・空・python（大小無視）で従来どおり Python 子プロセス（plan_simulation_stage2.py）。"
                         + " java のとき JVM 内の jp.co.pm.ai.planning.stage2 を起動し Python 段階2は使わない。"
-                        + " 配台コアの完全な Python 同等は段階的に拡張する（現状は入力読取・最小成果物・JSON ミラーの足場）。");
+                        + " 配台コアの完全な Python 同等は段階的に拡張する（現状は入力読取・最小成果物・JSON ミラーの足場）。"
+                        + " 本番既定を java のみに切り替えるのは、JavaFX「Java/Python 同一検証」がチーム承認の golden 全件でパスした後に行う（Python 正本は比較・障害時用に残す）。");
+        put(
+                "PM_AI_STAGE2_GOLDEN_CI",
+                "1 のときのみ JUnit `Stage2GoldenParityCiTest` が有効化される（通常の mvn test ではスキップ扱い）。"
+                        + " `scripts/stage2_golden_parity_ci.sh` から設定して CI で段階2 Java 足場の回帰を追加する用途。");
         put(
                 "PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH",
                 "段階2で PM_AI_STAGE2_ENGINE=java のときのみ有効。1/true/on/yes のとき、JVM 内 PassThrough ではなく"

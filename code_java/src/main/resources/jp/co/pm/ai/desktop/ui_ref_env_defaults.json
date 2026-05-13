@@ -16,11 +16,15 @@
   }, {
     "key" : "PM_AI_STAGE2_ENGINE",
     "value" : "",
-    "description" : "段階2エンジン: 空/python=従来の Python 子プロセス。java=JVM 内 jp.co.pm.ai.planning.stage2（Python 段階2は起動しない）。配台コアは段階的拡張。"
+    "description" : "段階2エンジン: 空/python=従来の Python 子プロセス。java=JVM 内 jp.co.pm.ai.planning.stage2（Python 段階2は起動しない）。配台コアは段階的拡張。本番既定を java のみにするのは golden で Java/Python 同一検証が全件パスした後。"
   }, {
     "key" : "PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH",
     "value" : "0",
     "description" : "java エンジン時のみ: 1/true で配台本体を Python 子（plan_simulation_stage2.py 正本）に委譲し Python と同一成果物を出す。完全 Java 移植までの本番同一出力用。PM_AI_CODE_PYTHON_DIR 必須。"
+  }, {
+    "key" : "PM_AI_STAGE2_GOLDEN_CI",
+    "value" : "0",
+    "description" : "1 のときのみ JUnit Stage2GoldenParityCiTest が有効。scripts/stage2_golden_parity_ci.sh 用。通常は 0。"
   }, {
     "key" : "PM_AI_PLAN_RESULT_TASK_JSON",
     "value" : "",

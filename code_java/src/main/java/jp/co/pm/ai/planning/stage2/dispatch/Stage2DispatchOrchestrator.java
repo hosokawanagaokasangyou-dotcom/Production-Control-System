@@ -19,7 +19,7 @@ public final class Stage2DispatchOrchestrator {
             return Stage2DelegatePythonDispatch.runBlocking(ctx);
         }
         ctx.log(
-                "[stage2-java] dispatch: Stage2PassThroughPlanner（Python _generate_plan_impl 相当の完全置換は未完了。入力行のプレースホルダ出力）");
-        return Stage2PassThroughPlanner.run(ctx, snap, outputDir);
+                "[stage2-java] dispatch: Stage2JavaDispatchEngine（task_queue 足場→現状は PassThrough で成果物）");
+        return Stage2JavaDispatchEngine.run(ctx, snap, outputDir);
     }
 }
