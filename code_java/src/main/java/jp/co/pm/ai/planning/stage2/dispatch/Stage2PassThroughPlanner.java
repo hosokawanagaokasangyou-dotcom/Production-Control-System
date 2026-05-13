@@ -15,6 +15,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.planning.stage2.Stage2ExitCodes;
@@ -24,8 +25,13 @@ import jp.co.pm.ai.planning.stage2.output.Stage2WorkbookJsonWriter;
 
 /**
  * 日内配台のプレースホルダ: 計画入力を「結果_タスク一覧」シートに転写し、メンバーごとの空スケジュール表を載せた成果物を出力する。
+ *
+ * <p>本経路は Python {@code _generate_plan_impl} 相当の完全置換ではない。設備ガント用の兄弟 JSON（{@code …設.json}、
+ * {@code kwargs_packed.timeline_events} 等）は出力しないため、設備ガントタブは Python 段階2の成果物が必要。
  */
 public final class Stage2PassThroughPlanner {
+
+    private static final String DEBUG_SESSION_ID = "b59b51";
 
     private Stage2PassThroughPlanner() {}
 
@@ -39,7 +45,42 @@ public final class Stage2PassThroughPlanner {
         Path planJson = outputDir.resolve(planBase + ".json");
         Path memberJson = outputDir.resolve(memberBase + ".json");
 
-        writePlanWorkbook(planXlsx, snap.planningTasksSheet());
+        ctx.log(
+                "[stage2-java] 注意: 本 Java 足場は配台コア未移植。設備ガントは兄弟の「…設.json」（timeline_events）が"
+                        + " 必要ですが未出力です。本番ガントは PM_AI_STAGE2_ENGINE=python を推奨。");
+        // #region agent log
+        PlanInputTabularIo.TabularSheet tasks = snap.planningTasksSheet();
+        List<String> hdr = tasks.headers();
+        int rowCt = tasks.rows() != null ? tasks.rows().size() : 0;
+        int memCt = snap.memberDisplayNames() != null ? snap.memberDisplayNames().size() : 0;
+        Map<String, Object> sizeData = new LinkedHashMap<>();
+        sizeData.put("planBase", planBase);
+        sizeData.put("headerColumns", hdr.size());
+        sizeData.put("dataRows", rowCt);
+        sizeData.put("memberSheetCount", memCt);
+        sizeData.put("planWorkbookSheetCount", 1);
+        sizeData.put("duplicateInputSheetRemoved", true);
+        AgentDebugLog.appendStructured(
+                ctx.uiEnv(),
+                DEBUG_SESSION_ID,
+                "H_size",
+                "Stage2PassThroughPlanner.run",
+                "java pass-through workbook shape (single plan sheet)",
+                sizeData);
+        Map<String, Object> ganttData = new LinkedHashMap<>();
+        ganttData.put("planJsonPath", planJson.toString());
+        ganttData.put("expectedContractSibling", planBase + "設.json");
+        ganttData.put("equipmentGanttContractWritten", false);
+        AgentDebugLog.appendStructured(
+                ctx.uiEnv(),
+                DEBUG_SESSION_ID,
+                "H_gantt",
+                "Stage2PassThroughPlanner.run",
+                "java pass-through does not emit equipment gantt contract JSON",
+                ganttData);
+        // #endregion
+
+        writePlanWorkbook(planXlsx, tasks);
         writeMemberWorkbook(memberXlsx, snap.memberDisplayNames());
 
         if (ctx.stage2WriteExcel()) {
@@ -98,8 +139,6 @@ public final class Stage2PassThroughPlanner {
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             Sheet sh = wb.createSheet("結果_タスク一覧");
             writeTabular(sh, tasks.headers(), tasks.rows());
-            Sheet meta = wb.createSheet("配台計画_タスク入力");
-            writeTabular(meta, tasks.headers(), tasks.rows());
             try (var os = Files.newOutputStream(path)) {
                 wb.write(os);
             }
