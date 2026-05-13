@@ -754,8 +754,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         double timelineWidth = slotColCount * layout.slotWidth;
         /*
          * 幅・高さが 0 に近い／Prism の Canvas バックバッファ生成失敗時に NGCanvas で NPE になるのを避ける。
-         * タイムラインが極端に長いと GPU の RTTexture 上限に触れ得る。その場合は -Dprism.order=sw。
-         * Effect 由来の maskTex NPE は担当バッジの DropShadow をハードウェア Prism 時に付けない（{@link PersonBadgeNodeFactory}）で緩和。
+         * D3D 先頭時に Effect 付き NGRegion で maskTex NPE になる場合は、本体既定の es2,d3d,sw か -Dprism.order=sw を試す。
          */
         final double canvasTimelineW = Math.max(1.0, timelineWidth);
         final double canvasHeaderH = Math.max(1.0, layout.headerHeight);
@@ -966,7 +965,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             cachedBarRuns));
 
             Pane badgePane = new Pane();
-            badgePane.setCache(false);
             /*
              * 親 Pane が mouseTransparent のとき JavaFX は子もヒットしない（バッジが最前面でもドラッグ不可）。
              * ドラッグ調整 ON のときだけ非透過にし、余白は pickOnBounds(false) で Canvas 側へ透過させる。
@@ -998,7 +996,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 badgePane.setTranslateY(bandVertEff);
             }
             StackPane rowStack = new StackPane(rowCanvas, badgePane);
-            rowStack.setCache(false);
             /*
              * Canvas と Pane を並べるだけでも後勝ちだが、子追加や再有効化時に順序がずれたとき備えて明示的に最前面へ。
              */
