@@ -7,8 +7,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
@@ -159,6 +163,27 @@ public final class PlanInputTabularIo {
         try (Workbook wb = WorkbookFactory.create(path.toFile())) {
             Sheet sh = wb.getSheet(sheetName);
             if (sh == null) {
+                // #region agent log
+                try {
+                    List<String> names = new ArrayList<>();
+                    for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+                        names.add(wb.getSheetName(i));
+                    }
+                    LinkedHashMap<String, Object> d = new LinkedHashMap<>();
+                    d.put("requestedSheet", sheetName);
+                    d.put("workbookPath", path.toString());
+                    d.put("sheetNamesInWorkbook", names);
+                    AgentDebugLog.appendStructured(
+                            Map.of(),
+                            "b59b51",
+                            "H4",
+                            "PlanInputTabularIo.readExcel",
+                            "sheet missing",
+                            d);
+                } catch (Throwable ignored) {
+                    // debug-only
+                }
+                // #endregion
                 throw new IOException("sheet not found: \"" + sheetName + "\" in " + path);
             }
             Row h = sh.getRow(0);
