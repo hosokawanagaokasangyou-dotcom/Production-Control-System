@@ -93,9 +93,6 @@ public final class MainRunTabController {
     private Button stage1RunButton;
 
     @FXML
-    private Button stage2RunButton;
-
-    @FXML
     private CheckBox stage2WriteExcelCheckBox;
 
     @FXML
@@ -223,7 +220,6 @@ public final class MainRunTabController {
         }
         applyLogAreaFont();
         installStageRunButtonDepth(stage1RunButton, Color.rgb(14, 116, 144, 0.35));
-        installStageRunButtonDepth(stage2RunButton, Color.rgb(194, 65, 12, 0.35));
         if (prismPipelineLabel != null) {
             prismPipelineLabel.setText(PrismGpuBootstrapStatus.runTabSummary());
         }
@@ -539,11 +535,6 @@ public final class MainRunTabController {
     }
 
     @FXML
-    private void onStage2RunButtonAction() {
-        shell.triggerStage2();
-    }
-
-    @FXML
     private void onOpenStage2ProductionPlanAction() {
         openExcelBesideField(stage2ProductionPlanField, "stage2-production-plan");
     }
@@ -643,15 +634,13 @@ public final class MainRunTabController {
     }
 
     /**
-     * 段階1／段階2 実行中は段階ボタンの再実行を無効化する（進捗・中断はメインシェルツールバーのみ）。
+     * 段階1／段階2 実行中は段階1ボタンの再実行を無効化する（進捗・中断はメインシェルツールバーのみ）。段階2実行ボタンは
+     * {@link PlanInputTabController} 側。
      */
     void setStageRunProgressVisible(boolean stage1Running, boolean stage2Running) {
         boolean busy = stage1Running || stage2Running;
         if (stage1RunButton != null) {
             stage1RunButton.setDisable(busy);
-        }
-        if (stage2RunButton != null) {
-            stage2RunButton.setDisable(busy);
         }
     }
 

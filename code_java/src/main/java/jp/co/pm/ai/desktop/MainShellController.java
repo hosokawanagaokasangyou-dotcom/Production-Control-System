@@ -2809,6 +2809,7 @@ public final class MainShellController {
                                                     invalidateDeliveryCalendarAfterPipelineRun();
                                                     refreshEquipmentGanttGraphicAfterPipelineRun();
                                                     MacroCompleteChime.playIfAvailable(collectUiEnv());
+                                                    selectMainShellTab(MainShellTabId.PLAN_INPUT);
                                                     showStageCompletionDialog(
                                                             "段階1 完了",
                                                             "段階1 の処理が正常終了しました。");
@@ -2882,6 +2883,9 @@ public final class MainShellController {
         }
         if (dispatchInteractiveTabController != null) {
             dispatchInteractiveTabController.setStageRunProgressVisible(stage1Running, stage2Running);
+        }
+        if (planInputTabController != null) {
+            planInputTabController.setStageRunProgressVisible(stage1Running, stage2Running);
         }
         updateShellStageProgressOverlay(stage1Running, stage2Running);
         if (tabPane == null) {

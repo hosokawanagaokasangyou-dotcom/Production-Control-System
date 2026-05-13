@@ -43,6 +43,10 @@
       </rowConstraints>
     </GridPane>
     <HBox alignment="CENTER_LEFT" spacing="8.0">
+        <Button fx:id="stage2RunButton" mnemonicParsing="false" onAction="#onStage2RunButtonAction"
+                styleClass="pm-stage-run-button,pm-stage-run-2" text="段階2 実行" />
+    </HBox>
+    <HBox alignment="CENTER_LEFT" spacing="8.0">
         <Button mnemonicParsing="false" onAction="#onRowUpAction" prefWidth="40.0" text="↑" />
         <Button mnemonicParsing="false" onAction="#onRowDownAction" prefWidth="40.0" text="↓" />
         <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"

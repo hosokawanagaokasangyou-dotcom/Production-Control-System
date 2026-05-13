@@ -34,9 +34,6 @@
                 onAction="#onEnsureStage2RequiredColumnsAction"/>
         <Button fx:id="saveButton" mnemonicParsing="false" text="保存 (JSON+xlsx)"
                 onAction="#onSaveAction"/>
-        <Button fx:id="stage2RunButton" mnemonicParsing="false" text="段階2 実行"
-                styleClass="pm-stage-run-button,pm-stage-run-2"
-                onAction="#onStage2RunButtonAction"/>
         <Button fx:id="dispatchTrialButton" mnemonicParsing="false" text="段階3へ"
                 styleClass="pm-stage-run-button,pm-stage-run-3"
                 onAction="#onDispatchTrialAction"/>

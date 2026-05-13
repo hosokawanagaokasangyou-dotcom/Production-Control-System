@@ -178,9 +178,6 @@ public final class DispatchInteractiveTabController {
     /** True while load/rebuild progress UI disables the toolbar ({@link #setReloadInteractionDisabled}). */
     private boolean reloadInteractionDisabled;
 
-    /** True while 段階1／段階2 pipeline is running ({@link #setStageRunProgressVisible}). */
-    private boolean stagePipelineBusy;
-
     /** Avoid treating programmatic grid updates as user edits ({@link #onWideGridChange}). */
     private final AtomicBoolean suppressDispatchGridDirty = new AtomicBoolean(false);
 
@@ -192,9 +189,6 @@ public final class DispatchInteractiveTabController {
 
     @FXML
     private Button saveButton;
-
-    @FXML
-    private Button stage2RunButton;
 
     @FXML
     private Button dispatchTrialButton;
@@ -490,41 +484,11 @@ public final class DispatchInteractiveTabController {
     }
 
     /**
-     * 実行タブと同様、段階1／段階2 実行中は「段階2 実行」を無効化する（{@link MainShellController#applyRunTabGating} から）。
+     * 以前は段階2実行ボタンの無効化に使っていた。ボタン移設後も {@link MainShellController#applyRunTabGating} から呼ばれるため
+     * メソッドは残す。
      */
     void setStageRunProgressVisible(boolean stage1Running, boolean stage2Running) {
-        stagePipelineBusy = stage1Running || stage2Running;
-        applyStage2RunButtonEnabledState();
-    }
-
-    private void applyStage2RunButtonEnabledState() {
-        if (stage2RunButton == null) {
-            return;
-        }
-        stage2RunButton.setDisable(reloadInteractionDisabled || stagePipelineBusy);
-    }
-
-    @FXML
-    private void onStage2RunButtonAction() {
-        if (shell == null) {
-            return;
-        }
-        boolean repaired = ResultDispatchStage2ColumnSupport.ensureStage2RequiredColumns(doc);
-        if (repaired) {
-            rebuildGrids();
-            markDispatchDocDirty();
-            Alert a = new Alert(AlertType.INFORMATION);
-            a.setTitle("段階2必須列");
-            a.setHeaderText(null);
-            a.setContentText(
-                    "段階2で参照する列を補いました。JSON を「保存」してから「段階2 実行」を再度押してください。");
-            if (shell.getPrimaryStage() != null) {
-                a.initOwner(shell.getPrimaryStage());
-            }
-            a.showAndWait();
-            return;
-        }
-        shell.triggerStage2();
+        // no-op: 段階2実行は配台計画_タスク入力タブへ移動済み
     }
 
     @FXML
@@ -1253,7 +1217,6 @@ public final class DispatchInteractiveTabController {
         if (saveButton != null) {
             saveButton.setDisable(disabled);
         }
-        applyStage2RunButtonEnabledState();
         applyDispatchTrialButtonEnabledState();
         if (wideRowUpButton != null) {
             wideRowUpButton.setDisable(disabled);

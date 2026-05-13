@@ -22,7 +22,9 @@ import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TablePosition;
 import javafx.scene.control.TextField;
+import javafx.scene.effect.DropShadow;
 import javafx.scene.layout.HBox;
+import javafx.scene.paint.Color;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -93,6 +95,9 @@ public final class PlanInputTabController {
     private Button removeRowsButton;
 
     @FXML
+    private Button stage2RunButton;
+
+    @FXML
     private HBox columnStripHost;
 
     @FXML
@@ -127,6 +132,8 @@ public final class PlanInputTabController {
         colWidthField.setText("112");
         hintLabel.setText(HINT_TEXT);
 
+        installStageRunButtonDepth(stage2RunButton, Color.rgb(194, 65, 12, 0.35));
+
         StackPane.setAlignment(spreadsheetView, Pos.CENTER_LEFT);
         spreadsheetHost.getChildren().add(spreadsheetView);
         VBox.setVgrow(spreadsheetHost, Priority.ALWAYS);
@@ -149,6 +156,19 @@ public final class PlanInputTabController {
 
         SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
                 spreadsheetHost, headerColumnCount::get);
+    }
+
+    /** 実行・ログタブの段階ボタンと同系のごく弱いドロップシャドウ。 */
+    private static void installStageRunButtonDepth(Button button, Color shadowColor) {
+        if (button == null) {
+            return;
+        }
+        DropShadow depth = new DropShadow();
+        depth.setColor(shadowColor);
+        depth.setRadius(10);
+        depth.setSpread(0.12);
+        depth.setOffsetY(2);
+        button.setEffect(depth);
     }
 
     /** Renumbers dispatch-trial-order column to 1..n after row reorder (DnD, etc.). */
@@ -220,6 +240,23 @@ public final class PlanInputTabController {
                         loadFromCurrentPath();
                     }
                 });
+    }
+
+    /**
+     * 段階1／段階2 実行中は再実行を無効化する（{@link MainShellController#applyRunTabGating} から）。
+     */
+    void setStageRunProgressVisible(boolean stage1Running, boolean stage2Running) {
+        boolean busy = stage1Running || stage2Running;
+        if (stage2RunButton != null) {
+            stage2RunButton.setDisable(busy);
+        }
+    }
+
+    @FXML
+    private void onStage2RunButtonAction() {
+        if (shell != null) {
+            shell.triggerStage2();
+        }
     }
 
     @FXML
