@@ -75,6 +75,7 @@ import jp.co.pm.ai.desktop.config.JvmMemoryLogStore;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutDefaults;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
 import jp.co.pm.ai.desktop.config.FactorySite;
+import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PushButtonCssEmitter;
 import jp.co.pm.ai.desktop.config.PushButtonDesignPrefs;
@@ -2582,14 +2583,14 @@ public final class MainShellController {
         if (primaryStage == null) {
             return Optional.of(FactorySite.KONAN);
         }
-        ChoiceDialog<FactorySite> d =
-                new ChoiceDialog<>(FactorySite.KONAN, List.of(FactorySite.values()));
+        FactorySite pref = GlobalInitSettingTarget.load();
+        ChoiceDialog<FactorySite> d = new ChoiceDialog<>(pref, List.of(FactorySite.values()));
         d.initOwner(primaryStage);
         applyAlertStylesheetsFromOwner(d);
         d.setTitle(title);
         d.setHeaderText(null);
         d.setContentText(contentText);
-        d.setSelectedItem(FactorySite.KONAN);
+        d.setSelectedItem(pref);
         return d.showAndWait();
     }
 
@@ -3240,6 +3241,10 @@ public final class MainShellController {
             } else if (AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK.equals(name)) {
                 r.setValue(pmAiSummary != null ? pmAiSummary : "");
             }
+        }
+        GlobalInitSettingTarget.save(site);
+        if (globalSettingsTabController != null) {
+            globalSettingsTabController.refreshInitSettingTargetComboFromStore();
         }
     }
 

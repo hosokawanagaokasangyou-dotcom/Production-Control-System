@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.config;
 
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -15,6 +16,26 @@ public final class InitSettingPaths {
     public static final String TABLE_COLUMN_DEFAULTS_FILE = "table_column_defaults.json";
 
     private InitSettingPaths() {}
+
+    /**
+     * 工場別グローバル既定（湖南／国分）。{@link GlobalInitSettingTarget} の選択に対応。
+     *
+     * <p>ファイル名は {@link FactorySite#name()} の小文字を付与する（{@code session_defaults_konan.json} 等）。
+     */
+    public static String sessionDefaultsFileForFactory(FactorySite site) {
+        if (site == null) {
+            site = FactorySite.KONAN;
+        }
+        return "session_defaults_" + site.name().toLowerCase(Locale.ROOT) + ".json";
+    }
+
+    /** 工場別の列順・表設定マージ用 JSON（{@link #TABLE_COLUMN_DEFAULTS_FILE} と同形状）。 */
+    public static String tableColumnDefaultsFileForFactory(FactorySite site) {
+        if (site == null) {
+            site = FactorySite.KONAN;
+        }
+        return "table_column_defaults_" + site.name().toLowerCase(Locale.ROOT) + ".json";
+    }
 
     /** {@code <repo>/init_setting} */
     public static Path resolveRepoInitSettingDir(Map<String, String> ui) {

@@ -34,6 +34,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.config.InitSettingPaths;
 
 /**
@@ -1416,13 +1417,20 @@ public final class TableColumnOrderPersistence {
     }
 
     /**
-     * ポータルアップデート直後: リポジトリ {@code init_setting/table_column_defaults.json}（配布同期で上書き済み）があれば
-     * それを {@link #STORE} に書き、無ければ {@link #portableBundleInitSettingDir()}、最後にバンドルマージへフォールバックする。
+     * ポータルアップデート直後: リポジトリ {@code init_setting/table_column_defaults_<工場>.json}（{@link
+     * GlobalInitSettingTarget}）→ 従来の {@code table_column_defaults.json} → {@link #portableBundleInitSettingDir()} の順で
+     * {@link #STORE} に書き、いずれも無ければバンドルマージへフォールバックする。
      */
     public static void overwriteTableColumnOrderStoreAfterPortableUpgrade(Map<String, String> ui) throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
-        Path repo =
-                InitSettingPaths.resolveRepoInitSettingDir(u).resolve(InitSettingPaths.TABLE_COLUMN_DEFAULTS_FILE);
+        Path repoDir = InitSettingPaths.resolveRepoInitSettingDir(u);
+        Path repoFactory =
+                repoDir.resolve(
+                        InitSettingPaths.tableColumnDefaultsFileForFactory(GlobalInitSettingTarget.load()));
+        if (tryWriteTableColumnStoreFromPath(repoFactory)) {
+            return;
+        }
+        Path repo = repoDir.resolve(InitSettingPaths.TABLE_COLUMN_DEFAULTS_FILE);
         if (tryWriteTableColumnStoreFromPath(repo)) {
             return;
         }
@@ -1468,15 +1476,26 @@ public final class TableColumnOrderPersistence {
     }
 
     /**
-     * 工場 UI リセット直後（ユーザーホームの {@link #STORE} を削除したあと）に呼ぶ。リポジトリの {@code
-     * init_setting/table_column_defaults.json} があればグローバル設定で書き出した内容を {@link #STORE} へ複製し、無ければ
-     * {@link #materializeBundledDefaultsIfStoreMissing()} にフォールバックする。
+     * 工場 UI リセット直後（ユーザーホームの {@link #STORE} を削除したあと）に呼ぶ。リポジトリ {@code init_setting} の
+     * {@link InitSettingPaths#tableColumnDefaultsFileForFactory}（{@link GlobalInitSettingTarget}）→ 従来の {@code
+     * table_column_defaults.json} の順で {@link #STORE} へ複製し、無ければ {@link #materializeBundledDefaultsIfStoreMissing()}
+     * にフォールバックする。
      */
     public static void materializeTableColumnStoreAfterFactoryReset(Map<String, String> ui) {
         try {
-            Path exported =
-                    InitSettingPaths.resolveRepoInitSettingDir(ui != null ? ui : Map.of())
-                            .resolve(InitSettingPaths.TABLE_COLUMN_DEFAULTS_FILE);
+            Path repoDir = InitSettingPaths.resolveRepoInitSettingDir(ui != null ? ui : Map.of());
+            Path exportedFactory =
+                    repoDir.resolve(
+                            InitSettingPaths.tableColumnDefaultsFileForFactory(GlobalInitSettingTarget.load()));
+            if (Files.isRegularFile(exportedFactory)) {
+                JsonNode n = JSON.readTree(exportedFactory.toFile());
+                if (n != null && n.isObject()) {
+                    Files.createDirectories(STORE.getParent());
+                    JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), n);
+                    return;
+                }
+            }
+            Path exported = repoDir.resolve(InitSettingPaths.TABLE_COLUMN_DEFAULTS_FILE);
             if (Files.isRegularFile(exported)) {
                 JsonNode n = JSON.readTree(exported.toFile());
                 if (n != null && n.isObject()) {

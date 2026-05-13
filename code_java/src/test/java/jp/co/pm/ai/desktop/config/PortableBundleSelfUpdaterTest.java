@@ -56,6 +56,10 @@ class PortableBundleSelfUpdaterTest {
         assertTrue(PortableBundleSelfUpdater.isExcludedPath(Path.of("init_setting/user-profiles")));
         assertTrue(PortableBundleSelfUpdater.isExcludedPath(Path.of("init_setting/user-profiles/a.json")));
         assertFalse(PortableBundleSelfUpdater.isExcludedPath(Path.of("init_setting/session_defaults.json")));
+        assertFalse(
+                PortableBundleSelfUpdater.isExcludedPath(Path.of("init_setting/session_defaults_kokubu.json")));
+        assertFalse(
+                PortableBundleSelfUpdater.isExcludedPath(Path.of("init_setting/table_column_defaults_konan.json")));
     }
 
     @Test

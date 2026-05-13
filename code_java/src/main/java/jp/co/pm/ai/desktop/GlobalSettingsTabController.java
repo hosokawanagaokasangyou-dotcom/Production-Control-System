@@ -7,8 +7,12 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.TextInputDialog;
 
+import jp.co.pm.ai.desktop.config.FactorySite;
+import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
+import jp.co.pm.ai.desktop.config.InitSettingPaths;
 import jp.co.pm.ai.desktop.config.InitSettingPersistence;
 
 /** Global settings tab (factory UI reset and saving package defaults to init_setting). */
@@ -20,10 +24,41 @@ public final class GlobalSettingsTabController {
     @FXML
     private Button saveDefaultsButton;
 
+    @FXML
+    private ComboBox<FactorySite> initSettingTargetCombo;
+
     private MainShellController shell;
 
     void bindShell(MainShellController shell) {
         this.shell = shell;
+        wireInitSettingTargetCombo();
+    }
+
+    /** 環境タブの工場プリセットなどで {@link GlobalInitSettingTarget} が変わったあと、コンボをディスクに合わせる。 */
+    void refreshInitSettingTargetComboFromStore() {
+        if (initSettingTargetCombo == null) {
+            return;
+        }
+        FactorySite disk = GlobalInitSettingTarget.load();
+        if (initSettingTargetCombo.getValue() != disk) {
+            initSettingTargetCombo.setValue(disk);
+        }
+    }
+
+    private void wireInitSettingTargetCombo() {
+        if (initSettingTargetCombo == null) {
+            return;
+        }
+        initSettingTargetCombo.getItems().setAll(FactorySite.values());
+        initSettingTargetCombo.setValue(GlobalInitSettingTarget.load());
+        initSettingTargetCombo
+                .valueProperty()
+                .addListener(
+                        (obs, oldV, newV) -> {
+                            if (newV != null) {
+                                GlobalInitSettingTarget.save(newV);
+                            }
+                        });
     }
 
     @FXML
@@ -62,9 +97,13 @@ public final class GlobalSettingsTabController {
             }
             ok.setTitle("完了");
             ok.setHeaderText(null);
+            FactorySite t = GlobalInitSettingTarget.load();
             ok.setContentText(
-                    "書き出しました。init_setting に session_defaults.json（メイン／子タブ含む）と、"
-                            + "table_column_defaults.json（列・行高・納期管理ビュー等の表設定をバンドル既定にマージ）を出力しました。");
+                    "書き出しました。init_setting に "
+                            + InitSettingPaths.sessionDefaultsFileForFactory(t)
+                            + "（メイン／子タブ含む）と、"
+                            + InitSettingPaths.tableColumnDefaultsFileForFactory(t)
+                            + "（列・行高・納期管理ビュー等をバンドル既定にマージ）を出力しました。");
             ok.showAndWait();
         } catch (Exception ex) {
             Alert err = new Alert(AlertType.ERROR);
