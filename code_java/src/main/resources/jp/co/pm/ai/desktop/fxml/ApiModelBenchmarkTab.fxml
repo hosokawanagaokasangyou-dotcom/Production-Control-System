@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Spinner?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="jp.co.pm.ai.desktop.ApiModelBenchmarkTabController">
+    <padding>
+        <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+    </padding>
+    <center>
+        <VBox fillWidth="true" spacing="10.0">
+            <Label wrapText="true" text="Gemini の generateContent（REST v1beta）を連続呼び出しし、往復レイテンシを計測します。API キーは環境変数 GEMINI_CREDENTIALS_JSON の JSON（暗号化形式）から復号します（パスフレーズは planning_core と同一の既定値）。"/>
+            <Label fx:id="credentialsPathLabel" style="-fx-text-fill: -fx-mid-text-color" wrapText="true" text=""/>
+            <Separator/>
+            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                <Label text="モデル"/>
+                <ComboBox fx:id="modelCombo" editable="true" prefWidth="360.0"/>
+            </HBox>
+            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                <Label text="試行回数"/>
+                <Spinner fx:id="runsSpinner" editable="true" prefWidth="100.0"/>
+                <Label text="maxOutputTokens"/>
+                <Spinner fx:id="maxTokensSpinner" editable="true" prefWidth="100.0"/>
+                <CheckBox fx:id="warmupCheck" mnemonicParsing="false" text="ウォームアップ（計測外に1回）" selected="true"/>
+            </HBox>
+            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                <Label text="タイムアウト（秒）"/>
+                <Spinner fx:id="timeoutSecondsSpinner" editable="true" prefWidth="100.0"/>
+                <Button fx:id="runButton" mnemonicParsing="false" onAction="#onRunBenchmark" text="ベンチマーク実行"/>
+                <Button fx:id="clearButton" mnemonicParsing="false" onAction="#onClearLog" text="ログ消去"/>
+            </HBox>
+            <Label text="プロンプト" style="-fx-font-weight: bold"/>
+            <TextArea fx:id="promptArea" prefRowCount="4" wrapText="true"
+                      text="次の文を一言で要約してください。本ベンチマークはレイテンシ計測用の短いリクエストです。"/>
+            <Label text="結果ログ" style="-fx-font-weight: bold"/>
+            <TextArea fx:id="logArea" editable="false" prefRowCount="18" wrapText="true" VBox.vgrow="ALWAYS"
+                      style="-fx-font-family: monospace"/>
+            <Label fx:id="summaryLabel" wrapText="true" text=""/>
+        </VBox>
+    </center>
+</BorderPane>

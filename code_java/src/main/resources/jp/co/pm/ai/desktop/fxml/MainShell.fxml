@@ -155,6 +155,11 @@
                         <fx:include fx:id="planWorkspaceHistoryTab" source="PlanWorkspaceHistoryTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabApiModelBenchmark" closable="false" text="APIモデルベンチマーク">
+                    <content>
+                        <fx:include fx:id="apiModelBenchmarkTab" source="ApiModelBenchmarkTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabOrganizer" closable="false" text="タブ整理">
                     <content>
                         <fx:include fx:id="mainShellTabOrganizerPane" source="MainShellTabOrganizerTab.fxml"/>

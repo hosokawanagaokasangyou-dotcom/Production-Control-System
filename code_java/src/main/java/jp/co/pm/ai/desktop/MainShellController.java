@@ -252,6 +252,9 @@ public final class MainShellController {
     private PlanWorkspaceHistoryTabController planWorkspaceHistoryTabController;
 
     @FXML
+    private ApiModelBenchmarkTabController apiModelBenchmarkTabController;
+
+    @FXML
     private Tab mainShellTabRun;
 
     @FXML
@@ -315,6 +318,9 @@ public final class MainShellController {
     private Tab mainShellTabPlanWorkspaceHistory;
 
     @FXML
+    private Tab mainShellTabApiModelBenchmark;
+
+    @FXML
     private Tab mainShellTabOrganizer;
 
     @FXML
@@ -340,8 +346,9 @@ public final class MainShellController {
     private NetworkSourceDirResolver.Result lastNetworkSourceResolution;
 
     /**
-     * 起動時プローブでソースフォルダが一覧不可なら {@code true}。{@link NetworkSourceDirResolver#resolve(Map, boolean, boolean)}
-     * でネットワーク側の一覧を省略する。
+     * ソースフォルダが一覧不可なら {@code true}。{@link NetworkSourceDirResolver#resolve(Map, boolean, boolean)} でネットワーク側の一覧を省略する。
+     *
+     * <p>起動時プローブで初期化し、段階1／段階2実行直前に {@link #refreshNetworkSourceDirListingSkipsBeforeStageRun(Map)} で再評価する（ネットワーク復旧後は一覧を再試行する）。
      */
     private volatile boolean startupSkipTaskInputSourceDirListing;
 
@@ -456,6 +463,9 @@ public final class MainShellController {
         dispatchInteractiveTabController.bindShell(this);
         if (planWorkspaceHistoryTabController != null) {
             planWorkspaceHistoryTabController.bindShell(this);
+        }
+        if (apiModelBenchmarkTabController != null) {
+            apiModelBenchmarkTabController.bindShell(this);
         }
 
         primaryStage.setMinWidth(640);
@@ -1194,6 +1204,9 @@ public final class MainShellController {
         if (t == mainShellTabPlanWorkspaceHistory) {
             return MainShellTabId.PLAN_WORKSPACE_HISTORY;
         }
+        if (t == mainShellTabApiModelBenchmark) {
+            return MainShellTabId.API_MODEL_BENCHMARK;
+        }
         if (t == mainShellTabPlanResultViewer) {
             return MainShellTabId.PLAN_RESULT_VIEWER;
         }
@@ -1234,6 +1247,7 @@ public final class MainShellController {
             case RESULT_DISPATCH -> mainShellTabResultDispatch;
             case DISPATCH_INTERACTIVE -> mainShellTabDispatchInteractive;
             case PLAN_WORKSPACE_HISTORY -> mainShellTabPlanWorkspaceHistory;
+            case API_MODEL_BENCHMARK -> mainShellTabApiModelBenchmark;
             case PLAN_RESULT_VIEWER -> mainShellTabPlanResultViewer;
             case EQUIPMENT_GANTT_GRAPHIC -> mainShellTabEquipmentGanttGraphic;
             case GANTT_PERSON_BADGE_DESIGN -> mainShellTabGanttPersonBadgeDesign;
@@ -2740,6 +2754,9 @@ public final class MainShellController {
                                     mainRunTabController.getScriptDirField().getText().trim()));
             String wb = effectiveTaskInputWorkbookPath();
             appendLog("--- start: " + script + " ---");
+            if (STAGE1.equals(script) || STAGE2.equals(script)) {
+                refreshNetworkSourceDirListingSkipsBeforeStageRun(uiRun);
+            }
             Map<String, String> childEnv = childEnvForPython(uiRun);
             if (lastNetworkSourceResolution != null) {
                 for (String line : lastNetworkSourceResolution.logLines()) {
@@ -3164,6 +3181,30 @@ public final class MainShellController {
                     "[startup] PM_AI_ACTUAL_DETAIL_SOURCE_DIR にアクセスできません（一覧不可）: "
                             + actDir
                             + " — フォルダ参照を省略しキャッシュを優先します");
+        }
+    }
+
+    /**
+     * 段階1／段階2の実行直前に、ネットワークソースフォルダの一覧可否を再評価する。起動時は未到達だったが実行時に回復していれば
+     * {@link #startupSkipTaskInputSourceDirListing} / {@link #startupSkipActualDetailSourceDirListing} を下げ、
+     * {@link NetworkSourceDirResolver#resolve(Map, boolean, boolean)} がネットワーク側の最新ファイル検出を再度行う。
+     */
+    private void refreshNetworkSourceDirListingSkipsBeforeStageRun(Map<String, String> ui) {
+        boolean wasTaskSkip = startupSkipTaskInputSourceDirListing;
+        boolean wasActSkip = startupSkipActualDetailSourceDirListing;
+        boolean taskReach = NetworkSourceDirResolver.isTaskInputSourceDirReachable(ui);
+        boolean actReach = NetworkSourceDirResolver.isActualDetailSourceDirReachable(ui);
+        startupSkipTaskInputSourceDirListing = !taskReach;
+        startupSkipActualDetailSourceDirListing = !actReach;
+        if (wasTaskSkip && taskReach) {
+            appendLog(
+                    "[network-source] PM_AI_TASK_INPUT_SOURCE_DIR が再び一覧可能になりました。ネットワークから最新を検出します: "
+                            + AppPaths.resolveTaskInputSourceDir(ui));
+        }
+        if (wasActSkip && actReach) {
+            appendLog(
+                    "[network-source] PM_AI_ACTUAL_DETAIL_SOURCE_DIR が再び一覧可能になりました。ネットワークから最新を検出します: "
+                            + AppPaths.resolveActualDetailSourceDir(ui));
         }
     }
 

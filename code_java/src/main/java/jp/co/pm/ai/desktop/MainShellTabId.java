@@ -30,6 +30,8 @@ public enum MainShellTabId {
     DISPATCH_INTERACTIVE("dispatchInteractive"),
     /** 配台ワークスペースのスナップショット履歴（結果 JSON・ガント表示・列順の復元）。 */
     PLAN_WORKSPACE_HISTORY("planWorkspaceHistory"),
+    /** Gemini generateContent の往復レイテンシ計測。 */
+    API_MODEL_BENCHMARK("apiModelBenchmark"),
     /** メインシェル末尾の「タブ整理」（入れ子構成・色の編集用）。 */
     TAB_ORGANIZER("tabOrganizer");
 

@@ -43,7 +43,8 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.SPECIAL_RULES.key(),
                     MainShellTabId.ACTUALS_STATUS.key(),
                     MainShellTabId.USER_PROFILES.key(),
-                    MainShellTabId.PLAN_WORKSPACE_HISTORY.key());
+                    MainShellTabId.PLAN_WORKSPACE_HISTORY.key(),
+                    MainShellTabId.API_MODEL_BENCHMARK.key());
 
     /**
      * All {@link MainShellTabId} keys except {@link MainShellTabId#TAB_ORGANIZER}: DEFAULT order then any enum-only
@@ -107,7 +108,8 @@ public final class MainShellTabLayoutDefaults {
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.MASTER_SUMMARY.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.EXCLUDE_RULES.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.SPECIAL_RULES.key(), ""),
-                                MainShellTabLayoutNode.tabNode(MainShellTabId.ACTUALS_STATUS.key(), ""))));
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.ACTUALS_STATUS.key(), ""),
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.API_MODEL_BENCHMARK.key(), ""))));
 
         return List.copyOf(top);
     }
