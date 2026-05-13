@@ -15,7 +15,6 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.planning.stage2.Stage2ExitCodes;
@@ -33,8 +32,6 @@ import jp.co.pm.ai.planning.stage2.output.Stage2WorkbookJsonWriter;
  */
 public final class Stage2PassThroughPlanner {
 
-    private static final String DEBUG_SESSION_ID = "b59b51";
-
     private Stage2PassThroughPlanner() {}
 
     public static int run(Stage2RunContext ctx, Stage2InputSnapshot snap, Path outputDir) throws IOException {
@@ -50,26 +47,7 @@ public final class Stage2PassThroughPlanner {
         ctx.log(
                 "[stage2-java] 注意: 本 Java 足場は配台コア未移植。計画 JSON ミラー時は設備ガント契約 JSON（空イベント）を"
                         + " プレースホルダ出力します。本番のタイムラインは PM_AI_STAGE2_ENGINE=python を推奨。");
-        // #region agent log
         PlanInputTabularIo.TabularSheet tasks = snap.planningTasksSheet();
-        List<String> hdr = tasks.headers();
-        int rowCt = tasks.rows() != null ? tasks.rows().size() : 0;
-        int memCt = snap.memberDisplayNames() != null ? snap.memberDisplayNames().size() : 0;
-        Map<String, Object> sizeData = new LinkedHashMap<>();
-        sizeData.put("planBase", planBase);
-        sizeData.put("headerColumns", hdr.size());
-        sizeData.put("dataRows", rowCt);
-        sizeData.put("memberSheetCount", memCt);
-        sizeData.put("planWorkbookSheetCount", 1);
-        sizeData.put("duplicateInputSheetRemoved", true);
-        AgentDebugLog.appendStructured(
-                ctx.uiEnv(),
-                DEBUG_SESSION_ID,
-                "H_size",
-                "Stage2PassThroughPlanner.run",
-                "java pass-through workbook shape (single plan sheet)",
-                sizeData);
-        // #endregion
 
         writePlanWorkbook(planXlsx, tasks);
         writeMemberWorkbook(memberXlsx, snap.memberDisplayNames());
@@ -123,23 +101,6 @@ public final class Stage2PassThroughPlanner {
             Files.deleteIfExists(planXlsx);
             Files.deleteIfExists(memberXlsx);
         }
-
-        // #region agent log
-        Path contractSibling = outputDir.resolve(planBase + "設.json");
-        Map<String, Object> ganttPost = new LinkedHashMap<>();
-        ganttPost.put("planJsonPath", planJson.toString());
-        ganttPost.put("contractPath", contractSibling.toString());
-        ganttPost.put(
-                "equipmentGanttContractWritten",
-                ctx.mirrorPlanWorkbookJson() && Files.isRegularFile(contractSibling));
-        AgentDebugLog.appendStructured(
-                ctx.uiEnv(),
-                DEBUG_SESSION_ID,
-                "H_gantt",
-                "Stage2PassThroughPlanner.run",
-                "equipment gantt contract file state after stage2-java outputs",
-                ganttPost);
-        // #endregion
 
         ctx.log("[stage2-java] 完了（stamp=" + stamp + "）。本経路は配台アルゴリズムの段階移植用の足場です。");
         return Stage2ExitCodes.OK;
