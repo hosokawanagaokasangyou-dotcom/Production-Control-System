@@ -31,13 +31,24 @@ public final class PlanInputTabularIo {
 
     public record TabularSheet(List<String> headers, List<List<String>> rows) {}
 
+    /**
+     * 読み取った表と、実際に開いた Excel シート名（CSV のときは空文字）。段階1出力の {@code plan_input_tasks.xlsx}
+     * はシート名が「タスク一覧」のみのことがあり、Python の {@code _resolve_tabular_sheet_name_calamine} と同様に
+     * 要求シートが無くシートが1枚だけのときはそのシートを採用する。
+     */
+    public record TabularRead(String resolvedSheetName, TabularSheet tabular) {}
+
     public static TabularSheet read(Path path, String sheetName) throws IOException {
+        return readWithResolvedSheet(path, sheetName).tabular();
+    }
+
+    public static TabularRead readWithResolvedSheet(Path path, String sheetName) throws IOException {
         String low = path.getFileName().toString().toLowerCase(Locale.ROOT);
         if (low.endsWith(".csv")) {
-            return readCsv(path);
+            return new TabularRead("", readCsv(path));
         }
         if (low.endsWith(".xlsx") || low.endsWith(".xlsm")) {
-            return readExcel(path, sheetName);
+            return readExcelResolved(path, sheetName);
         }
         throw new IOException("unsupported extension (use .csv, .xlsx, .xlsm): " + path);
     }
@@ -159,9 +170,31 @@ public final class PlanInputTabularIo {
         return sb.toString();
     }
 
-    private static TabularSheet readExcel(Path path, String sheetName) throws IOException {
+    private static TabularRead readExcelResolved(Path path, String sheetName) throws IOException {
         try (Workbook wb = WorkbookFactory.create(path.toFile())) {
             Sheet sh = wb.getSheet(sheetName);
+            String usedSheetName = sheetName;
+            if (sh == null && wb.getNumberOfSheets() == 1) {
+                sh = wb.getSheetAt(0);
+                usedSheetName = sh.getSheetName();
+                // #region agent log
+                try {
+                    LinkedHashMap<String, Object> d = new LinkedHashMap<>();
+                    d.put("requestedSheet", sheetName);
+                    d.put("fallbackSheet", usedSheetName);
+                    d.put("singleSheetFallback", Boolean.TRUE);
+                    AgentDebugLog.appendStructured(
+                            Map.of(),
+                            "b59b51",
+                            "H4-verify",
+                            "PlanInputTabularIo.readExcelResolved",
+                            "single sheet fallback (parity with Python _resolve_tabular_sheet_name_calamine)",
+                            d);
+                } catch (Throwable ignored) {
+                    // debug-only
+                }
+                // #endregion
+            }
             if (sh == null) {
                 // #region agent log
                 try {
@@ -177,7 +210,7 @@ public final class PlanInputTabularIo {
                             Map.of(),
                             "b59b51",
                             "H4",
-                            "PlanInputTabularIo.readExcel",
+                            "PlanInputTabularIo.readExcelResolved",
                             "sheet missing",
                             d);
                 } catch (Throwable ignored) {
@@ -188,7 +221,7 @@ public final class PlanInputTabularIo {
             }
             Row h = sh.getRow(0);
             if (h == null) {
-                return new TabularSheet(List.of(), List.of());
+                return new TabularRead(usedSheetName, new TabularSheet(List.of(), List.of()));
             }
             List<String> headers = new ArrayList<>();
             short last = h.getLastCellNum();
@@ -205,7 +238,7 @@ public final class PlanInputTabularIo {
                 }
                 rows.add(line);
             }
-            return new TabularSheet(headers, rows);
+            return new TabularRead(usedSheetName, new TabularSheet(headers, rows));
         }
     }
 
