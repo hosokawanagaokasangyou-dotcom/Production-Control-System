@@ -35,11 +35,10 @@ public final class ApiModelBenchmarkTabController {
 
     private static final List<String> DEFAULT_MODELS =
             List.of(
+                    "gemini-2.5-flash",
+                    "gemini-2.5-flash-lite",
                     "gemini-2.0-flash",
-                    "gemini-2.0-flash-lite",
-                    "gemini-1.5-flash",
-                    "gemini-1.5-flash-8b",
-                    "gemini-2.5-flash-preview-05-20");
+                    "gemini-2.0-flash-lite");
 
     private MainShellController shell;
 
@@ -62,6 +61,9 @@ public final class ApiModelBenchmarkTabController {
     private CheckBox warmupCheck;
 
     @FXML
+    private CheckBox stopOnTerminalHttpCheck;
+
+    @FXML
     private Button runButton;
 
     @FXML
@@ -82,20 +84,42 @@ public final class ApiModelBenchmarkTabController {
     private final AtomicReference<Thread> worker = new AtomicReference<>();
 
     private record ModelBenchOutcome(
-            String model, int http2xxCount, int plannedRuns, double avgMs, double minMs, double maxMs) {
+            String model,
+            int http2xxCount,
+            int measuredAttempts,
+            int plannedRuns,
+            double avgMs,
+            double minMs,
+            double maxMs,
+            String supplement) {
 
         String toSummaryLine() {
             if (http2xxCount <= 0) {
-                return model + ": HTTP 2xx なし（試行 " + plannedRuns + " 回）";
+                String s =
+                        model
+                                + ": HTTP 2xx なし（実施 "
+                                + measuredAttempts
+                                + "/"
+                                + plannedRuns
+                                + "）";
+                if (supplement != null && !supplement.isBlank()) {
+                    s += " — " + supplement.strip();
+                }
+                return s;
             }
-            return String.format(
-                    Locale.ROOT,
-                    "%s: 平均 %.2f ms / 最小 %.2f / 最大 %.2f（n=%d）",
-                    model,
-                    avgMs,
-                    minMs,
-                    maxMs,
-                    http2xxCount);
+            String s =
+                    String.format(
+                            Locale.ROOT,
+                            "%s: 平均 %.2f ms / 最小 %.2f / 最大 %.2f（n=%d）",
+                            model,
+                            avgMs,
+                            minMs,
+                            maxMs,
+                            http2xxCount);
+            if (supplement != null && !supplement.isBlank()) {
+                s += " — " + supplement.strip();
+            }
+            return s;
         }
     }
 
@@ -176,6 +200,7 @@ public final class ApiModelBenchmarkTabController {
         int maxTok = maxTokensSpinner != null ? maxTokensSpinner.getValue() : 64;
         int timeoutSec = timeoutSecondsSpinner != null ? timeoutSecondsSpinner.getValue() : 120;
         boolean warmup = warmupCheck != null && warmupCheck.isSelected();
+        boolean stopOnTerminal = stopOnTerminalHttpCheck == null || stopOnTerminalHttpCheck.isSelected();
         String prompt = promptArea != null ? promptArea.getText() : "";
         Duration timeout = Duration.ofSeconds(Math.max(1, timeoutSec));
 
@@ -186,7 +211,8 @@ public final class ApiModelBenchmarkTabController {
                         () -> {
                             try {
                                 ModelBenchOutcome outcome =
-                                        runBenchmarkOnWorker(apiKey, model, runs, maxTok, timeout, warmup, prompt);
+                                        runBenchmarkOnWorker(
+                                                apiKey, model, runs, maxTok, timeout, warmup, stopOnTerminal, prompt);
                                 String line = outcome.toSummaryLine();
                                 Platform.runLater(
                                         () -> {
@@ -233,6 +259,7 @@ public final class ApiModelBenchmarkTabController {
         int maxTok = maxTokensSpinner != null ? maxTokensSpinner.getValue() : 64;
         int timeoutSec = timeoutSecondsSpinner != null ? timeoutSecondsSpinner.getValue() : 120;
         boolean warmup = warmupCheck != null && warmupCheck.isSelected();
+        boolean stopOnTerminal = stopOnTerminalHttpCheck == null || stopOnTerminalHttpCheck.isSelected();
         String prompt = promptArea != null ? promptArea.getText() : "";
         Duration timeout = Duration.ofSeconds(Math.max(1, timeoutSec));
 
@@ -243,6 +270,8 @@ public final class ApiModelBenchmarkTabController {
                         + runs
                         + ", maxOutputTokens="
                         + maxTok
+                        + ", 404/429打ち切り="
+                        + stopOnTerminal
                         + "）===");
 
         setBenchButtonsDisabled(true);
@@ -255,7 +284,14 @@ public final class ApiModelBenchmarkTabController {
                                 for (String model : models) {
                                     ModelBenchOutcome o =
                                             runBenchmarkOnWorker(
-                                                    apiKey, model, runs, maxTok, timeout, warmup, prompt);
+                                                    apiKey,
+                                                    model,
+                                                    runs,
+                                                    maxTok,
+                                                    timeout,
+                                                    warmup,
+                                                    stopOnTerminal,
+                                                    prompt);
                                     outcomes.add(o);
                                 }
                                 StringBuilder sb = new StringBuilder();
@@ -354,6 +390,10 @@ public final class ApiModelBenchmarkTabController {
         }
     }
 
+    private static boolean shouldCutRemainingTrials(int httpStatus) {
+        return httpStatus == 404 || httpStatus == 429;
+    }
+
     private ModelBenchOutcome runBenchmarkOnWorker(
             String apiKey,
             String model,
@@ -361,6 +401,7 @@ public final class ApiModelBenchmarkTabController {
             int maxTok,
             Duration timeout,
             boolean warmup,
+            boolean stopOnTerminalHttp,
             String prompt) {
         appendLogLine("--- 開始 model=" + model + " runs=" + runs + " maxOutputTokens=" + maxTok + " ---");
         if (warmup) {
@@ -375,6 +416,20 @@ public final class ApiModelBenchmarkTabController {
                                 "[ウォームアップ] HTTP %d  %.2f ms",
                                 w.httpStatus(),
                                 w.wallTimeMs()));
+                if (stopOnTerminalHttp && shouldCutRemainingTrials(w.httpStatus())) {
+                    logHttpFailureDetailOnce(w);
+                    appendLogLine("[ウォームアップ] 計測ループはスキップ（HTTP " + w.httpStatus() + " で打ち切り）。");
+                    appendLogLine("--- 終了 model=" + model + " ---");
+                    return new ModelBenchOutcome(
+                            model,
+                            0,
+                            0,
+                            runs,
+                            Double.NaN,
+                            Double.NaN,
+                            Double.NaN,
+                            "HTTP " + w.httpStatus() + "（ウォームアップで打ち切り）");
+                }
                 if (!w.errorSummary().isEmpty()) {
                     appendLogLine("[ウォームアップ] " + w.errorSummary());
                 }
@@ -387,6 +442,8 @@ public final class ApiModelBenchmarkTabController {
         int counted = 0;
         double minMs = Double.POSITIVE_INFINITY;
         double maxMs = 0;
+        boolean failureDetailLogged = false;
+        String supplement = "";
 
         for (int i = 1; i <= runs; i++) {
             try {
@@ -403,11 +460,48 @@ public final class ApiModelBenchmarkTabController {
                 String line =
                         String.format(Locale.ROOT, "#%d  HTTP %d  %.2f ms", i, r.httpStatus(), ms);
                 appendLogLine(line);
-                if (!r.bodyPreview().isEmpty()) {
-                    appendLogLine("  body: " + r.bodyPreview());
+                if (stopOnTerminalHttp && shouldCutRemainingTrials(r.httpStatus())) {
+                    if (!failureDetailLogged) {
+                        logHttpFailureDetailOnce(r);
+                        failureDetailLogged = true;
+                    }
+                    int remaining = runs - i;
+                    appendLogLine(
+                            "  （HTTP "
+                                    + r.httpStatus()
+                                    + " のため残り "
+                                    + remaining
+                                    + " 回を省略）");
+                    supplement = "打ち切り HTTP " + r.httpStatus();
+                    appendLogLine("--- 終了 model=" + model + " ---");
+                    if (counted > 0) {
+                        return new ModelBenchOutcome(
+                                model,
+                                counted,
+                                i,
+                                runs,
+                                sumMs / counted,
+                                minMs,
+                                maxMs,
+                                supplement);
+                    }
+                    return new ModelBenchOutcome(
+                            model,
+                            0,
+                            i,
+                            runs,
+                            Double.NaN,
+                            Double.NaN,
+                            Double.NaN,
+                            supplement);
                 }
-                if (!r.errorSummary().isEmpty()) {
-                    appendLogLine("  err: " + r.errorSummary());
+                if (r.httpStatus() < 200 || r.httpStatus() >= 300) {
+                    if (!failureDetailLogged) {
+                        logHttpFailureDetailOnce(r);
+                        failureDetailLogged = true;
+                    } else {
+                        appendLogLine("  （詳細ログは先頭の失敗応答を参照）");
+                    }
                 }
             } catch (Exception ex) {
                 appendLogLine("#" + i + "  例外: " + ex.getClass().getSimpleName() + " — " + ex.getMessage());
@@ -417,9 +511,28 @@ public final class ApiModelBenchmarkTabController {
         appendLogLine("--- 終了 model=" + model + " ---");
 
         if (counted > 0) {
-            return new ModelBenchOutcome(model, counted, runs, sumMs / counted, minMs, maxMs);
+            return new ModelBenchOutcome(
+                    model, counted, runs, runs, sumMs / counted, minMs, maxMs, supplement);
         }
-        return new ModelBenchOutcome(model, 0, runs, 0, Double.NaN, Double.NaN);
+        return new ModelBenchOutcome(
+                model, 0, runs, runs, Double.NaN, Double.NaN, Double.NaN, supplement);
+    }
+
+    private void logHttpFailureDetailOnce(CallResult r) {
+        if (r.bodyPreview() != null && !r.bodyPreview().isEmpty()) {
+            String one = r.bodyPreview().strip();
+            if (one.length() > 360) {
+                one = one.substring(0, 360) + "…";
+            }
+            appendLogLine("  body: " + one);
+        }
+        if (r.errorSummary() != null && !r.errorSummary().isEmpty()) {
+            String e = r.errorSummary().strip();
+            if (e.length() > 320) {
+                e = e.substring(0, 320) + "…";
+            }
+            appendLogLine("  err: " + e);
+        }
     }
 
     private void appendLogLine(String line) {
