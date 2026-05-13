@@ -5081,6 +5081,42 @@ def load_tasks_df():
     _src_pp = (os.environ.get("PM_AI_PROCESSING_PLAN_PATH") or "").strip()
     if _src_pp and os.path.isfile(_src_pp):
         logging.info("タスク入力: PM_AI_PROCESSING_PLAN_PATH='%s' を読み込みました。", _src_pp)
+    try:
+        _sheet_arg = (os.environ.get(ENV_PM_AI_PROCESSING_PLAN_SHEET) or "").strip()
+        _hdr = (os.environ.get("PM_AI_PROCESSING_PLAN_HEADER_ROW") or "").strip()
+        _tid = (os.environ.get("PM_AI_TASK_INPUT_SOURCE_DIR") or "").strip()
+        print(
+            "[stage1-input] 加工計画DATA 読込完了: ファイル=%r シート（文脈ラベル）=%r"
+            % (_src_pp, _sheet_label_for_context),
+            file=sys.stderr,
+            flush=True,
+        )
+        print(
+            "[stage1-input] 参照環境変数: %s, %s, PM_AI_PROCESSING_PLAN_HEADER_ROW, PM_AI_TASK_INPUT_SOURCE_DIR"
+            % (ENV_PROCESSING_PLAN_PATH, ENV_PM_AI_PROCESSING_PLAN_SHEET),
+            file=sys.stderr,
+            flush=True,
+        )
+        if _sheet_arg:
+            print(
+                "[stage1-input] %s=%r" % (ENV_PM_AI_PROCESSING_PLAN_SHEET, _sheet_arg),
+                file=sys.stderr,
+                flush=True,
+            )
+        if _hdr:
+            print(
+                "[stage1-input] PM_AI_PROCESSING_PLAN_HEADER_ROW=%r" % (_hdr,),
+                file=sys.stderr,
+                flush=True,
+            )
+        if _tid:
+            print(
+                "[stage1-input] PM_AI_TASK_INPUT_SOURCE_DIR=%r" % (_tid,),
+                file=sys.stderr,
+                flush=True,
+            )
+    except Exception:
+        pass
     return df
 
 
@@ -15842,6 +15878,23 @@ def run_stage1_extract():
             "段階1: タスク入力が解決できません。%s を実在ファイルにするか、"
             "%s から表ファイルを解決できるようにしてください。"
             % (ENV_PROCESSING_PLAN_PATH, "PM_AI_TASK_INPUT_SOURCE_DIR")
+        )
+        _tid0 = (os.environ.get("PM_AI_TASK_INPUT_SOURCE_DIR") or "").strip()
+        print(
+            "[stage1-error] "
+            + (
+                "段階1: タスク入力が解決できません。%s を実在ファイルにするか、"
+                "%s から表ファイルを解決できるようにしてください。"
+                % (ENV_PROCESSING_PLAN_PATH, "PM_AI_TASK_INPUT_SOURCE_DIR")
+            ),
+            file=sys.stderr,
+            flush=True,
+        )
+        print(
+            "[stage1-input] 現在の環境: %s=%r PM_AI_TASK_INPUT_SOURCE_DIR=%r"
+            % (ENV_PROCESSING_PLAN_PATH, _proc_plan, _tid0),
+            file=sys.stderr,
+            flush=True,
         )
         return False
     reset_gemini_usage_tracker()

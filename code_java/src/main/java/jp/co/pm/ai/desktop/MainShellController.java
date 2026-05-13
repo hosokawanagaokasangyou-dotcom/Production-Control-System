@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -111,8 +112,42 @@ public final class MainShellController {
     private static final String STAGE1 = "task_extract_stage1.py";
     private static final String STAGE2 = "plan_simulation_stage2.py";
 
+    /** 段階1実行前ログに出す「入力解決に関わる」環境変数キー（子プロセスへ渡る値）。 */
+    private static final List<String> STAGE1_CHILD_INPUT_ENV_KEYS =
+            List.of(
+                    AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                    AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH,
+                    "PM_AI_PROCESSING_PLAN_SHEET",
+                    "PM_AI_PROCESSING_PLAN_HEADER_ROW",
+                    AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
+                    AppPaths.KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK,
+                    AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SHEET,
+                    AppPaths.KEY_PM_AI_PLAN_INPUT_PATH,
+                    AppPaths.KEY_PM_AI_MASTER_WORKBOOK,
+                    AppPaths.KEY_MASTER_WORKBOOK_FILE,
+                    AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON,
+                    AppPaths.KEY_PM_AI_OUTPUT_DIR,
+                    AppPaths.KEY_PM_AI_REPO_ROOT);
+
+    /** 段階2実行前ログに出す「入力解決に関わる」環境変数キー。 */
+    private static final List<String> STAGE2_CHILD_INPUT_ENV_KEYS =
+            List.of(
+                    AppPaths.KEY_PM_AI_PLAN_INPUT_PATH,
+                    PlanInputTabController.ENV_TASK_PLAN_SHEET,
+                    AppPaths.KEY_PM_AI_MASTER_WORKBOOK,
+                    AppPaths.KEY_MASTER_WORKBOOK_FILE,
+                    AppPaths.KEY_PM_AI_OUTPUT_DIR,
+                    AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH,
+                    AppPaths.KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK,
+                    AppPaths.KEY_PM_AI_PLAN_WORKBOOK_JSON,
+                    AppPaths.KEY_PM_AI_MEMBER_SCHEDULE_JSON,
+                    AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON);
+
     private static final String PREFIX_CHILD = "[child] ";
     private static final String NDJSON_START = PREFIX_CHILD + "{";
+
+    /** 段階1／2 失敗ダイアログに載せる子プロセス出力の末尾行数上限（リングバッファ）。 */
+    private static final int STAGE_CHILD_LOG_TAIL_MAX = 48;
 
     /** Legacy keys removed from the env tab and never passed to Python children. */
     private static final Set<String> REMOVED_ENV_VAR_KEYS =
@@ -2776,12 +2811,21 @@ public final class MainShellController {
                                 ? uiBadgeDesignTabController.snapshotStage1NetworkCacheBadgeLabel()
                                 : "キャッシュ");
             }
+            appendStageChildResolvedEnvForRun(script, childEnv);
             RunRequest req = new RunRequest(py, dir, script, wb, childEnv);
             mainRunTabController.getStatusLabel().setText("実行中…");
+
+            ArrayDeque<String> recentChildLines = new ArrayDeque<>(STAGE_CHILD_LOG_TAIL_MAX + 4);
 
             PythonProcessRunner.runAsync(
                             req,
                             line -> {
+                                synchronized (recentChildLines) {
+                                    while (recentChildLines.size() >= STAGE_CHILD_LOG_TAIL_MAX) {
+                                        recentChildLines.removeFirst();
+                                    }
+                                    recentChildLines.addLast(line);
+                                }
                                 if (line.startsWith(NDJSON_START)) {
                                     String payload = line.substring(PREFIX_CHILD.length());
                                     IpcStdoutTap.handleLine(payload, this::appendLog);
@@ -2793,6 +2837,10 @@ public final class MainShellController {
                             activeStageChildProcess::set)
                     .whenComplete(
                             (code, err) -> {
+                                final List<String> tailSnap;
+                                synchronized (recentChildLines) {
+                                    tailSnap = new ArrayList<>(recentChildLines);
+                                }
                                 runLock.set(false);
                                 activeRunStageScript = null;
                                 activeStageChildProcess.set(null);
@@ -2802,8 +2850,16 @@ public final class MainShellController {
                                             if (err != null) {
                                                 mainRunTabController
                                                         .getStatusLabel()
-                                                        .setText("failed: " + err.getMessage());
-                                                appendLog("[end] exceptional exit");
+                                                        .setText(
+                                                                "failed: "
+                                                                        + (err.getMessage() != null
+                                                                                ? err.getMessage()
+                                                                                : err.toString()));
+                                                appendLog(
+                                                        "[end] exceptional exit: "
+                                                                + (err.getMessage() != null
+                                                                        ? err.getMessage()
+                                                                        : err.toString()));
                                                 if (STAGE2.equals(script)
                                                         && dispatchInteractiveTabController != null) {
                                                     dispatchInteractiveTabController
@@ -2848,6 +2904,21 @@ public final class MainShellController {
                                                     }
                                                 }
                                             }
+                                            boolean stage12 =
+                                                    STAGE1.equals(script) || STAGE2.equals(script);
+                                            boolean failed =
+                                                    err != null
+                                                            || (code != null && code.intValue() != 0);
+                                            if (stage12 && failed) {
+                                                appendLog(
+                                                        "[ui] 段階処理が異常終了しました。エラーダイアログを表示します。");
+                                                selectMainShellTab(MainShellTabId.RUN);
+                                                showStageFailureDialog(
+                                                        script,
+                                                        err != null ? null : code,
+                                                        err,
+                                                        tailSnap);
+                                            }
                                         });
                             });
         } catch (Throwable t) {
@@ -2856,11 +2927,16 @@ public final class MainShellController {
             activeStageChildProcess.set(null);
             appendLog("[error] runStage: " + t.getMessage());
             boolean stage2 = STAGE2.equals(script);
+            boolean stage1 = STAGE1.equals(script);
             Platform.runLater(
                     () -> {
                         applyRunTabGating();
                         if (stage2 && dispatchInteractiveTabController != null) {
                             dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
+                        }
+                        if (stage1 || stage2) {
+                            selectMainShellTab(MainShellTabId.RUN);
+                            showStageFailureDialog(script, null, t, List.of());
                         }
                     });
         }
@@ -2983,6 +3059,100 @@ public final class MainShellController {
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(contentText);
+        alert.showAndWait();
+    }
+
+    /**
+     * 段階1／段階2の子プロセスに渡す直前に、入力解決に効く環境変数をログへ列挙する（ネットワーク解決ログの直後）。
+     */
+    private void appendStageChildResolvedEnvForRun(String script, Map<String, String> childEnv) {
+        List<String> keys =
+                STAGE1.equals(script)
+                        ? STAGE1_CHILD_INPUT_ENV_KEYS
+                        : (STAGE2.equals(script) ? STAGE2_CHILD_INPUT_ENV_KEYS : List.of());
+        if (keys.isEmpty()) {
+            return;
+        }
+        String ja = STAGE1.equals(script) ? "段階1" : "段階2";
+        appendLog("--- " + ja + " 子プロセス入力（環境変数キー → 渡す値）---");
+        for (String k : keys) {
+            String v = childEnv != null ? childEnv.get(k) : null;
+            if (v == null || v.isBlank()) {
+                appendLog("[" + ja + "-input] " + k + " = （未設定または空）");
+            } else {
+                appendLog("[" + ja + "-input] " + k + " = " + v);
+            }
+        }
+        if (STAGE1.equals(script)) {
+            appendLog(
+                    "[段階1-input] 加工計画DATAの実ファイルは "
+                            + AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH
+                            + "（未設定時は "
+                            + AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR
+                            + " 直下の最新表から解決）。実績明細は "
+                            + AppPaths.KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK
+                            + " または "
+                            + AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR
+                            + "。");
+        } else if (STAGE2.equals(script)) {
+            appendLog(
+                    "[段階2-input] 配台計画の入力は "
+                            + AppPaths.KEY_PM_AI_PLAN_INPUT_PATH
+                            + " とシート名 "
+                            + PlanInputTabController.ENV_TASK_PLAN_SHEET
+                            + "。マスタは "
+                            + AppPaths.KEY_PM_AI_MASTER_WORKBOOK
+                            + " / "
+                            + AppPaths.KEY_MASTER_WORKBOOK_FILE
+                            + "。");
+        }
+    }
+
+    private static String exitHintJa(int code) {
+        return switch (code) {
+            case 0 -> "正常終了しました。";
+            case 1 -> "一般エラーです（データや設定の不整合など）。";
+            case 2 -> "致命的エラー、またはマスタ・入力ファイルの欠如などです。";
+            case 3 -> "計画データの検証エラーです（必須列の不足など）。";
+            case 9 -> "ユーザーによる中断です。";
+            default -> "終了コード " + code + " です。";
+        };
+    }
+
+    /**
+     * 段階1／段階2が異常終了したときにエラーダイアログを出す。{@code tailLines} は子の標準出力に付いた行（先頭に {@code
+     * [child] } を含む）の末尾スナップショット。
+     */
+    private void showStageFailureDialog(
+            String script, Integer code, Throwable err, List<String> tailLines) {
+        String stageJa = STAGE1.equals(script) ? "段階1" : "段階2";
+        Alert alert = new Alert(AlertType.ERROR);
+        alert.initOwner(primaryStage);
+        applyAlertStylesheetsFromOwner(alert);
+        alert.setTitle(stageJa + " 失敗");
+        alert.setHeaderText(null);
+        StringBuilder body = new StringBuilder();
+        if (err != null) {
+            body.append("子プロセスの起動または実行中に例外が発生しました。\n");
+            body.append(err.getMessage() != null ? err.getMessage() : err.toString());
+        } else {
+            int c = code != null ? code : -1;
+            body.append(exitCodeLegend(c)).append("\n");
+            body.append(exitHintJa(c));
+        }
+        body.append("\n\n詳細は「実行・ログ」タブのログを確認してください。");
+        if (tailLines != null && !tailLines.isEmpty()) {
+            body.append("\n\n【直近の子プロセス出力】\n");
+            int start = Math.max(0, tailLines.size() - 14);
+            for (int i = start; i < tailLines.size(); i++) {
+                String ln = tailLines.get(i);
+                if (ln.length() > 220) {
+                    ln = ln.substring(0, 217) + "...";
+                }
+                body.append(ln).append('\n');
+            }
+        }
+        alert.setContentText(body.toString());
         alert.showAndWait();
     }
 
