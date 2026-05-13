@@ -298,7 +298,8 @@ public final class EnvVarDocs {
         put(
                 "PM_AI_CMD_PAUSE_ON_ERROR",
                 "CLI 終了時の pause（Windows）。"
-                        + "0/false で無効化（workbook_env_bootstrap 同様）。");
+                        + "0/false で無効化（workbook_env_bootstrap 同様）。"
+                        + "JavaFX デスクトップが起動する Python 子プロセスでは、環境タブの値に関わらず 0 に固定（pause によるハング防止）。");
         put(
                 "PYTHONUTF8",
                 "子プロセスで最終固定 1（本 UI では上書き不可）。");

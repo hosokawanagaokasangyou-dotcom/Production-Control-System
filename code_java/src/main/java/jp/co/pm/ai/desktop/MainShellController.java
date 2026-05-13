@@ -3109,10 +3109,10 @@ public final class MainShellController {
                         startupSkipActualDetailSourceDirListing);
         lastNetworkSourceResolution = netRes;
         NetworkSourceDirResolver.applyToEnv(m, netRes);
-        String pauseOnErr = m.get(AppPaths.KEY_PM_AI_CMD_PAUSE_ON_ERROR);
-        if (pauseOnErr == null || pauseOnErr.isBlank()) {
-            m.put(AppPaths.KEY_PM_AI_CMD_PAUSE_ON_ERROR, "0");
-        }
+        // Windows で pause が有効だと、stdin が TTY でない子プロセスが os.system("pause") でブロックし、
+        // stdout が閉じないままになる。readStreamBlocking が終わらず段階1/2 が「実行中」のまま固定される。
+        // ログは実行・ログタブに出るため、JavaFX から起動する子プロセスでは常に無効化する。
+        m.put(AppPaths.KEY_PM_AI_CMD_PAUSE_ON_ERROR, "0");
         return m;
     }
 
