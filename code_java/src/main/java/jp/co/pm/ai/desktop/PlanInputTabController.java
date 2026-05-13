@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -42,6 +43,7 @@ import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
+import jp.co.pm.ai.desktop.ui.SpreadsheetMultiColumnFilterCoordinator;
 import jp.co.pm.ai.desktop.ui.SpreadsheetPlanInputCellEditSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetPlanInputRowDragSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
@@ -440,7 +442,7 @@ public final class PlanInputTabController {
                             persistedLayout.set(newLay);
                             TableColumnOrderPersistence.saveLayout(
                                     TableColumnOrderPersistence.TableId.PLAN_INPUT, newLay);
-                            rebuildSpreadsheet();
+                            rebuildSpreadsheet(false);
                         });
     }
 
@@ -547,6 +549,14 @@ public final class PlanInputTabController {
     }
 
     private void rebuildSpreadsheet() {
+        rebuildSpreadsheet(true);
+    }
+
+    /**
+     * @param preserveColumnFilters {@code true} のとき、再構築前の列フィルタ（許容値集合）を復元する。ファイル読込・
+     *     論理列並べ替え後は {@code false}（列インデックスが変わるため）。
+     */
+    private void rebuildSpreadsheet(boolean preserveColumnFilters) {
         if (headersRef.isEmpty()) {
             detachGridHandler();
             GridBase empty = new GridBase(0, 0);
@@ -556,6 +566,11 @@ public final class PlanInputTabController {
             currentGrid = empty;
             return;
         }
+        final Map<Integer, Set<String>> columnFilterSnapshot =
+                preserveColumnFilters
+                        ? SpreadsheetMultiColumnFilterCoordinator.copyColumnAllowedByIndex(
+                                spreadsheetView)
+                        : Map.of();
         suppressColumnOrderPersistence.set(true);
         try {
             detachGridHandler();
@@ -586,6 +601,8 @@ public final class PlanInputTabController {
                         SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                 spreadsheetView, headerColumnCount.get());
                         SpreadsheetTabularSupport.applyColumnFiltersWithDialog(spreadsheetView);
+                        SpreadsheetMultiColumnFilterCoordinator.restoreColumnAllowedSnapshot(
+                                spreadsheetView, columnFilterSnapshot);
                         SpreadsheetTabularSupport.pinSpreadsheetFilterRow(spreadsheetView);
                         SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(spreadsheetView);
                         ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
@@ -610,7 +627,7 @@ public final class PlanInputTabController {
     }
 
     private void applyLoaded() {
-        rebuildSpreadsheet();
+        rebuildSpreadsheet(false);
     }
 
     private void syncFromEnv() {

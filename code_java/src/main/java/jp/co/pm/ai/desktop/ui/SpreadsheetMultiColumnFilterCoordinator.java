@@ -72,6 +72,32 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
     }
 
     /**
+     * {@link #copyColumnAllowedByIndex} で得たスナップショットを再適用する。
+     *
+     * <p>{@link SpreadsheetTabularSupport#applyColumnFiltersWithDialog} 直後など、コーディネータが空になった
+     * あとで呼び、行の並べ替えなどでグリッドだけ差し替えた場合に列フィルタを維持する。
+     */
+    public static void restoreColumnAllowedSnapshot(
+            SpreadsheetView spv, Map<Integer, Set<String>> snapshot) {
+        if (spv == null || snapshot == null || snapshot.isEmpty()) {
+            return;
+        }
+        Map<Integer, Set<String>> map = COLUMN_ALLOWED.computeIfAbsent(spv, k -> new HashMap<>());
+        map.clear();
+        for (Map.Entry<Integer, Set<String>> e : snapshot.entrySet()) {
+            Set<String> vals = e.getValue();
+            if (vals != null && !vals.isEmpty()) {
+                map.put(e.getKey(), new HashSet<>(vals));
+            }
+        }
+        if (map.isEmpty()) {
+            COLUMN_ALLOWED.remove(spv);
+        }
+        recomputeHiddenRows(spv);
+        runColumnFilterCommitHook(spv);
+    }
+
+    /**
      * 1 列ぶんのチェック状態を反映し、全列の AND に基づいて非表示行を再計算する。
      *
      * @param selectedValues その列で表示を許可するセル文字列（チェック済み集合）
