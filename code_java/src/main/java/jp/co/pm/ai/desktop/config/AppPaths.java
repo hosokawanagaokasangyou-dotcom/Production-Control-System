@@ -86,9 +86,9 @@ public final class AppPaths {
     public static final String KEY_MASTER_WORKBOOK_FILE = "MASTER_WORKBOOK_FILE";
 
     /**
-     * {@code 実行・ログ} タブの「開く」が開くサマリ用マクロブック（
+     * {@code 実行・ログ} タブの「開く」が開くサマリ用ブック（
      * 絶対パス、または {@code code/} からの相対）。空で
-     * {@link #SUMMARY_AI_DISPATCH_XLSM}。
+     * {@link #SUMMARY_AI_DISPATCH_XLSM}（{@code code/} 直下の既定名）。
      */
     public static final String KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK =
             "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK";
@@ -805,10 +805,15 @@ public final class AppPaths {
     }
 
     /**
-     * {@code code/} 配下のサマリ用マクロブック（{@code サマリ_AI配台.xlsm}）。実行・ログタブの「開く」から参照。
+     * {@code code/} 配下のサマリ用ブックの既定ファイル名（湖南工場プリセット・空欄時の解決にも使用）。実行・ログタブの「開く」から参照。
+     *
+     * <p>定数名は歴史的経緯で {@code XLSM} のまま。実体は {@code .xlsx}。
      */
     public static final String SUMMARY_AI_DISPATCH_XLSM =
-            "サマリ_AI配台.xlsm";
+            "サマリ_AI配台.xlsx";
+
+    /** 国分工場プリセット: {@code code/} 直下のサマリ用ブック名。 */
+    public static final String KOKUBU_SUMMARY_AI_DISPATCH_WORKBOOK_XLSX = "国分サマリ_AI配台.xlsx";
 
     /**
      * リポジトリ {@code code/} 内の {@link #SUMMARY_AI_DISPATCH_XLSM} の絶対パス（{@link #resolveRepoRoot} と同一のルート解決）。

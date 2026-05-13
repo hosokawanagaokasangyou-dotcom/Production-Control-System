@@ -4,7 +4,7 @@ import java.nio.file.Path;
 import java.util.Map;
 
 /**
- * 工場別の環境タブ既定（ネットワークソース・バージョンアップ正本 ZIP・マスタ名）。
+ * 工場別の環境タブ既定（ネットワークソース・バージョンアップ正本 ZIP・マスタ名・サマリ用ブック）。
  *
  * <p>ポータル自動バージョンアップ完了時、および「環境変数を初期値に戻す」で工場を選んだときに適用する。
  * 湖南（{@link #KONAN}）は従来のコード既定、国分（{@link #KOKUBU}）は国分共有パスと {@code code/国分master.xlsm} 絶対パス等を使う。
@@ -17,7 +17,8 @@ public enum FactorySite {
             AppPaths.DEFAULT_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR,
             AppPaths.DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR,
             AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
-            ""),
+            "",
+            AppPaths.SUMMARY_AI_DISPATCH_XLSM),
 
     /** 国分工場（国分共有・DATA 配下・マスタは {@code 国分master.xlsm}）。 */
     KOKUBU(
@@ -26,7 +27,8 @@ public enum FactorySite {
                     + "PMD_version_upgrade.zip",
             "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\計画",
             "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\実績",
-            "国分master.xlsm");
+            "国分master.xlsm",
+            AppPaths.KOKUBU_SUMMARY_AI_DISPATCH_WORKBOOK_XLSX);
 
     private final String displayLabelJa;
     private final String portableBundleSourceDir;
@@ -34,18 +36,22 @@ public enum FactorySite {
     private final String actualDetailSourceDir;
     /** {@link AppPaths#KEY_MASTER_WORKBOOK_FILE}。空のとき planning_core 側は {@code master.xlsm} 相当。 */
     private final String masterWorkbookFileBasename;
+    /** {@code code/} 直下の {@link AppPaths#KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 用ファイル名。 */
+    private final String summaryAiDispatchWorkbookCodeFilename;
 
     FactorySite(
             String displayLabelJa,
             String portableBundleSourceDir,
             String taskInputSourceDir,
             String actualDetailSourceDir,
-            String masterWorkbookFileBasename) {
+            String masterWorkbookFileBasename,
+            String summaryAiDispatchWorkbookCodeFilename) {
         this.displayLabelJa = displayLabelJa;
         this.portableBundleSourceDir = portableBundleSourceDir;
         this.taskInputSourceDir = taskInputSourceDir;
         this.actualDetailSourceDir = actualDetailSourceDir;
         this.masterWorkbookFileBasename = masterWorkbookFileBasename;
+        this.summaryAiDispatchWorkbookCodeFilename = summaryAiDispatchWorkbookCodeFilename;
     }
 
     /** UI 表示用（ダイアログの選択肢文言）。 */
@@ -95,6 +101,23 @@ public enum FactorySite {
                 AppPaths.resolveRepoRoot(ui != null ? ui : Map.of())
                         .resolve("code")
                         .resolve(masterWorkbookFileBasename)
+                        .normalize()
+                        .toAbsolutePath();
+        return p.toString();
+    }
+
+    /**
+     * {@link AppPaths#KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 環境タブへ書く既定（絶対パス）。
+     *
+     * <p>{@code (リポジトリルート)/code/}{@link #summaryAiDispatchWorkbookCodeFilename}。
+     *
+     * @param ui {@link AppPaths#resolveRepoRoot(Map)} に必要なキーを含む
+     */
+    public String pmAiSummaryAiDispatchWorkbookEnvValue(Map<String, String> ui) {
+        Path p =
+                AppPaths.resolveRepoRoot(ui != null ? ui : Map.of())
+                        .resolve("code")
+                        .resolve(summaryAiDispatchWorkbookCodeFilename)
                         .normalize()
                         .toAbsolutePath();
         return p.toString();

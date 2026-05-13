@@ -3208,7 +3208,7 @@ public final class MainShellController {
     }
 
     /**
-     * 工場別のネットワークソース・バージョンアップ正本 ZIP・マスタ basename を環境タブへ書き込む（UNC は {@link Path} 経由にしない）。
+     * 工場別のネットワークソース・バージョンアップ正本 ZIP・マスタ basename・サマリ用ブック絶対パスを環境タブへ書き込む（UNC は {@link Path} 経由にしない）。
      *
      * <p>環境タブでこれらをコードから書き換えるのは、ポータル自動バージョンアップ完了時・
      * {@link #applyEnvRowsFullBundledResetAndPersist(boolean, FactorySite)}（環境変数を初期化）とする。
@@ -3224,6 +3224,7 @@ public final class MainShellController {
         String portable = site.portableBundleSourceDir();
         String masterBasename = site.masterWorkbookFileBasename();
         String pmAiMaster = site.pmAiMasterWorkbookEnvValue(collectUiEnv());
+        String pmAiSummary = site.pmAiSummaryAiDispatchWorkbookEnvValue(collectUiEnv());
         for (EnvVarRow r : envRows) {
             String name = r.getName() != null ? r.getName().trim() : "";
             if (AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR.equals(name)) {
@@ -3236,6 +3237,8 @@ public final class MainShellController {
                 r.setValue(masterBasename != null ? masterBasename : "");
             } else if (AppPaths.KEY_PM_AI_MASTER_WORKBOOK.equals(name)) {
                 r.setValue(pmAiMaster != null ? pmAiMaster : "");
+            } else if (AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK.equals(name)) {
+                r.setValue(pmAiSummary != null ? pmAiSummary : "");
             }
         }
     }

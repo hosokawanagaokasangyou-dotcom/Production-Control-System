@@ -52,4 +52,35 @@ class FactorySiteTest {
                         .toString(),
                 FactorySite.KOKUBU.pmAiMasterWorkbookEnvValue(ui));
     }
+
+    @Test
+    void konanPmAiSummaryDispatchUnderRepoCode(@TempDir Path repo) throws Exception {
+        Files.createDirectories(repo.resolve("code"));
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, repo.toString());
+        assertEquals(
+                repo.resolve("code")
+                        .resolve("サマリ_AI配台.xlsx")
+                        .normalize()
+                        .toAbsolutePath()
+                        .toString(),
+                FactorySite.KONAN.pmAiSummaryAiDispatchWorkbookEnvValue(ui));
+    }
+
+    @Test
+    void kokubuPmAiSummaryDispatchUnderRepoCode(@TempDir Path repo) throws Exception {
+        Files.createDirectories(repo.resolve("code"));
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, repo.toString());
+        assertEquals(
+                repo.resolve("code")
+                        .resolve("国分サマリ_AI配台.xlsx")
+                        .normalize()
+                        .toAbsolutePath()
+                        .toString(),
+                FactorySite.KOKUBU.pmAiSummaryAiDispatchWorkbookEnvValue(ui));
+    }
+
+    @Test
+    void kokubuSummaryFilenameConstant() {
+        assertEquals("国分サマリ_AI配台.xlsx", AppPaths.KOKUBU_SUMMARY_AI_DISPATCH_WORKBOOK_XLSX);
+    }
 }

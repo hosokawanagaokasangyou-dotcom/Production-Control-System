@@ -261,6 +261,8 @@ public final class PortableBundleSelfUpdater {
         LinkedHashSet<String> s = new LinkedHashSet<>();
         s.add("master.xlsm");
         s.add("code/\u30b5\u30de\u30ea_AI\u914d\u53f0.xlsm");
+        s.add("code/\u30b5\u30de\u30ea_AI\u914d\u53f0.xlsx");
+        s.add("code/\u56fd\u5206\u30b5\u30de\u30ea_AI\u914d\u53f0.xlsx");
         s.add("code/\u7d50\u679c_\u914d\u53f0\u8868.json");
         s.add("code/\u7d50\u679c_\u914d\u53f0\u8868.xlsx");
         s.add("code/\u56fd\u5206master.xlsm");

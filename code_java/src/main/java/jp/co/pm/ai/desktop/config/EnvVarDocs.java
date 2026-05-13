@@ -224,9 +224,9 @@ public final class EnvVarDocs {
         put(
                 "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK",
                 "実行・ログタブの「開く」（サマリ AI 配台"
-                        + " 等）が開く .xlsm の絶対パス。"
+                        + " 等）が開くブックの絶対パス（.xlsx 等）。"
                         + " 空で code/ 下の"
-                        + " サマリ_AI配台.xlsm（"
+                        + " サマリ_AI配台.xlsx（"
                         + "PM_AI_REPO_ROOT 準拠）。"
                         + " ファイル名のみのときは code/ からの相対パス"
                         + "として解決。");
