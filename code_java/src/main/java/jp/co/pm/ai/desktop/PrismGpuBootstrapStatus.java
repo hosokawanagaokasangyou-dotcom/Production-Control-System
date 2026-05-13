@@ -10,6 +10,11 @@ public final class PrismGpuBootstrapStatus {
         GPU_AFTER_PROBE,
         /** 起動時プローブ失敗・タイムアウト等でソフトウェア描画 */
         SOFTWARE_AFTER_PROBE,
+        /**
+         * {@code javafx:run} 等で OpenJFX が CLASSPATH（無名モジュール）に載る構成。子 JVM の GPU 試験は合格しても本体では
+         * Canvas＋HW Prism で RTTexture NPE になる再現があるため {@code prism.order=sw} に固定した。
+         */
+        SOFTWARE_CLASSPATH_OPENJFX,
         /** {@code pm.ai.javafx.prism.gpu} 等で GPU を強制（プローブ省略） */
         GPU_OPT_IN,
         /** プローブ省略時の従来ロジック（既定 sw または JVM の prism.order） */
@@ -33,6 +38,11 @@ public final class PrismGpuBootstrapStatus {
         detail = reason != null ? reason : "";
     }
 
+    static void recordSoftwareClasspathOpenJfx() {
+        mode = Mode.SOFTWARE_CLASSPATH_OPENJFX;
+        detail = "";
+    }
+
     static void recordGpuOptIn() {
         mode = Mode.GPU_OPT_IN;
         detail = "";
@@ -54,6 +64,9 @@ public final class PrismGpuBootstrapStatus {
                     "JavaFX Prism: ソフトウェア描画（GPU テスト不合格） order="
                             + ordShort
                             + (detail.isBlank() ? "" : " — " + detail);
+            case SOFTWARE_CLASSPATH_OPENJFX ->
+                    "JavaFX Prism: ソフトウェア描画（CLASSPATH の OpenJFX／Canvas 安定化。GPU 試験は子 JVM） order="
+                            + ordShort;
             case GPU_OPT_IN ->
                     "JavaFX Prism: GPU 強制（opt-in） order=" + ordShort;
             case LEGACY_NO_PROBE ->

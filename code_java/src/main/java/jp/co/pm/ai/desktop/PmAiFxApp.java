@@ -12,6 +12,7 @@ import javafx.animation.PauseTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
+import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
@@ -48,6 +49,8 @@ public class PmAiFxApp extends Application {
      * <ul>
      *   <li>{@code -Dpm.ai.javafx.prism.skipGpuProbe=true} … プローブせず {@link #applyLegacyPrismConfiguration()}
      *   <li>{@code -Dpm.ai.javafx.prism.gpu=true} または {@code PM_AI_JAVAFX_PRISM_GPU=1} … プローブ省略で GPU 優先
+     *   <li>{@code -Dpm.ai.javafx.prism.allowHwOnClasspath=true} … OpenJFX が CLASSPATH（無名モジュール）でも HW Prism を試す
+     *       （既定は Canvas 安定のため SW）
      * </ul>
      */
     private static void configurePrismAfterProbe() {
@@ -62,10 +65,22 @@ public class PmAiFxApp extends Application {
         }
         boolean ok = GpuProbeLauncher.runGpuCanvasProbe();
         if (ok) {
-            applyPrismGpuPipelineOrder();
-            PrismGpuBootstrapStatus.recordGpuAfterProbe();
+            /*
+             * javafx:run の runtimePathOption=CLASSPATH では OpenJFX が無名モジュールに載る。
+             * ターミナル証拠: 子 JVM の GPU 試験は通っても本体で NGCanvas + RTTexture NPE が再発するため、
+             * 明示オプションが無い限り SW に固定する（モジュールパス構成のパッケージ版とは切り分け）。
+             */
+            if (javaFxRuntimeOnUnnamedClasspath()
+                    && !Boolean.getBoolean("pm.ai.javafx.prism.allowHwOnClasspath")) {
+                System.setProperty("prism.order", "sw");
+                PrismGpuBootstrapStatus.recordSoftwareClasspathOpenJfx();
+            } else {
+                applyPrismGpuPipelineOrder();
+                PrismGpuBootstrapStatus.recordGpuAfterProbe();
+            }
         } else {
             System.setProperty("prism.order", "sw");
+            PrismGpuBootstrapStatus.recordSoftwareAfterProbe("GPU テスト不合格");
         }
     }
 
@@ -89,6 +104,15 @@ public class PmAiFxApp extends Application {
         }
         String env = System.getenv("PM_AI_JAVAFX_PRISM_GPU");
         return env != null && ("1".equals(env) || "true".equalsIgnoreCase(env));
+    }
+
+    /** OpenJFX が名前付きモジュールではなく CLASSPATH（無名）で解決されているか。 */
+    private static boolean javaFxRuntimeOnUnnamedClasspath() {
+        try {
+            return !Node.class.getModule().isNamed();
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     private static void applyPrismGpuPipelineOrder() {
@@ -255,6 +279,8 @@ public class PmAiFxApp extends Application {
                 Map<String, Object> d = new LinkedHashMap<>();
                 d.put("skipGpuProbe", Boolean.getBoolean("pm.ai.javafx.prism.skipGpuProbe"));
                 d.put("prismGpuOptIn", prismGpuOptIn());
+                d.put("javaFxUnnamedClasspath", javaFxRuntimeOnUnnamedClasspath());
+                d.put("allowHwOnClasspath", Boolean.getBoolean("pm.ai.javafx.prism.allowHwOnClasspath"));
                 d.put("prismOrder", System.getProperty("prism.order", ""));
                 d.put("bootstrapMode", PrismGpuBootstrapStatus.getMode().name());
                 AgentDebugLog.appendStructured(
