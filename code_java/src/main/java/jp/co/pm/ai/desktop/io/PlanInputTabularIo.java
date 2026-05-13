@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -166,14 +167,56 @@ public final class PlanInputTabularIo {
         return sb.toString();
     }
 
+    /**
+     * Python {@code planning_core.dispatch_workspace._norm_sheet_key} と同趣旨（NFKC + trim）。
+     * {@code _resolve_tabular_sheet_name_calamine} のシート名照合に合わせる。
+     */
+    static String normSheetKey(String name) {
+        if (name == null) {
+            return "";
+        }
+        return Normalizer.normalize(name.strip(), Normalizer.Form.NFKC);
+    }
+
+    /**
+     * 要求シート名で {@link Workbook#getSheet}、無ければ NFKC 正規化が一致するシートを 1 枚だけのときに採用。
+     * それでも無くシートが 1 枚だけならそのシートを採用。Python {@code _resolve_tabular_sheet_name_calamine} に整合。
+     */
+    static Sheet resolveExcelSheet(Workbook wb, String sheetName) {
+        if (wb == null) {
+            return null;
+        }
+        String req = sheetName != null ? sheetName.strip() : "";
+        if (req.isEmpty()) {
+            return wb.getNumberOfSheets() > 0 ? wb.getSheetAt(0) : null;
+        }
+        Sheet sh = wb.getSheet(req);
+        if (sh != null) {
+            return sh;
+        }
+        String nreq = normSheetKey(req);
+        List<Sheet> nMatches = new ArrayList<>();
+        for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+            Sheet candidate = wb.getSheetAt(i);
+            if (candidate != null && normSheetKey(candidate.getSheetName()).equals(nreq)) {
+                nMatches.add(candidate);
+            }
+        }
+        if (nMatches.size() == 1) {
+            return nMatches.get(0);
+        }
+        if (nMatches.size() > 1) {
+            return nMatches.get(0);
+        }
+        if (wb.getNumberOfSheets() == 1) {
+            return wb.getSheetAt(0);
+        }
+        return null;
+    }
+
     private static TabularRead readExcelResolved(Path path, String sheetName) throws IOException {
         try (Workbook wb = WorkbookFactory.create(path.toFile())) {
-            Sheet sh = wb.getSheet(sheetName);
-            String usedSheetName = sheetName;
-            if (sh == null && wb.getNumberOfSheets() == 1) {
-                sh = wb.getSheetAt(0);
-                usedSheetName = sh.getSheetName();
-            }
+            Sheet sh = resolveExcelSheet(wb, sheetName);
             if (sh == null) {
                 List<String> names = new ArrayList<>();
                 for (int i = 0; i < wb.getNumberOfSheets(); i++) {
@@ -185,8 +228,11 @@ public final class PlanInputTabularIo {
                                 + "\" in "
                                 + path
                                 + "; sheets="
-                                + names);
+                                + names
+                                + "\nヒント: TASK_PLAN_SHEET（環境タブ／配台計画タブ）をブック内のシート名に合わせるか、"
+                                + "段階1出力の plan_input_tasks.xlsx 等を PM_AI_PLAN_INPUT_PATH に指定してください。");
             }
+            String usedSheetName = sh.getSheetName();
             Row h = sh.getRow(0);
             if (h == null) {
                 return new TabularRead(usedSheetName, new TabularSheet(List.of(), List.of()));

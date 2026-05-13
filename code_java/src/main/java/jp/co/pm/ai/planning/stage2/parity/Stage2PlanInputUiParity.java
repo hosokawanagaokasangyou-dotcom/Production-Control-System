@@ -22,16 +22,24 @@ public final class Stage2PlanInputUiParity {
     private Stage2PlanInputUiParity() {}
 
     public static Stage2ParityCheckResult compareUiToDisk(
-            PlanInputTabularIo.TabularSheet ui, Path planInputPath, String requestedSheetName)
-            throws IOException {
+            PlanInputTabularIo.TabularSheet ui, Path planInputPath, String requestedSheetName) {
         Objects.requireNonNull(ui, "ui");
         Objects.requireNonNull(planInputPath, "planInputPath");
         if (!Files.isRegularFile(planInputPath)) {
             return new Stage2ParityCheckResult(
                     false, "タスク入力ファイルがありません: " + planInputPath);
         }
-        PlanInputTabularIo.TabularRead disk =
-                PlanInputTabularIo.readWithResolvedSheet(planInputPath, requestedSheetName);
+        PlanInputTabularIo.TabularRead disk;
+        try {
+            disk = PlanInputTabularIo.readWithResolvedSheet(planInputPath, requestedSheetName);
+        } catch (IOException ex) {
+            return new Stage2ParityCheckResult(
+                    false,
+                    "タスク入力ブックを読めません（シート名の解決に失敗した可能性があります）。\n"
+                            + "TASK_PLAN_SHEET / 配台計画タブのシート名をブック内のいずれかに合わせるか、"
+                            + "plan_input_tasks.xlsx 等の専用ブックを PM_AI_PLAN_INPUT_PATH に指定してください。\n\n"
+                            + ex.getMessage());
+        }
         PlanInputTabularIo.TabularSheet fileTab = disk.tabular();
         if (!headersMultisetEqual(ui.headers(), fileTab.headers())) {
             return new Stage2ParityCheckResult(
