@@ -24,9 +24,10 @@ public final class EquipmentGanttWireAnchorMath {
     }
 
     /**
-     * 担当バッジをワイヤーアンカー周りに均等配置するための角度列（ラジアン）。
+     * 担当バッジをワイヤーアンカー周りの円環上に均等配置するための角度列（ラジアン）。
      *
-     * <p>JavaFX 座標系（+X 右、+Y 下）。{@code -π/2} は画面上方向。バーを跨がないよう主に上側の扇形に収める。
+     * <p>JavaFX 座標系（+X 右、+Y 下）。{@code -π/2} は画面上方向。最初のバッジを上に置き、時計回りに {@code 2π/n}
+     * 刻みで円周へ並べる（扇形ではなく全周の等間隔）。
      *
      * @param badgeCount バッジ数（正の整数想定）
      */
@@ -34,19 +35,10 @@ public final class EquipmentGanttWireAnchorMath {
         if (badgeCount <= 0) {
             return new double[0];
         }
-        if (badgeCount == 1) {
-            return new double[] {-Math.PI / 2.0};
-        }
-        double minTotal = Math.toRadians(28.0) * (badgeCount - 1);
-        double desired = Math.toRadians(40.0 + 22.0 * (badgeCount - 1));
-        double maxTotal = Math.toRadians(210.0);
-        double totalArc = Math.min(maxTotal, Math.max(minTotal, desired));
-        double center = -Math.PI / 2.0;
-        double half = totalArc / 2.0;
-        double start = center - half;
         double[] angles = new double[badgeCount];
+        double step = (2.0 * Math.PI) / badgeCount;
         for (int i = 0; i < badgeCount; i++) {
-            angles[i] = start + totalArc * i / (badgeCount - 1);
+            angles[i] = -Math.PI / 2.0 + step * i;
         }
         return angles;
     }

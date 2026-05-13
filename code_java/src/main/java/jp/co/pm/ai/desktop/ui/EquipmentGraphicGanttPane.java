@@ -604,7 +604,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      * @param personBadgeWireWidthPxOrZero {@code 0} または非正でズーム連動の既定太さ
      * @param personBadgeWireDashStyleKeyOrEmpty {@link EquipmentGanttPersonBadgeWireDashStyle} の名前（空は SOLID）
      * @param personBadgeWireMaxLengthPxOrZero バッジ中心とバーアンカー間のワイヤー長（px）。{@code 0}
-     *     または非正は無制限（横並び初期配置・ドラッグ時の距離クランプなし）。正の値では放射配置の半径かつドラッグ時の距離上限
+     *     または非正は無制限（横並び初期配置・ドラッグ時の距離クランプなし）。正の値では円環配置の半径かつドラッグ時の距離上限
      * @param showPersonBadgeWires 担当バッジとチャートバーをワイヤーで結ぶ（{@code showPersonBadges} が false のとき無効）
      */
     public static BorderPane build(
@@ -2029,7 +2029,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     /**
-     * ワイヤー有効時: バッジをアンカーから一定距離の円周上に均等角で配置する（横並び初期配置の代替）。
+     * ワイヤー有効時: バッジをアンカーから一定距離の円周上に、全周等間隔（円環状）で配置する（横並び初期配置の代替）。
      */
     private static void layoutPersonBadgesRadialForRun(
             int displayRowIndex,
