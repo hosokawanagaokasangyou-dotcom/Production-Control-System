@@ -5,8 +5,11 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
@@ -93,7 +96,7 @@ public final class Stage2PythonishPlanWorkbookLayout {
                     case "結果_カレンダー(出勤簿)" -> writeCalendarHeaderOnly(wb, sheetName);
                     case "結果_メンバー別作業割合" -> writeMemberUtilHeader(wb, sheetName, members);
                     case "列設定_結果_タスク一覧" -> writeColumnConfigSheet(wb, sheetName, tasks.headers());
-                    case "結果_タスク一覧" -> writeTaskSheet(wb, sheetName, tasks);
+                    case "結果_タスク一覧" -> writeResultTaskListSheet(wb, sheetName, tasks);
                     case "結果_配台表" -> writeDispatchHeaderOnly(wb, sheetName);
                     case "結果_AIログ" -> writeAiLogPlaceholder(wb, sheetName);
                     default -> wb.createSheet(safeSheetName(sheetName));
@@ -166,9 +169,63 @@ public final class Stage2PythonishPlanWorkbookLayout {
         }
     }
 
-    private static void writeTaskSheet(XSSFWorkbook wb, String sheetName, PlanInputTabularIo.TabularSheet tasks) {
+    /**
+     * Python {@code default_result_task_sheet_column_order(0)} と同じ 28 列見出しで、計画入力の列を同名または
+     * 依頼NO→タスクID にマッピングして転写する（配台未実行のため他列は空）。
+     */
+    private static void writeResultTaskListSheet(
+            XSSFWorkbook wb, String sheetName, PlanInputTabularIo.TabularSheet tasks) {
         Sheet sh = wb.createSheet(safeSheetName(sheetName));
-        writeTabular(sh, tasks.headers(), tasks.rows());
+        List<String> canon = Stage2ResultTaskListCanonicalHeaders.DEFAULT_ORDER_NO_HISTORY;
+        writeTabular(sh, canon, expandResultTaskRows(tasks, canon));
+    }
+
+    private static List<List<String>> expandResultTaskRows(
+            PlanInputTabularIo.TabularSheet tasks, List<String> outCols) {
+        List<String> inHeaders = tasks.headers();
+        Map<String, Integer> inIndex = new HashMap<>();
+        for (int i = 0; i < inHeaders.size(); i++) {
+            String k = inHeaders.get(i) == null ? "" : inHeaders.get(i).strip();
+            inIndex.put(k, i);
+        }
+        Map<String, String> planKeyToResultCol = new HashMap<>();
+        planKeyToResultCol.put("依頼NO", "タスクID");
+        String[] sameName =
+                new String[] {
+                    "工程名",
+                    "機械名",
+                    "回答納期",
+                    "指定納期",
+                    "原反投入日",
+                    "加工速度",
+                    "優先度",
+                    "担当OP指定",
+                };
+        for (String s : sameName) {
+            planKeyToResultCol.put(s, s);
+        }
+        Map<String, Integer> outIndex = new HashMap<>();
+        for (int i = 0; i < outCols.size(); i++) {
+            outIndex.put(outCols.get(i), i);
+        }
+
+        List<List<String>> out = new ArrayList<>();
+        for (List<String> row : tasks.rows()) {
+            List<String> cells = new ArrayList<>(Collections.nCopies(outCols.size(), ""));
+            for (Map.Entry<String, String> e : planKeyToResultCol.entrySet()) {
+                Integer si = inIndex.get(e.getKey());
+                Integer ti = outIndex.get(e.getValue());
+                if (si == null || ti == null || si < 0 || ti < 0) {
+                    continue;
+                }
+                if (si < row.size()) {
+                    String v = row.get(si);
+                    cells.set(ti, v != null ? v : "");
+                }
+            }
+            out.add(cells);
+        }
+        return out;
     }
 
     private static void writeDispatchHeaderOnly(XSSFWorkbook wb, String sheetName) {

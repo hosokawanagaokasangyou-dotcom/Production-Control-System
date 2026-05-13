@@ -30,6 +30,10 @@ class Stage2PythonishPlanWorkbookLayoutTest {
                         Stage2PythonishPlanWorkbookLayout.PLAN_SHEET_ORDER.get(i),
                         wb.getSheetAt(i).getSheetName());
             }
+            var taskSheet = wb.getSheet("結果_タスク一覧");
+            assertEquals(
+                    Stage2ResultTaskListCanonicalHeaders.DEFAULT_ORDER_NO_HISTORY.size(),
+                    (int) taskSheet.getRow(0).getLastCellNum());
         }
     }
 }

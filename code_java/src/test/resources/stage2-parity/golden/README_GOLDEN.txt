@@ -7,6 +7,10 @@
 
 ■ 収録例（task_queue_expected.json）
   case_minimal … 1 依頼・工程あり
+
+■ result_task_list_sheet_expected.json（case_minimal）
+  計画ブック JSON の「結果_タスク一覧」サブツリー。列順は Python _core.default_result_task_sheet_column_order(0) と一致。
+  PassThrough は配台未実行のためセル値は主に空＋計画入力から転写した列のみ（依頼NO→タスクID 等）。Python 正本と全文一致させるときは同じ master/plan で段階2を実行して差し替える。
   case_two_tasks … 2 依頼の出現順
   case_skip_empty_process … 工程名が空の行はスキップ（Python TASK_COL_MACHINE 空ゲートに相当）
 
