@@ -91,11 +91,7 @@ public class PmAiFxApp extends Application {
     private static void applyPrismGpuPipelineOrder() {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (os.contains("windows")) {
-            /*
-             * D3D を先にすると Effect／クリップを伴う NGRegion で maskTex NPE（設備ガント等）が出る環境がある。
-             * ES2（ANGLE）を先に試し、ダメなら D3D → sw。
-             */
-            System.setProperty("prism.order", "es2,d3d,sw");
+            System.setProperty("prism.order", "d3d,es2,sw");
         } else if (os.contains("mac")) {
             System.setProperty("prism.order", "metal,es2,sw");
         } else {

@@ -354,8 +354,7 @@ final class GpuProbeLauncher {
     private static String prismGpuOrderForProbe() {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (os.contains("windows")) {
-            /* {@link PmAiFxApp#applyPrismGpuPipelineOrder} と同一（プローブと本体の Prism 順を揃える） */
-            return "es2,d3d,sw";
+            return "d3d,es2,sw";
         }
         if (os.contains("mac")) {
             return "metal,es2,sw";
