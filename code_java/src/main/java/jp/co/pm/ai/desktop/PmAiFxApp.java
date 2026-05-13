@@ -94,7 +94,12 @@ public class PmAiFxApp extends Application {
     private static void applyPrismGpuPipelineOrder() {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (os.contains("windows")) {
-            System.setProperty("prism.order", "d3d,es2,sw");
+            /*
+             * javafx:run の CLASSPATH（無名モジュール）構成では D3D 先行だと Canvas 描画で
+             * NGCanvas$RenderBuf.validate が RTTexture null の NPE になる事例がある（ターミナル再現）。
+             * ES2 を先に試し、必要なら D3D へ退避可能な順序にする。
+             */
+            System.setProperty("prism.order", "es2,d3d,sw");
         } else if (os.contains("mac")) {
             System.setProperty("prism.order", "metal,es2,sw");
         } else {
