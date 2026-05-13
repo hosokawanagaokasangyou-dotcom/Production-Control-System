@@ -304,6 +304,7 @@ public final class DispatchInteractiveTabController {
         this.shell = shell;
         Platform.runLater(this::reloadFromDiskQuiet);
         ensureInnerTabPersistenceWired();
+        shell.syncPlanInputStage2ButtonFromDispatchDirty();
     }
 
     private void ensureInnerTabPersistenceWired() {
@@ -612,6 +613,9 @@ public final class DispatchInteractiveTabController {
     @FXML
     private void onDispatchTrialAction() {
         if (shell == null) {
+            return;
+        }
+        if (reloadInteractionDisabled || dispatchDocDirtySinceSave) {
             return;
         }
         statusLabel.setText("配台試行中...");
@@ -1229,24 +1233,37 @@ public final class DispatchInteractiveTabController {
     private void markDispatchDocDirty() {
         dispatchDocDirtySinceSave = true;
         applyDispatchTrialButtonEnabledState();
+        if (shell != null) {
+            shell.onDispatchInteractiveTableDirtyChanged(true);
+        }
     }
 
     private void clearDispatchDocDirty() {
         dispatchDocDirtySinceSave = false;
         applyDispatchTrialButtonEnabledState();
+        if (shell != null) {
+            shell.onDispatchInteractiveTableDirtyChanged(false);
+        }
     }
 
-    /** 配台試行ボタン: パイプライン実行中のみ無効。未保存でも試行開始時に JSON へ同期する。 */
+    /** 最後の保存または「再読み」以降に手動編集があり、ディスク上の JSON と表が一致しないとき true。 */
+    boolean isDispatchDocDirtySinceSave() {
+        return dispatchDocDirtySinceSave;
+    }
+
+    /**
+     * 配台試行ボタン: 再読込中は無効。表を手動編集して未保存のときは無効（保存または「再読み」で有効化）。
+     */
     private void applyDispatchTrialButtonEnabledState() {
         if (dispatchTrialButton == null) {
             return;
         }
-        dispatchTrialButton.setDisable(reloadInteractionDisabled);
+        boolean blockTrial = reloadInteractionDisabled || dispatchDocDirtySinceSave;
+        dispatchTrialButton.setDisable(blockTrial);
         if (dispatchDocDirtySinceSave && !reloadInteractionDisabled) {
             dispatchTrialButton.setTooltip(
                     new Tooltip(
-                            "未保存の編集があります。配台試行は開始時に表の内容を結果_配台表.json に自動同期します。"
-                                    + " Excel (xlsx) も更新する場合は「保存 (JSON+xlsx)」を押してください。"));
+                            "未保存の編集があります。「保存 (JSON+xlsx)」または「再読み」で確定してから段階3へ進んでください。"));
         } else {
             dispatchTrialButton.setTooltip(null);
         }

@@ -22,6 +22,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TablePosition;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.layout.HBox;
 import javafx.scene.paint.Color;
@@ -122,6 +123,12 @@ public final class PlanInputTabController {
     private EventHandler<GridChange> gridChangeHandler;
 
     private boolean planInputCellEditHooksInstalled;
+
+    /** 段階1／段階2 の Python 実行中（メインシェルから同期）。 */
+    private boolean stage2RunPipelineBusy;
+
+    /** 配台計画手動修正タブの表が未保存のとき、段階2を抑止する。 */
+    private boolean stage2BlockedByDispatchUnsavedEdit;
 
     @FXML
     private void initialize() {
@@ -240,15 +247,37 @@ public final class PlanInputTabController {
                         loadFromCurrentPath();
                     }
                 });
+        shell.syncPlanInputStage2ButtonFromDispatchDirty();
     }
 
     /**
      * 段階1／段階2 実行中は再実行を無効化する（{@link MainShellController#applyRunTabGating} から）。
      */
     void setStageRunProgressVisible(boolean stage1Running, boolean stage2Running) {
-        boolean busy = stage1Running || stage2Running;
-        if (stage2RunButton != null) {
-            stage2RunButton.setDisable(busy);
+        stage2RunPipelineBusy = stage1Running || stage2Running;
+        applyStage2RunButtonEnabledState();
+    }
+
+    /**
+     * 配台計画手動修正の表に未保存の変更があるとき {@code blocked} を true にする（保存または「再読み」で false）。
+     */
+    void setStage2BlockedByUnsavedDispatchEdit(boolean blocked) {
+        stage2BlockedByDispatchUnsavedEdit = blocked;
+        applyStage2RunButtonEnabledState();
+    }
+
+    private void applyStage2RunButtonEnabledState() {
+        if (stage2RunButton == null) {
+            return;
+        }
+        boolean disable = stage2RunPipelineBusy || stage2BlockedByDispatchUnsavedEdit;
+        stage2RunButton.setDisable(disable);
+        if (stage2BlockedByDispatchUnsavedEdit && !stage2RunPipelineBusy) {
+            stage2RunButton.setTooltip(
+                    new Tooltip(
+                            "配台計画手動修正タブに未保存の変更があります。「保存 (JSON+xlsx)」または「再読み」で確定してから実行してください。"));
+        } else {
+            stage2RunButton.setTooltip(null);
         }
     }
 

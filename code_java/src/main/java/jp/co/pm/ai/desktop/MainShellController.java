@@ -3400,11 +3400,31 @@ public final class MainShellController {
         this.reloadAfterStage1Preview = r;
     }
 
+    /** 手動修正タブの未保存状態をタスク入力の段階2ボタンへ反映する（起動時・bind 直後用）。 */
+    void syncPlanInputStage2ButtonFromDispatchDirty() {
+        boolean dirty =
+                dispatchInteractiveTabController != null
+                        && dispatchInteractiveTabController.isDispatchDocDirtySinceSave();
+        onDispatchInteractiveTableDirtyChanged(dirty);
+    }
+
+    void onDispatchInteractiveTableDirtyChanged(boolean dispatchTableDirty) {
+        if (planInputTabController != null) {
+            planInputTabController.setStage2BlockedByUnsavedDispatchEdit(dispatchTableDirty);
+        }
+    }
+
     void triggerStage1() {
         runStage(STAGE1);
     }
 
     void triggerStage2() {
+        if (dispatchInteractiveTabController != null
+                && dispatchInteractiveTabController.isDispatchDocDirtySinceSave()) {
+            appendLog(
+                    "[stage2] 配台計画手動修正に未保存の変更があります。JSON を「保存」するか「再読み」後に実行してください。");
+            return;
+        }
         runStage(STAGE2);
     }
 
