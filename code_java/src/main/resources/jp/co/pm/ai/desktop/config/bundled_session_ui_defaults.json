@@ -40,7 +40,7 @@
   "equipmentGanttPersonBadgeWireStrokeHex": "",
   "equipmentGanttPersonBadgeWireWidthPx": 0,
   "equipmentGanttPersonBadgeWireDashStyleKey": "SOLID",
-  "equipmentGanttPersonBadgeWireMaxLengthPx": 0,
+  "equipmentGanttPersonBadgeWireMaxLengthPx": 25,
   "equipmentGanttPersonBadgeFontPercent": 85,
   "equipmentGanttPersonBadgeFillHex": "#2563eb",
   "equipmentGanttPersonBadgeTextHex": "#f8fafc",

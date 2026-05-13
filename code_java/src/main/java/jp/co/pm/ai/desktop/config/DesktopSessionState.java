@@ -191,7 +191,7 @@ public record DesktopSessionState(
      * ワイヤー長の既定（px）。ワイヤー表示時はバッジ中心がアンカーからこの距離の円周上に置かれる（放射配置の半径）。
      * {@code 0} は無制限（従来の横並び初期配置＋距離クランプなし）。
      */
-    public static final double DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX = 60d;
+    public static final double DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX = 25d;
 
     /** UI スライダーおよび保存値のワイヤー長上限（px）。 */
     public static final double MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX = 1200d;
