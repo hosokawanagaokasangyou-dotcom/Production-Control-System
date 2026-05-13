@@ -74,6 +74,22 @@ class Stage2JavaEngineSmokeTest {
                                     })
                             .findFirst()
                             .orElseThrow();
+            Path planXlsx =
+                    files.stream()
+                            .filter(
+                                    p -> {
+                                        String n = p.getFileName().toString();
+                                        return n.startsWith("計画")
+                                                && n.endsWith(".xlsx")
+                                                && !n.contains("設");
+                                    })
+                            .findFirst()
+                            .orElseThrow();
+            try (var wb = new XSSFWorkbook(Files.newInputStream(planXlsx))) {
+                assertEquals(8, wb.getNumberOfSheets());
+                assertEquals("結果_設備毎の時間割", wb.getSheetAt(0).getSheetName());
+                assertEquals("結果_タスク一覧", wb.getSheetAt(5).getSheetName());
+            }
             JsonNode rootNode = MAPPER.readTree(Files.readString(json, StandardCharsets.UTF_8));
             assertEquals(2, rootNode.get("format_version").asInt());
             assertTrue(rootNode.has("sheets"));
@@ -83,9 +99,10 @@ class Stage2JavaEngineSmokeTest {
     private static void writeMinimalMaster(Path path) throws Exception {
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             var skills = wb.createSheet("skills");
-            var hr = skills.createRow(0);
-            hr.createCell(0).setCellValue("メンバー");
-            skills.createRow(1).createCell(0).setCellValue("テストオペレータ");
+            skills.createRow(0).createCell(0).setCellValue("メンバー");
+            skills.createRow(0).createCell(1).setCellValue("工程テスト");
+            skills.createRow(1).createCell(1).setCellValue("機械テスト");
+            skills.createRow(2).createCell(0).setCellValue("テストオペレータ");
             var main = wb.createSheet("メイン");
             var r12 = main.createRow(11);
             r12.createCell(0).setCellValue("08:00");
