@@ -26,4 +26,11 @@ public final class Stage2EnvParsing {
     public static boolean stage2WriteExcel(Map<String, String> ui) {
         return envEnabled(AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL, ui, true);
     }
+
+    /**
+     * {@code PM_AI_STAGE2_ENGINE=java} かつ本キーが真のとき、配台本体は Python 子プロセス（正本）へ委譲する。
+     */
+    public static boolean javaDelegatesPythonDispatch(Map<String, String> ui) {
+        return envEnabled(AppPaths.KEY_PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH, ui, false);
+    }
 }

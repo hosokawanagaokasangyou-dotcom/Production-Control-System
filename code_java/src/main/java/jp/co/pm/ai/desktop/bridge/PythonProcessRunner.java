@@ -213,6 +213,42 @@ public final class PythonProcessRunner {
 
     public record CapturedResult(int exitCode, String stdout) {}
 
+    /**
+     * {@link #runAsync} と同一の子プロセス設定だが、呼び出しスレッドで stdout を読み切り、JavaFX に依存しない。
+     * 長大な stdout をメモリに溜めない（{@link #runCaptureAsync} との差）。
+     */
+    public static int runBlockingSameThread(RunRequest req, Consumer<String> lineConsumer)
+            throws IOException, InterruptedException {
+        Objects.requireNonNull(req, "req");
+        if (!Files.isDirectory(req.scriptDirectory())) {
+            throw new IOException("script directory not found: " + req.scriptDirectory());
+        }
+        Path script = req.scriptDirectory().resolve(req.scriptFileName());
+        if (!Files.isRegularFile(script)) {
+            throw new IOException("script not found: " + script);
+        }
+        List<String> cmd = new ArrayList<>();
+        cmd.add(req.pythonExecutable().toString());
+        cmd.add(req.scriptFileName());
+        ProcessBuilder pb = new ProcessBuilder(cmd);
+        pb.directory(req.scriptDirectory().toFile());
+        pb.redirectErrorStream(true);
+        mergeUiEnvIntoProcess(pb, req.extraEnv(), req.scriptDirectory());
+        Process p = pb.start();
+        readStreamSameThread(p.getInputStream(), lineConsumer != null ? lineConsumer : s -> {});
+        return p.waitFor();
+    }
+
+    private static void readStreamSameThread(InputStream in, Consumer<String> perLine) throws IOException {
+        try (BufferedReader r = new BufferedReader(
+                new InputStreamReader(in, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                perLine.accept(line);
+            }
+        }
+    }
+
     private static String readStreamFullyWithTap(InputStream in, Consumer<String> lineTap)
             throws IOException {
         try (BufferedReader r = new BufferedReader(

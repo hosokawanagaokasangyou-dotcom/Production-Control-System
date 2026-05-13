@@ -187,6 +187,13 @@ public final class AppPaths {
     public static final String KEY_PM_AI_STAGE2_ENGINE = "PM_AI_STAGE2_ENGINE";
 
     /**
+     * {@link #KEY_PM_AI_STAGE2_ENGINE} が {@code java} のときのみ参照。有効にすると JVM 内の PassThrough ではなく、Python
+     * {@code plan_simulation_stage2.py}（{@code _generate_plan_impl} 正本）を子プロセスで実行し、Python エンジンと同一の計画／人員成果物を出す。
+     */
+    public static final String KEY_PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH =
+            "PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH";
+
+    /**
      * 段階2の Excel 成果物（結果ブック）のフォントファミリ。空のときは planning_core の {@code RESULT_BOOK_FONT_NAME}（BIZ
      * UDゴシック）相当。JavaFX 実行タブのコンボで上書き可。
      */

@@ -274,6 +274,12 @@ public final class EnvVarDocs {
                         + " java のとき JVM 内の jp.co.pm.ai.planning.stage2 を起動し Python 段階2は使わない。"
                         + " 配台コアの完全な Python 同等は段階的に拡張する（現状は入力読取・最小成果物・JSON ミラーの足場）。");
         put(
+                "PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH",
+                "段階2で PM_AI_STAGE2_ENGINE=java のときのみ有効。1/true/on/yes のとき、JVM 内 PassThrough ではなく"
+                        + " Python plan_simulation_stage2.py（_generate_plan_impl 正本）を子プロセスで実行し、"
+                        + " Python エンジンと同一の計画／人員成果物を出す（完全 Java 移植までの本番同一出力用）。"
+                        + " PM_AI_CODE_PYTHON_DIR・PM_AI_PYTHON 等は Python 子と同様に必須。");
+        put(
                 "PM_AI_XLWINGS_STAGE2_DISABLED",
                 "1/true/yes/on で段階2後の xlwings"
                         + "（列設定シート図形複製等、Excel COM/アドイン連携用）"
