@@ -26,6 +26,8 @@
                 <Label text="モデル"/>
                 <ComboBox fx:id="modelCombo" editable="true" prefWidth="360.0"/>
             </HBox>
+            <Label style="-fx-text-fill: -fx-mid-text-color" wrapText="true"
+                   text="「全モデル一括」は ComboBox のドロップダウン一覧に並ぶモデル ID を上から順に実行します（候補の編集・追加・削除で対象が変わります）。"/>
             <HBox alignment="CENTER_LEFT" spacing="8.0">
                 <Label text="試行回数"/>
                 <Spinner fx:id="runsSpinner" editable="true" prefWidth="100.0"/>
@@ -37,6 +39,7 @@
                 <Label text="タイムアウト（秒）"/>
                 <Spinner fx:id="timeoutSecondsSpinner" editable="true" prefWidth="100.0"/>
                 <Button fx:id="runButton" mnemonicParsing="false" onAction="#onRunBenchmark" text="ベンチマーク実行"/>
+                <Button fx:id="runAllModelsButton" mnemonicParsing="false" onAction="#onRunAllModelsBenchmark" text="全モデル一括"/>
                 <Button fx:id="clearButton" mnemonicParsing="false" onAction="#onClearLog" text="ログ消去"/>
             </HBox>
             <Label text="プロンプト" style="-fx-font-weight: bold"/>

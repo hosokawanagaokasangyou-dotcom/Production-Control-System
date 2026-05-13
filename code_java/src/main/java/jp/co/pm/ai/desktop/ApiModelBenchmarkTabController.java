@@ -3,6 +3,8 @@ package jp.co.pm.ai.desktop;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -63,6 +65,9 @@ public final class ApiModelBenchmarkTabController {
     private Button runButton;
 
     @FXML
+    private Button runAllModelsButton;
+
+    @FXML
     private Button clearButton;
 
     @FXML
@@ -75,6 +80,24 @@ public final class ApiModelBenchmarkTabController {
     private Label summaryLabel;
 
     private final AtomicReference<Thread> worker = new AtomicReference<>();
+
+    private record ModelBenchOutcome(
+            String model, int http2xxCount, int plannedRuns, double avgMs, double minMs, double maxMs) {
+
+        String toSummaryLine() {
+            if (http2xxCount <= 0) {
+                return model + ": HTTP 2xx なし（試行 " + plannedRuns + " 回）";
+            }
+            return String.format(
+                    Locale.ROOT,
+                    "%s: 平均 %.2f ms / 最小 %.2f / 最大 %.2f（n=%d）",
+                    model,
+                    avgMs,
+                    minMs,
+                    maxMs,
+                    http2xxCount);
+        }
+    }
 
     @FXML
     private void initialize() {
@@ -133,28 +156,8 @@ public final class ApiModelBenchmarkTabController {
             return;
         }
 
-        Path credPath = resolveGeminiCredentialsPath(shell.snapshotUiEnv());
-        if (!Files.isRegularFile(credPath)) {
-            alert(
-                    AlertType.WARNING,
-                    "認証ファイルが見つかりません。\n"
-                            + credPath
-                            + "\n環境変数タブで GEMINI_CREDENTIALS_JSON を設定するか、既定パスにファイルを置いてください。");
-            return;
-        }
-
-        final String apiKey;
-        try {
-            String json = Files.readString(credPath);
-            apiKey =
-                    GeminiCredentialsV2Crypto.decryptGeminiApiKeyFromJsonString(
-                            json, GeminiCredentialsV2Crypto.DEFAULT_PASSPHRASE);
-        } catch (Exception ex) {
-            alert(AlertType.ERROR, "認証 JSON の読込・復号に失敗しました。\n" + ex.getMessage());
-            return;
-        }
-        if (apiKey == null || apiKey.isBlank()) {
-            alert(AlertType.ERROR, "復号した API キーが空です。");
+        String apiKey = loadApiKeyOrAlert();
+        if (apiKey == null) {
             return;
         }
 
@@ -162,6 +165,10 @@ public final class ApiModelBenchmarkTabController {
         String model = GeminiGenerateContentRestClient.normalizeModelId(modelRaw);
         if (model.isEmpty()) {
             alert(AlertType.WARNING, "モデル ID を入力してください。");
+            return;
+        }
+        if (!GeminiGenerateContentRestClient.isAllowedModelId(modelRaw)) {
+            alert(AlertType.WARNING, "モデル ID は英数字・ドット・ハイフン・アンダースコアのみ使用してください。");
             return;
         }
 
@@ -172,29 +179,23 @@ public final class ApiModelBenchmarkTabController {
         String prompt = promptArea != null ? promptArea.getText() : "";
         Duration timeout = Duration.ofSeconds(Math.max(1, timeoutSec));
 
-        if (runButton != null) {
-            runButton.setDisable(true);
-        }
-        if (clearButton != null) {
-            clearButton.setDisable(true);
-        }
+        setBenchButtonsDisabled(true);
 
         Thread t =
                 new Thread(
                         () -> {
                             try {
-                                runBenchmarkOnWorker(apiKey, model, runs, maxTok, timeout, warmup, prompt);
-                            } finally {
+                                ModelBenchOutcome outcome =
+                                        runBenchmarkOnWorker(apiKey, model, runs, maxTok, timeout, warmup, prompt);
+                                String line = outcome.toSummaryLine();
                                 Platform.runLater(
                                         () -> {
-                                            if (runButton != null) {
-                                                runButton.setDisable(false);
+                                            if (summaryLabel != null) {
+                                                summaryLabel.setText(line);
                                             }
-                                            if (clearButton != null) {
-                                                clearButton.setDisable(false);
-                                            }
-                                            worker.set(null);
                                         });
+                            } finally {
+                                finishBenchWorker();
                             }
                         },
                         "api-model-benchmark");
@@ -203,7 +204,157 @@ public final class ApiModelBenchmarkTabController {
         t.start();
     }
 
-    private void runBenchmarkOnWorker(
+    @FXML
+    private void onRunAllModelsBenchmark() {
+        if (shell == null) {
+            alert(AlertType.WARNING, "メインシェルが未接続のため実行できません。");
+            return;
+        }
+        if (worker.get() != null && worker.get().isAlive()) {
+            alert(AlertType.INFORMATION, "既にベンチマークが実行中です。");
+            return;
+        }
+
+        String apiKey = loadApiKeyOrAlert();
+        if (apiKey == null) {
+            return;
+        }
+
+        List<String> models = orderedAllowedModelsFromCombo();
+        if (models.isEmpty()) {
+            alert(
+                    AlertType.WARNING,
+                    "ComboBox の一覧に有効なモデル ID がありません。\n"
+                            + "英数字・ドット・ハイフン・アンダースコアのみの ID をリストに追加してください。");
+            return;
+        }
+
+        int runs = runsSpinner != null ? runsSpinner.getValue() : 1;
+        int maxTok = maxTokensSpinner != null ? maxTokensSpinner.getValue() : 64;
+        int timeoutSec = timeoutSecondsSpinner != null ? timeoutSecondsSpinner.getValue() : 120;
+        boolean warmup = warmupCheck != null && warmupCheck.isSelected();
+        String prompt = promptArea != null ? promptArea.getText() : "";
+        Duration timeout = Duration.ofSeconds(Math.max(1, timeoutSec));
+
+        appendLogLine(
+                "=== 全モデル一括: "
+                        + models.size()
+                        + " 件（試行回数="
+                        + runs
+                        + ", maxOutputTokens="
+                        + maxTok
+                        + "）===");
+
+        setBenchButtonsDisabled(true);
+
+        Thread t =
+                new Thread(
+                        () -> {
+                            try {
+                                List<ModelBenchOutcome> outcomes = new ArrayList<>();
+                                for (String model : models) {
+                                    ModelBenchOutcome o =
+                                            runBenchmarkOnWorker(
+                                                    apiKey, model, runs, maxTok, timeout, warmup, prompt);
+                                    outcomes.add(o);
+                                }
+                                StringBuilder sb = new StringBuilder();
+                                sb.append("【全モデル集計】\n");
+                                for (ModelBenchOutcome o : outcomes) {
+                                    sb.append(o.toSummaryLine()).append('\n');
+                                }
+                                String text = sb.toString().strip();
+                                Platform.runLater(
+                                        () -> {
+                                            if (summaryLabel != null) {
+                                                summaryLabel.setText(text);
+                                            }
+                                        });
+                                appendLogLine("=== 全モデル一括 完了 ===");
+                            } finally {
+                                finishBenchWorker();
+                            }
+                        },
+                        "api-model-benchmark-all");
+        worker.set(t);
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * ComboBox の {@code items} を上から順に走査し、有効なモデル ID を重複なく返す（編集行のテキストは含めない）。
+     */
+    private List<String> orderedAllowedModelsFromCombo() {
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+        if (modelCombo != null && modelCombo.getItems() != null) {
+            for (String item : modelCombo.getItems()) {
+                if (GeminiGenerateContentRestClient.isAllowedModelId(item)) {
+                    out.add(GeminiGenerateContentRestClient.normalizeModelId(item));
+                }
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    private void setBenchButtonsDisabled(boolean disabled) {
+        Platform.runLater(
+                () -> {
+                    if (runButton != null) {
+                        runButton.setDisable(disabled);
+                    }
+                    if (runAllModelsButton != null) {
+                        runAllModelsButton.setDisable(disabled);
+                    }
+                    if (clearButton != null) {
+                        clearButton.setDisable(disabled);
+                    }
+                });
+    }
+
+    private void finishBenchWorker() {
+        Platform.runLater(
+                () -> {
+                    if (runButton != null) {
+                        runButton.setDisable(false);
+                    }
+                    if (runAllModelsButton != null) {
+                        runAllModelsButton.setDisable(false);
+                    }
+                    if (clearButton != null) {
+                        clearButton.setDisable(false);
+                    }
+                    worker.set(null);
+                });
+    }
+
+    /** 認証ファイルの読込・復号。失敗時はアラートのみで {@code null}。 */
+    private String loadApiKeyOrAlert() {
+        Path credPath = resolveGeminiCredentialsPath(shell.snapshotUiEnv());
+        if (!Files.isRegularFile(credPath)) {
+            alert(
+                    AlertType.WARNING,
+                    "認証ファイルが見つかりません。\n"
+                            + credPath
+                            + "\n環境変数タブで GEMINI_CREDENTIALS_JSON を設定するか、既定パスにファイルを置いてください。");
+            return null;
+        }
+        try {
+            String json = Files.readString(credPath);
+            String apiKey =
+                    GeminiCredentialsV2Crypto.decryptGeminiApiKeyFromJsonString(
+                            json, GeminiCredentialsV2Crypto.DEFAULT_PASSPHRASE);
+            if (apiKey == null || apiKey.isBlank()) {
+                alert(AlertType.ERROR, "復号した API キーが空です。");
+                return null;
+            }
+            return apiKey;
+        } catch (Exception ex) {
+            alert(AlertType.ERROR, "認証 JSON の読込・復号に失敗しました。\n" + ex.getMessage());
+            return null;
+        }
+    }
+
+    private ModelBenchOutcome runBenchmarkOnWorker(
             String apiKey,
             String model,
             int runs,
@@ -250,10 +401,7 @@ public final class ApiModelBenchmarkTabController {
                     maxMs = Math.max(maxMs, ms);
                 }
                 String line =
-                        String.format(
-                                Locale.ROOT,
-                                "#%d  HTTP %d  %.2f ms",
-                                i, r.httpStatus(), ms);
+                        String.format(Locale.ROOT, "#%d  HTTP %d  %.2f ms", i, r.httpStatus(), ms);
                 appendLogLine(line);
                 if (!r.bodyPreview().isEmpty()) {
                     appendLogLine("  body: " + r.bodyPreview());
@@ -266,25 +414,12 @@ public final class ApiModelBenchmarkTabController {
             }
         }
 
-        String summary;
+        appendLogLine("--- 終了 model=" + model + " ---");
+
         if (counted > 0) {
-            double avg = sumMs / counted;
-            summary =
-                    String.format(
-                            Locale.ROOT,
-                            "集計（HTTP 2xx のみ）: 平均 %.2f ms / 最小 %.2f ms / 最大 %.2f ms（n=%d）",
-                            avg, minMs, maxMs, counted);
-        } else {
-            summary = "集計: 成功レスポンスが無かったため平均を算出できませんでした。";
+            return new ModelBenchOutcome(model, counted, runs, sumMs / counted, minMs, maxMs);
         }
-        String finalSummary = summary;
-        Platform.runLater(
-                () -> {
-                    appendLogLine("--- 終了 ---");
-                    if (summaryLabel != null) {
-                        summaryLabel.setText(finalSummary);
-                    }
-                });
+        return new ModelBenchOutcome(model, 0, runs, 0, Double.NaN, Double.NaN);
     }
 
     private void appendLogLine(String line) {

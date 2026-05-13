@@ -48,6 +48,15 @@ public final class GeminiGenerateContentRestClient {
         return s;
     }
 
+    /** 正規化後のモデル ID が REST のパスセグメントとして許容される形式か（UI の一括リスト用）。 */
+    public static boolean isAllowedModelId(String raw) {
+        return isAllowedNormalized(normalizeModelId(raw));
+    }
+
+    private static boolean isAllowedNormalized(String model) {
+        return model != null && !model.isEmpty() && model.matches("^[a-zA-Z0-9._\\-]+$");
+    }
+
     /**
      * Gemini に 1 リクエスト送る。
      *
@@ -65,7 +74,7 @@ public final class GeminiGenerateContentRestClient {
         if (model.isEmpty()) {
             throw new IllegalArgumentException("モデル ID が空です。");
         }
-        if (!model.matches("^[a-zA-Z0-9._\\-]+$")) {
+        if (!isAllowedNormalized(model)) {
             throw new IllegalArgumentException("モデル ID は英数字・ドット・ハイフン・アンダースコアのみ使用してください。");
         }
         String key = apiKey.strip();
