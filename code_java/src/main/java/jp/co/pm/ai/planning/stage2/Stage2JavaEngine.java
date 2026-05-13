@@ -6,6 +6,7 @@ import java.nio.file.NoSuchFileException;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.planning.stage2.dispatch.Stage2DispatchOrchestrator;
 import jp.co.pm.ai.planning.stage2.input.Stage2InputLoader;
+import jp.co.pm.ai.planning.stage2.input.Stage2InputSnapshot;
 
 /** JVM 内の段階2エンジン（Python 子プロセスを使わない）。 */
 public final class Stage2JavaEngine {

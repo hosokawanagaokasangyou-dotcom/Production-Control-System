@@ -6,12 +6,16 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javafx.application.Platform;
+import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
@@ -22,7 +26,10 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
 import javafx.scene.control.SelectionMode;
+import javafx.scene.control.Tab;
+import javafx.scene.control.TabPane;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
@@ -41,7 +48,9 @@ import javafx.util.StringConverter;
 
 import org.controlsfx.control.table.TableFilter;
 
+import jp.co.pm.ai.desktop.benchmark.GeminiGenerateContentRestClient;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
 import jp.co.pm.ai.desktop.crypto.GeminiCredentialsV2Crypto;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.FileChooserForEnvKey;
@@ -93,6 +102,51 @@ public final class EnvTabController {
                     + " フォルダ型は「フォルダ...」、各ファイル型は"
                     + "変数名に応じて JSON / Excel / CSV の拡張子を表示。";
 
+    private static final String KEY_GEMINI_MODEL_TRY_ORDER = "GEMINI_MODEL_TRY_ORDER";
+    private static final String KEY_GEMINI_MODEL = "GEMINI_MODEL";
+
+    private static final String GEMINI_TRY_ORDER_ROW_DESCRIPTION =
+            "カンマ区切りで試行順（例: gemini-3.1-flash-lite,gemini-2.5-flash-lite）。GEMINI_MODEL 未設定時のみ有効。両方空ならコード既定（Flash-Lite 系の列）";
+
+    @FXML
+    private TabPane envMainTabPane;
+
+    @FXML
+    private Tab envVarsListTab;
+
+    @FXML
+    private Tab dispatchGeminiModelsTab;
+
+    @FXML
+    private Label dispatchGeminiHelpLabel;
+
+    @FXML
+    private Label dispatchGeminiPinnedWarning;
+
+    @FXML
+    private ListView<String> dispatchGeminiModelListView;
+
+    @FXML
+    private TextField dispatchGeminiModelAddField;
+
+    @FXML
+    private Button dispatchGeminiAddButton;
+
+    @FXML
+    private Button dispatchGeminiMoveUpButton;
+
+    @FXML
+    private Button dispatchGeminiMoveDownButton;
+
+    @FXML
+    private Button dispatchGeminiRemoveButton;
+
+    @FXML
+    private Button dispatchGeminiLoadDefaultsButton;
+
+    @FXML
+    private Button dispatchGeminiApplyToEnvButton;
+
     @FXML
     private Label hintLabel;
 
@@ -136,6 +190,10 @@ public final class EnvTabController {
 
     private FilteredList<EnvVarRow> envRowsFiltered;
 
+    private final ObservableList<String> dispatchGeminiModelItems = FXCollections.observableArrayList();
+
+    private boolean dispatchGeminiEditorWired;
+
     void bindShell(MainShellController shell) {
         this.shell = shell;
         this.ownerStage = shell.getPrimaryStage();
@@ -158,6 +216,9 @@ public final class EnvTabController {
             encryptGeminiCredentialsButton.setText("Gemini API キーを暗号化保存");
         }
         wireTable();
+        wireDispatchGeminiModelEditorOnce();
+        reloadDispatchGeminiModelsFromEnv();
+        refreshDispatchGeminiPinnedWarning();
     }
 
     @FXML
@@ -482,6 +543,201 @@ public final class EnvTabController {
         applyEnvSearchPredicate();
     }
 
+    private void wireDispatchGeminiModelEditorOnce() {
+        if (dispatchGeminiEditorWired) {
+            return;
+        }
+        if (envMainTabPane == null || dispatchGeminiModelsTab == null) {
+            return;
+        }
+        dispatchGeminiEditorWired = true;
+        if (dispatchGeminiHelpLabel != null) {
+            dispatchGeminiHelpLabel.setText(
+                    "配台（planning_core）は GEMINI_MODEL が空のとき、環境変数 GEMINI_MODEL_TRY_ORDER を上から順に試行します。"
+                            + " 一覧を空にして「環境変数へ書き込み」するとコード既定の順（Python と同じ既定列）が使われます。"
+                            + " 環境変数一覧で GEMINI_MODEL_TRY_ORDER を直接編集した場合も、この子タブ表示中は自動で再読込します。");
+        }
+        if (dispatchGeminiModelListView != null) {
+            dispatchGeminiModelListView.setItems(dispatchGeminiModelItems);
+            dispatchGeminiModelListView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
+        }
+        envMainTabPane
+                .getSelectionModel()
+                .selectedItemProperty()
+                .addListener(
+                        (obs, prev, sel) -> {
+                            if (sel == dispatchGeminiModelsTab) {
+                                reloadDispatchGeminiModelsFromEnv();
+                                refreshDispatchGeminiPinnedWarning();
+                            }
+                        });
+    }
+
+    private void reloadDispatchGeminiModelsFromEnv() {
+        if (envRows == null || dispatchGeminiModelItems == null) {
+            return;
+        }
+        EnvVarRow row = findEnvRowByExactKey(KEY_GEMINI_MODEL_TRY_ORDER);
+        String raw = row != null ? row.getValue() : "";
+        dispatchGeminiModelItems.setAll(parseTryOrderCsv(raw));
+    }
+
+    private void refreshDispatchGeminiPinnedWarning() {
+        if (dispatchGeminiPinnedWarning == null || envRows == null) {
+            return;
+        }
+        EnvVarRow pin = findEnvRowByExactKey(KEY_GEMINI_MODEL);
+        String v = pin != null ? pin.getValue() : "";
+        boolean active = v != null && !v.isBlank();
+        dispatchGeminiPinnedWarning.setVisible(active);
+        dispatchGeminiPinnedWarning.setManaged(active);
+        if (active) {
+            dispatchGeminiPinnedWarning.setText(
+                    "GEMINI_MODEL が「"
+                            + v.strip()
+                            + "」に設定されているため、試行列（GEMINI_MODEL_TRY_ORDER）は無効です（単一モデル固定）。");
+        }
+    }
+
+    private EnvVarRow findEnvRowByExactKey(String key) {
+        if (envRows == null || key == null) {
+            return null;
+        }
+        for (EnvVarRow r : envRows) {
+            String n = r.getName() != null ? r.getName().strip() : "";
+            if (key.equals(n)) {
+                return r;
+            }
+        }
+        return null;
+    }
+
+    private EnvVarRow ensureGeminiTryOrderRow() {
+        EnvVarRow row = findEnvRowByExactKey(KEY_GEMINI_MODEL_TRY_ORDER);
+        if (row != null) {
+            return row;
+        }
+        EnvVarRow r = new EnvVarRow();
+        r.setName(KEY_GEMINI_MODEL_TRY_ORDER);
+        r.setValue("");
+        r.setDescription(GEMINI_TRY_ORDER_ROW_DESCRIPTION);
+        envRows.add(r);
+        return r;
+    }
+
+    private static List<String> parseTryOrderCsv(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        List<String> out = new ArrayList<>();
+        for (String p : raw.split(",")) {
+            if (p == null) {
+                continue;
+            }
+            String t = p.strip();
+            if (t.isEmpty()) {
+                continue;
+            }
+            String norm = GeminiGenerateContentRestClient.normalizeModelId(t);
+            if (seen.add(norm)) {
+                out.add(norm);
+            }
+        }
+        return out;
+    }
+
+    private void applyDispatchModelsToTryOrderEnvRow() {
+        EnvVarRow row = ensureGeminiTryOrderRow();
+        row.setValue(String.join(",", dispatchGeminiModelItems));
+    }
+
+    @FXML
+    private void onDispatchGeminiAddModelAction() {
+        if (dispatchGeminiModelAddField == null || ownerStage == null) {
+            return;
+        }
+        String raw = dispatchGeminiModelAddField.getText();
+        String norm = GeminiGenerateContentRestClient.normalizeModelId(raw != null ? raw : "");
+        if (norm.isEmpty()) {
+            alertFolderOpen(ownerStage, AlertType.WARNING, "モデル ID を入力してください。");
+            return;
+        }
+        if (!GeminiGenerateContentRestClient.isAllowedModelId(norm)) {
+            alertFolderOpen(
+                    ownerStage,
+                    AlertType.WARNING,
+                    "モデル ID は英数字・ドット・ハイフン・アンダースコアのみ使用してください。");
+            return;
+        }
+        if (dispatchGeminiModelItems.contains(norm)) {
+            alertFolderOpen(ownerStage, AlertType.INFORMATION, "既に一覧に含まれています: " + norm);
+            return;
+        }
+        dispatchGeminiModelItems.add(norm);
+        dispatchGeminiModelAddField.clear();
+        if (dispatchGeminiModelListView != null) {
+            dispatchGeminiModelListView.getSelectionModel().select(norm);
+        }
+    }
+
+    @FXML
+    private void onDispatchGeminiMoveUpAction() {
+        if (dispatchGeminiModelListView == null) {
+            return;
+        }
+        int i = dispatchGeminiModelListView.getSelectionModel().getSelectedIndex();
+        if (i <= 0) {
+            return;
+        }
+        String a = dispatchGeminiModelItems.remove(i);
+        dispatchGeminiModelItems.add(i - 1, a);
+        dispatchGeminiModelListView.getSelectionModel().select(i - 1);
+    }
+
+    @FXML
+    private void onDispatchGeminiMoveDownAction() {
+        if (dispatchGeminiModelListView == null) {
+            return;
+        }
+        int i = dispatchGeminiModelListView.getSelectionModel().getSelectedIndex();
+        if (i < 0 || i >= dispatchGeminiModelItems.size() - 1) {
+            return;
+        }
+        String a = dispatchGeminiModelItems.remove(i);
+        dispatchGeminiModelItems.add(i + 1, a);
+        dispatchGeminiModelListView.getSelectionModel().select(i + 1);
+    }
+
+    @FXML
+    private void onDispatchGeminiRemoveAction() {
+        if (dispatchGeminiModelListView == null) {
+            return;
+        }
+        int i = dispatchGeminiModelListView.getSelectionModel().getSelectedIndex();
+        if (i < 0 || i >= dispatchGeminiModelItems.size()) {
+            return;
+        }
+        dispatchGeminiModelItems.remove(i);
+    }
+
+    @FXML
+    private void onDispatchGeminiLoadDefaultsAction() {
+        dispatchGeminiModelItems.setAll(GeminiDispatchModelTryOrderDefaults.PLANNING_CORE_FALLBACK_TRY_ORDER);
+        if (dispatchGeminiModelListView != null && !dispatchGeminiModelItems.isEmpty()) {
+            dispatchGeminiModelListView.getSelectionModel().selectFirst();
+        }
+    }
+
+    @FXML
+    private void onDispatchGeminiApplyToEnvAction() {
+        if (envRows == null || ownerStage == null) {
+            return;
+        }
+        applyDispatchModelsToTryOrderEnvRow();
+        alertFolderOpen(ownerStage, AlertType.INFORMATION, "GEMINI_MODEL_TRY_ORDER を環境変数表に書き込みました。");
+    }
+
     private void hookEnvRowForSearchFilter(EnvVarRow r) {
         if (r == null) {
             return;
@@ -491,6 +747,28 @@ public final class EnvTabController {
         r.nameProperty().addListener((o, a, b) -> ping.run());
         r.valueProperty().addListener((o, a, b) -> ping.run());
         r.descriptionProperty().addListener((o, a, b) -> ping.run());
+        r.nameProperty().addListener((o, a, b) -> requestDispatchGeminiUiResyncIfRelevant(r));
+        r.valueProperty().addListener((o, a, b) -> requestDispatchGeminiUiResyncIfRelevant(r));
+    }
+
+    private void requestDispatchGeminiUiResyncIfRelevant(EnvVarRow r) {
+        if (r == null) {
+            return;
+        }
+        String n = r.getName() != null ? r.getName().strip() : "";
+        if (!KEY_GEMINI_MODEL_TRY_ORDER.equals(n) && !KEY_GEMINI_MODEL.equals(n)) {
+            return;
+        }
+        Platform.runLater(
+                () -> {
+                    if (envMainTabPane != null
+                            && dispatchGeminiModelsTab != null
+                            && envMainTabPane.getSelectionModel().getSelectedItem()
+                                    == dispatchGeminiModelsTab) {
+                        reloadDispatchGeminiModelsFromEnv();
+                        refreshDispatchGeminiPinnedWarning();
+                    }
+                });
     }
 
     private void applyEnvSearchPredicate() {

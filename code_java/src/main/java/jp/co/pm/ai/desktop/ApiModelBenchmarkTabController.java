@@ -34,6 +34,7 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import jp.co.pm.ai.desktop.benchmark.GeminiGenerateContentRestClient;
 import jp.co.pm.ai.desktop.benchmark.GeminiGenerateContentRestClient.CallResult;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
 import jp.co.pm.ai.desktop.crypto.GeminiCredentialsV2Crypto;
 
 /**
@@ -42,21 +43,7 @@ import jp.co.pm.ai.desktop.crypto.GeminiCredentialsV2Crypto;
 public final class ApiModelBenchmarkTabController {
 
     private static final List<String> DEFAULT_MODELS =
-            List.of(
-                    "gemini-3.1-flash-lite",
-                    "gemini-3.1-flash-lite-preview",
-                    "gemini-2.5-flash-lite",
-                    "gemini-2.0-flash-lite");
-
-    /**
-     * {@code planning_core/_core.py} の {@code GEMINI_MODEL_IDS_BY_QUALITY} と同一順（再試行のフォールバック列）。
-     */
-    private static final List<String> PLANNING_CORE_GEMINI_MODEL_IDS_BY_QUALITY =
-            List.of(
-                    "gemini-3.1-flash-lite",
-                    "gemini-3.1-flash-lite-preview",
-                    "gemini-2.5-flash-lite",
-                    "gemini-2.0-flash-lite");
+            List.copyOf(GeminiDispatchModelTryOrderDefaults.PLANNING_CORE_FALLBACK_TRY_ORDER);
 
     private MainShellController shell;
 
@@ -331,7 +318,8 @@ public final class ApiModelBenchmarkTabController {
         if (modelPriorityLabel == null) {
             return;
         }
-        String defaultsJoined = String.join(" → ", PLANNING_CORE_GEMINI_MODEL_IDS_BY_QUALITY);
+        String defaultsJoined =
+                String.join(" → ", GeminiDispatchModelTryOrderDefaults.PLANNING_CORE_FALLBACK_TRY_ORDER);
         String header =
                 "【planning_core】Gemini 試行モデル列（_gemini_generate_content_with_retry）\n"
                         + "決定ルール: 呼び出し引数で model を渡したときはその1件のみ。"

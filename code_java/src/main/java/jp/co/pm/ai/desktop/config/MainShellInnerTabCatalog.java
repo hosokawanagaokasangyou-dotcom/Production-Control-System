@@ -49,6 +49,10 @@ public final class MainShellInnerTabCatalog {
                     List.of(
                             "\u30bf\u30b9\u30af\u00d7\u65e5\u4ed8",
                             "\u5de5\u7a0b+\u6a5f\u68b0\u00d7\u65e5");
+            case ENV ->
+                    List.of(
+                            "\u74b0\u5883\u5909\u6570\u4e00\u89a7",
+                            "\u914d\u53f0 Gemini \u30e2\u30c7\u30eb\u512a\u5148");
             case PLAN_RESULT_VIEWER ->
                     List.of(
                             "\u751f\u7523\u8a08\u753b (multi_day) / \u30e1\u30f3\u30d0\u30fc\u52e4\u52d9",
