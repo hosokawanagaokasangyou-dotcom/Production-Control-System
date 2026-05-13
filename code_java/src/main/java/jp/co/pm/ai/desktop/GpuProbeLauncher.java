@@ -1,21 +1,37 @@
 package jp.co.pm.ai.desktop;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.lang.management.ManagementFactory;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
+
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 
 /**
- * 現在の JVM と同じクラスパスで {@link JavaFxGpuProbeApp} を子プロセス起動し、GPU Prism が Canvas で動くか判定する。
+ * 現在の JVM と同等の依存解決で {@link JavaFxGpuProbeApp} を子プロセス起動し、GPU Prism が Canvas で動くか判定する。
+ *
+ * <p>{@code javafx:run}（クラスパス JavaFX）のように {@code jdk.module.path} が空で OpenJFX が {@code java.class.path}
+ * に載っている場合は、子だけ {@code --module-path} に OpenJFX を切り出し {@code exec:exec} と同型のモジュール起動にする。
  */
 final class GpuProbeLauncher {
 
     private static final int PROBE_TIMEOUT_SEC = 45;
+
+    /** Cursor デバッグセッション用 NDJSON（{@code .cursor/debug-afb084.log}）。 */
+    private static final String AGENT_DEBUG_SESSION = "afb084";
+
+    private static final int STDERR_CAPTURE_MAX = 96_000;
 
     private GpuProbeLauncher() {}
 
@@ -34,25 +50,60 @@ final class GpuProbeLauncher {
         pb.redirectOutput(ProcessBuilder.Redirect.PIPE);
         pb.redirectError(ProcessBuilder.Redirect.PIPE);
         Process process = null;
+        ByteArrayOutputStream outBuf = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuf = new ByteArrayOutputStream();
         try {
             process = pb.start();
-            drainStream(process.getInputStream());
-            drainStream(process.getErrorStream());
+            Thread tout = drainStreamToBuffer(process.getInputStream(), outBuf, STDERR_CAPTURE_MAX);
+            Thread terr = drainStreamToBuffer(process.getErrorStream(), errBuf, STDERR_CAPTURE_MAX);
             boolean done = process.waitFor(PROBE_TIMEOUT_SEC, TimeUnit.SECONDS);
+            joinQuietly(tout, 8_000);
+            joinQuietly(terr, 8_000);
             if (!done) {
                 process.destroyForcibly();
                 PrismGpuBootstrapStatus.recordSoftwareAfterProbe("GPU テストタイムアウト");
+                // #region agent log
+                logGpuProbeNdjson(
+                        "H-timeout",
+                        "GpuProbeLauncher.runGpuCanvasProbe",
+                        "GPU probe timed out",
+                        probeLogData(cmd, -1, outBuf, errBuf));
+                // #endregion
                 return false;
             }
             int code = process.exitValue();
             if (code != 0) {
                 PrismGpuBootstrapStatus.recordSoftwareAfterProbe("GPU テスト終了コード=" + code);
+                // #region agent log
+                logGpuProbeNdjson(
+                        "H-child-exit-nonzero",
+                        "GpuProbeLauncher.runGpuCanvasProbe",
+                        "GPU probe child exited non-zero",
+                        probeLogData(cmd, code, outBuf, errBuf));
+                // #endregion
                 return false;
             }
+            // #region agent log
+            logGpuProbeNdjson(
+                    "H-probe-ok",
+                    "GpuProbeLauncher.runGpuCanvasProbe",
+                    "GPU probe child exit 0",
+                    probeLogData(cmd, 0, outBuf, errBuf));
+            // #endregion
             return true;
         } catch (Exception e) {
             PrismGpuBootstrapStatus.recordSoftwareAfterProbe(
                     "GPU テスト例外: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            // #region agent log
+            Map<String, Object> d = probeLogData(cmd, null, outBuf, errBuf);
+            d.put("parentException", e.getClass().getName());
+            d.put("parentExceptionMessage", String.valueOf(e.getMessage()));
+            logGpuProbeNdjson(
+                    "H-parent-io",
+                    "GpuProbeLauncher.runGpuCanvasProbe",
+                    "GPU probe parent IOException/Interrupted",
+                    d);
+            // #endregion
             return false;
         } finally {
             if (process != null && process.isAlive()) {
@@ -61,12 +112,23 @@ final class GpuProbeLauncher {
         }
     }
 
-    private static void drainStream(InputStream in) {
+    private static Thread drainStreamToBuffer(InputStream in, ByteArrayOutputStream dest, int maxBytes) {
         Thread t =
                 new Thread(
                         () -> {
                             try (in) {
-                                in.transferTo(OutputStream.nullOutputStream());
+                                byte[] buf = new byte[8192];
+                                int n;
+                                while ((n = in.read(buf)) >= 0) {
+                                    synchronized (dest) {
+                                        int room = maxBytes - dest.size();
+                                        if (room <= 0) {
+                                            continue;
+                                        }
+                                        int take = Math.min(n, room);
+                                        dest.write(buf, 0, take);
+                                    }
+                                }
                             } catch (IOException ignored) {
                                 // ignore
                             }
@@ -74,6 +136,65 @@ final class GpuProbeLauncher {
                         "gpu-probe-drain");
         t.setDaemon(true);
         t.start();
+        return t;
+    }
+
+    private static void joinQuietly(Thread t, long millis) {
+        if (t == null) {
+            return;
+        }
+        try {
+            t.join(millis);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static Map<String, Object> probeLogData(
+            List<String> cmd, Integer exitCode, ByteArrayOutputStream outBuf, ByteArrayOutputStream errBuf) {
+        Map<String, Object> d = new LinkedHashMap<>();
+        d.put("exitCode", exitCode);
+        d.put("javaHome", System.getProperty("java.home", ""));
+        d.put("osName", System.getProperty("os.name", ""));
+        d.put("prismOrderInProbeCmd", prismGpuOrderForProbe());
+        d.put("childStdoutUtf8", utf8Bounded(outBuf, 24_000));
+        d.put("childStderrUtf8", utf8Bounded(errBuf, 48_000));
+        d.put("probeJavaExe", cmd.isEmpty() ? "" : cmd.get(0));
+        String cp = System.getProperty("java.class.path", "");
+        d.put("parentClasspathLen", cp.length());
+        d.put("parentClasspathHasOpenjfx", cp.contains("openjfx") || cp.contains("javafx"));
+        d.put("jdkModulePathLen", System.getProperty("jdk.module.path", "").length());
+        d.put("jdkFeature", jdkFeatureVersion());
+        d.put("probeCmdHasModulePath", cmd.contains("--module-path"));
+        return d;
+    }
+
+    private static int jdkFeatureVersion() {
+        try {
+            return Runtime.version().feature();
+        } catch (Throwable ignored) {
+            return 21;
+        }
+    }
+
+    private static String utf8Bounded(ByteArrayOutputStream buf, int maxChars) {
+        if (buf == null) {
+            return "";
+        }
+        byte[] raw;
+        synchronized (buf) {
+            raw = buf.toByteArray();
+        }
+        String s = new String(raw, StandardCharsets.UTF_8);
+        if (s.length() <= maxChars) {
+            return s;
+        }
+        return s.substring(0, maxChars) + "\n…(truncated)";
+    }
+
+    private static void logGpuProbeNdjson(
+            String hypothesisId, String location, String message, Map<String, ?> data) {
+        AgentDebugLog.appendStructured(Map.of(), AGENT_DEBUG_SESSION, hypothesisId, location, message, data);
     }
 
     private static List<String> buildCommand() {
@@ -92,10 +213,56 @@ final class GpuProbeLauncher {
         List<String> cmd = new ArrayList<>();
         cmd.add(javaExe.toString());
 
+        /*
+         * JDK 22+ でクラスパス上の JavaFX（無名モジュール）がネイティブを System::load する際、
+         * 子プローブだけフラグが無いと「ランタイム不足」扱いで終了することがある（親は Maven が
+         * --enable-native-access を付けるが javafx.graphics は無名構成では Unknown module になり得る）。
+         */
+        if (jdkFeatureVersion() >= 22) {
+            cmd.add("--enable-native-access=ALL-UNNAMED");
+        }
+
         appendInheritedJvmOptions(cmd, ManagementFactory.getRuntimeMXBean().getInputArguments());
 
         cmd.add("-Dfile.encoding=UTF-8");
         cmd.add("-Dprism.order=" + prismGpuOrderForProbe());
+
+        /*
+         * exec:exec@pm-ai-desktop と同様: OpenJFX を module-path に載せ、プローブ本体は -classpath 側の無名モジュール。
+         * 親が jdk.module.path 付きなら継承済みのため従来どおり単一 -classpath のみ。
+         */
+        if (!System.getProperty("jdk.module.path", "").isBlank()) {
+            cmd.add("-classpath");
+            cmd.add(cp);
+            cmd.add(JavaFxGpuProbeApp.class.getName());
+            return cmd;
+        }
+
+        LinkedHashSet<String> openJfx = new LinkedHashSet<>();
+        LinkedHashSet<String> rest = new LinkedHashSet<>();
+        for (String seg : splitClasspathSegments(cp)) {
+            String lower = seg.toLowerCase(Locale.ROOT);
+            if (lower.contains("openjfx") || lower.contains("javafx-")) {
+                openJfx.add(seg);
+            } else {
+                rest.add(seg);
+            }
+        }
+        if (!openJfx.isEmpty()) {
+            cmd.add("--module-path");
+            cmd.add(String.join(File.pathSeparator, openJfx));
+            cmd.add("--add-modules");
+            cmd.add("javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.swing");
+            cmd.add("--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED");
+            cmd.add("--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED");
+            cmd.add("--add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED");
+            cmd.add("--enable-native-access=javafx.graphics");
+            cmd.add("-classpath");
+            cmd.add(String.join(File.pathSeparator, rest));
+            cmd.add(JavaFxGpuProbeApp.class.getName());
+            return cmd;
+        }
+
         cmd.add("-classpath");
         cmd.add(cp);
         cmd.add(JavaFxGpuProbeApp.class.getName());
@@ -103,10 +270,24 @@ final class GpuProbeLauncher {
         return cmd;
     }
 
+    private static List<String> splitClasspathSegments(String cp) {
+        List<String> out = new ArrayList<>();
+        for (String s : cp.split(Pattern.quote(File.pathSeparator))) {
+            if (s != null && !s.isBlank()) {
+                out.add(s);
+            }
+        }
+        return out;
+    }
+
     /**
      * exec:exec@pm-ai-desktop や従来の JavaFX 起動が付ける JavaFX モジュール解決用オプションを子へ継承する。
      *
      * <p>継承しないと子プロセスだけ {@code javafx.application.Application} が解決できず GPU プローブが誤って不合格になる。
+     *
+     * <p>{@code --add-opens}/{@code --add-exports}/{@code --enable-native-access}/{@code --patch-module} のうち
+     * {@code javafx.*} モジュールを対象にするものは継承しない。親がクラスパス上の JavaFX で動いていると子だけ
+     * 「Unknown module: javafx.*」となりランタイム不足扱いで終了するため。
      */
     private static void appendInheritedJvmOptions(List<String> cmd, List<String> inputArgs) {
         for (int i = 0; i < inputArgs.size(); i++) {
@@ -132,13 +313,42 @@ final class GpuProbeLauncher {
                 }
                 continue;
             }
-            if (arg.startsWith("--add-opens")
-                    || arg.startsWith("--add-exports")
-                    || arg.startsWith("--enable-native-access=")
-                    || arg.startsWith("--patch-module")) {
-                cmd.add(arg);
+            if ("--add-opens".equals(arg) || "--add-exports".equals(arg)) {
+                if (i + 1 < inputArgs.size()) {
+                    String next = inputArgs.get(i + 1);
+                    if (!next.startsWith("-")) {
+                        if (!referencesJavaFxModuleSpec(next)) {
+                            cmd.add(arg);
+                            cmd.add(next);
+                        }
+                        i++;
+                    }
+                }
+                continue;
+            }
+            if (arg.startsWith("--add-opens=") || arg.startsWith("--add-exports=")) {
+                if (!referencesJavaFxModuleSpec(arg)) {
+                    cmd.add(arg);
+                }
+                continue;
+            }
+            if (arg.startsWith("--enable-native-access=")) {
+                if (!referencesJavaFxModuleSpec(arg)) {
+                    cmd.add(arg);
+                }
+                continue;
+            }
+            if (arg.startsWith("--patch-module")) {
+                if (!referencesJavaFxModuleSpec(arg)) {
+                    cmd.add(arg);
+                }
             }
         }
+    }
+
+    /** {@code javafx.} モジュール名を対象にした JVM 引数か（プローブ子では未ロードのため除外する）。 */
+    private static boolean referencesJavaFxModuleSpec(String arg) {
+        return arg != null && arg.contains("javafx.");
     }
 
     private static String prismGpuOrderForProbe() {
