@@ -9,6 +9,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -47,10 +48,19 @@ public final class ApiModelBenchmarkTabController {
                     "gemini-2.0-flash",
                     "gemini-2.0-flash-lite");
 
+    /**
+     * {@code planning_core/_core.py} の {@code GEMINI_MODEL_IDS_BY_QUALITY} と同一順（再試行のフォールバック列）。
+     */
+    private static final List<String> PLANNING_CORE_GEMINI_MODEL_IDS_BY_QUALITY =
+            List.of("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro");
+
     private MainShellController shell;
 
     @FXML
     private Label credentialsPathLabel;
+
+    @FXML
+    private Label modelPriorityLabel;
 
     @FXML
     private ProgressBar benchProgressBar;
@@ -256,7 +266,7 @@ public final class ApiModelBenchmarkTabController {
                     new SpinnerValueFactory.IntegerSpinnerValueFactory(10, 600, 120, 10));
         }
         installRankingColumns();
-        refreshCredentialsPathLabel();
+        refreshShellDerivedLabels();
     }
 
     private void installRankingColumns() {
@@ -292,7 +302,13 @@ public final class ApiModelBenchmarkTabController {
 
     void bindShell(MainShellController mainShell) {
         this.shell = mainShell;
+        refreshShellDerivedLabels();
+    }
+
+    /** 認証パス・API モデル優先表示を、現在のシェル環境で更新する（タブ選択時にも呼ぶ）。 */
+    public void refreshShellDerivedLabels() {
         refreshCredentialsPathLabel();
+        refreshModelPriorityLabel();
     }
 
     private void refreshCredentialsPathLabel() {
@@ -305,6 +321,78 @@ public final class ApiModelBenchmarkTabController {
         }
         Path p = resolveGeminiCredentialsPath(shell.snapshotUiEnv());
         credentialsPathLabel.setText("GEMINI_CREDENTIALS_JSON → " + p);
+    }
+
+    private void refreshModelPriorityLabel() {
+        if (modelPriorityLabel == null) {
+            return;
+        }
+        String defaultsJoined = String.join(" → ", PLANNING_CORE_GEMINI_MODEL_IDS_BY_QUALITY);
+        String header =
+                "【planning_core】Gemini 試行モデル列（_gemini_generate_content_with_retry）\n"
+                        + "決定ルール: 呼び出し引数で model を渡したときはその1件のみ。"
+                        + " 未指定のときは (1) 環境変数 GEMINI_MODEL が非空ならその1件 (2) GEMINI_MODEL_TRY_ORDER が非空ならカンマ区切りを左から順"
+                        + " (3) コード既定: "
+                        + defaultsJoined
+                        + "\n";
+        if (shell == null) {
+            modelPriorityLabel.setText(header + "現在の列: （シェル未接続）");
+            return;
+        }
+        Map<String, String> env = shell.snapshotUiEnv();
+        String pinned = firstNonBlankEnv(env, "GEMINI_MODEL");
+        String tryRaw = env != null ? Objects.toString(env.get("GEMINI_MODEL_TRY_ORDER"), "") : "";
+        String tryParsed = parseCommaSeparatedModelOrder(tryRaw);
+        String effective;
+        String sourceLine;
+        if (pinned != null) {
+            effective = pinned;
+            sourceLine = "ソース: GEMINI_MODEL（単一固定）";
+        } else if (tryParsed != null) {
+            effective = tryParsed;
+            sourceLine = "ソース: GEMINI_MODEL_TRY_ORDER";
+        } else {
+            effective = defaultsJoined;
+            sourceLine = "ソース: planning_core コード既定（GEMINI_MODEL_IDS_BY_QUALITY）";
+        }
+        modelPriorityLabel.setText(
+                header
+                        + "現在の列（環境タブのスナップショット）: "
+                        + effective
+                        + "\n"
+                        + sourceLine
+                        + "\n"
+                        + "※ 本タブの「全モデル一括」は ComboBox 一覧の順であり、上記とは別です。");
+    }
+
+    private static String firstNonBlankEnv(Map<String, String> env, String key) {
+        if (env == null || key == null) {
+            return null;
+        }
+        String v = env.get(key);
+        if (v == null) {
+            return null;
+        }
+        String s = v.strip();
+        return s.isEmpty() ? null : s;
+    }
+
+    /** カンマ区切りを「 → 」で連結。空・空白のみなら {@code null}。 */
+    private static String parseCommaSeparatedModelOrder(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        List<String> parts = new ArrayList<>();
+        for (String p : raw.split(",")) {
+            String t = p != null ? p.strip() : "";
+            if (!t.isEmpty()) {
+                parts.add(t);
+            }
+        }
+        if (parts.isEmpty()) {
+            return null;
+        }
+        return String.join(" → ", parts);
     }
 
     @FXML

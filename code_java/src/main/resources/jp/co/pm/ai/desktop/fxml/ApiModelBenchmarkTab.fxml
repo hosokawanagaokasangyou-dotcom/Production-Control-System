@@ -24,6 +24,7 @@
         <VBox fillWidth="true" spacing="10.0">
             <Label wrapText="true" text="Gemini の generateContent（REST v1beta）を連続呼び出しし、往復レイテンシを計測します。API キーは環境変数 GEMINI_CREDENTIALS_JSON の JSON（暗号化形式）から復号します（パスフレーズは planning_core と同一の既定値）。429 はクォータ超過、404 はモデル ID 不正または未提供のことが多いです。"/>
             <Label fx:id="credentialsPathLabel" style="-fx-text-fill: -fx-mid-text-color" wrapText="true" text=""/>
+            <Label fx:id="modelPriorityLabel" style="-fx-text-fill: -fx-mid-text-color" wrapText="true" text=""/>
             <HBox alignment="CENTER_LEFT" spacing="10.0">
                 <ProgressBar fx:id="benchProgressBar" maxWidth="Infinity" prefWidth="320.0" visible="false" managed="false" HBox.hgrow="ALWAYS"/>
                 <Label fx:id="benchRunningLabel" style="-fx-text-fill: -fx-mid-text-color" text="" visible="false" managed="false"/>

@@ -575,6 +575,10 @@ public final class MainShellController {
                                     && deliveryCalendarViewTabController != null) {
                                 deliveryCalendarViewTabController.collapseInnerSectionPanesOnShellSelect();
                             }
+                            if (newTab == mainShellTabApiModelBenchmark
+                                    && apiModelBenchmarkTabController != null) {
+                                apiModelBenchmarkTabController.refreshShellDerivedLabels();
+                            }
                         });
         tabPane
                 .getTabs()
