@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -33,5 +34,21 @@ class EquipmentGanttWireAnchorMathTest {
                 expected,
                 EquipmentGanttWireAnchorMath.barAnchorCenterY(pad, rowH, zoom),
                 1e-9);
+    }
+
+    @Test
+    void personBadgeRadialAngles_symmetricAroundUp() {
+        double[] a2 = EquipmentGanttWireAnchorMath.personBadgeRadialAnglesRad(2);
+        assertEquals(2, a2.length);
+        assertEquals(-Math.PI / 2, (a2[0] + a2[1]) / 2, 1e-9);
+
+        double[] a4 = EquipmentGanttWireAnchorMath.personBadgeRadialAnglesRad(4);
+        assertEquals(4, a4.length);
+        assertTrue(a4[0] < a4[1] && a4[1] < a4[2] && a4[2] < a4[3]);
+        for (double t : a4) {
+            assertTrue(
+                    t > -Math.PI * 1.1 && t < Math.PI * 0.35,
+                    "angle in fan around up: " + t);
+        }
     }
 }

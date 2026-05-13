@@ -603,7 +603,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      * @param personBadgeWireStrokeHexOrEmpty ワイヤー色（#RRGGBB、空はテーマのバー枠色）
      * @param personBadgeWireWidthPxOrZero {@code 0} または非正でズーム連動の既定太さ
      * @param personBadgeWireDashStyleKeyOrEmpty {@link EquipmentGanttPersonBadgeWireDashStyle} の名前（空は SOLID）
-     * @param personBadgeWireMaxLengthPxOrZero バッジ中心とバーアンカー間のワイヤー長上限（px）。{@code 0} または非正は無制限
+     * @param personBadgeWireMaxLengthPxOrZero バッジ中心とバーアンカー間のワイヤー長（px）。{@code 0}
+     *     または非正は無制限（横並び初期配置・ドラッグ時の距離クランプなし）。正の値では放射配置の半径かつドラッグ時の距離上限
      * @param showPersonBadgeWires 担当バッジとチャートバーをワイヤーで結ぶ（{@code showPersonBadges} が false のとき無効）
      */
     public static BorderPane build(
@@ -1987,6 +1988,213 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         sync.run();
     }
 
+    /**
+     * バッジ論理中心をアンカーから {@code ringRadiusPx} の距離に乗せる（近すぎ・遠すぎの両方を補正）。
+     * {@link #clampBadgeLayoutToWireMaxLength} は上限超えのみ縮めるため、放射配置の「円周上に載せる」用に別途使う。
+     */
+    private static double[] projectBadgeLayoutOntoWireRing(
+            double layoutX,
+            double layoutY,
+            Bounds cb,
+            double anchorX,
+            double anchorY,
+            double ringRadiusPx) {
+        if (cb == null
+                || !Double.isFinite(ringRadiusPx)
+                || ringRadiusPx <= 1e-6
+                || !Double.isFinite(anchorX)
+                || !Double.isFinite(anchorY)) {
+            return new double[] {layoutX, layoutY};
+        }
+        double halfW = cb.getWidth() <= 1e-9 ? 0 : cb.getWidth() / 2;
+        double halfH = cb.getHeight() <= 1e-9 ? 0 : cb.getHeight() / 2;
+        double cx = layoutX + cb.getMinX() + halfW;
+        double cy = layoutY + cb.getMinY() + halfH;
+        double dx = cx - anchorX;
+        double dy = cy - anchorY;
+        double dist = Math.hypot(dx, dy);
+        if (dist <= 1e-6) {
+            double ncx = anchorX;
+            double ncy = anchorY - ringRadiusPx;
+            double nlx = ncx - cb.getMinX() - halfW;
+            double nly = ncy - cb.getMinY() - halfH;
+            return new double[] {nlx, nly};
+        }
+        double scale = ringRadiusPx / dist;
+        double ncx = anchorX + dx * scale;
+        double ncy = anchorY + dy * scale;
+        double nlx = ncx - cb.getMinX() - halfW;
+        double nly = ncy - cb.getMinY() - halfH;
+        return new double[] {nlx, nly};
+    }
+
+    /**
+     * ワイヤー有効時: バッジをアンカーから一定距離の円周上に均等角で配置する（横並び初期配置の代替）。
+     */
+    private static void layoutPersonBadgesRadialForRun(
+            int displayRowIndex,
+            List<String> parts,
+            List<StackPane> nodes,
+            List<Bounds> locals,
+            List<Double> stackHeights,
+            BarRun run,
+            double anchorX,
+            double anchorY,
+            double ringRadiusPx,
+            LayoutMetrics layout,
+            double timelineOuterPad,
+            double timelinePaneWidth,
+            double overlayPaneHeight,
+            List<BoundingBox> placedBadgeLogicalRects,
+            Map<String, EquipmentGanttBadgeDragDelta> dragDeltas,
+            boolean badgeDragAdjustEnabled,
+            BiConsumer<String, EquipmentGanttBadgeDragDelta> dragDeltaSink,
+            List<BadgeWirePlacement> wirePlacementBatch,
+            PersonBadgeWirePaint wirePaintOrNull) {
+        int n = nodes.size();
+        if (n == 0) {
+            return;
+        }
+        double innerBarTop = 3 * layout.zoom;
+        double barTop = timelineOuterPad + innerBarTop;
+        double barH = layout.rowHeight - 2 * innerBarTop;
+        double maxStackH = 1.0;
+        for (Double h : stackHeights) {
+            maxStackH = Math.max(maxStackH, h);
+        }
+        double totalStackH =
+                Math.max(barH, ringRadiusPx + maxStackH + 6 * layout.zoom);
+        double insetBottom = Math.max(2.0, layout.zoom);
+        double maxBottom =
+                Double.isFinite(overlayPaneHeight) && overlayPaneHeight > insetBottom + barTop
+                        ? overlayPaneHeight - insetBottom
+                        : barTop + barH;
+        double desiredClampBottom = barTop + Math.max(barH, totalStackH);
+        double badgeClampBottom = Math.min(desiredClampBottom, maxBottom);
+
+        double badgeBandVerticalExtraPx = Math.max(36.0, 11.0 * layout.zoom);
+        double badgeDragBandTop = Math.max(0.0, barTop - badgeBandVerticalExtraPx);
+        double paneBottomLimit =
+                Double.isFinite(overlayPaneHeight) && overlayPaneHeight > insetBottom + 1e-6
+                        ? overlayPaneHeight - insetBottom
+                        : Double.POSITIVE_INFINITY;
+        double badgeDragBandBottom =
+                Double.isFinite(paneBottomLimit)
+                        ? Math.min(badgeClampBottom + badgeBandVerticalExtraPx, paneBottomLimit)
+                        : badgeClampBottom + badgeBandVerticalExtraPx;
+
+        double[] angles = EquipmentGanttWireAnchorMath.personBadgeRadialAnglesRad(n);
+        boolean anchorDotPlacedForRun = false;
+
+        for (int k = 0; k < n; k++) {
+            StackPane sp = nodes.get(k);
+            Bounds b = locals.get(k);
+            Bounds cb = badgeDragClampBounds(sp);
+            double ang = angles[k];
+            double cx = anchorX + ringRadiusPx * Math.cos(ang);
+            double cy = anchorY + ringRadiusPx * Math.sin(ang);
+            double lx = cx - cb.getMinX() - (cb.getWidth() <= 1e-9 ? 0 : cb.getWidth() / 2);
+            double ly = cy - cb.getMinY() - (cb.getHeight() <= 1e-9 ? 0 : cb.getHeight() / 2);
+
+            Bounds logicalSize = badgeDragClampBounds(sp);
+            BoundingBox proposed =
+                    new BoundingBox(
+                            lx,
+                            ly,
+                            logicalSize.getWidth(),
+                            logicalSize.getHeight());
+            proposed =
+                    nudgeBadgeLogicalRectToClearPlaced(
+                            proposed,
+                            placedBadgeLogicalRects,
+                            Math.max(0.5, layout.zoom));
+            double visualLeft = proposed.getMinX();
+            lx = visualLeft;
+            ly = proposed.getMinY();
+
+            for (int refine = 0; refine < 3; refine++) {
+                double[] snapped =
+                        projectBadgeLayoutOntoWireRing(
+                                lx, ly, cb, anchorX, anchorY, ringRadiusPx);
+                lx = snapped[0];
+                ly = snapped[1];
+                lx = clampBadgeLayoutX(lx, cb, timelinePaneWidth);
+                ly = clampBadgeLayoutYInBand(ly, cb, badgeDragBandTop, badgeDragBandBottom);
+            }
+
+            placedBadgeLogicalRects.add(
+                    new BoundingBox(
+                            lx, ly, logicalSize.getWidth(), logicalSize.getHeight()));
+
+            String personLabel = k < parts.size() ? parts.get(k) : "";
+            String badgeKey =
+                    personBadgeDragKey(displayRowIndex, run, 0, k, personLabel);
+            double defaultLayoutX = lx - b.getMinX();
+            double defaultLayoutY = ly;
+            double lxUse = lx;
+            double lyUse = ly;
+            EquipmentGanttBadgeDragDelta sv =
+                    dragDeltas != null ? dragDeltas.get(badgeKey) : null;
+            if (sv != null) {
+                lxUse += sv.dx();
+                lyUse += sv.dy();
+            }
+            lxUse = clampBadgeLayoutX(lxUse, cb, timelinePaneWidth);
+            lyUse = clampBadgeLayoutYInBand(lyUse, cb, badgeDragBandTop, badgeDragBandBottom);
+            if (ringRadiusPx > 1e-6) {
+                double[] wxy =
+                        clampBadgeLayoutToWireMaxLength(
+                                lxUse,
+                                lyUse,
+                                cb,
+                                anchorX,
+                                anchorY,
+                                ringRadiusPx);
+                lxUse = wxy[0];
+                lyUse = wxy[1];
+                lxUse = clampBadgeLayoutX(lxUse, cb, timelinePaneWidth);
+                lyUse =
+                        clampBadgeLayoutYInBand(
+                                lyUse, cb, badgeDragBandTop, badgeDragBandBottom);
+            }
+            sp.setLayoutX(lxUse);
+            sp.setLayoutY(lyUse);
+
+            Line wireLine = new Line(anchorX, anchorY, anchorX, anchorY);
+            wireLine.setStroke(wirePaintOrNull.color());
+            wireLine.setStrokeWidth(wirePaintOrNull.strokeWidthPx());
+            wirePaintOrNull.dashStyle().applyTo(wireLine, layout.zoom);
+            wireLine.setMouseTransparent(true);
+            wireLine.setPickOnBounds(false);
+            Circle anchorDot = null;
+            if (!anchorDotPlacedForRun) {
+                anchorDot =
+                        createPersonBadgeWireAnchorDot(
+                                anchorX, anchorY, wirePaintOrNull.color(), layout.zoom);
+                anchorDotPlacedForRun = true;
+            }
+            wirePlacementBatch.add(
+                    new BadgeWirePlacement(wireLine, anchorDot, sp, anchorX, anchorY));
+            if (badgeDragAdjustEnabled) {
+                sp.setMouseTransparent(false);
+                sp.setCursor(Cursor.DEFAULT);
+                installBadgeDragHandlers(
+                        sp,
+                        badgeDragClampBounds(sp),
+                        badgeDragBandTop,
+                        badgeDragBandBottom,
+                        timelinePaneWidth,
+                        defaultLayoutX,
+                        defaultLayoutY,
+                        badgeKey,
+                        dragDeltaSink,
+                        anchorX,
+                        anchorY,
+                        ringRadiusPx);
+            }
+        }
+    }
+
     private static void layoutPersonBadgeOverlay(
             Pane overlay,
             List<String> badgeSlotTexts,
@@ -2063,6 +2271,32 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 locals.add(lb);
                 nodes.add(sp);
                 stackHeights.add(Math.max(1.0, sp.prefHeight(-1)));
+            }
+
+            boolean radialWireLayout =
+                    wireThisRun && personBadgeWireMaxLengthPxOrZero > 1e-6;
+            if (radialWireLayout) {
+                layoutPersonBadgesRadialForRun(
+                        displayRowIndex,
+                        parts,
+                        nodes,
+                        locals,
+                        stackHeights,
+                        run,
+                        anchorX,
+                        anchorY,
+                        personBadgeWireMaxLengthPxOrZero,
+                        layout,
+                        timelineOuterPad,
+                        timelinePaneWidth,
+                        overlayPaneHeight,
+                        placedBadgeLogicalRects,
+                        dragDeltas,
+                        badgeDragAdjustEnabled,
+                        dragDeltaSink,
+                        wirePlacementBatch,
+                        wirePaintOrNull);
+                continue;
             }
 
             double inset = 0.5 * layout.zoom;

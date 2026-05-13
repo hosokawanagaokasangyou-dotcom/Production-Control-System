@@ -55,7 +55,7 @@ import java.util.Map;
  * @param equipmentGanttPersonBadgeWireStrokeHex ワイヤー色（#RRGGBB / #RRGGBBAA、空はテーマのバー枠色＋既定不透明度）
  * @param equipmentGanttPersonBadgeWireWidthPx ワイヤー太さ（px、{@code 0} または非正はズームに応じた自動）
  * @param equipmentGanttPersonBadgeWireDashStyleKey 線種（{@code SOLID}|{@code DASHED}|{@code DOTTED}|{@code DASH_DOT}、空は SOLID）
- * @param equipmentGanttPersonBadgeWireMaxLengthPx バッジ中心とバーアンカー間のワイヤー長の上限（px）。{@code 0} は無制限
+ * @param equipmentGanttPersonBadgeWireMaxLengthPx ワイヤー表示時のバッジ中心とアンカー間の距離（px）。正の値は放射配置の半径かつドラッグ時の距離上限。{@code 0} は無制限（横並び初期配置）
  * @param equipmentGanttPersonBadgeFontFamily バッジ文字フォント（空は既定ファミリ）
  * @param equipmentGanttPersonBadgeFontPercent バッジ文字サイズ（行ラベル基準の%、0 は未保存として既定 85）
  * @param equipmentGanttPersonBadgeFillHex バッジ背景色（#RRGGBB）
@@ -188,9 +188,10 @@ public record DesktopSessionState(
     public static final String DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_DASH_STYLE_KEY = "SOLID";
 
     /**
-     * ワイヤー長上限の既定（px）。{@code 0} は無制限（バッジをバーから離してもクランプしない）。
+     * ワイヤー長の既定（px）。ワイヤー表示時はバッジ中心がアンカーからこの距離の円周上に置かれる（放射配置の半径）。
+     * {@code 0} は無制限（従来の横並び初期配置＋距離クランプなし）。
      */
-    public static final double DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX = 0d;
+    public static final double DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX = 60d;
 
     /** UI スライダーおよび保存値のワイヤー長上限（px）。 */
     public static final double MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX = 1200d;
