@@ -1151,7 +1151,7 @@ PLAN_COL_DISPATCH_REMAINING_QTY = "配台使用残数量"
 # 原反幅（mm 想定）。段階1のみ算出。テーブル「使用原反, 加工幅.txt」優先、未登録時は最後の NNNxMM の左辺を採用。いずれも不可なら PlanningValidationError。
 # 「使用原反」キー照合は _normalize_mm_table_lookup_key（NFKC 後に全角・半角など空白類を除去）で加工計画の使用原反／製品名と突き合わせる。
 PLAN_COL_RAW_FABRIC_WIDTH = "原反幅"
-# 使用原反キーで「使用原反,ロール単位の長さ.txt」に登録があるときの 1 ロール長(m)。未登録は空。
+# 使用原反キーで「使用原反,ロール単位の長さ.txt」に登録があるときはその m。無いときは列「ロール単位長さ」と同じ推定・矯正の結果を表示用に格納する。
 # 製品側の列「ロール単位長さ」と区別するため見出しは (原反) プレフィックス。
 PLAN_COL_RAW_ROLL_UNIT_LENGTH = "(原反)ロール単位長さ"
 # マクロブックと同じフォルダ（またはカレント・code/）の CSV。環境変数 RAW_FABRIC_WIDTH_TABLE_PATH で上書き可。
@@ -4965,6 +4965,30 @@ def _heal_stage1_roll_unit_no_dim_when_roll_matches_qty_mistake(
             healed,
             int(want) if abs(want - int(want)) < 1e-9 else want,
         )
+
+
+def _sync_stage1_raw_roll_unit_length_fallback_to_product_roll_column(
+    out_df: "pd.DataFrame",
+) -> None:
+    """
+    「使用原反,ロール単位の長さ.txt」にキーが無い行について、(原反)ロール単位長さ を
+    矯正後の列「ロール単位長さ」と一致させる（テーブル命中行は変更しない）。
+    """
+    if out_df is None or getattr(out_df, "empty", True):
+        return
+    if (
+        PLAN_COL_RAW_ROLL_UNIT_LENGTH not in out_df.columns
+        or PLAN_COL_ROLL_UNIT_LENGTH not in out_df.columns
+        or TASK_COL_USED_RAW not in out_df.columns
+    ):
+        return
+    for i in out_df.index:
+        ur = out_df.at[i, TASK_COL_USED_RAW]
+        if _lookup_roll_unit_length_m_from_used_raw(ur) is not None:
+            continue
+        rp = parse_float_safe(out_df.at[i, PLAN_COL_ROLL_UNIT_LENGTH], 0.0)
+        if rp > 0:
+            out_df.at[i, PLAN_COL_RAW_ROLL_UNIT_LENGTH] = rp
 
 
 def _excel_sheet_arg_from_env(env_key: str) -> str | int:
@@ -15910,7 +15934,8 @@ def run_stage1_extract():
         )
         if TASK_COL_QTY in rec:
             rec[TASK_COL_QTY] = _qty_total_s1
-        rec[PLAN_COL_ROLL_UNIT_LENGTH] = _stage1_roll_length_for_planning_row(row)
+        _roll_len_product = _stage1_roll_length_for_planning_row(row)
+        rec[PLAN_COL_ROLL_UNIT_LENGTH] = _roll_len_product
         rec[PLAN_COL_PRODUCT_WIDTH] = _resolve_product_width_mm_for_stage1_row(
             row, pw_table
         )
@@ -15927,11 +15952,10 @@ def run_stage1_extract():
         _raw_roll_tab_m = _lookup_roll_unit_length_m_from_used_raw(
             row.get(TASK_COL_USED_RAW)
         )
-        rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = (
-            float(_raw_roll_tab_m)
-            if _raw_roll_tab_m is not None and float(_raw_roll_tab_m) > 0
-            else ""
-        )
+        if _raw_roll_tab_m is not None and float(_raw_roll_tab_m) > 0:
+            rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = float(_raw_roll_tab_m)
+        else:
+            rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = float(_roll_len_product)
         # 工程名 + 機械名 を“因孝”として表示用に追加（後段は計算キーにも使用）
         if machine_name:
             rec[PLAN_COL_PROCESS_FACTOR] = f"{machine}+{machine_name}"
@@ -15979,6 +16003,7 @@ def run_stage1_extract():
     _apply_master_speed_sheet_to_plan_df(out_df, log_prefix="段階1")
     _heal_stage1_roll_unit_no_dim_when_roll_matches_qty_mistake(out_df)
     _heal_stage1_roll_unit_if_width_ceiling_merge_spurious(out_df)
+    _sync_stage1_raw_roll_unit_length_fallback_to_product_roll_column(out_df)
     _refresh_plan_reference_columns(out_df, req_map, need_rules)
     try:
         _apply_auto_exclude_bunkatsu_duplicate_machine(out_df, log_prefix="段階1")
