@@ -27,7 +27,6 @@ public final class Stage2JavaDispatchEngine {
         List<Stage2QueuedTask> queue = Stage2TaskQueueBuilder.build(snap);
         ctx.log("[stage2-java] task_queue: size=" + queue.size());
         Stage2DispatchDiagnostics.logMasterProbe(ctx, snap);
-        Stage2DispatchDiagnostics.logTaskQueuePreview(ctx, queue, 12);
         Stage2ConstraintDigest digest = Stage2ConstraintDigest.fromSnapshot(snap);
         ctx.log(
                 "[stage2-java] constraint_digest: members="
@@ -42,7 +41,8 @@ public final class Stage2JavaDispatchEngine {
                         + digest.planDataRows()
                         + " sheet="
                         + digest.planSheetResolved());
-        Stage2DispatchLoop.Default.INSTANCE.run(snap, queue, ctx);
+        queue = Stage2DispatchLoop.Default.INSTANCE.run(snap, queue, ctx);
+        Stage2DispatchDiagnostics.logTaskQueuePreview(ctx, queue, 12);
         return Stage2PassThroughPlanner.run(ctx, snap, outputDir);
     }
 }

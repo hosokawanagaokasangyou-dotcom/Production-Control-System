@@ -23,6 +23,12 @@ class Stage2TaskQueueBuilderTest {
     }
 
     @Test
+    void findDispatchTrialOrderColumn_detectsHeader() {
+        List<String> headers = List.of("依頼NO", "配台試行順番", "工程名");
+        assertEquals(1, Stage2TaskQueueBuilder.findDispatchTrialOrderColumn(headers));
+    }
+
+    @Test
     void build_skipsRowWhenProcessNameEmpty() {
         var tab =
                 new jp.co.pm.ai.desktop.io.PlanInputTabularIo.TabularSheet(

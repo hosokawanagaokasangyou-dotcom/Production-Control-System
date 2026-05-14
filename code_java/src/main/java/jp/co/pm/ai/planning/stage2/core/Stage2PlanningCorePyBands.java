@@ -16,6 +16,10 @@ public final class Stage2PlanningCorePyBands {
     public static final String TRIAL_ORDER_FIRST_SCHEDULE_PASS =
             "planning_core/_core.py: _trial_order_first_schedule_pass（目安 20576 行付近）";
 
+    /** 配台試行順の確定（シート列採用またはソート後の連番付与の手前まで）。 */
+    public static final String APPLY_DISPATCH_TRIAL_ORDER_FOR_GENERATE_PLAN =
+            "planning_core/_core.py: _apply_dispatch_trial_order_for_generate_plan（目安 21685 行付近）";
+
     /** 段階2メイン（成果物・メンバー出力を含む）。 */
     public static final String GENERATE_PLAN_IMPL =
             "planning_core/_core.py: _generate_plan_impl（目安 21795 行付近）";

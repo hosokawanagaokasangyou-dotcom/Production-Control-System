@@ -39,6 +39,10 @@ public final class Stage2DispatchDiagnostics {
                 sb.append(',');
             }
             sb.append(queue.get(i).requestId());
+            int dto = queue.get(i).dispatchTrialOrderEffective();
+            if (dto > 0) {
+                sb.append('(').append(dto).append(')');
+            }
         }
         if (queue.size() > lim) {
             sb.append(",…(total ").append(queue.size()).append(')');

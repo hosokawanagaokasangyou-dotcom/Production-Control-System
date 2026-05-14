@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
@@ -21,6 +22,8 @@ public final class Stage2TaskQueueBuilder {
      * {@code build_task_queue_from_planning_df} の {@code not machine} ゲートに合わせキューへ載せない。
      */
     private static final String PRIMARY_PROCESS_HEADER = "工程名";
+    /** Python {@code RESULT_TASK_COL_DISPATCH_TRIAL_ORDER} に相当。 */
+    private static final String DISPATCH_TRIAL_ORDER_HEADER = "配台試行順番";
 
     private Stage2TaskQueueBuilder() {}
 
@@ -30,6 +33,7 @@ public final class Stage2TaskQueueBuilder {
         List<List<String>> rows = tab.rows();
         int col = findRequestIdColumn(headers);
         int procCol = findProcessNameColumn(headers);
+        int trialCol = findDispatchTrialOrderColumn(headers);
         List<Stage2QueuedTask> out = new ArrayList<>();
         if (col < 0 || rows == null) {
             return out;
@@ -48,7 +52,14 @@ public final class Stage2TaskQueueBuilder {
             if (!skipRow) {
                 String id = col < row.size() && row.get(col) != null ? row.get(col).strip() : "";
                 if (!id.isEmpty() && seen.add(id)) {
-                    out.add(new Stage2QueuedTask(excelRow, id));
+                    Optional<Integer> trial =
+                            trialCol < 0
+                                    ? Optional.empty()
+                                    : Stage2DispatchTrialOrderApplier.parseDispatchTrialOrderFromSheet(
+                                            trialCol < row.size() && row.get(trialCol) != null
+                                                    ? row.get(trialCol)
+                                                    : "");
+                    out.add(new Stage2QueuedTask(excelRow, id, trial, 0));
                 }
             }
             excelRow++;
@@ -73,6 +84,19 @@ public final class Stage2TaskQueueBuilder {
         for (int i = 0; i < headers.size(); i++) {
             String h = normalizeHeader(headers.get(i));
             if (PRIMARY_PROCESS_HEADER.equals(h)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    static int findDispatchTrialOrderColumn(List<String> headers) {
+        if (headers == null) {
+            return -1;
+        }
+        for (int i = 0; i < headers.size(); i++) {
+            String h = normalizeHeader(headers.get(i));
+            if (DISPATCH_TRIAL_ORDER_HEADER.equals(h)) {
                 return i;
             }
         }
