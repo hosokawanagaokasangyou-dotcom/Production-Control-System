@@ -2,9 +2,7 @@ package jp.co.pm.ai.desktop;
 
 import java.awt.GraphicsEnvironment;
 import java.nio.charset.StandardCharsets;
-import java.util.LinkedHashMap;
 import java.util.Locale;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -20,7 +18,6 @@ import javafx.stage.WindowEvent;
 import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.StartupCrashLog;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.runtime.JvmMemoryMonitor;
 import jp.co.pm.ai.desktop.runtime.WindowsLauncherUserDir;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
@@ -274,24 +271,6 @@ public class PmAiFxApp extends Application {
         }
         try {
             configurePrismAfterProbe();
-            // #region agent log
-            {
-                Map<String, Object> d = new LinkedHashMap<>();
-                d.put("skipGpuProbe", Boolean.getBoolean("pm.ai.javafx.prism.skipGpuProbe"));
-                d.put("prismGpuOptIn", prismGpuOptIn());
-                d.put("javaFxUnnamedClasspath", javaFxRuntimeOnUnnamedClasspath());
-                d.put("allowHwOnClasspath", Boolean.getBoolean("pm.ai.javafx.prism.allowHwOnClasspath"));
-                d.put("prismOrder", System.getProperty("prism.order", ""));
-                d.put("bootstrapMode", PrismGpuBootstrapStatus.getMode().name());
-                AgentDebugLog.appendStructured(
-                        Map.of(),
-                        "afb084",
-                        "H-main-prism-after-config",
-                        "PmAiFxApp.main",
-                        "after configurePrismAfterProbe",
-                        d);
-            }
-            // #endregion
             StartupCrashLog.append(
                     "main: after configurePrism prism.order="
                             + System.getProperty("prism.order", ""));
