@@ -28784,6 +28784,7 @@ def _trial_order_first_schedule_pass(
                         rq_base, len(best_team), extra_max
                     ),
                     "unit_m": task["unit_m"],
+                    "total_qty_m": float(parse_float_safe(task.get("total_qty_m"), 0.0)),
                     "event_kind": TIMELINE_EVENT_MACHINING,
                 }
             )
@@ -32490,6 +32491,7 @@ def _generate_plan_impl(
                                 / _te_disp
                                 * _surplus_team_time_factor(rq_base, len(best_team), extra_max),
                                 "unit_m": task['unit_m'],
+                                "total_qty_m": float(parse_float_safe(task.get("total_qty_m"), 0.0)),
                                 "event_kind": TIMELINE_EVENT_MACHINING,
                             })
                             if _dispatch_interval_mirror is not None:

@@ -3085,33 +3085,52 @@ public final class DispatchInteractiveTabController {
     }
 
     /**
-     * 設備フェイズチェックポイントの加工イベント: {@code units_done * unit_m}（JSON に数値がある場合）。
-     * 将来互換のため {@code machining_m} が数値／文字で来ればそれを優先する。
+     * 設備フェイズチェックポイントの加工イベント: {@code (units_done×unit_m)m / (合計)m}。
+     * 合計は {@code total_qty_m}（チェックポイント JSON に含む）を優先し、無いときは {@code total_units×unit_m}。
+     * テキストの {@code machining_m} があればそのまま表示（手編集・将来形式用）。
      */
     private static String stage3EquipmentMachiningMeters(JsonNode ev) {
         if (ev == null || !ev.isObject()) {
             return "";
         }
         JsonNode explicit = ev.get("machining_m");
-        if (explicit != null && !explicit.isNull()) {
-            if (explicit.isNumber()) {
-                double m = explicit.asDouble();
-                return Math.abs(m) > 1e-12 ? ResultDispatchNormalizer.formatQty(m) : "";
-            }
-            if (explicit.isTextual()) {
-                String s = explicit.asText().strip();
-                if (!s.isEmpty()) {
-                    return s;
-                }
+        if (explicit != null && !explicit.isNull() && explicit.isTextual()) {
+            String s = explicit.asText().strip();
+            if (!s.isEmpty()) {
+                return s;
             }
         }
         JsonNode ud = ev.get("units_done");
         JsonNode um = ev.get("unit_m");
-        if (ud != null && um != null && ud.isNumber() && um.isNumber()) {
-            double m = ud.asDouble() * um.asDouble();
-            return Math.abs(m) > 1e-12 ? ResultDispatchNormalizer.formatQty(m) : "";
+        if (ud == null || um == null || !ud.isNumber() || !um.isNumber()) {
+            return "";
         }
-        return "";
+        double unitM = um.asDouble();
+        double chunkM = ud.asDouble() * unitM;
+        if (Math.abs(chunkM) < 1e-12) {
+            return "";
+        }
+        String chunkPart = ResultDispatchNormalizer.formatQty(chunkM) + "m";
+        double totalM = stage3EquipmentTotalMetersDenominator(ev, unitM);
+        if (totalM > 1e-12) {
+            return chunkPart + "/" + ResultDispatchNormalizer.formatQty(totalM) + "m";
+        }
+        return chunkPart;
+    }
+
+    private static double stage3EquipmentTotalMetersDenominator(JsonNode ev, double unitM) {
+        JsonNode tqm = ev.get("total_qty_m");
+        if (tqm != null && tqm.isNumber()) {
+            double v = tqm.asDouble();
+            if (v > 1e-12) {
+                return v;
+            }
+        }
+        JsonNode tu = ev.get("total_units");
+        if (tu != null && tu.isNumber() && unitM > 1e-12) {
+            return tu.asDouble() * unitM;
+        }
+        return 0.0;
     }
 
     private void loadStage3PeopleShortageIntoTable(Path shortageJson) {
