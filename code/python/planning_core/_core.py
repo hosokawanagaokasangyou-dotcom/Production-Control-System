@@ -4782,6 +4782,33 @@ def _string_has_roll_dim_mm_pattern(val) -> bool:
     return bool(re.search(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", t))
 
 
+def _agent_debug_roll_infer_ndjson(
+    location: str, message: str, hypothesis_id: str, data: dict
+) -> None:
+    # #region agent log
+    log_path = "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-e668f6.log"
+    try:
+        line = (
+            json.dumps(
+                {
+                    "sessionId": "e668f6",
+                    "location": location,
+                    "message": message,
+                    "hypothesisId": hypothesis_id,
+                    "data": data,
+                    "timestamp": int(time_module.time() * 1000),
+                },
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(line)
+    except Exception:
+        pass
+    # #endregion
+
+
 def infer_roll_unit_m_from_used_raw_then_product_dims(
     product_name, used_raw, fallback_unit
 ):
@@ -4791,8 +4818,27 @@ def infer_roll_unit_m_from_used_raw_then_product_dims(
     製品名に寸法パターンが無く使用原反にだけあるときは使用原反文字列で推定する
     （製品名列が空で換算数量だけが入る誤フォールバックを防ぐ）。
     """
+    _pn_dbg = _planning_scalar_text_for_roll_dim(product_name)
+    _ur_dbg = _planning_scalar_text_for_roll_dim(used_raw)
+    _agent_debug_roll_infer_ndjson(
+        "_core.py:infer_roll_unit_m_from_used_raw_then_product_dims",
+        "entry",
+        "H_entry",
+        {
+            "product_name_head": _pn_dbg[:96],
+            "used_raw_head": _ur_dbg[:96],
+            "pn_has_dim": _string_has_roll_dim_mm_pattern(product_name),
+            "ur_has_dim": _string_has_roll_dim_mm_pattern(used_raw),
+        },
+    )
     v = _lookup_roll_unit_length_m_from_used_raw(used_raw)
     if v is not None and v > 0:
+        _agent_debug_roll_infer_ndjson(
+            "_core.py:infer_roll_unit_m_from_used_raw_then_product_dims",
+            "return_used_raw_table",
+            "H1",
+            {"return_m": float(v)},
+        )
         return float(v)
     pn_txt = _planning_scalar_text_for_roll_dim(product_name)
     ur_txt = _planning_scalar_text_for_roll_dim(used_raw)
@@ -4800,13 +4846,31 @@ def infer_roll_unit_m_from_used_raw_then_product_dims(
         ur_txt
     ):
         dim_source = ur_txt
+        _dim_branch = "ur_only_pn_no_dim"
     elif not pn_txt and ur_txt:
         dim_source = ur_txt
+        _dim_branch = "pn_empty_ur_fallback"
     else:
         dim_source = pn_txt if pn_txt else ur_txt
-    return _infer_roll_unit_m_from_product_name_dimensions_only(
+        _dim_branch = "pn_or_default"
+    _out = _infer_roll_unit_m_from_product_name_dimensions_only(
         dim_source if dim_source else None, fallback_unit
     )
+    try:
+        _out_m_dbg = float(_out) if _out is not None else None
+    except (TypeError, ValueError):
+        _out_m_dbg = None
+    _agent_debug_roll_infer_ndjson(
+        "_core.py:infer_roll_unit_m_from_used_raw_then_product_dims",
+        "return_dimension_infer",
+        "H2",
+        {
+            "dim_branch": _dim_branch,
+            "dim_source_head": (dim_source or "")[:96],
+            "return_m": _out_m_dbg,
+        },
+    )
+    return _out
 
 
 def infer_unit_m_from_product_name(product_name, fallback_unit):
@@ -4920,6 +4984,13 @@ def _stage1_roll_length_for_planning_row(row) -> float:
         _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
     if _roll_len <= 0:
         _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
+    _tid_dbg = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
+    _agent_debug_roll_infer_ndjson(
+        "_core.py:_stage1_roll_length_for_planning_row",
+        "stage1_product_roll_m_final",
+        "H_stage1",
+        {"task_id": _tid_dbg, "roll_m": float(_roll_len)},
+    )
     return float(_roll_len)
 
 
