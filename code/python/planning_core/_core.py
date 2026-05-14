@@ -29439,6 +29439,14 @@ def _task_dict_for_timeline_event(
         neqs.discard("")
         multi_proc = len(neqs) > 1
 
+    # 同一依頼NOに複数工程の target があるとき、占有キー一致などで SEC が高得点になり
+    # スリット設備のイベントでも SEC 行が選ばれ meters_done が SEC に積まれるのを防ぐ。
+    # イベント設備キーと want の (工程, 機械) の突合せをスコアリングより先に採用する。
+    if multi_proc and want:
+        fb_first = _timeline_event_fallback_task_from_want(ev, task_queue, want, tid_n)
+        if fb_first is not None:
+            return fb_first
+
     scored = [(_timeline_event_task_match_score(ev, t, want, tid_n), t) for t in candidates]
     scored.sort(key=lambda x: -x[0])
     best_sc, best_t = scored[0]
