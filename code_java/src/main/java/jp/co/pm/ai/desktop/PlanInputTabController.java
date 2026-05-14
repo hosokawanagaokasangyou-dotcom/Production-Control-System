@@ -49,6 +49,7 @@ import jp.co.pm.ai.desktop.ui.SpreadsheetPlanInputRowDragSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
+import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
 
 /**
  * 配台計画_タスク入力タブ。レイアウトは {@code PlanInputTab.fxml}。
@@ -121,6 +122,9 @@ public final class PlanInputTabController {
     private final AtomicReference<List<TableColumnOrderPersistence.ColumnSpec>> persistedLayout =
             new AtomicReference<>(List.of());
     private final AtomicInteger headerColumnCount = new AtomicInteger(0);
+
+    private final AtomicReference<Stage2RollUnitLengthTables> cachedRollUnitHighlightTables =
+            new AtomicReference<>();
 
     private GridBase currentGrid;
     private EventHandler<GridChange> gridChangeHandler;
@@ -611,6 +615,24 @@ public final class PlanInputTabController {
         }
     }
 
+    private Stage2RollUnitLengthTables rollUnitHighlightTablesCached() {
+        return cachedRollUnitHighlightTables.updateAndGet(
+                cur -> {
+                    if (cur != null) {
+                        return cur;
+                    }
+                    if (shell == null) {
+                        return Stage2RollUnitLengthTables.empty();
+                    }
+                    try {
+                        return Stage2RollUnitLengthTables.load(
+                                AppPaths.resolveRepoRoot(shell.snapshotUiEnv()));
+                    } catch (Exception e) {
+                        return Stage2RollUnitLengthTables.empty();
+                    }
+                });
+    }
+
     private void rebuildSpreadsheet() {
         rebuildSpreadsheet(true);
     }
@@ -650,7 +672,11 @@ public final class PlanInputTabController {
 
             GridBase grid =
                     SpreadsheetTabularSupport.buildPlanInputGrid(
-                            headersRef, rows, false, headerColumnCount.get());
+                            headersRef,
+                            rows,
+                            false,
+                            headerColumnCount.get(),
+                            rollUnitHighlightTablesCached());
             int firstDataRow = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
             var rowSync =
                     SpreadsheetTabularSupport.newRowsSyncHandler(rows, headersRef, firstDataRow);

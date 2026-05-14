@@ -243,6 +243,11 @@ public final class TabularCellHighlight {
                             TableHeaderColumnStyle.applyBodyCellTint(this, table, column, hc);
                             return;
                         }
+                        if ("未加工".equals(columnTitle) && isStrictPositiveNumber(item)) {
+                            getStyleClass().remove(TableHeaderColumnStyle.HEADER_BODY_CELL_STYLE_CLASS);
+                            setStyle(LIGHT_GREEN_STYLE);
+                            return;
+                        }
                         setStyle("");
                         TableHeaderColumnStyle.applyBodyCellTint(this, table, column, hc);
                     }

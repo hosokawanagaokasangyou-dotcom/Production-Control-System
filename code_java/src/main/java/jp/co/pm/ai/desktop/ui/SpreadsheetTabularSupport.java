@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
@@ -34,6 +35,8 @@ import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
+import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
+
 /**
  * Bridges tabular {@link ObservableList} rows to ControlsFX {@link SpreadsheetView} / {@link GridBase}.
  */
@@ -59,12 +62,18 @@ public final class SpreadsheetTabularSupport {
     private static final String DC_STYLE_DATA_GREEN =
             "-fx-background-color: #d4edd4; -fx-text-fill: black;";
 
+    /** 配台シミュレータ実効ロール単位（m）を Excel 側と揃えた強調。Python 着色の {@code FFFF00} 相当。 */
+    private static final String DC_STYLE_DATA_YELLOW =
+            "-fx-background-color: #ffff00; -fx-text-fill: black;";
+
     /** {@link #installPmAiReadableSpreadsheetChrome}／グリッド構築用に外部へ公開する固定配色（テーマ非依存）。 */
     public static final String READABLE_STYLE_FILTER_ROW = DC_STYLE_HEADER_ROW;
 
     public static final String READABLE_STYLE_LEADING_COL = DC_STYLE_LEADING_COL;
     public static final String READABLE_STYLE_DATA_WHITE = DC_STYLE_DATA_WHITE;
     public static final String READABLE_STYLE_DATA_GREEN = DC_STYLE_DATA_GREEN;
+
+    public static final String READABLE_STYLE_DATA_YELLOW = DC_STYLE_DATA_YELLOW;
 
     /**
      * Date-column triple: lines shown as {@code (prefix)(qty)}. Lines with no value, dash placeholder, or
@@ -432,16 +441,140 @@ public final class SpreadsheetTabularSupport {
         installFullRowDataSelection(view, null);
     }
 
+    private static final String PLAN_INPUT_COL_UNPROCESSED = "未加工";
+    private static final String PLAN_INPUT_COL_ROLL_UNIT_M = "ロール単位長さ";
+    private static final String PLAN_INPUT_COL_QTY_CONV = "換算数量";
+    private static final String PLAN_INPUT_COL_ACTUAL = "実加工数";
+    private static final String PLAN_INPUT_COL_PRODUCT = "製品名";
+    private static final String PLAN_INPUT_COL_USED_RAW = "使用原反";
+
     /**
-     * 配台計画タスク入力の編集可能グリッド。フィルタ行・見出し列数に応じた配色は納期管理ビュー表と同一系統。
+     * Python {@code planning_core._core._effective_roll_unit_m_for_dispatch_task_simulator} に相当。
      *
-     * @param leadingColumnCount 先頭から固定する属性列の本数（{@code 0} なら日付列のみのデータ配色）
+     * @param qtyM 配台に使う残量 (m) 相当（本 UI では行セルから近似）
+     * @param sheetRollUnitM シート上の製品側ロール単位 (m)
+     */
+    public static double effectiveRollUnitMForDispatchTaskSimulator(double qtyM, double sheetRollUnitM) {
+        double q = qtyM;
+        double u = sheetRollUnitM;
+        if (q <= 1e-12 || u <= 1e-12) {
+            return u > 1e-12 ? u : 0.0;
+        }
+        double nRaw = q / u;
+        if (nRaw <= 1e-12) {
+            return u;
+        }
+        if (Math.abs(nRaw - Math.rint(nRaw)) <= 1e-9) {
+            return u;
+        }
+        int nWork = (int) Math.floor(nRaw);
+        if (nWork < 1) {
+            nWork = 1;
+        }
+        return q / (double) nWork;
+    }
+
+    private static String planInputCellAt(ObservableList<String> src, int col) {
+        if (src == null || col < 0 || col >= src.size()) {
+            return "";
+        }
+        String v = src.get(col);
+        return v != null ? v : "";
+    }
+
+    /**
+     * 段階2 {@code build_task_queue_from_planning_df} の {@code qty} に近い残量 (m)。完全な {@code
+     * _plan_row_dispatch_qty_metrics} ではなく、実効ロール強調用の近似。
+     */
+    private static double planInputQtyMForDispatchSimulatorApprox(
+            ObservableList<String> src, int idxConv, int idxUnp, int idxAct) {
+        double conv =
+                idxConv >= 0 ? Stage2RollUnitLengthTables.parseFloatSafe(planInputCellAt(src, idxConv), 0.0) : 0.0;
+        double actual =
+                idxAct >= 0 ? Stage2RollUnitLengthTables.parseFloatSafe(planInputCellAt(src, idxAct), 0.0) : 0.0;
+        if (idxUnp < 0) {
+            return Math.max(0.0, conv);
+        }
+        Optional<Double> unpOpt =
+                Stage2RollUnitLengthTables.optionalUnprocessedCell(planInputCellAt(src, idxUnp));
+        if (unpOpt.isEmpty()) {
+            return Math.max(0.0, conv);
+        }
+        double unp = unpOpt.get();
+        if (conv > 1e-12 && Math.abs(unp) <= 1e-12 && actual <= 1e-12) {
+            return conv;
+        }
+        if (unp > 1e-12) {
+            return unp;
+        }
+        return Math.max(0.0, conv);
+    }
+
+    private static double intrinsicProductRollSheetGuess(
+            String product,
+            String usedRaw,
+            Stage2RollUnitLengthTables tablesOrNull,
+            double qtyFallback) {
+        if (tablesOrNull != null) {
+            Optional<Double> byRaw = tablesOrNull.lookupByUsedRaw(usedRaw);
+            if (byRaw.isPresent()) {
+                return byRaw.get();
+            }
+            Optional<Double> byProd = tablesOrNull.lookupByProductName(product);
+            if (byProd.isPresent()) {
+                return byProd.get();
+            }
+        }
+        double fb = qtyFallback > 1e-12 ? qtyFallback : 100.0;
+        return Stage2RollUnitLengthTables.inferFromProductDimensions(product, fb);
+    }
+
+    private static boolean planInputRollUnitLengthCellIsYellowHighlight(
+            ObservableList<String> src,
+            int idxConv,
+            int idxUnp,
+            int idxAct,
+            int idxProd,
+            int idxUsed,
+            String rawRoll,
+            Stage2RollUnitLengthTables tablesOrNull) {
+        double uDisp = Stage2RollUnitLengthTables.parseFloatSafe(rawRoll, 0.0);
+        if (!(uDisp > 1e-12)) {
+            return false;
+        }
+        double q = planInputQtyMForDispatchSimulatorApprox(src, idxConv, idxUnp, idxAct);
+        if (!(q > 1e-12)) {
+            return false;
+        }
+        double effFromDisplay = effectiveRollUnitMForDispatchTaskSimulator(q, uDisp);
+        if (Math.abs(effFromDisplay - uDisp) > 1e-6) {
+            return true;
+        }
+        String product = idxProd >= 0 ? planInputCellAt(src, idxProd) : "";
+        String usedRaw = idxUsed >= 0 ? planInputCellAt(src, idxUsed) : "";
+        double uSheet = intrinsicProductRollSheetGuess(product, usedRaw, tablesOrNull, q);
+        if (!(uSheet > 1e-12) || Math.abs(uSheet - uDisp) <= 1e-6) {
+            return false;
+        }
+        double effFromSheet = effectiveRollUnitMForDispatchTaskSimulator(q, uSheet);
+        return Math.abs(effFromSheet - uDisp) <= 1e-6;
+    }
+
+    /**
+     * 配台計画タスク入力の編集可能グリッド。先頭固定列は白地、それ以外は既定で白地とし、「未加工」列のみ正の数値で薄緑、
+     * 「ロール単位長さ」は実効ロール化が想定されるセルを黄で示す（Excel 側の実効ロール着色と整合）。
+     *
+     * @param leadingColumnCount 先頭から固定する属性列の本数
+     * @param rollUnitLengthTablesOrNull 製品名／使用原反テーブル（黄の「上書き後セル」判定に使用）。{@code null}
+     *     のときは製品名寸法推定のみで近似する。
+     * @see #buildPlanInputGrid(List, ObservableList, boolean, int)
      */
     public static GridBase buildPlanInputGrid(
             List<String> headersRef,
             ObservableList<ObservableList<String>> rows,
             boolean editable,
-            int leadingColumnCount) {
+            int leadingColumnCount,
+            Stage2RollUnitLengthTables rollUnitLengthTablesOrNull) {
         int cols = headersRef.size();
         int rc = rows.size();
         int gridRowsTotal = rc + 1;
@@ -463,6 +596,11 @@ public final class SpreadsheetTabularSupport {
 
         int lead = Math.max(0, Math.min(leadingColumnCount, cols));
         int firstData = spreadsheetFirstDataRowIndex();
+        int idxUnp = headersRef.indexOf(PLAN_INPUT_COL_UNPROCESSED);
+        int idxConv = headersRef.indexOf(PLAN_INPUT_COL_QTY_CONV);
+        int idxAct = headersRef.indexOf(PLAN_INPUT_COL_ACTUAL);
+        int idxProd = headersRef.indexOf(PLAN_INPUT_COL_PRODUCT);
+        int idxUsed = headersRef.indexOf(PLAN_INPUT_COL_USED_RAW);
         for (int r = 0; r < rc; r++) {
             int gridRow = firstData + r;
             ObservableList<String> src = rows.get(r);
@@ -478,8 +616,22 @@ public final class SpreadsheetTabularSupport {
                     cell.setStyle(TabularCellHighlight.PLAN_INPUT_EXCLUDE_YES_STYLE);
                 } else if (c < lead) {
                     cell.setStyle(READABLE_STYLE_LEADING_COL);
+                } else if (PLAN_INPUT_COL_UNPROCESSED.equals(headerTitle)
+                        && TabularCellHighlight.isStrictPositiveNumber(raw)) {
+                    cell.setStyle(READABLE_STYLE_DATA_GREEN);
+                } else if (PLAN_INPUT_COL_ROLL_UNIT_M.equals(headerTitle)
+                        && planInputRollUnitLengthCellIsYellowHighlight(
+                                src,
+                                idxConv,
+                                idxUnp,
+                                idxAct,
+                                idxProd,
+                                idxUsed,
+                                raw,
+                                rollUnitLengthTablesOrNull)) {
+                    cell.setStyle(READABLE_STYLE_DATA_YELLOW);
                 } else {
-                    cell.setStyle(deliveryCalendarDataStyleForDisplayText(raw));
+                    cell.setStyle(READABLE_STYLE_DATA_WHITE);
                 }
                 rowCells.add(cell);
             }
@@ -487,6 +639,19 @@ public final class SpreadsheetTabularSupport {
         }
         grid.setRows(gridRows);
         return grid;
+    }
+
+    /**
+     * @param rollUnitLengthTablesOrNull {@link #buildPlanInputGrid(List, ObservableList, boolean, int,
+     *     Stage2RollUnitLengthTables)} 参照
+     */
+    public static GridBase buildPlanInputGrid(
+            List<String> headersRef,
+            ObservableList<ObservableList<String>> rows,
+            boolean editable,
+            int leadingColumnCount) {
+        return buildPlanInputGrid(
+                headersRef, rows, editable, leadingColumnCount, null);
     }
 
     /**
