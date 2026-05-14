@@ -2942,9 +2942,11 @@ public final class DispatchInteractiveTabController {
         c3.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("start_dt", "")));
         TableColumn<Map<String, String>, String> c4 = new TableColumn<>("終了");
         c4.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("end_dt", "")));
-        TableColumn<Map<String, String>, String> c5 = new TableColumn<>("OP");
-        c5.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("op", "")));
-        tv.getColumns().addAll(List.of(c0, c1, c2, c3, c4, c5));
+        TableColumn<Map<String, String>, String> c5 = new TableColumn<>("加工m数");
+        c5.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("machining_m", "")));
+        TableColumn<Map<String, String>, String> c6 = new TableColumn<>("OP");
+        c6.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("op", "")));
+        tv.getColumns().addAll(List.of(c0, c1, c2, c3, c4, c5, c6));
     }
 
     private static double stage3EquipmentTablePrefHeight(int rowCount) {
@@ -3060,6 +3062,7 @@ public final class DispatchInteractiveTabController {
                 m.put("machine", textOrEmpty(ev, "machine"));
                 m.put("start_dt", textOrEmpty(ev, "start_dt"));
                 m.put("end_dt", textOrEmpty(ev, "end_dt"));
+                m.put("machining_m", stage3EquipmentMachiningMeters(ev));
                 m.put("op", textOrEmpty(ev, "op"));
                 rows.add(m);
             }
@@ -3079,6 +3082,36 @@ public final class DispatchInteractiveTabController {
             return "";
         }
         return v.asText("");
+    }
+
+    /**
+     * 設備フェイズチェックポイントの加工イベント: {@code units_done * unit_m}（JSON に数値がある場合）。
+     * 将来互換のため {@code machining_m} が数値／文字で来ればそれを優先する。
+     */
+    private static String stage3EquipmentMachiningMeters(JsonNode ev) {
+        if (ev == null || !ev.isObject()) {
+            return "";
+        }
+        JsonNode explicit = ev.get("machining_m");
+        if (explicit != null && !explicit.isNull()) {
+            if (explicit.isNumber()) {
+                double m = explicit.asDouble();
+                return Math.abs(m) > 1e-12 ? ResultDispatchNormalizer.formatQty(m) : "";
+            }
+            if (explicit.isTextual()) {
+                String s = explicit.asText().strip();
+                if (!s.isEmpty()) {
+                    return s;
+                }
+            }
+        }
+        JsonNode ud = ev.get("units_done");
+        JsonNode um = ev.get("unit_m");
+        if (ud != null && um != null && ud.isNumber() && um.isNumber()) {
+            double m = ud.asDouble() * um.asDouble();
+            return Math.abs(m) > 1e-12 ? ResultDispatchNormalizer.formatQty(m) : "";
+        }
+        return "";
     }
 
     private void loadStage3PeopleShortageIntoTable(Path shortageJson) {
