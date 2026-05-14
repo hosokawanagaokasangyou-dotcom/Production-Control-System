@@ -1,5 +1,7 @@
 package jp.co.pm.ai.desktop.ui;
 
+import java.text.Normalizer;
+import java.util.Locale;
 import java.util.regex.Pattern;
 import java.util.function.IntSupplier;
 
@@ -24,12 +26,52 @@ public final class TabularCellHighlight {
     public static final String LIGHT_GREEN_STYLE =
             "-fx-background-color: #d4edd4; -fx-control-inner-background: #d4edd4;";
 
+    /**
+     * 配台計画タスク入力の「配台不要」列がオンのとき（{@link #planInputExcludeFromAssignmentIsOn}）。
+     * 背景赤・白字・太字（内側も同色にしてエディタ風セルと整合）。
+     */
+    public static final String PLAN_INPUT_EXCLUDE_YES_STYLE =
+            "-fx-background-color: #c62828; -fx-control-inner-background: #c62828;"
+                    + " -fx-text-fill: white; -fx-font-weight: bold;";
+
     /** Column title is a calendar date only, e.g. {@code 2026/04/30} （{@code yyyy/MM/dd} 形式の日付列のみ）。 */
     private static final Pattern HEADER_YMD_SLASH = Pattern.compile("^\\d{4}/\\d{1,2}/\\d{1,2}$");
 
     private static final Pattern HEADER_YMD_DASH = Pattern.compile("^\\d{4}-\\d{1,2}-\\d{1,2}$");
 
     private TabularCellHighlight() {}
+
+    /**
+     * 計画シート「配台不要」列のセル文字列が配台対象外（オン）か。
+     * Python {@code planning_core._core._plan_row_exclude_from_assignment} の文字列分岐と整合。
+     */
+    public static boolean planInputExcludeFromAssignmentIsOn(String v) {
+        if (v == null) {
+            return false;
+        }
+        String s = Normalizer.normalize(v.strip(), Normalizer.Form.NFKC).toLowerCase(Locale.ROOT);
+        if (s.isEmpty()
+                || s.equals("nan")
+                || s.equals("none")
+                || s.equals("false")
+                || s.equals("0")
+                || s.equals("no")
+                || s.equals("off")
+                || s.equals("いいえ")
+                || s.equals("坦")) {
+            return false;
+        }
+        return s.equals("true")
+                || s.equals("1")
+                || s.equals("yes")
+                || s.equals("on")
+                || s.equals("はい")
+                || s.equals("y")
+                || s.equals("t")
+                || s.equals("○")
+                || s.equals("〇")
+                || s.equals("◝");
+    }
 
     /** ControlsFX spreadsheet: clears cell inline style (未加工列の緑塗りは廃止). */
     public static void applyPlanInputSpreadsheetHighlight(SpreadsheetCell cell) {

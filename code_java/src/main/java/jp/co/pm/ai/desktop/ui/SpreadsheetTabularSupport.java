@@ -472,7 +472,11 @@ public final class SpreadsheetTabularSupport {
                 SpreadsheetCell cell =
                         SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, raw);
                 cell.setEditable(editable);
-                if (c < lead) {
+                String headerTitle = headersRef.get(c);
+                if ("配台不要".equals(headerTitle)
+                        && TabularCellHighlight.planInputExcludeFromAssignmentIsOn(raw)) {
+                    cell.setStyle(TabularCellHighlight.PLAN_INPUT_EXCLUDE_YES_STYLE);
+                } else if (c < lead) {
                     cell.setStyle(READABLE_STYLE_LEADING_COL);
                 } else {
                     cell.setStyle(deliveryCalendarDataStyleForDisplayText(raw));

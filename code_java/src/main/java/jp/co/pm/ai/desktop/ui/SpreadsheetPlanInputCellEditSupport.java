@@ -78,6 +78,17 @@ public final class SpreadsheetPlanInputCellEditSupport {
                     }
                     String cur = row.get(colIndex) != null ? row.get(colIndex) : "";
 
+                    if ("配台不要".equals(columnTitle)) {
+                        if (TabularCellHighlight.planInputExcludeFromAssignmentIsOn(cur)) {
+                            row.set(colIndex, "");
+                        } else {
+                            row.set(colIndex, "yes");
+                        }
+                        rebuildSpreadsheet.run();
+                        e.consume();
+                        return;
+                    }
+
                     @SuppressWarnings("rawtypes")
                     TableColumn col = tc.getTableColumn();
                     double colW = col != null ? col.getWidth() : 0;
