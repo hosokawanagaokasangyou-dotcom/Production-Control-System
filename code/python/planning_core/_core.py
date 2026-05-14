@@ -19532,6 +19532,51 @@ def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
                 and _roll_pipeline_inspection_assign_room(task_queue, tid) > 1e-12
             ):
                 continue
+            # #region agent log
+            if "JR260502" in tid:
+                _h7_bag = getattr(
+                    _task_blocked_by_same_request_dependency, "_h7_logged_keys", None
+                )
+                if _h7_bag is None:
+                    _h7_bag = set()
+                    setattr(
+                        _task_blocked_by_same_request_dependency,
+                        "_h7_logged_keys",
+                        _h7_bag,
+                    )
+                _h7_key = (
+                    tid,
+                    str(task.get("machine") or "")[:160],
+                    str(t2.get("machine") or "")[:160],
+                    my_seq,
+                    s2,
+                )
+                if _h7_key not in _h7_bag:
+                    _h7_bag.add(_h7_key)
+                    try:
+                        append_interactive_core_probe(
+                            "H7",
+                            "_core.py:_task_blocked_by_same_request_dependency",
+                            "same_request_dependency_block",
+                            {
+                                "blocked_task_id": tid,
+                                "blocked_same_request_line_seq": my_seq,
+                                "blocked_rank": my_r,
+                                "blocked_machine": str(task.get("machine") or "")[:200],
+                                "blocked_remaining_units": float(
+                                    task.get("remaining_units") or 0.0
+                                ),
+                                "predecessor_same_request_line_seq": s2,
+                                "predecessor_rank": r2,
+                                "predecessor_machine": str(t2.get("machine") or "")[:200],
+                                "predecessor_remaining_units": float(
+                                    t2.get("remaining_units") or 0.0
+                                ),
+                            },
+                        )
+                    except Exception:
+                        pass
+            # #endregion
             return True
     return False
 
