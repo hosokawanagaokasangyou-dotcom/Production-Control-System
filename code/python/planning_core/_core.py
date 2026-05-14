@@ -3789,6 +3789,29 @@ def _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(row) 
     return bool(ok_mikan and ok_act and ok_unp)
 
 
+# #region agent log
+def _agent_debug_ndjson_append(
+    location: str, message: str, hypothesis_id: str, data: dict
+) -> None:
+    try:
+        p = "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-d3d9c5.log"
+        payload = {
+            "sessionId": "d3d9c5",
+            "timestamp": int(time_module.time() * 1000),
+            "location": location,
+            "message": message,
+            "hypothesisId": hypothesis_id,
+            "data": data,
+        }
+        with open(p, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# #endregion
+
+
 def _plan_row_exclude_from_assignment(row) -> bool:
     """
     「配台試行」列はオンなら」しの行は配台キューへ入れう」特別指定_備考の AI 解析行からも除し。
@@ -12148,6 +12171,29 @@ def build_task_queue_from_planning_df(
         if _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(row):
             continue
         task_id = planning_task_id_str_from_plan_row(row)
+        # #region agent log
+        try:
+            if "JR260502" in str(task_id or ""):
+                _ex = _plan_row_exclude_from_assignment(row)
+                _raw = row.get(PLAN_COL_EXCLUDE_FROM_ASSIGNMENT)
+                _agent_debug_ndjson_append(
+                    "_core.py:build_task_queue_from_planning_df",
+                    "依頼NO=JR260502の計画行（キュー投入前）",
+                    "H1",
+                    {
+                        "task_id": str(task_id or ""),
+                        "工程名": str(row.get(TASK_COL_MACHINE, "") or "").strip(),
+                        "機械名": str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip(),
+                        "tasks_dfに配台不要列": bool(
+                            PLAN_COL_EXCLUDE_FROM_ASSIGNMENT in tasks_df.columns
+                        ),
+                        "配台不要_生値": repr(_raw),
+                        "exclude_from_assignment": bool(_ex),
+                    },
+                )
+        except Exception:
+            pass
+        # #endregion
         if _plan_row_exclude_from_assignment(row):
             n_exclude_plan += 1
             continue
@@ -12433,6 +12479,25 @@ def build_task_queue_from_planning_df(
                 "unprocessed_baseline_m": _unp_base,
             }
         )
+        # #region agent log
+        try:
+            if "JR260502" in str(task_id or ""):
+                _agent_debug_ndjson_append(
+                    "_core.py:build_task_queue_from_planning_df",
+                    "依頼NO=JR260502をtask_queueへ追加",
+                    "H2",
+                    {
+                        "task_id": str(task_id or ""),
+                        "machine": machine,
+                        "machine_name": machine_name,
+                        "equipment_line_key": str(
+                            task_queue[-1].get("equipment_line_key") or ""
+                        ),
+                    },
+                )
+        except Exception:
+            pass
+        # #endregion
         planning_sheet_row_seq += 1
 
     logging.info(
@@ -23864,6 +23929,30 @@ def _resolve_task_dict_for_timeline_line(
     if len(cands) == 1:
         return cands[0]
     if len(cands) > 1:
+        # #region agent log
+        try:
+            if "JR260502" in tid_s:
+                _agent_debug_ndjson_append(
+                    "_core.py:_resolve_task_dict_for_timeline_line",
+                    "equipment_line_key一致が複数（先頭を採用）",
+                    "H4",
+                    {
+                        "tid": tid_s,
+                        "ev_machine_line": em,
+                        "n_cands": len(cands),
+                        "picked_machine": str(cands[0].get("machine") or ""),
+                        "picked_machine_name": str(cands[0].get("machine_name") or ""),
+                        "cand_preview": [
+                            str(c.get("machine") or "")
+                            + "/"
+                            + str(c.get("machine_name") or "")
+                            for c in cands[:8]
+                        ],
+                    },
+                )
+        except Exception:
+            pass
+        # #endregion
         return cands[0]
     for t in sorted_tasks_for_result:
         if str(t.get("task_id") or "").strip() != tid_s:
@@ -23871,12 +23960,46 @@ def _resolve_task_dict_for_timeline_line(
         m_proc = str(t.get("machine") or "").strip()
         m_name = str(t.get("machine_name") or "").strip()
         if m_proc and m_proc in em and (not m_name or m_name in em):
+            # #region agent log
+            try:
+                if "JR260502" in tid_s:
+                    _agent_debug_ndjson_append(
+                        "_core.py:_resolve_task_dict_for_timeline_line",
+                        "部分一致ブランチで解決",
+                        "H4",
+                        {
+                            "tid": tid_s,
+                            "ev_machine_line": em,
+                            "picked_machine": m_proc,
+                            "picked_machine_name": m_name,
+                        },
+                    )
+            except Exception:
+                pass
+            # #endregion
             return t
     for t in sorted_tasks_for_result:
         if str(t.get("task_id") or "").strip() != tid_s:
             continue
         ek = str(t.get("equipment_line_key") or "").strip() or str(t.get("machine") or "").strip()
         if ek == em:
+            # #region agent log
+            try:
+                if "JR260502" in tid_s:
+                    _agent_debug_ndjson_append(
+                        "_core.py:_resolve_task_dict_for_timeline_line",
+                        "ek==emブランチで解決",
+                        "H4",
+                        {
+                            "tid": tid_s,
+                            "ev_machine_line": em,
+                            "picked_equipment_or_machine": ek,
+                            "picked_machine_name": str(t.get("machine_name") or ""),
+                        },
+                    )
+            except Exception:
+                pass
+            # #endregion
             return t
     return None
 
@@ -24272,6 +24395,29 @@ def build_result_dispatch_table_dataframe(
         )
         r["配台日"] = day_k
         r["当日配台数量"] = float(qty_sum)
+        # #region agent log
+        try:
+            if "JR260502" in tid_k:
+                _agent_debug_ndjson_append(
+                    "_core.py:build_result_dispatch_table_dataframe",
+                    "結果_配台表の1行（集約後）",
+                    "H3",
+                    {
+                        "tid": tid_k,
+                        "eq_line": eq_k,
+                        "day": str(day_k),
+                        "qty_sum": float(qty_sum),
+                        "resolved_machine": str((t or {}).get("machine") or ""),
+                        "resolved_machine_name": str((t or {}).get("machine_name") or ""),
+                        "plan_row_exists": plan_row is not None,
+                        "src_row_exists": src_row is not None,
+                        "工程名列": str(r.get("工程名") or ""),
+                        "機械名列": str(r.get("機械名") or ""),
+                    },
+                )
+        except Exception:
+            pass
+        # #endregion
         rows.append(r)
     return pd.DataFrame(rows, columns=cols)
 
