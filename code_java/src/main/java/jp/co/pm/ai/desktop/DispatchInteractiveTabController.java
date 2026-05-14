@@ -90,7 +90,6 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchPivot;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage2ColumnSupport;
-import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage2TableJsonReconciliation;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
 import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
@@ -1070,7 +1069,7 @@ public final class DispatchInteractiveTabController {
     }
 
     private void reloadFromDiskQuiet() {
-        reloadFromDiskQuiet(null, false, false);
+        reloadFromDiskQuiet(null, false);
     }
 
     /**
@@ -1079,7 +1078,7 @@ public final class DispatchInteractiveTabController {
      * を読まない。
      */
     private void reloadFromDiskQuietAfterDispatchTrial(Runnable afterSuccessOnFxThread) {
-        reloadFromDiskQuiet(afterSuccessOnFxThread, true, false);
+        reloadFromDiskQuiet(afterSuccessOnFxThread, true);
     }
 
     /**
@@ -1089,12 +1088,9 @@ public final class DispatchInteractiveTabController {
      * @param applyDispatchTrialShortfallJson true のときのみ隣接の {@code dispatch_trial_shortages.json} を読む（配台試行
      *     直後）。false のときは未達表・セル赤表示用キーをクリアする（再読み・外部更新後など、メイン JSON と不足 JSON
      *     の生成タイミングがずれていると誤表示になるため）。
-     * @param showStage2JsonReconcileDialog true のとき、表再構築後に段階2 JSON 再読込との突合結果をダイアログ表示する。
      */
     private void reloadFromDiskQuiet(
-            Runnable afterSuccessOnFxThread,
-            boolean applyDispatchTrialShortfallJson,
-            boolean showStage2JsonReconcileDialog) {
+            Runnable afterSuccessOnFxThread, boolean applyDispatchTrialShortfallJson) {
         if (shell == null) {
             return;
         }
@@ -1138,9 +1134,6 @@ public final class DispatchInteractiveTabController {
                     rebuildGrids();
                     clearDispatchDocDirty();
                     hideReloadProgress();
-                    if (showStage2JsonReconcileDialog && Files.isRegularFile(jsonPath)) {
-                        showStage2DispatchJsonReconcileDialog(jsonPath);
-                    }
                     if (afterSuccessOnFxThread != null) {
                         afterSuccessOnFxThread.run();
                     }
@@ -1161,48 +1154,9 @@ public final class DispatchInteractiveTabController {
         new Thread(task, "dispatch-editor-reload").start();
     }
 
-    /** 段階2 正常終了直後: 表を JSON から再構築し、同一 JSON の再読込と突合した結果をダイアログで示す。 */
+    /** 段階2 正常終了直後: 表を JSON から再構築する。 */
     void reloadTableFromDiskAfterStage2Success() {
-        reloadFromDiskQuiet(null, false, true);
-    }
-
-    private void showStage2DispatchJsonReconcileDialog(Path jsonPath) {
-        if (shell == null) {
-            return;
-        }
-        ResultDispatchStage2TableJsonReconciliation.Result r =
-                ResultDispatchStage2TableJsonReconciliation.verifyAgainstDiskJson(doc, jsonPath);
-        if (r.ok()) {
-            shell.appendLog(
-                    "[dispatch-editor] stage2-json reconcile: OK（表と "
-                            + AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME
-                            + " の再処理結果が一致）");
-        } else {
-            shell.appendLog(
-                    "[dispatch-editor] stage2-json reconcile: 差異あり（"
-                            + r.detailLines().size()
-                            + " 件のメッセージ）");
-        }
-        Alert alert = new Alert(r.ok() ? AlertType.INFORMATION : AlertType.WARNING);
-        alert.setTitle("段階2 JSON と手動修正表の突合");
-        alert.setHeaderText(
-                r.ok()
-                        ? "段階2が出力した JSON と、表作成後のデータが一致しました。"
-                        : "段階2 JSON と表の内容に差異があります。");
-        StringBuilder body = new StringBuilder();
-        body.append("対象: ").append(jsonPath.toAbsolutePath().normalize()).append("\n\n");
-        if (r.ok()) {
-            body.append("列・行内容を、JSON の再読込→段階2必須列補完→手動修正タブ用マージの同一手順で照合し、差異はありませんでした。");
-        } else {
-            body.append("差分の例:\n");
-            body.append(String.join("\n", r.detailLines()));
-        }
-        alert.setContentText(body.toString());
-        Stage st = shell.getPrimaryStage();
-        if (st != null) {
-            alert.initOwner(st);
-        }
-        alert.showAndWait();
+        reloadFromDiskQuiet(null, false);
     }
 
     /** 再読込や段階2開始の直前に、メモリ上の表を空表示へ戻す（JSON パスラベルは維持）。 */
@@ -1238,7 +1192,7 @@ public final class DispatchInteractiveTabController {
      * 外部で {@code 結果_配台表.json} が更新されたあと、当タブの表をディスクから再読込する（段階2終了後の再同期やワークスペース復元後など）。
      */
     void reloadTableFromDiskAfterExternalUpdate() {
-        reloadFromDiskQuiet(null, false, false);
+        reloadFromDiskQuiet(null, false);
     }
 
     /** 配台ワークスペース用スナップショット: メモリ上の配台表ドキュメントのコピー（UI スレッド）。 */
