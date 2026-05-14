@@ -107,7 +107,8 @@ def _agent_debug_9e76d2_log(
 ) -> None:
     """Cursor debug session 9e76d2: NDJSON 1 行追記（失敗は握りつぶす）。"""
     try:
-        _p = "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-9e76d2.log"
+        _root = pathlib.Path(__file__).resolve().parents[3]
+        _p = str(_root / ".cursor" / "debug-9e76d2.log")
         _payload = {
             "sessionId": "9e76d2",
             "hypothesisId": hypothesis_id,
@@ -24277,6 +24278,51 @@ def _interactive_dispatch_resolve_cap_key(
     return past[0][1]
 
 
+def _interactive_fallback_meter_target_key_for_recompute(
+    tid: str,
+    proc: str,
+    mach: str,
+    d_ev: date,
+    want: set,
+) -> tuple | None:
+    """
+    タイムライン暦日 d_ev に一致する targets キーが無いとき、(依頼,工程,機械) が一致する
+    配台日キーへ寄せる（暦日 < 配台日のみ JSON があるケース等）。
+    """
+    cands: list[tuple] = [
+        kk
+        for kk in want
+        if isinstance(kk, tuple)
+        and len(kk) == 4
+        and kk[0] == tid
+        and kk[1] == proc
+        and kk[2] == mach
+        and isinstance(kk[3], date)
+    ]
+    if not cands:
+        return None
+    fut = [kk for kk in cands if kk[3] >= d_ev]
+    if fut:
+        return min(fut, key=lambda x: x[3])
+    return max(cands, key=lambda x: x[3])
+
+
+def _interactive_timeline_event_calendar_date(ev: dict) -> date | None:
+    d = ev.get("date") if isinstance(ev, dict) else None
+    if isinstance(d, datetime):
+        return d.date()
+    if isinstance(d, date):
+        return d
+    if isinstance(d, str) and d.strip():
+        ts = pd.to_datetime(d.strip(), errors="coerce")
+        if not pd.isna(ts) and hasattr(ts, "date"):
+            try:
+                return ts.date()
+            except Exception:
+                return None
+    return None
+
+
 def _interactive_parse_dispatch_date_cell(val) -> date | None:
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return None
@@ -28708,7 +28754,31 @@ def _trial_order_first_schedule_pass(
                 except (TypeError, ValueError):
                     _um_lim = 0.0
                 if _um_lim > 1e-12:
-                    _rem_m = max(0.0, _cap_m - _done_m)
+                    _rem_key_m = max(0.0, _cap_m - _done_m)
+                    _rem_m = _rem_key_m
+                    _tot_task = float(parse_float_safe(task.get("total_qty_m"), 0.0))
+                    if (
+                        _tot_task > 1e-12
+                        and interactive_dispatch_targets is not None
+                        and interactive_trial_meters_done is not None
+                    ):
+                        _glob_done_m = 0.0
+                        for _gk in interactive_dispatch_targets:
+                            if (
+                                isinstance(_gk, tuple)
+                                and len(_gk) == 4
+                                and _gk[0] == _tid_iv
+                                and _gk[1] == _proc_iv
+                                and _gk[2] == _mach_iv
+                            ):
+                                try:
+                                    _glob_done_m += float(
+                                        interactive_trial_meters_done.get(_gk, 0.0)
+                                    )
+                                except (TypeError, ValueError):
+                                    pass
+                        _rem_task_m = max(0.0, _tot_task - _glob_done_m)
+                        _rem_m = min(_rem_key_m, _rem_task_m)
                     if _rem_m + 1e-9 < _um_lim:
                         break
             # #region agent log
@@ -29222,26 +29292,34 @@ def _interactive_trial_recompute_meters_done_from_timeline(
     targets: dict | None,
 ) -> dict[tuple[str, str, str, date], float]:
     """
-    インタラクティブ試行: timeline の加工イベントから (依頼NO, 工程名, 機械名, 暦日) 別の換算mを再集計する。
-    納期シフト等で timeline からイベントが削除されたときに meters 追跡を整合させる。
+    インタラクティブ試行: timeline の加工イベントから (依頼NO, 工程名, 機械名, 配台日) キー別の換算mを再集計する。
+
+    イベント暦日と結果_配台表 JSON の配台日が一致しない場合は、
+    `_interactive_dispatch_resolve_cap_key` とフォールバックでキーを解決する。
     """
     acc: dict[tuple[str, str, str, date], float] = {}
     if not targets:
         return acc
     want = set(targets.keys())
     # #region agent log
-    _ev_mach = 0
     _sk_no_task = 0
     _sk_bad_date = 0
-    _sk_key_not_want = 0
+    _sk_no_bucket = 0
     _sample_miss: list[dict] = []
     # #endregion
-    for ev in timeline_events:
-        if not _is_machining_timeline_event(ev):
-            continue
-        # #region agent log
-        _ev_mach += 1
-        # #endregion
+    _mach_evs = [e for e in (timeline_events or []) if _is_machining_timeline_event(e)]
+    # #region agent log
+    _ev_mach = len(_mach_evs)
+    # #endregion
+
+    def _ev_sort_key(ev: dict):
+        st = ev.get("start_dt")
+        if isinstance(st, datetime):
+            return st
+        return datetime.max.replace(tzinfo=None)
+
+    _mach_evs.sort(key=_ev_sort_key)
+    for ev in _mach_evs:
         tid = _interactive_norm_cell(ev.get("task_id"))
         tsk = _task_dict_for_timeline_event(ev, task_queue)
         if tsk is None:
@@ -29251,16 +29329,39 @@ def _interactive_trial_recompute_meters_done_from_timeline(
             continue
         proc_n = _interactive_dispatch_target_process_key(tsk.get("machine"))
         mach_n = _interactive_norm_cell(tsk.get("machine_name"))
-        d = ev.get("date")
-        if not isinstance(d, date):
+        d = _interactive_timeline_event_calendar_date(ev)
+        if d is None:
             # #region agent log
             _sk_bad_date += 1
             # #endregion
             continue
-        k = (tid, proc_n, mach_n, d)
-        if k not in want:
+        try:
+            ud = float(ev.get("units_done") or 0)
+            um = float(tsk.get("unit_m") or 0)
+        except (TypeError, ValueError):
+            continue
+        add_m = ud * um
+        if add_m <= 1e-18:
+            continue
+        k_direct = (tid, proc_n, mach_n, d)
+        if k_direct in want:
+            kk = k_direct
+        else:
+            kk = _interactive_dispatch_resolve_cap_key(
+                interactive_dispatch_targets=targets,
+                interactive_trial_meters_done=acc,
+                tid=tid,
+                proc=proc_n,
+                mach=mach_n,
+                current_date=d,
+            )
+            if kk is None:
+                kk = _interactive_fallback_meter_target_key_for_recompute(
+                    tid, proc_n, mach_n, d, want
+                )
+        if kk is None:
             # #region agent log
-            _sk_key_not_want += 1
+            _sk_no_bucket += 1
             if "JR260502" in tid and len(_sample_miss) < 12:
                 _sample_miss.append(
                     {
@@ -29273,12 +29374,7 @@ def _interactive_trial_recompute_meters_done_from_timeline(
                 )
             # #endregion
             continue
-        try:
-            ud = float(ev.get("units_done") or 0)
-            um = float(tsk.get("unit_m") or 0)
-        except (TypeError, ValueError):
-            continue
-        acc[k] = acc.get(k, 0.0) + ud * um
+        acc[kk] = acc.get(kk, 0.0) + add_m
     # #region agent log
     _jr_keys = [kk for kk in want if isinstance(kk, tuple) and len(kk) == 4 and "JR260502" in str(kk[0])]
     _agent_debug_9e76d2_log(
@@ -29290,7 +29386,7 @@ def _interactive_trial_recompute_meters_done_from_timeline(
             "machining_events": _ev_mach,
             "skip_no_task": _sk_no_task,
             "skip_bad_date": _sk_bad_date,
-            "skip_key_not_in_want": _sk_key_not_want,
+            "skip_no_bucket": _sk_no_bucket,
             "acc_n": len(acc),
             "jr260502_target_keys": [
                 {
