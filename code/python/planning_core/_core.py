@@ -24658,11 +24658,40 @@ def compute_interactive_trial_dispatch_qty_shortfall(
     """
     interactive_dispatch_targets（目標メートル）と meters_done を突き合わせ、
     目標を満たせない暦日キーを一覧化する（JavaFX 未達ハイライト用）。
+
+    同一 (依頼NO, 工程名, 機械名) に複数配台日があるとき、行ごとの不足があっても
+    タイムライン総実績が総目標に達していれば未達行は出さない（再集計ズレの誤検知抑止）。
     """
     out: list[dict] = []
     if not targets:
         return out
     md = meters_done or {}
+    agg_tgt: dict[tuple[str, str, str], float] = defaultdict(float)
+    agg_done: dict[tuple[str, str, str], float] = defaultdict(float)
+    for k, target_m in targets.items():
+        if not isinstance(k, tuple) or len(k) != 4:
+            continue
+        t3 = (
+            _interactive_norm_cell(k[0]),
+            _interactive_norm_cell(k[1]),
+            _interactive_norm_cell(k[2]),
+        )
+        try:
+            agg_tgt[t3] += float(target_m or 0.0)
+        except (TypeError, ValueError):
+            pass
+    for k, v in md.items():
+        if not isinstance(k, tuple) or len(k) != 4:
+            continue
+        t3 = (
+            _interactive_norm_cell(k[0]),
+            _interactive_norm_cell(k[1]),
+            _interactive_norm_cell(k[2]),
+        )
+        try:
+            agg_done[t3] += float(v or 0.0)
+        except (TypeError, ValueError):
+            pass
     for k, target_m in targets.items():
         if not isinstance(k, tuple) or len(k) != 4:
             continue
@@ -24712,7 +24741,17 @@ def compute_interactive_trial_dispatch_qty_shortfall(
                     ),
                 }
             )
-    return out
+    filtered: list[dict] = []
+    for row in out:
+        t3 = (
+            _interactive_norm_cell(row.get("task_id")),
+            _interactive_norm_cell(row.get("process")),
+            _interactive_norm_cell(row.get("machine_name")),
+        )
+        if agg_done.get(t3, 0.0) + eps >= agg_tgt.get(t3, 0.0):
+            continue
+        filtered.append(row)
+    return filtered
 
 
 def _apply_result_dispatch_table_excel_table(ws, *, table_display_name: str) -> None:
