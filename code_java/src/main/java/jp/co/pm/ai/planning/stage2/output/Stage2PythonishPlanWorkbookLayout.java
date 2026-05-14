@@ -17,6 +17,8 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
+import jp.co.pm.ai.planning.stage2.core.Stage2PlanRowDispatchQtyMetrics;
+import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
 
 /**
  * Python 段階2の計画ブック（{@code _stage2_tabular_sheet_order}）と同じシート名・並びで xlsx を組み立てる。
@@ -76,6 +78,20 @@ public final class Stage2PythonishPlanWorkbookLayout {
             List<String> equipmentProcPlusMachine,
             List<String> memberDisplayNames)
             throws IOException {
+        write(path, tasks, equipmentProcPlusMachine, memberDisplayNames, null);
+    }
+
+    /**
+     * @param rollTableRepoRoot {@code PM_AI_REPO_ROOT} 相当。非 null なら {@code code/} 下のロール単位長さテーブルを読み、
+     *     Python {@code _roll_unit_m_estimate_from_plan_row} に近い推定で未加工≤0 時の残量を算定する。
+     */
+    public static void write(
+            Path path,
+            PlanInputTabularIo.TabularSheet tasks,
+            List<String> equipmentProcPlusMachine,
+            List<String> memberDisplayNames,
+            Path rollTableRepoRoot)
+            throws IOException {
         Files.createDirectories(path.getParent());
         List<String> eq =
                 equipmentProcPlusMachine != null && !equipmentProcPlusMachine.isEmpty()
@@ -96,7 +112,7 @@ public final class Stage2PythonishPlanWorkbookLayout {
                     case "結果_カレンダー(出勤簿)" -> writeCalendarHeaderOnly(wb, sheetName);
                     case "結果_メンバー別作業割合" -> writeMemberUtilHeader(wb, sheetName, members);
                     case "列設定_結果_タスク一覧" -> writeColumnConfigSheet(wb, sheetName, tasks.headers());
-                    case "結果_タスク一覧" -> writeResultTaskListSheet(wb, sheetName, tasks);
+                    case "結果_タスク一覧" -> writeResultTaskListSheet(wb, sheetName, tasks, rollTableRepoRoot);
                     case "結果_配台表" -> writeDispatchHeaderOnly(wb, sheetName);
                     case "結果_AIログ" -> writeAiLogPlaceholder(wb, sheetName);
                     default -> wb.createSheet(safeSheetName(sheetName));
@@ -174,14 +190,20 @@ public final class Stage2PythonishPlanWorkbookLayout {
      * 依頼NO→タスクID にマッピングして転写する（配台未実行のため他列は空）。
      */
     private static void writeResultTaskListSheet(
-            XSSFWorkbook wb, String sheetName, PlanInputTabularIo.TabularSheet tasks) {
+            XSSFWorkbook wb, String sheetName, PlanInputTabularIo.TabularSheet tasks, Path rollTableRepoRoot)
+            throws IOException {
         Sheet sh = wb.createSheet(safeSheetName(sheetName));
         List<String> canon = Stage2ResultTaskListCanonicalHeaders.DEFAULT_ORDER_NO_HISTORY;
-        writeTabular(sh, canon, expandResultTaskRows(tasks, canon));
+        writeTabular(sh, canon, expandResultTaskRows(tasks, canon, rollTableRepoRoot));
     }
 
     private static List<List<String>> expandResultTaskRows(
-            PlanInputTabularIo.TabularSheet tasks, List<String> outCols) {
+            PlanInputTabularIo.TabularSheet tasks, List<String> outCols, Path rollTableRepoRoot)
+            throws IOException {
+        Stage2RollUnitLengthTables tables =
+                rollTableRepoRoot != null
+                        ? Stage2RollUnitLengthTables.load(rollTableRepoRoot)
+                        : Stage2RollUnitLengthTables.empty();
         List<String> inHeaders = tasks.headers();
         Map<String, Integer> inIndex = new HashMap<>();
         for (int i = 0; i < inHeaders.size(); i++) {
@@ -223,9 +245,42 @@ public final class Stage2PythonishPlanWorkbookLayout {
                     cells.set(ti, v != null ? v : "");
                 }
             }
+            applyDispatchQtyMetricsToCells(cells, outIndex, inHeaders, row, tables);
             out.add(cells);
         }
         return out;
+    }
+
+    private static void applyDispatchQtyMetricsToCells(
+            List<String> cells,
+            Map<String, Integer> outIndex,
+            List<String> inHeaders,
+            List<String> row,
+            Stage2RollUnitLengthTables tables) {
+        Map<String, String> rowMap = new HashMap<>();
+        for (int c = 0; c < inHeaders.size(); c++) {
+            String hk = inHeaders.get(c) == null ? "" : inHeaders.get(c).strip();
+            String val = "";
+            if (c < row.size() && row.get(c) != null) {
+                val = row.get(c).strip();
+            }
+            rowMap.put(hk, val);
+        }
+        Stage2PlanRowDispatchQtyMetrics.compute(rowMap, tables)
+                .flatMap(Stage2PlanRowDispatchQtyMetrics::toResultSheetStrings)
+                .ifPresent(
+                        str -> {
+                            putAt(outIndex, cells, "残加工量", str.remainingM());
+                            putAt(outIndex, cells, "累計加工量", str.cumulativeDoneM());
+                            putAt(outIndex, cells, "完了率(実行時点)", str.completionPct());
+                        });
+    }
+
+    private static void putAt(Map<String, Integer> outIndex, List<String> cells, String col, String value) {
+        Integer i = outIndex.get(col);
+        if (i != null && i >= 0 && i < cells.size() && value != null && !value.isEmpty()) {
+            cells.set(i, value);
+        }
     }
 
     private static void writeDispatchHeaderOnly(XSSFWorkbook wb, String sheetName) {

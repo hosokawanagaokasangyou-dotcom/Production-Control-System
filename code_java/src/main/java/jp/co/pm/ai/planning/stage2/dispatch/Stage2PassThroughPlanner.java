@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.SkillsSheetEquipmentListReader;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
@@ -47,7 +48,11 @@ public final class Stage2PassThroughPlanner {
         List<String> equipmentCombos =
                 SkillsSheetEquipmentListReader.readEquipmentProcPlusMachineCombos(snap.masterPath());
         Stage2PythonishPlanWorkbookLayout.write(
-                planXlsx, tasks, equipmentCombos, snap.memberDisplayNames());
+                planXlsx,
+                tasks,
+                equipmentCombos,
+                snap.memberDisplayNames(),
+                AppPaths.resolveRepoRoot(ctx.uiEnv()));
         Stage2PythonishMemberWorkbookLayout.write(
                 memberXlsx,
                 snap.memberDisplayNames(),
