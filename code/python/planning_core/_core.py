@@ -78,6 +78,7 @@ from .bootstrap import (
     log_dir,
     output_dir,
 )
+from .agent_debug_log import append_interactive_core_probe
 
 # region stage2 cache helpers
 _STAGE2_GLOBAL_COMMENT_CACHE: dict | None = None
@@ -99,31 +100,6 @@ _INTERACTIVE_TRIAL_AS_SHORTAGE: list[dict] = []
 _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT: dict[tuple[str, str, str, date], float] = {}
 # 直近の段階3二相（案B）メタ（不足 JSON 等へ載せる）
 _LAST_INTERACTIVE_STAGE3_META: dict = {}
-
-
-# #region agent log
-def _agent_debug_9e76d2_log(
-    hypothesis_id: str, location: str, message: str, data: dict
-) -> None:
-    """Cursor debug session 9e76d2: NDJSON 1 行追記（失敗は握りつぶす）。"""
-    try:
-        _root = pathlib.Path(__file__).resolve().parents[3]
-        _p = str(_root / ".cursor" / "debug-9e76d2.log")
-        _payload = {
-            "sessionId": "9e76d2",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time_module.time() * 1000),
-        }
-        with open(_p, "a", encoding="utf-8") as _f:
-            _f.write(json.dumps(_payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-# #endregion
 
 
 def interactive_stage3_last_run_meta_snapshot() -> dict:
@@ -24708,7 +24684,7 @@ def compute_interactive_trial_dispatch_qty_shortfall(
         # #region agent log
         _tid_s = str(tid or "")
         if gap > eps or "JR260502" in _tid_s:
-            _agent_debug_9e76d2_log(
+            append_interactive_core_probe(
                 "H1",
                 "_core.py:compute_interactive_trial_dispatch_qty_shortfall",
                 "target_vs_done",
@@ -28828,7 +28804,7 @@ def _trial_order_first_schedule_pass(
                 except Exception:
                     _cm_dbg = _dm_dbg = 0.0
                 _um_dbg = float(task.get("unit_m") or 0)
-                _agent_debug_9e76d2_log(
+                append_interactive_core_probe(
                     "H4",
                     "_core.py:_drain_rolls_for_task",
                     "pre_assign_roll_cap_state",
@@ -29416,7 +29392,7 @@ def _interactive_trial_recompute_meters_done_from_timeline(
         acc[kk] = acc.get(kk, 0.0) + add_m
     # #region agent log
     _jr_keys = [kk for kk in want if isinstance(kk, tuple) and len(kk) == 4 and "JR260502" in str(kk[0])]
-    _agent_debug_9e76d2_log(
+    append_interactive_core_probe(
         "H1",
         "_core.py:_interactive_trial_recompute_meters_done_from_timeline",
         "recompute_summary",
