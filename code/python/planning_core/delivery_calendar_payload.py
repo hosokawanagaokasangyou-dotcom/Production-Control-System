@@ -124,17 +124,23 @@ def _df_plan_rows_included_in_delivery_calendar(df_plan: pd.DataFrame | None) ->
 def _plan_pair_dispatch_excluded(
     df_plan: pd.DataFrame | None, mk: str, tid: str
 ) -> bool:
-    """True if any processing-plan row for (mk, tid) is dispatch-excluded."""
+    """True only when **every** processing-plan row for (mk, tid) is dispatch-excluded.
+
+    Same physical machine and same 依頼NO can carry multiple processes (e.g. スリット then 梱包).
+    If any matching row remains dispatchable, the pair must stay in the calendar grid.
+    """
     if df_plan is None or not mk or not tid:
         return False
+    matched = False
     for _, row in df_plan.iterrows():
         pmk = core._normalize_equipment_match_key(row.get(core.TASK_COL_MACHINE_NAME))
         ptid = core.planning_task_id_str_from_scalar(row.get(core.TASK_COL_TASK_ID))
         if pmk != mk or ptid != tid:
             continue
-        if _plan_row_dispatch_excluded(row):
-            return True
-    return False
+        matched = True
+        if not _plan_row_dispatch_excluded(row):
+            return False
+    return matched
 
 
 def _resolve_actual_detail_machine_key_for_delivery_calendar(
