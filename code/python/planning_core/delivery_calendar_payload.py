@@ -28,6 +28,7 @@ from planning_core.dispatch_workspace import (
     resolve_processing_plan_path_from_env,
     resolve_result_dispatch_table_output_dir,
 )
+from planning_core.input_resolution import ENV_EXCLUDE_RULES_JSON
 
 _LOG = logging.getLogger(__name__)
 
@@ -873,6 +874,30 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
         pp = (os.environ.get(ENV_PROCESSING_PLAN_PATH) or "").strip()
         meta["processingPlanPath"] = pp
 
+        if df_plan is not None and len(df_plan) > 0:
+            try:
+                core._ensure_stage1_exclude_rules_json_env_from_repo_default()
+                meta["deliveryCalendarExcludeRulesJsonPath"] = (
+                    os.environ.get(ENV_EXCLUDE_RULES_JSON) or ""
+                ).strip()
+                if core.PLAN_COL_EXCLUDE_FROM_ASSIGNMENT not in df_plan.columns:
+                    df_plan[core.PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = ""
+                _wb_for_er = (core._excel_plan_input_wb() or pp or "").strip()
+                df_plan = core.apply_exclude_rules_config_to_plan_df(
+                    df_plan, _wb_for_er, "delivery_calendar"
+                )
+            except Exception as ex:
+                _LOG.warning("delivery_calendar: apply_exclude_rules_config failed: %s", ex)
+            try:
+                if core.PLAN_COL_EXCLUDE_FROM_ASSIGNMENT in df_plan.columns:
+                    meta["deliveryCalendarPlanRowsExcludeDispatchYes"] = int(
+                        df_plan.apply(
+                            core._plan_row_exclude_from_assignment, axis=1
+                        ).sum()
+                    )
+            except Exception:
+                pass
+
         dispatch_path = _resolve_dispatch_json_path(pp)
         meta["dispatchJsonPath"] = dispatch_path or ""
         _disp_header, disp_rows = _load_dispatch_json_rows(dispatch_path)
@@ -1301,6 +1326,12 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                             "deliveryCalendarEligiblePairsDroppedForExcludeDispatch",
                             0,
                         )
+                    ),
+                    "planRowsExcludeDispatchYes": int(
+                        meta.get("deliveryCalendarPlanRowsExcludeDispatchYes", -1)
+                    ),
+                    "excludeRulesJsonPathSet": bool(
+                        (meta.get("deliveryCalendarExcludeRulesJsonPath") or "").strip()
                     ),
                     "mainDataRows": sum(
                         1 for r in main_rows_out if r.get("kind") == "data"
