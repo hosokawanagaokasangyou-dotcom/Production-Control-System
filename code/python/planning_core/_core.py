@@ -29289,15 +29289,40 @@ def _task_dict_for_timeline_event(ev: dict, task_queue: list) -> dict | None:
     if not tid:
         return None
     eq = str(ev.get("machine") or "").strip()
+    ev_occ = str(ev.get("machine_occupancy_key") or "").strip()
+    norm_ev_occ = _normalize_equipment_match_key(ev_occ) if ev_occ else ""
+    norm_eq_ev = _normalize_equipment_match_key(eq)
+
+    candidates: list[dict] = []
     for t in task_queue:
         if str(t.get("task_id") or "").strip() != tid:
             continue
+        candidates.append(t)
+    if not candidates:
+        return None
+
+    for t in candidates:
         t_eq = str(t.get("equipment_line_key") or t.get("machine") or "").strip()
         if t_eq == eq:
             return t
-    for t in task_queue:
-        if str(t.get("task_id") or "").strip() == tid:
+
+    for t in candidates:
+        t_eq = str(t.get("equipment_line_key") or t.get("machine") or "").strip()
+        if norm_eq_ev and _normalize_equipment_match_key(t_eq) == norm_eq_ev:
             return t
+
+    if norm_ev_occ:
+        for t in candidates:
+            t_eq = str(t.get("equipment_line_key") or t.get("machine") or "").strip()
+            try:
+                t_occ = str(_machine_occupancy_key_resolve(t, t_eq) or "").strip()
+            except Exception:
+                t_occ = ""
+            if t_occ and _normalize_equipment_match_key(t_occ) == norm_ev_occ:
+                return t
+
+    if len(candidates) == 1:
+        return candidates[0]
     return None
 
 
