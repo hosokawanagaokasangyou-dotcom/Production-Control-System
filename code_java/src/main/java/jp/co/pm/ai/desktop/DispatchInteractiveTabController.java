@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.Collator;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -19,6 +20,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -29,6 +31,7 @@ import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.concurrent.Task;
@@ -53,6 +56,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableView;
+import javafx.scene.control.TitledPane;
 import javafx.scene.control.TablePosition;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
@@ -113,6 +117,9 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 public final class DispatchInteractiveTabController {
 
     private static final ObjectMapper STAGE3_RESULT_JSON = new ObjectMapper();
+
+    /** 設備フェイズ結果の機械名別折りたたみの並び（日本語ロケールの辞書順）。 */
+    private static final Collator STAGE3_MACHINE_NAME_ORDER = Collator.getInstance(Locale.JAPANESE);
 
     private record ReloadBundle(ResultDispatchDocument doc) {}
 
@@ -210,7 +217,7 @@ public final class DispatchInteractiveTabController {
     private Button stage3BothTrialButton;
 
     @FXML
-    private TableView<Map<String, String>> stage3EquipmentResultTable;
+    private VBox stage3EquipmentTablesHost;
 
     @FXML
     private TextField stage3EquipmentFilterField;
@@ -2880,17 +2887,19 @@ public final class DispatchInteractiveTabController {
     }
 
     private void ensureStage3EquipmentFilteredModel() {
-        if (stage3EquipmentResultTable == null || stage3EquipmentFilterModelWired) {
+        if (stage3EquipmentTablesHost == null || stage3EquipmentFilterModelWired) {
             return;
         }
         stage3EquipmentFilterModelWired = true;
         stage3EquipmentFilteredRows = new FilteredList<>(stage3EquipmentMasterRows, r -> true);
-        stage3EquipmentResultTable.setItems(stage3EquipmentFilteredRows);
+        stage3EquipmentFilteredRows.addListener(
+                (ListChangeListener.Change<? extends Map<String, String>> c) -> rebuildStage3EquipmentNestedTables());
         if (stage3EquipmentFilterField != null) {
             stage3EquipmentFilterField
                     .textProperty()
                     .addListener((obs, prev, cur) -> applyStage3EquipmentRowFilter());
         }
+        rebuildStage3EquipmentNestedTables();
     }
 
     private void applyStage3EquipmentRowFilter() {
@@ -2901,10 +2910,10 @@ public final class DispatchInteractiveTabController {
         String q = raw != null ? raw.trim() : "";
         if (q.isEmpty()) {
             stage3EquipmentFilteredRows.setPredicate(r -> true);
-            return;
+        } else {
+            String qLower = q.toLowerCase(Locale.ROOT);
+            stage3EquipmentFilteredRows.setPredicate(row -> stage3EquipmentRowMatchesFilter(row, qLower));
         }
-        String qLower = q.toLowerCase(Locale.ROOT);
-        stage3EquipmentFilteredRows.setPredicate(row -> stage3EquipmentRowMatchesFilter(row, qLower));
     }
 
     private static boolean stage3EquipmentRowMatchesFilter(Map<String, String> row, String qLower) {
@@ -2919,32 +2928,74 @@ public final class DispatchInteractiveTabController {
         return false;
     }
 
-    private void installStage3ResultTableColumns() {
-        if (stage3EquipmentResultTable != null && stage3EquipmentResultTable.getColumns().isEmpty()) {
-            TableColumn<Map<String, String>, String> c0 = new TableColumn<>("日付");
-            c0.setCellValueFactory(
-                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("date", "")));
-            TableColumn<Map<String, String>, String> c1 = new TableColumn<>("依頼NO");
-            c1.setCellValueFactory(
-                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("task_id", "")));
-            TableColumn<Map<String, String>, String> c2 = new TableColumn<>("設備");
-            c2.setCellValueFactory(
-                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("machine", "")));
-            TableColumn<Map<String, String>, String> c3 = new TableColumn<>("開始");
-            c3.setCellValueFactory(
-                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("start_dt", "")));
-            TableColumn<Map<String, String>, String> c4 = new TableColumn<>("終了");
-            c4.setCellValueFactory(
-                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("end_dt", "")));
-            TableColumn<Map<String, String>, String> c5 = new TableColumn<>("OP");
-            c5.setCellValueFactory(
-                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("op", "")));
-            stage3EquipmentResultTable
-                    .getColumns()
-                    .addAll(List.of(c0, c1, c2, c3, c4, c5));
-            stage3EquipmentResultTable.setColumnResizePolicy(
-                    TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+    private static void installStage3EquipmentDataColumns(TableView<Map<String, String>> tv) {
+        if (tv == null || !tv.getColumns().isEmpty()) {
+            return;
         }
+        TableColumn<Map<String, String>, String> c0 = new TableColumn<>("日付");
+        c0.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("date", "")));
+        TableColumn<Map<String, String>, String> c1 = new TableColumn<>("依頼NO");
+        c1.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("task_id", "")));
+        TableColumn<Map<String, String>, String> c2 = new TableColumn<>("設備");
+        c2.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("machine", "")));
+        TableColumn<Map<String, String>, String> c3 = new TableColumn<>("開始");
+        c3.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("start_dt", "")));
+        TableColumn<Map<String, String>, String> c4 = new TableColumn<>("終了");
+        c4.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("end_dt", "")));
+        TableColumn<Map<String, String>, String> c5 = new TableColumn<>("OP");
+        c5.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("op", "")));
+        tv.getColumns().addAll(List.of(c0, c1, c2, c3, c4, c5));
+    }
+
+    private static double stage3EquipmentTablePrefHeight(int rowCount) {
+        int capped = Math.min(Math.max(rowCount, 1), 22);
+        return 36.0 + capped * 26.0;
+    }
+
+    private void rebuildStage3EquipmentNestedTables() {
+        if (stage3EquipmentTablesHost == null) {
+            return;
+        }
+        stage3EquipmentTablesHost.getChildren().clear();
+        if (stage3EquipmentFilteredRows == null) {
+            return;
+        }
+        if (stage3EquipmentMasterRows.isEmpty()) {
+            return;
+        }
+        if (stage3EquipmentFilteredRows.isEmpty()) {
+            Label hint = new Label("絞り込み条件に一致する行がありません");
+            stage3EquipmentTablesHost.getChildren().add(hint);
+            return;
+        }
+        TreeMap<String, List<Map<String, String>>> byMachine = new TreeMap<>(STAGE3_MACHINE_NAME_ORDER::compare);
+        for (Map<String, String> row : stage3EquipmentFilteredRows) {
+            if (row == null) {
+                continue;
+            }
+            String rawM = row.get("machine");
+            String key = rawM == null || rawM.isBlank() ? "（設備名なし）" : rawM.strip();
+            byMachine.computeIfAbsent(key, k -> new ArrayList<>()).add(row);
+        }
+        for (var e : byMachine.entrySet()) {
+            String machine = e.getKey();
+            List<Map<String, String>> group = e.getValue();
+            TableView<Map<String, String>> tv = new TableView<>();
+            installStage3EquipmentDataColumns(tv);
+            tv.setItems(FXCollections.observableArrayList(group));
+            tv.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+            tv.setPrefHeight(stage3EquipmentTablePrefHeight(group.size()));
+            tv.setMinHeight(Region.USE_PREF_SIZE);
+            TitledPane pane = new TitledPane();
+            pane.setText(machine + " （" + group.size() + " 行）");
+            pane.setContent(tv);
+            pane.setExpanded(true);
+            pane.setMaxWidth(Double.MAX_VALUE);
+            stage3EquipmentTablesHost.getChildren().add(pane);
+        }
+    }
+
+    private void installStage3ResultTableColumns() {
         if (stage3PeopleResultTable != null && stage3PeopleResultTable.getColumns().isEmpty()) {
             TableColumn<Map<String, String>, String> p0 = new TableColumn<>("区分");
             p0.setCellValueFactory(
@@ -2982,7 +3033,7 @@ public final class DispatchInteractiveTabController {
     }
 
     private void loadStage3EquipmentCheckpointIntoTable() {
-        if (stage3EquipmentResultTable == null) {
+        if (stage3EquipmentTablesHost == null) {
             return;
         }
         ensureStage3EquipmentFilteredModel();

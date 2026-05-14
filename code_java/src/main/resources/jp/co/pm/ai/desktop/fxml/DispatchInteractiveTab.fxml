@@ -5,6 +5,7 @@
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ProgressBar?>
 <?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Tab?>
 <?import javafx.scene.control.TabPane?>
 <?import javafx.scene.control.TextField?>
@@ -106,8 +107,14 @@
                             </HBox>
                         </top>
                         <center>
-                            <TableView fx:id="stage3EquipmentResultTable" maxHeight="Infinity" maxWidth="Infinity"
-                                       minHeight="200.0"/>
+                            <ScrollPane fitToWidth="true" maxHeight="Infinity" maxWidth="Infinity" minHeight="200.0"
+                                        hbarPolicy="NEVER" vbarPolicy="AS_NEEDED">
+                                <VBox fx:id="stage3EquipmentTablesHost" fillWidth="true" spacing="8.0">
+                                    <padding>
+                                        <Insets bottom="8.0" left="4.0" right="4.0" top="4.0"/>
+                                    </padding>
+                                </VBox>
+                            </ScrollPane>
                         </center>
                     </BorderPane>
                 </content>
