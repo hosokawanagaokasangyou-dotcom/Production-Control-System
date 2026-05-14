@@ -1145,6 +1145,7 @@ PLAN_COL_EXCLUDE_FROM_ASSIGNMENT = "配台不要"
 PLAN_COL_AI_PARSE = "AI特別指定_解析"
 PLAN_COL_PROCESS_FACTOR = "加工工程の決定プロセスの因子"
 # 1ロールあたりの長さ（m）。配台計画_タスク入力にのみ存在（加工計画DATA には無い）。製品名列の右隣に配置。
+# 段階1は「製品名,ロール単位の長さ.txt」→製品名寸法のみ（使用原反列・原反ロール長テーブルとは独立）。
 PLAN_COL_ROLL_UNIT_LENGTH = "ロール単位長さ"
 # 段階1で算出し配台計画に出力。段階2の build_task_queue と同一式（_plan_row_dispatch_qty_metrics の残りm）。
 PLAN_COL_DISPATCH_REMAINING_QTY = "配台使用残数量"
@@ -1609,7 +1610,7 @@ def plan_input_sheet_column_order():
     0. 配台試行順番（段階1抽出直後に空クリア→段階2と同じ趣旨に付与。段階2は全行に値はあるとしこの順を優先）
     1. 配台不要（参照列なし）
     2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量、製品名の直後にロール単位長さ・製品幅、原反投入日の直後に在庫場所・使用原反の直後に(原反)ロール単位長さ・原反幅）
-       （(原反)ロール単位長さは使用原反テーブル→使用原反文字列の寸法→いずれも不可なら「不明」）
+       （ロール単位長さは製品名テーブル→製品名寸法のみ。(原反)ロール単位長さは使用原反テーブル→使用原反文字列の寸法→いずれも不可なら「不明」）
     3. 加工工程の決定プロセスの因孝
     4. 上書き列… 複数列の直後に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
        （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
@@ -4051,20 +4052,13 @@ def _planning_df_cell_scalar(row, col_name):
 def _roll_unit_m_estimate_from_plan_row(row, fallback_m: float) -> float:
     """
     配台計画1行から 1 ロールあたりの長さ(m)。シートのロール単位長さを優先し、
-    空・0 のときは使用原反テーブル→製品名寸法の順で推定する（build_task_queue と同趣旨）。
+    空・0 のときは製品名テーブル→製品名寸法で推定する（build_task_queue と同趣旨）。
     """
     product_name = row.get(TASK_COL_PRODUCT, None) if hasattr(row, "get") else None
-    used_raw = (
-        _planning_df_cell_scalar(row, TASK_COL_USED_RAW)
-        if hasattr(row, "get")
-        else None
-    )
     unit = parse_float_safe(_planning_df_cell_scalar(row, PLAN_COL_ROLL_UNIT_LENGTH), 0.0)
     fb = max(1e-9, float(parse_float_safe(fallback_m, 0.0)))
     if unit <= 0:
-        unit = infer_roll_unit_m_from_used_raw_then_product_dims(
-            product_name, used_raw, fallback_unit=fb
-        )
+        unit = infer_unit_m_from_product_name(product_name, fallback_unit=fb)
     try:
         unit = float(unit)
     except (TypeError, ValueError):
@@ -4782,63 +4776,19 @@ def _string_has_roll_dim_mm_pattern(val) -> bool:
     return bool(re.search(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", t))
 
 
-def _agent_debug_roll_infer_ndjson(
-    location: str, message: str, hypothesis_id: str, data: dict
-) -> None:
-    # #region agent log
-    log_path = "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-e668f6.log"
-    try:
-        line = (
-            json.dumps(
-                {
-                    "sessionId": "e668f6",
-                    "location": location,
-                    "message": message,
-                    "hypothesisId": hypothesis_id,
-                    "data": data,
-                    "timestamp": int(time_module.time() * 1000),
-                },
-                ensure_ascii=False,
-            )
-            + "\n"
-        )
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(line)
-    except Exception:
-        pass
-    # #endregion
-
-
 def infer_roll_unit_m_from_used_raw_then_product_dims(
     product_name, used_raw, fallback_unit
 ):
     """
-    配台用: 使用原反テーブル（``使用原反,ロール単位の長さ.txt``）を優先し、
-    未登録なら製品名の寸法（X の右側等）から推定する。
-    製品名に寸法パターンが無く使用原反にだけあるときは使用原反文字列で推定する
-    （製品名列が空で換算数量だけが入る誤フォールバックを防ぐ）。
+    使用原反テーブル（``使用原反,ロール単位の長さ.txt``）を優先し、
+    未登録なら製品名の寸法、さらに製品名に寸法が無い場合は使用原反文字列の寸法から推定する。
+
+    **配台計画シートの列「ロール単位長さ」**（製品側1ロール長）の算出には使わない
+    （当列は ``infer_unit_m_from_product_name`` のみ）。原反ロール長の表示列とも別経路。
+    検証・他処理で「原反由来を優先したい」場合の補助として残す。
     """
-    _pn_dbg = _planning_scalar_text_for_roll_dim(product_name)
-    _ur_dbg = _planning_scalar_text_for_roll_dim(used_raw)
-    _agent_debug_roll_infer_ndjson(
-        "_core.py:infer_roll_unit_m_from_used_raw_then_product_dims",
-        "entry",
-        "H_entry",
-        {
-            "product_name_head": _pn_dbg[:96],
-            "used_raw_head": _ur_dbg[:96],
-            "pn_has_dim": _string_has_roll_dim_mm_pattern(product_name),
-            "ur_has_dim": _string_has_roll_dim_mm_pattern(used_raw),
-        },
-    )
     v = _lookup_roll_unit_length_m_from_used_raw(used_raw)
     if v is not None and v > 0:
-        _agent_debug_roll_infer_ndjson(
-            "_core.py:infer_roll_unit_m_from_used_raw_then_product_dims",
-            "return_used_raw_table",
-            "H1",
-            {"return_m": float(v)},
-        )
         return float(v)
     pn_txt = _planning_scalar_text_for_roll_dim(product_name)
     ur_txt = _planning_scalar_text_for_roll_dim(used_raw)
@@ -4846,42 +4796,25 @@ def infer_roll_unit_m_from_used_raw_then_product_dims(
         ur_txt
     ):
         dim_source = ur_txt
-        _dim_branch = "ur_only_pn_no_dim"
     elif not pn_txt and ur_txt:
         dim_source = ur_txt
-        _dim_branch = "pn_empty_ur_fallback"
     else:
         dim_source = pn_txt if pn_txt else ur_txt
-        _dim_branch = "pn_or_default"
-    _out = _infer_roll_unit_m_from_product_name_dimensions_only(
+    return _infer_roll_unit_m_from_product_name_dimensions_only(
         dim_source if dim_source else None, fallback_unit
     )
-    try:
-        _out_m_dbg = float(_out) if _out is not None else None
-    except (TypeError, ValueError):
-        _out_m_dbg = None
-    _agent_debug_roll_infer_ndjson(
-        "_core.py:infer_roll_unit_m_from_used_raw_then_product_dims",
-        "return_dimension_infer",
-        "H2",
-        {
-            "dim_branch": _dim_branch,
-            "dim_source_head": (dim_source or "")[:96],
-            "return_m": _out_m_dbg,
-        },
-    )
-    return _out
 
 
 def infer_unit_m_from_product_name(product_name, fallback_unit):
     """
-    製品名文字列から 1 ロールあたりの長さ(m)を推定する（検証・旧互換用）。
+    製品名文字列から 1 ロールあたりの長さ(m)を推定する。
 
     まず「製品名,ロール単位の長さ.txt」の完全一致があれば採用し、
     無ければ寸法（``_infer_roll_unit_m_from_product_name_dimensions_only`` と同じ）へフォールバックする。
 
-    **配台本線**（段階1のロール単位長さ列・段階2の unit_m 補完等）は
-    ``infer_roll_unit_m_from_used_raw_then_product_dims`` を用い、使用原反テーブルを優先する。
+    **配台計画_タスク入力**の列 **「ロール単位長さ」**（段階1の ``_stage1_roll_length_for_planning_row``）、
+    段階2 ``build_task_queue_from_planning_df`` でシート値が空・0 のときの補完、
+    ``_roll_unit_m_estimate_from_plan_row`` のフォールバックで使用する。
     """
     if product_name is None or pd.isna(product_name):
         return fallback_unit
@@ -4902,14 +4835,15 @@ def _coerce_roll_unit_m_when_converted_qty_below_roll(
     換算数量（qty_total）が、推定ロール単位長さより小さいときは、
     ロール単位長さを採用する（シート等で unit_m が換算数量未満に誤っている場合の救済）。
     シート・手入力で unit_m が推定より大きい場合は上書きしない。
+
+    推定値は ``infer_unit_m_from_product_name``（製品名テーブル→製品名寸法）のみ。
+    ``used_raw`` は呼び出し互換のため受け取るが参照しない。
     """
     try:
         u = float(unit_m)
     except (TypeError, ValueError):
         u = 0.0
-    roll_infer = infer_roll_unit_m_from_used_raw_then_product_dims(
-        product_name, used_raw, fallback_unit=0.0
-    )
+    roll_infer = infer_unit_m_from_product_name(product_name, fallback_unit=0.0)
     try:
         roll_infer = float(roll_infer)
     except (TypeError, ValueError):
@@ -4954,20 +4888,18 @@ def _stage1_roll_length_for_planning_row(row) -> float:
     """
     段階1: 加工計画由来の1行から ロール単位長さ(m)を計算（``run_stage1_extract`` の merge 前と同一式）。
 
-    使用原反テーブル・製品名寸法・``_coerce_roll_unit_m_when_converted_qty_below_roll`` まで適用した値を
-    **100m 切上げせず**そのまま返す。
+    製品名テーブル・製品名寸法・``_coerce_roll_unit_m_when_converted_qty_below_roll`` まで適用した値を
+    **100m 切上げせず**そのまま返す（使用原反列・原反ロール長テーブルは参照しない）。
     """
     _pn_stage1 = row.get(TASK_COL_PRODUCT, None)
-    _used_raw_s1 = row.get(TASK_COL_USED_RAW, None)
     qty, _done_m, _qtceiled, _from_unp = _plan_row_dispatch_qty_metrics(row)
     _qty_total_s1 = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
     _qty_total_s1 = _floor_positive_m_to_planning_minimum(
         _qty_total_s1, PLANNING_MIN_QTY_M
     )
-    _roll_len = infer_roll_unit_m_from_used_raw_then_product_dims(
+    _roll_len = infer_unit_m_from_product_name(
         _pn_stage1,
-        _used_raw_s1,
-        fallback_unit=_qty_total_s1 if _qty_total_s1 > 0 else qty,
+        _qty_total_s1 if _qty_total_s1 > 0 else qty,
     )
     try:
         _roll_len = float(_roll_len)
@@ -4976,7 +4908,7 @@ def _stage1_roll_length_for_planning_row(row) -> float:
     if _roll_len <= 0:
         _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
     _roll_len = _coerce_roll_unit_m_when_converted_qty_below_roll(
-        _pn_stage1, _roll_len, _qty_total_s1, used_raw=_used_raw_s1
+        _pn_stage1, _roll_len, _qty_total_s1, used_raw=None
     )
     try:
         _roll_len = float(_roll_len)
@@ -4984,13 +4916,6 @@ def _stage1_roll_length_for_planning_row(row) -> float:
         _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
     if _roll_len <= 0:
         _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
-    _tid_dbg = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
-    _agent_debug_roll_infer_ndjson(
-        "_core.py:_stage1_roll_length_for_planning_row",
-        "stage1_product_roll_m_final",
-        "H_stage1",
-        {"task_id": _tid_dbg, "roll_m": float(_roll_len)},
-    )
     return float(_roll_len)
 
 
@@ -12336,14 +12261,12 @@ def build_task_queue_from_planning_df(
         except (TypeError, ValueError):
             _prod_w_i = None
 
-        _used_raw_plan = _planning_df_cell_scalar(row, TASK_COL_USED_RAW)
         unit = parse_float_safe(
             _planning_df_cell_scalar(row, PLAN_COL_ROLL_UNIT_LENGTH), 0.0
         )
         if unit <= 0:
-            unit = infer_roll_unit_m_from_used_raw_then_product_dims(
+            unit = infer_unit_m_from_product_name(
                 product_name,
-                _used_raw_plan,
                 fallback_unit=qty_total if qty_total > 0 else qty,
             )
         try:
@@ -12638,7 +12561,7 @@ def _merge_plan_sheet_user_overrides(out_df):
     段階1の抽出結果へ (依頼NO, 工程名) 短縮で引き継ぎ。
     空のセルはマージしない（新規抽出坴の空のまま）。
 
-    「ロール単位長さ」は、使用原反が「使用原反,ロール単位の長さ.txt」に登録されている行では
+    「ロール単位長さ」は、製品名が「製品名,ロール単位の長さ.txt」に登録されている行では
     シート上の旧値で上書きしない（テーブル＋段階1の再計算を優先し、誤った過去値の混入を防ぐ）。
     「(原反)ロール単位長さ」は旧シートからマージしない（使用原反列と当該テーブル由来のみ）。
 
@@ -12708,10 +12631,10 @@ def _merge_plan_sheet_user_overrides(out_df):
         for c, v in bucket.items():
             if (
                 c == PLAN_COL_ROLL_UNIT_LENGTH
-                and TASK_COL_USED_RAW in out_df.columns
+                and TASK_COL_PRODUCT in out_df.columns
             ):
-                _ur_m = out_df.at[i, TASK_COL_USED_RAW]
-                if _lookup_roll_unit_length_m_from_used_raw(_ur_m) is not None:
+                _pn_m = out_df.at[i, TASK_COL_PRODUCT]
+                if _lookup_roll_unit_length_m_from_table(_pn_m) is not None:
                     continue
             if c == PLAN_COL_EXCLUDE_FROM_ASSIGNMENT:
                 tp_m = str(row.get(TASK_COL_MACHINE, "") or "").strip()
