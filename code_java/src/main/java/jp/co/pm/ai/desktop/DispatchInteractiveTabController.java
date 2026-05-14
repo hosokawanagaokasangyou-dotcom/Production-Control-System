@@ -2942,7 +2942,7 @@ public final class DispatchInteractiveTabController {
         c3.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("start_dt", "")));
         TableColumn<Map<String, String>, String> c4 = new TableColumn<>("終了");
         c4.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("end_dt", "")));
-        TableColumn<Map<String, String>, String> c5 = new TableColumn<>("加工m数");
+        TableColumn<Map<String, String>, String> c5 = new TableColumn<>("加工m（累計/合計）");
         c5.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("machining_m", "")));
         TableColumn<Map<String, String>, String> c6 = new TableColumn<>("OP");
         c6.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("op", "")));
@@ -3085,8 +3085,10 @@ public final class DispatchInteractiveTabController {
     }
 
     /**
-     * 設備フェイズチェックポイントの加工イベント: {@code (units_done×unit_m)m / (合計)m}。
-     * 合計は {@code total_qty_m}（チェックポイント JSON に含む）を優先し、無いときは {@code total_units×unit_m}。
+     * 設備フェイズチェックポイントの加工イベント: {@code (加工累計m)/(タスク合計m)}。
+     * 累計は {@code (already_done_units + units_done) × unit_m}。{@code already_done_units} が無い旧 JSON は
+     * {@code units_done × unit_m} のみとする。
+     * 合計は {@code total_qty_m} を優先し、無いときは {@code total_units×unit_m}。
      * テキストの {@code machining_m} があればそのまま表示（手編集・将来形式用）。
      */
     private static String stage3EquipmentMachiningMeters(JsonNode ev) {
@@ -3106,16 +3108,23 @@ public final class DispatchInteractiveTabController {
             return "";
         }
         double unitM = um.asDouble();
-        double chunkM = ud.asDouble() * unitM;
-        if (Math.abs(chunkM) < 1e-12) {
+        double slotM = ud.asDouble() * unitM;
+        if (Math.abs(slotM) < 1e-12) {
             return "";
         }
-        String chunkPart = ResultDispatchNormalizer.formatQty(chunkM) + "m";
+        JsonNode ad = ev.get("already_done_units");
+        double cumUnits =
+                ad != null && ad.isNumber() ? ad.asDouble() + ud.asDouble() : ud.asDouble();
+        double cumM = cumUnits * unitM;
+        if (Math.abs(cumM) < 1e-12) {
+            return "";
+        }
+        String cumPart = ResultDispatchNormalizer.formatQty(cumM) + "m";
         double totalM = stage3EquipmentTotalMetersDenominator(ev, unitM);
         if (totalM > 1e-12) {
-            return chunkPart + "/" + ResultDispatchNormalizer.formatQty(totalM) + "m";
+            return cumPart + "/" + ResultDispatchNormalizer.formatQty(totalM) + "m";
         }
-        return chunkPart;
+        return cumPart;
     }
 
     private static double stage3EquipmentTotalMetersDenominator(JsonNode ev, double unitM) {
