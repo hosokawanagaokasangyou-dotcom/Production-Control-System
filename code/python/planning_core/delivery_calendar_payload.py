@@ -7,7 +7,6 @@ import json
 import logging
 import math
 import os
-from pathlib import Path
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime, timedelta
@@ -16,6 +15,7 @@ from typing import Any
 import pandas as pd
 
 import planning_core._core as core
+from planning_core.agent_debug_ndjson import append_structured as _agent_debug_append_structured
 from planning_core.dispatch_workspace import (
     DEFAULT_ACTUAL_DETAIL_SOURCE_DIR,
     DEFAULT_TASK_INPUT_SOURCE_DIR,
@@ -66,16 +66,9 @@ def _pm_ai_progress(pct: int) -> None:
 
 
 # #region agent log
-def _agent_debug_log_file() -> str:
-    """Workspace ``.cursor/debug-21d166.log`` (works when Python runs on Windows too)."""
-    try:
-        repo = Path(__file__).resolve().parent.parent.parent.parent
-        return str(repo / ".cursor" / "debug-21d166.log")
-    except Exception:
-        return "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-21d166.log"
-
-
-_AGENT_DEBUG_SESSION_ID = "21d166"
+_AGENT_DEBUG_SESSION_ID = (
+    (os.environ.get("PM_AI_AGENT_DEBUG_SESSION_ID") or "21d166").strip() or "21d166"
+)
 
 
 def _delivery_debug_target_tid() -> str | None:
@@ -94,23 +87,13 @@ def _agent_delivery_ndjson(
     hypothesis_id: str, location: str, message: str, data: dict[str, Any]
 ) -> None:
     try:
-        rid = (os.environ.get("PM_AI_DEBUG_RUN_ID") or "run1").strip() or "run1"
-        line = json.dumps(
-            {
-                "sessionId": _AGENT_DEBUG_SESSION_ID,
-                "runId": rid,
-                "hypothesisId": hypothesis_id,
-                "location": location,
-                "message": message,
-                "data": data,
-                "timestamp": int(__import__("time").time() * 1000),
-            },
-            ensure_ascii=False,
+        _agent_debug_append_structured(
+            _AGENT_DEBUG_SESSION_ID,
+            hypothesis_id,
+            location,
+            message,
+            data,
         )
-        p = Path(_agent_debug_log_file())
-        p.parent.mkdir(parents=True, exist_ok=True)
-        with open(p, "a", encoding="utf-8") as _lf:
-            _lf.write(line + "\n")
     except Exception:
         pass
 
