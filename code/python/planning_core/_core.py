@@ -12216,7 +12216,7 @@ def build_task_queue_from_planning_df(
     planning_sheet_row_seq = 0
     _has_unprocessed_col = TASK_COL_UNPROCESSED in tasks_df.columns
 
-    for planning_df_iloc, (_, row) in enumerate(tasks_df.iterrows()):
+    for planning_df_iloc, (row_idx, row) in enumerate(tasks_df.iterrows()):
         if row_has_completion_keyword(row):
             continue
         if _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(row):
@@ -12407,6 +12407,18 @@ def build_task_queue_from_planning_df(
                     _sheet_roll_unit_before_sim_adjust,
                     unit,
                 )
+                # 計画 DataFrame の「ロール単位長さ」を実効値で明示上書き（出力・後段がシート列と整合するようにする）
+                if PLAN_COL_ROLL_UNIT_LENGTH in tasks_df.columns:
+                    try:
+                        tasks_df.at[row_idx, PLAN_COL_ROLL_UNIT_LENGTH] = float(unit)
+                    except Exception as e:
+                        logging.warning(
+                            "列「%s」の明示更新に失敗（行=%s 依頼NO=%s）: %s",
+                            PLAN_COL_ROLL_UNIT_LENGTH,
+                            row_idx,
+                            task_id,
+                            e,
+                        )
 
         # 換算数量・ロール単位長さの補正（推定・100m 下限・換算<ロール時の引き上げ）は段階1のみ。段階2はシート値を採用し、空・0 のときだけ推定フォールバックする。
 
