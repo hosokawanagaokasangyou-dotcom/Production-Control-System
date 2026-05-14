@@ -66,7 +66,15 @@ def _pm_ai_progress(pct: int) -> None:
 
 
 # #region agent log
-_AGENT_DEBUG_LOG_PATH = "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-21d166.log"
+def _agent_debug_log_file() -> str:
+    """Workspace ``.cursor/debug-21d166.log`` (works when Python runs on Windows too)."""
+    try:
+        repo = Path(__file__).resolve().parent.parent.parent.parent
+        return str(repo / ".cursor" / "debug-21d166.log")
+    except Exception:
+        return "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-21d166.log"
+
+
 _AGENT_DEBUG_SESSION_ID = "21d166"
 
 
@@ -99,7 +107,9 @@ def _agent_delivery_ndjson(
             },
             ensure_ascii=False,
         )
-        with open(_AGENT_DEBUG_LOG_PATH, "a", encoding="utf-8") as _lf:
+        p = Path(_agent_debug_log_file())
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with open(p, "a", encoding="utf-8") as _lf:
             _lf.write(line + "\n")
     except Exception:
         pass
