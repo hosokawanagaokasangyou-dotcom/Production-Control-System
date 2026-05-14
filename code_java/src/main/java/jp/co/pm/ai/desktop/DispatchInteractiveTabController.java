@@ -118,6 +118,12 @@ public final class DispatchInteractiveTabController {
 
     private static final ObjectMapper STAGE3_RESULT_JSON = new ObjectMapper();
 
+    /**
+     * 段階3設備チェックポイントの日次始業帯は {@code task_id} が空（Python 側 {@code machine_daily_startup}）。
+     * 依頼NO 列ではこの文言を出す。
+     */
+    private static final String STAGE3_EQUIPMENT_DAILY_STARTUP_TASK_LABEL = "日次始業準備";
+
     /** 設備フェイズ結果の機械名別折りたたみの並び（日本語ロケールの辞書順）。 */
     private static final Collator STAGE3_MACHINE_NAME_ORDER = Collator.getInstance(Locale.JAPANESE);
 
@@ -3124,7 +3130,7 @@ public final class DispatchInteractiveTabController {
                 }
                 Map<String, String> m = new LinkedHashMap<>();
                 m.put("date", textOrEmpty(ev, "date"));
-                m.put("task_id", textOrEmpty(ev, "task_id"));
+                m.put("task_id", stage3EquipmentCheckpointTaskIdForDisplay(ev));
                 m.put("machine", textOrEmpty(ev, "machine"));
                 m.put("start_dt", textOrEmpty(ev, "start_dt"));
                 m.put("end_dt", textOrEmpty(ev, "end_dt"));
@@ -3152,6 +3158,15 @@ public final class DispatchInteractiveTabController {
             return "";
         }
         return v.asText("");
+    }
+
+    /** checkpoint の {@code task_id} が空の行は日次始業準備（設備タイムライン上の非依頼セグメント）。 */
+    private static String stage3EquipmentCheckpointTaskIdForDisplay(JsonNode ev) {
+        String raw = textOrEmpty(ev, "task_id").strip();
+        if (!raw.isEmpty()) {
+            return raw;
+        }
+        return STAGE3_EQUIPMENT_DAILY_STARTUP_TASK_LABEL;
     }
 
     /**
