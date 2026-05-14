@@ -92,6 +92,7 @@ import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.InitSettingPersistence;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
@@ -115,6 +116,11 @@ public final class MainShellController {
     private static final String STAGE1 = "task_extract_stage1.py";
     private static final String STAGE2 = "plan_simulation_stage2.py";
 
+    /**
+     * Cursor デバッグセッション ID（子 Python の NDJSON と親 {@link AgentDebugLog} を同一ファイルに揃える）。
+     */
+    private static final String STAGE_AGENT_DEBUG_SESSION_ID = "d3d9c5";
+
     /** 段階1実行前ログに出す「入力解決に関わる」環境変数キー（子プロセスへ渡る値）。 */
     private static final List<String> STAGE1_CHILD_INPUT_ENV_KEYS =
             List.of(
@@ -130,7 +136,9 @@ public final class MainShellController {
                     AppPaths.KEY_MASTER_WORKBOOK_FILE,
                     AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON,
                     AppPaths.KEY_PM_AI_OUTPUT_DIR,
-                    AppPaths.KEY_PM_AI_REPO_ROOT);
+                    AppPaths.KEY_PM_AI_REPO_ROOT,
+                    "PM_AI_DEBUG_LOG",
+                    "PM_AI_AGENT_DEBUG_SESSION_ID");
 
     /** 段階2実行前ログに出す「入力解決に関わる」環境変数キー。 */
     private static final List<String> STAGE2_CHILD_INPUT_ENV_KEYS =
@@ -145,7 +153,9 @@ public final class MainShellController {
                     AppPaths.KEY_PM_AI_PLAN_WORKBOOK_JSON,
                     AppPaths.KEY_PM_AI_MEMBER_SCHEDULE_JSON,
                     AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON,
-                    AppPaths.KEY_PM_AI_STAGE2_ENGINE);
+                    AppPaths.KEY_PM_AI_STAGE2_ENGINE,
+                    "PM_AI_DEBUG_LOG",
+                    "PM_AI_AGENT_DEBUG_SESSION_ID");
 
     private static final String PREFIX_CHILD = "[child] ";
     private static final String NDJSON_START = PREFIX_CHILD + "{";
@@ -2795,6 +2805,25 @@ public final class MainShellController {
                 refreshNetworkSourceDirListingSkipsBeforeStageRun(uiRun);
             }
             Map<String, String> childEnv = childEnvForPython(uiRun);
+            if (STAGE1.equals(script) || STAGE2.equals(script)) {
+                try {
+                    Path nd = AgentDebugLog.resolveNdjsonPath(uiRun, STAGE_AGENT_DEBUG_SESSION_ID);
+                    childEnv.put("PM_AI_DEBUG_LOG", nd.toString());
+                    childEnv.put("PM_AI_AGENT_DEBUG_SESSION_ID", STAGE_AGENT_DEBUG_SESSION_ID);
+                    Map<String, Object> boot = new LinkedHashMap<>();
+                    boot.put("script", script);
+                    boot.put("pmAiDebugLog", nd.toString());
+                    AgentDebugLog.appendStructured(
+                            uiRun,
+                            STAGE_AGENT_DEBUG_SESSION_ID,
+                            "H0",
+                            "MainShellController.runStage",
+                            "段階1/2子プロセスへ NDJSON ログパスを設定（AgentDebugLog と同一解決）",
+                            boot);
+                } catch (Throwable ignored) {
+                    // debug-only
+                }
+            }
             if (lastNetworkSourceResolution != null) {
                 for (String line : lastNetworkSourceResolution.logLines()) {
                     appendLog(line);

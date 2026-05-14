@@ -3790,19 +3790,42 @@ def _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(row) 
 
 
 # #region agent log
+def _agent_debug_ndjson_log_path() -> str | None:
+    """
+    NDJSON 追記先。Java {@code AgentDebugLog} と同順:
+    CURSOR_DEBUG_LOG / PM_AI_DEBUG_LOG → 未設定時はリポジトリ直下 {@code .cursor/debug-<session>.log}。
+    段階1/2 子プロセスでは親が {@code PM_AI_DEBUG_LOG} を設定する。
+    """
+    for _k in ("CURSOR_DEBUG_LOG", "PM_AI_DEBUG_LOG"):
+        _v = (os.environ.get(_k) or "").strip()
+        if _v:
+            return _v
+    try:
+        _here = pathlib.Path(__file__).resolve()
+        _root = _here.parents[3]
+        _sid = (os.environ.get("PM_AI_AGENT_DEBUG_SESSION_ID") or "d3d9c5").strip() or "d3d9c5"
+        return str(_root / ".cursor" / f"debug-{_sid}.log")
+    except Exception:
+        return None
+
+
 def _agent_debug_ndjson_append(
     location: str, message: str, hypothesis_id: str, data: dict
 ) -> None:
     try:
-        p = "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-d3d9c5.log"
+        p = _agent_debug_ndjson_log_path()
+        if not p:
+            return
+        _sid = (os.environ.get("PM_AI_AGENT_DEBUG_SESSION_ID") or "d3d9c5").strip() or "d3d9c5"
         payload = {
-            "sessionId": "d3d9c5",
+            "sessionId": _sid,
             "timestamp": int(time_module.time() * 1000),
             "location": location,
             "message": message,
             "hypothesisId": hypothesis_id,
             "data": data,
         }
+        pathlib.Path(p).parent.mkdir(parents=True, exist_ok=True)
         with open(p, "a", encoding="utf-8") as f:
             f.write(json.dumps(payload, ensure_ascii=False) + "\n")
     except Exception:
