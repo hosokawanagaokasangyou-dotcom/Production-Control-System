@@ -71,7 +71,11 @@ _AGENT_DEBUG_SESSION_ID = "21d166"
 
 
 def _delivery_debug_target_tid() -> str | None:
-    """Set ``PM_AI_DELIVERY_CALENDAR_DEBUG_TID`` (e.g. JR560502) to emit NDJSON for that task id."""
+    """Set ``PM_AI_DELIVERY_CALENDAR_DEBUG_TID`` (e.g. JR560502) to emit NDJSON for that task id.
+
+    Must appear in the JavaFX **環境変数** tab: ``PythonProcessRunner`` strips OS-inherited ``PM_AI_*``
+    unless the same key is present in the merged child env.
+    """
     raw = (os.environ.get("PM_AI_DELIVERY_CALENDAR_DEBUG_TID") or "").strip()
     if not raw:
         return None
@@ -102,6 +106,41 @@ def _agent_delivery_ndjson(
 
 
 # #endregion
+
+
+def _plan_row_dispatch_excluded(row: Any) -> bool:
+    """True when the processing-plan row is out of dispatch scope (「配台不要」列)."""
+    try:
+        return bool(core._plan_row_exclude_from_assignment(row))
+    except Exception:
+        return False
+
+
+def _df_plan_rows_included_in_delivery_calendar(df_plan: pd.DataFrame | None) -> pd.DataFrame | None:
+    """Drop dispatch-excluded rows for Aladdin bucket qtys (same dates as plan, without excluded work)."""
+    if df_plan is None or len(df_plan) == 0:
+        return df_plan
+    try:
+        ex = df_plan.apply(_plan_row_dispatch_excluded, axis=1)
+        return df_plan.loc[~ex].reset_index(drop=True)
+    except Exception:
+        return df_plan
+
+
+def _plan_pair_dispatch_excluded(
+    df_plan: pd.DataFrame | None, mk: str, tid: str
+) -> bool:
+    """True if any processing-plan row for (mk, tid) is dispatch-excluded."""
+    if df_plan is None or not mk or not tid:
+        return False
+    for _, row in df_plan.iterrows():
+        pmk = core._normalize_equipment_match_key(row.get(core.TASK_COL_MACHINE_NAME))
+        ptid = core.planning_task_id_str_from_scalar(row.get(core.TASK_COL_TASK_ID))
+        if pmk != mk or ptid != tid:
+            continue
+        if _plan_row_dispatch_excluded(row):
+            return True
+    return False
 
 
 def _resolve_actual_detail_machine_key_for_delivery_calendar(
@@ -898,8 +937,9 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             }
 
         dates_set = set(sorted_dates)
+        df_plan_for_buckets = _df_plan_rows_included_in_delivery_calendar(df_plan)
         _, buckets = core._build_compare_gantt_aladdin_qty_lookup(
-            df_plan,
+            df_plan_for_buckets,
             dates_set,
         )
         if _dtid and buckets:
@@ -936,6 +976,8 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
         plan_pairs: set[tuple[str, str]] = set()
         if df_plan is not None and len(df_plan) > 0:
             for _, row in df_plan.iterrows():
+                if _plan_row_dispatch_excluded(row):
+                    continue
                 mk = core._normalize_equipment_match_key(row.get(core.TASK_COL_MACHINE_NAME))
                 tid = core.planning_task_id_str_from_scalar(row.get(core.TASK_COL_TASK_ID))
                 if mk and tid:
@@ -980,6 +1022,16 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             )
         meta["deliveryCalendarEligiblePairsFromShapedJson"] = len(pairs_from_shaped_json)
         eligible_pairs |= pairs_from_shaped_json
+        if df_plan is not None and len(df_plan) > 0:
+            _ep_before_ex = len(eligible_pairs)
+            eligible_pairs = {
+                p
+                for p in eligible_pairs
+                if not _plan_pair_dispatch_excluded(df_plan, p[0], p[1])
+            }
+            meta["deliveryCalendarEligiblePairsDroppedForExcludeDispatch"] = _ep_before_ex - len(
+                eligible_pairs
+            )
         if _dtid:
             _ep_for_tid = sorted(
                 [(m, t) for (m, t) in eligible_pairs if t == _dtid],
@@ -1008,6 +1060,8 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
         pair_plan_row: dict[tuple[str, str], Any] = {}
         if df_plan is not None and len(df_plan) > 0:
             for _, row in df_plan.iterrows():
+                if _plan_row_dispatch_excluded(row):
+                    continue
                 mk = core._normalize_equipment_match_key(row.get(core.TASK_COL_MACHINE_NAME))
                 tid = core.planning_task_id_str_from_scalar(row.get(core.TASK_COL_TASK_ID))
                 if not mk or not tid:
@@ -1023,6 +1077,8 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
         plan_rows_by_tid: dict[str, list[tuple[str, Any]]] = defaultdict(list)
         if df_plan is not None and len(df_plan) > 0:
             for _, prow in df_plan.iterrows():
+                if _plan_row_dispatch_excluded(prow):
+                    continue
                 pmk = core._normalize_equipment_match_key(
                     prow.get(core.TASK_COL_MACHINE_NAME)
                 )
@@ -1230,6 +1286,36 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                 )
 
         _pm_ai_progress(96)
+
+        try:
+            n_plan_all = int(len(df_plan)) if df_plan is not None else 0
+            n_plan_buck = (
+                int(len(df_plan_for_buckets))
+                if df_plan_for_buckets is not None
+                else 0
+            )
+            _agent_delivery_ndjson(
+                "H5",
+                "delivery_calendar_payload:build_end",
+                "delivery_calendar_build_summary",
+                {
+                    "debugTidEnv": _dtid is not None,
+                    "planRowsAll": n_plan_all,
+                    "planRowsForBuckets": n_plan_buck,
+                    "eligiblePairs": len(eligible_pairs),
+                    "eligiblePairsDroppedExcludeDispatch": int(
+                        meta.get(
+                            "deliveryCalendarEligiblePairsDroppedForExcludeDispatch",
+                            0,
+                        )
+                    ),
+                    "mainDataRows": sum(
+                        1 for r in main_rows_out if r.get("kind") == "data"
+                    ),
+                },
+            )
+        except Exception:
+            pass
 
         _pm_ai_progress(100)
         return {
