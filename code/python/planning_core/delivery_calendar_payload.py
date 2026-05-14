@@ -490,6 +490,75 @@ def _qty_from_buckets_for_tid(
     return s
 
 
+def _qty_from_buckets_for_tid_proc(
+    buckets: dict[tuple[str, date], list[tuple[str, str, float]]],
+    mk: str,
+    d: date,
+    tid: str,
+    process_raw: Any,
+) -> float:
+    """Sum plan qty for (machine, day, 依頼NO) scoped by 工程名 when buckets carry process keys."""
+    parts = buckets.get((mk, d))
+    if not parts:
+        return 0.0
+    same: list[tuple[str, float]] = []
+    for t, pkey, q in parts:
+        bt = core.planning_task_id_str_from_scalar(t) or str(t).strip()
+        if bt != tid:
+            continue
+        same.append((pkey or "", float(q)))
+    if not same:
+        return 0.0
+    if all(not (pk or "").strip() for pk, _ in same):
+        return sum(q for _, q in same)
+    pn = core._normalize_process_name_for_rule_match(process_raw)
+    if not pn:
+        return 0.0
+    return sum(q for pk, q in same if pk == pn)
+
+
+def _build_delivery_calendar_plan_qty_buckets_tid_proc(
+    df_plan: pd.DataFrame | None, dates_set: set
+) -> dict[tuple[str, date], list[tuple[str, str, float]]]:
+    """(機械キー, 日付) → (依頼NO, 工程名キー, 数量)。同依頼・同機械の別工程を分離 (_build_compare_gantt と同列規則)。"""
+    out: dict[tuple[str, date], list[tuple[str, str, float]]] = defaultdict(list)
+    if df_plan is None or len(df_plan) == 0:
+        return {}
+    if core.TASK_COL_MACHINE_NAME not in df_plan.columns:
+        return {}
+    date_cols: list[tuple[str, date]] = []
+    for col in df_plan.columns:
+        col_key = core._nfkc_column_aliases(col)
+        m = core._COMPARE_GANTT_ALADDIN_QTY_COL_RE.match(str(col_key).strip())
+        if not m:
+            continue
+        try:
+            y, mo, dd = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            date_cols.append((str(col).strip(), date(y, mo, dd)))
+        except ValueError:
+            continue
+    for col_name, dk in date_cols:
+        if dk not in dates_set:
+            continue
+        if col_name not in df_plan.columns:
+            continue
+        for _, row in df_plan.iterrows():
+            mach_k = core._normalize_equipment_match_key(
+                row.get(core.TASK_COL_MACHINE_NAME)
+            )
+            if not mach_k:
+                continue
+            qty = core._parse_optional_float_non_nan(row.get(col_name))
+            if qty is None or abs(qty) < 1e-12:
+                continue
+            tid = core.planning_task_id_str_from_scalar(row.get(core.TASK_COL_TASK_ID))
+            proc_n = core._normalize_process_name_for_rule_match(
+                row.get(core.TASK_COL_MACHINE)
+            )
+            out[(mach_k, dk)].append((tid or "—", proc_n, float(qty)))
+    return dict(out)
+
+
 def _parse_calendar_window_int_env(name: str, default: int, lo: int, hi: int) -> int:
     try:
         raw = (os.environ.get(name) or "").strip()
@@ -962,12 +1031,16 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
 
         dates_set = set(sorted_dates)
         df_plan_for_buckets = _df_plan_rows_included_in_delivery_calendar(df_plan)
-        _, buckets = core._build_compare_gantt_aladdin_qty_lookup(
+        _, buckets_legacy = core._build_compare_gantt_aladdin_qty_lookup(
             df_plan_for_buckets,
             dates_set,
         )
-        if _dtid and buckets:
-            for (bmk, bdk), parts in buckets.items():
+        buckets_by_proc = _build_delivery_calendar_plan_qty_buckets_tid_proc(
+            df_plan_for_buckets,
+            dates_set,
+        )
+        if _dtid and buckets_legacy:
+            for (bmk, bdk), parts in buckets_legacy.items():
                 same_tid_parts: list[tuple[str, float]] = []
                 for t, q in parts:
                     bt = core.planning_task_id_str_from_scalar(t) or str(t).strip()
@@ -1212,8 +1285,13 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                     left_cells[left_headers.index(core.TASK_COL_TASK_ID)] = tid
 
             cal_cells: list[dict[str, Any]] = []
+            proc_for_plan_qty = (
+                plan_row.get(core.TASK_COL_MACHINE) if plan_row is not None else None
+            )
             for d in sorted_dates:
-                q_in = _qty_from_buckets_for_tid(buckets, mk, d, tid)
+                q_in = _qty_from_buckets_for_tid_proc(
+                    buckets_by_proc, mk, d, tid, proc_for_plan_qty
+                )
                 q_act = float(actual_agg.get((mk, d), {}).get(tid, 0.0))
                 q_disp = float(dispatch_agg.get((mk, d, tid), 0.0))
                 tp = core._format_qty_short(q_in) if abs(q_in) > 1e-12 else ""
@@ -1231,7 +1309,9 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                     except Exception:
                         px = "?"
                 qsum = sum(
-                    _qty_from_buckets_for_tid(buckets, mk, d, tid)
+                    _qty_from_buckets_for_tid_proc(
+                        buckets_by_proc, mk, d, tid, proc_for_plan_qty
+                    )
                     for d in sorted_dates
                 )
                 hproc = ""
@@ -1268,7 +1348,7 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
 
         _pm_ai_progress(90)
         plan_agg: dict[tuple[str, date, str], float] = defaultdict(float)
-        for (mk, dk), parts in buckets.items():
+        for (mk, dk), parts in buckets_legacy.items():
             for t, q in parts:
                 btid = core.planning_task_id_str_from_scalar(t) or str(t).strip()
                 plan_agg[(mk, dk, btid)] += float(q)
