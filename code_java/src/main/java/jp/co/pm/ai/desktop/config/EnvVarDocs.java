@@ -290,6 +290,12 @@ public final class EnvVarDocs {
                         + " Python エンジンと同一の計画／人員成果物を出す（完全 Java 移植までの本番同一出力用）。"
                         + " PM_AI_CODE_PYTHON_DIR・PM_AI_PYTHON 等は Python 子と同様に必須。");
         put(
+                "PM_AI_DISPATCH_ENGINE",
+                "配台コアのみの切替（PM_AI_STAGE2_ENGINE=java のときのみ参照）。"
+                        + " java=JVM 内配台コア経路を強制（PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH より優先。移植進行中の実装が正）。"
+                        + " python=Python 子 plan_simulation_stage2.py（_generate_plan_impl 正本）を強制（委譲フラグが偽でも Python 配台）。"
+                        + " 未設定・空=従来どおり委譲フラグのみで切替（偽なら JVM 内 PassThrough＋移植中ロジック）。");
+        put(
                 "PM_AI_XLWINGS_STAGE2_DISABLED",
                 "1/true/yes/on で段階2後の xlwings"
                         + "（列設定シート図形複製等、Excel COM/アドイン連携用）"

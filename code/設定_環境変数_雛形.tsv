@@ -76,3 +76,4 @@ PM_AI_PORTABLE_BUNDLE_SOURCE_DIR	\\192.168.0.101\共有フォルダ\湖南工場
 PM_AI_TASK_INPUT_SOURCE_DIR	\\192.168.0.101\共有フォルダ\湖南工場\湖南共有\生産管理システム\管理システム\●DATA\生産計画問合せ	段階1・加工計画DATA相当の探索元フォルダ（AppPaths 既定と同じ）。空なら Java/Python が同 UNC を既定に使用。
 PM_AI_ACTUAL_DETAIL_SOURCE_DIR	\\192.168.0.101\共有フォルダ\湖南工場\湖南共有\002  加工G\●検査表作成\加工実績明細DATA	加工実績明細の探索元フォルダ（AppPaths 既定と同じ）。PM_AI_ACTUAL_DETAIL_WORKBOOK 優先。
 PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES		JavaFX 加工実績明細タブ: 元ファイル読込前のサイズ上限（バイト）。空で 20971520（20MiB）。0 で無制限。16M 等。
+PM_AI_DISPATCH_ENGINE		PM_AI_STAGE2_ENGINE=java のときのみ: 空=従来どおり PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH のみ。java=JVM 内配台コアを強制（委譲より優先）。python=Python 子（plan_simulation_stage2.py 正本）を強制。

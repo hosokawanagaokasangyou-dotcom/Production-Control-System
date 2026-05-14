@@ -22,6 +22,10 @@
     "value" : "0",
     "description" : "java エンジン時のみ: 1/true で配台本体を Python 子（plan_simulation_stage2.py 正本）に委譲し Python と同一成果物を出す。完全 Java 移植までの本番同一出力用。PM_AI_CODE_PYTHON_DIR 必須。"
   }, {
+    "key" : "PM_AI_DISPATCH_ENGINE",
+    "value" : "",
+    "description" : "java エンジン時の配台コアのみ: 空=従来どおり PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH のみ。java=JVM 配台を強制（委譲より優先）。python=Python 子配台を強制（委譲が偽でも正本）。"
+  }, {
     "key" : "PM_AI_STAGE2_GOLDEN_CI",
     "value" : "0",
     "description" : "1 のときのみ JUnit Stage2GoldenParityCiTest が有効。scripts/stage2_golden_parity_ci.sh 用。通常は 0。"

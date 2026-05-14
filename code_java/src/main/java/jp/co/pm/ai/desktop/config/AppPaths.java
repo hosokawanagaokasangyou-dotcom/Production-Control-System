@@ -193,6 +193,18 @@ public final class AppPaths {
     public static final String KEY_PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH =
             "PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH";
 
+    /**
+     * 配台コア（{@code planning_core._core._generate_plan_impl} 相当）の実行先。{@link #KEY_PM_AI_STAGE2_ENGINE} が {@code java}
+     * のときのみ意味を持つ。
+     *
+     * <ul>
+     *   <li>未設定・空: 従来どおり {@link #KEY_PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH} のみで切替（偽なら JVM 内 PassThrough＋移植中ロジック）。
+     *   <li>{@code java}: JVM 内の配台コア経路を強制（委譲フラグより優先。移植が未完でも本キーで「Java 側を正」とする）。
+     *   <li>{@code python}: Python 子プロセス（{@code plan_simulation_stage2.py}）を強制（委譲フラグが偽でも配台は Python 正本）。
+     * </ul>
+     */
+    public static final String KEY_PM_AI_DISPATCH_ENGINE = "PM_AI_DISPATCH_ENGINE";
+
     /** CI 用: {@code 1} のときのみ {@code Stage2GoldenParityCiTest} が有効（JUnit {@code EnabledIfEnvironmentVariable}）。 */
     public static final String KEY_PM_AI_STAGE2_GOLDEN_CI = "PM_AI_STAGE2_GOLDEN_CI";
 

@@ -33,4 +33,24 @@ public final class Stage2EnvParsing {
     public static boolean javaDelegatesPythonDispatch(Map<String, String> ui) {
         return envEnabled(AppPaths.KEY_PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH, ui, false);
     }
+
+    /**
+     * {@link AppPaths#KEY_PM_AI_DISPATCH_ENGINE} が {@code java}（大小無視）のとき真。未設定・空・その他の値は偽。
+     */
+    public static boolean dispatchCoreExplicitJava(Map<String, String> ui) {
+        return "java".equalsIgnoreCase(trimDispatchToken(ui, AppPaths.KEY_PM_AI_DISPATCH_ENGINE));
+    }
+
+    /**
+     * {@link AppPaths#KEY_PM_AI_DISPATCH_ENGINE} が {@code python}（大小無視）のとき真。未設定・空は偽（従来の委譲フラグのみ参照）。
+     */
+    public static boolean dispatchCoreExplicitPython(Map<String, String> ui) {
+        return "python".equalsIgnoreCase(trimDispatchToken(ui, AppPaths.KEY_PM_AI_DISPATCH_ENGINE));
+    }
+
+    private static String trimDispatchToken(Map<String, String> ui, String key) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String raw = u.get(key);
+        return raw != null ? raw.strip() : "";
+    }
 }
