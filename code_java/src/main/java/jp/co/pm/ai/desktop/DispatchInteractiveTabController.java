@@ -2072,7 +2072,30 @@ public final class DispatchInteractiveTabController {
         dispatchShortfallTable
                 .getSelectionModel()
                 .selectedItemProperty()
-                .addListener((obs, prev, row) -> focusWideSpreadsheetOnDispatchShortfallRow(row));
+                .addListener(
+                        (obs, prev, row) -> {
+                            focusWideSpreadsheetOnDispatchShortfallRow(row);
+                            syncStage3EquipmentFilterToDispatchShortfallRow(row);
+                        });
+    }
+
+    /**
+     * 数量未達表で選んだ依頼NOを「段階3・設備フェイズ結果」の絞り込みに反映する。
+     *
+     * <p>絞り込みが別依頼のままだと、未達に出ているタスクが設備表に現れないように見えるため、
+     * ワイド表フォーカスと同じ操作感で同期する。
+     */
+    private void syncStage3EquipmentFilterToDispatchShortfallRow(DispatchQtyShortfallRow row) {
+        if (row == null || stage3EquipmentFilterField == null) {
+            return;
+        }
+        String tid = DispatchTrialShortages.normalizeKeyPart(row.taskId());
+        if (tid.isEmpty()) {
+            return;
+        }
+        ensureStage3EquipmentFilteredModel();
+        stage3EquipmentFilterField.setText(tid);
+        applyStage3EquipmentRowFilter();
     }
 
     /**
@@ -2915,10 +2938,24 @@ public final class DispatchInteractiveTabController {
             return;
         }
         if (stage3EquipmentMasterRows.isEmpty()) {
+            Label empty =
+                    new Label(
+                            "設備フェイズのチェックポイントに加工イベントがありません。"
+                                    + "（未実行・別 JSON・人割当のみの試行など）");
+            empty.setWrapText(true);
+            stage3EquipmentTablesHost.getChildren().add(empty);
             return;
         }
         if (stage3EquipmentFilteredRows.isEmpty()) {
-            Label hint = new Label("絞り込み条件に一致する行がありません");
+            int n = stage3EquipmentMasterRows.size();
+            Label hint =
+                    new Label(
+                            "絞り込み条件に一致する行がありません（チェックポイント全体 "
+                                    + n
+                                    + " 行）。"
+                                    + "別依頼で絞り込んでいないか確認し、「クリア」を試してください。"
+                                    + "数量未達表の行を選ぶと依頼NOが絞り込みに入ります。");
+            hint.setWrapText(true);
             stage3EquipmentTablesHost.getChildren().add(hint);
             return;
         }
