@@ -1151,8 +1151,8 @@ PLAN_COL_DISPATCH_REMAINING_QTY = "配台使用残数量"
 # 原反幅（mm 想定）。段階1のみ算出。テーブル「使用原反, 加工幅.txt」優先、未登録時は最後の NNNxMM の左辺を採用。いずれも不可なら PlanningValidationError。
 # 「使用原反」キー照合は _normalize_mm_table_lookup_key（NFKC 後に全角・半角など空白類を除去）で加工計画の使用原反／製品名と突き合わせる。
 PLAN_COL_RAW_FABRIC_WIDTH = "原反幅"
-# 使用原反キーで「使用原反,ロール単位の長さ.txt」に登録があるときはその m。無いときは列「ロール単位長さ」と同じ推定・矯正の結果を表示用に格納する。
-# 製品側の列「ロール単位長さ」と区別するため見出しは (原反) プレフィックス。
+# 使用原反列の文字列をキーに「使用原反,ロール単位の長さ.txt」で照合した m のみ（未登録は空）。列「ロール単位長さ」とは独立。
+# 見出しは製品側の「ロール単位長さ」と区別するため (原反) プレフィックス。
 PLAN_COL_RAW_ROLL_UNIT_LENGTH = "(原反)ロール単位長さ"
 # マクロブックと同じフォルダ（またはカレント・code/）の CSV。環境変数 RAW_FABRIC_WIDTH_TABLE_PATH で上書き可。
 RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME = "使用原反, 加工幅.txt"
@@ -1587,10 +1587,7 @@ PLAN_CONFLICT_STYLABLE_COLS = tuple(PLAN_OVERRIDE_COLUMNS)
 PLAN_STAGE1_MERGE_COLUMNS = tuple(c for c in PLAN_OVERRIDE_COLUMNS if c != PLAN_COL_AI_PARSE)
 # 上書き以外で」再抽出時に旧シートから引き継ぎ列（セルは空でないとしのみ）
 # 配台試行順番は毎回空クリア後に fill_plan_dispatch_trial_order_column_stage1 で付け直すが対象外。
-PLAN_STAGE1_MERGE_EXTRA_COLUMNS = (
-    PLAN_COL_ROLL_UNIT_LENGTH,
-    PLAN_COL_RAW_ROLL_UNIT_LENGTH,
-)
+PLAN_STAGE1_MERGE_EXTRA_COLUMNS = (PLAN_COL_ROLL_UNIT_LENGTH,)
 # openpyxl 保存はブックロックで失敗したとし」VBA は開いているブックへ書式適用するための指示ファイル
 PLANNING_CONFLICT_SIDECAR = "planning_conflict_highlight.tsv"
 # 配台計画_タスク入力へ「グローバルコメント解析」を書き列（表の坳端より外側。1行目から縦にラベル＝値）
@@ -4472,45 +4469,6 @@ def _normalize_product_dim_separators_for_roll_inference(s: str) -> str:
     return t
 
 
-# #region agent log
-def _debug_e668f6_ndjson(
-    hypothesis_id: str, location: str, message: str, data: dict
-) -> None:
-    try:
-        import json
-        import time as _time
-
-        _path = "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-e668f6.log"
-        _rec = {
-            "sessionId": "e668f6",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(_time.time() * 1000),
-        }
-        with open(_path, "a", encoding="utf-8") as _f:
-            _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-def _debug_e668f6_srhw193_context(product_name, used_raw) -> bool:
-    t1 = str(product_name or "")
-    t2 = str(used_raw or "")
-    return (
-        "SRHW" in t1
-        or "SRHW" in t2
-        or "1860X193" in t1
-        or "1860X193" in t2
-        or "1860x193" in t1
-        or "1860x193" in t2
-    )
-
-
-# #endregion
-
-
 ROLL_UNIT_LENGTH_TABLE_DEFAULT_FILENAME = "製品名,ロール単位の長さ.txt"
 ROLL_UNIT_LENGTH_TABLE_PATH_ENV = "ROLL_UNIT_LENGTH_TABLE_PATH"
 _ROLL_UNIT_LENGTH_TABLE_CACHE: dict[str, float] | None = None
@@ -4668,15 +4626,6 @@ def _lookup_roll_unit_length_m_from_used_raw(used_raw) -> float | None:
     if not k:
         return None
     v = _ROLL_UNIT_BY_USED_RAW_TABLE_CACHE.get(k)
-    # #region agent log
-    if _debug_e668f6_srhw193_context(None, used_raw):
-        _debug_e668f6_ndjson(
-            "A",
-            "_core.py:_lookup_roll_unit_length_m_from_used_raw",
-            "used_raw roll table lookup",
-            {"used_raw_repr": repr(used_raw), "key_norm": k, "table_hit_m": v},
-        )
-    # #endregion
     return float(v) if (v is not None and v > 0) else None
 
 
@@ -4764,16 +4713,6 @@ def _infer_roll_unit_m_from_product_name_dimensions_only(product_name, fallback_
     最後の NNNxMM ペアの右側、なければ最後の X 直後の 2〜6 桁。
     """
     if product_name is None or pd.isna(product_name):
-        # #region agent log
-        _fu = parse_float_safe(fallback_unit, -1.0)
-        if 0 < _fu < 500:
-            _debug_e668f6_ndjson(
-                "G",
-                "_core.py:_infer_roll_unit_m_from_product_name_dimensions_only",
-                "product_nullish_return_fallback_unit",
-                {"fallback_unit": _fu},
-            )
-        # #endregion
         return fallback_unit
     s = _normalize_product_dim_separators_for_roll_inference(str(product_name))
     dim_pairs = re.findall(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", s)
@@ -4782,22 +4721,6 @@ def _infer_roll_unit_m_from_product_name_dimensions_only(product_name, fallback_
             _a_str, b_str = dim_pairs[-1]
             b = int(b_str)
             if b > 0:
-                # #region agent log
-                if _debug_e668f6_srhw193_context(product_name, None):
-                    _debug_e668f6_ndjson(
-                        "B",
-                        "_core.py:_infer_roll_unit_m_from_product_name_dimensions_only",
-                        "dim_pairs branch",
-                        {
-                            "product_repr": repr(product_name),
-                            "s_norm": s,
-                            "dim_pairs": dim_pairs,
-                            "picked_pair": (_a_str, b_str),
-                            "return_m": b,
-                            "fallback_unit": fallback_unit,
-                        },
-                    )
-                # #endregion
                 return b
         except ValueError:
             pass
@@ -4806,41 +4729,9 @@ def _infer_roll_unit_m_from_product_name_dimensions_only(product_name, fallback_
         try:
             v = int(matches[-1])
             if v > 0:
-                # #region agent log
-                if _debug_e668f6_srhw193_context(product_name, None):
-                    _debug_e668f6_ndjson(
-                        "C",
-                        "_core.py:_infer_roll_unit_m_from_product_name_dimensions_only",
-                        "x_tail branch",
-                        {
-                            "product_repr": repr(product_name),
-                            "s_norm": s,
-                            "dim_pairs": dim_pairs,
-                            "x_matches": matches,
-                            "return_m": v,
-                            "fallback_unit": fallback_unit,
-                        },
-                    )
-                # #endregion
                 return v
         except ValueError:
             pass
-    # #region agent log
-    if _debug_e668f6_srhw193_context(product_name, None):
-        _debug_e668f6_ndjson(
-            "D",
-            "_core.py:_infer_roll_unit_m_from_product_name_dimensions_only",
-            "fallback_default_or_fallback_unit",
-            {
-                "product_repr": repr(product_name),
-                "s_norm": s,
-                "dim_pairs": dim_pairs,
-                "x_matches_tail": re.findall(r"[xX]\s*(\d{2,6})", s),
-                "fallback_unit": fallback_unit,
-                "default_m": float(INFER_ROLL_UNIT_LENGTH_DEFAULT_NO_MATCH_M),
-            },
-        )
-    # #endregion
     return float(INFER_ROLL_UNIT_LENGTH_DEFAULT_NO_MATCH_M)
 
 
@@ -4872,19 +4763,6 @@ def infer_roll_unit_m_from_used_raw_then_product_dims(
     """
     v = _lookup_roll_unit_length_m_from_used_raw(used_raw)
     if v is not None and v > 0:
-        # #region agent log
-        if _debug_e668f6_srhw193_context(product_name, used_raw):
-            _debug_e668f6_ndjson(
-                "A",
-                "_core.py:infer_roll_unit_m_from_used_raw_then_product_dims",
-                "return_used_raw_table",
-                {
-                    "product_repr": repr(product_name),
-                    "used_raw_repr": repr(used_raw),
-                    "table_m": float(v),
-                },
-            )
-        # #endregion
         return float(v)
     pn_txt = _planning_scalar_text_for_roll_dim(product_name)
     ur_txt = _planning_scalar_text_for_roll_dim(used_raw)
@@ -4896,25 +4774,9 @@ def infer_roll_unit_m_from_used_raw_then_product_dims(
         dim_source = ur_txt
     else:
         dim_source = pn_txt if pn_txt else ur_txt
-    out = _infer_roll_unit_m_from_product_name_dimensions_only(
+    return _infer_roll_unit_m_from_product_name_dimensions_only(
         dim_source if dim_source else None, fallback_unit
     )
-    # #region agent log
-    if _debug_e668f6_srhw193_context(product_name, used_raw):
-        _debug_e668f6_ndjson(
-            "F",
-            "_core.py:infer_roll_unit_m_from_used_raw_then_product_dims",
-            "after_product_dim_infer",
-            {
-                "product_repr": repr(product_name),
-                "used_raw_repr": repr(used_raw),
-                "dim_source_repr": repr(dim_source),
-                "fallback_unit": fallback_unit,
-                "inferred_m": out,
-            },
-        )
-    # #endregion
-    return out
 
 
 def infer_unit_m_from_product_name(product_name, fallback_unit):
@@ -5019,39 +4881,9 @@ def _stage1_roll_length_for_planning_row(row) -> float:
         _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else qty
     if _roll_len <= 0:
         _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
-    # #region agent log
-    _tid_dbg = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
-    if _debug_e668f6_srhw193_context(_pn_stage1, _used_raw_s1) or _tid_dbg == "E5-2":
-        _debug_e668f6_ndjson(
-            "E",
-            "_core.py:_stage1_roll_length_for_planning_row",
-            "before_coerce",
-            {
-                "task_id": _tid_dbg,
-                "product_repr": repr(_pn_stage1),
-                "used_raw_repr": repr(_used_raw_s1),
-                "qty_metrics_qty": qty,
-                "qty_total_floor": _qty_total_s1,
-                "roll_len_before_coerce": _roll_len,
-            },
-        )
-    # #endregion
     _roll_len = _coerce_roll_unit_m_when_converted_qty_below_roll(
         _pn_stage1, _roll_len, _qty_total_s1, used_raw=_used_raw_s1
     )
-    # #region agent log
-    _tid_dbg2 = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
-    if _debug_e668f6_srhw193_context(_pn_stage1, _used_raw_s1) or _tid_dbg2 == "E5-2":
-        _debug_e668f6_ndjson(
-            "E",
-            "_core.py:_stage1_roll_length_for_planning_row",
-            "after_coerce",
-            {
-                "task_id": _tid_dbg2,
-                "roll_len_after_coerce": _roll_len,
-            },
-        )
-    # #endregion
     try:
         _roll_len = float(_roll_len)
     except (TypeError, ValueError):
@@ -5159,30 +4991,6 @@ def _heal_stage1_roll_unit_no_dim_when_roll_matches_qty_mistake(
             healed,
             int(want) if abs(want - int(want)) < 1e-9 else want,
         )
-
-
-def _sync_stage1_raw_roll_unit_length_fallback_to_product_roll_column(
-    out_df: "pd.DataFrame",
-) -> None:
-    """
-    「使用原反,ロール単位の長さ.txt」にキーが無い行について、(原反)ロール単位長さ を
-    矯正後の列「ロール単位長さ」と一致させる（テーブル命中行は変更しない）。
-    """
-    if out_df is None or getattr(out_df, "empty", True):
-        return
-    if (
-        PLAN_COL_RAW_ROLL_UNIT_LENGTH not in out_df.columns
-        or PLAN_COL_ROLL_UNIT_LENGTH not in out_df.columns
-        or TASK_COL_USED_RAW not in out_df.columns
-    ):
-        return
-    for i in out_df.index:
-        ur = out_df.at[i, TASK_COL_USED_RAW]
-        if _lookup_roll_unit_length_m_from_used_raw(ur) is not None:
-            continue
-        rp = parse_float_safe(out_df.at[i, PLAN_COL_ROLL_UNIT_LENGTH], 0.0)
-        if rp > 0:
-            out_df.at[i, PLAN_COL_RAW_ROLL_UNIT_LENGTH] = rp
 
 
 def _excel_sheet_arg_from_env(env_key: str) -> str | int:
@@ -12731,7 +12539,7 @@ def _merge_plan_sheet_user_overrides(out_df):
 
     「ロール単位長さ」は、使用原反が「使用原反,ロール単位の長さ.txt」に登録されている行では
     シート上の旧値で上書きしない（テーブル＋段階1の再計算を優先し、誤った過去値の混入を防ぐ）。
-    「(原反)ロール単位長さ」も同様（当該テーブルにキーがあるときはシート旧値をマージしない）。
+    「(原反)ロール単位長さ」は旧シートからマージしない（使用原反列と当該テーブル由来のみ）。
 
     工程「分割」で同一依頼NO内に同一機械名の複数行がないとき、過去に誤って付いた
     「配台不要」=オン相当の値はマージしない（``apply_exclude_rules_config_to_plan_df`` の
@@ -12803,13 +12611,6 @@ def _merge_plan_sheet_user_overrides(out_df):
             ):
                 _ur_m = out_df.at[i, TASK_COL_USED_RAW]
                 if _lookup_roll_unit_length_m_from_used_raw(_ur_m) is not None:
-                    continue
-            if (
-                c == PLAN_COL_RAW_ROLL_UNIT_LENGTH
-                and TASK_COL_USED_RAW in out_df.columns
-            ):
-                _ur_m2 = out_df.at[i, TASK_COL_USED_RAW]
-                if _lookup_roll_unit_length_m_from_used_raw(_ur_m2) is not None:
                     continue
             if c == PLAN_COL_EXCLUDE_FROM_ASSIGNMENT:
                 tp_m = str(row.get(TASK_COL_MACHINE, "") or "").strip()
@@ -16146,10 +15947,11 @@ def run_stage1_extract():
         _raw_roll_tab_m = _lookup_roll_unit_length_m_from_used_raw(
             row.get(TASK_COL_USED_RAW)
         )
-        if _raw_roll_tab_m is not None and float(_raw_roll_tab_m) > 0:
-            rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = float(_raw_roll_tab_m)
-        else:
-            rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = float(_roll_len_product)
+        rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = (
+            float(_raw_roll_tab_m)
+            if _raw_roll_tab_m is not None and float(_raw_roll_tab_m) > 0
+            else ""
+        )
         # 工程名 + 機械名 を“因孝”として表示用に追加（後段は計算キーにも使用）
         if machine_name:
             rec[PLAN_COL_PROCESS_FACTOR] = f"{machine}+{machine_name}"
@@ -16197,7 +15999,6 @@ def run_stage1_extract():
     _apply_master_speed_sheet_to_plan_df(out_df, log_prefix="段階1")
     _heal_stage1_roll_unit_no_dim_when_roll_matches_qty_mistake(out_df)
     _heal_stage1_roll_unit_if_width_ceiling_merge_spurious(out_df)
-    _sync_stage1_raw_roll_unit_length_fallback_to_product_roll_column(out_df)
     _refresh_plan_reference_columns(out_df, req_map, need_rules)
     try:
         _apply_auto_exclude_bunkatsu_duplicate_machine(out_df, log_prefix="段階1")
