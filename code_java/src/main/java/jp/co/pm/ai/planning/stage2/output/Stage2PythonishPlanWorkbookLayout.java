@@ -295,7 +295,7 @@ public final class Stage2PythonishPlanWorkbookLayout {
         h.createCell(1).setCellValue("内容");
         Row d = sh.createRow(1);
         d.createCell(0).setCellValue("Java段階2");
-        d.createCell(1).setCellValue("プレースホルダ（配台コア未移植。PM_AI_STAGE2_ENGINE=python を推奨）");
+        d.createCell(1).setCellValue("プレースホルダ（配台結果なし。本番の計画表は Python 段階2の出力を使用）");
     }
 
     private static void writeHeaderRow(Sheet sh, List<String> headers) {

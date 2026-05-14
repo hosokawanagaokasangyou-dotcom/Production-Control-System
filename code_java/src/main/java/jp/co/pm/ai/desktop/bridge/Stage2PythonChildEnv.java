@@ -55,7 +55,7 @@ public final class Stage2PythonChildEnv {
     }
 
     /**
-     * ヘッドレス同一検証 CLI 用: OS 環境をコピーし、Python 子向けの最低限のマージを行う（配台計画タブの補完はしない）。
+     * ヘッドレス／バッチ用: OS 環境をコピーし、Python 子向けの最低限のマージを行う（配台計画タブの補完はしない）。
      */
     public static HashMap<String, String> headlessBaseFromSystemEnv() {
         HashMap<String, String> m = new HashMap<>(System.getenv());

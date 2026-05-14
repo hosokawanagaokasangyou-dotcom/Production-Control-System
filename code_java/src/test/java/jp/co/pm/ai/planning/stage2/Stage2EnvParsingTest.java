@@ -3,7 +3,6 @@ package jp.co.pm.ai.planning.stage2;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -13,37 +12,20 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 class Stage2EnvParsingTest {
 
     @Test
-    void javaDelegatesPythonDispatch_defaultOff() {
-        assertFalse(Stage2EnvParsing.javaDelegatesPythonDispatch(Map.of()));
-        assertFalse(Stage2EnvParsing.javaDelegatesPythonDispatch(null));
+    void stage2WriteExcel_defaultOn() {
+        assertTrue(Stage2EnvParsing.stage2WriteExcel(Map.of()));
+        assertTrue(Stage2EnvParsing.stage2WriteExcel(null));
     }
 
     @Test
-    void javaDelegatesPythonDispatch_truthy() {
-        Map<String, String> m = new HashMap<>();
-        m.put(AppPaths.KEY_PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH, "1");
-        assertTrue(Stage2EnvParsing.javaDelegatesPythonDispatch(m));
+    void stage2WriteExcel_offTokens() {
+        assertFalse(Stage2EnvParsing.stage2WriteExcel(Map.of(AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL, "0")));
+        assertFalse(Stage2EnvParsing.stage2WriteExcel(Map.of(AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL, "false")));
     }
 
     @Test
-    void dispatchCoreExplicitJava_recognized() {
-        Map<String, String> m = new HashMap<>();
-        m.put(AppPaths.KEY_PM_AI_DISPATCH_ENGINE, "JAVA");
-        assertTrue(Stage2EnvParsing.dispatchCoreExplicitJava(m));
-        assertFalse(Stage2EnvParsing.dispatchCoreExplicitPython(m));
-    }
-
-    @Test
-    void dispatchCoreExplicitPython_recognized() {
-        Map<String, String> m = new HashMap<>();
-        m.put(AppPaths.KEY_PM_AI_DISPATCH_ENGINE, "Python");
-        assertTrue(Stage2EnvParsing.dispatchCoreExplicitPython(m));
-        assertFalse(Stage2EnvParsing.dispatchCoreExplicitJava(m));
-    }
-
-    @Test
-    void dispatchCoreUnset_bothFalse() {
-        assertFalse(Stage2EnvParsing.dispatchCoreExplicitJava(Map.of()));
-        assertFalse(Stage2EnvParsing.dispatchCoreExplicitPython(Map.of()));
+    void envEnabled_truthyAndOff() {
+        assertTrue(Stage2EnvParsing.envEnabled("K", Map.of("K", "1"), false));
+        assertFalse(Stage2EnvParsing.envEnabled("K", Map.of("K", "0"), true));
     }
 }

@@ -101,9 +101,6 @@ public final class PlanInputTabController {
     private Button stage2RunButton;
 
     @FXML
-    private Button stage2JavaPythonParityButton;
-
-    @FXML
     private HBox columnStripHost;
 
     @FXML
@@ -145,7 +142,6 @@ public final class PlanInputTabController {
         hintLabel.setText(HINT_TEXT);
 
         installStageRunButtonDepth(stage2RunButton, Color.rgb(194, 65, 12, 0.35));
-        installStageRunButtonDepth(stage2JavaPythonParityButton, Color.rgb(72, 110, 160, 0.32));
 
         StackPane.setAlignment(spreadsheetView, Pos.CENTER_LEFT);
         spreadsheetHost.getChildren().add(spreadsheetView);
@@ -273,15 +269,12 @@ public final class PlanInputTabController {
     }
 
     private void applyStage2RunButtonEnabledState() {
-        if (stage2RunButton == null && stage2JavaPythonParityButton == null) {
+        if (stage2RunButton == null) {
             return;
         }
         boolean disable = stage2RunPipelineBusy || stage2BlockedByDispatchUnsavedEdit;
         if (stage2RunButton != null) {
             stage2RunButton.setDisable(disable);
-        }
-        if (stage2JavaPythonParityButton != null) {
-            stage2JavaPythonParityButton.setDisable(disable);
         }
         if (stage2BlockedByDispatchUnsavedEdit && !stage2RunPipelineBusy) {
             Tooltip blockedTip =
@@ -290,18 +283,9 @@ public final class PlanInputTabController {
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(blockedTip);
             }
-            if (stage2JavaPythonParityButton != null) {
-                stage2JavaPythonParityButton.setTooltip(blockedTip);
-            }
         } else {
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(null);
-            }
-            if (stage2JavaPythonParityButton != null) {
-                stage2JavaPythonParityButton.setTooltip(
-                        new Tooltip(
-                                "同一入力で Python 段階2のあと Java 段階2を実行し、計画 primary JSON をツリー比較します。"
-                                        + " 環境タブの PM_AI_STAGE2_ENGINE は検証中のみ上書きされます。"));
             }
         }
     }
@@ -310,13 +294,6 @@ public final class PlanInputTabController {
     private void onStage2RunButtonAction() {
         if (shell != null) {
             shell.triggerStage2();
-        }
-    }
-
-    @FXML
-    private void onStage2JavaPythonParityButtonAction() {
-        if (shell != null) {
-            shell.triggerStage2JavaPythonParity();
         }
     }
 
@@ -733,24 +710,6 @@ public final class PlanInputTabController {
 
     String snapshotPlanInputPath() {
         return pathField.getText() != null ? pathField.getText().trim() : "";
-    }
-
-    /**
-     * 段階2 Java/Python 同一検証用: 現在の見出しと行のスナップショット（FX アプリケーションスレッドからのみ呼ぶ）。
-     */
-    public PlanInputTabularIo.TabularSheet snapshotTabularSheetForParity() {
-        List<List<String>> dataRows = new ArrayList<>();
-        for (ObservableList<String> r : rows) {
-            List<String> copy = new ArrayList<>(r);
-            while (copy.size() < headersRef.size()) {
-                copy.add("");
-            }
-            while (copy.size() > headersRef.size()) {
-                copy.remove(copy.size() - 1);
-            }
-            dataRows.add(copy);
-        }
-        return new PlanInputTabularIo.TabularSheet(new ArrayList<>(headersRef), dataRows);
     }
 
     String snapshotPlanInputSheet() {

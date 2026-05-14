@@ -270,31 +270,8 @@ public final class EnvVarDocs {
                         + " 0 のときは設備ガント（計画・実績明細）系シートは作成しない（処理時間の削減）。");
         put(
                 "PM_AI_STAGE2_ENGINE",
-                "段階2の実行エンジン。未設定・空・python（大小無視）で従来どおり Python 子プロセス（plan_simulation_stage2.py）。"
-                        + " java のとき JVM 内の jp.co.pm.ai.planning.stage2 を起動し Python 段階2は使わない。"
-                        + " 配台コアの完全な Python 同等は段階的に拡張する（現状は入力読取・最小成果物・JSON ミラーの足場）。"
-                        + " 本番既定を java のみに切り替えるのは、JavaFX「Java/Python 同一検証」がチーム承認の golden 全件でパスした後に行う（Python 正本は比較・障害時用に残す）。");
-        put(
-                "PM_AI_STAGE2_GOLDEN_CI",
-                "1 のときのみ JUnit `Stage2GoldenParityCiTest` が有効化される（通常の mvn test ではスキップ扱い）。"
-                        + " `scripts/stage2_golden_parity_ci.sh` から設定して CI で段階2 Java 足場の回帰を追加する用途。");
-        put(
-                "PM_AI_STAGE2_HEADLESS_CI",
-                "1 のときのみ JUnit `Stage2HeadlessParityCiTest` が有効化される（Python→Java の同一検証ランナーを CI で叩く）。"
-                        + " `planning_core` を import できる Python（3.14+ 推奨）が必要。未設定または import 失敗時はテストをスキップする。"
-                        + " `scripts/stage2_headless_parity_ci.sh` を参照。");
-        put(
-                "PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH",
-                "段階2で PM_AI_STAGE2_ENGINE=java のときのみ有効。1/true/on/yes のとき、JVM 内 PassThrough ではなく"
-                        + " Python plan_simulation_stage2.py（_generate_plan_impl 正本）を子プロセスで実行し、"
-                        + " Python エンジンと同一の計画／人員成果物を出す（完全 Java 移植までの本番同一出力用）。"
-                        + " PM_AI_CODE_PYTHON_DIR・PM_AI_PYTHON 等は Python 子と同様に必須。");
-        put(
-                "PM_AI_DISPATCH_ENGINE",
-                "配台コアのみの切替（PM_AI_STAGE2_ENGINE=java のときのみ参照）。"
-                        + " java=JVM 内配台コア経路を強制（PM_AI_STAGE2_JAVA_DELEGATE_PYTHON_DISPATCH より優先。移植進行中の実装が正）。"
-                        + " python=Python 子 plan_simulation_stage2.py（_generate_plan_impl 正本）を強制（委譲フラグが偽でも Python 配台）。"
-                        + " 未設定・空=従来どおり委譲フラグのみで切替（偽なら JVM 内 PassThrough＋移植中ロジック）。");
+                "段階2の実行エンジン（互換用キー）。JavaFX 実行タブからの段階2は常に Python 子プロセス（plan_simulation_stage2.py）のみ。"
+                        + " 未設定・空・python（大小無視）で従来どおり。java が指定されていても無視され Python が起動する（旧 JVM 段階2は撤去済み）。");
         put(
                 "PM_AI_XLWINGS_STAGE2_DISABLED",
                 "1/true/yes/on で段階2後の xlwings"
