@@ -515,6 +515,9 @@ public final class MainShellController {
             suppressEnvSessionPersistence.set(false);
         }
 
+        /* 起動時は常にメインウィンドウを最大化（セッションの幅・高さ・位置は復元後に上書き） */
+        primaryStage.setMaximized(true);
+
         if (toolbarGrowSpacer != null) {
             HBox.setHgrow(toolbarGrowSpacer, Priority.ALWAYS);
         }
