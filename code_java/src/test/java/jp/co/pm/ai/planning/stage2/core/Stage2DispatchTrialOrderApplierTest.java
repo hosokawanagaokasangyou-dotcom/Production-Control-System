@@ -52,6 +52,12 @@ class Stage2DispatchTrialOrderApplierTest {
     }
 
     @Test
+    void parseDispatchTrialOrder_rejectsNonPositive() {
+        assertEquals(Optional.empty(), Stage2DispatchTrialOrderApplier.parseDispatchTrialOrderFromSheet("0"));
+        assertEquals(Optional.empty(), Stage2DispatchTrialOrderApplier.parseDispatchTrialOrderFromSheet("-3"));
+    }
+
+    @Test
     void parseDispatchTrialOrder_acceptsDecimalString() {
         assertEquals(Optional.of(2), Stage2DispatchTrialOrderApplier.parseDispatchTrialOrderFromSheet("1.8"));
         assertEquals(Optional.of(7), Stage2DispatchTrialOrderApplier.parseDispatchTrialOrderFromSheet("7"));

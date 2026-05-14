@@ -27,7 +27,13 @@ public final class Stage2DispatchTrialOrderApplier {
         }
         ArrayList<Stage2QueuedTask> work = new ArrayList<>(in);
         boolean allFromSheet =
-                work.stream().allMatch(t -> t.dispatchTrialOrderFromSheet().isPresent());
+                !work.isEmpty()
+                        && work.stream()
+                                .allMatch(
+                                        t -> {
+                                            Optional<Integer> o = t.dispatchTrialOrderFromSheet();
+                                            return o.isPresent() && o.get() >= 1;
+                                        });
         if (allFromSheet) {
             work.sort(
                     Comparator.comparingInt((Stage2QueuedTask t) -> t.dispatchTrialOrderFromSheet().orElse(0))
@@ -76,7 +82,11 @@ public final class Stage2DispatchTrialOrderApplier {
             if (Double.isNaN(d) || Double.isInfinite(d)) {
                 return Optional.empty();
             }
-            return Optional.of((int) Math.round(d));
+            int v = (int) Math.round(d);
+            if (v < 1) {
+                return Optional.empty();
+            }
+            return Optional.of(v);
         } catch (NumberFormatException e) {
             return Optional.empty();
         }
