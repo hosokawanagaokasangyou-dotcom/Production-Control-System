@@ -1173,8 +1173,6 @@ PRODUCT_LENGTH_TABLE_PATH_ENV = "PRODUCT_LENGTH_TABLE_PATH"
 PLAN_COL_PRODUCT_THICKNESS = "製品厚み"
 PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME = "製品名,製品厚み.txt"
 PRODUCT_THICKNESS_TABLE_PATH_ENV = "PRODUCT_THICKNESS_TABLE_PATH"
-# 配台計算で使う換算数量の下限（m）。正の値でこれ未満のときはこの値に引き上げる（段階1）。
-PLANNING_MIN_QTY_M = 100.0
 # 換算数量（配台用内部）や矯正ロジックの比較用に使う 100m 刻みの切り上げ。ロール単位長さ列への切上げは行わない。
 ROLL_UNIT_LENGTH_CEIL_STEP_M = 100.0
 # 製品名から寸法（NNNxMM 等）を解釈できないときの 1 ロール長(m)。換算数量へは落とさない（FEL 品番で 2000 等になるのを防ぐ）。
@@ -4887,17 +4885,6 @@ def _coerce_roll_unit_m_when_converted_qty_below_roll(
     return u
 
 
-def _floor_positive_m_to_planning_minimum(val: float, minimum: float) -> float:
-    """正の長さ(m)のみ、minimum 未満なら minimum に引き上げる。0以下・欠損はそのまま。"""
-    v = parse_float_safe(val, 0.0)
-    if v <= 0:
-        return v
-    m = parse_float_safe(minimum, 0.0)
-    if m <= 0:
-        return v
-    return float(m) if v < m else v
-
-
 def _ceil_roll_unit_length_m_to_next_step(roll_m: float, step_m: float = None) -> float:
     """
     正の長さ(m)を step の倍数に切り上げ（下二桁繰り上げ: step=100 のとき 40→100, 125→200）。
@@ -4924,10 +4911,7 @@ def _stage1_roll_length_for_planning_row(row) -> float:
     """
     _pn_stage1 = row.get(TASK_COL_PRODUCT, None)
     qty, _done_m, _qtceiled, _from_unp = _plan_row_dispatch_qty_metrics(row)
-    _qty_total_s1 = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
-    _qty_total_s1 = _floor_positive_m_to_planning_minimum(
-        _qty_total_s1, PLANNING_MIN_QTY_M
-    )
+    _qty_total_s1 = max(0.0, parse_float_safe(row.get(TASK_COL_QTY), 0.0))
     _roll_len = infer_unit_m_from_product_name(
         _pn_stage1,
         _qty_total_s1 if _qty_total_s1 > 0 else qty,
@@ -5002,7 +4986,7 @@ def _heal_stage1_roll_unit_no_dim_when_roll_matches_qty_mistake(
     out_df: "pd.DataFrame",
 ) -> None:
     """
-    寸法パターンが無い品番で、ロール単位長さが換算数量（下限適用後）またはその 100m 切上と
+    寸法パターンが無い品番で、ロール単位長さが換算数量（シート値）またはその 100m 切上と
     同じになっている行を矯正する（旧シートマージで FEL 等に換算数量が載った誤り向け）。
     小さい値（<500）は「意図的に換算数量と同じロール長」とみなし触れない。
     """
@@ -5027,16 +5011,14 @@ def _heal_stage1_roll_unit_no_dim_when_roll_matches_qty_mistake(
         s = _normalize_product_dim_separators_for_roll_inference(str(pn or ""))
         if re.findall(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", s):
             continue
-        qty_floor = _floor_positive_m_to_planning_minimum(
-            parse_float_safe(row.get(TASK_COL_QTY), 0.0), PLANNING_MIN_QTY_M
-        )
-        if qty_floor <= 0:
+        qty_raw = max(0.0, parse_float_safe(row.get(TASK_COL_QTY), 0.0))
+        if qty_raw <= 0:
             continue
-        qty_ceiled = float(_ceil_roll_unit_length_m_to_next_step(float(qty_floor)))
+        qty_ceiled = float(_ceil_roll_unit_length_m_to_next_step(float(qty_raw)))
         cur = parse_float_safe(row.get(PLAN_COL_ROLL_UNIT_LENGTH), 0.0)
         if cur + 1e-9 < min_heal_cur:
             continue
-        if abs(cur - qty_floor) > 1e-4 and abs(cur - qty_ceiled) > 1e-4:
+        if abs(cur - qty_raw) > 1e-4 and abs(cur - qty_ceiled) > 1e-4:
             continue
         if abs(cur - want) < 1e-6:
             continue
@@ -15978,10 +15960,7 @@ def run_stage1_extract():
             continue
         rec = {c: row.get(c) for c in SOURCE_BASE_COLUMNS}
         rec[TASK_COL_TASK_ID] = task_id
-        _qty_total_s1 = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
-        _qty_total_s1 = _floor_positive_m_to_planning_minimum(
-            _qty_total_s1, PLANNING_MIN_QTY_M
-        )
+        _qty_total_s1 = max(0.0, parse_float_safe(row.get(TASK_COL_QTY), 0.0))
         _roll_len_product = _stage1_roll_length_for_planning_row(row)
         rec[PLAN_COL_ROLL_UNIT_LENGTH] = _roll_len_product
         rec[PLAN_COL_PRODUCT_WIDTH] = _resolve_product_width_mm_for_stage1_row(
