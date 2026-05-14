@@ -634,6 +634,34 @@ def _equipment_sort_index(equipment_list: list, mk_normalized: str) -> int:
     return 10_000
 
 
+def _select_fallback_plan_row_for_delivery_calendar(
+    mk: str,
+    candidates: list[tuple[str, Any]],
+    equipment_list: list,
+) -> Any | None:
+    """Pick a processing-plan row for the same request id when the exact (machine_key, tid) row is absent.
+
+    Prefer a plan row whose normalized machine key matches ``mk``. If none, use the only candidate
+    when unique; otherwise pick the candidate whose equipment list index is closest to ``mk``.
+    """
+    if not candidates:
+        return None
+    for cmk, row in candidates:
+        if cmk == mk:
+            return row
+    if len(candidates) == 1:
+        return candidates[0][1]
+    target_idx = _equipment_sort_index(equipment_list, mk)
+    best_row = candidates[0][1]
+    best_dist = 10**9
+    for cmk, row in candidates:
+        d = abs(_equipment_sort_index(equipment_list, cmk) - target_idx)
+        if d < best_dist:
+            best_dist = d
+            best_row = row
+    return best_row
+
+
 def _resolve_shaped_processing_actuals_json_path(processing_plan_path: str) -> str | None:
     """Java ?????????????? ``shaped_processing_actuals.json`` ???????????"""
     out_dir = resolve_result_dispatch_table_output_dir(processing_plan_path or "")
@@ -885,6 +913,21 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
         for (mk, tid) in eligible_pairs:
             pair_plan_row.setdefault((mk, tid), None)
 
+        # All plan rows grouped by task id (for left-column fallback when actual/shaped adds (mk, tid)
+        # pairs that have no exact match in the processing plan grid).
+        plan_rows_by_tid: dict[str, list[tuple[str, Any]]] = defaultdict(list)
+        if df_plan is not None and len(df_plan) > 0:
+            for _, prow in df_plan.iterrows():
+                pmk = core._normalize_equipment_match_key(
+                    prow.get(core.TASK_COL_MACHINE_NAME)
+                )
+                ptid = core.planning_task_id_str_from_scalar(
+                    prow.get(core.TASK_COL_TASK_ID)
+                )
+                if not pmk or not ptid:
+                    continue
+                plan_rows_by_tid[ptid].append((pmk, prow))
+
         mk_to_display: dict[str, str] = {}
         if df_plan is not None and len(df_plan) > 0:
             for _, row in df_plan.iterrows():
@@ -951,12 +994,30 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                 span = 78 + min(11, int(11 * idx / max(1, n_pairs)))
                 _pm_ai_progress(span)
             plan_row = pair_plan_row.get((mk, tid))
+            used_plan_row_fallback = False
+            if plan_row is None:
+                fb_cand = plan_rows_by_tid.get(tid)
+                if fb_cand:
+                    fb = _select_fallback_plan_row_for_delivery_calendar(
+                        mk, fb_cand, equipment_list
+                    )
+                    if fb is not None:
+                        plan_row = fb
+                        used_plan_row_fallback = True
+
             flush_section(mk)
 
             left_cells: list[str] = []
             if plan_row is not None:
                 for h in left_headers:
                     left_cells.append(_format_cell(plan_row.get(h)))
+                if used_plan_row_fallback:
+                    if core.TASK_COL_MACHINE_NAME in left_headers:
+                        mi = left_headers.index(core.TASK_COL_MACHINE_NAME)
+                        left_cells[mi] = mk_to_display.get(mk, left_cells[mi])
+                    if core.TASK_COL_TASK_ID in left_headers:
+                        ti = left_headers.index(core.TASK_COL_TASK_ID)
+                        left_cells[ti] = tid
             else:
                 left_cells = [""] * len(left_headers)
                 if core.TASK_COL_MACHINE_NAME in left_headers:
