@@ -4472,6 +4472,45 @@ def _normalize_product_dim_separators_for_roll_inference(s: str) -> str:
     return t
 
 
+# #region agent log
+def _debug_e668f6_ndjson(
+    hypothesis_id: str, location: str, message: str, data: dict
+) -> None:
+    try:
+        import json
+        import time as _time
+
+        _path = "/mnt/c/工程管理AIプロジェクト_JAVA/.cursor/debug-e668f6.log"
+        _rec = {
+            "sessionId": "e668f6",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(_time.time() * 1000),
+        }
+        with open(_path, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps(_rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+def _debug_e668f6_srhw193_context(product_name, used_raw) -> bool:
+    t1 = str(product_name or "")
+    t2 = str(used_raw or "")
+    return (
+        "SRHW" in t1
+        or "SRHW" in t2
+        or "1860X193" in t1
+        or "1860X193" in t2
+        or "1860x193" in t1
+        or "1860x193" in t2
+    )
+
+
+# #endregion
+
+
 ROLL_UNIT_LENGTH_TABLE_DEFAULT_FILENAME = "製品名,ロール単位の長さ.txt"
 ROLL_UNIT_LENGTH_TABLE_PATH_ENV = "ROLL_UNIT_LENGTH_TABLE_PATH"
 _ROLL_UNIT_LENGTH_TABLE_CACHE: dict[str, float] | None = None
@@ -4629,6 +4668,15 @@ def _lookup_roll_unit_length_m_from_used_raw(used_raw) -> float | None:
     if not k:
         return None
     v = _ROLL_UNIT_BY_USED_RAW_TABLE_CACHE.get(k)
+    # #region agent log
+    if _debug_e668f6_srhw193_context(None, used_raw):
+        _debug_e668f6_ndjson(
+            "A",
+            "_core.py:_lookup_roll_unit_length_m_from_used_raw",
+            "used_raw roll table lookup",
+            {"used_raw_repr": repr(used_raw), "key_norm": k, "table_hit_m": v},
+        )
+    # #endregion
     return float(v) if (v is not None and v > 0) else None
 
 
@@ -4716,6 +4764,16 @@ def _infer_roll_unit_m_from_product_name_dimensions_only(product_name, fallback_
     最後の NNNxMM ペアの右側、なければ最後の X 直後の 2〜6 桁。
     """
     if product_name is None or pd.isna(product_name):
+        # #region agent log
+        _fu = parse_float_safe(fallback_unit, -1.0)
+        if 0 < _fu < 500:
+            _debug_e668f6_ndjson(
+                "G",
+                "_core.py:_infer_roll_unit_m_from_product_name_dimensions_only",
+                "product_nullish_return_fallback_unit",
+                {"fallback_unit": _fu},
+            )
+        # #endregion
         return fallback_unit
     s = _normalize_product_dim_separators_for_roll_inference(str(product_name))
     dim_pairs = re.findall(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", s)
@@ -4724,6 +4782,22 @@ def _infer_roll_unit_m_from_product_name_dimensions_only(product_name, fallback_
             _a_str, b_str = dim_pairs[-1]
             b = int(b_str)
             if b > 0:
+                # #region agent log
+                if _debug_e668f6_srhw193_context(product_name, None):
+                    _debug_e668f6_ndjson(
+                        "B",
+                        "_core.py:_infer_roll_unit_m_from_product_name_dimensions_only",
+                        "dim_pairs branch",
+                        {
+                            "product_repr": repr(product_name),
+                            "s_norm": s,
+                            "dim_pairs": dim_pairs,
+                            "picked_pair": (_a_str, b_str),
+                            "return_m": b,
+                            "fallback_unit": fallback_unit,
+                        },
+                    )
+                # #endregion
                 return b
         except ValueError:
             pass
@@ -4732,10 +4806,59 @@ def _infer_roll_unit_m_from_product_name_dimensions_only(product_name, fallback_
         try:
             v = int(matches[-1])
             if v > 0:
+                # #region agent log
+                if _debug_e668f6_srhw193_context(product_name, None):
+                    _debug_e668f6_ndjson(
+                        "C",
+                        "_core.py:_infer_roll_unit_m_from_product_name_dimensions_only",
+                        "x_tail branch",
+                        {
+                            "product_repr": repr(product_name),
+                            "s_norm": s,
+                            "dim_pairs": dim_pairs,
+                            "x_matches": matches,
+                            "return_m": v,
+                            "fallback_unit": fallback_unit,
+                        },
+                    )
+                # #endregion
                 return v
         except ValueError:
             pass
+    # #region agent log
+    if _debug_e668f6_srhw193_context(product_name, None):
+        _debug_e668f6_ndjson(
+            "D",
+            "_core.py:_infer_roll_unit_m_from_product_name_dimensions_only",
+            "fallback_default_or_fallback_unit",
+            {
+                "product_repr": repr(product_name),
+                "s_norm": s,
+                "dim_pairs": dim_pairs,
+                "x_matches_tail": re.findall(r"[xX]\s*(\d{2,6})", s),
+                "fallback_unit": fallback_unit,
+                "default_m": float(INFER_ROLL_UNIT_LENGTH_DEFAULT_NO_MATCH_M),
+            },
+        )
+    # #endregion
     return float(INFER_ROLL_UNIT_LENGTH_DEFAULT_NO_MATCH_M)
+
+
+def _planning_scalar_text_for_roll_dim(val) -> str:
+    """寸法推定用: 欠損・空白・文字列化のみ。"""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return ""
+    s = str(val).strip()
+    return "" if s.lower() in ("nan", "none") else s
+
+
+def _string_has_roll_dim_mm_pattern(val) -> bool:
+    """NNNxMM（2〜6 桁×2〜6 桁）の寸法ペアが含まれるか（ロール長推定の前提）。"""
+    s = _planning_scalar_text_for_roll_dim(val)
+    if not s:
+        return False
+    t = _normalize_product_dim_separators_for_roll_inference(s)
+    return bool(re.search(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", t))
 
 
 def infer_roll_unit_m_from_used_raw_then_product_dims(
@@ -4744,13 +4867,54 @@ def infer_roll_unit_m_from_used_raw_then_product_dims(
     """
     配台用: 使用原反テーブル（``使用原反,ロール単位の長さ.txt``）を優先し、
     未登録なら製品名の寸法（X の右側等）から推定する。
+    製品名に寸法パターンが無く使用原反にだけあるときは使用原反文字列で推定する
+    （製品名列が空で換算数量だけが入る誤フォールバックを防ぐ）。
     """
     v = _lookup_roll_unit_length_m_from_used_raw(used_raw)
     if v is not None and v > 0:
+        # #region agent log
+        if _debug_e668f6_srhw193_context(product_name, used_raw):
+            _debug_e668f6_ndjson(
+                "A",
+                "_core.py:infer_roll_unit_m_from_used_raw_then_product_dims",
+                "return_used_raw_table",
+                {
+                    "product_repr": repr(product_name),
+                    "used_raw_repr": repr(used_raw),
+                    "table_m": float(v),
+                },
+            )
+        # #endregion
         return float(v)
-    return _infer_roll_unit_m_from_product_name_dimensions_only(
-        product_name, fallback_unit
+    pn_txt = _planning_scalar_text_for_roll_dim(product_name)
+    ur_txt = _planning_scalar_text_for_roll_dim(used_raw)
+    if not _string_has_roll_dim_mm_pattern(pn_txt) and _string_has_roll_dim_mm_pattern(
+        ur_txt
+    ):
+        dim_source = ur_txt
+    elif not pn_txt and ur_txt:
+        dim_source = ur_txt
+    else:
+        dim_source = pn_txt if pn_txt else ur_txt
+    out = _infer_roll_unit_m_from_product_name_dimensions_only(
+        dim_source if dim_source else None, fallback_unit
     )
+    # #region agent log
+    if _debug_e668f6_srhw193_context(product_name, used_raw):
+        _debug_e668f6_ndjson(
+            "F",
+            "_core.py:infer_roll_unit_m_from_used_raw_then_product_dims",
+            "after_product_dim_infer",
+            {
+                "product_repr": repr(product_name),
+                "used_raw_repr": repr(used_raw),
+                "dim_source_repr": repr(dim_source),
+                "fallback_unit": fallback_unit,
+                "inferred_m": out,
+            },
+        )
+    # #endregion
+    return out
 
 
 def infer_unit_m_from_product_name(product_name, fallback_unit):
@@ -4855,9 +5019,39 @@ def _stage1_roll_length_for_planning_row(row) -> float:
         _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else qty
     if _roll_len <= 0:
         _roll_len = _qty_total_s1 if _qty_total_s1 > 0 else max(qty, 1e-9)
+    # #region agent log
+    _tid_dbg = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
+    if _debug_e668f6_srhw193_context(_pn_stage1, _used_raw_s1) or _tid_dbg == "E5-2":
+        _debug_e668f6_ndjson(
+            "E",
+            "_core.py:_stage1_roll_length_for_planning_row",
+            "before_coerce",
+            {
+                "task_id": _tid_dbg,
+                "product_repr": repr(_pn_stage1),
+                "used_raw_repr": repr(_used_raw_s1),
+                "qty_metrics_qty": qty,
+                "qty_total_floor": _qty_total_s1,
+                "roll_len_before_coerce": _roll_len,
+            },
+        )
+    # #endregion
     _roll_len = _coerce_roll_unit_m_when_converted_qty_below_roll(
         _pn_stage1, _roll_len, _qty_total_s1, used_raw=_used_raw_s1
     )
+    # #region agent log
+    _tid_dbg2 = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
+    if _debug_e668f6_srhw193_context(_pn_stage1, _used_raw_s1) or _tid_dbg2 == "E5-2":
+        _debug_e668f6_ndjson(
+            "E",
+            "_core.py:_stage1_roll_length_for_planning_row",
+            "after_coerce",
+            {
+                "task_id": _tid_dbg2,
+                "roll_len_after_coerce": _roll_len,
+            },
+        )
+    # #endregion
     try:
         _roll_len = float(_roll_len)
     except (TypeError, ValueError):
