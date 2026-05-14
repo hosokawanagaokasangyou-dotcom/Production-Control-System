@@ -1151,8 +1151,8 @@ PLAN_COL_DISPATCH_REMAINING_QTY = "配台使用残数量"
 # 原反幅（mm 想定）。段階1のみ算出。テーブル「使用原反, 加工幅.txt」優先、未登録時は最後の NNNxMM の左辺を採用。いずれも不可なら PlanningValidationError。
 # 「使用原反」キー照合は _normalize_mm_table_lookup_key（NFKC 後に全角・半角など空白類を除去）で加工計画の使用原反／製品名と突き合わせる。
 PLAN_COL_RAW_FABRIC_WIDTH = "原反幅"
-# 使用原反列の文字列をキーに「使用原反,ロール単位の長さ.txt」で照合した m のみ（未登録は空）。列「ロール単位長さ」とは独立。
-# 見出しは製品側の「ロール単位長さ」と区別するため (原反) プレフィックス。
+# 使用原反列の値をキーに「使用原反,ロール単位の長さ.txt」を優先し、無ければ使用原反文字列の寸法（NNNxMM 等）のみから推定。
+# テーブルにも寸法にも無いときは「不明」。列「ロール単位長さ」とは独立。
 PLAN_COL_RAW_ROLL_UNIT_LENGTH = "(原反)ロール単位長さ"
 # マクロブックと同じフォルダ（またはカレント・code/）の CSV。環境変数 RAW_FABRIC_WIDTH_TABLE_PATH で上書き可。
 RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME = "使用原反, 加工幅.txt"
@@ -1609,6 +1609,7 @@ def plan_input_sheet_column_order():
     0. 配台試行順番（段階1抽出直後に空クリア→段階2と同じ趣旨に付与。段階2は全行に値はあるとしこの順を優先）
     1. 配台不要（参照列なし）
     2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量、製品名の直後にロール単位長さ・製品幅、原反投入日の直後に在庫場所・使用原反の直後に(原反)ロール単位長さ・原反幅）
+       （(原反)ロール単位長さは使用原反テーブル→使用原反文字列の寸法→いずれも不可なら「不明」）
     3. 加工工程の決定プロセスの因孝
     4. 上書き列… 複数列の直後に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
        （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
@@ -4627,6 +4628,35 @@ def _lookup_roll_unit_length_m_from_used_raw(used_raw) -> float | None:
         return None
     v = _ROLL_UNIT_BY_USED_RAW_TABLE_CACHE.get(k)
     return float(v) if (v is not None and v > 0) else None
+
+
+def _parse_roll_unit_m_from_used_raw_dimension_only(used_raw) -> float | None:
+    """
+    使用原反セル文字列からのみロール長(m)を読む（CSV テーブルは使わない）。
+    ``_infer_roll_unit_m_from_product_name_dimensions_only`` と同系の NNNxMM / X 後ろパターン。
+    解釈できなければ None。
+    """
+    if used_raw is None or (isinstance(used_raw, float) and pd.isna(used_raw)):
+        return None
+    s0 = str(used_raw).strip()
+    if not s0 or s0.lower() in ("nan", "none"):
+        return None
+    s = _normalize_product_dim_separators_for_roll_inference(s0)
+    dim_pairs = re.findall(r"(\d{2,6})\s*[xX]\s*(\d{2,6})", s)
+    if dim_pairs:
+        try:
+            b = int(dim_pairs[-1][1])
+            return float(b) if b > 0 else None
+        except ValueError:
+            pass
+    matches = re.findall(r"[xX]\s*(\d{2,6})", s)
+    if matches:
+        try:
+            v = int(matches[-1])
+            return float(v) if v > 0 else None
+        except ValueError:
+            pass
+    return None
 
 
 def _load_roll_unit_length_m_table_optional() -> dict[str, float]:
@@ -15944,14 +15974,16 @@ def run_stage1_extract():
         rec[PLAN_COL_RAW_FABRIC_WIDTH] = _resolve_raw_fabric_width_mm_for_stage1_row(
             row, rw_table
         )
-        _raw_roll_tab_m = _lookup_roll_unit_length_m_from_used_raw(
-            row.get(TASK_COL_USED_RAW)
-        )
-        rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = (
-            float(_raw_roll_tab_m)
-            if _raw_roll_tab_m is not None and float(_raw_roll_tab_m) > 0
-            else ""
-        )
+        _ur_cell = row.get(TASK_COL_USED_RAW)
+        _raw_roll_tab_m = _lookup_roll_unit_length_m_from_used_raw(_ur_cell)
+        if _raw_roll_tab_m is not None and float(_raw_roll_tab_m) > 0:
+            rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = float(_raw_roll_tab_m)
+        else:
+            _raw_dim_m = _parse_roll_unit_m_from_used_raw_dimension_only(_ur_cell)
+            if _raw_dim_m is not None and _raw_dim_m > 0:
+                rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = float(_raw_dim_m)
+            else:
+                rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = "不明"
         # 工程名 + 機械名 を“因孝”として表示用に追加（後段は計算キーにも使用）
         if machine_name:
             rec[PLAN_COL_PROCESS_FACTOR] = f"{machine}+{machine_name}"
