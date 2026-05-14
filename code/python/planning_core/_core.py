@@ -1155,6 +1155,9 @@ PLAN_COL_PROCESS_FACTOR = "加工工程の決定プロセスの因子"
 # 1ロールあたりの長さ（m）。配台計画_タスク入力にのみ存在（加工計画DATA には無い）。製品名列の右隣に配置。
 # 段階1は「製品名,ロール単位の長さ.txt」→製品名寸法のみ（使用原反列・原反ロール長テーブルとは独立）。
 PLAN_COL_ROLL_UNIT_LENGTH = "ロール単位長さ"
+# ``build_task_queue_from_planning_df`` が実効ロール長に上書きしたデータ行の iloc（0 始まり・iterrows 順）。
+# 段階2の ``write_plan_sheet_global_parse_and_conflict_styles_one_io`` でブックの当該セルへ値反映＋黄地黒字に使う。
+PLAN_DF_ATTR_EFFECTIVE_ROLL_UNIT_DATA_ILOCS = "_pm_ai_effective_roll_unit_data_ilocs"
 # 段階1で算出し配台計画に出力。段階2の build_task_queue と同一式（_plan_row_dispatch_qty_metrics の残りm）。
 PLAN_COL_DISPATCH_REMAINING_QTY = "配台使用残数量"
 # 原反幅（mm 想定）。段階1のみ算出。テーブル「使用原反, 加工幅.txt」優先、未登録時は最後の NNNxMM の左辺を採用。いずれも不可なら PlanningValidationError。
@@ -11194,6 +11197,7 @@ def _try_write_plan_input_global_parse_and_conflicts_one_save(
     when_str: str,
     num_data_rows: int,
     conflicts_by_row,
+    tasks_df=None,
 ) -> None:
     try:
         write_plan_sheet_global_parse_and_conflict_styles_one_io(
@@ -11204,6 +11208,7 @@ def _try_write_plan_input_global_parse_and_conflicts_one_save(
             num_data_rows=num_data_rows,
             conflicts_by_row=conflicts_by_row,
             log_prefix="段階2",
+            tasks_df=tasks_df,
         )
     except Exception as ex:
         logging.warning(
@@ -11706,6 +11711,82 @@ def _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows: int, conflicts_by
             cell.font = conflict_font
 
 
+def _plan_df_reset_effective_roll_unit_ilocs(tasks_df) -> None:
+    """実効ロール単位の行トラッキングをクリア（同一 DataFrame で配台キュー再構築するときの取りこぼし防止）。"""
+    try:
+        tasks_df.attrs[PLAN_DF_ATTR_EFFECTIVE_ROLL_UNIT_DATA_ILOCS] = set()
+    except Exception:
+        pass
+
+
+def _plan_df_note_effective_roll_unit_iloc(tasks_df, data_iloc: int) -> None:
+    """実効ロール単位に書き換えた ``tasks_df`` のデータ行位置（iloc 相当）を記録する。"""
+    try:
+        a = tasks_df.attrs
+        key = PLAN_DF_ATTR_EFFECTIVE_ROLL_UNIT_DATA_ILOCS
+        if key not in a or not isinstance(a.get(key), set):
+            a[key] = set()
+        a[key].add(int(data_iloc))
+    except Exception:
+        pass
+
+
+def _plan_sheet_apply_effective_roll_unit_cells_from_df(
+    ws, tasks_df, num_data_rows: int, *, log_prefix: str = "段階2"
+) -> int:
+    """
+    実効ロール単位に更新した行について、シート上の「ロール単位長さ」を DataFrame 値で上書きし、
+    背景=黄・文字=黒にする（矛盾着色のあとに適用。ロール列は PLAN_CONFLICT_STYLABLE に含まれない）。
+    戻り値: 書式を付けたセル数。
+    """
+    if tasks_df is None or getattr(tasks_df, "empty", True):
+        return 0
+    try:
+        ilocs = tasks_df.attrs.get(PLAN_DF_ATTR_EFFECTIVE_ROLL_UNIT_DATA_ILOCS)
+    except Exception:
+        ilocs = None
+    if not ilocs or not isinstance(ilocs, set):
+        return 0
+    if PLAN_COL_ROLL_UNIT_LENGTH not in tasks_df.columns:
+        return 0
+    header_map: dict[str, int] = {}
+    for col_idx in range(1, ws.max_column + 1):
+        v = ws.cell(1, col_idx).value
+        if v is not None:
+            header_map[str(v).strip()] = col_idx
+    ci = header_map.get(PLAN_COL_ROLL_UNIT_LENGTH)
+    if not ci:
+        return 0
+    fill_yellow = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+    font_black = _result_font(color="000000", bold=False)
+    last_row = max(2, 1 + int(num_data_rows))
+    n_done = 0
+    n_rows = len(tasks_df)
+    for i in sorted(ilocs):
+        if i < 0 or i >= n_rows:
+            continue
+        excel_r = i + 2
+        if excel_r > last_row:
+            continue
+        try:
+            val = tasks_df.iloc[i][PLAN_COL_ROLL_UNIT_LENGTH]
+        except Exception:
+            continue
+        cell = ws.cell(row=excel_r, column=ci)
+        cell.value = val
+        cell.fill = fill_yellow
+        cell.font = font_black
+        n_done += 1
+    if n_done:
+        logging.info(
+            "%s: 実効ロール単位の「%s」セルを %s 件、黄地・黒字で反映しました。",
+            log_prefix,
+            PLAN_COL_ROLL_UNIT_LENGTH,
+            n_done,
+        )
+    return n_done
+
+
 def _openpyxl_cell_fill_rgb_tuple(cell) -> tuple[int, int, int] | None:
     """openpyxl のセル塗りから RGB を取り出す。塗り無しは None。"""
     try:
@@ -11780,6 +11861,7 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
     num_data_rows: int,
     conflicts_by_row,
     log_prefix: str = "段階2",
+    tasks_df=None,
 ) -> bool:
     """
     段階2: グローバルコメント解析（AX:AY）と矛盾ハイライトを反映する。
@@ -11833,6 +11915,9 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
         ws = wb[sheet_name]
         _plan_sheet_write_global_parse_block_to_ws(ws, global_priority_override or {}, when_str)
         _plan_sheet_apply_conflict_styles_to_ws(ws, num_data_rows, conflicts_by_row or {})
+        _plan_sheet_apply_effective_roll_unit_cells_from_df(
+            ws, tasks_df, num_data_rows, log_prefix=log_prefix
+        )
         lc = PLAN_SHEET_GLOBAL_PARSE_LABEL_COL
         vc = PLAN_SHEET_GLOBAL_PARSE_VALUE_COL
         write_planning_conflict_highlight_sidecar(
@@ -12215,6 +12300,7 @@ def build_task_queue_from_planning_df(
     # 依頼NO直列配台の順庝用: iterrows の読み込み順（0 始まり）。task_queue.sort 後も試行。
     planning_sheet_row_seq = 0
     _has_unprocessed_col = TASK_COL_UNPROCESSED in tasks_df.columns
+    _plan_df_reset_effective_roll_unit_ilocs(tasks_df)
 
     for planning_df_iloc, (row_idx, row) in enumerate(tasks_df.iterrows()):
         if row_has_completion_keyword(row):
@@ -12419,6 +12505,8 @@ def build_task_queue_from_planning_df(
                             task_id,
                             e,
                         )
+                    else:
+                        _plan_df_note_effective_roll_unit_iloc(tasks_df, planning_df_iloc)
 
         # 換算数量・ロール単位長さの補正（推定・100m 下限・換算<ロール時の引き上げ）は段階1のみ。段階2はシート値を採用し、空・0 のときだけ推定フォールバックする。
 
@@ -31925,6 +32013,7 @@ def _generate_plan_impl(
         data_extract_dt_str,
         len(tasks_df),
         conflict_rows,
+        tasks_df=tasks_df,
     )
 
     if not task_queue:
