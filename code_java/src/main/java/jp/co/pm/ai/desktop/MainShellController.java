@@ -3650,6 +3650,12 @@ public final class MainShellController {
                     "[stage2] 配台計画手動修正に未保存の変更があります。JSON を「保存」するか「再読み」後に実行してください。");
             return;
         }
+        if (planInputTabController != null
+                && planInputTabController.isPlanInputTableDirtySinceSave()) {
+            appendLog(
+                    "[stage2] 配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
+            return;
+        }
         runStage(STAGE2);
     }
 

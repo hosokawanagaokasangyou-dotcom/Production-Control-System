@@ -117,6 +117,7 @@ public final class PlanInputTabController {
     private final List<String> headersRef = new ArrayList<>();
     private ObservableList<ObservableList<String>> rows;
     private final AtomicBoolean suppressColumnOrderPersistence = new AtomicBoolean(false);
+    private final AtomicBoolean suppressPlanInputDirtyFromGridEvents = new AtomicBoolean(false);
     private final AtomicReference<List<TableColumnOrderPersistence.ColumnSpec>> persistedLayout =
             new AtomicReference<>(List.of());
     private final AtomicInteger headerColumnCount = new AtomicInteger(0);
@@ -131,6 +132,11 @@ public final class PlanInputTabController {
 
     /** 配台計画手動修正タブの表が未保存のとき、段階2を抑止する。 */
     private boolean stage2BlockedByDispatchUnsavedEdit;
+
+    /**
+     * 配台計画_タスク入力タブの表を手動変更したが「保存」または「再読み」でディスクと同期していないとき、段階2を抑止する。
+     */
+    private boolean stage2BlockedByUnsavedPlanInputTableEdit;
 
     @FXML
     private void initialize() {
@@ -160,6 +166,7 @@ public final class PlanInputTabController {
                 rows,
                 () -> {
                     renumberDispatchTrialOrderColumn();
+                    markPlanInputTableDirtySinceSave();
                     rebuildSpreadsheet();
                 });
 
@@ -232,7 +239,10 @@ public final class PlanInputTabController {
                     SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex(),
                     headersRef,
                     rows,
-                    this::rebuildSpreadsheet);
+                    () -> {
+                        markPlanInputTableDirtySinceSave();
+                        rebuildSpreadsheet();
+                    });
             planInputCellEditHooksInstalled = true;
         }
 
@@ -268,18 +278,47 @@ public final class PlanInputTabController {
         applyStage2RunButtonEnabledState();
     }
 
+    /** タスク入力表が「保存」または「再読み」後と同期しているか（段階2実行可否）。 */
+    boolean isPlanInputTableDirtySinceSave() {
+        return stage2BlockedByUnsavedPlanInputTableEdit;
+    }
+
+    private void markPlanInputTableDirtySinceSave() {
+        stage2BlockedByUnsavedPlanInputTableEdit = true;
+        applyStage2RunButtonEnabledState();
+    }
+
+    private void clearPlanInputTableDirtySinceSave() {
+        stage2BlockedByUnsavedPlanInputTableEdit = false;
+        applyStage2RunButtonEnabledState();
+    }
+
     private void applyStage2RunButtonEnabledState() {
         if (stage2RunButton == null) {
             return;
         }
-        boolean disable = stage2RunPipelineBusy || stage2BlockedByDispatchUnsavedEdit;
+        boolean disable =
+                stage2RunPipelineBusy
+                        || stage2BlockedByDispatchUnsavedEdit
+                        || stage2BlockedByUnsavedPlanInputTableEdit;
         if (stage2RunButton != null) {
             stage2RunButton.setDisable(disable);
         }
-        if (stage2BlockedByDispatchUnsavedEdit && !stage2RunPipelineBusy) {
+        if (stage2RunPipelineBusy) {
+            if (stage2RunButton != null) {
+                stage2RunButton.setTooltip(null);
+            }
+        } else if (stage2BlockedByDispatchUnsavedEdit) {
             Tooltip blockedTip =
                     new Tooltip(
                             "配台計画手動修正タブに未保存の変更があります。「保存 (JSON+xlsx)」または「再読み」で確定してから実行してください。");
+            if (stage2RunButton != null) {
+                stage2RunButton.setTooltip(blockedTip);
+            }
+        } else if (stage2BlockedByUnsavedPlanInputTableEdit) {
+            Tooltip blockedTip =
+                    new Tooltip(
+                            "配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(blockedTip);
             }
@@ -304,6 +343,7 @@ public final class PlanInputTabController {
             return;
         }
         int colIdx = planInputFocusedColumnIndex();
+        markPlanInputTableDirtySinceSave();
         swapPlanInputDataRows(i - 1, i);
         focusPlanInputCellAfterReorder(i - 1, colIdx);
     }
@@ -315,6 +355,7 @@ public final class PlanInputTabController {
             return;
         }
         int colIdx = planInputFocusedColumnIndex();
+        markPlanInputTableDirtySinceSave();
         swapPlanInputDataRows(i, i + 1);
         focusPlanInputCellAfterReorder(i + 1, colIdx);
     }
@@ -397,6 +438,7 @@ public final class PlanInputTabController {
 
     private void onLeadingColumnCountCommitted(int n) {
         headerColumnCount.set(n);
+        markPlanInputTableDirtySinceSave();
         rebuildSpreadsheet();
     }
 
@@ -449,6 +491,7 @@ public final class PlanInputTabController {
                             persistedLayout.set(newLay);
                             TableColumnOrderPersistence.saveLayout(
                                     TableColumnOrderPersistence.TableId.PLAN_INPUT, newLay);
+                            markPlanInputTableDirtySinceSave();
                             rebuildSpreadsheet(false);
                         });
     }
@@ -501,6 +544,7 @@ public final class PlanInputTabController {
                             : sheetField.getText().trim(),
                     new PlanInputTabularIo.TabularSheet(headersRef, dataRows));
             shell.appendLog("[plan-input] saved " + path);
+            clearPlanInputTableDirtySinceSave();
         } catch (Exception ex) {
             shell.appendLog("[plan-input] save error: " + ex.getMessage());
         }
@@ -517,6 +561,7 @@ public final class PlanInputTabController {
             r.add("");
         }
         rows.add(r);
+        markPlanInputTableDirtySinceSave();
         rebuildSpreadsheet();
     }
 
@@ -541,6 +586,7 @@ public final class PlanInputTabController {
             }
         }
         shell.appendLog("[plan-input] removed " + sorted.size() + " row(s)");
+        markPlanInputTableDirtySinceSave();
         rebuildSpreadsheet();
     }
 
@@ -579,6 +625,7 @@ public final class PlanInputTabController {
                                 spreadsheetView)
                         : Map.of();
         suppressColumnOrderPersistence.set(true);
+        suppressPlanInputDirtyFromGridEvents.set(true);
         try {
             detachGridHandler();
             double colW = 112;
@@ -594,9 +641,16 @@ public final class PlanInputTabController {
             GridBase grid =
                     SpreadsheetTabularSupport.buildPlanInputGrid(
                             headersRef, rows, false, headerColumnCount.get());
+            int firstDataRow = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+            var rowSync =
+                    SpreadsheetTabularSupport.newRowsSyncHandler(rows, headersRef, firstDataRow);
             gridChangeHandler =
-                    SpreadsheetTabularSupport.newRowsSyncHandler(
-                            rows, headersRef, SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex());
+                    ev -> {
+                        rowSync.handle(ev);
+                        if (!suppressPlanInputDirtyFromGridEvents.get()) {
+                            markPlanInputTableDirtySinceSave();
+                        }
+                    };
             grid.addEventHandler(GridChange.GRID_CHANGE_EVENT, gridChangeHandler);
             currentGrid = grid;
             spreadsheetView.getSelectionModel().clearSelection();
@@ -604,22 +658,31 @@ public final class PlanInputTabController {
 
             Platform.runLater(
                     () -> {
-                        SpreadsheetTabularSupport.applyColumnWidths(spreadsheetView, widths, widthDefault);
-                        SpreadsheetTabularSupport.applyFixedLeadingColumns(
-                                spreadsheetView, headerColumnCount.get());
-                        SpreadsheetTabularSupport.applyColumnFiltersWithDialog(spreadsheetView);
-                        SpreadsheetMultiColumnFilterCoordinator.restoreColumnAllowedSnapshot(
-                                spreadsheetView, columnFilterSnapshot);
-                        SpreadsheetTabularSupport.pinSpreadsheetFilterRow(spreadsheetView);
-                        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(spreadsheetView);
-                        ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
-                                spreadsheetView,
-                                () -> new ArrayList<>(headersRef),
-                                () ->
-                                        TableColumnOrderPersistence.loadColumnVisibility(
-                                                TableColumnOrderPersistence.TableId.PLAN_INPUT,
-                                                headersRef.size()));
+                        try {
+                            SpreadsheetTabularSupport.applyColumnWidths(
+                                    spreadsheetView, widths, widthDefault);
+                            SpreadsheetTabularSupport.applyFixedLeadingColumns(
+                                    spreadsheetView, headerColumnCount.get());
+                            SpreadsheetTabularSupport.applyColumnFiltersWithDialog(spreadsheetView);
+                            SpreadsheetMultiColumnFilterCoordinator.restoreColumnAllowedSnapshot(
+                                    spreadsheetView, columnFilterSnapshot);
+                            SpreadsheetTabularSupport.pinSpreadsheetFilterRow(spreadsheetView);
+                            SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(
+                                    spreadsheetView);
+                            ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
+                                    spreadsheetView,
+                                    () -> new ArrayList<>(headersRef),
+                                    () ->
+                                            TableColumnOrderPersistence.loadColumnVisibility(
+                                                    TableColumnOrderPersistence.TableId.PLAN_INPUT,
+                                                    headersRef.size()));
+                        } finally {
+                            suppressPlanInputDirtyFromGridEvents.set(false);
+                        }
                     });
+        } catch (Throwable t) {
+            suppressPlanInputDirtyFromGridEvents.set(false);
+            throw t;
         } finally {
             suppressColumnOrderPersistence.set(false);
         }
@@ -692,6 +755,7 @@ public final class PlanInputTabController {
             TableColumnOrderPersistence.saveColumnVisibility(
                     TableColumnOrderPersistence.TableId.PLAN_INPUT, visAfter);
             applyLoaded();
+            clearPlanInputTableDirtySinceSave();
             shell.appendLog(
                     "[plan-input] loaded rows="
                             + rows.size()
