@@ -35,6 +35,9 @@ def run_stage2_generate_plan() -> None:
 
 def run_interactive_dispatch_trial_from_result_dispatch_json(
     path: Path,
+    *,
+    stage3_phase: str | None = None,
+    stage3_two_phase: bool | None = None,
 ) -> tuple[int, Path | None]:
     """
     段階3: ``結果_配台表.json`` を入力とし、段階2同一条件で配台を実行する。
@@ -84,6 +87,10 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
                 interactive_result_dispatch_json_columns=json_columns
                 if isinstance(json_columns, list)
                 else None,
+                interactive_stage3_two_phase=stage3_two_phase,
+                interactive_stage3_phase=stage3_phase,
+                interactive_stage3_source_json=str(path),
+                interactive_stage3_checkpoint_path=None,
             )
         snap = pc.interactive_trial_shortages_snapshot()
         md_snap = pc.interactive_trial_meters_done_snapshot()
@@ -91,13 +98,19 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
             targets if targets else None,
             md_snap if md_snap else None,
         )
+        s3_meta = {}
+        try:
+            s3_meta = pc.interactive_stage3_last_run_meta_snapshot()
+        except Exception:
+            s3_meta = {}
         shortage_payload: dict = {
-            "format_version": 2,
+            "format_version": 3,
             "source_json": str(path),
             "note": "interactive trial via stage2_identical_dispatch_runner",
             "op_shortage": snap["op_shortage"],
             "as_shortage": snap["as_shortage"],
             "dispatch_qty_shortfall": dispatch_qty_shortfall,
+            "stage3": s3_meta,
         }
         if isinstance(paths, dict):
             shortage_payload["production_plan"] = str(paths.get("production_plan") or "")

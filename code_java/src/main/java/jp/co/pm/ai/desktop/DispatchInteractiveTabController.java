@@ -20,6 +20,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.SimpleObjectProperty;
@@ -105,6 +108,8 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
  * process+machine-by-day).
  */
 public final class DispatchInteractiveTabController {
+
+    private static final ObjectMapper STAGE3_RESULT_JSON = new ObjectMapper();
 
     private record ReloadBundle(ResultDispatchDocument doc) {}
 
@@ -193,7 +198,19 @@ public final class DispatchInteractiveTabController {
     private Button saveButton;
 
     @FXML
-    private Button dispatchTrialButton;
+    private Button stage3EquipmentTrialButton;
+
+    @FXML
+    private Button stage3PeopleTrialButton;
+
+    @FXML
+    private Button stage3BothTrialButton;
+
+    @FXML
+    private TableView<Map<String, String>> stage3EquipmentResultTable;
+
+    @FXML
+    private TableView<Map<String, String>> stage3PeopleResultTable;
 
     @FXML
     private Button wideRowUpButton;
@@ -300,6 +317,7 @@ public final class DispatchInteractiveTabController {
                     TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
             wireDispatchShortfallSelectionToWideGrid();
         }
+        installStage3ResultTableColumns();
     }
 
     void bindShell(MainShellController shell) {
@@ -364,9 +382,12 @@ public final class DispatchInteractiveTabController {
     @FXML
     private void onColumnVisibilityAction() {
         int tab = innerTabPane != null ? innerTabPane.getSelectionModel().getSelectedIndex() : 0;
-        if (tab <= 0) {
+        if (tab > 1) {
+            return;
+        }
+        if (tab == 0) {
             openWideColumnVisibilityDialog();
-        } else {
+        } else if (tab == 1) {
             openByDayColumnVisibilityDialog();
         }
     }
@@ -402,7 +423,14 @@ public final class DispatchInteractiveTabController {
             return;
         }
         int tab = innerTabPane != null ? innerTabPane.getSelectionModel().getSelectedIndex() : 0;
-        boolean wideMode = tab <= 0;
+        if (tab != 0 && tab != 1) {
+            if (shell != null) {
+                shell.appendLog(
+                        "[dispatch-editor] 列の並べ替えは「タスク×日付」「工程+機械×日」のタブでのみ利用できます。");
+            }
+            return;
+        }
+        boolean wideMode = tab == 0;
         List<String> headers =
                 wideMode
                         ? new ArrayList<>(buildWideColumnLabelsForAxis(dateAxis))
@@ -613,19 +641,27 @@ public final class DispatchInteractiveTabController {
     }
 
     /**
-     * 段階3（レガシー）: 配台試行。Python {@link ResultDispatchTrialPython} および不足 JSON 連携。
-     *
-     * <p>再設計時の退避先・エントリ名の正は {@link DispatchInteractiveStage3Legacy} を参照。
+     * 段階3: 配台試行（二相時は {@code trialStage3Phase} に {@code equipment}/{@code people}/{@code both}）。
+     * Python {@link ResultDispatchTrialPython} および不足 JSON 連携。
      */
-    @FXML
-    private void onDispatchTrialAction() {
+    private void startDispatchTrial(String trialStage3Phase) {
         if (shell == null) {
             return;
         }
         if (reloadInteractionDisabled || dispatchDocDirtySinceSave) {
             return;
         }
+        final String trialPhaseFinal = trialStage3Phase == null ? "" : trialStage3Phase;
         statusLabel.setText("配台試行中...");
+        if (stage3EquipmentTrialButton != null) {
+            stage3EquipmentTrialButton.setDisable(true);
+        }
+        if (stage3PeopleTrialButton != null) {
+            stage3PeopleTrialButton.setDisable(true);
+        }
+        if (stage3BothTrialButton != null) {
+            stage3BothTrialButton.setDisable(true);
+        }
         showReloadProgress();
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
         final Path trialPythonExe = resolvePythonExe();
@@ -679,6 +715,10 @@ public final class DispatchInteractiveTabController {
                     }
                     try {
                         hideReloadProgress();
+                    } catch (Throwable ignored) {
+                    }
+                    try {
+                        Platform.runLater(this::applyDispatchTrialButtonEnabledState);
                     } catch (Throwable ignored) {
                     }
                 };
@@ -914,7 +954,8 @@ public final class DispatchInteractiveTabController {
                                                     logLines.add(line);
                                                     int last = logLines.size() - 1;
                                                     logList.scrollTo(last);
-                                                }));
+                                                }),
+                                trialStage3Phase);
                     }
                 };
         trialTaskHolder[0] = task;
@@ -978,6 +1019,8 @@ public final class DispatchInteractiveTabController {
                                         if (last >= 0) {
                                             logList.scrollTo(last);
                                         }
+                                        refreshStage3ResultTablesAfterTrial(
+                                                trialPhaseFinal, Path.of(shortagesPath));
                                         DispatchTrialUnassignedWizard.showIfNeeded(
                                                 owner, shell, Path.of(shortagesPath));
                                     } catch (Throwable upex) {
@@ -1044,6 +1087,21 @@ public final class DispatchInteractiveTabController {
                     }
                 });
         new Thread(task, "dispatch-trial").start();
+    }
+
+    @FXML
+    private void onStage3EquipmentTrialAction() {
+        startDispatchTrial("equipment");
+    }
+
+    @FXML
+    private void onStage3PeopleTrialAction() {
+        startDispatchTrial("people");
+    }
+
+    @FXML
+    private void onStage3BothTrialAction() {
+        startDispatchTrial("both");
     }
 
     @FXML
@@ -1130,6 +1188,8 @@ public final class DispatchInteractiveTabController {
                         applyDispatchShortfallFromDisk(jsonPath);
                     } else {
                         clearDispatchShortfallUi();
+                        clearStage3EquipmentResultTable();
+                        clearStage3PeopleResultTable();
                     }
                     rebuildGrids();
                     clearDispatchDocDirty();
@@ -1265,20 +1325,49 @@ public final class DispatchInteractiveTabController {
     }
 
     /**
-     * 配台試行ボタン: 再読込中は無効。表を手動編集して未保存のときは無効（保存または「再読み」で有効化）。
+     * 段階3試行ボタン: 再読込中は無効。表を手動編集して未保存のときは無効（保存または「再読み」で有効化）。
+     * 人割当のみは設備フェイズのチェックポイント JSON が隣接して存在するときのみ有効。
      */
     private void applyDispatchTrialButtonEnabledState() {
-        if (dispatchTrialButton == null) {
-            return;
-        }
         boolean blockTrial = reloadInteractionDisabled || dispatchDocDirtySinceSave;
-        dispatchTrialButton.setDisable(blockTrial);
+        Path ck = resolveStage3EquipmentCheckpointPath();
+        boolean peopleOk = Files.isRegularFile(ck);
+        if (stage3EquipmentTrialButton != null) {
+            stage3EquipmentTrialButton.setDisable(blockTrial);
+        }
+        if (stage3PeopleTrialButton != null) {
+            stage3PeopleTrialButton.setDisable(blockTrial || !peopleOk);
+        }
+        if (stage3BothTrialButton != null) {
+            stage3BothTrialButton.setDisable(blockTrial);
+        }
         if (dispatchDocDirtySinceSave && !reloadInteractionDisabled) {
-            dispatchTrialButton.setTooltip(
+            Tooltip t =
                     new Tooltip(
-                            "未保存の編集があります。「保存 (JSON+xlsx)」または「再読み」で確定してから段階3へ進んでください。"));
+                            "未保存の編集があります。「保存 (JSON+xlsx)」または「再読み」で確定してから段階3を実行してください。");
+            if (stage3EquipmentTrialButton != null) {
+                stage3EquipmentTrialButton.setTooltip(t);
+            }
+            if (stage3PeopleTrialButton != null) {
+                stage3PeopleTrialButton.setTooltip(t);
+            }
+            if (stage3BothTrialButton != null) {
+                stage3BothTrialButton.setTooltip(t);
+            }
         } else {
-            dispatchTrialButton.setTooltip(null);
+            if (stage3EquipmentTrialButton != null) {
+                stage3EquipmentTrialButton.setTooltip(null);
+            }
+            if (stage3PeopleTrialButton != null) {
+                stage3PeopleTrialButton.setTooltip(
+                        peopleOk
+                                ? null
+                                : new Tooltip(
+                                        "先に「段階3・設備フェイズ実行」を完了し、stage3_equipment_checkpoint.json が出力されている必要があります。"));
+            }
+            if (stage3BothTrialButton != null) {
+                stage3BothTrialButton.setTooltip(null);
+            }
         }
     }
 
@@ -2758,6 +2847,190 @@ public final class DispatchInteractiveTabController {
         rebuildGrids();
         markDispatchDocDirty();
         return true;
+    }
+
+    private Path resolveStage3EquipmentCheckpointPath() {
+        if (shell == null) {
+            return Path.of("stage3_equipment_checkpoint.json");
+        }
+        Path jp = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
+        return jp.resolveSibling("stage3_equipment_checkpoint.json");
+    }
+
+    private void installStage3ResultTableColumns() {
+        if (stage3EquipmentResultTable != null && stage3EquipmentResultTable.getColumns().isEmpty()) {
+            TableColumn<Map<String, String>, String> c0 = new TableColumn<>("日付");
+            c0.setCellValueFactory(
+                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("date", "")));
+            TableColumn<Map<String, String>, String> c1 = new TableColumn<>("依頼NO");
+            c1.setCellValueFactory(
+                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("task_id", "")));
+            TableColumn<Map<String, String>, String> c2 = new TableColumn<>("設備");
+            c2.setCellValueFactory(
+                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("machine", "")));
+            TableColumn<Map<String, String>, String> c3 = new TableColumn<>("開始");
+            c3.setCellValueFactory(
+                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("start_dt", "")));
+            TableColumn<Map<String, String>, String> c4 = new TableColumn<>("終了");
+            c4.setCellValueFactory(
+                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("end_dt", "")));
+            TableColumn<Map<String, String>, String> c5 = new TableColumn<>("OP");
+            c5.setCellValueFactory(
+                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("op", "")));
+            stage3EquipmentResultTable
+                    .getColumns()
+                    .addAll(List.of(c0, c1, c2, c3, c4, c5));
+            stage3EquipmentResultTable.setColumnResizePolicy(
+                    TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        }
+        if (stage3PeopleResultTable != null && stage3PeopleResultTable.getColumns().isEmpty()) {
+            TableColumn<Map<String, String>, String> p0 = new TableColumn<>("区分");
+            p0.setCellValueFactory(
+                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("kind", "")));
+            TableColumn<Map<String, String>, String> p1 = new TableColumn<>("依頼NO");
+            p1.setCellValueFactory(
+                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("task_id", "")));
+            TableColumn<Map<String, String>, String> p2 = new TableColumn<>("日付");
+            p2.setCellValueFactory(
+                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("date", "")));
+            TableColumn<Map<String, String>, String> p3 = new TableColumn<>("内容");
+            p3.setCellValueFactory(
+                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("detail", "")));
+            stage3PeopleResultTable.getColumns().addAll(List.of(p0, p1, p2, p3));
+            stage3PeopleResultTable.setColumnResizePolicy(
+                    TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        }
+    }
+
+    private void clearStage3EquipmentResultTable() {
+        if (stage3EquipmentResultTable != null) {
+            stage3EquipmentResultTable.setItems(FXCollections.observableArrayList());
+        }
+    }
+
+    private void clearStage3PeopleResultTable() {
+        if (stage3PeopleResultTable != null) {
+            stage3PeopleResultTable.setItems(FXCollections.observableArrayList());
+        }
+    }
+
+    private void loadStage3EquipmentCheckpointIntoTable() {
+        if (stage3EquipmentResultTable == null) {
+            return;
+        }
+        Path ck = resolveStage3EquipmentCheckpointPath();
+        if (!Files.isRegularFile(ck)) {
+            clearStage3EquipmentResultTable();
+            return;
+        }
+        try {
+            JsonNode root = STAGE3_RESULT_JSON.readTree(Files.readString(ck, StandardCharsets.UTF_8));
+            JsonNode arr = root.get("timeline_events");
+            if (arr == null || !arr.isArray()) {
+                clearStage3EquipmentResultTable();
+                return;
+            }
+            List<Map<String, String>> rows = new ArrayList<>();
+            for (JsonNode ev : arr) {
+                if (ev == null || !ev.isObject()) {
+                    continue;
+                }
+                Map<String, String> m = new LinkedHashMap<>();
+                m.put("date", textOrEmpty(ev, "date"));
+                m.put("task_id", textOrEmpty(ev, "task_id"));
+                m.put("machine", textOrEmpty(ev, "machine"));
+                m.put("start_dt", textOrEmpty(ev, "start_dt"));
+                m.put("end_dt", textOrEmpty(ev, "end_dt"));
+                m.put("op", textOrEmpty(ev, "op"));
+                rows.add(m);
+            }
+            stage3EquipmentResultTable.setItems(FXCollections.observableArrayList(rows));
+        } catch (Exception e) {
+            clearStage3EquipmentResultTable();
+            if (shell != null) {
+                shell.appendLog("[dispatch-editor] stage3 equipment checkpoint read failed: " + e.getMessage());
+            }
+        }
+    }
+
+    private static String textOrEmpty(JsonNode n, String field) {
+        JsonNode v = n.get(field);
+        if (v == null || v.isNull()) {
+            return "";
+        }
+        return v.asText("");
+    }
+
+    private void loadStage3PeopleShortageIntoTable(Path shortageJson) {
+        if (stage3PeopleResultTable == null) {
+            return;
+        }
+        if (shortageJson == null || !Files.isRegularFile(shortageJson)) {
+            clearStage3PeopleResultTable();
+            return;
+        }
+        try {
+            JsonNode root = STAGE3_RESULT_JSON.readTree(Files.readString(shortageJson, StandardCharsets.UTF_8));
+            List<Map<String, String>> rows = new ArrayList<>();
+            appendShortageNodes(rows, root.get("op_shortage"), "OP不足");
+            appendShortageNodes(rows, root.get("as_shortage"), "AS不足");
+            JsonNode dq = root.get("dispatch_qty_shortfall");
+            if (dq != null && dq.isArray()) {
+                for (JsonNode x : dq) {
+                    if (x == null || !x.isObject()) {
+                        continue;
+                    }
+                    Map<String, String> m = new LinkedHashMap<>();
+                    m.put("kind", "数量未達");
+                    m.put("task_id", textOrEmpty(x, "task_id"));
+                    m.put("date", textOrEmpty(x, "dispatch_date"));
+                    String note = textOrEmpty(x, "note");
+                    String tgt = textOrEmpty(x, "target_m");
+                    String done = textOrEmpty(x, "done_m");
+                    m.put("detail", "target=" + tgt + " done=" + done + " " + note);
+                    rows.add(m);
+                }
+            }
+            stage3PeopleResultTable.setItems(FXCollections.observableArrayList(rows));
+        } catch (Exception e) {
+            clearStage3PeopleResultTable();
+            if (shell != null) {
+                shell.appendLog("[dispatch-editor] stage3 people shortage read failed: " + e.getMessage());
+            }
+        }
+    }
+
+    private static void appendShortageNodes(List<Map<String, String>> rows, JsonNode arr, String kind) {
+        if (arr == null || !arr.isArray()) {
+            return;
+        }
+        for (JsonNode x : arr) {
+            if (x == null || !x.isObject()) {
+                continue;
+            }
+            Map<String, String> m = new LinkedHashMap<>();
+            m.put("kind", kind);
+            m.put("task_id", textOrEmpty(x, "task_id"));
+            m.put("date", textOrEmpty(x, "date"));
+            String reason = textOrEmpty(x, "reason");
+            String proc = textOrEmpty(x, "process");
+            String mn = textOrEmpty(x, "machine_name");
+            m.put("detail", reason + " / " + proc + " / " + mn);
+            rows.add(m);
+        }
+    }
+
+    private void refreshStage3ResultTablesAfterTrial(String phase, Path shortageJson) {
+        if ("equipment".equals(phase) || "both".equals(phase)) {
+            loadStage3EquipmentCheckpointIntoTable();
+        } else {
+            clearStage3EquipmentResultTable();
+        }
+        if ("people".equals(phase) || "both".equals(phase)) {
+            loadStage3PeopleShortageIntoTable(shortageJson);
+        } else {
+            clearStage3PeopleResultTable();
+        }
     }
 
     private static Optional<Double> pickMoveQuantity(Window owner, double max) {

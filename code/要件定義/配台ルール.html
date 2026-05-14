@@ -160,6 +160,7 @@
       <li><strong>指定数量</strong>: タイムライン上の加工数量は <strong>依頼NO×機械名の合計</strong> が入力 JSON と一致することを検証する（不一致時は <code>PlanningValidationError</code>）。目標メートル未達は <code>dispatch_qty_shortfall</code> で別途一覧。</li>
       <li><strong>機械カレンダー</strong>（マスタ「機械カレンダー」）: <code>*</code> / <code>＊</code> / <code>※</code> のセルのみ占有（ブロック）。<strong>空セル</strong>は、当該時間に<strong>スロット行（列0）</strong>がある場合に限り配台可能。<strong>シートにスロット行が無い時刻</strong>（工場計画窓内）は配台不可としてブロック。</li>
       <li><strong>人員不足</strong>: <code>op_shortage</code>（フォーム候補が必要人数に足りない）と <code>as_shortage</code>（候補人数は足りるが組み合わせで割当不可）を区別。</li>
+      <li><strong>段階3 二相（案B・任意）</strong>: <span class="file">dispatch_interactive_trial.py</span> の<strong>第2引数</strong>に <code>equipment</code> / <code>people</code> / <code>both</code> を渡し、<code>PM_AI_STAGE3_TWO_PHASE=1</code>（または API で二相フラグ）で有効化。<strong>設備フェイズ</strong>は仮想チームにより機械占有・日次始業準備・<strong>工場稼働枠（メイン A12/B12）内の共通休憩</strong>のみを見る（人別休憩・勤務終了・終業直前デファーの人起因は見ない）。<strong>人割当フェイズ</strong>は <code>stage3_equipment_checkpoint.json</code> を読み、プレースホルダ OP を実メンバーへ置換（開始・終了は不変）。<strong>定常（A15 等）</strong>と工場稼働枠を混同しない。§B-2 完全二相は段階2と同一経路を設備フェイズでも共有。</li>
     </ul>
   </section>
 

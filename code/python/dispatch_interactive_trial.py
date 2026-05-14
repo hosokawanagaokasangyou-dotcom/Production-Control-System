@@ -42,7 +42,21 @@ def main() -> int:
         run_interactive_dispatch_trial_from_result_dispatch_json,
     )
 
-    code, shortage_path = run_interactive_dispatch_trial_from_result_dispatch_json(path)
+    s3_phase = None
+    s3_two = None
+    if len(sys.argv) >= 3:
+        s3_phase = sys.argv[2].strip().lower()
+        if s3_phase not in ("equipment", "people", "both"):
+            print(
+                "usage: dispatch_interactive_trial.py <path-to-result-dispatch.json> "
+                "[equipment|people|both]",
+                file=sys.stderr,
+            )
+            return 2
+        s3_two = True
+    code, shortage_path = run_interactive_dispatch_trial_from_result_dispatch_json(
+        path, stage3_phase=s3_phase, stage3_two_phase=s3_two
+    )
     if code != 0:
         return code
     if shortage_path is None:

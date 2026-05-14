@@ -48,7 +48,9 @@ public final class MainShellInnerTabCatalog {
             case DISPATCH_INTERACTIVE ->
                     List.of(
                             "\u30bf\u30b9\u30af\u00d7\u65e5\u4ed8",
-                            "\u5de5\u7a0b+\u6a5f\u68b0\u00d7\u65e5");
+                            "\u5de5\u7a0b+\u6a5f\u68b0\u00d7\u65e5",
+                            "\u6bb5\u968e3\u30fb\u8a2d\u5099\u30d5\u30a7\u30a4\u30ba\u7d50\u679c",
+                            "\u6bb5\u968e3\u30fb\u4eba\u5272\u5f53\u30d5\u30a7\u30a4\u30ba\u7d50\u679c");
             case ENV ->
                     List.of(
                             "\u74b0\u5883\u5909\u6570\u4e00\u89a7",

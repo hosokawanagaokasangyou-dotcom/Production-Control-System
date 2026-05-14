@@ -40,15 +40,33 @@ public final class ResultDispatchTrialPython {
             Map<String, String> extraUiEnv,
             Consumer<String> logLine)
             throws Exception {
+        return runTrial(jsonPath, pythonExe, pythonScriptDir, extraUiEnv, logLine, null);
+    }
+
+    /**
+     * @param stage3Phase {@code equipment} / {@code people} / {@code both} で段階3二相（案B）を有効化。{@code null}
+     *     で従来の単相試行。
+     */
+    public static String runTrial(
+            Path jsonPath,
+            Path pythonExe,
+            Path pythonScriptDir,
+            Map<String, String> extraUiEnv,
+            Consumer<String> logLine,
+            String stage3Phase)
+            throws Exception {
         Path script = pythonScriptDir.resolve("dispatch_interactive_trial.py");
         if (!Files.isRegularFile(script)) {
             throw new IllegalStateException("missing dispatch_interactive_trial.py in " + pythonScriptDir);
         }
-        ProcessBuilder pb =
-                new ProcessBuilder(
-                        pythonExe.toString(),
-                        script.toAbsolutePath().toString(),
-                        jsonPath.toAbsolutePath().toString());
+        java.util.ArrayList<String> cmd = new java.util.ArrayList<>();
+        cmd.add(pythonExe.toString());
+        cmd.add(script.toAbsolutePath().toString());
+        cmd.add(jsonPath.toAbsolutePath().toString());
+        if (stage3Phase != null && !stage3Phase.isBlank()) {
+            cmd.add(stage3Phase.trim().toLowerCase());
+        }
+        ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.directory(pythonScriptDir.toFile());
         pb.redirectErrorStream(true);
         PythonProcessRunner.mergeUiEnvIntoProcess(pb, extraUiEnv, pythonScriptDir);

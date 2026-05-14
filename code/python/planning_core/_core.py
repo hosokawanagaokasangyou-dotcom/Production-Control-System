@@ -97,6 +97,13 @@ _INTERACTIVE_TRIAL_OP_SHORTAGE: list[dict] = []
 _INTERACTIVE_TRIAL_AS_SHORTAGE: list[dict] = []
 # 試行終了時の _interactive_trial_meters_done のコピー（targets との突合用）
 _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT: dict[tuple[str, str, str, date], float] = {}
+# 直近の段階3二相（案B）メタ（不足 JSON 等へ載せる）
+_LAST_INTERACTIVE_STAGE3_META: dict = {}
+
+
+def interactive_stage3_last_run_meta_snapshot() -> dict:
+    """段階3二相の直近実行メタ（checkpoint パス・phase 等）。未実行時は空 dict。"""
+    return dict(_LAST_INTERACTIVE_STAGE3_META or {})
 
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
@@ -16125,6 +16132,269 @@ DEFAULT_BREAKS = [
     (time(12, 0), time(12, 50)),
     (time(14, 45), time(15, 0))
 ]
+
+# ---------------------------------------------------------------------------
+# 段階3（案B）二相化: 設備フェイズは仮想チーム＋工場共通休憩。人は後段で充足。
+# ---------------------------------------------------------------------------
+STAGE3_VIRTUAL_MEMBER_PREFIX = "__PM_AI_S3V__"
+STAGE3_EQUIPMENT_PLACEHOLDER_OP = "（段階3設備）"
+_STAGE3_EQUIPMENT_VIRTUAL_ACTIVE: bool = False
+
+
+def stage3_equipment_virtual_active() -> bool:
+    """True のとき _assign_one_roll_trial_order_flow は仮想チーム経路（設備のみ）を使う。"""
+    return _STAGE3_EQUIPMENT_VIRTUAL_ACTIVE
+
+
+def _set_stage3_equipment_virtual_active(v: bool) -> None:
+    global _STAGE3_EQUIPMENT_VIRTUAL_ACTIVE
+    _STAGE3_EQUIPMENT_VIRTUAL_ACTIVE = bool(v)
+
+
+def _is_stage3_virtual_team(team: tuple) -> bool:
+    if not team:
+        return False
+    return all(str(m).startswith(STAGE3_VIRTUAL_MEMBER_PREFIX) for m in team)
+
+
+def _factory_common_breaks_dt_for_calendar_date(day_d: date) -> list:
+    """
+    工場稼働日の暦日内における共通休憩（DEFAULT_BREAKS を A12/B12 由来の
+    DEFAULT_START_TIME / DEFAULT_END_TIME の窓にクリップした区間）。
+    人別勤怠の breaks_dt は使わない。
+    """
+    w0 = datetime.combine(day_d, DEFAULT_START_TIME)
+    w1 = datetime.combine(day_d, DEFAULT_END_TIME)
+    out: list = []
+    for bt, et in DEFAULT_BREAKS:
+        bs = datetime.combine(day_d, bt)
+        ee = datetime.combine(day_d, et)
+        if bs < w1 and ee > w0:
+            out.append((max(bs, w0), min(ee, w1)))
+    return merge_time_intervals(out)
+
+
+def _stage3_checkpoint_default_path(interactive_source_json: str | None) -> str:
+    base = (interactive_source_json or "").strip()
+    if base:
+        try:
+            return str(pathlib.Path(base).resolve().with_name("stage3_equipment_checkpoint.json"))
+        except Exception:
+            pass
+    return str(pathlib.Path.cwd() / "stage3_equipment_checkpoint.json")
+
+
+def _stage3_serialize_timeline_for_checkpoint(events: list) -> list:
+    out: list = []
+    for ev in events or []:
+        if not isinstance(ev, dict):
+            continue
+        row = dict(ev)
+        for k in ("start_dt", "end_dt"):
+            v = row.get(k)
+            if isinstance(v, datetime):
+                row[k] = v.isoformat(sep=" ", timespec="seconds")
+        d = row.get("date")
+        if isinstance(d, date):
+            row["date"] = d.isoformat()
+        br = row.get("breaks")
+        if isinstance(br, list):
+            row["breaks"] = [
+                (
+                    (x[0].isoformat(sep=" ", timespec="seconds"), x[1].isoformat(sep=" ", timespec="seconds"))
+                    if isinstance(x, (list, tuple))
+                    and len(x) == 2
+                    and isinstance(x[0], datetime)
+                    and isinstance(x[1], datetime)
+                    else x
+                )
+                for x in br
+            ]
+        out.append(row)
+    return out
+
+
+def _stage3_deserialize_timeline_from_checkpoint(rows: list) -> list:
+    out: list = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        ev = dict(row)
+        for k in ("start_dt", "end_dt"):
+            v = ev.get(k)
+            if isinstance(v, str) and v.strip():
+                try:
+                    ev[k] = datetime.fromisoformat(v.replace(" ", "T", 1))
+                except Exception:
+                    try:
+                        ev[k] = pd.to_datetime(v, errors="coerce")
+                        if hasattr(ev[k], "to_pydatetime"):
+                            ev[k] = ev[k].to_pydatetime()
+                    except Exception:
+                        pass
+        d = ev.get("date")
+        if isinstance(d, str) and d.strip():
+            try:
+                ev["date"] = date.fromisoformat(d[:10])
+            except Exception:
+                pass
+        br = ev.get("breaks")
+        if isinstance(br, list):
+            nb: list = []
+            for x in br:
+                if (
+                    isinstance(x, (list, tuple))
+                    and len(x) == 2
+                    and isinstance(x[0], str)
+                    and isinstance(x[1], str)
+                ):
+                    try:
+                        a = datetime.fromisoformat(x[0].replace(" ", "T", 1))
+                        b = datetime.fromisoformat(x[1].replace(" ", "T", 1))
+                        nb.append((a, b))
+                    except Exception:
+                        pass
+                elif isinstance(x, (list, tuple)) and len(x) == 2:
+                    nb.append(tuple(x))
+            ev["breaks"] = merge_time_intervals(nb) if nb else []
+        out.append(ev)
+    return out
+
+
+def _stage3_write_equipment_checkpoint(
+    path: str,
+    *,
+    timeline_events: list,
+    task_queue: list,
+) -> None:
+    rem: dict[str, float] = {}
+    for t in task_queue or []:
+        tid = str(t.get("task_id") or "").strip()
+        if not tid:
+            continue
+        rem[tid] = float(t.get("remaining_units") or 0.0)
+    payload = {
+        "format_version": 1,
+        "placeholder_op": STAGE3_EQUIPMENT_PLACEHOLDER_OP,
+        "timeline_events": _stage3_serialize_timeline_for_checkpoint(timeline_events),
+        "remaining_units_by_task_id": rem,
+    }
+    pathlib.Path(path).write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    logging.info("段階3: 設備フェイズチェックポイントを書き出しました → %s", path)
+
+
+def _stage3_load_equipment_checkpoint(path: str) -> tuple[list, dict[str, float]]:
+    raw = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+    rows = raw.get("timeline_events") if isinstance(raw, dict) else None
+    rem = raw.get("remaining_units_by_task_id") if isinstance(raw, dict) else None
+    tl = _stage3_deserialize_timeline_from_checkpoint(rows if isinstance(rows, list) else [])
+    rmap: dict[str, float] = {}
+    if isinstance(rem, dict):
+        for k, v in rem.items():
+            try:
+                rmap[str(k)] = float(v)
+            except (TypeError, ValueError):
+                pass
+    return tl, rmap
+
+
+def _stage3_greedy_fill_placeholder_operators(
+    timeline_events: list,
+    task_queue: list,
+    skills_dict: dict,
+    members: list,
+    req_map: dict,
+    need_rules: list,
+    attendance_data: dict,
+) -> int:
+    """
+    タイムライン上の STAGE3_EQUIPMENT_PLACEHOLDER_OP を、スキル・need に沿って貪欲に実メンバーへ置換する。
+    開始・終了時刻は変更しない。戻り値: 置換したイベント件数。
+    """
+    if not timeline_events or not members:
+        return 0
+    tid_to_task = {str(t.get("task_id") or "").strip(): t for t in (task_queue or [])}
+
+    def _skill_meta(mem: str, machine_proc: str, machine_name: str) -> tuple:
+        srow = skills_dict.get(mem, {}) or {}
+        v = ""
+        if machine_proc and machine_name:
+            v = srow.get(f"{machine_proc}+{machine_name}", "")
+        elif machine_name:
+            v = srow.get(machine_name, "")
+        elif machine_proc:
+            v = srow.get(machine_proc, "")
+        return parse_op_as_skill_cell(v)
+
+    n_fill = 0
+    for ev in timeline_events:
+        if not isinstance(ev, dict):
+            continue
+        if ev.get("event_kind") not in (TIMELINE_EVENT_MACHINING, None, ""):
+            if ev.get("event_kind") is not None and ev.get("event_kind") != TIMELINE_EVENT_MACHINING:
+                continue
+        if str(ev.get("op") or "").strip() != STAGE3_EQUIPMENT_PLACEHOLDER_OP:
+            continue
+        tid = str(ev.get("task_id") or "").strip()
+        task = tid_to_task.get(tid)
+        if not task:
+            continue
+        machine = task.get("machine")
+        machine_name = str(task.get("machine_name") or "").strip()
+        machine_proc = str(machine or "").strip()
+        plan_ro = _plan_sheet_required_op_optional(task)
+        if TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY:
+            req_num, _ = resolve_need_required_op_explain(
+                machine, machine_name, task["task_id"], req_map, need_rules
+            )
+        else:
+            if plan_ro is not None:
+                req_num = plan_ro
+            else:
+                req_num, _ = resolve_need_required_op_explain(
+                    machine, machine_name, task["task_id"], req_map, need_rules
+                )
+        try:
+            req_num = max(1, int(req_num))
+        except (TypeError, ValueError):
+            req_num = 1
+        cal_d = ev.get("date")
+        if not isinstance(cal_d, date):
+            continue
+        day_att = attendance_data.get(cal_d) or {}
+        st = ev.get("start_dt")
+        ed = ev.get("end_dt")
+        if not isinstance(st, datetime) or not isinstance(ed, datetime):
+            continue
+        candidates: list[str] = []
+        for mem in members:
+            if mem not in day_att:
+                continue
+            if not day_att[mem].get("is_working"):
+                continue
+            role, _prio = _skill_meta(mem, machine_proc, machine_name)
+            if role != "OP":
+                continue
+            ws = day_att[mem].get("start_dt")
+            we = day_att[mem].get("end_dt")
+            if not isinstance(ws, datetime) or not isinstance(we, datetime):
+                continue
+            if ws <= st and we >= ed:
+                candidates.append(mem)
+        if len(candidates) < req_num:
+            continue
+        candidates.sort()
+        lead = candidates[0]
+        subs = candidates[1:req_num]
+        ev["op"] = lead
+        ev["sub"] = ", ".join(subs)
+        n_fill += 1
+    return n_fill
+
+
 # 終業直前デファー: ASSIGN_END_OF_DAY_DEFER_MINUTES が正のとき、team_end_limit までの残りがその分数以下で、
 # かつ remaining_units（切り上げ）が ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、その日の開始不可（None）。
 # 同じウィンドウで「必要収容ロール数ロール分以上は回せない」（収容が閾値未満）ときは
@@ -16364,7 +16634,8 @@ def _defer_team_start_past_prebreak_and_end_of_day(
         gap_end = ASSIGN_END_OF_DAY_DEFER_MINUTES
         rem_ceil = math.ceil(float(task.get("remaining_units") or 0))
         if (
-            not eod_same_request_continuation_exempt
+            not stage3_equipment_virtual_active()
+            and not eod_same_request_continuation_exempt
             and gap_end > 0
             and (team_end_limit - ts) <= timedelta(minutes=gap_end)
             and rem_ceil <= ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS
@@ -27050,6 +27321,8 @@ def _assign_one_roll_trial_order_flow(
     skill_meta_cache: dict = {}
 
     def skill_role_priority(mem):
+        if str(mem).startswith(STAGE3_VIRTUAL_MEMBER_PREFIX):
+            return ("OP", 100)
         if _gpo.get("ignore_skill_requirements"):
             return ("OP", 100)
         if mem not in skill_meta_cache:
@@ -27064,28 +27337,40 @@ def _assign_one_roll_trial_order_flow(
             skill_meta_cache[mem] = parse_op_as_skill_cell(v)
         return skill_meta_cache[mem]
 
-    capable_members = [m for m in avail_dt if skill_role_priority(m)[0] in ("OP", "AS")]
-    capable_members.sort(key=lambda mm: (skill_role_priority(mm)[1], mm))
-    capable_members = _filter_capable_members_b2_disjoint_teams(
-        task, task_queue, capable_members
-    )
+    if not stage3_equipment_virtual_active():
+        capable_members = [m for m in avail_dt if skill_role_priority(m)[0] in ("OP", "AS")]
+        capable_members.sort(key=lambda mm: (skill_role_priority(mm)[1], mm))
+        capable_members = _filter_capable_members_b2_disjoint_teams(
+            task, task_queue, capable_members
+        )
 
-    pref_raw = str(task.get("preferred_operator_raw") or "").strip()
-    op_today = [m for m in capable_members if skill_role_priority(m)[0] == "OP"]
-    pref_mem = (
-        _resolve_preferred_op_to_member(pref_raw, op_today, members)
-        if pref_raw
-        else None
-    )
+        pref_raw = str(task.get("preferred_operator_raw") or "").strip()
+        op_today = [m for m in capable_members if skill_role_priority(m)[0] == "OP"]
+        pref_mem = (
+            _resolve_preferred_op_to_member(pref_raw, op_today, members)
+            if pref_raw
+            else None
+        )
 
-    _gdp_must, _gdp_warns = _active_global_day_process_must_include(
-        _gpo, task, current_date, capable_members, members
-    )
+        _gdp_must, _gdp_warns = _active_global_day_process_must_include(
+            _gpo, task, current_date, capable_members, members
+        )
+    else:
+        capable_members = [
+            f"{STAGE3_VIRTUAL_MEMBER_PREFIX}{i}"
+            for i in range(max(1, int(req_num)))
+        ]
+        pref_mem = None
+        _gdp_must, _gdp_warns = (), []
+
     for _gw in _gdp_warns:
         logging.warning(_gw)
-    fixed_team_anchor = _merge_global_day_process_and_pref_anchor(
-        _gdp_must, pref_mem, capable_members
-    )
+    if not stage3_equipment_virtual_active():
+        fixed_team_anchor = _merge_global_day_process_and_pref_anchor(
+            _gdp_must, pref_mem, capable_members
+        )
+    else:
+        fixed_team_anchor = ()
     if _gdp_must:
         logging.info(
             "メイングローバル(日付×工程): task=%s date=%s 工程=%r フォーム必須=%s",
@@ -27248,75 +27533,125 @@ def _assign_one_roll_trial_order_flow(
                 ",".join(str(x) for x in team),
             )
             return None
-        if not all(m in daily_status for m in team):
-            _trace_assign(
-                "候補坴下: 当日勤怠キーなし team=%s",
-                ",".join(str(x) for x in team),
-            )
-            return None
-        team_start = max(avail_dt[m] for m in team)
-        if not _gpo.get("abolish_all_scheduling_limits"):
-            machine_free_dt = _mach_floor_eff
-            if team_start < machine_free_dt:
-                team_start = machine_free_dt
+        if _is_stage3_virtual_team(team):
+            team_start = _mach_floor_eff
+            if not _gpo.get("abolish_all_scheduling_limits"):
+                if team_start < machine_day_floor:
+                    team_start = machine_day_floor
             if team_start < day_floor:
                 team_start = day_floor
-        if b2_insp_ec_floor is not None and team_start < b2_insp_ec_floor:
-            team_start = b2_insp_ec_floor
-        if (
-            _sec_pair_gate_floor_dt is not None
-            and team_start < _sec_pair_gate_floor_dt
-        ):
-            team_start = _sec_pair_gate_floor_dt
-        team_end_limit = min(daily_status[m]["end_dt"] for m in team)
-        team_end_limit = _interactive_trial_relax_team_end_limit_to_eod(
-            team_end_limit, current_date
-        )
-        if team_start >= team_end_limit:
-            _trace_assign(
-                "候補坴下: 開始>=終業 team=%s start=%s end_limit=%s",
-                ",".join(str(x) for x in team),
-                team_start,
-                team_end_limit,
-            )
-            return None
-        team_breaks = []
-        for m in team:
-            team_breaks.extend(daily_status[m]["breaks_dt"])
-        team_breaks = merge_time_intervals(team_breaks)
-
-        avg_eff = sum(daily_status[m]["efficiency"] for m in team) / len(team)
-        if avg_eff <= 0:
-            avg_eff = 0.01
-        t_eff = parse_float_safe(task.get("task_eff_factor"), 1.0)
-        if t_eff <= 0:
-            t_eff = 1.0
-        eff_time_per_unit = (
-            _base_time_per_unit
-            / avg_eff
-            / t_eff
-            * _surplus_team_time_factor(rq_base, len(team), extra_max)
-        )
-        _defer_min_contig = max(1, int(math.ceil(float(eff_time_per_unit))))
-
-        def _refloor_trial_roll(ts: datetime) -> datetime:
-            ts = max(ts, max(avail_dt[m] for m in team))
-            if not _gpo.get("abolish_all_scheduling_limits"):
-                mf = _mach_floor_eff
-                if ts < mf:
-                    ts = mf
-                if ts < day_floor:
-                    ts = day_floor
-            if b2_insp_ec_floor is not None and ts < b2_insp_ec_floor:
-                ts = b2_insp_ec_floor
+            if b2_insp_ec_floor is not None and team_start < b2_insp_ec_floor:
+                team_start = b2_insp_ec_floor
             if (
                 _sec_pair_gate_floor_dt is not None
-                and ts < _sec_pair_gate_floor_dt
+                and team_start < _sec_pair_gate_floor_dt
             ):
-                ts = _sec_pair_gate_floor_dt
-            return ts
+                team_start = _sec_pair_gate_floor_dt
+            team_end_limit = datetime.combine(current_date, DEFAULT_END_TIME)
+            team_breaks = _factory_common_breaks_dt_for_calendar_date(current_date)
+            avg_eff = 1.0
+            t_eff = parse_float_safe(task.get("task_eff_factor"), 1.0)
+            if t_eff <= 0:
+                t_eff = 1.0
+            eff_time_per_unit = (
+                _base_time_per_unit / avg_eff / t_eff * _surplus_team_time_factor(rq_base, len(team), extra_max)
+            )
+            _defer_min_contig = max(1, int(math.ceil(float(eff_time_per_unit))))
 
-        _ts_before_defer = team_start
+            def _refloor_trial_roll(ts: datetime) -> datetime:
+                ts = max(ts, _mach_floor_eff)
+                if not _gpo.get("abolish_all_scheduling_limits"):
+                    mf = _mach_floor_eff
+                    if ts < mf:
+                        ts = mf
+                    if ts < day_floor:
+                        ts = day_floor
+                if b2_insp_ec_floor is not None and ts < b2_insp_ec_floor:
+                    ts = b2_insp_ec_floor
+                if (
+                    _sec_pair_gate_floor_dt is not None
+                    and ts < _sec_pair_gate_floor_dt
+                ):
+                    ts = _sec_pair_gate_floor_dt
+                return ts
+        else:
+            if not all(m in daily_status for m in team):
+                _trace_assign(
+                    "候補坴下: 当日勤怠キーなし team=%s",
+                    ",".join(str(x) for x in team),
+                )
+                return None
+            team_start = max(avail_dt[m] for m in team)
+            if not _gpo.get("abolish_all_scheduling_limits"):
+                machine_free_dt = _mach_floor_eff
+                if team_start < machine_free_dt:
+                    team_start = machine_free_dt
+                if team_start < day_floor:
+                    team_start = day_floor
+            if b2_insp_ec_floor is not None and team_start < b2_insp_ec_floor:
+                team_start = b2_insp_ec_floor
+            if (
+                _sec_pair_gate_floor_dt is not None
+                and team_start < _sec_pair_gate_floor_dt
+            ):
+                team_start = _sec_pair_gate_floor_dt
+            team_end_limit = min(daily_status[m]["end_dt"] for m in team)
+            team_end_limit = _interactive_trial_relax_team_end_limit_to_eod(
+                team_end_limit, current_date
+            )
+            if team_start >= team_end_limit:
+                _trace_assign(
+                    "候補坴下: 開始>=終業 team=%s start=%s end_limit=%s",
+                    ",".join(str(x) for x in team),
+                    team_start,
+                    team_end_limit,
+                )
+                return None
+            team_breaks = []
+            for m in team:
+                team_breaks.extend(daily_status[m]["breaks_dt"])
+            team_breaks = merge_time_intervals(team_breaks)
+
+            avg_eff = sum(daily_status[m]["efficiency"] for m in team) / len(team)
+            if avg_eff <= 0:
+                avg_eff = 0.01
+            t_eff = parse_float_safe(task.get("task_eff_factor"), 1.0)
+            if t_eff <= 0:
+                t_eff = 1.0
+            eff_time_per_unit = (
+                _base_time_per_unit
+                / avg_eff
+                / t_eff
+                * _surplus_team_time_factor(rq_base, len(team), extra_max)
+            )
+            _defer_min_contig = max(1, int(math.ceil(float(eff_time_per_unit))))
+
+            def _refloor_trial_roll(ts: datetime) -> datetime:
+                ts = max(ts, max(avail_dt[m] for m in team))
+                if not _gpo.get("abolish_all_scheduling_limits"):
+                    mf = _mach_floor_eff
+                    if ts < mf:
+                        ts = mf
+                    if ts < day_floor:
+                        ts = day_floor
+                if b2_insp_ec_floor is not None and ts < b2_insp_ec_floor:
+                    ts = b2_insp_ec_floor
+                if (
+                    _sec_pair_gate_floor_dt is not None
+                    and ts < _sec_pair_gate_floor_dt
+                ):
+                    ts = _sec_pair_gate_floor_dt
+                return ts
+
+        if _is_stage3_virtual_team(team):
+            if team_start >= team_end_limit:
+                _trace_assign(
+                    "候補坴下(段階3設備): 開始>=工場終業 team=%s start=%s end_limit=%s",
+                    ",".join(str(x) for x in team),
+                    team_start,
+                    team_end_limit,
+                )
+                return None
         team_start_d = _defer_team_start_past_prebreak_and_end_of_day(
             task,
             team,
@@ -27365,21 +27700,22 @@ def _assign_one_roll_trial_order_flow(
             if _rem_eod_ceil > 0
             else int(ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS)
         )
-        if _eod_reject_capacity_units_below_threshold(
-            _trial_units_cap,
-            team_start,
-            team_end_limit,
-            eod_same_request_continuation_exempt=_eod_cont_exempt,
-            remaining_units_ceil=_rem_eod_ceil,
-        ):
-            _trace_assign(
-                "候補坴下: 終業直後で当日坎容ロール数は閾値未満 team=%s cap=%s th=%s start=%s",
-                ",".join(str(x) for x in team),
+        if not stage3_equipment_virtual_active():
+            if _eod_reject_capacity_units_below_threshold(
                 _trial_units_cap,
-                _eod_eff_th,
                 team_start,
-            )
-            return None
+                team_end_limit,
+                eod_same_request_continuation_exempt=_eod_cont_exempt,
+                remaining_units_ceil=_rem_eod_ceil,
+            ):
+                _trace_assign(
+                    "候補坴下: 終業直後で当日坎容ロール数は閾値未満 team=%s cap=%s th=%s start=%s",
+                    ",".join(str(x) for x in team),
+                    _trial_units_cap,
+                    _eod_eff_th,
+                    team_start,
+                )
+                return None
         _contig = _contiguous_work_minutes_until_next_break_or_limit(
             team_start, team_breaks, team_end_limit
         )
@@ -27456,6 +27792,31 @@ def _assign_one_roll_trial_order_flow(
                     "changeover_segments": _co_segs,
                     "startup_skill_role_priority": skill_role_priority,
                 }
+
+    # 段階3 設備フェイズ（仮想チーム）: 組合せ探索を省略し単一チームで一発評価
+    if stage3_equipment_virtual_active():
+        vt = tuple(capable_members)
+        if len(vt) < rq_base:
+            return None
+        got = _one_roll_from_team(vt)
+        if got is None:
+            return None
+        return {
+            **got,
+            "extra_max": extra_max,
+            "rq_base": rq_base,
+            "need_src_line": need_src_line,
+            "extra_src_line": extra_src_line,
+            "machine": machine,
+            "machine_name": machine_name,
+            "eq_line": eq_line,
+            "req_num": req_num,
+            "max_team_size": max_team_size,
+            "combo_sheet_row_id": None,
+            "combo_preset_team": None,
+            "changeover_segments": _co_segs,
+            "startup_skill_role_priority": skill_role_priority,
+        }
 
     team_candidates: list[dict] = []
     # 組み合わせ表プリセットは「成立したら坳 return」せう」組み合わせ探索とまとめで
@@ -28346,8 +28707,12 @@ def _trial_order_first_schedule_pass(
             if done_units <= 0:
                 break
             best_team = tuple(res["team"])
-            lead_op = res["lead_op"]
-            sub_members = [m for m in best_team if m != lead_op]
+            if _is_stage3_virtual_team(best_team):
+                lead_op = STAGE3_EQUIPMENT_PLACEHOLDER_OP
+                sub_members = []
+            else:
+                lead_op = res["lead_op"]
+                sub_members = [m for m in best_team if m != lead_op]
             best_start = res["team_start"]
             best_end = res["actual_end_dt"]
             best_breaks = res["team_breaks"]
@@ -30447,15 +30812,20 @@ def _generate_plan_impl(
     interactive_dispatch_targets: dict | None = None,
     interactive_result_dispatch_json_rows: list | None = None,
     interactive_result_dispatch_json_columns: list | None = None,
+    interactive_stage3_two_phase: bool | None = None,
+    interactive_stage3_phase: str | None = None,
+    interactive_stage3_source_json: str | None = None,
+    interactive_stage3_checkpoint_path: str | None = None,
 ):
     # 配台トレース（設定シート A3:A26 のみ）はメンバー0人等で早期 return しても
     # execution_log に残るよご skills 読込より剝で確定・ログれる。
     global TRACE_SCHEDULE_TASK_IDS, DEBUG_DISPATCH_ONLY_TASK_IDS
-    global _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT
+    global _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT, _LAST_INTERACTIVE_STAGE3_META
     if interactive_relax_intraday or interactive_dispatch_targets is not None:
         _INTERACTIVE_TRIAL_OP_SHORTAGE.clear()
         _INTERACTIVE_TRIAL_AS_SHORTAGE.clear()
         _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT.clear()
+        _LAST_INTERACTIVE_STAGE3_META.clear()
     _wb_trace = _excel_plan_input_wb()
     _ids_from_sheet = _read_trace_schedule_task_ids_from_config_sheet(_wb_trace)
     TRACE_SCHEDULE_TASK_IDS = frozenset(
@@ -30923,8 +31293,69 @@ def _generate_plan_impl(
             _interactive_trial_pair_dates = _interactive_trial_pair_dates_from_targets(
                 interactive_dispatch_targets
             )
+    # 段階3（案B）二相: 設備フェイズのみ／人割当のみ／一括
+    _env_s3_two = (os.environ.get("PM_AI_STAGE3_TWO_PHASE") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    if interactive_stage3_two_phase is True:
+        _s3_two_eff = interactive_dispatch_targets is not None
+    elif interactive_stage3_two_phase is False:
+        _s3_two_eff = False
+    else:
+        _s3_two_eff = bool(interactive_dispatch_targets) and _env_s3_two
+    _s3_ph_raw = (
+        (interactive_stage3_phase or os.environ.get("PM_AI_STAGE3_PHASE") or "")
+        .strip()
+        .lower()
+    )
+    if _s3_two_eff and _s3_ph_raw not in ("equipment", "people", "both"):
+        _s3_ph_raw = "both"
+    elif not _s3_two_eff:
+        _s3_ph_raw = ""
+    _s3_ck = (interactive_stage3_checkpoint_path or "").strip() or (
+        (os.environ.get("PM_AI_STAGE3_CHECKPOINT") or "").strip()
+    )
+    if _s3_two_eff and not _s3_ck:
+        _s3_ck = _stage3_checkpoint_default_path(interactive_stage3_source_json)
+    _skip_s3_main_dispatch_loop = False
+    if _s3_two_eff and _s3_ph_raw == "people":
+        if not _s3_ck:
+            raise PlanningValidationError(
+                "段階3 人割当フェイズ: チェックポイントパスが未設定です（PM_AI_STAGE3_CHECKPOINT または source JSON からの既定名）。"
+            )
+        _p_ck = pathlib.Path(_s3_ck)
+        if not _p_ck.is_file():
+            raise PlanningValidationError(
+                "段階3 人割当フェイズ: 設備フェイズのチェックポイントが見つかりません: "
+                + str(_p_ck.resolve())
+            )
+        tl_load, rem_load = _stage3_load_equipment_checkpoint(str(_p_ck))
+        timeline_events[:] = tl_load
+        for _tt in task_queue:
+            _tid_ck = str(_tt.get("task_id") or "").strip()
+            if _tid_ck in rem_load:
+                _tt["remaining_units"] = float(rem_load[_tid_ck])
+        _set_stage3_equipment_virtual_active(False)
+        _skip_s3_main_dispatch_loop = True
+        logging.info(
+            "段階3: 人割当フェイズ — メイン配台ループをスキップしチェックポイントを復元しました。"
+        )
+    elif _s3_two_eff and _s3_ph_raw in ("equipment", "both"):
+        _set_stage3_equipment_virtual_active(True)
+        logging.info(
+            "段階3: 設備フェイズ（仮想チーム）を有効化しました（phase=%s）。",
+            _s3_ph_raw,
+        )
+    else:
+        _set_stage3_equipment_virtual_active(False)
+
     _outer_retry_round = 0
     while True:
+        if _skip_s3_main_dispatch_loop:
+            break
         _dispatch_trace_begin_outer_round(_outer_retry_round)
         _need_headcount_logged_orders: set = set()
         if _outer_retry_round > 0:
@@ -32363,6 +32794,49 @@ def _generate_plan_impl(
                     "§B-2/§B-3 リワインド: EC 完走後に検査＝巻返しのみ日付先頭から再配台しました（timeline_events を占有テーブルとして利用）。"
                 )
             break
+
+    _set_stage3_equipment_virtual_active(False)
+
+    if (
+        _s3_two_eff
+        and _s3_ck
+        and _s3_ph_raw in ("equipment", "both")
+        and not _skip_s3_main_dispatch_loop
+    ):
+        _stage3_write_equipment_checkpoint(
+            str(pathlib.Path(_s3_ck).resolve()),
+            timeline_events=timeline_events,
+            task_queue=task_queue,
+        )
+
+    _s3_fill_n = 0
+    if _s3_two_eff and _s3_ph_raw in ("people", "both"):
+        _s3_fill_n = int(
+            _stage3_greedy_fill_placeholder_operators(
+                timeline_events,
+                task_queue,
+                skills_dict,
+                members,
+                req_map,
+                need_rules,
+                attendance_data,
+            )
+        )
+        if _s3_fill_n > 0:
+            logging.info(
+                "段階3: プレースホルダOPを %s 件の加工イベントで実メンバーへ置換しました。",
+                _s3_fill_n,
+            )
+
+    if interactive_dispatch_targets is not None:
+        _LAST_INTERACTIVE_STAGE3_META = {
+            "two_phase": bool(_s3_two_eff),
+            "phase": _s3_ph_raw,
+            "checkpoint_path": _s3_ck or "",
+            "people_fill_events": int(_s3_fill_n) if _s3_two_eff else 0,
+        }
+    else:
+        _LAST_INTERACTIVE_STAGE3_META = {}
 
     if TRACE_SCHEDULE_TASK_IDS:
         for _tt in TRACE_SCHEDULE_TASK_IDS:
