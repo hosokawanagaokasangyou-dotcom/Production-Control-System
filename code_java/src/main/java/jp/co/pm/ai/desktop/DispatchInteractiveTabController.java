@@ -88,6 +88,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialConsistency;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialShortages;
@@ -3023,13 +3024,88 @@ public final class DispatchInteractiveTabController {
         }
     }
 
+    private static String agentDebugSessionIdPreferEnv() {
+        String a = System.getenv("CURSOR_DEBUG_SESSION_ID");
+        if (a != null && !a.isBlank()) {
+            return a.trim();
+        }
+        String b = System.getenv("PM_AI_AGENT_DEBUG_SESSION_ID");
+        if (b != null && !b.isBlank()) {
+            return b.trim();
+        }
+        return AgentDebugLog.DEFAULT_SESSION_ID;
+    }
+
+    /**
+     * 設備フェイズ結果表のデータ源（チェックポイント JSON）と JR260502 行の有無を NDJSON に残す。
+     * 数量未達は別 JSON 由来のため、表に無い／未達に出るの切り分けに使う。
+     */
+    private void agentLogStage3EquipmentTableLoad(
+            Path checkpointPath,
+            boolean fileExists,
+            int rawTimelineArrayLen,
+            List<Map<String, String>> masterRows,
+            int filteredRowsSize,
+            String filterFieldText) {
+        try {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put(
+                    "checkpointPath",
+                    checkpointPath != null ? checkpointPath.toAbsolutePath().toString() : "");
+            data.put("checkpointFileExists", fileExists);
+            data.put("rawTimelineArrayLen", rawTimelineArrayLen);
+            data.put("masterRowsBuilt", masterRows.size());
+            data.put("filteredRowsSize", filteredRowsSize);
+            data.put("filterFieldText", filterFieldText != null ? filterFieldText : "");
+
+            int jr = 0;
+            int jrSlit = 0;
+            int jrSec = 0;
+            List<String> sampleMac = new ArrayList<>();
+            for (Map<String, String> m : masterRows) {
+                String tid = m.getOrDefault("task_id", "");
+                if (!tid.contains("JR260502")) {
+                    continue;
+                }
+                jr++;
+                String mac = m.getOrDefault("machine", "");
+                if (mac.contains("スリット")) {
+                    jrSlit++;
+                }
+                if (mac.contains("SEC")) {
+                    jrSec++;
+                }
+                if (sampleMac.size() < 10) {
+                    sampleMac.add(mac.length() > 100 ? mac.substring(0, 100) + "…" : mac);
+                }
+            }
+            data.put("jr260502_rowsInMaster", jr);
+            data.put("jr260502_machineFieldContainsSlit", jrSlit);
+            data.put("jr260502_machineFieldContainsSec", jrSec);
+            data.put("jr260502_sampleMachineFields", sampleMac);
+
+            Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+            AgentDebugLog.appendStructured(
+                    ui,
+                    agentDebugSessionIdPreferEnv(),
+                    "H6",
+                    "DispatchInteractiveTabController.java:loadStage3EquipmentCheckpointIntoTable",
+                    "stage3_equipment_table_source",
+                    data);
+        } catch (Throwable ignored) {
+            // debug-only
+        }
+    }
+
     private void loadStage3EquipmentCheckpointIntoTable() {
         if (stage3EquipmentTablesHost == null) {
             return;
         }
         ensureStage3EquipmentFilteredModel();
         Path ck = resolveStage3EquipmentCheckpointPath();
+        String filterSnap = stage3EquipmentFilterField != null ? stage3EquipmentFilterField.getText() : "";
         if (!Files.isRegularFile(ck)) {
+            agentLogStage3EquipmentTableLoad(ck, false, 0, List.of(), 0, filterSnap);
             clearStage3EquipmentResultTable();
             return;
         }
@@ -3037,6 +3113,7 @@ public final class DispatchInteractiveTabController {
             JsonNode root = STAGE3_RESULT_JSON.readTree(Files.readString(ck, StandardCharsets.UTF_8));
             JsonNode arr = root.get("timeline_events");
             if (arr == null || !arr.isArray()) {
+                agentLogStage3EquipmentTableLoad(ck, true, 0, List.of(), 0, filterSnap);
                 clearStage3EquipmentResultTable();
                 return;
             }
@@ -3057,7 +3134,11 @@ public final class DispatchInteractiveTabController {
             }
             stage3EquipmentMasterRows.setAll(rows);
             applyStage3EquipmentRowFilter();
+            int filtered =
+                    stage3EquipmentFilteredRows != null ? stage3EquipmentFilteredRows.size() : -1;
+            agentLogStage3EquipmentTableLoad(ck, true, arr.size(), rows, filtered, filterSnap);
         } catch (Exception e) {
+            agentLogStage3EquipmentTableLoad(ck, true, -1, List.of(), -1, filterSnap);
             clearStage3EquipmentResultTable();
             if (shell != null) {
                 shell.appendLog("[dispatch-editor] stage3 equipment checkpoint read failed: " + e.getMessage());

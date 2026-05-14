@@ -16285,6 +16285,46 @@ def _stage3_write_equipment_checkpoint(
         encoding="utf-8",
     )
     logging.info("段階3: 設備フェイズチェックポイントを書き出しました → %s", path)
+    # #region agent log
+    try:
+        _jr_all = 0
+        _jr_mach = 0
+        _jr_sl = 0
+        _jr_sec = 0
+        _mach_samples: list[str] = []
+        for ev in timeline_events or []:
+            if not isinstance(ev, dict):
+                continue
+            tid = str(ev.get("task_id") or "").strip()
+            if "JR260502" not in tid:
+                continue
+            _jr_all += 1
+            if not _is_machining_timeline_event(ev):
+                continue
+            _jr_mach += 1
+            m = str(ev.get("machine") or "")
+            if "スリット" in m:
+                _jr_sl += 1
+            if "SEC" in m:
+                _jr_sec += 1
+            if len(_mach_samples) < 10:
+                _mach_samples.append(m[:120])
+        append_interactive_core_probe(
+            "H5",
+            "_core.py:_stage3_write_equipment_checkpoint",
+            "checkpoint_jr260502_timeline_slice",
+            {
+                "checkpoint_path": path,
+                "jr260502_events_all_kinds": _jr_all,
+                "jr260502_events_machining_or_blank_kind": _jr_mach,
+                "jr260502_machine_field_contains_slit": _jr_sl,
+                "jr260502_machine_field_contains_sec": _jr_sec,
+                "machine_samples": _mach_samples,
+            },
+        )
+    except Exception:
+        pass
+    # #endregion
 
 
 def _stage3_load_equipment_checkpoint(path: str) -> tuple[list, dict[str, float]]:
