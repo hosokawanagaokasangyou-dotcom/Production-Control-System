@@ -29284,10 +29284,110 @@ def _timeline_event_team_names_set(ev: dict) -> set:
     return names
 
 
-def _task_dict_for_timeline_event(ev: dict, task_queue: list) -> dict | None:
+def _timeline_event_fallback_task_from_want(
+    ev: dict, task_queue: list, want: set | None, tid_n: str
+) -> dict | None:
+    """
+    task_queue が依頼NO 1 行に潰れているとき、want の (工程, 機械) とイベントの設備キーで行を復元する。
+    """
+    if not want:
+        return None
+    ev_eq_n = _normalize_equipment_match_key(str(ev.get("machine") or ""))
+    ev_oc_n = _normalize_equipment_match_key(str(ev.get("machine_occupancy_key") or ""))
+    best_k = None
+    best_sc = -1
+    for k in want:
+        if not isinstance(k, tuple) or len(k) != 4:
+            continue
+        if _interactive_norm_cell(str(k[0])) != tid_n:
+            continue
+        km = _interactive_norm_cell(str(k[2]))
+        kmnk = _normalize_equipment_match_key(km)
+        sc = 0
+        if kmnk and (
+            kmnk == ev_eq_n
+            or kmnk == ev_oc_n
+            or (ev_eq_n and (kmnk in ev_eq_n or ev_eq_n in kmnk))
+            or (ev_oc_n and (kmnk in ev_oc_n or ev_oc_n in kmnk))
+        ):
+            sc += 80
+        if sc > best_sc:
+            best_sc = sc
+            best_k = k
+    if best_k is None or best_sc < 1:
+        return None
+    proc_t = str(best_k[1])
+    for t in task_queue:
+        if _interactive_norm_cell(str(t.get("task_id") or "")) != tid_n:
+            continue
+        if _interactive_dispatch_target_process_key(t.get("machine")) == proc_t:
+            return t
+    for t in task_queue:
+        if _interactive_norm_cell(str(t.get("task_id") or "")) != tid_n:
+            continue
+        out = dict(t)
+        out["machine"] = proc_t
+        out["machine_name"] = str(best_k[2])
+        return out
+    return None
+
+
+def _timeline_event_task_match_score(
+    ev: dict, t: dict, want: set | None, tid_n: str
+) -> int:
+    """タイムライン加工イベント ev とタスク行 t の適合度（高いほど同一行とみなしやすい）。"""
+    eq = str(ev.get("machine") or "").strip()
+    t_eq = str(t.get("equipment_line_key") or t.get("machine") or "").strip()
+    sc = 0
+    if t_eq and t_eq == eq:
+        sc += 100
+    ne, nt = _normalize_equipment_match_key(eq), _normalize_equipment_match_key(t_eq)
+    if ne and nt and ne == nt:
+        sc += 50
+    ev_occ = _normalize_equipment_match_key(str(ev.get("machine_occupancy_key") or ""))
+    if ev_occ:
+        try:
+            t_occ = str(_machine_occupancy_key_resolve(t, t_eq) or "").strip()
+        except Exception:
+            t_occ = ""
+        if _normalize_equipment_match_key(t_occ) == ev_occ:
+            sc += 80
+    mn = str(t.get("machine_name") or "").strip()
+    nm = _normalize_equipment_match_key(mn)
+    if ne and nm:
+        if ne == nm:
+            sc += 40
+        elif ne in nm or nm in ne:
+            sc += 18
+    if want:
+        tp = _interactive_dispatch_target_process_key(t.get("machine"))
+        for k in want:
+            if not isinstance(k, tuple) or len(k) != 4:
+                continue
+            if _interactive_norm_cell(str(k[0])) != tid_n:
+                continue
+            if str(k[1]) != tp:
+                continue
+            km = _interactive_norm_cell(str(k[2]))
+            kmnk = _normalize_equipment_match_key(km)
+            if kmnk and (
+                kmnk == ne
+                or kmnk == ev_occ
+                or (ne and (kmnk in ne or ne in kmnk))
+                or (ev_occ and (kmnk in ev_occ or ev_occ in kmnk))
+            ):
+                sc += 75
+                break
+    return sc
+
+
+def _task_dict_for_timeline_event(
+    ev: dict, task_queue: list, want: set | None = None
+) -> dict | None:
     tid = str(ev.get("task_id") or "").strip()
     if not tid:
         return None
+    tid_n = _interactive_norm_cell(tid)
     eq = str(ev.get("machine") or "").strip()
     ev_occ = str(ev.get("machine_occupancy_key") or "").strip()
     norm_ev_occ = _normalize_equipment_match_key(ev_occ) if ev_occ else ""
@@ -29295,7 +29395,7 @@ def _task_dict_for_timeline_event(ev: dict, task_queue: list) -> dict | None:
 
     candidates: list[dict] = []
     for t in task_queue:
-        if str(t.get("task_id") or "").strip() != tid:
+        if _interactive_norm_cell(str(t.get("task_id") or "")) != tid_n:
             continue
         candidates.append(t)
     if not candidates:
@@ -29321,8 +29421,37 @@ def _task_dict_for_timeline_event(ev: dict, task_queue: list) -> dict | None:
             if t_occ and _normalize_equipment_match_key(t_occ) == norm_ev_occ:
                 return t
 
-    if len(candidates) == 1:
+    multi_proc = False
+    if want:
+        pst = set()
+        for k in want:
+            if isinstance(k, tuple) and len(k) == 4:
+                if _interactive_norm_cell(str(k[0])) == tid_n:
+                    pst.add(str(k[1]))
+        multi_proc = len(pst) > 1
+    else:
+        neqs = {
+            _normalize_equipment_match_key(
+                str(c.get("equipment_line_key") or c.get("machine") or "")
+            )
+            for c in candidates
+        }
+        neqs.discard("")
+        multi_proc = len(neqs) > 1
+
+    scored = [(_timeline_event_task_match_score(ev, t, want, tid_n), t) for t in candidates]
+    scored.sort(key=lambda x: -x[0])
+    best_sc, best_t = scored[0]
+
+    if best_sc >= 50:
+        return best_t
+    if len(candidates) == 1 and not multi_proc:
         return candidates[0]
+    fb = _timeline_event_fallback_task_from_want(ev, task_queue, want, tid_n)
+    if fb is not None:
+        return fb
+    if best_sc > 0 and not multi_proc:
+        return best_t
     return None
 
 
@@ -29361,7 +29490,7 @@ def _interactive_trial_recompute_meters_done_from_timeline(
     _mach_evs.sort(key=_ev_sort_key)
     for ev in _mach_evs:
         tid = _interactive_norm_cell(ev.get("task_id"))
-        tsk = _task_dict_for_timeline_event(ev, task_queue)
+        tsk = _task_dict_for_timeline_event(ev, task_queue, want)
         if tsk is None:
             # #region agent log
             _sk_no_task += 1
