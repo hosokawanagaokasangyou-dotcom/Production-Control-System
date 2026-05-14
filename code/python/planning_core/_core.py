@@ -15986,6 +15986,9 @@ def run_stage1_extract():
                 rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = float(_raw_dim_m)
             else:
                 rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = "不明"
+        _raw_floor_s1 = _raw_roll_unit_m_resolved_for_dispatch_qty(rec)
+        if _raw_floor_s1 > 1e-12 and _qty_total_s1 + 1e-9 < _raw_floor_s1:
+            _qty_total_s1 = max(_qty_total_s1, _raw_floor_s1)
         if TASK_COL_QTY in rec:
             rec[TASK_COL_QTY] = _qty_total_s1
         # 工程名 + 機械名 を“因孝”として表示用に追加（後段は計算キーにも使用）
