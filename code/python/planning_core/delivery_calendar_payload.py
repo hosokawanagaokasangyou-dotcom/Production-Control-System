@@ -15,7 +15,6 @@ from typing import Any
 import pandas as pd
 
 import planning_core._core as core
-from planning_core.agent_debug_ndjson import append_structured as _agent_debug_append_structured
 from planning_core.dispatch_workspace import (
     DEFAULT_ACTUAL_DETAIL_SOURCE_DIR,
     DEFAULT_TASK_INPUT_SOURCE_DIR,
@@ -64,42 +63,6 @@ def _pm_ai_progress(pct: int) -> None:
     """Emit one ASCII line for JavaFX ProgressBar (not JSON). Uses merged child stdout."""
     p = max(0, min(100, int(pct)))
     print(f"PM_AI_PROGRESS {p}", flush=True)
-
-
-# #region agent log
-_AGENT_DEBUG_SESSION_ID = (
-    (os.environ.get("PM_AI_AGENT_DEBUG_SESSION_ID") or "21d166").strip() or "21d166"
-)
-
-
-def _delivery_debug_target_tid() -> str | None:
-    """Set ``PM_AI_DELIVERY_CALENDAR_DEBUG_TID`` (e.g. JR560502) to emit NDJSON for that task id.
-
-    Must appear in the JavaFX **環境変数** tab: ``PythonProcessRunner`` strips OS-inherited ``PM_AI_*``
-    unless the same key is present in the merged child env.
-    """
-    raw = (os.environ.get("PM_AI_DELIVERY_CALENDAR_DEBUG_TID") or "").strip()
-    if not raw:
-        return None
-    return core.planning_task_id_str_from_scalar(raw) or raw
-
-
-def _agent_delivery_ndjson(
-    hypothesis_id: str, location: str, message: str, data: dict[str, Any]
-) -> None:
-    try:
-        _agent_debug_append_structured(
-            _AGENT_DEBUG_SESSION_ID,
-            hypothesis_id,
-            location,
-            message,
-            data,
-        )
-    except Exception:
-        pass
-
-
-# #endregion
 
 
 def _plan_row_dispatch_excluded(row: Any) -> bool:
@@ -935,17 +898,6 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
     try:
         _pm_ai_progress(2)
         df_plan = _read_plan_tasks_from_processing_plan_env()
-        _dtid = _delivery_debug_target_tid()
-        if _dtid:
-            _agent_delivery_ndjson(
-                "H0",
-                "delivery_calendar_payload:build_delivery_calendar_payload",
-                "debug_tid_active",
-                {
-                    "tid": _dtid,
-                    "plan_row_count": int(len(df_plan)) if df_plan is not None else 0,
-                },
-            )
         pp = (os.environ.get(ENV_PROCESSING_PLAN_PATH) or "").strip()
         meta["processingPlanPath"] = pp
 
@@ -1039,28 +991,6 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             df_plan_for_buckets,
             dates_set,
         )
-        if _dtid and buckets_legacy:
-            for (bmk, bdk), parts in buckets_legacy.items():
-                same_tid_parts: list[tuple[str, float]] = []
-                for t, q in parts:
-                    bt = core.planning_task_id_str_from_scalar(t) or str(t).strip()
-                    if bt == _dtid:
-                        same_tid_parts.append((str(t), float(q)))
-                if not same_tid_parts:
-                    continue
-                if len(same_tid_parts) > 1:
-                    _agent_delivery_ndjson(
-                        "H2",
-                        "delivery_calendar_payload:after_buckets",
-                        "multiple_bucket_parts_same_mk_date_tid",
-                        {
-                            "mk": bmk,
-                            "date": bdk.isoformat(),
-                            "n_match": len(same_tid_parts),
-                            "pairs": same_tid_parts[:12],
-                            "n_all_parts": len(parts),
-                        },
-                    )
         _pm_ai_progress(52)
 
         actual_agg = _aggregate_daily_actual_qty_aladdin_max(
@@ -1079,28 +1009,6 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                 tid = core.planning_task_id_str_from_scalar(row.get(core.TASK_COL_TASK_ID))
                 if mk and tid:
                     plan_pairs.add((mk, tid))
-        if _dtid and df_plan is not None and len(df_plan) > 0:
-            for _, row in df_plan.iterrows():
-                tid = core.planning_task_id_str_from_scalar(row.get(core.TASK_COL_TASK_ID))
-                if tid != _dtid:
-                    continue
-                pmk = core._normalize_equipment_match_key(
-                    row.get(core.TASK_COL_MACHINE_NAME)
-                )
-                proc = str(row.get(core.TASK_COL_MACHINE) or "").strip()[:120]
-                exc = bool(core._plan_row_exclude_from_assignment(row))
-                _agent_delivery_ndjson(
-                    "H1",
-                    "delivery_calendar_payload:after_plan_pairs",
-                    "plan_df_row_for_tid",
-                    {
-                        "mk": pmk,
-                        "tid": tid,
-                        "process_name": proc,
-                        "exclude_dispatch": exc,
-                        "in_plan_pairs": (pmk, tid) in plan_pairs,
-                    },
-                )
 
         actual_pairs: set[tuple[str, str]] = set()
         for (mk, _d), tmap in actual_agg.items():
@@ -1128,17 +1036,6 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             }
             meta["deliveryCalendarEligiblePairsDroppedForExcludeDispatch"] = _ep_before_ex - len(
                 eligible_pairs
-            )
-        if _dtid:
-            _ep_for_tid = sorted(
-                [(m, t) for (m, t) in eligible_pairs if t == _dtid],
-                key=lambda z: (z[0], z[1]),
-            )
-            _agent_delivery_ndjson(
-                "H4",
-                "delivery_calendar_payload:after_eligible_pairs",
-                "eligible_machine_pairs_for_debug_tid",
-                {"tid": _dtid, "n_pairs": len(_ep_for_tid), "pairs": _ep_for_tid[:24]},
             )
         _pm_ai_progress(72)
 
@@ -1299,44 +1196,6 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                 td = core._format_qty_short(q_disp) if abs(q_disp) > 1e-12 else ""
                 cal_cells.append({"triple": {"p": tp, "a": ta, "d": td}})
 
-            if _dtid and tid == _dtid:
-                px = ""
-                excv: bool | None = None
-                if plan_row is not None:
-                    try:
-                        px = str(plan_row.get(core.TASK_COL_MACHINE) or "").strip()[:120]
-                        excv = bool(core._plan_row_exclude_from_assignment(plan_row))
-                    except Exception:
-                        px = "?"
-                qsum = sum(
-                    _qty_from_buckets_for_tid_proc(
-                        buckets_by_proc, mk, d, tid, proc_for_plan_qty
-                    )
-                    for d in sorted_dates
-                )
-                hproc = ""
-                try:
-                    if core.TASK_COL_MACHINE in left_headers:
-                        hproc = left_cells[left_headers.index(core.TASK_COL_MACHINE)]
-                except Exception:
-                    hproc = ""
-                _agent_delivery_ndjson(
-                    "H3",
-                    "delivery_calendar_payload:main_row",
-                    "emit_row",
-                    {
-                        "mk": mk,
-                        "tid": tid,
-                        "used_plan_row_fallback": used_plan_row_fallback,
-                        "process_from_plan_row_series": px,
-                        "exclude_from_plan_row_series": excv,
-                        "left_col_process_display": (hproc or "")[:120],
-                        "sum_p_qty_buckets": round(qsum, 6),
-                        "in_plan_pairs": (mk, tid) in plan_pairs,
-                        "in_actual_pairs": (mk, tid) in actual_pairs,
-                    },
-                )
-
             main_rows_out.append(
                 {
                     "kind": "data",
@@ -1390,42 +1249,6 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                 )
 
         _pm_ai_progress(96)
-
-        try:
-            n_plan_all = int(len(df_plan)) if df_plan is not None else 0
-            n_plan_buck = (
-                int(len(df_plan_for_buckets))
-                if df_plan_for_buckets is not None
-                else 0
-            )
-            _agent_delivery_ndjson(
-                "H5",
-                "delivery_calendar_payload:build_end",
-                "delivery_calendar_build_summary",
-                {
-                    "debugTidEnv": _dtid is not None,
-                    "planRowsAll": n_plan_all,
-                    "planRowsForBuckets": n_plan_buck,
-                    "eligiblePairs": len(eligible_pairs),
-                    "eligiblePairsDroppedExcludeDispatch": int(
-                        meta.get(
-                            "deliveryCalendarEligiblePairsDroppedForExcludeDispatch",
-                            0,
-                        )
-                    ),
-                    "planRowsExcludeDispatchYes": int(
-                        meta.get("deliveryCalendarPlanRowsExcludeDispatchYes", -1)
-                    ),
-                    "excludeRulesJsonPathSet": bool(
-                        (meta.get("deliveryCalendarExcludeRulesJsonPath") or "").strip()
-                    ),
-                    "mainDataRows": sum(
-                        1 for r in main_rows_out if r.get("kind") == "data"
-                    ),
-                },
-            )
-        except Exception:
-            pass
 
         _pm_ai_progress(100)
         return {
