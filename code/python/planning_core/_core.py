@@ -3939,6 +3939,29 @@ def _ensure_dataframe_has_unprocessed_column(
         )
 
 
+def _raw_roll_unit_m_resolved_for_dispatch_qty(row) -> float:
+    """
+    (原反)ロール単位長さ相当の正の m。配台計画行に列があれば優先し、
+    無い・「不明」のときは使用原反セルからテーブル→寸法で解決する。
+    """
+    if hasattr(row, "get"):
+        v = _planning_df_cell_scalar(row, PLAN_COL_RAW_ROLL_UNIT_LENGTH)
+        if v is not None and not (isinstance(v, float) and pd.isna(v)):
+            s = str(v).strip()
+            if s and s != "不明" and s.lower() not in ("nan", "none"):
+                m = parse_float_safe(v, 0.0)
+                if m > 1e-12:
+                    return float(m)
+        ur = row.get(TASK_COL_USED_RAW)
+    else:
+        ur = None
+    tab = _lookup_roll_unit_length_m_from_used_raw(ur)
+    if tab is not None and float(tab) > 1e-12:
+        return float(tab)
+    dim = _parse_roll_unit_m_from_used_raw_dimension_only(ur)
+    return float(dim) if dim is not None and dim > 1e-12 else 0.0
+
+
 def _plan_row_dispatch_qty_metrics(row):
     """
     1行分の換算数量・未加工に基づき、配台用の残り(m)・済相当(m)・換算数量(100m切上)を返す。
@@ -3950,6 +3973,7 @@ def _plan_row_dispatch_qty_metrics(row):
     未加工に有効数値があるとき:
       ① 未加工 > 0: 済相当m = max(0, 換算数量(raw) - 未加工)、残りm = max(0, 未加工)
       ② 未加工 <= 0: 換算数量(100m切上)を残りm の基準とし、それがロール単位長さ未満ならロール長を採用（最小加工単位=1ロール）。済相当m = 0。
+      さらに **換算数量(raw) が (原反)ロール単位長さ m 未満**のときは、残りm を **少なくともその原反ロール長**まで引き上げる（配台に使う数量の下限）。
       換算数量がロール単位長さの整数倍に一致するときは、100m 切上げだけが残量を膨らませるのを避けるため raw を基準とする。
       第三要素は配台総量(m)用: ①では 100m 切上げ値、②では残りm と一致（ロール数整合）。
 
@@ -3981,6 +4005,13 @@ def _plan_row_dispatch_qty_metrics(row):
                 if abs(n_rolls_raw - round(n_rolls_raw)) <= 1e-9:
                     base_m = max(0.0, qty_conv_raw)
             remaining_m = max(base_m, roll_m_f) if roll_m_f > 0 else base_m
+            raw_floor_m = _raw_roll_unit_m_resolved_for_dispatch_qty(row)
+            if (
+                raw_floor_m > 1e-12
+                and qty_conv_raw > 1e-12
+                and qty_conv_raw + 1e-9 < raw_floor_m
+            ):
+                remaining_m = max(remaining_m, raw_floor_m)
             done_m = 0.0
             qty_total_for_dispatch_m = remaining_m
             return remaining_m, done_m, qty_total_for_dispatch_m, True
@@ -15951,8 +15982,6 @@ def run_stage1_extract():
         _qty_total_s1 = _floor_positive_m_to_planning_minimum(
             _qty_total_s1, PLANNING_MIN_QTY_M
         )
-        if TASK_COL_QTY in rec:
-            rec[TASK_COL_QTY] = _qty_total_s1
         _roll_len_product = _stage1_roll_length_for_planning_row(row)
         rec[PLAN_COL_ROLL_UNIT_LENGTH] = _roll_len_product
         rec[PLAN_COL_PRODUCT_WIDTH] = _resolve_product_width_mm_for_stage1_row(
@@ -15978,6 +16007,11 @@ def run_stage1_extract():
                 rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = float(_raw_dim_m)
             else:
                 rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = "不明"
+        _raw_floor_s1 = _raw_roll_unit_m_resolved_for_dispatch_qty(rec)
+        if _raw_floor_s1 > 1e-12 and _qty_total_s1 + 1e-9 < _raw_floor_s1:
+            _qty_total_s1 = max(_qty_total_s1, _raw_floor_s1)
+        if TASK_COL_QTY in rec:
+            rec[TASK_COL_QTY] = _qty_total_s1
         # 工程名 + 機械名 を“因孝”として表示用に追加（後段は計算キーにも使用）
         if machine_name:
             rec[PLAN_COL_PROCESS_FACTOR] = f"{machine}+{machine_name}"
