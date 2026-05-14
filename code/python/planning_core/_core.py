@@ -5553,7 +5553,10 @@ def _apply_planning_sheet_post_load_mutations(
     compile_exclude_rules_d_to_e_with_ai: bool = True,
 ) -> None:
     """
-    配台計画_タスク入力を DataFrame 化した直後の共通処理（設定シートの行同期・分割行の自動配台不要）。
+    配台計画_タスク入力を DataFrame 化した直後の共通処理（配台不要ルールの行同期・分割行の自動配台不要）。
+
+    行同期: ``PM_AI_EXCLUDE_RULES_JSON`` が有効なら JSON へ未登録の (工程名, 機械名) を追記。
+    無効なら計画ブックの「設定_配台不要工程」を ``run_exclude_rules_sheet_maintenance`` で更新する。
 
     「設定_配台不要工程」の C/E による計画 DataFrame への「配台不要」上書きは **段階1のみ**
     （``run_stage1_extract`` 内の ``apply_exclude_rules_config_to_plan_df``）。段階2の
@@ -5567,29 +5570,12 @@ def _apply_planning_sheet_post_load_mutations(
     試行順のみ再計算する当該経路でも同様）。
     """
     try:
+        _pairs_lr = _collect_plan_input_process_machine_pairs_for_exclude_rules_sync(df)
         if _exclude_rules_json_env_supersedes_excel_sheet():
-            logging.info(
-                "%s: 設定シート「%s」の Excel 保守をスキップ（%s が有効）。",
-                log_prefix,
-                EXCLUDE_RULES_SHEET_NAME,
-                ENV_EXCLUDE_RULES_JSON,
-            )
+            json_env = (os.environ.get(ENV_EXCLUDE_RULES_JSON) or "").strip()
+            if json_env and _pairs_lr:
+                _merge_exclude_rules_json_with_plan_pairs(json_env, _pairs_lr, log_prefix)
         else:
-            _pairs_lr = []
-            _seen_lr = set()
-            for _, _row_lr in df.iterrows():
-                _p = str(_row_lr.get(TASK_COL_MACHINE, "") or "").strip()
-                _m = str(_row_lr.get(TASK_COL_MACHINE_NAME, "") or "").strip()
-                if not _p:
-                    continue
-                _k = (
-                    _normalize_process_name_for_rule_match(_p),
-                    _normalize_equipment_match_key(_m),
-                )
-                if _k in _seen_lr:
-                    continue
-                _seen_lr.add(_k)
-                _pairs_lr.append((_p, _m))
             run_exclude_rules_sheet_maintenance(
                 wb_path,
                 _pairs_lr,
@@ -5626,7 +5612,8 @@ def load_planning_tasks_df():
     「配台不要」がオン（TRUE/1/はい 等）の行は配台対象外（**シート上の列の値をそのまま**解釈する）。
     読み込み後、同一依頼NO・重複機械名があるグループの工程「分割」行へ空なら「配台不要」=yes（段階1と同じ）。
     「設定_配台不要工程」シートの**行同期・保守**（``run_exclude_rules_sheet_maintenance``）は、
-    ``PM_AI_PLAN_INPUT_PATH`` がブック（xlsx/xlsm）のときのみ対象ブックで行う。
+    ``PM_AI_PLAN_INPUT_PATH`` がブック（xlsx/xlsm）かつ ``PM_AI_EXCLUDE_RULES_JSON`` が無効なときのみ
+    対象ブックで行う。JSON 正本のときは ``_merge_exclude_rules_json_with_plan_pairs`` で JSON を更新する。
     D→E の **AI 補完は行わない**（段階1のみ）。C/E に基づく計画シートへの配台不要の**再適用**
     （``apply_exclude_rules_config_to_plan_df``）も行わない（段階1のみ）。
 
@@ -13403,6 +13390,40 @@ def _collect_process_machine_pairs_for_exclude_rules(df_src: pd.DataFrame) -> li
     return out
 
 
+def _collect_plan_input_process_machine_pairs_for_exclude_rules_sync(
+    df: "pd.DataFrame",
+) -> list[tuple[str, str]]:
+    """配台計画_タスク入力相当の DataFrame から (工程名, 機械名) を重複除しで列挙。
+
+    ``run_exclude_rules_sheet_maintenance`` の行同期と同一の正規化キーでまとめる。
+    """
+    out: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    if df is None or getattr(df, "empty", True):
+        return out
+    if TASK_COL_MACHINE not in df.columns:
+        return out
+    _has_mach_name = TASK_COL_MACHINE_NAME in df.columns
+    for _, row in df.iterrows():
+        p = str(row.get(TASK_COL_MACHINE, "") or "").strip()
+        m = (
+            str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
+            if _has_mach_name
+            else ""
+        )
+        if not p:
+            continue
+        key = (
+            _normalize_process_name_for_rule_match(p),
+            _normalize_equipment_match_key(m),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append((p, m))
+    return out
+
+
 def _parse_exclude_rule_json_cell(raw) -> dict | None:
     if raw is None or (isinstance(raw, float) and pd.isna(raw)):
         return None
@@ -15282,8 +15303,133 @@ def _write_stage1_exclude_rules_json_sidecar(
     return abs_out
 
 
+def _exclude_rule_json_row_proc_mach(row: dict) -> tuple[str, str]:
+    """JSON ルール行から工程名・機械名（表示用）を取り出す。"""
+    proc = str(
+        row.get(EXCLUDE_RULE_COL_PROCESS)
+        or row.get("process")
+        or row.get("Process")
+        or ""
+    ).strip()
+    mach = str(
+        row.get(EXCLUDE_RULE_COL_MACHINE)
+        or row.get("machine")
+        or row.get("Machine")
+        or ""
+    ).strip()
+    return proc, mach
+
+
+def _merge_exclude_rules_json_with_plan_pairs(
+    json_path: str,
+    pairs: list[tuple[str, str]],
+    log_prefix: str,
+) -> int:
+    """``PM_AI_EXCLUDE_RULES_JSON`` 正本に、計画タスク上の (工程名, 機械名) で未登録の行を追記する。
+
+    既存行の ``配台不要`` / ロジック列は変更しない。追記のみ。
+    成功時に ``_reset_exclude_rules_json_env_memo`` でメモを無効化する。
+    """
+    path = (json_path or "").strip()
+    if not path or not os.path.isfile(path) or not pairs:
+        return 0
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            data = json.load(f)
+    except Exception as ex:
+        logging.warning(
+            "%s: 配台不要ルール JSON の読込に失敗し行同期をスキップ: %s (%s)",
+            log_prefix,
+            path,
+            ex,
+        )
+        return 0
+
+    if isinstance(data, list):
+        top: dict = {"rules": data}
+        rules_list: list = data
+    elif isinstance(data, dict):
+        top = dict(data)
+        rules_list = top.get("rules")
+        if not isinstance(rules_list, list):
+            rules_list = []
+            top["rules"] = rules_list
+    else:
+        logging.warning(
+            "%s: 配台不要ルール JSON が list / object ではないため行同期をスキップ: %s",
+            log_prefix,
+            path,
+        )
+        return 0
+
+    existing_keys: set[tuple[str, str]] = set()
+    for row in rules_list:
+        if not isinstance(row, dict):
+            continue
+        proc, mach = _exclude_rule_json_row_proc_mach(row)
+        if not proc:
+            continue
+        existing_keys.add(
+            (
+                _normalize_process_name_for_rule_match(proc),
+                _normalize_equipment_match_key(mach),
+            )
+        )
+
+    added = 0
+    for p, m in pairs:
+        key = (
+            _normalize_process_name_for_rule_match(p),
+            _normalize_equipment_match_key(m),
+        )
+        if key in existing_keys:
+            continue
+        rules_list.append(
+            {
+                EXCLUDE_RULE_COL_PROCESS: p,
+                EXCLUDE_RULE_COL_MACHINE: m,
+                EXCLUDE_RULE_COL_FLAG: None,
+                EXCLUDE_RULE_COL_LOGIC_JA: None,
+                EXCLUDE_RULE_COL_LOGIC_JSON: None,
+            }
+        )
+        existing_keys.add(key)
+        added += 1
+
+    if not added:
+        return 0
+
+    abs_out = os.path.abspath(path)
+    parent = os.path.dirname(abs_out)
+    try:
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(abs_out, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(top, f, ensure_ascii=False, indent=2)
+    except OSError as ex:
+        logging.warning(
+            "%s: 配台不要ルール JSON の書き込みに失敗（追記 %s 件は未保存）: %s",
+            log_prefix,
+            added,
+            ex,
+        )
+        return 0
+
+    _reset_exclude_rules_json_env_memo()
+    logging.info(
+        "%s: 配台不要ルール JSON に工程+機械の組み合わせを %s 件追加しました（%s）。",
+        log_prefix,
+        added,
+        abs_out,
+    )
+    return int(added)
+
+
 def _exclude_rules_json_env_supersedes_excel_sheet() -> bool:
-    """True のとき「設定_配台不要工程」の openpyxl と Excel 経由の保守を省略し、ルールは JSON のみとする。"""
+    """True のときルール読込は JSON を正とし Excel「設定_配台不要工程」は読まない。
+
+    行同期は ``_merge_exclude_rules_json_with_plan_pairs`` で JSON へ追記する。
+    """
     return _get_exclude_rules_from_json_env() is not None
 
 
@@ -16144,7 +16290,9 @@ def run_stage1_extract():
     「設定_配台不要工程」は読まない。どちらも無い場合のみ master.xlsm の当該シートから
     ``json/stage1_exclude_rules.json`` へ書き出して同変数を設定する。
 
-    ``PM_AI_PLAN_INPUT_PATH`` が Excel ブック実ファイルのときのみ、そのブックへ
+    ``PM_AI_EXCLUDE_RULES_JSON`` が有効なときは、上記 JSON に
+    ``_merge_exclude_rules_json_with_plan_pairs`` で工程+機械の行同期（追記）を行う。
+    JSON を使わない場合に限り ``PM_AI_PLAN_INPUT_PATH`` が Excel ブック実ファイルのとき、そのブックへ
     ``run_exclude_rules_sheet_maintenance``（行同期・D→E）を行う。
     """
     resolve_processing_plan_path_from_env()
@@ -16282,14 +16430,15 @@ def run_stage1_extract():
     except Exception as ex:
         logging.exception("段階1: 分割行の配台不要自動設定で例外（出力は続行）: %s", ex)
     _ensure_stage1_exclude_rules_json_env_from_repo_default()
-    # 設定_配台不要工程の行同期と D→E（AI）は JSON 正本が無いときのみ（計画行確定後・試行順より前）。
+    # 計画行確定後・試行順より前: JSON 正本なら JSON への行同期、それ以外は計画ブックの「設定_配台不要工程」（D→E 含む）。
     try:
+        _pm_pairs_s1 = _collect_plan_input_process_machine_pairs_for_exclude_rules_sync(
+            out_df
+        )
         if _exclude_rules_json_env_supersedes_excel_sheet():
-            logging.info(
-                "段階1: %s が有効のため「%s」の Excel 保守をスキップします。",
-                ENV_EXCLUDE_RULES_JSON,
-                EXCLUDE_RULES_SHEET_NAME,
-            )
+            json_env = (os.environ.get(ENV_EXCLUDE_RULES_JSON) or "").strip()
+            if json_env and _pm_pairs_s1:
+                _merge_exclude_rules_json_with_plan_pairs(json_env, _pm_pairs_s1, "段階1")
         else:
             _wb_maint_s1 = _excel_plan_input_wb()
             if not _wb_maint_s1 or not os.path.isfile(_wb_maint_s1):
@@ -16299,7 +16448,6 @@ def run_stage1_extract():
                     ENV_PLAN_INPUT_PATH,
                 )
             else:
-                _pm_pairs_s1 = _collect_process_machine_pairs_for_exclude_rules(out_df)
                 run_exclude_rules_sheet_maintenance(_wb_maint_s1, _pm_pairs_s1, "段階1")
     except Exception:
         logging.exception("段階1: 設定_配台不要工程の保守で例外（続行）")
