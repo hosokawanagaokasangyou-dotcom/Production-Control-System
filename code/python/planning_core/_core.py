@@ -4151,6 +4151,34 @@ def _roll_unit_m_estimate_from_plan_row(row, fallback_m: float) -> float:
     return float(unit)
 
 
+def _effective_roll_unit_m_for_dispatch_task_simulator(
+    qty_m: float, sheet_roll_unit_m: float
+) -> float:
+    """
+    換算数量（配台に使う残 m）をシートのロール単位長さで割ったとき整数ロールにならない場合、
+    作業ロール数を ``floor(換算数量 / ロール単位)`` 本（少なくとも 1 本）とし、
+    ``換算数量 / 作業ロール数`` を配台シミュレータ用の実効 1 ロール長さ (m) として返す。
+
+    例: 800 m ÷ 95 m → 8.42… 本 → 8 本、800 ÷ 8 = 100 m を実効ロール単位とする。
+
+    既に（誤差範囲内で）整数ロールに収まるとき、または数量・単位が不正なときは
+    シートのロール単位長さをそのまま返す。
+    """
+    q = parse_float_safe(qty_m, 0.0)
+    u = parse_float_safe(sheet_roll_unit_m, 0.0)
+    if q <= 1e-12 or u <= 1e-12:
+        return float(u) if u > 1e-12 else 0.0
+    n_raw = q / u
+    if n_raw <= 1e-12:
+        return float(u)
+    if abs(n_raw - round(n_raw)) <= 1e-9:
+        return float(u)
+    n_work = int(math.floor(n_raw))
+    if n_work < 1:
+        n_work = 1
+    return float(q) / float(n_work)
+
+
 def load_ai_cache():
     try:
         if os.path.exists(ai_cache_path):
@@ -12366,6 +12394,20 @@ def build_task_queue_from_planning_df(
         if unit <= 0:
             unit = qty
 
+        # 換算数量 ÷ シートのロール単位が整数ロールにならないとき、切り捨て本数で割った実効ロール長を
+        # 配台シミュレータ（unit_m・remaining_units）に採用する（例: 800/95 → 8 本・100m/本）。
+        _sheet_roll_unit_before_sim_adjust = float(unit)
+        if qty > 1e-12 and unit > 1e-12:
+            unit = _effective_roll_unit_m_for_dispatch_task_simulator(qty, unit)
+            if abs(unit - _sheet_roll_unit_before_sim_adjust) > 1e-6:
+                logging.info(
+                    "配台シミュレータ: ロール単位を実効化 依頼NO=%s qty_m=%s シートロール単位=%s → 実効=%s",
+                    task_id,
+                    qty,
+                    _sheet_roll_unit_before_sim_adjust,
+                    unit,
+                )
+
         # 換算数量・ロール単位長さの補正（推定・100m 下限・換算<ロール時の引き上げ）は段階1のみ。段階2はシート値を採用し、空・0 のときだけ推定フォールバックする。
 
         # 納期は優先順位・緊急度には使うが、開始日の下限には使わない（余力があれば前倒し開始するため）。
@@ -12466,7 +12508,7 @@ def build_task_queue_from_planning_df(
                 "raw_input_date": raw_input_date,
                 "same_day_raw_start_limit": same_day_raw_start_limit,
                 "total_qty_m": int(qty_total),
-                "unit_m": int(unit),
+                "unit_m": float(unit),
                 "remaining_units": _init_rem,
                 "base_time_per_unit": (qty / speed) / (qty / unit)
                 if unit and speed and qty
