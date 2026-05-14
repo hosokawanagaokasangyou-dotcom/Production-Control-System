@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -29,6 +30,7 @@ import javafx.beans.property.SimpleObjectProperty;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
@@ -47,6 +49,7 @@ import javafx.scene.control.ListView;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TabPane;
+import javafx.scene.control.TextField;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableView;
@@ -210,7 +213,17 @@ public final class DispatchInteractiveTabController {
     private TableView<Map<String, String>> stage3EquipmentResultTable;
 
     @FXML
+    private TextField stage3EquipmentFilterField;
+
+    @FXML
     private TableView<Map<String, String>> stage3PeopleResultTable;
+
+    /** 設備フェイズ結果表の全行（絞り込み前）。 */
+    private final ObservableList<Map<String, String>> stage3EquipmentMasterRows = FXCollections.observableArrayList();
+
+    private FilteredList<Map<String, String>> stage3EquipmentFilteredRows;
+
+    private boolean stage3EquipmentFilterModelWired;
 
     @FXML
     private Button wideRowUpButton;
@@ -318,6 +331,15 @@ public final class DispatchInteractiveTabController {
             wireDispatchShortfallSelectionToWideGrid();
         }
         installStage3ResultTableColumns();
+        ensureStage3EquipmentFilteredModel();
+    }
+
+    @FXML
+    private void onStage3EquipmentFilterClearAction() {
+        if (stage3EquipmentFilterField != null) {
+            stage3EquipmentFilterField.setText("");
+        }
+        applyStage3EquipmentRowFilter();
     }
 
     void bindShell(MainShellController shell) {
@@ -2857,6 +2879,46 @@ public final class DispatchInteractiveTabController {
         return jp.resolveSibling("stage3_equipment_checkpoint.json");
     }
 
+    private void ensureStage3EquipmentFilteredModel() {
+        if (stage3EquipmentResultTable == null || stage3EquipmentFilterModelWired) {
+            return;
+        }
+        stage3EquipmentFilterModelWired = true;
+        stage3EquipmentFilteredRows = new FilteredList<>(stage3EquipmentMasterRows, r -> true);
+        stage3EquipmentResultTable.setItems(stage3EquipmentFilteredRows);
+        if (stage3EquipmentFilterField != null) {
+            stage3EquipmentFilterField
+                    .textProperty()
+                    .addListener((obs, prev, cur) -> applyStage3EquipmentRowFilter());
+        }
+    }
+
+    private void applyStage3EquipmentRowFilter() {
+        if (stage3EquipmentFilteredRows == null) {
+            return;
+        }
+        String raw = stage3EquipmentFilterField != null ? stage3EquipmentFilterField.getText() : "";
+        String q = raw != null ? raw.trim() : "";
+        if (q.isEmpty()) {
+            stage3EquipmentFilteredRows.setPredicate(r -> true);
+            return;
+        }
+        String qLower = q.toLowerCase(Locale.ROOT);
+        stage3EquipmentFilteredRows.setPredicate(row -> stage3EquipmentRowMatchesFilter(row, qLower));
+    }
+
+    private static boolean stage3EquipmentRowMatchesFilter(Map<String, String> row, String qLower) {
+        if (row == null || qLower.isEmpty()) {
+            return false;
+        }
+        for (String v : row.values()) {
+            if (v != null && v.toLowerCase(Locale.ROOT).contains(qLower)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void installStage3ResultTableColumns() {
         if (stage3EquipmentResultTable != null && stage3EquipmentResultTable.getColumns().isEmpty()) {
             TableColumn<Map<String, String>, String> c0 = new TableColumn<>("日付");
@@ -2903,8 +2965,13 @@ public final class DispatchInteractiveTabController {
     }
 
     private void clearStage3EquipmentResultTable() {
-        if (stage3EquipmentResultTable != null) {
-            stage3EquipmentResultTable.setItems(FXCollections.observableArrayList());
+        ensureStage3EquipmentFilteredModel();
+        stage3EquipmentMasterRows.clear();
+        if (stage3EquipmentFilterField != null) {
+            stage3EquipmentFilterField.setText("");
+        }
+        if (stage3EquipmentFilteredRows != null) {
+            stage3EquipmentFilteredRows.setPredicate(r -> true);
         }
     }
 
@@ -2918,6 +2985,7 @@ public final class DispatchInteractiveTabController {
         if (stage3EquipmentResultTable == null) {
             return;
         }
+        ensureStage3EquipmentFilteredModel();
         Path ck = resolveStage3EquipmentCheckpointPath();
         if (!Files.isRegularFile(ck)) {
             clearStage3EquipmentResultTable();
@@ -2944,7 +3012,8 @@ public final class DispatchInteractiveTabController {
                 m.put("op", textOrEmpty(ev, "op"));
                 rows.add(m);
             }
-            stage3EquipmentResultTable.setItems(FXCollections.observableArrayList(rows));
+            stage3EquipmentMasterRows.setAll(rows);
+            applyStage3EquipmentRowFilter();
         } catch (Exception e) {
             clearStage3EquipmentResultTable();
             if (shell != null) {

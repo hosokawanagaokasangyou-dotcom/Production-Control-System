@@ -7,6 +7,7 @@
 <?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.control.Tab?>
 <?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TextField?>
 <?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
@@ -91,6 +92,19 @@
             <Tab closable="false" text="段階3・設備フェイズ結果">
                 <content>
                     <BorderPane>
+                        <top>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <padding>
+                                    <Insets bottom="4.0" left="4.0" right="4.0" top="4.0"/>
+                                </padding>
+                                <Label text="絞り込み"/>
+                                <TextField fx:id="stage3EquipmentFilterField" maxWidth="Infinity" minWidth="120.0"
+                                           promptText="全列に部分一致（大文字小文字を区別しない）"
+                                           HBox.hgrow="ALWAYS"/>
+                                <Button mnemonicParsing="false" text="クリア"
+                                        onAction="#onStage3EquipmentFilterClearAction"/>
+                            </HBox>
+                        </top>
                         <center>
                             <TableView fx:id="stage3EquipmentResultTable" maxHeight="Infinity" maxWidth="Infinity"
                                        minHeight="200.0"/>
