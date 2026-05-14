@@ -114,6 +114,9 @@ public final class DeliveryCalendarViewTabController {
     @FXML
     private Button refreshButton;
 
+    /** {@link #onRefreshButtonAction} から開始した再読み込み完了時のみ情報ダイアログを出す。 */
+    private boolean pendingUserDeliveryRefreshCompletionDialog;
+
     @FXML
     private Label statusLabel;
 
@@ -894,6 +897,7 @@ public final class DeliveryCalendarViewTabController {
             return;
         }
         refreshButton.setDisable(true);
+        pendingUserDeliveryRefreshCompletionDialog = true;
         showDeliveryReloadProgress();
         statusLabel.setText("取得中…");
         commitSpinnerIntegerValue(dateWindowPastDaysSpinner);
@@ -913,12 +917,25 @@ public final class DeliveryCalendarViewTabController {
                                                 statusLabel.setText("error: " + err.getMessage());
                                                 if (shell != null) {
                                                     shell.appendLog("[delivery-calendar] " + err.getMessage());
+                                                    if (pendingUserDeliveryRefreshCompletionDialog) {
+                                                        pendingUserDeliveryRefreshCompletionDialog = false;
+                                                        shell.showErrorDialog(
+                                                                "再読み込みエラー",
+                                                                err.getMessage() != null
+                                                                        ? err.getMessage()
+                                                                        : err.toString());
+                                                    }
                                                 }
                                                 return;
                                             }
                                             if (cap == null) {
                                                 scheduleHideDeliveryReloadProgress();
                                                 statusLabel.setText("no result");
+                                                if (shell != null && pendingUserDeliveryRefreshCompletionDialog) {
+                                                    pendingUserDeliveryRefreshCompletionDialog = false;
+                                                    shell.showWarningDialog(
+                                                            "再読み込み", "結果を取得できませんでした（no result）。");
+                                                }
                                                 return;
                                             }
                                             applyPayload(cap.stdout(), cap.exitCode());
@@ -1038,6 +1055,10 @@ public final class DeliveryCalendarViewTabController {
         if (trimmed.isEmpty()) {
             statusLabel.setText("empty stdout (exit=" + exitCode + ")");
             scheduleHideDeliveryReloadProgress();
+            if (shell != null && pendingUserDeliveryRefreshCompletionDialog) {
+                pendingUserDeliveryRefreshCompletionDialog = false;
+                shell.showWarningDialog("再読み込み", "子プロセスの出力が空です（exit=" + exitCode + "）。");
+            }
             return;
         }
         try {
@@ -1146,11 +1167,26 @@ public final class DeliveryCalendarViewTabController {
 
             applyMainCalendar(root);
             scheduleHideDeliveryReloadProgress();
+            if (shell != null && pendingUserDeliveryRefreshCompletionDialog) {
+                pendingUserDeliveryRefreshCompletionDialog = false;
+                String detail =
+                        err0.isEmpty()
+                                ? "ペイロードの ok が false です（exit=" + exitCode + "）。"
+                                : err0;
+                shell.showWarningDialog("再読み込み", "取得結果に問題があります。メイン表のみ反映しました。\n" + detail);
+            }
 
         } catch (Exception e) {
             statusLabel.setText("parse: " + e.getMessage());
             if (shell != null) {
                 shell.appendLog("[delivery-calendar] parse " + e.getMessage());
+                if (pendingUserDeliveryRefreshCompletionDialog) {
+                    pendingUserDeliveryRefreshCompletionDialog = false;
+                    shell.showErrorDialog(
+                            "再読み込みエラー",
+                            "ペイロードの解析に失敗しました。\n"
+                                    + (e.getMessage() != null ? e.getMessage() : e.toString()));
+                }
             }
             scheduleHideDeliveryReloadProgress();
         }
@@ -1170,6 +1206,13 @@ public final class DeliveryCalendarViewTabController {
         } catch (Throwable t) {
             if (shell != null) {
                 shell.appendLog("[delivery-calendar] アラジン再読込 " + t.getMessage());
+                if (pendingUserDeliveryRefreshCompletionDialog) {
+                    pendingUserDeliveryRefreshCompletionDialog = false;
+                    shell.showErrorDialog(
+                            "再読み込みエラー",
+                            "アラジン加工計画タブへの反映中に失敗しました。\n"
+                                    + (t.getMessage() != null ? t.getMessage() : t.toString()));
+                }
             }
             statusLabel.setText("error: " + t.getMessage());
             scheduleHideDeliveryReloadProgress();
@@ -1202,6 +1245,13 @@ public final class DeliveryCalendarViewTabController {
         } catch (Throwable t) {
             if (shell != null) {
                 shell.appendLog("[delivery-calendar] 加工実績再読込 " + t.getMessage());
+                if (pendingUserDeliveryRefreshCompletionDialog) {
+                    pendingUserDeliveryRefreshCompletionDialog = false;
+                    shell.showErrorDialog(
+                            "再読み込みエラー",
+                            "加工実績タブへの反映中に失敗しました。\n"
+                                    + (t.getMessage() != null ? t.getMessage() : t.toString()));
+                }
             }
             statusLabel.setText("error: " + t.getMessage());
             scheduleHideDeliveryReloadProgress();
@@ -1223,12 +1273,24 @@ public final class DeliveryCalendarViewTabController {
                         try {
                             applyMainCalendar(root);
                         } finally {
+                            if (shell != null && pendingUserDeliveryRefreshCompletionDialog) {
+                                pendingUserDeliveryRefreshCompletionDialog = false;
+                                shell.showInformationDialog(
+                                        "再読み込み完了", "納期管理ビューと関連タブの表示を更新しました。");
+                            }
                             scheduleHideDeliveryReloadProgress();
                         }
                     });
         } catch (Throwable t) {
             if (shell != null) {
                 shell.appendLog("[delivery-calendar] 配台結果再読込 " + t.getMessage());
+                if (pendingUserDeliveryRefreshCompletionDialog) {
+                    pendingUserDeliveryRefreshCompletionDialog = false;
+                    shell.showErrorDialog(
+                            "再読み込みエラー",
+                            "配台結果タブへの反映中に失敗しました。\n"
+                                    + (t.getMessage() != null ? t.getMessage() : t.toString()));
+                }
             }
             statusLabel.setText("error: " + t.getMessage());
             scheduleHideDeliveryReloadProgress();

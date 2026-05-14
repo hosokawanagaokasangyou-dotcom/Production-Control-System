@@ -156,7 +156,7 @@ public final class ResultDispatchTableTabController {
 
         initResultDispatchSpreadsheetPresentationControls();
 
-        Platform.runLater(this::reloadFromDisk);
+        Platform.runLater(() -> reloadFromDisk(false));
     }
 
     /**
@@ -172,7 +172,7 @@ public final class ResultDispatchTableTabController {
 
     /** 親（納期管理ビュー）の再読込成功後に呼ぶ。 */
     public void reloadResultDispatchTableFromDisk() {
-        reloadFromDisk();
+        reloadFromDisk(false);
     }
 
     private void onLeadingColumnCountCommitted(int n) {
@@ -366,10 +366,10 @@ public final class ResultDispatchTableTabController {
 
     @FXML
     private void onRefreshButtonAction() {
-        reloadFromDisk();
+        reloadFromDisk(true);
     }
 
-    private void reloadFromDisk() {
+    private void reloadFromDisk(boolean userCompletionDialog) {
         if (shell == null) {
             return;
         }
@@ -385,6 +385,9 @@ public final class ResultDispatchTableTabController {
             if (refreshButton != null) {
                 refreshButton.setDisable(false);
             }
+            if (userCompletionDialog) {
+                shell.showWarningDialog("再読み", "ファイルが見つかりません。\n" + path);
+            }
             return;
         }
         try {
@@ -397,6 +400,11 @@ public final class ResultDispatchTableTabController {
                 applyEmpty();
                 if (refreshButton != null) {
                     refreshButton.setDisable(false);
+                }
+                if (userCompletionDialog) {
+                    shell.showWarningDialog(
+                            "再読み",
+                            "JSON の構造が不正です（columns / rows が必要です）。\n" + path);
                 }
                 return;
             }
@@ -449,10 +457,20 @@ public final class ResultDispatchTableTabController {
                     TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE, visAfter);
 
             rebuildSpreadsheet();
+            if (userCompletionDialog) {
+                shell.showInformationDialog(
+                        "再読み完了",
+                        "結果_配台表を読み込みました。\n" + path + "\n行数: " + rowMaps.size());
+            }
         } catch (Exception ex) {
             statusLabel.setText("error");
             shell.appendLog("[result-dispatch-json] " + ex.getMessage());
             applyEmpty();
+            if (userCompletionDialog) {
+                shell.showErrorDialog(
+                        "再読みエラー",
+                        ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            }
         } finally {
             if (refreshButton != null) {
                 refreshButton.setDisable(false);

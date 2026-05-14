@@ -229,7 +229,7 @@ public final class PlanInputTabController {
                         pathField.setText(AppPaths.defaultStage1PlanTasksPath(env).toString());
                     }
                     sheetField.setText(AppPaths.STAGE1_PLAN_OUTPUT_SHEET);
-                    loadFromCurrentPath();
+                    loadFromCurrentPath(false);
                 });
 
         if (!planInputCellEditHooksInstalled) {
@@ -256,7 +256,7 @@ public final class PlanInputTabController {
                 () -> {
                     syncFromEnv();
                     if (!pathField.getText().isBlank()) {
-                        loadFromCurrentPath();
+                        loadFromCurrentPath(false);
                     }
                 });
         shell.syncPlanInputStage2ButtonFromDispatchDirty();
@@ -515,16 +515,17 @@ public final class PlanInputTabController {
     @FXML
     private void onLoadButtonAction() {
         syncFromEnv();
-        loadFromCurrentPath();
+        loadFromCurrentPath(true);
     }
 
     @FXML
     private void onSaveButtonAction() {
-        Path path = Path.of(pathField.getText().trim());
         if (pathField.getText().isBlank()) {
             shell.appendLog("[plan-input] save: path is empty");
+            shell.showWarningDialog("保存", "保存先のパスが空です。");
             return;
         }
+        Path path = Path.of(pathField.getText().trim());
         try {
             List<List<String>> dataRows = new ArrayList<>();
             for (ObservableList<String> r : rows) {
@@ -545,8 +546,17 @@ public final class PlanInputTabController {
                     new PlanInputTabularIo.TabularSheet(headersRef, dataRows));
             shell.appendLog("[plan-input] saved " + path);
             clearPlanInputTableDirtySinceSave();
+            shell.showInformationDialog(
+                    "保存完了",
+                    "配台計画_タスク入力を保存しました。\n"
+                            + path
+                            + "\n行数: "
+                            + dataRows.size());
         } catch (Exception ex) {
             shell.appendLog("[plan-input] save error: " + ex.getMessage());
+            shell.showErrorDialog(
+                    "保存エラー",
+                    ex.getMessage() != null ? ex.getMessage() : ex.toString());
         }
     }
 
@@ -714,10 +724,13 @@ public final class PlanInputTabController {
         }
     }
 
-    private void loadFromCurrentPath() {
+    private void loadFromCurrentPath(boolean showCompletionDialog) {
         Path path = Path.of(pathField.getText().trim());
         if (!java.nio.file.Files.isRegularFile(path)) {
             shell.appendLog("[plan-input] file not found: " + path);
+            if (showCompletionDialog) {
+                shell.showWarningDialog("読込", "ファイルが見つかりません。\n" + path);
+            }
             return;
         }
         String sheetName = sheetField.getText().trim();
@@ -763,8 +776,23 @@ public final class PlanInputTabController {
                             + headersRef.size()
                             + " path="
                             + path);
+            if (showCompletionDialog) {
+                shell.showInformationDialog(
+                        "読込完了",
+                        "配台計画_タスク入力を読み込みました。\n"
+                                + path
+                                + "\n行数: "
+                                + rows.size()
+                                + " / 列数: "
+                                + headersRef.size());
+            }
         } catch (Exception ex) {
             shell.appendLog("[plan-input] load error: " + ex.getMessage());
+            if (showCompletionDialog) {
+                shell.showErrorDialog(
+                        "読込エラー",
+                        ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            }
         }
     }
 

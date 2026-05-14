@@ -955,7 +955,7 @@ public final class EquipmentGanttGraphicTabController {
     void bindShell(MainShellController shell) {
         this.shell = shell;
         this.ownerStage = shell.getPrimaryStage();
-        Platform.runLater(this::reloadFromFields);
+        Platform.runLater(() -> reloadFromFields(false));
     }
 
     /**
@@ -972,13 +972,13 @@ public final class EquipmentGanttGraphicTabController {
         Path json = siblingJson(Path.of(p));
         if (json != null && Files.isRegularFile(json)) {
             planJsonField.setText(json.toString());
-            Platform.runLater(this::reloadFromFields);
+            Platform.runLater(() -> reloadFromFields(false));
         }
     }
 
     @FXML
     private void onReloadButtonAction() {
-        reloadFromFields();
+        reloadFromFields(true);
     }
 
     @FXML
@@ -989,14 +989,14 @@ public final class EquipmentGanttGraphicTabController {
 
     @FXML
     private void onSyncLatestButtonAction() {
-        syncLatestPlanJsonFromOutputDirAndReload();
+        syncLatestPlanJsonFromOutputDirAndReload(true);
     }
 
     /**
      * 既定出力フォルダの最新 {@code 計画*.json} を選択してグラフィックを再構築する。「同期して最新を表示」と同一。
      * 段階2・配台試行（段階3）完了後にメインシェルから呼び、ディスク上の最新計画を確実に反映する。
      */
-    void syncLatestPlanJsonFromOutputDirAndReload() {
+    void syncLatestPlanJsonFromOutputDirAndReload(boolean userCompletionDialog) {
         if (shell == null) {
             return;
         }
@@ -1015,6 +1015,11 @@ public final class EquipmentGanttGraphicTabController {
                                     + dir
                                     + "）");
                 }
+                if (userCompletionDialog) {
+                    shell.showWarningDialog(
+                            "同期",
+                            "出力フォルダに計画 JSON がありません。\n" + dir);
+                }
                 return;
             }
         } catch (Exception ex) {
@@ -1024,9 +1029,14 @@ public final class EquipmentGanttGraphicTabController {
                         "[equipment-gantt-graphic] ガント同期エラー: "
                                 + (ex.getMessage() != null ? ex.getMessage() : ex));
             }
+            if (userCompletionDialog) {
+                shell.showErrorDialog(
+                        "同期エラー",
+                        ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            }
             return;
         }
-        reloadFromFields();
+        reloadFromFields(userCompletionDialog);
     }
 
     @FXML
@@ -1049,7 +1059,7 @@ public final class EquipmentGanttGraphicTabController {
         java.io.File picked = ch.showOpenDialog(ownerStage);
         if (picked != null) {
             planJsonField.setText(picked.getAbsolutePath());
-            reloadFromFields();
+            reloadFromFields(true);
         }
     }
 
@@ -1090,7 +1100,7 @@ public final class EquipmentGanttGraphicTabController {
         }
     }
 
-    private void reloadFromFields() {
+    private void reloadFromFields(boolean userCompletionDialog) {
         if (contentPane == null) {
             return;
         }
@@ -1104,6 +1114,12 @@ public final class EquipmentGanttGraphicTabController {
                 resetGraphicState(
                         "ファイルが指定されていないか、見つかりません。", false);
                 statusLabel.setText("読み込み対象なし");
+                if (userCompletionDialog && shell != null) {
+                    shell.showWarningDialog(
+                            "再読み",
+                            "計画 JSON が指定されていないか、見つかりません。\n"
+                                    + (planPath != null ? planPath : "（パス空）"));
+                }
                 return;
             }
 
@@ -1117,6 +1133,11 @@ public final class EquipmentGanttGraphicTabController {
                 resetGraphicState(
                         "設備タイムライン形式のシートが見つかりません（時刻列 HH:MM のシート）。");
                 statusLabel.setText("対象シートなし: " + planPath.getFileName());
+                if (userCompletionDialog && shell != null) {
+                    shell.showWarningDialog(
+                            "再読み",
+                            "設備タイムライン形式のシートがありません。\n" + planPath);
+                }
                 return;
             }
 
@@ -1144,11 +1165,24 @@ public final class EquipmentGanttGraphicTabController {
                                 + "）");
             }
             collapseSourceAccordionAfterSuccessfulLoad();
+            if (userCompletionDialog && shell != null) {
+                shell.showInformationDialog(
+                        "再読み完了",
+                        "設備ガント（グラフィック）を更新しました。\n"
+                                + planPath
+                                + "\n表示シート: "
+                                + sheetUsed);
+            }
         } catch (Exception ex) {
             resetGraphicState("エラー");
             statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
             if (shell != null) {
                 shell.appendLog("[equipment-gantt-graphic] " + ex.getMessage());
+            }
+            if (userCompletionDialog && shell != null) {
+                shell.showErrorDialog(
+                        "再読みエラー",
+                        ex.getMessage() != null ? ex.getMessage() : ex.toString());
             }
         } finally {
             reloadButton.setDisable(false);

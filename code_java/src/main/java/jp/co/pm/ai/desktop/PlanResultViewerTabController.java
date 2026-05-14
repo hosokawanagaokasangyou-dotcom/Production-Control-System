@@ -318,7 +318,7 @@ public final class PlanResultViewerTabController {
     void bindShell(MainShellController shell) {
         this.shell = shell;
         this.ownerStage = shell.getPrimaryStage();
-        Platform.runLater(this::reloadFromFields);
+        Platform.runLater(() -> reloadFromFields(false));
     }
 
     /**
@@ -346,13 +346,13 @@ public final class PlanResultViewerTabController {
             }
         }
         if (touched) {
-            Platform.runLater(this::reloadFromFields);
+            Platform.runLater(() -> reloadFromFields(false));
         }
     }
 
     @FXML
     private void onReloadButtonAction() {
-        reloadFromFields();
+        reloadFromFields(true);
     }
 
     @FXML
@@ -376,14 +376,18 @@ public final class PlanResultViewerTabController {
                         "このフォルダに JSON が見つかりません: "
                                 + dir);
                 expandSourcePaneForAttention();
+                shell.showWarningDialog("同期", "出力フォルダに計画／メンバー JSON がありません。\n" + dir);
                 return;
             }
         } catch (Exception ex) {
             statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
             expandSourcePaneForAttention();
+            shell.showErrorDialog(
+                    "同期エラー",
+                    ex.getMessage() != null ? ex.getMessage() : ex.toString());
             return;
         }
-        reloadFromFields();
+        reloadFromFields(true);
     }
 
     @FXML
@@ -415,7 +419,7 @@ public final class PlanResultViewerTabController {
         java.io.File picked = ch.showOpenDialog(ownerStage);
         if (picked != null) {
             target.setText(picked.getAbsolutePath());
-            reloadFromFields();
+            reloadFromFields(true);
         }
     }
 
@@ -434,7 +438,7 @@ public final class PlanResultViewerTabController {
         clearColumnFiltersAndSort();
     }
 
-    private void reloadFromFields() {
+    private void reloadFromFields(boolean userCompletionDialog) {
         if (contentPane == null) {
             return;
         }
@@ -463,6 +467,14 @@ public final class PlanResultViewerTabController {
                                 "ファイルが指定されていないか、見つかりません。"));
                 statusLabel.setText("読み込み対象なし");
                 expandSourcePaneForAttention();
+                if (userCompletionDialog && shell != null) {
+                    String detail =
+                            "計画: "
+                                    + (planPath != null ? planPath : "（未指定）")
+                                    + "\nメンバー: "
+                                    + (memberPath != null ? memberPath : "（未指定）");
+                    shell.showWarningDialog("再読み", "読み込み対象の JSON がありません。\n" + detail);
+                }
                 return;
             }
 
@@ -500,12 +512,25 @@ public final class PlanResultViewerTabController {
                             + memberSheets.size()
                             + " 読み込み");
             collapseSourcePaneAfterLoad();
+            if (userCompletionDialog && shell != null) {
+                shell.showInformationDialog(
+                        "再読み完了",
+                        "計画結果ビューアを更新しました。\n生産計画シート数: "
+                                + planSheets.size()
+                                + "\nメンバー勤務シート数: "
+                                + memberSheets.size());
+            }
         } catch (Exception ex) {
             contentPane.setCenter(emptyPlaceholder("Error"));
             statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
             expandSourcePaneForAttention();
             if (shell != null) {
                 shell.appendLog("[plan-result-viewer] " + ex.getMessage());
+            }
+            if (userCompletionDialog && shell != null) {
+                shell.showErrorDialog(
+                        "再読みエラー",
+                        ex.getMessage() != null ? ex.getMessage() : ex.toString());
             }
         } finally {
             reloadButton.setDisable(false);

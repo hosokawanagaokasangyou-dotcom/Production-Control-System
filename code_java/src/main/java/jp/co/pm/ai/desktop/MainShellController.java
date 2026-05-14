@@ -1129,6 +1129,43 @@ public final class MainShellController {
     }
 
     /**
+     * メインウィンドウと同じテーマ CSS をダイアログに載せる（{@link Alert} / {@link ChoiceDialog} 等）。
+     */
+    public void prepareDialogForMainTheme(Dialog<?> dialog) {
+        if (dialog == null) {
+            return;
+        }
+        if (primaryStage != null) {
+            dialog.initOwner(primaryStage);
+        }
+        applyAlertStylesheetsFromOwner(dialog);
+    }
+
+    /** 保存・読込完了などの情報ダイアログ。 */
+    public void showInformationDialog(String title, String message) {
+        showThemedAlert(AlertType.INFORMATION, title, null, message);
+    }
+
+    /** ファイルなし・部分成功などの注意ダイアログ。 */
+    public void showWarningDialog(String title, String message) {
+        showThemedAlert(AlertType.WARNING, title, null, message);
+    }
+
+    /** 失敗時のエラーダイアログ。 */
+    public void showErrorDialog(String title, String message) {
+        showThemedAlert(AlertType.ERROR, title, null, message);
+    }
+
+    private void showThemedAlert(AlertType type, String title, String headerText, String message) {
+        Alert alert = new Alert(type);
+        alert.setTitle(title);
+        alert.setHeaderText(headerText);
+        alert.setContentText(message);
+        prepareDialogForMainTheme(alert);
+        alert.showAndWait();
+    }
+
+    /**
      * タブ・表・テーマ等をマージ済みバンドル既定へ戻し、環境タブはテンプレ既定へ戻す。実行パス・環境値のうちブートストラップ系は
      * リセット後の環境タブから再収集する。
      */
@@ -3681,7 +3718,7 @@ public final class MainShellController {
      */
     void refreshEquipmentGanttGraphicAfterPipelineRun() {
         if (equipmentGanttGraphicTabController != null) {
-            equipmentGanttGraphicTabController.syncLatestPlanJsonFromOutputDirAndReload();
+            equipmentGanttGraphicTabController.syncLatestPlanJsonFromOutputDirAndReload(false);
         }
     }
 

@@ -521,6 +521,14 @@ public final class GanttPersonBadgeDesignTabController {
             if (shell != null) {
                 shell.refreshEquipmentGanttGraphicForBadgeChange();
             }
+            if (showAlertOnFailure) {
+                shell.showInformationDialog(
+                        "再読込完了",
+                        "skills メンバー一覧をマスタから読み込みました（"
+                                + masterMemberNames.size()
+                                + " 名）。\n"
+                                + master);
+            }
         } catch (IOException ex) {
             if (showAlertOnFailure) {
                 alert(

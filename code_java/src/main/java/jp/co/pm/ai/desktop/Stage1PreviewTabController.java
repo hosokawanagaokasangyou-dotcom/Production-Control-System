@@ -361,6 +361,7 @@ public final class Stage1PreviewTabController {
         Path path = Path.of(pathField.getText().trim());
         if (!java.nio.file.Files.isRegularFile(path)) {
             shell.appendLog("[stage1-preview] file not found: " + path);
+            shell.showWarningDialog("読込", "ファイルが見つかりません。\n" + path);
             return;
         }
         String sheet = sheetField.getText().trim();
@@ -405,8 +406,19 @@ public final class Stage1PreviewTabController {
                             + headersRef.size()
                             + " path="
                             + path);
+            shell.showInformationDialog(
+                    "読込完了",
+                    "段階1 成形結果を読み込みました。\n"
+                            + path
+                            + "\nシート: "
+                            + sheet
+                            + "\n行数: "
+                            + rows.size());
         } catch (Exception ex) {
             shell.appendLog("[stage1-preview] load error: " + ex.getMessage());
+            shell.showErrorDialog(
+                    "読込エラー",
+                    ex.getMessage() != null ? ex.getMessage() : ex.toString());
         }
     }
 

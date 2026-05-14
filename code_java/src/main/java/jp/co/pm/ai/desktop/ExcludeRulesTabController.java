@@ -216,6 +216,7 @@ public final class ExcludeRulesTabController {
         String p = pathField.getText() != null ? pathField.getText().trim() : "";
         if (p.isEmpty()) {
             shell.appendLog("[exclude-json] path empty");
+            shell.showWarningDialog("読込", "JSON のパスが空です。");
             return;
         }
         Optional<Path> resolvedOpt = resolveExistingExcludeRulesJsonPath(p);
@@ -223,6 +224,9 @@ public final class ExcludeRulesTabController {
             shell.appendLog(
                     "[exclude-json] 読込失敗: ファイルなし（入力パスおよび code/json 等の既定候補）。パス="
                             + p);
+            shell.showWarningDialog(
+                    "読込",
+                    "ファイルが見つかりません（入力パスおよび既定候補）。\nパス: " + p);
             return;
         }
         Path fp = resolvedOpt.get();
@@ -234,8 +238,12 @@ public final class ExcludeRulesTabController {
         try {
             String s = Files.readString(fp, StandardCharsets.UTF_8);
             setBodyAndSyncTable(s, "[exclude-json] load ok: " + fp);
+            shell.showInformationDialog("読込完了", "配台不要ルール JSON を読み込みました。\n" + fp);
         } catch (IOException ex) {
             shell.appendLog("[exclude-json] load error: " + ex.getMessage());
+            shell.showErrorDialog(
+                    "読込エラー",
+                    ex.getMessage() != null ? ex.getMessage() : ex.toString());
         }
     }
 
@@ -244,6 +252,7 @@ public final class ExcludeRulesTabController {
         String p = pathField.getText() != null ? pathField.getText().trim() : "";
         if (p.isEmpty()) {
             shell.appendLog("[exclude-json] path empty (set PM_AI_EXCLUDE_RULES_JSON or type path)");
+            shell.showWarningDialog("保存", "保存先のパスが空です（PM_AI_EXCLUDE_RULES_JSON または手入力）。");
             return;
         }
         try {
@@ -252,8 +261,12 @@ public final class ExcludeRulesTabController {
             }
             Files.writeString(Path.of(p), bodyArea.getText(), StandardCharsets.UTF_8);
             shell.appendLog("[exclude-json] save ok: " + p);
+            shell.showInformationDialog("保存完了", "配台不要ルール JSON を保存しました。\n" + p);
         } catch (IOException ex) {
             shell.appendLog("[exclude-json] save error: " + ex.getMessage());
+            shell.showErrorDialog(
+                    "保存エラー",
+                    ex.getMessage() != null ? ex.getMessage() : ex.toString());
         }
     }
 

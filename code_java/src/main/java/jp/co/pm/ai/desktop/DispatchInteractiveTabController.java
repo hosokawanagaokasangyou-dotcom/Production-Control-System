@@ -580,7 +580,7 @@ public final class DispatchInteractiveTabController {
         }
         resetTableDisplayBeforeReload("再読込中（表示をクリア）");
         // 同一パルスで即 reload すると、空グリッドのレイアウト前に onSucceeded が走り「クリアされない」ように見える
-        Platform.runLater(this::reloadFromDiskQuiet);
+        Platform.runLater(() -> reloadFromDiskQuiet(null, false, true));
     }
 
     @FXML
@@ -635,17 +635,11 @@ public final class DispatchInteractiveTabController {
                         shell.appendLog(
                                 "[dispatch-editor] save failed: "
                                         + (detail != null && !detail.isBlank() ? detail : "(不明)"));
-                        Alert err = new Alert(AlertType.ERROR);
-                        err.setTitle("保存エラー");
-                        err.setHeaderText("保存に失敗しました");
-                        err.setContentText(
+                        String msg =
                                 detail != null && !detail.isBlank()
                                         ? detail
-                                        : (ex != null ? ex.getClass().getSimpleName() : "(不明)"));
-                        if (shell.getPrimaryStage() != null) {
-                            err.initOwner(shell.getPrimaryStage());
-                        }
-                        err.showAndWait();
+                                        : (ex != null ? ex.getClass().getSimpleName() : "(不明)");
+                        shell.showErrorDialog("保存エラー", "保存に失敗しました。\n" + msg);
                     } finally {
                         hideReloadProgress();
                     }
@@ -669,9 +663,7 @@ public final class DispatchInteractiveTabController {
                             + " 実行・ログのメッセージも確認してください。");
         }
         alert.setContentText(text.toString());
-        if (shell != null && shell.getPrimaryStage() != null) {
-            alert.initOwner(shell.getPrimaryStage());
-        }
+        shell.prepareDialogForMainTheme(alert);
         alert.showAndWait();
     }
 
@@ -1115,7 +1107,7 @@ public final class DispatchInteractiveTabController {
     }
 
     private void reloadFromDiskQuiet() {
-        reloadFromDiskQuiet(null, false);
+        reloadFromDiskQuiet(null, false, false);
     }
 
     /**
@@ -1124,7 +1116,7 @@ public final class DispatchInteractiveTabController {
      * を読まない。
      */
     private void reloadFromDiskQuietAfterDispatchTrial(Runnable afterSuccessOnFxThread) {
-        reloadFromDiskQuiet(afterSuccessOnFxThread, true);
+        reloadFromDiskQuiet(afterSuccessOnFxThread, true, false);
     }
 
     /**
@@ -1134,9 +1126,12 @@ public final class DispatchInteractiveTabController {
      * @param applyDispatchTrialShortfallJson true のときのみ隣接の {@code dispatch_trial_shortages.json} を読む（配台試行
      *     直後）。false のときは未達表・セル赤表示用キーをクリアする（再読み・外部更新後など、メイン JSON と不足 JSON
      *     の生成タイミングがずれていると誤表示になるため）。
+     * @param userCompletionDialog ユーザーが「再読み」ボタンを押したときのみ true（自動再同期ではダイアログを出さない）。
      */
     private void reloadFromDiskQuiet(
-            Runnable afterSuccessOnFxThread, boolean applyDispatchTrialShortfallJson) {
+            Runnable afterSuccessOnFxThread,
+            boolean applyDispatchTrialShortfallJson,
+            boolean userCompletionDialog) {
         if (shell == null) {
             return;
         }
@@ -1148,10 +1143,12 @@ public final class DispatchInteractiveTabController {
             clearDispatchShortfallUi();
             rebuildGrids();
             clearDispatchDocDirty();
+            if (userCompletionDialog) {
+                shell.showWarningDialog("再読み", "結果_配台表.json が見つかりません。\n" + p);
+            }
             return;
         }
         showReloadProgress();
-        final MainShellController shellRef = shell;
         final Path jsonPath = p;
         Task<ReloadBundle> task =
                 new Task<>() {
@@ -1165,7 +1162,9 @@ public final class DispatchInteractiveTabController {
                 ev -> {
                     ReloadBundle b = task.getValue();
                     doc = b.doc();
-                    if (ResultDispatchStage2ColumnSupport.ensureStage2RequiredColumns(doc)) {
+                    boolean stage2ColsFilled =
+                            ResultDispatchStage2ColumnSupport.ensureStage2RequiredColumns(doc);
+                    if (stage2ColsFilled) {
                         markDispatchDocDirty();
                         statusLabel.setText(
                                 doc.rows().size() + " 行（段階2必須列を補完しました。保存してください）");
@@ -1185,6 +1184,15 @@ public final class DispatchInteractiveTabController {
                     if (afterSuccessOnFxThread != null) {
                         afterSuccessOnFxThread.run();
                     }
+                    if (userCompletionDialog) {
+                        String extra =
+                                stage2ColsFilled
+                                        ? "\n\n段階2必須列を補完しました。必要に応じて保存してください。"
+                                        : "";
+                        shell.showInformationDialog(
+                                "再読み完了",
+                                doc.rows().size() + " 行を読み込みました。\n" + jsonPath + extra);
+                    }
                 });
         task.setOnFailed(
                 ev -> {
@@ -1198,13 +1206,20 @@ public final class DispatchInteractiveTabController {
                     rebuildGrids();
                     clearDispatchDocDirty();
                     hideReloadProgress();
+                    if (userCompletionDialog) {
+                        String msg =
+                                ex != null && ex.getMessage() != null && !ex.getMessage().isBlank()
+                                        ? ex.getMessage()
+                                        : (ex != null ? ex.toString() : "不明");
+                        shell.showErrorDialog("読込エラー", msg);
+                    }
                 });
         new Thread(task, "dispatch-editor-reload").start();
     }
 
     /** 段階2 正常終了直後: 表を JSON から再構築する。 */
     void reloadTableFromDiskAfterStage2Success() {
-        reloadFromDiskQuiet(null, false);
+        reloadFromDiskQuiet(null, false, false);
     }
 
     /** 再読込や段階2開始の直前に、メモリ上の表を空表示へ戻す（JSON パスラベルは維持）。 */
@@ -1240,7 +1255,7 @@ public final class DispatchInteractiveTabController {
      * 外部で {@code 結果_配台表.json} が更新されたあと、当タブの表をディスクから再読込する（段階2終了後の再同期やワークスペース復元後など）。
      */
     void reloadTableFromDiskAfterExternalUpdate() {
-        reloadFromDiskQuiet(null, false);
+        reloadFromDiskQuiet(null, false, false);
     }
 
     /** 配台ワークスペース用スナップショット: メモリ上の配台表ドキュメントのコピー（UI スレッド）。 */

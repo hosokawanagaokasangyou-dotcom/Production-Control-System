@@ -45,22 +45,22 @@ public final class SpecialRulesTabController {
                 .addListener(
                         (obs, prev, cur) -> {
                             if (shell != null && cur != null) {
-                                loadCurrent();
+                                loadCurrent(false);
                             }
                         });
     }
 
     void bindShell(MainShellController shell) {
         this.shell = shell;
-        loadCurrent();
+        loadCurrent(false);
     }
 
     @FXML
     private void onReloadAction() {
-        loadCurrent();
+        loadCurrent(true);
     }
 
-    private void loadCurrent() {
+    private void loadCurrent(boolean userCompletionDialog) {
         if (shell == null) {
             return;
         }
@@ -76,16 +76,27 @@ public final class SpecialRulesTabController {
             if (Files.isRegularFile(path)) {
                 bodyArea.setText(Files.readString(path, StandardCharsets.UTF_8));
                 shell.appendLog("[special-rules] load ok: " + path);
+                if (userCompletionDialog) {
+                    shell.showInformationDialog("再読込完了", "特別ルールを読み込みました。\n" + path);
+                }
             } else {
                 bodyArea.setText(
                         "ファイルが見つかりません。\n"
                                 + path
                                 + "\n\nリポジトリ根（PM_AI_REPO_ROOT）を環境変数タブで確認してください。");
                 shell.appendLog("[special-rules] missing: " + path);
+                if (userCompletionDialog) {
+                    shell.showWarningDialog("再読込", "ファイルが見つかりません。\n" + path);
+                }
             }
         } catch (IOException ex) {
             bodyArea.setText("読込エラー: " + ex.getMessage());
             shell.appendLog("[special-rules] read error: " + ex.getMessage());
+            if (userCompletionDialog) {
+                shell.showErrorDialog(
+                        "読込エラー",
+                        ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            }
         }
     }
 }
