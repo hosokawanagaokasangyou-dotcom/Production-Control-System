@@ -373,28 +373,6 @@ public final class ExcludeRulesTabController {
         tableEdited();
     }
 
-    @FXML
-    private void onJsonToTableButtonAction() {
-        try {
-            syncJsonToTableInternal();
-            preferTableOnSave = false;
-            shell.appendLog("[exclude-json] JSON→表 反映しました");
-        } catch (Exception ex) {
-            shell.appendLog("[exclude-json] JSON→表 エラー: " + ex.getMessage());
-        }
-    }
-
-    @FXML
-    private void onTableToJsonButtonAction() {
-        try {
-            applyTableToBodyInternal();
-            preferTableOnSave = false;
-            shell.appendLog("[exclude-json] 表→JSON 反映しました");
-        } catch (Exception ex) {
-            shell.appendLog("[exclude-json] 表→JSON エラー: " + ex.getMessage());
-        }
-    }
-
     private void setBodyAndSyncTable(String jsonText, String logOk) {
         setBodyTextProgrammatically(jsonText);
         preferTableOnSave = false;

@@ -49,10 +49,6 @@
                                 onAction="#onAddRowButtonAction"/>
                         <Button mnemonicParsing="false" text="行を削除"
                                 onAction="#onRemoveRowButtonAction"/>
-                        <Button mnemonicParsing="false" text="JSON→表"
-                                onAction="#onJsonToTableButtonAction"/>
-                        <Button mnemonicParsing="false" text="表→JSON"
-                                onAction="#onTableToJsonButtonAction"/>
                     </HBox>
                     <TableView fx:id="rulesTable" editable="true" minHeight="160.0" VBox.vgrow="ALWAYS"/>
                 </VBox>
