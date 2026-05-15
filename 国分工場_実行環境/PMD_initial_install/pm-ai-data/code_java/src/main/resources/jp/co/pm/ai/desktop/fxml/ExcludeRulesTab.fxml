@@ -49,6 +49,9 @@
                                 onAction="#onAddRowButtonAction"/>
                         <Button mnemonicParsing="false" text="行を削除"
                                 onAction="#onRemoveRowButtonAction"/>
+                        <Button fx:id="aiCompileLogicJsonButton" mnemonicParsing="false"
+                                text="ロジック式をAI生成"
+                                onAction="#onAiCompileLogicJsonButtonAction"/>
                     </HBox>
                     <TableView fx:id="rulesTable" editable="true" minHeight="160.0" VBox.vgrow="ALWAYS"/>
                 </VBox>

@@ -4,35 +4,43 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.SplitPane;
+import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.cell.TextFieldTableCell;
+import javafx.scene.layout.Region;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.crypto.GeminiCredentialsV2Crypto;
 import jp.co.pm.ai.desktop.ui.FileChooserForEnvKey;
 
 /**
@@ -63,7 +71,9 @@ public final class ExcludeRulesTabController {
             "PM_AI_EXCLUDE_RULES_JSON が実在かつ有効なら"
                     + " 設定_配台不要工程 の Excel 保守を省略可。"
                     + " 環境変数タブに同名を追加してパスを共有してください。"
-                    + " 表と JSON の両方で編集できます。保存は直近で触れた側を書き出します。";
+                    + " 表と JSON の両方で編集できます。保存は直近で触れた側を書き出します。"
+                    + " 「ロジック式をAI生成」は選択行の配台不要ロジックを Gemini で JSON 化します（"
+                    + "code/gemini_credentials.encrypted.json または GEMINI_CREDENTIALS_JSON）。";
 
     private Stage ownerStage;
 
@@ -89,6 +99,9 @@ public final class ExcludeRulesTabController {
 
     @FXML
     private TableView<ExcludeRuleTableRow> rulesTable;
+
+    @FXML
+    private Button aiCompileLogicJsonButton;
 
     private final ObservableList<ExcludeRuleTableRow> ruleRows = FXCollections.observableArrayList();
 
@@ -134,23 +147,22 @@ public final class ExcludeRulesTabController {
 
         TableColumn<ExcludeRuleTableRow, String> colLj = new TableColumn<>(COL_LOGIC_JA);
         colLj.setCellValueFactory(d -> d.getValue().logicJaProperty());
-        colLj.setCellFactory(TextFieldTableCell.forTableColumn());
-        colLj.setOnEditCommit(e -> {
-            e.getRowValue().logicJaProperty().set(e.getNewValue());
+        colLj.setCellFactory(c -> wrappingTextAreaCell(c, (row, txt) -> {
+            row.logicJaProperty().set(txt);
             tableEdited();
-        });
-        colLj.setPrefWidth(160);
+        }));
+        colLj.setPrefWidth(280);
 
         TableColumn<ExcludeRuleTableRow, String> colJe = new TableColumn<>(COL_LOGIC_JSON);
         colJe.setCellValueFactory(d -> d.getValue().logicJsonProperty());
-        colJe.setCellFactory(TextFieldTableCell.forTableColumn());
-        colJe.setOnEditCommit(e -> {
-            e.getRowValue().logicJsonProperty().set(e.getNewValue());
+        colJe.setCellFactory(c -> wrappingTextAreaCell(c, (row, txt) -> {
+            row.logicJsonProperty().set(txt);
             tableEdited();
-        });
-        colJe.setPrefWidth(220);
+        }));
+        colJe.setPrefWidth(320);
 
         rulesTable.getColumns().setAll(colP, colM, colF, colLj, colJe);
+        rulesTable.setFixedCellSize(96);
 
         rulesTable.focusedProperty().addListener((obs, was, now) -> {
             if (Boolean.TRUE.equals(now)) {
@@ -216,6 +228,7 @@ public final class ExcludeRulesTabController {
         String p = pathField.getText() != null ? pathField.getText().trim() : "";
         if (p.isEmpty()) {
             shell.appendLog("[exclude-json] path empty");
+            shell.showWarningDialog("読込", "JSON のパスが空です。");
             return;
         }
         Optional<Path> resolvedOpt = resolveExistingExcludeRulesJsonPath(p);
@@ -223,6 +236,9 @@ public final class ExcludeRulesTabController {
             shell.appendLog(
                     "[exclude-json] 読込失敗: ファイルなし（入力パスおよび code/json 等の既定候補）。パス="
                             + p);
+            shell.showWarningDialog(
+                    "読込",
+                    "ファイルが見つかりません（入力パスおよび既定候補）。\nパス: " + p);
             return;
         }
         Path fp = resolvedOpt.get();
@@ -234,8 +250,12 @@ public final class ExcludeRulesTabController {
         try {
             String s = Files.readString(fp, StandardCharsets.UTF_8);
             setBodyAndSyncTable(s, "[exclude-json] load ok: " + fp);
+            shell.showInformationDialog("読込完了", "配台不要ルール JSON を読み込みました。\n" + fp);
         } catch (IOException ex) {
             shell.appendLog("[exclude-json] load error: " + ex.getMessage());
+            shell.showErrorDialog(
+                    "読込エラー",
+                    ex.getMessage() != null ? ex.getMessage() : ex.toString());
         }
     }
 
@@ -244,6 +264,7 @@ public final class ExcludeRulesTabController {
         String p = pathField.getText() != null ? pathField.getText().trim() : "";
         if (p.isEmpty()) {
             shell.appendLog("[exclude-json] path empty (set PM_AI_EXCLUDE_RULES_JSON or type path)");
+            shell.showWarningDialog("保存", "保存先のパスが空です（PM_AI_EXCLUDE_RULES_JSON または手入力）。");
             return;
         }
         try {
@@ -252,8 +273,12 @@ public final class ExcludeRulesTabController {
             }
             Files.writeString(Path.of(p), bodyArea.getText(), StandardCharsets.UTF_8);
             shell.appendLog("[exclude-json] save ok: " + p);
+            shell.showInformationDialog("保存完了", "配台不要ルール JSON を保存しました。\n" + p);
         } catch (IOException ex) {
             shell.appendLog("[exclude-json] save error: " + ex.getMessage());
+            shell.showErrorDialog(
+                    "保存エラー",
+                    ex.getMessage() != null ? ex.getMessage() : ex.toString());
         }
     }
 
@@ -360,6 +385,84 @@ public final class ExcludeRulesTabController {
         tableEdited();
     }
 
+    @FXML
+    private void onAiCompileLogicJsonButtonAction() {
+        if (shell == null) {
+            return;
+        }
+        var selected = rulesTable.getSelectionModel().getSelectedItems();
+        if (selected == null || selected.isEmpty()) {
+            shell.appendLog("[exclude-json] AI: 行を選択してください");
+            shell.showWarningDialog("AI ロジック式", "変換する行を表で選択してください。");
+            return;
+        }
+        List<ExcludeRuleTableRow> targets = new ArrayList<>();
+        for (ExcludeRuleTableRow r : selected) {
+            String ja = r.logicJaProperty().get();
+            if (ja != null && !ja.strip().isEmpty()) {
+                targets.add(r);
+            }
+        }
+        if (targets.isEmpty()) {
+            shell.showWarningDialog("AI ロジック式", "選択行に配台不要ロジックの本文がありません。");
+            return;
+        }
+        String apiKey = loadGeminiApiKeyOrNull();
+        if (apiKey == null) {
+            return;
+        }
+        if (aiCompileLogicJsonButton != null) {
+            aiCompileLogicJsonButton.setDisable(true);
+        }
+        shell.appendLog("[exclude-json] AI: " + targets.size() + " 行を変換中…");
+        Duration timeout = Duration.ofSeconds(120);
+        Thread worker =
+                new Thread(
+                        () -> {
+                            try {
+                                for (ExcludeRuleTableRow row : targets) {
+                                    final ExcludeRuleTableRow r = row;
+                                    String json =
+                                            ExcludeRuleLogicGeminiService.compileToCompactJson(
+                                                    r.logicJaProperty().get(),
+                                                    r.processProperty().get(),
+                                                    r.machineProperty().get(),
+                                                    apiKey,
+                                                    timeout);
+                                    final String fj = json;
+                                    Platform.runLater(
+                                            () -> {
+                                                r.logicJsonProperty().set(fj);
+                                                tableEdited();
+                                            });
+                                }
+                                Platform.runLater(
+                                        () ->
+                                                shell.appendLog(
+                                                        "[exclude-json] AI: "
+                                                                + targets.size()
+                                                                + " 行のロジック式を更新しました"));
+                            } catch (Exception ex) {
+                                String msg = ex.getMessage() != null ? ex.getMessage() : ex.toString();
+                                Platform.runLater(
+                                        () -> {
+                                            shell.appendLog("[exclude-json] AI エラー: " + msg);
+                                            shell.showErrorDialog("AI ロジック式", msg);
+                                        });
+                            } finally {
+                                Platform.runLater(
+                                        () -> {
+                                            if (aiCompileLogicJsonButton != null) {
+                                                aiCompileLogicJsonButton.setDisable(false);
+                                            }
+                                        });
+                            }
+                        },
+                        "exclude-rules-ai-logic");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
     private void setBodyAndSyncTable(String jsonText, String logOk) {
         setBodyTextProgrammatically(jsonText);
         preferTableOnSave = false;
@@ -420,6 +523,101 @@ public final class ExcludeRulesTabController {
 
     private void tableEdited() {
         preferTableOnSave = true;
+    }
+
+    /**
+     * 長文列用: 右端で折り返す {@link TextArea} をセルに載せ、フォーカス喪失時にモデルへ反映する。
+     */
+    private TableCell<ExcludeRuleTableRow, String> wrappingTextAreaCell(
+            TableColumn<ExcludeRuleTableRow, String> column,
+            BiConsumer<ExcludeRuleTableRow, String> applyText) {
+        return new TableCell<>() {
+            private final TextArea area = new TextArea();
+            private ExcludeRuleTableRow boundRow;
+
+            {
+                area.setWrapText(true);
+                area.setPrefRowCount(4);
+                area.setMinHeight(Region.USE_PREF_SIZE);
+                area.setMaxWidth(Double.MAX_VALUE);
+                area
+                        .focusedProperty()
+                        .addListener(
+                                (obs, was, now) -> {
+                                    if (Boolean.FALSE.equals(now)
+                                            && boundRow != null
+                                            && getTableRow() != null
+                                            && boundRow == getTableRow().getItem()) {
+                                        applyText.accept(boundRow, area.getText());
+                                    }
+                                });
+            }
+
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || getTableRow() == null || getTableRow().getItem() == null) {
+                    boundRow = null;
+                    setGraphic(null);
+                    return;
+                }
+                boundRow = getTableRow().getItem();
+                String next = item == null ? "" : item;
+                if (!area.isFocused() && !Objects.equals(next, area.getText())) {
+                    area.setText(next);
+                }
+                if (area.prefWidthProperty().isBound()) {
+                    area.prefWidthProperty().unbind();
+                }
+                area.prefWidthProperty().bind(column.widthProperty().subtract(14));
+                setGraphic(area);
+            }
+        };
+    }
+
+    /**
+     * {@link jp.co.pm.ai.desktop.ApiModelBenchmarkTabController} と同じ解決（環境変数または既定パス）。
+     */
+    private static Path resolveGeminiCredentialsPath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String raw = u.get(AppPaths.KEY_GEMINI_CREDENTIALS_JSON);
+        if (raw != null && !raw.isBlank()) {
+            return Path.of(raw.strip()).toAbsolutePath().normalize();
+        }
+        return AppPaths.resolveRepoRoot(u)
+                .resolve("code")
+                .resolve("gemini_credentials.encrypted.json")
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /** 復号済み API キー。失敗時はダイアログのみで {@code null}。 */
+    private String loadGeminiApiKeyOrNull() {
+        Path credPath = resolveGeminiCredentialsPath(shell.snapshotUiEnv());
+        if (!Files.isRegularFile(credPath)) {
+            shell.showWarningDialog(
+                    "AI ロジック式",
+                    "認証ファイルが見つかりません。\n"
+                            + credPath
+                            + "\n環境変数タブで GEMINI_CREDENTIALS_JSON を設定するか、既定パスにファイルを置いてください。");
+            return null;
+        }
+        try {
+            String json = Files.readString(credPath, StandardCharsets.UTF_8);
+            String apiKey =
+                    GeminiCredentialsV2Crypto.decryptGeminiApiKeyFromJsonString(
+                            json, GeminiCredentialsV2Crypto.DEFAULT_PASSPHRASE);
+            if (apiKey == null || apiKey.isBlank()) {
+                shell.showErrorDialog("AI ロジック式", "復号した API キーが空です。");
+                return null;
+            }
+            return apiKey;
+        } catch (Exception ex) {
+            shell.showErrorDialog(
+                    "AI ロジック式",
+                    "認証 JSON の読込・復号に失敗しました。\n" + ex.getMessage());
+            return null;
+        }
     }
 
     private void syncJsonToTableInternal() throws IOException {
