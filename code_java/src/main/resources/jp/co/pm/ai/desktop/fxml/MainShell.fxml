@@ -89,6 +89,12 @@
                         <fx:include fx:id="stage1PreviewTab" source="Stage1PreviewTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabCodeLookupTables" closable="false"
+                     text="参照テーブル(code)">
+                    <content>
+                        <fx:include fx:id="codeDispatchLookupTablesTab" source="CodeDispatchLookupTablesTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabExcludeRules" closable="false"
                      text="配台不要ルール (JSON)">
                     <content>

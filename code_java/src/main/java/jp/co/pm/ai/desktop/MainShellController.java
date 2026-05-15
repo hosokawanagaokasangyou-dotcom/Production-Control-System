@@ -300,6 +300,9 @@ public final class MainShellController {
     private ApiModelBenchmarkTabController apiModelBenchmarkTabController;
 
     @FXML
+    private CodeDispatchLookupTablesTabController codeDispatchLookupTablesTabController;
+
+    @FXML
     private Tab mainShellTabRun;
 
     @FXML
@@ -364,6 +367,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabApiModelBenchmark;
+
+    @FXML
+    private Tab mainShellTabCodeLookupTables;
 
     @FXML
     private Tab mainShellTabOrganizer;
@@ -500,6 +506,9 @@ public final class MainShellController {
 
         planInputTabController.bindShell(this);
         stage1PreviewTabController.bindShell(this);
+        if (codeDispatchLookupTablesTabController != null) {
+            codeDispatchLookupTablesTabController.bindShell(this);
+        }
         excludeRulesTabController.bindShell(this);
         specialRulesTabController.bindShell(this);
         actualsStatusTabController.bindShell(this);
@@ -1272,6 +1281,9 @@ public final class MainShellController {
         if (t == mainShellTabStage1Preview) {
             return MainShellTabId.STAGE1_PREVIEW;
         }
+        if (t == mainShellTabCodeLookupTables) {
+            return MainShellTabId.CODE_LOOKUP_TABLES;
+        }
         if (t == mainShellTabExcludeRules) {
             return MainShellTabId.EXCLUDE_RULES;
         }
@@ -1329,6 +1341,7 @@ public final class MainShellController {
             case MASTER_SUMMARY -> mainShellTabMasterSummary;
             case PLAN_INPUT -> mainShellTabPlanInput;
             case STAGE1_PREVIEW -> mainShellTabStage1Preview;
+            case CODE_LOOKUP_TABLES -> mainShellTabCodeLookupTables;
             case EXCLUDE_RULES -> mainShellTabExcludeRules;
             case SPECIAL_RULES -> mainShellTabSpecialRules;
             case ACTUALS_STATUS -> mainShellTabActualsStatus;
@@ -1496,6 +1509,12 @@ public final class MainShellController {
                 m.put(MainShellTabId.DISPATCH_INTERACTIVE.key(), i);
             }
         }
+        if (codeDispatchLookupTablesTabController != null) {
+            int i = codeDispatchLookupTablesTabController.snapshotInnerTabSelectedIndex();
+            if (i >= 0) {
+                m.put(MainShellTabId.CODE_LOOKUP_TABLES.key(), i);
+            }
+        }
         return Map.copyOf(m);
     }
 
@@ -1512,6 +1531,10 @@ public final class MainShellController {
                     Integer di = map.get(MainShellTabId.DISPATCH_INTERACTIVE.key());
                     if (di != null && dispatchInteractiveTabController != null) {
                         dispatchInteractiveTabController.applyInnerTabSelectedIndex(di.intValue());
+                    }
+                    Integer lk = map.get(MainShellTabId.CODE_LOOKUP_TABLES.key());
+                    if (lk != null && codeDispatchLookupTablesTabController != null) {
+                        codeDispatchLookupTablesTabController.applyInnerTabSelectedIndex(lk.intValue());
                     }
                 });
     }
@@ -2962,6 +2985,18 @@ public final class MainShellController {
             appendLog("[end] exitCode=" + c + " " + exitHint(c));
             if (STAGE1.equals(script) && c == 0) {
                 applyStage1ExcludeRulesJsonToEnvTab();
+                try {
+                    CodeDispatchLookupTablesMerge.MergeSummary ms =
+                            CodeDispatchLookupTablesMerge.mergeAfterStage1(collectUiEnv());
+                    if (ms.totalAdded() > 0) {
+                        appendLog("[stage1] code/ 参照テーブル自動追記: " + ms.summaryJa());
+                    }
+                } catch (Exception ex) {
+                    appendLog("[stage1] code/ 参照テーブル自動追記失敗: " + ex.getMessage());
+                }
+                if (codeDispatchLookupTablesTabController != null) {
+                    Platform.runLater(() -> codeDispatchLookupTablesTabController.reloadAllFromDisk());
+                }
                 if (reloadAfterStage1Preview != null) {
                     reloadAfterStage1Preview.run();
                 }

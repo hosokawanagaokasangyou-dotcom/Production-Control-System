@@ -61,7 +61,7 @@ public final class Stage2RollUnitLengthTables {
         return v != null && v > 0 ? Optional.of(v) : Optional.empty();
     }
 
-    static String normalizeKey(String val) {
+    public static String normalizeKey(String val) {
         if (val == null) {
             return "";
         }

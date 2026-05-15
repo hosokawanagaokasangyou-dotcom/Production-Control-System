@@ -37,6 +37,7 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.GLOBAL_SETTINGS.key(),
                     MainShellTabId.PLAN_RESULT_VIEWER.key(),
                     MainShellTabId.STAGE1_PREVIEW.key(),
+                    MainShellTabId.CODE_LOOKUP_TABLES.key(),
                     MainShellTabId.RESULT_DISPATCH.key(),
                     MainShellTabId.MASTER_SUMMARY.key(),
                     MainShellTabId.EXCLUDE_RULES.key(),
@@ -98,6 +99,7 @@ public final class MainShellTabLayoutDefaults {
                         List.of(
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_RESULT_VIEWER.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.STAGE1_PREVIEW.key(), ""),
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.CODE_LOOKUP_TABLES.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.RESULT_DISPATCH.key(), ""))));
 
         top.add(

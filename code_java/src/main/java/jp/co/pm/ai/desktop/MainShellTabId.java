@@ -17,6 +17,8 @@ public enum MainShellTabId {
     MASTER_SUMMARY("masterSummary"),
     PLAN_INPUT("planInput"),
     STAGE1_PREVIEW("stage1Preview"),
+    /** {@code code/} 配下の製品・原反参照テーブル（配台照会用 CSV）。 */
+    CODE_LOOKUP_TABLES("codeLookupTables"),
     EXCLUDE_RULES("excludeRules"),
     SPECIAL_RULES("specialRules"),
     ACTUALS_STATUS("actualsStatus"),
