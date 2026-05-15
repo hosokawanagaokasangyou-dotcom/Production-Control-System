@@ -5,6 +5,7 @@ import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -35,6 +36,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
 
 /**
@@ -547,7 +549,12 @@ public final class SpreadsheetTabularSupport {
             return false;
         }
         double effFromDisplay = effectiveRollUnitMForDispatchTaskSimulator(q, uDisp);
-        if (Math.abs(effFromDisplay - uDisp) > 1e-6) {
+        /*
+         * 換算数量に満たない残量（q < シートの u）では Python も n_work=1 とし実効は q に近づく。
+         * このときセルの製品ロール長（例: 17）と effective の数値差だけで黄にすると誤検知になる（ログ077782 E5-2）。
+         */
+        double nRawOverDisplay = uDisp > 1e-12 ? q / uDisp : 0.0;
+        if (nRawOverDisplay >= 1.0 - 1e-9 && Math.abs(effFromDisplay - uDisp) > 1e-6) {
             return true;
         }
         String product = idxProd >= 0 ? planInputCellAt(src, idxProd) : "";
@@ -559,6 +566,83 @@ public final class SpreadsheetTabularSupport {
         double effFromSheet = effectiveRollUnitMForDispatchTaskSimulator(q, uSheet);
         return Math.abs(effFromSheet - uDisp) <= 1e-6;
     }
+
+    // #region agent log
+    private static final String DEBUG_SESSION_ROLL_TRACE = "077782";
+
+    /**
+     * デバッグ077782: 管理NO（または依頼NO）が E5-2 の行について、ロール単位長さ・残量近似・実効ロールの中間値を NDJSON に出す。
+     */
+    private static void agentDebugPlanInputRowRollIfE5(
+            List<String> headersRef,
+            ObservableList<String> src,
+            int idxConv,
+            int idxUnp,
+            int idxAct,
+            int idxProd,
+            int idxUsed,
+            int idxRoll,
+            Stage2RollUnitLengthTables tablesOrNull) {
+        int idxMgmt = headersRef.indexOf("管理NO");
+        if (idxMgmt < 0) {
+            idxMgmt = headersRef.indexOf("依頼NO");
+        }
+        String mg = idxMgmt >= 0 ? planInputCellAt(src, idxMgmt).strip() : "";
+        if (!"E5-2".equals(mg) && !mg.contains("E5-2")) {
+            return;
+        }
+        String rollRaw = idxRoll >= 0 ? planInputCellAt(src, idxRoll) : "";
+        double uDisp = Stage2RollUnitLengthTables.parseFloatSafe(rollRaw, 0.0);
+        double q = planInputQtyMForDispatchSimulatorApprox(src, idxConv, idxUnp, idxAct);
+        double conv =
+                idxConv >= 0 ? Stage2RollUnitLengthTables.parseFloatSafe(planInputCellAt(src, idxConv), 0.0) : 0.0;
+        double actual =
+                idxAct >= 0 ? Stage2RollUnitLengthTables.parseFloatSafe(planInputCellAt(src, idxAct), 0.0) : 0.0;
+        String unpRaw = idxUnp >= 0 ? planInputCellAt(src, idxUnp) : "";
+        String product = idxProd >= 0 ? planInputCellAt(src, idxProd) : "";
+        String usedRaw = idxUsed >= 0 ? planInputCellAt(src, idxUsed) : "";
+        int idxPlanQty = headersRef.indexOf("配台使用計画数量");
+        String planQtyCell = idxPlanQty >= 0 ? planInputCellAt(src, idxPlanQty) : "";
+        int idxUnpAlt = headersRef.indexOf("未加工数");
+        String unpAltRaw = idxUnpAlt >= 0 ? planInputCellAt(src, idxUnpAlt) : "";
+        int idxRawRoll = headersRef.indexOf("(原反)ロール単位長さ");
+        if (idxRawRoll < 0) {
+            idxRawRoll = headersRef.indexOf("(原版)ロール単位長さ");
+        }
+        String rawRollCell = idxRawRoll >= 0 ? planInputCellAt(src, idxRawRoll) : "";
+        double effD = effectiveRollUnitMForDispatchTaskSimulator(q, uDisp);
+        double nRawDisp = (q > 1e-12 && uDisp > 1e-12) ? q / uDisp : Double.NaN;
+        double uSheet = intrinsicProductRollSheetGuess(product, usedRaw, tablesOrNull, q);
+        double effS = effectiveRollUnitMForDispatchTaskSimulator(q, uSheet);
+        boolean yel =
+                planInputRollUnitLengthCellIsYellowHighlight(
+                        src, idxConv, idxUnp, idxAct, idxProd, idxUsed, rollRaw, tablesOrNull);
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("rowKey", mg);
+        data.put("qtyApprox_m", q);
+        data.put("conv_m", conv);
+        data.put("actual_m", actual);
+        data.put("unprocessed_raw", unpRaw);
+        data.put("unprocessed_num_raw", unpAltRaw);
+        data.put("plan_dispatch_qty_cell", planQtyCell);
+        data.put("raw_roll_unit_cell", rawRollCell);
+        data.put("roll_display_m", uDisp);
+        data.put("nRaw_q_over_rollDisplay", nRawDisp);
+        data.put("effective_q_rollDisplay_m", effD);
+        data.put("uSheet_guess_m", uSheet);
+        data.put("effective_q_uSheet_m", effS);
+        data.put("yellowHighlight", yel);
+
+        AgentDebugLog.appendStructured(
+                Map.of(),
+                DEBUG_SESSION_ROLL_TRACE,
+                "H_roll_e5",
+                "SpreadsheetTabularSupport.buildPlanInputGrid",
+                "E5-2 row roll/qty intermediates",
+                data);
+    }
+    // #endregion
 
     /**
      * 配台計画タスク入力の編集可能グリッド。先頭固定列は白地、それ以外は既定で白地とし、「未加工」列のみ正の数値で薄緑、
@@ -604,6 +688,18 @@ public final class SpreadsheetTabularSupport {
         for (int r = 0; r < rc; r++) {
             int gridRow = firstData + r;
             ObservableList<String> src = rows.get(r);
+            // #region agent log
+            agentDebugPlanInputRowRollIfE5(
+                    headersRef,
+                    src,
+                    idxConv,
+                    idxUnp,
+                    idxAct,
+                    idxProd,
+                    idxUsed,
+                    headersRef.indexOf(PLAN_INPUT_COL_ROLL_UNIT_M),
+                    rollUnitLengthTablesOrNull);
+            // #endregion
             ObservableList<SpreadsheetCell> rowCells = FXCollections.observableArrayList();
             for (int c = 0; c < cols; c++) {
                 String raw = c < src.size() && src.get(c) != null ? src.get(c) : "";
