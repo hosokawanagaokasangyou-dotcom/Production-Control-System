@@ -29,7 +29,7 @@ import jp.co.pm.ai.desktop.io.CodeDispatchLookupTableIo;
 import jp.co.pm.ai.desktop.io.CodeDispatchLookupTableIo.KeyValTable;
 
 /**
- * {@code code/} 配下の配台参照テーブル（キー,値 CSV）をタブ切替で編集する。
+ * 「材料・製品種類情報」: {@code code/} 配下のキー・値テーブルをタブ切替で編集する。
  */
 public final class CodeDispatchLookupTablesTabController {
 
@@ -75,7 +75,7 @@ public final class CodeDispatchLookupTablesTabController {
     @FXML
     private void initialize() {
         hintLabel.setText(
-                "リポジトリ直下の code/ にある配台参照用テーブルを編集します（UTF-8）。"
+                "リポジトリ直下の code/ にある材料・製品種類に関するテーブルを編集します（UTF-8）。"
                         + " 段階1が正常終了したとき、plan_input_tasks の製品名・使用原反で不足キーのみ自動追記します。");
         for (FileSpec spec : FILES) {
             Tab tab = new Tab(spec.tabLabel());

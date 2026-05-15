@@ -90,7 +90,7 @@
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabCodeLookupTables" closable="false"
-                     text="参照テーブル(code)">
+                     text="材料・製品種類情報">
                     <content>
                         <fx:include fx:id="codeDispatchLookupTablesTab" source="CodeDispatchLookupTablesTab.fxml"/>
                     </content>

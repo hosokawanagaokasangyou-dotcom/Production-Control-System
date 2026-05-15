@@ -2989,10 +2989,10 @@ public final class MainShellController {
                     CodeDispatchLookupTablesMerge.MergeSummary ms =
                             CodeDispatchLookupTablesMerge.mergeAfterStage1(collectUiEnv());
                     if (ms.totalAdded() > 0) {
-                        appendLog("[stage1] code/ 参照テーブル自動追記: " + ms.summaryJa());
+                        appendLog("[stage1] 材料・製品種類情報(code/) 自動追記: " + ms.summaryJa());
                     }
                 } catch (Exception ex) {
-                    appendLog("[stage1] code/ 参照テーブル自動追記失敗: " + ex.getMessage());
+                    appendLog("[stage1] 材料・製品種類情報(code/) 自動追記失敗: " + ex.getMessage());
                 }
                 if (codeDispatchLookupTablesTabController != null) {
                     Platform.runLater(() -> codeDispatchLookupTablesTabController.reloadAllFromDisk());

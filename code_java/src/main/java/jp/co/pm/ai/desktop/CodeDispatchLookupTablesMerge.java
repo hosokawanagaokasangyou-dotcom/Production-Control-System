@@ -15,7 +15,7 @@ import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
 
 /**
- * 段階1出力 {@code plan_input_tasks.xlsx} に現れた製品名・使用原反を、{@code code/} 配下の参照テーブルへ不足分のみ追記する。
+ * 段階1出力 {@code plan_input_tasks.xlsx} に現れた製品名・使用原反を、{@code code/} 配下の材料・製品種類テーブルへ不足分のみ追記する。
  */
 public final class CodeDispatchLookupTablesMerge {
 
