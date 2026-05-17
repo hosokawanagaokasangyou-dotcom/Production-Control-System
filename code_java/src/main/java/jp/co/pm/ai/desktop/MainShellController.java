@@ -430,6 +430,13 @@ public final class MainShellController {
      */
     private DesktopSessionState pendingMainShellTabLayoutSession;
 
+    /** 非選択タブの重い {@link Tab#setContent(Node)} を退避するときの {@link Tab#getProperties()} キー。 */
+    private static final String PM_DEFERRED_TAB_CONTENT = "pmDeferredTabContent";
+
+    private static final String PM_LAZY_TAB_PLACEHOLDER = "pmLazyTabPlaceholder";
+
+    private final AtomicBoolean suppressLazyMainShellTabContentSwap = new AtomicBoolean(false);
+
     /** メインシェル見出しのユーザー色にドロップシャドウ風グローを付ける（タブ整理のチェック）。 */
     private final AtomicBoolean mainShellTabOrganizerHeaderGlowEnabled = new AtomicBoolean(true);
 
@@ -477,6 +484,7 @@ public final class MainShellController {
         suppressEnvSessionPersistence.set(true);
         try {
             captureMainShellTabBaselineTitles();
+            installLazyMainShellTabContentForStartup();
             envRows = FXCollections.observableArrayList();
             populateEnvRows(envRows);
             applyBundledPortableDefaultsIfPresent();
@@ -589,6 +597,8 @@ public final class MainShellController {
                     primaryStage.requestFocus();
                     applyPendingMainShellTabLayoutFromSessionIfNeeded();
                     tabPane.getSelectionModel().selectFirst();
+                    activateMainShellTabHeavyContentRecursive(
+                            tabPane.getSelectionModel().getSelectedItem());
                     Platform.runLater(
                             () -> {
                                 refreshMainShellTabHeaderChromeFromStoredColors();
@@ -621,6 +631,10 @@ public final class MainShellController {
                                     suppressDeliveryCalendarReloadTabGuard.set(false);
                                 }
                                 return;
+                            }
+                            if (!suppressLazyMainShellTabContentSwap.get()) {
+                                deferMainShellTabBranchHeavyContent(prevTab);
+                                activateMainShellTabHeavyContentRecursive(newTab);
                             }
                             emitShellTabNavigation();
                             /* :selected 由来の -fx-text-fill がインラインより後勝ちになることがあるため再適用 */
@@ -1741,6 +1755,7 @@ public final class MainShellController {
             return;
         }
         suppressMainShellTabChromeRefresh.set(true);
+        suppressLazyMainShellTabContentSwap.set(true);
         try {
             if (s.mainShellTabLayout() != null && !s.mainShellTabLayout().isEmpty()) {
                 if (!rebuildMainShellTabsFromLayout(s.mainShellTabLayout())) {
@@ -1754,8 +1769,93 @@ public final class MainShellController {
             lastEffectiveShellLeaf =
                     resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
         } finally {
+            suppressLazyMainShellTabContentSwap.set(false);
             suppressMainShellTabChromeRefresh.set(false);
         }
+    }
+
+    /**
+     * 初回 {@link Scene#doLayoutPass} 前に、全作業タブの Spreadsheet 等をシーンから外す。
+     * 非表示タブまで FXML 読込で載ると {@code IndexOutOfBoundsException}（index 19, length 19）になりやすい。
+     */
+    private void installLazyMainShellTabContentForStartup() {
+        if (tabPane == null) {
+            return;
+        }
+        suppressLazyMainShellTabContentSwap.set(true);
+        try {
+            for (Tab t : tabPane.getTabs()) {
+                if (t == mainShellTabOrganizer) {
+                    continue;
+                }
+                deferMainShellTabHeavyContentRecursive(t);
+                if (t.getContent() instanceof TabPane inner) {
+                    for (Tab innerTab : inner.getTabs()) {
+                        deferMainShellTabHeavyContentRecursive(innerTab);
+                    }
+                }
+            }
+        } finally {
+            suppressLazyMainShellTabContentSwap.set(false);
+        }
+    }
+
+    private void deferMainShellTabBranchHeavyContent(Tab tab) {
+        if (tab == null) {
+            return;
+        }
+        deferMainShellTabHeavyContentRecursive(tab);
+        if (tab.getContent() instanceof TabPane inner) {
+            for (Tab innerTab : inner.getTabs()) {
+                deferMainShellTabHeavyContentRecursive(innerTab);
+            }
+        }
+    }
+
+    private void deferMainShellTabHeavyContentRecursive(Tab tab) {
+        if (tab == null || isLazyMainShellTabPlaceholder(tab.getContent())) {
+            return;
+        }
+        Node content = tab.getContent();
+        if (content == null) {
+            return;
+        }
+        tab.getProperties().put(PM_DEFERRED_TAB_CONTENT, content);
+        Region placeholder = new Region();
+        placeholder.setMinSize(0, 0);
+        placeholder.setPrefSize(0, 0);
+        placeholder.getProperties().put(PM_LAZY_TAB_PLACEHOLDER, Boolean.TRUE);
+        tab.setContent(placeholder);
+    }
+
+    private void activateMainShellTabHeavyContentRecursive(Tab tab) {
+        if (tab == null) {
+            return;
+        }
+        Object detached = tab.getProperties().remove(PM_DEFERRED_TAB_CONTENT);
+        if (detached instanceof Node node) {
+            tab.setContent(node);
+        }
+        Node content = tab.getContent();
+        if (!(content instanceof TabPane inner)) {
+            return;
+        }
+        Tab innerSelected = inner.getSelectionModel().getSelectedItem();
+        if (innerSelected == null && !inner.getTabs().isEmpty()) {
+            inner.getSelectionModel().select(0);
+            innerSelected = inner.getTabs().getFirst();
+        }
+        for (Tab innerTab : inner.getTabs()) {
+            if (innerTab != innerSelected) {
+                deferMainShellTabHeavyContentRecursive(innerTab);
+            }
+        }
+        activateMainShellTabHeavyContentRecursive(innerSelected);
+    }
+
+    private static boolean isLazyMainShellTabPlaceholder(Node content) {
+        return content != null
+                && Boolean.TRUE.equals(content.getProperties().get(PM_LAZY_TAB_PLACEHOLDER));
     }
 
     private void applyStoredShellTabColorsRecursive(ObservableList<Tab> tabs) {
@@ -2216,6 +2316,10 @@ public final class MainShellController {
                         .selectedItemProperty()
                         .addListener(
                                 (o, p, n) -> {
+                                    if (!suppressLazyMainShellTabContentSwap.get()) {
+                                        deferMainShellTabBranchHeavyContent(p);
+                                        activateMainShellTabHeavyContentRecursive(n);
+                                    }
                                     emitShellTabNavigation();
                                     if (!suppressMainShellTabChromeRefresh.get()) {
                                         refreshMainShellTabHeaderChromeFromStoredColors();

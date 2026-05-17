@@ -15,6 +15,8 @@ import java.util.function.IntSupplier;
 
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
+import javafx.beans.value.ChangeListener;
+import javafx.scene.Scene;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
@@ -406,34 +408,62 @@ public final class SpreadsheetTabularSupport {
         if (Boolean.TRUE.equals(host.getProperties().get(SPREADSHEET_HOST_RELAYOUT_HOOK))) {
             return;
         }
-        host.getProperties().put(SPREADSHEET_HOST_RELAYOUT_HOOK, Boolean.TRUE);
+        Runnable attachRelayoutHook =
+                () -> {
+                    if (Boolean.TRUE.equals(host.getProperties().get(SPREADSHEET_HOST_RELAYOUT_HOOK))) {
+                        return;
+                    }
+                    host.getProperties().put(SPREADSHEET_HOST_RELAYOUT_HOOK, Boolean.TRUE);
 
-        PauseTransition debounce = new PauseTransition(Duration.millis(120));
-        Runnable flush =
-                () ->
-                        Platform.runLater(
-                                () -> {
-                                    if (host.getChildren().isEmpty()) {
-                                        return;
-                                    }
-                                    Node ch = host.getChildren().get(0);
-                                    if (!(ch instanceof SpreadsheetView sv)) {
-                                        return;
-                                    }
-                                    int hc =
-                                            headerColumnCountSupplier != null
-                                                    ? Math.max(0, headerColumnCountSupplier.getAsInt())
-                                                    : 0;
-                                    reapplySpreadsheetColumnChrome(sv, hc);
-                                });
-        debounce.setOnFinished(e -> flush.run());
+                    PauseTransition debounce = new PauseTransition(Duration.millis(120));
+                    Runnable flush =
+                            () ->
+                                    Platform.runLater(
+                                            () -> {
+                                                if (host.getChildren().isEmpty()) {
+                                                    return;
+                                                }
+                                                Node ch = host.getChildren().get(0);
+                                                if (!(ch instanceof SpreadsheetView sv)) {
+                                                    return;
+                                                }
+                                                int hc =
+                                                        headerColumnCountSupplier != null
+                                                                ? Math.max(
+                                                                        0,
+                                                                        headerColumnCountSupplier
+                                                                                .getAsInt())
+                                                                : 0;
+                                                reapplySpreadsheetColumnChrome(sv, hc);
+                                            });
+                    debounce.setOnFinished(e -> flush.run());
 
-        host.layoutBoundsProperty()
-                .addListener(
-                        (obs, o, n) -> {
-                            debounce.stop();
-                            debounce.playFromStart();
-                        });
+                    host.layoutBoundsProperty()
+                            .addListener(
+                                    (obs, o, n) -> {
+                                        debounce.stop();
+                                        debounce.playFromStart();
+                                    });
+                };
+
+        if (host.getScene() != null) {
+            attachRelayoutHook.run();
+        } else {
+            ChangeListener<Scene> whenAttached =
+                    new ChangeListener<>() {
+                        @Override
+                        public void changed(
+                                javafx.beans.value.ObservableValue<? extends Scene> obs,
+                                Scene oldScene,
+                                Scene newScene) {
+                            if (newScene != null) {
+                                host.sceneProperty().removeListener(this);
+                                attachRelayoutHook.run();
+                            }
+                        }
+                    };
+            host.sceneProperty().addListener(whenAttached);
+        }
     }
 
     /**
