@@ -277,11 +277,8 @@ public class PmAiFxApp extends Application {
                         PmAiFxApp.class
                                 .getResource("/jp/co/pm/ai/desktop/css/pm-ai-desktop.css")
                                 .toExternalForm());
-        shell.prepareMainShellTabsBeforeFirstSceneAttach();
-        MainShellController.debugLogParentsWithExactChildCount(root, 19, shell.snapshotUiEnv());
         primaryStage.setScene(scene);
         shell.finishStartup(scene);
-        Platform.runLater(shell::reapplyMainShellTabContentManagedAfterSceneAttach);
         return shell;
     }
 

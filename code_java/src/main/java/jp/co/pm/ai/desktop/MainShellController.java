@@ -118,11 +118,6 @@ public final class MainShellController {
     private static final String PROP_SHELL_TAB_SELECTION_CHROME_LISTENER =
             "pmShellTabSelectionChromeListener";
 
-    /** 非選択タブの {@link Tab#setContent(Node)} を退避するときの {@link Tab#getProperties()} キー。 */
-    private static final String PM_DETACHED_TAB_CONTENT = "pmDetachedTabContent";
-
-    private static final String PM_TAB_PLACEHOLDER_MARKER = "pmTabPlaceholder";
-
     private static final String STAGE1 = "task_extract_stage1.py";
     private static final String STAGE2 = "plan_simulation_stage2.py";
 
@@ -212,9 +207,6 @@ public final class MainShellController {
     private static final Set<String> BOOTSTRAP_KEY_SET = Set.copyOf(BOOTSTRAP_ORDER);
 
     private final Stage primaryStage;
-
-    /** {@link Stage#setOnShown} 前はタブ見出し chrome の一括再適用を抑止（初回レイアウトと競合しやすい）。 */
-    private boolean mainWindowShown;
 
     @FXML
     private TabPane tabPane;
@@ -549,8 +541,6 @@ public final class MainShellController {
                 mainShellTabOrganizerPaneController.bindShell(this);
                 mainShellTabOrganizerPaneController.installTreeCellFactory();
             }
-            ensureMainShellTabPaneSelectionsInitialized("initialize:afterDesktopSession");
-            applyMainShellTabContentManagedState(tabPane.getSelectionModel().getSelectedItem());
         } finally {
             suppressEnvSessionPersistence.set(false);
         }
@@ -583,12 +573,9 @@ public final class MainShellController {
 
         primaryStage.setOnShown(
                 e -> {
-                    mainWindowShown = true;
                     primaryStage.toFront();
                     primaryStage.requestFocus();
                     tabPane.getSelectionModel().selectFirst();
-                    applyMainShellTabContentManagedState(tabPane.getSelectionModel().getSelectedItem());
-                    refreshMainShellTabHeaderChromeFromStoredColors();
                 });
 
         lastEffectiveShellLeaf =
@@ -614,7 +601,17 @@ public final class MainShellController {
                                 }
                                 return;
                             }
-                            Platform.runLater(() -> finishMainShellTabSelectionChange(newTab));
+                            emitShellTabNavigation();
+                            /* :selected 由来の -fx-text-fill がインラインより後勝ちになることがあるため再適用 */
+                            refreshMainShellTabHeaderChromeFromStoredColors();
+                            if (newTab == mainShellTabDeliveryCalendar
+                                    && deliveryCalendarViewTabController != null) {
+                                deliveryCalendarViewTabController.collapseInnerSectionPanesOnShellSelect();
+                            }
+                            if (newTab == mainShellTabApiModelBenchmark
+                                    && apiModelBenchmarkTabController != null) {
+                                apiModelBenchmarkTabController.refreshShellDerivedLabels();
+                            }
                         });
         tabPane
                 .getTabs()
@@ -773,7 +770,6 @@ public final class MainShellController {
             }
         } else if (!rebuildMainShellTabsFromLayout(null)) {
             applyMainShellTabOrder(s.mainShellTabOrder());
-            ensureMainShellTabPaneSelectionsInitialized("applyDesktopSession:tabOrder");
         }
         applyMainShellTabTitleAliasesFromSession(s.mainShellTabTitleAliases());
         applyInnerTabSelectionsFromSession(s.innerTabSelectedIndexByShellTabKey());
@@ -1680,328 +1676,22 @@ public final class MainShellController {
         if (tabPane == null) {
             return;
         }
-        if (!mainWindowShown) {
-            return;
-        }
         applyStoredShellTabColorsRecursive(tabPane.getTabs());
-        requestLayoutShellTabPanesDeferred();
+        layoutShellTabPanesRecursive(tabPane);
     }
 
     /**
-     * {@link TabPane#layout()} の同期再帰はシーンのレイアウトパルス中に走ると {@code IndexOutOfBoundsException}
-     * （例: index 19, length 19）を誘発しやすい。スタイル適用後は次パルスで {@link Node#requestLayout()} のみ行う。
-     */
-    private void requestLayoutShellTabPanesDeferred() {
-        Platform.runLater(
-                () -> {
-                    if (tabPane == null) {
-                        return;
-                    }
-                    // #region agent log
-                    AgentDebugLog.appendStructured(
-                            collectUiEnv(),
-                            AGENT_DEBUG_SESSION,
-                            "H",
-                            "MainShellController:requestLayoutShellTabPanesDeferred",
-                            "deferred tab pane requestLayout",
-                            Map.of("topLevelTabs", tabPane.getTabs().size()));
-                    // #endregion
-                    layoutShellTabPanesRecursive(tabPane);
-                });
-    }
-
-    /**
-     * 入れ子 {@link TabPane} まで {@code applyCss} し、見出しセル（{@code .headers-region}）の取りこぼしを減らす。
+     * 入れ子 {@link TabPane} まで {@code applyCss}/{@code layout} し、見出しセル（{@code .headers-region}）の取りこぼしを減らす。
      */
     private static void layoutShellTabPanesRecursive(TabPane pane) {
         if (pane == null) {
             return;
         }
         pane.applyCss();
-        pane.requestLayout();
+        pane.layout();
         for (Tab t : pane.getTabs()) {
             if (t.getContent() instanceof TabPane inner) {
                 layoutShellTabPanesRecursive(inner);
-            }
-        }
-    }
-
-    /**
-     * 入れ子 {@link TabPane} で内側の選択が未設定のまま初回 {@link Scene#doLayoutPass} に入ると、見出し行の子数と
-     * レイアウトインデックスがずれて {@code IndexOutOfBoundsException} になることがある（例: index 19, length 19）。
-     */
-    private void ensureMainShellTabPaneSelectionsInitialized(String reason) {
-        if (tabPane == null) {
-            return;
-        }
-        int innerPanes = 0;
-        int innerTabsMax = 0;
-        if (tabPane.getSelectionModel().getSelectedItem() == null && !tabPane.getTabs().isEmpty()) {
-            tabPane.getSelectionModel().select(0);
-        }
-        clampTabPaneSelection(tabPane);
-        for (Tab t : tabPane.getTabs()) {
-            if (t.getContent() instanceof TabPane inner) {
-                innerPanes++;
-                innerTabsMax = Math.max(innerTabsMax, inner.getTabs().size());
-                clampTabPaneSelection(inner);
-            }
-        }
-        // #region agent log
-        AgentDebugLog.appendStructured(
-                collectUiEnv(),
-                AGENT_DEBUG_SESSION,
-                "I",
-                "MainShellController:ensureMainShellTabPaneSelectionsInitialized",
-                reason,
-                Map.of(
-                        "topLevelTabs",
-                        tabPane.getTabs().size(),
-                        "innerTabPanes",
-                        innerPanes,
-                        "innerTabsMax",
-                        innerTabsMax,
-                        "topSelectedIndex",
-                        tabPane.getSelectionModel().getSelectedIndex()));
-        // #endregion
-    }
-
-    /**
-     * {@link PmAiFxApp} が {@link Stage#setScene(Scene)} する直前に呼ぶ。非選択タブの重いコンテンツをシーンから切り離し、初回
-     * {@link Scene#doLayoutPass} で Spreadsheet 等が一斉レイアウトされないようにする。
-     */
-    void prepareMainShellTabsBeforeFirstSceneAttach() {
-        ensureMainShellTabPaneSelectionsInitialized("beforeFirstSceneAttach");
-        applyMainShellTabContentManagedState(tabPane.getSelectionModel().getSelectedItem());
-    }
-
-    void reapplyMainShellTabContentManagedAfterSceneAttach() {
-        applyMainShellTabContentManagedState(tabPane.getSelectionModel().getSelectedItem());
-        // #region agent log
-        int attachedBranches = 0;
-        int detachedBranches = 0;
-        if (tabPane != null) {
-            for (Tab t : tabPane.getTabs()) {
-                if (t.getProperties().containsKey(PM_DETACHED_TAB_CONTENT)) {
-                    detachedBranches++;
-                } else if (t.getContent() != null && !isInvisibleTabPlaceholder(t.getContent())) {
-                    attachedBranches++;
-                }
-            }
-        }
-        AgentDebugLog.appendStructured(
-                collectUiEnv(),
-                AGENT_DEBUG_SESSION,
-                "K",
-                "MainShellController:reapplyMainShellTabContentManagedAfterSceneAttach",
-                "tab content attach state after scene attach",
-                Map.of(
-                        "attachedBranches",
-                        attachedBranches,
-                        "detachedBranches",
-                        detachedBranches,
-                        "topTabs",
-                        tabPane != null ? tabPane.getTabs().size() : 0,
-                        "runId",
-                        "post-scene-detach"));
-        logTabPaneHeaderDiagnostics("afterSceneAttach");
-        // #endregion
-    }
-
-    private void finishMainShellTabSelectionChange(Tab selectedTopTab) {
-        if (tabPane == null) {
-            return;
-        }
-        Tab effective = tabPane.getSelectionModel().getSelectedItem();
-        if (effective != selectedTopTab) {
-            return;
-        }
-        applyMainShellTabContentManagedState(selectedTopTab);
-        Tab leaf = resolveEffectiveLeafTab(selectedTopTab);
-        if (leaf == mainShellTabDispatchInteractive && dispatchInteractiveTabController != null) {
-            dispatchInteractiveTabController.onMainShellTabBecameVisible();
-        }
-        emitShellTabNavigation();
-        refreshMainShellTabHeaderChromeFromStoredColors();
-        if (selectedTopTab == mainShellTabDeliveryCalendar
-                && deliveryCalendarViewTabController != null) {
-            deliveryCalendarViewTabController.collapseInnerSectionPanesOnShellSelect();
-        }
-        if (selectedTopTab == mainShellTabApiModelBenchmark
-                && apiModelBenchmarkTabController != null) {
-            apiModelBenchmarkTabController.refreshShellDerivedLabels();
-        }
-    }
-
-    private void applyMainShellTabContentManagedState(Tab selectedTopTab) {
-        if (tabPane == null) {
-            return;
-        }
-        for (Tab t : tabPane.getTabs()) {
-            setMainShellTabBranchActive(t, t == selectedTopTab);
-        }
-    }
-
-    private static void setMainShellTabBranchActive(Tab tab, boolean branchActive) {
-        if (tab == null) {
-            return;
-        }
-        if (!branchActive) {
-            detachMainShellTabContent(tab);
-            return;
-        }
-        reattachMainShellTabContent(tab);
-        Node content = tab.getContent();
-        if (!(content instanceof TabPane inner)) {
-            if (content != null) {
-                content.setManaged(true);
-                content.setVisible(true);
-            }
-            return;
-        }
-        inner.setManaged(true);
-        inner.setVisible(true);
-        Tab innerSel = inner.getSelectionModel().getSelectedItem();
-        if (innerSel == null && !inner.getTabs().isEmpty()) {
-            innerSel = inner.getTabs().getFirst();
-            inner.getSelectionModel().select(innerSel);
-        }
-        for (Tab innerTab : inner.getTabs()) {
-            setMainShellTabBranchActive(innerTab, innerTab == innerSel);
-        }
-    }
-
-    private static void detachMainShellTabContent(Tab tab) {
-        Node content = tab.getContent();
-        if (content == null || isInvisibleTabPlaceholder(content)) {
-            return;
-        }
-        tab.getProperties().put(PM_DETACHED_TAB_CONTENT, content);
-        tab.setContent(newInvisibleTabPlaceholder());
-    }
-
-    private static void reattachMainShellTabContent(Tab tab) {
-        Object detached = tab.getProperties().remove(PM_DETACHED_TAB_CONTENT);
-        if (detached instanceof Node node) {
-            tab.setContent(node);
-        }
-    }
-
-    private static boolean isInvisibleTabPlaceholder(Node content) {
-        return Boolean.TRUE.equals(content.getProperties().get(PM_TAB_PLACEHOLDER_MARKER));
-    }
-
-    private static Region newInvisibleTabPlaceholder() {
-        Region placeholder = new Region();
-        placeholder.setMinSize(0, 0);
-        placeholder.setPrefSize(0, 0);
-        placeholder.setMaxSize(0, 0);
-        placeholder.setManaged(false);
-        placeholder.setVisible(false);
-        placeholder.getProperties().put(PM_TAB_PLACEHOLDER_MARKER, Boolean.TRUE);
-        return placeholder;
-    }
-
-    private static void clampTabPaneSelection(TabPane pane) {
-        if (pane == null || pane.getTabs().isEmpty()) {
-            return;
-        }
-        int n = pane.getTabs().size();
-        int sel = pane.getSelectionModel().getSelectedIndex();
-        if (sel < 0 || sel >= n) {
-            pane.getSelectionModel().select(0);
-        }
-    }
-
-    private void logTabPaneHeaderDiagnostics(String reason) {
-        if (tabPane == null) {
-            return;
-        }
-        logTabPaneHeaderDiagnosticsRecursive(tabPane, reason);
-    }
-
-    private void logTabPaneHeaderDiagnosticsRecursive(TabPane pane, String reason) {
-        if (pane == null) {
-            return;
-        }
-        Node headersRegion = pane.lookup(".headers-region");
-        if (headersRegion instanceof Parent hp) {
-            int headerChildren = hp.getChildrenUnmodifiable().size();
-            int headerTabNodes = 0;
-            for (Node child : hp.getChildrenUnmodifiable()) {
-                if (child.getStyleClass().contains("tab")) {
-                    headerTabNodes++;
-                }
-            }
-            int paneTabs = pane.getTabs().size();
-            int selected = pane.getSelectionModel().getSelectedIndex();
-            if (headerChildren == 19
-                    || paneTabs == 19
-                    || headerChildren != paneTabs
-                    || selected < 0
-                    || selected >= paneTabs) {
-                // #region agent log
-                AgentDebugLog.appendStructured(
-                        collectUiEnv(),
-                        AGENT_DEBUG_SESSION,
-                        "L",
-                        "MainShellController:logTabPaneHeaderDiagnostics",
-                        reason,
-                        Map.of(
-                                "paneTabs",
-                                paneTabs,
-                                "headerChildren",
-                                headerChildren,
-                                "headerTabNodes",
-                                headerTabNodes,
-                                "selectedIndex",
-                                selected));
-                // #endregion
-            }
-        }
-        for (Tab t : pane.getTabs()) {
-            if (t.getContent() instanceof TabPane inner) {
-                logTabPaneHeaderDiagnosticsRecursive(inner, reason);
-            }
-        }
-    }
-
-    /** {@code setScene} 前に子数が一致する {@link Parent} を記録（IOOBE 原因の特定用）。 */
-    static void debugLogParentsWithExactChildCount(
-            Parent root, int childCount, Map<String, String> ui) {
-        if (root == null) {
-            return;
-        }
-        List<String> hits = new ArrayList<>();
-        collectParentsWithExactChildCount(root, childCount, hits, 0, 24);
-        // #region agent log
-        AgentDebugLog.appendStructured(
-                ui,
-                AGENT_DEBUG_SESSION,
-                "K",
-                "MainShellController:debugLogParentsWithExactChildCount",
-                "parents before setScene",
-                Map.of("childCount", childCount, "hits", hits));
-        // #endregion
-    }
-
-    private static void collectParentsWithExactChildCount(
-            Node node, int childCount, List<String> hits, int depth, int maxDepth) {
-        if (node == null || depth > maxDepth || hits.size() >= 12) {
-            return;
-        }
-        if (node instanceof Parent parent) {
-            int n = parent.getChildrenUnmodifiable().size();
-            if (n == childCount) {
-                String id = parent.getId();
-                hits.add(
-                        parent.getClass().getSimpleName()
-                                + (id != null && !id.isBlank() ? "#" + id : "")
-                                + "@d"
-                                + depth);
-            }
-            for (Node child : parent.getChildrenUnmodifiable()) {
-                collectParentsWithExactChildCount(child, childCount, hits, depth + 1, maxDepth);
             }
         }
     }
@@ -2302,6 +1992,7 @@ public final class MainShellController {
                         tabOrdinal++;
                     }
                 };
+        op.run();
         Platform.runLater(op);
     }
 
@@ -2318,7 +2009,9 @@ public final class MainShellController {
         }
         syncLeafTabColorsFromOrganizerTree(invisibleRoot);
         syncGroupTabHeadersFromOrganizerTree(invisibleRoot);
+        /* 同一フレームで見出しへ反映（runLater のみだと未レイアウトで poke が無効になることがある） */
         refreshMainShellTabHeaderChromeFromStoredColors();
+        Platform.runLater(this::refreshMainShellTabHeaderChromeFromStoredColors);
     }
 
     private void syncLeafTabColorsFromOrganizerTree(TreeItem<MainShellTabOrganizerTabController.OrgRow> node) {
@@ -2459,19 +2152,14 @@ public final class MainShellController {
                 inner.getSelectionModel()
                         .selectedItemProperty()
                         .addListener(
-                                (o, p, n) ->
-                                        Platform.runLater(
-                                                () ->
-                                                        finishMainShellTabSelectionChange(
-                                                                tabPane
-                                                                        .getSelectionModel()
-                                                                        .getSelectedItem())));
+                                (o, p, n) -> {
+                                    emitShellTabNavigation();
+                                    refreshMainShellTabHeaderChromeFromStoredColors();
+                                });
             }
         } finally {
             suppressEnvSessionPersistence.set(false);
         }
-        ensureMainShellTabPaneSelectionsInitialized("rebuildMainShellTabsFromLayout");
-        applyMainShellTabContentManagedState(tabPane.getSelectionModel().getSelectedItem());
         refreshMainShellTabDisplayedTitles();
         lastEffectiveShellLeaf =
                 resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
@@ -2543,8 +2231,6 @@ public final class MainShellController {
         } finally {
             suppressEnvSessionPersistence.set(false);
         }
-        ensureMainShellTabPaneSelectionsInitialized("restoreDefaultFlatMainShellTabLayout");
-        applyMainShellTabContentManagedState(tabPane.getSelectionModel().getSelectedItem());
         refreshMainShellTabDisplayedTitles();
         lastEffectiveShellLeaf =
                 resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
