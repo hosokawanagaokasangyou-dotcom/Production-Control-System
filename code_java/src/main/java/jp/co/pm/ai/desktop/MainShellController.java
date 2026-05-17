@@ -424,6 +424,12 @@ public final class MainShellController {
      */
     private final AtomicBoolean suppressMainShellTabChromeRefresh = new AtomicBoolean(false);
 
+    /**
+     * {@link #applyDesktopSession} でタブ構成を復元するセッション。{@link Stage#setOnShown} 前は
+     * {@link TabPane} の再構築を遅延し、初回 {@link Scene#doLayoutPass} と競合しないようにする。
+     */
+    private DesktopSessionState pendingMainShellTabLayoutSession;
+
     /** メインシェル見出しのユーザー色にドロップシャドウ風グローを付ける（タブ整理のチェック）。 */
     private final AtomicBoolean mainShellTabOrganizerHeaderGlowEnabled = new AtomicBoolean(true);
 
@@ -581,6 +587,7 @@ public final class MainShellController {
                 e -> {
                     primaryStage.toFront();
                     primaryStage.requestFocus();
+                    applyPendingMainShellTabLayoutFromSessionIfNeeded();
                     tabPane.getSelectionModel().selectFirst();
                     Platform.runLater(
                             () -> {
@@ -780,15 +787,7 @@ public final class MainShellController {
             pushButtonDesignTabController.applyPushButtonSession(s);
         }
         applyWindowGeometry(s);
-        if (s.mainShellTabLayout() != null && !s.mainShellTabLayout().isEmpty()) {
-            if (!rebuildMainShellTabsFromLayout(s.mainShellTabLayout())) {
-                rebuildMainShellTabsFromLayout(null);
-            }
-        } else if (!rebuildMainShellTabsFromLayout(null)) {
-            applyMainShellTabOrder(s.mainShellTabOrder());
-        }
-        applyMainShellTabTitleAliasesFromSession(s.mainShellTabTitleAliases());
-        applyInnerTabSelectionsFromSession(s.innerTabSelectedIndexByShellTabKey());
+        applyOrDeferMainShellTabLayoutFromSession(s);
         pendingTheme = DesktopTheme.fromStored(s.uiTheme());
         if (mainShellTabOrganizerPaneController != null) {
             mainShellTabOrganizerPaneController.syncHeaderGlowControlsFromShell();
@@ -1708,11 +1707,54 @@ public final class MainShellController {
             return;
         }
         pane.applyCss();
-        pane.layout();
+        pane.requestLayout();
         for (Tab t : pane.getTabs()) {
             if (t.getContent() instanceof TabPane inner) {
                 layoutShellTabPanesRecursive(inner);
             }
+        }
+    }
+
+    private void applyOrDeferMainShellTabLayoutFromSession(DesktopSessionState s) {
+        if (s == null) {
+            return;
+        }
+        if (primaryScene != null && tabPane != null && tabPane.getScene() != null) {
+            applyMainShellTabLayoutFromSession(s);
+            pendingMainShellTabLayoutSession = null;
+        } else {
+            pendingMainShellTabLayoutSession = s;
+        }
+    }
+
+    private void applyPendingMainShellTabLayoutFromSessionIfNeeded() {
+        if (pendingMainShellTabLayoutSession == null) {
+            return;
+        }
+        DesktopSessionState s = pendingMainShellTabLayoutSession;
+        pendingMainShellTabLayoutSession = null;
+        applyMainShellTabLayoutFromSession(s);
+    }
+
+    private void applyMainShellTabLayoutFromSession(DesktopSessionState s) {
+        if (s == null || tabPane == null) {
+            return;
+        }
+        suppressMainShellTabChromeRefresh.set(true);
+        try {
+            if (s.mainShellTabLayout() != null && !s.mainShellTabLayout().isEmpty()) {
+                if (!rebuildMainShellTabsFromLayout(s.mainShellTabLayout())) {
+                    rebuildMainShellTabsFromLayout(null);
+                }
+            } else if (!rebuildMainShellTabsFromLayout(null)) {
+                applyMainShellTabOrder(s.mainShellTabOrder());
+            }
+            applyMainShellTabTitleAliasesFromSession(s.mainShellTabTitleAliases());
+            applyInnerTabSelectionsFromSession(s.innerTabSelectedIndexByShellTabKey());
+            lastEffectiveShellLeaf =
+                    resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
+        } finally {
+            suppressMainShellTabChromeRefresh.set(false);
         }
     }
 
@@ -2328,9 +2370,28 @@ public final class MainShellController {
             }
         }
         if (uniq.equals(req)) {
+            if (isOversizedFlatMainShellTabLayout(sanitized)) {
+                return mergeMissingMainShellTabLeaves(MainShellTabLayoutDefaults.groupedLayout());
+            }
             return sanitized;
         }
         return mergeMissingMainShellTabLeaves(sanitized);
+    }
+
+    /**
+     * セッションに保存された「全タブがトップレベルに並ぶ」フラット構成は、見出しスキンと子数がずれて
+     * {@code IndexOutOfBoundsException}（index 19, length 19）を起こしやすい。既定のグループ構成へ寄せる。
+     */
+    private static boolean isOversizedFlatMainShellTabLayout(List<MainShellTabLayoutNode> top) {
+        if (top == null || top.size() < 12) {
+            return false;
+        }
+        for (MainShellTabLayoutNode n : top) {
+            if (n.isGroup()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static MainShellTabLayoutNode sanitizeLayoutNode(MainShellTabLayoutNode n) {
