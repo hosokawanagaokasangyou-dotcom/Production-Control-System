@@ -1,7 +1,11 @@
 package jp.co.pm.ai.desktop.config;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * 工場別の環境タブ既定（ネットワークソース・バージョンアップ正本 ZIP・マスタ名・サマリ用ブック）。
@@ -23,8 +27,7 @@ public enum FactorySite {
     /** 国分工場（国分共有・DATA 配下・マスタは {@code 国分master.xlsm}）。 */
     KOKUBU(
             "国分工場",
-            "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\pm-ai-package-release\\"
-                    + "PMD_version_upgrade.zip",
+            AppPaths.DEFAULT_PM_AI_PORTABLE_BUNDLE_RELEASE_DIR_KOKUBU,
             "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\計画",
             "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\実績",
             "国分master.xlsm",
@@ -121,5 +124,64 @@ public enum FactorySite {
                         .normalize()
                         .toAbsolutePath();
         return p.toString();
+    }
+
+    /**
+     * ポータブル同梱の {@code pm-ai-data/init_setting/session_defaults.json} から工場を推定する。
+     *
+     * <p>初回起動マーカー処理で湖南固定にしないため。{@link AppPaths#KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR}
+     * の UNC に「国分」「湖南」が含まれるかで判定する。
+     */
+    public static Optional<FactorySite> inferFromPortableBundleInitSetting(Path portableExeDir) {
+        if (portableExeDir == null) {
+            return Optional.empty();
+        }
+        Path defaults =
+                portableExeDir
+                        .toAbsolutePath()
+                        .normalize()
+                        .resolve("pm-ai-data")
+                        .resolve("init_setting")
+                        .resolve(InitSettingPaths.SESSION_DEFAULTS_FILE);
+        if (!Files.isRegularFile(defaults)) {
+            return Optional.empty();
+        }
+        try {
+            JsonNode root = new ObjectMapper().readTree(defaults.toFile());
+            if (!root.isArray()) {
+                return Optional.empty();
+            }
+            for (JsonNode row : root) {
+                String name = textOrEmpty(row, "name");
+                if (!AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR.equals(name)) {
+                    continue;
+                }
+                return inferFromPortableBundleSourceValue(textOrEmpty(row, "value"));
+            }
+        } catch (Exception ignored) {
+            return Optional.empty();
+        }
+        return Optional.empty();
+    }
+
+    static Optional<FactorySite> inferFromPortableBundleSourceValue(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return Optional.empty();
+        }
+        if (raw.contains("国分")) {
+            return Optional.of(KOKUBU);
+        }
+        if (raw.contains("湖南")) {
+            return Optional.of(KONAN);
+        }
+        return Optional.empty();
+    }
+
+    private static String textOrEmpty(JsonNode row, String field) {
+        JsonNode n = row.get(field);
+        if (n == null || n.isNull()) {
+            return "";
+        }
+        return n.asText("").trim();
     }
 }

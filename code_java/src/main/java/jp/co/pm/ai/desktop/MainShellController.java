@@ -4224,13 +4224,19 @@ public final class MainShellController {
             return;
         }
         try {
-            applyEnvRowsFullBundledResetAndPersist(true, FactorySite.KONAN);
+            FactorySite firstLaunchSite =
+                    FactorySite.inferFromPortableBundleInitSetting(cwd)
+                            .orElseGet(GlobalInitSettingTarget::load);
+            GlobalInitSettingTarget.save(firstLaunchSite);
+            applyEnvRowsFullBundledResetAndPersist(true, firstLaunchSite);
             applyBundledPortableDefaultsIfPresent();
             applyRepoFolderPathNormalization();
             DesktopSessionStateStore.save(collectDesktopSession());
             Files.deleteIfExists(marker);
             appendLog(
-                    "[startup] 初回起動: 環境変数を初期化し、"
+                    "[startup] 初回起動: 環境変数を初期化し（工場既定="
+                            + firstLaunchSite.displayLabelJa()
+                            + "）、"
                             + AppPaths.PORTABLE_FIRST_LAUNCH_MARKER_FILE
                             + " を削除しました。");
         } catch (Exception ex) {
@@ -4249,8 +4255,13 @@ public final class MainShellController {
     private void maybePortableBundleSelfUpdate() {
         Path cwd = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
         if (!PortableBundleSelfUpdater.isPortableBundleLayout(cwd)) {
+            appendLog(
+                    "[startup] 自動バージョンアップは対象外（PMD.exe 直下に pm-ai-data のポータブル配布レイアウトがありません）。"
+                            + " user.dir="
+                            + PortableBundleSelfUpdater.safePathForLog(cwd));
             return;
         }
+        appendLog("[startup] 自動バージョンアップ: ポータブル配布を検出しました。user.dir=" + PortableBundleSelfUpdater.safePathForLog(cwd));
         Map<String, String> ui = collectUiEnv();
         String raw = ui.get(AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR);
         if (raw == null || raw.isBlank()) {
@@ -4291,12 +4302,31 @@ public final class MainShellController {
         Optional<BigDecimal> cv = PortableBundleSelfUpdater.readCanonicalPortableBundleVersion(canonical);
         Optional<BigDecimal> lv = PortableBundleSelfUpdater.readLocalBundleVersion(cwd, localData);
         if (!PortableBundleSelfUpdater.shouldUpdate(cv, lv)) {
+            String reason =
+                    cv.isEmpty()
+                            ? "正本の version.txt が読めません（ZIP の隣、または pm-ai-package-release 直下）。"
+                            : "ローカル版が正本以上です（更新不要）。";
+            appendLog(
+                    "[startup] 自動バージョンアップはスキップ: "
+                            + reason
+                            + " 正本="
+                            + cv.map(BigDecimal::toPlainString).orElse("（なし）")
+                            + " ローカル="
+                            + lv.map(BigDecimal::toPlainString).orElse("（なし・0扱い）")
+                            + " 正本パス="
+                            + PortableBundleSelfUpdater.safePathForLog(canonical));
             return;
         }
+        appendLog(
+                "[startup] 自動バージョンアップ: 正本の方が新しいため確認ダイアログを表示します。正本="
+                        + cv.map(BigDecimal::toPlainString).orElse("?")
+                        + " ローカル="
+                        + lv.map(BigDecimal::toPlainString).orElse("（なし・初回）"));
         String canonVerStr = cv.map(BigDecimal::toPlainString).orElse("?");
         String localVerStr = lv.map(BigDecimal::toPlainString).orElse("（なし・初回）");
+        Optional<Path> upgradeZip = PortableBundleSelfUpdater.resolveEffectiveUpgradeZip(canonical);
         String syncHint =
-                PortableBundleSelfUpdater.isPortableBundleZipPath(canonical)
+                upgradeZip.isPresent()
                         ? "ZIP を展開して pm-ai-data に同期します。"
                         : "正本フォルダから pm-ai-data へファイルを同期します。";
         Alert confirm = new Alert(AlertType.CONFIRMATION);
@@ -4343,35 +4373,27 @@ public final class MainShellController {
                     @Override
                     protected Void call() throws Exception {
                         Path syncSource;
-                        if (PortableBundleSelfUpdater.isPortableBundleZipPath(canonical)) {
+                        Optional<Path> zipForSync =
+                                PortableBundleSelfUpdater.resolveEffectiveUpgradeZip(canonical);
+                        if (zipForSync.isPresent()) {
                             Path tmp =
                                     PortableBundleSelfUpdater.extractUpgradeZipToTempDirectory(
-                                            canonical,
+                                            zipForSync.get(),
                                             line -> Platform.runLater(() -> appendLog(line)));
                             extractedHolder[0] = tmp;
                             syncSource = tmp.resolve("pm-ai-data");
                             if (!Files.isDirectory(syncSource)) {
-                                throw new IOException("ZIP 内に pm-ai-data フォルダがありません: " + canonical);
+                                throw new IOException(
+                                        "ZIP 内に pm-ai-data フォルダがありません: " + zipForSync.get());
                             }
                         } else {
-                            syncSource = canonical;
+                            syncSource = PortableBundleSelfUpdater.resolveSyncSourceRoot(canonical);
                         }
                         PortableBundleSelfUpdater.syncFromCanonical(
                                 syncSource,
                                 localData,
                                 line -> Platform.runLater(() -> appendLog(line)));
-                        if (PortableBundleSelfUpdater.isPortableBundleZipPath(canonical)) {
-                            Path parent = canonical.getParent();
-                            if (parent != null) {
-                                Path outer = parent.resolve(AppPaths.VERSION_TXT_FILE_NAME);
-                                if (Files.isRegularFile(outer)) {
-                                    Files.copy(
-                                            outer,
-                                            localData.resolve(AppPaths.VERSION_TXT_FILE_NAME),
-                                            StandardCopyOption.REPLACE_EXISTING);
-                                }
-                            }
-                        }
+                        PortableBundleSelfUpdater.copyOuterVersionTxtToLocal(canonical, cwd, localData);
                         return null;
                     }
                 };

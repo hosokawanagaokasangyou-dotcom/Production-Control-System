@@ -85,4 +85,41 @@ class PortableBundleSelfUpdaterTest {
                 Optional.of(new BigDecimal("9.99")),
                 PortableBundleSelfUpdater.readCanonicalPortableBundleVersion(zip));
     }
+
+    @Test
+    void resolveEffectiveUpgradeZip_fromReleaseFolder(@TempDir Path tmp) throws IOException {
+        Path zip = tmp.resolve(PortableBundleSelfUpdater.PORTABLE_UPGRADE_ZIP_NAME);
+        Files.writeString(zip, "PK", StandardCharsets.UTF_8);
+        assertEquals(Optional.of(zip), PortableBundleSelfUpdater.resolveEffectiveUpgradeZip(tmp));
+    }
+
+    @Test
+    void readCanonicalPortableBundleVersion_fromReleaseFolder(@TempDir Path tmp) throws IOException {
+        Path zip = tmp.resolve(PortableBundleSelfUpdater.PORTABLE_UPGRADE_ZIP_NAME);
+        Files.writeString(zip, "PK", StandardCharsets.UTF_8);
+        Files.writeString(tmp.resolve(AppPaths.VERSION_TXT_FILE_NAME), "7.50\n", StandardCharsets.UTF_8);
+        assertEquals(
+                Optional.of(new BigDecimal("7.50")),
+                PortableBundleSelfUpdater.readCanonicalPortableBundleVersion(tmp));
+    }
+
+    @Test
+    void resolveSyncSourceRoot_prefersNestedPmAiData(@TempDir Path tmp) throws IOException {
+        Path nested = tmp.resolve("pm-ai-data/code/python");
+        Files.createDirectories(nested);
+        assertEquals(tmp.resolve("pm-ai-data"), PortableBundleSelfUpdater.resolveSyncSourceRoot(tmp));
+    }
+
+    @Test
+    void copyOuterVersionTxtToLocal_writesPmAiDataAndCwd(@TempDir Path tmp) throws IOException {
+        Path zip = tmp.resolve(PortableBundleSelfUpdater.PORTABLE_UPGRADE_ZIP_NAME);
+        Files.writeString(zip, "PK", StandardCharsets.UTF_8);
+        Files.writeString(tmp.resolve(AppPaths.VERSION_TXT_FILE_NAME), "3.14\n", StandardCharsets.UTF_8);
+        Path pm = tmp.resolve("install/pm-ai-data");
+        Path cwd = tmp.resolve("install");
+        Files.createDirectories(pm);
+        PortableBundleSelfUpdater.copyOuterVersionTxtToLocal(tmp, cwd, pm);
+        assertEquals("3.14", Files.readString(pm.resolve(AppPaths.VERSION_TXT_FILE_NAME)).trim());
+        assertEquals("3.14", Files.readString(cwd.resolve(AppPaths.VERSION_TXT_FILE_NAME)).trim());
+    }
 }

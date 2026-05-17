@@ -235,11 +235,24 @@ public final class AppPaths {
     public static final String KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR = "PM_AI_PORTABLE_BUNDLE_SOURCE_DIR";
 
     /**
-     * 環境変数タブ・{@code ui_ref_env_defaults.json} で値が空のときの工場共有上の正本（UNC）。バージョンアップ用 ZIP と外付け
-     * {@code version.txt} を置く {@code pm-ai-package-release} フォルダを指す。ユーザーが上書き可能。
+     * 湖南工場共有の {@code pm-ai-package-release} フォルダ（UNC）。{@link #KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR} の湖南既定。
+     * 直下に外付け {@code version.txt} と {@code PMD_version_upgrade.zip} を置く。
+     */
+    public static final String DEFAULT_PM_AI_PORTABLE_BUNDLE_RELEASE_DIR_KONAN =
+            "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\pm-ai-package-release";
+
+    /**
+     * 国分工場共有の {@code pm-ai-package-release} フォルダ（UNC）。{@link FactorySite#KOKUBU} のバージョンアップ正本。
+     */
+    public static final String DEFAULT_PM_AI_PORTABLE_BUNDLE_RELEASE_DIR_KOKUBU =
+            "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\pm-ai-package-release";
+
+    /**
+     * 環境変数タブで値が空のときの正本（UNC）。{@link #DEFAULT_PM_AI_PORTABLE_BUNDLE_RELEASE_DIR_KONAN} と同じ（湖南）。
+     * ZIP フルパス指定も可だが、運用の正は release フォルダパス。
      */
     public static final String DEFAULT_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR =
-            "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\pm-ai-package-release\\PMD_version_upgrade.zip";
+            DEFAULT_PM_AI_PORTABLE_BUNDLE_RELEASE_DIR_KONAN;
 
     /**
      * {@link #KEY_PM_AI_TASK_INPUT_SOURCE_DIR} が空のときの既定（工場共有・生産計画問合せフォルダ）。{@code plan/01_*.m} のパスと揃える。

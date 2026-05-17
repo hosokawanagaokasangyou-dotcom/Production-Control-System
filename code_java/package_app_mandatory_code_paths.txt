@@ -1,5 +1,7 @@
-# Repo-relative UTF-8 paths (under code/). Copied into pm-ai-data even if not tracked by git.
+# Repo-relative UTF-8 paths. Copied into pm-ai-data even if not tracked by git (reinforces presence).
 # package_app.ps1 reads this file so the script stays ASCII-only for Windows PowerShell 5.1.
+# Word guide at repo root (AppPaths.DISPATCH_USAGE_GUIDE_DOCX; toolbar 配台の使い方). Not related to manual/.venv-docx/.
+配台システム使い方（整理版）.docx
 code/使用原反, 加工幅.txt
 code/使用原反,ロール単位の長さ.txt
 code/製品名,ロール単位の長さ.txt

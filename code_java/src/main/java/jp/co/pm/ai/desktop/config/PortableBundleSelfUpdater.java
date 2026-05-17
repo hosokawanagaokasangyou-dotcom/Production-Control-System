@@ -23,6 +23,9 @@ import java.util.function.Consumer;
  */
 public final class PortableBundleSelfUpdater {
 
+    /** Version-upgrade bundle file name on the release share ({@code pm-ai-package-release}). */
+    public static final String PORTABLE_UPGRADE_ZIP_NAME = "PMD_version_upgrade.zip";
+
     private static final CopyOption[] COPY_OPTIONS =
             new CopyOption[] {StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES};
 
@@ -35,18 +38,70 @@ public final class PortableBundleSelfUpdater {
         return Files.isRegularFile(marker);
     }
 
-    /** Reads {@link AppPaths#VERSION_TXT_FILE_NAME} at canonical repo root or, when {@code canonicalPath} is a {@code .zip} file, beside that zip. */
-    public static Optional<BigDecimal> readCanonicalPortableBundleVersion(Path canonicalPath) {
-        Objects.requireNonNull(canonicalPath, "canonicalPath");
-        Path abs = canonicalPath.toAbsolutePath().normalize();
+    /**
+     * Upgrade ZIP for sync: {@code canonical} when it is a {@code .zip}, or {@code canonical}/{@link
+     * #PORTABLE_UPGRADE_ZIP_NAME} when that file exists under a release folder.
+     */
+    public static Optional<Path> resolveEffectiveUpgradeZip(Path canonical) {
+        if (canonical == null) {
+            return Optional.empty();
+        }
+        Path abs = canonical.toAbsolutePath().normalize();
         if (isPortableBundleZipPath(abs)) {
-            Path outer = abs.getParent() != null ? abs.getParent().resolve(AppPaths.VERSION_TXT_FILE_NAME) : null;
-            if (outer == null) {
+            return Optional.of(abs);
+        }
+        if (!isReadableDirectory(abs)) {
+            return Optional.empty();
+        }
+        Path nested = abs.resolve(PORTABLE_UPGRADE_ZIP_NAME);
+        if (isPortableBundleZipPath(nested)) {
+            return Optional.of(nested);
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Outer {@link AppPaths#VERSION_TXT_FILE_NAME} used for version compare and post-sync copy (beside upgrade ZIP or
+     * directory root).
+     */
+    public static Optional<Path> resolveOuterVersionTxt(Path canonical) {
+        if (canonical == null) {
+            return Optional.empty();
+        }
+        Path abs = canonical.toAbsolutePath().normalize();
+        Optional<Path> zip = resolveEffectiveUpgradeZip(abs);
+        if (zip.isPresent()) {
+            Path parent = zip.get().getParent();
+            if (parent == null) {
                 return Optional.empty();
             }
-            return parseVersionFile(outer);
+            return Optional.of(parent.resolve(AppPaths.VERSION_TXT_FILE_NAME));
         }
-        return readBundleVersion(abs);
+        Path atRoot = abs.resolve(AppPaths.VERSION_TXT_FILE_NAME);
+        if (Files.isRegularFile(atRoot)) {
+            return Optional.of(atRoot);
+        }
+        return Optional.empty();
+    }
+
+    /** Reads canonical version beside upgrade ZIP or at directory root. */
+    public static Optional<BigDecimal> readCanonicalPortableBundleVersion(Path canonicalPath) {
+        Objects.requireNonNull(canonicalPath, "canonicalPath");
+        return resolveOuterVersionTxt(canonicalPath).flatMap(PortableBundleSelfUpdater::parseVersionFile);
+    }
+
+    /**
+     * Directory whose tree is copied into local {@code pm-ai-data}: extracted ZIP {@code pm-ai-data}, nested {@code
+     * pm-ai-data}, or repo-root layout (the canonical directory itself).
+     */
+    public static Path resolveSyncSourceRoot(Path canonical) {
+        Objects.requireNonNull(canonical, "canonical");
+        Path abs = canonical.toAbsolutePath().normalize();
+        Path nested = abs.resolve("pm-ai-data");
+        if (Files.isDirectory(nested)) {
+            return nested;
+        }
+        return abs;
     }
 
     /** Reads {@link AppPaths#VERSION_TXT_FILE_NAME} under {@code pm-ai-data}, then {@code cwd} when missing (release ZIP omits inner version). */
@@ -302,6 +357,21 @@ public final class PortableBundleSelfUpdater {
         BigDecimal remote = canonicalVer.get();
         BigDecimal local = localVer.orElse(fallbackMinimumVersion());
         return remote.compareTo(local) > 0;
+    }
+
+    /** Copies outer {@link AppPaths#VERSION_TXT_FILE_NAME} into {@code pmAiDataRoot} and {@code cwd} when present. */
+    public static void copyOuterVersionTxtToLocal(Path canonical, Path cwd, Path pmAiDataRoot) throws IOException {
+        Objects.requireNonNull(pmAiDataRoot, "pmAiDataRoot");
+        Optional<Path> outer = resolveOuterVersionTxt(canonical);
+        if (outer.isEmpty() || !Files.isRegularFile(outer.get())) {
+            return;
+        }
+        Path src = outer.get();
+        Files.createDirectories(pmAiDataRoot);
+        Files.copy(src, pmAiDataRoot.resolve(AppPaths.VERSION_TXT_FILE_NAME), COPY_OPTIONS);
+        if (cwd != null) {
+            Files.copy(src, cwd.toAbsolutePath().normalize().resolve(AppPaths.VERSION_TXT_FILE_NAME), COPY_OPTIONS);
+        }
     }
 
     /** Whether {@code p} is a readable directory (UNC-safe check). */
