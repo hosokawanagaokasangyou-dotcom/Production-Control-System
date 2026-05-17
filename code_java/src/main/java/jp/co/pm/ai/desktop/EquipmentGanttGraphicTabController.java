@@ -290,6 +290,9 @@ public final class EquipmentGanttGraphicTabController {
     /** {@link #applyEquipmentGanttSession} 等で複数スライダーを一度に動かすときの再構築抑制 */
     private boolean suppressGraphicRebuild;
 
+    /** 起動時はタブが遅延プレースホルダのため {@link #flushGraphicRebuildNow} を後回しにする。 */
+    private boolean pendingGraphicRebuildAfterSessionApply;
+
     /**
      * Ctrl+ホイールで拡大率変更した直後の再構築のみ、横スクロールをマウス位置基準で復元する。
      * {@link #applyGraphicCenter} で消費して null に戻す。
@@ -573,8 +576,21 @@ public final class EquipmentGanttGraphicTabController {
             applyEquipmentGanttSessionBody(s);
         } finally {
             suppressGraphicRebuild = false;
-            flushGraphicRebuildNow();
+            if (contentPane != null && contentPane.getScene() != null) {
+                flushGraphicRebuildNow();
+            } else {
+                pendingGraphicRebuildAfterSessionApply = true;
+            }
         }
+    }
+
+    /** メインシェルで設備ガントタブが実体化されたあと、セッション適用分の再構築を行う。 */
+    void flushPendingGraphicRebuildAfterSessionApply() {
+        if (!pendingGraphicRebuildAfterSessionApply) {
+            return;
+        }
+        pendingGraphicRebuildAfterSessionApply = false;
+        flushGraphicRebuildNow();
     }
 
     private void applyEquipmentGanttSessionBody(DesktopSessionState s) {

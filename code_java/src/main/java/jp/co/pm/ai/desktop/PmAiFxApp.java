@@ -277,8 +277,9 @@ public class PmAiFxApp extends Application {
                         PmAiFxApp.class
                                 .getResource("/jp/co/pm/ai/desktop/css/pm-ai-desktop.css")
                                 .toExternalForm());
-        primaryStage.setScene(scene);
         shell.finishStartup(scene);
+        // 初回 layout を FXML 直後の同一パルスで走らせない（全タブ載せ直し時の IOOBE 回避）
+        Platform.runLater(() -> primaryStage.setScene(scene));
         return shell;
     }
 

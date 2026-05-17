@@ -322,5 +322,9 @@
     "key" : "PM_AI_SETUP_COMPLETION_MSGBOX",
     "value" : "1",
     "description" : "環境構築 setup_environment: Windows で成功時に完了メッセージ（MessageBox）を表示。0 false no off で無効"
+  }, {
+    "key" : "PM_AI_DEBUG_STAGE3_PLAN_ACTUAL_SINGLE_LINE",
+    "value" : "1",
+    "description" : "配台手動修正: 段階3試行後の日付セルで（段階3前）（段階3後）を改行せず1行表示（スペース区切り）。1/true/yes/on で有効。0/false/no/off/none で2行（改行）表示。既定は1（安定）。"
   } ]
 }

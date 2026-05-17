@@ -46,6 +46,7 @@ import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ProgressIndicator;
+import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TableColumn;
@@ -82,7 +83,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialConsistency;
@@ -112,7 +112,13 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
  */
 public final class DispatchInteractiveTabController {
 
-    private static final String AGENT_DEBUG_SESSION = "a35f7c";
+
+    /** 起動直後は「実行・ログ」タブが選択されるため、初回 JSON 読込は配台タブ初回表示まで遅延する。 */
+    private final AtomicBoolean pendingInitialDispatchReload = new AtomicBoolean(false);
+
+    /** オフシーンで JSON だけ読み込んだあと、配台タブ表示時にグリッド再構築する。 */
+    private final AtomicBoolean pendingGridRebuildAfterTabAttach = new AtomicBoolean(false);
+
 
     private record ReloadBundle(ResultDispatchDocument doc) {}
 
@@ -152,6 +158,13 @@ public final class DispatchInteractiveTabController {
     private static final String DISPATCH_DATE_QTY_CELL_STYLE_CLASS = "dispatch-date-qty-cell";
 
     private static final String DISPATCH_DATE_QTY_SHORTFALL_CELL_STYLE_CLASS = "dispatch-date-qty-shortfall-cell";
+
+  /** 段階3の2行表示（{@code \\n}）用。CSS の wrap-text は付けない。 */
+    private static final String DISPATCH_DATE_QTY_MULTILINE_CELL_STYLE_CLASS =
+            "dispatch-date-qty-multiline";
+
+    /** 2行ラベル付き数量セルの行高（px）。 */
+    private static final double DISPATCH_STAGE3_MULTILINE_ROW_HEIGHT_PX = 44.0;
 
     /** 日付セル表示: 段階3試行前の編集対象（当日配台数量）。 */
     static final String LABEL_STAGE3_PLAN = "\uff08\u6bb5\u968e3\u524d\uff09";
@@ -337,9 +350,46 @@ public final class DispatchInteractiveTabController {
         shell.syncPlanInputStage2ButtonFromDispatchDirty();
     }
 
-    /** {@link MainShellController} の {@link javafx.stage.Stage#setOnShown} 後に初回 JSON 再読込する。 */
+    /**
+     * {@link MainShellController} の {@link javafx.stage.Stage#setOnShown} 後にフラグだけ立てる。
+     * 実際の読込は {@link #onMainShellDispatchTabSelected()}（配台タブ初回選択）で行う。
+     */
     void scheduleInitialReloadAfterMainWindowShown() {
-        reloadFromDiskQuiet();
+        pendingInitialDispatchReload.set(true);
+    }
+
+    /** メインシェルで配台計画手動修正タブが選択されたとき（遅延ロード・保留再構築のフラッシュ）。 */
+    void onMainShellDispatchTabSelected() {
+        if (pendingInitialDispatchReload.compareAndSet(true, false)) {
+            resetTableDisplayBeforeReload("起動時読込中");
+            // タブ実体化直後の同一パルスで setGrid すると Parent.layout IOOBE になりやすい
+            Platform.runLater(
+                    () -> Platform.runLater(() -> reloadFromDiskQuiet(null, false, false)));
+            return;
+        }
+        flushPendingGridRebuildAfterTabAttach();
+    }
+
+    private void flushPendingGridRebuildAfterTabAttach() {
+        if (!pendingGridRebuildAfterTabAttach.get()) {
+            return;
+        }
+        Platform.runLater(
+                () -> {
+                    if (!pendingGridRebuildAfterTabAttach.get()) {
+                        return;
+                    }
+                    if (shell != null) {
+                        shell.ensureDispatchInteractiveOnSceneForGridRebuild(false);
+                    }
+                    boolean onScene =
+                            wideSpreadsheet != null && wideSpreadsheet.getScene() != null;
+                    if (!onScene) {
+                        return;
+                    }
+                    pendingGridRebuildAfterTabAttach.set(false);
+                    rebuildGrids(this::hideReloadProgress);
+                });
     }
 
     private void ensureInnerTabPersistenceWired() {
@@ -558,7 +608,7 @@ public final class DispatchInteractiveTabController {
         if (reloadInteractionDisabled) {
             return;
         }
-        resetTableDisplayBeforeReload("再読込中（表示をクリア）");
+                resetTableDisplayBeforeReload("再読込中（表示をクリア）");
         // 同一パルスで即 reload すると、空グリッドのレイアウト前に onSucceeded が走り「クリアされない」ように見える
         Platform.runLater(() -> reloadFromDiskQuiet(null, false, true));
     }
@@ -1071,7 +1121,18 @@ public final class DispatchInteractiveTabController {
      * を読まない。
      */
     private void reloadFromDiskQuietAfterDispatchTrial(Runnable afterSuccessOnFxThread) {
-        reloadFromDiskQuiet(afterSuccessOnFxThread, true, false);
+        resetTableDisplayBeforeReload("配台試行後（再読込中）");
+        Platform.runLater(() -> reloadFromDiskQuiet(afterSuccessOnFxThread, true, false));
+    }
+
+    /** 子タブが遅延プレースホルダのとき実 Spreadsheet をシーンに戻す。 */
+    void ensureInnerTabsMaterializedForRebuild() {
+        if (innerTabPane == null || shell == null) {
+            return;
+        }
+        for (Tab t : innerTabPane.getTabs()) {
+            shell.restoreDeferredTabContent(t);
+        }
     }
 
     /**
@@ -1104,7 +1165,6 @@ public final class DispatchInteractiveTabController {
             }
             return;
         }
-        finalizeDispatchSpreadsheetPresentation();
         SpreadsheetTabularSupport.showScratchGridWhileReloading(wideSpreadsheet);
         SpreadsheetTabularSupport.showScratchGridWhileReloading(byDaySpreadsheet);
         showReloadProgress();
@@ -1136,12 +1196,33 @@ public final class DispatchInteractiveTabController {
                         clearDispatchShortfallUi();
                     }
                     clearDispatchDocDirty();
+                    if (shell != null) {
+                        shell.ensureDispatchInteractiveOnSceneForGridRebuild(userCompletionDialog);
+                    }
+                    boolean wideOnScene =
+                            wideSpreadsheet != null && wideSpreadsheet.getScene() != null;
                     Runnable afterLayouts =
                             buildReloadSuccessAfterLayoutsRunnable(
                                     afterSuccessOnFxThread,
                                     userCompletionDialog,
                                     stage2ColsFilled,
                                     jsonPath);
+                    if (!wideOnScene) {
+                        pendingGridRebuildAfterTabAttach.set(true);
+                        hideReloadProgress();
+                        if (afterSuccessOnFxThread != null) {
+                            afterSuccessOnFxThread.run();
+                        }
+                        if (userCompletionDialog) {
+                            shell.showInformationDialog(
+                                    "再読み完了",
+                                    doc.rows().size()
+                                            + " 行を読み込みました（配台タブを開くと表を表示します）。\n"
+                                            + jsonPath);
+                        }
+                        return;
+                    }
+                    pendingGridRebuildAfterTabAttach.set(false);
                     if (afterLayouts != null) {
                         rebuildGrids(afterLayouts);
                     } else {
@@ -1150,20 +1231,22 @@ public final class DispatchInteractiveTabController {
                 });
         task.setOnFailed(
                 ev -> {
+                    Throwable loadEx = task.getException();
                     doc = ResultDispatchDocument.empty();
                     statusLabel.setText("読込エラー");
-                    Throwable ex = task.getException();
                     shell.appendLog(
                             "[dispatch-editor] load failed: "
-                                    + (ex != null ? ex.getMessage() : ""));
+                                    + (loadEx != null ? loadEx.getMessage() : ""));
                     clearDispatchShortfallUi();
                     rebuildGrids(this::hideReloadProgress);
                     clearDispatchDocDirty();
                     if (userCompletionDialog) {
                         String msg =
-                                ex != null && ex.getMessage() != null && !ex.getMessage().isBlank()
-                                        ? ex.getMessage()
-                                        : (ex != null ? ex.toString() : "不明");
+                                loadEx != null
+                                                && loadEx.getMessage() != null
+                                                && !loadEx.getMessage().isBlank()
+                                        ? loadEx.getMessage()
+                                        : (loadEx != null ? loadEx.toString() : "不明");
                         shell.showErrorDialog("読込エラー", msg);
                     }
                 });
@@ -1202,9 +1285,13 @@ public final class DispatchInteractiveTabController {
         if (statusLabel != null) {
             statusLabel.setText(statusText);
         }
-        wideSpreadsheet.requestLayout();
-        byDaySpreadsheet.requestLayout();
-    }
+        if (wideSpreadsheet != null && wideSpreadsheet.getScene() != null) {
+            wideSpreadsheet.requestLayout();
+        }
+        if (byDaySpreadsheet != null && byDaySpreadsheet.getScene() != null) {
+            byDaySpreadsheet.requestLayout();
+        }
+            }
 
     /**
      * 段階2パイプライン開始時に、古い行を誤認しないよう表の表示を空にする（JSON パスラベルは維持）。
@@ -1373,7 +1460,7 @@ public final class DispatchInteractiveTabController {
      * になることがある。
      */
     private void rebuildGrids(Runnable afterLayoutsReady) {
-        int layoutGen = bumpDispatchSpreadsheetLayoutGeneration();
+                int layoutGen = bumpDispatchSpreadsheetLayoutGeneration();
         FullGridRebuild bundle = buildFullGridRebuild();
         applyFullGridRebuild(bundle, afterLayoutsReady, layoutGen);
     }
@@ -1665,6 +1752,7 @@ public final class DispatchInteractiveTabController {
             gridRows.add(line);
         }
         grid.setRows(gridRows);
+        applyDispatchStage3QtyRowPresentation(grid);
 
         boolean[] wideBlockedCols = computeWideFullyBlockedDateColumns(dayCount);
         return new WideGridBundle(grid, profiles, rowItems, wideBlockedCols, staticCols, dayCount);
@@ -1741,6 +1829,7 @@ public final class DispatchInteractiveTabController {
             gridRows.add(line);
         }
         grid.setRows(gridRows);
+        applyDispatchStage3QtyRowPresentation(grid);
 
         boolean[] byDayBlockedCols = computeByDayFullyBlockedDateColumns(dayCount);
         return new ByDayGridBundle(grid, byDayBlockedCols, staticCols, dayCount);
@@ -1773,69 +1862,57 @@ public final class DispatchInteractiveTabController {
 
             WideGridBundle w = bundle.wide();
             w.grid().addEventHandler(GridChange.GRID_CHANGE_EVENT, this::onWideGridChange);
-            wideSpreadsheet.setGrid(w.grid());
+                        SpreadsheetTabularSupport.detachAndSetGrid(wideSpreadsheet, w.grid());
             wideSpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
-            // #region agent log
-            logDispatchSpreadsheetState(
-                    "C",
-                    "applyFullGridRebuild:postSetGridWide",
-                    "wide after setGrid (before col-sync)",
-                    wideSpreadsheet,
-                    w.staticCols() + w.dayCount() * DAY_SLOT_COLUMNS);
-            // #endregion
-
+            
             ByDayGridBundle b = bundle.byDay();
-            byDaySpreadsheet.setGrid(b.grid());
+            SpreadsheetTabularSupport.detachAndSetGrid(byDaySpreadsheet, b.grid());
             byDaySpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
-            // #region agent log
-            logDispatchSpreadsheetState(
-                    "C",
-                    "applyFullGridRebuild:postSetGridByDay",
-                    "byDay after setGrid (before col-sync)",
-                    byDaySpreadsheet,
-                    b.staticCols() + b.dayCount() * DAY_SLOT_COLUMNS);
-            // #endregion
-
+            
             SpreadsheetTabularSupport.restoreHiddenRows(wideSpreadsheet, wideHiddenSnapshot);
             SpreadsheetTabularSupport.restoreHiddenRows(byDaySpreadsheet, byDayHiddenSnapshot);
 
-            if (afterLayoutsReady == null) {
-                scheduleWideLayoutAfterColumnSync(w, null, layoutGen);
-                scheduleByDayLayoutAfterColumnSync(b, null, layoutGen);
-            } else {
-                AtomicInteger pendingLayouts = new AtomicInteger(2);
-                Runnable bothLayoutsReady =
-                        () -> {
-                            if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
-                                // #region agent log
-                                logDispatchSpreadsheetState(
-                                        "F",
-                                        "applyFullGridRebuild:staleBothLayouts",
-                                        "skipped stale bothLayoutsReady callback",
-                                        wideSpreadsheet,
-                                        w.staticCols() + w.dayCount() * DAY_SLOT_COLUMNS);
-                                // #endregion
-                                return;
-                            }
-                            if (pendingLayouts.decrementAndGet() == 0) {
-                                clearSpreadsheetSelectionForRebuild(wideSpreadsheet);
-                                clearSpreadsheetSelectionForRebuild(byDaySpreadsheet);
-                                Platform.runLater(
-                                        () -> {
-                                            if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
-                                                return;
-                                            }
-                                            finalizeDispatchSpreadsheetPresentation();
-                                            refreshDispatchSpreadsheetsAfterPresentationSettled();
-                                            if (afterLayoutsReady != null) {
-                                                afterLayoutsReady.run();
-                                            }
-                                        });
-                            }
-                        };
-                scheduleWideLayoutAfterColumnSync(w, bothLayoutsReady, layoutGen);
-                scheduleByDayLayoutAfterColumnSync(b, bothLayoutsReady, layoutGen);
-            }
+            final Runnable layoutsReadyCallback = afterLayoutsReady;
+            Platform.runLater(
+                    () -> {
+                        if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
+                            return;
+                        }
+                        AtomicInteger pendingLayouts = new AtomicInteger(2);
+                        Runnable bothLayoutsReady =
+                                () -> {
+                                    if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
+                                                                                return;
+                                    }
+                                    if (pendingLayouts.decrementAndGet() != 0) {
+                                        return;
+                                    }
+                                    clearSpreadsheetSelectionForRebuild(wideSpreadsheet);
+                                    clearSpreadsheetSelectionForRebuild(byDaySpreadsheet);
+                                    Platform.runLater(
+                                            () -> {
+                                                if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
+                                                    return;
+                                                }
+                                                                                                finalizeDispatchSpreadsheetPresentation();
+                                                if (layoutsReadyCallback != null) {
+                                                    layoutsReadyCallback.run();
+                                                }
+                                                Platform.runLater(
+                                                        () -> {
+                                                            if (wideSpreadsheetHost != null) {
+                                                                wideSpreadsheetHost.requestLayout();
+                                                            }
+                                                            if (byDaySpreadsheetHost != null) {
+                                                                byDaySpreadsheetHost
+                                                                        .requestLayout();
+                                                            }
+                                                        });
+                                            });
+                                };
+                        scheduleWideLayoutAfterColumnSync(w, bothLayoutsReady, layoutGen);
+                        scheduleByDayLayoutAfterColumnSync(b, bothLayoutsReady, layoutGen);
+                    });
 
         } finally {
             Platform.runLater(() -> suppressDispatchGridDirty.set(false));
@@ -1852,7 +1929,6 @@ public final class DispatchInteractiveTabController {
         }
         return () -> {
             hideReloadProgress();
-            finalizeDispatchSpreadsheetPresentation();
             if (afterSuccessOnFxThread != null) {
                 afterSuccessOnFxThread.run();
             }
@@ -1865,7 +1941,7 @@ public final class DispatchInteractiveTabController {
                         "再読み完了",
                         doc.rows().size() + " 行を読み込みました。\n" + jsonPath + extra);
             }
-        };
+                    };
     }
 
     private static void clearSpreadsheetSelectionForRebuild(SpreadsheetView view) {
@@ -1885,51 +1961,15 @@ public final class DispatchInteractiveTabController {
         SpreadsheetTabularSupport.finalizeSpreadsheetPresentationAfterGridRebuild(byDaySpreadsheet);
     }
 
-    private void refreshDispatchSpreadsheetsAfterPresentationSettled() {
-        // #region agent log
-        logDispatchSpreadsheetState(
-                "B",
-                "refreshDispatchSpreadsheets:before",
-                "before refreshSpreadsheetAfterRowPresentationChange",
-                wideSpreadsheet,
-                null);
-        // #endregion
-        SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(wideSpreadsheet, false);
-        SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(byDaySpreadsheet, false);
+    private void refreshDispatchSpreadsheetForView(SpreadsheetView view) {
+        if (view == null || view.getScene() == null) {
+            return;
+        }
+                SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(view, false);
     }
 
-    // #region agent log
-    private void logDispatchSpreadsheetState(
-            String hypothesisId,
-            String location,
-            String message,
-            SpreadsheetView view,
-            Integer expectedCols) {
-        Map<String, Object> data = new LinkedHashMap<>();
-        if (view != null) {
-            data.put("viewColumns", view.getColumns().size());
-            if (view.getGrid() != null) {
-                data.put("gridRows", view.getGrid().getRowCount());
-            }
-            data.put("hiddenRows", view.getHiddenRows().cardinality());
-            data.put("filteredRow", view.getFilteredRow());
-        }
-        if (expectedCols != null) {
-            data.put("expectedCols", expectedCols);
-        }
-        if (doc != null) {
-            data.put("docRows", doc.rows().size());
-        }
-        AgentDebugLog.appendStructured(
-                shell != null ? shell.snapshotUiEnv() : Map.of(),
-                AGENT_DEBUG_SESSION,
-                hypothesisId,
-                location,
-                message,
-                data);
-    }
-    // #endregion
 
+    
     /**
      * After {@link SpreadsheetView#setGrid}, the inner {@link TableView} may add columns on the next layout pulse.
      * Retrying avoids applying widths while {@link SpreadsheetView#getColumns()} is still shorter than the grid
@@ -1943,15 +1983,7 @@ public final class DispatchInteractiveTabController {
         job[0] =
                 () -> {
                     if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
-                        // #region agent log
-                        logDispatchSpreadsheetState(
-                                "F",
-                                "scheduleWideLayout:stale",
-                                "skipped stale wide layout job",
-                                wideSpreadsheet,
-                                expectedCols);
-                        // #endregion
-                        return;
+                                                return;
                     }
                     attempts[0]++;
                     int actual = wideSpreadsheet.getColumns().size();
@@ -1969,15 +2001,7 @@ public final class DispatchInteractiveTabController {
                                         SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
                                 SpreadsheetTabularSupport.applyColumnFiltersWithDialog(
                                         wideSpreadsheet);
-                                // #region agent log
-                                logDispatchSpreadsheetState(
-                                        "C",
-                                        "scheduleWideLayout:postFilters",
-                                        "wide after applyColumnFiltersWithDialog (col-sync ready)",
-                                        wideSpreadsheet,
-                                        expectedCols);
-                                // #endregion
-                                SpreadsheetTabularSupport.applyFixedLeadingColumns(
+                                                                SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                         wideSpreadsheet, WIDE_STATIC_HEADERS.size());
                                 SpreadsheetTabularSupport.pinSpreadsheetFilterRow(wideSpreadsheet);
                                 SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(
@@ -2017,19 +2041,12 @@ public final class DispatchInteractiveTabController {
                     if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
                         return;
                     }
-                    // #region agent log
-                    logDispatchSpreadsheetState(
-                            "A",
-                            "runAfterWide:settled",
-                            "wide layout settled before finalize",
-                            wideSpreadsheet,
-                            null);
-                    // #endregion
-                    SpreadsheetTabularSupport.finalizeSpreadsheetPresentationAfterGridRebuild(
+                                        SpreadsheetTabularSupport.finalizeSpreadsheetPresentationAfterGridRebuild(
                             wideSpreadsheet);
-                    refreshDispatchSpreadsheetsAfterPresentationSettled();
                     if (onComplete != null) {
                         onComplete.run();
+                    } else {
+                        refreshDispatchSpreadsheetForView(wideSpreadsheet);
                     }
                 });
     }
@@ -2042,15 +2059,7 @@ public final class DispatchInteractiveTabController {
         job[0] =
                 () -> {
                     if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
-                        // #region agent log
-                        logDispatchSpreadsheetState(
-                                "F",
-                                "scheduleByDayLayout:stale",
-                                "skipped stale byDay layout job",
-                                byDaySpreadsheet,
-                                expectedCols);
-                        // #endregion
-                        return;
+                                                return;
                     }
                     attempts[0]++;
                     if (byDaySpreadsheet.getColumns().size() < expectedCols && attempts[0] < 48) {
@@ -2066,15 +2075,7 @@ public final class DispatchInteractiveTabController {
                                         SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
                                 SpreadsheetTabularSupport.applyColumnFiltersWithDialog(
                                         byDaySpreadsheet);
-                                // #region agent log
-                                logDispatchSpreadsheetState(
-                                        "C",
-                                        "scheduleByDayLayout:postFilters",
-                                        "byDay after applyColumnFiltersWithDialog (col-sync ready)",
-                                        byDaySpreadsheet,
-                                        expectedCols);
-                                // #endregion
-                                SpreadsheetTabularSupport.applyFixedLeadingColumns(
+                                                                SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                         byDaySpreadsheet, BY_DAY_STATIC_HEADERS.size());
                                 SpreadsheetTabularSupport.pinSpreadsheetFilterRow(byDaySpreadsheet);
                                 SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(
@@ -2116,9 +2117,10 @@ public final class DispatchInteractiveTabController {
                     }
                     SpreadsheetTabularSupport.finalizeSpreadsheetPresentationAfterGridRebuild(
                             byDaySpreadsheet);
-                    refreshDispatchSpreadsheetsAfterPresentationSettled();
                     if (onComplete != null) {
                         onComplete.run();
+                    } else {
+                        refreshDispatchSpreadsheetForView(byDaySpreadsheet);
                     }
                 });
     }
@@ -2552,6 +2554,17 @@ public final class DispatchInteractiveTabController {
         return doc.columns().contains(ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL);
     }
 
+    /** 環境変数 {@link AppPaths#KEY_PM_AI_DEBUG_STAGE3_PLAN_ACTUAL_SINGLE_LINE}（未設定時は2行表示）。 */
+    private boolean stage3PlanActualSingleLineDisplay() {
+        if (shell == null) {
+            return false;
+        }
+        return AppPaths.isTruthyUiEnv(
+                shell.snapshotUiEnv(),
+                AppPaths.KEY_PM_AI_DEBUG_STAGE3_PLAN_ACTUAL_SINGLE_LINE,
+                false);
+    }
+
     private static boolean isComputedWideStaticHeader(String title) {
         return COL_STAGE3_DISPATCH_QTY_TOTAL.equals(title)
                 || Stage3DispatchQtyBalanceCheck.COL_TITLE.equals(title);
@@ -2616,14 +2629,17 @@ public final class DispatchInteractiveTabController {
                 String targetFmt = ResultDispatchNormalizer.formatQty(sf.targetM());
                 String doneFmt = ResultDispatchNormalizer.formatQty(sf.doneM());
                 SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(
-                        cell, formatDispatchPlanActualQtyText(targetFmt, doneFmt));
+                        cell,
+                        formatDispatchPlanActualQtyText(
+                                targetFmt, doneFmt, stage3PlanActualSingleLineDisplay()));
                 clearDispatchQtyCellGraphic(cell);
-                tagDispatchDateQtyShortfallCell(cell);
+                tagDispatchDateQtyShortfallCell(cell, dispatchStage3QtyMultilineCell());
                 return;
             }
         }
-        applyDispatchPlanActualQtyCellDisplay(cell, planAmt, actualAmt, docHasActualDispatchQtyColumn(), eps);
-        tagDispatchDateQtyCell(cell);
+        applyDispatchPlanActualQtyCellDisplay(
+                cell, planAmt, actualAmt, docHasActualDispatchQtyColumn(), eps, stage3PlanActualSingleLineDisplay());
+        tagDispatchDateQtyCell(cell, dispatchStage3QtyMultilineCell());
     }
 
     private void applyByDayDispatchQtyCellDisplay(SpreadsheetCell cell, ByDayRow br, int dateIdx) {
@@ -2632,8 +2648,32 @@ public final class DispatchInteractiveTabController {
                 br.getAmount(dateIdx),
                 br.getActualAmount(dateIdx),
                 docHasActualDispatchQtyColumn(),
-                1e-3);
-        tagDispatchDateQtyCell(cell);
+                1e-3,
+                stage3PlanActualSingleLineDisplay());
+        tagDispatchDateQtyCell(cell, dispatchStage3QtyMultilineCell());
+    }
+
+    private boolean dispatchStage3QtyMultilineCell() {
+        return docHasActualDispatchQtyColumn() && !stage3PlanActualSingleLineDisplay();
+    }
+
+    /**
+     * 段階3の2行表示: 固定行高＋{@code \\n}（{@code -fx-wrap-text} は使わない）。単行表示時は既定行高。
+     */
+    private void applyDispatchStage3QtyRowPresentation(GridBase grid) {
+        if (grid == null) {
+            return;
+        }
+        if (dispatchStage3QtyMultilineCell()) {
+            SpreadsheetTabularSupport.applySpreadsheetGridRowHeightsAndWrap(
+                    grid,
+                    false,
+                    100.0,
+                    24.0,
+                    DISPATCH_STAGE3_MULTILINE_ROW_HEIGHT_PX);
+        } else {
+            SpreadsheetTabularSupport.applySpreadsheetGridRowHeightsAndWrap(grid, false, 100.0);
+        }
     }
 
     /**
@@ -2645,15 +2685,22 @@ public final class DispatchInteractiveTabController {
             double planAmt,
             double actualAmt,
             boolean hasActualColumn,
-            double eps) {
-        String qtxt = formatDispatchPlanActualQtyDisplay(planAmt, actualAmt, hasActualColumn, eps);
+            double eps,
+            boolean singleLineDisplay) {
+        String qtxt =
+                formatDispatchPlanActualQtyDisplay(
+                        planAmt, actualAmt, hasActualColumn, eps, singleLineDisplay);
         SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(cell, qtxt);
         clearDispatchQtyCellGraphic(cell);
     }
 
     /** 目標 m（段階3前）と実績 m（段階3後）を2行ラベル付きで表示する。 */
     static String formatDispatchPlanActualQtyDisplay(
-            double planAmt, double actualAmt, boolean hasActualColumn, double eps) {
+            double planAmt,
+            double actualAmt,
+            boolean hasActualColumn,
+            double eps,
+            boolean singleLineDisplay) {
         boolean hasPlan = planAmt > eps;
         boolean hasActual = hasActualColumn && actualAmt > eps;
         if (!hasPlan && !hasActual) {
@@ -2664,17 +2711,19 @@ public final class DispatchInteractiveTabController {
         }
         return formatDispatchPlanActualQtyText(
                 hasPlan ? ResultDispatchNormalizer.formatQty(planAmt) : "",
-                hasActual ? ResultDispatchNormalizer.formatQty(actualAmt) : "");
+                hasActual ? ResultDispatchNormalizer.formatQty(actualAmt) : "",
+                singleLineDisplay);
     }
 
-    static String formatDispatchPlanActualQtyText(String planFmt, String actualFmt) {
+    static String formatDispatchPlanActualQtyText(
+            String planFmt, String actualFmt, boolean singleLineDisplay) {
         StringBuilder sb = new StringBuilder();
         if (planFmt != null && !planFmt.isBlank()) {
             sb.append(LABEL_STAGE3_PLAN).append(planFmt);
         }
         if (actualFmt != null && !actualFmt.isBlank()) {
             if (!sb.isEmpty()) {
-                sb.append('\n');
+                sb.append(singleLineDisplay ? ' ' : '\n');
             }
             sb.append(LABEL_STAGE3_ACTUAL).append(actualFmt);
         }
@@ -2686,7 +2735,7 @@ public final class DispatchInteractiveTabController {
         cell.setGraphic(null);
     }
 
-    private static void tagDispatchDateQtyCell(SpreadsheetCell cell) {
+    private static void tagDispatchDateQtyCell(SpreadsheetCell cell, boolean multiline) {
         if (cell == null) {
             return;
         }
@@ -2694,9 +2743,10 @@ public final class DispatchInteractiveTabController {
             cell.getStyleClass().add(DISPATCH_DATE_QTY_CELL_STYLE_CLASS);
         }
         cell.getStyleClass().remove(DISPATCH_DATE_QTY_SHORTFALL_CELL_STYLE_CLASS);
+        setDispatchDateQtyMultilineStyleClass(cell, multiline);
     }
 
-    private static void tagDispatchDateQtyShortfallCell(SpreadsheetCell cell) {
+    private static void tagDispatchDateQtyShortfallCell(SpreadsheetCell cell, boolean multiline) {
         if (cell == null) {
             return;
         }
@@ -2704,6 +2754,17 @@ public final class DispatchInteractiveTabController {
             cell.getStyleClass().add(DISPATCH_DATE_QTY_SHORTFALL_CELL_STYLE_CLASS);
         }
         cell.getStyleClass().remove(DISPATCH_DATE_QTY_CELL_STYLE_CLASS);
+        setDispatchDateQtyMultilineStyleClass(cell, multiline);
+    }
+
+    private static void setDispatchDateQtyMultilineStyleClass(SpreadsheetCell cell, boolean multiline) {
+        if (multiline) {
+            if (!cell.getStyleClass().contains(DISPATCH_DATE_QTY_MULTILINE_CELL_STYLE_CLASS)) {
+                cell.getStyleClass().add(DISPATCH_DATE_QTY_MULTILINE_CELL_STYLE_CLASS);
+            }
+        } else {
+            cell.getStyleClass().remove(DISPATCH_DATE_QTY_MULTILINE_CELL_STYLE_CLASS);
+        }
     }
 
     private void installDispatchShortfallColumns(TableView<DispatchQtyShortfallRow> tv) {

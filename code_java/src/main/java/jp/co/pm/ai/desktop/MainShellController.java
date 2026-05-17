@@ -90,7 +90,6 @@ import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.PlanWorkspaceSessionFragment;
 import jp.co.pm.ai.desktop.config.PlanWorkspaceSnapshotStore;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.InitSettingPersistence;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
@@ -109,8 +108,6 @@ import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
  * Layout: {@code MainShell.fxml} and tab FXML files.
  */
 public final class MainShellController {
-
-    private static final String AGENT_DEBUG_SESSION = "a35f7c";
 
     /**
      * {@link Tab#getProperties()} に登録済みかどうか。選択変更時に見出し chrome を再適用するリスナーを二重登録しない。
@@ -596,17 +593,23 @@ public final class MainShellController {
                     primaryStage.toFront();
                     primaryStage.requestFocus();
                     applyPendingMainShellTabLayoutFromSessionIfNeeded();
-                    tabPane.getSelectionModel().selectFirst();
+                    installLazyMainShellTabContentForStartup();
+                    if (tabPane.getSelectionModel().getSelectedItem() == null
+                            && !tabPane.getTabs().isEmpty()) {
+                        tabPane.getSelectionModel().selectFirst();
+                    }
                     activateMainShellTabHeavyContentRecursive(
                             tabPane.getSelectionModel().getSelectedItem());
                     Platform.runLater(
-                            () -> {
-                                refreshMainShellTabHeaderChromeFromStoredColors();
-                                if (dispatchInteractiveTabController != null) {
-                                    dispatchInteractiveTabController
-                                            .scheduleInitialReloadAfterMainWindowShown();
-                                }
-                            });
+                            () ->
+                                    Platform.runLater(
+                                            () -> {
+                                                refreshMainShellTabHeaderChromeFromStoredColors();
+                                                if (dispatchInteractiveTabController != null) {
+                                                    dispatchInteractiveTabController
+                                                            .scheduleInitialReloadAfterMainWindowShown();
+                                                }
+                                            }));
                 });
 
         lastEffectiveShellLeaf =
@@ -641,6 +644,11 @@ public final class MainShellController {
                             if (!suppressMainShellTabChromeRefresh.get()) {
                                 refreshMainShellTabHeaderChromeFromStoredColors();
                             }
+                            if (newTab == mainShellTabEquipmentGanttGraphic
+                                    && equipmentGanttGraphicTabController != null) {
+                                equipmentGanttGraphicTabController
+                                        .flushPendingGraphicRebuildAfterSessionApply();
+                            }
                             if (newTab == mainShellTabDeliveryCalendar
                                     && deliveryCalendarViewTabController != null) {
                                 deliveryCalendarViewTabController.collapseInnerSectionPanesOnShellSelect();
@@ -648,6 +656,10 @@ public final class MainShellController {
                             if (newTab == mainShellTabApiModelBenchmark
                                     && apiModelBenchmarkTabController != null) {
                                 apiModelBenchmarkTabController.refreshShellDerivedLabels();
+                            }
+                            if (newTab == mainShellTabDispatchInteractive
+                                    && dispatchInteractiveTabController != null) {
+                                dispatchInteractiveTabController.onMainShellDispatchTabSelected();
                             }
                         });
         tabPane
@@ -1771,6 +1783,7 @@ public final class MainShellController {
         } finally {
             suppressLazyMainShellTabContentSwap.set(false);
             suppressMainShellTabChromeRefresh.set(false);
+            installLazyMainShellTabContentForStartup();
         }
     }
 
@@ -1828,7 +1841,52 @@ public final class MainShellController {
         tab.setContent(placeholder);
     }
 
-    private void activateMainShellTabHeavyContentRecursive(Tab tab) {
+    /**
+     * 配台計画手動修正タブで {@link SpreadsheetView#setGrid} する直前に呼ぶ。メインシェル遅延ロードで
+     * プレースホルダに差し替えられていると、再構築しても画面に反映されない。
+     */
+    void ensureDispatchInteractiveReadyForGridRebuild() {
+        if (mainShellTabDispatchInteractive == null) {
+            return;
+        }
+        boolean prev = suppressLazyMainShellTabContentSwap.get();
+        suppressLazyMainShellTabContentSwap.set(true);
+        try {
+            restoreDeferredTabContent(mainShellTabDispatchInteractive);
+            if (dispatchInteractiveTabController != null) {
+                dispatchInteractiveTabController.ensureInnerTabsMaterializedForRebuild();
+            }
+        } finally {
+            suppressLazyMainShellTabContentSwap.set(prev);
+        }
+    }
+
+    /**
+     * 配台 Spreadsheet をシーングラフ上に載せてから {@code setGrid} する。未選択タブのコンテンツは
+     * {@link javafx.scene.Node#getScene()} が null のままになり、オフシーンでの再構築は空表示・IOOBE の原因になる。
+     *
+     * @param forceSelectTab {@code true} のとき配台タブが未選択なら選択する（手動「再読み」向け）
+     */
+    void ensureDispatchInteractiveOnSceneForGridRebuild(boolean forceSelectTab) {
+        ensureDispatchInteractiveReadyForGridRebuild();
+        if (mainShellTabDispatchInteractive == null || tabPane == null) {
+            return;
+        }
+        Tab effective = resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
+        if (effective != mainShellTabDispatchInteractive && forceSelectTab) {
+            selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
+        }
+        boolean prev = suppressLazyMainShellTabContentSwap.get();
+        suppressLazyMainShellTabContentSwap.set(true);
+        try {
+            activateMainShellTabHeavyContentRecursive(mainShellTabDispatchInteractive);
+            ensureDispatchInteractiveReadyForGridRebuild();
+        } finally {
+            suppressLazyMainShellTabContentSwap.set(prev);
+        }
+    }
+
+    void restoreDeferredTabContent(Tab tab) {
         if (tab == null) {
             return;
         }
@@ -1836,6 +1894,13 @@ public final class MainShellController {
         if (detached instanceof Node node) {
             tab.setContent(node);
         }
+    }
+
+    private void activateMainShellTabHeavyContentRecursive(Tab tab) {
+        if (tab == null) {
+            return;
+        }
+        restoreDeferredTabContent(tab);
         Node content = tab.getContent();
         if (!(content instanceof TabPane inner)) {
             return;
