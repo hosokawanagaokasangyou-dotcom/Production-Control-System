@@ -418,6 +418,12 @@ public final class MainShellController {
     /** 納期管理ビュー再読み込み中のタブ差し戻しで {@link TabPane} の選択リスナーを再入しない。 */
     private final AtomicBoolean suppressDeliveryCalendarReloadTabGuard = new AtomicBoolean(false);
 
+    /**
+     * メインタブの組み替え中に {@link #refreshMainShellTabHeaderChromeFromStoredColors()} を抑止する。
+     * タブ追加・削除と同期 {@link TabPane#layout()} が重なると {@code IndexOutOfBoundsException} になりやすい。
+     */
+    private final AtomicBoolean suppressMainShellTabChromeRefresh = new AtomicBoolean(false);
+
     /** メインシェル見出しのユーザー色にドロップシャドウ風グローを付ける（タブ整理のチェック）。 */
     private final AtomicBoolean mainShellTabOrganizerHeaderGlowEnabled = new AtomicBoolean(true);
 
@@ -576,6 +582,14 @@ public final class MainShellController {
                     primaryStage.toFront();
                     primaryStage.requestFocus();
                     tabPane.getSelectionModel().selectFirst();
+                    Platform.runLater(
+                            () -> {
+                                refreshMainShellTabHeaderChromeFromStoredColors();
+                                if (dispatchInteractiveTabController != null) {
+                                    dispatchInteractiveTabController
+                                            .scheduleInitialReloadAfterMainWindowShown();
+                                }
+                            });
                 });
 
         lastEffectiveShellLeaf =
@@ -603,7 +617,9 @@ public final class MainShellController {
                             }
                             emitShellTabNavigation();
                             /* :selected 由来の -fx-text-fill がインラインより後勝ちになることがあるため再適用 */
-                            refreshMainShellTabHeaderChromeFromStoredColors();
+                            if (!suppressMainShellTabChromeRefresh.get()) {
+                                refreshMainShellTabHeaderChromeFromStoredColors();
+                            }
                             if (newTab == mainShellTabDeliveryCalendar
                                     && deliveryCalendarViewTabController != null) {
                                 deliveryCalendarViewTabController.collapseInnerSectionPanesOnShellSelect();
@@ -1673,7 +1689,11 @@ public final class MainShellController {
 
     /** 保存済みの {@code pmShellTabColor} を踏まえて全タブ見出しのインラインスタイルを再適用（グロー切替時）。 */
     public void refreshMainShellTabHeaderChromeFromStoredColors() {
-        if (tabPane == null) {
+        if (tabPane == null || suppressMainShellTabChromeRefresh.get()) {
+            return;
+        }
+        if (tabPane.getScene() == null) {
+            Platform.runLater(this::refreshMainShellTabHeaderChromeFromStoredColors);
             return;
         }
         applyStoredShellTabColorsRecursive(tabPane.getTabs());
@@ -2133,6 +2153,7 @@ public final class MainShellController {
             return false;
         }
         suppressEnvSessionPersistence.set(true);
+        suppressMainShellTabChromeRefresh.set(true);
         try {
             wiredInnerMainShellTabPanes.clear();
             tabPane.getTabs().clear();
@@ -2154,10 +2175,13 @@ public final class MainShellController {
                         .addListener(
                                 (o, p, n) -> {
                                     emitShellTabNavigation();
-                                    refreshMainShellTabHeaderChromeFromStoredColors();
+                                    if (!suppressMainShellTabChromeRefresh.get()) {
+                                        refreshMainShellTabHeaderChromeFromStoredColors();
+                                    }
                                 });
             }
         } finally {
+            suppressMainShellTabChromeRefresh.set(false);
             suppressEnvSessionPersistence.set(false);
         }
         refreshMainShellTabDisplayedTitles();
@@ -2198,9 +2222,6 @@ public final class MainShellController {
                     inner.getTabs().add(ct);
                 }
             }
-            if (!inner.getTabs().isEmpty()) {
-                inner.getSelectionModel().select(0);
-            }
             groupTab.setContent(inner);
             applyShellTabColor(groupTab, n.colorHex());
             wiredInnerMainShellTabPanes.add(inner);
@@ -2215,6 +2236,7 @@ public final class MainShellController {
             return;
         }
         suppressEnvSessionPersistence.set(true);
+        suppressMainShellTabChromeRefresh.set(true);
         try {
             wiredInnerMainShellTabPanes.clear();
             tabPane.getTabs().clear();
@@ -2229,6 +2251,7 @@ public final class MainShellController {
             tabPane.getTabs().add(mainShellTabOrganizer);
             tabPane.setTabDragPolicy(TabPane.TabDragPolicy.REORDER);
         } finally {
+            suppressMainShellTabChromeRefresh.set(false);
             suppressEnvSessionPersistence.set(false);
         }
         refreshMainShellTabDisplayedTitles();

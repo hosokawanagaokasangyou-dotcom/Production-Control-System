@@ -333,9 +333,13 @@ public final class DispatchInteractiveTabController {
 
     void bindShell(MainShellController shell) {
         this.shell = shell;
-        Platform.runLater(this::reloadFromDiskQuiet);
         ensureInnerTabPersistenceWired();
         shell.syncPlanInputStage2ButtonFromDispatchDirty();
+    }
+
+    /** {@link MainShellController} の {@link javafx.stage.Stage#setOnShown} 後に初回 JSON 再読込する。 */
+    void scheduleInitialReloadAfterMainWindowShown() {
+        reloadFromDiskQuiet();
     }
 
     private void ensureInnerTabPersistenceWired() {
@@ -1745,6 +1749,15 @@ public final class DispatchInteractiveTabController {
     private void applyFullGridRebuild(
             FullGridRebuild bundle, Runnable afterLayoutsReady, int layoutGen) {
         suppressDispatchGridDirty.set(true);
+        boolean emptyWide = bundle.wide().profiles().isEmpty();
+        BitSet wideHiddenSnapshot =
+                emptyWide
+                        ? new BitSet()
+                        : SpreadsheetTabularSupport.snapshotHiddenRows(wideSpreadsheet);
+        BitSet byDayHiddenSnapshot =
+                emptyWide
+                        ? new BitSet()
+                        : SpreadsheetTabularSupport.snapshotHiddenRows(byDaySpreadsheet);
         clearSpreadsheetSelectionForRebuild(wideSpreadsheet);
         clearSpreadsheetSelectionForRebuild(byDaySpreadsheet);
         if (dispatchShortfallTable != null) {
@@ -1760,28 +1773,31 @@ public final class DispatchInteractiveTabController {
 
             WideGridBundle w = bundle.wide();
             w.grid().addEventHandler(GridChange.GRID_CHANGE_EVENT, this::onWideGridChange);
-            SpreadsheetTabularSupport.detachAndSetGrid(wideSpreadsheet, w.grid());
+            wideSpreadsheet.setGrid(w.grid());
             wideSpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
             // #region agent log
             logDispatchSpreadsheetState(
                     "C",
-                    "applyFullGridRebuild:postDetachWide",
-                    "wide after detachAndSetGrid (before col-sync)",
+                    "applyFullGridRebuild:postSetGridWide",
+                    "wide after setGrid (before col-sync)",
                     wideSpreadsheet,
                     w.staticCols() + w.dayCount() * DAY_SLOT_COLUMNS);
             // #endregion
 
             ByDayGridBundle b = bundle.byDay();
-            SpreadsheetTabularSupport.detachAndSetGrid(byDaySpreadsheet, b.grid());
+            byDaySpreadsheet.setGrid(b.grid());
             byDaySpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
             // #region agent log
             logDispatchSpreadsheetState(
                     "C",
-                    "applyFullGridRebuild:postDetachByDay",
-                    "byDay after detachAndSetGrid (before col-sync)",
+                    "applyFullGridRebuild:postSetGridByDay",
+                    "byDay after setGrid (before col-sync)",
                     byDaySpreadsheet,
                     b.staticCols() + b.dayCount() * DAY_SLOT_COLUMNS);
             // #endregion
+
+            SpreadsheetTabularSupport.restoreHiddenRows(wideSpreadsheet, wideHiddenSnapshot);
+            SpreadsheetTabularSupport.restoreHiddenRows(byDaySpreadsheet, byDayHiddenSnapshot);
 
             if (afterLayoutsReady == null) {
                 scheduleWideLayoutAfterColumnSync(w, null, layoutGen);
