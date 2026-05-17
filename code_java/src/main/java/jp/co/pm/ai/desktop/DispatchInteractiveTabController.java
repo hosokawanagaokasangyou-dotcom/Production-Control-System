@@ -333,9 +333,57 @@ public final class DispatchInteractiveTabController {
 
     void bindShell(MainShellController shell) {
         this.shell = shell;
-        Platform.runLater(this::reloadFromDiskQuiet);
         ensureInnerTabPersistenceWired();
         shell.syncPlanInputStage2ButtonFromDispatchDirty();
+    }
+
+    /**
+     * メインシェルで本タブのコンテンツがシーンに載ったあと（{@link Platform#runLater} 経由）に呼ぶ。非表示のまま
+     * Spreadsheet を組み立てると {@code IndexOutOfBoundsException}（index 19, length 19）になりやすい。
+     */
+    void onMainShellTabBecameVisible() {
+        // #region agent log
+        logDispatchSpreadsheetState(
+                "M",
+                "onMainShellTabBecameVisible:enter",
+                "dispatch tab visible",
+                wideSpreadsheet,
+                null);
+        // #endregion
+        Platform.runLater(
+                () ->
+                        Platform.runLater(
+                                () -> {
+                                    if (wideSpreadsheet.getScene() == null) {
+                                        return;
+                                    }
+                                    if (!dispatchMainShellTabShownOnce) {
+                                        dispatchMainShellTabShownOnce = true;
+                                        reloadFromDiskQuiet();
+                                    } else {
+                                        resyncSpreadsheetsAfterTabAttach();
+                                    }
+                                }));
+    }
+
+    private boolean dispatchMainShellTabShownOnce;
+
+    /** タブ切替でコンテンツが再アタッチされたあと、列同期パイプラインだけやり直す（JSON 再読込はしない）。 */
+    private void resyncSpreadsheetsAfterTabAttach() {
+        if (doc == null || doc.rows().isEmpty()) {
+            return;
+        }
+        int layoutGen = bumpDispatchSpreadsheetLayoutGeneration();
+        FullGridRebuild bundle = buildFullGridRebuild();
+        applyFullGridRebuild(bundle, null, layoutGen);
+        // #region agent log
+        logDispatchSpreadsheetState(
+                "M",
+                "resyncSpreadsheetsAfterTabAttach",
+                "rebuilt grids after tab re-attach",
+                wideSpreadsheet,
+                null);
+        // #endregion
     }
 
     private void ensureInnerTabPersistenceWired() {
