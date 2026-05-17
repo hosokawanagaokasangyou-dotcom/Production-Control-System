@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
-# Git pre-commit: UTF-8 チェック（*.md）→ version.txt バンプ（requires python3）。
+# Git pre-commit: UTF-8 チェック（*.md）→ version.txt バンプ（requires Python 3）。
+# Windows Git Bash: bare python3 is often the Store stub; use scripts/run_python3.sh.
 set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
-python3 "$ROOT/scripts/check_staged_markdown_utf8.py"
+RUN_PY="$ROOT/scripts/run_python3.sh"
+if [[ ! -x "$RUN_PY" ]]; then
+  chmod +x "$RUN_PY" "$ROOT/scripts/resolve_python3.sh" 2>/dev/null || true
+fi
+"$RUN_PY" "$ROOT/scripts/check_staged_markdown_utf8.py"
 VT="$ROOT/version.txt"
 if [[ ! -f "$VT" ]]; then
   exit 0
 fi
-python3 "$ROOT/scripts/bump_version_txt.py" "$VT"
+"$RUN_PY" "$ROOT/scripts/bump_version_txt.py" "$VT"
 git add -- "$VT"

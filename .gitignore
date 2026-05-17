@@ -1,5 +1,6 @@
 .venv/
 manual/.venv/
+manual/.venv-docx/
 # Java Desktop ネットワークソース代替キャッシュ（リポジトリ直下 .pm-ai-cache/）。無視しない — Git のステージング対象。
 # Log files（ステージングしない）
 *.log

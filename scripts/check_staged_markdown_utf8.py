@@ -10,19 +10,20 @@ import sys
 from pathlib import Path
 
 
+def _git_text(args: list[str], *, cwd: Path | None = None) -> str:
+    """Git stdout as UTF-8 (Windows default locale cp932 breaks on non-ASCII repo paths)."""
+    out = subprocess.check_output(args, cwd=cwd, encoding="utf-8", errors="surrogateescape")
+    return out.strip()
+
+
 def _repo_root() -> Path:
-    out = subprocess.check_output(
-        ["git", "rev-parse", "--show-toplevel"],
-        text=True,
-    )
-    return Path(out.strip())
+    return Path(_git_text(["git", "rev-parse", "--show-toplevel"]))
 
 
 def _staged_paths(root: Path) -> list[str]:
-    out = subprocess.check_output(
+    out = _git_text(
         ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
         cwd=root,
-        text=True,
     )
     return [line for line in out.splitlines() if line.strip()]
 

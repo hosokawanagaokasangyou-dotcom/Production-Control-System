@@ -56,7 +56,7 @@
                         <Label text="見出し色"/>
                         <ColorPicker fx:id="colorPicker"/>
                     </HBox>
-                    <HBox spacing="8.0" wrapText="true">
+                    <HBox spacing="8.0">
                         <Button mnemonicParsing="false" onAction="#onApplySelectedColor" text="選択に色を適用"/>
                         <Button mnemonicParsing="false" onAction="#onClearSelectedColor" text="色を解除"/>
                     </HBox>
