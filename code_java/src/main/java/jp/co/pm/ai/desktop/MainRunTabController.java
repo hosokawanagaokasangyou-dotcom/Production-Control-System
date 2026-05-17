@@ -35,6 +35,7 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.effect.DropShadow;
+import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
@@ -43,6 +44,9 @@ import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.AppVersionInfo;
+import jp.co.pm.ai.desktop.config.FactorySite;
+import jp.co.pm.ai.desktop.config.FactorySiteLogoSupport;
+import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
@@ -118,6 +122,15 @@ public final class MainRunTabController {
 
     @FXML
     private Label summaryWorkbookOpenHintLabel;
+
+    @FXML
+    private StackPane factoryLogoHost;
+
+    @FXML
+    private ImageView factoryLogoImageView;
+
+    @FXML
+    private Label factoryLogoCaptionLabel;
 
     private final ObservableList<String> logLinesAll = FXCollections.observableArrayList();
     private final FilteredList<String> logLinesVisible =
@@ -438,6 +451,30 @@ public final class MainRunTabController {
         this.shell = shell;
         refreshAppVersionLabel();
         refreshOpenWorkbookHintLabels();
+        refreshFactorySiteLogo();
+    }
+
+    /** {@link GlobalInitSettingTarget} の工場に合わせて実行・ログタブ上部のロゴを更新する。 */
+    void refreshFactorySiteLogo() {
+        if (factoryLogoHost == null || factoryLogoCaptionLabel == null) {
+            return;
+        }
+        FactorySite site = GlobalInitSettingTarget.load();
+        factoryLogoCaptionLabel.setText(site.displayLabelJa());
+        factoryLogoHost.getStyleClass().removeIf(c -> c.startsWith("pm-factory-logo-"));
+        factoryLogoHost.getStyleClass().add("pm-factory-logo-" + site.name().toLowerCase());
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        if (factoryLogoImageView != null) {
+            FactorySiteLogoSupport.applyBrandingOverrideToImageView(factoryLogoImageView, site, ui);
+        }
+        if (factoryLogoCaptionLabel != null) {
+            boolean branding = factoryLogoImageView != null && factoryLogoImageView.isVisible();
+            factoryLogoCaptionLabel.setVisible(!branding);
+            factoryLogoCaptionLabel.setManaged(!branding);
+        }
+        Tooltip.install(
+                factoryLogoHost,
+                new Tooltip(site.displayLabelJa() + "（init_setting 対象工場）"));
     }
 
     /**

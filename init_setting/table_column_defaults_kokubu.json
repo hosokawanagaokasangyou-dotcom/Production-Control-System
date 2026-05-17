@@ -821,7 +821,7 @@
   } ],
   "planInput_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false, false, false, false, false, false ],
   "stage1Preview_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
-  "aladdinProcessingPlanRaw_columnVisible" : [ true, false, false, true, true, true, false, false, true, false, true, true, true, true, true, true, false, true, false, true, true, true, false, true, true, true, true, true, true, false, false, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, false, true, false, true, true, false, true, true, true, true, true, true, true, false, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false, true, true, false, true, false, true, true, true, true, false, true, true, true, true, true, true, true, true, true, false, true, false, true, true, true, true, true, true, true, true, true, false, false, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "aladdinProcessingPlanRaw_columnVisible" : [ true, true, false, false, true, false, false, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, false, false, true, true, true, true, false, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, true, false, true, false, true, true, true, false, true, true, true, true, true, true, false, false, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, false, true, false, true, true, false, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false, true, true, false, true, false, true, true, true, true, false, false, true, true, true, true ],
   "resultDispatchTable_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
   "envVars" : [ {
     "title" : "変数名",
@@ -865,6 +865,9 @@
     "width" : 112.0
   }, {
     "title" : "回答納期",
+    "width" : 112.0
+  }, {
+    "title" : "納期判定",
     "width" : 112.0
   }, {
     "title" : "指定納期",

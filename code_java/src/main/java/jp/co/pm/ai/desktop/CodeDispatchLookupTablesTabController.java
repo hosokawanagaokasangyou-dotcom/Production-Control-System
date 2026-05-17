@@ -4,12 +4,16 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -20,6 +24,7 @@ import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
+import javafx.scene.control.TextField;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -72,6 +77,8 @@ public final class CodeDispatchLookupTablesTabController {
 
     private final Map<Tab, FilePanel> panelByTab = new ConcurrentHashMap<>();
 
+    private final AtomicBoolean planInputRollUnitNotifyPending = new AtomicBoolean(false);
+
     @FXML
     private void initialize() {
         hintLabel.setText(
@@ -118,6 +125,7 @@ public final class CodeDispatchLookupTablesTabController {
         for (FilePanel p : panelByTab.values()) {
             p.reloadFromDisk();
         }
+        scheduleInvalidatePlanInputRollUnitHighlightCache();
     }
 
     int snapshotInnerTabSelectedIndex() {
@@ -145,17 +153,52 @@ public final class CodeDispatchLookupTablesTabController {
         }
     }
 
+    /** 保存・再読込でディスク上のルックアップ表が変わったあと、配台計画_タスク入力のロール長キャッシュを1回だけ無効化する。 */
+    private void scheduleInvalidatePlanInputRollUnitHighlightCache() {
+        if (shell == null) {
+            return;
+        }
+        if (!planInputRollUnitNotifyPending.compareAndSet(false, true)) {
+            return;
+        }
+        Platform.runLater(
+                () -> {
+                    planInputRollUnitNotifyPending.set(false);
+                    shell.invalidatePlanInputRollUnitHighlightCache();
+                });
+    }
+
     private final class FilePanel {
 
         private final FileSpec spec;
         private final VBox root;
         private final Label pathLabel = new Label();
+        private final TextField rowSearchField = new TextField();
         private final TableView<ObservableList<String>> table = new TableView<>();
         private final ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        private final FilteredList<ObservableList<String>> rowsFiltered;
         private volatile boolean loaded;
 
         FilePanel(FileSpec spec) {
             this.spec = spec;
+            rowsFiltered = new FilteredList<>(rows, this::rowMatchesSearch);
+            rowSearchField.setPromptText(
+                    "キー・値のいずれかに含まれる文字列（部分一致）。空欄ですべて表示");
+            HBox.setHgrow(rowSearchField, Priority.ALWAYS);
+            rowSearchField
+                    .textProperty()
+                    .addListener((obs, prev, cur) -> applySearchPredicate());
+            rows.addListener(
+                    (ListChangeListener<ObservableList<String>>)
+                            c -> {
+                                while (c.next()) {
+                                    if (c.wasAdded()) {
+                                        for (ObservableList<String> r : c.getAddedSubList()) {
+                                            hookRowForSearchFilter(r);
+                                        }
+                                    }
+                                }
+                            });
             TableColumn<ObservableList<String>, String> colKey = new TableColumn<>("キー");
             colKey.setPrefWidth(420);
             colKey.setCellValueFactory(
@@ -175,6 +218,7 @@ public final class CodeDispatchLookupTablesTabController {
                             r.add("");
                         }
                         r.set(0, ev.getNewValue() != null ? ev.getNewValue() : "");
+                        applySearchPredicate();
                     });
             TableColumn<ObservableList<String>, String> colVal = new TableColumn<>("値");
             colVal.setPrefWidth(160);
@@ -195,9 +239,10 @@ public final class CodeDispatchLookupTablesTabController {
                             r.add("");
                         }
                         r.set(1, ev.getNewValue() != null ? ev.getNewValue() : "");
+                        applySearchPredicate();
                     });
             table.getColumns().addAll(List.of(colKey, colVal));
-            table.setItems(rows);
+            table.setItems(rowsFiltered);
             table.setEditable(true);
             table.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
             table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
@@ -217,7 +262,7 @@ public final class CodeDispatchLookupTablesTabController {
                         }
                         rows.removeAll(sel);
                     });
-            HBox bar = new HBox(8, reload, save, add, remove);
+            HBox bar = new HBox(8, rowSearchField, reload, save, add, remove);
             bar.setAlignment(Pos.CENTER_LEFT);
             pathLabel.setWrapText(true);
             root = new VBox(8, pathLabel, bar, table);
@@ -236,6 +281,7 @@ public final class CodeDispatchLookupTablesTabController {
         }
 
         void reloadFromDisk() {
+            boolean wasLoaded = loaded;
             Path path = resolvePath();
             pathLabel.setText(path.toString());
             try {
@@ -243,10 +289,17 @@ public final class CodeDispatchLookupTablesTabController {
                         CodeDispatchLookupTableIo.readOrEmpty(path, spec.defaultHeaderLine());
                 rows.clear();
                 for (Map.Entry<String, String> e : t.rows().entrySet()) {
-                    rows.add(FXCollections.observableArrayList(e.getKey(), e.getValue()));
+                    ObservableList<String> row =
+                            FXCollections.observableArrayList(e.getKey(), e.getValue());
+                    hookRowForSearchFilter(row);
+                    rows.add(row);
                 }
+                applySearchPredicate();
                 loaded = true;
                 logLine("[code-lookup] 読込: " + path);
+                if (wasLoaded) {
+                    scheduleInvalidatePlanInputRollUnitHighlightCache();
+                }
             } catch (IOException ex) {
                 logLine("[code-lookup] 読込失敗: " + path + " → " + ex.getMessage());
             }
@@ -271,6 +324,7 @@ public final class CodeDispatchLookupTablesTabController {
                 KeyValTable cur = CodeDispatchLookupTableIo.readOrEmpty(path, spec.defaultHeaderLine());
                 CodeDispatchLookupTableIo.write(path, new KeyValTable(cur.headerLine(), m));
                 logLine("[code-lookup] 保存: " + path + " (" + m.size() + " 行)");
+                scheduleInvalidatePlanInputRollUnitHighlightCache();
             } catch (IOException ex) {
                 logLine("[code-lookup] 保存失敗: " + path + " → " + ex.getMessage());
                 if (shell != null) {
@@ -282,6 +336,37 @@ public final class CodeDispatchLookupTablesTabController {
         private Path resolvePath() {
             Path code = AppPaths.resolveRepoRoot(uiEnv()).resolve("code");
             return code.resolve(spec.relativePath()).toAbsolutePath().normalize();
+        }
+
+        private void applySearchPredicate() {
+            rowsFiltered.setPredicate(this::rowMatchesSearch);
+        }
+
+        private String normalizedSearchQuery() {
+            String t = rowSearchField.getText();
+            return t != null ? t.trim().toLowerCase(Locale.ROOT) : "";
+        }
+
+        private boolean rowMatchesSearch(ObservableList<String> r) {
+            if (r == null) {
+                return false;
+            }
+            String q = normalizedSearchQuery();
+            if (q.isEmpty()) {
+                return true;
+            }
+            String key = r.isEmpty() || r.get(0) == null ? "" : r.get(0);
+            String val = r.size() > 1 && r.get(1) != null ? r.get(1) : "";
+            return key.toLowerCase(Locale.ROOT).contains(q)
+                    || val.toLowerCase(Locale.ROOT).contains(q);
+        }
+
+        private void hookRowForSearchFilter(ObservableList<String> r) {
+            if (r == null) {
+                return;
+            }
+            Runnable ping = () -> Platform.runLater(this::applySearchPredicate);
+            r.addListener((ListChangeListener<String>) c -> ping.run());
         }
     }
 }

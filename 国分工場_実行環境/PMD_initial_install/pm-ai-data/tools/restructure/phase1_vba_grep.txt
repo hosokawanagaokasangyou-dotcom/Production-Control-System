@@ -1,6 +1,0 @@
-Phase 1-A: code/VBA 配下のパターン検索（apply_|setup_environment|encrypt|xlwings|plan_refresh|モジュール取り込み 等）
-
-結果: 主に code/VBA/モジュール分割バージョン/*.bas に参照あり（移動後は code/参照用/モジュール分割バージョン/）。
-master.xlsm 紐付けの マスターファイル/ には上記の Python 起動文字列は未検出（Grep 対象外の可能性あり。Phase 2 で master_xlsm_VBA.bas も再検索）。
-
-保存日: 作業セッション

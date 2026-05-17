@@ -279,8 +279,8 @@ public final class EnvVarDocs {
         put(
                 "PM_AI_DEBUG_STAGE3_PLAN_ACTUAL_SINGLE_LINE",
                 "配台計画手動修正タブ: 段階3試行後の日付セル表示。"
-                        + " 1/true/yes/on（既定）で（段階3前）（段階3後）を1行（スペース区切り）。"
-                        + " 0/false/no/off/none で2行（改行）。2行は固定行高44px・wrap-text なし。"
+                        + " 1/true/yes/on で（段階3前）（段階3後）を1行（スペース区切り）。"
+                        + " 0/false/no/off/none（既定）で2行（改行）。2行は固定行高44px・wrap-text なし。"
                         + " Spreadsheet の layout IOOBE 回避のため。");
         put(
                 "PM_AI_STAGE2_ENGINE",

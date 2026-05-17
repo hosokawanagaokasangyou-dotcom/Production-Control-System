@@ -57,6 +57,9 @@ public final class GlobalSettingsTabController {
                         (obs, oldV, newV) -> {
                             if (newV != null) {
                                 GlobalInitSettingTarget.save(newV);
+                                if (shell != null) {
+                                    shell.refreshMainRunTabFactoryLogo();
+                                }
                             }
                         });
     }

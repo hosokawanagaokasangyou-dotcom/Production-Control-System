@@ -76,6 +76,41 @@
     -fx-background-color: transparent;
 }
 
+.pm-run-factory-logo-host {
+    -fx-alignment: center;
+    -fx-padding: 0 12 0 0;
+    -fx-min-width: 200;
+    -fx-pref-width: 200;
+    -fx-max-width: 200;
+    -fx-min-height: 52;
+    -fx-pref-height: 52;
+    -fx-max-height: 52;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.55), 6, 0, 0, 2);
+}
+
+.pm-factory-logo-konan.pm-run-factory-logo-host {
+    -fx-background-color: linear-gradient(to bottom, #3d6a9e 0%, #1e3a5f 48%, #142a45 100%);
+    -fx-border-color: #5a8ec8 #1a3050 #0f2038 #356090;
+    -fx-border-width: 1 1 2 1;
+}
+
+.pm-factory-logo-kokubu.pm-run-factory-logo-host {
+    -fx-background-color: linear-gradient(to bottom, #3d9a62 0%, #1a6b3a 48%, #0f4d28 100%);
+    -fx-border-color: #5ec48a #0f4d28 #083820 #2d8a52;
+    -fx-border-width: 1 1 2 1;
+}
+
+.pm-run-factory-logo-caption {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+    -fx-text-fill: white;
+    -fx-alignment: center;
+    -fx-text-alignment: center;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 3, 0, 0, 1);
+}
+
 .pm-run-tab .label.pm-section-title {
     -fx-font-size: 13px;
     -fx-font-weight: bold;
@@ -601,10 +636,14 @@
 }
 
 /*
- * Tab 見出しラベル：ダーク系テーマで Modena の推定文字色が暗いままになり、見出し背景と融けて判読不能になることがある
- * （メインシェル最上段は pokeShellTabHeaderBackground で上書きされる）。ネストした TabPane（納期管理ビュー等）向け。
+ * Tab 見出しラベル：ダーク系テーマで Modena の LabeledText が黒のまま残り、ホバーするまで見えないことがある。
+ * メインシェル最上段・入れ子は下記 pm-main-shell-tab-pane を優先。pokeShellTabHeaderBackground は着色タブ向け。
  */
 .tab-pane > .tab-header-area > .headers-region > .tab .tab-label {
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab:hover .tab-label {
     -fx-text-fill: -fx-mid-text-color;
 }
 
@@ -612,10 +651,25 @@
     -fx-text-fill: -fx-dark-text-color;
 }
 
+.tab-pane.pm-main-shell-tab-pane > .tab-header-area > .headers-region > .tab .tab-label {
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.tab-pane.pm-main-shell-tab-pane > .tab-header-area > .headers-region > .tab:hover .tab-label {
+    -fx-text-fill: -fx-light-text-color;
+}
+
+.tab-pane.pm-main-shell-tab-pane > .tab-header-area > .headers-region > .tab:selected .tab-label {
+    -fx-text-fill: -fx-light-text-color;
+}
+
+.tab-pane.pm-main-shell-tab-pane > .tab-header-area > .headers-region > .tab.pm-shell-tab-colored .tab-label {
+    -fx-opacity: 1;
+}
+
 /*
  * 選択中タブの強調（最上段・入れ子・着色タブ共通）。
- * pokeShellTabHeaderBackground のインラインは -fx-background-color / -fx-text-fill / -fx-effect しか
- * 触らないため、border と font-weight を CSS 側で指定すれば着色タブにも乗る。
+ * pokeShellTabHeaderBackground のインラインは見出しセルへ背景・ラベル色を直接指定する。
  * テーマ CSS は scene 先頭に挿入されるため、本ルール（後発）が同セレクタなら勝つ。
  */
 .tab-pane > .tab-header-area > .headers-region > .tab:selected {
@@ -628,9 +682,27 @@
     -fx-font-weight: bold;
 }
 
+.tab-pane.pm-main-shell-tab-pane > .tab-header-area > .headers-region > .tab.pm-shell-tab-colored:selected .tab-label,
+.tab-pane.pm-main-shell-tab-pane > .tab-header-area > .headers-region > .tab.pm-shell-tab-colored:hover .tab-label,
+.tab-pane.pm-main-shell-tab-pane > .tab-header-area > .headers-region > .tab.pm-shell-tab-colored .tab-label {
+    -fx-font-weight: bold;
+}
+
 /* メインシェル：グループ内の第2段 TabPane */
 .tab-pane.pm-main-shell-inner-tab-pane {
     -fx-padding: 2 0 0 0;
+}
+
+.tab-pane.pm-main-shell-inner-tab-pane > .tab-header-area > .headers-region > .tab .tab-label {
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.tab-pane.pm-main-shell-inner-tab-pane > .tab-header-area > .headers-region > .tab:hover .tab-label {
+    -fx-text-fill: -fx-light-text-color;
+}
+
+.tab-pane.pm-main-shell-inner-tab-pane > .tab-header-area > .headers-region > .tab:selected .tab-label {
+    -fx-text-fill: -fx-light-text-color;
 }
 
 /* ツールバー右上：JVM ヒープ・メタスペース表示（FxJvmMemoryStatusBar） */

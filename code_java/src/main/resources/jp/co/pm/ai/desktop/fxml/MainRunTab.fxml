@@ -7,10 +7,12 @@
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ListView?>
 <?import javafx.scene.control.TextField?>
+<?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.ColumnConstraints?>
 <?import javafx.scene.layout.GridPane?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
 <?import javafx.scene.layout.RowConstraints?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
@@ -23,10 +25,17 @@
     </padding>
     <top>
         <VBox fillWidth="true" spacing="10.0">
-            <HBox alignment="CENTER_RIGHT" spacing="8.0">
-                <Button mnemonicParsing="false" onAction="#onOpenDispatchUsageGuideDocxAction" text="配台の使い方" />
-                <Button mnemonicParsing="false" onAction="#onOpenManualAction" text="マニュアルを開く" />
-                <Label fx:id="appVersionLabel" styleClass="pm-app-version-label" text="" />
+            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                <StackPane fx:id="factoryLogoHost" alignment="CENTER" maxHeight="56.0" minHeight="52.0" minWidth="200.0" prefHeight="52.0" prefWidth="200.0" styleClass="pm-run-factory-logo-host">
+                    <ImageView fx:id="factoryLogoImageView" fitHeight="44.0" fitWidth="184.0" mouseTransparent="true" preserveRatio="true" />
+                    <Label fx:id="factoryLogoCaptionLabel" alignment="CENTER" contentDisplay="CENTER" maxWidth="188.0" mouseTransparent="true" styleClass="pm-run-factory-logo-caption" text="" textAlignment="CENTER" wrapText="false" />
+                </StackPane>
+                <Region HBox.hgrow="ALWAYS" />
+                <HBox alignment="CENTER_RIGHT" spacing="8.0">
+                    <Button mnemonicParsing="false" onAction="#onOpenDispatchUsageGuideDocxAction" text="配台の使い方" />
+                    <Button mnemonicParsing="false" onAction="#onOpenManualAction" text="マニュアルを開く" />
+                    <Label fx:id="appVersionLabel" styleClass="pm-app-version-label" text="" />
+                </HBox>
             </HBox>
             <GridPane hgap="10.0" styleClass="pm-run-actions-grid" vgap="10.0">
                 <padding>

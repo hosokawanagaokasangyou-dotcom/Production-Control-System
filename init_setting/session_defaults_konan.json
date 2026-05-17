@@ -379,8 +379,8 @@
     "description" : "環境構築 setup_environment: Windows で成功時に完了メッセージ（MessageBox）を表示。0 false no off で無効"
   }, {
     "name" : "PM_AI_DEBUG_STAGE3_PLAN_ACTUAL_SINGLE_LINE",
-    "value" : "1",
-    "description" : "配台手動修正: 段階3試行後の日付セルで（段階3前）（段階3後）を改行せず1行表示（スペース区切り）。1/true/yes/on で有効。0/false/no/off/none で2行（改行）表示。既定は1（安定）。 — 配台計画手動修正タブ: 段階3試行後の日付セル表示。 1/true/yes/on（既定）で（段階3前）（段階3後）を1行（スペース区切り）。 0/false/no/off/none で2行（改行）。2行は固定行高44px・wrap-text なし。 Spreadsheet の layout IOOBE 回避のため。"
+    "value" : "0",
+    "description" : "配台手動修正: 段階3試行後の日付セルで（段階3前）（段階3後）を改行せず1行表示（スペース区切り）。1/true/yes/on で有効。0/false/no/off/none で2行（改行）表示。既定は0（2行表示）。 — 配台計画手動修正タブ: 段階3試行後の日付セル表示。 1/true/yes/on で（段階3前）（段階3後）を1行（スペース区切り）。 0/false/no/off/none（既定）で2行（改行）。2行は固定行高44px・wrap-text なし。 Spreadsheet の layout IOOBE 回避のため。"
   } ],
   "mainShellTabOrder" : [ "run", "planInput", "equipmentGanttGraphic", "deliveryCalendarView", "dispatchInteractive", "operatorCard", "uiBadgeDesign", "pushButtonDesign", "ganttPersonBadgeDesign", "env", "memorySettings", "globalSettings", "apiModelBenchmark", "userProfiles", "summaryAiDispatchExportCustomize", "masterSummary", "excludeRules", "specialRules", "actualsStatus", "planWorkspaceHistory", "codeLookupTables", "stage1Preview", "resultDispatch", "planResultViewer" ],
   "mainShellTabLayout" : [ {

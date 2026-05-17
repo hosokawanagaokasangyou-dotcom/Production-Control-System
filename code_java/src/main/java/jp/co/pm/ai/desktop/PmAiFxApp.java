@@ -240,6 +240,7 @@ public class PmAiFxApp extends Application {
                                                     main.requestFocus();
                                                 }
                                                 shell.appendBootMessage();
+                                                shell.schedulePortableBundleSelfUpdateAfterSplash();
                                             }));
                 };
         if (waitNs <= 0) {

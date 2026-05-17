@@ -481,6 +481,7 @@ public final class MainShellController {
         suppressEnvSessionPersistence.set(true);
         try {
             captureMainShellTabBaselineTitles();
+            installMainShellTabPaneChromeHooks();
             installLazyMainShellTabContentForStartup();
             envRows = FXCollections.observableArrayList();
             populateEnvRows(envRows);
@@ -577,8 +578,6 @@ public final class MainShellController {
         maybePortableFirstLaunchEnvInit();
 
         probeNetworkSourceDirsAtStartup();
-
-        Platform.runLater(this::maybePortableBundleSelfUpdate);
 
         primaryStage.setOnCloseRequest(
                 e -> {
@@ -819,6 +818,7 @@ public final class MainShellController {
             mainShellTabOrganizerPaneController.syncHeaderGlowControlsFromShell();
         }
         mainRunTabController.refreshOpenWorkbookHintLabels();
+        mainRunTabController.refreshFactorySiteLogo();
         Platform.runLater(() -> excludeRulesTabController.tryStartupLoadFromPathField());
     }
 
@@ -1644,6 +1644,28 @@ public final class MainShellController {
         return v instanceof String s && !s.isBlank() ? s.strip() : "";
     }
 
+    /** メインシェル {@link TabPane} の見出し CSS 再適用（スキン生成遅延・選択切替後の黒文字化対策）。 */
+    private void installMainShellTabPaneChromeHooks() {
+        if (tabPane == null) {
+            return;
+        }
+        if (!tabPane.getStyleClass().contains("pm-main-shell-tab-pane")) {
+            tabPane.getStyleClass().add("pm-main-shell-tab-pane");
+        }
+        if (Boolean.TRUE.equals(tabPane.getProperties().get("pmMainShellTabChromeHooksInstalled"))) {
+            return;
+        }
+        tabPane.getProperties().put("pmMainShellTabChromeHooksInstalled", Boolean.TRUE);
+        tabPane
+                .skinProperty()
+                .addListener(
+                        (obs, oldSkin, newSkin) -> {
+                            if (newSkin != null && !suppressMainShellTabChromeRefresh.get()) {
+                                Platform.runLater(this::refreshMainShellTabHeaderChromeFromStoredColors);
+                            }
+                        });
+    }
+
     /**
      * 選択／非選択の切り替えでテーマ CSS が見出しを塗り直し、インライン前景が潰れることがあるため、保存色があれば再適用する。
      */
@@ -2156,6 +2178,40 @@ public final class MainShellController {
      * テーマ CSS の {@code .tab-pane > ... > .tab:selected} 等が Tab のインラインより強く当たり色が変わらないことがあるため、
      * 見出し行のセル（{@code .headers-region} 直下の {@code .tab}）へ直接背景・文字色を指定する。
      */
+    private static void applyShellTabHeaderCellChrome(
+            Node tabHeaderCell,
+            String bgHex,
+            String labelFillHex,
+            String glowEffectCssOrNull) {
+        String tf = labelFillHex.strip();
+        tabHeaderCell.setStyle(shellTabHeaderChromeInlineStyle(bgHex, tf, glowEffectCssOrNull));
+        if (!tabHeaderCell.getStyleClass().contains("pm-shell-tab-colored")) {
+            tabHeaderCell.getStyleClass().add("pm-shell-tab-colored");
+        }
+        String labelInline = "-fx-text-fill: " + tf + ";";
+        Node lab = tabHeaderCell.lookup(".tab-label");
+        if (lab != null) {
+            lab.setStyle(labelInline);
+        }
+        try {
+            applyShellTabHeaderForegroundRecursive(tabHeaderCell, Color.web(tf), tf);
+        } catch (IllegalArgumentException ex) {
+            if (lab instanceof Labeled labeled) {
+                labeled.setStyle(labelInline);
+            }
+        }
+    }
+
+    private static void clearShellTabHeaderCellChrome(Node tabHeaderCell) {
+        tabHeaderCell.setStyle("");
+        tabHeaderCell.getStyleClass().remove("pm-shell-tab-colored");
+        Node lab = tabHeaderCell.lookup(".tab-label");
+        if (lab != null) {
+            lab.setStyle("");
+        }
+        clearShellTabHeaderForegroundRecursive(tabHeaderCell);
+    }
+
     private static void pokeShellTabHeaderBackground(
             Map<String, String> uiEnv,
             TabPane pane,
@@ -2186,33 +2242,13 @@ public final class MainShellController {
                                     && !rgbHexOrNull.isBlank()
                                     && labelFillHexOrNull != null
                                     && !labelFillHexOrNull.isBlank()) {
-                                String h = rgbHexOrNull.strip();
-                                String tf = labelFillHexOrNull.strip();
-                                child.setStyle(
-                                        shellTabHeaderChromeInlineStyle(
-                                                h, tf, glowEffectCssOrNull));
-                                Node lab = child.lookup(".tab-label");
-                                if (lab != null) {
-                                    try {
-                                        applyShellTabHeaderForegroundRecursive(
-                                                lab, Color.web(tf), tf);
-                                    } catch (IllegalArgumentException ex) {
-                                        if (lab instanceof Labeled labeled) {
-                                            if (!labeled.textFillProperty().isBound()) {
-                                                labeled.setTextFill(Color.web(tf));
-                                            }
-                                            labeled.setStyle("-fx-text-fill: " + tf + ";");
-                                        } else {
-                                            lab.setStyle("-fx-text-fill: " + tf + ";");
-                                        }
-                                    }
-                                }
+                                applyShellTabHeaderCellChrome(
+                                        child,
+                                        rgbHexOrNull.strip(),
+                                        labelFillHexOrNull.strip(),
+                                        glowEffectCssOrNull);
                             } else {
-                                child.setStyle("");
-                                Node lab = child.lookup(".tab-label");
-                                if (lab != null) {
-                                    clearShellTabHeaderForegroundRecursive(lab);
-                                }
+                                clearShellTabHeaderCellChrome(child);
                             }
                             return;
                         }
@@ -2221,6 +2257,7 @@ public final class MainShellController {
                 };
         op.run();
         Platform.runLater(op);
+        Platform.runLater(() -> Platform.runLater(op));
     }
 
     /**
@@ -3066,6 +3103,14 @@ public final class MainShellController {
     }
 
     /**
+     * 起動スプラッシュ（APPLICATION_MODAL・常に前面）を閉じたあとにポータブル自動バージョンアップを走らせる。
+     * スプラッシュ表示中に {@link Alert#showAndWait()} すると確認ダイアログが背面に隠れて見えないことがある。
+     */
+    void schedulePortableBundleSelfUpdateAfterSplash() {
+        Platform.runLater(this::maybePortableBundleSelfUpdate);
+    }
+
+    /**
      * After stage 1 writes {@code json/stage1_exclude_rules.json}, mirror the path into the env tab so
      * {@code PM_AI_EXCLUDE_RULES_JSON} matches the next child-process run.
      */
@@ -3838,6 +3883,7 @@ public final class MainShellController {
         scheduleDesktopSessionSave();
         if (mainRunTabController != null) {
             mainRunTabController.refreshOpenWorkbookHintLabels();
+            mainRunTabController.refreshFactorySiteLogo();
         }
     }
 
@@ -3870,6 +3916,9 @@ public final class MainShellController {
         GlobalInitSettingTarget.save(site);
         if (globalSettingsTabController != null) {
             globalSettingsTabController.refreshInitSettingTargetComboFromStore();
+        }
+        if (mainRunTabController != null) {
+            mainRunTabController.refreshFactorySiteLogo();
         }
     }
 
@@ -3971,6 +4020,13 @@ public final class MainShellController {
     /** Same-package tab controllers append run-tab log lines here. */
     void appendLog(String line) {
         mainRunTabController.appendLog(line);
+    }
+
+    /** グローバル設定の工場切替などで実行・ログタブ上部ロゴを更新する。 */
+    void refreshMainRunTabFactoryLogo() {
+        if (mainRunTabController != null) {
+            mainRunTabController.refreshFactorySiteLogo();
+        }
     }
 
     Map<String, String> snapshotUiEnv() {
@@ -4084,6 +4140,13 @@ public final class MainShellController {
     void invalidateDeliveryCalendarAfterPipelineRun() {
         if (deliveryCalendarViewTabController != null) {
             deliveryCalendarViewTabController.markStaleUntilManualReload();
+        }
+    }
+
+    /** 材料・製品種類情報タブで {@code code/} ルックアップ表がディスクと同期したあと、配台計画_タスク入力のロール長ハイライトを更新する。 */
+    void invalidatePlanInputRollUnitHighlightCache() {
+        if (planInputTabController != null) {
+            planInputTabController.invalidateRollUnitHighlightCacheAndRefresh();
         }
     }
 
@@ -4433,6 +4496,7 @@ public final class MainShellController {
                     DesktopSessionStateStore.save(collectDesktopSession());
                     mainRunTabController.refreshAppVersionLabel();
                     mainRunTabController.refreshOpenWorkbookHintLabels();
+                    mainRunTabController.refreshFactorySiteLogo();
                     appendLog(
                             "[startup] ポータル同期が完了しました（version.txt・pm-ai-data／init_setting をリポジトリへ反映）。"
                                     + "グローバル設定「デフォルトに戻す」相当で UI をバンドル既定へ揃えました。"

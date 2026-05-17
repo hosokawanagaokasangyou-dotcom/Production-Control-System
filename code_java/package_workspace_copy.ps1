@@ -65,6 +65,10 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
 
     # Must be defined before InitialInstall exclusions reference it (avoid $null -> excludes entire tree).
     $referenceDirRel = 'code/' + (-join @([char]0x53C2, [char]0x7167, [char]0x7528)) + '/'
+    # Local unpacked portable install under repo (duplicate of jpackage output; must not ship in pm-ai-data mirror).
+    $kokubuRuntimeEnvRel =
+        (-join @([char]0x56FD, [char]0x5206, [char]0x5DE5, [char]0x5834)) + '_' +
+        (-join @([char]0x5B9F, [char]0x884C, [char]0x74B0, [char]0x5883)) + '/'
 
     # Directory prefixes (repo-relative, slash form, must end with '/').
     $excludedDirPrefixes = [System.Collections.Generic.List[string]]::new()
@@ -80,6 +84,7 @@ function Copy-WorkspaceTreeWithExplicitExclusions {
             '.cursor/',
             '.vscode/',
             'code/VBA/',
+            $kokubuRuntimeEnvRel,
             $ReleaseFolderRelativePrefix
         )) {
         $excludedDirPrefixes.Add($p)

@@ -1,8 +1,0 @@
-# Repo-relative UTF-8 paths (under code/). Copied into pm-ai-data even if not tracked by git.
-# package_app.ps1 reads this file so the script stays ASCII-only for Windows PowerShell 5.1.
-code/使用原反, 加工幅.txt
-code/使用原反,ロール単位の長さ.txt
-code/製品名,ロール単位の長さ.txt
-code/製品名,製品厚み.txt
-code/製品名,製品長.txt
-code/製品名, 製品幅.txt

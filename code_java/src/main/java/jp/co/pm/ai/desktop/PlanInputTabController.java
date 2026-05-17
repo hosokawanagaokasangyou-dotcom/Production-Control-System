@@ -670,6 +670,16 @@ public final class PlanInputTabController {
                 });
     }
 
+    /**
+     * 材料・製品種類情報（{@code code/} テーブル）の保存・再読込後に呼ぶ。ロール長ハイライト用キャッシュを破棄し、表を再構築する。
+     */
+    void invalidateRollUnitHighlightCacheAndRefresh() {
+        cachedRollUnitHighlightTables.set(null);
+        if (!headersRef.isEmpty()) {
+            rebuildSpreadsheet();
+        }
+    }
+
     private void rebuildSpreadsheet() {
         rebuildSpreadsheet(true);
     }
