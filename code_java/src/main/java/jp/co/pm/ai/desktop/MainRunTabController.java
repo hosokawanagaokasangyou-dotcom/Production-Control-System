@@ -588,6 +588,31 @@ public final class MainRunTabController {
     }
 
     @FXML
+    private void onOpenDispatchUsageGuideDocxAction() {
+        if (shell == null) {
+            return;
+        }
+        Path p = AppPaths.resolveDispatchUsageGuideDocx(shell.snapshotUiEnv());
+        if (!Files.isRegularFile(p)) {
+            appendLog(
+                    "[dispatch-usage-docx] file not found: "
+                            + p
+                            + " (expected "
+                            + AppPaths.DISPATCH_USAGE_GUIDE_DOCX
+                            + " under "
+                            + AppPaths.KEY_PM_AI_REPO_ROOT
+                            + ")");
+            return;
+        }
+        try {
+            DesktopFileOpener.openFile(p);
+            appendLog("[dispatch-usage-docx] opened: " + p.toAbsolutePath().normalize());
+        } catch (Exception e) {
+            appendLog("[dispatch-usage-docx] open failed: " + e.getMessage());
+        }
+    }
+
+    @FXML
     private void onOpenManualAction() {
         if (shell == null) {
             return;

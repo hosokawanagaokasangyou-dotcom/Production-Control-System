@@ -24,6 +24,7 @@
     <top>
         <VBox fillWidth="true" spacing="10.0">
             <HBox alignment="CENTER_RIGHT" spacing="8.0">
+                <Button mnemonicParsing="false" onAction="#onOpenDispatchUsageGuideDocxAction" text="配台の使い方" />
                 <Button mnemonicParsing="false" onAction="#onOpenManualAction" text="マニュアルを開く" />
                 <Label fx:id="appVersionLabel" styleClass="pm-app-version-label" text="" />
             </HBox>
