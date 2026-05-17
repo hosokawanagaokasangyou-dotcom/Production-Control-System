@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -8,6 +9,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import javafx.application.Platform;
+import javafx.geometry.Bounds;
 import javafx.beans.value.ChangeListener;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
@@ -28,6 +30,7 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
 import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.DragEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.Node;
 import javafx.scene.layout.Region;
@@ -57,8 +60,22 @@ public final class MainShellTabOrganizerTabController {
     /** 子行ごとに左へ積み上げるインデント（階段状の「半歩ずらし」用、横方向のみ）。 */
     private static final double CHILD_STRIP_HORIZONTAL_STAGGER = 8.0;
 
+    /** ドラッグ中にリスト ScrollPane を端で自動スクロールする感度（px）。 */
+    private static final double LIST_AUTO_SCROLL_MARGIN_PX = 56.0;
+
+    private static final double LIST_AUTO_SCROLL_STEP = 0.04;
+
     @FXML
     private TreeView<OrgRow> treeView;
+
+    @FXML
+    private ScrollPane organizerListScroll;
+
+    @FXML
+    private Button moveUpButton;
+
+    @FXML
+    private Button moveDownButton;
 
     @FXML
     private VBox organizerVisualRoot;
@@ -91,6 +108,9 @@ public final class MainShellTabOrganizerTabController {
 
     /** ドラッグ開始セルと {@link Dragboard} を対応付けるための作業領域（ツリー行の移動用）。 */
     private TreeItem<OrgRow> dragSourceItem;
+
+    /** ドロップ先ハイライト用（{@code pm-org-drop-target}）。 */
+    private Node dragHighlightNode;
 
     private ChangeListener<TreeItem<OrgRow>> treeSelectionListener;
 
@@ -252,6 +272,7 @@ public final class MainShellTabOrganizerTabController {
         syncTabAliasField();
         syncColorPickerFromSelection();
         syncHeaderGlowControlsFromShell();
+        updateMoveButtonsState();
     }
 
     /** 単一選択時、見出し色ピッカーを選択行の {@link OrgRow#colorHex} に合わせる。 */
@@ -475,6 +496,117 @@ public final class MainShellTabOrganizerTabController {
     /**
      * 選択中のグループ行を削除する。子がある場合は同一親の直下へ順に繰り上げる（タブは失わない）。
      */
+    @FXML
+    private void onMoveSelectionUp() {
+        moveSelectedSiblings(-1);
+    }
+
+    @FXML
+    private void onMoveSelectionDown() {
+        moveSelectedSiblings(1);
+    }
+
+    /**
+     * 選択中のタブ／グループ行を同一親の兄弟リスト内で移動する（{@code direction} は -1=上、+1=下）。
+     */
+    private void moveSelectedSiblings(int direction) {
+        if (treeView == null || treeView.getRoot() == null || direction == 0) {
+            return;
+        }
+        List<TreeItem<OrgRow>> block = movableSelectedUnderSameParent();
+        if (block.isEmpty()) {
+            alert(AlertType.INFORMATION, "タブ行またはグループ行を選んでください。");
+            return;
+        }
+        TreeItem<OrgRow> parent = block.getFirst().getParent();
+        if (parent == null) {
+            return;
+        }
+        ObservableList<TreeItem<OrgRow>> siblings = parent.getChildren();
+        block.sort(Comparator.comparingInt(siblings::indexOf));
+        int firstIdx = siblings.indexOf(block.getFirst());
+        int lastIdx = siblings.indexOf(block.getLast());
+        if (firstIdx < 0 || lastIdx < 0) {
+            return;
+        }
+        if (direction < 0 && firstIdx == 0) {
+            return;
+        }
+        if (direction > 0 && lastIdx >= siblings.size() - 1) {
+            return;
+        }
+        List<TreeItem<OrgRow>> removed = new ArrayList<>(block);
+        for (int i = removed.size() - 1; i >= 0; i--) {
+            siblings.remove(removed.get(i));
+        }
+        int insertAt = direction < 0 ? firstIdx - 1 : firstIdx + 1;
+        for (int i = 0; i < removed.size(); i++) {
+            siblings.add(insertAt + i, removed.get(i));
+        }
+        treeView.getSelectionModel().clearSelection();
+        for (TreeItem<OrgRow> ti : removed) {
+            treeView.getSelectionModel().select(ti);
+        }
+        rebuildOrganizerVisualTree();
+        syncOrganizerSideFields();
+    }
+
+    private List<TreeItem<OrgRow>> movableSelectedUnderSameParent() {
+        if (treeView == null) {
+            return List.of();
+        }
+        ObservableList<TreeItem<OrgRow>> sel = treeView.getSelectionModel().getSelectedItems();
+        if (sel == null || sel.isEmpty()) {
+            return List.of();
+        }
+        List<TreeItem<OrgRow>> block = new ArrayList<>();
+        TreeItem<OrgRow> parent = null;
+        for (TreeItem<OrgRow> ti : sel) {
+            if (ti == null || ti.getValue() == null) {
+                continue;
+            }
+            OrgRow.Kind k = ti.getValue().kind;
+            if (k == OrgRow.Kind.INNER_TAB || k == OrgRow.Kind.INNER_ACCORDION) {
+                continue;
+            }
+            if (ti.getParent() == null || ti.getParent().getValue() == null) {
+                continue;
+            }
+            if (parent == null) {
+                parent = ti.getParent();
+            } else if (ti.getParent() != parent) {
+                return List.of();
+            }
+            block.add(ti);
+        }
+        return block;
+    }
+
+    private void updateMoveButtonsState() {
+        if (moveUpButton == null && moveDownButton == null) {
+            return;
+        }
+        List<TreeItem<OrgRow>> block = movableSelectedUnderSameParent();
+        boolean enabled = !block.isEmpty();
+        boolean canUp = false;
+        boolean canDown = false;
+        if (enabled) {
+            TreeItem<OrgRow> parent = block.getFirst().getParent();
+            ObservableList<TreeItem<OrgRow>> siblings = parent.getChildren();
+            block.sort(Comparator.comparingInt(siblings::indexOf));
+            int firstIdx = siblings.indexOf(block.getFirst());
+            int lastIdx = siblings.indexOf(block.getLast());
+            canUp = firstIdx > 0;
+            canDown = lastIdx >= 0 && lastIdx < siblings.size() - 1;
+        }
+        if (moveUpButton != null) {
+            moveUpButton.setDisable(!enabled || !canUp);
+        }
+        if (moveDownButton != null) {
+            moveDownButton.setDisable(!enabled || !canDown);
+        }
+    }
+
     @FXML
     private void onDeleteSelectedGroup() {
         if (treeView == null || treeView.getRoot() == null) {
@@ -918,6 +1050,7 @@ public final class MainShellTabOrganizerTabController {
         for (TreeItem<OrgRow> ch : root.getChildren()) {
             organizerVisualRoot.getChildren().add(buildOrganizerRow(ch));
         }
+        updateMoveButtonsState();
     }
 
     private Node buildOrganizerRow(TreeItem<OrgRow> item) {
@@ -1164,14 +1297,10 @@ public final class MainShellTabOrganizerTabController {
                 });
         pill.setOnDragOver(
                 ev -> {
-                    if (ev.getGestureSource() != pill
-                            && ev.getDragboard().hasContent(ROW_MOVE_MARKER)
-                            && dragSourceItem != null
-                            && canAcceptDrop(dragSourceItem, item)) {
-                        ev.acceptTransferModes(TransferMode.MOVE);
-                    }
+                    handleOrganizerDragOver(ev, pill, item);
                     ev.consume();
                 });
+        pill.setOnDragExited(ev -> clearDragHighlightIfNode(pill));
         pill.setOnDragDropped(
                 ev -> {
                     Dragboard db = ev.getDragboard();
@@ -1179,23 +1308,24 @@ public final class MainShellTabOrganizerTabController {
                     if (db.hasContent(ROW_MOVE_MARKER) && dragSourceItem != null) {
                         ok = performDrop(dragSourceItem, item);
                     }
+                    clearDragHighlightNode();
                     ev.setDropCompleted(ok);
                     ev.consume();
                 });
-        pill.setOnDragDone(ev -> dragSourceItem = null);
+        pill.setOnDragDone(
+                ev -> {
+                    dragSourceItem = null;
+                    clearDragHighlightNode();
+                });
     }
 
     private void attachDropTarget(Node node, TreeItem<OrgRow> target) {
         node.setOnDragOver(
                 ev -> {
-                    if (ev.getGestureSource() != node
-                            && ev.getDragboard().hasContent(ROW_MOVE_MARKER)
-                            && dragSourceItem != null
-                            && canAcceptDrop(dragSourceItem, target)) {
-                        ev.acceptTransferModes(TransferMode.MOVE);
-                    }
+                    handleOrganizerDragOver(ev, node, target);
                     ev.consume();
                 });
+        node.setOnDragExited(ev -> clearDragHighlightIfNode(node));
         node.setOnDragDropped(
                 ev -> {
                     Dragboard db = ev.getDragboard();
@@ -1203,10 +1333,68 @@ public final class MainShellTabOrganizerTabController {
                     if (db.hasContent(ROW_MOVE_MARKER) && dragSourceItem != null) {
                         ok = performDrop(dragSourceItem, target);
                     }
+                    clearDragHighlightNode();
                     ev.setDropCompleted(ok);
                     ev.consume();
                 });
-        node.setOnDragDone(ev -> dragSourceItem = null);
+        node.setOnDragDone(
+                ev -> {
+                    dragSourceItem = null;
+                    clearDragHighlightNode();
+                });
+    }
+
+    private void handleOrganizerDragOver(DragEvent ev, Node surface, TreeItem<OrgRow> target) {
+        maybeAutoScrollOrganizerList(ev.getSceneY());
+        if (ev.getGestureSource() != surface
+                && ev.getDragboard().hasContent(ROW_MOVE_MARKER)
+                && dragSourceItem != null
+                && canAcceptDrop(dragSourceItem, target)) {
+            ev.acceptTransferModes(TransferMode.MOVE);
+            setDragHighlightNode(surface);
+        }
+    }
+
+    private void maybeAutoScrollOrganizerList(double sceneY) {
+        if (organizerListScroll == null || !organizerListScroll.isVisible()) {
+            return;
+        }
+        Bounds b = organizerListScroll.localToScene(organizerListScroll.getBoundsInLocal());
+        if (b == null || b.getWidth() <= 0 || b.getHeight() <= 0) {
+            return;
+        }
+        double v = organizerListScroll.getVvalue();
+        if (sceneY < b.getMinY() + LIST_AUTO_SCROLL_MARGIN_PX) {
+            organizerListScroll.setVvalue(Math.max(0.0, v - LIST_AUTO_SCROLL_STEP));
+        } else if (sceneY > b.getMaxY() - LIST_AUTO_SCROLL_MARGIN_PX) {
+            organizerListScroll.setVvalue(Math.min(1.0, v + LIST_AUTO_SCROLL_STEP));
+        }
+    }
+
+    private void setDragHighlightNode(Node node) {
+        if (node == null) {
+            return;
+        }
+        if (dragHighlightNode != null && dragHighlightNode != node) {
+            dragHighlightNode.getStyleClass().remove("pm-org-drop-target");
+        }
+        dragHighlightNode = node;
+        if (!node.getStyleClass().contains("pm-org-drop-target")) {
+            node.getStyleClass().add("pm-org-drop-target");
+        }
+    }
+
+    private void clearDragHighlightIfNode(Node node) {
+        if (dragHighlightNode == node) {
+            clearDragHighlightNode();
+        }
+    }
+
+    private void clearDragHighlightNode() {
+        if (dragHighlightNode != null) {
+            dragHighlightNode.getStyleClass().remove("pm-org-drop-target");
+            dragHighlightNode = null;
+        }
     }
 
     /**

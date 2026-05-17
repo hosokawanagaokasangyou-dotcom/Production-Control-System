@@ -8,6 +8,7 @@
 <?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.Slider?>
+<?import javafx.scene.control.SplitPane?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.control.TreeView?>
 <?import javafx.scene.layout.BorderPane?>
@@ -19,72 +20,101 @@
 <BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="jp.co.pm.ai.desktop.MainShellTabOrganizerTabController"
             minHeight="0.0" styleClass="pm-main-shell-tab-organizer">
-    <top>
-        <!-- 設定のみスクロール -->
-        <ScrollPane fitToWidth="true" hbarPolicy="NEVER" minHeight="0.0" pannable="false"
-                    vbarPolicy="AS_NEEDED">
-            <VBox spacing="8.0">
-                <padding>
-                    <Insets bottom="4.0" left="0.0" right="4.0" top="0.0"/>
-                </padding>
-                <Label wrapText="true"
-                       text="メイン画面上部のタブ構成・見出し・色をここで編集します。グループ名・別名の入力欄は、「構成を適用」のときまとめて取り込まれます（個別の反映ボタンは省略できます）。見出し別名は見た目のみで内部タブ ID は変わりません。適用成功時にセッションへ保存されます。"/>
-                <Label wrapText="true" styleClass="pm-main-shell-tab-organizer-hint"
-                       text="ドラッグで行を移動（タブ行へ＝その前へ挿入、グループ行へ＝子の末尾へ）。複数選択して「選択をまとめてグループへ」でフォルダ化。「グループを削除」は枠だけ外し、中身のタブ・子グループはその階層に残ります。"/>
-                <HBox alignment="CENTER_LEFT" spacing="8.0">
-                    <Label text="グループ名"/>
-                    <TextField fx:id="groupNameField" prefWidth="220.0" promptText="グループ行を1つ選ぶと編集できます"
-                               HBox.hgrow="ALWAYS"/>
-                    <Button mnemonicParsing="false" onAction="#onApplyGroupName" text="名前を反映"/>
-                </HBox>
-                <HBox alignment="CENTER_LEFT" spacing="8.0">
-                    <Label text="タブ見出し（別名）"/>
-                    <TextField fx:id="tabAliasField" prefWidth="220.0" promptText="タブ行を1つ選ぶと編集できます"
-                               HBox.hgrow="ALWAYS"/>
-                    <Button mnemonicParsing="false" onAction="#onApplyTabAlias" text="別名を反映"/>
-                </HBox>
-                <Label wrapText="true" styleClass="pm-main-shell-tab-organizer-subhint"
-                       text="別名はエイリアスのみです。空にして反映すると FXML 既定の見出しに戻ります。"/>
-                <HBox alignment="CENTER_LEFT" spacing="8.0">
-                    <Label text="見出し色"/>
-                    <ColorPicker fx:id="colorPicker"/>
-                    <Button mnemonicParsing="false" onAction="#onApplySelectedColor" text="選択に色を適用"/>
-                    <Button mnemonicParsing="false" onAction="#onClearSelectedColor" text="選択の色を解除"/>
-                </HBox>
-                <CheckBox fx:id="headerGlowCheck" mnemonicParsing="false"
-                          text="見出しにグロー（発光風）を付ける — メインタブの見出しの縁に色にじみが付きます（オフでフラット）"/>
-                <HBox alignment="CENTER_LEFT" spacing="8.0">
-                    <Label minWidth="90.0" text="グロー強度"/>
-                    <Slider fx:id="headerGlowStrengthSlider" blockIncrement="5.0" majorTickUnit="25.0"
-                            max="100.0" min="0.0" minorTickCount="4" prefWidth="220.0"
-                            showTickLabels="true" showTickMarks="true" snapToTicks="true" value="100.0"
-                            HBox.hgrow="ALWAYS"/>
-                    <Label fx:id="headerGlowStrengthLabel" minWidth="42.0" text="100%"/>
-                </HBox>
-                <HBox spacing="8.0">
-                    <Button mnemonicParsing="false" onAction="#onAddGroup" text="空のグループを追加"/>
-                    <Button mnemonicParsing="false" onAction="#onGroupSelection" text="選択をまとめてグループへ"/>
-                    <Button mnemonicParsing="false" onAction="#onDeleteSelectedGroup" text="グループを削除"/>
-                </HBox>
-            </VBox>
-        </ScrollPane>
-    </top>
     <center>
-        <!-- タブ領域の残り縦幅いっぱい（下端ボタン列の直上まで） -->
-        <StackPane minHeight="80.0" styleClass="pm-org-organizer-stack">
-            <ScrollPane fitToHeight="true" fitToWidth="true" hbarPolicy="AS_NEEDED" minHeight="0.0"
-                        styleClass="pm-org-organizer-visual-scroll" vbarPolicy="AS_NEEDED">
-                <content>
-                    <VBox fx:id="organizerVisualRoot" spacing="6.0" styleClass="pm-org-organizer-visual-root">
-                        <padding>
-                            <Insets bottom="4.0" left="4.0" right="4.0" top="2.0"/>
-                        </padding>
+        <SplitPane fx:id="organizerSplit" dividerPositions="0.34" styleClass="pm-org-organizer-split">
+            <!-- 左: 名前・色・グループ操作（縦スクロールのみ） -->
+            <ScrollPane fitToWidth="true" hbarPolicy="NEVER" maxWidth="420.0" minWidth="280.0"
+                        prefWidth="340.0" styleClass="pm-org-settings-scroll" vbarPolicy="AS_NEEDED">
+                <VBox spacing="10.0" styleClass="pm-org-settings-panel">
+                    <padding>
+                        <Insets bottom="8.0" left="4.0" right="8.0" top="4.0"/>
+                    </padding>
+                    <Label styleClass="pm-org-settings-title" text="見出し・色・グループ"/>
+                    <Label wrapText="true" styleClass="pm-main-shell-tab-organizer-subhint"
+                           text="グループ名・別名は「構成を適用」でまとめて取り込めます。見出し別名は表示のみで内部 ID は変わりません。"/>
+                    <Separator/>
+                    <HBox alignment="CENTER_LEFT" spacing="8.0">
+                        <Label minWidth="72.0" text="グループ名"/>
+                        <TextField fx:id="groupNameField" HBox.hgrow="ALWAYS"
+                                   promptText="グループ行を1つ選ぶと編集できます"/>
+                    </HBox>
+                    <HBox alignment="CENTER_RIGHT" spacing="8.0">
+                        <Button mnemonicParsing="false" onAction="#onApplyGroupName" text="名前を反映"/>
+                    </HBox>
+                    <HBox alignment="CENTER_LEFT" spacing="8.0">
+                        <Label minWidth="72.0" text="タブ別名"/>
+                        <TextField fx:id="tabAliasField" HBox.hgrow="ALWAYS"
+                                   promptText="タブ行を1つ選ぶと編集できます"/>
+                    </HBox>
+                    <HBox alignment="CENTER_RIGHT" spacing="8.0">
+                        <Button mnemonicParsing="false" onAction="#onApplyTabAlias" text="別名を反映"/>
+                    </HBox>
+                    <Label wrapText="true" styleClass="pm-main-shell-tab-organizer-subhint"
+                           text="別名を空にして反映すると FXML 既定の見出しに戻ります。"/>
+                    <Separator/>
+                    <HBox alignment="CENTER_LEFT" spacing="8.0">
+                        <Label text="見出し色"/>
+                        <ColorPicker fx:id="colorPicker"/>
+                    </HBox>
+                    <HBox spacing="8.0" wrapText="true">
+                        <Button mnemonicParsing="false" onAction="#onApplySelectedColor" text="選択に色を適用"/>
+                        <Button mnemonicParsing="false" onAction="#onClearSelectedColor" text="色を解除"/>
+                    </HBox>
+                    <CheckBox fx:id="headerGlowCheck" mnemonicParsing="false"
+                              text="見出しにグロー（発光風）を付ける"/>
+                    <HBox alignment="CENTER_LEFT" spacing="8.0">
+                        <Label minWidth="72.0" text="グロー強度"/>
+                        <Slider fx:id="headerGlowStrengthSlider" blockIncrement="5.0" HBox.hgrow="ALWAYS"
+                                majorTickUnit="25.0" max="100.0" min="0.0" minorTickCount="4"
+                                showTickLabels="false" showTickMarks="true" snapToTicks="true" value="100.0"/>
+                        <Label fx:id="headerGlowStrengthLabel" minWidth="42.0" text="100%"/>
+                    </HBox>
+                    <Separator/>
+                    <Label styleClass="pm-org-settings-section" text="グループ操作"/>
+                    <VBox spacing="6.0">
+                        <Button maxWidth="Infinity" mnemonicParsing="false" onAction="#onAddGroup"
+                                text="空のグループを追加"/>
+                        <Button maxWidth="Infinity" mnemonicParsing="false" onAction="#onGroupSelection"
+                                text="選択をまとめてグループへ"/>
+                        <Button maxWidth="Infinity" mnemonicParsing="false" onAction="#onDeleteSelectedGroup"
+                                text="グループを削除"/>
                     </VBox>
-                </content>
+                </VBox>
             </ScrollPane>
-            <TreeView fx:id="treeView" managed="true" maxHeight="0.0" minHeight="0.0" mouseTransparent="true"
-                      prefHeight="0.0" showRoot="false" styleClass="pm-org-organizer-model-tree" visible="false"/>
-        </StackPane>
+            <!-- 右: タブ並べ替え（メイン領域・ここだけ縦スクロール） -->
+            <VBox spacing="6.0" styleClass="pm-org-list-panel">
+                <padding>
+                    <Insets bottom="0.0" left="4.0" right="4.0" top="4.0"/>
+                </padding>
+                <HBox alignment="CENTER_LEFT" spacing="8.0" styleClass="pm-org-list-toolbar">
+                    <Label styleClass="pm-org-list-title" text="タブの並び"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Button fx:id="moveUpButton" disable="true" mnemonicParsing="false"
+                            onAction="#onMoveSelectionUp" styleClass="pm-org-move-button" text="↑ 上へ"/>
+                    <Button fx:id="moveDownButton" disable="true" mnemonicParsing="false"
+                            onAction="#onMoveSelectionDown" styleClass="pm-org-move-button" text="↓ 下へ"/>
+                </HBox>
+                <Label wrapText="true" styleClass="pm-main-shell-tab-organizer-hint"
+                       text="チップをドラッグするか「上へ」「下へ」で順序を変更します。タブ行の上へ＝その前に挿入、グループ行へ＝グループ内の末尾へ。Ctrl+クリックで複数選択。子タブ・折りたたみ行は参照のみです。"/>
+                <StackPane minHeight="120.0" styleClass="pm-org-organizer-stack" VBox.vgrow="ALWAYS">
+                    <ScrollPane fx:id="organizerListScroll" fitToWidth="true" hbarPolicy="NEVER"
+                                minHeight="0.0" pannable="true" styleClass="pm-org-organizer-visual-scroll"
+                                vbarPolicy="AS_NEEDED" VBox.vgrow="ALWAYS">
+                        <content>
+                            <VBox fx:id="organizerVisualRoot" spacing="8.0"
+                                  styleClass="pm-org-organizer-visual-root">
+                                <padding>
+                                    <Insets bottom="12.0" left="6.0" right="6.0" top="6.0"/>
+                                </padding>
+                            </VBox>
+                        </content>
+                    </ScrollPane>
+                    <TreeView fx:id="treeView" managed="true" maxHeight="0.0" minHeight="0.0"
+                              mouseTransparent="true" prefHeight="0.0" showRoot="false"
+                              styleClass="pm-org-organizer-model-tree" visible="false"/>
+                </StackPane>
+            </VBox>
+        </SplitPane>
     </center>
     <bottom>
         <VBox spacing="8.0">
