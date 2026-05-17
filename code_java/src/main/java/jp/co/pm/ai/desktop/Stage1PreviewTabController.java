@@ -162,7 +162,7 @@ public final class Stage1PreviewTabController {
                 () -> {
                     fillPathFromEnv();
                     sheetField.setText(DEFAULT_STAGE1_PREVIEW_SHEET);
-                    loadButton.fire();
+                    loadFromCurrentPath(false);
                 });
 
         TableColumnOrderPersistence.installSpreadsheetColumnLayoutWatcher(
@@ -179,7 +179,7 @@ public final class Stage1PreviewTabController {
                         fillPathFromEnv();
                     }
                     if (!pathField.getText().isBlank()) {
-                        loadButton.fire();
+                        loadFromCurrentPath(false);
                     }
                 });
     }
@@ -358,10 +358,16 @@ public final class Stage1PreviewTabController {
         if (pathField.getText().isBlank()) {
             fillPathFromEnv();
         }
+        loadFromCurrentPath(true);
+    }
+
+    private void loadFromCurrentPath(boolean showCompletionDialog) {
         Path path = Path.of(pathField.getText().trim());
         if (!java.nio.file.Files.isRegularFile(path)) {
             shell.appendLog("[stage1-preview] file not found: " + path);
-            shell.showWarningDialog("読込", "ファイルが見つかりません。\n" + path);
+            if (showCompletionDialog) {
+                shell.showWarningDialog("読込", "ファイルが見つかりません。\n" + path);
+            }
             return;
         }
         String sheet = sheetField.getText().trim();
@@ -406,19 +412,23 @@ public final class Stage1PreviewTabController {
                             + headersRef.size()
                             + " path="
                             + path);
-            shell.showInformationDialog(
-                    "読込完了",
-                    "段階1 成形結果を読み込みました。\n"
-                            + path
-                            + "\nシート: "
-                            + sheet
-                            + "\n行数: "
-                            + rows.size());
+            if (showCompletionDialog) {
+                shell.showInformationDialog(
+                        "読込完了",
+                        "段階1 成形結果を読み込みました。\n"
+                                + path
+                                + "\nシート: "
+                                + sheet
+                                + "\n行数: "
+                                + rows.size());
+            }
         } catch (Exception ex) {
             shell.appendLog("[stage1-preview] load error: " + ex.getMessage());
-            shell.showErrorDialog(
-                    "読込エラー",
-                    ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            if (showCompletionDialog) {
+                shell.showErrorDialog(
+                        "読込エラー",
+                        ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            }
         }
     }
 

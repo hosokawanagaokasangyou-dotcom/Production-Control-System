@@ -190,6 +190,8 @@ public record PlanWorkspaceSessionFragment(
                 mainRunStage2ProductionPlan != null ? mainRunStage2ProductionPlan : "",
                 mainRunStage2MemberSchedule != null ? mainRunStage2MemberSchedule : "",
                 base.mainRunStage2WriteExcel(),
+                base.mainRunStage2SkipTodayDispatch(),
+                base.mainRunStage2SkipInProgressDispatch(),
                 base.mainRunStage2ResultBookFont(),
                 base.uiEnvRows(),
                 base.mainShellTabOrder(),

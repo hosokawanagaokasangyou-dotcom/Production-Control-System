@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -52,7 +53,12 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.dispatch.AladdinSystemDispatchDisplayQty;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
+import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
+import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
+import jp.co.pm.ai.desktop.io.SummaryAiDispatchWorkbookExporter;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCell;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
@@ -60,6 +66,7 @@ import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
+import jp.co.pm.ai.desktop.ui.SpreadsheetMultiColumnFilterCoordinator;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 
@@ -114,7 +121,9 @@ public final class DeliveryCalendarViewTabController {
     @FXML
     private Button refreshButton;
 
-    /** {@link #onRefreshButtonAction} から開始した再読み込み完了時のみ情報ダイアログを出す。 */
+    /**
+     * {@link #runDeliveryCalendarDataReload} の第2引数が true のときのみ、完了・警告・一部エラーをダイアログ表示する。
+     */
     private boolean pendingUserDeliveryRefreshCompletionDialog;
 
     @FXML
@@ -527,6 +536,7 @@ public final class DeliveryCalendarViewTabController {
         if (deliveryCalendarResultDispatchTableTabController != null) {
             deliveryCalendarResultDispatchTableTabController.bindShell(shell);
             deliveryCalendarResultDispatchTableTabController.setResultDispatchRefreshButtonVisible(false);
+            deliveryCalendarResultDispatchTableTabController.setEmbeddedInDeliveryCalendar(true);
         }
         ensureInnerTabPersistenceWired();
     }
@@ -822,6 +832,7 @@ public final class DeliveryCalendarViewTabController {
                         SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                 mainSpreadsheet, headerColumnCountMain.get());
                         SpreadsheetTabularSupport.applyColumnFiltersWithDialog(mainSpreadsheet);
+                        applyDefaultMainProcessNameColumnFilter();
                         SpreadsheetTabularSupport.pinSpreadsheetFilterRow(mainSpreadsheet);
                         SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(mainSpreadsheet);
                         SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(mainSpreadsheet);
@@ -844,6 +855,17 @@ public final class DeliveryCalendarViewTabController {
                     });
         } finally {
             suppressMainPersistence.set(false);
+        }
+    }
+
+    /**
+     * メイン表の「工程名」列で空欄行を初期非表示にする。列が無い・空欄行のみのときは何もしない。
+     */
+    private void applyDefaultMainProcessNameColumnFilter() {
+        int idx = mainHeadersRef.indexOf(ResultDispatchSchema.COL_PROCESS);
+        if (idx >= 0) {
+            SpreadsheetMultiColumnFilterCoordinator.applyDefaultExcludeBlankCellValues(
+                    mainSpreadsheet, idx);
         }
     }
 
@@ -892,13 +914,63 @@ public final class DeliveryCalendarViewTabController {
 
     @FXML
     private void onRefreshButtonAction() {
+        runDeliveryCalendarDataReload(true, true, false);
+    }
+
+    /**
+     * 段階2 正常完了後、または配台計画修正タブの配台試行（段階3インタラクティブ）正常終了後に、手動の「再読み込み」と
+     * 同じデータ取得を開始する。他メインタブの無効化・進行パネル・完了時の情報ダイアログは出さない（JavaFX
+     * スレッドから呼ぶこと）。
+     */
+    public void reloadInBackgroundAfterStage2Success() {
+        runDeliveryCalendarDataReload(false, false, true);
+    }
+
+    /**
+     * 配台試行（段階3）正常終了後: Python ペイロード再取得・アラジン・加工実績の再読込は行わず、
+     * {@code 結果_配台表.json} とメイン表の (シス配台) 行のみ更新する。
+     *
+     * @param afterUiUpdated UI 反映後に呼ぶ（例: サマリ xlsx 出力）。JavaFX スレッドから呼ぶこと。
+     */
+    public void reloadInBackgroundAfterStage3DispatchTrialSuccess(Runnable afterUiUpdated) {
+        Platform.runLater(() -> applyStage3DispatchOnlyReload(afterUiUpdated));
+    }
+
+    /** 納期管理メイン表のエクスポート用スナップショット（ヘッダ未読込時は空表）。 */
+    PlanInputTabularIo.TabularSheet snapshotMainCompareForExport() {
+        if (mainHeadersRef.isEmpty()) {
+            return new PlanInputTabularIo.TabularSheet(List.of(), List.of());
+        }
+        return SummaryAiDispatchWorkbookExporter.mainCompareFromUi(
+                new ArrayList<>(mainHeadersRef), copyMainRowsForExport());
+    }
+
+    /**
+     * @param fullProgressShellChrome 手動再読込と同様に進行 UI と他メインタブのグレーアウトを行う
+     * @param completionInfoDialog 完了時の情報／警告／エラーダイアログを出す（手動再読込時のみ true）
+     * @param pipelineTriggered 段階2/段階3 完了後など。再読込実行中でもサマリ更新のため再読込を開始する
+     */
+    private void runDeliveryCalendarDataReload(
+            boolean fullProgressShellChrome, boolean completionInfoDialog, boolean pipelineTriggered) {
         if (requestFactory == null) {
             statusLabel.setText("初期化待ち");
             return;
         }
-        refreshButton.setDisable(true);
-        pendingUserDeliveryRefreshCompletionDialog = true;
-        showDeliveryReloadProgress();
+        if (!pipelineTriggered && refreshButton != null && refreshButton.isDisabled()) {
+            if (shell != null && !fullProgressShellChrome) {
+                shell.appendLog("[delivery-calendar] バックグラウンド再読み込みをスキップ（既に実行中）");
+            }
+            return;
+        }
+        if (refreshButton != null) {
+            refreshButton.setDisable(true);
+        }
+        pendingUserDeliveryRefreshCompletionDialog = completionInfoDialog;
+        if (fullProgressShellChrome) {
+            showDeliveryReloadProgress();
+        } else if (shell != null) {
+            shell.appendLog("[delivery-calendar] バックグラウンド再読み込みを開始します。");
+        }
         statusLabel.setText("取得中…");
         commitSpinnerIntegerValue(dateWindowPastDaysSpinner);
         commitSpinnerIntegerValue(dateWindowFutureDaysSpinner);
@@ -911,7 +983,9 @@ public final class DeliveryCalendarViewTabController {
                         (cap, err) ->
                                 Platform.runLater(
                                         () -> {
-                                            refreshButton.setDisable(false);
+                                            if (refreshButton != null) {
+                                                refreshButton.setDisable(false);
+                                            }
                                             if (err != null) {
                                                 scheduleHideDeliveryReloadProgress();
                                                 statusLabel.setText("error: " + err.getMessage());
@@ -931,10 +1005,16 @@ public final class DeliveryCalendarViewTabController {
                                             if (cap == null) {
                                                 scheduleHideDeliveryReloadProgress();
                                                 statusLabel.setText("no result");
-                                                if (shell != null && pendingUserDeliveryRefreshCompletionDialog) {
-                                                    pendingUserDeliveryRefreshCompletionDialog = false;
-                                                    shell.showWarningDialog(
-                                                            "再読み込み", "結果を取得できませんでした（no result）。");
+                                                if (shell != null) {
+                                                    if (!pendingUserDeliveryRefreshCompletionDialog) {
+                                                        shell.appendLog(
+                                                                "[delivery-calendar] バックグラウンド再読み込み: 結果なし（no result）");
+                                                    }
+                                                    if (pendingUserDeliveryRefreshCompletionDialog) {
+                                                        pendingUserDeliveryRefreshCompletionDialog = false;
+                                                        shell.showWarningDialog(
+                                                                "再読み込み", "結果を取得できませんでした（no result）。");
+                                                    }
                                                 }
                                                 return;
                                             }
@@ -1055,9 +1135,17 @@ public final class DeliveryCalendarViewTabController {
         if (trimmed.isEmpty()) {
             statusLabel.setText("empty stdout (exit=" + exitCode + ")");
             scheduleHideDeliveryReloadProgress();
-            if (shell != null && pendingUserDeliveryRefreshCompletionDialog) {
-                pendingUserDeliveryRefreshCompletionDialog = false;
-                shell.showWarningDialog("再読み込み", "子プロセスの出力が空です（exit=" + exitCode + "）。");
+            if (shell != null) {
+                if (!pendingUserDeliveryRefreshCompletionDialog) {
+                    shell.appendLog(
+                            "[delivery-calendar] バックグラウンド再読み込み: 子プロセス出力が空（exit="
+                                    + exitCode
+                                    + "）");
+                }
+                if (pendingUserDeliveryRefreshCompletionDialog) {
+                    pendingUserDeliveryRefreshCompletionDialog = false;
+                    shell.showWarningDialog("再読み込み", "子プロセスの出力が空です（exit=" + exitCode + "）。");
+                }
             }
             return;
         }
@@ -1272,11 +1360,17 @@ public final class DeliveryCalendarViewTabController {
                     () -> {
                         try {
                             applyMainCalendar(root);
+                            exportSummaryAiDispatchWorkbookAfterReload();
                         } finally {
                             if (shell != null && pendingUserDeliveryRefreshCompletionDialog) {
                                 pendingUserDeliveryRefreshCompletionDialog = false;
                                 shell.showInformationDialog(
-                                        "再読み込み完了", "納期管理ビューと関連タブの表示を更新しました。");
+                                        "再読み込み完了",
+                                        "納期管理ビューと関連タブの表示を更新しました。\n"
+                                                + AppPaths.summaryAiDispatchXlsxPath(
+                                                                shell.snapshotUiEnv())
+                                                        .getFileName()
+                                                + " を出力しました。");
                             }
                             scheduleHideDeliveryReloadProgress();
                         }
@@ -1294,6 +1388,136 @@ public final class DeliveryCalendarViewTabController {
             }
             statusLabel.setText("error: " + t.getMessage());
             scheduleHideDeliveryReloadProgress();
+        }
+    }
+
+    /**
+     * 納期管理ビュー4表を {@link AppPaths#KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 先へ上書き出力する。
+     * 再読み込み完了後（メイン表反映後）に呼ぶ。
+     */
+    private void exportSummaryAiDispatchWorkbookAfterReload() {
+        if (shell == null) {
+            return;
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        try {
+            PlanInputTabularIo.TabularSheet main =
+                    SummaryAiDispatchWorkbookExporter.mainCompareFromUi(
+                            new ArrayList<>(mainHeadersRef), copyMainRowsForExport());
+            PlanInputTabularIo.TabularSheet dispatch = snapshotDispatchTabularForExport(ui);
+            PlanInputTabularIo.TabularSheet actuals = snapshotActualsTabularForExport(ui);
+            PlanInputTabularIo.TabularSheet aladdin = snapshotAladdinTabularForExport(ui);
+            Path out =
+                    SummaryAiDispatchWorkbookExporter.writeOverwrite(
+                            ui, main, actuals, aladdin, dispatch);
+            shell.ensureSummaryAiDispatchWorkbookEnvPath(out);
+            shell.appendLog(
+                    "[summary-ai-dispatch] エクセル出力: "
+                            + out
+                            + " （"
+                            + SummaryAiDispatchWorkbookExporter.rowCountSummary(
+                                    main, dispatch, actuals, aladdin)
+                            + "）");
+        } catch (Exception ex) {
+            shell.appendLog(
+                    "[summary-ai-dispatch] エクセル出力失敗: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+        }
+    }
+
+    private List<List<DeliveryCalendarMainCell>> copyMainRowsForExport() {
+        List<List<DeliveryCalendarMainCell>> out = new ArrayList<>(mainRows.size());
+        for (ObservableList<DeliveryCalendarMainCell> row : mainRows) {
+            out.add(new ArrayList<>(row));
+        }
+        return out;
+    }
+
+    private PlanInputTabularIo.TabularSheet snapshotAladdinTabularForExport(Map<String, String> ui) {
+        Path json = AppPaths.resolveShapedAladdinPlanJsonPath(ui);
+        if (Files.isRegularFile(json)) {
+            try {
+                JsonTableIo.ArrayTable t = JsonTableIo.loadArrayTable(json);
+                if (!t.columns().isEmpty()) {
+                    return new PlanInputTabularIo.TabularSheet(t.columns(), t.rows());
+                }
+            } catch (IOException ignored) {
+                // fall through to UI
+            }
+        }
+        if (aladdinProcessingPlanDataTabController != null
+                && !aladdinProcessingPlanDataTabController.getShapedHeaders().isEmpty()) {
+            return new PlanInputTabularIo.TabularSheet(
+                    aladdinProcessingPlanDataTabController.getShapedHeaders(),
+                    aladdinProcessingPlanDataTabController.getShapedRows());
+        }
+        return new PlanInputTabularIo.TabularSheet(List.of(), List.of());
+    }
+
+    private PlanInputTabularIo.TabularSheet snapshotActualsTabularForExport(Map<String, String> ui) {
+        Path json = AppPaths.resolveShapedProcessingActualsJsonPath(ui);
+        if (Files.isRegularFile(json)) {
+            try {
+                JsonTableIo.ArrayTable t = JsonTableIo.loadArrayTable(json);
+                if (!t.columns().isEmpty()) {
+                    return new PlanInputTabularIo.TabularSheet(t.columns(), t.rows());
+                }
+            } catch (IOException ignored) {
+                // fall through to UI
+            }
+        }
+        if (processingActualsDataTabController != null
+                && !processingActualsDataTabController.getUnfilteredShapedHeaders().isEmpty()) {
+            return new PlanInputTabularIo.TabularSheet(
+                    processingActualsDataTabController.getUnfilteredShapedHeaders(),
+                    processingActualsDataTabController.getUnfilteredShapedRows());
+        }
+        return new PlanInputTabularIo.TabularSheet(List.of(), List.of());
+    }
+
+    private PlanInputTabularIo.TabularSheet snapshotDispatchTabularForExport(Map<String, String> ui) {
+        if (deliveryCalendarResultDispatchTableTabController != null
+                && !deliveryCalendarResultDispatchTableTabController.getShapedHeaders().isEmpty()) {
+            return new PlanInputTabularIo.TabularSheet(
+                    deliveryCalendarResultDispatchTableTabController.getShapedHeaders(),
+                    deliveryCalendarResultDispatchTableTabController.getShapedRows());
+        }
+        try {
+            Path json = AppPaths.resolveResultDispatchTableJsonPath(ui);
+            if (Files.isRegularFile(json)) {
+                return JsonTableIo.loadFlatTable(json).toTabularSheet();
+            }
+        } catch (IOException ignored) {
+            // empty sheet below
+        }
+        return new PlanInputTabularIo.TabularSheet(List.of(), List.of());
+    }
+
+    private void applyStage3DispatchOnlyReload(Runnable afterUiUpdated) {
+        if (shell != null) {
+            shell.appendLog(
+                    "[delivery-calendar] 段階3後: シス配台（配台結果）のみ反映（Python 再取得はスキップ）");
+        }
+        statusLabel.setText("反映中… 配台結果（段階3）");
+        try {
+            if (deliveryCalendarResultDispatchTableTabController != null) {
+                deliveryCalendarResultDispatchTableTabController.reloadResultDispatchTableFromDisk();
+            }
+            if (!mainHeadersRef.isEmpty() && !mainRows.isEmpty()) {
+                // 成形 JSON キャッシュから (アラ計画)/(実績) も再合成し、(シス配台) は配台表 JSON で更新する
+                overlayChildTabValues();
+                rebuildMainSpreadsheet();
+            }
+            clearPipelineStaleOverlayAfterSuccessfulReload();
+            statusLabel.setText("反映完了（段階3・配台のみ）");
+            if (afterUiUpdated != null) {
+                afterUiUpdated.run();
+            }
+        } catch (Throwable t) {
+            statusLabel.setText("error: " + t.getMessage());
+            if (shell != null) {
+                shell.appendLog("[delivery-calendar] 段階3配台のみ反映 " + t.getMessage());
+            }
         }
     }
 
@@ -1460,33 +1684,20 @@ public final class DeliveryCalendarViewTabController {
             actRows = processingActualsDataTabController.getUnfilteredShapedRows();
         }
 
-        // --- Dispatch: load from \u7d50\u679c_\u914d\u53f0\u8868.json when present (restart-safe without opening tab) ---
-        Path dispatchJsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
-        List<String> disHeaders = deliveryCalendarResultDispatchTableTabController.getShapedHeaders();
-        List<List<String>> disRows = deliveryCalendarResultDispatchTableTabController.getShapedRows();
-        String dispatchSource = disRows.isEmpty() ? "none" : "memory";
-        if (Files.isRegularFile(dispatchJsonPath)) {
-            try {
-                JsonTableIo.SheetTable st = JsonTableIo.loadFlatTable(dispatchJsonPath);
-                if (!st.columns().isEmpty() && !st.rows().isEmpty()) {
-                    disHeaders = new ArrayList<>(st.columns());
-                    disRows = sheetTableToRowLists(st);
-                    dispatchSource = "file";
-                }
-            } catch (Exception ex) {
-                if (shell != null) {
-                    shell.appendLog(
-                            "[delivery-calendar] dispatch flat JSON load failed: " + ex.getMessage());
-                }
-            }
-        }
+        DispatchTableSnapshot dispatchSnap = loadDispatchTableSnapshot(ui);
 
         Map<String, Map<String, Map<String, Map<String, Double>>>> planLookup =
                 buildAladdinPlanLookup(planHeaders, planRows);
         Map<String, Map<String, Map<String, Double>>> actualLookup =
                 buildActualLookup(actHeaders, actRows);
         Map<String, Map<String, Map<String, Double>>> dispatchLookup =
-                buildDispatchLookup(disHeaders, disRows);
+                buildDispatchLookup(dispatchSnap.headers(), dispatchSnap.rows());
+
+        Map<String, AladdinSystemDispatchDisplayQty.TaskQtyContext> dispatchQtyCtx =
+                buildDispatchQtyContext(ui, dispatchSnap.headers(), dispatchSnap.rows());
+
+        List<Map.Entry<Integer, String>> calColsByDate = new ArrayList<>(calDateByIdx.entrySet());
+        calColsByDate.sort(Map.Entry.comparingByValue());
 
         int procIdxMain = colIdx(mainHeadersRef, "\u5de5\u7a0b\u540d");
 
@@ -1509,7 +1720,13 @@ public final class DeliveryCalendarViewTabController {
                     procRawForPlan = ptxt.text();
                 }
             }
-            for (Map.Entry<Integer, String> e : calDateByIdx.entrySet()) {
+            AladdinSystemDispatchDisplayQty.TaskQtyContext dispatchCtx =
+                    dispatchQtyCtx.get(mk + "\t" + tid);
+            Double aladdinConvCap =
+                    dispatchCtx != null && dispatchCtx.usesConvertedQtyForAladdinDisplay()
+                            ? dispatchCtx.qtyConvM()
+                            : null;
+            for (Map.Entry<Integer, String> e : calColsByDate) {
                 int j = e.getKey();
                 if (j >= row.size()) {
                     continue;
@@ -1517,13 +1734,163 @@ public final class DeliveryCalendarViewTabController {
                 String dateStr = e.getValue();
                 double p = lookupQtyAladdinPlan(planLookup, mk, tid, dateStr, procRawForPlan);
                 double a = lookupQty(actualLookup, mk, tid, dateStr);
-                double d = lookupQty(dispatchLookup, mk, tid, dateStr);
+                double dRaw = lookupQty(dispatchLookup, mk, tid, dateStr);
+                double d = dRaw;
+                if (dispatchCtx != null) {
+                    AladdinSystemDispatchDisplayQty.DayDisplay day =
+                            AladdinSystemDispatchDisplayQty.allocateDay(
+                                    dRaw,
+                                    dispatchCtx.qtyConvM(),
+                                    dispatchCtx.rawRollM(),
+                                    aladdinConvCap);
+                    d = day.displayM();
+                    aladdinConvCap = day.remainingConvCap();
+                }
                 String sp = Math.abs(p) > 1e-12 ? formatQtyShort(p) : "";
                 String sa = Math.abs(a) > 1e-12 ? formatQtyShort(a) : "";
                 String sd = Math.abs(d) > 1e-12 ? formatQtyShort(d) : "";
-                row.set(j, new DeliveryCalendarMainCell.TripleQty(sp, sa, sd));
+                row.set(j, overlayTripleQty(sp, sa, sd));
             }
         }
+    }
+
+    /**
+     * アラジン計画・実績・シス配台の3数量を日付セルに載せる（2段表示＝セル内の (アラ計画)/(実績) と (シス配台)）。
+     */
+    static DeliveryCalendarMainCell overlayTripleQty(
+            String planQty, String actualQty, String dispatchQty) {
+        return new DeliveryCalendarMainCell.TripleQty(
+                planQty != null ? planQty : "",
+                actualQty != null ? actualQty : "",
+                dispatchQty != null ? dispatchQty : "");
+    }
+
+    /**
+     * メイン表の日付列について (シス配台) のみ {@code 結果_配台表.json} から再計算する。
+     * (アラ計画)・(実績) は既存セルを維持する。
+     */
+    private void overlayDispatchValuesOnly() {
+        if (mainRowMeta.isEmpty() || mainHeadersRef.isEmpty()) {
+            return;
+        }
+        Map<Integer, String> calDateByIdx = new LinkedHashMap<>();
+        for (int i = 0; i < mainHeadersRef.size(); i++) {
+            String ds = parseDateHeader(mainHeadersRef.get(i));
+            if (ds != null) {
+                calDateByIdx.put(i, ds);
+            }
+        }
+        if (calDateByIdx.isEmpty()) {
+            return;
+        }
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        DispatchTableSnapshot dispatchSnap = loadDispatchTableSnapshot(ui);
+        Map<String, Map<String, Map<String, Double>>> dispatchLookup =
+                buildDispatchLookup(dispatchSnap.headers(), dispatchSnap.rows());
+        Map<String, AladdinSystemDispatchDisplayQty.TaskQtyContext> dispatchQtyCtx =
+                buildDispatchQtyContext(ui, dispatchSnap.headers(), dispatchSnap.rows());
+
+        List<Map.Entry<Integer, String>> calColsByDate = new ArrayList<>(calDateByIdx.entrySet());
+        calColsByDate.sort(Map.Entry.comparingByValue());
+        int procIdxMain = colIdx(mainHeadersRef, "\u5de5\u7a0b\u540d");
+
+        for (int i = 0; i < mainRows.size(); i++) {
+            String[] meta = i < mainRowMeta.size() ? mainRowMeta.get(i) : null;
+            if (meta == null) {
+                continue;
+            }
+            String mk = meta[0];
+            String tid = meta[1];
+            if (mk.isEmpty() && tid.isEmpty()) {
+                continue;
+            }
+            ObservableList<DeliveryCalendarMainCell> row = mainRows.get(i);
+            String procRawForPlan = "";
+            if (procIdxMain >= 0 && procIdxMain < row.size()) {
+                DeliveryCalendarMainCell pc = row.get(procIdxMain);
+                if (pc instanceof DeliveryCalendarMainCell.PlainText ptxt) {
+                    procRawForPlan = ptxt.text();
+                }
+            }
+            AladdinSystemDispatchDisplayQty.TaskQtyContext dispatchCtx =
+                    dispatchQtyCtx.get(mk + "\t" + tid);
+            Double aladdinConvCap =
+                    dispatchCtx != null && dispatchCtx.usesConvertedQtyForAladdinDisplay()
+                            ? dispatchCtx.qtyConvM()
+                            : null;
+            for (Map.Entry<Integer, String> e : calColsByDate) {
+                int j = e.getKey();
+                if (j >= row.size()) {
+                    continue;
+                }
+                String dateStr = e.getValue();
+                double dRaw = lookupQty(dispatchLookup, mk, tid, dateStr);
+                double d = dRaw;
+                if (dispatchCtx != null) {
+                    AladdinSystemDispatchDisplayQty.DayDisplay day =
+                            AladdinSystemDispatchDisplayQty.allocateDay(
+                                    dRaw,
+                                    dispatchCtx.qtyConvM(),
+                                    dispatchCtx.rawRollM(),
+                                    aladdinConvCap);
+                    d = day.displayM();
+                    aladdinConvCap = day.remainingConvCap();
+                }
+                String sd = Math.abs(d) > 1e-12 ? formatQtyShort(d) : "";
+                row.set(j, mergeTripleDispatchQty(row.get(j), sd));
+            }
+        }
+    }
+
+    /** 既存 Triple の plan/actual を維持し dispatch（シス配台）だけ差し替える。 */
+    static DeliveryCalendarMainCell mergeTripleDispatchQty(
+            DeliveryCalendarMainCell existing, String dispatchQty) {
+        String d = dispatchQty != null ? dispatchQty : "";
+        if (existing instanceof DeliveryCalendarMainCell.TripleQty t) {
+            return new DeliveryCalendarMainCell.TripleQty(t.plan(), t.actual(), d);
+        }
+        return new DeliveryCalendarMainCell.TripleQty("", "", d);
+    }
+
+    private record DispatchTableSnapshot(List<String> headers, List<List<String>> rows) {}
+
+    private DispatchTableSnapshot loadDispatchTableSnapshot(Map<String, String> ui) {
+        Path dispatchJsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        List<String> disHeaders =
+                deliveryCalendarResultDispatchTableTabController != null
+                        ? deliveryCalendarResultDispatchTableTabController.getShapedHeaders()
+                        : List.of();
+        List<List<String>> disRows =
+                deliveryCalendarResultDispatchTableTabController != null
+                        ? deliveryCalendarResultDispatchTableTabController.getShapedRows()
+                        : List.of();
+        if (Files.isRegularFile(dispatchJsonPath)) {
+            try {
+                JsonTableIo.SheetTable st = JsonTableIo.loadFlatTable(dispatchJsonPath);
+                if (!st.columns().isEmpty() && !st.rows().isEmpty()) {
+                    disHeaders = new ArrayList<>(st.columns());
+                    disRows = sheetTableToRowLists(st);
+                }
+            } catch (Exception ex) {
+                if (shell != null) {
+                    shell.appendLog(
+                            "[delivery-calendar] dispatch flat JSON load failed: " + ex.getMessage());
+                }
+            }
+        }
+        return new DispatchTableSnapshot(disHeaders, disRows);
+    }
+
+    private Map<String, AladdinSystemDispatchDisplayQty.TaskQtyContext> buildDispatchQtyContext(
+            Map<String, String> ui, List<String> disHeaders, List<List<String>> disRows) {
+        Stage2RollUnitLengthTables rollTables = Stage2RollUnitLengthTables.empty();
+        try {
+            rollTables = Stage2RollUnitLengthTables.load(AppPaths.resolveRepoRoot(ui));
+        } catch (IOException ignored) {
+            // テーブル無し時は使用原反寸法パースのみ
+        }
+        return AladdinSystemDispatchDisplayQty.buildContextByMachineAndTaskId(
+                disHeaders, disRows, rollTables);
     }
 
     private static double lookupQty(

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>5. 画面・タブ一覧</title>
+  <link rel="stylesheet" href="../static/style.css"/>
+</head>
+<body>
+<div class="manual-layout">
+<nav class="manual-nav" aria-label="目次">
+<p class="manual-nav-title">取扱説明書</p>
+<ul>
+<li><a href="../index.html">トップ</a></li>
+<li><a href="overview.html">1. はじめに</a></li>
+<li><a href="getting-started.html">2. 起動と基本操作</a></li>
+<li><a href="daily-operations.html">3. 日常運用ガイド（配台システム使い方）</a></li>
+<li><a href="workflow-dispatch.html">4. 配台の流れ（段階1・段階2・段階3）</a></li>
+<li><a href="tabs.html" class="is-current">5. 画面・タブ一覧</a></li>
+<li><a href="environment.html">6. 環境変数とデータの場所</a></li>
+<li><a href="excel-integration.html">7. Excel 連携とサマリ</a></li>
+<li><a href="troubleshooting.html">8. 困ったときは</a></li>
+</ul></nav>
+<main class="manual-main">
+
+<article class="manual-content">
+<h1>5. 画面・タブ一覧</h1>
+<p>以下はメインシェルタブの代表一覧です。表示名は FXML の <code>text</code> に準拠しています。実際の並びは <strong>タブ整理</strong> の設定により異なります。</p>
+<h2>日常運用</h2>
+<table>
+<thead>
+<tr>
+<th>タブ名</th>
+<th>主な用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>実行・ログ</td>
+<td>段階1/2 実行、ログ、出力パス、中断</td>
+</tr>
+<tr>
+<td>配台計画_タスク入力</td>
+<td>入力ブック・シート・表編集、段階2 起動前の入力</td>
+</tr>
+<tr>
+<td>配台計画手動修正</td>
+<td>配台結果 JSON の GUI 編集</td>
+</tr>
+<tr>
+<td>設備ガント（グラフィック）</td>
+<td>設備別タイムライン表示・印刷向け</td>
+</tr>
+<tr>
+<td>納期管理ビュー</td>
+<td>アラジン計画風の納期・実績比較</td>
+</tr>
+<tr>
+<td>オペレーターカード</td>
+<td>担当者カード表示</td>
+</tr>
+<tr>
+<td>配台ワークスペース履歴</td>
+<td>スナップショット保存・復元</td>
+</tr>
+</tbody>
+</table>
+<p><img alt="納期管理ビュー" src="../images/deliveryCalendarView.png" /></p>
+<h2>バッジ設定（グループ）</h2>
+<table>
+<thead>
+<tr>
+<th>タブ名</th>
+<th>主な用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UIバッジ</td>
+<td>画面上のバッジ部品のデザイン調整</td>
+</tr>
+<tr>
+<td>プッシュボタン</td>
+<td>プッシュボタン見た目の調整</td>
+</tr>
+<tr>
+<td>設備ガント・担当バッジ</td>
+<td>ガント上の担当表示バッジ</td>
+</tr>
+</tbody>
+</table>
+<p>設計・調整用途が中心で、日常の配台実行では触れないことが多いです。</p>
+<h2>環境設定（グループ）</h2>
+<table>
+<thead>
+<tr>
+<th>タブ名</th>
+<th>主な用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>環境変数</td>
+<td><code>PM_AI_*</code> および計画用キーの編集</td>
+</tr>
+<tr>
+<td>メモリ設定</td>
+<td>JVM ヒープ、次回起動時の希望値</td>
+</tr>
+<tr>
+<td>グローバル設定</td>
+<td>UI 既定のリセット、パッケージ既定の書き出し</td>
+</tr>
+<tr>
+<td>ユーザープロファイル</td>
+<td>プロファイルの保存・読込</td>
+</tr>
+</tbody>
+</table>
+<!-- MANUAL_SNAP:env -->
+
+<h2>結果情報（グループ）</h2>
+<table>
+<thead>
+<tr>
+<th>タブ名</th>
+<th>主な用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>計画結果ビューア (JSON)</td>
+<td>段階2 JSON の閲覧</td>
+</tr>
+<tr>
+<td>段階1 成形結果</td>
+<td>段階1 中間成果</td>
+</tr>
+<tr>
+<td>材料・製品種類情報</td>
+<td><code>code/</code> 配下のコード表・原反キー等</td>
+</tr>
+<tr>
+<td>結果_配台表 (JSON)</td>
+<td>配台表 JSON</td>
+</tr>
+</tbody>
+</table>
+<p><img alt="結果_配台表" src="../images/resultDispatch.png" /></p>
+<h2>その他（グループ）</h2>
+<table>
+<thead>
+<tr>
+<th>タブ名</th>
+<th>主な用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>マスタ読込サマリ</td>
+<td>マスタブック読込結果の要約</td>
+</tr>
+<tr>
+<td>配台不要ルール (JSON)</td>
+<td>段階1 で生成される除外ルール</td>
+</tr>
+<tr>
+<td>特別ルール</td>
+<td><code>特別ルール.md</code> / 列挙の表示</td>
+</tr>
+<tr>
+<td>実績DATA・明細の取得状態</td>
+<td>実績ソースの到達性・更新状態</td>
+</tr>
+<tr>
+<td>APIモデルベンチマーク</td>
+<td>Gemini API 往復の計測（開発・検証用）</td>
+</tr>
+</tbody>
+</table>
+<p><img alt="特別ルール" src="../images/specialRules.png" /></p>
+<h2>タブ整理</h2>
+<p>メインタブの <strong>順序</strong>・<strong>グループ見出し</strong>・<strong>色</strong> を編集します。子タブ（TabPane 内）や TitledPane は参照行として表示され、ドラッグ対象外の場合があります。</p>
+<p><img alt="タブ整理" src="../images/tabOrganizer.png" /></p>
+<h2>子タブ・折りたたみ</h2>
+<p>「配台計画_タスク入力」など、タブの内側にさらに <strong>子タブ</strong> や <strong>TitledPane</strong>（例: 操作・ソース / データ表）がある画面があります。タブ整理ツリーでは親タブの下にこれらの見出しが並びます。</p>
+</article>
+<footer class="manual-footer">
+  工程管理 AI デスクトップ 取扱説明書 — リポジトリ <code>manual/html/</code> より生成
+</footer>
+</main>
+</div>
+</body>
+</html>

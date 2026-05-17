@@ -26,6 +26,9 @@ import java.util.Map;
  * @param mainRunStage2ProductionPlan last shown stage-2 production_plan xlsx path on run tab (empty if none)
  * @param mainRunStage2MemberSchedule last shown stage-2 member_schedule xlsx path on run tab (empty if none)
  * @param mainRunStage2WriteExcel whether stage-2 writes xlsx deliverables; when false only JSON (run tab)
+ * @param mainRunStage2SkipTodayDispatch when true, stage-2 skips dispatch on the data-extraction calendar day
+ *     (UI checkbox is on 配台計画_タスク入力 tab; session key name unchanged)
+ * @param mainRunStage2SkipInProgressDispatch when true, stage-2 omits in-progress tasks (実加工数 &gt; 0); UI on 実行・ログ tab
  * @param mainRunStage2ResultBookFont stage-2 result Excel font family; empty with system default in UI means Python
  *     built-in default
  * @param uiEnvRows persisted 環境変数 tab rows (empty uses bootstrap defaults only)
@@ -101,6 +104,8 @@ public record DesktopSessionState(
         String mainRunStage2ProductionPlan,
         String mainRunStage2MemberSchedule,
         boolean mainRunStage2WriteExcel,
+        boolean mainRunStage2SkipTodayDispatch,
+        boolean mainRunStage2SkipInProgressDispatch,
         String mainRunStage2ResultBookFont,
         List<UiEnvRowSnapshot> uiEnvRows,
         List<String> mainShellTabOrder,
@@ -318,6 +323,8 @@ public record DesktopSessionState(
                 "",
                 "",
                 true,
+                false,
+                false,
                 "",
                 List.of(),
                 List.of(),
@@ -396,6 +403,8 @@ public record DesktopSessionState(
                 bootstrap.mainRunStage2ProductionPlan(),
                 bootstrap.mainRunStage2MemberSchedule(),
                 bootstrap.mainRunStage2WriteExcel(),
+                bootstrap.mainRunStage2SkipTodayDispatch(),
+                bootstrap.mainRunStage2SkipInProgressDispatch(),
                 bootstrap.mainRunStage2ResultBookFont(),
                 bootstrap.uiEnvRows(),
                 mainShellTabOrder(),

@@ -1185,12 +1185,40 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             proc_for_plan_qty = (
                 plan_row.get(core.TASK_COL_MACHINE) if plan_row is not None else None
             )
+            _aladdin_cap: float | None = None
+            if plan_row is not None:
+                _q_conv_row = max(
+                    0.0, core.parse_float_safe(plan_row.get(core.TASK_COL_QTY), 0.0)
+                )
+                _raw_row = core._raw_roll_unit_m_resolved_for_dispatch_qty(plan_row)
+                if (
+                    _q_conv_row > 1e-12
+                    and _raw_row > 1e-12
+                    and _q_conv_row + 1e-9 < _raw_row
+                ):
+                    _aladdin_cap = _q_conv_row
             for d in sorted_dates:
                 q_in = _qty_from_buckets_for_tid_proc(
                     buckets_by_proc, mk, d, tid, proc_for_plan_qty
                 )
                 q_act = float(actual_agg.get((mk, d), {}).get(tid, 0.0))
-                q_disp = float(dispatch_agg.get((mk, d, tid), 0.0))
+                q_disp_raw = float(dispatch_agg.get((mk, d, tid), 0.0))
+                q_conv_for_disp = (
+                    max(0.0, core.parse_float_safe(plan_row.get(core.TASK_COL_QTY), 0.0))
+                    if plan_row is not None
+                    else 0.0
+                )
+                _raw_for_disp = (
+                    core._raw_roll_unit_m_resolved_for_dispatch_qty(plan_row)
+                    if plan_row is not None
+                    else 0.0
+                )
+                q_disp, _aladdin_cap = core.aladdin_system_dispatch_display_qty_m(
+                    q_disp_raw,
+                    q_conv_for_disp,
+                    _raw_for_disp,
+                    remaining_conv_cap=_aladdin_cap,
+                )
                 tp = core._format_qty_short(q_in) if abs(q_in) > 1e-12 else ""
                 ta = core._format_qty_short(q_act) if abs(q_act) > 1e-12 else ""
                 td = core._format_qty_short(q_disp) if abs(q_disp) > 1e-12 else ""

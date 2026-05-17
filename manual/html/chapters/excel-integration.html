@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>7. Excel 連携とサマリ</title>
+  <link rel="stylesheet" href="../static/style.css"/>
+</head>
+<body>
+<div class="manual-layout">
+<nav class="manual-nav" aria-label="目次">
+<p class="manual-nav-title">取扱説明書</p>
+<ul>
+<li><a href="../index.html">トップ</a></li>
+<li><a href="overview.html">1. はじめに</a></li>
+<li><a href="getting-started.html">2. 起動と基本操作</a></li>
+<li><a href="daily-operations.html">3. 日常運用ガイド（配台システム使い方）</a></li>
+<li><a href="workflow-dispatch.html">4. 配台の流れ（段階1・段階2・段階3）</a></li>
+<li><a href="tabs.html">5. 画面・タブ一覧</a></li>
+<li><a href="environment.html">6. 環境変数とデータの場所</a></li>
+<li><a href="excel-integration.html" class="is-current">7. Excel 連携とサマリ</a></li>
+<li><a href="troubleshooting.html">8. 困ったときは</a></li>
+</ul></nav>
+<main class="manual-main">
+
+<article class="manual-content">
+<h1>7. Excel 連携とサマリ</h1>
+<h2>Excel の役割</h2>
+<p>本システムは <strong>Excel マクロブック</strong> をハブに据えた運用を想定しています。</p>
+<table>
+<thead>
+<tr>
+<th>ブック・シート</th>
+<th>役割</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>タスク入力ブック（<code>TASK_INPUT_WORKBOOK</code>）</td>
+<td>配台計画シート、加工計画 DATA 参照、VBA/xlwings から Python 起動</td>
+</tr>
+<tr>
+<td>マスタブック（<code>master.xlsm</code> 等）</td>
+<td>設備・速度・組み合わせ表など</td>
+</tr>
+<tr>
+<td>設定_環境変数 シート</td>
+<td>変数名・値を Python 起動前に環境へ反映</td>
+</tr>
+<tr>
+<td>結果_配台表.xlsx</td>
+<td>段階2 後の配台表（JSON から export）</td>
+</tr>
+</tbody>
+</table>
+<p>Java デスクトップから段階1/2 を実行する場合も、最終的な計画シート・マクロは Excel 側と整合している必要があります。</p>
+<h2>サマリ_AI配台（Excel）</h2>
+<p><code>code/サマリ_AI配台.xlsm</code>（または <code>.xlsx</code>）は、配台・AI 利用状況などを <strong>集計・可視化</strong> するサマリ用ブックです。主な用途の例:</p>
+<ul>
+<li>段階2 やパターン別バッチの <strong>試行結果・スコア</strong> の一覧</li>
+<li><strong>Gemini トークン・料金</strong> など AI 利用サマリの反映（メインシート P 列等）</li>
+<li>納期管理ビュー向け <strong>(シス配台)</strong> 表示用数量の参照</li>
+</ul>
+<blockquote>
+<p>セル配置・マクロ名はブックのバージョンに依存します。ブック内の説明シートまたは VBA コメントを正としてください。</p>
+</blockquote>
+<h3>パターン別段階2 サマリ</h3>
+<p>環境変数 <code>DISPATCH_PATTERN_STAGE2_SUMMARY_SHEET</code> でサマリシート名を指定できます。バッチ実行後:</p>
+<ol>
+<li>サマリの <strong>採用パターン ID</strong>（例: B3）を入力</li>
+<li>バッチ出力ルート（例: B2）が有効であることを確認</li>
+<li>マクロまたは Python コマンドで <strong>配台計画シートへ試行順を反映</strong></li>
+</ol>
+<h2>xlwings と自動計算</h2>
+<p><code>XLWINGS_SUSPEND_AUTO_CALCULATION</code> が有効（既定）のとき、一括書き込み前後で Excel の計算モードを制御し、性能と安定性を確保します。書き込み後に計算が戻らない場合は Excel を一度保存・再計算してください。</p>
+<h2>VBA 変更時の確認</h2>
+<p>マクロを編集した場合は、Excel VBE で <strong>デバッグ → VBAProject のコンパイル</strong> を必ず実行し、エラーが無いことを確認してから本番データで段階2 を回してください。</p>
+<h2>Java デスクトップとの使い分け</h2>
+<table>
+<thead>
+<tr>
+<th>操作</th>
+<th>推奨場所</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>日常の段階1/2・ログ確認</td>
+<td>Java デスクトップ</td>
+</tr>
+<tr>
+<td>セル単位の帳票調整・社内定型マクロ</td>
+<td>Excel</td>
+</tr>
+<tr>
+<td>配台結果の GUI 手修正</td>
+<td>デスクトップ「配台計画手動修正」</td>
+</tr>
+<tr>
+<td>複数パターン一括試行</td>
+<td>Excel マクロ / バッチ + サマリシート</td>
+</tr>
+</tbody>
+</table>
+</article>
+<footer class="manual-footer">
+  工程管理 AI デスクトップ 取扱説明書 — リポジトリ <code>manual/html/</code> より生成
+</footer>
+</main>
+</div>
+</body>
+</html>

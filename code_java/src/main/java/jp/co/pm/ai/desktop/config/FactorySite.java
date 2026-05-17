@@ -18,7 +18,7 @@ public enum FactorySite {
             AppPaths.DEFAULT_PM_AI_TASK_INPUT_SOURCE_DIR,
             AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
             "",
-            AppPaths.SUMMARY_AI_DISPATCH_XLSM),
+            AppPaths.SUMMARY_AI_DISPATCH_XLSX),
 
     /** 国分工場（国分共有・DATA 配下・マスタは {@code 国分master.xlsm}）。 */
     KOKUBU(

@@ -79,6 +79,12 @@ public final class AppPaths {
     /** リポジトリ直下の L 番号列挙（{@code planning_core/_core.py} のコメントと対応）。 */
     public static final String SPECIAL_RULES_ENUMERATED_MD = "特別ルール列挙.md";
 
+    /** 取扱説明書 HTML の相対パス（{@link #resolveManualIndexHtml(Map)}）。 */
+    public static final String MANUAL_INDEX_HTML_REL = "manual/html/index.html";
+
+    /** 現場向け Word 手順書（リポジトリ直下・{@link #resolveDispatchUsageGuideDocx(Map)}）。 */
+    public static final String DISPATCH_USAGE_GUIDE_DOCX = "配台システム使い方（整理版）.docx";
+
     /** Absolute path to master workbook ({@code master.xlsm}); overrides basename-only {@code MASTER_WORKBOOK_FILE}. */
     public static final String KEY_PM_AI_MASTER_WORKBOOK = "PM_AI_MASTER_WORKBOOK";
 
@@ -88,7 +94,7 @@ public final class AppPaths {
     /**
      * {@code 実行・ログ} タブの「開く」が開くサマリ用ブック（
      * 絶対パス、または {@code code/} からの相対）。空で
-     * {@link #SUMMARY_AI_DISPATCH_XLSM}（{@code code/} 直下の既定名）。
+     * {@link #SUMMARY_AI_DISPATCH_XLSX}（{@code code/} 直下の既定名）。
      */
     public static final String KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK =
             "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK";
@@ -179,6 +185,15 @@ public final class AppPaths {
      * {@code 0} / {@code false} / {@code no} / {@code off} / {@code none} のときは JSON のみ（UI 実行・ログタブのチェックボックスから上書き可）。
      */
     public static final String KEY_PM_AI_STAGE2_WRITE_EXCEL = "PM_AI_STAGE2_WRITE_EXCEL";
+
+    /** 1 のときデータ抽出日（当日）の配台を行わず、翌暦日以降を計画開始日とする（段階2）。UI は配台計画_タスク入力タブ。 */
+    public static final String KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH = "PM_AI_STAGE2_SKIP_TODAY_DISPATCH";
+
+    /**
+     * 1 のとき実加工数が正の行（加工途中相当）を配台キューに載せない（当日完了と想定、段階2）。UI は実行・ログタブのチェックで上書き。
+     */
+    public static final String KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH =
+            "PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH";
 
     /**
      * 段階2の実行エンジン（互換用キー）。JavaFX 実行タブから段階2を起動するときは常に Python 子プロセス（{@code
@@ -813,20 +828,17 @@ public final class AppPaths {
 
     /**
      * {@code code/} 配下のサマリ用ブックの既定ファイル名（湖南工場プリセット・空欄時の解決にも使用）。実行・ログタブの「開く」から参照。
-     *
-     * <p>定数名は歴史的経緯で {@code XLSM} のまま。実体は {@code .xlsx}。
      */
-    public static final String SUMMARY_AI_DISPATCH_XLSM =
-            "サマリ_AI配台.xlsx";
+    public static final String SUMMARY_AI_DISPATCH_XLSX = "サマリ_AI配台.xlsx";
 
     /** 国分工場プリセット: {@code code/} 直下のサマリ用ブック名。 */
     public static final String KOKUBU_SUMMARY_AI_DISPATCH_WORKBOOK_XLSX = "国分サマリ_AI配台.xlsx";
 
     /**
-     * リポジトリ {@code code/} 内の {@link #SUMMARY_AI_DISPATCH_XLSM} の絶対パス（{@link #resolveRepoRoot} と同一のルート解決）。
+     * リポジトリ {@code code/} 内の {@link #SUMMARY_AI_DISPATCH_XLSX} の絶対パス（{@link #resolveRepoRoot} と同一のルート解決）。
      * {@link #KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} が非空のときはそのパス（絶対、または {@code code/} 基準の相対）を返す。
      */
-    public static Path summaryAiDispatchXlsmPath(Map<String, String> ui) {
+    public static Path summaryAiDispatchXlsxPath(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
         String override = trim(u.get(KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK));
         if (!override.isEmpty()) {
@@ -838,10 +850,20 @@ public final class AppPaths {
         }
         return resolveRepoRoot(u)
                 .resolve("code")
-                .resolve(SUMMARY_AI_DISPATCH_XLSM)
+                .resolve(SUMMARY_AI_DISPATCH_XLSX)
                 .toAbsolutePath()
                 .normalize();
     }
+
+    /** @deprecated {@link #summaryAiDispatchXlsxPath(Map)} を使用 */
+    @Deprecated
+    public static Path summaryAiDispatchXlsmPath(Map<String, String> ui) {
+        return summaryAiDispatchXlsxPath(ui);
+    }
+
+    /** @deprecated {@link #SUMMARY_AI_DISPATCH_XLSX} を使用 */
+    @Deprecated
+    public static final String SUMMARY_AI_DISPATCH_XLSM = SUMMARY_AI_DISPATCH_XLSX;
 
     /** Filename for stage-1 shaped tasks ({@code planning_core.STAGE1_OUTPUT_FILENAME}). */
     public static final String STAGE1_PLAN_TASKS_FILENAME = "plan_input_tasks.xlsx";
@@ -1011,6 +1033,16 @@ public final class AppPaths {
     /** {@link #resolveRepoRoot(Map)}/{@link #SPECIAL_RULES_ENUMERATED_MD} */
     public static Path resolveSpecialRulesEnumeratedMd(Map<String, String> ui) {
         return resolveRepoRoot(ui).resolve(SPECIAL_RULES_ENUMERATED_MD).toAbsolutePath().normalize();
+    }
+
+    /** {@link #resolveRepoRoot(Map)}/{@link #MANUAL_INDEX_HTML_REL}（ブラウザで開く取扱説明書トップ）。 */
+    public static Path resolveManualIndexHtml(Map<String, String> ui) {
+        return resolveRepoRoot(ui).resolve(MANUAL_INDEX_HTML_REL).toAbsolutePath().normalize();
+    }
+
+    /** {@link #resolveRepoRoot(Map)}/{@link #DISPATCH_USAGE_GUIDE_DOCX}（Word で開く現場手順書）。 */
+    public static Path resolveDispatchUsageGuideDocx(Map<String, String> ui) {
+        return resolveRepoRoot(ui).resolve(DISPATCH_USAGE_GUIDE_DOCX).toAbsolutePath().normalize();
     }
 
     /**

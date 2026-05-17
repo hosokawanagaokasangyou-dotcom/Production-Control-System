@@ -45,9 +45,13 @@ public class PmAiFxApp extends Application {
      *
      * <ul>
      *   <li>{@code -Dpm.ai.javafx.prism.skipGpuProbe=true} … プローブせず {@link #applyLegacyPrismConfiguration()}
-     *   <li>{@code -Dpm.ai.javafx.prism.gpu=true} または {@code PM_AI_JAVAFX_PRISM_GPU=1} … プローブ省略で GPU 優先
-     *   <li>{@code -Dpm.ai.javafx.prism.allowHwOnClasspath=true} … OpenJFX が CLASSPATH（無名モジュール）でも HW Prism を試す
-     *       （既定は Canvas 安定のため SW）
+     *   <li>{@code -Dpm.ai.javafx.prism.gpu=true} または {@code PM_AI_JAVAFX_PRISM_GPU=1} … GPU 優先（無名
+     *       CLASSPATH のときは起動前に鏡像 GPU プローブに合格した場合のみ HW 順を適用。不合格なら SW）
+     *   <li>{@code -Dpm.ai.javafx.prism.allowHwOnClasspath=true} … 無名 CLASSPATH かつ通常起動（上記 gpu 以外）で、GPU
+     *       試験合格後に HW パイプラインを試す（既定は Canvas 安定のため SW）
+     *   <li>{@code -Dpm.ai.javafx.prism.forceSwOnClasspath=true} … 無名 CLASSPATH のとき、GPU 試験合格後も必ず SW
+     *   <li>{@code -Dpm.ai.javafx.prism.probeSplitOpenJfx=true} … GPU 子プロセスだけ従来どおり OpenJFX を
+     *       {@code --module-path} に切り出す（無名 CLASSPATH 親との鏡像プローブが子起動に失敗するときの切り戻し）
      * </ul>
      */
     private static void configurePrismAfterProbe() {
@@ -55,22 +59,22 @@ public class PmAiFxApp extends Application {
             applyLegacyPrismConfiguration();
             return;
         }
-        if (prismGpuOptIn()) {
-            applyPrismGpuPipelineOrder();
-            PrismGpuBootstrapStatus.recordGpuOptIn();
+        if (applyPrismWhenGpuOptIn()) {
             return;
         }
-        boolean ok = GpuProbeLauncher.runGpuCanvasProbe();
+        boolean ok = GpuProbeLauncher.runGpuCanvasProbe(javaFxRuntimeOnUnnamedClasspath());
         if (ok) {
             /*
-             * javafx:run の runtimePathOption=CLASSPATH では OpenJFX が無名モジュールに載る。
-             * ターミナル証拠: 子 JVM の GPU 試験は通っても本体で NGCanvas + RTTexture NPE が再発するため、
-             * 明示オプションが無い限り SW に固定する（モジュールパス構成のパッケージ版とは切り分け）。
+             * 無名 CLASSPATH では Canvas＋HW の組み合わせが環境によって不安定になり得る。既定は SW。
+             * GPU を試すには allowHwOnClasspath または gpu／環境変数オプトイン（オプトインは上で鏡像プローブ済み）。
              */
-            if (javaFxRuntimeOnUnnamedClasspath()
-                    && !Boolean.getBoolean("pm.ai.javafx.prism.allowHwOnClasspath")) {
+            boolean unnamed = javaFxRuntimeOnUnnamedClasspath();
+            if (unnamed && Boolean.getBoolean("pm.ai.javafx.prism.forceSwOnClasspath")) {
                 System.setProperty("prism.order", "sw");
-                PrismGpuBootstrapStatus.recordSoftwareClasspathOpenJfx();
+                PrismGpuBootstrapStatus.recordSoftwareClasspathOpenJfx("forceSw");
+            } else if (unnamed && !Boolean.getBoolean("pm.ai.javafx.prism.allowHwOnClasspath")) {
+                System.setProperty("prism.order", "sw");
+                PrismGpuBootstrapStatus.recordSoftwareClasspathOpenJfx("defaultSw");
             } else {
                 applyPrismGpuPipelineOrder();
                 PrismGpuBootstrapStatus.recordGpuAfterProbe();
@@ -83,9 +87,7 @@ public class PmAiFxApp extends Application {
 
     /** プローブ無効時の従来どおりの設定（opt-in GPU または JVM の prism.order / 既定 sw）。 */
     private static void applyLegacyPrismConfiguration() {
-        if (prismGpuOptIn()) {
-            applyPrismGpuPipelineOrder();
-            PrismGpuBootstrapStatus.recordGpuOptIn();
+        if (applyPrismWhenGpuOptIn()) {
             return;
         }
         PrismGpuBootstrapStatus.recordLegacyNoProbe();
@@ -93,6 +95,30 @@ public class PmAiFxApp extends Application {
             return;
         }
         System.setProperty("prism.order", "sw");
+    }
+
+    /**
+     * {@code pm.ai.javafx.prism.gpu} / {@code PM_AI_JAVAFX_PRISM_GPU} 指定時に HW 順を適用する。無名 CLASSPATH のときは鏡像
+     * GPU プローブに不合格なら SW に落とす。
+     *
+     * @return オプトインを処理して呼び出し元が return すべきなら true
+     */
+    private static boolean applyPrismWhenGpuOptIn() {
+        if (!prismGpuOptIn()) {
+            return false;
+        }
+        if (javaFxRuntimeOnUnnamedClasspath()) {
+            boolean gpuOk = GpuProbeLauncher.runGpuCanvasProbe(true);
+            if (!gpuOk) {
+                System.setProperty("prism.order", "sw");
+                PrismGpuBootstrapStatus.recordSoftwareAfterProbe(
+                        "GPU opt-in: 無名 CLASSPATH 鏡像プローブ不合格");
+                return true;
+            }
+        }
+        applyPrismGpuPipelineOrder();
+        PrismGpuBootstrapStatus.recordGpuOptIn();
+        return true;
     }
 
     private static boolean prismGpuOptIn() {
@@ -130,7 +156,7 @@ public class PmAiFxApp extends Application {
 
     @Override
     public void start(Stage primaryStage) {
-        primaryStage.setTitle("工程管理 AI 配台 — JavaFX MVP");
+        primaryStage.setTitle("工程管理 AI 配台");
 
         AtomicLong splashVisibleSinceNanos = new AtomicLong();
         StartupSplashStage.createAndShow(
@@ -251,8 +277,10 @@ public class PmAiFxApp extends Application {
                         PmAiFxApp.class
                                 .getResource("/jp/co/pm/ai/desktop/css/pm-ai-desktop.css")
                                 .toExternalForm());
+        MainShellController.debugLogParentsWithExactChildCount(root, 19, shell.snapshotUiEnv());
         primaryStage.setScene(scene);
         shell.finishStartup(scene);
+        Platform.runLater(shell::reapplyMainShellTabContentManagedAfterSceneAttach);
         return shell;
     }
 

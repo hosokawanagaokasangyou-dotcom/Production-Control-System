@@ -16,6 +16,8 @@ public final class ResultDispatchSchema {
     public static final String COL_MACHINE = "機械名";
     public static final String COL_DISPATCH_DATE = "配台日";
     public static final String COL_DISPATCH_QTY = "当日配台数量";
+    /** 段階3試行後: Python がタイムライン実配台 m を書く列（目標は {@link #COL_DISPATCH_QTY}）。 */
+    public static final String COL_DISPATCH_QTY_ACTUAL = "実配台数量";
 
     /** Static columns in pipeline order (excluding {@link #COL_DISPATCH_DATE} / {@link #COL_DISPATCH_QTY}). */
     public static final List<String> STATIC_HEADERS =

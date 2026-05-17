@@ -80,6 +80,10 @@ public final class AgentDebugLog {
         }
 
         Map<String, String> u = ui != null ? ui : Map.of();
+        String uiDbg = trim(u.get("PM_AI_DEBUG_LOG"));
+        if (!uiDbg.isEmpty()) {
+            return Path.of(uiDbg).toAbsolutePath().normalize();
+        }
         String uiPath = trim(u.get(AppPaths.KEY_PM_AI_CURSOR_DEBUG_LOG));
         if (!uiPath.isEmpty()) {
             return Path.of(uiPath).toAbsolutePath().normalize();
@@ -367,5 +371,29 @@ public final class AgentDebugLog {
         } catch (Throwable ignored) {
             // debug-only
         }
+    }
+
+    /**
+     * 配台試行など子プロセス NDJSON と JVM 側 {@link #appendStructured} の {@code sessionId} を揃える。
+     *
+     * <p>優先: UI の {@code PM_AI_AGENT_DEBUG_SESSION} → OS の同キー → {@code CURSOR_DEBUG_SESSION_ID} →
+     * 既定（現在の Cursor デバッグ会話 ID。会話ごとに変える場合は環境変数タブで上書き）。
+     */
+    public static String resolveDispatchTrialSessionId(Map<String, String> ui) {
+        if (ui != null) {
+            String s = trim(ui.get("PM_AI_AGENT_DEBUG_SESSION"));
+            if (!s.isEmpty()) {
+                return s;
+            }
+        }
+        String s2 = trim(System.getenv("PM_AI_AGENT_DEBUG_SESSION"));
+        if (!s2.isEmpty()) {
+            return s2;
+        }
+        String s3 = trim(System.getenv("CURSOR_DEBUG_SESSION_ID"));
+        if (!s3.isEmpty()) {
+            return s3;
+        }
+        return "903e77";
     }
 }

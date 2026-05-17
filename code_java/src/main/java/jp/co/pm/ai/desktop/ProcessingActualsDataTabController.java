@@ -42,6 +42,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
+import jp.co.pm.ai.desktop.io.NetworkSourceFileReloadCache;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.TaskInputSourceRawGridIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
@@ -669,6 +670,14 @@ public final class ProcessingActualsDataTabController {
         Path file = resolved.get().toAbsolutePath().normalize();
         loadedPath = file;
         pathLabel.setText(file.toString());
+
+        Optional<NetworkSourceFileReloadCache.Snapshot> cached =
+                NetworkSourceFileReloadCache.matchActuals(file);
+        if (cached.isPresent()) {
+            applyActualsFromReloadCache(file, cached.get(), whenDone, mirrorBar, mirrorPct, gen);
+            return;
+        }
+
         statusLabel.setText("\u8aad\u8fbc\u4e2d\u2026");
 
         String low = file.getFileName().toString().toLowerCase(Locale.ROOT);
@@ -800,6 +809,7 @@ public final class ProcessingActualsDataTabController {
                         }
                         ActualsReloadPayload p = task.getValue();
                         if (p != null) {
+                            storeActualsReloadCache(file, p);
                             applyReloadPayloadOnFx(p, true, notifyParent);
                         } else if (notifyParent != null) {
                             notifyParent.run();
@@ -841,6 +851,59 @@ public final class ProcessingActualsDataTabController {
                     }
                 });
         new Thread(task, "processing-actuals-reload").start();
+    }
+
+    private void applyActualsFromReloadCache(
+            Path file,
+            NetworkSourceFileReloadCache.Snapshot snap,
+            Runnable whenDone,
+            ProgressBar mirrorBar,
+            Label mirrorPct,
+            long gen) {
+        statusLabel.setText("\u30ad\u30e3\u30c3\u30b7\u30e5\u4f7f\u7528: " + snap.fileName());
+        if (shell != null) {
+            shell.appendLog(
+                    "[processing-actuals-detail] \u30ad\u30e3\u30c3\u30b7\u30e5\u4f7f\u7528\uff08\u540c\u4e00\u30d5\u30a1\u30a4\u30eb\u540d\uff09: "
+                            + snap.fileName());
+        }
+        if (mirrorBar != null) {
+            mirrorBar.setProgress(1.0);
+        }
+        if (mirrorPct != null) {
+            mirrorPct.setText("100%");
+        }
+        Platform.runLater(
+                () -> {
+                    if (gen != reloadGeneration.get()) {
+                        return;
+                    }
+                    Runnable notifyParent =
+                            whenDone != null
+                                    ? () -> {
+                                        if (gen == reloadGeneration.get()) {
+                                            whenDone.run();
+                                        }
+                                    }
+                                    : null;
+                    applyReloadPayloadOnFx(toActualsPayload(snap), true, notifyParent);
+                });
+    }
+
+    private static ActualsReloadPayload toActualsPayload(NetworkSourceFileReloadCache.Snapshot snap) {
+        return new ActualsReloadPayload(
+                snap.excel(), snap.sheetNames(), snap.selectedSheetIndex(), snap.toTabularSheet());
+    }
+
+    private static void storeActualsReloadCache(Path file, ActualsReloadPayload payload) {
+        if (file == null || payload == null) {
+            return;
+        }
+        NetworkSourceFileReloadCache.storeActuals(
+                file,
+                payload.excel(),
+                payload.sheetNames(),
+                payload.selectedSheetIndex(),
+                payload.shaped());
     }
 
     private void applyReloadPayloadOnFx(ActualsReloadPayload p, boolean showErrorsInStatus) {
@@ -945,6 +1008,19 @@ public final class ProcessingActualsDataTabController {
                             return;
                         }
                         PlanInputTabularIo.TabularSheet shaped = task.getValue();
+                        if (shaped != null) {
+                            int sel = sheetCombo.getSelectionModel().getSelectedIndex();
+                            if (sel < 0) {
+                                sel = idx;
+                            }
+                            storeActualsReloadCache(
+                                    path,
+                                    new ActualsReloadPayload(
+                                            true,
+                                            new ArrayList<>(sheetCombo.getItems()),
+                                            sel,
+                                            shaped));
+                        }
                         applyShapedToUi(shaped, showErrorsInStatus);
                     } finally {
                         unbindLoadProgress();

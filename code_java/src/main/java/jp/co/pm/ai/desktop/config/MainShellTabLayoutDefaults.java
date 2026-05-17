@@ -45,7 +45,8 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.ACTUALS_STATUS.key(),
                     MainShellTabId.USER_PROFILES.key(),
                     MainShellTabId.PLAN_WORKSPACE_HISTORY.key(),
-                    MainShellTabId.API_MODEL_BENCHMARK.key());
+                    MainShellTabId.API_MODEL_BENCHMARK.key(),
+                    MainShellTabId.SUMMARY_AI_DISPATCH_EXPORT_CUSTOMIZE.key());
 
     /**
      * All {@link MainShellTabId} keys except {@link MainShellTabId#TAB_ORGANIZER}: DEFAULT order then any enum-only
@@ -90,7 +91,9 @@ public final class MainShellTabLayoutDefaults {
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.ENV.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.MEMORY_SETTINGS.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.GLOBAL_SETTINGS.key(), ""),
-                                MainShellTabLayoutNode.tabNode(MainShellTabId.USER_PROFILES.key(), ""))));
+                                MainShellTabLayoutNode.tabNode(MainShellTabId.USER_PROFILES.key(), ""),
+                                MainShellTabLayoutNode.tabNode(
+                                        MainShellTabId.SUMMARY_AI_DISPATCH_EXPORT_CUSTOMIZE.key(), ""))));
 
         top.add(
                 MainShellTabLayoutNode.groupNode(

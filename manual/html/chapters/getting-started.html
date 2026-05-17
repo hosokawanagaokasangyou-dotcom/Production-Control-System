@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>2. 起動と基本操作</title>
+  <link rel="stylesheet" href="../static/style.css"/>
+</head>
+<body>
+<div class="manual-layout">
+<nav class="manual-nav" aria-label="目次">
+<p class="manual-nav-title">取扱説明書</p>
+<ul>
+<li><a href="../index.html">トップ</a></li>
+<li><a href="overview.html">1. はじめに</a></li>
+<li><a href="getting-started.html" class="is-current">2. 起動と基本操作</a></li>
+<li><a href="daily-operations.html">3. 日常運用ガイド（配台システム使い方）</a></li>
+<li><a href="workflow-dispatch.html">4. 配台の流れ（段階1・段階2・段階3）</a></li>
+<li><a href="tabs.html">5. 画面・タブ一覧</a></li>
+<li><a href="environment.html">6. 環境変数とデータの場所</a></li>
+<li><a href="excel-integration.html">7. Excel 連携とサマリ</a></li>
+<li><a href="troubleshooting.html">8. 困ったときは</a></li>
+</ul></nav>
+<main class="manual-main">
+
+<article class="manual-content">
+<h1>2. 起動と基本操作</h1>
+<p>現場の一連手順（アラジン出力〜段階3〜アラジン転記）は <a href="daily-operations.html">日常運用ガイド</a> にまとめています。本章はアプリの部品と最短ルートの説明です。</p>
+<h2>アプリの起動</h2>
+<ol>
+<li>配布パッケージでは <strong><code>PMD.exe</code></strong>（実行ファイル名はビルドにより異なる場合あり）をダブルクリックします。</li>
+<li>初回起動時、ポータブル配布では <strong>環境変数の既定リセット</strong> が一度だけ行われることがあります（マーカーファイル削除後は再実行されません）。</li>
+<li>起動後、ウィンドウが表示されれば正常です。失敗時は <strong>実行・ログ</strong> タブまたはコンソール出力を確認します。</li>
+</ol>
+<h2>メインウィンドウの部品</h2>
+<table>
+<thead>
+<tr>
+<th>部品</th>
+<th>説明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>テーマ</td>
+<td>画面の明暗テーマ切替</td>
+</tr>
+<tr>
+<td>進捗ラベル / 中断</td>
+<td>段階1・段階2 実行中に表示。 <strong>中断</strong> で Python 子プロセスを終了</td>
+</tr>
+<tr>
+<td>Memory</td>
+<td>JVM ヒープ使用量の目安（メモリ設定タブと連動）</td>
+</tr>
+<tr>
+<td>タブ行</td>
+<td>各機能画面。実行中は段階1/2 以外が無効化されることがある</td>
+</tr>
+</tbody>
+</table>
+<h2>日常の基本手順</h2>
+<ol class="flow-steps">
+<li><strong>入力の確認</strong> — 「配台計画_タスク入力」でブックパス・シート・加工計画 DATA の参照先を確認する。</li>
+<li><strong>段階1</strong> — 「実行・ログ」から段階1 を実行し、成形結果・除外ルール JSON 等を得る。</li>
+<li><strong>段階2</strong> — 同タブから段階2 を実行し、配台結果 JSON・xlsx・ガント用データを得る。</li>
+<li><strong>確認</strong> — 「計画結果ビューア」「設備ガント」「結果_配台表」で内容を確認する。</li>
+<li><strong>手修正（任意）</strong> — 「配台計画手動修正」で編集し、保存後に再実行する。</li>
+</ol>
+
+<h2>実行・ログタブ</h2>
+<p>計画実行の起点です。段階1/2 のボタン、出力パスの表示、ログの追記がここに集約されます。</p>
+<p><img alt="実行・ログタブ" src="../images/run.png" /></p>
+<blockquote>
+<p><strong>注意</strong><br />
+段階1/2 実行中は他タブへの切り替えが制限されます。長時間処理の場合はログ末尾で進捗を確認し、必要なら <strong>中断</strong> で止めてから入力を見直してください。</p>
+</blockquote>
+<h2>タブの並べ替え</h2>
+<p><strong>タブ整理</strong> タブで、メインタブの順序・グループ・色を変更できます。変更はセッションに保存され、次回起動時も反映されます。</p>
+<p><img alt="タブ整理" src="../images/tabOrganizer.png" /></p>
+<h2>設定の保存</h2>
+<table>
+<thead>
+<tr>
+<th>保存先</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>~/.pm-ai-desktop/</code></td>
+<td>ユーザーセッション（タブ配置、列幅、プロファイル等）</td>
+</tr>
+<tr>
+<td>環境変数タブ</td>
+<td><code>PM_AI_*</code> 系のキーと値（TSV/シート連携あり）</td>
+</tr>
+<tr>
+<td>ユーザープロファイル</td>
+<td>UI 設定のエクスポート・インポート</td>
+</tr>
+</tbody>
+</table>
+<h2>終了</h2>
+<p>ウィンドウを閉じる前に、手動修正タブに <strong>未保存</strong> がないか確認してください。未保存のまま段階2 を実行しようとすると、ログに警告が出て実行が止まる場合があります。</p>
+</article>
+<footer class="manual-footer">
+  工程管理 AI デスクトップ 取扱説明書 — リポジトリ <code>manual/html/</code> より生成
+</footer>
+</main>
+</div>
+</body>
+</html>

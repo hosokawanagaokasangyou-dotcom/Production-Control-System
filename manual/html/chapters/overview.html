@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>1. はじめに</title>
+  <link rel="stylesheet" href="../static/style.css"/>
+</head>
+<body>
+<div class="manual-layout">
+<nav class="manual-nav" aria-label="目次">
+<p class="manual-nav-title">取扱説明書</p>
+<ul>
+<li><a href="../index.html">トップ</a></li>
+<li><a href="overview.html" class="is-current">1. はじめに</a></li>
+<li><a href="getting-started.html">2. 起動と基本操作</a></li>
+<li><a href="daily-operations.html">3. 日常運用ガイド（配台システム使い方）</a></li>
+<li><a href="workflow-dispatch.html">4. 配台の流れ（段階1・段階2・段階3）</a></li>
+<li><a href="tabs.html">5. 画面・タブ一覧</a></li>
+<li><a href="environment.html">6. 環境変数とデータの場所</a></li>
+<li><a href="excel-integration.html">7. Excel 連携とサマリ</a></li>
+<li><a href="troubleshooting.html">8. 困ったときは</a></li>
+</ul></nav>
+<main class="manual-main">
+
+<article class="manual-content">
+<h1>1. はじめに</h1>
+<h2>本システムについて</h2>
+<p><strong>工程管理 AI デスクトップ</strong>は、加工計画データとマスタ情報をもとに <strong>配台計画</strong>（設備・担当への割付）を生成・確認・手修正するためのデスクトップアプリです。</p>
+<ul>
+<li><strong>段階1</strong> … 加工計画 DATA の読込・成形、配台除外ルールの生成など</li>
+<li><strong>段階2</strong> … 配台計画の実行、結果 JSON・設備ガント・配台表の出力</li>
+<li><strong>手動修正</strong> … 配台結果を画面上で編集し、再実行に反映</li>
+</ul>
+<p>バックエンドの計算は <strong>Python</strong>（<code>planning_core</code>）が担い、Excel マクロブック（タスク入力ブック）との連携も想定しています。</p>
+<h2>動作環境</h2>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OS</td>
+<td>Windows 10 / 11（本番想定）。開発時は WSL から起動することもある</td>
+</tr>
+<tr>
+<td>実行形態</td>
+<td>ポータブル配布（<code>PMD.exe</code> + <code>pm-ai-data</code>）または開発ビルド</td>
+</tr>
+<tr>
+<td>Excel</td>
+<td>マクロブック・xlwings 連携時は Microsoft Excel が必要</td>
+</tr>
+<tr>
+<td>ネットワーク</td>
+<td>タスク入力・実績明細を共有フォルダから読む構成では UNC パス到達性が必要</td>
+</tr>
+</tbody>
+</table>
+<h2>画面の全体像</h2>
+<p>メインウィンドウ上部に <strong>テーマ</strong>・<strong>実行進捗</strong>・<strong>メモリ表示</strong>があり、その下が <strong>タブ</strong> で区切られた各機能です。</p>
+<p><img alt="実行・ログ（メイン画面）" src="../images/run.png" /></p>
+<p>既定では次のような並びです（「タブ整理」で並べ替え・グループ化可能）。</p>
+<table>
+<thead>
+<tr>
+<th>区分</th>
+<th>主なタブ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>日常運用</td>
+<td>実行・ログ、配台計画_タスク入力、配台計画手動修正、設備ガント、納期管理ビュー、オペレーターカード</td>
+</tr>
+<tr>
+<td>バッジ設定</td>
+<td>UIバッジ、プッシュボタン、設備ガント・担当バッジ</td>
+</tr>
+<tr>
+<td>環境設定</td>
+<td>環境変数、メモリ設定、グローバル設定、ユーザープロファイル</td>
+</tr>
+<tr>
+<td>結果情報</td>
+<td>計画結果ビューア、段階1 成形結果、材料・製品種類情報、結果_配台表</td>
+</tr>
+<tr>
+<td>その他</td>
+<td>マスタ読込サマリ、配台不要ルール、特別ルール、実績DATA取得状態 など</td>
+</tr>
+</tbody>
+</table>
+<h2>用語</h2>
+<table>
+<thead>
+<tr>
+<th>用語</th>
+<th>意味</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>タスク入力ブック</td>
+<td>配台計画シートなどを含む Excel マクロブック（<code>TASK_INPUT_WORKBOOK</code>）</td>
+</tr>
+<tr>
+<td>段階1 / 段階2</td>
+<td>計画パイプラインの前処理フェーズと配台実行フェーズ</td>
+</tr>
+<tr>
+<td>結果 JSON</td>
+<td>段階2 出力の <code>production_plan</code> 等（計画結果ビューア・ガントで参照）</td>
+</tr>
+<tr>
+<td>ワークスペース履歴</td>
+<td>配台結果のスナップショット保存・復元</td>
+</tr>
+</tbody>
+</table>
+<h2>初回セットアップの要点</h2>
+<ol>
+<li>配布フォルダを所定の場所に展開し、<code>PMD.exe</code> を起動する。</li>
+<li><strong>環境変数</strong> タブで、タスク入力元・マスタ・ネットワークソースのパスを確認する。</li>
+<li><strong>配台計画_タスク入力</strong> で入力ブックとシートを指定する。</li>
+<li><strong>実行・ログ</strong> から段階1 → 段階2 の順で実行する。</li>
+</ol>
+<p>詳細は <a href="getting-started.html">起動と基本操作</a>、<a href="daily-operations.html">日常運用ガイド</a>、<a href="workflow-dispatch.html">配台の流れ</a> を参照してください。</p>
+</article>
+<footer class="manual-footer">
+  工程管理 AI デスクトップ 取扱説明書 — リポジトリ <code>manual/html/</code> より生成
+</footer>
+</main>
+</div>
+</body>
+</html>

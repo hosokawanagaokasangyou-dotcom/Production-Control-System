@@ -72,6 +72,7 @@ import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.bridge.Stage2PythonChildEnv;
 import jp.co.pm.ai.desktop.bridge.StagePythonExecutable;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
@@ -89,15 +90,17 @@ import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.PlanWorkspaceSessionFragment;
 import jp.co.pm.ai.desktop.config.PlanWorkspaceSnapshotStore;
 import jp.co.pm.ai.desktop.config.EnvVarDocs;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.InitSettingPersistence;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
+import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
+import jp.co.pm.ai.desktop.io.SummaryAiDispatchWorkbookExporter;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
 import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
@@ -107,6 +110,8 @@ import jp.co.pm.ai.desktop.ipc.IpcStdoutTap;
  */
 public final class MainShellController {
 
+    private static final String AGENT_DEBUG_SESSION = "a35f7c";
+
     /**
      * {@link Tab#getProperties()} に登録済みかどうか。選択変更時に見出し chrome を再適用するリスナーを二重登録しない。
      */
@@ -115,11 +120,6 @@ public final class MainShellController {
 
     private static final String STAGE1 = "task_extract_stage1.py";
     private static final String STAGE2 = "plan_simulation_stage2.py";
-
-    /**
-     * Cursor デバッグセッション ID（子 Python の NDJSON と親 {@link AgentDebugLog} を同一ファイルに揃える）。
-     */
-    private static final String STAGE_AGENT_DEBUG_SESSION_ID = "d3d9c5";
 
     /** 段階1実行前ログに出す「入力解決に関わる」環境変数キー（子プロセスへ渡る値）。 */
     private static final List<String> STAGE1_CHILD_INPUT_ENV_KEYS =
@@ -138,7 +138,7 @@ public final class MainShellController {
                     AppPaths.KEY_PM_AI_OUTPUT_DIR,
                     AppPaths.KEY_PM_AI_REPO_ROOT,
                     "PM_AI_DEBUG_LOG",
-                    "PM_AI_AGENT_DEBUG_SESSION_ID");
+                    AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH);
 
     /** 段階2実行前ログに出す「入力解決に関わる」環境変数キー。 */
     private static final List<String> STAGE2_CHILD_INPUT_ENV_KEYS =
@@ -154,8 +154,10 @@ public final class MainShellController {
                     AppPaths.KEY_PM_AI_MEMBER_SCHEDULE_JSON,
                     AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON,
                     AppPaths.KEY_PM_AI_STAGE2_ENGINE,
-                    "PM_AI_DEBUG_LOG",
-                    "PM_AI_AGENT_DEBUG_SESSION_ID");
+                    AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL,
+                    AppPaths.KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH,
+                    AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH,
+                    "PM_AI_DEBUG_LOG");
 
     private static final String PREFIX_CHILD = "[child] ";
     private static final String NDJSON_START = PREFIX_CHILD + "{";
@@ -246,6 +248,9 @@ public final class MainShellController {
     private GlobalSettingsTabController globalSettingsTabController;
 
     @FXML
+    private SummaryAiDispatchExportCustomizeTabController summaryAiDispatchExportCustomizeTabController;
+
+    @FXML
     private UserProfilesTabController userProfilesTabController;
 
     @FXML
@@ -319,6 +324,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabGlobalSettings;
+
+    @FXML
+    private Tab mainShellTabSummaryAiDispatchExportCustomize;
 
     @FXML
     private Tab mainShellTabUserProfiles;
@@ -468,6 +476,9 @@ public final class MainShellController {
             if (globalSettingsTabController != null) {
                 globalSettingsTabController.bindShell(this);
             }
+            if (summaryAiDispatchExportCustomizeTabController != null) {
+                summaryAiDispatchExportCustomizeTabController.bindShell(this);
+            }
             if (userProfilesTabController != null) {
                 userProfilesTabController.bindShell(this);
             }
@@ -530,6 +541,8 @@ public final class MainShellController {
                 mainShellTabOrganizerPaneController.bindShell(this);
                 mainShellTabOrganizerPaneController.installTreeCellFactory();
             }
+            ensureMainShellTabPaneSelectionsInitialized("initialize:afterDesktopSession");
+            applyMainShellTabContentManagedState(tabPane.getSelectionModel().getSelectedItem());
         } finally {
             suppressEnvSessionPersistence.set(false);
         }
@@ -574,6 +587,7 @@ public final class MainShellController {
                 .selectedItemProperty()
                 .addListener(
                         (obs, prevTab, newTab) -> {
+                            applyMainShellTabContentManagedState(newTab);
                             if (!suppressDeliveryCalendarReloadTabGuard.get()
                                     && deliveryCalendarViewTabController != null
                                     && mainShellTabDeliveryCalendar != null
@@ -734,6 +748,9 @@ public final class MainShellController {
                     nz(s.mainRunStage2MemberSchedule()));
         }
         mainRunTabController.applyStage2WriteExcelFromSession(s.mainRunStage2WriteExcel());
+        planInputTabController.applyStage2SkipTodayDispatchFromSession(s.mainRunStage2SkipTodayDispatch());
+        mainRunTabController.applyStage2SkipInProgressDispatchFromSession(
+                s.mainRunStage2SkipInProgressDispatch());
         mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
         /*
          * 設備ガントの apply は末尾で Canvas を再構築し personBadgeStyleResolverForGantt を参照する。
@@ -756,6 +773,7 @@ public final class MainShellController {
             }
         } else if (!rebuildMainShellTabsFromLayout(null)) {
             applyMainShellTabOrder(s.mainShellTabOrder());
+            ensureMainShellTabPaneSelectionsInitialized("applyDesktopSession:tabOrder");
         }
         applyMainShellTabTitleAliasesFromSession(s.mainShellTabTitleAliases());
         applyInnerTabSelectionsFromSession(s.innerTabSelectedIndexByShellTabKey());
@@ -835,6 +853,8 @@ public final class MainShellController {
                 mainRunTabController.snapshotStage2ProductionPlanPath(),
                 mainRunTabController.snapshotStage2MemberSchedulePath(),
                 mainRunTabController.snapshotStage2WriteExcel(),
+                planInputTabController.snapshotStage2SkipTodayDispatch(),
+                mainRunTabController.snapshotStage2SkipInProgressDispatch(),
                 mainRunTabController.snapshotStage2ResultBookFont(),
                 snapshotUiEnvRows(),
                 snapshotMainShellTabOrder(),
@@ -1269,6 +1289,9 @@ public final class MainShellController {
         if (t == mainShellTabGlobalSettings) {
             return MainShellTabId.GLOBAL_SETTINGS;
         }
+        if (t == mainShellTabSummaryAiDispatchExportCustomize) {
+            return MainShellTabId.SUMMARY_AI_DISPATCH_EXPORT_CUSTOMIZE;
+        }
         if (t == mainShellTabUserProfiles) {
             return MainShellTabId.USER_PROFILES;
         }
@@ -1337,6 +1360,7 @@ public final class MainShellController {
             case ENV -> mainShellTabEnv;
             case MEMORY_SETTINGS -> mainShellTabMemorySettings;
             case GLOBAL_SETTINGS -> mainShellTabGlobalSettings;
+            case SUMMARY_AI_DISPATCH_EXPORT_CUSTOMIZE -> mainShellTabSummaryAiDispatchExportCustomize;
             case USER_PROFILES -> mainShellTabUserProfiles;
             case MASTER_SUMMARY -> mainShellTabMasterSummary;
             case PLAN_INPUT -> mainShellTabPlanInput;
@@ -1657,21 +1681,193 @@ public final class MainShellController {
             return;
         }
         applyStoredShellTabColorsRecursive(tabPane.getTabs());
-        layoutShellTabPanesRecursive(tabPane);
+        requestLayoutShellTabPanesDeferred();
     }
 
     /**
-     * 入れ子 {@link TabPane} まで {@code applyCss}/{@code layout} し、見出しセル（{@code .headers-region}）の取りこぼしを減らす。
+     * {@link TabPane#layout()} の同期再帰はシーンのレイアウトパルス中に走ると {@code IndexOutOfBoundsException}
+     * （例: index 19, length 19）を誘発しやすい。スタイル適用後は次パルスで {@link Node#requestLayout()} のみ行う。
+     */
+    private void requestLayoutShellTabPanesDeferred() {
+        Platform.runLater(
+                () -> {
+                    if (tabPane == null) {
+                        return;
+                    }
+                    // #region agent log
+                    AgentDebugLog.appendStructured(
+                            collectUiEnv(),
+                            AGENT_DEBUG_SESSION,
+                            "H",
+                            "MainShellController:requestLayoutShellTabPanesDeferred",
+                            "deferred tab pane requestLayout",
+                            Map.of("topLevelTabs", tabPane.getTabs().size()));
+                    // #endregion
+                    layoutShellTabPanesRecursive(tabPane);
+                });
+    }
+
+    /**
+     * 入れ子 {@link TabPane} まで {@code applyCss} し、見出しセル（{@code .headers-region}）の取りこぼしを減らす。
      */
     private static void layoutShellTabPanesRecursive(TabPane pane) {
         if (pane == null) {
             return;
         }
         pane.applyCss();
-        pane.layout();
+        pane.requestLayout();
         for (Tab t : pane.getTabs()) {
             if (t.getContent() instanceof TabPane inner) {
                 layoutShellTabPanesRecursive(inner);
+            }
+        }
+    }
+
+    /**
+     * 入れ子 {@link TabPane} で内側の選択が未設定のまま初回 {@link Scene#doLayoutPass} に入ると、見出し行の子数と
+     * レイアウトインデックスがずれて {@code IndexOutOfBoundsException} になることがある（例: index 19, length 19）。
+     */
+    private void ensureMainShellTabPaneSelectionsInitialized(String reason) {
+        if (tabPane == null) {
+            return;
+        }
+        int innerPanes = 0;
+        int innerTabsMax = 0;
+        if (tabPane.getSelectionModel().getSelectedItem() == null && !tabPane.getTabs().isEmpty()) {
+            tabPane.getSelectionModel().select(0);
+        }
+        for (Tab t : tabPane.getTabs()) {
+            if (t.getContent() instanceof TabPane inner) {
+                innerPanes++;
+                innerTabsMax = Math.max(innerTabsMax, inner.getTabs().size());
+                if (inner.getSelectionModel().getSelectedItem() == null && !inner.getTabs().isEmpty()) {
+                    inner.getSelectionModel().select(0);
+                }
+            }
+        }
+        // #region agent log
+        AgentDebugLog.appendStructured(
+                collectUiEnv(),
+                AGENT_DEBUG_SESSION,
+                "I",
+                "MainShellController:ensureMainShellTabPaneSelectionsInitialized",
+                reason,
+                Map.of(
+                        "topLevelTabs",
+                        tabPane.getTabs().size(),
+                        "innerTabPanes",
+                        innerPanes,
+                        "innerTabsMax",
+                        innerTabsMax,
+                        "topSelectedIndex",
+                        tabPane.getSelectionModel().getSelectedIndex()));
+        // #endregion
+    }
+
+    /**
+     * 初回 {@link Scene#doLayoutPass} で全タブの Spreadsheet 等が一斉にレイアウトされると、ControlsFX スキンと列数の組み合わせで
+     * {@code IndexOutOfBoundsException}（index 19, length 19）が出ることがある。選択中の枝だけ {@code managed} にする。
+     */
+    void reapplyMainShellTabContentManagedAfterSceneAttach() {
+        applyMainShellTabContentManagedState(tabPane.getSelectionModel().getSelectedItem());
+        // #region agent log
+        int managedBranches = 0;
+        if (tabPane != null) {
+            for (Tab t : tabPane.getTabs()) {
+                Node c = t.getContent();
+                if (c != null && c.isManaged()) {
+                    managedBranches++;
+                }
+            }
+        }
+        AgentDebugLog.appendStructured(
+                collectUiEnv(),
+                AGENT_DEBUG_SESSION,
+                "K",
+                "MainShellController:reapplyMainShellTabContentManagedAfterSceneAttach",
+                "managed branches after scene attach",
+                Map.of(
+                        "managedBranches",
+                        managedBranches,
+                        "topTabs",
+                        tabPane != null ? tabPane.getTabs().size() : 0,
+                        "runId",
+                        "post-scene-managed"));
+        // #endregion
+    }
+
+    private void applyMainShellTabContentManagedState(Tab selectedTopTab) {
+        if (tabPane == null) {
+            return;
+        }
+        for (Tab t : tabPane.getTabs()) {
+            setMainShellTabBranchManaged(t, t == selectedTopTab);
+        }
+    }
+
+    private static void setMainShellTabBranchManaged(Tab tab, boolean branchActive) {
+        if (tab == null) {
+            return;
+        }
+        Node content = tab.getContent();
+        if (content == null) {
+            return;
+        }
+        if (content instanceof TabPane inner) {
+            content.setManaged(branchActive);
+            Tab innerSel =
+                    branchActive ? inner.getSelectionModel().getSelectedItem() : null;
+            if (branchActive && innerSel == null && !inner.getTabs().isEmpty()) {
+                innerSel = inner.getTabs().getFirst();
+            }
+            for (Tab innerTab : inner.getTabs()) {
+                boolean innerActive = branchActive && innerTab == innerSel;
+                Node innerContent = innerTab.getContent();
+                if (innerContent != null) {
+                    innerContent.setManaged(innerActive);
+                }
+            }
+            return;
+        }
+        content.setManaged(branchActive);
+    }
+
+    /** {@code setScene} 前に子数が一致する {@link Parent} を記録（IOOBE 原因の特定用）。 */
+    static void debugLogParentsWithExactChildCount(
+            Parent root, int childCount, Map<String, String> ui) {
+        if (root == null) {
+            return;
+        }
+        List<String> hits = new ArrayList<>();
+        collectParentsWithExactChildCount(root, childCount, hits, 0, 24);
+        // #region agent log
+        AgentDebugLog.appendStructured(
+                ui,
+                AGENT_DEBUG_SESSION,
+                "K",
+                "MainShellController:debugLogParentsWithExactChildCount",
+                "parents before setScene",
+                Map.of("childCount", childCount, "hits", hits));
+        // #endregion
+    }
+
+    private static void collectParentsWithExactChildCount(
+            Node node, int childCount, List<String> hits, int depth, int maxDepth) {
+        if (node == null || depth > maxDepth || hits.size() >= 12) {
+            return;
+        }
+        if (node instanceof Parent parent) {
+            int n = parent.getChildrenUnmodifiable().size();
+            if (n == childCount) {
+                String id = parent.getId();
+                hits.add(
+                        parent.getClass().getSimpleName()
+                                + (id != null && !id.isBlank() ? "#" + id : "")
+                                + "@d"
+                                + depth);
+            }
+            for (Node child : parent.getChildrenUnmodifiable()) {
+                collectParentsWithExactChildCount(child, childCount, hits, depth + 1, maxDepth);
             }
         }
     }
@@ -1972,7 +2168,6 @@ public final class MainShellController {
                         tabOrdinal++;
                     }
                 };
-        op.run();
         Platform.runLater(op);
     }
 
@@ -1989,9 +2184,7 @@ public final class MainShellController {
         }
         syncLeafTabColorsFromOrganizerTree(invisibleRoot);
         syncGroupTabHeadersFromOrganizerTree(invisibleRoot);
-        /* 同一フレームで見出しへ反映（runLater のみだと未レイアウトで poke が無効になることがある） */
         refreshMainShellTabHeaderChromeFromStoredColors();
-        Platform.runLater(this::refreshMainShellTabHeaderChromeFromStoredColors);
     }
 
     private void syncLeafTabColorsFromOrganizerTree(TreeItem<MainShellTabOrganizerTabController.OrgRow> node) {
@@ -2133,6 +2326,8 @@ public final class MainShellController {
                         .selectedItemProperty()
                         .addListener(
                                 (o, p, n) -> {
+                                    applyMainShellTabContentManagedState(
+                                            tabPane.getSelectionModel().getSelectedItem());
                                     emitShellTabNavigation();
                                     refreshMainShellTabHeaderChromeFromStoredColors();
                                 });
@@ -2140,6 +2335,8 @@ public final class MainShellController {
         } finally {
             suppressEnvSessionPersistence.set(false);
         }
+        ensureMainShellTabPaneSelectionsInitialized("rebuildMainShellTabsFromLayout");
+        applyMainShellTabContentManagedState(tabPane.getSelectionModel().getSelectedItem());
         refreshMainShellTabDisplayedTitles();
         lastEffectiveShellLeaf =
                 resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
@@ -2178,6 +2375,9 @@ public final class MainShellController {
                     inner.getTabs().add(ct);
                 }
             }
+            if (!inner.getTabs().isEmpty()) {
+                inner.getSelectionModel().select(0);
+            }
             groupTab.setContent(inner);
             applyShellTabColor(groupTab, n.colorHex());
             wiredInnerMainShellTabPanes.add(inner);
@@ -2208,6 +2408,8 @@ public final class MainShellController {
         } finally {
             suppressEnvSessionPersistence.set(false);
         }
+        ensureMainShellTabPaneSelectionsInitialized("restoreDefaultFlatMainShellTabLayout");
+        applyMainShellTabContentManagedState(tabPane.getSelectionModel().getSelectedItem());
         refreshMainShellTabDisplayedTitles();
         lastEffectiveShellLeaf =
                 resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
@@ -2848,10 +3050,21 @@ public final class MainShellController {
         }
         try {
             Map<String, String> uiRun = collectUiEnv();
+            if (STAGE1.equals(script)) {
+                uiRun.put(
+                        AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH,
+                        mainRunTabController.snapshotStage2SkipInProgressDispatch() ? "1" : "0");
+            }
             if (STAGE2.equals(script)) {
                 uiRun.put(
                         AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL,
                         mainRunTabController.snapshotStage2WriteExcel() ? "1" : "0");
+                uiRun.put(
+                        AppPaths.KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH,
+                        planInputTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
+                uiRun.put(
+                        AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH,
+                        mainRunTabController.snapshotStage2SkipInProgressDispatch() ? "1" : "0");
                 String resultFont = mainRunTabController.snapshotStage2ResultBookFont();
                 if (resultFont != null && !resultFont.isBlank()) {
                     uiRun.put(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT, resultFont.trim());
@@ -2865,25 +3078,6 @@ public final class MainShellController {
                 refreshNetworkSourceDirListingSkipsBeforeStageRun(uiRun);
             }
             Map<String, String> childEnv = childEnvForPython(uiRun);
-            if (STAGE1.equals(script) || STAGE2.equals(script)) {
-                try {
-                    Path nd = AgentDebugLog.resolveNdjsonPath(uiRun, STAGE_AGENT_DEBUG_SESSION_ID);
-                    childEnv.put("PM_AI_DEBUG_LOG", nd.toString());
-                    childEnv.put("PM_AI_AGENT_DEBUG_SESSION_ID", STAGE_AGENT_DEBUG_SESSION_ID);
-                    Map<String, Object> boot = new LinkedHashMap<>();
-                    boot.put("script", script);
-                    boot.put("pmAiDebugLog", nd.toString());
-                    AgentDebugLog.appendStructured(
-                            uiRun,
-                            STAGE_AGENT_DEBUG_SESSION_ID,
-                            "H0",
-                            "MainShellController.runStage",
-                            "段階1/2子プロセスへ NDJSON ログパスを設定（AgentDebugLog と同一解決）",
-                            boot);
-                } catch (Throwable ignored) {
-                    // debug-only
-                }
-            }
             if (lastNetworkSourceResolution != null) {
                 for (String line : lastNetworkSourceResolution.logLines()) {
                     appendLog(line);
@@ -3012,17 +3206,23 @@ public final class MainShellController {
             if (STAGE2.equals(script)) {
                 if (c == 0) {
                     refreshStage2OutputArtifacts();
-                    invalidateDeliveryCalendarAfterPipelineRun();
+                    exportSummaryAiDispatchWorkbookAfterPipelineStageRun(true);
                     refreshEquipmentGanttGraphicAfterPipelineRun();
-                    MacroCompleteChime.playIfAvailable(collectUiEnv());
-                    showStageCompletionDialog("段階2 完了", "段階2 の処理が正常終了しました。");
-                }
-                if (dispatchInteractiveTabController != null) {
-                    if (c == 0) {
-                        dispatchInteractiveTabController.reloadTableFromDiskAfterStage2Success();
+                    Runnable afterDispatchReload =
+                            () -> {
+                                MacroCompleteChime.playIfAvailable(collectUiEnv());
+                                selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
+                                showStageCompletionDialog(
+                                        "段階2 完了", "段階2 の処理が正常終了しました。");
+                            };
+                    if (dispatchInteractiveTabController != null) {
+                        dispatchInteractiveTabController.reloadTableFromDiskAfterStage2Success(
+                                afterDispatchReload);
                     } else {
-                        dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
+                        afterDispatchReload.run();
                     }
+                } else if (dispatchInteractiveTabController != null) {
+                    dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
                 }
             }
         }
@@ -3058,6 +3258,29 @@ public final class MainShellController {
     @FXML
     private void onCancelStageRunAction() {
         cancelActiveStageRun();
+    }
+
+    /** ツールバー「配台の使い方」… リポジトリ直下の Word 手順書を既定アプリで開く。 */
+    @FXML
+    private void onOpenDispatchUsageGuideDocxAction() {
+        Path p = AppPaths.resolveDispatchUsageGuideDocx(collectUiEnv());
+        if (!Files.isRegularFile(p)) {
+            appendLog(
+                    "[dispatch-usage-docx] file not found: "
+                            + p
+                            + " (expected "
+                            + AppPaths.DISPATCH_USAGE_GUIDE_DOCX
+                            + " under "
+                            + AppPaths.KEY_PM_AI_REPO_ROOT
+                            + ")");
+            return;
+        }
+        try {
+            DesktopFileOpener.openFile(p);
+            appendLog("[dispatch-usage-docx] opened: " + p);
+        } catch (IOException e) {
+            appendLog("[dispatch-usage-docx] open failed: " + e.getMessage());
+        }
     }
 
     /**
@@ -3517,6 +3740,33 @@ public final class MainShellController {
      *
      * @param site 選択された工場（湖南＝従来既定）
      */
+    /**
+     * サマリ用ブックの出力先を環境タブ {@link AppPaths#KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} に反映する。
+     * 既に非空のときも、出力した絶対パスへ揃える（固定ファイル名の上書き運用）。
+     */
+    void ensureSummaryAiDispatchWorkbookEnvPath(Path absoluteOutputPath) {
+        if (envRows == null || absoluteOutputPath == null) {
+            return;
+        }
+        String target = absoluteOutputPath.toAbsolutePath().normalize().toString();
+        suppressEnvSessionPersistence.set(true);
+        try {
+            for (EnvVarRow row : envRows) {
+                String name = row.getName() != null ? row.getName().trim() : "";
+                if (AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK.equals(name)) {
+                    row.setValue(target);
+                    break;
+                }
+            }
+        } finally {
+            suppressEnvSessionPersistence.set(false);
+        }
+        scheduleDesktopSessionSave();
+        if (mainRunTabController != null) {
+            mainRunTabController.refreshOpenWorkbookHintLabels();
+        }
+    }
+
     private void applyFactorySitePortableAndNetworkDefaults(FactorySite site) {
         if (envRows == null || site == null) {
             return;
@@ -3671,20 +3921,35 @@ public final class MainShellController {
     }
 
     /**
-     * Environment for {@code dispatch_interactive_trial.py}: same {@link AppPaths#KEY_PM_AI_STAGE2_WRITE_EXCEL} and
-     * {@link AppPaths#KEY_PM_AI_RESULT_BOOK_FONT} overrides as running stage 2 from the run tab (unchecking Excel
-     * there suppresses xlsx deliverables in planning_core for the trial as well).
+     * Environment for {@code dispatch_interactive_trial.py}: same stage-2 overrides as {@link #runStage}:
+     * {@link AppPaths#KEY_PM_AI_STAGE2_WRITE_EXCEL} and {@link AppPaths#KEY_PM_AI_RESULT_BOOK_FONT} from the run tab,
+     * {@link AppPaths#KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH} from the plan-input tab, and
+     * {@link AppPaths#KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH} from the run tab.
      */
     public Map<String, String> snapshotDispatchTrialPythonEnv() {
         Map<String, String> ui = new HashMap<>(collectUiEnv());
         ui.put(
                 AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL,
                 mainRunTabController.snapshotStage2WriteExcel() ? "1" : "0");
+        ui.put(
+                AppPaths.KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH,
+                planInputTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
+        ui.put(
+                AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH,
+                mainRunTabController.snapshotStage2SkipInProgressDispatch() ? "1" : "0");
         String resultFont = mainRunTabController.snapshotStage2ResultBookFont();
         if (resultFont != null && !resultFont.isBlank()) {
             ui.put(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT, resultFont.trim());
         } else {
             ui.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
+        }
+        String trialSid = AgentDebugLog.resolveDispatchTrialSessionId(ui);
+        ui.put("PM_AI_AGENT_DEBUG_SESSION", trialSid);
+        String dbg = ui.get("PM_AI_DEBUG_LOG");
+        if (dbg == null || dbg.isBlank()) {
+            ui.put(
+                    "PM_AI_DEBUG_LOG",
+                    AgentDebugLog.resolveNdjsonPath(ui, trialSid).toAbsolutePath().toString());
         }
         return childEnvForPython(ui);
     }
@@ -3745,6 +4010,59 @@ public final class MainShellController {
     void invalidateDeliveryCalendarAfterPipelineRun() {
         if (deliveryCalendarViewTabController != null) {
             deliveryCalendarViewTabController.markStaleUntilManualReload();
+        }
+    }
+
+    /**
+     * 配台試行（段階3）正常終了後: 納期管理ビューはシス配台（配台結果）のみ反映し、サマリ xlsx を更新する。
+     */
+    void reloadDeliveryCalendarInBackgroundAfterDispatchTrialSuccess() {
+        if (deliveryCalendarViewTabController != null) {
+            deliveryCalendarViewTabController.reloadInBackgroundAfterStage3DispatchTrialSuccess(
+                    this::exportSummaryAiDispatchWorkbookAfterStage3DispatchReload);
+        } else {
+            exportSummaryAiDispatchWorkbookAfterStage3DispatchReload();
+        }
+    }
+
+    /** 段階3 配台のみ反映後のサマリ xlsx 出力（メイン表スナップショットは反映済み UI を使用）。 */
+    private void exportSummaryAiDispatchWorkbookAfterStage3DispatchReload() {
+        Map<String, String> ui = collectUiEnv();
+        try {
+            PlanInputTabularIo.TabularSheet main =
+                    deliveryCalendarViewTabController != null
+                            ? deliveryCalendarViewTabController.snapshotMainCompareForExport()
+                            : new PlanInputTabularIo.TabularSheet(List.of(), List.of());
+            Path out = SummaryAiDispatchWorkbookExporter.writeFromPipelineArtifacts(ui, main);
+            ensureSummaryAiDispatchWorkbookEnvPath(out);
+            appendLog("[summary-ai-dispatch] 段階3後エクセル出力: " + out);
+        } catch (Exception ex) {
+            appendLog(
+                    "[summary-ai-dispatch] 段階3後エクセル出力失敗: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+        }
+    }
+
+    /**
+     * 段階2 正常完了後: 成果物 JSON でサマリ xlsx を更新し、納期管理ビューをフル再読込する。
+     */
+    private void exportSummaryAiDispatchWorkbookAfterPipelineStageRun(boolean scheduleDeliveryReload) {
+        Map<String, String> ui = collectUiEnv();
+        try {
+            PlanInputTabularIo.TabularSheet main =
+                    deliveryCalendarViewTabController != null
+                            ? deliveryCalendarViewTabController.snapshotMainCompareForExport()
+                            : new PlanInputTabularIo.TabularSheet(List.of(), List.of());
+            Path out = SummaryAiDispatchWorkbookExporter.writeFromPipelineArtifacts(ui, main);
+            ensureSummaryAiDispatchWorkbookEnvPath(out);
+            appendLog("[summary-ai-dispatch] パイプライン後エクセル出力: " + out);
+        } catch (Exception ex) {
+            appendLog(
+                    "[summary-ai-dispatch] パイプライン後エクセル出力失敗: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+        }
+        if (scheduleDeliveryReload && deliveryCalendarViewTabController != null) {
+            deliveryCalendarViewTabController.reloadInBackgroundAfterStage2Success();
         }
     }
 
@@ -4305,7 +4623,7 @@ public final class MainShellController {
             case "MASTER_SPEED_SHEET_NAME" -> "speed";
             case "MASTER_SPEED_FIRST_EXCEL_COL" -> "4";
             case AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK ->
-                    AppPaths.summaryAiDispatchXlsmPath(u).toString();
+                    AppPaths.summaryAiDispatchXlsxPath(u).toString();
             case "RAW_FABRIC_WIDTH_TABLE_PATH" -> {
                 Path p = codeDir.resolve("使用原反, 加工幅.txt");
                 yield Files.isRegularFile(p)

@@ -3,7 +3,21 @@
   "hooks": {
     "sessionStart": [
       {
-        "command": "python .cursor/hooks/git_rules_session_context.py"
+        "command": "python3 .cursor/hooks/git_rules_session_context.py"
+      },
+      {
+        "command": "python3 .cursor/hooks/agent_debug_session_context.py"
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "python3 .cursor/hooks/agent_debug_post_edit_guard.py",
+        "matcher": "Write|StrReplace"
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "python3 .cursor/hooks/agent_debug_post_edit_guard.py"
       }
     ]
   }

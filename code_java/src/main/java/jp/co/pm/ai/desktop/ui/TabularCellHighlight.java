@@ -43,13 +43,18 @@ public final class TabularCellHighlight {
 
     /**
      * 計画シート「配台不要」列のセル文字列が配台対象外（オン）か。
-     * Python {@code planning_core._core._plan_row_exclude_from_assignment} の文字列分岐と整合。
+     * Python {@code planning_core._core._plan_row_exclude_from_assignment} の真偽トークンと整合。
+     * さらに「配台不要」に {@code 配台計画除外} が含まれる場合もオン（{@code build_task_queue_from_planning_df} で段階2キュー除外）。
      */
     public static boolean planInputExcludeFromAssignmentIsOn(String v) {
         if (v == null) {
             return false;
         }
-        String s = Normalizer.normalize(v.strip(), Normalizer.Form.NFKC).toLowerCase(Locale.ROOT);
+        String nfkc = Normalizer.normalize(v.strip(), Normalizer.Form.NFKC);
+        if (nfkc.contains("配台計画除外")) {
+            return true;
+        }
+        String s = nfkc.toLowerCase(Locale.ROOT);
         if (s.isEmpty()
                 || s.equals("nan")
                 || s.equals("none")

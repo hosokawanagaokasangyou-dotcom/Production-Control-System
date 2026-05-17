@@ -8,7 +8,49 @@ data_prep: []
 injections:
   - tab_key: run
     markdown_file: manual/src/chapters/overview.md
-    caption: "実行・ログ"
+    caption: "実行・ログ（メイン画面）"
+  - tab_key: run
+    markdown_file: manual/src/chapters/getting-started.md
+    caption: "実行・ログタブ"
+  - tab_key: run
+    markdown_file: manual/src/chapters/troubleshooting.md
+    caption: "実行・ログ（エラー確認）"
+  - tab_key: tabOrganizer
+    markdown_file: manual/src/chapters/getting-started.md
+    caption: "タブ整理"
+  - tab_key: tabOrganizer
+    markdown_file: manual/src/chapters/tabs.md
+    caption: "タブ整理"
+  - tab_key: planInput
+    markdown_file: manual/src/chapters/daily-operations.md
+    caption: "配台計画_タスク入力（日常運用）"
+  - tab_key: planInput
+    markdown_file: manual/src/chapters/workflow-dispatch.md
+    caption: "配台計画_タスク入力"
+  - tab_key: dispatchInteractive
+    markdown_file: manual/src/chapters/workflow-dispatch.md
+    caption: "配台計画手動修正"
+  - tab_key: stage1Preview
+    markdown_file: manual/src/chapters/workflow-dispatch.md
+    caption: "段階1 成形結果"
+  - tab_key: equipmentGanttGraphic
+    markdown_file: manual/src/chapters/workflow-dispatch.md
+    caption: "設備ガント（グラフィック）"
+  - tab_key: deliveryCalendarView
+    markdown_file: manual/src/chapters/tabs.md
+    caption: "納期管理ビュー"
   - tab_key: env
-    markdown_file: manual/src/chapters/overview.md
+    markdown_file: manual/src/chapters/environment.md
     caption: "環境変数"
+  - tab_key: memorySettings
+    markdown_file: manual/src/chapters/environment.md
+    caption: "メモリ設定"
+  - tab_key: actualsStatus
+    markdown_file: manual/src/chapters/environment.md
+    caption: "実績DATA・明細の取得状態"
+  - tab_key: resultDispatch
+    markdown_file: manual/src/chapters/tabs.md
+    caption: "結果_配台表"
+  - tab_key: specialRules
+    markdown_file: manual/src/chapters/tabs.md
+    caption: "特別ルール"

@@ -96,6 +96,9 @@ public final class MainRunTabController {
     private CheckBox stage2WriteExcelCheckBox;
 
     @FXML
+    private CheckBox stage2SkipInProgressDispatchCheckBox;
+
+    @FXML
     private ComboBox<String> stage2ResultBookFontCombo;
 
     @FXML
@@ -225,6 +228,16 @@ public final class MainRunTabController {
         }
         if (stage2WriteExcelCheckBox != null) {
             stage2WriteExcelCheckBox
+                    .selectedProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (shell != null) {
+                                    shell.scheduleDesktopSessionSave();
+                                }
+                            });
+        }
+        if (stage2SkipInProgressDispatchCheckBox != null) {
+            stage2SkipInProgressDispatchCheckBox
                     .selectedProperty()
                     .addListener(
                             (o, a, b) -> {
@@ -446,7 +459,7 @@ public final class MainRunTabController {
         }
         if (summaryWorkbookOpenHintLabel != null) {
             summaryWorkbookOpenHintLabel.setText(
-                    AppPaths.summaryAiDispatchXlsmPath(ui).getFileName().toString());
+                    AppPaths.summaryAiDispatchXlsxPath(ui).getFileName().toString());
         }
     }
 
@@ -575,11 +588,34 @@ public final class MainRunTabController {
     }
 
     @FXML
+    private void onOpenManualAction() {
+        if (shell == null) {
+            return;
+        }
+        Path p = AppPaths.resolveManualIndexHtml(shell.snapshotUiEnv());
+        if (!Files.isRegularFile(p)) {
+            appendLog(
+                    "[manual] file not found: "
+                            + p
+                            + " (publish HTML per manual/README.md, or set "
+                            + AppPaths.KEY_PM_AI_REPO_ROOT
+                            + " if the repository root is wrong)");
+            return;
+        }
+        try {
+            DesktopFileOpener.openFile(p);
+            appendLog("[manual] opened: " + p.toAbsolutePath().normalize());
+        } catch (Exception e) {
+            appendLog("[manual] open failed: " + e.getMessage());
+        }
+    }
+
+    @FXML
     private void onOpenSummaryAiDispatchAction() {
         if (shell == null) {
             return;
         }
-        Path p = AppPaths.summaryAiDispatchXlsmPath(shell.snapshotUiEnv());
+        Path p = AppPaths.summaryAiDispatchXlsxPath(shell.snapshotUiEnv());
         if (!Files.isRegularFile(p)) {
             appendLog(
                     "[summary-ai-dispatch] file not found: "
@@ -710,6 +746,18 @@ public final class MainRunTabController {
     void applyStage2WriteExcelFromSession(boolean writeExcel) {
         if (stage2WriteExcelCheckBox != null) {
             stage2WriteExcelCheckBox.setSelected(writeExcel);
+        }
+    }
+
+    /** When {@code true}, stage-2 passes {@code PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH=1}. */
+    boolean snapshotStage2SkipInProgressDispatch() {
+        return stage2SkipInProgressDispatchCheckBox != null
+                && stage2SkipInProgressDispatchCheckBox.isSelected();
+    }
+
+    void applyStage2SkipInProgressDispatchFromSession(boolean skipInProgress) {
+        if (stage2SkipInProgressDispatchCheckBox != null) {
+            stage2SkipInProgressDispatchCheckBox.setSelected(skipInProgress);
         }
     }
 

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>3. 日常運用ガイド（配台システム使い方）</title>
+  <link rel="stylesheet" href="../static/style.css"/>
+</head>
+<body>
+<div class="manual-layout">
+<nav class="manual-nav" aria-label="目次">
+<p class="manual-nav-title">取扱説明書</p>
+<ul>
+<li><a href="../index.html">トップ</a></li>
+<li><a href="overview.html">1. はじめに</a></li>
+<li><a href="getting-started.html">2. 起動と基本操作</a></li>
+<li><a href="daily-operations.html" class="is-current">3. 日常運用ガイド（配台システム使い方）</a></li>
+<li><a href="workflow-dispatch.html">4. 配台の流れ（段階1・段階2・段階3）</a></li>
+<li><a href="tabs.html">5. 画面・タブ一覧</a></li>
+<li><a href="environment.html">6. 環境変数とデータの場所</a></li>
+<li><a href="excel-integration.html">7. Excel 連携とサマリ</a></li>
+<li><a href="troubleshooting.html">8. 困ったときは</a></li>
+</ul></nav>
+<main class="manual-main">
+
+<article class="manual-content">
+<h1>3. 日常運用ガイド（配台システム使い方）</h1>
+<p>本章は現場オペレーション向けの <strong>一連の手順</strong> を、Word 原稿「配台システム使い方」（2026-05-16 版）と <strong>実装・配台ルール</strong> に照合して整理したものです。画面名・ボタン名は JavaFX アプリの表示に合わせています。</p>
+<h2>全体の流れ</h2>
+<pre><code class="language-text">[アラジン] 仮配台・計画/実績の出力
+    ↓
+[工程管理 AI] 段階1 → タスク入力の確認・編集 → 段階2
+    ↓
+[確認] 納期管理ビュー / 設備ガント / 配台計画手動修正
+    ↓
+[任意] 段階3（配台試行）→ Excel・サマリ確認 → [アラジン] 本番反映
+</code></pre>
+<div class="callout callout-info">
+<p><strong>マスタの前提</strong> … <code>master.xlsm</code>（国分工場では <code>国分masters.xlsm</code> 等）の設定は別資料で完了しているものとします。未設定のときは <strong>マスタ読込サマリ</strong> タブと段階1 ログで不足を確認してください。</p>
+
+</div>
+
+<h2>事前準備（アラジン）</h2>
+<h3>生産計画入力での「仮」配台</h3>
+<p>アラジンの <strong>生産計画入力</strong> で、配台日・数量を <strong>仮</strong> として事前入力しておきます。</p>
+<ul>
+<li>この時点の仮数量は <strong>自動配台では無視</strong> されます（段階2 の割付根拠にはなりません）。</li>
+<li>仮を入れておかないと、後段で <strong>加工計画 DATA から行を吸い出せない</strong> ため、運用上は仮入力が必要です。</li>
+<li>システム配台を本番とする場合、確定後はアラジン側の仮計画も <strong>実績に合わせて更新</strong> する必要があります（後述「納期管理ビュー」参照）。</li>
+</ul>
+<h3>加工計画 DATA の出力（工程別生産計画問い合わせ）</h3>
+<ol>
+<li>アラジンで <strong>工程別生産計画問い合わせ</strong> を開く。</li>
+<li><strong>倉庫</strong> … 湖南工場 <code>520201</code> / 国分工場 <code>511101</code>。</li>
+<li>その他の条件は社内手順書の画面キャプチャに従い、<strong>問合せ</strong> を実行する。</li>
+<li>抽出結果の <strong>列設定は必ず初期化</strong> してから出力する（列ずれ防止）。</li>
+<li><strong>フォルダ</strong> で出力先を指定し、<strong>出力</strong> を実行する。</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>工場</th>
+<th>出力フォルダ（例）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>湖南工場</td>
+<td><code>\\192.168.0.101\共有フォルダ\湖南工場\湖南共有\生産管理システム\管理システム\●DATA\生産計画問合せ</code></td>
+</tr>
+<tr>
+<td>国分工場</td>
+<td><code>\\192.168.0.101\共有フォルダ\国分工場\国分共有\●配台AIシステム\DATA\計画</code></td>
+</tr>
+</tbody>
+</table>
+<p>環境変数 <code>PM_AI_TASK_INPUT_SOURCE_DIR</code> でネットワーク代替を使う場合は、上記と同内容が <code>.pm-ai-cache/network-source/</code> にコピーされているか <strong>実績DATA・明細の取得状態</strong> で確認します。</p>
+<h3>加工実績明細 DATA の出力（加工実績明細問合せ）</h3>
+<ol>
+<li><strong>加工実績明細問合せ</strong> を開く。</li>
+<li><strong>倉庫</strong> … 計画と同じコード（湖南 <code>520201</code> / 国分 <code>511101</code>）。</li>
+<li><strong>加工日付</strong> … できるだけ短い期間（<strong>1 日分</strong> の実績があれば足りることが多い）。</li>
+<li>列設定を <strong>初期化</strong> し、<strong>問合せ</strong> → <strong>フォルダ</strong> 指定 → <strong>出力</strong>。</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>工場</th>
+<th>出力フォルダ（例）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>湖南工場</td>
+<td><code>\\192.168.0.101\共有フォルダ\湖南工場\湖南共有\002  加工G\●検査表作成\加工実績明細DATA\</code></td>
+</tr>
+<tr>
+<td>国分工場</td>
+<td><code>\\192.168.0.101\共有フォルダ\国分工場\国分共有\●配台AIシステム\DATA\実績</code></td>
+</tr>
+</tbody>
+</table>
+<h2>工程管理 AI デスクトップ：段階1</h2>
+<!-- MANUAL_SNAP:run -->
+
+<ol class="flow-steps">
+<li><strong>起動</strong> … 配布の <code>PMD.exe</code>（または開発ビルド）を起動する。</li>
+<li><strong>実行・ログ</strong> タブを開き、必要なら <strong>ログをクリア</strong> で古いログを消す。</li>
+<li><strong>段階1 実行</strong> を押す。ネットワークソースをキャッシュで代替しているときは、段階1 ボタン左にバッジが出ることがあります。</li>
+<li>正常終了するとダイアログが出て、自動的に <strong>配台計画_タスク入力</strong> タブへ切り替わる。</li>
+</ol>
+
+<h3>段階1 で行われること（ロジック要約）</h3>
+<table>
+<thead>
+<tr>
+<th>処理</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>読込</td>
+<td>加工計画 DATA・マスタ・配台計画シートの統合</td>
+</tr>
+<tr>
+<td>配台試行順番</td>
+<td>段階1 出力時に <strong>1…n を自動付与</strong>（手入力の古い順序は引き継がない）</td>
+</tr>
+<tr>
+<td>配台不要ルール</td>
+<td><code>master.xlsm</code> の設定等から JSON 化（<code>配台不要ルール</code> タブで確認可）</td>
+</tr>
+<tr>
+<td>全数未加工</td>
+<td>換算数量 &gt; 0 かつ実加工数・未加工がともに 0 の行は <strong>全数未加工</strong> と解釈</td>
+</tr>
+</tbody>
+</table>
+<p>詳細は <a href="workflow-dispatch.html">配台の流れ（段階1・段階2・段階3）</a> とリポジトリ内 <code>code/要件定義/配台ルール.md</code> を参照してください。</p>
+<h2>配台計画_タスク入力：確認と編集</h2>
+<!-- MANUAL_SNAP:planInput -->
+
+<h3>画面の見方</h3>
+<ul>
+<li>上部 <strong>操作・ソース</strong> … ブックパス・シート名・<strong>読込</strong> / <strong>保存</strong>・<strong>段階2 実行</strong>。</li>
+<li>下部 <strong>データ表</strong> … 配台対象行のスプレッドシート。列ヘッダの <strong>▽</strong> で Excel 風フィルタが使えます。</li>
+</ul>
+<p><strong>ヒント</strong> … 「操作・ソース」のアコーディオンを一度閉じると、表の表示領域が広くなります。</p>
+<h3>フィルタの例（加工内容）</h3>
+<p><strong>加工内容</strong> 列のフィルタ（▽）で、例えば <code>EC</code> のみ、<code>EC,検査</code> のみ、などに絞り込めます。フィルタ適用中は <strong>該当行だけ</strong> が表示されます（Excel と同様の操作感）。</p>
+<p>業務ルール上、同一依頼で <code>EC</code> → <code>検査</code> の順序がある場合、<strong>EC の残ロールがある間は検査に自動割付されない</strong> 制約があります（<code>配台ルール.md</code> §A-1 / §B-2）。フィルタで工程ごとに件数を確認すると安全です。</p>
+<h3>配台試行順番の変更</h3>
+<p>自動配台は <strong>配台試行順番</strong> の昇順で設備・担当を割り付けます（環境変数 <code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST</code> が有効なときの既定）。</p>
+<ul>
+<li><strong>依頼NO</strong> 付近の行をドラッグ＆ドロップで入れ替え、優先したい依頼を上にします。</li>
+<li>↑ / ↓ ボタンでも行を移動できます。</li>
+<li><strong>すべての行</strong> に正の整数が入っているときだけ、シート上の順序がそのまま段階2 に反映されます。1 行でも欠損があると <strong>自動再計算</strong> にフォールバックします。</li>
+</ul>
+<h3>配台不要（行の除外）</h3>
+<p><strong>配台不要</strong> 列のセルを <strong>ダブルクリック</strong> すると、配台対象外として <code>yes</code> 相当の値が入ります（セルは <strong>赤背景・白字</strong> で強調）。</p>
+<p>有効な値の例: <code>yes</code> / <code>1</code> / <code>はい</code> / <code>○</code> など（<code>配台計画除外</code> を含む文字列も除外扱い）。段階2 のタスクキューに <strong>載りません</strong>。</p>
+<h3>上書き列（速度・原反投入日）</h3>
+<table>
+<thead>
+<tr>
+<th>列</th>
+<th>操作</th>
+<th>備考</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>加工速度_上書き</td>
+<td>ダブルクリックで編集</td>
+<td>自動配台の速度計算に反映</td>
+</tr>
+<tr>
+<td>原反投入日_上書き</td>
+<td>ダブルクリックで編集</td>
+<td><strong>アラジン上の元データは書き換えません</strong>（本システム内の計画用）</td>
+</tr>
+</tbody>
+</table>
+<h3>保存と段階2</h3>
+<ol>
+<li><strong>操作・ソース</strong> を開き、表の編集を <strong>保存</strong> する。</li>
+<li><strong>当日は配台しない（翌日以降から計画）</strong> にチェックが入っていることを確認する（当日分を計画に含めない運用）。</li>
+<li><strong>段階2 実行</strong> を押す。</li>
+</ol>
+<div class="callout callout-warn">
+<p><strong>未保存のまま段階2 は実行できません。</strong> 保存後、自動的に <strong>実行・ログ</strong> タブへ切り替わり段階2 が走ります。実行中は他タブが灰色になることがあります（ツールバーの <strong>中断</strong> で停止可）。</p>
+
+</div>
+
+<h3>段階2 実行中・完了後</h3>
+<ul>
+<li><strong>Gemini API</strong> を使う設定では、呼び出しに <strong>数分以上</strong> かかることがあります。ログ末尾を確認してください。</li>
+<li>正常終了すると <strong>段階2 完了</strong> ダイアログが出ます。</li>
+<li><strong>実行・ログ</strong> に <code>production_plan</code> / <code>member_schedule</code> の最新パスが表示され、<strong>エクセルを開く</strong> で Excel 成果物を開けます。</li>
+</ul>
+<h2>結果の確認とアラジン連携</h2>
+<h3>納期管理ビュー</h3>
+<!-- MANUAL_SNAP:deliveryCalendarView -->
+
+<ul>
+<li><strong>納期判定</strong> 列で <strong>NG</strong> の行を確認する。</li>
+<li>対応の要点 … <strong>回答納期</strong> を、<strong>加工終了日時</strong> の <strong>次稼働日</strong> にアラジン上で設定する（現場手順）。</li>
+<li>本ビューでは <strong>アラジン計画</strong> と <strong>システム配台（シス配台）</strong> を並べて比較できます。</li>
+<li>段階2 または段階3 完了直後は、古い表を見せないよう <strong>自動再読込</strong> される設計です（手動「再読み込み」前の誤判断防止）。</li>
+</ul>
+<p><strong>納期基準の優先</strong>（ロジック） … 回答納期が入っていればそれを基準に、空なら <strong>指定納期</strong> を使います（<code>配台ルール.md</code> §2.3 改定参照）。</p>
+<h3>設備ガント（グラフィック）</h3>
+<!-- MANUAL_SNAP:equipmentGanttGraphic -->
+
+<p>設備別のタイムラインで、割付の重なり・空白・担当表示を <strong>グラフィカルに評価</strong> します。印刷・倍率は環境変数 <code>GANTT_*</code> 系とガントタブの UI 設定に依存します。</p>
+<h3>配台計画手動修正（段階2 結果の精査・段階3）</h3>
+<!-- MANUAL_SNAP:dispatchInteractive -->
+
+<table>
+<thead>
+<tr>
+<th>子タブ／表</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>工程・機械×日</strong></td>
+<td>機械名ごとの日別合計加工量。設備負荷の妥当性確認</td>
+</tr>
+<tr>
+<td><strong>タスク×日付</strong></td>
+<td>依頼NOごとに「いつ・何 m」配台されているか。ダブルクリック編集・ドラッグで日付間移動</td>
+</tr>
+</tbody>
+</table>
+<p><strong>段階3</strong> ボタン（画面上は「段階3」）が <strong>インタラクティブ配台試行</strong> です。段階2 とは別エンジン経路で、表の <strong>当日配台数量（段階3前）</strong> を満たすようタイムラインを組み立てます。</p>
+<div class="callout callout-warn">
+<p><strong>段階3 の制約（運用上重要）</strong></p>
+<ul>
+<li>試行は <strong>最初に配台数が現れる日</strong> から始まりますが、<strong>勤怠（master の人員カレンダー）</strong> に縛られる点は段階2 と同様です。そのため <strong>当日に指定した加工数を必ず満たせるとは限りません</strong>。</li>
+<li>不足時は <strong>残業・休出で余力を増やしてから</strong> 段階3 を実行する、または <strong>タスク×日付</strong> で人の判断を先に反映してから試行する、という運用が docx 原稿でも推奨されています。</li>
+<li>試行後のセルは <strong>（段階3前）</strong> と <strong>（段階3後）</strong> の2行表示になり、<strong>（段階3後）</strong> は編集しません。</li>
+<li>人員不足・割当不可は <code>dispatch_trial_shortages.json</code> 等でモーダル表示されます。</li>
+</ul>
+<p>将来版では、数量を死守したうえで「いつ・どれだけ残業すれば足りるか」をシステムが示す拡張が docx に記載されています（現行未実装の場合あり）。</p>
+</div>
+
+<h3>段階3 実行後</h3>
+<ol>
+<li><strong>保存 (JSON+xlsx)</strong> で手修正を確定する（試行ボタンは未保存でも試行開始時に同期するが、運用では保存を推奨）。</li>
+<li><strong>実行・ログ</strong> の <strong>エクセルを開く</strong>（<code>production_plan</code> / <code>member_schedule</code> / サマリ_AI配台）で Excel 側を確認する。</li>
+<li><strong>納期管理ビュー</strong> でも同系の数量・納期を確認できる。</li>
+<li><strong>アラジンへ転記</strong> … 32 インチ程度のワイドモニターで、アラジンと本アプリを <strong>上下または左右に並べ</strong>、シス配台結果を生産計画入力へ写す。</li>
+</ol>
+<h2>チェックリスト（1 日の締め）</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>確認項目</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>段階1・段階2 がログ上 exit 0 で終了している</td>
+</tr>
+<tr>
+<td>2</td>
+<td>タスク入力表を <strong>保存</strong> 済み</td>
+</tr>
+<tr>
+<td>3</td>
+<td>納期管理ビューで NG 行に手順どおり対応した</td>
+</tr>
+<tr>
+<td>4</td>
+<td>ガント・手動修正表で設備・人の偏りがない</td>
+</tr>
+<tr>
+<td>5</td>
+<td>段階3 を使った場合、未達・不足ダイアログを解消または記録した</td>
+</tr>
+<tr>
+<td>6</td>
+<td>アラジン本番計画をシス配台と整合した</td>
+</tr>
+</tbody>
+</table>
+<p>次章 <a href="workflow-dispatch.html">配台の流れ</a> では段階1・2・3 の技術的な入出力とルール参照を詳述します。</p>
+</article>
+<footer class="manual-footer">
+  工程管理 AI デスクトップ 取扱説明書 — リポジトリ <code>manual/html/</code> より生成
+</footer>
+</main>
+</div>
+</body>
+</html>

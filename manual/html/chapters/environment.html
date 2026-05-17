@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>6. 環境変数とデータの場所</title>
+  <link rel="stylesheet" href="../static/style.css"/>
+</head>
+<body>
+<div class="manual-layout">
+<nav class="manual-nav" aria-label="目次">
+<p class="manual-nav-title">取扱説明書</p>
+<ul>
+<li><a href="../index.html">トップ</a></li>
+<li><a href="overview.html">1. はじめに</a></li>
+<li><a href="getting-started.html">2. 起動と基本操作</a></li>
+<li><a href="daily-operations.html">3. 日常運用ガイド（配台システム使い方）</a></li>
+<li><a href="workflow-dispatch.html">4. 配台の流れ（段階1・段階2・段階3）</a></li>
+<li><a href="tabs.html">5. 画面・タブ一覧</a></li>
+<li><a href="environment.html" class="is-current">6. 環境変数とデータの場所</a></li>
+<li><a href="excel-integration.html">7. Excel 連携とサマリ</a></li>
+<li><a href="troubleshooting.html">8. 困ったときは</a></li>
+</ul></nav>
+<main class="manual-main">
+
+<article class="manual-content">
+<h1>6. 環境変数とデータの場所</h1>
+<h2>環境変数タブ</h2>
+<p>計画・配台・ガント・Excel 連携に使うキーと値を一覧編集します。マクロブックに <strong>設定_環境変数</strong> シートがある場合、Excel 側から <code>os.environ</code> へ先に反映される運用もあります。</p>
+<p><img alt="環境変数" src="../images/env.png" /></p>
+<h3>代表的なキー</h3>
+<table>
+<thead>
+<tr>
+<th>変数名</th>
+<th>説明（要約）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TASK_INPUT_WORKBOOK</code></td>
+<td>タスク入力マクロブックのフルパス</td>
+</tr>
+<tr>
+<td><code>MASTER_WORKBOOK_FILE</code></td>
+<td>マスタブック（既定 <code>master.xlsm</code>）</td>
+</tr>
+<tr>
+<td><code>TASK_PLAN_SHEET</code></td>
+<td>配台計画シート名</td>
+</tr>
+<tr>
+<td><code>PM_AI_TASK_INPUT_SOURCE_DIR</code></td>
+<td>タスク入力のネットワーク代替キャッシュ元</td>
+</tr>
+<tr>
+<td><code>PM_AI_ACTUAL_DETAIL_SOURCE_DIR</code></td>
+<td>実績明細のネットワーク代替キャッシュ元</td>
+</tr>
+<tr>
+<td><code>STAGE2_*</code></td>
+<td>段階2 の配台フロー・試行順・チーム割当の挙動</td>
+</tr>
+<tr>
+<td><code>GANTT_*</code></td>
+<td>設備ガントの配色・印刷・行高</td>
+</tr>
+</tbody>
+</table>
+<p>完全な一覧と説明列はリポジトリの <strong><code>code/設定_環境変数_雛形.tsv</code></strong> を参照してください。</p>
+<h2>ファイル・フォルダの既定</h2>
+<table>
+<thead>
+<tr>
+<th>パス</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>配布 <code>pm-ai-data/input/task-input</code></td>
+<td>既定タスク入力置き場</td>
+</tr>
+<tr>
+<td>配布 <code>pm-ai-data/input/actual-detail</code></td>
+<td>既定実績明細置き場</td>
+</tr>
+<tr>
+<td><code>{リポジトリ}/.pm-ai-cache/network-source/</code></td>
+<td>ネットワークソースのローカル代替コピー</td>
+</tr>
+<tr>
+<td><code>~/.pm-ai-desktop/</code></td>
+<td>セッション・ユーザープロファイル</td>
+</tr>
+<tr>
+<td><code>code/json/</code></td>
+<td>除外ルール等の JSON（段階1 連携）</td>
+</tr>
+</tbody>
+</table>
+<h2>メモリ設定</h2>
+<p>大規模計画で OutOfMemory が出る場合、<strong>メモリ設定</strong> タブでヒープ上限を引き上げ、<strong>次回起動時</strong> の値を設定します。変更後はアプリの再起動が必要な場合があります。</p>
+<p><img alt="メモリ設定" src="../images/memorySettings.png" /></p>
+<h2>グローバル設定・プロファイル</h2>
+<ul>
+<li><strong>グローバル設定</strong> … UI 既定の一括リセット、パッケージ同梱既定の書き出し</li>
+<li><strong>ユーザープロファイル</strong> … 複数 PC 間や担当者間で UI 設定を共有する際にエクスポート/インポート</li>
+</ul>
+<h2>ネットワークソース</h2>
+<p>共有フォルダが一時的に unreachable でも、<code>.pm-ai-cache</code> にコピー済みのファイルがあれば処理を続行できる構成があります。<strong>実績DATA・明細の取得状態</strong> タブで到達性を確認してください。</p>
+<p><img alt="実績DATA・明細の取得状態" src="../images/actualsStatus.png" /></p>
+</article>
+<footer class="manual-footer">
+  工程管理 AI デスクトップ 取扱説明書 — リポジトリ <code>manual/html/</code> より生成
+</footer>
+</main>
+</div>
+</body>
+</html>

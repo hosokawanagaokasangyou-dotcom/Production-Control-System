@@ -34,6 +34,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
+import jp.co.pm.ai.desktop.io.NetworkSourceFileReloadCache;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.TaskInputSourceRawGridIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
@@ -399,6 +400,13 @@ public final class AladdinProcessingPlanDataTabController {
         loadedPath = file;
         pathLabel.setText(file.toString());
 
+        Optional<NetworkSourceFileReloadCache.Snapshot> cached =
+                NetworkSourceFileReloadCache.matchAladdin(file);
+        if (cached.isPresent()) {
+            applyAladdinFromReloadCache(file, cached.get());
+            return;
+        }
+
         String low = file.getFileName().toString().toLowerCase(Locale.ROOT);
         if (low.endsWith(".pq") || low.endsWith(".parquet")) {
             statusLabel.setText("Parquet は未対応です");
@@ -439,11 +447,56 @@ public final class AladdinProcessingPlanDataTabController {
         }
     }
 
+    private void applyAladdinFromReloadCache(Path file, NetworkSourceFileReloadCache.Snapshot snap) {
+        if (snap.excel()) {
+            suppressSheetUi.set(true);
+            try {
+                sheetCombo.getItems().setAll(snap.sheetNames());
+                sheetCombo.setDisable(snap.sheetNames().isEmpty());
+                if (!snap.sheetNames().isEmpty()) {
+                    int idx = Math.min(Math.max(snap.selectedSheetIndex(), 0), snap.sheetNames().size() - 1);
+                    sheetCombo.getSelectionModel().select(idx);
+                }
+            } finally {
+                suppressSheetUi.set(false);
+            }
+        } else {
+            sheetCombo.setDisable(true);
+            sheetCombo.getItems().clear();
+        }
+        statusLabel.setText("キャッシュ使用: " + snap.fileName());
+        if (shell != null) {
+            shell.appendLog("[aladdin-plan-data] キャッシュ使用（同一ファイル名）: " + snap.fileName());
+        }
+        applyLoadedTabular(snap.toTabularSheet(), true);
+    }
+
     private void applyLoadedFile(Path file, int excelSheetIndex, boolean showErrorsInStatus) {
         try {
             PlanInputTabularIo.TabularSheet tab =
                     TaskInputSourceRawGridIo.applyAladdinProcessingPlanDisplaySteps(
                             TaskInputSourceRawGridIo.readRaw(file, excelSheetIndex));
+            boolean excel = isExcelPath(file);
+            List<String> sheetNames =
+                    excel ? new ArrayList<>(sheetCombo.getItems()) : List.of();
+            NetworkSourceFileReloadCache.storeAladdin(
+                    file, excel, sheetNames, excelSheetIndex, tab);
+            applyLoadedTabular(tab, showErrorsInStatus);
+        } catch (Exception ex) {
+            if (showErrorsInStatus) {
+                statusLabel.setText("読込エラー");
+            }
+            if (shell != null) {
+                shell.appendLog(
+                        "[aladdin-plan-data] "
+                                + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+            }
+            applyEmpty();
+        }
+    }
+
+    private void applyLoadedTabular(PlanInputTabularIo.TabularSheet tab, boolean showErrorsInStatus) {
+        try {
             // Persist shaped plan (pre-column-order) for DeliveryCalendarView overlay JSON cache
             if (shell != null) {
                 try {

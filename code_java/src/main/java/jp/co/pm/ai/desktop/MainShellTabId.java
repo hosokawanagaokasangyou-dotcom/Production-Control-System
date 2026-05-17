@@ -34,6 +34,8 @@ public enum MainShellTabId {
     PLAN_WORKSPACE_HISTORY("planWorkspaceHistory"),
     /** Gemini generateContent の往復レイテンシ計測。 */
     API_MODEL_BENCHMARK("apiModelBenchmark"),
+    /** サマリ_AI配台.xlsx 出力の見出し列・フォント・列順・テーマ。 */
+    SUMMARY_AI_DISPATCH_EXPORT_CUSTOMIZE("summaryAiDispatchExportCustomize"),
     /** メインシェル末尾の「タブ整理」（入れ子構成・色の編集用）。 */
     TAB_ORGANIZER("tabOrganizer");
 

@@ -320,10 +320,10 @@ class AppPathsTest {
         Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
         Path expected =
                 fakeRepo.resolve("code")
-                        .resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSM)
+                        .resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX)
                         .normalize()
                         .toAbsolutePath();
-        assertEquals(expected, AppPaths.summaryAiDispatchXlsmPath(ui));
+        assertEquals(expected, AppPaths.summaryAiDispatchXlsxPath(ui));
     }
 
     @Test
@@ -332,7 +332,7 @@ class AppPathsTest {
         Files.createFile(custom);
         Map<String, String> ui =
                 Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, custom.toString());
-        assertEquals(custom.toAbsolutePath().normalize(), AppPaths.summaryAiDispatchXlsmPath(ui));
+        assertEquals(custom.toAbsolutePath().normalize(), AppPaths.summaryAiDispatchXlsxPath(ui));
     }
 
     @Test
@@ -348,7 +348,7 @@ class AppPathsTest {
                         fakeRepo.toString(),
                         AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
                         "alt.xlsm");
-        assertEquals(alt.toAbsolutePath().normalize(), AppPaths.summaryAiDispatchXlsmPath(ui));
+        assertEquals(alt.toAbsolutePath().normalize(), AppPaths.summaryAiDispatchXlsxPath(ui));
     }
 
     @Test
@@ -479,5 +479,21 @@ class AppPathsTest {
     @Test
     void findPortablePythonEmbedExecutable_missingReturnsEmpty(@TempDir Path tmp) {
         assertTrue(AppPaths.findPortablePythonEmbedExecutable(tmp.resolve("no_embed_here")).isEmpty());
+    }
+
+    @Test
+    void resolveManualIndexHtml_underRepoRoot(@TempDir Path fakeRepo) {
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
+        assertEquals(
+                fakeRepo.resolve(AppPaths.MANUAL_INDEX_HTML_REL).toAbsolutePath().normalize(),
+                AppPaths.resolveManualIndexHtml(ui));
+    }
+
+    @Test
+    void resolveDispatchUsageGuideDocx_underRepoRoot(@TempDir Path fakeRepo) {
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
+        assertEquals(
+                fakeRepo.resolve(AppPaths.DISPATCH_USAGE_GUIDE_DOCX).toAbsolutePath().normalize(),
+                AppPaths.resolveDispatchUsageGuideDocx(ui));
     }
 }

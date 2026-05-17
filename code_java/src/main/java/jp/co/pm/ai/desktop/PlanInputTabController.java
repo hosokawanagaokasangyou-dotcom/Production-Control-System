@@ -19,6 +19,7 @@ import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TablePosition;
@@ -53,6 +54,8 @@ import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
 
 /**
  * 配台計画_タスク入力タブ。レイアウトは {@code PlanInputTab.fxml}。
+ *
+ * <p>段階2の「当日は配台しない」オプション（{@code PM_AI_STAGE2_SKIP_TODAY_DISPATCH}）のチェックボックスは本タブに配置する。
  *
  * <p>ControlsFX {@link SpreadsheetView} で先頭固定列をネイティブに扱う。
  */
@@ -102,6 +105,9 @@ public final class PlanInputTabController {
     private Button stage2RunButton;
 
     @FXML
+    private CheckBox stage2SkipTodayDispatchCheckBox;
+
+    @FXML
     private HBox columnStripHost;
 
     @FXML
@@ -109,6 +115,9 @@ public final class PlanInputTabController {
 
     @FXML
     private Label hintLabel;
+
+    @FXML
+    private TextField rowSearchField;
 
     @FXML
     private StackPane spreadsheetHost;
@@ -152,6 +161,16 @@ public final class PlanInputTabController {
         hintLabel.setText(HINT_TEXT);
 
         installStageRunButtonDepth(stage2RunButton, Color.rgb(194, 65, 12, 0.35));
+        if (stage2SkipTodayDispatchCheckBox != null) {
+            stage2SkipTodayDispatchCheckBox
+                    .selectedProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (shell != null) {
+                                    shell.scheduleDesktopSessionSave();
+                                }
+                            });
+        }
 
         StackPane.setAlignment(spreadsheetView, Pos.CENTER_LEFT);
         spreadsheetHost.getChildren().add(spreadsheetView);
@@ -176,6 +195,13 @@ public final class PlanInputTabController {
 
         SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
                 spreadsheetHost, headerColumnCount::get);
+
+        rowSearchField
+                .textProperty()
+                .addListener(
+                        (obs, prev, cur) ->
+                                SpreadsheetMultiColumnFilterCoordinator.setRowTextSearchQuery(
+                                        spreadsheetView, cur));
     }
 
     /** 実行・ログタブの段階ボタンと同系のごく弱いドロップシャドウ。 */
@@ -330,6 +356,17 @@ public final class PlanInputTabController {
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(null);
             }
+        }
+    }
+
+    /** 段階2子プロセスへ渡す {@code PM_AI_STAGE2_SKIP_TODAY_DISPATCH}（チェックは本タブ）。 */
+    boolean snapshotStage2SkipTodayDispatch() {
+        return stage2SkipTodayDispatchCheckBox != null && stage2SkipTodayDispatchCheckBox.isSelected();
+    }
+
+    void applyStage2SkipTodayDispatchFromSession(boolean skipToday) {
+        if (stage2SkipTodayDispatchCheckBox != null) {
+            stage2SkipTodayDispatchCheckBox.setSelected(skipToday);
         }
     }
 
@@ -712,6 +749,14 @@ public final class PlanInputTabController {
                                             TableColumnOrderPersistence.loadColumnVisibility(
                                                     TableColumnOrderPersistence.TableId.PLAN_INPUT,
                                                     headersRef.size()));
+                            String q =
+                                    rowSearchField.getText() != null
+                                            ? rowSearchField.getText().trim()
+                                            : "";
+                            if (!q.isEmpty()) {
+                                SpreadsheetMultiColumnFilterCoordinator.setRowTextSearchQuery(
+                                        spreadsheetView, q);
+                            }
                         } finally {
                             suppressPlanInputDirtyFromGridEvents.set(false);
                         }
@@ -850,5 +895,6 @@ public final class PlanInputTabController {
     @FXML
     private void onClearColumnFiltersAction() {
         clearColumnFiltersAndSort();
+        rowSearchField.clear();
     }
 }

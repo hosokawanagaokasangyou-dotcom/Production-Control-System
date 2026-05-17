@@ -24,6 +24,7 @@
     <top>
         <VBox fillWidth="true" spacing="10.0">
             <HBox alignment="CENTER_RIGHT" spacing="8.0">
+                <Button mnemonicParsing="false" onAction="#onOpenManualAction" text="マニュアルを開く" />
                 <Label fx:id="appVersionLabel" styleClass="pm-app-version-label" text="" />
             </HBox>
             <GridPane hgap="10.0" styleClass="pm-run-actions-grid" vgap="10.0">
@@ -39,23 +40,27 @@
                         <Label text="段階2結果 Excel フォント" />
                         <ComboBox fx:id="stage2ResultBookFontCombo" editable="true" prefWidth="240.0" />
                     </HBox>
-                    <Label text="段階2 production_plan（最新）" GridPane.columnIndex="0" GridPane.rowIndex="1" />
-                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="1">
+                    <HBox alignment="CENTER_LEFT" spacing="12.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="1">
+                        <CheckBox fx:id="stage2SkipInProgressDispatchCheckBox" mnemonicParsing="false"
+                                text="加工途中を配台しない（当日完了と想定）" />
+                    </HBox>
+                    <Label text="段階2 production_plan（最新）" GridPane.columnIndex="0" GridPane.rowIndex="2" />
+                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="2">
                         <TextField fx:id="stage2ProductionPlanField" editable="false" maxWidth="Infinity" HBox.hgrow="ALWAYS" />
                         <Button mnemonicParsing="false" onAction="#onOpenStage2ProductionPlanAction" text="エクセルを開く" />
                     </HBox>
-                    <Label text="段階2 member_schedule（最新）" GridPane.columnIndex="0" GridPane.rowIndex="2" />
-                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="2">
+                    <Label text="段階2 member_schedule（最新）" GridPane.columnIndex="0" GridPane.rowIndex="3" />
+                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="3">
                         <TextField fx:id="stage2MemberScheduleField" editable="false" maxWidth="Infinity" HBox.hgrow="ALWAYS" />
                         <Button mnemonicParsing="false" onAction="#onOpenStage2MemberScheduleAction" text="エクセルを開く" />
                     </HBox>
-                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="3">
+                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="4">
                        <Label fx:id="masterWorkbookOpenHintLabel" text="master.xlsm" />
                         <Button mnemonicParsing="false" onAction="#onOpenMasterWorkbookAction" text="エクセルを開く" />
                        <Label fx:id="summaryWorkbookOpenHintLabel" text="サマリ_AI配台.xlsx" />
                         <Button mnemonicParsing="false" onAction="#onOpenSummaryAiDispatchAction" text="エクセルを開く" />
                     </HBox>
-                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="4" />
+                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="5" />
                 </children>
             <columnConstraints>
                <ColumnConstraints />
@@ -63,6 +68,7 @@
                <ColumnConstraints />
             </columnConstraints>
             <rowConstraints>
+               <RowConstraints />
                <RowConstraints />
                <RowConstraints />
                <RowConstraints />

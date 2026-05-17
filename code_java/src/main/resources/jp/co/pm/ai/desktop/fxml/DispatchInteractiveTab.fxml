@@ -5,10 +5,8 @@
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ProgressBar?>
 <?import javafx.scene.control.ProgressIndicator?>
-<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Tab?>
 <?import javafx.scene.control.TabPane?>
-<?import javafx.scene.control.TextField?>
 <?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
@@ -36,15 +34,9 @@
                 onAction="#onEnsureStage2RequiredColumnsAction"/>
         <Button fx:id="saveButton" mnemonicParsing="false" text="保存 (JSON+xlsx)"
                 onAction="#onSaveAction"/>
-        <Button fx:id="stage3EquipmentTrialButton" mnemonicParsing="false" text="段階3・設備フェイズ実行"
+        <Button fx:id="dispatchTrialButton" mnemonicParsing="false" text="段階3"
                 styleClass="pm-stage-run-button,pm-stage-run-3"
-                onAction="#onStage3EquipmentTrialAction"/>
-        <Button fx:id="stage3PeopleTrialButton" mnemonicParsing="false" text="段階3・人割当フェイズ実行"
-                styleClass="pm-stage-run-button,pm-stage-run-3"
-                onAction="#onStage3PeopleTrialAction"/>
-        <Button fx:id="stage3BothTrialButton" mnemonicParsing="false" text="段階3・一括実行"
-                styleClass="pm-stage-run-button,pm-stage-run-3"
-                onAction="#onStage3BothTrialAction"/>
+                onAction="#onDispatchTrialAction"/>
         <Button fx:id="wideRowUpButton" mnemonicParsing="false" text="↑"
                 onAction="#onWideRowUpAction">
             <tooltip>
@@ -85,45 +77,6 @@
                     <BorderPane>
                         <center>
                             <StackPane fx:id="byDaySpreadsheetHost" maxHeight="Infinity" maxWidth="Infinity"
-                                       minHeight="200.0"/>
-                        </center>
-                    </BorderPane>
-                </content>
-            </Tab>
-            <Tab closable="false" text="段階3・設備フェイズ結果">
-                <content>
-                    <BorderPane>
-                        <top>
-                            <HBox alignment="CENTER_LEFT" spacing="8.0">
-                                <padding>
-                                    <Insets bottom="4.0" left="4.0" right="4.0" top="4.0"/>
-                                </padding>
-                                <Label text="絞り込み"/>
-                                <TextField fx:id="stage3EquipmentFilterField" maxWidth="Infinity" minWidth="120.0"
-                                           promptText="全列に部分一致（大文字小文字を区別しない）"
-                                           HBox.hgrow="ALWAYS"/>
-                                <Button mnemonicParsing="false" text="クリア"
-                                        onAction="#onStage3EquipmentFilterClearAction"/>
-                            </HBox>
-                        </top>
-                        <center>
-                            <ScrollPane fitToWidth="true" maxHeight="Infinity" maxWidth="Infinity" minHeight="200.0"
-                                        hbarPolicy="NEVER" vbarPolicy="AS_NEEDED">
-                                <VBox fx:id="stage3EquipmentTablesHost" fillWidth="true" spacing="8.0">
-                                    <padding>
-                                        <Insets bottom="8.0" left="4.0" right="4.0" top="4.0"/>
-                                    </padding>
-                                </VBox>
-                            </ScrollPane>
-                        </center>
-                    </BorderPane>
-                </content>
-            </Tab>
-            <Tab closable="false" text="段階3・人割当フェイズ結果">
-                <content>
-                    <BorderPane>
-                        <center>
-                            <TableView fx:id="stage3PeopleResultTable" maxHeight="Infinity" maxWidth="Infinity"
                                        minHeight="200.0"/>
                         </center>
                     </BorderPane>

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Spinner?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="jp.co.pm.ai.desktop.SummaryAiDispatchExportCustomizeTabController">
+    <padding>
+        <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+    </padding>
+    <center>
+        <VBox spacing="12.0">
+            <Label style="-fx-font-weight: bold" text="サマリ_AI配台エクセル生成カスタイマイズ"/>
+            <Label wrapText="true" maxWidth="900"
+                   text="code/サマリ_AI配台.xlsx への上書き出力時に、各シートの見出し列固定数・フォント・非日付列の並び・テーマ色を適用します。日付列（カレンダー見出し・yyyy/MM/dd 形式など）は並べ替え対象外で、常に右側に残ります。"/>
+            <Separator/>
+            <HBox alignment="CENTER_LEFT" spacing="12.0">
+                <Label text="フォント:"/>
+                <TextField fx:id="fontFamilyField" prefWidth="220.0" promptText="BIZ UDPゴシック"/>
+                <Label text="サイズ(pt):"/>
+                <Spinner fx:id="fontSizeSpinner" editable="true" prefWidth="72.0"/>
+                <Label text="テーマ:"/>
+                <ComboBox fx:id="themeCombo" prefWidth="196.0"/>
+            </HBox>
+            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                <Button mnemonicParsing="false" onAction="#onSaveGlobalAction" text="共通設定を保存"/>
+                <Button mnemonicParsing="false" onAction="#onResetAllAction" text="すべて既定に戻す"/>
+            </HBox>
+            <Separator/>
+            <TabPane fx:id="sheetTabPane" tabClosingPolicy="UNAVAILABLE">
+                <tabs>
+                    <Tab text="アラ・実績・シス比較">
+                        <content>
+                            <fx:include fx:id="mainComparePane" source="SummaryAiDispatchExportSheetCustomizePane.fxml"/>
+                        </content>
+                    </Tab>
+                    <Tab text="配台結果">
+                        <content>
+                            <fx:include fx:id="dispatchPane" source="SummaryAiDispatchExportSheetCustomizePane.fxml"/>
+                        </content>
+                    </Tab>
+                    <Tab text="加工実績">
+                        <content>
+                            <fx:include fx:id="actualsPane" source="SummaryAiDispatchExportSheetCustomizePane.fxml"/>
+                        </content>
+                    </Tab>
+                    <Tab text="アラジン加工計画取得データ">
+                        <content>
+                            <fx:include fx:id="aladdinPane" source="SummaryAiDispatchExportSheetCustomizePane.fxml"/>
+                        </content>
+                    </Tab>
+                </tabs>
+            </TabPane>
+        </VBox>
+    </center>
+</BorderPane>

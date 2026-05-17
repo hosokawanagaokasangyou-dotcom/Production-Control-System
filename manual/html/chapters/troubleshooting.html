@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>8. 困ったときは</title>
+  <link rel="stylesheet" href="../static/style.css"/>
+</head>
+<body>
+<div class="manual-layout">
+<nav class="manual-nav" aria-label="目次">
+<p class="manual-nav-title">取扱説明書</p>
+<ul>
+<li><a href="../index.html">トップ</a></li>
+<li><a href="overview.html">1. はじめに</a></li>
+<li><a href="getting-started.html">2. 起動と基本操作</a></li>
+<li><a href="daily-operations.html">3. 日常運用ガイド（配台システム使い方）</a></li>
+<li><a href="workflow-dispatch.html">4. 配台の流れ（段階1・段階2・段階3）</a></li>
+<li><a href="tabs.html">5. 画面・タブ一覧</a></li>
+<li><a href="environment.html">6. 環境変数とデータの場所</a></li>
+<li><a href="excel-integration.html">7. Excel 連携とサマリ</a></li>
+<li><a href="troubleshooting.html" class="is-current">8. 困ったときは</a></li>
+</ul></nav>
+<main class="manual-main">
+
+<article class="manual-content">
+<h1>8. 困ったときは</h1>
+<h2>段階1 / 段階2 が失敗する</h2>
+<ol>
+<li><strong>実行・ログ</strong> の末尾 50 行付近を読む（エラーダイアログにも同内容が出る場合あり）。</li>
+<li>ログの <strong>入力解決</strong> 行で、加工計画 DATA・配台計画ブックのパスが意図どおりか確認する。</li>
+<li><strong>環境変数</strong> タブで <code>TASK_INPUT_WORKBOOK</code> / <code>MASTER_WORKBOOK_FILE</code> を確認する。</li>
+<li>ネットワークフォルダ利用時は <strong>実績DATA・明細の取得状態</strong> と <code>.pm-ai-cache</code> の更新を確認する。</li>
+</ol>
+<p><img alt="実行・ログ（エラー確認）" src="../images/run.png" /></p>
+<h2>「未保存のため実行できません」</h2>
+<ul>
+<li><strong>配台計画手動修正</strong> … JSON を <strong>保存</strong> するか <strong>再読み</strong> する。</li>
+<li><strong>配台計画_タスク入力</strong> … 表の編集を <strong>保存</strong> または <strong>再読み</strong> してから段階2 へ。</li>
+</ul>
+<h2>タブが灰色で切り替えられない</h2>
+<p>段階1 または段階2 が <strong>実行中</strong> です。完了を待つか、ツールバーの <strong>中断</strong> で止めてから操作してください。</p>
+<h2>メモリ不足（OutOfMemoryError）</h2>
+<ol>
+<li><strong>メモリ設定</strong> でヒープを増やし、アプリを再起動する。</li>
+<li>計画期間・依頼件数を絞って再実行する。</li>
+<li>それでも失敗する場合はログと <code>*.hprof</code> の有無を開発担当へ共有する。</li>
+</ol>
+<h2>ガント・配台表が古い</h2>
+<p>段階2 完了後、実行タブの出力パスが更新されているか確認します。手動修正後は <strong>保存 → 段階2 再実行</strong> または結果 JSON の <strong>再読み</strong> が必要です。</p>
+<h2>段階3 で当日数量が満たせない</h2>
+<p>段階3 は <strong>勤怠・休憩・機械カレンダー</strong> に拘束されます。docx 原稿どおり、<strong>残業・休出で余力を増やしてから試行</strong>するか、<strong>タスク×日付</strong> で（段階3前）の数量・日付を人の判断で直してから <strong>段階3</strong> を実行してください。<code>dispatch_trial_shortages.json</code> の <code>op_shortage</code> / <code>as_shortage</code> を確認します。</p>
+<h2>納期管理ビューが段階2 直後に古い</h2>
+<p>段階2・段階3 完了直後は自動反映のため一時的に「反映中」になります。失敗時はログの <code>[delivery-calendar]</code> 行を確認し、手動 <strong>再読み込み</strong> を試してください。</p>
+<h2>環境変数が反映されない</h2>
+<ul>
+<li>Excel <strong>設定_環境変数</strong> シートの A 列が空・<code>#</code> 始まりでないか</li>
+<li>Java 側 <strong>環境変数</strong> タブで上書きしていないか</li>
+<li>ポータブル初回起動で既定リセットが走っていないか</li>
+</ul>
+<h2>マニュアル画像が表示されない</h2>
+<p><code>manual/src/images/{tab_key}.png</code> を用意し、リポジトリ直下でマニュアル公開パイプラインを実行してください（<code>manual/README.md</code> 参照）。PNG が無い場合はプレースホルダのままテキストのみです。</p>
+<h2>サポートに渡す情報</h2>
+<p>問題報告時は次を添付すると調査が早くなります。</p>
+<ul>
+<li>実行・ログの該当箇所（個人情報をマスク）</li>
+<li>使用した <code>version.txt</code> の版</li>
+<li>段階1/2 の直前にログへ出た環境変数一覧</li>
+<li>再現手順（入力ブックは匿名化したコピーでも可）</li>
+</ul>
+</article>
+<footer class="manual-footer">
+  工程管理 AI デスクトップ 取扱説明書 — リポジトリ <code>manual/html/</code> より生成
+</footer>
+</main>
+</div>
+</body>
+</html>

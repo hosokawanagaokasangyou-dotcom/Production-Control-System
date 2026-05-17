@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.text.Collator;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -20,20 +19,16 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
-import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
-import javafx.collections.transformation.FilteredList;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
@@ -56,7 +51,6 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableView;
-import javafx.scene.control.TitledPane;
 import javafx.scene.control.TablePosition;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
@@ -74,6 +68,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
 import javafx.stage.Modality;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
@@ -87,8 +82,8 @@ import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.debug.AgentDebugLog;
+import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialConsistency;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialShortages;
@@ -100,6 +95,8 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPivot;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
+import jp.co.pm.ai.desktop.dispatch.Stage3DispatchQtyBalanceCheck;
+import jp.co.pm.ai.desktop.ui.TabularCellHighlight;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage2ColumnSupport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
@@ -107,7 +104,6 @@ import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetRowReorderDragGhost;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
-import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 
 /**
@@ -116,16 +112,7 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
  */
 public final class DispatchInteractiveTabController {
 
-    private static final ObjectMapper STAGE3_RESULT_JSON = new ObjectMapper();
-
-    /**
-     * 段階3設備チェックポイントの日次始業帯は {@code task_id} が空（Python 側 {@code machine_daily_startup}）。
-     * 依頼NO 列ではこの文言を出す。
-     */
-    private static final String STAGE3_EQUIPMENT_DAILY_STARTUP_TASK_LABEL = "日次始業準備";
-
-    /** 設備フェイズ結果の機械名別折りたたみの並び（日本語ロケールの辞書順）。 */
-    private static final Collator STAGE3_MACHINE_NAME_ORDER = Collator.getInstance(Locale.JAPANESE);
+    private static final String AGENT_DEBUG_SESSION = "a35f7c";
 
     private record ReloadBundle(ResultDispatchDocument doc) {}
 
@@ -154,13 +141,26 @@ public final class DispatchInteractiveTabController {
     /** Fully-blocked (holiday) date columns: stay narrow but wide enough for a short header glyph. */
     private static final double MIN_BLOCKED_DATE_COLUMN_WIDTH_PX = 40.0;
 
-    /** 日付列で数量が正のとき。 */
+    /** 日付列で数量が正のとき（薄緑・黒字。行選択時も読めるよう text-fill を明示）。 */
     private static final String DATE_CELL_STYLE_POSITIVE_QTY =
-            "-fx-background-color: #e8f5e9; -fx-text-fill: black;";
+            "-fx-background-color: #d4edd4; -fx-text-fill: #111111;";
 
     /** 配台試行でタイムライン実績が目標に届かないセル。 */
     private static final String DATE_CELL_STYLE_SHORTFALL =
-            "-fx-background-color: #b71c1c; -fx-text-fill: white; -fx-font-weight: bold;";
+            "-fx-background-color: #b71c1c; -fx-text-fill: #ffffff; -fx-font-weight: bold;";
+
+    private static final String DISPATCH_DATE_QTY_CELL_STYLE_CLASS = "dispatch-date-qty-cell";
+
+    private static final String DISPATCH_DATE_QTY_SHORTFALL_CELL_STYLE_CLASS = "dispatch-date-qty-shortfall-cell";
+
+    /** 日付セル表示: 段階3試行前の編集対象（当日配台数量）。 */
+    static final String LABEL_STAGE3_PLAN = "\uff08\u6bb5\u968e3\u524d\uff09";
+
+    /** 日付セル表示: 段階3試行後の実績（実配台数量・DnD/編集では変更しない）。 */
+    static final String LABEL_STAGE3_ACTUAL = "\uff08\u6bb5\u968e3\u5f8c\uff09";
+
+    /** 段階3試行後の実配台数量（日付セルの括弧内）を行単位で合算する列。 */
+    private static final String COL_STAGE3_DISPATCH_QTY_TOTAL = "段階3配台数";
 
     private static final List<String> WIDE_STATIC_HEADERS =
             List.of(
@@ -171,14 +171,17 @@ public final class DispatchInteractiveTabController {
                     "依頼NO",
                     "換算数量",
                     "実加工数",
-                    "計画合計");
+                    "計画合計",
+                    COL_STAGE3_DISPATCH_QTY_TOTAL,
+                    Stage3DispatchQtyBalanceCheck.COL_TITLE);
 
     /** 「工程+機械×日」ビューの先頭固定列（日付ブロックの直前まで）。 */
     private static final List<String> BY_DAY_STATIC_HEADERS =
             List.of(
                     ResultDispatchSchema.COL_PROCESS,
                     ResultDispatchSchema.COL_MACHINE,
-                    "加工内容");
+                    "加工内容",
+                    COL_STAGE3_DISPATCH_QTY_TOTAL);
 
     private record WideGridBundle(
             GridBase grid,
@@ -204,6 +207,11 @@ public final class DispatchInteractiveTabController {
     /** Avoid treating programmatic grid updates as user edits ({@link #onWideGridChange}). */
     private final AtomicBoolean suppressDispatchGridDirty = new AtomicBoolean(false);
 
+    /**
+     * {@link #rebuildGrids} や空表示クリアのたびに増やし、遅延した列同期・可視化ジョブが古いグリッドに触れないようにする。
+     */
+    private final AtomicInteger dispatchSpreadsheetLayoutGeneration = new AtomicInteger(0);
+
     @FXML
     private ProgressIndicator busyIndicator;
 
@@ -214,29 +222,7 @@ public final class DispatchInteractiveTabController {
     private Button saveButton;
 
     @FXML
-    private Button stage3EquipmentTrialButton;
-
-    @FXML
-    private Button stage3PeopleTrialButton;
-
-    @FXML
-    private Button stage3BothTrialButton;
-
-    @FXML
-    private VBox stage3EquipmentTablesHost;
-
-    @FXML
-    private TextField stage3EquipmentFilterField;
-
-    @FXML
-    private TableView<Map<String, String>> stage3PeopleResultTable;
-
-    /** 設備フェイズ結果表の全行（絞り込み前）。 */
-    private final ObservableList<Map<String, String>> stage3EquipmentMasterRows = FXCollections.observableArrayList();
-
-    private FilteredList<Map<String, String>> stage3EquipmentFilteredRows;
-
-    private boolean stage3EquipmentFilterModelWired;
+    private Button dispatchTrialButton;
 
     @FXML
     private Button wideRowUpButton;
@@ -319,8 +305,7 @@ public final class DispatchInteractiveTabController {
         byDaySpreadsheet.prefWidthProperty().bind(byDaySpreadsheetHost.widthProperty());
         byDaySpreadsheet.prefHeightProperty().bind(byDaySpreadsheetHost.heightProperty());
 
-        SpreadsheetThemeBridge.install(wideSpreadsheet);
-        SpreadsheetThemeBridge.install(byDaySpreadsheet);
+        // 固定配色（薄緑日付列・黒字）。ThemeBridge は -fx-text-inner-color で日付セルが白抜けするため入れない。
         SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome(wideSpreadsheet);
         SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome(byDaySpreadsheet);
 
@@ -335,6 +320,7 @@ public final class DispatchInteractiveTabController {
                 byDaySpreadsheetHost, BY_DAY_STATIC_HEADERS::size);
 
         installWideDnDHandlers();
+        installWideDoubleClickHandler();
         installByDayDoubleClickHandler();
 
         if (dispatchShortfallTable != null) {
@@ -343,16 +329,6 @@ public final class DispatchInteractiveTabController {
                     TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
             wireDispatchShortfallSelectionToWideGrid();
         }
-        installStage3ResultTableColumns();
-        ensureStage3EquipmentFilteredModel();
-    }
-
-    @FXML
-    private void onStage3EquipmentFilterClearAction() {
-        if (stage3EquipmentFilterField != null) {
-            stage3EquipmentFilterField.setText("");
-        }
-        applyStage3EquipmentRowFilter();
     }
 
     void bindShell(MainShellController shell) {
@@ -668,26 +644,18 @@ public final class DispatchInteractiveTabController {
     }
 
     /**
-     * 段階3: 配台試行（二相時は {@code trialStage3Phase} に {@code equipment}/{@code people}/{@code both}）。
-     * Python {@link ResultDispatchTrialPython} および不足 JSON 連携。
+     * 配台試行: {@link ResultDispatchTrialPython} および不足 JSON 連携（段階2と同一エンジン・数量上限は JSON）。
      */
-    private void startDispatchTrial(String trialStage3Phase) {
+    private void startDispatchTrial() {
         if (shell == null) {
             return;
         }
         if (reloadInteractionDisabled || dispatchDocDirtySinceSave) {
             return;
         }
-        final String trialPhaseFinal = trialStage3Phase == null ? "" : trialStage3Phase;
         statusLabel.setText("配台試行中...");
-        if (stage3EquipmentTrialButton != null) {
-            stage3EquipmentTrialButton.setDisable(true);
-        }
-        if (stage3PeopleTrialButton != null) {
-            stage3PeopleTrialButton.setDisable(true);
-        }
-        if (stage3BothTrialButton != null) {
-            stage3BothTrialButton.setDisable(true);
+        if (dispatchTrialButton != null) {
+            dispatchTrialButton.setDisable(true);
         }
         showReloadProgress();
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
@@ -738,10 +706,6 @@ public final class DispatchInteractiveTabController {
                     }
                     try {
                         closeBtn.requestFocus();
-                    } catch (Throwable ignored) {
-                    }
-                    try {
-                        hideReloadProgress();
                     } catch (Throwable ignored) {
                     }
                     try {
@@ -934,8 +898,7 @@ public final class DispatchInteractiveTabController {
                                                     logLines.add(line);
                                                     int last = logLines.size() - 1;
                                                     logList.scrollTo(last);
-                                                }),
-                                trialStage3Phase);
+                                                }));
                     }
                 };
         trialTaskHolder[0] = task;
@@ -955,7 +918,7 @@ public final class DispatchInteractiveTabController {
                         String shortagesPath = task.getValue();
                         statusLabel.setText("配台試行完了");
                         shell.refreshRunTabStage2ArtifactLinks();
-                        shell.invalidateDeliveryCalendarAfterPipelineRun();
+                        shell.reloadDeliveryCalendarInBackgroundAfterDispatchTrialSuccess();
                         shell.refreshEquipmentGanttGraphicAfterPipelineRun();
                         shell.appendLog("[dispatch-editor] trial: " + shortagesPath);
                         logLines.add("");
@@ -999,8 +962,6 @@ public final class DispatchInteractiveTabController {
                                         if (last >= 0) {
                                             logList.scrollTo(last);
                                         }
-                                        refreshStage3ResultTablesAfterTrial(
-                                                trialPhaseFinal, Path.of(shortagesPath));
                                         DispatchTrialUnassignedWizard.showIfNeeded(
                                                 owner, shell, Path.of(shortagesPath));
                                     } catch (Throwable upex) {
@@ -1070,18 +1031,8 @@ public final class DispatchInteractiveTabController {
     }
 
     @FXML
-    private void onStage3EquipmentTrialAction() {
-        startDispatchTrial("equipment");
-    }
-
-    @FXML
-    private void onStage3PeopleTrialAction() {
-        startDispatchTrial("people");
-    }
-
-    @FXML
-    private void onStage3BothTrialAction() {
-        startDispatchTrial("both");
+    private void onDispatchTrialAction() {
+        startDispatchTrial();
     }
 
     @FXML
@@ -1137,17 +1088,21 @@ public final class DispatchInteractiveTabController {
         }
         Path p = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
         jsonPathLabel.setText(p.toString());
+        bumpDispatchSpreadsheetLayoutGeneration();
         if (!Files.isRegularFile(p)) {
             statusLabel.setText("ファイルなし");
             doc = ResultDispatchDocument.empty();
             clearDispatchShortfallUi();
-            rebuildGrids();
+            rebuildGrids(this::hideReloadProgress);
             clearDispatchDocDirty();
             if (userCompletionDialog) {
                 shell.showWarningDialog("再読み", "結果_配台表.json が見つかりません。\n" + p);
             }
             return;
         }
+        finalizeDispatchSpreadsheetPresentation();
+        SpreadsheetTabularSupport.showScratchGridWhileReloading(wideSpreadsheet);
+        SpreadsheetTabularSupport.showScratchGridWhileReloading(byDaySpreadsheet);
         showReloadProgress();
         final Path jsonPath = p;
         Task<ReloadBundle> task =
@@ -1175,23 +1130,18 @@ public final class DispatchInteractiveTabController {
                         applyDispatchShortfallFromDisk(jsonPath);
                     } else {
                         clearDispatchShortfallUi();
-                        clearStage3EquipmentResultTable();
-                        clearStage3PeopleResultTable();
                     }
-                    rebuildGrids();
                     clearDispatchDocDirty();
-                    hideReloadProgress();
-                    if (afterSuccessOnFxThread != null) {
-                        afterSuccessOnFxThread.run();
-                    }
-                    if (userCompletionDialog) {
-                        String extra =
-                                stage2ColsFilled
-                                        ? "\n\n段階2必須列を補完しました。必要に応じて保存してください。"
-                                        : "";
-                        shell.showInformationDialog(
-                                "再読み完了",
-                                doc.rows().size() + " 行を読み込みました。\n" + jsonPath + extra);
+                    Runnable afterLayouts =
+                            buildReloadSuccessAfterLayoutsRunnable(
+                                    afterSuccessOnFxThread,
+                                    userCompletionDialog,
+                                    stage2ColsFilled,
+                                    jsonPath);
+                    if (afterLayouts != null) {
+                        rebuildGrids(afterLayouts);
+                    } else {
+                        rebuildGrids(this::hideReloadProgress);
                     }
                 });
         task.setOnFailed(
@@ -1203,9 +1153,8 @@ public final class DispatchInteractiveTabController {
                             "[dispatch-editor] load failed: "
                                     + (ex != null ? ex.getMessage() : ""));
                     clearDispatchShortfallUi();
-                    rebuildGrids();
+                    rebuildGrids(this::hideReloadProgress);
                     clearDispatchDocDirty();
-                    hideReloadProgress();
                     if (userCompletionDialog) {
                         String msg =
                                 ex != null && ex.getMessage() != null && !ex.getMessage().isBlank()
@@ -1219,7 +1168,14 @@ public final class DispatchInteractiveTabController {
 
     /** 段階2 正常終了直後: 表を JSON から再構築する。 */
     void reloadTableFromDiskAfterStage2Success() {
-        reloadFromDiskQuiet(null, false, false);
+        reloadTableFromDiskAfterStage2Success(null);
+    }
+
+    /**
+     * 段階2 正常終了直後: 表を JSON から再構築し、成功後に {@code afterSuccessOnFxThread} を FX スレッドで実行する。
+     */
+    void reloadTableFromDiskAfterStage2Success(Runnable afterSuccessOnFxThread) {
+        reloadFromDiskQuiet(afterSuccessOnFxThread, false, false);
     }
 
     /** 再読込や段階2開始の直前に、メモリ上の表を空表示へ戻す（JSON パスラベルは維持）。 */
@@ -1233,9 +1189,11 @@ public final class DispatchInteractiveTabController {
         if (jsonPathLabel != null) {
             jsonPathLabel.setText(p.toString());
         }
+        bumpDispatchSpreadsheetLayoutGeneration();
         doc = ResultDispatchDocument.empty();
         clearDispatchShortfallUi();
-        rebuildGrids();
+        SpreadsheetTabularSupport.showScratchGridWhileReloading(wideSpreadsheet);
+        SpreadsheetTabularSupport.showScratchGridWhileReloading(byDaySpreadsheet);
         clearDispatchDocDirty();
         if (statusLabel != null) {
             statusLabel.setText(statusText);
@@ -1328,48 +1286,23 @@ public final class DispatchInteractiveTabController {
     }
 
     /**
-     * 段階3試行ボタン: 再読込中は無効。表を手動編集して未保存のときは無効（保存または「再読み」で有効化）。
-     * 人割当のみは設備フェイズのチェックポイント JSON が隣接して存在するときのみ有効。
+     * 配台試行ボタン: 再読込中は無効。表を手動編集して未保存のときは無効（保存または「再読み」で有効化）。
      */
     private void applyDispatchTrialButtonEnabledState() {
         boolean blockTrial = reloadInteractionDisabled || dispatchDocDirtySinceSave;
-        Path ck = resolveStage3EquipmentCheckpointPath();
-        boolean peopleOk = Files.isRegularFile(ck);
-        if (stage3EquipmentTrialButton != null) {
-            stage3EquipmentTrialButton.setDisable(blockTrial);
-        }
-        if (stage3PeopleTrialButton != null) {
-            stage3PeopleTrialButton.setDisable(blockTrial || !peopleOk);
-        }
-        if (stage3BothTrialButton != null) {
-            stage3BothTrialButton.setDisable(blockTrial);
+        if (dispatchTrialButton != null) {
+            dispatchTrialButton.setDisable(blockTrial);
         }
         if (dispatchDocDirtySinceSave && !reloadInteractionDisabled) {
             Tooltip t =
                     new Tooltip(
-                            "未保存の編集があります。「保存 (JSON+xlsx)」または「再読み」で確定してから段階3を実行してください。");
-            if (stage3EquipmentTrialButton != null) {
-                stage3EquipmentTrialButton.setTooltip(t);
-            }
-            if (stage3PeopleTrialButton != null) {
-                stage3PeopleTrialButton.setTooltip(t);
-            }
-            if (stage3BothTrialButton != null) {
-                stage3BothTrialButton.setTooltip(t);
+                            "未保存の編集があります。「保存 (JSON+xlsx)」または「再読み」で確定してから配台試行を実行してください。");
+            if (dispatchTrialButton != null) {
+                dispatchTrialButton.setTooltip(t);
             }
         } else {
-            if (stage3EquipmentTrialButton != null) {
-                stage3EquipmentTrialButton.setTooltip(null);
-            }
-            if (stage3PeopleTrialButton != null) {
-                stage3PeopleTrialButton.setTooltip(
-                        peopleOk
-                                ? null
-                                : new Tooltip(
-                                        "先に「段階3・設備フェイズ実行」を完了し、stage3_equipment_checkpoint.json が出力されている必要があります。"));
-            }
-            if (stage3BothTrialButton != null) {
-                stage3BothTrialButton.setTooltip(null);
+            if (dispatchTrialButton != null) {
+                dispatchTrialButton.setTooltip(null);
             }
         }
     }
@@ -1390,6 +1323,9 @@ public final class DispatchInteractiveTabController {
         }
         int staticCols = WIDE_STATIC_HEADERS.size();
         if (c <= 0 || c >= staticCols) {
+            return;
+        }
+        if (isComputedWideStaticHeader(WIDE_STATIC_HEADERS.get(c))) {
             return;
         }
         int profileIdx = r - firstData;
@@ -1424,8 +1360,26 @@ public final class DispatchInteractiveTabController {
     }
 
     private void rebuildGrids() {
+        rebuildGrids(null);
+    }
+
+    /**
+     * 両 Spreadsheet の列同期・幅適用が終わったあと FX スレッドで {@code afterLayoutsReady} を実行する。
+     * 同期前にモーダル（{@code showAndWait}）を出すと列数と View の不整合で {@link IndexOutOfBoundsException}
+     * になることがある。
+     */
+    private void rebuildGrids(Runnable afterLayoutsReady) {
+        int layoutGen = bumpDispatchSpreadsheetLayoutGeneration();
         FullGridRebuild bundle = buildFullGridRebuild();
-        applyFullGridRebuild(bundle);
+        applyFullGridRebuild(bundle, afterLayoutsReady, layoutGen);
+    }
+
+    private int bumpDispatchSpreadsheetLayoutGeneration() {
+        return dispatchSpreadsheetLayoutGeneration.incrementAndGet();
+    }
+
+    private boolean isDispatchSpreadsheetLayoutStale(int layoutGen) {
+        return layoutGen != dispatchSpreadsheetLayoutGeneration.get();
     }
 
     private List<LocalDate> computeDateAxisList() {
@@ -1621,6 +1575,8 @@ public final class DispatchInteractiveTabController {
         List<Map<String, String>> profiles = new ArrayList<>();
         List<WideRow> rowItems = new ArrayList<>();
         List<String> cols = doc.columns();
+        Map<String, DispatchQtyShortfallRow> wideShortfallMerged =
+                mergeWideDispatchShortfallRowsByKey();
         profiles.addAll(
                 ResultDispatchPivot.distinctWideTaskProfiles(
                         cols,
@@ -1659,34 +1615,47 @@ public final class DispatchInteractiveTabController {
             int gridRow = firstData + pr;
             WideRow wr = new WideRow(profile, axis.size());
             for (int j = 0; j < axis.size(); j++) {
-                double v =
+                LocalDate day = axis.get(j);
+                wr.setAmount(
+                        j,
                         ResultDispatchPivot.sumQuantityForProfileAndDateForWideMerge(
                                 doc.rows(),
                                 profile,
-                                axis.get(j),
-                                ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
-                wr.setAmount(j, v);
+                                day,
+                                ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS));
+                wr.setActualAmount(
+                        j,
+                        ResultDispatchPivot.sumActualQuantityForProfileAndDateForWideMerge(
+                                doc.rows(),
+                                profile,
+                                day,
+                                ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS));
             }
             rowItems.add(wr);
 
             ObservableList<SpreadsheetCell> line = FXCollections.observableArrayList();
             for (int c = 0; c < staticCols; c++) {
                 String title = WIDE_STATIC_HEADERS.get(c);
-                String raw = wr.getStatic(title);
+                String raw = wideStaticCellText(wr, title);
                 SpreadsheetCell cell =
                         SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, raw != null ? raw : "");
-                cell.setEditable(c > 0);
-                cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_LEADING_COL);
+                cell.setEditable(c > 0 && !isComputedWideStaticHeader(title));
+                if (Stage3DispatchQtyBalanceCheck.COL_TITLE.equals(title)
+                        && Stage3DispatchQtyBalanceCheck.isNgResult(raw)) {
+                    cell.setStyle(TabularCellHighlight.PLAN_INPUT_EXCLUDE_YES_STYLE);
+                } else {
+                    cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_LEADING_COL);
+                }
                 line.add(cell);
             }
             for (int di = 0; di < dayCount; di++) {
-                double dayAmt = wr.getAmount(di);
-                String qtxt = dayAmt > 1e-9 ? ResultDispatchNormalizer.formatQty(dayAmt) : "";
                 int col = staticCols + di * DAY_SLOT_COLUMNS;
                 SpreadsheetCell cell =
-                        SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, qtxt);
-                cell.setEditable(false);
+                        SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, "");
+                applyWideDispatchQtyCellDisplay(
+                        cell, wr, di, axis, wideShortfallMerged);
                 applyWideCellStyle(wr, di, cell);
+                cell.setEditable(false);
                 line.add(cell);
             }
             gridRows.add(line);
@@ -1730,10 +1699,15 @@ public final class DispatchInteractiveTabController {
                             cols, doc.rows(), en.getKey(), en.getValue());
             ByDayRow br = new ByDayRow(en.getKey(), en.getValue(), pcSummary, axis.size());
             for (int j = 0; j < axis.size(); j++) {
-                double v =
+                LocalDate day = axis.get(j);
+                br.setAmount(
+                        j,
                         ResultDispatchPivot.sumQuantityForProcessMachineDate(
-                                doc.rows(), en.getKey(), en.getValue(), axis.get(j));
-                br.setAmount(j, v);
+                                doc.rows(), en.getKey(), en.getValue(), day));
+                br.setActualAmount(
+                        j,
+                        ResultDispatchPivot.sumActualQuantityForProcessMachineDate(
+                                doc.rows(), en.getKey(), en.getValue(), day));
             }
             byItems.add(br);
         }
@@ -1742,29 +1716,22 @@ public final class DispatchInteractiveTabController {
             ByDayRow br = byItems.get(ir);
             int gridRow = firstData + ir;
             ObservableList<SpreadsheetCell> line = FXCollections.observableArrayList();
-            SpreadsheetCell c0 =
-                    SpreadsheetCellType.STRING.createCell(gridRow, 0, 1, 1, br.process());
-            c0.setEditable(false);
-            c0.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_LEADING_COL);
-            line.add(c0);
-            SpreadsheetCell c1 =
-                    SpreadsheetCellType.STRING.createCell(gridRow, 1, 1, 1, br.machine());
-            c1.setEditable(false);
-            c1.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_LEADING_COL);
-            line.add(c1);
-            SpreadsheetCell c2 =
-                    SpreadsheetCellType.STRING.createCell(gridRow, 2, 1, 1, br.processingContent());
-            c2.setEditable(false);
-            c2.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_LEADING_COL);
-            line.add(c2);
+            for (int c = 0; c < staticCols; c++) {
+                String title = BY_DAY_STATIC_HEADERS.get(c);
+                String raw = byDayStaticCellText(br, title);
+                SpreadsheetCell cell =
+                        SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, raw != null ? raw : "");
+                cell.setEditable(false);
+                cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_LEADING_COL);
+                line.add(cell);
+            }
             for (int di = 0; di < dayCount; di++) {
-                double dayAmt = br.getAmount(di);
-                String qtxt = dayAmt > 1e-9 ? ResultDispatchNormalizer.formatQty(dayAmt) : "";
                 int col = staticCols + di * DAY_SLOT_COLUMNS;
                 SpreadsheetCell cell =
-                        SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, qtxt);
-                cell.setEditable(false);
+                        SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, "");
+                applyByDayDispatchQtyCellDisplay(cell, br, di);
                 applyByDayCellStyle(br, di, cell);
+                cell.setEditable(false);
                 line.add(cell);
             }
             gridRows.add(line);
@@ -1775,14 +1742,14 @@ public final class DispatchInteractiveTabController {
         return new ByDayGridBundle(grid, byDayBlockedCols, staticCols, dayCount);
     }
 
-    private void applyFullGridRebuild(FullGridRebuild bundle) {
+    private void applyFullGridRebuild(
+            FullGridRebuild bundle, Runnable afterLayoutsReady, int layoutGen) {
         suppressDispatchGridDirty.set(true);
-        // 行0件の空グリッドへ切り替えるとき、旧グリッドの行非表示状態を復元すると表示が不整合になることがある
-        boolean emptyWide = bundle.wide().profiles().isEmpty();
-        BitSet wideHiddenSnapshot =
-                emptyWide ? new BitSet() : SpreadsheetTabularSupport.snapshotHiddenRows(wideSpreadsheet);
-        BitSet byDayHiddenSnapshot =
-                emptyWide ? new BitSet() : SpreadsheetTabularSupport.snapshotHiddenRows(byDaySpreadsheet);
+        clearSpreadsheetSelectionForRebuild(wideSpreadsheet);
+        clearSpreadsheetSelectionForRebuild(byDaySpreadsheet);
+        if (dispatchShortfallTable != null) {
+            dispatchShortfallTable.getSelectionModel().clearSelection();
+        }
         try {
             dateAxis.clear();
             dateAxis.addAll(bundle.axis());
@@ -1793,35 +1760,183 @@ public final class DispatchInteractiveTabController {
 
             WideGridBundle w = bundle.wide();
             w.grid().addEventHandler(GridChange.GRID_CHANGE_EVENT, this::onWideGridChange);
-            wideSpreadsheet.setGrid(w.grid());
+            SpreadsheetTabularSupport.detachAndSetGrid(wideSpreadsheet, w.grid());
             wideSpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
-            SpreadsheetTabularSupport.applyColumnFiltersWithDialog(wideSpreadsheet);
-            scheduleWideLayoutAfterColumnSync(w);
+            // #region agent log
+            logDispatchSpreadsheetState(
+                    "C",
+                    "applyFullGridRebuild:postDetachWide",
+                    "wide after detachAndSetGrid (before col-sync)",
+                    wideSpreadsheet,
+                    w.staticCols() + w.dayCount() * DAY_SLOT_COLUMNS);
+            // #endregion
 
             ByDayGridBundle b = bundle.byDay();
-            byDaySpreadsheet.setGrid(b.grid());
+            SpreadsheetTabularSupport.detachAndSetGrid(byDaySpreadsheet, b.grid());
             byDaySpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
-            SpreadsheetTabularSupport.applyColumnFiltersWithDialog(byDaySpreadsheet);
-            scheduleByDayLayoutAfterColumnSync(b);
+            // #region agent log
+            logDispatchSpreadsheetState(
+                    "C",
+                    "applyFullGridRebuild:postDetachByDay",
+                    "byDay after detachAndSetGrid (before col-sync)",
+                    byDaySpreadsheet,
+                    b.staticCols() + b.dayCount() * DAY_SLOT_COLUMNS);
+            // #endregion
 
-            SpreadsheetTabularSupport.restoreHiddenRows(wideSpreadsheet, wideHiddenSnapshot);
-            SpreadsheetTabularSupport.restoreHiddenRows(byDaySpreadsheet, byDayHiddenSnapshot);
+            if (afterLayoutsReady == null) {
+                scheduleWideLayoutAfterColumnSync(w, null, layoutGen);
+                scheduleByDayLayoutAfterColumnSync(b, null, layoutGen);
+            } else {
+                AtomicInteger pendingLayouts = new AtomicInteger(2);
+                Runnable bothLayoutsReady =
+                        () -> {
+                            if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
+                                // #region agent log
+                                logDispatchSpreadsheetState(
+                                        "F",
+                                        "applyFullGridRebuild:staleBothLayouts",
+                                        "skipped stale bothLayoutsReady callback",
+                                        wideSpreadsheet,
+                                        w.staticCols() + w.dayCount() * DAY_SLOT_COLUMNS);
+                                // #endregion
+                                return;
+                            }
+                            if (pendingLayouts.decrementAndGet() == 0) {
+                                clearSpreadsheetSelectionForRebuild(wideSpreadsheet);
+                                clearSpreadsheetSelectionForRebuild(byDaySpreadsheet);
+                                Platform.runLater(
+                                        () -> {
+                                            if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
+                                                return;
+                                            }
+                                            finalizeDispatchSpreadsheetPresentation();
+                                            refreshDispatchSpreadsheetsAfterPresentationSettled();
+                                            if (afterLayoutsReady != null) {
+                                                afterLayoutsReady.run();
+                                            }
+                                        });
+                            }
+                        };
+                scheduleWideLayoutAfterColumnSync(w, bothLayoutsReady, layoutGen);
+                scheduleByDayLayoutAfterColumnSync(b, bothLayoutsReady, layoutGen);
+            }
+
         } finally {
             Platform.runLater(() -> suppressDispatchGridDirty.set(false));
         }
     }
+
+    private Runnable buildReloadSuccessAfterLayoutsRunnable(
+            Runnable afterSuccessOnFxThread,
+            boolean userCompletionDialog,
+            boolean stage2ColsFilled,
+            Path jsonPath) {
+        if (afterSuccessOnFxThread == null && !userCompletionDialog) {
+            return null;
+        }
+        return () -> {
+            hideReloadProgress();
+            finalizeDispatchSpreadsheetPresentation();
+            if (afterSuccessOnFxThread != null) {
+                afterSuccessOnFxThread.run();
+            }
+            if (userCompletionDialog) {
+                String extra =
+                        stage2ColsFilled
+                                ? "\n\n段階2必須列を補完しました。必要に応じて保存してください。"
+                                : "";
+                shell.showInformationDialog(
+                        "再読み完了",
+                        doc.rows().size() + " 行を読み込みました。\n" + jsonPath + extra);
+            }
+        };
+    }
+
+    private static void clearSpreadsheetSelectionForRebuild(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        try {
+            view.getSelectionModel().clearSelection();
+        } catch (RuntimeException ignored) {
+            // setGrid 直後など、選択モデルと列数が一時的にずれているときは無視する
+        }
+    }
+
+    /** 段階3再読込・手動再読込の直前に、列フィルタ／行非表示／並べ替えの残りを消す。 */
+    private void finalizeDispatchSpreadsheetPresentation() {
+        SpreadsheetTabularSupport.finalizeSpreadsheetPresentationAfterGridRebuild(wideSpreadsheet);
+        SpreadsheetTabularSupport.finalizeSpreadsheetPresentationAfterGridRebuild(byDaySpreadsheet);
+    }
+
+    private void refreshDispatchSpreadsheetsAfterPresentationSettled() {
+        // #region agent log
+        logDispatchSpreadsheetState(
+                "B",
+                "refreshDispatchSpreadsheets:before",
+                "before refreshSpreadsheetAfterRowPresentationChange",
+                wideSpreadsheet,
+                null);
+        // #endregion
+        SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(wideSpreadsheet, false);
+        SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(byDaySpreadsheet, false);
+    }
+
+    // #region agent log
+    private void logDispatchSpreadsheetState(
+            String hypothesisId,
+            String location,
+            String message,
+            SpreadsheetView view,
+            Integer expectedCols) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        if (view != null) {
+            data.put("viewColumns", view.getColumns().size());
+            if (view.getGrid() != null) {
+                data.put("gridRows", view.getGrid().getRowCount());
+            }
+            data.put("hiddenRows", view.getHiddenRows().cardinality());
+            data.put("filteredRow", view.getFilteredRow());
+        }
+        if (expectedCols != null) {
+            data.put("expectedCols", expectedCols);
+        }
+        if (doc != null) {
+            data.put("docRows", doc.rows().size());
+        }
+        AgentDebugLog.appendStructured(
+                shell != null ? shell.snapshotUiEnv() : Map.of(),
+                AGENT_DEBUG_SESSION,
+                hypothesisId,
+                location,
+                message,
+                data);
+    }
+    // #endregion
 
     /**
      * After {@link SpreadsheetView#setGrid}, the inner {@link TableView} may add columns on the next layout pulse.
      * Retrying avoids applying widths while {@link SpreadsheetView#getColumns()} is still shorter than the grid
      * (which skipped date columns and looked like “no date columns”).
      */
-    private void scheduleWideLayoutAfterColumnSync(WideGridBundle w) {
+    private void scheduleWideLayoutAfterColumnSync(
+            WideGridBundle w, Runnable onComplete, int layoutGen) {
         final int expectedCols = w.staticCols() + w.dayCount() * DAY_SLOT_COLUMNS;
         final int[] attempts = {0};
         final Runnable[] job = new Runnable[1];
         job[0] =
                 () -> {
+                    if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
+                        // #region agent log
+                        logDispatchSpreadsheetState(
+                                "F",
+                                "scheduleWideLayout:stale",
+                                "skipped stale wide layout job",
+                                wideSpreadsheet,
+                                expectedCols);
+                        // #endregion
+                        return;
+                    }
                     attempts[0]++;
                     int actual = wideSpreadsheet.getColumns().size();
                     boolean retry = actual < expectedCols && attempts[0] < 48;
@@ -1829,71 +1944,167 @@ public final class DispatchInteractiveTabController {
                         Platform.runLater(job[0]);
                         return;
                     }
-                    SpreadsheetTabularSupport.applyFixedLeadingColumns(
-                            wideSpreadsheet, WIDE_STATIC_HEADERS.size());
-                    SpreadsheetTabularSupport.pinSpreadsheetFilterRow(wideSpreadsheet);
-                    SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(wideSpreadsheet);
-                    applyDateColumnWidthsForBlockedDays(
-                            wideSpreadsheet,
-                            w.staticCols(),
-                            w.dayCount(),
-                            sanitizeFullyBlockedFlagsForColumnWidth(w.blockedCols()));
-                    SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
-                            wideSpreadsheet,
-                            suppressColumnReorderPersistence::get,
-                            () -> new ArrayList<>(buildWideColumnLabelsForAxis(dateAxis)),
-                            WIDE_STATIC_HEADERS.size(),
-                            this::onWideSpreadsheetVisualColumnOrderChanged);
-                    ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
-                            wideSpreadsheet,
-                            () -> new ArrayList<>(buildWideColumnLabelsForAxis(dateAxis)),
+                    Platform.runLater(
                             () -> {
-                                List<String> h = buildWideColumnLabelsForAxis(dateAxis);
-                                return TableColumnOrderPersistence.loadColumnVisibility(
-                                        TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_WIDE,
-                                        h.size());
+                                if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
+                                    return;
+                                }
+                                wideSpreadsheet.setFilteredRow(
+                                        SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
+                                SpreadsheetTabularSupport.applyColumnFiltersWithDialog(
+                                        wideSpreadsheet);
+                                // #region agent log
+                                logDispatchSpreadsheetState(
+                                        "C",
+                                        "scheduleWideLayout:postFilters",
+                                        "wide after applyColumnFiltersWithDialog (col-sync ready)",
+                                        wideSpreadsheet,
+                                        expectedCols);
+                                // #endregion
+                                SpreadsheetTabularSupport.applyFixedLeadingColumns(
+                                        wideSpreadsheet, WIDE_STATIC_HEADERS.size());
+                                SpreadsheetTabularSupport.pinSpreadsheetFilterRow(wideSpreadsheet);
+                                SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(
+                                        wideSpreadsheet);
+                                applyDateColumnWidthsForBlockedDays(
+                                        wideSpreadsheet,
+                                        w.staticCols(),
+                                        w.dayCount(),
+                                        sanitizeFullyBlockedFlagsForColumnWidth(w.blockedCols()));
+                                SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
+                                        wideSpreadsheet,
+                                        suppressColumnReorderPersistence::get,
+                                        () -> new ArrayList<>(buildWideColumnLabelsForAxis(dateAxis)),
+                                        WIDE_STATIC_HEADERS.size(),
+                                        this::onWideSpreadsheetVisualColumnOrderChanged);
+                                ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
+                                        wideSpreadsheet,
+                                        () -> new ArrayList<>(buildWideColumnLabelsForAxis(dateAxis)),
+                                        () -> {
+                                            List<String> h = buildWideColumnLabelsForAxis(dateAxis);
+                                            return TableColumnOrderPersistence.loadColumnVisibility(
+                                                    TableColumnOrderPersistence.TableId
+                                                            .DISPATCH_INTERACTIVE_WIDE,
+                                                    h.size());
+                                        },
+                                        () ->
+                                                runAfterWideSpreadsheetLayoutSettled(
+                                                        onComplete, layoutGen));
                             });
                 };
         Platform.runLater(job[0]);
     }
 
-    private void scheduleByDayLayoutAfterColumnSync(ByDayGridBundle b) {
+    private void runAfterWideSpreadsheetLayoutSettled(Runnable onComplete, int layoutGen) {
+        Platform.runLater(
+                () -> {
+                    if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
+                        return;
+                    }
+                    // #region agent log
+                    logDispatchSpreadsheetState(
+                            "A",
+                            "runAfterWide:settled",
+                            "wide layout settled before finalize",
+                            wideSpreadsheet,
+                            null);
+                    // #endregion
+                    SpreadsheetTabularSupport.finalizeSpreadsheetPresentationAfterGridRebuild(
+                            wideSpreadsheet);
+                    refreshDispatchSpreadsheetsAfterPresentationSettled();
+                    if (onComplete != null) {
+                        onComplete.run();
+                    }
+                });
+    }
+
+    private void scheduleByDayLayoutAfterColumnSync(
+            ByDayGridBundle b, Runnable onComplete, int layoutGen) {
         final int expectedCols = b.staticCols() + b.dayCount() * DAY_SLOT_COLUMNS;
         final int[] attempts = {0};
         final Runnable[] job = new Runnable[1];
         job[0] =
                 () -> {
+                    if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
+                        // #region agent log
+                        logDispatchSpreadsheetState(
+                                "F",
+                                "scheduleByDayLayout:stale",
+                                "skipped stale byDay layout job",
+                                byDaySpreadsheet,
+                                expectedCols);
+                        // #endregion
+                        return;
+                    }
                     attempts[0]++;
                     if (byDaySpreadsheet.getColumns().size() < expectedCols && attempts[0] < 48) {
                         Platform.runLater(job[0]);
                         return;
                     }
-                    SpreadsheetTabularSupport.applyFixedLeadingColumns(
-                            byDaySpreadsheet, BY_DAY_STATIC_HEADERS.size());
-                    SpreadsheetTabularSupport.pinSpreadsheetFilterRow(byDaySpreadsheet);
-                    SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(byDaySpreadsheet);
-                    applyDateColumnWidthsForBlockedDays(
-                            byDaySpreadsheet,
-                            b.staticCols(),
-                            b.dayCount(),
-                            sanitizeFullyBlockedFlagsForColumnWidth(b.blockedCols()));
-                    SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
-                            byDaySpreadsheet,
-                            suppressColumnReorderPersistence::get,
-                            () -> new ArrayList<>(buildByDayColumnLabelsForAxis(dateAxis)),
-                            BY_DAY_STATIC_HEADERS.size(),
-                            this::onByDaySpreadsheetVisualColumnOrderChanged);
-                    ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
-                            byDaySpreadsheet,
-                            () -> new ArrayList<>(buildByDayColumnLabelsForAxis(dateAxis)),
+                    Platform.runLater(
                             () -> {
-                                List<String> h = buildByDayColumnLabelsForAxis(dateAxis);
-                                return TableColumnOrderPersistence.loadColumnVisibility(
-                                        TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_BY_DAY,
-                                        h.size());
+                                if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
+                                    return;
+                                }
+                                byDaySpreadsheet.setFilteredRow(
+                                        SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
+                                SpreadsheetTabularSupport.applyColumnFiltersWithDialog(
+                                        byDaySpreadsheet);
+                                // #region agent log
+                                logDispatchSpreadsheetState(
+                                        "C",
+                                        "scheduleByDayLayout:postFilters",
+                                        "byDay after applyColumnFiltersWithDialog (col-sync ready)",
+                                        byDaySpreadsheet,
+                                        expectedCols);
+                                // #endregion
+                                SpreadsheetTabularSupport.applyFixedLeadingColumns(
+                                        byDaySpreadsheet, BY_DAY_STATIC_HEADERS.size());
+                                SpreadsheetTabularSupport.pinSpreadsheetFilterRow(byDaySpreadsheet);
+                                SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(
+                                        byDaySpreadsheet);
+                                applyDateColumnWidthsForBlockedDays(
+                                        byDaySpreadsheet,
+                                        b.staticCols(),
+                                        b.dayCount(),
+                                        sanitizeFullyBlockedFlagsForColumnWidth(b.blockedCols()));
+                                SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
+                                        byDaySpreadsheet,
+                                        suppressColumnReorderPersistence::get,
+                                        () -> new ArrayList<>(buildByDayColumnLabelsForAxis(dateAxis)),
+                                        BY_DAY_STATIC_HEADERS.size(),
+                                        this::onByDaySpreadsheetVisualColumnOrderChanged);
+                                ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
+                                        byDaySpreadsheet,
+                                        () -> new ArrayList<>(buildByDayColumnLabelsForAxis(dateAxis)),
+                                        () -> {
+                                            List<String> h = buildByDayColumnLabelsForAxis(dateAxis);
+                                            return TableColumnOrderPersistence.loadColumnVisibility(
+                                                    TableColumnOrderPersistence.TableId
+                                                            .DISPATCH_INTERACTIVE_BY_DAY,
+                                                    h.size());
+                                        },
+                                        () ->
+                                                runAfterByDaySpreadsheetLayoutSettled(
+                                                        onComplete, layoutGen));
                             });
                 };
         Platform.runLater(job[0]);
+    }
+
+    private void runAfterByDaySpreadsheetLayoutSettled(Runnable onComplete, int layoutGen) {
+        Platform.runLater(
+                () -> {
+                    if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
+                        return;
+                    }
+                    SpreadsheetTabularSupport.finalizeSpreadsheetPresentationAfterGridRebuild(
+                            byDaySpreadsheet);
+                    refreshDispatchSpreadsheetsAfterPresentationSettled();
+                    if (onComplete != null) {
+                        onComplete.run();
+                    }
+                });
     }
 
     /**
@@ -1989,8 +2200,9 @@ public final class DispatchInteractiveTabController {
             cell.setStyle(DATE_CELL_STYLE_SHORTFALL);
             return;
         }
-        double q = wr.getAmount(dateIdx);
-        if (q > 1e-9) {
+        double planQ = wr.getAmount(dateIdx);
+        double actualQ = wr.getActualAmount(dateIdx);
+        if (planQ > 1e-9 || actualQ > 1e-9) {
             cell.setStyle(DATE_CELL_STYLE_POSITIVE_QTY);
         } else {
             cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_DATA_WHITE);
@@ -2097,27 +2309,7 @@ public final class DispatchInteractiveTabController {
                 .addListener(
                         (obs, prev, row) -> {
                             focusWideSpreadsheetOnDispatchShortfallRow(row);
-                            syncStage3EquipmentFilterToDispatchShortfallRow(row);
                         });
-    }
-
-    /**
-     * 数量未達表で選んだ依頼NOを「段階3・設備フェイズ結果」の絞り込みに反映する。
-     *
-     * <p>絞り込みが別依頼のままだと、未達に出ているタスクが設備表に現れないように見えるため、
-     * ワイド表フォーカスと同じ操作感で同期する。
-     */
-    private void syncStage3EquipmentFilterToDispatchShortfallRow(DispatchQtyShortfallRow row) {
-        if (row == null || stage3EquipmentFilterField == null) {
-            return;
-        }
-        String tid = DispatchTrialShortages.normalizeKeyPart(row.taskId());
-        if (tid.isEmpty()) {
-            return;
-        }
-        ensureStage3EquipmentFilteredModel();
-        stage3EquipmentFilterField.setText(tid);
-        applyStage3EquipmentRowFilter();
     }
 
     /**
@@ -2267,8 +2459,9 @@ public final class DispatchInteractiveTabController {
             cell.setStyle(DATE_CELL_STYLE_SHORTFALL);
             return;
         }
-        double q = br.getAmount(dateIdx);
-        if (q > 1e-9) {
+        double planQ = br.getAmount(dateIdx);
+        double actualQ = br.getActualAmount(dateIdx);
+        if (planQ > 1e-9 || actualQ > 1e-9) {
             cell.setStyle(DATE_CELL_STYLE_POSITIVE_QTY);
         } else {
             cell.setStyle(SpreadsheetTabularSupport.READABLE_STYLE_DATA_WHITE);
@@ -2299,6 +2492,202 @@ public final class DispatchInteractiveTabController {
         LocalDate d = dateAxis.get(dateIdx);
         return dispatchByDayShortfallKeys.contains(
                 DispatchTrialShortages.byDayShortfallKey(mach, d.toString()));
+    }
+
+    /**
+     * {@code dispatch_qty_shortfall} をワイドキー（依頼NO・機械・配台日）で集約する。同一キーが複数あるときは目標・実績・不足を
+     * 合算する。
+     */
+    private Map<String, DispatchQtyShortfallRow> mergeWideDispatchShortfallRowsByKey() {
+        Map<String, double[]> sumByKey = new HashMap<>();
+        Map<String, String[]> metaByKey = new HashMap<>();
+        for (DispatchQtyShortfallRow r : lastDispatchShortfallRows) {
+            String k =
+                    DispatchTrialShortages.wideShortfallKey(
+                            r.taskId(), r.machineName(), r.dispatchDateIso());
+            sumByKey.merge(
+                    k,
+                    new double[] {r.targetM(), r.doneM(), r.shortfallM()},
+                    (a, b) ->
+                            new double[] {
+                                a[0] + b[0], a[1] + b[1], a[2] + b[2]
+                            });
+            metaByKey.putIfAbsent(
+                    k,
+                    new String[] {
+                        r.taskId() != null ? r.taskId() : "",
+                        r.machineName() != null ? r.machineName() : "",
+                        r.dispatchDateIso() != null ? r.dispatchDateIso() : ""
+                    });
+        }
+        Map<String, DispatchQtyShortfallRow> out = new LinkedHashMap<>();
+        for (Map.Entry<String, double[]> e : sumByKey.entrySet()) {
+            String[] meta = metaByKey.get(e.getKey());
+            double[] v = e.getValue();
+            out.put(
+                    e.getKey(),
+                    new DispatchQtyShortfallRow(
+                            meta[0], meta[1], meta[2], v[0], v[1], v[2], ""));
+        }
+        return out;
+    }
+
+    private boolean docHasActualDispatchQtyColumn() {
+        return doc.columns().contains(ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL);
+    }
+
+    private static boolean isComputedWideStaticHeader(String title) {
+        return COL_STAGE3_DISPATCH_QTY_TOTAL.equals(title)
+                || Stage3DispatchQtyBalanceCheck.COL_TITLE.equals(title);
+    }
+
+    private String wideStaticCellText(WideRow wr, String title) {
+        if (COL_STAGE3_DISPATCH_QTY_TOTAL.equals(title)) {
+            return formatStage3DispatchQtyTotal(wr.sumActualAmounts());
+        }
+        if (Stage3DispatchQtyBalanceCheck.COL_TITLE.equals(title)) {
+            return formatStage3DispatchQtyBalanceCheck(wr);
+        }
+        return wr.getStatic(title);
+    }
+
+    private String formatStage3DispatchQtyBalanceCheck(WideRow wr) {
+        double qtyConv = ResultDispatchNormalizer.parseDouble(wr.getStatic("換算数量"));
+        double actualDone = ResultDispatchNormalizer.parseDouble(wr.getStatic("実加工数"));
+        return Stage3DispatchQtyBalanceCheck.formatCheck(
+                qtyConv, actualDone, wr.sumActualAmounts(), docHasActualDispatchQtyColumn());
+    }
+
+    private String byDayStaticCellText(ByDayRow br, String title) {
+        if (COL_STAGE3_DISPATCH_QTY_TOTAL.equals(title)) {
+            return formatStage3DispatchQtyTotal(br.sumActualAmounts());
+        }
+        if (ResultDispatchSchema.COL_PROCESS.equals(title)) {
+            return br.process();
+        }
+        if (ResultDispatchSchema.COL_MACHINE.equals(title)) {
+            return br.machine();
+        }
+        if ("加工内容".equals(title)) {
+            return br.processingContent();
+        }
+        return "";
+    }
+
+    private String formatStage3DispatchQtyTotal(double sumActual) {
+        if (!docHasActualDispatchQtyColumn() || sumActual <= 1e-3) {
+            return "";
+        }
+        return ResultDispatchNormalizer.formatQty(sumActual);
+    }
+
+    private void applyWideDispatchQtyCellDisplay(
+            SpreadsheetCell cell,
+            WideRow wr,
+            int dateIdx,
+            List<LocalDate> axis,
+            Map<String, DispatchQtyShortfallRow> wideShortfallMerged) {
+        final double eps = 1e-3;
+        double planAmt = wr.getAmount(dateIdx);
+        double actualAmt = wr.getActualAmount(dateIdx);
+        if (isWideDispatchShortfall(wr, dateIdx)) {
+            LocalDate dCell = axis.get(dateIdx);
+            String tid = wr.getStatic("依頼NO");
+            String mach = wr.getStatic(ResultDispatchSchema.COL_MACHINE);
+            String k = DispatchTrialShortages.wideShortfallKey(tid, mach, dCell.toString());
+            DispatchQtyShortfallRow sf = wideShortfallMerged.get(k);
+            if (sf != null) {
+                String targetFmt = ResultDispatchNormalizer.formatQty(sf.targetM());
+                String doneFmt = ResultDispatchNormalizer.formatQty(sf.doneM());
+                SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(
+                        cell, formatDispatchPlanActualQtyText(targetFmt, doneFmt));
+                clearDispatchQtyCellGraphic(cell);
+                tagDispatchDateQtyShortfallCell(cell);
+                return;
+            }
+        }
+        applyDispatchPlanActualQtyCellDisplay(cell, planAmt, actualAmt, docHasActualDispatchQtyColumn(), eps);
+        tagDispatchDateQtyCell(cell);
+    }
+
+    private void applyByDayDispatchQtyCellDisplay(SpreadsheetCell cell, ByDayRow br, int dateIdx) {
+        applyDispatchPlanActualQtyCellDisplay(
+                cell,
+                br.getAmount(dateIdx),
+                br.getActualAmount(dateIdx),
+                docHasActualDispatchQtyColumn(),
+                1e-3);
+        tagDispatchDateQtyCell(cell);
+    }
+
+    /**
+     * 段階3試行後: 編集目標（当日配台数量）を {@link #LABEL_STAGE3_PLAN}、実績（実配台数量）を
+     * {@link #LABEL_STAGE3_ACTUAL} の2行で表示する。DnD・ダブルクリック編集は目標のみ更新する。
+     */
+    private static void applyDispatchPlanActualQtyCellDisplay(
+            SpreadsheetCell cell,
+            double planAmt,
+            double actualAmt,
+            boolean hasActualColumn,
+            double eps) {
+        String qtxt = formatDispatchPlanActualQtyDisplay(planAmt, actualAmt, hasActualColumn, eps);
+        SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(cell, qtxt);
+        clearDispatchQtyCellGraphic(cell);
+    }
+
+    /** 目標 m（段階3前）と実績 m（段階3後）を2行ラベル付きで表示する。 */
+    static String formatDispatchPlanActualQtyDisplay(
+            double planAmt, double actualAmt, boolean hasActualColumn, double eps) {
+        boolean hasPlan = planAmt > eps;
+        boolean hasActual = hasActualColumn && actualAmt > eps;
+        if (!hasPlan && !hasActual) {
+            return "";
+        }
+        if (!hasActualColumn) {
+            return hasPlan ? ResultDispatchNormalizer.formatQty(planAmt) : "";
+        }
+        return formatDispatchPlanActualQtyText(
+                hasPlan ? ResultDispatchNormalizer.formatQty(planAmt) : "",
+                hasActual ? ResultDispatchNormalizer.formatQty(actualAmt) : "");
+    }
+
+    static String formatDispatchPlanActualQtyText(String planFmt, String actualFmt) {
+        StringBuilder sb = new StringBuilder();
+        if (planFmt != null && !planFmt.isBlank()) {
+            sb.append(LABEL_STAGE3_PLAN).append(planFmt);
+        }
+        if (actualFmt != null && !actualFmt.isBlank()) {
+            if (!sb.isEmpty()) {
+                sb.append('\n');
+            }
+            sb.append(LABEL_STAGE3_ACTUAL).append(actualFmt);
+        }
+        return sb.toString();
+    }
+
+    private static void clearDispatchQtyCellGraphic(SpreadsheetCell cell) {
+        cell.setCellGraphic(false);
+        cell.setGraphic(null);
+    }
+
+    private static void tagDispatchDateQtyCell(SpreadsheetCell cell) {
+        if (cell == null) {
+            return;
+        }
+        if (!cell.getStyleClass().contains(DISPATCH_DATE_QTY_CELL_STYLE_CLASS)) {
+            cell.getStyleClass().add(DISPATCH_DATE_QTY_CELL_STYLE_CLASS);
+        }
+        cell.getStyleClass().remove(DISPATCH_DATE_QTY_SHORTFALL_CELL_STYLE_CLASS);
+    }
+
+    private static void tagDispatchDateQtyShortfallCell(SpreadsheetCell cell) {
+        if (cell == null) {
+            return;
+        }
+        if (!cell.getStyleClass().contains(DISPATCH_DATE_QTY_SHORTFALL_CELL_STYLE_CLASS)) {
+            cell.getStyleClass().add(DISPATCH_DATE_QTY_SHORTFALL_CELL_STYLE_CLASS);
+        }
+        cell.getStyleClass().remove(DISPATCH_DATE_QTY_CELL_STYLE_CLASS);
     }
 
     private void installDispatchShortfallColumns(TableView<DispatchQtyShortfallRow> tv) {
@@ -2514,6 +2903,82 @@ public final class DispatchInteractiveTabController {
                     }
                 });
         st.showAndWait();
+    }
+
+    /** タスク×日付: 日付列ダブルクリックで {@link #LABEL_STAGE3_PLAN} のみ編集（{@link #LABEL_STAGE3_ACTUAL} は固定）。 */
+    private void installWideDoubleClickHandler() {
+        wideSpreadsheet.addEventFilter(
+                MouseEvent.MOUSE_CLICKED,
+                e -> {
+                    if (e.getClickCount() != 2) {
+                        return;
+                    }
+                    TableCell<?, ?> tc = findTableCell(e.getPickResult().getIntersectedNode());
+                    if (tc == null || !isUnderSpreadsheet(wideSpreadsheet, tc)) {
+                        return;
+                    }
+                    int modelCol = wideModelColumnFromTableCell(tc);
+                    int staticCols = WIDE_STATIC_HEADERS.size();
+                    if (modelCol < staticCols) {
+                        return;
+                    }
+                    int slot = modelCol - staticCols;
+                    int dateIdx = slot / DAY_SLOT_COLUMNS;
+                    int profIdx = wideProfileIndexFromTableCell(tc);
+                    if (profIdx < 0
+                            || profIdx >= wideRowItems.size()
+                            || dateIdx < 0
+                            || dateIdx >= dateAxis.size()) {
+                        return;
+                    }
+                    WideRow wr = wideRowItems.get(profIdx);
+                    double planQ = wr.getAmount(dateIdx);
+                    double actualQ = wr.getActualAmount(dateIdx);
+                    boolean hasActual = docHasActualDispatchQtyColumn() && actualQ > 1e-9;
+                    TextInputDialog dialog =
+                            new TextInputDialog(
+                                    planQ > 1e-9 ? ResultDispatchNormalizer.formatQty(planQ) : "");
+                    if (shell != null) {
+                        dialog.initOwner(shell.primaryStageForDialogs());
+                    }
+                    dialog.setTitle("当日配台数量（段階3前）");
+                    String profileHint =
+                            Objects.toString(wr.getStatic("依頼NO"), "")
+                                    + " / "
+                                    + Objects.toString(wr.getStatic(ResultDispatchSchema.COL_MACHINE), "")
+                                    + " / "
+                                    + dateAxis.get(dateIdx);
+                    if (hasActual) {
+                        dialog.setHeaderText(
+                                profileHint
+                                        + "\n"
+                                        + LABEL_STAGE3_ACTUAL
+                                        + ResultDispatchNormalizer.formatQty(actualQ)
+                                        + "（固定・ドラッグ移動不可）");
+                        dialog.setContentText(LABEL_STAGE3_PLAN + "の値 (m):");
+                    } else {
+                        dialog.setHeaderText(profileHint);
+                        dialog.setContentText("数量 (m):");
+                    }
+                    Optional<String> ov = dialog.showAndWait();
+                    ov.filter(s -> !s.isBlank())
+                            .ifPresent(
+                                    s -> {
+                                        double newTotal = ResultDispatchNormalizer.parseDouble(s);
+                                        ResultDispatchPivot.upsertAllocationForWideMerge(
+                                                doc.columns(),
+                                                doc.rows(),
+                                                wr.profileMap(),
+                                                dateAxis.get(dateIdx),
+                                                newTotal,
+                                                ResultDispatchPivot
+                                                        .DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+                                        ResultDispatchNormalizer.normalizeInPlace(
+                                                doc.columns(), doc.rows());
+                                        rebuildGrids();
+                                        markDispatchDocDirty();
+                                    });
+                });
     }
 
     private void installWideDnDHandlers() {
@@ -2875,445 +3340,6 @@ public final class DispatchInteractiveTabController {
         return true;
     }
 
-    private Path resolveStage3EquipmentCheckpointPath() {
-        if (shell == null) {
-            return Path.of("stage3_equipment_checkpoint.json");
-        }
-        Path jp = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
-        return jp.resolveSibling("stage3_equipment_checkpoint.json");
-    }
-
-    private void ensureStage3EquipmentFilteredModel() {
-        if (stage3EquipmentTablesHost == null || stage3EquipmentFilterModelWired) {
-            return;
-        }
-        stage3EquipmentFilterModelWired = true;
-        stage3EquipmentFilteredRows = new FilteredList<>(stage3EquipmentMasterRows, r -> true);
-        stage3EquipmentFilteredRows.addListener(
-                (ListChangeListener.Change<? extends Map<String, String>> c) -> rebuildStage3EquipmentNestedTables());
-        if (stage3EquipmentFilterField != null) {
-            stage3EquipmentFilterField
-                    .textProperty()
-                    .addListener((obs, prev, cur) -> applyStage3EquipmentRowFilter());
-        }
-        rebuildStage3EquipmentNestedTables();
-    }
-
-    private void applyStage3EquipmentRowFilter() {
-        if (stage3EquipmentFilteredRows == null) {
-            return;
-        }
-        String raw = stage3EquipmentFilterField != null ? stage3EquipmentFilterField.getText() : "";
-        String q = raw != null ? raw.trim() : "";
-        if (q.isEmpty()) {
-            stage3EquipmentFilteredRows.setPredicate(r -> true);
-        } else {
-            String qLower = q.toLowerCase(Locale.ROOT);
-            stage3EquipmentFilteredRows.setPredicate(row -> stage3EquipmentRowMatchesFilter(row, qLower));
-        }
-    }
-
-    private static boolean stage3EquipmentRowMatchesFilter(Map<String, String> row, String qLower) {
-        if (row == null || qLower.isEmpty()) {
-            return false;
-        }
-        for (String v : row.values()) {
-            if (v != null && v.toLowerCase(Locale.ROOT).contains(qLower)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static void installStage3EquipmentDataColumns(TableView<Map<String, String>> tv) {
-        if (tv == null || !tv.getColumns().isEmpty()) {
-            return;
-        }
-        TableColumn<Map<String, String>, String> c0 = new TableColumn<>("日付");
-        c0.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("date", "")));
-        TableColumn<Map<String, String>, String> c1 = new TableColumn<>("依頼NO");
-        c1.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("task_id", "")));
-        TableColumn<Map<String, String>, String> c2 = new TableColumn<>("設備");
-        c2.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("machine", "")));
-        TableColumn<Map<String, String>, String> c3 = new TableColumn<>("開始");
-        c3.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("start_dt", "")));
-        TableColumn<Map<String, String>, String> c4 = new TableColumn<>("終了");
-        c4.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("end_dt", "")));
-        TableColumn<Map<String, String>, String> c5 = new TableColumn<>("加工m（累計/合計）");
-        c5.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("machining_m", "")));
-        TableColumn<Map<String, String>, String> c6 = new TableColumn<>("OP");
-        c6.setCellValueFactory(cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("op", "")));
-        tv.getColumns().addAll(List.of(c0, c1, c2, c3, c4, c5, c6));
-    }
-
-    private static double stage3EquipmentTablePrefHeight(int rowCount) {
-        int capped = Math.min(Math.max(rowCount, 1), 22);
-        return 36.0 + capped * 26.0;
-    }
-
-    private void rebuildStage3EquipmentNestedTables() {
-        if (stage3EquipmentTablesHost == null) {
-            return;
-        }
-        stage3EquipmentTablesHost.getChildren().clear();
-        if (stage3EquipmentFilteredRows == null) {
-            return;
-        }
-        if (stage3EquipmentMasterRows.isEmpty()) {
-            Label empty =
-                    new Label(
-                            "設備フェイズのチェックポイントに加工イベントがありません。"
-                                    + "（未実行・別 JSON・人割当のみの試行など）");
-            empty.setWrapText(true);
-            stage3EquipmentTablesHost.getChildren().add(empty);
-            return;
-        }
-        if (stage3EquipmentFilteredRows.isEmpty()) {
-            int n = stage3EquipmentMasterRows.size();
-            Label hint =
-                    new Label(
-                            "絞り込み条件に一致する行がありません（チェックポイント全体 "
-                                    + n
-                                    + " 行）。"
-                                    + "別依頼で絞り込んでいないか確認し、「クリア」を試してください。"
-                                    + "数量未達表の行を選ぶと依頼NOが絞り込みに入ります。");
-            hint.setWrapText(true);
-            stage3EquipmentTablesHost.getChildren().add(hint);
-            return;
-        }
-        TreeMap<String, List<Map<String, String>>> byMachine = new TreeMap<>(STAGE3_MACHINE_NAME_ORDER::compare);
-        for (Map<String, String> row : stage3EquipmentFilteredRows) {
-            if (row == null) {
-                continue;
-            }
-            String rawM = row.get("machine");
-            String key = rawM == null || rawM.isBlank() ? "（設備名なし）" : rawM.strip();
-            byMachine.computeIfAbsent(key, k -> new ArrayList<>()).add(row);
-        }
-        for (var e : byMachine.entrySet()) {
-            String machine = e.getKey();
-            List<Map<String, String>> group = e.getValue();
-            TableView<Map<String, String>> tv = new TableView<>();
-            installStage3EquipmentDataColumns(tv);
-            tv.setItems(FXCollections.observableArrayList(group));
-            tv.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-            tv.setPrefHeight(stage3EquipmentTablePrefHeight(group.size()));
-            tv.setMinHeight(Region.USE_PREF_SIZE);
-            TitledPane pane = new TitledPane();
-            pane.setText(machine + " （" + group.size() + " 行）");
-            pane.setContent(tv);
-            pane.setExpanded(true);
-            pane.setMaxWidth(Double.MAX_VALUE);
-            stage3EquipmentTablesHost.getChildren().add(pane);
-        }
-    }
-
-    private void installStage3ResultTableColumns() {
-        if (stage3PeopleResultTable != null && stage3PeopleResultTable.getColumns().isEmpty()) {
-            TableColumn<Map<String, String>, String> p0 = new TableColumn<>("区分");
-            p0.setCellValueFactory(
-                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("kind", "")));
-            TableColumn<Map<String, String>, String> p1 = new TableColumn<>("依頼NO");
-            p1.setCellValueFactory(
-                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("task_id", "")));
-            TableColumn<Map<String, String>, String> p2 = new TableColumn<>("日付");
-            p2.setCellValueFactory(
-                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("date", "")));
-            TableColumn<Map<String, String>, String> p3 = new TableColumn<>("内容");
-            p3.setCellValueFactory(
-                    cd -> new ReadOnlyObjectWrapper<>(cd.getValue().getOrDefault("detail", "")));
-            stage3PeopleResultTable.getColumns().addAll(List.of(p0, p1, p2, p3));
-            stage3PeopleResultTable.setColumnResizePolicy(
-                    TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-        }
-    }
-
-    private void clearStage3EquipmentResultTable() {
-        ensureStage3EquipmentFilteredModel();
-        stage3EquipmentMasterRows.clear();
-        if (stage3EquipmentFilterField != null) {
-            stage3EquipmentFilterField.setText("");
-        }
-        if (stage3EquipmentFilteredRows != null) {
-            stage3EquipmentFilteredRows.setPredicate(r -> true);
-        }
-    }
-
-    private void clearStage3PeopleResultTable() {
-        if (stage3PeopleResultTable != null) {
-            stage3PeopleResultTable.setItems(FXCollections.observableArrayList());
-        }
-    }
-
-    private static String agentDebugSessionIdPreferEnv() {
-        String a = System.getenv("CURSOR_DEBUG_SESSION_ID");
-        if (a != null && !a.isBlank()) {
-            return a.trim();
-        }
-        String b = System.getenv("PM_AI_AGENT_DEBUG_SESSION_ID");
-        if (b != null && !b.isBlank()) {
-            return b.trim();
-        }
-        return AgentDebugLog.DEFAULT_SESSION_ID;
-    }
-
-    /**
-     * 設備フェイズ結果表のデータ源（チェックポイント JSON）と JR260502 行の有無を NDJSON に残す。
-     * 数量未達は別 JSON 由来のため、表に無い／未達に出るの切り分けに使う。
-     */
-    private void agentLogStage3EquipmentTableLoad(
-            Path checkpointPath,
-            boolean fileExists,
-            int rawTimelineArrayLen,
-            List<Map<String, String>> masterRows,
-            int filteredRowsSize,
-            String filterFieldText) {
-        try {
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put(
-                    "checkpointPath",
-                    checkpointPath != null ? checkpointPath.toAbsolutePath().toString() : "");
-            data.put("checkpointFileExists", fileExists);
-            data.put("rawTimelineArrayLen", rawTimelineArrayLen);
-            data.put("masterRowsBuilt", masterRows.size());
-            data.put("filteredRowsSize", filteredRowsSize);
-            data.put("filterFieldText", filterFieldText != null ? filterFieldText : "");
-
-            int jr = 0;
-            int jrSlit = 0;
-            int jrSec = 0;
-            List<String> sampleMac = new ArrayList<>();
-            for (Map<String, String> m : masterRows) {
-                String tid = m.getOrDefault("task_id", "");
-                if (!tid.contains("JR260502")) {
-                    continue;
-                }
-                jr++;
-                String mac = m.getOrDefault("machine", "");
-                if (mac.contains("スリット")) {
-                    jrSlit++;
-                }
-                if (mac.contains("SEC")) {
-                    jrSec++;
-                }
-                if (sampleMac.size() < 10) {
-                    sampleMac.add(mac.length() > 100 ? mac.substring(0, 100) + "…" : mac);
-                }
-            }
-            data.put("jr260502_rowsInMaster", jr);
-            data.put("jr260502_machineFieldContainsSlit", jrSlit);
-            data.put("jr260502_machineFieldContainsSec", jrSec);
-            data.put("jr260502_sampleMachineFields", sampleMac);
-
-            Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
-            AgentDebugLog.appendStructured(
-                    ui,
-                    agentDebugSessionIdPreferEnv(),
-                    "H6",
-                    "DispatchInteractiveTabController.java:loadStage3EquipmentCheckpointIntoTable",
-                    "stage3_equipment_table_source",
-                    data);
-        } catch (Throwable ignored) {
-            // debug-only
-        }
-    }
-
-    private void loadStage3EquipmentCheckpointIntoTable() {
-        if (stage3EquipmentTablesHost == null) {
-            return;
-        }
-        ensureStage3EquipmentFilteredModel();
-        Path ck = resolveStage3EquipmentCheckpointPath();
-        String filterSnap = stage3EquipmentFilterField != null ? stage3EquipmentFilterField.getText() : "";
-        if (!Files.isRegularFile(ck)) {
-            agentLogStage3EquipmentTableLoad(ck, false, 0, List.of(), 0, filterSnap);
-            clearStage3EquipmentResultTable();
-            return;
-        }
-        try {
-            JsonNode root = STAGE3_RESULT_JSON.readTree(Files.readString(ck, StandardCharsets.UTF_8));
-            JsonNode arr = root.get("timeline_events");
-            if (arr == null || !arr.isArray()) {
-                agentLogStage3EquipmentTableLoad(ck, true, 0, List.of(), 0, filterSnap);
-                clearStage3EquipmentResultTable();
-                return;
-            }
-            List<Map<String, String>> rows = new ArrayList<>();
-            for (JsonNode ev : arr) {
-                if (ev == null || !ev.isObject()) {
-                    continue;
-                }
-                Map<String, String> m = new LinkedHashMap<>();
-                m.put("date", textOrEmpty(ev, "date"));
-                m.put("task_id", stage3EquipmentCheckpointTaskIdForDisplay(ev));
-                m.put("machine", textOrEmpty(ev, "machine"));
-                m.put("start_dt", textOrEmpty(ev, "start_dt"));
-                m.put("end_dt", textOrEmpty(ev, "end_dt"));
-                m.put("machining_m", stage3EquipmentMachiningMeters(ev));
-                m.put("op", textOrEmpty(ev, "op"));
-                rows.add(m);
-            }
-            stage3EquipmentMasterRows.setAll(rows);
-            applyStage3EquipmentRowFilter();
-            int filtered =
-                    stage3EquipmentFilteredRows != null ? stage3EquipmentFilteredRows.size() : -1;
-            agentLogStage3EquipmentTableLoad(ck, true, arr.size(), rows, filtered, filterSnap);
-        } catch (Exception e) {
-            agentLogStage3EquipmentTableLoad(ck, true, -1, List.of(), -1, filterSnap);
-            clearStage3EquipmentResultTable();
-            if (shell != null) {
-                shell.appendLog("[dispatch-editor] stage3 equipment checkpoint read failed: " + e.getMessage());
-            }
-        }
-    }
-
-    private static String textOrEmpty(JsonNode n, String field) {
-        JsonNode v = n.get(field);
-        if (v == null || v.isNull()) {
-            return "";
-        }
-        return v.asText("");
-    }
-
-    /** checkpoint の {@code task_id} が空の行は日次始業準備（設備タイムライン上の非依頼セグメント）。 */
-    private static String stage3EquipmentCheckpointTaskIdForDisplay(JsonNode ev) {
-        String raw = textOrEmpty(ev, "task_id").strip();
-        if (!raw.isEmpty()) {
-            return raw;
-        }
-        return STAGE3_EQUIPMENT_DAILY_STARTUP_TASK_LABEL;
-    }
-
-    /**
-     * 設備フェイズチェックポイントの加工イベント: {@code (加工累計m)/(タスク合計m)}。
-     * 累計は {@code (already_done_units + units_done) × unit_m}。{@code already_done_units} が無い旧 JSON は
-     * {@code units_done × unit_m} のみとする。
-     * 合計は {@code total_qty_m} を優先し、無いときは {@code total_units×unit_m}。
-     * テキストの {@code machining_m} があればそのまま表示（手編集・将来形式用）。
-     */
-    private static String stage3EquipmentMachiningMeters(JsonNode ev) {
-        if (ev == null || !ev.isObject()) {
-            return "";
-        }
-        JsonNode explicit = ev.get("machining_m");
-        if (explicit != null && !explicit.isNull() && explicit.isTextual()) {
-            String s = explicit.asText().strip();
-            if (!s.isEmpty()) {
-                return s;
-            }
-        }
-        JsonNode ud = ev.get("units_done");
-        JsonNode um = ev.get("unit_m");
-        if (ud == null || um == null || !ud.isNumber() || !um.isNumber()) {
-            return "";
-        }
-        double unitM = um.asDouble();
-        double slotM = ud.asDouble() * unitM;
-        if (Math.abs(slotM) < 1e-12) {
-            return "";
-        }
-        JsonNode ad = ev.get("already_done_units");
-        double cumUnits =
-                ad != null && ad.isNumber() ? ad.asDouble() + ud.asDouble() : ud.asDouble();
-        double cumM = cumUnits * unitM;
-        if (Math.abs(cumM) < 1e-12) {
-            return "";
-        }
-        String cumPart = ResultDispatchNormalizer.formatQty(cumM) + "m";
-        double totalM = stage3EquipmentTotalMetersDenominator(ev, unitM);
-        if (totalM > 1e-12) {
-            return cumPart + "/" + ResultDispatchNormalizer.formatQty(totalM) + "m";
-        }
-        return cumPart;
-    }
-
-    private static double stage3EquipmentTotalMetersDenominator(JsonNode ev, double unitM) {
-        JsonNode tqm = ev.get("total_qty_m");
-        if (tqm != null && tqm.isNumber()) {
-            double v = tqm.asDouble();
-            if (v > 1e-12) {
-                return v;
-            }
-        }
-        JsonNode tu = ev.get("total_units");
-        if (tu != null && tu.isNumber() && unitM > 1e-12) {
-            return tu.asDouble() * unitM;
-        }
-        return 0.0;
-    }
-
-    private void loadStage3PeopleShortageIntoTable(Path shortageJson) {
-        if (stage3PeopleResultTable == null) {
-            return;
-        }
-        if (shortageJson == null || !Files.isRegularFile(shortageJson)) {
-            clearStage3PeopleResultTable();
-            return;
-        }
-        try {
-            JsonNode root = STAGE3_RESULT_JSON.readTree(Files.readString(shortageJson, StandardCharsets.UTF_8));
-            List<Map<String, String>> rows = new ArrayList<>();
-            appendShortageNodes(rows, root.get("op_shortage"), "OP不足");
-            appendShortageNodes(rows, root.get("as_shortage"), "AS不足");
-            JsonNode dq = root.get("dispatch_qty_shortfall");
-            if (dq != null && dq.isArray()) {
-                for (JsonNode x : dq) {
-                    if (x == null || !x.isObject()) {
-                        continue;
-                    }
-                    Map<String, String> m = new LinkedHashMap<>();
-                    m.put("kind", "数量未達");
-                    m.put("task_id", textOrEmpty(x, "task_id"));
-                    m.put("date", textOrEmpty(x, "dispatch_date"));
-                    String note = textOrEmpty(x, "note");
-                    String tgt = textOrEmpty(x, "target_m");
-                    String done = textOrEmpty(x, "done_m");
-                    m.put("detail", "target=" + tgt + " done=" + done + " " + note);
-                    rows.add(m);
-                }
-            }
-            stage3PeopleResultTable.setItems(FXCollections.observableArrayList(rows));
-        } catch (Exception e) {
-            clearStage3PeopleResultTable();
-            if (shell != null) {
-                shell.appendLog("[dispatch-editor] stage3 people shortage read failed: " + e.getMessage());
-            }
-        }
-    }
-
-    private static void appendShortageNodes(List<Map<String, String>> rows, JsonNode arr, String kind) {
-        if (arr == null || !arr.isArray()) {
-            return;
-        }
-        for (JsonNode x : arr) {
-            if (x == null || !x.isObject()) {
-                continue;
-            }
-            Map<String, String> m = new LinkedHashMap<>();
-            m.put("kind", kind);
-            m.put("task_id", textOrEmpty(x, "task_id"));
-            m.put("date", textOrEmpty(x, "date"));
-            String reason = textOrEmpty(x, "reason");
-            String proc = textOrEmpty(x, "process");
-            String mn = textOrEmpty(x, "machine_name");
-            m.put("detail", reason + " / " + proc + " / " + mn);
-            rows.add(m);
-        }
-    }
-
-    private void refreshStage3ResultTablesAfterTrial(String phase, Path shortageJson) {
-        if ("equipment".equals(phase) || "both".equals(phase)) {
-            loadStage3EquipmentCheckpointIntoTable();
-        } else {
-            clearStage3EquipmentResultTable();
-        }
-        if ("people".equals(phase) || "both".equals(phase)) {
-            loadStage3PeopleShortageIntoTable(shortageJson);
-        } else {
-            clearStage3PeopleResultTable();
-        }
-    }
-
     private static Optional<Double> pickMoveQuantity(Window owner, double max) {
         TextInputDialog dialog = new TextInputDialog(ResultDispatchNormalizer.formatQty(max));
         dialog.initOwner(owner);
@@ -3328,10 +3354,12 @@ public final class DispatchInteractiveTabController {
     public static final class WideRow {
         private final Map<String, String> staticPart;
         private final double[] amounts;
+        private final double[] actualAmounts;
 
         WideRow(Map<String, String> staticPart, int nDates) {
             this.staticPart = new LinkedHashMap<>(staticPart);
             this.amounts = new double[nDates];
+            this.actualAmounts = new double[nDates];
         }
 
         String getStatic(String col) {
@@ -3349,11 +3377,28 @@ public final class DispatchInteractiveTabController {
         void setAmount(int di, double v) {
             amounts[di] = v;
         }
+
+        double getActualAmount(int di) {
+            return actualAmounts[di];
+        }
+
+        void setActualAmount(int di, double v) {
+            actualAmounts[di] = v;
+        }
+
+        double sumActualAmounts() {
+            double sum = 0;
+            for (double v : actualAmounts) {
+                sum += v;
+            }
+            return sum;
+        }
     }
 
-    public record ByDayRow(String process, String machine, String processingContent, double[] amounts) {
+    public record ByDayRow(
+            String process, String machine, String processingContent, double[] amounts, double[] actualAmounts) {
         ByDayRow(String process, String machine, String processingContent, int n) {
-            this(process, machine, processingContent, new double[n]);
+            this(process, machine, processingContent, new double[n], new double[n]);
         }
 
         double getAmount(int i) {
@@ -3362,6 +3407,22 @@ public final class DispatchInteractiveTabController {
 
         void setAmount(int i, double v) {
             amounts[i] = v;
+        }
+
+        double getActualAmount(int i) {
+            return actualAmounts[i];
+        }
+
+        void setActualAmount(int i, double v) {
+            actualAmounts[i] = v;
+        }
+
+        double sumActualAmounts() {
+            double sum = 0;
+            for (double v : actualAmounts) {
+                sum += v;
+            }
+            return sum;
         }
     }
 }

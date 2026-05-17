@@ -35,9 +35,6 @@ def run_stage2_generate_plan() -> None:
 
 def run_interactive_dispatch_trial_from_result_dispatch_json(
     path: Path,
-    *,
-    stage3_phase: str | None = None,
-    stage3_two_phase: bool | None = None,
 ) -> tuple[int, Path | None]:
     """
     段階3: ``結果_配台表.json`` を入力とし、段階2同一条件で配台を実行する。
@@ -72,9 +69,38 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
     try:
         print("[dispatch trial] 計画タスクを読み込み、表データをマージ中…", flush=True)
         tasks_df = pc.load_planning_tasks_df()
+        try:
+            df_src = pc.load_tasks_df()
+        except Exception as _e_src:
+            print(
+                f"[dispatch trial] 加工計画DATA 読込に失敗（静的列の補完のみスキップ）: {_e_src}",
+                flush=True,
+            )
+            df_src = None
+        n_fill = pc.fill_interactive_result_dispatch_json_rows_from_planning_sources(
+            rows, tasks_df, df_src
+        )
+        if n_fill:
+            print(f"[dispatch trial] 計画入力・加工計画DATA から {n_fill} セルを補完しました。", flush=True)
         merged_df, targets = pc.merge_interactive_result_dispatch_json_into_tasks_df(
             tasks_df, rows
         )
+        try:
+            from planning_core import agent_debug_ndjson as _adn
+
+            _adn.append_structured(
+                "H1",
+                "stage2_identical_dispatch_runner",
+                "merge_interactive_result_dispatch_json_into_tasks_df done",
+                {
+                    "source_json": str(path),
+                    "y5_json_rows": _adn.y5_21_json_row_sample(rows),
+                    "y5_targets": _adn.y5_21_targets_sample(dict(targets) if targets else None),
+                    "n_targets": len(targets or {}),
+                },
+            )
+        except Exception:
+            pass
         print("[dispatch trial] 段階2同一条件で配台を実行中…（時間がかかる場合があります）", flush=True)
         master_abs = pc._master_workbook_path_resolved()
         with pc._override_default_factory_hours_from_master(master_abs):
@@ -87,10 +113,6 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
                 interactive_result_dispatch_json_columns=json_columns
                 if isinstance(json_columns, list)
                 else None,
-                interactive_stage3_two_phase=stage3_two_phase,
-                interactive_stage3_phase=stage3_phase,
-                interactive_stage3_source_json=str(path),
-                interactive_stage3_checkpoint_path=None,
             )
         snap = pc.interactive_trial_shortages_snapshot()
         md_snap = pc.interactive_trial_meters_done_snapshot()
@@ -120,10 +142,48 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
             encoding="utf-8",
         )
         print("[dispatch trial] 不足情報JSONを書き出しました。", flush=True)
+        try:
+            from planning_core import agent_debug_ndjson as _adn2
+
+            def _y5_touching(seq):
+                if not seq:
+                    return []
+                out = []
+                for x in seq:
+                    if "Y5-21" in json.dumps(x, default=str, ensure_ascii=False):
+                        out.append(x)
+                    if len(out) >= 20:
+                        break
+                return out
+
+            _adn2.append_structured(
+                "H4",
+                "stage2_identical_dispatch_runner",
+                "trial success shortages snapshot",
+                {
+                    "shortage_path": str(shortage_path),
+                    "y5_dispatch_qty_shortfall": _y5_touching(dispatch_qty_shortfall),
+                    "y5_op_shortage": _y5_touching(snap.get("op_shortage")),
+                    "y5_as_shortage": _y5_touching(snap.get("as_shortage")),
+                },
+            )
+        except Exception:
+            pass
         return 0, shortage_path
     except Exception as e:
         if type(e).__name__ == "PlanningValidationError":
             msg = str(e).strip() or "PlanningValidationError"
+            try:
+                from planning_core import agent_debug_ndjson as _adn_e
+
+                _adn_e.append_structured(
+                    "H2",
+                    "stage2_identical_dispatch_runner",
+                    "PlanningValidationError",
+                    {"error": msg, "y5_json_rows": _adn_e.y5_21_json_row_sample(rows)},
+                )
+            except Exception:
+                pass
             print(msg, flush=True)
             try:
                 pc._write_stage2_blocking_message(msg)

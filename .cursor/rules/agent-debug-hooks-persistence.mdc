@@ -1,0 +1,46 @@
+---
+description: Cursor フックと正本 API による NDJSON デバッグ計測の永続化（ログ取得・計測追加時）
+alwaysApply: true
+---
+
+# Agent debug：フック永続化と正本 API
+
+## 目的
+
+エージェントが **ログを取得するための NDJSON 計測**を追加・変更するとき、毎回手順がぶれないよう **Cursor フック**と **コード正本**で規約を固定する。
+
+## 関連ルール（詳細）
+
+- **出力手順・パス解決**: `.cursor/rules/agent-debug-ndjson-logging.mdc`
+- **WSL / Windows JVM ミラー**: `.cursor/rules/agent-debug-wsl-windows-mirror.mdc`
+
+## 永続フック（`.cursor/hooks.json`）
+
+| イベント | スクリプト | 役割 |
+|----------|------------|------|
+| `sessionStart` | `.cursor/hooks/agent_debug_session_context.py` | セッション開始時に正本 API・禁止事項を `additional_context` 注入 |
+| `postToolUse` | `.cursor/hooks/agent_debug_post_edit_guard.py` | `Write` / `StrReplace` 後に ad-hoc ログパス等を検知して注意 |
+| `afterFileEdit` | 同上 | エディタ直編集後も同ガード（ペイロード差異はスクリプト内で吸収） |
+
+フックを無効化しない。新規デバッグ計測を入れる依頼では、**先に本ルールと上記 2 ルールを読む**。
+
+## コード正本（再掲）
+
+| 言語 | API | 備考 |
+|------|-----|------|
+| Java / JavaFX | `jp.co.pm.ai.desktop.debug.AgentDebugLog` | `appendStructured(ui, sessionId, …)`。ミラーはクラス内 |
+| Python | `planning_core.agent_debug_ndjson` | `append_structured(...)`。`PM_AI_DEBUG_LOG` 等は親 JVM から継承 |
+
+**禁止**: `/mnt/c/...` やリポジトリ名固定の絶対パス、セッション ID 埋め込みの `_agent_debug_log_*` ヘルパ、`.cursor/debug-*.log` への `open` 直書き。
+
+## エージェント作業手順
+
+1. チャットで `debug-<sessionId>.log` が指定されていれば **その sessionId** を使う。
+2. Java 計測は `// #region agent log` … `// #endregion` で囲み、`shell.snapshotUiEnv()`（または `collectUiEnv()`）を渡す。
+3. Python 計測は `agent_debug_ndjson.append_structured` のみ。パス解決はモジュール内 `resolve_ndjson_path()` に任せる。
+4. ログで不具合が確証できたら **計測ブロックだけ削除**（`AgentDebugLog` と本ルール・フックは残す）。
+5. WSL でログが空のときは `agent-debug-wsl-windows-mirror.mdc` の環境変数と UNC ミラーを確認する。
+
+## 変更時
+
+フックや正本 API を変えたら **同じ変更単位で** 本ファイルと `.cursor/hooks.json` を更新する。

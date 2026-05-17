@@ -7,7 +7,9 @@ alwaysApply: true
 
 ## 実装の正
 
-- **コード**: `code_java/src/main/java/jp/co/pm/ai/desktop/debug/AgentDebugLog.java`（ネストクローンでは `Production-Control-System/code_java/...` と同等）
+- **Java**: `code_java/src/main/java/jp/co/pm/ai/desktop/debug/AgentDebugLog.java`（ネストクローンでは `Production-Control-System/code_java/...` と同等）
+- **Python 子プロセス**: `code/python/planning_core/agent_debug_ndjson.py`（`append_structured` / `resolve_ndjson_path`）
+- **永続フック**: `.cursor/rules/agent-debug-hooks-persistence.mdc` と `.cursor/hooks.json`
 
 ## 出力に使う API（必須）
 

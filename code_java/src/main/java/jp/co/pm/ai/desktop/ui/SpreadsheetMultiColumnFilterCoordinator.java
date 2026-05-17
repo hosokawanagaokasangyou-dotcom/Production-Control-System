@@ -16,11 +16,17 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
  * ControlsFX {@link SpreadsheetView} の列フィルタを Excel と同様に複数列 AND で合成する。
  *
  * <p>各列の「表示する値」の集合を保持し、{@link SpreadsheetView#setHiddenRows} で行の表示を更新する。
+ * {@link #setRowTextSearchQuery} による行検索（いずれかの列への部分一致）が有効なときは、列フィルタと AND で合成する。
  */
 public final class SpreadsheetMultiColumnFilterCoordinator {
 
     private static final WeakHashMap<SpreadsheetView, Map<Integer, Set<String>>> COLUMN_ALLOWED =
             new WeakHashMap<>();
+
+    /**
+     * 行単位の全文検索（いずれかの列のセル文字列に部分一致する行だけ表示）。列フィルタと AND で合成する。
+     */
+    private static final WeakHashMap<SpreadsheetView, String> ROW_TEXT_SEARCH = new WeakHashMap<>();
 
     /** 計画結果ビューアなど、フィルタ確定後にストレージへ保存するフック（1 ビュー 1 つ）。 */
     private static final WeakHashMap<SpreadsheetView, Runnable> COLUMN_FILTER_COMMIT_HOOK =
@@ -72,6 +78,32 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
     }
 
     /**
+     * 行検索クエリのみを解除する（列フィルタの許容値集合はそのまま）。
+     *
+     * <p>{@link SpreadsheetTabularSupport#clearAllFiltersAndSort} からも呼ばれる。
+     */
+    public static void clearRowTextSearch(SpreadsheetView spv) {
+        if (spv != null) {
+            ROW_TEXT_SEARCH.remove(spv);
+        }
+    }
+
+    /**
+     * 行検索を設定する。{@code query} が null・空白のときは解除し、列フィルタのみの表示に戻す。
+     */
+    public static void setRowTextSearchQuery(SpreadsheetView spv, String query) {
+        Objects.requireNonNull(spv);
+        String q = query == null ? "" : query.trim();
+        if (q.isEmpty()) {
+            ROW_TEXT_SEARCH.remove(spv);
+        } else {
+            ROW_TEXT_SEARCH.put(spv, q);
+        }
+        recomputeHiddenRows(spv);
+        runColumnFilterCommitHook(spv);
+    }
+
+    /**
      * {@link #copyColumnAllowedByIndex} で得たスナップショットを再適用する。
      *
      * <p>{@link SpreadsheetTabularSupport#applyColumnFiltersWithDialog} 直後など、コーディネータが空になった
@@ -102,6 +134,31 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
      *
      * @param selectedValues その列で表示を許可するセル文字列（チェック済み集合）
      */
+    /**
+     * 指定列の空欄・空白のみのセル値を持つ行を非表示にする（初期表示用）。
+     *
+     * <p>非空の値が 1 つも無い、または列に空欄が無いときは何もしない。
+     */
+    public static void applyDefaultExcludeBlankCellValues(SpreadsheetView spv, int column) {
+        if (spv == null || column < 0) {
+            return;
+        }
+        Set<String> universe = distinctValuesForColumnRespectingOtherFilters(spv, column);
+        if (universe.isEmpty()) {
+            return;
+        }
+        Set<String> allowed = new HashSet<>();
+        for (String v : universe) {
+            if (v != null && !v.isBlank()) {
+                allowed.add(v);
+            }
+        }
+        if (allowed.isEmpty() || allowed.size() >= universe.size()) {
+            return;
+        }
+        commitColumnSelection(spv, column, allowed);
+    }
+
     public static void commitColumnSelection(SpreadsheetView spv, int column, Set<String> selectedValues) {
         Objects.requireNonNull(spv);
         Objects.requireNonNull(selectedValues);
@@ -143,6 +200,9 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
     }
 
     static boolean rowPassesFiltersExcept(SpreadsheetView spv, int gridRow, int exceptColumn) {
+        if (!rowMatchesTextSearch(spv, gridRow)) {
+            return false;
+        }
         Map<Integer, Set<String>> map = COLUMN_ALLOWED.get(spv);
         if (map == null || map.isEmpty()) {
             return true;
@@ -172,6 +232,26 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
         return true;
     }
 
+    private static boolean rowMatchesTextSearch(SpreadsheetView spv, int gridRow) {
+        String needle = ROW_TEXT_SEARCH.get(spv);
+        if (needle == null || needle.isEmpty()) {
+            return true;
+        }
+        Grid grid = spv.getGrid();
+        if (grid == null || grid.getRows() == null) {
+            return true;
+        }
+        int colCount = spv.getColumns().size();
+        var rowCells = grid.getRows().get(gridRow);
+        for (int c = 0; c < colCount && c < rowCells.size(); c++) {
+            String txt = rowCells.get(c).getText();
+            if (txt != null && txt.contains(needle)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static void recomputeHiddenRows(SpreadsheetView spv) {
         Map<Integer, Set<String>> map = COLUMN_ALLOWED.get(spv);
         Grid grid = spv.getGrid();
@@ -181,28 +261,30 @@ public final class SpreadsheetMultiColumnFilterCoordinator {
         int first = spv.getFilteredRow() + 1;
         int n = grid.getRowCount();
         BitSet hidden = new BitSet(Math.max(n, spv.getHiddenRows().size()));
-        if (map == null || map.isEmpty()) {
-            spv.setHiddenRows(hidden);
-            return;
-        }
+        boolean hasColumnFilters = map != null && !map.isEmpty();
         int colCount = spv.getColumns().size();
         for (int i = first; i < n; i++) {
             boolean hide = false;
-            for (Map.Entry<Integer, Set<String>> e : map.entrySet()) {
-                int col = e.getKey();
-                if (col < 0 || col >= colCount) {
-                    continue;
+            if (hasColumnFilters) {
+                for (Map.Entry<Integer, Set<String>> e : map.entrySet()) {
+                    int col = e.getKey();
+                    if (col < 0 || col >= colCount) {
+                        continue;
+                    }
+                    Set<String> allowed = e.getValue();
+                    if (allowed == null || allowed.isEmpty()) {
+                        hide = true;
+                        break;
+                    }
+                    String txt = grid.getRows().get(i).get(col).getText();
+                    if (!allowed.contains(txt)) {
+                        hide = true;
+                        break;
+                    }
                 }
-                Set<String> allowed = e.getValue();
-                if (allowed == null || allowed.isEmpty()) {
-                    hide = true;
-                    break;
-                }
-                String txt = grid.getRows().get(i).get(col).getText();
-                if (!allowed.contains(txt)) {
-                    hide = true;
-                    break;
-                }
+            }
+            if (!hide && !rowMatchesTextSearch(spv, i)) {
+                hide = true;
             }
             hidden.set(i, hide);
         }

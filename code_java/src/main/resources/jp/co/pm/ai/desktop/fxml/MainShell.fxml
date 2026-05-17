@@ -23,6 +23,8 @@
             <Label text="テーマ"/>
             <ComboBox fx:id="themeCombo" prefWidth="196.0"/>
             <Separator orientation="VERTICAL"/>
+            <Button mnemonicParsing="false" onAction="#onOpenDispatchUsageGuideDocxAction" text="配台の使い方"/>
+            <Separator orientation="VERTICAL"/>
             <HBox fx:id="shellStageProgressBox" alignment="CENTER_LEFT" managed="false" spacing="8.0" styleClass="pm-shell-stage-progress" visible="false">
                 <Label fx:id="shellStageProgressLabel" minWidth="130.0" text="" />
                 <ProgressIndicator fx:id="shellStageBusyIndicator" managed="false" prefHeight="22.0" prefWidth="22.0" visible="false" />
@@ -64,6 +66,13 @@
                 <Tab fx:id="mainShellTabGlobalSettings" closable="false" text="グローバル設定">
                     <content>
                         <fx:include fx:id="globalSettingsTab" source="GlobalSettingsTab.fxml"/>
+                    </content>
+                </Tab>
+                <Tab fx:id="mainShellTabSummaryAiDispatchExportCustomize" closable="false"
+                     text="サマリ_AI配台エクセル生成カスタイマイズ">
+                    <content>
+                        <fx:include fx:id="summaryAiDispatchExportCustomizeTab"
+                                    source="SummaryAiDispatchExportCustomizeTab.fxml"/>
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabUserProfiles" closable="false" text="ユーザープロファイル">

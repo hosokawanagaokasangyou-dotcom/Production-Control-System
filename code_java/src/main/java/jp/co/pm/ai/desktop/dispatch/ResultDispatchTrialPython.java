@@ -5,6 +5,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -40,21 +41,6 @@ public final class ResultDispatchTrialPython {
             Map<String, String> extraUiEnv,
             Consumer<String> logLine)
             throws Exception {
-        return runTrial(jsonPath, pythonExe, pythonScriptDir, extraUiEnv, logLine, null);
-    }
-
-    /**
-     * @param stage3Phase {@code equipment} / {@code people} / {@code both} で段階3二相（案B）を有効化。{@code null}
-     *     で従来の単相試行。
-     */
-    public static String runTrial(
-            Path jsonPath,
-            Path pythonExe,
-            Path pythonScriptDir,
-            Map<String, String> extraUiEnv,
-            Consumer<String> logLine,
-            String stage3Phase)
-            throws Exception {
         Path script = pythonScriptDir.resolve("dispatch_interactive_trial.py");
         if (!Files.isRegularFile(script)) {
             throw new IllegalStateException("missing dispatch_interactive_trial.py in " + pythonScriptDir);
@@ -63,9 +49,6 @@ public final class ResultDispatchTrialPython {
         cmd.add(pythonExe.toString());
         cmd.add(script.toAbsolutePath().toString());
         cmd.add(jsonPath.toAbsolutePath().toString());
-        if (stage3Phase != null && !stage3Phase.isBlank()) {
-            cmd.add(stage3Phase.trim().toLowerCase());
-        }
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.directory(pythonScriptDir.toFile());
         pb.redirectErrorStream(true);
@@ -113,29 +96,20 @@ public final class ResultDispatchTrialPython {
      * out}).
      */
     private static String trialFailureHint(String mergedOut, Path pythonExe) {
-        if (mergedOut == null || mergedOut.isEmpty()) {
+        if (mergedOut == null) {
             return "";
         }
-        StringBuilder sb = new StringBuilder();
-        if (mergedOut.contains("No module named 'pydantic'")) {
-            sb.append("\n対処: ログ先頭の「Python 実行ファイル」と同じパスに pip install すること（別の python に入れると解消しません）。例: \"")
-                    .append(pythonExe)
-                    .append("\" -m pip install pydantic\n")
-                    .append("またはリポジトリの code/python/requirements.txt を ")
-                    .append("\"")
-                    .append(pythonExe)
-                    .append(
-                            "\" -m pip install -r （リポジトリルート）\\\\code\\\\python\\\\requirements.txt で一括。\n")
-                    .append("Windows では scripts/pm_ai_embed_pip_install.ps1 も利用可。-PythonExe に上記パスを指定。\n")
-                    .append("環境変数タブの PM_AI_PYTHON が別インタープリターを指していないかも確認してください。\n");
+        String lower = mergedOut.toLowerCase(Locale.ROOT);
+        if (lower.contains("modulenotfounderror") || lower.contains("no module named")) {
+            return "\n\n[hint] Python 環境に依存パッケージが不足している可能性があります。"
+                    + " 環境タブの PM_AI_PYTHON_EXE と planning_core が import できる site-packages を確認してください。";
         }
-        if (mergedOut.contains("pywin32_bootstrap") || mergedOut.contains("pywin32.pth")) {
-            sb.append(
-                    "pywin32.pth 警告: pywin32 が不完全です。例: \"")
-                    .append(pythonExe)
-                    .append("\" -m pip install --upgrade --force-reinstall pywin32\n")
-                    .append("配台試行のみで COM が不要なら、Lib\\\\site-packages\\\\pywin32.pth をリネームして無効化してもよい場合があります。\n");
+        if (lower.contains("permission denied") || lower.contains("access is denied")) {
+            return "\n\n[hint] JSON/xlsx の書き込み権限またはファイルロックを確認してください。";
         }
-        return sb.toString();
+        if (pythonExe != null && mergedOut.contains(pythonExe.toString())) {
+            return "\n\n[hint] 指定 Python: " + pythonExe;
+        }
+        return "";
     }
 }

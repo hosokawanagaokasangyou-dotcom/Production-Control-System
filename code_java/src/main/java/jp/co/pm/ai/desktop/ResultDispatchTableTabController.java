@@ -34,6 +34,7 @@ import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchDeadlineJudgment;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
@@ -111,6 +112,8 @@ public final class ResultDispatchTableTabController {
 
     private volatile boolean resultDispatchPresentationHooksInstalled;
 
+    private boolean embeddedInDeliveryCalendar;
+
     @FXML
     private void initialize() {
         hintLabel.setText(HINT_TEXT);
@@ -168,6 +171,11 @@ public final class ResultDispatchTableTabController {
             refreshButton.setVisible(visible);
             refreshButton.setManaged(visible);
         }
+    }
+
+    /** 納期管理ビューに埋め込んだときのみ {@code true}（納期判定列を付与）。 */
+    void setEmbeddedInDeliveryCalendar(boolean embedded) {
+        embeddedInDeliveryCalendar = embedded;
     }
 
     /** 親（納期管理ビュー）の再読込成功後に呼ぶ。 */
@@ -325,9 +333,14 @@ public final class ResultDispatchTableTabController {
                             headersRef, persistedLayout.get(), 112);
             final double widthDefault = 112;
 
+            int deadlineJudgmentColIdx = -1;
+            if (embeddedInDeliveryCalendar) {
+                deadlineJudgmentColIdx =
+                        headersRef.indexOf(ResultDispatchDeadlineJudgment.COL_TITLE);
+            }
             GridBase grid =
                     SpreadsheetTabularSupport.buildReadOnlyPlainGrid(
-                            headersRef, rows, headerColumnCount.get());
+                            headersRef, rows, headerColumnCount.get(), deadlineJudgmentColIdx);
             TableColumnOrderPersistence.SpreadsheetTabPresentationPrefs pres =
                     spreadsheetTabPrefs.get();
             SpreadsheetTabularSupport.applySpreadsheetGridRowHeightsAndWrap(
@@ -456,6 +469,8 @@ public final class ResultDispatchTableTabController {
             TableColumnOrderPersistence.saveColumnVisibility(
                     TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE, visAfter);
 
+            injectDeadlineJudgmentColumnIfNeeded();
+
             rebuildSpreadsheet();
             if (userCompletionDialog) {
                 shell.showInformationDialog(
@@ -483,6 +498,35 @@ public final class ResultDispatchTableTabController {
         rows.clear();
         persistedLayout.set(List.of());
         spreadsheetView.setGrid(new GridBase(0, 0));
+    }
+
+    private void injectDeadlineJudgmentColumnIfNeeded() {
+        if (!embeddedInDeliveryCalendar || headersRef.isEmpty()) {
+            return;
+        }
+        final String col = ResultDispatchDeadlineJudgment.COL_TITLE;
+        int colIdx = headersRef.indexOf(col);
+        if (colIdx < 0) {
+            int afterAnswer = headersRef.indexOf("回答納期");
+            colIdx = afterAnswer >= 0 ? afterAnswer + 1 : headersRef.size();
+            headersRef.add(colIdx, col);
+            for (ObservableList<String> row : rows) {
+                row.add(colIdx, "");
+            }
+        }
+        for (int r = 0; r < rows.size(); r++) {
+            ObservableList<String> line = rows.get(r);
+            LinkedHashMap<String, String> map = new LinkedHashMap<>();
+            for (int c = 0; c < headersRef.size(); c++) {
+                String h = headersRef.get(c);
+                if (ResultDispatchDeadlineJudgment.COL_TITLE.equals(h)) {
+                    continue;
+                }
+                String v = c < line.size() && line.get(c) != null ? line.get(c) : "";
+                map.put(h, v);
+            }
+            line.set(colIdx, ResultDispatchDeadlineJudgment.judgmentOkNg(map));
+        }
     }
 
     private static String formatCell(JsonNode n) {

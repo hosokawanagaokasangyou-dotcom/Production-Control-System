@@ -4,8 +4,8 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -22,6 +22,8 @@ import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.control.Label;
+import javafx.scene.control.TableCell;
+import javafx.scene.control.TableColumn;
 import javafx.scene.control.TablePosition;
 import javafx.scene.control.TableView;
 import javafx.scene.control.Tooltip;
@@ -36,7 +38,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
 
 /**
@@ -117,6 +118,24 @@ public final class SpreadsheetTabularSupport {
         }
     }
 
+    /**
+     * ControlsFX {@link SpreadsheetCell#setItem} は {@code isEditable()==false} では何もしない。
+     * 表示専用セルへ値を入れるときは本メソッドを使う。
+     */
+    public static void setSpreadsheetCellDisplayValue(SpreadsheetCell cell, Object value) {
+        if (cell == null) {
+            return;
+        }
+        boolean wasEditable = cell.isEditable();
+        if (!wasEditable) {
+            cell.setEditable(true);
+        }
+        cell.setItem(value);
+        if (!wasEditable) {
+            cell.setEditable(false);
+        }
+    }
+
     /** @deprecated {@link #installPmAiReadableSpreadsheetChrome(SpreadsheetView)} を使用。 */
     @Deprecated
     public static void installDeliveryCalendarSpreadsheetChrome(SpreadsheetView view) {
@@ -153,6 +172,7 @@ public final class SpreadsheetTabularSupport {
         for (int i = 0; i < cols.size(); i++) {
             cols.get(i).setFilter(new DialogExcelLikeSpreadsheetFilter(view, i));
         }
+        view.setHiddenRows(new BitSet());
     }
 
     /**
@@ -162,6 +182,7 @@ public final class SpreadsheetTabularSupport {
         if (view == null) {
             return;
         }
+        SpreadsheetMultiColumnFilterCoordinator.clearRowTextSearch(view);
         SpreadsheetMultiColumnFilterCoordinator.clear(view);
         view.setComparator(null);
         view.setHiddenRows(new BitSet());
@@ -178,6 +199,109 @@ public final class SpreadsheetTabularSupport {
             return new BitSet();
         }
         return (BitSet) view.getHiddenRows().clone();
+    }
+
+    /**
+     * {@link SpreadsheetView#setGrid} 直後に呼び、行の並べ替え・非表示・列フィルタ由来の hidden rows を初期化する。
+     * 旧グリッドの {@link #snapshotHiddenRows} を復元すると、行番号が逆順になったり非表示行の隙間が太い横線のように見える。
+     */
+    public static void resetSpreadsheetRowVisibilityAfterGridRebuild(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        SpreadsheetMultiColumnFilterCoordinator.clear(view);
+        SpreadsheetMultiColumnFilterCoordinator.clearRowTextSearch(view);
+        view.setComparator(null);
+        view.setHiddenRows(new BitSet());
+        ExcelLikeSpreadsheetFilter.resetAllColumnSortMenus(view);
+        DialogExcelLikeSpreadsheetFilter.resetAllColumnSortMenus(view);
+    }
+
+    /**
+     * 旧グリッドの行スキン・非表示行・固定行を残したまま {@link SpreadsheetView#setGrid(Grid)} すると、
+     * 段階2クリア直後や再読込後にセル全文が同じ文字列（例: フィルタ行の入力）のまま残ることがある。
+     * いったん 1×1 のスクラッチグリッドへ差し替えてから本番グリッドを載せる。
+     */
+    /**
+     * 非同期再読込の待ち時間中、旧グリッドのセル文字列（例: 列フィルタ行の入力）が画面に残らないよう 1×1 に差し替える。
+     */
+    public static void showScratchGridWhileReloading(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        clearAllFiltersAndSort(view);
+        clearFixedRowsExceptFilterRow(view);
+        view.setGrid(newSingleCellScratchGrid());
+        view.setHiddenRows(new BitSet());
+        view.requestLayout();
+    }
+
+    public static void detachAndSetGrid(SpreadsheetView view, Grid grid) {
+        if (view == null || grid == null) {
+            return;
+        }
+        clearAllFiltersAndSort(view);
+        clearFixedRowsExceptFilterRow(view);
+        view.setGrid(newSingleCellScratchGrid());
+        view.setHiddenRows(new BitSet());
+        view.setGrid(grid);
+        clearFixedRowsExceptFilterRow(view);
+        view.setHiddenRows(new BitSet());
+        pinSpreadsheetFilterRow(view);
+        /*
+         * setGrid 直後の refresh / 内側 TableView#refresh はレイアウトパルスと重なると
+         * Parent.layout で IndexOutOfBoundsException になりやすい。列同期パイプライン側で後から整える。
+         */
+    }
+
+    private static GridBase newSingleCellScratchGrid() {
+        GridBase scratch = new GridBase(1, 1);
+        scratch.getColumnHeaders().clear();
+        scratch.getColumnHeaders().add("");
+        SpreadsheetCell scratchCell =
+                SpreadsheetCellType.STRING.createCell(SPREADSHEET_FILTER_ROW, 0, 1, 1, "");
+        scratchCell.setEditable(false);
+        List<ObservableList<SpreadsheetCell>> scratchRows = new ArrayList<>();
+        scratchRows.add(FXCollections.observableArrayList(scratchCell));
+        scratch.setRows(FXCollections.observableArrayList(scratchRows));
+        return scratch;
+    }
+
+    /**
+     * {@link #resetSpreadsheetRowVisibilityAfterGridRebuild} に加え、フィルタ行以外の固定行を外してから再ピンする。
+     * {@link SpreadsheetView#setGrid} 後のレイアウト完了時にも呼び、段階3再読込後の「太い帯」や行番号の乱れを防ぐ。
+     */
+    /**
+     * 列フィルタの許容値は維持し、非表示行・行ソート・フィルタ行以外の固定行だけ除去する。
+     * ホストのレイアウト変化（モーダル閉鎖等）後のデバウンス再適用向け。
+     */
+    public static void clearSpreadsheetRowPresentationArtifacts(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        view.setComparator(null);
+        view.setHiddenRows(new BitSet());
+        clearFixedRowsExceptFilterRow(view);
+    }
+
+    public static void finalizeSpreadsheetPresentationAfterGridRebuild(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        resetSpreadsheetRowVisibilityAfterGridRebuild(view);
+        clearSpreadsheetRowPresentationArtifacts(view);
+        pinSpreadsheetFilterRow(view);
+        view.requestLayout();
+    }
+
+    /** 旧グリッド由来の固定行インデックスが残ると、行ヘッダに帯状の隙間が出ることがある。 */
+    private static void clearFixedRowsExceptFilterRow(SpreadsheetView view) {
+        javafx.collections.ObservableList<Integer> fixed = view.getFixedRows();
+        for (int i = fixed.size() - 1; i >= 0; i--) {
+            if (fixed.get(i) != SPREADSHEET_FILTER_ROW) {
+                fixed.remove(i);
+            }
+        }
     }
 
     /**
@@ -250,12 +374,26 @@ public final class SpreadsheetTabularSupport {
      * TitledPane／アコーディオン開閉後など、レイアウトでスキンが組み替わったあとに再度呼ぶこと。
      */
     public static void reapplySpreadsheetColumnChrome(SpreadsheetView view, int headerColumnCount) {
-        if (view == null) {
+        if (view == null || !isSpreadsheetReadyForColumnChrome(view)) {
             return;
         }
+        clearSpreadsheetRowPresentationArtifacts(view);
         applyFixedLeadingColumns(view, headerColumnCount);
         pinSpreadsheetFilterRow(view);
         applyUnconstrainedColumnResizePolicy(view);
+    }
+
+    /** スクラッチ 1×1 や列未生成の段階では固定列・UNCONSTRAINED 適用でスキンが壊れやすい。 */
+    private static boolean isSpreadsheetReadyForColumnChrome(SpreadsheetView view) {
+        if (view.getColumns().isEmpty()) {
+            return false;
+        }
+        if (!(view.getGrid() instanceof GridBase gb)) {
+            return false;
+        }
+        var rows = gb.getRows();
+        int rowCount = rows != null ? rows.size() : 0;
+        return rowCount > 1 || gb.getColumnCount() > 1;
     }
 
     /**
@@ -333,11 +471,14 @@ public final class SpreadsheetTabularSupport {
     }
 
     private static void setUnconstrainedOnEmbeddedTableViews(Node n, int depth) {
-        if (n == null || depth > 12) {
+        if (n == null || depth > 24) {
             return;
         }
         if (n instanceof TableView<?> tv) {
             tv.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
+            for (TableColumn<?, ?> col : tv.getColumns()) {
+                col.setResizable(true);
+            }
         }
         if (n instanceof Parent p) {
             for (Node c : p.getChildrenUnmodifiable()) {
@@ -567,83 +708,6 @@ public final class SpreadsheetTabularSupport {
         return Math.abs(effFromSheet - uDisp) <= 1e-6;
     }
 
-    // #region agent log
-    private static final String DEBUG_SESSION_ROLL_TRACE = "077782";
-
-    /**
-     * デバッグ077782: 管理NO（または依頼NO）が E5-2 の行について、ロール単位長さ・残量近似・実効ロールの中間値を NDJSON に出す。
-     */
-    private static void agentDebugPlanInputRowRollIfE5(
-            List<String> headersRef,
-            ObservableList<String> src,
-            int idxConv,
-            int idxUnp,
-            int idxAct,
-            int idxProd,
-            int idxUsed,
-            int idxRoll,
-            Stage2RollUnitLengthTables tablesOrNull) {
-        int idxMgmt = headersRef.indexOf("管理NO");
-        if (idxMgmt < 0) {
-            idxMgmt = headersRef.indexOf("依頼NO");
-        }
-        String mg = idxMgmt >= 0 ? planInputCellAt(src, idxMgmt).strip() : "";
-        if (!"E5-2".equals(mg) && !mg.contains("E5-2")) {
-            return;
-        }
-        String rollRaw = idxRoll >= 0 ? planInputCellAt(src, idxRoll) : "";
-        double uDisp = Stage2RollUnitLengthTables.parseFloatSafe(rollRaw, 0.0);
-        double q = planInputQtyMForDispatchSimulatorApprox(src, idxConv, idxUnp, idxAct);
-        double conv =
-                idxConv >= 0 ? Stage2RollUnitLengthTables.parseFloatSafe(planInputCellAt(src, idxConv), 0.0) : 0.0;
-        double actual =
-                idxAct >= 0 ? Stage2RollUnitLengthTables.parseFloatSafe(planInputCellAt(src, idxAct), 0.0) : 0.0;
-        String unpRaw = idxUnp >= 0 ? planInputCellAt(src, idxUnp) : "";
-        String product = idxProd >= 0 ? planInputCellAt(src, idxProd) : "";
-        String usedRaw = idxUsed >= 0 ? planInputCellAt(src, idxUsed) : "";
-        int idxPlanQty = headersRef.indexOf("配台使用計画数量");
-        String planQtyCell = idxPlanQty >= 0 ? planInputCellAt(src, idxPlanQty) : "";
-        int idxUnpAlt = headersRef.indexOf("未加工数");
-        String unpAltRaw = idxUnpAlt >= 0 ? planInputCellAt(src, idxUnpAlt) : "";
-        int idxRawRoll = headersRef.indexOf("(原反)ロール単位長さ");
-        if (idxRawRoll < 0) {
-            idxRawRoll = headersRef.indexOf("(原版)ロール単位長さ");
-        }
-        String rawRollCell = idxRawRoll >= 0 ? planInputCellAt(src, idxRawRoll) : "";
-        double effD = effectiveRollUnitMForDispatchTaskSimulator(q, uDisp);
-        double nRawDisp = (q > 1e-12 && uDisp > 1e-12) ? q / uDisp : Double.NaN;
-        double uSheet = intrinsicProductRollSheetGuess(product, usedRaw, tablesOrNull, q);
-        double effS = effectiveRollUnitMForDispatchTaskSimulator(q, uSheet);
-        boolean yel =
-                planInputRollUnitLengthCellIsYellowHighlight(
-                        src, idxConv, idxUnp, idxAct, idxProd, idxUsed, rollRaw, tablesOrNull);
-
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("rowKey", mg);
-        data.put("qtyApprox_m", q);
-        data.put("conv_m", conv);
-        data.put("actual_m", actual);
-        data.put("unprocessed_raw", unpRaw);
-        data.put("unprocessed_num_raw", unpAltRaw);
-        data.put("plan_dispatch_qty_cell", planQtyCell);
-        data.put("raw_roll_unit_cell", rawRollCell);
-        data.put("roll_display_m", uDisp);
-        data.put("nRaw_q_over_rollDisplay", nRawDisp);
-        data.put("effective_q_rollDisplay_m", effD);
-        data.put("uSheet_guess_m", uSheet);
-        data.put("effective_q_uSheet_m", effS);
-        data.put("yellowHighlight", yel);
-
-        AgentDebugLog.appendStructured(
-                Map.of(),
-                DEBUG_SESSION_ROLL_TRACE,
-                "H_roll_e5",
-                "SpreadsheetTabularSupport.buildPlanInputGrid",
-                "E5-2 row roll/qty intermediates",
-                data);
-    }
-    // #endregion
-
     /**
      * 配台計画タスク入力の編集可能グリッド。先頭固定列は白地、それ以外は既定で白地とし、「未加工」列のみ正の数値で薄緑、
      * 「ロール単位長さ」は実効ロール化が想定されるセルを黄で示す（Excel 側の実効ロール着色と整合）。
@@ -688,18 +752,6 @@ public final class SpreadsheetTabularSupport {
         for (int r = 0; r < rc; r++) {
             int gridRow = firstData + r;
             ObservableList<String> src = rows.get(r);
-            // #region agent log
-            agentDebugPlanInputRowRollIfE5(
-                    headersRef,
-                    src,
-                    idxConv,
-                    idxUnp,
-                    idxAct,
-                    idxProd,
-                    idxUsed,
-                    headersRef.indexOf(PLAN_INPUT_COL_ROLL_UNIT_M),
-                    rollUnitLengthTablesOrNull);
-            // #endregion
             ObservableList<SpreadsheetCell> rowCells = FXCollections.observableArrayList();
             for (int c = 0; c < cols; c++) {
                 String raw = c < src.size() && src.get(c) != null ? src.get(c) : "";
@@ -809,18 +861,29 @@ public final class SpreadsheetTabularSupport {
      */
     public static GridBase buildReadOnlyPlainGrid(
             List<String> headersRef, ObservableList<ObservableList<String>> rows) {
-        return buildReadOnlyPlainGrid(headersRef, rows, 0);
+        return buildReadOnlyPlainGrid(headersRef, rows, 0, -1);
     }
 
     /**
      * Same as {@link #buildReadOnlyPlainGrid(List, ObservableList)}; when {@code deliveryLeadingColumns >= 0},
      * applies fixed delivery-calendar chrome (ignore theme): header/filter row light gray, leading columns white,
-     * other data cells white or light green when a non-negative number is present.
+     * other data cells white or light green when a strictly positive number is present ({@code 0} is white).
      */
     public static GridBase buildReadOnlyPlainGrid(
             List<String> headersRef,
             ObservableList<ObservableList<String>> rows,
             int deliveryLeadingColumns) {
+        return buildReadOnlyPlainGrid(headersRef, rows, deliveryLeadingColumns, -1);
+    }
+
+    /**
+     * @param deadlineJudgmentColumnIndex {@code >= 0} のとき、その列で {@code NG} は赤背景・白字・太字。
+     */
+    public static GridBase buildReadOnlyPlainGrid(
+            List<String> headersRef,
+            ObservableList<ObservableList<String>> rows,
+            int deliveryLeadingColumns,
+            int deadlineJudgmentColumnIndex) {
         int cols = headersRef.size();
         int rc = rows.size();
         int gridRowsTotal = rc + 1;
@@ -855,9 +918,13 @@ public final class SpreadsheetTabularSupport {
                 if (deliveryLeadingColumns >= 0) {
                     if (c < deliveryLeadingColumns) {
                         cell.setStyle(DC_STYLE_LEADING_COL);
+                    } else if (c == deadlineJudgmentColumnIndex && "NG".equals(raw)) {
+                        cell.setStyle(TabularCellHighlight.PLAN_INPUT_EXCLUDE_YES_STYLE);
                     } else {
                         cell.setStyle(deliveryCalendarDataStyleForDisplayText(raw));
                     }
+                } else if (c == deadlineJudgmentColumnIndex && "NG".equals(raw)) {
+                    cell.setStyle(TabularCellHighlight.PLAN_INPUT_EXCLUDE_YES_STYLE);
                 }
                 rowCells.add(cell);
             }
@@ -876,7 +943,7 @@ public final class SpreadsheetTabularSupport {
      *   <li>列見出し・行見出しは {@link #installPmAiReadableSpreadsheetChrome} 由来 CSS で薄グレー＋黒</li>
      *   <li>フィルタ行は {@link #DC_STYLE_HEADER_ROW}（薄グレー＋黒）</li>
      *   <li>先頭固定列（{@code c < leadingColumnCount}）は {@link #DC_STYLE_LEADING_COL}（白＋黒）</li>
-     *   <li>日付列で空欄以外は {@link #DC_STYLE_DATA_GREEN}（薄緑＋黒）、空欄は {@link #DC_STYLE_DATA_WHITE}（白＋黒）</li>
+     *   <li>日付列で正の数値は {@link #DC_STYLE_DATA_GREEN}（薄緑＋黒）、{@code 0}・空欄は {@link #DC_STYLE_DATA_WHITE}（白＋黒）</li>
      * </ul>
      *
      * @param leadingColumnCount number of left fixed columns (must be {@code >= 0} and {@code <= cols})
@@ -961,7 +1028,7 @@ public final class SpreadsheetTabularSupport {
     }
 
     /**
-     * {@code 0} \u4ee5\u4e0a\u306e\u6570\u5024\u304c\u542b\u307e\u308c\u308b\u30bb\u30eb\u306f\u8584\u3044\u7dd1\uff08\u8907\u6570\u884c\u306f\u884c\u5358\u4f4d\u3067\u5224\u5b9a\uff09\u3002
+     * 正の数値が含まれるセルは薄緑（{@code 0}・空欄・ダッシュは白）。複数行は行単位で判定。
      */
     private static boolean deliveryCalendarCellQualifiesGreen(String text) {
         if (text == null || text.isBlank()) {
@@ -973,8 +1040,8 @@ public final class SpreadsheetTabularSupport {
                 continue;
             }
             try {
-                double v = Double.parseDouble(t.replace(",", ""));
-                if (!Double.isNaN(v) && !Double.isInfinite(v) && v >= 0d) {
+                double v = Double.parseDouble(t.replace(",", "").replace("，", ""));
+                if (!Double.isNaN(v) && !Double.isInfinite(v) && v > 0d) {
                     return true;
                 }
             } catch (NumberFormatException ignored) {
@@ -1278,10 +1345,15 @@ public final class SpreadsheetTabularSupport {
          * 呼び出し時点では Grid の行がまだ増えていないことがある（後から数千行になる）。
          * 閾値は flush 実行時に再評価する。1 パルスのみ（二重 runLater 無し）。
          */
+        /*
+         * 1 パルス遅らせ、さらに flush 内で内側 TableView#refresh を避ける（レイアウト中の IOOBE 対策）。
+         */
         Platform.runLater(
                 () ->
-                        presentationFlushAfterRowPresentationChangeOnce(
-                                view, skipResizeRowsToDefault));
+                        Platform.runLater(
+                                () ->
+                                        presentationFlushAfterRowPresentationChangeOnce(
+                                                view, skipResizeRowsToDefault)));
     }
 
     private static int spreadsheetPhysicalRowCount(SpreadsheetView view) {
@@ -1306,9 +1378,13 @@ public final class SpreadsheetTabularSupport {
             if (!skipResizeRowsToDefault) {
                 view.resizeRowsToDefault();
             }
-            refreshEmbeddedTableViewsRecursive(view, 0);
         }
         view.requestLayout();
+        /*
+         * refresh / resizeRowsToDefault 後にスキンが組み替わると CONSTRAINED に戻る。
+         * 納期管理「アラ・実績・シス比較」は本メソッドを rebuild 後に呼ぶため、ここでも UNCONSTRAINED を再適用する。
+         */
+        applyUnconstrainedColumnResizePolicy(view);
     }
 
     private static void refreshEmbeddedTableViewsRecursive(Node n, int depth) {

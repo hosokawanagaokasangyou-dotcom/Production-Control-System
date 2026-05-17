@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>4. 配台の流れ（段階1・段階2・段階3）</title>
+  <link rel="stylesheet" href="../static/style.css"/>
+</head>
+<body>
+<div class="manual-layout">
+<nav class="manual-nav" aria-label="目次">
+<p class="manual-nav-title">取扱説明書</p>
+<ul>
+<li><a href="../index.html">トップ</a></li>
+<li><a href="overview.html">1. はじめに</a></li>
+<li><a href="getting-started.html">2. 起動と基本操作</a></li>
+<li><a href="daily-operations.html">3. 日常運用ガイド（配台システム使い方）</a></li>
+<li><a href="workflow-dispatch.html" class="is-current">4. 配台の流れ（段階1・段階2・段階3）</a></li>
+<li><a href="tabs.html">5. 画面・タブ一覧</a></li>
+<li><a href="environment.html">6. 環境変数とデータの場所</a></li>
+<li><a href="excel-integration.html">7. Excel 連携とサマリ</a></li>
+<li><a href="troubleshooting.html">8. 困ったときは</a></li>
+</ul></nav>
+<main class="manual-main">
+
+<article class="manual-content">
+<h1>4. 配台の流れ（段階1・段階2・段階3）</h1>
+<h2>概要</h2>
+<p>配台処理は <strong>段階1（前処理）</strong> → <strong>段階2（自動配台）</strong> → （任意）<strong>段階3（インタラクティブ配台試行）</strong> の三層です。段階1・2 は <strong>実行・ログ</strong> または <strong>配台計画_タスク入力</strong> から起動し、バックグラウンドで Python（<code>planning_core</code>）が動きます。</p>
+<pre><code class="language-text">[タスク入力・加工計画DATA] → 段階1 → [成形・除外ルール等]
+    → タスク入力で編集・保存 → 段階2 → [配台結果 JSON / xlsx / ガント]
+    → （任意）手動修正タブで段階3 → [タイムライン調整・不足一覧]
+</code></pre>
+<p>業務仕様の正本は <code>code/要件定義/配台ルール.md</code> です。日常のクリック手順は <a href="daily-operations.html">日常運用ガイド</a> を参照してください。</p>
+<h2>段階1（前処理）</h2>
+<h3>目的</h3>
+<ul>
+<li>加工計画 DATA の読込・検証・成形</li>
+<li>配台不要ルール（JSON）の生成・更新</li>
+<li><strong>配台試行順番</strong> の自動付与（1…n）と段階2 向け中間成果の整備</li>
+</ul>
+<h3>操作</h3>
+<ol>
+<li><strong>配台計画_タスク入力</strong> で入力ブックとデータソースを正しく指定する（初回のみ。以降はセッション復元可）。</li>
+<li><strong>実行・ログ</strong> で <strong>段階1 実行</strong> する。</li>
+<li>完了ダイアログ後、自動で <strong>配台計画_タスク入力</strong> タブへ遷移する。</li>
+<li><strong>段階1 成形結果</strong> タブで中間出力を確認する（必要に応じて）。</li>
+</ol>
+<p><img alt="段階1 成形結果" src="../images/stage1Preview.png" /></p>
+<h3>ロジック上の要点</h3>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>挙動</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>配台試行順番</td>
+<td>段階1 抽出直後に列をクリアし、マスタ need・特別ルール等を踏まえて <strong>自動採番</strong>。既存シートの手入力順は引き継がない</td>
+</tr>
+<tr>
+<td>全数未加工</td>
+<td>換算数量 &gt; 0、実加工数 = 0、未加工 = 0 → <strong>全数未加工</strong>（未加工量 = 換算数量）</td>
+</tr>
+<tr>
+<td>加工最小長さ</td>
+<td>配台に使う加工の最小長さ ≥ <strong>ロール単位の長さ</strong>（下回る設定は不可）</td>
+</tr>
+<tr>
+<td>配台不要</td>
+<td><code>master.xlsm</code>「設定_配台不要工程」または JSON ルールで段階2 キューから除外</td>
+</tr>
+</tbody>
+</table>
+<h3>よくある入力ミス</h3>
+<ul>
+<li>加工計画 DATA のパスがネットワーク未接続のまま</li>
+<li>マスタブック（<code>MASTER_WORKBOOK_FILE</code>）が見つからない</li>
+<li>列設定未初期化のアラジン出力をそのまま読んだ（列ずれ）</li>
+</ul>
+<h2>段階2（配台実行）</h2>
+<h3>目的</h3>
+<ul>
+<li>配台計画シートに基づく設備・担当割付（日次マルチパス）</li>
+<li><code>production_plan</code> 等の結果 JSON 出力</li>
+<li>結果_配台表 xlsx、設備ガント用データの生成</li>
+</ul>
+<h3>操作</h3>
+<ol>
+<li>段階1 が成功していることを確認する。</li>
+<li><strong>配台計画_タスク入力</strong> で表を確認・編集し <strong>保存</strong> する。</li>
+<li><strong>当日は配台しない</strong> のチェックを運用どおりに設定する。</li>
+<li>同タブの <strong>段階2 実行</strong> を押す（実行中は <strong>実行・ログ</strong> に切り替わる）。</li>
+<li>完了後、出力フォルダの JSON パスがログ・実行タブに反映される。</li>
+</ol>
+<p><img alt="配台計画_タスク入力" src="../images/planInput.png" /></p>
+<h3>手動修正・未保存との関係</h3>
+<ul>
+<li><strong>配台計画手動修正</strong> タブに未保存があると、タスク入力側の段階2 がブロックされる場合があります。</li>
+<li>手動修正 JSON を編集したあとは <strong>保存</strong> または <strong>再読み</strong> してから段階2 を再実行してください。</li>
+</ul>
+<p><img alt="配台計画手動修正" src="../images/dispatchInteractive.png" /></p>
+<h3>ロジック上の要点（段階2）</h3>
+<table>
+<thead>
+<tr>
+<th>テーマ</th>
+<th>要約</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>試行順</td>
+<td>既定は <strong>配台試行順の昇順</strong> で日内マルチパス（<code>STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=1</code>）</td>
+</tr>
+<tr>
+<td>§B-2 EC→検査</td>
+<td>同一依頼で EC を優先し、検査はロール枠・リワインドで制御</td>
+</tr>
+<tr>
+<td>納期基準</td>
+<td><strong>回答納期</strong> → なければ <strong>指定納期</strong></td>
+</tr>
+<tr>
+<td>終業直前</td>
+<td>残り時間・残ロールが閾値以下だと <strong>新規開始を繰り下げ／却下</strong>（<code>ASSIGN_END_OF_DAY_DEFER_*</code>）</td>
+</tr>
+<tr>
+<td>休憩</td>
+<td>休憩帯内開始や休憩までの実働不足は <strong>休憩終了まで繰り下げ</strong></td>
+</tr>
+<tr>
+<td>特別ルール</td>
+<td>L 番号ルールは <code>特別ルール列挙.md</code> とアプリ「特別ルール」タブと対応</td>
+</tr>
+</tbody>
+</table>
+<h2>段階3（インタラクティブ配台試行）</h2>
+<p>段階3 は <strong>配台計画手動修正</strong> タブの <strong>段階3</strong> ボタンから実行します（<code>dispatch_interactive_trial.py</code>）。段階2 の結果 JSON を入力に、<strong>タスク×日付</strong> 表の <strong>（段階3前）</strong> 数量を満たすタイムラインを組み立てます。</p>
+<h3>操作</h3>
+<ol>
+<li>段階2 が成功し、手動修正タブで JSON を <strong>再読み</strong> できる状態にする。</li>
+<li>必要なら <strong>タスク×日付</strong> で数量をドラッグ／ダブルクリック編集する（<strong>（段階3前）</strong> のみ）。</li>
+<li><strong>段階3</strong> を実行し、ログウィンドウで進捗を確認する。</li>
+<li>未達・人員不足があればモーダルと <strong>配台数量未達</strong> パネルを確認する。</li>
+<li><strong>保存 (JSON+xlsx)</strong> → 納期管理ビュー・設備ガント・サマリ Excel を更新確認する。</li>
+</ol>
+<h3>ロジック上の要点（段階3）</h3>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>挙動</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>数量検証</td>
+<td>依頼NO×機械名の合計が入力 JSON と一致することを検証</td>
+</tr>
+<tr>
+<td>機械カレンダー</td>
+<td><code>*</code> / <code>＊</code> / <code>※</code> セルは占有。スロット行のない時刻は配台不可</td>
+</tr>
+<tr>
+<td>人員不足</td>
+<td><code>op_shortage</code>（人数不足）と <code>as_shortage</code>（組合せ不可）を区別して記録</td>
+</tr>
+<tr>
+<td>二相（任意）</td>
+<td><code>PM_AI_STAGE3_TWO_PHASE=1</code> 等で設備フェイズ→人割当フェイズに分割可能</td>
+</tr>
+<tr>
+<td>勤怠</td>
+<td>master の勤怠・休憩に拘束されるため、<strong>当日指定数量を必ず満たせるとは限らない</strong></td>
+</tr>
+</tbody>
+</table>
+<h2>結果の確認</h2>
+<table>
+<thead>
+<tr>
+<th>タブ</th>
+<th>確認内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>計画結果ビューア (JSON)</td>
+<td>段階2 成果 JSON の構造・シート相当ビュー</td>
+</tr>
+<tr>
+<td>結果_配台表 (JSON)</td>
+<td>配台表形式の結果</td>
+</tr>
+<tr>
+<td>設備ガント（グラフィック）</td>
+<td>時間軸・設備行の可視化</td>
+</tr>
+<tr>
+<td>納期管理ビュー</td>
+<td>計画と実績・納期の比較（段階3 後はシス配台のみ再反映も可）</td>
+</tr>
+</tbody>
+</table>
+<p><img alt="設備ガント（グラフィック）" src="../images/equipmentGanttGraphic.png" /></p>
+<h2>パターン別段階2（上級）</h2>
+<p>複数の <strong>配台試行順パターン</strong> を一括試し、スコア付きサマリを Excel に出す運用があります（環境変数 <code>DISPATCH_PATTERN_*</code> 系）。通常の単発段階2 とは別バッチです。サマリシートで採用パターンを選び、マクロまたはコマンドで本番シートへ反映します。</p>
+<p>詳細は <a href="excel-integration.html">Excel 連携とサマリ</a> および <code>code/設定_環境変数_雛形.tsv</code> の該当キーを参照してください。</p>
+<h2>ワークスペース履歴</h2>
+<p><strong>配台ワークスペース履歴</strong> タブでは、過去の配台結果スナップショットを保存・復元できます。列順やガント表示状態の復元に使います。</p>
+</article>
+<footer class="manual-footer">
+  工程管理 AI デスクトップ 取扱説明書 — リポジトリ <code>manual/html/</code> より生成
+</footer>
+</main>
+</div>
+</body>
+</html>

@@ -77,6 +77,18 @@ public final class ColumnVisibilitySupport {
             SpreadsheetView view,
             Supplier<List<String>> headersSupplier,
             Supplier<boolean[]> visibilitySupplier) {
+        applyColumnVisibilityToSpreadsheetWhenReady(view, headersSupplier, visibilitySupplier, null);
+    }
+
+    /**
+     * @param afterApply runs on the FX thread immediately after visibility is applied (or after retries give up).
+     *     Use to clear fixed/hidden row state once column chrome is stable (e.g. dispatch editor after stage 3).
+     */
+    public static void applyColumnVisibilityToSpreadsheetWhenReady(
+            SpreadsheetView view,
+            Supplier<List<String>> headersSupplier,
+            Supplier<boolean[]> visibilitySupplier,
+            Runnable afterApply) {
         if (view == null || headersSupplier == null || visibilitySupplier == null) {
             return;
         }
@@ -96,7 +108,13 @@ public final class ColumnVisibilitySupport {
                         Platform.runLater(job[0]);
                         return;
                     }
-                    applyColumnVisibilityToSpreadsheet(view, h, v);
+                    Platform.runLater(
+                            () -> {
+                                applyColumnVisibilityToSpreadsheet(view, h, v);
+                                if (afterApply != null) {
+                                    Platform.runLater(afterApply);
+                                }
+                            });
                 };
         Platform.runLater(job[0]);
     }

@@ -269,6 +269,14 @@ public final class EnvVarDocs {
                         + " 起動時に本変数を上書きする。"
                         + " 0 のときは設備ガント（計画・実績明細）系シートは作成しない（処理時間の削減）。");
         put(
+                "PM_AI_STAGE2_SKIP_TODAY_DISPATCH",
+                "1/true/yes/on のとき、データ抽出日（当日）の暦日には配台せず、計画開始日を翌暦日以降にずらす（段階2）。"
+                        + " JavaFX「配台計画_タスク入力」タブのチェックが子プロセス起動時に上書きする。");
+        put(
+                "PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH",
+                "1/true/yes/on のとき、実加工数が正の行（加工途中相当）を配台キューに入れない（当日完了と想定、段階2）。"
+                        + " JavaFX「実行・ログ」タブのチェックが子プロセス起動時に上書きする。");
+        put(
                 "PM_AI_STAGE2_ENGINE",
                 "段階2の実行エンジン（互換用キー）。JavaFX 実行タブからの段階2は常に Python 子プロセス（plan_simulation_stage2.py）のみ。"
                         + " 未設定・空・python（大小無視）で従来どおり。java が指定されていても無視され Python が起動する（旧 JVM 段階2は撤去済み）。");

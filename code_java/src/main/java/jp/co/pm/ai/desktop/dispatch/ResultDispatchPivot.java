@@ -180,8 +180,35 @@ public final class ResultDispatchPivot {
             Map<String, String> taskProfile,
             LocalDate date,
             List<String> mergeIdentityHeaders) {
+        return sumQtyColumnForProfileAndDateForWideMerge(
+                rows,
+                taskProfile,
+                date,
+                mergeIdentityHeaders,
+                ResultDispatchSchema.COL_DISPATCH_QTY);
+    }
+
+    /** 段階3試行後の {@link ResultDispatchSchema#COL_DISPATCH_QTY_ACTUAL} 合計（列が無いときは 0）。 */
+    public static double sumActualQuantityForProfileAndDateForWideMerge(
+            List<Map<String, String>> rows,
+            Map<String, String> taskProfile,
+            LocalDate date,
+            List<String> mergeIdentityHeaders) {
+        return sumQtyColumnForProfileAndDateForWideMerge(
+                rows,
+                taskProfile,
+                date,
+                mergeIdentityHeaders,
+                ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL);
+    }
+
+    private static double sumQtyColumnForProfileAndDateForWideMerge(
+            List<Map<String, String>> rows,
+            Map<String, String> taskProfile,
+            LocalDate date,
+            List<String> mergeIdentityHeaders,
+            String qtyColumn) {
         String dc = ResultDispatchSchema.COL_DISPATCH_DATE;
-        String qc = ResultDispatchSchema.COL_DISPATCH_QTY;
         double sum = 0;
         String ds = date.toString();
         for (Map<String, String> row : rows) {
@@ -192,7 +219,39 @@ public final class ResultDispatchPivot {
             if (!ds.equals(rd) && !ds.equals(normalizeDateCell(rd))) {
                 continue;
             }
-            sum += ResultDispatchNormalizer.parseDouble(row.get(qc));
+            sum += ResultDispatchNormalizer.parseDouble(row.get(qtyColumn));
+        }
+        return sum;
+    }
+
+    /** {@link #sumQuantityForProcessMachineDate} の実配台数量版（列が無いときは 0）。 */
+    public static double sumActualQuantityForProcessMachineDate(
+            List<Map<String, String>> rows, String process, String machine, LocalDate date) {
+        return sumQtyColumnForProcessMachineDate(
+                rows, process, machine, date, ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL);
+    }
+
+    private static double sumQtyColumnForProcessMachineDate(
+            List<Map<String, String>> rows,
+            String process,
+            String machine,
+            LocalDate date,
+            String qtyColumn) {
+        String dc = ResultDispatchSchema.COL_DISPATCH_DATE;
+        double sum = 0;
+        String ds = date.toString();
+        for (Map<String, String> row : rows) {
+            if (!process.equals(nz(row.get(ResultDispatchSchema.COL_PROCESS)))) {
+                continue;
+            }
+            if (!machine.equals(nz(row.get(ResultDispatchSchema.COL_MACHINE)))) {
+                continue;
+            }
+            String rd = nz(row.get(dc));
+            if (!ds.equals(rd) && !ds.equals(normalizeDateCell(rd))) {
+                continue;
+            }
+            sum += ResultDispatchNormalizer.parseDouble(row.get(qtyColumn));
         }
         return sum;
     }

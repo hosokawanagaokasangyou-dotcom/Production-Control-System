@@ -16,8 +16,9 @@ import java.util.regex.Pattern;
 /**
  * 現在の JVM と同等の依存解決で {@link JavaFxGpuProbeApp} を子プロセス起動し、GPU Prism が Canvas で動くか判定する。
  *
- * <p>{@code javafx:run}（クラスパス JavaFX）のように {@code jdk.module.path} が空で OpenJFX が {@code java.class.path}
- * に載っている場合は、子だけ {@code --module-path} に OpenJFX を切り出し {@code exec:exec} と同型のモジュール起動にする。
+ * <p>親が {@code jdk.module.path} なしで OpenJFX を {@code java.class.path}（無名モジュール）から読んでいるときは、
+ * 子も同一の単一 {@code -classpath} でプローブする。子だけ {@code --module-path} に切り出すと GPU 試験だけ通り、本体で
+ * Canvas／RTTexture 系の例外になる偽陽性が出るため。
  */
 final class GpuProbeLauncher {
 
@@ -28,12 +29,16 @@ final class GpuProbeLauncher {
     private GpuProbeLauncher() {}
 
     /**
+     * @param mirrorClasspathLikeParent 親が無名 CLASSPATH で JavaFX を読んでいるとき {@code true}。子のコマンドラインを親と
+     *     同型にし、GPU 試験の偽陽性を防ぐ。
      * @return GPU パイプラインで Canvas プローブが成功したら true
      */
-    static boolean runGpuCanvasProbe() {
+    static boolean runGpuCanvasProbe(boolean mirrorClasspathLikeParent) {
         List<String> cmd;
         try {
-            cmd = buildCommand();
+            boolean forceSplitOpenJfx =
+                    Boolean.getBoolean("pm.ai.javafx.prism.probeSplitOpenJfx");
+            cmd = buildCommand(mirrorClasspathLikeParent && !forceSplitOpenJfx);
         } catch (RuntimeException e) {
             PrismGpuBootstrapStatus.recordSoftwareAfterProbe("プローブ起動準備失敗: " + e.getMessage());
             return false;
@@ -119,7 +124,7 @@ final class GpuProbeLauncher {
         }
     }
 
-    private static List<String> buildCommand() {
+    private static List<String> buildCommand(boolean preferClasspathMirror) {
         boolean win =
                 System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("windows");
         Path javaExe = Path.of(System.getProperty("java.home"), "bin", win ? "java.exe" : "java");
@@ -150,8 +155,7 @@ final class GpuProbeLauncher {
         cmd.add("-Dprism.order=" + prismGpuOrderForProbe());
 
         /*
-         * exec:exec@pm-ai-desktop と同様: OpenJFX を module-path に載せ、プローブ本体は -classpath 側の無名モジュール。
-         * 親が jdk.module.path 付きなら継承済みのため従来どおり単一 -classpath のみ。
+         * 親が module-path 上で JavaFX を名前付きモジュールとして読んでいる場合: 親と同じ java.class.path を子に渡す。
          */
         if (!System.getProperty("jdk.module.path", "").isBlank()) {
             cmd.add("-classpath");
@@ -160,6 +164,21 @@ final class GpuProbeLauncher {
             return cmd;
         }
 
+        /*
+         * 親が無名 CLASSPATH のときは子も単一 classpath に揃える（OpenJFX を子だけ module-path に載せると
+         * 本体との Prism 経路がずれ、GPU 試験が偽陽性になり得る）。
+         */
+        if (preferClasspathMirror) {
+            cmd.add("-classpath");
+            cmd.add(cp);
+            cmd.add(JavaFxGpuProbeApp.class.getName());
+            return cmd;
+        }
+
+        /*
+         * 親が jdk.module.path 空だが JavaFX が名前付きモジュールとして解決されている等の稀な構成向け:
+         * OpenJFX を module-path に載せ、プローブ本体は -classpath 側の無名モジュール（従来の exec:exec 型）。
+         */
         LinkedHashSet<String> openJfx = new LinkedHashSet<>();
         LinkedHashSet<String> rest = new LinkedHashSet<>();
         for (String seg : splitClasspathSegments(cp)) {

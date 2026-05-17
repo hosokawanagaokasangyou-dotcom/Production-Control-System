@@ -45,6 +45,14 @@
 
 要点: **誤り・バグの可能性・非効率は忖度や長い前置きなく単刀直入に指摘**。**修正案はベストプラクティスに基づき簡潔にのみ**。
 
+---
+
+## Cursor デバッグ NDJSON（計測・ログ取得）
+
+正本: **`.cursor/rules/agent-debug-ndjson-logging.mdc`**／**`.cursor/rules/agent-debug-wsl-windows-mirror.mdc`**／**`.cursor/rules/agent-debug-hooks-persistence.mdc`**（**`.cursor/hooks.json`** で sessionStart / postToolUse / afterFileEdit にフック済み）
+
+要点: **Java は `AgentDebugLog.appendStructured`、Python は `planning_core.agent_debug_ndjson.append_structured` のみ**。**`/mnt/c/...` 等の OS 固定ログパス直書き禁止**。WSL ワークスペースでは Java 側ミラー規約を参照。修正確証後は `#region agent log` ブロックのみ削除。
+
 
 
 

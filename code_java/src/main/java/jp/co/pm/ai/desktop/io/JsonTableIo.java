@@ -24,7 +24,21 @@ public final class JsonTableIo {
 
     private JsonTableIo() {}
 
-    public record SheetTable(List<String> columns, List<Map<String, String>> rows) {}
+    public record SheetTable(List<String> columns, List<Map<String, String>> rows) {
+
+        /** {@link PlanInputTabularIo.TabularSheet} へ変換（列順は {@link #columns()} に従う）。 */
+        public PlanInputTabularIo.TabularSheet toTabularSheet() {
+            List<List<String>> matrix = new ArrayList<>();
+            for (Map<String, String> map : rows != null ? rows : List.<Map<String, String>>of()) {
+                List<String> line = new ArrayList<>(columns.size());
+                for (String h : columns) {
+                    line.add(map != null ? map.getOrDefault(h, "") : "");
+                }
+                matrix.add(line);
+            }
+            return new PlanInputTabularIo.TabularSheet(new ArrayList<>(columns), matrix);
+        }
+    }
 
     /**
      * Workbook JSON with top-level {@code sheets} object ({@code 人員*.json}, {@code 計画*.json}).

@@ -78,7 +78,6 @@ from .bootstrap import (
     log_dir,
     output_dir,
 )
-from .agent_debug_log import append_interactive_core_probe
 
 # region stage2 cache helpers
 _STAGE2_GLOBAL_COMMENT_CACHE: dict | None = None
@@ -98,12 +97,12 @@ _INTERACTIVE_TRIAL_OP_SHORTAGE: list[dict] = []
 _INTERACTIVE_TRIAL_AS_SHORTAGE: list[dict] = []
 # 試行終了時の _interactive_trial_meters_done のコピー（targets との突合用）
 _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT: dict[tuple[str, str, str, date], float] = {}
-# 直近の段階3二相（案B）メタ（不足 JSON 等へ載せる）
+# 直近の配台試行メタ（不足 JSON の stage3 ブロック等へ載せる。単一フェーズ運用）
 _LAST_INTERACTIVE_STAGE3_META: dict = {}
 
 
 def interactive_stage3_last_run_meta_snapshot() -> dict:
-    """段階3二相の直近実行メタ（checkpoint パス・phase 等）。未実行時は空 dict。"""
+    """直近の配台試行メタ（例: mode=single_phase）。試行未実行時は空 dict。"""
     return dict(_LAST_INTERACTIVE_STAGE3_META or {})
 
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
@@ -1150,6 +1149,8 @@ PLAN_COL_SPECIAL_REMARK = "特別指定_備考"
 # セル値の例（配台から外す）: Excel の TRUE / 数値 1 / 文字列「はい」「yes」「true」「○」「〇」「●」等。
 # 空・FALSE・0・「いいえ」等は配台対象。詳細は _plan_row_exclude_from_assignment。
 PLAN_COL_EXCLUDE_FROM_ASSIGNMENT = "配台不要"
+# 配台計画_タスク入力「配台不要」列に含めると段階2の配台キューから除くマーカー（部分一致・NFKC 正規化後に判定）。
+PLAN_COL_STAGE2_DISPATCH_PLAN_EXCLUDE_MARKER = "配台計画除外"
 PLAN_COL_AI_PARSE = "AI特別指定_解析"
 PLAN_COL_PROCESS_FACTOR = "加工工程の決定プロセスの因子"
 # 1ロールあたりの長さ（m）。配台計画_タスク入力にのみ存在（加工計画DATA には無い）。製品名列の右隣に配置。
@@ -1472,6 +1473,8 @@ RESULT_DISPATCH_TABLE_DATE_HEADERS = frozenset(
         "配台日",
     }
 )
+# 段階3手動修正: タイムライン実配台 m（「当日配台数量」は編集目標のまま残す）
+INTERACTIVE_DISPATCH_ACTUAL_QTY_COL = "実配台数量"
 # master メイン A15/B15 の定常外の「日時帯」見出し着色（結果_設備毎の時間割・結果_設備ガント）
 RESULT_OUTSIDE_REGULAR_TIME_FILL = "FCE4D6"
 # 結果_設備毎の時間割_機械名毎: 配台済み依頼NOセル（機械列）の薄いグリーン
@@ -3792,50 +3795,15 @@ def _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(row) 
     return bool(ok_mikan and ok_act and ok_unp)
 
 
-# #region agent log
-def _agent_debug_ndjson_log_path() -> str | None:
-    """
-    NDJSON 追記先。Java {@code AgentDebugLog} と同順:
-    CURSOR_DEBUG_LOG / PM_AI_DEBUG_LOG → 未設定時はリポジトリ直下 {@code .cursor/debug-<session>.log}。
-    段階1/2 子プロセスでは親が {@code PM_AI_DEBUG_LOG} を設定する。
-    """
-    for _k in ("CURSOR_DEBUG_LOG", "PM_AI_DEBUG_LOG"):
-        _v = (os.environ.get(_k) or "").strip()
-        if _v:
-            return _v
-    try:
-        _here = pathlib.Path(__file__).resolve()
-        _root = _here.parents[3]
-        _sid = (os.environ.get("PM_AI_AGENT_DEBUG_SESSION_ID") or "d3d9c5").strip() or "d3d9c5"
-        return str(_root / ".cursor" / f"debug-{_sid}.log")
-    except Exception:
-        return None
-
-
-def _agent_debug_ndjson_append(
-    location: str, message: str, hypothesis_id: str, data: dict
-) -> None:
-    try:
-        p = _agent_debug_ndjson_log_path()
-        if not p:
-            return
-        _sid = (os.environ.get("PM_AI_AGENT_DEBUG_SESSION_ID") or "d3d9c5").strip() or "d3d9c5"
-        payload = {
-            "sessionId": _sid,
-            "timestamp": int(time_module.time() * 1000),
-            "location": location,
-            "message": message,
-            "hypothesisId": hypothesis_id,
-            "data": data,
-        }
-        pathlib.Path(p).parent.mkdir(parents=True, exist_ok=True)
-        with open(p, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-
-
-# #endregion
+def _plan_row_stage2_dispatch_plan_excluded(row) -> bool:
+    """「配台不要」セルに配台計画除外マーカーが含まれる行は段階2の task_queue に載せない。"""
+    v = row.get(PLAN_COL_EXCLUDE_FROM_ASSIGNMENT)
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return False
+    s = unicodedata.normalize("NFKC", str(v).strip())
+    if not s or s.lower() in ("nan", "none"):
+        return False
+    return PLAN_COL_STAGE2_DISPATCH_PLAN_EXCLUDE_MARKER in s
 
 
 def _plan_row_exclude_from_assignment(row) -> bool:
@@ -3992,6 +3960,40 @@ def _ensure_dataframe_has_unprocessed_column(
             f"{context_label}: 列「{TASK_COL_UNPROCESSED}」が必須です。"
             "この列が無いため配台処理を中止します。"
         )
+
+
+def aladdin_system_dispatch_display_qty_m(
+    dispatch_qty_m: float,
+    qty_conv_m: float,
+    raw_roll_m: float,
+    *,
+    remaining_conv_cap: float | None = None,
+) -> tuple[float, float | None]:
+    """
+    納期管理ビュー・サマリ Excel の (シス配台) 表示用数量。
+
+    換算数量 < (原反)ロール単位長さ のとき、アラジン再入力値は換算数量（配台タイムラインの m ではない）。
+    ``remaining_conv_cap`` 指定時は依頼NO単位で換算数量を超えないよう暦日順に配分する。
+    配台計算本体は従来どおり原反ロール長ベースのタイムライン数量を使う。
+
+    Returns:
+        (display_m, new_remaining_conv_cap or None)
+    """
+    dq = max(0.0, float(dispatch_qty_m))
+    if dq <= 1e-12:
+        cap = remaining_conv_cap
+        if cap is not None:
+            return 0.0, max(0.0, float(cap))
+        return 0.0, None
+    q = max(0.0, float(qty_conv_m))
+    r = max(0.0, float(raw_roll_m))
+    if not (q > 1e-12 and r > 1e-12 and q + 1e-9 < r):
+        return dq, remaining_conv_cap
+    if remaining_conv_cap is not None:
+        cap = max(0.0, float(remaining_conv_cap))
+        show = min(dq, cap)
+        return show, max(0.0, cap - show)
+    return min(dq, q), None
 
 
 def _raw_roll_unit_m_resolved_for_dispatch_qty(row) -> float:
@@ -12276,6 +12278,8 @@ def build_task_queue_from_planning_df(
 ):
     """
     ``generate_plan`` 内で呼みれる。完了済み・配台試行行を除し」残りを task_queue に穝む。
+
+    「配台不要」列に「配台計画除外」が含まれる行は段階2の配台キューへ入れない（``PLAN_COL_STAGE2_DISPATCH_PLAN_EXCLUDE_MARKER``）。
     ai_by_tid は None のときの値内部で analyze_task_special_remarks を実行れる。
     """
     if ai_by_tid is None:
@@ -12295,30 +12299,10 @@ def build_task_queue_from_planning_df(
         if _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(row):
             continue
         task_id = planning_task_id_str_from_plan_row(row)
-        # #region agent log
-        try:
-            if "JR260502" in str(task_id or ""):
-                _ex = _plan_row_exclude_from_assignment(row)
-                _raw = row.get(PLAN_COL_EXCLUDE_FROM_ASSIGNMENT)
-                _agent_debug_ndjson_append(
-                    "_core.py:build_task_queue_from_planning_df",
-                    "依頼NO=JR260502の計画行（キュー投入前）",
-                    "H1",
-                    {
-                        "task_id": str(task_id or ""),
-                        "工程名": str(row.get(TASK_COL_MACHINE, "") or "").strip(),
-                        "機械名": str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip(),
-                        "tasks_dfに配台不要列": bool(
-                            PLAN_COL_EXCLUDE_FROM_ASSIGNMENT in tasks_df.columns
-                        ),
-                        "配台不要_生値": repr(_raw),
-                        "exclude_from_assignment": bool(_ex),
-                    },
-                )
-        except Exception:
-            pass
-        # #endregion
         if _plan_row_exclude_from_assignment(row):
+            n_exclude_plan += 1
+            continue
+        if _plan_row_stage2_dispatch_plan_excluded(row):
             n_exclude_plan += 1
             continue
 
@@ -12377,6 +12361,8 @@ def build_task_queue_from_planning_df(
             _special_remark_implies_due_related_dispatch_priority(remark_raw)
         )
         in_progress = done_qty > 0.0
+        if in_progress and _stage2_truthy_env("PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH"):
+            continue
 
         ai_one = _ai_task_special_entry_for_row(ai_by_tid, row)
         allow_from_ai_dispatch_signals = (
@@ -12631,25 +12617,6 @@ def build_task_queue_from_planning_df(
                 "unprocessed_baseline_m": _unp_base,
             }
         )
-        # #region agent log
-        try:
-            if "JR260502" in str(task_id or ""):
-                _agent_debug_ndjson_append(
-                    "_core.py:build_task_queue_from_planning_df",
-                    "依頼NO=JR260502をtask_queueへ追加",
-                    "H2",
-                    {
-                        "task_id": str(task_id or ""),
-                        "machine": machine,
-                        "machine_name": machine_name,
-                        "equipment_line_key": str(
-                            task_queue[-1].get("equipment_line_key") or ""
-                        ),
-                    },
-                )
-        except Exception:
-            pass
-        # #endregion
         planning_sheet_row_seq += 1
 
     logging.info(
@@ -16271,6 +16238,51 @@ def _write_stage1_task_input_preview_xlsx(df: pd.DataFrame, out_dir: str) -> str
     return out_path
 
 
+def _apply_stage1_in_progress_dispatch_plan_exclude_marker(df, log_prefix: str = "段階1") -> int:
+    """
+    ``PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH`` が有効なとき、実加工数が正の行の「配台不要」に
+    ``PLAN_COL_STAGE2_DISPATCH_PLAN_EXCLUDE_MARKER``（配台計画除外）を付与する（既に含む場合は据え置き）。
+    """
+    if not _stage2_truthy_env("PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH"):
+        return 0
+    if df is None or df.empty:
+        return 0
+    if (
+        TASK_COL_ACTUAL_DONE not in df.columns
+        or PLAN_COL_EXCLUDE_FROM_ASSIGNMENT not in df.columns
+    ):
+        return 0
+    marker = PLAN_COL_STAGE2_DISPATCH_PLAN_EXCLUDE_MARKER
+    act = pd.to_numeric(df[TASK_COL_ACTUAL_DONE], errors="coerce").fillna(0.0)
+    n = 0
+    for idx in df.index:
+        try:
+            av = float(act.loc[idx])
+        except (TypeError, ValueError):
+            av = 0.0
+        if av <= 1e-12:
+            continue
+        cell = df.at[idx, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT]
+        if cell is None or pd.isna(cell):
+            cur = ""
+        else:
+            cur = str(cell).strip()
+        if marker in cur:
+            continue
+        df.at[idx, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = (
+            f"{cur} {marker}" if cur else marker
+        ).strip()
+        n += 1
+    if n:
+        logging.info(
+            "%s: 加工途中を配台しない — 「%s」を実加工数>0 の %s 行へ付与しました。",
+            log_prefix,
+            marker,
+            n,
+        )
+    return n
+
+
 # =============================================================================
 # 段階1エントリ（task_extract_stage1.py → run_stage1_extract）
 #   加工計画DATA 読取 → 計画 DataFrame 確定（マージ・分割の配台不要）→
@@ -16346,7 +16358,6 @@ def run_stage1_extract():
             continue
         rec = {c: row.get(c) for c in SOURCE_BASE_COLUMNS}
         rec[TASK_COL_TASK_ID] = task_id
-        _qty_total_s1 = max(0.0, parse_float_safe(row.get(TASK_COL_QTY), 0.0))
         _roll_len_product = _stage1_roll_length_for_planning_row(row)
         rec[PLAN_COL_ROLL_UNIT_LENGTH] = _roll_len_product
         rec[PLAN_COL_PRODUCT_WIDTH] = _resolve_product_width_mm_for_stage1_row(
@@ -16372,11 +16383,10 @@ def run_stage1_extract():
                 rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = float(_raw_dim_m)
             else:
                 rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = "不明"
-        _raw_floor_s1 = _raw_roll_unit_m_resolved_for_dispatch_qty(rec)
-        if _raw_floor_s1 > 1e-12 and _qty_total_s1 + 1e-9 < _raw_floor_s1:
-            _qty_total_s1 = max(_qty_total_s1, _raw_floor_s1)
+        # 換算数量列は加工計画DATAの値のまま（§7.1）。原反ロール長未満への引き上げは
+        # _plan_row_dispatch_qty_metrics の配台残量(m)算定のみ（列は書き換えない）。
         if TASK_COL_QTY in rec:
-            rec[TASK_COL_QTY] = _qty_total_s1
+            rec[TASK_COL_QTY] = max(0.0, parse_float_safe(row.get(TASK_COL_QTY), 0.0))
         # 工程名 + 機械名 を“因孝”として表示用に追加（後段は計算キーにも使用）
         if machine_name:
             rec[PLAN_COL_PROCESS_FACTOR] = f"{machine}+{machine_name}"
@@ -16493,6 +16503,7 @@ def run_stage1_extract():
         logging.warning("段階1: 配台試行順番列の計算をスキップしました（続行）: %s", ex)
     out_df = _sort_stage1_plan_df_by_dispatch_trial_order_asc(out_df)
     _fill_plan_dispatch_remaining_qty_column(out_df)
+    _apply_stage1_in_progress_dispatch_plan_exclude_marker(out_df, log_prefix="段階1")
     out_path = os.path.join(output_dir, STAGE1_OUTPUT_FILENAME)
     out_df.to_excel(out_path, sheet_name="タスク一覧", index=False)
     _apply_excel_date_columns_date_only_display(out_path, "タスク一覧")
@@ -16511,308 +16522,6 @@ DEFAULT_BREAKS = [
     (time(12, 0), time(12, 50)),
     (time(14, 45), time(15, 0))
 ]
-
-# ---------------------------------------------------------------------------
-# 段階3（案B）二相化: 設備フェイズは仮想チーム＋工場共通休憩。人は後段で充足。
-# ---------------------------------------------------------------------------
-STAGE3_VIRTUAL_MEMBER_PREFIX = "__PM_AI_S3V__"
-STAGE3_EQUIPMENT_PLACEHOLDER_OP = "（段階3設備）"
-_STAGE3_EQUIPMENT_VIRTUAL_ACTIVE: bool = False
-
-
-def stage3_equipment_virtual_active() -> bool:
-    """True のとき _assign_one_roll_trial_order_flow は仮想チーム経路（設備のみ）を使う。"""
-    return _STAGE3_EQUIPMENT_VIRTUAL_ACTIVE
-
-
-def _set_stage3_equipment_virtual_active(v: bool) -> None:
-    global _STAGE3_EQUIPMENT_VIRTUAL_ACTIVE
-    _STAGE3_EQUIPMENT_VIRTUAL_ACTIVE = bool(v)
-
-
-def _is_stage3_virtual_team(team: tuple) -> bool:
-    if not team:
-        return False
-    return all(str(m).startswith(STAGE3_VIRTUAL_MEMBER_PREFIX) for m in team)
-
-
-def _factory_common_breaks_dt_for_calendar_date(day_d: date) -> list:
-    """
-    工場稼働日の暦日内における共通休憩（DEFAULT_BREAKS を A12/B12 由来の
-    DEFAULT_START_TIME / DEFAULT_END_TIME の窓にクリップした区間）。
-    人別勤怠の breaks_dt は使わない。
-    """
-    w0 = datetime.combine(day_d, DEFAULT_START_TIME)
-    w1 = datetime.combine(day_d, DEFAULT_END_TIME)
-    out: list = []
-    for bt, et in DEFAULT_BREAKS:
-        bs = datetime.combine(day_d, bt)
-        ee = datetime.combine(day_d, et)
-        if bs < w1 and ee > w0:
-            out.append((max(bs, w0), min(ee, w1)))
-    return merge_time_intervals(out)
-
-
-def _stage3_checkpoint_default_path(interactive_source_json: str | None) -> str:
-    base = (interactive_source_json or "").strip()
-    if base:
-        try:
-            return str(pathlib.Path(base).resolve().with_name("stage3_equipment_checkpoint.json"))
-        except Exception:
-            pass
-    return str(pathlib.Path.cwd() / "stage3_equipment_checkpoint.json")
-
-
-def _stage3_serialize_timeline_for_checkpoint(events: list) -> list:
-    out: list = []
-    for ev in events or []:
-        if not isinstance(ev, dict):
-            continue
-        row = dict(ev)
-        for k in ("start_dt", "end_dt"):
-            v = row.get(k)
-            if isinstance(v, datetime):
-                row[k] = v.isoformat(sep=" ", timespec="seconds")
-        d = row.get("date")
-        if isinstance(d, date):
-            row["date"] = d.isoformat()
-        br = row.get("breaks")
-        if isinstance(br, list):
-            row["breaks"] = [
-                (
-                    (x[0].isoformat(sep=" ", timespec="seconds"), x[1].isoformat(sep=" ", timespec="seconds"))
-                    if isinstance(x, (list, tuple))
-                    and len(x) == 2
-                    and isinstance(x[0], datetime)
-                    and isinstance(x[1], datetime)
-                    else x
-                )
-                for x in br
-            ]
-        out.append(row)
-    return out
-
-
-def _stage3_deserialize_timeline_from_checkpoint(rows: list) -> list:
-    out: list = []
-    for row in rows or []:
-        if not isinstance(row, dict):
-            continue
-        ev = dict(row)
-        for k in ("start_dt", "end_dt"):
-            v = ev.get(k)
-            if isinstance(v, str) and v.strip():
-                try:
-                    ev[k] = datetime.fromisoformat(v.replace(" ", "T", 1))
-                except Exception:
-                    try:
-                        ev[k] = pd.to_datetime(v, errors="coerce")
-                        if hasattr(ev[k], "to_pydatetime"):
-                            ev[k] = ev[k].to_pydatetime()
-                    except Exception:
-                        pass
-        d = ev.get("date")
-        if isinstance(d, str) and d.strip():
-            try:
-                ev["date"] = date.fromisoformat(d[:10])
-            except Exception:
-                pass
-        br = ev.get("breaks")
-        if isinstance(br, list):
-            nb: list = []
-            for x in br:
-                if (
-                    isinstance(x, (list, tuple))
-                    and len(x) == 2
-                    and isinstance(x[0], str)
-                    and isinstance(x[1], str)
-                ):
-                    try:
-                        a = datetime.fromisoformat(x[0].replace(" ", "T", 1))
-                        b = datetime.fromisoformat(x[1].replace(" ", "T", 1))
-                        nb.append((a, b))
-                    except Exception:
-                        pass
-                elif isinstance(x, (list, tuple)) and len(x) == 2:
-                    nb.append(tuple(x))
-            ev["breaks"] = merge_time_intervals(nb) if nb else []
-        out.append(ev)
-    return out
-
-
-def _stage3_write_equipment_checkpoint(
-    path: str,
-    *,
-    timeline_events: list,
-    task_queue: list,
-) -> None:
-    rem: dict[str, float] = {}
-    for t in task_queue or []:
-        tid = str(t.get("task_id") or "").strip()
-        if not tid:
-            continue
-        rem[tid] = float(t.get("remaining_units") or 0.0)
-    payload = {
-        "format_version": 1,
-        "placeholder_op": STAGE3_EQUIPMENT_PLACEHOLDER_OP,
-        "timeline_events": _stage3_serialize_timeline_for_checkpoint(timeline_events),
-        "remaining_units_by_task_id": rem,
-    }
-    pathlib.Path(path).write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    logging.info("段階3: 設備フェイズチェックポイントを書き出しました → %s", path)
-    # #region agent log
-    try:
-        _jr_all = 0
-        _jr_mach = 0
-        _jr_sl = 0
-        _jr_sec = 0
-        _mach_samples: list[str] = []
-        for ev in timeline_events or []:
-            if not isinstance(ev, dict):
-                continue
-            tid = str(ev.get("task_id") or "").strip()
-            if "JR260502" not in tid:
-                continue
-            _jr_all += 1
-            if not _is_machining_timeline_event(ev):
-                continue
-            _jr_mach += 1
-            m = str(ev.get("machine") or "")
-            if "スリット" in m:
-                _jr_sl += 1
-            if "SEC" in m:
-                _jr_sec += 1
-            if len(_mach_samples) < 10:
-                _mach_samples.append(m[:120])
-        append_interactive_core_probe(
-            "H5",
-            "_core.py:_stage3_write_equipment_checkpoint",
-            "checkpoint_jr260502_timeline_slice",
-            {
-                "checkpoint_path": path,
-                "jr260502_events_all_kinds": _jr_all,
-                "jr260502_events_machining_or_blank_kind": _jr_mach,
-                "jr260502_machine_field_contains_slit": _jr_sl,
-                "jr260502_machine_field_contains_sec": _jr_sec,
-                "machine_samples": _mach_samples,
-            },
-        )
-    except Exception:
-        pass
-    # #endregion
-
-
-def _stage3_load_equipment_checkpoint(path: str) -> tuple[list, dict[str, float]]:
-    raw = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
-    rows = raw.get("timeline_events") if isinstance(raw, dict) else None
-    rem = raw.get("remaining_units_by_task_id") if isinstance(raw, dict) else None
-    tl = _stage3_deserialize_timeline_from_checkpoint(rows if isinstance(rows, list) else [])
-    rmap: dict[str, float] = {}
-    if isinstance(rem, dict):
-        for k, v in rem.items():
-            try:
-                rmap[str(k)] = float(v)
-            except (TypeError, ValueError):
-                pass
-    return tl, rmap
-
-
-def _stage3_greedy_fill_placeholder_operators(
-    timeline_events: list,
-    task_queue: list,
-    skills_dict: dict,
-    members: list,
-    req_map: dict,
-    need_rules: list,
-    attendance_data: dict,
-) -> int:
-    """
-    タイムライン上の STAGE3_EQUIPMENT_PLACEHOLDER_OP を、スキル・need に沿って貪欲に実メンバーへ置換する。
-    開始・終了時刻は変更しない。戻り値: 置換したイベント件数。
-    """
-    if not timeline_events or not members:
-        return 0
-    tid_to_task = {str(t.get("task_id") or "").strip(): t for t in (task_queue or [])}
-
-    def _skill_meta(mem: str, machine_proc: str, machine_name: str) -> tuple:
-        srow = skills_dict.get(mem, {}) or {}
-        v = ""
-        if machine_proc and machine_name:
-            v = srow.get(f"{machine_proc}+{machine_name}", "")
-        elif machine_name:
-            v = srow.get(machine_name, "")
-        elif machine_proc:
-            v = srow.get(machine_proc, "")
-        return parse_op_as_skill_cell(v)
-
-    n_fill = 0
-    for ev in timeline_events:
-        if not isinstance(ev, dict):
-            continue
-        if ev.get("event_kind") not in (TIMELINE_EVENT_MACHINING, None, ""):
-            if ev.get("event_kind") is not None and ev.get("event_kind") != TIMELINE_EVENT_MACHINING:
-                continue
-        if str(ev.get("op") or "").strip() != STAGE3_EQUIPMENT_PLACEHOLDER_OP:
-            continue
-        tid = str(ev.get("task_id") or "").strip()
-        task = tid_to_task.get(tid)
-        if not task:
-            continue
-        machine = task.get("machine")
-        machine_name = str(task.get("machine_name") or "").strip()
-        machine_proc = str(machine or "").strip()
-        plan_ro = _plan_sheet_required_op_optional(task)
-        if TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY:
-            req_num, _ = resolve_need_required_op_explain(
-                machine, machine_name, task["task_id"], req_map, need_rules
-            )
-        else:
-            if plan_ro is not None:
-                req_num = plan_ro
-            else:
-                req_num, _ = resolve_need_required_op_explain(
-                    machine, machine_name, task["task_id"], req_map, need_rules
-                )
-        try:
-            req_num = max(1, int(req_num))
-        except (TypeError, ValueError):
-            req_num = 1
-        cal_d = ev.get("date")
-        if not isinstance(cal_d, date):
-            continue
-        day_att = attendance_data.get(cal_d) or {}
-        st = ev.get("start_dt")
-        ed = ev.get("end_dt")
-        if not isinstance(st, datetime) or not isinstance(ed, datetime):
-            continue
-        candidates: list[str] = []
-        for mem in members:
-            if mem not in day_att:
-                continue
-            if not day_att[mem].get("is_working"):
-                continue
-            role, _prio = _skill_meta(mem, machine_proc, machine_name)
-            if role != "OP":
-                continue
-            ws = day_att[mem].get("start_dt")
-            we = day_att[mem].get("end_dt")
-            if not isinstance(ws, datetime) or not isinstance(we, datetime):
-                continue
-            if ws <= st and we >= ed:
-                candidates.append(mem)
-        if len(candidates) < req_num:
-            continue
-        candidates.sort()
-        lead = candidates[0]
-        subs = candidates[1:req_num]
-        ev["op"] = lead
-        ev["sub"] = ", ".join(subs)
-        n_fill += 1
-    return n_fill
-
 
 # 終業直前デファー: ASSIGN_END_OF_DAY_DEFER_MINUTES が正のとき、team_end_limit までの残りがその分数以下で、
 # かつ remaining_units（切り上げ）が ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS 以下のとき、その日の開始不可（None）。
@@ -17053,8 +16762,7 @@ def _defer_team_start_past_prebreak_and_end_of_day(
         gap_end = ASSIGN_END_OF_DAY_DEFER_MINUTES
         rem_ceil = math.ceil(float(task.get("remaining_units") or 0))
         if (
-            not stage3_equipment_virtual_active()
-            and not eod_same_request_continuation_exempt
+            not eod_same_request_continuation_exempt
             and gap_end > 0
             and (team_end_limit - ts) <= timedelta(minutes=gap_end)
             and rem_ceil <= ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS
@@ -19645,6 +19353,12 @@ STAGE2_MACRO_NOW_USE_DATA_EXTRACT_CLOCK = (
 )
 
 
+def _stage2_truthy_env(name: str) -> bool:
+    """JavaFX 実行タブ／環境変数から渡す段階2オプション用（0/false/no/off/none 以外を有効とする）。"""
+    v = (os.environ.get(name) or "").strip().lower()
+    return v in ("1", "true", "yes", "on", "はい")
+
+
 # 勤怠に載っている最終日までで割付は終ゝらないとし」最終日とともにシフト型で日付を延長れる（オプション）。
 # False のとき段階2はマスタ勤怠の日付範囲のみで割付し、残りは配台残・配台試行のままとれる。
 STAGE2_EXTEND_ATTENDANCE_CALENDAR = False
@@ -19910,51 +19624,6 @@ def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
                 and _roll_pipeline_inspection_assign_room(task_queue, tid) > 1e-12
             ):
                 continue
-            # #region agent log
-            if "JR260502" in tid:
-                _h7_bag = getattr(
-                    _task_blocked_by_same_request_dependency, "_h7_logged_keys", None
-                )
-                if _h7_bag is None:
-                    _h7_bag = set()
-                    setattr(
-                        _task_blocked_by_same_request_dependency,
-                        "_h7_logged_keys",
-                        _h7_bag,
-                    )
-                _h7_key = (
-                    tid,
-                    str(task.get("machine") or "")[:160],
-                    str(t2.get("machine") or "")[:160],
-                    my_seq,
-                    s2,
-                )
-                if _h7_key not in _h7_bag:
-                    _h7_bag.add(_h7_key)
-                    try:
-                        append_interactive_core_probe(
-                            "H7",
-                            "_core.py:_task_blocked_by_same_request_dependency",
-                            "same_request_dependency_block",
-                            {
-                                "blocked_task_id": tid,
-                                "blocked_same_request_line_seq": my_seq,
-                                "blocked_rank": my_r,
-                                "blocked_machine": str(task.get("machine") or "")[:200],
-                                "blocked_remaining_units": float(
-                                    task.get("remaining_units") or 0.0
-                                ),
-                                "predecessor_same_request_line_seq": s2,
-                                "predecessor_rank": r2,
-                                "predecessor_machine": str(t2.get("machine") or "")[:200],
-                                "predecessor_remaining_units": float(
-                                    t2.get("remaining_units") or 0.0
-                                ),
-                            },
-                        )
-                    except Exception:
-                        pass
-            # #endregion
             return True
     return False
 
@@ -24242,30 +23911,6 @@ def _resolve_task_dict_for_timeline_line(
     if len(cands) == 1:
         return cands[0]
     if len(cands) > 1:
-        # #region agent log
-        try:
-            if "JR260502" in tid_s:
-                _agent_debug_ndjson_append(
-                    "_core.py:_resolve_task_dict_for_timeline_line",
-                    "equipment_line_key一致が複数（先頭を採用）",
-                    "H4",
-                    {
-                        "tid": tid_s,
-                        "ev_machine_line": em,
-                        "n_cands": len(cands),
-                        "picked_machine": str(cands[0].get("machine") or ""),
-                        "picked_machine_name": str(cands[0].get("machine_name") or ""),
-                        "cand_preview": [
-                            str(c.get("machine") or "")
-                            + "/"
-                            + str(c.get("machine_name") or "")
-                            for c in cands[:8]
-                        ],
-                    },
-                )
-        except Exception:
-            pass
-        # #endregion
         return cands[0]
     for t in sorted_tasks_for_result:
         if str(t.get("task_id") or "").strip() != tid_s:
@@ -24273,46 +23918,12 @@ def _resolve_task_dict_for_timeline_line(
         m_proc = str(t.get("machine") or "").strip()
         m_name = str(t.get("machine_name") or "").strip()
         if m_proc and m_proc in em and (not m_name or m_name in em):
-            # #region agent log
-            try:
-                if "JR260502" in tid_s:
-                    _agent_debug_ndjson_append(
-                        "_core.py:_resolve_task_dict_for_timeline_line",
-                        "部分一致ブランチで解決",
-                        "H4",
-                        {
-                            "tid": tid_s,
-                            "ev_machine_line": em,
-                            "picked_machine": m_proc,
-                            "picked_machine_name": m_name,
-                        },
-                    )
-            except Exception:
-                pass
-            # #endregion
             return t
     for t in sorted_tasks_for_result:
         if str(t.get("task_id") or "").strip() != tid_s:
             continue
         ek = str(t.get("equipment_line_key") or "").strip() or str(t.get("machine") or "").strip()
         if ek == em:
-            # #region agent log
-            try:
-                if "JR260502" in tid_s:
-                    _agent_debug_ndjson_append(
-                        "_core.py:_resolve_task_dict_for_timeline_line",
-                        "ek==emブランチで解決",
-                        "H4",
-                        {
-                            "tid": tid_s,
-                            "ev_machine_line": em,
-                            "picked_equipment_or_machine": ek,
-                            "picked_machine_name": str(t.get("machine_name") or ""),
-                        },
-                    )
-            except Exception:
-                pass
-            # #endregion
             return t
     return None
 
@@ -24708,29 +24319,6 @@ def build_result_dispatch_table_dataframe(
         )
         r["配台日"] = day_k
         r["当日配台数量"] = float(qty_sum)
-        # #region agent log
-        try:
-            if "JR260502" in tid_k:
-                _agent_debug_ndjson_append(
-                    "_core.py:build_result_dispatch_table_dataframe",
-                    "結果_配台表の1行（集約後）",
-                    "H3",
-                    {
-                        "tid": tid_k,
-                        "eq_line": eq_k,
-                        "day": str(day_k),
-                        "qty_sum": float(qty_sum),
-                        "resolved_machine": str((t or {}).get("machine") or ""),
-                        "resolved_machine_name": str((t or {}).get("machine_name") or ""),
-                        "plan_row_exists": plan_row is not None,
-                        "src_row_exists": src_row is not None,
-                        "工程名列": str(r.get("工程名") or ""),
-                        "機械名列": str(r.get("機械名") or ""),
-                    },
-                )
-        except Exception:
-            pass
-        # #endregion
         rows.append(r)
     return pd.DataFrame(rows, columns=cols)
 
@@ -24859,6 +24447,105 @@ def _interactive_parse_dispatch_date_cell(val) -> date | None:
     return parse_optional_date(val)
 
 
+def fill_interactive_result_dispatch_json_rows_from_planning_sources(
+    json_rows: list,
+    tasks_df: "pd.DataFrame",
+    df_src: "pd.DataFrame | None",
+) -> int:
+    """
+    結果_配台表 JSON の各行で空の静的列を、計画入力 tasks_df と加工計画DATA df_src（段階2と同一）から補完する。
+    「配台日」「当日配台数量」は編集対象のため上書きしない。
+    """
+    if not json_rows or tasks_df is None or getattr(tasks_df, "empty", True):
+        return 0
+    plan_lookup = _build_plan_input_row_lookup_for_dispatch_table(tasks_df)
+    try:
+        src_lookup3, src_lookup2 = _build_source_task_row_lookups_for_dispatch_table(
+            df_src
+        )
+    except Exception:
+        src_lookup3, src_lookup2 = {}, {}
+    skip_cols = frozenset({"配台日", "当日配台数量"})
+    filled = 0
+    for r in json_rows:
+        if not isinstance(r, dict):
+            continue
+        tid = _interactive_norm_cell(r.get(TASK_COL_TASK_ID)) or _interactive_norm_cell(
+            r.get("タスクID")
+        )
+        proc = _interactive_dispatch_target_process_key(r.get(TASK_COL_MACHINE))
+        if not tid or not proc:
+            continue
+        plan_row = plan_lookup.get((tid, proc))
+        od_key = ""
+        try:
+            if plan_row is not None and hasattr(plan_row, "index") and "受注日" in plan_row.index:
+                _v = _planning_df_cell_scalar(plan_row, "受注日")
+                if _v is not None and not (isinstance(_v, float) and pd.isna(_v)):
+                    od_key = str(_v).strip()
+        except Exception:
+            od_key = ""
+        if od_key:
+            try:
+                ts = pd.to_datetime(od_key, errors="coerce")
+                if not pd.isna(ts) and isinstance(ts, pd.Timestamp):
+                    od_key = ts.to_pydatetime().date().strftime("%Y/%m/%d")
+            except Exception:
+                pass
+        j_od = _interactive_norm_cell(r.get("受注日"))
+        if j_od:
+            try:
+                tsj = pd.to_datetime(j_od, errors="coerce")
+                if not pd.isna(tsj) and isinstance(tsj, pd.Timestamp):
+                    j_od = tsj.to_pydatetime().date().strftime("%Y/%m/%d")
+            except Exception:
+                pass
+        src_row = None
+        if tid and proc:
+            if j_od:
+                src_row = src_lookup3.get((tid, proc, j_od))
+            if src_row is None and od_key:
+                src_row = src_lookup3.get((tid, proc, od_key))
+            if src_row is None:
+                cand = src_lookup2.get((tid, proc))
+                if isinstance(cand, list):
+                    best = None
+                    best_od = ""
+                    for r0 in cand:
+                        od0 = ""
+                        try:
+                            if hasattr(r0, "index") and "受注日" in r0.index:
+                                od0 = _norm_ymd(_planning_df_cell_scalar(r0, "受注日"))
+                        except Exception:
+                            od0 = ""
+                        if best is None:
+                            best, best_od = r0, od0
+                        else:
+                            if od0 and (not best_od or od0 < best_od):
+                                best, best_od = r0, od0
+                    src_row = best
+                else:
+                    src_row = cand
+        for h in RESULT_DISPATCH_TABLE_STATIC_HEADERS:
+            if h in skip_cols:
+                continue
+            cur = r.get(h)
+            if cur is not None and str(cur).strip() != "":
+                continue
+            cell = _dispatch_table_cell_from_sources(
+                src_row=src_row, plan_row=plan_row, task_dict=None, col_name=h
+            )
+            if cell is None:
+                continue
+            if isinstance(cell, float) and pd.isna(cell):
+                continue
+            if isinstance(cell, str) and not cell.strip():
+                continue
+            r[h] = cell
+            filled += 1
+    return filled
+
+
 def merge_interactive_result_dispatch_json_into_tasks_df(
     tasks_df: "pd.DataFrame", json_rows: list
 ) -> tuple["pd.DataFrame", dict[tuple[str, str, str, date], float]]:
@@ -24921,6 +24608,51 @@ def merge_interactive_result_dispatch_json_into_tasks_df(
         if k in order_map:
             df.at[idx, _dto] = str(order_map[k])
     return df, dict(targets)
+
+
+def _interactive_min_positive_dispatch_date_from_json_rows(
+    json_rows: list,
+    task_id: str,
+    machine: str,
+    machine_name: str,
+) -> date | None:
+    """
+    段階3手動修正 JSON: 依頼NO×工程×機械名が一致し「当日配台数量」が正の行について、配台日の最奨日。
+
+    タスクキューの ``start_date_req`` をこれ以上前に倒さない下限として使う（手動表に無い暦日では
+    ``start_date_req <= current_date`` に入らず、当該日のフォーム探索に掛からない）。
+    """
+    tid_w = _interactive_norm_cell(task_id) or ""
+    mach_w = _interactive_norm_cell(machine_name) or ""
+    proc_w = _interactive_dispatch_target_process_key(machine)
+    if not tid_w or not mach_w:
+        return None
+    min_dd: date | None = None
+    for r in json_rows or []:
+        if not isinstance(r, dict):
+            continue
+        tid = _interactive_norm_cell(r.get(TASK_COL_TASK_ID)) or _interactive_norm_cell(
+            r.get("タスクID")
+        )
+        proc = _interactive_dispatch_target_process_key(r.get(TASK_COL_MACHINE))
+        mach = _interactive_norm_cell(r.get(TASK_COL_MACHINE_NAME))
+        if tid != tid_w or proc != proc_w or mach != mach_w:
+            continue
+        dd = _interactive_parse_dispatch_date_cell(r.get("配台日"))
+        qty_cell = r.get("当日配台数量")
+        try:
+            qty_v = (
+                float(str(qty_cell).replace(",", "").strip())
+                if qty_cell not in (None, "")
+                else 0.0
+            )
+        except (TypeError, ValueError):
+            qty_v = 0.0
+        if dd is None or qty_v <= 1e-18:
+            continue
+        if min_dd is None or dd < min_dd:
+            min_dd = dd
+    return min_dd
 
 
 def _interactive_aggregate_dispatch_targets_from_df(
@@ -25225,25 +24957,6 @@ def compute_interactive_trial_dispatch_qty_shortfall(
         except (TypeError, ValueError):
             done_m = 0.0
         gap = tgt - done_m
-        # #region agent log
-        _tid_s = str(tid or "")
-        if gap > eps or "JR260502" in _tid_s:
-            append_interactive_core_probe(
-                "H1",
-                "_core.py:compute_interactive_trial_dispatch_qty_shortfall",
-                "target_vs_done",
-                {
-                    "task_id": _tid_s,
-                    "proc": str(proc or ""),
-                    "mach": str(mach or ""),
-                    "dd": dd.isoformat() if isinstance(dd, date) else str(dd),
-                    "target_m": tgt,
-                    "done_m": done_m,
-                    "gap": gap,
-                    "emit_shortfall_row": bool(gap > eps),
-                },
-            )
-        # #endregion
         if gap > eps:
             date_iso = dd.isoformat() if isinstance(dd, date) else str(dd)
             out.append(
@@ -25758,6 +25471,39 @@ def _dispatch_meta_join_key_from_mapping(row: dict) -> tuple[str, str, str]:
     return (tid, mach, dd_s)
 
 
+def _iso_date_from_dispatch_table_datetime_cell(val) -> str:
+    """加工開始／終了日時セルから暦日 yyyy-mm-dd。取れなければ空。"""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return ""
+    try:
+        if pd.api.types.is_scalar(val) and pd.isna(val):
+            return ""
+    except Exception:
+        pass
+    if isinstance(val, datetime):
+        try:
+            return val.date().isoformat()
+        except (ValueError, OSError, AttributeError, TypeError):
+            return ""
+    if isinstance(val, date) and not isinstance(val, datetime):
+        try:
+            return val.isoformat()
+        except (ValueError, OSError, AttributeError, TypeError):
+            return ""
+    s = str(val).strip()
+    if not s or s.lower() in ("nan", "nat", "none"):
+        return ""
+    try:
+        ts = pd.to_datetime(s, errors="coerce")
+        if pd.api.types.is_scalar(ts) and pd.isna(ts):
+            return ""
+        if hasattr(ts, "date"):
+            return ts.date().isoformat()
+    except Exception:
+        pass
+    return ""
+
+
 def _overlay_timeline_meta_onto_interactive_dispatch_df(
     df_out: pd.DataFrame,
     df_sim: pd.DataFrame,
@@ -25765,6 +25511,12 @@ def _overlay_timeline_meta_onto_interactive_dispatch_df(
     """
     インタラクティブ配台試行で入力 JSON を正とする際、加工開始／終了／メンバー名だけは
     タイムライン集約（df_sim）で上書きする。入力 JSON に残った古い終了時刻・単一名を是正する。
+
+    JSON の「配台日」と df_sim の暦日キーがずれる場合、配台日キー一致でメタが取れなければ
+    「加工開始日時の暦日＝JSON 配台日」の df_sim 行を二次照合する。
+    メタが取れない行は、タイムラインに無い誤った JSON 時刻を残さないため、加工開始／終了／メンバー名を空にする。
+    上書き後も「加工開始の暦日」と「配台日」が食い違う場合のみ、当該3列を空にして段階2の時刻が
+    配台日だけ変わったように見える誤表示を防ぐ。
     """
     if (
         df_sim is None
@@ -25780,35 +25532,197 @@ def _overlay_timeline_meta_onto_interactive_dispatch_df(
     if not all(c in df_sim.columns for c in meta_cols):
         return df_out
     lookup: dict[tuple[str, str, str], dict[str, object]] = {}
+    lookup_by_start_day: dict[tuple[str, str, str], dict[str, object]] = {}
     for _, sim_row in df_sim.iterrows():
         d = sim_row.to_dict()
         k = _dispatch_meta_join_key_from_mapping(d)
         if not k[0]:
             continue
-        lookup[k] = {c: sim_row.get(c) for c in meta_cols}
+        meta = {c: sim_row.get(c) for c in meta_cols}
+        lookup[k] = meta
+        st_day = _iso_date_from_dispatch_table_datetime_cell(d.get("加工開始日時"))
+        if st_day:
+            lookup_by_start_day[(k[0], k[1], st_day)] = meta
 
     out = df_out.copy()
-    for pos in range(len(out)):
-        k = _dispatch_meta_join_key_from_mapping(out.iloc[pos].to_dict())
-        meta = lookup.get(k)
-        if not meta:
-            continue
+
+    def _clear_meta_at_pos(pos0: int) -> None:
         for c in meta_cols:
-            v = meta.get(c)
-            if v is None:
-                continue
-            if isinstance(v, float) and pd.isna(v):
-                continue
-            sv = str(v).strip()
-            if not sv or sv.lower() == "nan":
-                continue
             try:
                 ci = out.columns.get_loc(c)
                 if isinstance(ci, slice):
                     continue
-                out.iloc[pos, ci] = v
+                out.iloc[pos0, ci] = ""
             except Exception:
                 continue
+
+    for pos in range(len(out)):
+        k = _dispatch_meta_join_key_from_mapping(out.iloc[pos].to_dict())
+        meta = lookup.get(k)
+        if meta is None and k[0] and k[1] and k[2]:
+            meta = lookup_by_start_day.get(k)
+        if meta is not None:
+            for c in meta_cols:
+                v = meta.get(c)
+                if v is None:
+                    continue
+                if isinstance(v, float) and pd.isna(v):
+                    continue
+                sv = str(v).strip()
+                if not sv or sv.lower() == "nan":
+                    continue
+                try:
+                    ci = out.columns.get_loc(c)
+                    if isinstance(ci, slice):
+                        continue
+                    out.iloc[pos, ci] = v
+                except Exception:
+                    continue
+        else:
+            _clear_meta_at_pos(pos)
+        want_dd = k[2]
+        if not want_dd:
+            continue
+        dd_out = _interactive_parse_dispatch_date_cell(out.iloc[pos].get("配台日"))
+        raw_st = out.iloc[pos].get("加工開始日時")
+        dd_st: date | None = None
+        if raw_st is not None and not (isinstance(raw_st, float) and pd.isna(raw_st)):
+            try:
+                if isinstance(raw_st, datetime):
+                    dd_st = raw_st.date()
+                elif isinstance(raw_st, date) and not isinstance(raw_st, datetime):
+                    dd_st = raw_st
+                else:
+                    ts_st = pd.to_datetime(raw_st, errors="coerce")
+                    if not pd.isna(ts_st) and hasattr(ts_st, "date"):
+                        dd_st = ts_st.date()
+            except Exception:
+                dd_st = None
+        if dd_out is not None and dd_st is not None and dd_st != dd_out:
+            _clear_meta_at_pos(pos)
+    # #region agent log
+    try:
+        from planning_core import agent_debug_ndjson as _adn_ov
+
+        samples = []
+        tid_col = TASK_COL_TASK_ID
+        if tid_col in out.columns:
+            for pos in range(len(out)):
+                tid = str(out.iloc[pos].get(tid_col) or "")
+                if "Y5-21" not in tid:
+                    continue
+                samples.append(
+                    {
+                        "pos": int(pos),
+                        "配台日": str(out.iloc[pos].get("配台日")),
+                        "加工開始": str(out.iloc[pos].get("加工開始日時")),
+                        "加工終了": str(out.iloc[pos].get("加工終了日時")),
+                    }
+                )
+                if len(samples) >= 8:
+                    break
+        if samples:
+            _adn_ov.append_structured(
+                "H3",
+                "_overlay_timeline_meta_onto_interactive_dispatch_df",
+                "Y5-21 rows after overlay",
+                {"samples": samples},
+            )
+    except Exception:
+        pass
+    # #endregion
+    return out
+
+
+def _interactive_merge_actual_dispatch_qty_from_timeline_table(
+    df_editor: pd.DataFrame,
+    df_timeline_dispatch: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    段階3: 編集 JSON の「当日配台数量」（目標 m）は維持し、タイムライン実配台 m を
+    ``INTERACTIVE_DISPATCH_ACTUAL_QTY_COL``（実配台数量）へ書く。Java 手動修正表は
+    目標をそのまま、実績を ``(数字)`` で表示する（例: ``600 (400)`` / ``(600)``）。
+
+    キーは (依頼NO, 機械名, 配台暦日)。タイムライン側にのみある暦日行は行として追補する。
+    """
+    if df_editor is None or getattr(df_editor, "empty", True):
+        return df_editor
+    if df_timeline_dispatch is None or getattr(df_timeline_dispatch, "empty", True):
+        return df_editor
+    plan_col = "当日配台数量"
+    actual_col = INTERACTIVE_DISPATCH_ACTUAL_QTY_COL
+    if plan_col not in df_editor.columns:
+        return df_editor
+    lk: defaultdict[tuple[str, str, str], float] = defaultdict(float)
+    for _, simr in df_timeline_dispatch.iterrows():
+        tid = _interactive_norm_cell(simr.get(TASK_COL_TASK_ID))
+        mach = _interactive_norm_cell(simr.get(TASK_COL_MACHINE_NAME))
+        dd = _interactive_parse_dispatch_date_cell(simr.get("配台日"))
+        if not tid or not mach or dd is None:
+            continue
+        ddk = dd.isoformat()
+        try:
+            q = float(simr.get(plan_col) or 0)
+        except (TypeError, ValueError):
+            q = 0.0
+        lk[(tid, mach, ddk)] += float(q)
+    out = df_editor.copy()
+    if actual_col not in out.columns:
+        out[actual_col] = 0.0
+    present: set[tuple[str, str, str]] = set()
+    for pos in range(len(out)):
+        tid = _interactive_norm_cell(out.iloc[pos].get(TASK_COL_TASK_ID))
+        mach = _interactive_norm_cell(out.iloc[pos].get(TASK_COL_MACHINE_NAME))
+        dd = _interactive_parse_dispatch_date_cell(out.iloc[pos].get("配台日"))
+        if not tid or not mach or dd is None:
+            continue
+        ddk = dd.isoformat()
+        present.add((tid, mach, ddk))
+        qv = float(lk.get((tid, mach, ddk), 0.0))
+        try:
+            out.at[out.index[pos], actual_col] = qv
+        except Exception:
+            pass
+    extra: list[dict] = []
+    out_cols = list(out.columns)
+    appended_keys: set[tuple[str, str, str]] = set()
+    for _, simr in df_timeline_dispatch.iterrows():
+        tid = _interactive_norm_cell(simr.get(TASK_COL_TASK_ID))
+        mach = _interactive_norm_cell(simr.get(TASK_COL_MACHINE_NAME))
+        dd = _interactive_parse_dispatch_date_cell(simr.get("配台日"))
+        if not tid or not mach or dd is None:
+            continue
+        ddk = dd.isoformat()
+        try:
+            q = float(simr.get(plan_col) or 0)
+        except (TypeError, ValueError):
+            q = 0.0
+        if q <= 1e-9:
+            continue
+        if (tid, mach, ddk) in present:
+            continue
+        if (tid, mach, ddk) in appended_keys:
+            continue
+        appended_keys.add((tid, mach, ddk))
+        row: dict = {c: "" for c in out_cols}
+        for c in out_cols:
+            if c in simr.index:
+                v = simr.get(c)
+                if c in RESULT_DISPATCH_TABLE_DATE_HEADERS:
+                    row[c] = _norm_ymd(v)
+                elif v is not None and not (isinstance(v, float) and pd.isna(v)):
+                    row[c] = v
+                else:
+                    row[c] = ""
+        row[plan_col] = 0.0
+        row[actual_col] = float(q)
+        extra.append(row)
+    if extra:
+        out = pd.concat([out, pd.DataFrame(extra)], ignore_index=True)
+    try:
+        out[actual_col] = pd.to_numeric(out[actual_col], errors="coerce").fillna(0.0).astype(float)
+    except Exception:
+        pass
     return out
 
 
@@ -25818,8 +25732,9 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
     json_columns: list | None,
 ) -> pd.DataFrame:
     """
-    インタラクティブ配台試行: 編集タブの入力 JSON rows を結果_配台表の正とする。
+    インタラクティブ配台試行: 編集タブの入力 JSON rows を結果_配台表の行構成の正とする。
     ユーザーが暦日行を手動統合した場合でも、配台試行後に分割へ戻さない。
+    タイムライン実配台 m は「実配台数量」列へ反映する（「当日配台数量」＝編集目標は維持）。JSON に無い暦日行は追補する。
     """
     if not json_rows or not isinstance(json_rows, list):
         return df_sim
@@ -25831,6 +25746,7 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
         fallback_columns_from=df_sim,
     )
     df_out = _overlay_timeline_meta_onto_interactive_dispatch_df(df_out, df_sim)
+    df_out = _interactive_merge_actual_dispatch_qty_from_timeline_table(df_out, df_sim)
     logging.info(
         "インタラクティブ配台試行: 結果_配台表は入力 JSON rows を採用しました（%s 行）。",
         len(df_out),
@@ -25888,12 +25804,23 @@ def _write_dispatch_table_standalone_json(df_dispatch: pd.DataFrame, target_dir:
 def _norm_ymd(v) -> str:
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return ""
+    try:
+        if pd.api.types.is_scalar(v) and pd.isna(v):
+            return ""
+    except Exception:
+        pass
     if isinstance(v, datetime):
-        return v.date().strftime("%Y/%m/%d")
+        try:
+            return v.date().strftime("%Y/%m/%d")
+        except (ValueError, OSError, TypeError):
+            return ""
     if isinstance(v, date):
-        return v.strftime("%Y/%m/%d")
+        try:
+            return v.strftime("%Y/%m/%d")
+        except (ValueError, OSError, TypeError):
+            return ""
     s = str(v).strip()
-    if not s:
+    if not s or s.lower() in ("nan", "nat"):
         return ""
     try:
         ts = pd.to_datetime(s, errors="coerce")
@@ -27969,8 +27896,6 @@ def _assign_one_roll_trial_order_flow(
     skill_meta_cache: dict = {}
 
     def skill_role_priority(mem):
-        if str(mem).startswith(STAGE3_VIRTUAL_MEMBER_PREFIX):
-            return ("OP", 100)
         if _gpo.get("ignore_skill_requirements"):
             return ("OP", 100)
         if mem not in skill_meta_cache:
@@ -27985,40 +27910,29 @@ def _assign_one_roll_trial_order_flow(
             skill_meta_cache[mem] = parse_op_as_skill_cell(v)
         return skill_meta_cache[mem]
 
-    if not stage3_equipment_virtual_active():
-        capable_members = [m for m in avail_dt if skill_role_priority(m)[0] in ("OP", "AS")]
-        capable_members.sort(key=lambda mm: (skill_role_priority(mm)[1], mm))
-        capable_members = _filter_capable_members_b2_disjoint_teams(
-            task, task_queue, capable_members
-        )
+    capable_members = [m for m in avail_dt if skill_role_priority(m)[0] in ("OP", "AS")]
+    capable_members.sort(key=lambda mm: (skill_role_priority(mm)[1], mm))
+    capable_members = _filter_capable_members_b2_disjoint_teams(
+        task, task_queue, capable_members
+    )
 
-        pref_raw = str(task.get("preferred_operator_raw") or "").strip()
-        op_today = [m for m in capable_members if skill_role_priority(m)[0] == "OP"]
-        pref_mem = (
-            _resolve_preferred_op_to_member(pref_raw, op_today, members)
-            if pref_raw
-            else None
-        )
+    pref_raw = str(task.get("preferred_operator_raw") or "").strip()
+    op_today = [m for m in capable_members if skill_role_priority(m)[0] == "OP"]
+    pref_mem = (
+        _resolve_preferred_op_to_member(pref_raw, op_today, members)
+        if pref_raw
+        else None
+    )
 
-        _gdp_must, _gdp_warns = _active_global_day_process_must_include(
-            _gpo, task, current_date, capable_members, members
-        )
-    else:
-        capable_members = [
-            f"{STAGE3_VIRTUAL_MEMBER_PREFIX}{i}"
-            for i in range(max(1, int(req_num)))
-        ]
-        pref_mem = None
-        _gdp_must, _gdp_warns = (), []
+    _gdp_must, _gdp_warns = _active_global_day_process_must_include(
+        _gpo, task, current_date, capable_members, members
+    )
 
     for _gw in _gdp_warns:
         logging.warning(_gw)
-    if not stage3_equipment_virtual_active():
-        fixed_team_anchor = _merge_global_day_process_and_pref_anchor(
-            _gdp_must, pref_mem, capable_members
-        )
-    else:
-        fixed_team_anchor = ()
+    fixed_team_anchor = _merge_global_day_process_and_pref_anchor(
+        _gdp_must, pref_mem, capable_members
+    )
     if _gdp_must:
         logging.info(
             "メイングローバル(日付×工程): task=%s date=%s 工程=%r フォーム必須=%s",
@@ -28181,125 +28095,74 @@ def _assign_one_roll_trial_order_flow(
                 ",".join(str(x) for x in team),
             )
             return None
-        if _is_stage3_virtual_team(team):
-            team_start = _mach_floor_eff
-            if not _gpo.get("abolish_all_scheduling_limits"):
-                if team_start < machine_day_floor:
-                    team_start = machine_day_floor
+        if not all(m in daily_status for m in team):
+            _trace_assign(
+                "候補坴下: 当日勤怠キーなし team=%s",
+                ",".join(str(x) for x in team),
+            )
+            return None
+        team_start = max(avail_dt[m] for m in team)
+        if not _gpo.get("abolish_all_scheduling_limits"):
+            machine_free_dt = _mach_floor_eff
+            if team_start < machine_free_dt:
+                team_start = machine_free_dt
             if team_start < day_floor:
                 team_start = day_floor
-            if b2_insp_ec_floor is not None and team_start < b2_insp_ec_floor:
-                team_start = b2_insp_ec_floor
-            if (
-                _sec_pair_gate_floor_dt is not None
-                and team_start < _sec_pair_gate_floor_dt
-            ):
-                team_start = _sec_pair_gate_floor_dt
-            team_end_limit = datetime.combine(current_date, DEFAULT_END_TIME)
-            team_breaks = _factory_common_breaks_dt_for_calendar_date(current_date)
-            avg_eff = 1.0
-            t_eff = parse_float_safe(task.get("task_eff_factor"), 1.0)
-            if t_eff <= 0:
-                t_eff = 1.0
-            eff_time_per_unit = (
-                _base_time_per_unit / avg_eff / t_eff * _surplus_team_time_factor(rq_base, len(team), extra_max)
+        if b2_insp_ec_floor is not None and team_start < b2_insp_ec_floor:
+            team_start = b2_insp_ec_floor
+        if (
+            _sec_pair_gate_floor_dt is not None
+            and team_start < _sec_pair_gate_floor_dt
+        ):
+            team_start = _sec_pair_gate_floor_dt
+        team_end_limit = min(daily_status[m]["end_dt"] for m in team)
+        team_end_limit = _interactive_trial_relax_team_end_limit_to_eod(
+            team_end_limit, current_date
+        )
+        if team_start >= team_end_limit:
+            _trace_assign(
+                "候補坴下: 開始>=終業 team=%s start=%s end_limit=%s",
+                ",".join(str(x) for x in team),
+                team_start,
+                team_end_limit,
             )
-            _defer_min_contig = max(1, int(math.ceil(float(eff_time_per_unit))))
+            return None
+        team_breaks = []
+        for m in team:
+            team_breaks.extend(daily_status[m]["breaks_dt"])
+        team_breaks = merge_time_intervals(team_breaks)
 
-            def _refloor_trial_roll(ts: datetime) -> datetime:
-                ts = max(ts, _mach_floor_eff)
-                if not _gpo.get("abolish_all_scheduling_limits"):
-                    mf = _mach_floor_eff
-                    if ts < mf:
-                        ts = mf
-                    if ts < day_floor:
-                        ts = day_floor
-                if b2_insp_ec_floor is not None and ts < b2_insp_ec_floor:
-                    ts = b2_insp_ec_floor
-                if (
-                    _sec_pair_gate_floor_dt is not None
-                    and ts < _sec_pair_gate_floor_dt
-                ):
-                    ts = _sec_pair_gate_floor_dt
-                return ts
-        else:
-            if not all(m in daily_status for m in team):
-                _trace_assign(
-                    "候補坴下: 当日勤怠キーなし team=%s",
-                    ",".join(str(x) for x in team),
-                )
-                return None
-            team_start = max(avail_dt[m] for m in team)
+        avg_eff = sum(daily_status[m]["efficiency"] for m in team) / len(team)
+        if avg_eff <= 0:
+            avg_eff = 0.01
+        t_eff = parse_float_safe(task.get("task_eff_factor"), 1.0)
+        if t_eff <= 0:
+            t_eff = 1.0
+        eff_time_per_unit = (
+            _base_time_per_unit
+            / avg_eff
+            / t_eff
+            * _surplus_team_time_factor(rq_base, len(team), extra_max)
+        )
+        _defer_min_contig = max(1, int(math.ceil(float(eff_time_per_unit))))
+
+        def _refloor_trial_roll(ts: datetime) -> datetime:
+            ts = max(ts, max(avail_dt[m] for m in team))
             if not _gpo.get("abolish_all_scheduling_limits"):
-                machine_free_dt = _mach_floor_eff
-                if team_start < machine_free_dt:
-                    team_start = machine_free_dt
-                if team_start < day_floor:
-                    team_start = day_floor
-            if b2_insp_ec_floor is not None and team_start < b2_insp_ec_floor:
-                team_start = b2_insp_ec_floor
+                mf = _mach_floor_eff
+                if ts < mf:
+                    ts = mf
+                if ts < day_floor:
+                    ts = day_floor
+            if b2_insp_ec_floor is not None and ts < b2_insp_ec_floor:
+                ts = b2_insp_ec_floor
             if (
                 _sec_pair_gate_floor_dt is not None
-                and team_start < _sec_pair_gate_floor_dt
+                and ts < _sec_pair_gate_floor_dt
             ):
-                team_start = _sec_pair_gate_floor_dt
-            team_end_limit = min(daily_status[m]["end_dt"] for m in team)
-            team_end_limit = _interactive_trial_relax_team_end_limit_to_eod(
-                team_end_limit, current_date
-            )
-            if team_start >= team_end_limit:
-                _trace_assign(
-                    "候補坴下: 開始>=終業 team=%s start=%s end_limit=%s",
-                    ",".join(str(x) for x in team),
-                    team_start,
-                    team_end_limit,
-                )
-                return None
-            team_breaks = []
-            for m in team:
-                team_breaks.extend(daily_status[m]["breaks_dt"])
-            team_breaks = merge_time_intervals(team_breaks)
+                ts = _sec_pair_gate_floor_dt
+            return ts
 
-            avg_eff = sum(daily_status[m]["efficiency"] for m in team) / len(team)
-            if avg_eff <= 0:
-                avg_eff = 0.01
-            t_eff = parse_float_safe(task.get("task_eff_factor"), 1.0)
-            if t_eff <= 0:
-                t_eff = 1.0
-            eff_time_per_unit = (
-                _base_time_per_unit
-                / avg_eff
-                / t_eff
-                * _surplus_team_time_factor(rq_base, len(team), extra_max)
-            )
-            _defer_min_contig = max(1, int(math.ceil(float(eff_time_per_unit))))
-
-            def _refloor_trial_roll(ts: datetime) -> datetime:
-                ts = max(ts, max(avail_dt[m] for m in team))
-                if not _gpo.get("abolish_all_scheduling_limits"):
-                    mf = _mach_floor_eff
-                    if ts < mf:
-                        ts = mf
-                    if ts < day_floor:
-                        ts = day_floor
-                if b2_insp_ec_floor is not None and ts < b2_insp_ec_floor:
-                    ts = b2_insp_ec_floor
-                if (
-                    _sec_pair_gate_floor_dt is not None
-                    and ts < _sec_pair_gate_floor_dt
-                ):
-                    ts = _sec_pair_gate_floor_dt
-                return ts
-
-        if _is_stage3_virtual_team(team):
-            if team_start >= team_end_limit:
-                _trace_assign(
-                    "候補坴下(段階3設備): 開始>=工場終業 team=%s start=%s end_limit=%s",
-                    ",".join(str(x) for x in team),
-                    team_start,
-                    team_end_limit,
-                )
-                return None
         team_start_d = _defer_team_start_past_prebreak_and_end_of_day(
             task,
             team,
@@ -28348,22 +28211,21 @@ def _assign_one_roll_trial_order_flow(
             if _rem_eod_ceil > 0
             else int(ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS)
         )
-        if not stage3_equipment_virtual_active():
-            if _eod_reject_capacity_units_below_threshold(
+        if _eod_reject_capacity_units_below_threshold(
+            _trial_units_cap,
+            team_start,
+            team_end_limit,
+            eod_same_request_continuation_exempt=_eod_cont_exempt,
+            remaining_units_ceil=_rem_eod_ceil,
+        ):
+            _trace_assign(
+                "候補坴下: 終業直後で当日坎容ロール数は閾値未満 team=%s cap=%s th=%s start=%s",
+                ",".join(str(x) for x in team),
                 _trial_units_cap,
+                _eod_eff_th,
                 team_start,
-                team_end_limit,
-                eod_same_request_continuation_exempt=_eod_cont_exempt,
-                remaining_units_ceil=_rem_eod_ceil,
-            ):
-                _trace_assign(
-                    "候補坴下: 終業直後で当日坎容ロール数は閾値未満 team=%s cap=%s th=%s start=%s",
-                    ",".join(str(x) for x in team),
-                    _trial_units_cap,
-                    _eod_eff_th,
-                    team_start,
-                )
-                return None
+            )
+            return None
         _contig = _contiguous_work_minutes_until_next_break_or_limit(
             team_start, team_breaks, team_end_limit
         )
@@ -28440,31 +28302,6 @@ def _assign_one_roll_trial_order_flow(
                     "changeover_segments": _co_segs,
                     "startup_skill_role_priority": skill_role_priority,
                 }
-
-    # 段階3 設備フェイズ（仮想チーム）: 組合せ探索を省略し単一チームで一発評価
-    if stage3_equipment_virtual_active():
-        vt = tuple(capable_members)
-        if len(vt) < rq_base:
-            return None
-        got = _one_roll_from_team(vt)
-        if got is None:
-            return None
-        return {
-            **got,
-            "extra_max": extra_max,
-            "rq_base": rq_base,
-            "need_src_line": need_src_line,
-            "extra_src_line": extra_src_line,
-            "machine": machine,
-            "machine_name": machine_name,
-            "eq_line": eq_line,
-            "req_num": req_num,
-            "max_team_size": max_team_size,
-            "combo_sheet_row_id": None,
-            "combo_preset_team": None,
-            "changeover_segments": _co_segs,
-            "startup_skill_role_priority": skill_role_priority,
-        }
 
     team_candidates: list[dict] = []
     # 組み合わせ表プリセットは「成立したら坳 return」せう」組み合わせ探索とまとめで
@@ -29340,37 +29177,6 @@ def _trial_order_first_schedule_pass(
                         _rem_m = min(_rem_key_m, _rem_task_m)
                     if _rem_m + 1e-9 < _um_lim:
                         break
-            # #region agent log
-            if "JR260502" in _tid_iv and _iv_cap:
-                try:
-                    _cm_dbg = float(interactive_dispatch_targets.get(_cap_key, 0.0))
-                    _dm_dbg = float(interactive_trial_meters_done.get(_cap_key, 0.0))
-                except Exception:
-                    _cm_dbg = _dm_dbg = 0.0
-                _um_dbg = float(task.get("unit_m") or 0)
-                append_interactive_core_probe(
-                    "H4",
-                    "_core.py:_drain_rolls_for_task",
-                    "pre_assign_roll_cap_state",
-                    {
-                        "tid": _tid_iv,
-                        "proc": _proc_iv,
-                        "mach": _mach_iv,
-                        "current_date": current_date.isoformat()
-                        if isinstance(current_date, date)
-                        else str(current_date),
-                        "cap_key_dd": _cap_key[3].isoformat()
-                        if isinstance(_cap_key[3], date)
-                        else str(_cap_key[3]),
-                        "cap_m": _cm_dbg,
-                        "done_m": _dm_dbg,
-                        "rem_m_cap": max(0.0, _cm_dbg - _dm_dbg),
-                        "unit_m": _um_dbg,
-                        "remaining_units": float(task.get("remaining_units") or 0),
-                        "raw_key_in_targets": _raw_cap_key in interactive_dispatch_targets,
-                    },
-                )
-            # #endregion
             res = _assign_one_roll_trial_order_flow(
                 task,
                 current_date,
@@ -29410,12 +29216,8 @@ def _trial_order_first_schedule_pass(
             if done_units <= 0:
                 break
             best_team = tuple(res["team"])
-            if _is_stage3_virtual_team(best_team):
-                lead_op = STAGE3_EQUIPMENT_PLACEHOLDER_OP
-                sub_members = []
-            else:
-                lead_op = res["lead_op"]
-                sub_members = [m for m in best_team if m != lead_op]
+            lead_op = res["lead_op"]
+            sub_members = [m for m in best_team if m != lead_op]
             best_start = res["team_start"]
             best_end = res["actual_end_dt"]
             best_breaks = res["team_breaks"]
@@ -30022,16 +29824,7 @@ def _interactive_trial_recompute_meters_done_from_timeline(
     if not targets:
         return acc
     want = set(targets.keys())
-    # #region agent log
-    _sk_no_task = 0
-    _sk_bad_date = 0
-    _sk_no_bucket = 0
-    _sample_miss: list[dict] = []
-    # #endregion
     _mach_evs = [e for e in (timeline_events or []) if _is_machining_timeline_event(e)]
-    # #region agent log
-    _ev_mach = len(_mach_evs)
-    # #endregion
 
     def _ev_sort_key(ev: dict):
         st = ev.get("start_dt")
@@ -30044,17 +29837,11 @@ def _interactive_trial_recompute_meters_done_from_timeline(
         tid = _interactive_norm_cell(ev.get("task_id"))
         tsk = _task_dict_for_timeline_event(ev, task_queue, want)
         if tsk is None:
-            # #region agent log
-            _sk_no_task += 1
-            # #endregion
             continue
         proc_n = _interactive_dispatch_target_process_key(tsk.get("machine"))
         mach_n = _interactive_norm_cell(tsk.get("machine_name"))
         d = _interactive_timeline_event_calendar_date(ev)
         if d is None:
-            # #region agent log
-            _sk_bad_date += 1
-            # #endregion
             continue
         try:
             ud = float(ev.get("units_done") or 0)
@@ -30081,57 +29868,8 @@ def _interactive_trial_recompute_meters_done_from_timeline(
                     tid, proc_n, mach_n, d, want
                 )
         if kk is None:
-            # #region agent log
-            _sk_no_bucket += 1
-            if "JR260502" in tid and len(_sample_miss) < 12:
-                _sample_miss.append(
-                    {
-                        "ev_date": d.isoformat(),
-                        "tid": tid,
-                        "proc": proc_n,
-                        "mach": mach_n,
-                        "eq_line": str(ev.get("machine") or ""),
-                    }
-                )
-            # #endregion
             continue
         acc[kk] = acc.get(kk, 0.0) + add_m
-    # #region agent log
-    _jr_keys = [kk for kk in want if isinstance(kk, tuple) and len(kk) == 4 and "JR260502" in str(kk[0])]
-    append_interactive_core_probe(
-        "H1",
-        "_core.py:_interactive_trial_recompute_meters_done_from_timeline",
-        "recompute_summary",
-        {
-            "want_n": len(want),
-            "machining_events": _ev_mach,
-            "skip_no_task": _sk_no_task,
-            "skip_bad_date": _sk_bad_date,
-            "skip_no_bucket": _sk_no_bucket,
-            "acc_n": len(acc),
-            "jr260502_target_keys": [
-                {
-                    "tid": str(x[0]),
-                    "proc": str(x[1]),
-                    "mach": str(x[2]),
-                    "dd": x[3].isoformat() if isinstance(x[3], date) else str(x[3]),
-                }
-                for x in sorted(_jr_keys, key=lambda z: (str(z[0]), str(z[3])))
-            ],
-            "jr260502_acc": [
-                {
-                    "tid": str(x[0]),
-                    "proc": str(x[1]),
-                    "mach": str(x[2]),
-                    "dd": x[3].isoformat() if isinstance(x[3], date) else str(x[3]),
-                    "m": float(acc.get(x, 0.0)),
-                }
-                for x in sorted([kk for kk in acc if "JR260502" in str(kk[0])], key=lambda z: (str(z[0]), str(z[3])))
-            ],
-            "sample_key_misses": _sample_miss,
-        },
-    )
-    # #endregion
     return acc
 
 
@@ -31769,10 +31507,6 @@ def _generate_plan_impl(
     interactive_dispatch_targets: dict | None = None,
     interactive_result_dispatch_json_rows: list | None = None,
     interactive_result_dispatch_json_columns: list | None = None,
-    interactive_stage3_two_phase: bool | None = None,
-    interactive_stage3_phase: str | None = None,
-    interactive_stage3_source_json: str | None = None,
-    interactive_stage3_checkpoint_path: str | None = None,
 ):
     # 配台トレース（設定シート A3:A26 のみ）はメンバー0人等で早期 return しても
     # execution_log に残るよご skills 読込より剝で確定・ログれる。
@@ -32000,6 +31734,12 @@ def _generate_plan_impl(
                 _orig_macro.strftime("%Y/%m/%d %H:%M:%S"),
             )
     run_date = base_now_dt.date()
+    if _stage2_truthy_env("PM_AI_STAGE2_SKIP_TODAY_DISPATCH"):
+        run_date = run_date + timedelta(days=1)
+        logging.info(
+            "段階2: PM_AI_STAGE2_SKIP_TODAY_DISPATCH により当日は配台せず、計画開始日を %s にずらしました。",
+            run_date.isoformat(),
+        )
     data_extract_dt_str = (
         data_extract_dt_display_str if data_extract_dt is not None else "—"
     )
@@ -32120,6 +31860,10 @@ def _generate_plan_impl(
     ai_task_by_tid = analyze_task_special_remarks(
         tasks_df, reference_year=run_date.year,         ai_sheet_sink=ai_log_data
     )
+    if _stage2_truthy_env("PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH"):
+        logging.info(
+            "段階2: PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH — 実加工数が正の行は配台キューに入れません（当日完了と想定）。"
+        )
     task_queue = build_task_queue_from_planning_df(
         tasks_df,
         run_date,
@@ -32171,9 +31915,80 @@ def _generate_plan_impl(
         )
 
     # 配台試行順: シート列は权っていれみしれを採用。欠損時は §B 帯・紝期・need 列順でソートし EC 隣接後に 1..n
+    _dbg_all_sheet_dto = _task_queue_all_have_sheet_dispatch_trial_order(task_queue)
     _apply_dispatch_trial_order_for_generate_plan(
         task_queue, req_map, need_rules, need_combo_col_index
     )
+    # #region agent log
+    try:
+        from planning_core import agent_debug_ndjson as _adn_tq
+
+        _y5_rows = []
+        for _t in task_queue:
+            _tid = str(_t.get("task_id") or "").strip()
+            if _tid not in ("Y5-21", "Y5-22", "Y5-23"):
+                continue
+            _y5_rows.append(
+                {
+                    "task_id": _tid,
+                    "dispatch_trial_order_from_sheet": _t.get("dispatch_trial_order_from_sheet"),
+                    "dispatch_trial_order": _t.get("dispatch_trial_order"),
+                    "machine": str(_t.get("machine") or ""),
+                    "machine_name": str(_t.get("machine_name") or ""),
+                    "planning_sheet_row_seq": _t.get("planning_sheet_row_seq"),
+                }
+            )
+        _adn_tq.append_structured(
+            "H5",
+            "_generate_plan_impl",
+            "dispatch trial order branch and Y5-21/22/23 queue snapshot",
+            {
+                "all_rows_had_valid_sheet_dispatch_trial_order": _dbg_all_sheet_dto,
+                "task_queue_len": len(task_queue),
+                "y5_21_22_23": sorted(
+                    _y5_rows, key=lambda r: (int(r.get("dispatch_trial_order") or 10**9), str(r.get("task_id")))
+                ),
+            },
+        )
+    except Exception:
+        pass
+    # #endregion
+    # 段階3: 手動修正 JSON で正の「当日配台数量」がある配台日の最奨を start_date_req 下限とする
+    # （原反投入・既定開始より前にはしない: max(既存, 最奨暦日)。非稼働日は直前稼働日へ寄せる）
+    if (
+        _interactive_dispatch_trial_env_active()
+        and isinstance(interactive_result_dispatch_json_rows, list)
+        and interactive_result_dispatch_json_rows
+    ):
+        for _t_iv in task_queue:
+            _min_j = _interactive_min_positive_dispatch_date_from_json_rows(
+                interactive_result_dispatch_json_rows,
+                str(_t_iv.get("task_id") or ""),
+                str(_t_iv.get("machine") or ""),
+                str(_t_iv.get("machine_name") or ""),
+            )
+            if _min_j is None:
+                continue
+            _cur_iv = _t_iv.get("start_date_req")
+            if isinstance(_cur_iv, date):
+                _t_iv["start_date_req"] = max(_cur_iv, _min_j)
+            else:
+                _t_iv["start_date_req"] = max(run_date, _min_j)
+        if working_days:
+            for _t_iv in task_queue:
+                req_d = _t_iv.get("start_date_req")
+                if not isinstance(req_d, date):
+                    continue
+                if req_d in working_days:
+                    continue
+                prev_work = None
+                for wd in working_days:
+                    if wd <= req_d:
+                        prev_work = wd
+                    else:
+                        break
+                if prev_work is not None:
+                    _t_iv["start_date_req"] = prev_work
     if DEBUG_TASK_ID:
         dbg_items = [t for t in task_queue if str(t.get("task_id", "")).strip() == DEBUG_TASK_ID]
         if dbg_items:
@@ -32251,69 +32066,8 @@ def _generate_plan_impl(
             _interactive_trial_pair_dates = _interactive_trial_pair_dates_from_targets(
                 interactive_dispatch_targets
             )
-    # 段階3（案B）二相: 設備フェイズのみ／人割当のみ／一括
-    _env_s3_two = (os.environ.get("PM_AI_STAGE3_TWO_PHASE") or "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
-    if interactive_stage3_two_phase is True:
-        _s3_two_eff = interactive_dispatch_targets is not None
-    elif interactive_stage3_two_phase is False:
-        _s3_two_eff = False
-    else:
-        _s3_two_eff = bool(interactive_dispatch_targets) and _env_s3_two
-    _s3_ph_raw = (
-        (interactive_stage3_phase or os.environ.get("PM_AI_STAGE3_PHASE") or "")
-        .strip()
-        .lower()
-    )
-    if _s3_two_eff and _s3_ph_raw not in ("equipment", "people", "both"):
-        _s3_ph_raw = "both"
-    elif not _s3_two_eff:
-        _s3_ph_raw = ""
-    _s3_ck = (interactive_stage3_checkpoint_path or "").strip() or (
-        (os.environ.get("PM_AI_STAGE3_CHECKPOINT") or "").strip()
-    )
-    if _s3_two_eff and not _s3_ck:
-        _s3_ck = _stage3_checkpoint_default_path(interactive_stage3_source_json)
-    _skip_s3_main_dispatch_loop = False
-    if _s3_two_eff and _s3_ph_raw == "people":
-        if not _s3_ck:
-            raise PlanningValidationError(
-                "段階3 人割当フェイズ: チェックポイントパスが未設定です（PM_AI_STAGE3_CHECKPOINT または source JSON からの既定名）。"
-            )
-        _p_ck = pathlib.Path(_s3_ck)
-        if not _p_ck.is_file():
-            raise PlanningValidationError(
-                "段階3 人割当フェイズ: 設備フェイズのチェックポイントが見つかりません: "
-                + str(_p_ck.resolve())
-            )
-        tl_load, rem_load = _stage3_load_equipment_checkpoint(str(_p_ck))
-        timeline_events[:] = tl_load
-        for _tt in task_queue:
-            _tid_ck = str(_tt.get("task_id") or "").strip()
-            if _tid_ck in rem_load:
-                _tt["remaining_units"] = float(rem_load[_tid_ck])
-        _set_stage3_equipment_virtual_active(False)
-        _skip_s3_main_dispatch_loop = True
-        logging.info(
-            "段階3: 人割当フェイズ — メイン配台ループをスキップしチェックポイントを復元しました。"
-        )
-    elif _s3_two_eff and _s3_ph_raw in ("equipment", "both"):
-        _set_stage3_equipment_virtual_active(True)
-        logging.info(
-            "段階3: 設備フェイズ（仮想チーム）を有効化しました（phase=%s）。",
-            _s3_ph_raw,
-        )
-    else:
-        _set_stage3_equipment_virtual_active(False)
-
     _outer_retry_round = 0
     while True:
-        if _skip_s3_main_dispatch_loop:
-            break
         _dispatch_trace_begin_outer_round(_outer_retry_round)
         _need_headcount_logged_orders: set = set()
         if _outer_retry_round > 0:
@@ -33754,46 +33508,8 @@ def _generate_plan_impl(
                 )
             break
 
-    _set_stage3_equipment_virtual_active(False)
-
-    if (
-        _s3_two_eff
-        and _s3_ck
-        and _s3_ph_raw in ("equipment", "both")
-        and not _skip_s3_main_dispatch_loop
-    ):
-        _stage3_write_equipment_checkpoint(
-            str(pathlib.Path(_s3_ck).resolve()),
-            timeline_events=timeline_events,
-            task_queue=task_queue,
-        )
-
-    _s3_fill_n = 0
-    if _s3_two_eff and _s3_ph_raw in ("people", "both"):
-        _s3_fill_n = int(
-            _stage3_greedy_fill_placeholder_operators(
-                timeline_events,
-                task_queue,
-                skills_dict,
-                members,
-                req_map,
-                need_rules,
-                attendance_data,
-            )
-        )
-        if _s3_fill_n > 0:
-            logging.info(
-                "段階3: プレースホルダOPを %s 件の加工イベントで実メンバーへ置換しました。",
-                _s3_fill_n,
-            )
-
     if interactive_dispatch_targets is not None:
-        _LAST_INTERACTIVE_STAGE3_META = {
-            "two_phase": bool(_s3_two_eff),
-            "phase": _s3_ph_raw,
-            "checkpoint_path": _s3_ck or "",
-            "people_fill_events": int(_s3_fill_n) if _s3_two_eff else 0,
-        }
+        _LAST_INTERACTIVE_STAGE3_META = {"mode": "single_phase"}
     else:
         _LAST_INTERACTIVE_STAGE3_META = {}
 
