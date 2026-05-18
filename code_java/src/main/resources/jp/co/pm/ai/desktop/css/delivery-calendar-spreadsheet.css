@@ -3,6 +3,23 @@
  * Applied via SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome (style class pm-ai-readable-spreadsheet).
  */
 
+.pm-planning-stage-badge {
+    -fx-padding: 2 10 2 10;
+    -fx-background-radius: 4;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+
+.pm-planning-stage-badge-stage2 {
+    -fx-background-color: #e8e8e8;
+    -fx-text-fill: #333333;
+}
+
+.pm-planning-stage-badge-stage3 {
+    -fx-background-color: #c6efce;
+    -fx-text-fill: #1b5e20;
+}
+
 .pm-ai-readable-spreadsheet.table-view.cell-spreadsheet {
     -fx-background-color: #ffffff;
     /* ControlsFX 選択セルが -fx-selection-bar-text（ダークテーマ=白）を参照するため黒に固定 */

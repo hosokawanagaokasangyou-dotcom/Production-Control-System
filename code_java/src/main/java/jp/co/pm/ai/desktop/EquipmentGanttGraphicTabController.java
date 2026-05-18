@@ -52,6 +52,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support;
 import jp.co.pm.ai.desktop.config.EquipmentGanttBadgeDragDelta;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
@@ -100,6 +101,9 @@ public final class EquipmentGanttGraphicTabController {
 
     @FXML
     private Button reloadButton;
+
+    @FXML
+    private Label dataStageBadgeLabel;
 
     @FXML
     private Button syncLatestButton;
@@ -1181,6 +1185,7 @@ public final class EquipmentGanttGraphicTabController {
                                 + "）");
             }
             collapseSourceAccordionAfterSuccessfulLoad();
+            refreshPlanningStageBadgeFromDispatchJson();
             if (userCompletionDialog && shell != null) {
                 shell.showInformationDialog(
                         "再読み完了",
@@ -1201,9 +1206,18 @@ public final class EquipmentGanttGraphicTabController {
                         ex.getMessage() != null ? ex.getMessage() : ex.toString());
             }
         } finally {
+            refreshPlanningStageBadgeFromDispatchJson();
             reloadButton.setDisable(false);
             syncLatestButton.setDisable(false);
         }
+    }
+
+    private void refreshPlanningStageBadgeFromDispatchJson() {
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        boolean stage3 =
+                ResultDispatchStage3Support.detectStage3FromDispatchJsonPath(
+                        AppPaths.resolveResultDispatchTableJsonPath(ui));
+        ResultDispatchStage3Support.applyPlanningStageBadge(dataStageBadgeLabel, stage3);
     }
 
     private void applySelectedSheetFromMap(Map<String, JsonTableIo.SheetTable> eligible) {

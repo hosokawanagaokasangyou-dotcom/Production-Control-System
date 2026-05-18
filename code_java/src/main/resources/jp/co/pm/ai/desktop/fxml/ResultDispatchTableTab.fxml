@@ -26,6 +26,8 @@
                     <padding>
                         <Insets bottom="4.0"/>
                     </padding>
+                    <Label fx:id="dataStageBadgeLabel" styleClass="pm-planning-stage-badge"
+                           text="&#x6bb5;&#x968e;2" visible="false" managed="false"/>
                     <Button fx:id="refreshButton" mnemonicParsing="false" text="再読み"
                             onAction="#onRefreshButtonAction"/>
                     <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"

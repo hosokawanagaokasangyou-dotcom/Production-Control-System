@@ -390,7 +390,9 @@ public final class SummaryAiDispatchWorkbookExporter {
         if (!tripleQtyHidden(t.actual())) {
             lines.add(SpreadsheetTabularSupport.deliveryCalendarActualLineForInspector(t.actual()));
         }
-        if (!tripleQtyHidden(t.dispatch())) {
+        boolean hideStage3Plan =
+                !tripleQtyHidden(t.stage3After());
+        if (!hideStage3Plan && !tripleQtyHidden(t.dispatch())) {
             lines.add(
                     SpreadsheetTabularSupport.deliveryCalendarDispatchLineForInspector(t.dispatch()));
         }

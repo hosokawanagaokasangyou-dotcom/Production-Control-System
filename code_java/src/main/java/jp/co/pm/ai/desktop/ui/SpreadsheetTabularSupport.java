@@ -985,6 +985,18 @@ public final class SpreadsheetTabularSupport {
             List<String> headersRef,
             ObservableList<ObservableList<DeliveryCalendarMainCell>> rows,
             int leadingColumnCount) {
+        return buildReadOnlyDeliveryCalendarMainGrid(
+                headersRef, rows, leadingColumnCount, false);
+    }
+
+    /**
+     * @param hideStage3PlanLine 段階3試行済みのとき {@code true} にし、(段階3前) 行を日付セルから省略する
+     */
+    public static GridBase buildReadOnlyDeliveryCalendarMainGrid(
+            List<String> headersRef,
+            ObservableList<ObservableList<DeliveryCalendarMainCell>> rows,
+            int leadingColumnCount,
+            boolean hideStage3PlanLine) {
         int cols = headersRef.size();
         int rc = rows.size();
         int gridRowsTotal = rc + 1;
@@ -1015,14 +1027,15 @@ public final class SpreadsheetTabularSupport {
                         c < src.size() && src.get(c) != null ? src.get(c) : new DeliveryCalendarMainCell.PlainText("");
                 boolean isDateColumn = c >= leading;
                 if (mc instanceof DeliveryCalendarMainCell.TripleQty t) {
-                    List<String> visibleLines = deliveryCalendarTripleVisibleFormattedLines(t);
+                    List<String> visibleLines =
+                            deliveryCalendarTripleVisibleFormattedLines(t, hideStage3PlanLine);
                     String item = String.join("\n", visibleLines);
                     SpreadsheetCell cell =
                             SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, item);
                     cell.setEditable(false);
                     cell.setWrapText(true);
                     cell.setCellGraphic(true);
-                    Node g = deliveryCalendarTripleGraphic(t);
+                    Node g = deliveryCalendarTripleGraphic(t, hideStage3PlanLine);
                     cell.setGraphic(g);
                     cell.setStyle(
                             isDateColumn
@@ -1085,10 +1098,11 @@ public final class SpreadsheetTabularSupport {
         return false;
     }
 
-    private static Node deliveryCalendarTripleGraphic(DeliveryCalendarMainCell.TripleQty t) {
+    private static Node deliveryCalendarTripleGraphic(
+            DeliveryCalendarMainCell.TripleQty t, boolean hideStage3PlanLine) {
         VBox box = new VBox(1);
         box.setPadding(new Insets(2, 4, 2, 4));
-        for (String line : deliveryCalendarTripleVisibleFormattedLines(t)) {
+        for (String line : deliveryCalendarTripleVisibleFormattedLines(t, hideStage3PlanLine)) {
             box.getChildren().add(new Label(line));
         }
         return box;
@@ -1101,6 +1115,11 @@ public final class SpreadsheetTabularSupport {
      */
     private static List<String> deliveryCalendarTripleVisibleFormattedLines(
             DeliveryCalendarMainCell.TripleQty t) {
+        return deliveryCalendarTripleVisibleFormattedLines(t, false);
+    }
+
+    private static List<String> deliveryCalendarTripleVisibleFormattedLines(
+            DeliveryCalendarMainCell.TripleQty t, boolean hideStage3PlanLine) {
         List<String> lines = new ArrayList<>(4);
         if (!deliveryCalendarTripleQtyHidden(t.plan())) {
             lines.add(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_PLAN, t.plan()));
@@ -1108,7 +1127,8 @@ public final class SpreadsheetTabularSupport {
         if (!deliveryCalendarTripleQtyHidden(t.actual())) {
             lines.add(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_ACTUAL, t.actual()));
         }
-        if (!deliveryCalendarTripleQtyHidden(t.dispatch())) {
+        if (!hideStage3PlanLine
+                && !deliveryCalendarTripleQtyHidden(t.dispatch())) {
             lines.add(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_DISPATCH, t.dispatch()));
         }
         if (!deliveryCalendarTripleQtyHidden(t.stage3After())) {

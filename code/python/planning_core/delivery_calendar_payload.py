@@ -933,6 +933,8 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
         dispatch_stage3_agg = _aggregate_dispatch_quantities(
             disp_rows, qty_col=_DIS_JSON_QTY_STAGE3
         )
+        has_stage3_dispatch_col = _DIS_JSON_QTY_STAGE3 in (_disp_header or [])
+        meta["dispatchStage3TrialCompleted"] = has_stage3_dispatch_col
         _pm_ai_progress(16)
 
         df_actual = core.load_machining_actual_detail_df()
@@ -1208,30 +1210,34 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                 q_act = float(actual_agg.get((mk, d), {}).get(tid, 0.0))
                 q_disp_raw = float(dispatch_agg.get((mk, d, tid), 0.0))
                 q_stage3_raw = float(dispatch_stage3_agg.get((mk, d, tid), 0.0))
-                q_conv_for_disp = (
-                    max(0.0, core.parse_float_safe(plan_row.get(core.TASK_COL_QTY), 0.0))
-                    if plan_row is not None
-                    else 0.0
-                )
-                _raw_for_disp = (
-                    core._raw_roll_unit_m_resolved_for_dispatch_qty(plan_row)
-                    if plan_row is not None
-                    else 0.0
-                )
-                q_disp, _aladdin_cap = core.aladdin_system_dispatch_display_qty_m(
-                    q_disp_raw,
-                    q_conv_for_disp,
-                    _raw_for_disp,
-                    remaining_conv_cap=_aladdin_cap,
-                )
                 tp = core._format_qty_short(q_in) if abs(q_in) > 1e-12 else ""
                 ta = core._format_qty_short(q_act) if abs(q_act) > 1e-12 else ""
-                td = core._format_qty_short(q_disp) if abs(q_disp) > 1e-12 else ""
-                ts3 = (
-                    core._format_qty_short(q_stage3_raw)
-                    if abs(q_stage3_raw) > 1e-12
-                    else ""
-                )
+                if has_stage3_dispatch_col:
+                    td = ""
+                    ts3 = (
+                        core._format_qty_short(q_stage3_raw)
+                        if abs(q_stage3_raw) > 1e-12
+                        else ""
+                    )
+                else:
+                    q_conv_for_disp = (
+                        max(0.0, core.parse_float_safe(plan_row.get(core.TASK_COL_QTY), 0.0))
+                        if plan_row is not None
+                        else 0.0
+                    )
+                    _raw_for_disp = (
+                        core._raw_roll_unit_m_resolved_for_dispatch_qty(plan_row)
+                        if plan_row is not None
+                        else 0.0
+                    )
+                    q_disp, _aladdin_cap = core.aladdin_system_dispatch_display_qty_m(
+                        q_disp_raw,
+                        q_conv_for_disp,
+                        _raw_for_disp,
+                        remaining_conv_cap=_aladdin_cap,
+                    )
+                    td = core._format_qty_short(q_disp) if abs(q_disp) > 1e-12 else ""
+                    ts3 = ""
                 cal_cells.append({"triple": {"p": tp, "a": ta, "d": td, "s3": ts3}})
 
             main_rows_out.append(

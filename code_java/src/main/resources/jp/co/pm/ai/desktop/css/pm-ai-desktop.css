@@ -711,3 +711,21 @@
     -fx-text-fill: derive(-fx-text-inner-color, -8%);
     -fx-padding: 0 0 0 8;
 }
+
+/* 配台結果・納期管理・設備ガント: 表示データの段階（段階2 / 段階3） */
+.label.pm-planning-stage-badge {
+    -fx-padding: 2 10 2 10;
+    -fx-background-radius: 4;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+
+.label.pm-planning-stage-badge-stage2 {
+    -fx-background-color: #e8e8e8;
+    -fx-text-fill: #333333;
+}
+
+.label.pm-planning-stage-badge-stage3 {
+    -fx-background-color: #c6efce;
+    -fx-text-fill: #1b5e20;
+}

@@ -24,6 +24,8 @@
         <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
     </padding>
     <HBox alignment="CENTER_LEFT" spacing="8.0">
+        <Label fx:id="dataStageBadgeLabel" styleClass="pm-planning-stage-badge"
+               text="&#x6bb5;&#x968e;2" visible="false" managed="false"/>
         <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshButtonAction"
                 text="&#x518d;&#x8aad;&#x8fbc;"/>
         <Label fx:id="statusLabel"/>

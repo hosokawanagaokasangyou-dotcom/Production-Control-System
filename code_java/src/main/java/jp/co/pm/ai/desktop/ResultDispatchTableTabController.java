@@ -36,6 +36,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDeadlineJudgment;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveConsolidator;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
@@ -62,6 +63,9 @@ public final class ResultDispatchTableTabController {
 
     @FXML
     private Button refreshButton;
+
+    @FXML
+    private Label dataStageBadgeLabel;
 
     @FXML
     private Label statusLabel;
@@ -441,6 +445,12 @@ public final class ResultDispatchTableTabController {
             }
             ResultDispatchInteractiveConsolidator.consolidatePlanAndTimelineRowsInPlace(
                     headerOrder, rowMaps);
+            boolean stage3 = ResultDispatchStage3Support.hasStage3ActualColumn(headerOrder);
+            if (stage3) {
+                ResultDispatchStage3Support.applyStage3DisplayQuantities(headerOrder, rowMaps);
+                ResultDispatchStage3Support.removeRedundantActualColumnFromMaps(headerOrder, rowMaps);
+            }
+            ResultDispatchStage3Support.applyPlanningStageBadge(dataStageBadgeLabel, stage3);
             statusLabel.setText(rowMaps.size() + " 行");
 
             headersRef.clear();

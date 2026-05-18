@@ -41,6 +41,8 @@
                                       text="バッジワイヤー表示" selected="true"/>
                             <CheckBox fx:id="personBadgeDragAdjustCheckBox" mnemonicParsing="false"
                                       text="バッジをドラッグで移動（再描画でリセット）"/>
+                            <Label fx:id="dataStageBadgeLabel" styleClass="pm-planning-stage-badge"
+                                   text="&#x6bb5;&#x968e;2" visible="false" managed="false"/>
                             <Button fx:id="reloadButton" mnemonicParsing="false" text="再読み"
                                     onAction="#onReloadButtonAction"/>
                             <Button fx:id="syncLatestButton" mnemonicParsing="false"
