@@ -1552,16 +1552,22 @@ public final class EquipmentGanttGraphicTabController {
                         buildEquipmentGanttBorderPaneForPrint(cols, slice, badgeSlice, printableWidthPx);
                 Parent printRoot =
                         EquipmentGanttPrintPageWrapper.fitGanttToSinglePrintablePage(page, layout);
-                if (!job.printPage(layout, printRoot)) {
-                    if (shell != null) {
-                        shell.appendLog(
-                                "[equipment-gantt-graphic] printPage が false を返しました（"
-                                        + (okPages + 1)
-                                        + " ページ目）");
+                Stage printScratch =
+                        EquipmentGanttPrintPageWrapper.activateScratchStageForPrint(printRoot, layout);
+                try {
+                    if (!job.printPage(layout, printRoot)) {
+                        if (shell != null) {
+                            shell.appendLog(
+                                    "[equipment-gantt-graphic] printPage が false を返しました（"
+                                            + (okPages + 1)
+                                            + " ページ目）");
+                        }
+                        break;
                     }
-                    break;
+                    okPages++;
+                } finally {
+                    printScratch.close();
                 }
-                okPages++;
             }
         } catch (Exception ex) {
             String msg = ex.getMessage() != null ? ex.getMessage() : ex.toString();

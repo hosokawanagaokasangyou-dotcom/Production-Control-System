@@ -5,6 +5,8 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.stage.Stage;
+import javafx.stage.StageStyle;
 import javafx.scene.SnapshotParameters;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
@@ -90,14 +92,13 @@ public final class EquipmentGanttPrintPageWrapper {
             snapParams.setTransform(new Scale(rasterScale, rasterScale, 0, 0));
         }
 
-        WritableImage img;
-        try {
-            img = snapTarget.snapshot(snapParams, new WritableImage(imgW, imgH));
-        } catch (RuntimeException ex) {
-            return attachPrintScene(
-                    vectorFitCenteredOnPaper(gantt, handles, paperW, paperH, cw, ch), paperW, paperH);
+        WritableImage img = trySnapshot(snapTarget, snapParams, imgW, imgH);
+        if (snapshotLooksBlank(img) && snapTarget != gantt) {
+            pulseLayoutForPrint(gantt, handles, gantt, cw, ch);
+            runFullTimelinePaint(handles);
+            img = trySnapshot(gantt, snapParams, imgW, imgH);
         }
-        if (img == null || img.getPixelReader() == null || img.getWidth() < 1 || img.getHeight() < 1) {
+        if (img == null || snapshotLooksBlank(img)) {
             return attachPrintScene(
                     vectorFitCenteredOnPaper(gantt, handles, paperW, paperH, cw, ch), paperW, paperH);
         }
@@ -106,6 +107,78 @@ public final class EquipmentGanttPrintPageWrapper {
                 paperCanvasWithCenteredImage(img, paperW, paperH, img.getWidth(), img.getHeight()),
                 paperW,
                 paperH);
+    }
+
+    /**
+     * {@link javafx.print.PrinterJob#printPage} 直前に呼ぶ。印刷ルートを不可視 {@link Stage} に載せ、Pulse で描画を確定する。
+     *
+     * @return 印刷後に {@link Stage#close()} すること
+     */
+    public static Stage activateScratchStageForPrint(Parent printRoot, PageLayout layout) {
+        double paperW = layout.getPrintableWidth();
+        double paperH = layout.getPrintableHeight();
+        attachPrintScene(printRoot, paperW, paperH);
+        Scene scene = printRoot.getScene();
+        Stage scratch = new Stage(StageStyle.UTILITY);
+        scratch.setScene(scene);
+        scratch.setOpacity(0.0);
+        scratch.setX(-32_000);
+        scratch.setY(-32_000);
+        scratch.setWidth(Math.max(100, paperW));
+        scratch.setHeight(Math.max(100, paperH));
+        scratch.show();
+        printRoot.applyCss();
+        printRoot.layout();
+        fireToolkitPulse();
+        return scratch;
+    }
+
+    private static WritableImage trySnapshot(
+            Node target, SnapshotParameters params, int imgW, int imgH) {
+        if (target == null) {
+            return null;
+        }
+        try {
+            return target.snapshot(params, new WritableImage(imgW, imgH));
+        } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
+    private static boolean snapshotLooksBlank(WritableImage img) {
+        if (img == null || img.getPixelReader() == null) {
+            return true;
+        }
+        int w = (int) img.getWidth();
+        int h = (int) img.getHeight();
+        if (w < 2 || h < 2) {
+            return true;
+        }
+        int[] xs = {w / 4, w / 2, 3 * w / 4};
+        int[] ys = {h / 4, h / 2, 3 * h / 4};
+        int nonWhite = 0;
+        var pr = img.getPixelReader();
+        for (int y : ys) {
+            for (int x : xs) {
+                int argb = pr.getArgb(x, y);
+                int a = (argb >>> 24) & 0xff;
+                int r = (argb >>> 16) & 0xff;
+                int g = (argb >>> 8) & 0xff;
+                int b = argb & 0xff;
+                if (a > 12 && (r < 245 || g < 245 || b < 245)) {
+                    nonWhite++;
+                }
+            }
+        }
+        return nonWhite == 0;
+    }
+
+    private static void fireToolkitPulse() {
+        try {
+            com.sun.javafx.tk.Toolkit.getToolkit().firePulse();
+        } catch (Throwable ignored) {
+            // headless / モジュール制限時は layout のみ
+        }
     }
 
     /**
