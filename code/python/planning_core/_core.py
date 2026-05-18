@@ -2381,8 +2381,10 @@ def _gantt_best_overlapping_events_for_slots_line_sweep(evlist, slots, slot_mins
                 continue
             if st >= ce:
                 break
-            ed = e.get("end_dt")
-            if isinstance(ed, datetime) and ed > cs and st < ce:
+            _, ed_disp = _gantt_machining_display_range_for_slot_overlap(
+                e, int(slot_mins_f)
+            )
+            if isinstance(ed_disp, datetime) and ed_disp > cs and st < ce:
                 active.append(e)
             ei += 1
         if not active:
@@ -22160,12 +22162,39 @@ def _equipment_schedule_unified_sub_string_map(timeline_for_eq_grid: list) -> di
     return {k: ", ".join(sorted(v)) for k, v in acc.items() if v}
 
 
+def _gantt_floor_to_slot(dt: datetime, slot_mins: int) -> datetime:
+    """壁時計の slot_mins 刻みへ床（秒・マイクロ秒は 0）。"""
+    m = dt.hour * 60 + dt.minute
+    m = (m // int(slot_mins)) * int(slot_mins)
+    return dt.replace(hour=m // 60, minute=m % 60, second=0, microsecond=0)
+
+
+def _gantt_machining_display_range_for_slot_overlap(
+    ev: dict, slot_mins: int | None = None
+) -> tuple[datetime | None, datetime | None]:
+    """
+    ガントのスロット重なり判定用区間。
+    加工が slot_mins 未満のときは開始を含む1スロット枠に拡張（実 end_dt は変えない）。
+    """
+    sm = int(slot_mins if slot_mins is not None else GANTT_TIMELINE_SLOT_MINUTES)
+    st = ev.get("start_dt")
+    ed = ev.get("end_dt")
+    if not isinstance(st, datetime) or not isinstance(ed, datetime) or ed <= st:
+        return st, ed
+    if not _is_machining_timeline_event(ev):
+        return st, ed
+    slot_secs = float(sm) * 60.0
+    if (ed - st).total_seconds() >= slot_secs - 1e-9:
+        return st, ed
+    floored = _gantt_floor_to_slot(st, sm)
+    return floored, floored + timedelta(minutes=float(sm))
+
+
 def _eq_grid_slot_overlaps_event(
     curr_grid: datetime, next_grid: datetime, ev: dict
 ) -> bool:
     """10分枠 [curr_grid, next_grid) とイベント [start_dt, end_dt) が重なるか。"""
-    st = ev.get("start_dt")
-    ed = ev.get("end_dt")
+    st, ed = _gantt_machining_display_range_for_slot_overlap(ev)
     return (
         isinstance(st, datetime)
         and isinstance(ed, datetime)
@@ -22213,8 +22242,7 @@ def _eq_grid_overlap_sample_t(
     ev: dict, curr_grid: datetime, next_grid: datetime, slot_mid: datetime
 ) -> datetime:
     """休憩判定用: 枠とイベントの重なり区間の中点（重なりなければ枠中点）。"""
-    st = ev.get("start_dt")
-    ed = ev.get("end_dt")
+    st, ed = _gantt_machining_display_range_for_slot_overlap(ev)
     if isinstance(st, datetime) and isinstance(ed, datetime):
         os_ = max(curr_grid, st)
         oe = min(next_grid, ed)

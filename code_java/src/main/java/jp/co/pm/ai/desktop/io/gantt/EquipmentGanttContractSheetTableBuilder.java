@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.Normalizer;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -173,7 +174,9 @@ public final class EquipmentGanttContractSheetTableBuilder {
                         if (!eventTouchesCalendarDay(ev, day)) {
                             continue;
                         }
-                        if (!rangesOverlap(ev.start, ev.end, winStart, winEnd)) {
+                        SlotOverlapRange overlap = slotOverlapRangeForDisplay(ev);
+                        if (!rangesOverlap(
+                                overlap.start(), overlap.end(), winStart, winEnd)) {
                             continue;
                         }
                         if (ev.isInBreaks(winStart, winEnd)) {
@@ -443,6 +446,30 @@ public final class EquipmentGanttContractSheetTableBuilder {
     static boolean rangesOverlap(
             LocalDateTime a0, LocalDateTime a1, LocalDateTime b0, LocalDateTime b1) {
         return a0.isBefore(b1) && a1.isAfter(b0);
+    }
+
+    /**
+     * ガントのスロット充填用区間。加工が {@link #SLOT_MINUTES} 未満のときは開始時刻を含む1スロット枠
+     * （床時刻〜+{@link #SLOT_MINUTES} 分）に拡張する。配台の実際の {@code end} は変えない。
+     */
+    record SlotOverlapRange(LocalDateTime start, LocalDateTime end) {}
+
+    static SlotOverlapRange slotOverlapRangeForDisplay(TimelineEvent ev) {
+        if (ev == null || ev.start == null || ev.end == null) {
+            return new SlotOverlapRange(
+                    ev != null ? ev.start : null, ev != null ? ev.end : null);
+        }
+        if (!TimelineEvent.isMachiningDispatch(ev)) {
+            return new SlotOverlapRange(ev.start, ev.end);
+        }
+        long durationSec = Duration.between(ev.start, ev.end).getSeconds();
+        if (durationSec >= SLOT_MINUTES * 60L) {
+            return new SlotOverlapRange(ev.start, ev.end);
+        }
+        LocalTime slotFloor = floorToSlot(ev.start.toLocalTime());
+        LocalDateTime dispStart = LocalDateTime.of(ev.start.toLocalDate(), slotFloor);
+        LocalDateTime dispEnd = dispStart.plusMinutes(SLOT_MINUTES);
+        return new SlotOverlapRange(dispStart, dispEnd);
     }
 
     /**
