@@ -4104,6 +4104,25 @@ public final class MainShellController {
                         + "（キャンセルした場合は湖南工場の既定のままです。）");
     }
 
+    /** デスクトップ本体の終了後更新の直前: ユーザーへ再起動を明示する。 */
+    private void showPortableUpgradeDeferredRestartDialog(String versionLabel) {
+        Alert a = new Alert(AlertType.INFORMATION);
+        a.initOwner(primaryStage);
+        applyAlertStylesheetsFromOwner(a);
+        a.setTitle("自動バージョンアップ");
+        a.setHeaderText("再起動します");
+        String ver = versionLabel != null && !versionLabel.isBlank() ? versionLabel : "（新版）";
+        a.setContentText(
+                "pm-ai-data の更新が完了しました（版 "
+                        + ver
+                        + "）。\n\n"
+                        + "PMD.exe とアプリケーション本体（app・runtime）を反映するため、"
+                        + "このウィンドウを終了し、自動的に再起動します。\n\n"
+                        + "再起動後、利用工場（湖南／国分）の選択画面が表示されます。\n"
+                        + "OK を押して続行してください。");
+        a.showAndWait();
+    }
+
     /**
      * 納期管理ビュー再読み込み中に、メインシェル最上段の「納期管理ビュー」以外のタブを無効化してグレーアウトする。
      *
@@ -4822,6 +4841,7 @@ public final class MainShellController {
                             performGlobalUiFactoryResetWithoutConfirmation();
                             applyBundledPortableDefaultsIfPresent();
                             PortableBundleUpgradeFollowUp.writePending(cwd, canonVerStr);
+                            showPortableUpgradeDeferredRestartDialog(canonVerStr);
                             long pid = ProcessHandle.current().pid();
                             Path staging = PortableBundlePendingUpdate.defaultStagingDirectory();
                             PortableBundlePendingUpdate.write(
