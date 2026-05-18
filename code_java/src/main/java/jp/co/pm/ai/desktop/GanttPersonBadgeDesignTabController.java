@@ -474,6 +474,18 @@ public final class GanttPersonBadgeDesignTabController {
         loadMembersFromMasterBook(false);
     }
 
+    /**
+     * 工場既定・{@code PM_AI_MASTER_WORKBOOK} 等の変更後（ポータルアップグレード完了時など）、skills メンバーを
+     * 正しい master から再読込する。
+     *
+     * @return 読込後のメンバー数（失敗・未解決時は 0）
+     */
+    int reloadSkillsMembersAfterMasterEnvChange() {
+        autoLoadedSkillsOnce = false;
+        loadMembersFromMasterBook(false);
+        return masterMemberNames.size();
+    }
+
     private void loadMembersFromMasterBook(boolean showAlertOnFailure) {
         if (shell == null) {
             return;

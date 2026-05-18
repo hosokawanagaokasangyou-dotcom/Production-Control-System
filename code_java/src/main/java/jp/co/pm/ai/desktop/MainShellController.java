@@ -3206,6 +3206,7 @@ public final class MainShellController {
         if (persistSession) {
             DesktopSessionStateStore.save(collectDesktopSession());
         }
+        refreshPersonBadgeSkillsMembersFromMaster();
         mainRunTabController.refreshOpenWorkbookHintLabels();
         uiEnvSaveDebounce.stop();
     }
@@ -4928,6 +4929,13 @@ public final class MainShellController {
         t.start();
     }
 
+    private int refreshPersonBadgeSkillsMembersFromMaster() {
+        if (ganttPersonBadgeDesignTabController != null) {
+            return ganttPersonBadgeDesignTabController.reloadSkillsMembersAfterMasterEnvChange();
+        }
+        return 0;
+    }
+
     private void applyPortableUpgradeBundledPolicyFromPmAiData(Path localData) {
         try {
             InitSettingPersistence.applyPortableUpgradeOverwriteFromPmAiData(
@@ -4962,6 +4970,7 @@ public final class MainShellController {
         ensureBootstrapDefaultValuesVisible(collectUiEnv());
         ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
         applyRepoFolderPathNormalization();
+        int badgeMembers = refreshPersonBadgeSkillsMembersFromMaster();
         DesktopSessionStateStore.save(collectDesktopSession());
         mainRunTabController.refreshAppVersionLabel();
         mainRunTabController.refreshOpenWorkbookHintLabels();
@@ -4976,6 +4985,12 @@ public final class MainShellController {
                         + (completionNoteSuffix != null ? completionNoteSuffix : "");
         appendLog(completion);
         fileLogLine(fileLog, completion);
+        if (badgeMembers > 0) {
+            appendLog(
+                    "[startup] 担当バッジ: skills メンバーをマスタから再読込しました（"
+                            + badgeMembers
+                            + " 名）。");
+        }
         if (filesSyncedApprox > 0 && fileLog != null) {
             fileLog.appendLine(
                     "[startup] finishPortableUpgrade filesSyncedApprox=" + filesSyncedApprox);
