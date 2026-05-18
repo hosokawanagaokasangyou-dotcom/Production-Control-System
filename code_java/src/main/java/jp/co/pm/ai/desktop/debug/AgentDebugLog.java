@@ -394,6 +394,29 @@ public final class AgentDebugLog {
         if (!s3.isEmpty()) {
             return s3;
         }
-        return "903e77";
+        return DEFAULT_SESSION_ID;
+    }
+
+    /**
+     * Python 子プロセス（段階2・配台試行）向けに {@code PM_AI_AGENT_DEBUG_SESSION} と
+     * {@code PM_AI_DEBUG_LOG} を解決して {@code env} に書き込む。環境変数タブで既に非空なら上書きしない。
+     *
+     * <p>正本: {@code .cursor/rules/agent-debug-ndjson-logging.mdc}
+     */
+    public static void overlayPythonChildDebugEnv(Map<String, String> env) {
+        if (env == null) {
+            return;
+        }
+        String sid = resolveDispatchTrialSessionId(env);
+        env.put("PM_AI_AGENT_DEBUG_SESSION", sid);
+        String dbg = trim(env.get("PM_AI_DEBUG_LOG"));
+        if (dbg.isEmpty()) {
+            dbg = trim(env.get(AppPaths.KEY_PM_AI_CURSOR_DEBUG_LOG));
+        }
+        if (dbg.isEmpty()) {
+            env.put(
+                    "PM_AI_DEBUG_LOG",
+                    resolveNdjsonPath(env, sid).toAbsolutePath().toString());
+        }
     }
 }

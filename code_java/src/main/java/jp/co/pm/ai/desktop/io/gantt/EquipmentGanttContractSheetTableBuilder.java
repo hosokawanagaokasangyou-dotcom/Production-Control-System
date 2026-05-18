@@ -763,6 +763,12 @@ public final class EquipmentGanttContractSheetTableBuilder {
             if ("machine_daily_startup".equals(eventKind)) {
                 return "日次始業準備";
             }
+            if ("request_switch_prep".equals(eventKind)) {
+                return "依頼切替準備";
+            }
+            if ("break_resume_prep".equals(eventKind)) {
+                return "休憩再開準備";
+            }
             if ("machine_daily_inspection".equals(eventKind)
                     || "daily_inspection".equals(eventKind)) {
                 return "日次点検";
@@ -819,6 +825,8 @@ public final class EquipmentGanttContractSheetTableBuilder {
         String badgeSlotFragment() {
             boolean startupSplit =
                     "machine_daily_startup".equals(eventKind)
+                            || "request_switch_prep".equals(eventKind)
+                            || "break_resume_prep".equals(eventKind)
                             || "machine_daily_inspection".equals(eventKind)
                             || "daily_inspection".equals(eventKind);
             return PersonNameBadgeText.joinBadgeCells(

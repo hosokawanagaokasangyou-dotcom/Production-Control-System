@@ -29,4 +29,18 @@ class GanttScheduleSlotBarKindTest {
                 GanttScheduleSlotBarKind.STARTUP,
                 GanttScheduleSlotBarKind.fromTimelineCell("日次始業準備"));
     }
+
+    @Test
+    void request_switch_prep_isDedicatedKind_notDefault() {
+        assertEquals(
+                GanttScheduleSlotBarKind.REQUEST_SWITCH_PREP,
+                GanttScheduleSlotBarKind.fromTimelineCell("依頼切替準備"));
+    }
+
+    @Test
+    void break_resume_prep_isDedicatedKind_notCalendarBreak() {
+        assertEquals(
+                GanttScheduleSlotBarKind.BREAK_RESUME_PREP,
+                GanttScheduleSlotBarKind.fromTimelineCell("休憩再開準備"));
+    }
 }

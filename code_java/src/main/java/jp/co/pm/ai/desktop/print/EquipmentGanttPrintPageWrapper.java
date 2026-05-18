@@ -2,12 +2,15 @@ package jp.co.pm.ai.desktop.print;
 
 import javafx.geometry.Bounds;
 import javafx.geometry.Pos;
-import javafx.scene.Group;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.SnapshotParameters;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.image.WritableImage;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -23,11 +26,19 @@ import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
 /**
  * 設備ガントを印刷用に「1 物理ページ」へ収める。
  *
- * <p>主経路は {@link javafx.print.PrinterJob#printPage} 向けのベクター配置（{@link Group}＋{@link Scale}）。
- * 左列・ラベル・担当バッジはプリンタ解像度で描画される。タイムライン帯は {@link javafx.scene.canvas.Canvas}
- * のため高解像度 build（{@link EquipmentGraphicGanttPane#PRINT_LAYOUT_SCALE}）と組み合わせる。
+ * <p>JavaFX の {@link javafx.print.PrinterJob#printPage} は、{@link Scene} に載っていない
+ * {@link javafx.scene.canvas.Canvas} が真っ白になることがある。主経路はレイアウト確定後の高解像度
+ * {@code snapshot} を用紙に貼り付け、返却する {@link Parent} を必ず {@link Scene} に載せる。
+ * 左列・バッジはラスタでも十分な解像度を確保し、build 側の {@link EquipmentGraphicGanttPane#PRINT_LAYOUT_SCALE}
+ * で Canvas 帯のピクセル数を増やす。
  */
 public final class EquipmentGanttPrintPageWrapper {
+
+    /** スナップショット 1 辺の安全上限（GPU／Prism の上限に合わせる） */
+    private static final double SNAPSHOT_MAX_EDGE = 8192;
+
+    /** 用紙への収まり倍率に対し、snapshot をどれだけ上乗せするか（鮮明化） */
+    private static final double SNAPSHOT_SHARPNESS_FACTOR = 2.0;
 
     private EquipmentGanttPrintPageWrapper() {}
 
@@ -53,9 +64,65 @@ public final class EquipmentGanttPrintPageWrapper {
 
         double cw = contentWidth(handles, gantt);
         double ch = contentHeight(handles, gantt);
-        pulseLayoutForPrint(gantt, handles, cw, ch);
+        Node snapTarget = snapshotTarget(handles, gantt);
 
-        return vectorFitCenteredOnPaper(gantt, paperW, paperH, cw, ch);
+        pulseLayoutForPrint(gantt, handles, snapTarget, cw, ch);
+        runFullTimelinePaint(handles);
+
+        double fitScale = Math.min(paperW / cw, paperH / ch);
+        if (!Double.isFinite(fitScale) || fitScale <= 0) {
+            fitScale = 1.0;
+        }
+        double rasterScale =
+                Math.min(
+                        SNAPSHOT_MAX_EDGE / cw,
+                        Math.min(SNAPSHOT_MAX_EDGE / ch, fitScale * SNAPSHOT_SHARPNESS_FACTOR));
+        rasterScale = Math.max(1.0, rasterScale);
+
+        int imgW = (int) Math.ceil(Math.min(cw * rasterScale, SNAPSHOT_MAX_EDGE));
+        int imgH = (int) Math.ceil(Math.min(ch * rasterScale, SNAPSHOT_MAX_EDGE));
+        imgW = Math.max(1, imgW);
+        imgH = Math.max(1, imgH);
+
+        SnapshotParameters snapParams = new SnapshotParameters();
+        snapParams.setFill(Color.WHITE);
+        if (rasterScale > 1.0 + 1e-9) {
+            snapParams.setTransform(new Scale(rasterScale, rasterScale, 0, 0));
+        }
+
+        WritableImage img;
+        try {
+            img = snapTarget.snapshot(snapParams, new WritableImage(imgW, imgH));
+        } catch (RuntimeException ex) {
+            return attachPrintScene(
+                    vectorFitCenteredOnPaper(gantt, handles, paperW, paperH, cw, ch), paperW, paperH);
+        }
+        if (img == null || img.getPixelReader() == null || img.getWidth() < 1 || img.getHeight() < 1) {
+            return attachPrintScene(
+                    vectorFitCenteredOnPaper(gantt, handles, paperW, paperH, cw, ch), paperW, paperH);
+        }
+
+        return attachPrintScene(
+                paperCanvasWithCenteredImage(img, paperW, paperH, img.getWidth(), img.getHeight()),
+                paperW,
+                paperH);
+    }
+
+    /**
+     * {@link javafx.print.PrinterJob#printPage} 前に印刷ルートを {@link Scene} に載せ、レイアウトと Canvas 再描画を行う。
+     */
+    private static Parent attachPrintScene(Parent printRoot, double paperW, double paperH) {
+        if (printRoot == null) {
+            return new StackPane();
+        }
+        if (printRoot.getScene() == null) {
+            new Scene(printRoot, paperW, paperH, Color.WHITE);
+        }
+        printRoot.applyCss();
+        if (printRoot instanceof Parent p) {
+            p.layout();
+        }
+        return printRoot;
     }
 
     private static EquipmentGraphicGanttPane.EquipmentGanttViewHandles viewHandles(BorderPane gantt) {
@@ -64,6 +131,14 @@ public final class EquipmentGanttPrintPageWrapper {
             return h;
         }
         return null;
+    }
+
+    private static Node snapshotTarget(
+            EquipmentGraphicGanttPane.EquipmentGanttViewHandles handles, BorderPane gantt) {
+        if (handles != null && handles.mainColumn() != null) {
+            return handles.mainColumn();
+        }
+        return gantt;
     }
 
     private static double contentWidth(
@@ -103,36 +178,67 @@ public final class EquipmentGanttPrintPageWrapper {
     private static void pulseLayoutForPrint(
             BorderPane gantt,
             EquipmentGraphicGanttPane.EquipmentGanttViewHandles handles,
+            Node snapTarget,
             double cw,
             double ch) {
-        Scene scene = new Scene(gantt, cw, ch, Color.WHITE);
-        java.util.Objects.requireNonNull(scene, "scene");
+        if (snapTarget.getScene() == null) {
+            new Scene(gantt, cw, ch, Color.WHITE);
+        }
         gantt.applyCss();
         gantt.layout();
+        snapTarget.applyCss();
+        if (snapTarget instanceof Parent p) {
+            p.layout();
+        }
         runFullTimelinePaint(handles);
         gantt.applyCss();
         gantt.layout();
+        snapTarget.applyCss();
+        if (snapTarget instanceof Parent p) {
+            p.layout();
+        }
+    }
+
+    private static Parent paperCanvasWithCenteredImage(
+            WritableImage img, double paperW, double paperH, double iw, double ih) {
+        Canvas canvas = new Canvas(paperW, paperH);
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+        gc.setFill(Color.WHITE);
+        gc.fillRect(0, 0, paperW, paperH);
+        double s = Math.min(paperW / iw, paperH / ih);
+        double dw = iw * s;
+        double dh = ih * s;
+        double dx = (paperW - dw) * 0.5;
+        double dy = (paperH - dh) * 0.5;
+        gc.drawImage(img, dx, dy, dw, dh);
+
+        StackPane paper = new StackPane(canvas);
+        paper.setPrefSize(paperW, paperH);
+        paper.setMinSize(paperW, paperH);
+        paper.setMaxSize(paperW, paperH);
+        return paper;
     }
 
     /**
-     * シーン上でレイアウト済みのガントを、用紙座標系へ等比スケールして中央配置する（ラスタ中間なし）。
+     * snapshot 失敗時のフォールバック。{@link BorderPane} を用紙内にスケールして {@link StackPane} に載せる。
      */
     private static Parent vectorFitCenteredOnPaper(
-            BorderPane gantt, double paperW, double paperH, double contentW, double contentH) {
+            BorderPane gantt,
+            EquipmentGraphicGanttPane.EquipmentGanttViewHandles handles,
+            double paperW,
+            double paperH,
+            double contentW,
+            double contentH) {
         double scale = Math.min(paperW / contentW, paperH / contentH);
         if (!Double.isFinite(scale) || scale <= 0) {
             scale = 1.0;
         }
 
-        gantt.setLayoutX(0);
-        gantt.setLayoutY(0);
-        Group holder = new Group(gantt);
-        holder.getTransforms().add(new Scale(scale, scale, 0, 0));
-
-        double dw = contentW * scale;
-        double dh = contentH * scale;
-        holder.setTranslateX((paperW - dw) * 0.5);
-        holder.setTranslateY((paperH - dh) * 0.5);
+        gantt.setPrefSize(contentW, contentH);
+        gantt.setMinSize(contentW, contentH);
+        gantt.setMaxSize(contentW, contentH);
+        gantt.setScaleX(scale);
+        gantt.setScaleY(scale);
 
         Region bg = new Region();
         bg.setMinSize(paperW, paperH);
@@ -140,11 +246,13 @@ public final class EquipmentGanttPrintPageWrapper {
         bg.setMaxSize(paperW, paperH);
         bg.setStyle("-fx-background-color: white;");
 
-        StackPane paper = new StackPane(bg, holder);
-        paper.setAlignment(Pos.CENTER);
+        StackPane paper = new StackPane(bg, gantt);
+        StackPane.setAlignment(gantt, Pos.CENTER);
         paper.setPrefSize(paperW, paperH);
         paper.setMinSize(paperW, paperH);
         paper.setMaxSize(paperW, paperH);
+
+        runFullTimelinePaint(handles);
         return paper;
     }
 

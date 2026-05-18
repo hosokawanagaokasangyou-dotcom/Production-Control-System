@@ -48,6 +48,16 @@ public final class GanttScheduleStyle {
             "-fx-background-color: #fffbf0; -fx-control-inner-background: #fffbf0;"
                     + " -fx-border-color: #f0e1b7; -fx-border-width: 0.5;";
 
+    /** 準備帯: 薄地 + 補色の斜線ハッチ + 枠（設備ガント・メンバー共通） */
+    private static final String XL_PREP_STARTUP_HATCH_STYLE =
+            hatchTimelineCellStyle("#fff7d6", "#b45309", "#78350f");
+
+    private static final String XL_PREP_REQUEST_SWITCH_HATCH_STYLE =
+            hatchTimelineCellStyle("#fce7f3", "#a21caf", "#701a75");
+
+    private static final String XL_PREP_BREAK_RESUME_HATCH_STYLE =
+            hatchTimelineCellStyle("#d1fae5", "#047857", "#064e3b");
+
     private static final String SECTION_ROW_STYLE =
             "-fx-background-color: #4472c4; -fx-control-inner-background: #4472c4;"
                     + " -fx-text-fill: #ffffff; -fx-font-weight: bold;";
@@ -129,7 +139,42 @@ public final class GanttScheduleStyle {
             cell.setStyle(XL_PROGRESS_FILLED_STYLE);
             return;
         }
+        String prepHatch = prepTimelineHatchStyle(t);
+        if (prepHatch != null) {
+            cell.setStyle(prepHatch);
+            return;
+        }
         cell.setStyle(XL_TASK_BAR_STYLE_PREFIX);
+    }
+
+    private static String hatchTimelineCellStyle(String bg, String line, String text) {
+        return "-fx-background-color: repeating-linear-gradient(135deg, "
+                + bg
+                + " 0px, "
+                + bg
+                + " 5px, "
+                + line
+                + " 5px, "
+                + line
+                + " 6px), "
+                + bg
+                + "; -fx-control-inner-background: "
+                + bg
+                + "; -fx-text-fill: "
+                + text
+                + "; -fx-font-size: 10px; -fx-font-weight: bold;"
+                + " -fx-border-color: "
+                + line
+                + "; -fx-border-width: 1;";
+    }
+
+    private static String prepTimelineHatchStyle(String t) {
+        return switch (t) {
+            case "日次始業準備" -> XL_PREP_STARTUP_HATCH_STYLE;
+            case "依頼切替準備" -> XL_PREP_REQUEST_SWITCH_HATCH_STYLE;
+            case "休憩再開準備" -> XL_PREP_BREAK_RESUME_HATCH_STYLE;
+            default -> null;
+        };
     }
 
     private static String stripeEmptyGrid(int dataRowIndex) {
@@ -161,6 +206,11 @@ public final class GanttScheduleStyle {
                             + "; -fx-text-fill: #475569; -fx-font-size: 11px;");
             return;
         }
+        String prepHatch = prepTimelineHatchStyle(t);
+        if (prepHatch != null) {
+            cell.setStyle(prepHatch);
+            return;
+        }
         String semantic = semanticMemberOrTaskColor(t);
         if (semantic != null) {
             cell.setStyle(
@@ -186,7 +236,6 @@ public final class GanttScheduleStyle {
             case "休" -> "#e2e8f0";
             case "勤務外" -> "#f1f5f9";
             case "年休" -> "#fef9c3";
-            case "日次始業準備" -> "#fed7aa";
             default -> null;
         };
     }

@@ -9,7 +9,9 @@ package jp.co.pm.ai.desktop.ui;
 public enum GanttScheduleSlotBarKind {
     DEFAULT,
     BREAK,
-    STARTUP;
+    STARTUP,
+    REQUEST_SWITCH_PREP,
+    BREAK_RESUME_PREP;
 
     public static GanttScheduleSlotBarKind fromTimelineCell(String t) {
         if (t == null || t.isEmpty()) {
@@ -17,6 +19,12 @@ public enum GanttScheduleSlotBarKind {
         }
         if (t.contains("休憩前") || t.contains("休憩後")) {
             return DEFAULT;
+        }
+        if (t.contains("依頼切替準備")) {
+            return REQUEST_SWITCH_PREP;
+        }
+        if (t.contains("休憩再開準備")) {
+            return BREAK_RESUME_PREP;
         }
         if (t.contains("休憩") || t.contains("（休憩）")) {
             return BREAK;

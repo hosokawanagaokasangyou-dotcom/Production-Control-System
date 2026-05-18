@@ -34,8 +34,11 @@ def _log_path() -> str | None:
 
 
 def session_id() -> str:
-    s = (os.environ.get(_ENV_SESSION) or "").strip()
-    return s or _DEFAULT_SESSION_ID
+    for key in (_ENV_SESSION, "CURSOR_DEBUG_SESSION_ID"):
+        s = (os.environ.get(key) or "").strip()
+        if s:
+            return s
+    return _DEFAULT_SESSION_ID
 
 
 def _repo_root_candidates() -> list[Path]:
