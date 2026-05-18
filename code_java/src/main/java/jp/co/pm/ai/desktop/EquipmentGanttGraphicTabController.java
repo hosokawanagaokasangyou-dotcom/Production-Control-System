@@ -1377,18 +1377,20 @@ public final class EquipmentGanttGraphicTabController {
             List<List<String>> badgeSlotRowsSlice,
             boolean interactiveDragBadges) {
         return buildEquipmentGanttBorderPane(
-                columns, rows, badgeSlotRowsSlice, interactiveDragBadges, null);
+                columns, rows, badgeSlotRowsSlice, interactiveDragBadges, null, false);
     }
 
     /**
      * @param slotWidthPercentOverride 非 null のときツールバー「時刻列幅」％の代わりに使用（印刷の用紙幅合わせ）
+     * @param highQualityPrint 印刷向け高解像度 Canvas（画面表示では false）
      */
     private BorderPane buildEquipmentGanttBorderPane(
             List<String> columns,
             ObservableList<ObservableList<String>> rows,
             List<List<String>> badgeSlotRowsSlice,
             boolean interactiveDragBadges,
-            Double slotWidthPercentOverride) {
+            Double slotWidthPercentOverride,
+            boolean highQualityPrint) {
         double zoom = graphicZoomSlider != null ? graphicZoomSlider.getValue() / 100.0 : 1.0;
         double rowPct = graphicRowHeightSlider != null ? graphicRowHeightSlider.getValue() : 100d;
         double slotPct =
@@ -1449,7 +1451,8 @@ public final class EquipmentGanttGraphicTabController {
                 snapshotEquipmentGanttPersonBadgeWireWidthPx(),
                 snapshotEquipmentGanttPersonBadgeWireDashStyleKey(),
                 snapshotEquipmentGanttPersonBadgeWireMaxLengthPx(),
-                snapshotEquipmentGanttPersonBadgeWireEnabled());
+                snapshotEquipmentGanttPersonBadgeWireEnabled(),
+                highQualityPrint);
     }
 
     @FXML
@@ -1526,13 +1529,16 @@ public final class EquipmentGanttGraphicTabController {
             }
             return;
         }
-        PageLayout layout =
-                printer.createPageLayout(
-                        Paper.A3,
-                        PageOrientation.LANDSCAPE,
-                        Printer.MarginType.HARDWARE_MINIMUM);
-        job.getJobSettings().setPageLayout(layout);
-        double printableLandscapeW = landscapePrintableWidth(layout);
+        PageLayout layout = job.getJobSettings().getPageLayout();
+        if (layout == null) {
+            layout =
+                    printer.createPageLayout(
+                            Paper.A3,
+                            PageOrientation.PORTRAIT,
+                            Printer.MarginType.HARDWARE_MINIMUM);
+            job.getJobSettings().setPageLayout(layout);
+        }
+        double printableWidthPx = layout.getPrintableWidth();
 
         int okPages = 0;
         try {
@@ -1543,8 +1549,7 @@ public final class EquipmentGanttGraphicTabController {
                         EquipmentGanttPrintDaySlices.sliceBadgeRowsAligned(
                                 badgeRowsForCurrentGraphic, idxGroup, slotCols);
                 BorderPane page =
-                        buildEquipmentGanttBorderPaneForPrint(
-                                cols, slice, badgeSlice, printableLandscapeW);
+                        buildEquipmentGanttBorderPaneForPrint(cols, slice, badgeSlice, printableWidthPx);
                 Parent printRoot =
                         EquipmentGanttPrintPageWrapper.fitGanttToSinglePrintablePage(page, layout);
                 if (!job.printPage(layout, printRoot)) {
@@ -1572,46 +1577,39 @@ public final class EquipmentGanttGraphicTabController {
         }
         if (statusLabel != null) {
             statusLabel.setText(
-                    "印刷ジョブを送信しました（A3 横向き・余白狭・"
+                    "印刷ジョブを送信しました（"
                             + okPages
-                            + " ページ。暦日ごとに 1 枚、時刻行見出し付きで可印刷領域に収めます）。");
+                            + " ページ・暦日 1 枚・ベクター印刷・ダイアログの用紙設定に従います）。");
         }
     }
 
     /**
-     * 印刷 1 ページ分のガントを組み立てる。内容幅が A3 横の可印刷幅を超えるときは時刻列幅％だけ縮小して再構築する。
+     * 印刷 1 ページ分のガントを組み立てる。内容幅が可印刷幅を超えるときは時刻列幅％だけ縮小し、最後に高解像度で再構築する。
      */
     private BorderPane buildEquipmentGanttBorderPaneForPrint(
             List<String> columns,
             ObservableList<ObservableList<String>> rows,
             List<List<String>> badgeSlotRowsSlice,
-            double printableLandscapeWidthPx) {
-        BorderPane page =
-                buildEquipmentGanttBorderPane(columns, rows, badgeSlotRowsSlice, false, null);
-        Object ud = page.getUserData();
-        if (!(ud instanceof EquipmentGraphicGanttPane.EquipmentGanttViewHandles handles)) {
-            return page;
+            double printableWidthPx) {
+        BorderPane probe =
+                buildEquipmentGanttBorderPane(columns, rows, badgeSlotRowsSlice, false, null, false);
+        Double slotOverride = null;
+        Object udProbe = probe.getUserData();
+        if (udProbe instanceof EquipmentGraphicGanttPane.EquipmentGanttViewHandles handles) {
+            double contentW = handles.printContentWidth();
+            double targetW =
+                    printableWidthPx
+                            * 0.97
+                            / EquipmentGraphicGanttPane.PRINT_LAYOUT_SCALE;
+            if (contentW > targetW && contentW >= 2 && targetW >= 2) {
+                double uiSlotPct =
+                        graphicSlotWidthSlider != null ? graphicSlotWidthSlider.getValue() : 100d;
+                double adjustedSlotPct = uiSlotPct * (targetW / contentW);
+                slotOverride = Math.clamp(adjustedSlotPct, 30d, uiSlotPct);
+            }
         }
-        double contentW = handles.printContentWidth();
-        double targetW = printableLandscapeWidthPx * 0.97;
-        if (!(contentW > targetW) || contentW < 2 || targetW < 2) {
-            return page;
-        }
-        double uiSlotPct =
-                graphicSlotWidthSlider != null ? graphicSlotWidthSlider.getValue() : 100d;
-        double adjustedSlotPct = uiSlotPct * (targetW / contentW);
-        adjustedSlotPct = Math.clamp(adjustedSlotPct, 30d, uiSlotPct);
         return buildEquipmentGanttBorderPane(
-                columns, rows, badgeSlotRowsSlice, false, adjustedSlotPct);
-    }
-
-    private static double landscapePrintableWidth(PageLayout layout) {
-        double paperW = layout.getPrintableWidth();
-        double paperH = layout.getPrintableHeight();
-        if (paperH > paperW + 0.5) {
-            return paperH;
-        }
-        return paperW;
+                columns, rows, badgeSlotRowsSlice, false, slotOverride, true);
     }
 
     private static Printer findLikelyPdfPrinter() {

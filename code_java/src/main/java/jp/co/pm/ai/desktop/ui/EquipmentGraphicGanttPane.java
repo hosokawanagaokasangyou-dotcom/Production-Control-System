@@ -100,6 +100,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      */
     private static final double MAX_TIMELINE_CANVAS_WIDTH_PX = 3072.0;
 
+    /** 印刷時のタイムライン {@link Canvas} 幅上限（{@link #build} の {@code highQualityPrint}）。 */
+    private static final double MAX_TIMELINE_CANVAS_WIDTH_PRINT_PX = 8192.0;
+
+    /**
+     * 印刷向けレイアウト倍率（画面 96dpi 相当の Canvas を高解像度化）。ベクター印刷でも Canvas 帯の粗さを抑える。
+     */
+    public static final double PRINT_LAYOUT_SCALE = 2.0;
+
     /**
      * 行 Canvas 合計の RGBA ナイーブ見積（MiB）がこの値を超えると、面積比の平方根でスロット幅を追加縮小する。
      */
@@ -651,6 +659,67 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             String personBadgeWireDashStyleKeyOrEmpty,
             double personBadgeWireMaxLengthPxOrZero,
             boolean showPersonBadgeWires) {
+        return build(
+                columns,
+                rows,
+                theme,
+                zoom,
+                rowHeightPercent,
+                slotWidthPercent,
+                barFontFamily,
+                barFontPercent,
+                headerHeightPercent,
+                dateColWidthOverridePx,
+                machineColWidthOverridePx,
+                processColWidthOverridePx,
+                shiftWheelHorizontalSensitivityPercent,
+                badgeSlotRowsRaw,
+                showPersonBadges,
+                personBadgeStyleResolver,
+                personBadgeGapPx,
+                personBadgeBandVerticalOffsetPx,
+                personBadgeDragAdjustEnabled,
+                personBadgeDragDeltas,
+                personBadgeDragDeltaSink,
+                personBadgeWireStrokeHexOrEmpty,
+                personBadgeWireWidthPxOrZero,
+                personBadgeWireDashStyleKeyOrEmpty,
+                personBadgeWireMaxLengthPxOrZero,
+                showPersonBadgeWires,
+                false);
+    }
+
+    /**
+     * @param highQualityPrint true のとき印刷向けにレイアウト・Canvas 解像度を上げる（画面表示用 build では false）
+     */
+    public static BorderPane build(
+            List<String> columns,
+            ObservableList<ObservableList<String>> rows,
+            DesktopTheme theme,
+            double zoom,
+            double rowHeightPercent,
+            double slotWidthPercent,
+            String barFontFamily,
+            double barFontPercent,
+            double headerHeightPercent,
+            double dateColWidthOverridePx,
+            double machineColWidthOverridePx,
+            double processColWidthOverridePx,
+            double shiftWheelHorizontalSensitivityPercent,
+            List<List<String>> badgeSlotRowsRaw,
+            boolean showPersonBadges,
+            Function<String, PersonBadgeStyle> personBadgeStyleResolver,
+            double personBadgeGapPx,
+            double personBadgeBandVerticalOffsetPx,
+            boolean personBadgeDragAdjustEnabled,
+            Map<String, EquipmentGanttBadgeDragDelta> personBadgeDragDeltas,
+            BiConsumer<String, EquipmentGanttBadgeDragDelta> personBadgeDragDeltaSink,
+            String personBadgeWireStrokeHexOrEmpty,
+            double personBadgeWireWidthPxOrZero,
+            String personBadgeWireDashStyleKeyOrEmpty,
+            double personBadgeWireMaxLengthPxOrZero,
+            boolean showPersonBadgeWires,
+            boolean highQualityPrint) {
         BorderPane root = new BorderPane();
         root.setCache(false);
         RepairedGanttTable repairedTable = RepairedGanttTable.from(columns, rows, badgeSlotRowsRaw);
@@ -681,6 +750,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         slotWidthPercent,
                         barFontPercent,
                         headerHeightPercent);
+        if (highQualityPrint) {
+            layout = layout.scaleUniform(PRINT_LAYOUT_SCALE);
+        }
         GanttPalette palette = GanttPalette.forTheme(theme);
         EquipmentGanttPersonBadgeWireDashStyle wireDashResolved =
                 EquipmentGanttPersonBadgeWireDashStyle.fromStored(
@@ -725,18 +797,22 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         double naiveTotalRgbaMiB =
                 (timelineWidthBeforeCap * cellBodyH * approxTimelineRows * 4.0)
                         / (1024.0 * 1024.0);
+        double maxTimelineCanvasW =
+                highQualityPrint ? MAX_TIMELINE_CANVAS_WIDTH_PRINT_PX : MAX_TIMELINE_CANVAS_WIDTH_PX;
+        double maxNaiveRgbaMiB =
+                highQualityPrint
+                        ? MAX_NAIVE_ROW_CANVAS_RGBA_TOTAL_MIB
+                                * PRINT_LAYOUT_SCALE
+                                * PRINT_LAYOUT_SCALE
+                        : MAX_NAIVE_ROW_CANVAS_RGBA_TOTAL_MIB;
         double slotWidthScale = 1.0;
-        if (timelineWidthBeforeCap > MAX_TIMELINE_CANVAS_WIDTH_PX) {
+        if (timelineWidthBeforeCap > maxTimelineCanvasW) {
             slotWidthScale =
-                    Math.min(
-                            slotWidthScale,
-                            MAX_TIMELINE_CANVAS_WIDTH_PX / timelineWidthBeforeCap);
+                    Math.min(slotWidthScale, maxTimelineCanvasW / timelineWidthBeforeCap);
         }
-        if (naiveTotalRgbaMiB > MAX_NAIVE_ROW_CANVAS_RGBA_TOTAL_MIB && naiveTotalRgbaMiB > 0) {
+        if (naiveTotalRgbaMiB > maxNaiveRgbaMiB && naiveTotalRgbaMiB > 0) {
             slotWidthScale =
-                    Math.min(
-                            slotWidthScale,
-                            Math.sqrt(MAX_NAIVE_ROW_CANVAS_RGBA_TOTAL_MIB / naiveTotalRgbaMiB));
+                    Math.min(slotWidthScale, Math.sqrt(maxNaiveRgbaMiB / naiveTotalRgbaMiB));
         }
         if (slotWidthScale < 1.0 - 1e-12) {
             layout = layout.scaleSlotWidth(slotWidthScale);
@@ -1658,6 +1734,27 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     progressFontSize,
                     progressCellWidth,
                     progressGap);
+        }
+
+        /** 印刷向けにスロット幅・行高・フォント等を一括スケールする。 */
+        LayoutMetrics scaleUniform(double factor) {
+            if (!Double.isFinite(factor) || factor <= 0 || Math.abs(factor - 1.0) < 1e-12) {
+                return this;
+            }
+            return new LayoutMetrics(
+                    zoom,
+                    slotWidth * factor,
+                    rowHeight * factor,
+                    sectionRowHeight * factor,
+                    headerHeight * factor,
+                    labelMinWidth * factor,
+                    labelMaxWidth * factor,
+                    rowLabelFontSize * factor,
+                    axisFontSize * factor,
+                    barFontSize * factor,
+                    progressFontSize * factor,
+                    Math.max(1, (int) Math.round(progressCellWidth * factor)),
+                    Math.max(0, (int) Math.round(progressGap * factor)));
         }
     }
 
