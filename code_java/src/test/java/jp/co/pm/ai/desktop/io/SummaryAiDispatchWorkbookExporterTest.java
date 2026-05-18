@@ -133,6 +133,44 @@ class SummaryAiDispatchWorkbookExporterTest {
     }
 
     @Test
+    void writeOverwrite_publishesToOverridePathViaRepoRootStaging(@TempDir Path tmp) throws Exception {
+        Path fakeRepo = tmp.resolve("repo");
+        Path shared = tmp.resolve("shared");
+        Files.createDirectories(fakeRepo.resolve("code"));
+        Files.createDirectories(shared);
+        Path override = shared.resolve("remote-summary.xlsx");
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        fakeRepo.toString(),
+                        AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                        override.toString());
+        PlanInputTabularIo.TabularSheet dispatch =
+                new PlanInputTabularIo.TabularSheet(
+                        List.of("依頼NO"), List.of(List.of("NET-1")));
+        Path out =
+                SummaryAiDispatchWorkbookExporter.writeOverwrite(
+                        ui, empty(), empty(), empty(), dispatch);
+        assertEquals(override.toAbsolutePath().normalize(), out);
+        assertTrue(Files.isRegularFile(override));
+        Path staging =
+                fakeRepo.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX).toAbsolutePath().normalize();
+        assertTrue(Files.isRegularFile(staging));
+        assertTrue(Files.mismatch(staging, override) < 0);
+        assertTrue(
+                Files.notExists(
+                        fakeRepo.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX + ".tmp")));
+        try (var wb = WorkbookFactory.create(override.toFile())) {
+            assertEquals(
+                    "NET-1",
+                    wb.getSheet(SummaryAiDispatchWorkbookExporter.SHEET_DISPATCH)
+                            .getRow(1)
+                            .getCell(0)
+                            .getStringCellValue());
+        }
+    }
+
+    @Test
     void writeOverwrite_createsFourSheets(@TempDir Path tmp) throws Exception {
         Path fakeRepo = tmp.resolve("repo");
         Files.createDirectories(fakeRepo.resolve("code"));

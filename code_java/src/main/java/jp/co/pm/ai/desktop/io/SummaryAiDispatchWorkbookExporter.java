@@ -3,6 +3,7 @@ package jp.co.pm.ai.desktop.io;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -77,9 +78,14 @@ public final class SummaryAiDispatchWorkbookExporter {
     private SummaryAiDispatchWorkbookExporter() {}
 
     /**
-     * 4シートを出力先へ上書き保存する。親ディレクトリが無ければ作成する。
+     * 4シートを出力先へ上書き保存する。
      *
-     * @return 書き込んだ絶対パス
+     * <p>完成ファイルはまず {@link AppPaths#resolveRepoRoot} 直下に {@code .tmp} 経由で確定し、
+     * {@link AppPaths#summaryAiDispatchXlsxPath}（環境変数 {@link
+     * AppPaths#KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 含む）へコピーする。共有ドライブ上での
+     * リネーム置換を避けるため。
+     *
+     * @return 書き込んだ絶対パス（{@link AppPaths#summaryAiDispatchXlsxPath}）
      */
     public static Path writeOverwrite(
             Map<String, String> ui,
@@ -90,13 +96,13 @@ public final class SummaryAiDispatchWorkbookExporter {
             throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
         Path output = AppPaths.summaryAiDispatchXlsxPath(u);
-        if (output.getParent() != null) {
-            Files.createDirectories(output.getParent());
-        }
+        Path repoRoot = AppPaths.resolveRepoRoot(u);
+        Path stagingFinal = repoRoot.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX).toAbsolutePath().normalize();
+        Path stagingTmp = repoRoot.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX + ".tmp").toAbsolutePath().normalize();
         Path template = resolveTemplatePath(u);
-        ensureOutputWorkbookExists(output, template);
+        ensureOutputWorkbookExists(stagingFinal, template);
         SummaryAiDispatchExportPrefs.ExportPrefs prefs = SummaryAiDispatchExportPrefs.load();
-        try (Workbook wb = openWorkbookForUpdate(output, template)) {
+        try (Workbook wb = openWorkbookForUpdate(output, stagingFinal, template)) {
             SheetStyles styles = SheetStyles.of(wb, prefs);
             replaceSheet(
                     wb,
@@ -122,13 +128,31 @@ public final class SummaryAiDispatchWorkbookExporter {
                     layoutForExport(aladdin, SummaryAiDispatchExportPrefs.SheetKey.ALADDIN, prefs),
                     styles,
                     prefs.sheet(SummaryAiDispatchExportPrefs.SheetKey.ALADDIN).frozenColumnCount());
-            Path tmp = output.resolveSibling(output.getFileName() + ".tmp");
-            try (var out = Files.newOutputStream(tmp)) {
+            try (var out = Files.newOutputStream(stagingTmp)) {
                 wb.write(out);
             }
-            Files.move(tmp, output, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            Files.move(stagingTmp, stagingFinal, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            Files.deleteIfExists(stagingTmp);
         }
+        publishStagingToOutput(stagingFinal, output);
         return output.toAbsolutePath().normalize();
+    }
+
+    /**
+     * 共有ドライブ等では同一ボリューム上の {@link Files#move} が失敗しうるため、リポジトリ直下で
+     * 完成ファイルを確定してから {@link AppPaths#summaryAiDispatchXlsxPath} へコピーする。
+     */
+    private static void publishStagingToOutput(Path staging, Path output) throws IOException {
+        Path s = staging.toAbsolutePath().normalize();
+        Path o = output.toAbsolutePath().normalize();
+        if (Files.exists(s) && Files.exists(o) && Files.isSameFile(s, o)) {
+            return;
+        }
+        if (o.getParent() != null) {
+            Files.createDirectories(o.getParent());
+        }
+        Files.copy(s, o, StandardCopyOption.REPLACE_EXISTING);
     }
 
     /** 各シートの行数要約（ログ用）。 */
@@ -228,9 +252,13 @@ public final class SummaryAiDispatchWorkbookExporter {
         }
     }
 
-    private static Workbook openWorkbookForUpdate(Path output, Path template) throws IOException {
+    private static Workbook openWorkbookForUpdate(Path output, Path staging, Path template)
+            throws IOException {
         if (Files.isRegularFile(output)) {
             return WorkbookFactory.create(output.toFile());
+        }
+        if (Files.isRegularFile(staging)) {
+            return WorkbookFactory.create(staging.toFile());
         }
         if (template != null && Files.isRegularFile(template)) {
             return WorkbookFactory.create(template.toFile());
