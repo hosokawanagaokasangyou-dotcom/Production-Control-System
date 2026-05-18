@@ -1100,12 +1100,44 @@ public final class SpreadsheetTabularSupport {
 
     private static Node deliveryCalendarTripleGraphic(
             DeliveryCalendarMainCell.TripleQty t, boolean hideStage3PlanLine) {
-        VBox box = new VBox(1);
+        VBox box = new VBox(0);
         box.setPadding(new Insets(2, 4, 2, 4));
-        for (String line : deliveryCalendarTripleVisibleFormattedLines(t, hideStage3PlanLine)) {
-            box.getChildren().add(new Label(line));
+        box.setFillWidth(true);
+        for (DeliveryCalendarTripleSlot slot : deliveryCalendarTripleFixedSlots(t, hideStage3PlanLine)) {
+            Label lbl = new Label(slot.visible() ? slot.text() : "\u00a0");
+            lbl.getStyleClass().add("delivery-calendar-triple-slot");
+            if (!slot.visible()) {
+                lbl.getStyleClass().add("delivery-calendar-triple-slot-empty");
+            }
+            lbl.setWrapText(false);
+            lbl.setMaxWidth(Double.MAX_VALUE);
+            box.getChildren().add(lbl);
         }
         return box;
+    }
+
+    private record DeliveryCalendarTripleSlot(String text, boolean visible) {}
+
+    /**
+     * 比較タブ日付セル: (アラ計画)/(実績)/(段階3前)/(段階3後) を常に同じ行位置に載せる（非表示は空行で占有）。
+     */
+    private static List<DeliveryCalendarTripleSlot> deliveryCalendarTripleFixedSlots(
+            DeliveryCalendarMainCell.TripleQty t, boolean hideStage3PlanLine) {
+        List<DeliveryCalendarTripleSlot> slots = new ArrayList<>(4);
+        slots.add(deliveryCalendarTripleSlot(DC_TRIPLE_PREFIX_PLAN, t.plan()));
+        slots.add(deliveryCalendarTripleSlot(DC_TRIPLE_PREFIX_ACTUAL, t.actual()));
+        if (!hideStage3PlanLine) {
+            slots.add(deliveryCalendarTripleSlot(DC_TRIPLE_PREFIX_DISPATCH, t.dispatch()));
+        }
+        slots.add(deliveryCalendarTripleSlot(DC_TRIPLE_PREFIX_STAGE3_AFTER, t.stage3After()));
+        return slots;
+    }
+
+    private static DeliveryCalendarTripleSlot deliveryCalendarTripleSlot(String prefix, String qty) {
+        if (deliveryCalendarTripleQtyHidden(qty)) {
+            return new DeliveryCalendarTripleSlot("", false);
+        }
+        return new DeliveryCalendarTripleSlot(formatDeliveryCalendarTripleLine(prefix, qty), true);
     }
 
     /**
@@ -1121,20 +1153,28 @@ public final class SpreadsheetTabularSupport {
     private static List<String> deliveryCalendarTripleVisibleFormattedLines(
             DeliveryCalendarMainCell.TripleQty t, boolean hideStage3PlanLine) {
         List<String> lines = new ArrayList<>(4);
-        if (!deliveryCalendarTripleQtyHidden(t.plan())) {
-            lines.add(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_PLAN, t.plan()));
-        }
-        if (!deliveryCalendarTripleQtyHidden(t.actual())) {
-            lines.add(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_ACTUAL, t.actual()));
-        }
-        if (!hideStage3PlanLine
-                && !deliveryCalendarTripleQtyHidden(t.dispatch())) {
-            lines.add(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_DISPATCH, t.dispatch()));
-        }
-        if (!deliveryCalendarTripleQtyHidden(t.stage3After())) {
-            lines.add(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_STAGE3_AFTER, t.stage3After()));
+        for (DeliveryCalendarTripleSlot slot : deliveryCalendarTripleFixedSlots(t, hideStage3PlanLine)) {
+            if (slot.visible()) {
+                lines.add(slot.text());
+            }
         }
         return lines;
+    }
+
+    /** テスト用: 固定スロット行（非表示は空文字）。 */
+    static List<String> deliveryCalendarTripleAlignedSlotTextsForTest(
+            DeliveryCalendarMainCell.TripleQty t, boolean hideStage3PlanLine) {
+        return deliveryCalendarTripleFixedSlots(t, hideStage3PlanLine).stream()
+                .map(DeliveryCalendarTripleSlot::text)
+                .toList();
+    }
+
+    /** テスト用: スロット行の表示有無（段階3後のみ等の行位置検証）。 */
+    static List<Boolean> deliveryCalendarTripleAlignedSlotVisibleForTest(
+            DeliveryCalendarMainCell.TripleQty t, boolean hideStage3PlanLine) {
+        return deliveryCalendarTripleFixedSlots(t, hideStage3PlanLine).stream()
+                .map(DeliveryCalendarTripleSlot::visible)
+                .toList();
     }
 
     /**

@@ -109,6 +109,17 @@
     -fx-highlight-text-fill: #111111;
 }
 
+/* 納期管理・比較タブ: 日付セル内 (アラ計画)/(実績)/(段階3前)/(段階3後) の行位置を固定 */
+.pm-ai-readable-spreadsheet .spreadsheet-cell .delivery-calendar-triple-slot {
+    -fx-padding: 0;
+}
+
+.pm-ai-readable-spreadsheet .spreadsheet-cell .delivery-calendar-triple-slot-empty {
+    -fx-min-height: 1.15em;
+    -fx-pref-height: 1.15em;
+    -fx-max-height: 1.15em;
+}
+
 /* 配台手動修正: 段階3前/後の2行表示（固定行高＋wrap は Java 側で行高のみ。wrap-text は IOOBE の温床のため使わない） */
 
 .pm-ai-readable-spreadsheet .spreadsheet-cell.dispatch-date-qty-shortfall-cell,
