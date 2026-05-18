@@ -1552,22 +1552,16 @@ public final class EquipmentGanttGraphicTabController {
                         buildEquipmentGanttBorderPaneForPrint(cols, slice, badgeSlice, printableWidthPx);
                 Parent printRoot =
                         EquipmentGanttPrintPageWrapper.fitGanttToSinglePrintablePage(page, layout);
-                Stage printScratch =
-                        EquipmentGanttPrintPageWrapper.activateScratchStageForPrint(printRoot, layout);
-                try {
-                    if (!job.printPage(layout, printRoot)) {
-                        if (shell != null) {
-                            shell.appendLog(
-                                    "[equipment-gantt-graphic] printPage が false を返しました（"
-                                            + (okPages + 1)
-                                            + " ページ目）");
-                        }
-                        break;
+                if (!job.printPage(layout, printRoot)) {
+                    if (shell != null) {
+                        shell.appendLog(
+                                "[equipment-gantt-graphic] printPage が false を返しました（"
+                                        + (okPages + 1)
+                                        + " ページ目）");
                     }
-                    okPages++;
-                } finally {
-                    printScratch.close();
+                    break;
                 }
+                okPages++;
             }
         } catch (Exception ex) {
             String msg = ex.getMessage() != null ? ex.getMessage() : ex.toString();
@@ -1577,15 +1571,23 @@ public final class EquipmentGanttGraphicTabController {
             if (shell != null) {
                 shell.appendLog("[equipment-gantt-graphic] print: " + msg);
             }
+            job.cancelJob();
             return;
-        } finally {
+        }
+        if (okPages > 0) {
             job.endJob();
+        } else {
+            job.cancelJob();
+            if (statusLabel != null) {
+                statusLabel.setText("印刷ページを生成できませんでした。");
+            }
+            return;
         }
         if (statusLabel != null) {
             statusLabel.setText(
                     "印刷ジョブを送信しました（"
                             + okPages
-                            + " ページ・暦日 1 枚・ベクター印刷・ダイアログの用紙設定に従います）。");
+                            + " ページ・暦日 1 枚・ダイアログの用紙設定に従います）。");
         }
     }
 

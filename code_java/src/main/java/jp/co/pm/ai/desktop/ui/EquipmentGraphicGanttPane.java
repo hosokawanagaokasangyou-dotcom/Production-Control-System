@@ -101,12 +101,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static final double MAX_TIMELINE_CANVAS_WIDTH_PX = 3072.0;
 
     /** 印刷時のタイムライン {@link Canvas} 幅上限（{@link #build} の {@code highQualityPrint}）。 */
-    private static final double MAX_TIMELINE_CANVAS_WIDTH_PRINT_PX = 8192.0;
+    private static final double MAX_TIMELINE_CANVAS_WIDTH_PRINT_PX = 4096.0;
 
     /**
-     * 印刷向けレイアウト倍率（画面 96dpi 相当の Canvas を高解像度化）。ベクター印刷でも Canvas 帯の粗さを抑える。
+     * 印刷向けレイアウト倍率。大きすぎると snapshot／PDF でネイティブクラッシュしやすいため控えめにする。
      */
-    public static final double PRINT_LAYOUT_SCALE = 2.0;
+    public static final double PRINT_LAYOUT_SCALE = 1.25;
 
     /**
      * 行 Canvas 合計の RGBA ナイーブ見積（MiB）がこの値を超えると、面積比の平方根でスロット幅を追加縮小する。
