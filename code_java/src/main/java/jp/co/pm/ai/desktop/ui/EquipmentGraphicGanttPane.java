@@ -124,11 +124,26 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             ScrollPane timelineScroll,
             ScrollPane headerScroll,
             Runnable scheduleViewportRepaint,
-            Runnable paintFullContentForPrint) {
+            Runnable paintFullContentForPrint,
+            VBox mainColumn,
+            HBox bodySplit,
+            HBox headRow,
+            double printContentWidth,
+            double printContentHeight) {
         /** @deprecated 左スクロールが不要な呼び出し向け。印刷では左も展開するため 5 引数コンストラクタを使う。 */
         @Deprecated
         public EquipmentGanttViewHandles(ScrollPane timelineScroll, Runnable scheduleViewportRepaint) {
-            this(null, timelineScroll, null, scheduleViewportRepaint, null);
+            this(
+                    null,
+                    timelineScroll,
+                    null,
+                    scheduleViewportRepaint,
+                    null,
+                    null,
+                    null,
+                    null,
+                    0.0,
+                    0.0);
         }
     }
 
@@ -1216,13 +1231,21 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         mainColumn.setPadding(new Insets(4));
         mainColumn.setCache(false);
         root.setCenter(mainColumn);
+        double printPadVert = mainColumn.getPadding().getTop() + mainColumn.getPadding().getBottom();
+        double printContentWidth = leftTotal + timelineWidth + progressTotal;
+        double printContentHeight = printPadVert + layout.headerHeight + gridTimelineContentY;
         root.setUserData(
                 new EquipmentGanttViewHandles(
                         leftBodyScroll,
                         rightBodyScroll,
                         headerRightScroll,
                         scheduleViewportRepaint,
-                        paintFullContentForPrint));
+                        paintFullContentForPrint,
+                        mainColumn,
+                        bodySplit,
+                        headRow,
+                        printContentWidth,
+                        printContentHeight));
 
         Label hint =
                 new Label(
@@ -1647,9 +1670,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             Color barDefault,
             Color barBreak,
             Color barStartup,
+            Color barRequestSwitchPrep,
+            Color barBreakResumePrep,
             Color barDefaultText,
             Color barBreakText,
             Color barStartupText,
+            Color barRequestSwitchPrepText,
+            Color barBreakResumePrepText,
             Color barStroke,
             Color[] machineBands,
             String machineSideTextFill,
@@ -1695,11 +1722,15 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         Color.web("#60a5fa"),
                         Color.web("#93c5fd"),
                         Color.web("#fdba74"),
+                        Color.web("#e879f9"),
+                        Color.web("#34d399"),
                         Color.web("#f8fafc"),
                         /* バー外ラベルは機械行の暗い帯の上に描くため明るい色にする */
                         Color.web("#f1f5f9"),
                         Color.web("#fffbeb"),
                         Color.web("#93c5fd"),
+                        Color.web("#fdf4ff"),
+                        Color.web("#ecfdf5"),
                         bandsDark,
                         "#e2e8f0",
                         "#64748b",
@@ -1727,10 +1758,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     Color.web("#8faadc"),
                     Color.web("#c9daf8"),
                     Color.web("#ffd966"),
+                    Color.web("#d946ef"),
+                    Color.web("#10b981"),
                     Color.web("#111827"),
                     Color.web("#1e3a5f"),
                     Color.web("#854d0e"),
                     Color.web("#2f5597"),
+                    Color.web("#701a75"),
+                    Color.web("#064e3b"),
                     bandsLight,
                     "#111827",
                     "#bfbfbf",
@@ -2978,7 +3013,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             return "";
         }
         BarKind k = classifyBar(t);
-        if (k == BarKind.BREAK || k == BarKind.STARTUP) {
+        if (k == BarKind.BREAK
+                || k == BarKind.STARTUP
+                || k == BarKind.REQUEST_SWITCH_PREP
+                || k == BarKind.BREAK_RESUME_PREP) {
             return k + "\u0001" + t;
         }
         String base = t.replaceFirst("\\s+\\d+(?:\\.\\d+)?m\\s*$", "").strip();
@@ -3040,6 +3078,76 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         return runs;
     }
 
+    private static boolean isPrepHatchedBar(BarKind kind) {
+        return kind == BarKind.STARTUP
+                || kind == BarKind.REQUEST_SWITCH_PREP
+                || kind == BarKind.BREAK_RESUME_PREP;
+    }
+
+    /** 準備帯の薄い下地（ハッチ線は対色で上描き）。 */
+    private static Color prepHatchBackground(Color base) {
+        double sat = Math.min(0.55, Math.max(0.18, base.getSaturation() * 0.42));
+        double bri = Math.min(0.97, Math.max(0.78, base.getBrightness() * 0.35 + 0.58));
+        return Color.hsb(base.getHue(), sat, bri, 0.92);
+    }
+
+    /** 背景色の補色（色相 +180°）をベースに、明度でコントラストを確保。 */
+    private static Color complementaryContrastStroke(Color background) {
+        double h = (background.getHue() + 180.0) % 360.0;
+        double s = Math.min(1.0, Math.max(0.45, background.getSaturation() * 0.75 + 0.2));
+        double lum =
+                0.2126 * background.getRed()
+                        + 0.7152 * background.getGreen()
+                        + 0.0722 * background.getBlue();
+        double bri = lum > 0.58 ? 0.24 : 0.9;
+        return Color.hsb(h, s, bri);
+    }
+
+    private static void clipRoundRect(
+            GraphicsContext gc, double x, double y, double w, double h, double arc) {
+        gc.beginPath();
+        gc.moveTo(x + arc, y);
+        gc.lineTo(x + w - arc, y);
+        gc.quadraticCurveTo(x + w, y, x + w, y + arc);
+        gc.lineTo(x + w, y + h - arc);
+        gc.quadraticCurveTo(x + w, y + h, x + w - arc, y + h);
+        gc.lineTo(x + arc, y + h);
+        gc.quadraticCurveTo(x, y + h, x, y + h - arc);
+        gc.lineTo(x, y + arc);
+        gc.quadraticCurveTo(x, y, x + arc, y);
+        gc.closePath();
+        gc.clip();
+    }
+
+    private static void fillPrepHatchedBar(
+            GraphicsContext gc,
+            double x,
+            double y,
+            double w,
+            double h,
+            double arc,
+            Color baseFill,
+            double zoom) {
+        Color background = prepHatchBackground(baseFill);
+        Color stroke = complementaryContrastStroke(background);
+        gc.save();
+        clipRoundRect(gc, x, y, w, h, arc);
+        gc.setFill(background);
+        gc.fillRect(x, y, w, h);
+        gc.setStroke(stroke);
+        double hatchW = Math.max(0.75, 0.85 * zoom);
+        gc.setLineWidth(hatchW);
+        double spacing = Math.max(4.0, 5.0 * zoom);
+        double span = w + h;
+        for (double offset = -h; offset < span; offset += spacing) {
+            gc.strokeLine(x + offset, y + h, x + offset + h, y);
+        }
+        gc.restore();
+        gc.setStroke(stroke);
+        gc.setLineWidth(Math.max(1.0, 1.35 * zoom));
+        gc.strokeRoundRect(x, y, w, h, arc, arc);
+    }
+
     private static void fillBar(
             GraphicsContext gc, BarRun run, LayoutMetrics layout, GanttPalette palette) {
         int fromSlot = run.fromSlot();
@@ -3051,17 +3159,25 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 switch (kind) {
                     case BREAK -> palette.barBreak();
                     case STARTUP -> palette.barStartup();
+                    case REQUEST_SWITCH_PREP -> palette.barRequestSwitchPrep();
+                    case BREAK_RESUME_PREP -> palette.barBreakResumePrep();
                     default -> palette.barDefault();
                 };
-        gc.setFill(fill);
         double arc = Math.max(2, 3 * layout.zoom);
         double inset = 0.5 * layout.zoom;
         double barTop = 3 * layout.zoom;
         double barH = layout.rowHeight - 2 * barTop;
-        gc.fillRoundRect(x + inset, barTop, w - 2 * inset, barH, arc, arc);
+        double bx = x + inset;
+        double bw = w - 2 * inset;
+        if (isPrepHatchedBar(kind)) {
+            fillPrepHatchedBar(gc, bx, barTop, bw, barH, arc, fill, layout.zoom);
+            return;
+        }
+        gc.setFill(fill);
+        gc.fillRoundRect(bx, barTop, bw, barH, arc, arc);
         gc.setStroke(palette.barStroke());
         gc.setLineWidth(0.5 * layout.zoom);
-        gc.strokeRoundRect(x + inset, barTop, w - 2 * inset, barH, arc, arc);
+        gc.strokeRoundRect(bx, barTop, bw, barH, arc, arc);
     }
 
     private static void drawBarLabelsOutside(
@@ -3105,6 +3221,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     switch (run.kind()) {
                         case BREAK -> palette.barBreakText();
                         case STARTUP -> palette.barStartupText();
+                        case REQUEST_SWITCH_PREP -> palette.barRequestSwitchPrepText();
+                        case BREAK_RESUME_PREP -> palette.barBreakResumePrepText();
                         default -> palette.barDefaultText();
                     };
 
@@ -3162,13 +3280,17 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private enum BarKind {
         DEFAULT,
         BREAK,
-        STARTUP
+        STARTUP,
+        REQUEST_SWITCH_PREP,
+        BREAK_RESUME_PREP
     }
 
     private static BarKind classifyBar(String t) {
         return switch (GanttScheduleSlotBarKind.fromTimelineCell(t)) {
             case BREAK -> BarKind.BREAK;
             case STARTUP -> BarKind.STARTUP;
+            case REQUEST_SWITCH_PREP -> BarKind.REQUEST_SWITCH_PREP;
+            case BREAK_RESUME_PREP -> BarKind.BREAK_RESUME_PREP;
             default -> BarKind.DEFAULT;
         };
     }
