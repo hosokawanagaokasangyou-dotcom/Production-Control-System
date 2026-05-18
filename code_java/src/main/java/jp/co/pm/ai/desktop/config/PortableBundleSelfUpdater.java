@@ -1,6 +1,8 @@
 package jp.co.pm.ai.desktop.config;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.CopyOption;
@@ -31,6 +33,10 @@ public final class PortableBundleSelfUpdater {
 
     private static final CopyOption[] COPY_OPTIONS =
             new CopyOption[] {StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES};
+
+    private static final int PROGRESS_LOG_EVERY_FILES = 32;
+
+    private static final int COPY_BUFFER_SIZE = 64 * 1024;
 
     private PortableBundleSelfUpdater() {}
 
@@ -145,10 +151,85 @@ public final class PortableBundleSelfUpdater {
     }
 
     /**
+     * 共有上のバージョンアップ ZIP をローカル一時ファイルへコピー（取得）。呼び出し側で {@link Files#deleteIfExists} すること。
+     */
+    public static Path copyUpgradeZipToLocal(
+            Path sourceZip,
+            Consumer<String> log,
+            PortableBundleUpgradeProgress.Listener progress)
+            throws IOException {
+        Objects.requireNonNull(sourceZip, "sourceZip");
+        Path zip = sourceZip.toAbsolutePath().normalize();
+        if (!isPortableBundleZipPath(zip)) {
+            throw new IOException("Not a zip file: " + zip);
+        }
+        long size = Files.size(zip);
+        Path localZip = Files.createTempFile("pm-ai-upgrade-dl-", ".zip");
+        if (log != null) {
+            log.accept(
+                    PORTABLE_SYNC_LOG_PREFIX
+                            + "ZIP 取得開始: "
+                            + safePathForLog(zip)
+                            + " ("
+                            + formatByteSize(size)
+                            + ")");
+        }
+        if (progress != null) {
+            progress.onPhaseStarted(PortableBundleUpgradeProgress.Phase.DOWNLOAD, size);
+        }
+        long copied = 0;
+        byte[] buf = new byte[COPY_BUFFER_SIZE];
+        try (InputStream in = Files.newInputStream(zip);
+                OutputStream out = Files.newOutputStream(localZip)) {
+            int n;
+            while ((n = in.read(buf)) >= 0) {
+                out.write(buf, 0, n);
+                copied += n;
+                if (progress != null) {
+                    reportByteProgress(
+                            progress,
+                            PortableBundleUpgradeProgress.Phase.DOWNLOAD,
+                            copied,
+                            size,
+                            null);
+                }
+            }
+        } catch (IOException e) {
+            Files.deleteIfExists(localZip);
+            throw e;
+        }
+        if (progress != null) {
+            progress.onPhaseFinished(PortableBundleUpgradeProgress.Phase.DOWNLOAD, size);
+        }
+        if (log != null) {
+            log.accept(
+                    PORTABLE_SYNC_LOG_PREFIX
+                            + "ZIP 取得完了: "
+                            + safePathForLog(localZip)
+                            + " ("
+                            + formatByteSize(copied)
+                            + ")");
+        }
+        return localZip;
+    }
+
+    /**
      * Extracts a portable app-image zip (root contains {@code pm-ai-data/}) to a new temp directory. Caller must
      * {@link #deleteDirectoryRecursive(Path, Consumer)} when done.
      */
     public static Path extractUpgradeZipToTempDirectory(Path zipPath, Consumer<String> log) throws IOException {
+        return extractUpgradeZipToTempDirectory(zipPath, log, null);
+    }
+
+    /**
+     * {@link #extractUpgradeZipToTempDirectory(Path, Consumer)} with {@link PortableBundleUpgradeProgress} for ZIP
+     * entry extraction.
+     */
+    public static Path extractUpgradeZipToTempDirectory(
+            Path zipPath,
+            Consumer<String> log,
+            PortableBundleUpgradeProgress.Listener progress)
+            throws IOException {
         Objects.requireNonNull(zipPath, "zipPath");
         Path zip = zipPath.toAbsolutePath().normalize();
         if (!isPortableBundleZipPath(zip)) {
@@ -162,6 +243,10 @@ public final class PortableBundleSelfUpdater {
                             + safePathForLog(zip)
                             + " -> "
                             + safePathForLog(tempRoot));
+        }
+        int fileEntries = countZipFileEntries(zip);
+        if (progress != null) {
+            progress.onPhaseStarted(PortableBundleUpgradeProgress.Phase.EXTRACT, fileEntries);
         }
         int[] extractedFiles = {0};
         try (java.util.zip.ZipFile zf = new java.util.zip.ZipFile(zip.toFile(), StandardCharsets.UTF_8)) {
@@ -187,8 +272,19 @@ public final class PortableBundleSelfUpdater {
                     if (log != null) {
                         log.accept(PORTABLE_SYNC_LOG_PREFIX + "展開: " + name);
                     }
+                    if (progress != null) {
+                        reportFileProgress(
+                                progress,
+                                PortableBundleUpgradeProgress.Phase.EXTRACT,
+                                extractedFiles[0],
+                                fileEntries,
+                                name);
+                    }
                 }
             }
+        }
+        if (progress != null) {
+            progress.onPhaseFinished(PortableBundleUpgradeProgress.Phase.EXTRACT, fileEntries);
         }
         if (log != null) {
             log.accept(PORTABLE_SYNC_LOG_PREFIX + "ZIP 展開完了: ファイル " + extractedFiles[0] + " 件");
@@ -241,7 +337,19 @@ public final class PortableBundleSelfUpdater {
      *
      * @return number of files copied (directories not counted).
      */
-    public static SyncOutcome syncFromCanonical(Path canonicalRepoRoot, Path localPmAiDataRoot, Consumer<String> log)
+    public static SyncOutcome syncFromCanonical(
+            Path canonicalRepoRoot, Path localPmAiDataRoot, Consumer<String> log) throws IOException {
+        return syncFromCanonical(canonicalRepoRoot, localPmAiDataRoot, log, null);
+    }
+
+    /**
+     * {@link #syncFromCanonical(Path, Path, Consumer)} with file-count progress for pm-ai-data sync.
+     */
+    public static SyncOutcome syncFromCanonical(
+            Path canonicalRepoRoot,
+            Path localPmAiDataRoot,
+            Consumer<String> log,
+            PortableBundleUpgradeProgress.Listener progress)
             throws IOException {
         Objects.requireNonNull(canonicalRepoRoot, "canonicalRepoRoot");
         Objects.requireNonNull(localPmAiDataRoot, "localPmAiDataRoot");
@@ -251,6 +359,14 @@ public final class PortableBundleSelfUpdater {
             throw new IOException("Canonical folder does not exist or is not a directory: " + canon);
         }
         Files.createDirectories(destRoot);
+
+        int totalFiles = countFilesToSync(canon);
+        if (progress != null) {
+            progress.onPhaseStarted(PortableBundleUpgradeProgress.Phase.SYNC, totalFiles);
+        }
+        if (log != null) {
+            log.accept(PORTABLE_SYNC_LOG_PREFIX + "同期対象ファイル数: " + totalFiles);
+        }
 
         int[] copied = {0};
         Files.walkFileTree(
@@ -278,20 +394,29 @@ public final class PortableBundleSelfUpdater {
                         if (isExcludedPath(rel)) {
                             return FileVisitResult.CONTINUE;
                         }
+                        String relUnix = rel.toString().replace('\\', '/');
                         Path target = destRoot.resolve(rel.toString());
                         Files.createDirectories(target.getParent());
                         Files.copy(file, target, COPY_OPTIONS);
                         copied[0]++;
                         if (log != null) {
-                            log.accept(
-                                    PORTABLE_SYNC_LOG_PREFIX
-                                            + "同期: "
-                                            + rel.toString().replace('\\', '/'));
+                            log.accept(PORTABLE_SYNC_LOG_PREFIX + "同期: " + relUnix);
+                        }
+                        if (progress != null) {
+                            reportFileProgress(
+                                    progress,
+                                    PortableBundleUpgradeProgress.Phase.SYNC,
+                                    copied[0],
+                                    totalFiles,
+                                    relUnix);
                         }
                         return FileVisitResult.CONTINUE;
                     }
                 });
 
+        if (progress != null) {
+            progress.onPhaseFinished(PortableBundleUpgradeProgress.Phase.SYNC, totalFiles);
+        }
         if (log != null) {
             log.accept(
                     PORTABLE_SYNC_LOG_PREFIX
@@ -300,6 +425,90 @@ public final class PortableBundleSelfUpdater {
                             + " ファイル（除外パスはスキップ）");
         }
         return new SyncOutcome(copied[0]);
+    }
+
+    static int countZipFileEntries(Path zipPath) throws IOException {
+        try (java.util.zip.ZipFile zf =
+                new java.util.zip.ZipFile(zipPath.toFile(), StandardCharsets.UTF_8)) {
+            int n = 0;
+            java.util.Enumeration<? extends java.util.zip.ZipEntry> en = zf.entries();
+            while (en.hasMoreElements()) {
+                if (!en.nextElement().isDirectory()) {
+                    n++;
+                }
+            }
+            return n;
+        }
+    }
+
+    static int countFilesToSync(Path canonRoot) throws IOException {
+        int[] n = {0};
+        Files.walkFileTree(
+                canonRoot,
+                new SimpleFileVisitor<>() {
+                    @Override
+                    public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
+                            throws IOException {
+                        Path rel = canonRoot.relativize(dir);
+                        if (rel.getNameCount() > 0 && isExcludedPath(rel)) {
+                            return FileVisitResult.SKIP_SUBTREE;
+                        }
+                        return FileVisitResult.CONTINUE;
+                    }
+
+                    @Override
+                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                        Path rel = canonRoot.relativize(file);
+                        if (!isExcludedPath(rel)) {
+                            n[0]++;
+                        }
+                        return FileVisitResult.CONTINUE;
+                    }
+                });
+        return n[0];
+    }
+
+    private static void reportFileProgress(
+            PortableBundleUpgradeProgress.Listener progress,
+            PortableBundleUpgradeProgress.Phase phase,
+            long done,
+            long total,
+            String detail) {
+        if (progress == null) {
+            return;
+        }
+        if (done == total || done == 1 || done % PROGRESS_LOG_EVERY_FILES == 0) {
+            progress.onProgress(phase, done, total, detail);
+        }
+    }
+
+    private static void reportByteProgress(
+            PortableBundleUpgradeProgress.Listener progress,
+            PortableBundleUpgradeProgress.Phase phase,
+            long done,
+            long total,
+            String detail) {
+        if (progress == null || total <= 0) {
+            return;
+        }
+        long step = Math.max(COPY_BUFFER_SIZE, total / 200);
+        if (done >= total || done <= COPY_BUFFER_SIZE || done % step == 0) {
+            progress.onProgress(phase, done, total, detail);
+        }
+    }
+
+    /** Human-readable size for progress UI and logs. */
+    public static String formatByteSize(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        }
+        if (bytes < 1024 * 1024) {
+            return String.format(Locale.ROOT, "%.1f KB", bytes / 1024.0);
+        }
+        if (bytes < 1024L * 1024 * 1024) {
+            return String.format(Locale.ROOT, "%.1f MB", bytes / (1024.0 * 1024));
+        }
+        return String.format(Locale.ROOT, "%.2f GB", bytes / (1024.0 * 1024 * 1024));
     }
 
     /** Package-private for tests: relative path from canonical repo root is excluded from sync. */

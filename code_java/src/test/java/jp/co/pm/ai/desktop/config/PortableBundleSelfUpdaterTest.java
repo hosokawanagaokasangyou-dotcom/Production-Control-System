@@ -113,6 +113,19 @@ class PortableBundleSelfUpdaterTest {
     }
 
     @Test
+    void copyUpgradeZipToLocal_copiesBytes(@TempDir Path tmp) throws IOException {
+        Path src = tmp.resolve("PMD_version_upgrade.zip");
+        Files.writeString(src, "0123456789", StandardCharsets.UTF_8);
+        Path local =
+                PortableBundleSelfUpdater.copyUpgradeZipToLocal(src, null, null);
+        try {
+            assertEquals(10, Files.size(local));
+        } finally {
+            Files.deleteIfExists(local);
+        }
+    }
+
+    @Test
     void syncFromCanonical_logsEachCopiedRelativePath(@TempDir Path tmp) throws IOException {
         Path canon = tmp.resolve("canon");
         Files.createDirectories(canon.resolve("code"));

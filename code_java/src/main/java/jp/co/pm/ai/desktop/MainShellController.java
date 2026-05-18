@@ -22,6 +22,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -90,6 +91,7 @@ import jp.co.pm.ai.desktop.config.PushButtonCssEmitter;
 import jp.co.pm.ai.desktop.config.PushButtonDesignPrefs;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 import jp.co.pm.ai.desktop.config.PortableBundleSelfUpdater;
+import jp.co.pm.ai.desktop.config.PortableBundleUpgradeProgress;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.PlanWorkspaceSessionFragment;
 import jp.co.pm.ai.desktop.config.PlanWorkspaceSnapshotStore;
@@ -4583,30 +4585,93 @@ public final class MainShellController {
                                         + PortableBundleSelfUpdater.safePathForLog(upgradeZip.get())
                                 : " / フォルダ同期"));
 
+        final boolean zipUpgradeMode = upgradeZip.isPresent();
         Stage wait = new Stage();
         wait.initModality(Modality.APPLICATION_MODAL);
         wait.initOwner(primaryStage);
         wait.setTitle("自動バージョンアップ");
-        wait.setMinWidth(560);
-        wait.setMinHeight(280);
-        VBox root = new VBox(16);
-        root.setAlignment(Pos.CENTER);
+        wait.setMinWidth(580);
+        wait.setMinHeight(zipUpgradeMode ? 360 : 280);
+        VBox root = new VBox(14);
+        root.setAlignment(Pos.CENTER_LEFT);
         root.setStyle("-fx-padding: 24;");
         Label msg = new Label("正本から pm-ai-data を更新しています…\n詳細は「実行・ログ」タブに追記されます。");
         msg.setWrapText(true);
-        msg.setAlignment(Pos.CENTER);
-        msg.setMaxWidth(500);
+        msg.setMaxWidth(520);
+
+        Label downloadCaption = new Label("① 正本ZIPの取得（共有フォルダ → ローカル）");
+        ProgressBar downloadBar = new ProgressBar(0);
+        downloadBar.setMaxWidth(Double.MAX_VALUE);
+        downloadBar.setPrefWidth(520);
+        Label extractCaption = new Label("② ZIPの展開");
+        ProgressBar extractBar = new ProgressBar(0);
+        extractBar.setMaxWidth(Double.MAX_VALUE);
+        extractBar.setPrefWidth(520);
+        Label syncCaption = new Label("③ pm-ai-data へのファイル同期");
+        ProgressBar syncBar = new ProgressBar(0);
+        syncBar.setMaxWidth(Double.MAX_VALUE);
+        syncBar.setPrefWidth(520);
+
+        VBox downloadBox = new VBox(6, downloadCaption, downloadBar);
+        VBox extractBox = new VBox(6, extractCaption, extractBar);
+        VBox syncBox = new VBox(6, syncCaption, syncBar);
+        if (!zipUpgradeMode) {
+            downloadBox.setManaged(false);
+            downloadBox.setVisible(false);
+            extractBox.setManaged(false);
+            extractBox.setVisible(false);
+            downloadBar.setProgress(1);
+            extractBar.setProgress(1);
+        } else {
+            downloadBar.setProgress(-1);
+            extractBar.setProgress(0);
+        }
+        syncBar.setProgress(-1);
+
         Label detail = new Label("準備中…");
         detail.setWrapText(true);
-        detail.setAlignment(Pos.CENTER);
-        detail.setMaxWidth(500);
+        detail.setMaxWidth(520);
         detail.getStyleClass().add("pm-portable-sync-detail");
-        ProgressIndicator pi = new ProgressIndicator();
-        pi.setProgress(ProgressIndicator.INDETERMINATE_PROGRESS);
-        root.getChildren().addAll(msg, detail, pi);
-        wait.setScene(new Scene(root, 560, 280));
+
+        root.getChildren().addAll(msg, downloadBox, extractBox, syncBox, detail);
+        VBox.setVgrow(downloadBar, Priority.NEVER);
+        Scene waitScene = new Scene(root, 580, zipUpgradeMode ? 360 : 280);
+        wait.setScene(waitScene);
+        if (primaryStage != null && primaryStage.getScene() != null) {
+            waitScene.getStylesheets().setAll(primaryStage.getScene().getStylesheets());
+        }
         wait.show();
 
+        final AtomicLong lastProgressUiNanos = new AtomicLong(0);
+        PortableBundleUpgradeProgress.Listener upgradeProgress =
+                (phase, done, total, detailLine) -> {
+                    long now = System.nanoTime();
+                    boolean force =
+                            done <= 0
+                                    || (total > 0 && done >= total)
+                                    || detailLine != null && !detailLine.isBlank();
+                    if (!force && now - lastProgressUiNanos.get() < 50_000_000L) {
+                        return;
+                    }
+                    lastProgressUiNanos.set(now);
+                    Platform.runLater(
+                            () ->
+                                    applyPortableUpgradeProgressToBars(
+                                            zipUpgradeMode,
+                                            phase,
+                                            done,
+                                            total,
+                                            detailLine,
+                                            downloadCaption,
+                                            downloadBar,
+                                            extractCaption,
+                                            extractBar,
+                                            syncCaption,
+                                            syncBar,
+                                            detail));
+                };
+
+        final Path[] localZipHolder = new Path[1];
         final Path[] extractedHolder = new Path[1];
         final AtomicInteger filesSynced = new AtomicInteger();
         Consumer<String> portableSyncLog =
@@ -4615,11 +4680,6 @@ public final class MainShellController {
                         filesSynced.incrementAndGet();
                     }
                     mainRunTabController.appendPortableBundleSyncLog(line);
-                    if (line != null && !line.isBlank()) {
-                        String shortLine =
-                                line.length() > 160 ? line.substring(0, 157) + "…" : line;
-                        Platform.runLater(() -> detail.setText(shortLine));
-                    }
                 };
         Task<Void> task =
                 new Task<>() {
@@ -4629,14 +4689,18 @@ public final class MainShellController {
                         Optional<Path> zipForSync =
                                 PortableBundleSelfUpdater.resolveEffectiveUpgradeZip(canonical);
                         if (zipForSync.isPresent()) {
+                            Path remoteZip = zipForSync.get();
+                            localZipHolder[0] =
+                                    PortableBundleSelfUpdater.copyUpgradeZipToLocal(
+                                            remoteZip, portableSyncLog, upgradeProgress);
                             Path tmp =
                                     PortableBundleSelfUpdater.extractUpgradeZipToTempDirectory(
-                                            zipForSync.get(), portableSyncLog);
+                                            localZipHolder[0], portableSyncLog, upgradeProgress);
                             extractedHolder[0] = tmp;
                             syncSource = tmp.resolve("pm-ai-data");
                             if (!Files.isDirectory(syncSource)) {
                                 throw new IOException(
-                                        "ZIP 内に pm-ai-data フォルダがありません: " + zipForSync.get());
+                                        "ZIP 内に pm-ai-data フォルダがありません: " + remoteZip);
                             }
                         } else {
                             portableSyncLog.accept(
@@ -4648,7 +4712,7 @@ public final class MainShellController {
                             syncSource = PortableBundleSelfUpdater.resolveSyncSourceRoot(canonical);
                         }
                         PortableBundleSelfUpdater.syncFromCanonical(
-                                syncSource, localData, portableSyncLog);
+                                syncSource, localData, portableSyncLog, upgradeProgress);
                         PortableBundleSelfUpdater.copyOuterVersionTxtToLocal(canonical, cwd, localData);
                         return null;
                     }
@@ -4656,6 +4720,13 @@ public final class MainShellController {
         task.setOnSucceeded(
                 e -> {
                     mainRunTabController.flushPortableBundleSyncLog();
+                    if (localZipHolder[0] != null) {
+                        try {
+                            Files.deleteIfExists(localZipHolder[0]);
+                        } catch (IOException ignored) {
+                            /* best-effort */
+                        }
+                    }
                     if (extractedHolder[0] != null) {
                         PortableBundleSelfUpdater.deleteDirectoryRecursive(
                                 extractedHolder[0], portableSyncLog);
@@ -4703,6 +4774,13 @@ public final class MainShellController {
         task.setOnFailed(
                 e -> {
                     mainRunTabController.flushPortableBundleSyncLog();
+                    if (localZipHolder[0] != null) {
+                        try {
+                            Files.deleteIfExists(localZipHolder[0]);
+                        } catch (IOException ignored) {
+                            /* best-effort */
+                        }
+                    }
                     if (extractedHolder[0] != null) {
                         PortableBundleSelfUpdater.deleteDirectoryRecursive(
                                 extractedHolder[0], portableSyncLog);
@@ -4722,6 +4800,80 @@ public final class MainShellController {
         Thread t = new Thread(task, "pm-ai-portable-sync");
         t.setDaemon(true);
         t.start();
+    }
+
+    private static void applyPortableUpgradeProgressToBars(
+            boolean zipUpgradeMode,
+            PortableBundleUpgradeProgress.Phase phase,
+            long done,
+            long total,
+            String detailLine,
+            Label downloadCaption,
+            ProgressBar downloadBar,
+            Label extractCaption,
+            ProgressBar extractBar,
+            Label syncCaption,
+            ProgressBar syncBar,
+            Label detail) {
+        if (zipUpgradeMode) {
+            switch (phase) {
+                case DOWNLOAD -> {
+                    applyProgressBarValue(downloadBar, done, total);
+                    downloadCaption.setText(
+                            progressCaption(
+                                    "① 正本ZIPの取得（共有フォルダ → ローカル）", done, total));
+                }
+                case EXTRACT -> {
+                    downloadBar.setProgress(1.0);
+                    downloadCaption.setText("① 正本ZIPの取得（完了）");
+                    applyProgressBarValue(extractBar, done, total);
+                    extractCaption.setText(progressCaption("② ZIPの展開", done, total));
+                }
+                case SYNC -> {
+                    downloadBar.setProgress(1.0);
+                    downloadCaption.setText("① 正本ZIPの取得（完了）");
+                    extractBar.setProgress(1.0);
+                    extractCaption.setText("② ZIPの展開（完了）");
+                    applyProgressBarValue(syncBar, done, total);
+                    syncCaption.setText(progressCaption("③ pm-ai-data へのファイル同期", done, total));
+                }
+                default -> {
+                    /* not reached */
+                }
+            }
+        } else {
+            applyProgressBarValue(syncBar, done, total);
+            syncCaption.setText(progressCaption("③ pm-ai-data へのファイル同期", done, total));
+        }
+        if (detailLine != null && !detailLine.isBlank()) {
+            String shortLine =
+                    detailLine.length() > 160 ? detailLine.substring(0, 157) + "…" : detailLine;
+            detail.setText(shortLine);
+        } else if (phase == PortableBundleUpgradeProgress.Phase.DOWNLOAD && total > 0) {
+            detail.setText(
+                    "取得: "
+                            + PortableBundleSelfUpdater.formatByteSize(done)
+                            + " / "
+                            + PortableBundleSelfUpdater.formatByteSize(total));
+        } else if (total > 0) {
+            detail.setText(done + " / " + total);
+        }
+    }
+
+    private static void applyProgressBarValue(ProgressBar bar, long done, long total) {
+        if (total > 0) {
+            bar.setProgress(Math.min(1.0, done / (double) total));
+        } else {
+            bar.setProgress(-1);
+        }
+    }
+
+    private static String progressCaption(String base, long done, long total) {
+        if (total <= 0) {
+            return base + " …";
+        }
+        int pct = (int) Math.min(100, (done * 100) / total);
+        return base + " (" + pct + "%)";
     }
 
     /**
