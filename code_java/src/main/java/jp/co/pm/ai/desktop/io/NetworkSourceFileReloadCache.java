@@ -65,8 +65,8 @@ public final class NetworkSourceFileReloadCache {
         actualsSnapshot = snapshotFrom(file, excel, sheetNames, selectedSheetIndex, shaped);
     }
 
-    /** テスト・デバッグ用。 */
-    static void clearAll() {
+    /** 段階1キャッシュクリアやテストで、同一ファイル名の再読込省略を無効化する。 */
+    public static void clearAll() {
         aladdinSnapshot = null;
         actualsSnapshot = null;
     }

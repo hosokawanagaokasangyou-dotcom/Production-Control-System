@@ -3269,9 +3269,27 @@ public final class MainShellController {
             }
             String wb = effectiveTaskInputWorkbookPath();
             appendLog("--- start: " + script + " ---");
-            if (STAGE1.equals(script) && mainRunTabController.snapshotStage1ClearCacheAndRun()) {
-                for (String line : Stage1AiCacheClearer.clearBeforeStage1Run(uiRun)) {
-                    appendLog(line);
+            if (STAGE1.equals(script)) {
+                if (mainRunTabController.snapshotStage1ClearCacheAndRun()) {
+                    appendLog("[stage1] キャッシュをクリアして実行します。");
+                    Stage1AiCacheClearer.ClearResult cacheClear =
+                            Stage1AiCacheClearer.clearBeforeStage1Run(uiRun);
+                    for (String line : cacheClear.detailLines()) {
+                        appendLog(line);
+                    }
+                    if (cacheClear.anyFailed()) {
+                        appendLog("[stage1] キャッシュの一部を削除できませんでした。");
+                    } else {
+                        appendLog("[stage1] キャッシュをクリアしました。");
+                    }
+                } else {
+                    List<String> cacheKinds = Stage1AiCacheClearer.existingCacheKindLabelsJa(uiRun);
+                    if (!cacheKinds.isEmpty()) {
+                        appendLog(
+                                "[stage1] キャッシュを使用します（"
+                                        + String.join("・", cacheKinds)
+                                        + "）。");
+                    }
                 }
             }
             if (STAGE1.equals(script) || STAGE2.equals(script)) {
@@ -3285,10 +3303,13 @@ public final class MainShellController {
             }
             if (STAGE1.equals(script)) {
                 NetworkSourceDirResolver.Result res = lastNetworkSourceResolution;
-                boolean show =
+                boolean networkFromCache =
                         res != null && (res.taskInputFromCache() || res.actualDetailFromCache());
+                if (networkFromCache) {
+                    appendLog("[stage1] キャッシュを使用します（加工計画DATA／実績明細のネットワーク代替）。");
+                }
                 mainRunTabController.setStage1NetworkCacheBadge(
-                        show,
+                        networkFromCache,
                         uiBadgeDesignTabController != null
                                 ? uiBadgeDesignTabController.snapshotStage1NetworkCacheBadgeStyle()
                                 : PersonBadgeStyle.networkSourceCacheBadgeDefault(),
