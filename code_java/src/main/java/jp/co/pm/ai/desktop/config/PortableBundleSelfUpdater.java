@@ -26,6 +26,9 @@ public final class PortableBundleSelfUpdater {
     /** Version-upgrade bundle file name on the release share ({@code pm-ai-package-release}). */
     public static final String PORTABLE_UPGRADE_ZIP_NAME = "PMD_version_upgrade.zip";
 
+    /** Run-tab log prefix for portable bundle sync (filter-friendly). */
+    public static final String PORTABLE_SYNC_LOG_PREFIX = "[portable-sync] ";
+
     private static final CopyOption[] COPY_OPTIONS =
             new CopyOption[] {StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES};
 
@@ -153,8 +156,14 @@ public final class PortableBundleSelfUpdater {
         }
         Path tempRoot = Files.createTempDirectory("pm-ai-upgrade-zip-");
         if (log != null) {
-            log.accept("[portable-sync] extracting " + safePathForLog(zip) + " -> " + safePathForLog(tempRoot));
+            log.accept(
+                    PORTABLE_SYNC_LOG_PREFIX
+                            + "ZIP 展開開始: "
+                            + safePathForLog(zip)
+                            + " -> "
+                            + safePathForLog(tempRoot));
         }
+        int[] extractedFiles = {0};
         try (java.util.zip.ZipFile zf = new java.util.zip.ZipFile(zip.toFile(), StandardCharsets.UTF_8)) {
             java.util.Enumeration<? extends java.util.zip.ZipEntry> en = zf.entries();
             while (en.hasMoreElements()) {
@@ -174,8 +183,15 @@ public final class PortableBundleSelfUpdater {
                     try (var in = zf.getInputStream(entry)) {
                         Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
                     }
+                    extractedFiles[0]++;
+                    if (log != null) {
+                        log.accept(PORTABLE_SYNC_LOG_PREFIX + "展開: " + name);
+                    }
                 }
             }
+        }
+        if (log != null) {
+            log.accept(PORTABLE_SYNC_LOG_PREFIX + "ZIP 展開完了: ファイル " + extractedFiles[0] + " 件");
         }
         return tempRoot;
     }
@@ -266,12 +282,22 @@ public final class PortableBundleSelfUpdater {
                         Files.createDirectories(target.getParent());
                         Files.copy(file, target, COPY_OPTIONS);
                         copied[0]++;
+                        if (log != null) {
+                            log.accept(
+                                    PORTABLE_SYNC_LOG_PREFIX
+                                            + "同期: "
+                                            + rel.toString().replace('\\', '/'));
+                        }
                         return FileVisitResult.CONTINUE;
                     }
                 });
 
         if (log != null) {
-            log.accept("[portable-sync] copied " + copied[0] + " files (exclusions skipped)");
+            log.accept(
+                    PORTABLE_SYNC_LOG_PREFIX
+                            + "同期完了: "
+                            + copied[0]
+                            + " ファイル（除外パスはスキップ）");
         }
         return new SyncOutcome(copied[0]);
     }

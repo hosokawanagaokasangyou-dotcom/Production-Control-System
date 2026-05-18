@@ -149,6 +149,12 @@ public final class MainRunTabController {
 
     private double pendingSessionLogScroll = Double.NaN;
 
+    private final Object portableSyncLogLock = new Object();
+
+    private final List<String> portableSyncLogPending = new ArrayList<>();
+
+    private static final int PORTABLE_SYNC_LOG_BATCH_SIZE = 25;
+
     @FXML
     private void initialize() {
         logFilterCombo.getItems().setAll(LogViewFilter.values());
@@ -718,6 +724,73 @@ public final class MainRunTabController {
         if (shell != null) {
             shell.scheduleDesktopSessionSave();
         }
+    }
+
+    /**
+     * ポータブルバージョンアップ前: ログフィルタを「すべて」にし、同期行が実行・ログに見えるようにする。
+     */
+    void prepareRunTabForPortableBundleSync() {
+        Runnable prep =
+                () -> {
+                    if (logFilterCombo != null) {
+                        logFilterCombo.setValue(LogViewFilter.ALL);
+                    }
+                };
+        if (Platform.isFxApplicationThread()) {
+            prep.run();
+        } else {
+            Platform.runLater(prep);
+        }
+    }
+
+    /**
+     * バックグラウンドのポータル同期から呼ぶ。25 行ごとに UI へまとめて追記し、大量の {@code runLater} を抑える。
+     */
+    void appendPortableBundleSyncLog(String line) {
+        if (line == null || line.isEmpty()) {
+            return;
+        }
+        List<String> flush = null;
+        synchronized (portableSyncLogLock) {
+            portableSyncLogPending.add(line);
+            if (portableSyncLogPending.size() >= PORTABLE_SYNC_LOG_BATCH_SIZE) {
+                flush = new ArrayList<>(portableSyncLogPending);
+                portableSyncLogPending.clear();
+            }
+        }
+        if (flush != null) {
+            appendPortableBundleSyncLogBatch(flush);
+        }
+    }
+
+    /** 同期スレッド終了時に残りを UI へ反映する。 */
+    void flushPortableBundleSyncLog() {
+        List<String> flush;
+        synchronized (portableSyncLogLock) {
+            if (portableSyncLogPending.isEmpty()) {
+                return;
+            }
+            flush = new ArrayList<>(portableSyncLogPending);
+            portableSyncLogPending.clear();
+        }
+        appendPortableBundleSyncLogBatch(flush);
+    }
+
+    private void appendPortableBundleSyncLogBatch(List<String> batch) {
+        if (batch == null || batch.isEmpty()) {
+            return;
+        }
+        Platform.runLater(
+                () -> {
+                    logLinesAll.addAll(batch);
+                    int n = logLinesVisible.size();
+                    if (n > 0 && logListView != null) {
+                        logListView.scrollTo(n - 1);
+                    }
+                    if (shell != null) {
+                        shell.scheduleDesktopSessionSave();
+                    }
+                });
     }
 
     TextField getWorkbookField() {

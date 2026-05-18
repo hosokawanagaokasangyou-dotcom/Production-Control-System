@@ -21,7 +21,9 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
@@ -4570,26 +4572,55 @@ public final class MainShellController {
             return;
         }
 
+        selectMainShellTab(MainShellTabId.RUN);
+        mainRunTabController.prepareRunTabForPortableBundleSync();
+        appendLog("[startup] --- ポータルバージョンアップ開始（正本 " + canonVerStr + " → ローカル " + localVerStr + "）---");
+        appendLog(
+                "[startup] 正本: "
+                        + PortableBundleSelfUpdater.safePathForLog(canonical)
+                        + (upgradeZip.isPresent()
+                                ? " / ZIP: "
+                                        + PortableBundleSelfUpdater.safePathForLog(upgradeZip.get())
+                                : " / フォルダ同期"));
+
         Stage wait = new Stage();
         wait.initModality(Modality.APPLICATION_MODAL);
         wait.initOwner(primaryStage);
         wait.setTitle("自動バージョンアップ");
-        wait.setMinWidth(520);
-        wait.setMinHeight(220);
-        VBox root = new VBox(20);
+        wait.setMinWidth(560);
+        wait.setMinHeight(280);
+        VBox root = new VBox(16);
         root.setAlignment(Pos.CENTER);
-        root.setStyle("-fx-padding: 28;");
-        Label msg = new Label("正本から pm-ai-data を更新しています…");
+        root.setStyle("-fx-padding: 24;");
+        Label msg = new Label("正本から pm-ai-data を更新しています…\n詳細は「実行・ログ」タブに追記されます。");
         msg.setWrapText(true);
         msg.setAlignment(Pos.CENTER);
-        msg.setMaxWidth(460);
+        msg.setMaxWidth(500);
+        Label detail = new Label("準備中…");
+        detail.setWrapText(true);
+        detail.setAlignment(Pos.CENTER);
+        detail.setMaxWidth(500);
+        detail.getStyleClass().add("pm-portable-sync-detail");
         ProgressIndicator pi = new ProgressIndicator();
         pi.setProgress(ProgressIndicator.INDETERMINATE_PROGRESS);
-        root.getChildren().addAll(msg, pi);
-        wait.setScene(new Scene(root, 520, 220));
+        root.getChildren().addAll(msg, detail, pi);
+        wait.setScene(new Scene(root, 560, 280));
         wait.show();
 
         final Path[] extractedHolder = new Path[1];
+        final AtomicInteger filesSynced = new AtomicInteger();
+        Consumer<String> portableSyncLog =
+                line -> {
+                    if (line != null && line.contains("同期: ")) {
+                        filesSynced.incrementAndGet();
+                    }
+                    mainRunTabController.appendPortableBundleSyncLog(line);
+                    if (line != null && !line.isBlank()) {
+                        String shortLine =
+                                line.length() > 160 ? line.substring(0, 157) + "…" : line;
+                        Platform.runLater(() -> detail.setText(shortLine));
+                    }
+                };
         Task<Void> task =
                 new Task<>() {
                     @Override
@@ -4600,8 +4631,7 @@ public final class MainShellController {
                         if (zipForSync.isPresent()) {
                             Path tmp =
                                     PortableBundleSelfUpdater.extractUpgradeZipToTempDirectory(
-                                            zipForSync.get(),
-                                            line -> Platform.runLater(() -> appendLog(line)));
+                                            zipForSync.get(), portableSyncLog);
                             extractedHolder[0] = tmp;
                             syncSource = tmp.resolve("pm-ai-data");
                             if (!Files.isDirectory(syncSource)) {
@@ -4609,22 +4639,26 @@ public final class MainShellController {
                                         "ZIP 内に pm-ai-data フォルダがありません: " + zipForSync.get());
                             }
                         } else {
+                            portableSyncLog.accept(
+                                    PortableBundleSelfUpdater.PORTABLE_SYNC_LOG_PREFIX
+                                            + "正本フォルダから同期: "
+                                            + PortableBundleSelfUpdater.safePathForLog(
+                                                    PortableBundleSelfUpdater.resolveSyncSourceRoot(
+                                                            canonical)));
                             syncSource = PortableBundleSelfUpdater.resolveSyncSourceRoot(canonical);
                         }
                         PortableBundleSelfUpdater.syncFromCanonical(
-                                syncSource,
-                                localData,
-                                line -> Platform.runLater(() -> appendLog(line)));
+                                syncSource, localData, portableSyncLog);
                         PortableBundleSelfUpdater.copyOuterVersionTxtToLocal(canonical, cwd, localData);
                         return null;
                     }
                 };
         task.setOnSucceeded(
                 e -> {
+                    mainRunTabController.flushPortableBundleSyncLog();
                     if (extractedHolder[0] != null) {
                         PortableBundleSelfUpdater.deleteDirectoryRecursive(
-                                extractedHolder[0],
-                                line -> Platform.runLater(() -> appendLog(line)));
+                                extractedHolder[0], portableSyncLog);
                     }
                     wait.close();
                     try {
@@ -4640,7 +4674,10 @@ public final class MainShellController {
                     }
                     performGlobalUiFactoryResetWithoutConfirmation();
                     applyBundledPortableDefaultsIfPresent();
-                    mainRunTabController.clearMainRunTabLog();
+                    appendLog(
+                            "[startup] --- ポータルバージョンアップ完了（同期ファイル約 "
+                                    + filesSynced.get()
+                                    + " 件。上記 [portable-sync] 行を参照）---");
                     applyRepoFolderPathNormalization();
                     Optional<FactorySite> chosenOpt = promptFactorySiteAfterPortableUpgrade();
                     FactorySite siteAfterUpgrade = chosenOpt.orElse(FactorySite.KONAN);
@@ -4665,21 +4702,21 @@ public final class MainShellController {
                 });
         task.setOnFailed(
                 e -> {
+                    mainRunTabController.flushPortableBundleSyncLog();
                     if (extractedHolder[0] != null) {
                         PortableBundleSelfUpdater.deleteDirectoryRecursive(
-                                extractedHolder[0],
-                                line -> Platform.runLater(() -> appendLog(line)));
+                                extractedHolder[0], portableSyncLog);
                     }
                     wait.close();
                     Throwable ex = task.getException();
-                    String detail = ex != null ? ex.getMessage() : "不明なエラー";
-                    appendLog("[startup] ポータル同期に失敗: " + detail);
+                    String errorDetail = ex != null ? ex.getMessage() : "不明なエラー";
+                    appendLog("[startup] ポータル同期に失敗: " + errorDetail);
                     Alert er = new Alert(AlertType.WARNING);
                     er.initOwner(primaryStage);
                     applyAlertStylesheetsFromOwner(er);
                     er.setTitle("自動バージョンアップ");
                     er.setHeaderText(null);
-                    er.setContentText("正本からの同期に失敗しました。\n" + detail);
+                    er.setContentText("正本からの同期に失敗しました。\n" + errorDetail);
                     er.show();
                 });
         Thread t = new Thread(task, "pm-ai-portable-sync");

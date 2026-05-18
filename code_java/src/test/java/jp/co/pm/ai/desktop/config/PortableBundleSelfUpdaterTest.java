@@ -9,6 +9,8 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -108,6 +110,18 @@ class PortableBundleSelfUpdaterTest {
         Path nested = tmp.resolve("pm-ai-data/code/python");
         Files.createDirectories(nested);
         assertEquals(tmp.resolve("pm-ai-data"), PortableBundleSelfUpdater.resolveSyncSourceRoot(tmp));
+    }
+
+    @Test
+    void syncFromCanonical_logsEachCopiedRelativePath(@TempDir Path tmp) throws IOException {
+        Path canon = tmp.resolve("canon");
+        Files.createDirectories(canon.resolve("code"));
+        Files.writeString(canon.resolve("code/a.txt"), "a", StandardCharsets.UTF_8);
+        Path dest = tmp.resolve("dest");
+        List<String> lines = new ArrayList<>();
+        PortableBundleSelfUpdater.syncFromCanonical(canon, dest, lines::add);
+        assertTrue(lines.stream().anyMatch(s -> s.contains("同期: code/a.txt")));
+        assertTrue(lines.stream().anyMatch(s -> s.contains("同期完了: 1 ファイル")));
     }
 
     @Test

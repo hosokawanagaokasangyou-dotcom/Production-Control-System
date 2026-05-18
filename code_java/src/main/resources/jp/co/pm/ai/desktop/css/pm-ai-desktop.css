@@ -40,6 +40,12 @@
     -fx-padding: 0;
 }
 
+.label.pm-portable-sync-detail {
+    -fx-font-size: 11px;
+    -fx-text-fill: -fx-mid-text-color;
+    -fx-opacity: 0.95;
+}
+
 .list-view.pm-log-view .list-cell {
     -fx-padding: 2 6 2 6;
     -fx-background-insets: 0;
@@ -47,6 +53,11 @@
 
 .list-view.pm-log-view .list-cell.log-cell {
     -fx-text-fill: -fx-text-inner-color;
+    -fx-background-color: transparent;
+}
+
+.list-view.pm-log-view .list-cell.log-cell.log-dark {
+    -fx-text-fill: -fx-dark-text-color;
     -fx-background-color: transparent;
 }
 
