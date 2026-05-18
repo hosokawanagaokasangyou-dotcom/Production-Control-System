@@ -160,7 +160,7 @@ public final class EquipmentGanttPrintPageWrapper {
 
         HBox head = handles.headRow();
         if (head != null) {
-            HBox.setHgrow(handles.headerScroll(), Priority.NEVER);
+            flattenHeaderRowForPrint(handles, head, headerH);
             head.setPrefSize(cw, headerH);
             head.setMinSize(cw, headerH);
             head.setMaxSize(cw, headerH);
@@ -180,18 +180,77 @@ public final class EquipmentGanttPrintPageWrapper {
 
         resetScrollPaneOrigin(handles.leftBodyScroll());
         resetScrollPaneOrigin(handles.timelineScroll());
-        resetScrollPaneOrigin(handles.headerScroll());
         expandScrollPaneToFullContent(handles.leftBodyScroll());
         expandScrollPaneToFullContent(handles.timelineScroll());
-        expandScrollPaneToFullContent(handles.headerScroll());
-
-        ScrollPane headerScroll = handles.headerScroll();
-        if (headerScroll != null) {
-            headerScroll.setFitToHeight(false);
-        }
 
         gantt.applyCss();
         gantt.layout();
+    }
+
+    /**
+     * 印刷時は {@link ScrollPane} 内の時刻見出しが PDF に出ないことがあるため、見出し行から ScrollPane を外し
+     * コンテンツを直接載せる。左見出しの幅バインドも解除する。
+     */
+    private static void flattenHeaderRowForPrint(
+            EquipmentGraphicGanttPane.EquipmentGanttViewHandles handles, HBox head, double headerH) {
+        if (!head.getChildren().isEmpty()) {
+            Node left = head.getChildren().get(0);
+            if (left instanceof HBox leftHead) {
+                try {
+                    leftHead.minWidthProperty().unbind();
+                } catch (RuntimeException ignored) {
+                    // 未バインド
+                }
+                double lw = handles.printLeftWidth();
+                if (lw > 0.5) {
+                    leftHead.setMinWidth(lw);
+                    leftHead.setPrefWidth(lw);
+                    leftHead.setMaxWidth(lw);
+                }
+            }
+        }
+
+        HBox headerContent = handles.headerRightContent();
+        double headerRightW =
+                Math.max(
+                        1.0,
+                        handles.printContentWidth() > 0.5 && handles.printLeftWidth() > 0.5
+                                ? handles.printContentWidth() - handles.printLeftWidth()
+                                : handles.printTimelineWidth());
+        if (headerContent != null) {
+            headerContent.setMinHeight(headerH);
+            headerContent.setPrefHeight(headerH);
+            headerContent.setMaxHeight(headerH);
+            headerContent.setMinWidth(headerRightW);
+            headerContent.setPrefWidth(headerRightW);
+            headerContent.setMaxWidth(headerRightW);
+            headerContent.setVisible(true);
+            headerContent.setManaged(true);
+        }
+
+        if (head.getChildren().size() >= 2 && head.getChildren().get(1) instanceof ScrollPane headerScroll) {
+            Node content = headerScroll.getContent();
+            if (content != null) {
+                head.getChildren().set(1, content);
+            } else if (headerContent != null) {
+                head.getChildren().set(1, headerContent);
+            }
+        }
+
+        if (!head.getChildren().isEmpty()) {
+            Node right = head.getChildren().get(Math.min(1, head.getChildren().size() - 1));
+            HBox.setHgrow(right, Priority.ALWAYS);
+            if (right instanceof Region r) {
+                r.setMinHeight(headerH);
+                r.setPrefHeight(headerH);
+                r.setMaxHeight(headerH);
+                if (headerRightW > 0.5) {
+                    r.setMinWidth(headerRightW);
+                    r.setPrefWidth(headerRightW);
+                    r.setMaxWidth(headerRightW);
+                }
+            }
+        }
     }
 
     private static void hidePrintWarningBanner(VBox main) {

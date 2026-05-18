@@ -136,7 +136,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             HBox headRow,
             double printContentWidth,
             double printContentHeight,
-            double printTimelineWidth) {
+            double printTimelineWidth,
+            double printLeftWidth,
+            HBox headerRightContent) {
         /** @deprecated 左スクロールが不要な呼び出し向け。印刷では左も展開するため拡張コンストラクタを使う。 */
         @Deprecated
         public EquipmentGanttViewHandles(ScrollPane timelineScroll, Runnable scheduleViewportRepaint) {
@@ -151,7 +153,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     null,
                     0.0,
                     0.0,
-                    0.0);
+                    0.0,
+                    0.0,
+                    null);
         }
     }
 
@@ -751,7 +755,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         barFontPercent,
                         headerHeightPercent);
         final boolean vectorPrint = highQualityPrint;
-        GanttPalette palette = GanttPalette.forTheme(theme);
+        GanttPalette palette =
+                GanttPalette.forTheme(highQualityPrint ? DesktopTheme.LIGHT : theme);
         EquipmentGanttPersonBadgeWireDashStyle wireDashResolved =
                 EquipmentGanttPersonBadgeWireDashStyle.fromStored(
                         personBadgeWireDashStyleKeyOrEmpty);
@@ -1181,7 +1186,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         headerRightScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         headerRightScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         headerRightScroll.setPannable(false);
-        headerRightScroll.setFitToHeight(true);
+        headerRightScroll.setFitToHeight(!vectorPrint);
+        headerRightScroll.setFitToWidth(false);
         HBox.setHgrow(headerRightScroll, Priority.ALWAYS);
         leftBodyScroll.setCache(false);
         rightBodyScroll.setCache(false);
@@ -1350,7 +1356,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         headRow,
                         printContentWidth,
                         printContentHeight,
-                        timelineWidth));
+                        timelineWidth,
+                        leftTotal,
+                        headerRightContent));
 
         Label hint =
                 new Label(
@@ -1949,13 +1957,20 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         for (int i = 0; i < n; i += labelStep) {
             double cx = i * layout.slotWidth + layout.slotWidth * 0.5;
             LocalTime tt = t0.plusMinutes((long) i * slotMin);
-            Text txt = new Text(tt.format(tf));
+            String label = tt.format(tf);
+            Text txt = new Text(label);
             txt.setFill(palette.axisLabel());
             txt.setFont(Font.font(labelFont));
+            double tw = approxLatinDigitTextWidth(label, labelFont);
+            double cy = headerH * 0.38;
+            Group anchor = new Group();
             txt.setRotate(-90);
-            txt.setLayoutX(cx);
-            txt.setLayoutY(headerH * 0.38);
-            pane.getChildren().add(txt);
+            txt.setX(-tw / 2);
+            txt.setY(0);
+            anchor.getChildren().add(txt);
+            anchor.setLayoutX(cx);
+            anchor.setLayoutY(cy);
+            pane.getChildren().add(anchor);
         }
         return pane;
     }
