@@ -94,6 +94,7 @@ import jp.co.pm.ai.desktop.config.PortableBundleBuildManifest;
 import jp.co.pm.ai.desktop.config.PortableBundlePendingUpdate;
 import jp.co.pm.ai.desktop.config.PortableBundleSelfUpdater;
 import jp.co.pm.ai.desktop.config.PortableBundleUpdateLauncher;
+import jp.co.pm.ai.desktop.config.PortableBundleUpgradeFollowUp;
 import jp.co.pm.ai.desktop.config.PortableBundleUpgradeLog;
 import jp.co.pm.ai.desktop.config.PortableBundleUpgradeProgress;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
@@ -4488,6 +4489,18 @@ public final class MainShellController {
         if (PortableBundleUpdateLauncher.tryApplyStagedBundleOnColdStart(cwd, this::appendLog)) {
             appendLog("[startup] 前回保留のデスクトップ本体更新を適用しました。");
         }
+        Path localData = cwd.resolve("pm-ai-data").normalize();
+        if (PortableBundleUpgradeFollowUp.isPendingFor(cwd)) {
+            appendLog(
+                    "[startup] バージョンアップ後の再起動を検出: 工場既定の選択など後処理を続行します。");
+            finishPortableUpgradeWithFactorySitePrompt(
+                    cwd,
+                    localData,
+                    0,
+                    null,
+                    "（デスクトップ本体の再起動後）");
+            return;
+        }
         Map<String, String> ui = collectUiEnv();
         String raw = ui.get(AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR);
         if (raw == null || raw.isBlank()) {
@@ -4509,7 +4522,6 @@ public final class MainShellController {
             return;
         }
         Path canonical = Path.of(raw.trim()).toAbsolutePath().normalize();
-        Path localData = cwd.resolve("pm-ai-data").normalize();
         if (!PortableBundleSelfUpdater.isValidPortableBundleCanonical(canonical)) {
             appendLog(
                     "[startup] 正本パスにアクセスできません: "
@@ -4806,6 +4818,10 @@ public final class MainShellController {
                     wait.close();
                     if (deferredDesktopRelaunch.get()) {
                         try {
+                            applyPortableUpgradeBundledPolicyFromPmAiData(localData);
+                            performGlobalUiFactoryResetWithoutConfirmation();
+                            applyBundledPortableDefaultsIfPresent();
+                            PortableBundleUpgradeFollowUp.writePending(cwd, canonVerStr);
                             long pid = ProcessHandle.current().pid();
                             Path staging = PortableBundlePendingUpdate.defaultStagingDirectory();
                             PortableBundlePendingUpdate.write(
@@ -4818,7 +4834,8 @@ public final class MainShellController {
                                     canonical,
                                     this::appendLog);
                             appendLog(
-                                    "[startup] デスクトップ本体を適用するため終了します（pmd-apply-portable-update.ps1 が再起動します）。");
+                                    "[startup] デスクトップ本体を適用するため終了します（pmd-apply-portable-update.ps1 が再起動します）。"
+                                            + " 再起動後に工場既定の選択を表示します。");
                             fileLogLine(fileLog, "[startup] deferred desktop apply launched");
                             if (fileLog != null) {
                                 fileLog.close(true, "deferred desktop apply");
@@ -4832,17 +4849,7 @@ public final class MainShellController {
                         }
                         return;
                     }
-                    try {
-                        InitSettingPersistence.applyPortableUpgradeOverwriteFromPmAiData(
-                                localData, collectUiEnv());
-                        DesktopSessionStateStore.applyPortableUpgradeBundledPolicyToSessionStore(collectUiEnv());
-                        TableColumnOrderPersistence.overwriteTableColumnOrderStoreAfterPortableUpgrade(
-                                collectUiEnv());
-                    } catch (IOException ex) {
-                        appendLog(
-                                "[startup] バージョンアップ後のバンドル既定（タブ／列順／配台不要 JSON パス）の上書きに失敗: "
-                                        + ex.getMessage());
-                    }
+                    applyPortableUpgradeBundledPolicyFromPmAiData(localData);
                     performGlobalUiFactoryResetWithoutConfirmation();
                     applyBundledPortableDefaultsIfPresent();
                     String doneBanner =
@@ -4856,27 +4863,12 @@ public final class MainShellController {
                                 true, "同期ファイル約 " + filesSynced.get() + " 件");
                     }
                     applyRepoFolderPathNormalization();
-                    Optional<FactorySite> chosenOpt = promptFactorySiteAfterPortableUpgrade();
-                    FactorySite siteAfterUpgrade = chosenOpt.orElse(FactorySite.KONAN);
-                    if (chosenOpt.isEmpty()) {
-                        appendLog(
-                                "[startup] 工場既定の選択をキャンセルしたため湖南工場の既定を適用します。");
-                    }
-                    applyFactorySitePortableAndNetworkDefaults(siteAfterUpgrade);
-                    ensureBootstrapDefaultValuesVisible(collectUiEnv());
-                    ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
-                    applyRepoFolderPathNormalization();
-                    DesktopSessionStateStore.save(collectDesktopSession());
-                    mainRunTabController.refreshAppVersionLabel();
-                    mainRunTabController.refreshOpenWorkbookHintLabels();
-                    mainRunTabController.refreshFactorySiteLogo();
-                    appendLog(
-                            "[startup] ポータル同期が完了しました（version.txt・pm-ai-data／init_setting をリポジトリへ反映）。"
-                                    + "グローバル設定「デフォルトに戻す」相当で UI をバンドル既定へ揃えました。"
-                                    + " 工場既定: "
-                                    + siteAfterUpgrade.displayLabelJa()
-                                    + "。"
-                                    + "（デスクトップ本体の変更が無いため再起動は不要です）");
+                    finishPortableUpgradeWithFactorySitePrompt(
+                            cwd,
+                            localData,
+                            filesSynced.get(),
+                            fileLog,
+                            "（デスクトップ本体の変更が無いため再起動は不要です）");
                 });
         task.setOnFailed(
                 e -> {
@@ -4914,6 +4906,60 @@ public final class MainShellController {
         Thread t = new Thread(task, "pm-ai-portable-sync");
         t.setDaemon(true);
         t.start();
+    }
+
+    private void applyPortableUpgradeBundledPolicyFromPmAiData(Path localData) {
+        try {
+            InitSettingPersistence.applyPortableUpgradeOverwriteFromPmAiData(
+                    localData, collectUiEnv());
+            DesktopSessionStateStore.applyPortableUpgradeBundledPolicyToSessionStore(collectUiEnv());
+            TableColumnOrderPersistence.overwriteTableColumnOrderStoreAfterPortableUpgrade(
+                    collectUiEnv());
+        } catch (IOException ex) {
+            appendLog(
+                    "[startup] バージョンアップ後のバンドル既定（タブ／列順／配台不要 JSON パス）の上書きに失敗: "
+                            + ex.getMessage());
+        }
+    }
+
+    /**
+     * ポータル同期後の工場既定選択と環境タブのネットワーク／マスタ既定反映。デスクトップ本体再起動後は {@link
+     * PortableBundleUpgradeFollowUp} 経由でここだけ再実行する。
+     */
+    private void finishPortableUpgradeWithFactorySitePrompt(
+            Path cwd,
+            Path localData,
+            int filesSyncedApprox,
+            PortableBundleUpgradeLog fileLog,
+            String completionNoteSuffix) {
+        applyRepoFolderPathNormalization();
+        Optional<FactorySite> chosenOpt = promptFactorySiteAfterPortableUpgrade();
+        FactorySite siteAfterUpgrade = chosenOpt.orElse(FactorySite.KONAN);
+        if (chosenOpt.isEmpty()) {
+            appendLog("[startup] 工場既定の選択をキャンセルしたため湖南工場の既定を適用します。");
+        }
+        applyFactorySitePortableAndNetworkDefaults(siteAfterUpgrade);
+        ensureBootstrapDefaultValuesVisible(collectUiEnv());
+        ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
+        applyRepoFolderPathNormalization();
+        DesktopSessionStateStore.save(collectDesktopSession());
+        mainRunTabController.refreshAppVersionLabel();
+        mainRunTabController.refreshOpenWorkbookHintLabels();
+        mainRunTabController.refreshFactorySiteLogo();
+        PortableBundleUpgradeFollowUp.clear();
+        String completion =
+                "[startup] ポータル同期が完了しました（version.txt・pm-ai-data／init_setting をリポジトリへ反映）。"
+                        + "グローバル設定「デフォルトに戻す」相当で UI をバンドル既定へ揃えました。"
+                        + " 工場既定: "
+                        + siteAfterUpgrade.displayLabelJa()
+                        + "。"
+                        + (completionNoteSuffix != null ? completionNoteSuffix : "");
+        appendLog(completion);
+        fileLogLine(fileLog, completion);
+        if (filesSyncedApprox > 0 && fileLog != null) {
+            fileLog.appendLine(
+                    "[startup] finishPortableUpgrade filesSyncedApprox=" + filesSyncedApprox);
+        }
     }
 
     private static void fileLogLine(PortableBundleUpgradeLog fileLog, String line) {
