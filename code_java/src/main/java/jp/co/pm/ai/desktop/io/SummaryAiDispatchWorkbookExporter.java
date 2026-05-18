@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+import javax.xml.namespace.QName;
 
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
@@ -18,12 +19,19 @@ import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
+import org.apache.poi.ss.usermodel.RichTextString;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFColor;
+import org.apache.poi.xssf.usermodel.XSSFFont;
+import org.apache.poi.xssf.usermodel.XSSFRichTextString;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.xmlbeans.XmlCursor;
+import org.openxmlformats.schemas.spreadsheetml.x2006.main.CTRElt;
+import org.openxmlformats.schemas.spreadsheetml.x2006.main.CTRPrElt;
+import org.openxmlformats.schemas.spreadsheetml.x2006.main.CTRst;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.SummaryAiDispatchExportPrefs;
@@ -56,6 +64,15 @@ public final class SummaryAiDispatchWorkbookExporter {
     private static final String TEMPLATE_BASENAME = "\u30b5\u30de\u30ea_AI\u914d\u53f0.xlsx";
 
     private static final String LEGACY_TEMPLATE_BASENAME = "\u30b5\u30de\u30ea_AI\u914d\u53f0.xlsm";
+
+    /** {@link SpreadsheetTabularSupport} の日付セル4行目と同じ接頭辞。 */
+    private static final String STAGE3_AFTER_LINE_PREFIX = "(\u6bb5\u968e3\u5f8c)";
+
+    private static final String SPREADSHEETML_NS =
+            "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+    /** Excel の文字列ハイライト（セル全体の塗りつぶしではない）。 */
+    private static final String STAGE3_QTY_TEXT_HIGHLIGHT = "green";
 
     private SummaryAiDispatchWorkbookExporter() {}
 
@@ -241,14 +258,24 @@ public final class SummaryAiDispatchWorkbookExporter {
             wb.removeSheetAt(idx);
         }
         Sheet sh = wb.createSheet(sheetName);
-        writeTabular(sh, data != null ? data : emptySheet(), styles, frozenColumnCount);
+        boolean highlightStage3Qty = SHEET_MAIN_COMPARE.equals(sheetName);
+        writeTabular(
+                sh,
+                data != null ? data : emptySheet(),
+                styles,
+                frozenColumnCount,
+                highlightStage3Qty);
     }
 
     private static final String EMPTY_SHEET_HINT =
             "\uff08\u30c7\u30fc\u30bf\u306a\u3057: \u7d0d\u671f\u7ba1\u7406\u30d3\u30e5\u30fc\u3067\u518d\u8aad\u307f\u8fbc\u307f\u5f8c\u306b\u51fa\u529b\uff09";
 
     private static void writeTabular(
-            Sheet sh, PlanInputTabularIo.TabularSheet data, SheetStyles styles, int frozenColumnCount) {
+            Sheet sh,
+            PlanInputTabularIo.TabularSheet data,
+            SheetStyles styles,
+            int frozenColumnCount,
+            boolean highlightStage3Qty) {
         List<String> headers = data.headers() != null ? data.headers() : List.of();
         List<List<String>> rows = data.rows() != null ? data.rows() : List.of();
         if (headers.isEmpty() && rows.isEmpty()) {
@@ -275,7 +302,15 @@ public final class SummaryAiDispatchWorkbookExporter {
                         rowVals != null && c < rowVals.size() && rowVals.get(c) != null
                                 ? rowVals.get(c)
                                 : "";
-                cell.setCellValue(v);
+                RichTextString rich =
+                        highlightStage3Qty
+                                ? styles.mainCompareRichText(v)
+                                : null;
+                if (rich != null) {
+                    cell.setCellValue(rich);
+                } else {
+                    cell.setCellValue(v);
+                }
                 cell.setCellStyle(styles.dataWrap());
             }
         }
@@ -420,7 +455,98 @@ public final class SummaryAiDispatchWorkbookExporter {
         }
     }
 
-    private record SheetStyles(CellStyle header, CellStyle dataWrap) {
+    /**
+     * メイン比較シートの日付セル: (段階3後) 行の数量部分だけ Excel 文字列ハイライト（薄緑）を付ける。
+     * セル全体の背景色は変えない。
+     */
+    static RichTextString buildMainCompareRichText(String text, Font baseFont, Font stage3QtyFont) {
+        if (text == null
+                || text.isBlank()
+                || baseFont == null
+                || stage3QtyFont == null
+                || !text.contains(STAGE3_AFTER_LINE_PREFIX)) {
+            return null;
+        }
+        XSSFRichTextString rich = new XSSFRichTextString(text);
+        rich.applyFont(0, text.length(), baseFont);
+        int searchFrom = 0;
+        while (true) {
+            int lineStart = text.indexOf(STAGE3_AFTER_LINE_PREFIX, searchFrom);
+            if (lineStart < 0) {
+                break;
+            }
+            int qtyStart = lineStart + STAGE3_AFTER_LINE_PREFIX.length();
+            int lineEnd = text.indexOf('\n', qtyStart);
+            int qtyEnd = lineEnd >= 0 ? lineEnd : text.length();
+            String qtyPart = text.substring(qtyStart, qtyEnd).strip();
+            if (!qtyPart.isEmpty()
+                    && !"\u2014".equals(qtyPart)
+                    && !"-".equals(qtyPart)) {
+                rich.applyFont(qtyStart, qtyEnd, stage3QtyFont);
+                patchTextHighlightOnRuns(rich, qtyStart, qtyEnd);
+            }
+            searchFrom = qtyEnd > searchFrom ? qtyEnd : searchFrom + 1;
+        }
+        if (!rich.hasFormatting()) {
+            return null;
+        }
+        return rich;
+    }
+
+    private static void patchTextHighlightOnRuns(XSSFRichTextString rich, int start, int end) {
+        CTRst rst = rich.getCTRst();
+        if (rst == null || rst.sizeOfRArray() == 0) {
+            return;
+        }
+        int pos = 0;
+        for (CTRElt run : rst.getRList()) {
+            String chunk = run.getT();
+            int len = chunk != null ? chunk.length() : 0;
+            int runStart = pos;
+            int runEnd = pos + len;
+            if (runStart < end && runEnd > start && run.isSetRPr()) {
+                injectSpreadsheetTextHighlight(run.getRPr(), STAGE3_QTY_TEXT_HIGHLIGHT);
+            }
+            pos = runEnd;
+        }
+    }
+
+    /** POI の lite スキーマに無い {@code highlight} を rPr へ追加する。 */
+    private static void injectSpreadsheetTextHighlight(CTRPrElt rPr, String highlightVal) {
+        if (rPr == null || highlightVal == null || highlightVal.isBlank()) {
+            return;
+        }
+        try (XmlCursor cur = rPr.newCursor()) {
+            cur.toEndToken();
+            QName highlight = new QName(SPREADSHEETML_NS, "highlight", "main");
+            cur.beginElement(highlight);
+            cur.insertAttributeWithValue(new QName(SPREADSHEETML_NS, "val"), highlightVal);
+            cur.toParent();
+        }
+    }
+
+    private static XSSFFont copyXssfFont(XSSFWorkbook wb, Font src) {
+        XSSFFont f = wb.createFont();
+        f.setFontName(src.getFontName());
+        f.setFontHeightInPoints(src.getFontHeightInPoints());
+        f.setBold(src.getBold());
+        f.setItalic(src.getItalic());
+        if (src instanceof XSSFFont x) {
+            XSSFColor c = x.getXSSFColor();
+            if (c != null) {
+                f.setColor(c);
+            }
+        }
+        return f;
+    }
+
+    private record SheetStyles(
+            CellStyle header, CellStyle dataWrap, Font dataFont, XSSFFont stage3QtyFont) {
+
+        RichTextString mainCompareRichText(String text) {
+            return buildMainCompareRichText(text, dataFont, stage3QtyFont);
+        }
+
         static SheetStyles of(Workbook wb, SummaryAiDispatchExportPrefs.ExportPrefs prefs) {
             SummaryAiDispatchExportPrefs.ExportPrefs p =
                     prefs != null ? prefs : SummaryAiDispatchExportPrefs.ExportPrefs.defaults();
@@ -481,7 +607,12 @@ public final class SummaryAiDispatchWorkbookExporter {
                 xd.setFillForegroundColor(new XSSFColor(palette.dataFillRgb(), null));
             }
 
-            return new SheetStyles(header, dataWrap);
+            XSSFFont stage3QtyFont = null;
+            if (xssf) {
+                stage3QtyFont = copyXssfFont((XSSFWorkbook) wb, dataFont);
+            }
+
+            return new SheetStyles(header, dataWrap, dataFont, stage3QtyFont);
         }
     }
 }

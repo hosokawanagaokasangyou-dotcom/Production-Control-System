@@ -8,8 +8,11 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.xssf.usermodel.XSSFRichTextString;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -82,6 +85,50 @@ class SummaryAiDispatchWorkbookExporterTest {
             Sheet sh = wb.getSheet(SummaryAiDispatchWorkbookExporter.SHEET_DISPATCH);
             assertEquals(5, sh.getPaneInformation().getVerticalSplitLeftColumn());
             assertEquals(1, sh.getPaneInformation().getHorizontalSplitTopRow());
+        }
+    }
+
+    @Test
+    void buildMainCompareRichText_highlightsStage3QtyOnly() throws Exception {
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            Font base = wb.createFont();
+            Font qty = wb.createFont();
+            String text = "(アラ計画)900\n(段階3後)3300";
+            XSSFRichTextString rich =
+                    (XSSFRichTextString)
+                            SummaryAiDispatchWorkbookExporter.buildMainCompareRichText(
+                                    text, base, qty);
+            assertTrue(rich != null);
+            assertEquals(text, rich.getString());
+            assertTrue(rich.getCTRst().toString().contains("highlight"));
+            assertTrue(rich.getCTRst().toString().contains("green"));
+        }
+    }
+
+    @Test
+    void writeOverwrite_mainCompareStage3QtyUsesRichText(@TempDir Path tmp) throws Exception {
+        Path fakeRepo = tmp.resolve("repo");
+        Files.createDirectories(fakeRepo.resolve("code"));
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
+
+        PlanInputTabularIo.TabularSheet main =
+                SummaryAiDispatchWorkbookExporter.mainCompareFromUi(
+                        List.of("機械名", "2026年5月17日(土)"),
+                        List.of(
+                                List.of(
+                                        new DeliveryCalendarMainCell.PlainText("M1"),
+                                        new DeliveryCalendarMainCell.TripleQty(
+                                                "10", "", "", "3300"))));
+        Path out =
+                SummaryAiDispatchWorkbookExporter.writeOverwrite(
+                        ui, main, empty(), empty(), empty());
+
+        try (var wb = WorkbookFactory.create(out.toFile())) {
+            Sheet sh = wb.getSheet(SummaryAiDispatchWorkbookExporter.SHEET_MAIN_COMPARE);
+            XSSFRichTextString rich =
+                    (XSSFRichTextString) sh.getRow(1).getCell(2).getRichStringCellValue();
+            assertTrue(rich.getString().contains("(段階3後)3300"));
+            assertTrue(rich.getCTRst().toString().contains("highlight"));
         }
     }
 
