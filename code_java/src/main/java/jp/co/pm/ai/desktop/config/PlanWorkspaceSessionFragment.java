@@ -192,6 +192,7 @@ public record PlanWorkspaceSessionFragment(
                 base.mainRunStage2WriteExcel(),
                 base.mainRunStage2SkipTodayDispatch(),
                 base.mainRunStage2SkipInProgressDispatch(),
+                base.mainRunStage1ClearCacheAndRun(),
                 base.mainRunStage2ResultBookFont(),
                 base.uiEnvRows(),
                 base.mainShellTabOrder(),

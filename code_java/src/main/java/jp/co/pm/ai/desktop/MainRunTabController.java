@@ -97,6 +97,9 @@ public final class MainRunTabController {
     private Button stage1RunButton;
 
     @FXML
+    private CheckBox stage1ClearCacheAndRunCheckBox;
+
+    @FXML
     private CheckBox stage2WriteExcelCheckBox;
 
     @FXML
@@ -238,6 +241,16 @@ public final class MainRunTabController {
         installStageRunButtonDepth(stage1RunButton, Color.rgb(14, 116, 144, 0.35));
         if (prismPipelineLabel != null) {
             prismPipelineLabel.setText(PrismGpuBootstrapStatus.runTabSummary());
+        }
+        if (stage1ClearCacheAndRunCheckBox != null) {
+            stage1ClearCacheAndRunCheckBox
+                    .selectedProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (shell != null) {
+                                    shell.scheduleDesktopSessionSave();
+                                }
+                            });
         }
         if (stage2WriteExcelCheckBox != null) {
             stage2WriteExcelCheckBox
@@ -798,6 +811,21 @@ public final class MainRunTabController {
             return "";
         }
         return stage2MemberScheduleField.getText().trim();
+    }
+
+    /**
+     * When {@code true}, stage-1 deletes {@code ai_remarks_cache.json} (and legacy {@code output/} copy) before
+     * spawning Python.
+     */
+    boolean snapshotStage1ClearCacheAndRun() {
+        return stage1ClearCacheAndRunCheckBox != null
+                && stage1ClearCacheAndRunCheckBox.isSelected();
+    }
+
+    void applyStage1ClearCacheAndRunFromSession(boolean clearCacheAndRun) {
+        if (stage1ClearCacheAndRunCheckBox != null) {
+            stage1ClearCacheAndRunCheckBox.setSelected(clearCacheAndRun);
+        }
     }
 
     /** When {@code true}, stage-2 passes {@code PM_AI_STAGE2_WRITE_EXCEL=1}; unchecked writes JSON only. */

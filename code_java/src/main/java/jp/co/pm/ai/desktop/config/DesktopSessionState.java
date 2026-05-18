@@ -29,6 +29,7 @@ import java.util.Map;
  * @param mainRunStage2SkipTodayDispatch when true, stage-2 skips dispatch on the data-extraction calendar day
  *     (UI checkbox is on 配台計画_タスク入力 tab; session key name unchanged)
  * @param mainRunStage2SkipInProgressDispatch when true, stage-2 omits in-progress tasks (実加工数 &gt; 0); UI on 実行・ログ tab
+ * @param mainRunStage1ClearCacheAndRun when true, stage-1 deletes {@code ai_remarks_cache.json} before run (実行・ログ tab)
  * @param mainRunStage2ResultBookFont stage-2 result Excel font family; empty with system default in UI means Python
  *     built-in default
  * @param uiEnvRows persisted 環境変数 tab rows (empty uses bootstrap defaults only)
@@ -106,6 +107,7 @@ public record DesktopSessionState(
         boolean mainRunStage2WriteExcel,
         boolean mainRunStage2SkipTodayDispatch,
         boolean mainRunStage2SkipInProgressDispatch,
+        boolean mainRunStage1ClearCacheAndRun,
         String mainRunStage2ResultBookFont,
         List<UiEnvRowSnapshot> uiEnvRows,
         List<String> mainShellTabOrder,
@@ -325,6 +327,7 @@ public record DesktopSessionState(
                 true,
                 false,
                 false,
+                false,
                 "",
                 List.of(),
                 List.of(),
@@ -405,6 +408,7 @@ public record DesktopSessionState(
                 bootstrap.mainRunStage2WriteExcel(),
                 bootstrap.mainRunStage2SkipTodayDispatch(),
                 bootstrap.mainRunStage2SkipInProgressDispatch(),
+                bootstrap.mainRunStage1ClearCacheAndRun(),
                 bootstrap.mainRunStage2ResultBookFont(),
                 bootstrap.uiEnvRows(),
                 mainShellTabOrder(),

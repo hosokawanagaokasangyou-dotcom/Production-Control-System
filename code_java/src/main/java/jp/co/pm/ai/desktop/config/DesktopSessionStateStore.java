@@ -185,6 +185,7 @@ public final class DesktopSessionStateStore {
         root.put("mainRunStage2WriteExcel", state.mainRunStage2WriteExcel());
         root.put("mainRunStage2SkipTodayDispatch", state.mainRunStage2SkipTodayDispatch());
         root.put("mainRunStage2SkipInProgressDispatch", state.mainRunStage2SkipInProgressDispatch());
+        root.put("mainRunStage1ClearCacheAndRun", state.mainRunStage1ClearCacheAndRun());
         put(root, "mainRunStage2ResultBookFont", state.mainRunStage2ResultBookFont());
         putUiEnvRows(root, state.uiEnvRows());
         putMainShellTabOrder(root, state.mainShellTabOrder());
@@ -321,6 +322,7 @@ public final class DesktopSessionStateStore {
                 optionalBoolean(root, "mainRunStage2WriteExcel", true),
                 optionalBoolean(root, "mainRunStage2SkipTodayDispatch", false),
                 optionalBoolean(root, "mainRunStage2SkipInProgressDispatch", false),
+                optionalBoolean(root, "mainRunStage1ClearCacheAndRun", false),
                 text(root, "mainRunStage2ResultBookFont"),
                 loadUiEnvRows(root),
                 loadStringList(root, "mainShellTabOrder"),

@@ -46,6 +46,7 @@
                     <HBox alignment="CENTER_LEFT" spacing="20.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="0">
                         <StackPane fx:id="stage1NetworkCacheBadgeHost" alignment="CENTER_LEFT" managed="false" styleClass="pm-stage1-network-cache-badge-host" visible="false" />
                         <Button fx:id="stage1RunButton" mnemonicParsing="false" onAction="#onStage1RunButtonAction" styleClass="pm-stage-run-button,pm-stage-run-1" text="段階1 実行" />
+                        <CheckBox fx:id="stage1ClearCacheAndRunCheckBox" mnemonicParsing="false" text="キャッシュをクリアして実行" />
                         <CheckBox fx:id="stage2WriteExcelCheckBox" mnemonicParsing="false" selected="true" text="Excel（.xlsx）を出力" />
                         <Label text="段階2結果 Excel フォント" />
                         <ComboBox fx:id="stage2ResultBookFontCombo" editable="true" prefWidth="240.0" />

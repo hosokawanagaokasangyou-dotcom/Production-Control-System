@@ -72,6 +72,7 @@ import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.bridge.Stage2PythonChildEnv;
 import jp.co.pm.ai.desktop.bridge.StagePythonExecutable;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.Stage1AiCacheClearer;
 import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
@@ -660,6 +661,10 @@ public final class MainShellController {
                                     && dispatchInteractiveTabController != null) {
                                 dispatchInteractiveTabController.onMainShellDispatchTabSelected();
                             }
+                            if (newTab == mainShellTabOrganizer
+                                    && mainShellTabOrganizerPaneController != null) {
+                                mainShellTabOrganizerPaneController.refreshFromShell();
+                            }
                         });
         tabPane
                 .getTabs()
@@ -796,6 +801,7 @@ public final class MainShellController {
         planInputTabController.applyStage2SkipTodayDispatchFromSession(s.mainRunStage2SkipTodayDispatch());
         mainRunTabController.applyStage2SkipInProgressDispatchFromSession(
                 s.mainRunStage2SkipInProgressDispatch());
+        mainRunTabController.applyStage1ClearCacheAndRunFromSession(s.mainRunStage1ClearCacheAndRun());
         mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
         /*
          * 設備ガントの apply は末尾で Canvas を再構築し personBadgeStyleResolverForGantt を参照する。
@@ -892,6 +898,7 @@ public final class MainShellController {
                 mainRunTabController.snapshotStage2WriteExcel(),
                 planInputTabController.snapshotStage2SkipTodayDispatch(),
                 mainRunTabController.snapshotStage2SkipInProgressDispatch(),
+                mainRunTabController.snapshotStage1ClearCacheAndRun(),
                 mainRunTabController.snapshotStage2ResultBookFont(),
                 snapshotUiEnvRows(),
                 snapshotMainShellTabOrder(),
@@ -1172,6 +1179,16 @@ public final class MainShellController {
         }
         TableColumnOrderPersistence.overwriteStoreRoot(tableColumnOrderRoot);
         applyDesktopSession(state, true);
+        applyDesktopThemeFromSession(state);
+        refreshDesktopSessionDependentUi();
+        persistDesktopSessionNow();
+    }
+
+    /** セッションの {@code uiTheme} をツールバー・シーンへ反映する。 */
+    private void applyDesktopThemeFromSession(DesktopSessionState state) {
+        if (state == null) {
+            return;
+        }
         DesktopTheme t = DesktopTheme.fromStored(state.uiTheme());
         pendingTheme = t;
         if (themeCombo != null) {
@@ -1181,13 +1198,37 @@ public final class MainShellController {
             t.applyTo(primaryScene);
         }
         refreshThemeTrackedSecondaryScenes();
+    }
+
+    /** テーマ／プッシュボタン CSS／タブ見出し色など、セッション保存前に画面へ揃える。 */
+    private void refreshDesktopSessionDependentUi() {
         refreshPushButtonStylesheet();
         refreshMainShellTabHeaderChromeFromStoredColors();
         if (equipmentGanttGraphicTabController != null) {
             equipmentGanttGraphicTabController.refreshGraphicForTheme();
         }
         mainRunTabController.refreshLogThemeCells();
-        persistDesktopSessionNow();
+    }
+
+    /**
+     * グローバル設定「デフォルトに戻す」適用後、現在の画面状態を {@code ~/.pm-ai-desktop/session-state.json} へ保存する。
+     * タブ再構築・見出し色の再適用が終わってから書き込むため、FX スレッドで 2 パルス遅延する。
+     */
+    private void schedulePersistUserSessionAfterGlobalFactoryReset() {
+        Platform.runLater(() -> Platform.runLater(this::persistUserSessionAfterGlobalFactoryReset));
+    }
+
+    private void persistUserSessionAfterGlobalFactoryReset() {
+        if (ganttPersonBadgeDesignTabController != null) {
+            ganttPersonBadgeDesignTabController.flushBadgeEditsBeforeSnapshot();
+        }
+        if (uiBadgeDesignTabController != null) {
+            uiBadgeDesignTabController.flushEditsBeforeSnapshot();
+        }
+        if (pushButtonDesignTabController != null) {
+            pushButtonDesignTabController.flushEditsBeforeSnapshot();
+        }
+        DesktopSessionStateStore.save(collectDesktopSession());
     }
 
     Stage primaryStageForDialogs() {
@@ -1234,6 +1275,9 @@ public final class MainShellController {
     /**
      * タブ・表・テーマ等をマージ済みバンドル既定へ戻し、環境タブはテンプレ既定へ戻す。実行パス・環境値のうちブートストラップ系は
      * リセット後の環境タブから再収集する。
+     *
+     * <p>適用完了後、{@link #schedulePersistUserSessionAfterGlobalFactoryReset()} でユーザーセッション
+     * （{@code session-state.json}）へ保存する。
      */
     public void performGlobalUiFactoryReset() {
         TextInputDialog dialog = new TextInputDialog();
@@ -1280,7 +1324,6 @@ public final class MainShellController {
 
             DesktopSessionState merged =
                     DesktopSessionStateStore.buildFactoryResetSession(collectDesktopSession(), collectUiEnv());
-            DesktopSessionStateStore.save(merged);
             /*
              * 環境変数タブは直前の applyEnvRowsFullBundledResetAndPersist で既にテンプレ＋ブートストラップ済み。
              * applyUiEnvRowsFromSession（true）でセッションを再適用すると、マージ JSON の uiEnvRows 欠落や
@@ -1288,9 +1331,9 @@ public final class MainShellController {
              */
             applyDesktopSession(merged, false);
             TableColumnOrderPersistence.materializeTableColumnStoreAfterFactoryReset(collectUiEnv());
-            refreshPushButtonStylesheet();
-            refreshThemeTrackedSecondaryScenes();
-            persistDesktopSessionNow();
+            applyDesktopThemeFromSession(merged);
+            refreshDesktopSessionDependentUi();
+            schedulePersistUserSessionAfterGlobalFactoryReset();
         } finally {
             suppressEnvSessionPersistence.set(false);
         }
@@ -1621,7 +1664,8 @@ public final class MainShellController {
         if (t == null) {
             return null;
         }
-        if (t.getContent() instanceof TabPane inner) {
+        Node content = resolveMainShellTabContentForSnapshot(t);
+        if (content instanceof TabPane inner) {
             List<MainShellTabLayoutNode> ch = new ArrayList<>();
             for (Tab c : inner.getTabs()) {
                 MainShellTabLayoutNode cn = snapshotMainShellLayoutNode(c);
@@ -1637,6 +1681,24 @@ public final class MainShellController {
             return null;
         }
         return MainShellTabLayoutNode.tabNode(id.key(), readShellTabColorHex(t));
+    }
+
+    /**
+     * 遅延ロードで {@link Tab#setContent} がプレースホルダのとき、退避中の実コンテンツをスナップショットに使う。
+     * これが無いとグループ見出しタブが単独リーフとして保存され、タブ整理ツリーにグループが現れない。
+     */
+    private Node resolveMainShellTabContentForSnapshot(Tab t) {
+        if (t == null) {
+            return null;
+        }
+        Node content = t.getContent();
+        if (isLazyMainShellTabPlaceholder(content)) {
+            Object detached = t.getProperties().get(PM_DEFERRED_TAB_CONTENT);
+            if (detached instanceof Node node) {
+                return node;
+            }
+        }
+        return content;
     }
 
     private static String readShellTabColorHex(Tab t) {
@@ -1792,10 +1854,14 @@ public final class MainShellController {
         suppressLazyMainShellTabContentSwap.set(true);
         try {
             if (s.mainShellTabLayout() != null && !s.mainShellTabLayout().isEmpty()) {
-                if (!rebuildMainShellTabsFromLayout(s.mainShellTabLayout())) {
+                if (!rebuildMainShellTabsFromLayout(s.mainShellTabLayout())
+                        && !rebuildMainShellTabsFromLayout(
+                                flatMainShellTabLayoutFromOrderKeys(s.mainShellTabOrder()))) {
                     rebuildMainShellTabsFromLayout(null);
                 }
-            } else if (!rebuildMainShellTabsFromLayout(null)) {
+            } else if (!rebuildMainShellTabsFromLayout(
+                            flatMainShellTabLayoutFromOrderKeys(s.mainShellTabOrder()))
+                    && !rebuildMainShellTabsFromLayout(null)) {
                 applyMainShellTabOrder(s.mainShellTabOrder());
             }
             applyMainShellTabTitleAliasesFromSession(s.mainShellTabTitleAliases());
@@ -1954,7 +2020,8 @@ public final class MainShellController {
                 continue;
             }
             applyShellTabColor(t, readShellTabColorHex(t));
-            if (t.getContent() instanceof TabPane inner) {
+            Node content = resolveMainShellTabContentForSnapshot(t);
+            if (content instanceof TabPane inner) {
                 applyStoredShellTabColorsRecursive(inner.getTabs());
             }
         }
@@ -2553,6 +2620,36 @@ public final class MainShellController {
     }
 
     /**
+     * 従来の {@code mainShellTabOrder}（リーフキー列）からフラットな {@link MainShellTabLayoutNode} 列を組み立てる。
+     * 欠落キーは {@link MainShellTabLayoutDefaults#DEFAULT_FLAT_TAB_KEY_ORDER} の順で末尾に足す。
+     */
+    private static List<MainShellTabLayoutNode> flatMainShellTabLayoutFromOrderKeys(List<String> orderKeys) {
+        if (orderKeys == null || orderKeys.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> keys = new LinkedHashSet<>();
+        for (String key : orderKeys) {
+            if (key == null || key.isBlank()) {
+                continue;
+            }
+            MainShellTabId id = MainShellTabId.fromKey(key.trim());
+            if (id != null && id != MainShellTabId.TAB_ORGANIZER) {
+                keys.add(id.key());
+            }
+        }
+        for (String key : MainShellTabLayoutDefaults.DEFAULT_FLAT_TAB_KEY_ORDER) {
+            if (requiredShellTabKeys().contains(key)) {
+                keys.add(key);
+            }
+        }
+        List<MainShellTabLayoutNode> out = new ArrayList<>();
+        for (String key : keys) {
+            out.add(MainShellTabLayoutNode.tabNode(key, ""));
+        }
+        return List.copyOf(out);
+    }
+
+    /**
      * セッション由来やユーザー編集のレイアウトを、未知 ID の除去・欠落タブの末尾追記・重複時のフォールバックを行う。
      */
     private List<MainShellTabLayoutNode> prepareMainShellLayoutForRebuild(
@@ -2576,28 +2673,9 @@ public final class MainShellController {
             }
         }
         if (uniq.equals(req)) {
-            if (isOversizedFlatMainShellTabLayout(sanitized)) {
-                return mergeMissingMainShellTabLeaves(MainShellTabLayoutDefaults.groupedLayout());
-            }
             return sanitized;
         }
         return mergeMissingMainShellTabLeaves(sanitized);
-    }
-
-    /**
-     * セッションに保存された「全タブがトップレベルに並ぶ」フラット構成は、見出しスキンと子数がずれて
-     * {@code IndexOutOfBoundsException}（index 19, length 19）を起こしやすい。既定のグループ構成へ寄せる。
-     */
-    private static boolean isOversizedFlatMainShellTabLayout(List<MainShellTabLayoutNode> top) {
-        if (top == null || top.size() < 12) {
-            return false;
-        }
-        for (MainShellTabLayoutNode n : top) {
-            if (n.isGroup()) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private static MainShellTabLayoutNode sanitizeLayoutNode(MainShellTabLayoutNode n) {
@@ -3193,6 +3271,11 @@ public final class MainShellController {
             }
             String wb = effectiveTaskInputWorkbookPath();
             appendLog("--- start: " + script + " ---");
+            if (STAGE1.equals(script) && mainRunTabController.snapshotStage1ClearCacheAndRun()) {
+                for (String line : Stage1AiCacheClearer.clearBeforeStage1Run(uiRun)) {
+                    appendLog(line);
+                }
+            }
             if (STAGE1.equals(script) || STAGE2.equals(script)) {
                 refreshNetworkSourceDirListingSkipsBeforeStageRun(uiRun);
             }
