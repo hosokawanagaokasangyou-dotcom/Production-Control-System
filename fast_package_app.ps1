@@ -609,7 +609,7 @@ PythonEmbedSourceDir: $PythonEmbedSourceDir
     $rmLines.Add("This folder sits next to $($AppExeBaseName).exe.")
     $rmLines.Add('Release: Step 8 deletes existing version.txt and same-name ZIPs in pm-ai-package-release, then writes fresh copies; ZIPs omit pm-ai-data/version.txt. Interim bundle folders are removed after zipping.')
     $rmLines.Add('First launch: if the empty marker file next to this app exe exists, the desktop resets env-tab defaults once then deletes it (Initial install bundle only). See Java AppPaths.PORTABLE_FIRST_LAUNCH_MARKER_FILE.')
-    $rmLines.Add('Portable sync: PM_AI_PORTABLE_BUNDLE_SOURCE_DIR may be a folder (repo root layout under pm-ai-data on share) or a path to PMD_version_upgrade.zip with version.txt beside the zip. Local version: version.txt next to PMD.exe (also copied into this bundle folder at pack time; not inside pm-ai-data in ZIP).')
+    $rmLines.Add('Portable sync: PM_AI_PORTABLE_BUNDLE_SOURCE_DIR may be a folder (repo root layout under pm-ai-data on share) or a path to PMD_version_upgrade.zip with version.txt and build-manifest.json beside the zip. Local version: version.txt next to PMD.exe. VersionUpgrade applies pm-ai-data in-process then stages PMD.exe/app/runtime and runs pmd-apply-portable-update.ps1 after exit.')
     $cacheReadme = if (-not [string]::IsNullOrWhiteSpace($PackagingCacheRoot)) { $PackagingCacheRoot } else { 'code_java\Cash_PMD (default)' }
     $rmLines.Add("Python: bundled under pm-ai-data\runtime\python-embed\ (official embed zip + pip; builder cache: $cacheReadme). Not the JVM: exe-side runtime\ is Java only.")
     $rmLines.Add('Default inputs: input\task-input , input\actual-detail.')
@@ -1220,6 +1220,20 @@ foreach ($bd in @($bundleOutInitial, $bundleOutUpgrade)) {
     Write-Host "Launcher bat: $launcherBatDst" -ForegroundColor DarkGray
 }
 
+$portableUpdateScriptSrc = Join-Path $WorkspaceRoot 'scripts/pmd-apply-portable-update.ps1'
+if (Test-Path -LiteralPath $portableUpdateScriptSrc) {
+    foreach ($bd in @($bundleOutInitial, $bundleOutUpgrade)) {
+        Copy-Item -LiteralPath $portableUpdateScriptSrc -Destination (Join-Path $bd 'pmd-apply-portable-update.ps1') -Force
+        $scriptsUnderData = Join-Path $bd 'pm-ai-data/scripts'
+        New-Item -ItemType Directory -Force -Path $scriptsUnderData | Out-Null
+        Copy-Item -LiteralPath $portableUpdateScriptSrc -Destination (Join-Path $scriptsUnderData 'pmd-apply-portable-update.ps1') -Force
+    }
+    Write-Host "Portable update script: pmd-apply-portable-update.ps1 (bundle root + pm-ai-data/scripts)" -ForegroundColor DarkGray
+}
+else {
+    Write-Warning "scripts/pmd-apply-portable-update.ps1 missing; portable deferred desktop update will not work until added."
+}
+
 # Initial install only: empty marker for first-launch env reset (Java deletes after success).
 # Build leaf name as UTF-16 code units to avoid script-file encoding mojibake on Windows PowerShell 5.1 (must match AppPaths.PORTABLE_FIRST_LAUNCH_MARKER_FILE).
 $firstLaunchLeaf = (-join @([char]0x521d, [char]0x56de, [char]0x8d77, [char]0x52d5)) + '.txt'
@@ -1254,6 +1268,27 @@ if (Test-Path -LiteralPath $VersionTxtPath) {
 }
 else {
     Write-Warning "Repo version.txt missing; skipped copy to $ReleaseRoot"
+}
+
+$releaseBuildManifest = Join-Path $ReleaseRoot 'build-manifest.json'
+if ((Test-Path -LiteralPath $releaseVersionTxt) -and (Test-Path -LiteralPath $bundleOutUpgrade)) {
+  $verLine = (Get-Content -LiteralPath $releaseVersionTxt -Raw -Encoding UTF8).Trim()
+  $desktopJar = Get-ChildItem -LiteralPath (Join-Path $bundleOutUpgrade 'app') -Filter 'production-control-desktop*.jar' -File -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if ($desktopJar) {
+    $sha = (Get-FileHash -LiteralPath $desktopJar.FullName -Algorithm SHA256).Hash
+    $manifestObj = [ordered]@{
+      version            = $verLine
+      desktopJarFileName = $desktopJar.Name
+      desktopJarSize     = $desktopJar.Length
+      desktopJarSha256   = $sha
+    }
+    $manifestObj | ConvertTo-Json | Set-Content -LiteralPath $releaseBuildManifest -Encoding utf8
+    Write-Host "Generated: $releaseBuildManifest ($($desktopJar.Name) size=$($desktopJar.Length))" -ForegroundColor DarkGray
+  }
+  else {
+    Write-Warning "Desktop JAR not found under $bundleOutUpgrade\app; skipped build-manifest.json"
+  }
 }
 
 # Priority: Optimal > Store > Fast/default. Default = Fastest (Deflate level 1).

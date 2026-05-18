@@ -90,7 +90,10 @@ import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PushButtonCssEmitter;
 import jp.co.pm.ai.desktop.config.PushButtonDesignPrefs;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
+import jp.co.pm.ai.desktop.config.PortableBundleBuildManifest;
+import jp.co.pm.ai.desktop.config.PortableBundlePendingUpdate;
 import jp.co.pm.ai.desktop.config.PortableBundleSelfUpdater;
+import jp.co.pm.ai.desktop.config.PortableBundleUpdateLauncher;
 import jp.co.pm.ai.desktop.config.PortableBundleUpgradeLog;
 import jp.co.pm.ai.desktop.config.PortableBundleUpgradeProgress;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
@@ -3875,6 +3878,7 @@ public final class MainShellController {
                         m,
                         startupSkipTaskInputSourceDirListing,
                         startupSkipActualDetailSourceDirListing);
+        AgentDebugLog.overlayPythonChildDebugEnv(m);
         return m;
     }
 
@@ -4237,14 +4241,6 @@ public final class MainShellController {
         } else {
             ui.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
         }
-        String trialSid = AgentDebugLog.resolveDispatchTrialSessionId(ui);
-        ui.put("PM_AI_AGENT_DEBUG_SESSION", trialSid);
-        String dbg = ui.get("PM_AI_DEBUG_LOG");
-        if (dbg == null || dbg.isBlank()) {
-            ui.put(
-                    "PM_AI_DEBUG_LOG",
-                    AgentDebugLog.resolveNdjsonPath(ui, trialSid).toAbsolutePath().toString());
-        }
         return childEnvForPython(ui);
     }
 
@@ -4489,6 +4485,9 @@ public final class MainShellController {
             return;
         }
         appendLog("[startup] 自動バージョンアップ: ポータブル配布を検出しました。user.dir=" + PortableBundleSelfUpdater.safePathForLog(cwd));
+        if (PortableBundleUpdateLauncher.tryApplyStagedBundleOnColdStart(cwd, this::appendLog)) {
+            appendLog("[startup] 前回保留のデスクトップ本体更新を適用しました。");
+        }
         Map<String, String> ui = collectUiEnv();
         String raw = ui.get(AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR);
         if (raw == null || raw.isBlank()) {
@@ -4528,11 +4527,13 @@ public final class MainShellController {
         }
         Optional<BigDecimal> cv = PortableBundleSelfUpdater.readCanonicalPortableBundleVersion(canonical);
         Optional<BigDecimal> lv = PortableBundleSelfUpdater.readLocalBundleVersion(cwd, localData);
-        if (!PortableBundleSelfUpdater.shouldUpdate(cv, lv)) {
+        Optional<PortableBundleBuildManifest> buildManifest =
+                PortableBundleBuildManifest.readBesideCanonical(canonical);
+        if (!PortableBundleSelfUpdater.shouldUpdateBundle(canonical, cwd, localData)) {
             String reason =
                     cv.isEmpty()
                             ? "正本の version.txt が読めません（ZIP の隣、または pm-ai-package-release 直下）。"
-                            : "ローカル版が正本以上です（更新不要）。";
+                            : "ローカル版が正本以上で、デスクトップ JAR も一致（更新不要）。";
             appendLog(
                     "[startup] 自動バージョンアップはスキップ: "
                             + reason
@@ -4540,6 +4541,7 @@ public final class MainShellController {
                             + cv.map(BigDecimal::toPlainString).orElse("（なし）")
                             + " ローカル="
                             + lv.map(BigDecimal::toPlainString).orElse("（なし・0扱い）")
+                            + (buildManifest.map(m -> " " + m.summaryForLog()).orElse(""))
                             + " 正本パス="
                             + PortableBundleSelfUpdater.safePathForLog(canonical));
             return;
@@ -4554,21 +4556,22 @@ public final class MainShellController {
         Optional<Path> upgradeZip = PortableBundleSelfUpdater.resolveEffectiveUpgradeZip(canonical);
         String syncHint =
                 upgradeZip.isPresent()
-                        ? "ZIP を展開して pm-ai-data に同期します。"
-                        : "正本フォルダから pm-ai-data へファイルを同期します。";
+                        ? "ZIP を展開し、pm-ai-data とデスクトップ本体（PMD.exe・app・runtime）を更新します。\n"
+                                + "本体更新後は自動的にアプリを再起動します。"
+                        : "正本から pm-ai-data を同期します（ZIP が無い場合はデスクトップ本体は更新しません）。";
         Alert confirm = new Alert(AlertType.CONFIRMATION);
         confirm.initOwner(primaryStage);
         applyAlertStylesheetsFromOwner(confirm);
         confirm.setTitle("自動バージョンアップ");
         confirm.setHeaderText(null);
         confirm.setContentText(
-                "正本のバージョン（"
+                "正本の更新があります（版 "
                         + canonVerStr
-                        + "）がローカル pm-ai-data（"
+                        + "、ローカル "
                         + localVerStr
-                        + "）より新しいです。\n"
+                        + "）。\n"
                         + syncHint
-                        + " 実行してよいですか？");
+                        + "\n実行してよいですか？");
         Optional<ButtonType> ans = confirm.showAndWait();
         if (ans.isEmpty() || ans.get() != ButtonType.OK) {
             appendLog("[startup] ポータル同期はユーザー操作によりスキップしました（版 " + canonVerStr + " → 保留）。");
@@ -4619,14 +4622,14 @@ public final class MainShellController {
         wait.initOwner(primaryStage);
         wait.setTitle("自動バージョンアップ");
         wait.setMinWidth(580);
-        wait.setMinHeight(zipUpgradeMode ? 360 : 280);
+        wait.setMinHeight(zipUpgradeMode ? 420 : 320);
         VBox root = new VBox(14);
         root.setAlignment(Pos.CENTER_LEFT);
         root.setStyle("-fx-padding: 24;");
         String waitHint =
                 fileLog != null
-                        ? "正本から pm-ai-data を更新しています…\n詳細は「実行・ログ」タブとログファイルに記録します。"
-                        : "正本から pm-ai-data を更新しています…\n詳細は「実行・ログ」タブに追記されます。";
+                        ? "正本から pm-ai-data とデスクトップ本体を更新しています…\n詳細は「実行・ログ」タブとログファイルに記録します。"
+                        : "正本から pm-ai-data とデスクトップ本体を更新しています…\n詳細は「実行・ログ」タブに追記されます。";
         Label msg = new Label(waitHint);
         msg.setWrapText(true);
         msg.setMaxWidth(520);
@@ -4643,20 +4646,29 @@ public final class MainShellController {
         ProgressBar syncBar = new ProgressBar(0);
         syncBar.setMaxWidth(Double.MAX_VALUE);
         syncBar.setPrefWidth(520);
+        Label desktopCaption = new Label("④ デスクトップ本体のステージング（PMD.exe・app・runtime）");
+        ProgressBar desktopBar = new ProgressBar(0);
+        desktopBar.setMaxWidth(Double.MAX_VALUE);
+        desktopBar.setPrefWidth(520);
 
         VBox downloadBox = new VBox(6, downloadCaption, downloadBar);
         VBox extractBox = new VBox(6, extractCaption, extractBar);
         VBox syncBox = new VBox(6, syncCaption, syncBar);
+        VBox desktopBox = new VBox(6, desktopCaption, desktopBar);
         if (!zipUpgradeMode) {
             downloadBox.setManaged(false);
             downloadBox.setVisible(false);
             extractBox.setManaged(false);
             extractBox.setVisible(false);
+            desktopBox.setManaged(false);
+            desktopBox.setVisible(false);
             downloadBar.setProgress(1);
             extractBar.setProgress(1);
+            desktopBar.setProgress(1);
         } else {
             downloadBar.setProgress(-1);
             extractBar.setProgress(0);
+            desktopBar.setProgress(0);
         }
         syncBar.setProgress(-1);
 
@@ -4665,9 +4677,9 @@ public final class MainShellController {
         detail.setMaxWidth(520);
         detail.getStyleClass().add("pm-portable-sync-detail");
 
-        root.getChildren().addAll(msg, downloadBox, extractBox, syncBox, detail);
+        root.getChildren().addAll(msg, downloadBox, extractBox, syncBox, desktopBox, detail);
         VBox.setVgrow(downloadBar, Priority.NEVER);
-        Scene waitScene = new Scene(root, 580, zipUpgradeMode ? 360 : 280);
+        Scene waitScene = new Scene(root, 580, zipUpgradeMode ? 420 : 320);
         wait.setScene(waitScene);
         if (primaryStage != null && primaryStage.getScene() != null) {
             waitScene.getStylesheets().setAll(primaryStage.getScene().getStylesheets());
@@ -4709,11 +4721,14 @@ public final class MainShellController {
                                             extractBar,
                                             syncCaption,
                                             syncBar,
+                                            desktopCaption,
+                                            desktopBar,
                                             detail));
                 };
 
         final Path[] localZipHolder = new Path[1];
         final Path[] extractedHolder = new Path[1];
+        final AtomicBoolean deferredDesktopRelaunch = new AtomicBoolean();
         final AtomicInteger filesSynced = new AtomicInteger();
         Consumer<String> portableSyncLog =
                 line -> {
@@ -4756,6 +4771,21 @@ public final class MainShellController {
                         PortableBundleSelfUpdater.syncFromCanonical(
                                 syncSource, localData, portableSyncLog, upgradeProgress);
                         PortableBundleSelfUpdater.copyOuterVersionTxtToLocal(canonical, cwd, localData);
+
+                        Optional<Path> desktopBundleRoot = Optional.empty();
+                        if (extractedHolder[0] != null) {
+                            desktopBundleRoot =
+                                    PortableBundleSelfUpdater.resolveDesktopBundleRoot(
+                                            extractedHolder[0]);
+                        } else if (PortableBundleSelfUpdater.hasDesktopInstallLayout(canonical)) {
+                            desktopBundleRoot = Optional.of(canonical);
+                        }
+                        if (desktopBundleRoot.isPresent()) {
+                            Path staging = PortableBundlePendingUpdate.defaultStagingDirectory();
+                            PortableBundleSelfUpdater.stageDesktopBundleForRelaunch(
+                                    desktopBundleRoot.get(), staging, portableSyncLog);
+                            deferredDesktopRelaunch.set(true);
+                        }
                         return null;
                     }
                 };
@@ -4774,6 +4804,34 @@ public final class MainShellController {
                                 extractedHolder[0], portableSyncLog);
                     }
                     wait.close();
+                    if (deferredDesktopRelaunch.get()) {
+                        try {
+                            long pid = ProcessHandle.current().pid();
+                            Path staging = PortableBundlePendingUpdate.defaultStagingDirectory();
+                            PortableBundlePendingUpdate.write(
+                                    cwd, staging, canonVerStr, pid, canonical);
+                            PortableBundleUpdateLauncher.launchDeferredDesktopApply(
+                                    cwd,
+                                    staging,
+                                    pid,
+                                    canonVerStr,
+                                    canonical,
+                                    this::appendLog);
+                            appendLog(
+                                    "[startup] デスクトップ本体を適用するため終了します（pmd-apply-portable-update.ps1 が再起動します）。");
+                            fileLogLine(fileLog, "[startup] deferred desktop apply launched");
+                            if (fileLog != null) {
+                                fileLog.close(true, "deferred desktop apply");
+                            }
+                            Platform.exit();
+                        } catch (IOException ex) {
+                            appendLog(
+                                    "[startup] デスクトップ本体の終了後更新の起動に失敗: "
+                                            + ex.getMessage());
+                            fileLogLine(fileLog, "[startup] deferred launch failed: " + ex.getMessage());
+                        }
+                        return;
+                    }
                     try {
                         InitSettingPersistence.applyPortableUpgradeOverwriteFromPmAiData(
                                 localData, collectUiEnv());
@@ -4817,7 +4875,8 @@ public final class MainShellController {
                                     + "グローバル設定「デフォルトに戻す」相当で UI をバンドル既定へ揃えました。"
                                     + " 工場既定: "
                                     + siteAfterUpgrade.displayLabelJa()
-                                    + "。");
+                                    + "。"
+                                    + "（デスクトップ本体の変更が無いため再起動は不要です）");
                 });
         task.setOnFailed(
                 e -> {
@@ -4875,6 +4934,8 @@ public final class MainShellController {
             ProgressBar extractBar,
             Label syncCaption,
             ProgressBar syncBar,
+            Label desktopCaption,
+            ProgressBar desktopBar,
             Label detail) {
         if (zipUpgradeMode) {
             switch (phase) {
@@ -4890,7 +4951,7 @@ public final class MainShellController {
                     applyProgressBarValue(extractBar, done, total);
                     extractCaption.setText(progressCaption("② ZIPの展開", done, total));
                 }
-                case SYNC -> {
+                case SYNC_PM_AI_DATA -> {
                     downloadBar.setProgress(1.0);
                     downloadCaption.setText("① 正本ZIPの取得（完了）");
                     extractBar.setProgress(1.0);
@@ -4898,13 +4959,29 @@ public final class MainShellController {
                     applyProgressBarValue(syncBar, done, total);
                     syncCaption.setText(progressCaption("③ pm-ai-data へのファイル同期", done, total));
                 }
+                case SYNC_DESKTOP -> {
+                    downloadBar.setProgress(1.0);
+                    downloadCaption.setText("① 正本ZIPの取得（完了）");
+                    extractBar.setProgress(1.0);
+                    extractCaption.setText("② ZIPの展開（完了）");
+                    syncBar.setProgress(1.0);
+                    syncCaption.setText("③ pm-ai-data へのファイル同期（完了）");
+                    applyProgressBarValue(desktopBar, done, total);
+                    desktopCaption.setText(
+                            progressCaption("④ デスクトップ本体のステージング", done, total));
+                }
                 default -> {
                     /* not reached */
                 }
             }
         } else {
-            applyProgressBarValue(syncBar, done, total);
-            syncCaption.setText(progressCaption("③ pm-ai-data へのファイル同期", done, total));
+            if (phase == PortableBundleUpgradeProgress.Phase.SYNC_DESKTOP) {
+                applyProgressBarValue(desktopBar, done, total);
+                desktopCaption.setText(progressCaption("④ デスクトップ本体のステージング", done, total));
+            } else {
+                applyProgressBarValue(syncBar, done, total);
+                syncCaption.setText(progressCaption("③ pm-ai-data へのファイル同期", done, total));
+            }
         }
         if (detailLine != null && !detailLine.isBlank()) {
             String shortLine =

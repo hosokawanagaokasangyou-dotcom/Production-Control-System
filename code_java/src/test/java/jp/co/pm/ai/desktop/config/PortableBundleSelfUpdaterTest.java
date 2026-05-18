@@ -138,6 +138,57 @@ class PortableBundleSelfUpdaterTest {
     }
 
     @Test
+    @Test
+    void shouldUpdateBundle_trueWhenJarHashDiffers(@TempDir Path tmp) throws IOException {
+        Path install = tmp.resolve("install");
+        Path pm = install.resolve("pm-ai-data");
+        Files.createDirectories(pm);
+        Files.writeString(install.resolve(AppPaths.VERSION_TXT_FILE_NAME), "1.00\n", StandardCharsets.UTF_8);
+        Path app = install.resolve("app");
+        Files.createDirectories(app);
+        Path jar = app.resolve("production-control-desktop-0.1.0-SNAPSHOT.jar");
+        Files.writeString(jar, "same-version", StandardCharsets.UTF_8);
+        String hash =
+                PortableBundleBuildManifest.sha256Hex(jar).orElseThrow();
+        long size = Files.size(jar);
+
+        Path release = tmp.resolve("release");
+        Files.createDirectories(release);
+        Files.writeString(release.resolve(AppPaths.VERSION_TXT_FILE_NAME), "1.00\n", StandardCharsets.UTF_8);
+        String manifest =
+                """
+                {
+                  "version": "1.00",
+                  "desktopJarFileName": "production-control-desktop-0.1.0-SNAPSHOT.jar",
+                  "desktopJarSize": %d,
+                  "desktopJarSha256": "%s"
+                }
+                """
+                        .formatted(size, hash);
+        Files.writeString(
+                release.resolve(PortableBundleBuildManifest.FILE_NAME),
+                manifest,
+                StandardCharsets.UTF_8);
+
+        assertFalse(PortableBundleSelfUpdater.shouldUpdateBundle(release, install, pm));
+        Files.writeString(jar, "same-version-changed", StandardCharsets.UTF_8);
+        assertTrue(PortableBundleSelfUpdater.shouldUpdateBundle(release, install, pm));
+    }
+
+    @Test
+    void syncDesktopInstallFromBundleRoot_copiesExeAndJar(@TempDir Path tmp) throws IOException {
+        Path bundle = tmp.resolve("bundle");
+        Files.createDirectories(bundle.resolve("app"));
+        Files.writeString(bundle.resolve("PMD.exe"), "exe", StandardCharsets.UTF_8);
+        Files.writeString(
+                bundle.resolve("app/desktop.jar"), "jar-bytes", StandardCharsets.UTF_8);
+        Path install = tmp.resolve("install");
+        PortableBundleSelfUpdater.syncDesktopInstallFromBundleRoot(bundle, install, null);
+        assertTrue(Files.isRegularFile(install.resolve("PMD.exe")));
+        assertEquals("jar-bytes", Files.readString(install.resolve("app/desktop.jar")));
+    }
+
+    @Test
     void copyOuterVersionTxtToLocal_writesPmAiDataAndCwd(@TempDir Path tmp) throws IOException {
         Path zip = tmp.resolve(PortableBundleSelfUpdater.PORTABLE_UPGRADE_ZIP_NAME);
         Files.writeString(zip, "PK", StandardCharsets.UTF_8);

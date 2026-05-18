@@ -13,6 +13,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
@@ -27,6 +28,15 @@ public final class PortableBundleSelfUpdater {
 
     /** Version-upgrade bundle file name on the release share ({@code pm-ai-package-release}). */
     public static final String PORTABLE_UPGRADE_ZIP_NAME = "PMD_version_upgrade.zip";
+
+    /** jpackage デスクトップ起動ファイル名（{@code user.dir} 直下）。 */
+    public static final String PORTABLE_DESKTOP_EXE_NAME = "PMD.exe";
+
+    /** 同梱ランチャー BAT（任意）。 */
+    public static final String PORTABLE_LAUNCHER_BAT_NAME = "launch-pm-ai-desktop.bat";
+
+    /** 終了後にデスクトップ本体を適用する PowerShell（{@link PortableBundleUpdateLauncher}）。 */
+    public static final String PORTABLE_UPDATE_SCRIPT_NAME = "pmd-apply-portable-update.ps1";
 
     /** Run-tab log prefix for portable bundle sync (filter-friendly). */
     public static final String PORTABLE_SYNC_LOG_PREFIX = "[portable-sync] ";
@@ -362,7 +372,7 @@ public final class PortableBundleSelfUpdater {
 
         int totalFiles = countFilesToSync(canon);
         if (progress != null) {
-            progress.onPhaseStarted(PortableBundleUpgradeProgress.Phase.SYNC, totalFiles);
+            progress.onPhaseStarted(PortableBundleUpgradeProgress.Phase.SYNC_PM_AI_DATA, totalFiles);
         }
         if (log != null) {
             log.accept(PORTABLE_SYNC_LOG_PREFIX + "同期対象ファイル数: " + totalFiles);
@@ -405,7 +415,7 @@ public final class PortableBundleSelfUpdater {
                         if (progress != null) {
                             reportFileProgress(
                                     progress,
-                                    PortableBundleUpgradeProgress.Phase.SYNC,
+                                    PortableBundleUpgradeProgress.Phase.SYNC_PM_AI_DATA,
                                     copied[0],
                                     totalFiles,
                                     relUnix);
@@ -415,7 +425,7 @@ public final class PortableBundleSelfUpdater {
                 });
 
         if (progress != null) {
-            progress.onPhaseFinished(PortableBundleUpgradeProgress.Phase.SYNC, totalFiles);
+            progress.onPhaseFinished(PortableBundleUpgradeProgress.Phase.SYNC_PM_AI_DATA, totalFiles);
         }
         if (log != null) {
             log.accept(
@@ -592,6 +602,235 @@ public final class PortableBundleSelfUpdater {
         BigDecimal remote = canonicalVer.get();
         BigDecimal local = localVer.orElse(fallbackMinimumVersion());
         return remote.compareTo(local) > 0;
+    }
+
+    /**
+     * 版数が新しい、または {@link PortableBundleBuildManifest} 上でデスクトップ JAR がローカルと異なるときに更新する。
+     */
+    public static boolean shouldUpdateBundle(Path canonical, Path installRoot, Path pmAiDataRoot) {
+        Objects.requireNonNull(canonical, "canonical");
+        Objects.requireNonNull(installRoot, "installRoot");
+        Objects.requireNonNull(pmAiDataRoot, "pmAiDataRoot");
+        Optional<BigDecimal> cv = readCanonicalPortableBundleVersion(canonical);
+        Optional<BigDecimal> lv = readLocalBundleVersion(installRoot, pmAiDataRoot);
+        if (shouldUpdate(cv, lv)) {
+            return true;
+        }
+        if (cv.isEmpty()) {
+            return false;
+        }
+        return needsDesktopBinaryUpdate(canonical, installRoot);
+    }
+
+    /** {@link PortableBundleBuildManifest} によりデスクトップ JAR の差し替えが必要。manifest が無いときは false。 */
+    public static boolean needsDesktopBinaryUpdate(Path canonical, Path installRoot) {
+        Objects.requireNonNull(canonical, "canonical");
+        Objects.requireNonNull(installRoot, "installRoot");
+        return PortableBundleBuildManifest.readBesideCanonical(canonical)
+                .map(m -> m.desktopJarDiffersFromLocal(installRoot))
+                .orElse(false);
+    }
+
+    /** {@code PMD.exe} と {@code app/} がある jpackage ルートか。 */
+    public static boolean hasDesktopInstallLayout(Path root) {
+        if (root == null) {
+            return false;
+        }
+        Path abs = root.toAbsolutePath().normalize();
+        return Files.isRegularFile(abs.resolve(PORTABLE_DESKTOP_EXE_NAME))
+                && Files.isDirectory(abs.resolve("app"));
+    }
+
+    /**
+     * ZIP 展開先などから pm-ai-data ではなくデスクトップ本体ルートを得る。フルレイアウトでなければ empty。
+     */
+    public static Optional<Path> resolveDesktopBundleRoot(Path extractedOrCanonicalRoot) {
+        if (extractedOrCanonicalRoot == null) {
+            return Optional.empty();
+        }
+        Path abs = extractedOrCanonicalRoot.toAbsolutePath().normalize();
+        if (hasDesktopInstallLayout(abs)) {
+            return Optional.of(abs);
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * {@code bundleRoot} のデスクトップ本体（{@code PMD.exe}, {@code app}, {@code runtime} 等）を {@code installRoot} へコピー。
+     * {@code pm-ai-data} は対象外。
+     */
+    public static SyncOutcome syncDesktopInstallFromBundleRoot(
+            Path bundleRoot, Path installRoot, Consumer<String> log) throws IOException {
+        return syncDesktopInstallFromBundleRoot(bundleRoot, installRoot, log, null);
+    }
+
+    /**
+     * {@link #syncDesktopInstallFromBundleRoot(Path, Path, Consumer)} with progress.
+     */
+    public static SyncOutcome syncDesktopInstallFromBundleRoot(
+            Path bundleRoot,
+            Path installRoot,
+            Consumer<String> log,
+            PortableBundleUpgradeProgress.Listener progress)
+            throws IOException {
+        Objects.requireNonNull(bundleRoot, "bundleRoot");
+        Objects.requireNonNull(installRoot, "installRoot");
+        Path src = bundleRoot.toAbsolutePath().normalize();
+        Path dest = installRoot.toAbsolutePath().normalize();
+        if (!hasDesktopInstallLayout(src)) {
+            throw new IOException("Bundle root is not a desktop install layout: " + src);
+        }
+        Files.createDirectories(dest);
+
+        int totalFiles = countDesktopInstallFiles(src);
+        if (progress != null) {
+            progress.onPhaseStarted(PortableBundleUpgradeProgress.Phase.SYNC_DESKTOP, totalFiles);
+        }
+        if (log != null) {
+            log.accept(PORTABLE_SYNC_LOG_PREFIX + "デスクトップ本体の同期対象ファイル数: " + totalFiles);
+        }
+
+        int[] copied = {0};
+        copyDesktopTree(src.resolve("app"), dest.resolve("app"), log, progress, copied, totalFiles);
+        copyDesktopTree(src.resolve("runtime"), dest.resolve("runtime"), log, progress, copied, totalFiles);
+        for (String leaf :
+                List.of(
+                        PORTABLE_DESKTOP_EXE_NAME,
+                        PORTABLE_LAUNCHER_BAT_NAME,
+                        PORTABLE_UPDATE_SCRIPT_NAME,
+                        AppPaths.VERSION_TXT_FILE_NAME)) {
+            Path f = src.resolve(leaf);
+            if (Files.isRegularFile(f)) {
+                Path target = dest.resolve(leaf);
+                Files.createDirectories(target.getParent() != null ? target.getParent() : dest);
+                Files.copy(f, target, COPY_OPTIONS);
+                copied[0]++;
+                logDesktopCopy(log, progress, copied[0], totalFiles, leaf);
+            }
+        }
+
+        if (progress != null) {
+            progress.onPhaseFinished(PortableBundleUpgradeProgress.Phase.SYNC_DESKTOP, totalFiles);
+        }
+        if (log != null) {
+            log.accept(
+                    PORTABLE_SYNC_LOG_PREFIX
+                            + "デスクトップ本体の同期完了: "
+                            + copied[0]
+                            + " ファイル");
+        }
+        return new SyncOutcome(copied[0]);
+    }
+
+    /**
+     * 終了後適用用にデスクトップ本体を {@code stagingRoot} へ丸ごとコピーする（既存内容は削除）。
+     */
+    public static void stageDesktopBundleForRelaunch(Path bundleRoot, Path stagingRoot, Consumer<String> log)
+            throws IOException {
+        Objects.requireNonNull(bundleRoot, "bundleRoot");
+        Objects.requireNonNull(stagingRoot, "stagingRoot");
+        deleteDirectoryRecursive(stagingRoot, log);
+        Files.createDirectories(stagingRoot);
+        syncDesktopInstallFromBundleRoot(bundleRoot, stagingRoot, log, null);
+    }
+
+    static void copyDesktopTree(
+            Path srcDir,
+            Path destDir,
+            Consumer<String> log,
+            PortableBundleUpgradeProgress.Listener progress,
+            int[] copied,
+            int totalFiles)
+            throws IOException {
+        if (!Files.isDirectory(srcDir)) {
+            return;
+        }
+        Files.walkFileTree(
+                srcDir,
+                new SimpleFileVisitor<>() {
+                    @Override
+                    public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
+                            throws IOException {
+                        Path rel = srcDir.relativize(dir);
+                        Path targetDir =
+                                rel.getNameCount() == 0 ? destDir : destDir.resolve(rel.toString());
+                        if (!Files.exists(targetDir)) {
+                            Files.createDirectories(targetDir);
+                        }
+                        return FileVisitResult.CONTINUE;
+                    }
+
+                    @Override
+                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                        Path rel = srcDir.relativize(file);
+                        Path target = destDir.resolve(rel.toString());
+                        Files.createDirectories(target.getParent());
+                        Files.copy(file, target, COPY_OPTIONS);
+                        copied[0]++;
+                        String relUnix =
+                                srcDir.getFileName()
+                                        + "/"
+                                        + rel.toString().replace('\\', '/');
+                        logDesktopCopy(log, progress, copied[0], totalFiles, relUnix);
+                        return FileVisitResult.CONTINUE;
+                    }
+                });
+    }
+
+    static void logDesktopCopy(
+            Consumer<String> log,
+            PortableBundleUpgradeProgress.Listener progress,
+            int copied,
+            int totalFiles,
+            String relUnix) {
+        if (log != null) {
+            log.accept(PORTABLE_SYNC_LOG_PREFIX + "本体同期: " + relUnix);
+        }
+        if (progress != null) {
+            reportFileProgress(
+                    progress,
+                    PortableBundleUpgradeProgress.Phase.SYNC_DESKTOP,
+                    copied,
+                    totalFiles,
+                    relUnix);
+        }
+    }
+
+    static int countDesktopInstallFiles(Path bundleRoot) throws IOException {
+        int[] n = {0};
+        Path app = bundleRoot.resolve("app");
+        if (Files.isDirectory(app)) {
+            n[0] += countFilesUnder(app);
+        }
+        Path runtime = bundleRoot.resolve("runtime");
+        if (Files.isDirectory(runtime)) {
+            n[0] += countFilesUnder(runtime);
+        }
+        for (String leaf :
+                List.of(
+                        PORTABLE_DESKTOP_EXE_NAME,
+                        PORTABLE_LAUNCHER_BAT_NAME,
+                        PORTABLE_UPDATE_SCRIPT_NAME,
+                        AppPaths.VERSION_TXT_FILE_NAME)) {
+            if (Files.isRegularFile(bundleRoot.resolve(leaf))) {
+                n[0]++;
+            }
+        }
+        return n[0];
+    }
+
+    static int countFilesUnder(Path root) throws IOException {
+        int[] n = {0};
+        Files.walkFileTree(
+                root,
+                new SimpleFileVisitor<>() {
+                    @Override
+                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                        n[0]++;
+                        return FileVisitResult.CONTINUE;
+                    }
+                });
+        return n[0];
     }
 
     /** Copies outer {@link AppPaths#VERSION_TXT_FILE_NAME} into {@code pmAiDataRoot} and {@code cwd} when present. */

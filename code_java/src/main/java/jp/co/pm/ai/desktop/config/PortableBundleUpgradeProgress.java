@@ -13,7 +13,9 @@ public final class PortableBundleUpgradeProgress {
         /** ローカル ZIP を一時フォルダへ展開。 */
         EXTRACT,
         /** 展開済み（または正本フォルダ）から pm-ai-data へファイル同期。 */
-        SYNC
+        SYNC_PM_AI_DATA,
+        /** {@code PMD.exe} / {@code app} / {@code runtime} をインストール先へ同期（またはステージング）。 */
+        SYNC_DESKTOP
     }
 
     /** 進捗コールバック。{@code totalUnits <= 0} のときはその段階を不定（indeterminate）扱いにできる。 */
