@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+      spacing="10.0"
+      fx:controller="jp.co.pm.ai.desktop.WorkspaceCacheHistoryTabController">
+    <padding>
+        <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+    </padding>
+    <Label styleClass="pm-section-title" text="キャッシュ退避・復元"
+           wrapText="true"/>
+    <Label text="段階1の「キャッシュをクリアして実行」、または本タブの操作で、AI 備考キャッシュ・結果_配台表.json・納期ビュー用 shaped JSON 等を退避してから削除します。履歴から選択して復元できます。"
+           wrapText="true"/>
+    <Separator/>
+    <HBox spacing="8.0" alignment="CENTER_LEFT">
+        <Label text="ラベル"/>
+        <TextField fx:id="archiveLabelField" prefWidth="320.0" promptText="任意（例: 手動退避）"/>
+        <Button fx:id="archiveOnlyButton" mnemonicParsing="false" onAction="#onArchiveOnlyAction" text="退避のみ"/>
+        <Button fx:id="archiveAndClearButton" mnemonicParsing="false" onAction="#onArchiveAndClearAction" text="退避してクリア"/>
+    </HBox>
+    <Label fx:id="storePathLabel" styleClass="pm-muted-label" wrapText="true"/>
+    <Separator/>
+    <Label text="履歴（新しい順）"/>
+    <ListView fx:id="archiveListView" prefHeight="360.0" VBox.vgrow="ALWAYS"/>
+    <HBox spacing="8.0" alignment="CENTER_LEFT">
+        <Button fx:id="restoreButton" mnemonicParsing="false" onAction="#onRestoreArchiveAction" text="この退避を復元"/>
+        <Button fx:id="renameButton" mnemonicParsing="false" onAction="#onRenameArchiveAction" text="ラベル変更"/>
+        <Button fx:id="deleteButton" mnemonicParsing="false" onAction="#onDeleteArchiveAction" text="削除"/>
+        <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshListAction" text="一覧更新"/>
+    </HBox>
+</VBox>

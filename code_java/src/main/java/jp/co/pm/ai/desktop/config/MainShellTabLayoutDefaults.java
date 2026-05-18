@@ -45,6 +45,7 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.ACTUALS_STATUS.key(),
                     MainShellTabId.USER_PROFILES.key(),
                     MainShellTabId.PLAN_WORKSPACE_HISTORY.key(),
+                    MainShellTabId.CACHE_HISTORY.key(),
                     MainShellTabId.API_MODEL_BENCHMARK.key(),
                     MainShellTabId.SUMMARY_AI_DISPATCH_EXPORT_CUSTOMIZE.key());
 
@@ -72,6 +73,7 @@ public final class MainShellTabLayoutDefaults {
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.DELIVERY_CALENDAR_VIEW.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.OPERATOR_CARD.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_WORKSPACE_HISTORY.key(), ""));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.CACHE_HISTORY.key(), ""));
 
         top.add(
                 MainShellTabLayoutNode.groupNode(

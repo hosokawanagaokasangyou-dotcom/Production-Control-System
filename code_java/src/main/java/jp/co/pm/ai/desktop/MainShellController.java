@@ -73,6 +73,7 @@ import jp.co.pm.ai.desktop.bridge.Stage2PythonChildEnv;
 import jp.co.pm.ai.desktop.bridge.StagePythonExecutable;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.Stage1AiCacheClearer;
+import jp.co.pm.ai.desktop.config.WorkspaceCacheArchiveStore;
 import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
@@ -299,6 +300,8 @@ public final class MainShellController {
     @FXML
     private PlanWorkspaceHistoryTabController planWorkspaceHistoryTabController;
 
+    private WorkspaceCacheHistoryTabController workspaceCacheHistoryTabController;
+
     @FXML
     private ApiModelBenchmarkTabController apiModelBenchmarkTabController;
 
@@ -370,6 +373,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabPlanWorkspaceHistory;
+
+    @FXML
+    private Tab mainShellTabCacheHistory;
 
     @FXML
     private Tab mainShellTabApiModelBenchmark;
@@ -547,6 +553,9 @@ public final class MainShellController {
         dispatchInteractiveTabController.bindShell(this);
         if (planWorkspaceHistoryTabController != null) {
             planWorkspaceHistoryTabController.bindShell(this);
+        }
+        if (workspaceCacheHistoryTabController != null) {
+            workspaceCacheHistoryTabController.bindShell(this);
         }
         if (apiModelBenchmarkTabController != null) {
             apiModelBenchmarkTabController.bindShell(this);
@@ -1094,6 +1103,27 @@ public final class MainShellController {
      *
      * @throws IOException 入出力エラー
      */
+    /**
+     * キャッシュ退避履歴を現在のワークスペースパスへ復元する。
+     */
+    public void restoreWorkspaceCacheArchive(WorkspaceCacheArchiveStore.WorkspaceCacheArchiveEntry entry)
+            throws IOException {
+        if (entry == null) {
+            return;
+        }
+        for (String line : WorkspaceCacheArchiveStore.restoreToWorkspace(entry, collectUiEnv())) {
+            appendLog(line);
+        }
+        appendLog("[cache-archive] キャッシュを復元しました（履歴 ID: " + entry.id() + "）。");
+        if (dispatchInteractiveTabController != null) {
+            dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
+        }
+        if (resultDispatchTableTabController != null) {
+            resultDispatchTableTabController.reloadResultDispatchTableFromDisk();
+        }
+        invalidateDeliveryCalendarAfterPipelineRun();
+    }
+
     public void restorePlanWorkspaceSnapshot(PlanWorkspaceSnapshotStore.PlanWorkspaceSnapshotEntry entry)
             throws IOException {
         if (entry == null) {
@@ -1318,6 +1348,7 @@ public final class MainShellController {
             }
             DispatchTrialLogUiStore.deleteStoreSilently();
             PlanWorkspaceSnapshotStore.deleteAllSilently();
+            WorkspaceCacheArchiveStore.deleteAllSilently();
             PushButtonCssEmitter.deleteUserOverridesFileSilently();
 
             DesktopSessionState merged =
@@ -1406,6 +1437,9 @@ public final class MainShellController {
         if (t == mainShellTabPlanWorkspaceHistory) {
             return MainShellTabId.PLAN_WORKSPACE_HISTORY;
         }
+        if (t == mainShellTabCacheHistory) {
+            return MainShellTabId.CACHE_HISTORY;
+        }
         if (t == mainShellTabApiModelBenchmark) {
             return MainShellTabId.API_MODEL_BENCHMARK;
         }
@@ -1451,6 +1485,7 @@ public final class MainShellController {
             case RESULT_DISPATCH -> mainShellTabResultDispatch;
             case DISPATCH_INTERACTIVE -> mainShellTabDispatchInteractive;
             case PLAN_WORKSPACE_HISTORY -> mainShellTabPlanWorkspaceHistory;
+            case CACHE_HISTORY -> mainShellTabCacheHistory;
             case API_MODEL_BENCHMARK -> mainShellTabApiModelBenchmark;
             case PLAN_RESULT_VIEWER -> mainShellTabPlanResultViewer;
             case EQUIPMENT_GANTT_GRAPHIC -> mainShellTabEquipmentGanttGraphic;
@@ -3272,15 +3307,31 @@ public final class MainShellController {
             if (STAGE1.equals(script)) {
                 if (mainRunTabController.snapshotStage1ClearCacheAndRun()) {
                     appendLog("[stage1] キャッシュをクリアして実行します。");
-                    Stage1AiCacheClearer.ClearResult cacheClear =
-                            Stage1AiCacheClearer.clearBeforeStage1Run(uiRun);
-                    for (String line : cacheClear.detailLines()) {
-                        appendLog(line);
-                    }
-                    if (cacheClear.anyFailed()) {
-                        appendLog("[stage1] キャッシュの一部を削除できませんでした。");
-                    } else {
-                        appendLog("[stage1] キャッシュをクリアしました。");
+                    try {
+                        Stage1AiCacheClearer.ClearResult cacheClear =
+                                Stage1AiCacheClearer.archiveAndClearBeforeStage1Run(
+                                        uiRun, "段階1実行前");
+                        for (String line : cacheClear.detailLines()) {
+                            appendLog(line);
+                        }
+                        if (cacheClear.anyFailed()) {
+                            appendLog("[stage1] キャッシュの一部を削除できませんでした。");
+                        } else {
+                            appendLog("[stage1] キャッシュをクリアしました。");
+                        }
+                        if (workspaceCacheHistoryTabController != null) {
+                            workspaceCacheHistoryTabController.refreshListQuietly();
+                        }
+                    } catch (IOException archiveEx) {
+                        appendLog(
+                                "[stage1] キャッシュ退避に失敗したためクリアを中止しました: "
+                                        + archiveEx.getMessage());
+                        runLock.set(false);
+                        activeRunStageScript = null;
+                        activeStageChildProcess.set(null);
+                        mainRunTabController.getStatusLabel().setText("キャッシュ退避失敗");
+                        applyRunTabGating();
+                        return;
                     }
                 } else {
                     List<String> cacheKinds = Stage1AiCacheClearer.existingCacheKindLabelsJa(uiRun);

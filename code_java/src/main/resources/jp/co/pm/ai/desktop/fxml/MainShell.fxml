@@ -170,6 +170,11 @@
                         <fx:include fx:id="planWorkspaceHistoryTab" source="PlanWorkspaceHistoryTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabCacheHistory" closable="false" text="キャッシュ履歴">
+                    <content>
+                        <fx:include fx:id="workspaceCacheHistoryTab" source="WorkspaceCacheHistoryTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabApiModelBenchmark" closable="false" text="APIモデルベンチマーク">
                     <content>
                         <fx:include fx:id="apiModelBenchmarkTab" source="ApiModelBenchmarkTab.fxml"/>

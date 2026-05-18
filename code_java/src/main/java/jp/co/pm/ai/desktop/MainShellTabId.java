@@ -32,6 +32,8 @@ public enum MainShellTabId {
     DISPATCH_INTERACTIVE("dispatchInteractive"),
     /** 配台ワークスペースのスナップショット履歴（結果 JSON・ガント表示・列順の復元）。 */
     PLAN_WORKSPACE_HISTORY("planWorkspaceHistory"),
+    /** 段階1キャッシュ等の退避履歴（クリア前退避・復元）。 */
+    CACHE_HISTORY("cacheHistory"),
     /** Gemini generateContent の往復レイテンシ計測。 */
     API_MODEL_BENCHMARK("apiModelBenchmark"),
     /** サマリ_AI配台.xlsx 出力の見出し列・フォント・列順・テーマ。 */
