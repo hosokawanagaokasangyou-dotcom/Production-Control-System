@@ -9,17 +9,17 @@
   "uiTheme" : "midnight-blue",
   "logFontSize" : 12.0,
   "mainRunLogFilter" : "ALL",
-  "mainRunLogLines" : [ "--- start: task_extract_stage1.py ---", "[network-source] PM_AI_TASK_INPUT_SOURCE_DIR 最新: \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ問合せ_20260516_172911.xlsx", "[network-source] PM_AI_ACTUAL_DETAIL_SOURCE_DIR 最新: \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA\\NO(ロット)別問合せ_20260515_232751.xlsx", "--- 段階1 子プロセス入力（環境変数キー → 渡す値）---", "[段階1-input] PM_AI_TASK_INPUT_SOURCE_DIR = \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ", "[段階1-input] PM_AI_PROCESSING_PLAN_PATH = \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ問合せ_20260516_172911.xlsx", "[段階1-input] PM_AI_PROCESSING_PLAN_SHEET = （未設定または空）", "[段階1-input] PM_AI_PROCESSING_PLAN_HEADER_ROW = （未設定または空）", "[段階1-input] PM_AI_ACTUAL_DETAIL_SOURCE_DIR = \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA", "[段階1-input] PM_AI_ACTUAL_DETAIL_WORKBOOK = \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA\\NO(ロット)別問合せ_20260515_232751.xlsx", "[段階1-input] PM_AI_ACTUAL_DETAIL_SHEET = （未設定または空）", "[段階1-input] PM_AI_PLAN_INPUT_PATH = C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx", "[段階1-input] PM_AI_MASTER_WORKBOOK = C:\\工程管理AIプロジェクト_JAVA\\code\\master.xlsm", "[段階1-input] MASTER_WORKBOOK_FILE = master.xlsm", "[段階1-input] PM_AI_EXCLUDE_RULES_JSON = C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json", "[段階1-input] PM_AI_OUTPUT_DIR = C:\\工程管理AIプロジェクト_JAVA\\output", "[段階1-input] PM_AI_REPO_ROOT = C:\\工程管理AIプロジェクト_JAVA", "[段階1-input] PM_AI_DEBUG_LOG = （未設定または空）", "[段階1-input] PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH = 0", "[段階1-input] 加工計画DATAの実ファイルは PM_AI_PROCESSING_PLAN_PATH（未設定時は PM_AI_TASK_INPUT_SOURCE_DIR 直下の最新表から解決）。実績明細は PM_AI_ACTUAL_DETAIL_WORKBOOK または PM_AI_ACTUAL_DETAIL_SOURCE_DIR。", "[child] 2026-05-17 18:13:19,370 - INFO - Gemini API キー: 暗号化証明書 JSON から読み込みました。", "[child] 2026-05-17 18:13:19,512 - INFO - Excel: header row auto-detected at Excel row 6 (pandas header=5). file='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\湖南工場\\\\湖南共有\\\\生産管理システム\\\\管理システム\\\\●DATA\\\\生産計画問合せ\\\\工程別生産計画問合せ問合せ_20260516_172911.xlsx' sheet=0", "[child] 2026-05-17 18:13:19,662 - INFO - Excel: 工程別問合せ風の複合見出し成形を適用しました（header Excel row=6）。", "[child] 2026-05-17 18:13:19,668 - INFO - タスク入力: 列「未加工」の欠損セル 1 件を「換算数量」−「実加工数」で補完しました。", "[child] 2026-05-17 18:13:19,675 - INFO - タスク入力: PM_AI_PROCESSING_PLAN_PATH='\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ問合せ_20260516_172911.xlsx' を読み込みました。", "[child] [stage1-input] 加工計画DATA 読込完了: ファイル='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\湖南工場\\\\湖南共有\\\\生産管理システム\\\\管理システム\\\\●DATA\\\\生産計画問合せ\\\\工程別生産計画問合せ問合せ_20260516_172911.xlsx' シート（文脈ラベル）='先頭シート'", "[child] [stage1-input] 参照環境変数: PM_AI_PROCESSING_PLAN_PATH, PM_AI_PROCESSING_PLAN_SHEET, PM_AI_PROCESSING_PLAN_HEADER_ROW, PM_AI_TASK_INPUT_SOURCE_DIR", "[child] [stage1-input] PM_AI_TASK_INPUT_SOURCE_DIR='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\湖南工場\\\\湖南共有\\\\生産管理システム\\\\管理システム\\\\●DATA\\\\生産計画問合せ'", "[child] 2026-05-17 18:13:19,816 - INFO - 段階1: タスク入力整形プレビュー 'C:\\工程管理AIプロジェクト_JAVA\\output\\stage1_task_input_table.xlsx'（シート「タスク入力整形」59 行）を出力しました。", "[child] 2026-05-17 18:13:19,820 - INFO - 原反幅テーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反, 加工幅.txt (49 件)", "[child] 2026-05-17 18:13:19,830 - INFO - 製品幅テーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名, 製品幅.txt (49 件)", "[child] 2026-05-17 18:13:19,833 - INFO - 製品長テーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品長.txt (58 件)", "[child] 2026-05-17 18:13:19,845 - INFO - 製品厚みテーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品厚み.txt (48 件)", "[child] 2026-05-17 18:13:19,853 - INFO - ロール単位長さテーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,ロール単位の長さ.txt (59 件)", "[child] 2026-05-17 18:13:19,860 - INFO - 使用原反ロール単位長さテーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反,ロール単位の長さ.txt (46 件)", "[child] 2026-05-17 18:13:20,057 - INFO - skillsシート: 2段ヘッダ形式で読み込みました（工程+機械=16列, メンバー=7人）。", "[child] 2026-05-17 18:13:20,088 - INFO - need シート: 配台時追加人数行を検出（Excel行≈5）。列ととの上限を読み込みました。", "[child] 2026-05-17 18:13:20,104 - INFO - need人数マスタ: C:\\工程管理AIプロジェクト_JAVA\\code\\master.xlsm の need シートを読み込み（skills と同一 ExcelFile で開いた直後。need 専用ディスクキャッシュは無し・AI json とは無関係）。", "[child] 2026-05-17 18:13:20,112 - INFO - need列サマリ combo='EC+EC機\\u3000湖南' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 18:13:20,128 - INFO - need列サマリ combo='EC+SEC機\\u3000湖南' 基本必須人数=3 配台時追加人数上限=0", "[child] 2026-05-17 18:13:20,134 - INFO - need列サマリ combo='SEC+SEC機\\u3000湖南' 基本必須人数=3 配台時追加人数上限=0", "[child] 2026-05-17 18:13:20,140 - INFO - need列サマリ combo='スリット+スリット機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:20,145 - INFO - need列サマリ combo='スライス+スライス機1\\u3000湖南' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 18:13:20,151 - INFO - need列サマリ combo='エンボス+エンボス\\u3000湖南' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 18:13:20,158 - INFO - need列サマリ combo='接続+熱融着機\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:20,163 - INFO - need列サマリ combo='熱融着+熱融着機\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:20,167 - INFO - need列サマリ combo='検査+熱融着機\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:20,178 - INFO - need列サマリ combo='接続+スリット機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:20,186 - INFO - need列サマリ combo='接続+スライス機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:20,192 - INFO - need列サマリ combo='分割+スライス機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:20,198 - INFO - need列サマリ combo='分割+エンボス\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:20,204 - INFO - need列サマリ combo='分割+スリット機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:20,211 - INFO - need列サマリ combo='分割+EC機\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:20,215 - INFO - need列サマリ combo='巻返し+スリット機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:20,242 - INFO - need 特別指定ルール: 2 件（工程名+機械名キー）。", "[child] 2026-05-17 18:13:20,246 - INFO - 『master.xlsm」からスキルと設備覝件(need)を読み込みました。", "[child] 2026-05-17 18:13:20,257 - INFO - 段階1: 既存の配台シートを読めないため上書き継承をスキップ (\"There is no item named 'xl/sharedStrings.xml' in the archive\")", "[child] 2026-05-17 18:13:20,399 - INFO - master.xlsm speed: シート 'speed' から 16 件の (工程名, 機械名) 速度を読み込みました。", "[child] 2026-05-17 18:13:20,407 - INFO - 段階1: master.xlsm「speed」の速度を 55 行に適用（マスタ未該当 3 行は加工速度セルを変更しませんでした）。", "[child] 2026-05-17 18:13:20,449 - INFO - 段階1: 同一依頼NOかつ同一機械名は複数行あるグループで」工程名「分割」の行 4 件に「配台試行」=yes を自動設定しました。", "[child] 2026-05-17 18:13:20,460 - INFO - 配台試行ルール: JSON 'C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json' から 19 件（Excel の「設定_配台不要工程」read_excel はスキップ）。", "[child] 2026-05-17 18:13:20,466 - INFO - 段階1: 配台不要は JSON のみのため master からの stage1_exclude_rules.json 書き出しをスキップします。", "[child] 2026-05-17 18:13:20,507 - INFO - 段階1: 設定「設定_配台不要工程」により配台不要=yes を 6 行に設定しました。", "[child] 2026-05-17 18:13:20,518 - WARNING - タスク特別指定: AI 解析対象はありません（「特別指定_備考」列は空の可能性はありした）。总行数=58」依頼NOのある行=58」備考は入っている行=0。段階2実行剝にブックを保存し、本当に「特別指定_備考」列へ入力しているか確認してください。", "[child] 2026-05-17 18:13:20,526 - INFO - 配台シミュレータ: ロール単位を実効化 依頼NO=W5-14 qty_m=91.0 シートロール単位=20.0 → 実効=22.75", "[child] 2026-05-17 18:13:20,529 - INFO - 配台シミュレータ: ロール単位を実効化 依頼NO=W5-17 qty_m=271.0 シートロール単位=20.0 → 実効=20.846153846153847", "[child] 2026-05-17 18:13:20,538 - INFO - 配台シミュレータ: ロール単位を実効化 依頼NO=JR260502 qty_m=800.0 シートロール単位=95.0 → 実効=100.0", "[child] 2026-05-17 18:13:20,549 - INFO - task_queue 構築完了: total=51（配台試行によりスキップ 7 行）", "[child] 2026-05-17 18:13:20,553 - INFO - §B-2/§B-3 配台試行順: EC と未着手後続（検査＝巻返し）を隣接した依頼NO: W5-5,W5-12", "[child] 2026-05-17 18:13:20,558 - INFO - 特別ルールL10 配台試行順: スリット行の直後にSEC行を隣接した依頼NO: Y5-32", "[child] 2026-05-17 18:13:20,564 - INFO - 配台試行順番: マスタ・タスク入力から自動計算し 1..51 を付与しました。", "[child] 2026-05-17 18:13:20,775 - INFO - 段階1完了: 'C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx' を出力しました。マクロで '配台計画_タスク入力' に坖り込んでしてさい。", "[child] 2026-05-17 18:13:20,790 - INFO - 段階1: メイン相当シートが無いため Gemini の反映をスキップしました（Excel 起動なし）。plan_input_tasks.xlsx", "[child] 2026-05-17 18:13:20,801 - INFO - 段階1: メイン P 列・グラフをブックへ保存できませんでした。 C:\\工程管理AIプロジェクト_JAVA\\code\\log\\gemini_usage_summary_for_main.txt に出力済み → マクロ「メインシート_Gemini利用サマリをP列に反映」で P 列のみ反映できます。", "[end] exitCode=0 (success)", "[env] PM_AI_EXCLUDE_RULES_JSON=C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json", "[stage1-preview] loaded rows=59 cols=134 path=C:\\工程管理AIプロジェクト_JAVA\\output\\stage1_task_input_table.xlsx", "[plan-input] loaded rows=58 cols=36 path=C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx", "[equipment-gantt-graphic] ガントを更新: 計画2605171716369861.json（対象シート数=3, 表示=結果_設備ガント）", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品厚み.txt", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名, 製品幅.txt", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,ロール単位の長さ.txt", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品長.txt", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反, 加工幅.txt", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反,ロール単位の長さ.txt", "--- start: plan_simulation_stage2.py ---", "[network-source] PM_AI_TASK_INPUT_SOURCE_DIR 最新: \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ問合せ_20260516_172911.xlsx", "[network-source] PM_AI_ACTUAL_DETAIL_SOURCE_DIR 最新: \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA\\NO(ロット)別問合せ_20260515_232751.xlsx", "--- 段階2 子プロセス入力（環境変数キー → 渡す値）---", "[段階2-input] PM_AI_PLAN_INPUT_PATH = C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx", "[段階2-input] TASK_PLAN_SHEET = 配台計画_タスク入力", "[段階2-input] PM_AI_MASTER_WORKBOOK = C:\\工程管理AIプロジェクト_JAVA\\code\\master.xlsm", "[段階2-input] MASTER_WORKBOOK_FILE = master.xlsm", "[段階2-input] PM_AI_OUTPUT_DIR = C:\\工程管理AIプロジェクト_JAVA\\output", "[段階2-input] PM_AI_PROCESSING_PLAN_PATH = \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ問合せ_20260516_172911.xlsx", "[段階2-input] PM_AI_ACTUAL_DETAIL_WORKBOOK = \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA\\NO(ロット)別問合せ_20260515_232751.xlsx", "[段階2-input] PM_AI_PLAN_WORKBOOK_JSON = （未設定または空）", "[段階2-input] PM_AI_MEMBER_SCHEDULE_JSON = （未設定または空）", "[段階2-input] PM_AI_EXCLUDE_RULES_JSON = C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json", "[段階2-input] PM_AI_STAGE2_ENGINE = （未設定または空）", "[段階2-input] PM_AI_STAGE2_WRITE_EXCEL = 1", "[段階2-input] PM_AI_STAGE2_SKIP_TODAY_DISPATCH = 1", "[段階2-input] PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH = 0", "[段階2-input] PM_AI_DEBUG_LOG = （未設定または空）", "[段階2-input] 配台計画の入力は PM_AI_PLAN_INPUT_PATH とシート名 TASK_PLAN_SHEET。マスタは PM_AI_MASTER_WORKBOOK / MASTER_WORKBOOK_FILE。", "[child] 2026-05-17 18:13:36,692 - INFO - Gemini API キー: 暗号化証明書 JSON から読み込みました。", "[child] 2026-05-17 18:13:37,702 - INFO - 工場稼働枠: master.xlsm メイン A12/B12 を採用 → 08:00 ～ 19:00（結果_* の日内グリッド・配台枠）", "[child] 2026-05-17 18:13:37,708 - INFO - 設定シート「設定」A3:A26: トレース用依頼NOは無し（空またはシート無し）", "[child] 2026-05-17 18:13:37,714 - INFO - 配台トレース: 対象なし（[配台トレース …] ログは出ません）", "[child] 2026-05-17 18:13:37,777 - INFO - skillsシート: 2段ヘッダ形式で読み込みました（工程+機械=16列, メンバー=7人）。", "[child] 2026-05-17 18:13:37,790 - INFO - need シート: 配台時追加人数行を検出（Excel行≈5）。列ととの上限を読み込みました。", "[child] 2026-05-17 18:13:37,793 - INFO - need人数マスタ: C:\\工程管理AIプロジェクト_JAVA\\code\\master.xlsm の need シートを読み込み（skills と同一 ExcelFile で開いた直後。need 専用ディスクキャッシュは無し・AI json とは無関係）。", "[child] 2026-05-17 18:13:37,800 - INFO - need列サマリ combo='EC+EC機\\u3000湖南' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 18:13:37,809 - INFO - need列サマリ combo='EC+SEC機\\u3000湖南' 基本必須人数=3 配台時追加人数上限=0", "[child] 2026-05-17 18:13:37,816 - INFO - need列サマリ combo='SEC+SEC機\\u3000湖南' 基本必須人数=3 配台時追加人数上限=0", "[child] 2026-05-17 18:13:37,823 - INFO - need列サマリ combo='スリット+スリット機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:37,830 - INFO - need列サマリ combo='スライス+スライス機1\\u3000湖南' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 18:13:37,838 - INFO - need列サマリ combo='エンボス+エンボス\\u3000湖南' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 18:13:37,844 - INFO - need列サマリ combo='接続+熱融着機\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:37,853 - INFO - need列サマリ combo='熱融着+熱融着機\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:37,859 - INFO - need列サマリ combo='検査+熱融着機\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:37,866 - INFO - need列サマリ combo='接続+スリット機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:37,878 - INFO - need列サマリ combo='接続+スライス機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:37,884 - INFO - need列サマリ combo='分割+スライス機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:37,889 - INFO - need列サマリ combo='分割+エンボス\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:37,898 - INFO - need列サマリ combo='分割+スリット機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:37,906 - INFO - need列サマリ combo='分割+EC機\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:37,910 - INFO - need列サマリ combo='巻返し+スリット機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 18:13:37,943 - INFO - need 特別指定ルール: 2 件（工程名+機械名キー）。", "[child] 2026-05-17 18:13:37,949 - INFO - 『master.xlsm」からスキルと設備覝件(need)を読み込みました。", "[child] 2026-05-17 18:13:38,085 - INFO - 組み合わせ表: 工程+機械キー 15 種類・編集行 117 を配台プリセットとして読み込みました。", "[child] 2026-05-17 18:13:41,135 - INFO - マスタ「設定_機械_日次始業準備」: 機械 12 件の日次始業準備（分）を読み込みました（必要人数指定 12 件）。", "[child] 2026-05-17 18:13:43,822 - INFO - 定常枠: master メイン A15=08:25（結果シートの定常外着色・出勤簿生成の参照）", "[child] 2026-05-17 18:13:43,833 - INFO - 機械カレンダー: 7 日分・設備占有ブロック合計 76 件を配台に反映しました。", "[child] 2026-05-17 18:13:43,841 - INFO - need配台時追加人数: メイン割付は基本必須人数のみ。余力は全シミュレーション後」未割当かつスキル保有社をサブに追記しました。（メインで増員探索れる従来挙動: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1）", "[child] 2026-05-17 18:13:43,851 - INFO - 段階2: PM_AI_STAGE2_SKIP_TODAY_DISPATCH により当日は配台せず、計画開始日を 2026-05-18 にずらしました。", "[child] 2026-05-17 18:13:43,854 - INFO - 計画基準日時: 2026/05/17 18:13:43（現在時刻フォールバック）", "[child] 2026-05-17 18:13:44,022 - INFO - 「master.xlsm」の各メンバーの勤怠シートを読み込みました。", "[child] 2026-05-17 18:13:44,025 - INFO - 勤怠列: AI 入力は「備考」のみ。備考は空の日は「休暇区分」（公休・後休・他拠点勤務など）を reason に反映しました。", "[child] 2026-05-17 18:13:44,035 - INFO - 勤怠列: 任意「残業(分)」は退勤上限の時刻、または定時退勤からの延長分（1〜720 の整数＝分）を指定できます（全日休み行では無視）。", "[child] 2026-05-17 18:13:44,076 - INFO - AIキャッシュ期陝切れを削除: 1件", "[child] 2026-05-17 18:13:44,164 - WARNING - Sheet '配台計画_タスク入力' not in workbook; only one sheet 'タスク一覧' — using it.", "[child] 2026-05-17 18:13:44,181 - WARNING - probe excel failed (no header): path='C:\\\\工程管理AIプロジェクト_JAVA\\\\output\\\\plan_input_tasks.xlsx' sheet='配台計画_タスク入力' err=\"There is no item named 'xl/sharedStrings.xml' in the archive\"", "[child] 2026-05-17 18:13:44,189 - WARNING - Sheet '配台計画_タスク入力' not in workbook; only one sheet 'タスク一覧' — using it.", "[child] 2026-05-17 18:13:44,218 - INFO - 配台試行ルール: JSON 'C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json' から 19 件（Excel の「設定_配台不要工程」read_excel はスキップ）。", "[child] 2026-05-17 18:13:44,301 - INFO - master.xlsm speed: シート 'speed' から 16 件の (工程名, 機械名) 速度を読み込みました。", "[child] 2026-05-17 18:13:44,312 - INFO - 配台シート読込: master.xlsm「speed」の速度を 55 行に適用（マスタ未該当 3 行は加工速度セルを変更しませんでした）。", "[child] 2026-05-17 18:13:44,322 - INFO - 計画タスク入力: PM_AI_PLAN_INPUT_PATH='C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx' を読み込みました。", "[child] 2026-05-17 18:13:44,344 - WARNING - タスク特別指定: AI 解析対象はありません（「特別指定_備考」列は空の可能性はありした）。总行数=58」依頼NOのある行=58」備考は入っている行=0。段階2実行剝にブックを保存し、本当に「特別指定_備考」列へ入力しているか確認してください。", "[child] 2026-05-17 18:13:44,369 - INFO - 配台シミュレータ: ロール単位を実効化 依頼NO=W5-14 qty_m=100.0 シートロール単位=22.75 → 実効=25.0", "[child] 2026-05-17 18:13:44,378 - INFO - task_queue 構築完了: total=51（配台試行によりスキップ 7 行）", "[child] 2026-05-17 18:13:44,389 - INFO - 段階2: OOXML に sharedStrings.xml が無いブックのため、配台シート一括書込（openpyxl）をスキップ（専用UI等の xlsx）", "[child] 2026-05-17 18:13:44,397 - INFO - 配台試行順番: 「配台試行順番」列の値をしのまま使用しました（全 51 行）。", "[child] 2026-05-17 18:13:44,410 - INFO - DEBUG[task=Y3-26] task_queueに存在しません（完了/残量0/依頼NO厳密一致の可能性）。", "[child] 2026-05-17 18:13:44,414 - INFO - DISPATCH_INTERVAL_MIRROR_ENFORCE: 設備・人の占有を区間ミラーで追跡しした（無効化は 設定_環境変数 等で DISPATCH_INTERVAL_MIRROR_ENFORCE=0）。", "[child] 2026-05-17 18:13:44,425 - INFO - 依頼NO直列配台: 無効。start_date を満たれ全行は当日候補になり」配台試行順・設備ルールで順庝付けしした。", "[child] 2026-05-17 18:13:44,436 - INFO - need人数(試行順優先フロー) order=1 task=Y5-12 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 18:13:44,448 - INFO - need人数(試行順優先フロー) order=1 task=Y5-12 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 18:13:44,461 - INFO - need人数(試行順優先フロー) order=2 task=Y5-10 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\\u3000湖南']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 18:13:44,467 - INFO - need人数(試行順優先フロー) order=2 task=Y5-10 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\\u3000湖南']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 18:13:44,478 - INFO - need人数(試行順優先フロー) order=3 task=W5-5 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:44,487 - INFO - need人数(試行順優先フロー) order=3 task=W5-5 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:44,503 - INFO - need人数(試行順優先フロー) order=4 task=W5-5 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 18:13:44,511 - INFO - need人数(試行順優先フロー) order=4 task=W5-5 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 18:13:44,525 - INFO - need人数(試行順優先フロー) order=5 task=Y5-18 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 18:13:44,533 - INFO - need人数(試行順優先フロー) order=5 task=Y5-18 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 18:13:44,553 - INFO - need人数(試行順優先フロー) order=8 task=W5-15 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=5人", "[child] 2026-05-17 18:13:44,564 - INFO - need人数(試行順優先フロー) order=8 task=W5-15 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=5人", "[child] 2026-05-17 18:13:44,588 - INFO - need人数(試行順優先フロー) order=6 task=W5-15 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:44,595 - INFO - need人数(試行順優先フロー) order=6 task=W5-15 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:44,606 - INFO - need人数(試行順優先フロー) order=12 task=Y5-13 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 18:13:44,611 - INFO - need人数(試行順優先フロー) order=12 task=Y5-13 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 18:13:44,618 - INFO - need人数(試行順優先フロー) order=15 task=Y5-21 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:44,622 - INFO - need人数(試行順優先フロー) order=23 task=W5-6 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:44,645 - INFO - need人数(試行順優先フロー) order=4 task=W5-5 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-17 18:13:44,666 - INFO - need人数(試行順優先フロー) order=7 task=Y5-25 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:44,673 - INFO - need人数(試行順優先フロー) order=7 task=Y5-25 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:44,686 - WARNING - 段階2: 依頼NO=Y5-25 日付=2026-05-19 工程/機械=SEC/SEC機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 6 人いしたは」設備の加工開始下限=2026-05-19 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-19 17:00 占有キー=SEC機 湖南", "[child] 2026-05-17 18:13:44,695 - INFO - need人数(試行順優先フロー) order=9 task=Y5-19 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:44,703 - INFO - need人数(試行順優先フロー) order=9 task=Y5-19 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:44,713 - INFO - need人数(試行順優先フロー) order=10 task=Y5-32 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:44,727 - INFO - need人数(試行順優先フロー) order=10 task=Y5-32 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:44,745 - INFO - need人数(試行順優先フロー) order=12 task=Y5-13 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 18:13:44,763 - INFO - need人数(試行順優先フロー) order=13 task=Y5-36 工程/機械=スライス/スライス機1　湖南 req_num=3 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:44,773 - INFO - need人数(試行順優先フロー) order=13 task=Y5-36 工程/機械=スライス/スライス機1　湖南 req_num=3 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:44,786 - INFO - need人数(試行順優先フロー) order=14 task=W5-11 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:44,789 - INFO - need人数(試行順優先フロー) order=20 task=V5-5 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:44,799 - INFO - need人数(試行順優先フロー) order=23 task=W5-6 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:44,804 - INFO - need人数(試行順優先フロー) order=40 task=W5-12 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:44,819 - INFO - need人数(試行順優先フロー) order=14 task=W5-11 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:44,824 - INFO - need人数(試行順優先フロー) order=4 task=W5-5 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-17 18:13:44,848 - INFO - need人数(試行順優先フロー) order=7 task=Y5-25 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:44,860 - INFO - need人数(試行順優先フロー) order=11 task=Y5-32 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:44,868 - INFO - need人数(試行順優先フロー) order=11 task=Y5-32 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:44,883 - INFO - need人数(試行順優先フロー) order=13 task=Y5-36 工程/機械=スライス/スライス機1　湖南 req_num=3 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:44,917 - INFO - need人数(試行順優先フロー) order=14 task=W5-11 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:44,941 - INFO - need人数(試行順優先フロー) order=15 task=Y5-21 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:44,958 - INFO - need人数(試行順優先フロー) order=15 task=Y5-21 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:44,998 - INFO - need人数(試行順優先フロー) order=20 task=V5-5 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,008 - INFO - need人数(試行順優先フロー) order=20 task=V5-5 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,015 - INFO - need人数(試行順優先フロー) order=22 task=Y5-15 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 18:13:45,028 - INFO - need人数(試行順優先フロー) order=22 task=Y5-15 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 18:13:45,049 - WARNING - 段階2: 依頼NO=Y5-15 日付=2026-05-20 工程/機械=スライス/スライス機1　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 6 人いしたは」設備の加工開始下限=2026-05-20 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-20 17:00 占有キー=スライス機1 湖南", "[child] 2026-05-17 18:13:45,054 - INFO - need人数(試行順優先フロー) order=23 task=W5-6 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:45,060 - INFO - need人数(試行順優先フロー) order=40 task=W5-12 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,073 - INFO - need人数(試行順優先フロー) order=23 task=W5-6 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:45,079 - INFO - need人数(試行順優先フロー) order=4 task=W5-5 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-17 18:13:45,094 - INFO - need人数(試行順優先フロー) order=15 task=Y5-21 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:45,117 - INFO - need人数(試行順優先フロー) order=16 task=Y5-23 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:45,128 - INFO - need人数(試行順優先フロー) order=16 task=Y5-23 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:45,147 - INFO - need人数(試行順優先フロー) order=17 task=Y5-22 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:45,157 - INFO - need人数(試行順優先フロー) order=17 task=Y5-22 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:45,166 - INFO - need人数(試行順優先フロー) order=21 task=V5-6 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 18:13:45,171 - INFO - need人数(試行順優先フロー) order=21 task=V5-6 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 18:13:45,177 - INFO - need人数(試行順優先フロー) order=22 task=Y5-15 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 18:13:45,189 - INFO - need人数(試行順優先フロー) order=23 task=W5-6 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:45,193 - INFO - need人数(試行順優先フロー) order=26 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 18:13:45,208 - INFO - need人数(試行順優先フロー) order=26 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 18:13:45,219 - WARNING - 段階2: 依頼NO=Y5-16 日付=2026-05-21 工程/機械=スライス/スライス機1　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 6 人いしたは」設備の加工開始下限=2026-05-21 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-21 17:00 占有キー=スライス機1 湖南", "[child] 2026-05-17 18:13:45,224 - INFO - need人数(試行順優先フロー) order=23 task=W5-6 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:45,230 - INFO - need人数(試行順優先フロー) order=40 task=W5-12 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,236 - INFO - need人数(試行順優先フロー) order=40 task=W5-12 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,245 - INFO - need人数(試行順優先フロー) order=23 task=W5-6 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:45,257 - INFO - need人数(試行順優先フロー) order=17 task=Y5-22 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:45,292 - INFO - need人数(試行順優先フロー) order=18 task=JR260502 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 18:13:45,302 - INFO - need人数(試行順優先フロー) order=18 task=JR260502 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 18:13:45,321 - INFO - need人数(試行順優先フロー) order=19 task=JR260502 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=5人", "[child] 2026-05-17 18:13:45,326 - INFO - need人数(試行順優先フロー) order=19 task=JR260502 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=5人", "[child] 2026-05-17 18:13:45,336 - INFO - need人数(試行順優先フロー) order=23 task=W5-6 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:45,351 - INFO - need人数(試行順優先フロー) order=24 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 18:13:45,356 - INFO - need人数(試行順優先フロー) order=24 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 18:13:45,370 - INFO - need人数(試行順優先フロー) order=25 task=Y5-27 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:45,377 - INFO - need人数(試行順優先フロー) order=26 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 18:13:45,384 - INFO - need人数(試行順優先フロー) order=25 task=Y5-27 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:45,401 - INFO - need人数(試行順優先フロー) order=25 task=Y5-27 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:45,409 - INFO - need人数(試行順優先フロー) order=27 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:45,415 - INFO - need人数(試行順優先フロー) order=40 task=W5-12 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=5人", "[child] 2026-05-17 18:13:45,421 - INFO - need人数(試行順優先フロー) order=25 task=Y5-27 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:45,426 - INFO - need人数(試行順優先フロー) order=27 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:45,436 - WARNING - 段階2: 依頼NO=W5-12 日付=2026-05-22 工程/機械=スリット/スリット機1　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 5 人いしたは」設備の加工開始下限=2026-05-22 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-22 17:00 占有キー=スリット機1 湖南", "[child] 2026-05-17 18:13:45,440 - INFO - need人数(試行順優先フロー) order=25 task=Y5-27 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:45,446 - INFO - need人数(試行順優先フロー) order=27 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:45,456 - INFO - DEBUG[day=2026-05-23] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 18:13:45,458 - INFO - DEBUG[day=2026-05-24] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 18:13:45,468 - INFO - need人数(試行順優先フロー) order=23 task=W5-6 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=2人", "[child] 2026-05-17 18:13:45,499 - INFO - need人数(試行順優先フロー) order=24 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-17 18:13:45,524 - INFO - need人数(試行順優先フロー) order=25 task=Y5-27 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:45,559 - INFO - need人数(試行順優先フロー) order=27 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:45,572 - INFO - need人数(試行順優先フロー) order=29 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 18:13:45,575 - INFO - need人数(試行順優先フロー) order=30 task=Y5-17 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 18:13:45,581 - INFO - need人数(試行順優先フロー) order=40 task=W5-12 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,591 - INFO - need人数(試行順優先フロー) order=29 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 18:13:45,599 - INFO - need人数(試行順優先フロー) order=29 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 18:13:45,603 - INFO - need人数(試行順優先フロー) order=30 task=Y5-17 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 18:13:45,620 - INFO - need人数(試行順優先フロー) order=29 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 18:13:45,627 - INFO - need人数(試行順優先フロー) order=30 task=Y5-17 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 18:13:45,633 - INFO - need人数(試行順優先フロー) order=41 task=W5-16 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,639 - INFO - need人数(試行順優先フロー) order=43 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,655 - INFO - need人数(試行順優先フロー) order=44 task=W5-17 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,673 - INFO - need人数(試行順優先フロー) order=24 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-17 18:13:45,691 - INFO - need人数(試行順優先フロー) order=27 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:45,717 - INFO - need人数(試行順優先フロー) order=28 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:45,726 - INFO - need人数(試行順優先フロー) order=28 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:45,744 - WARNING - 段階2: 依頼NO=Y5-34 日付=2026-05-26 工程/機械=SEC/SEC機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 6 人いしたは」設備の加工開始下限=2026-05-26 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-26 17:00 占有キー=SEC機 湖南", "[child] 2026-05-17 18:13:45,750 - INFO - need人数(試行順優先フロー) order=29 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 18:13:45,763 - INFO - need人数(試行順優先フロー) order=30 task=Y5-17 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 18:13:45,788 - INFO - need人数(試行順優先フロー) order=31 task=V5-9 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,797 - INFO - need人数(試行順優先フロー) order=31 task=V5-9 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,813 - INFO - need人数(試行順優先フロー) order=40 task=W5-12 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,829 - INFO - need人数(試行順優先フロー) order=32 task=W5-12 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:45,835 - INFO - need人数(試行順優先フロー) order=41 task=W5-16 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,850 - INFO - need人数(試行順優先フロー) order=32 task=W5-12 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:45,853 - INFO - need人数(試行順優先フロー) order=41 task=W5-16 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,870 - INFO - need人数(試行順優先フロー) order=32 task=W5-12 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:45,873 - INFO - need人数(試行順優先フロー) order=35 task=W5-16 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:45,891 - INFO - need人数(試行順優先フロー) order=32 task=W5-12 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:45,902 - INFO - need人数(試行順優先フロー) order=35 task=W5-16 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:45,916 - INFO - need人数(試行順優先フロー) order=42 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,920 - INFO - need人数(試行順優先フロー) order=43 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,927 - INFO - need人数(試行順優先フロー) order=44 task=W5-17 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,942 - INFO - need人数(試行順優先フロー) order=42 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,947 - INFO - need人数(試行順優先フロー) order=42 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,956 - INFO - need人数(試行順優先フロー) order=43 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,965 - INFO - need人数(試行順優先フロー) order=42 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,974 - INFO - need人数(試行順優先フロー) order=43 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,980 - INFO - need人数(試行順優先フロー) order=44 task=W5-17 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:45,992 - INFO - need人数(試行順優先フロー) order=36 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:45,996 - INFO - need人数(試行順優先フロー) order=43 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:46,019 - INFO - need人数(試行順優先フロー) order=36 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:46,029 - INFO - need人数(試行順優先フロー) order=24 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-17 18:13:46,041 - INFO - need人数(試行順優先フロー) order=28 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,056 - INFO - need人数(試行順優先フロー) order=32 task=W5-12 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=2人", "[child] 2026-05-17 18:13:46,070 - WARNING - 段階2: 依頼NO=W5-12 日付=2026-05-27 工程/機械=EC/EC機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 2 人いしたは」設備の加工開始下限=2026-05-27 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-27 17:00 占有キー=EC機 湖南", "[child] 2026-05-17 18:13:46,080 - INFO - need人数(試行順優先フロー) order=33 task=W5-12 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 18:13:46,090 - INFO - need人数(試行順優先フロー) order=33 task=W5-12 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 18:13:46,098 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,105 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,120 - INFO - need人数(試行順優先フロー) order=39 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,133 - INFO - need人数(試行順優先フロー) order=42 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=5人", "[child] 2026-05-17 18:13:46,149 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,157 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,163 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,168 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,171 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,175 - INFO - need人数(試行順優先フロー) order=39 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,197 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,200 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,207 - INFO - need人数(試行順優先フロー) order=39 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,214 - INFO - need人数(試行順優先フロー) order=43 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=5人", "[child] 2026-05-17 18:13:46,221 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,225 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,234 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,246 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,251 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,255 - INFO - need人数(試行順優先フロー) order=39 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-17 18:13:46,266 - INFO - need人数(試行順優先フロー) order=32 task=W5-12 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:46,278 - INFO - need人数(試行順優先フロー) order=33 task=W5-12 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 18:13:46,292 - INFO - need人数(試行順優先フロー) order=34 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:46,301 - INFO - need人数(試行順優先フロー) order=34 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:46,328 - INFO - need人数(試行順優先フロー) order=36 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:46,347 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:46,377 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:46,386 - INFO - need人数(試行順優先フロー) order=39 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:46,398 - INFO - need人数(試行順優先フロー) order=45 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:46,407 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:46,415 - INFO - need人数(試行順優先フロー) order=45 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:46,426 - WARNING - 段階2: 依頼NO=W5-8 日付=2026-05-28 工程/機械=EC/EC機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 3 人いしたは」設備の加工開始下限=2026-05-28 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-28 17:00 占有キー=EC機 湖南", "[child] 2026-05-17 18:13:46,431 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:46,437 - INFO - need人数(試行順優先フロー) order=39 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:46,446 - INFO - need人数(試行順優先フロー) order=33 task=W5-12 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 18:13:46,455 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:46,503 - INFO - need人数(試行順優先フロー) order=39 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:46,534 - INFO - need人数(試行順優先フロー) order=45 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:46,539 - INFO - need人数(試行順優先フロー) order=46 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-17 18:13:46,544 - INFO - need人数(試行順優先フロー) order=46 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-17 18:13:46,554 - INFO - need人数(試行順優先フロー) order=45 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:46,561 - INFO - DEBUG[day=2026-05-30] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 18:13:46,565 - INFO - DEBUG[day=2026-05-31] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 18:13:46,576 - INFO - need人数(試行順優先フロー) order=39 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-17 18:13:46,595 - INFO - need人数(試行順優先フロー) order=45 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:46,618 - INFO - need人数(試行順優先フロー) order=46 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-17 18:13:46,648 - INFO - need人数(試行順優先フロー) order=48 task=C5-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:46,655 - INFO - need人数(試行順優先フロー) order=48 task=C5-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:46,683 - INFO - need人数(試行順優先フロー) order=47 task=C5-1 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:46,689 - INFO - need人数(試行順優先フロー) order=47 task=C5-1 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:46,702 - INFO - need人数(試行順優先フロー) order=46 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-17 18:13:46,729 - INFO - need人数(試行順優先フロー) order=47 task=C5-1 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:46,744 - INFO - need人数(試行順優先フロー) order=46 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-17 18:13:46,753 - INFO - need人数(試行順優先フロー) order=49 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:46,758 - INFO - need人数(試行順優先フロー) order=49 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-17 18:13:46,774 - INFO - need人数(試行順優先フロー) order=50 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:46,778 - INFO - need人数(試行順優先フロー) order=50 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-17 18:13:46,790 - WARNING - 段階2: 依頼NO=W5-13 日付=2026-06-03 工程/機械=EC/EC機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 3 人いしたは」設備の加工開始下限=2026-06-03 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-06-03 17:00 占有キー=EC機 湖南", "[child] 2026-05-17 18:13:46,799 - INFO - need人数(試行順優先フロー) order=51 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-17 18:13:46,812 - INFO - need人数(試行順優先フロー) order=51 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-17 18:13:46,828 - INFO - DEBUG[day=2026-06-04] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 18:13:46,832 - INFO - DEBUG[day=2026-06-05] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 18:13:46,840 - INFO - DEBUG[day=2026-06-06] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 18:13:46,849 - INFO - DEBUG[day=2026-06-07] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 18:13:46,857 - INFO - need人数(試行順優先フロー) order=50 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=2人", "[child] 2026-05-17 18:13:46,876 - INFO - need人数(試行順優先フロー) order=51 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-17 18:13:46,897 - INFO - need人数(試行順優先フロー) order=51 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-17 18:13:46,913 - INFO - DEBUG[day=2026-06-10] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-17 18:13:46,928 - INFO - DEBUG[day=2026-06-11] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-17 18:13:46,934 - INFO - DEBUG[day=2026-06-12] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-17 18:13:46,939 - INFO - DEBUG[day=2026-06-13] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 18:13:46,944 - INFO - DEBUG[day=2026-06-14] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 18:13:46,949 - INFO - DEBUG[day=2026-06-15] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-17 18:13:46,963 - INFO - DEBUG[day=2026-06-16] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-17 18:13:46,973 - INFO - DEBUG[day=2026-06-17] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-17 18:13:46,981 - INFO - DEBUG[day=2026-06-18] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-17 18:13:46,988 - INFO - DEBUG[day=2026-06-19] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-17 18:13:46,994 - INFO - DEBUG[day=2026-06-20] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 18:13:46,996 - INFO - DEBUG[day=2026-06-21] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 18:13:47,007 - INFO - DEBUG[day=2026-06-22] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-17 18:13:47,014 - INFO - DEBUG[day=2026-06-23] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-17 18:13:47,024 - INFO - DEBUG[day=2026-06-24] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-17 18:13:47,030 - INFO - DEBUG[day=2026-06-25] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-17 18:13:47,037 - INFO - DEBUG[day=2026-06-26] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-17 18:13:47,044 - INFO - DEBUG[day=2026-06-27] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 18:13:47,055 - INFO - DEBUG[day=2026-06-28] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-17 18:13:47,064 - INFO - DEBUG[day=2026-06-29] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-17 18:13:47,071 - INFO - DEBUG[day=2026-06-30] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-17 18:13:47,143 - INFO - 日次始業準備: 当日先頭の加工から離れていた帯を 20 件、先頭加工の直前に寄せました。", "[child] 2026-05-17 18:13:47,168 - INFO - 段階2出力の整理: 計画*・人員*（および旧 production_plan_multi_day_* / member_schedule_*）の .xlsx/.json を 8 件削除しました。", "[child] 2026-05-17 18:13:49,438 - INFO - 定常枠: master メイン A15/B15 → 08:25 ～ 17:00（結果の定常外「日時帯」着色）", "[child] 2026-05-17 18:13:49,441 - INFO - 段階2: 結果ブックを作成しした → 計画2605171813431854.xlsx", "[child] 2026-05-17 18:13:59,355 - INFO - 加工実績明細: '\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA\\NO(ロット)別問合せ_20260515_232751.xlsx' の '先頭シート' を 15841 行読み込み。", "[child] 2026-05-17 18:14:01,095 - INFO - 先頭シート: ガント用セグメントは0件です。表示日（sorted_dates）に重ならない実績のみの場合、描画されません。", "[child] 2026-05-17 18:14:01,097 - INFO - 先頭シート からガント用セグメント 0 件を生成しました。", "[child] 2026-05-17 18:14:01,114 - INFO - 結果_タスク一覧の列順ソース: 既定（38 列）", "[child] 2026-05-17 18:14:01,116 - INFO - 列順・表示のカスタマイズ: マクロ実行ブックにシート「列設定_結果_タスク一覧」を追加。 見出し「列名」「表示」… 表示は FALSE の列は結果シートで非表示。 1行「履歴」で履歴1～n を挿入。VBA の「列設定_結果_タスク一覧_チェックボックスを配置」でチェックボックスを表示列に連動可能。", "[child] 2026-05-17 18:14:01,244 - INFO - Excel: header row auto-detected at Excel row 6 (pandas header=5). file='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\湖南工場\\\\湖南共有\\\\生産管理システム\\\\管理システム\\\\●DATA\\\\生産計画問合せ\\\\工程別生産計画問合せ問合せ_20260516_172911.xlsx' sheet=0", "[child] 2026-05-17 18:14:01,391 - INFO - Excel: 工程別問合せ風の複合見出し成形を適用しました（header Excel row=6）。", "[child] 2026-05-17 18:14:01,406 - INFO - タスク入力: 列「未加工」の欠損セル 1 件を「換算数量」−「実加工数」で補完しました。", "[child] 2026-05-17 18:14:01,409 - INFO - タスク入力: PM_AI_PROCESSING_PLAN_PATH='\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ問合せ_20260516_172911.xlsx' を読み込みました。", "[child] [stage1-input] 加工計画DATA 読込完了: ファイル='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\湖南工場\\\\湖南共有\\\\生産管理システム\\\\管理システム\\\\●DATA\\\\生産計画問合せ\\\\工程別生産計画問合せ問合せ_20260516_172911.xlsx' シート（文脈ラベル）='先頭シート'", "[child] [stage1-input] 参照環境変数: PM_AI_PROCESSING_PLAN_PATH, PM_AI_PROCESSING_PLAN_SHEET, PM_AI_PROCESSING_PLAN_HEADER_ROW, PM_AI_TASK_INPUT_SOURCE_DIR", "[child] [stage1-input] PM_AI_TASK_INPUT_SOURCE_DIR='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\湖南工場\\\\湖南共有\\\\生産管理システム\\\\管理システム\\\\●DATA\\\\生産計画問合せ'", "[child] 2026-05-17 18:14:01,704 - INFO - 段階2: 表シート正本 JSON（Excel より先）を 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605171813431854表.json' に出力しました（same_dir_as_output）。", "[child] 2026-05-17 18:14:02,647 - INFO - 段階2: 計画ブックへの設備ガント Excel シートは省略します（設備ガント(グラフィック)用の契約 JSON のみ出力。ブックへ含める場合は PM_AI_STAGE2_WRITE_EXCEL_GANTT_SHEETS=1）。", "[child] 2026-05-17 18:14:02,833 - INFO - 段階2: 設備ガント描画契約 JSON（再描画用）を 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605171813431854設.json' に出力しました（same_dir_as_output）。", "[child] 2026-05-17 18:14:06,600 - INFO - 段階2: 結果_タスク一覧 JSON サイドカーを 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605171813431854一覧.json' に出力しました。", "[child] 2026-05-17 18:14:08,010 - INFO - 列設定シート図形コピー: Excel COM を廃止したためスキップしました（手動コピーまたはマクロで代替してください）。", "[child] 2026-05-17 18:14:08,824 - INFO - plan_workbook_sidecar: 同名 JSON を出力しました path=C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605171813431854.json (same_dir_as_output)", "[child] 2026-05-17 18:14:08,829 - INFO - 段階2: 計画ブック（全シート）の JSON を 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605171813431854.json' に出力しました。", "[child] 2026-05-17 18:14:10,868 - INFO - plan_workbook_sidecar: 論理ビュー JSON を出力 path=C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605171813431854論.json (same_dir_as_output)", "[child] 2026-05-17 18:14:10,875 - INFO - 段階2: 計画ブック 論理ビュー JSON（結合展開）を 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605171813431854論.json' に出力しました。", "[child] 2026-05-17 18:14:10,877 - INFO - 完了: 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605171813431854.xlsx' を生成しました。", "[child] 2026-05-17 18:14:11,066 - INFO - 段階2: PowerQuery 用に 'C:\\工程管理AIプロジェクト_JAVA\\code\\output\\結果_配台表.xlsx' を出力しました。", "[child] 2026-05-17 18:14:11,076 - INFO - 段階2: 結果_配台表 JSON を 'C:\\工程管理AIプロジェクト_JAVA\\code\\output\\結果_配台表.json' に出力しました。", "[child] 2026-05-17 18:14:11,082 - INFO - 段階2: メンバー別スケジュールを作成しした → 人員2605171813431854.xlsx", "[child] 2026-05-17 18:14:12,357 - INFO - 完了: 個人別スケジュールを 'C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605171813431854.xlsx' に出力しました。", "[child] 2026-05-17 18:14:12,654 - INFO - plan_workbook_sidecar: 同名 JSON を出力しました path=C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605171813431854.json (same_dir_as_output)", "[child] 2026-05-17 18:14:12,659 - INFO - 段階2: メンバー別スケジュール JSON を 'C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605171813431854.json' に出力しました。", "[child] 2026-05-17 18:14:12,663 - INFO - 段階2: OOXML に xl/sharedStrings.xml が無いブックのため、メイン AI サマリ（openpyxl）をスキップしました。Excel で対象ブックを開いて通常保存すると解消することがあります。", "[child] 2026-05-17 18:14:12,680 - INFO - 段階2: メイン P 列・グラフをブックへ保存できませんでした。 C:\\工程管理AIプロジェクト_JAVA\\code\\log\\gemini_usage_summary_for_main.txt に出力済み → マクロ「メインシート_Gemini利用サマリをP列に反映」で P 列のみ反映できます。", "[end] exitCode=0 (success)", "[stage2-ui] 最新成果物: production_plan=C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605171813431854.xlsx | member_schedule=C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605171813431854.xlsx", "[summary-ai-dispatch] パイプライン後エクセル出力: C:\\工程管理AIプロジェクト_JAVA\\code\\サマリ_AI配台.xlsx", "[delivery-calendar] バックグラウンド再読み込みを開始します。", "[equipment-gantt-graphic] ガントを更新: 計画2605171813431854.json（対象シート数=3, 表示=結果_設備ガント）", "[equipment-gantt-graphic] ガントを更新: 計画2605171813431854.json（対象シート数=3, 表示=結果_設備ガント）", "[dispatch-editor] trial: 試行前にメモリ上の表を JSON に同期 C:\\工程管理AIプロジェクト_JAVA\\code\\output\\結果_配台表.json", "[aladdin-plan-data] キャッシュ使用（同一ファイル名）: 工程別生産計画問合せ問合せ_20260516_172911.xlsx", "[summary-ai-dispatch] エクセル出力: C:\\工程管理AIプロジェクト_JAVA\\code\\サマリ_AI配台.xlsx （アラ・実績・シス比較=94 配台結果=82 加工実績=15838 アラジン加工計画取得データ=60）", "[stage2-ui] 最新成果物: production_plan=C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605171814414851.xlsx | member_schedule=C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605171814414851.xlsx", "[equipment-gantt-graphic] ガントを更新: 計画2605171814414851.json（対象シート数=3, 表示=結果_設備ガント）", "[dispatch-editor] trial: C:\\工程管理AIプロジェクト_JAVA\\code\\output\\dispatch_trial_shortages.json", "[equipment-gantt-graphic] ガントを更新: 計画2605171814414851.json（対象シート数=3, 表示=結果_設備ガント）", "[delivery-calendar] 段階3後: シス配台（配台結果）のみ反映（Python 再取得はスキップ）", "[summary-ai-dispatch] 段階3後エクセル出力: C:\\工程管理AIプロジェクト_JAVA\\code\\サマリ_AI配台.xlsx", "[dispatch-editor] trial: 整合性OK（保存表と再読込JSONの数量・試行順）" ],
-  "mainRunLogScroll" : 0.9999999999999998,
-  "mainRunStage2ProductionPlan" : "C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605171814414851.xlsx",
-  "mainRunStage2MemberSchedule" : "C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605171814414851.xlsx",
+  "mainRunLogLines" : [ "--- start: task_extract_stage1.py ---", "[network-source] PM_AI_TASK_INPUT_SOURCE_DIR 最新: \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ問合せ_20260518_071915.xlsx", "[network-source] PM_AI_ACTUAL_DETAIL_SOURCE_DIR 最新: \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA\\NO(ロット)別問合せ_20260518_092902.xlsx", "--- 段階1 子プロセス入力（環境変数キー → 渡す値）---", "[段階1-input] PM_AI_TASK_INPUT_SOURCE_DIR = \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ", "[段階1-input] PM_AI_PROCESSING_PLAN_PATH = \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ問合せ_20260518_071915.xlsx", "[段階1-input] PM_AI_PROCESSING_PLAN_SHEET = （未設定または空）", "[段階1-input] PM_AI_PROCESSING_PLAN_HEADER_ROW = （未設定または空）", "[段階1-input] PM_AI_ACTUAL_DETAIL_SOURCE_DIR = \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA", "[段階1-input] PM_AI_ACTUAL_DETAIL_WORKBOOK = \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA\\NO(ロット)別問合せ_20260518_092902.xlsx", "[段階1-input] PM_AI_ACTUAL_DETAIL_SHEET = （未設定または空）", "[段階1-input] PM_AI_PLAN_INPUT_PATH = C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx", "[段階1-input] PM_AI_MASTER_WORKBOOK = C:\\工程管理AIプロジェクト_JAVA\\code\\master.xlsm", "[段階1-input] MASTER_WORKBOOK_FILE = master.xlsm", "[段階1-input] PM_AI_EXCLUDE_RULES_JSON = C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json", "[段階1-input] PM_AI_OUTPUT_DIR = C:\\工程管理AIプロジェクト_JAVA\\output", "[段階1-input] PM_AI_REPO_ROOT = C:\\工程管理AIプロジェクト_JAVA", "[段階1-input] PM_AI_DEBUG_LOG = （未設定または空）", "[段階1-input] PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH = 0", "[段階1-input] 加工計画DATAの実ファイルは PM_AI_PROCESSING_PLAN_PATH（未設定時は PM_AI_TASK_INPUT_SOURCE_DIR 直下の最新表から解決）。実績明細は PM_AI_ACTUAL_DETAIL_WORKBOOK または PM_AI_ACTUAL_DETAIL_SOURCE_DIR。", "[child] 2026-05-18 10:39:12,000 - INFO - Gemini API キー: 暗号化証明書 JSON から読み込みました。", "[child] 2026-05-18 10:39:12,091 - INFO - Excel: header row auto-detected at Excel row 6 (pandas header=5). file='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\湖南工場\\\\湖南共有\\\\生産管理システム\\\\管理システム\\\\●DATA\\\\生産計画問合せ\\\\工程別生産計画問合せ問合せ_20260518_071915.xlsx' sheet=0", "[child] 2026-05-18 10:39:12,199 - INFO - Excel: 工程別問合せ風の複合見出し成形を適用しました（header Excel row=6）。", "[child] 2026-05-18 10:39:12,206 - INFO - タスク入力: 列「未加工」の欠損セル 1 件を「換算数量」−「実加工数」で補完しました。", "[child] 2026-05-18 10:39:12,211 - INFO - タスク入力: PM_AI_PROCESSING_PLAN_PATH='\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ問合せ_20260518_071915.xlsx' を読み込みました。", "[child] [stage1-input] 加工計画DATA 読込完了: ファイル='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\湖南工場\\\\湖南共有\\\\生産管理システム\\\\管理システム\\\\●DATA\\\\生産計画問合せ\\\\工程別生産計画問合せ問合せ_20260518_071915.xlsx' シート（文脈ラベル）='先頭シート'", "[child] [stage1-input] 参照環境変数: PM_AI_PROCESSING_PLAN_PATH, PM_AI_PROCESSING_PLAN_SHEET, PM_AI_PROCESSING_PLAN_HEADER_ROW, PM_AI_TASK_INPUT_SOURCE_DIR", "[child] [stage1-input] PM_AI_TASK_INPUT_SOURCE_DIR='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\湖南工場\\\\湖南共有\\\\生産管理システム\\\\管理システム\\\\●DATA\\\\生産計画問合せ'", "[child] 2026-05-18 10:39:12,307 - INFO - 段階1: タスク入力整形プレビュー 'C:\\工程管理AIプロジェクト_JAVA\\output\\stage1_task_input_table.xlsx'（シート「タスク入力整形」59 行）を出力しました。", "[child] 2026-05-18 10:39:12,315 - INFO - 原反幅テーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反, 加工幅.txt (101 件)", "[child] 2026-05-18 10:39:12,319 - INFO - 製品幅テーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名, 製品幅.txt (143 件)", "[child] 2026-05-18 10:39:12,323 - INFO - 製品長テーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品長.txt (152 件)", "[child] 2026-05-18 10:39:12,328 - INFO - 製品厚みテーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品厚み.txt (142 件)", "[child] 2026-05-18 10:39:12,335 - INFO - ロール単位長さテーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,ロール単位の長さ.txt (153 件)", "[child] 2026-05-18 10:39:12,340 - INFO - 使用原反ロール単位長さテーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反,ロール単位の長さ.txt (99 件)", "[child] 2026-05-18 10:39:12,417 - INFO - skillsシート: 2段ヘッダ形式で読み込みました（工程+機械=16列, メンバー=7人）。", "[child] 2026-05-18 10:39:12,435 - INFO - need シート: 配台時追加人数行を検出（Excel行≈5）。列ととの上限を読み込みました。", "[child] 2026-05-18 10:39:12,437 - INFO - need人数マスタ: C:\\工程管理AIプロジェクト_JAVA\\code\\master.xlsm の need シートを読み込み（skills と同一 ExcelFile で開いた直後。need 専用ディスクキャッシュは無し・AI json とは無関係）。", "[child] 2026-05-18 10:39:12,445 - INFO - need列サマリ combo='EC+EC機\\u3000湖南' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-18 10:39:12,453 - INFO - need列サマリ combo='EC+SEC機\\u3000湖南' 基本必須人数=3 配台時追加人数上限=0", "[child] 2026-05-18 10:39:12,461 - INFO - need列サマリ combo='SEC+SEC機\\u3000湖南' 基本必須人数=3 配台時追加人数上限=0", "[child] 2026-05-18 10:39:12,470 - INFO - need列サマリ combo='スリット+スリット機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:12,478 - INFO - need列サマリ combo='スライス+スライス機1\\u3000湖南' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-18 10:39:12,486 - INFO - need列サマリ combo='エンボス+エンボス\\u3000湖南' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-18 10:39:12,495 - INFO - need列サマリ combo='接続+熱融着機\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:12,500 - INFO - need列サマリ combo='熱融着+熱融着機\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:12,507 - INFO - need列サマリ combo='検査+熱融着機\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:12,514 - INFO - need列サマリ combo='接続+スリット機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:12,518 - INFO - need列サマリ combo='接続+スライス機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:12,526 - INFO - need列サマリ combo='分割+スライス機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:12,532 - INFO - need列サマリ combo='分割+エンボス\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:12,537 - INFO - need列サマリ combo='分割+スリット機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:12,544 - INFO - need列サマリ combo='分割+EC機\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:12,549 - INFO - need列サマリ combo='巻返し+スリット機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:12,569 - INFO - need 特別指定ルール: 2 件（工程名+機械名キー）。", "[child] 2026-05-18 10:39:12,571 - INFO - 『master.xlsm」からスキルと設備覝件(need)を読み込みました。", "[child] 2026-05-18 10:39:12,583 - INFO - 段階1: 既存の配台シートを読めないため上書き継承をスキップ (\"There is no item named 'xl/sharedStrings.xml' in the archive\")", "[child] 2026-05-18 10:39:12,651 - INFO - master.xlsm speed: シート 'speed' から 16 件の (工程名, 機械名) 速度を読み込みました。", "[child] 2026-05-18 10:39:12,664 - INFO - 段階1: master.xlsm「speed」の速度を 55 行に適用（マスタ未該当 3 行は加工速度セルを変更しませんでした）。", "[child] 2026-05-18 10:39:12,700 - INFO - 段階1: 同一依頼NOかつ同一機械名は複数行あるグループで」工程名「分割」の行 4 件に「配台試行」=yes を自動設定しました。", "[child] 2026-05-18 10:39:12,705 - INFO - 配台試行ルール: JSON 'C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json' から 42 件（Excel の「設定_配台不要工程」read_excel はスキップ）。", "[child] 2026-05-18 10:39:12,711 - INFO - 段階1: 配台不要は JSON のみのため master からの stage1_exclude_rules.json 書き出しをスキップします。", "[child] 2026-05-18 10:39:12,731 - INFO - 段階1: 設定「設定_配台不要工程」により配台不要=yes を 6 行に設定しました。", "[child] 2026-05-18 10:39:12,745 - WARNING - タスク特別指定: AI 解析対象はありません（「特別指定_備考」列は空の可能性はありした）。总行数=58」依頼NOのある行=58」備考は入っている行=0。段階2実行剝にブックを保存し、本当に「特別指定_備考」列へ入力しているか確認してください。", "[child] 2026-05-18 10:39:12,753 - INFO - 配台シミュレータ: ロール単位を実効化 依頼NO=W5-14 qty_m=91.0 シートロール単位=20.0 → 実効=22.75", "[child] 2026-05-18 10:39:12,756 - INFO - 配台シミュレータ: ロール単位を実効化 依頼NO=W5-17 qty_m=271.0 シートロール単位=20.0 → 実効=20.846153846153847", "[child] 2026-05-18 10:39:12,766 - INFO - 配台シミュレータ: ロール単位を実効化 依頼NO=JR260502 qty_m=800.0 シートロール単位=95.0 → 実効=100.0", "[child] 2026-05-18 10:39:12,770 - INFO - task_queue 構築完了: total=51（配台試行によりスキップ 7 行）", "[child] 2026-05-18 10:39:12,774 - INFO - §B-2/§B-3 配台試行順: EC と未着手後続（検査＝巻返し）を隣接した依頼NO: W5-5,W5-12", "[child] 2026-05-18 10:39:12,782 - INFO - 特別ルールL10 配台試行順: スリット行の直後にSEC行を隣接した依頼NO: Y5-32", "[child] 2026-05-18 10:39:12,787 - INFO - 配台試行順番: マスタ・タスク入力から自動計算し 1..51 を付与しました。", "[child] 2026-05-18 10:39:12,951 - INFO - 段階1完了: 'C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx' を出力しました。マクロで '配台計画_タスク入力' に坖り込んでしてさい。", "[child] 2026-05-18 10:39:12,962 - INFO - 段階1: メイン相当シートが無いため Gemini の反映をスキップしました（Excel 起動なし）。plan_input_tasks.xlsx", "[child] 2026-05-18 10:39:12,969 - INFO - 段階1: メイン P 列・グラフをブックへ保存できませんでした。 C:\\工程管理AIプロジェクト_JAVA\\code\\log\\gemini_usage_summary_for_main.txt に出力済み → マクロ「メインシート_Gemini利用サマリをP列に反映」で P 列のみ反映できます。", "[end] exitCode=0 (success)", "[env] PM_AI_EXCLUDE_RULES_JSON=C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json", "[stage1-preview] loaded rows=59 cols=134 path=C:\\工程管理AIプロジェクト_JAVA\\output\\stage1_task_input_table.xlsx", "[plan-input] loaded rows=58 cols=36 path=C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx", "[equipment-gantt-graphic] ガントを更新: 計画2605172213231816.json（対象シート数=3, 表示=結果_設備ガント）", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品厚み.txt", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品長.txt", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反,ロール単位の長さ.txt", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,ロール単位の長さ.txt", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名, 製品幅.txt", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反, 加工幅.txt", "--- start: plan_simulation_stage2.py ---", "[network-source] PM_AI_TASK_INPUT_SOURCE_DIR 最新: \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ問合せ_20260518_071915.xlsx", "[network-source] PM_AI_ACTUAL_DETAIL_SOURCE_DIR 最新: \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA\\NO(ロット)別問合せ_20260518_092902.xlsx", "--- 段階2 子プロセス入力（環境変数キー → 渡す値）---", "[段階2-input] PM_AI_PLAN_INPUT_PATH = C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx", "[段階2-input] TASK_PLAN_SHEET = 配台計画_タスク入力", "[段階2-input] PM_AI_MASTER_WORKBOOK = C:\\工程管理AIプロジェクト_JAVA\\code\\master.xlsm", "[段階2-input] MASTER_WORKBOOK_FILE = master.xlsm", "[段階2-input] PM_AI_OUTPUT_DIR = C:\\工程管理AIプロジェクト_JAVA\\output", "[段階2-input] PM_AI_PROCESSING_PLAN_PATH = \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ問合せ_20260518_071915.xlsx", "[段階2-input] PM_AI_ACTUAL_DETAIL_WORKBOOK = \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA\\NO(ロット)別問合せ_20260518_092902.xlsx", "[段階2-input] PM_AI_PLAN_WORKBOOK_JSON = （未設定または空）", "[段階2-input] PM_AI_MEMBER_SCHEDULE_JSON = （未設定または空）", "[段階2-input] PM_AI_EXCLUDE_RULES_JSON = C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json", "[段階2-input] PM_AI_STAGE2_ENGINE = （未設定または空）", "[段階2-input] PM_AI_STAGE2_WRITE_EXCEL = 1", "[段階2-input] PM_AI_STAGE2_SKIP_TODAY_DISPATCH = 1", "[段階2-input] PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH = 0", "[段階2-input] PM_AI_DEBUG_LOG = （未設定または空）", "[段階2-input] 配台計画の入力は PM_AI_PLAN_INPUT_PATH とシート名 TASK_PLAN_SHEET。マスタは PM_AI_MASTER_WORKBOOK / MASTER_WORKBOOK_FILE。", "[child] 2026-05-18 10:39:32,249 - INFO - Gemini API キー: 暗号化証明書 JSON から読み込みました。", "[child] 2026-05-18 10:39:33,291 - INFO - 工場稼働枠: master.xlsm メイン A12/B12 を採用 → 08:00 ～ 19:00（結果_* の日内グリッド・配台枠）", "[child] 2026-05-18 10:39:33,298 - INFO - 設定シート「設定」A3:A26: トレース用依頼NOは無し（空またはシート無し）", "[child] 2026-05-18 10:39:33,310 - INFO - 配台トレース: 対象なし（[配台トレース …] ログは出ません）", "[child] 2026-05-18 10:39:33,356 - INFO - skillsシート: 2段ヘッダ形式で読み込みました（工程+機械=16列, メンバー=7人）。", "[child] 2026-05-18 10:39:33,369 - INFO - need シート: 配台時追加人数行を検出（Excel行≈5）。列ととの上限を読み込みました。", "[child] 2026-05-18 10:39:33,371 - INFO - need人数マスタ: C:\\工程管理AIプロジェクト_JAVA\\code\\master.xlsm の need シートを読み込み（skills と同一 ExcelFile で開いた直後。need 専用ディスクキャッシュは無し・AI json とは無関係）。", "[child] 2026-05-18 10:39:33,377 - INFO - need列サマリ combo='EC+EC機\\u3000湖南' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-18 10:39:33,386 - INFO - need列サマリ combo='EC+SEC機\\u3000湖南' 基本必須人数=3 配台時追加人数上限=0", "[child] 2026-05-18 10:39:33,392 - INFO - need列サマリ combo='SEC+SEC機\\u3000湖南' 基本必須人数=3 配台時追加人数上限=0", "[child] 2026-05-18 10:39:33,398 - INFO - need列サマリ combo='スリット+スリット機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:33,406 - INFO - need列サマリ combo='スライス+スライス機1\\u3000湖南' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-18 10:39:33,413 - INFO - need列サマリ combo='エンボス+エンボス\\u3000湖南' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-18 10:39:33,418 - INFO - need列サマリ combo='接続+熱融着機\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:33,423 - INFO - need列サマリ combo='熱融着+熱融着機\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:33,429 - INFO - need列サマリ combo='検査+熱融着機\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:33,436 - INFO - need列サマリ combo='接続+スリット機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:33,444 - INFO - need列サマリ combo='接続+スライス機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:33,452 - INFO - need列サマリ combo='分割+スライス機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:33,459 - INFO - need列サマリ combo='分割+エンボス\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:33,466 - INFO - need列サマリ combo='分割+スリット機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:33,472 - INFO - need列サマリ combo='分割+EC機\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:33,479 - INFO - need列サマリ combo='巻返し+スリット機1\\u3000湖南' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-18 10:39:33,499 - INFO - need 特別指定ルール: 2 件（工程名+機械名キー）。", "[child] 2026-05-18 10:39:33,502 - INFO - 『master.xlsm」からスキルと設備覝件(need)を読み込みました。", "[child] 2026-05-18 10:39:33,554 - INFO - 組み合わせ表: 工程+機械キー 15 種類・編集行 117 を配台プリセットとして読み込みました。", "[child] 2026-05-18 10:39:36,385 - INFO - マスタ「設定_機械_日次始業準備」: 機械 12 件の日次始業準備（分）を読み込みました（必要人数指定 12 件）。", "[child] 2026-05-18 10:39:38,744 - INFO - 定常枠: master メイン A15=08:25（結果シートの定常外着色・出勤簿生成の参照）", "[child] 2026-05-18 10:39:38,750 - INFO - 機械カレンダー: 7 日分・設備占有ブロック合計 76 件を配台に反映しました。", "[child] 2026-05-18 10:39:38,759 - INFO - need配台時追加人数: メイン割付は基本必須人数のみ。余力は全シミュレーション後」未割当かつスキル保有社をサブに追記しました。（メインで増員探索れる従来挙動: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1）", "[child] 2026-05-18 10:39:38,769 - INFO - 段階2: PM_AI_STAGE2_SKIP_TODAY_DISPATCH により当日は配台せず、計画開始日を 2026-05-19 にずらしました。", "[child] 2026-05-18 10:39:38,773 - INFO - 計画基準日時: 2026/05/18 10:39:38（現在時刻フォールバック）", "[child] 2026-05-18 10:39:38,877 - INFO - 「master.xlsm」の各メンバーの勤怠シートを読み込みました。", "[child] 2026-05-18 10:39:38,879 - INFO - 勤怠列: AI 入力は「備考」のみ。備考は空の日は「休暇区分」（公休・後休・他拠点勤務など）を reason に反映しました。", "[child] 2026-05-18 10:39:38,887 - INFO - 勤怠列: 任意「残業(分)」は退勤上限の時刻、または定時退勤からの延長分（1〜720 の整数＝分）を指定できます（全日休み行では無視）。", "[child] 2026-05-18 10:39:38,958 - WARNING - Sheet '配台計画_タスク入力' not in workbook; only one sheet 'タスク一覧' — using it.", "[child] 2026-05-18 10:39:38,968 - WARNING - probe excel failed (no header): path='C:\\\\工程管理AIプロジェクト_JAVA\\\\output\\\\plan_input_tasks.xlsx' sheet='配台計画_タスク入力' err=\"There is no item named 'xl/sharedStrings.xml' in the archive\"", "[child] 2026-05-18 10:39:38,970 - WARNING - Sheet '配台計画_タスク入力' not in workbook; only one sheet 'タスク一覧' — using it.", "[child] 2026-05-18 10:39:38,990 - INFO - 配台試行ルール: JSON 'C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json' から 42 件（Excel の「設定_配台不要工程」read_excel はスキップ）。", "[child] 2026-05-18 10:39:39,037 - INFO - master.xlsm speed: シート 'speed' から 16 件の (工程名, 機械名) 速度を読み込みました。", "[child] 2026-05-18 10:39:39,044 - INFO - 配台シート読込: master.xlsm「speed」の速度を 55 行に適用（マスタ未該当 3 行は加工速度セルを変更しませんでした）。", "[child] 2026-05-18 10:39:39,046 - INFO - 計画タスク入力: PM_AI_PLAN_INPUT_PATH='C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx' を読み込みました。", "[child] 2026-05-18 10:39:39,056 - WARNING - タスク特別指定: AI 解析対象はありません（「特別指定_備考」列は空の可能性はありした）。总行数=58」依頼NOのある行=58」備考は入っている行=0。段階2実行剝にブックを保存し、本当に「特別指定_備考」列へ入力しているか確認してください。", "[child] 2026-05-18 10:39:39,068 - INFO - 配台シミュレータ: ロール単位を実効化 依頼NO=W5-14 qty_m=100.0 シートロール単位=22.75 → 実効=25.0", "[child] 2026-05-18 10:39:39,076 - INFO - task_queue 構築完了: total=51（配台試行によりスキップ 7 行）", "[child] 2026-05-18 10:39:39,085 - INFO - 段階2: OOXML に sharedStrings.xml が無いブックのため、配台シート一括書込（openpyxl）をスキップ（専用UI等の xlsx）", "[child] 2026-05-18 10:39:39,087 - INFO - 配台試行順番: 「配台試行順番」列の値をしのまま使用しました（全 51 行）。", "[child] 2026-05-18 10:39:39,108 - INFO - DEBUG[task=Y3-26] task_queueに存在しません（完了/残量0/依頼NO厳密一致の可能性）。", "[child] 2026-05-18 10:39:39,110 - INFO - DISPATCH_INTERVAL_MIRROR_ENFORCE: 設備・人の占有を区間ミラーで追跡しした（無効化は 設定_環境変数 等で DISPATCH_INTERVAL_MIRROR_ENFORCE=0）。", "[child] 2026-05-18 10:39:39,118 - INFO - 依頼NO直列配台: 無効。start_date を満たれ全行は当日候補になり」配台試行順・設備ルールで順庝付けしした。", "[child] 2026-05-18 10:39:39,129 - INFO - need人数(試行順優先フロー) order=1 task=Y5-12 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,135 - INFO - need人数(試行順優先フロー) order=1 task=Y5-12 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,142 - INFO - need人数(試行順優先フロー) order=2 task=Y5-10 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,147 - INFO - need人数(試行順優先フロー) order=2 task=Y5-10 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,154 - INFO - need人数(試行順優先フロー) order=3 task=W5-5 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:39,161 - INFO - need人数(試行順優先フロー) order=3 task=W5-5 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:39,169 - INFO - need人数(試行順優先フロー) order=4 task=W5-5 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-18 10:39:39,175 - INFO - need人数(試行順優先フロー) order=4 task=W5-5 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-18 10:39:39,184 - INFO - need人数(試行順優先フロー) order=5 task=Y5-18 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,191 - INFO - need人数(試行順優先フロー) order=5 task=Y5-18 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,203 - INFO - need人数(試行順優先フロー) order=7 task=Y5-25 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:39,210 - INFO - need人数(試行順優先フロー) order=7 task=Y5-25 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:39,217 - WARNING - 段階2: 依頼NO=Y5-25 日付=2026-05-19 工程/機械=SEC/SEC機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 6 人いしたは」設備の加工開始下限=2026-05-19 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-19 17:00 占有キー=SEC機 湖南", "[child] 2026-05-18 10:39:39,222 - INFO - need人数(試行順優先フロー) order=8 task=W5-15 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,231 - INFO - need人数(試行順優先フロー) order=8 task=W5-15 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,242 - INFO - need人数(試行順優先フロー) order=6 task=W5-15 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:39,247 - INFO - need人数(試行順優先フロー) order=6 task=W5-15 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:39,255 - WARNING - 段階2: 依頼NO=W5-15 日付=2026-05-19 工程/機械=EC/EC機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 3 人いしたは」設備の加工開始下限=2026-05-19 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-19 17:00 占有キー=EC機 湖南", "[child] 2026-05-18 10:39:39,266 - INFO - need人数(試行順優先フロー) order=12 task=Y5-13 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,274 - INFO - need人数(試行順優先フロー) order=13 task=Y5-36 工程/機械=スライス/スライス機1　湖南 req_num=3 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:39,285 - INFO - need人数(試行順優先フロー) order=22 task=Y5-15 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,305 - INFO - need人数(試行順優先フロー) order=12 task=Y5-13 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,309 - INFO - need人数(試行順優先フロー) order=4 task=W5-5 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-18 10:39:39,323 - INFO - need人数(試行順優先フロー) order=6 task=W5-15 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:39,331 - INFO - need人数(試行順優先フロー) order=7 task=Y5-25 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:39,344 - INFO - need人数(試行順優先フロー) order=9 task=Y5-19 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,349 - INFO - need人数(試行順優先フロー) order=9 task=Y5-19 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,356 - INFO - need人数(試行順優先フロー) order=10 task=Y5-32 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,366 - INFO - need人数(試行順優先フロー) order=10 task=Y5-32 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,373 - INFO - need人数(試行順優先フロー) order=11 task=Y5-32 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:39,383 - INFO - need人数(試行順優先フロー) order=11 task=Y5-32 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:39,391 - INFO - need人数(試行順優先フロー) order=12 task=Y5-13 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,400 - WARNING - 段階2: 依頼NO=Y5-13 日付=2026-05-20 工程/機械=スライス/スライス機1　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 6 人いしたは」設備の加工開始下限=2026-05-20 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-20 17:00 占有キー=スライス機1 湖南", "[child] 2026-05-18 10:39:39,404 - INFO - need人数(試行順優先フロー) order=14 task=W5-11 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:39,411 - INFO - need人数(試行順優先フロー) order=15 task=Y5-21 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:39,420 - INFO - need人数(試行順優先フロー) order=14 task=W5-11 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:39,423 - INFO - need人数(試行順優先フロー) order=15 task=Y5-21 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:39,435 - INFO - need人数(試行順優先フロー) order=14 task=W5-11 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:39,438 - INFO - need人数(試行順優先フロー) order=20 task=V5-5 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,450 - INFO - need人数(試行順優先フロー) order=20 task=V5-5 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,455 - INFO - need人数(試行順優先フロー) order=14 task=W5-11 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:39,459 - INFO - need人数(試行順優先フロー) order=23 task=W5-6 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:39,474 - INFO - need人数(試行順優先フロー) order=4 task=W5-5 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-18 10:39:39,484 - INFO - need人数(試行順優先フロー) order=12 task=Y5-13 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,492 - INFO - need人数(試行順優先フロー) order=13 task=Y5-36 工程/機械=スライス/スライス機1　湖南 req_num=3 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:39,498 - INFO - need人数(試行順優先フロー) order=13 task=Y5-36 工程/機械=スライス/スライス機1　湖南 req_num=3 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:39,511 - INFO - need人数(試行順優先フロー) order=14 task=W5-11 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:39,520 - INFO - need人数(試行順優先フロー) order=15 task=Y5-21 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:39,534 - INFO - need人数(試行順優先フロー) order=16 task=Y5-23 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:39,540 - INFO - need人数(試行順優先フロー) order=16 task=Y5-23 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:39,552 - INFO - need人数(試行順優先フロー) order=20 task=V5-5 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,558 - INFO - need人数(試行順優先フロー) order=21 task=V5-6 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,562 - INFO - need人数(試行順優先フロー) order=21 task=V5-6 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,569 - INFO - need人数(試行順優先フロー) order=22 task=Y5-15 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,577 - INFO - need人数(試行順優先フロー) order=22 task=Y5-15 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,586 - WARNING - 段階2: 依頼NO=Y5-15 日付=2026-05-21 工程/機械=スライス/スライス機1　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 6 人いしたは」設備の加工開始下限=2026-05-21 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-21 17:00 占有キー=スライス機1 湖南", "[child] 2026-05-18 10:39:39,593 - INFO - need人数(試行順優先フロー) order=23 task=W5-6 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:39,601 - INFO - need人数(試行順優先フロー) order=40 task=W5-12 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,609 - INFO - need人数(試行順優先フロー) order=23 task=W5-6 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:39,614 - INFO - need人数(試行順優先フロー) order=4 task=W5-5 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=3人", "[child] 2026-05-18 10:39:39,623 - INFO - need人数(試行順優先フロー) order=16 task=Y5-23 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:39,637 - INFO - need人数(試行順優先フロー) order=17 task=Y5-22 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:39,643 - INFO - need人数(試行順優先フロー) order=17 task=Y5-22 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:39,660 - INFO - need人数(試行順優先フロー) order=22 task=Y5-15 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=5人", "[child] 2026-05-18 10:39:39,670 - INFO - need人数(試行順優先フロー) order=23 task=W5-6 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:39,673 - INFO - need人数(試行順優先フロー) order=26 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=5人", "[child] 2026-05-18 10:39:39,683 - INFO - need人数(試行順優先フロー) order=26 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=5人", "[child] 2026-05-18 10:39:39,691 - WARNING - 段階2: 依頼NO=Y5-16 日付=2026-05-22 工程/機械=スライス/スライス機1　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 5 人いしたは」設備の加工開始下限=2026-05-22 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-22 17:00 占有キー=スライス機1 湖南", "[child] 2026-05-18 10:39:39,698 - INFO - need人数(試行順優先フロー) order=23 task=W5-6 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:39,707 - INFO - need人数(試行順優先フロー) order=40 task=W5-12 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=5人", "[child] 2026-05-18 10:39:39,713 - INFO - need人数(試行順優先フロー) order=41 task=W5-16 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=5人", "[child] 2026-05-18 10:39:39,718 - INFO - need人数(試行順優先フロー) order=43 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=5人", "[child] 2026-05-18 10:39:39,722 - INFO - need人数(試行順優先フロー) order=44 task=W5-17 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=5人", "[child] 2026-05-18 10:39:39,738 - INFO - DEBUG[day=2026-05-23] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-18 10:39:39,739 - INFO - DEBUG[day=2026-05-24] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-18 10:39:39,750 - INFO - need人数(試行順優先フロー) order=17 task=Y5-22 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:39,772 - INFO - need人数(試行順優先フロー) order=18 task=JR260502 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,779 - INFO - need人数(試行順優先フロー) order=18 task=JR260502 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,806 - INFO - need人数(試行順優先フロー) order=19 task=JR260502 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,813 - INFO - need人数(試行順優先フロー) order=19 task=JR260502 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,831 - INFO - need人数(試行順優先フロー) order=23 task=W5-6 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:39,840 - WARNING - 段階2: 依頼NO=W5-6 日付=2026-05-25 工程/機械=EC/EC機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 3 人いしたは」設備の加工開始下限=2026-05-25 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-25 17:00 占有キー=EC機 湖南", "[child] 2026-05-18 10:39:39,844 - INFO - need人数(試行順優先フロー) order=24 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-18 10:39:39,854 - INFO - need人数(試行順優先フロー) order=24 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-18 10:39:39,861 - INFO - need人数(試行順優先フロー) order=25 task=Y5-27 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:39,868 - INFO - need人数(試行順優先フロー) order=25 task=Y5-27 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:39,883 - INFO - need人数(試行順優先フロー) order=26 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,888 - INFO - need人数(試行順優先フロー) order=29 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,896 - INFO - need人数(試行順優先フロー) order=30 task=Y5-17 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,906 - INFO - need人数(試行順優先フロー) order=40 task=W5-12 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,910 - INFO - need人数(試行順優先フロー) order=41 task=W5-16 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,919 - INFO - need人数(試行順優先フロー) order=26 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,924 - INFO - need人数(試行順優先フロー) order=26 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,930 - INFO - need人数(試行順優先フロー) order=29 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,938 - INFO - need人数(試行順優先フロー) order=40 task=W5-12 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,942 - INFO - need人数(試行順優先フロー) order=29 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,949 - INFO - need人数(試行順優先フロー) order=30 task=Y5-17 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,956 - INFO - need人数(試行順優先フロー) order=40 task=W5-12 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,960 - INFO - need人数(試行順優先フロー) order=41 task=W5-16 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,968 - INFO - need人数(試行順優先フロー) order=26 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,971 - INFO - need人数(試行順優先フロー) order=29 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,977 - INFO - need人数(試行順優先フロー) order=30 task=Y5-17 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:39,982 - INFO - need人数(試行順優先フロー) order=43 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,986 - INFO - need人数(試行順優先フロー) order=44 task=W5-17 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:39,995 - INFO - need人数(試行順優先フロー) order=26 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:40,000 - INFO - need人数(試行順優先フロー) order=26 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:40,003 - INFO - need人数(試行順優先フロー) order=29 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:40,009 - INFO - need人数(試行順優先フロー) order=43 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:40,013 - INFO - need人数(試行順優先フロー) order=43 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:40,015 - INFO - need人数(試行順優先フロー) order=44 task=W5-17 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:40,024 - INFO - need人数(試行順優先フロー) order=26 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:40,028 - INFO - need人数(試行順優先フロー) order=29 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:40,033 - INFO - need人数(試行順優先フロー) order=30 task=Y5-17 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:40,036 - INFO - need人数(試行順優先フロー) order=43 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:40,051 - INFO - need人数(試行順優先フロー) order=23 task=W5-6 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=2人", "[child] 2026-05-18 10:39:40,062 - INFO - need人数(試行順優先フロー) order=24 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-18 10:39:40,088 - INFO - need人数(試行順優先フロー) order=25 task=Y5-27 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:40,105 - INFO - need人数(試行順優先フロー) order=26 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:40,121 - INFO - need人数(試行順優先フロー) order=27 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:40,129 - INFO - need人数(試行順優先フロー) order=27 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:40,145 - INFO - need人数(試行順優先フロー) order=29 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:40,154 - INFO - need人数(試行順優先フロー) order=30 task=Y5-17 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=6人", "[child] 2026-05-18 10:39:40,169 - INFO - need人数(試行順優先フロー) order=31 task=V5-9 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:40,176 - INFO - need人数(試行順優先フロー) order=31 task=V5-9 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:40,183 - INFO - need人数(試行順優先フロー) order=35 task=W5-16 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,188 - INFO - need人数(試行順優先フロー) order=36 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,196 - INFO - need人数(試行順優先フロー) order=43 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:40,205 - INFO - need人数(試行順優先フロー) order=45 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,223 - INFO - need人数(試行順優先フロー) order=35 task=W5-16 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,229 - INFO - need人数(試行順優先フロー) order=24 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-18 10:39:40,250 - INFO - need人数(試行順優先フロー) order=27 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,264 - INFO - need人数(試行順優先フロー) order=28 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,271 - INFO - need人数(試行順優先フロー) order=28 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,281 - INFO - need人数(試行順優先フロー) order=30 task=Y5-17 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\\u3000湖南']=0] max_team候補=2 capable=5人", "[child] 2026-05-18 10:39:40,293 - INFO - need人数(試行順優先フロー) order=31 task=V5-9 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=5人", "[child] 2026-05-18 10:39:40,305 - INFO - need人数(試行順優先フロー) order=35 task=W5-16 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=2人", "[child] 2026-05-18 10:39:40,312 - INFO - need人数(試行順優先フロー) order=36 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=2人", "[child] 2026-05-18 10:39:40,317 - INFO - need人数(試行順優先フロー) order=36 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=2人", "[child] 2026-05-18 10:39:40,322 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,328 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,334 - INFO - need人数(試行順優先フロー) order=39 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,339 - INFO - need人数(試行順優先フロー) order=40 task=W5-12 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=5人", "[child] 2026-05-18 10:39:40,348 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,351 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,358 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,366 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,372 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,377 - INFO - need人数(試行順優先フロー) order=39 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,388 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,392 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,400 - INFO - need人数(試行順優先フロー) order=39 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,409 - INFO - need人数(試行順優先フロー) order=42 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=5人", "[child] 2026-05-18 10:39:40,419 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,423 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,429 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,438 - INFO - need人数(試行順優先フロー) order=42 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=5人", "[child] 2026-05-18 10:39:40,447 - WARNING - 段階2: 依頼NO=Y5-20 日付=2026-05-27 工程/機械=スリット/スリット機1　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 5 人いしたは」設備の加工開始下限=2026-05-27 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-27 17:00 占有キー=スリット機1 湖南", "[child] 2026-05-18 10:39:40,451 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,457 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,463 - INFO - need人数(試行順優先フロー) order=39 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=5人", "[child] 2026-05-18 10:39:40,473 - INFO - need人数(試行順優先フロー) order=24 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-18 10:39:40,481 - INFO - need人数(試行順優先フロー) order=32 task=W5-12 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,485 - INFO - need人数(試行順優先フロー) order=32 task=W5-12 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,493 - INFO - need人数(試行順優先フロー) order=33 task=W5-12 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-18 10:39:40,499 - INFO - need人数(試行順優先フロー) order=33 task=W5-12 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-18 10:39:40,513 - INFO - need人数(試行順優先フロー) order=37 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:40,532 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:40,535 - INFO - need人数(試行順優先フロー) order=39 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:40,539 - INFO - need人数(試行順優先フロー) order=42 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:40,549 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:40,558 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:40,562 - INFO - need人数(試行順優先フロー) order=39 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:40,568 - INFO - need人数(試行順優先フロー) order=43 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:40,573 - INFO - need人数(試行順優先フロー) order=45 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,588 - INFO - need人数(試行順優先フロー) order=33 task=W5-12 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-18 10:39:40,610 - INFO - need人数(試行順優先フロー) order=38 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:40,638 - INFO - need人数(試行順優先フロー) order=39 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:40,650 - INFO - need人数(試行順優先フロー) order=42 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:40,659 - INFO - need人数(試行順優先フロー) order=43 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:40,669 - INFO - need人数(試行順優先フロー) order=34 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,673 - INFO - need人数(試行順優先フロー) order=45 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,677 - INFO - need人数(試行順優先フロー) order=34 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,682 - INFO - DEBUG[day=2026-05-30] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-18 10:39:40,690 - INFO - DEBUG[day=2026-05-31] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-18 10:39:40,701 - INFO - need人数(試行順優先フロー) order=34 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,712 - INFO - need人数(試行順優先フロー) order=39 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\\u3000湖南']=0] max_team候補=3 capable=6人", "[child] 2026-05-18 10:39:40,726 - INFO - need人数(試行順優先フロー) order=45 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,729 - INFO - need人数(試行順優先フロー) order=45 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,737 - WARNING - 段階2: 依頼NO=W5-8 日付=2026-06-01 工程/機械=EC/EC機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 3 人いしたは」設備の加工開始下限=2026-06-01 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-06-01 17:00 占有キー=EC機 湖南", "[child] 2026-05-18 10:39:40,743 - INFO - need人数(試行順優先フロー) order=46 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-18 10:39:40,746 - INFO - need人数(試行順優先フロー) order=46 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-18 10:39:40,763 - INFO - need人数(試行順優先フロー) order=48 task=C5-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:40,768 - INFO - need人数(試行順優先フロー) order=48 task=C5-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:40,788 - INFO - need人数(試行順優先フロー) order=45 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=2人", "[child] 2026-05-18 10:39:40,802 - INFO - need人数(試行順優先フロー) order=46 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-18 10:39:40,814 - INFO - need人数(試行順優先フロー) order=47 task=C5-1 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,818 - INFO - need人数(試行順優先フロー) order=47 task=C5-1 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,831 - INFO - need人数(試行順優先フロー) order=46 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=4人", "[child] 2026-05-18 10:39:40,842 - INFO - need人数(試行順優先フロー) order=49 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:40,847 - INFO - need人数(試行順優先フロー) order=49 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:40,855 - INFO - need人数(試行順優先フロー) order=50 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,860 - INFO - need人数(試行順優先フロー) order=50 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,867 - INFO - DEBUG[day=2026-06-04] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-18 10:39:40,870 - INFO - DEBUG[day=2026-06-05] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-18 10:39:40,875 - INFO - DEBUG[day=2026-06-06] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-18 10:39:40,880 - INFO - DEBUG[day=2026-06-07] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-18 10:39:40,887 - INFO - need人数(試行順優先フロー) order=49 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\\u3000湖南']=0] max_team候補=1 capable=6人", "[child] 2026-05-18 10:39:40,896 - INFO - need人数(試行順優先フロー) order=50 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\\u3000湖南']=0] max_team候補=2 capable=3人", "[child] 2026-05-18 10:39:40,909 - INFO - need人数(試行順優先フロー) order=51 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=3人", "[child] 2026-05-18 10:39:40,912 - INFO - need人数(試行順優先フロー) order=51 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=3人", "[child] 2026-05-18 10:39:40,928 - INFO - need人数(試行順優先フロー) order=51 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=3人", "[child] 2026-05-18 10:39:40,942 - INFO - need人数(試行順優先フロー) order=51 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\\u3000湖南']=0] max_team候補=1 capable=3人", "[child] 2026-05-18 10:39:40,948 - INFO - DEBUG[day=2026-06-11] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-18 10:39:40,953 - INFO - DEBUG[day=2026-06-12] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-18 10:39:40,962 - INFO - DEBUG[day=2026-06-13] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-18 10:39:40,966 - INFO - DEBUG[day=2026-06-14] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-18 10:39:40,971 - INFO - DEBUG[day=2026-06-15] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-18 10:39:40,980 - INFO - DEBUG[day=2026-06-16] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-18 10:39:40,985 - INFO - DEBUG[day=2026-06-17] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-18 10:39:40,990 - INFO - DEBUG[day=2026-06-18] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-18 10:39:40,996 - INFO - DEBUG[day=2026-06-19] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-18 10:39:41,001 - INFO - DEBUG[day=2026-06-20] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-18 10:39:41,005 - INFO - DEBUG[day=2026-06-21] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-18 10:39:41,008 - INFO - DEBUG[day=2026-06-22] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-18 10:39:41,012 - INFO - DEBUG[day=2026-06-23] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-18 10:39:41,015 - INFO - DEBUG[day=2026-06-24] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-18 10:39:41,018 - INFO - DEBUG[day=2026-06-25] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-18 10:39:41,021 - INFO - DEBUG[day=2026-06-26] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-18 10:39:41,024 - INFO - DEBUG[day=2026-06-27] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-18 10:39:41,028 - INFO - DEBUG[day=2026-06-28] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-18 10:39:41,034 - INFO - DEBUG[day=2026-06-29] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-18 10:39:41,043 - INFO - DEBUG[day=2026-06-30] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None", "[child] 2026-05-18 10:39:41,081 - INFO - 日次始業準備: 当日先頭の加工から離れていた帯を 20 件、先頭加工の直前に寄せました。", "[child] 2026-05-18 10:39:41,101 - INFO - 段階2出力の整理: 計画*・人員*（および旧 production_plan_multi_day_* / member_schedule_*）の .xlsx/.json を 8 件削除しました。", "[child] 2026-05-18 10:39:43,186 - INFO - 定常枠: master メイン A15/B15 → 08:25 ～ 17:00（結果の定常外「日時帯」着色）", "[child] 2026-05-18 10:39:43,194 - INFO - 段階2: 結果ブックを作成しした → 計画2605181039383714.xlsx", "[child] 2026-05-18 10:39:55,575 - INFO - 加工実績明細: '\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA\\NO(ロット)別問合せ_20260518_092902.xlsx' の '先頭シート' を 21112 行読み込み。", "[child] 2026-05-18 10:39:57,866 - INFO - 先頭シート: ガント用セグメントは0件です。表示日（sorted_dates）に重ならない実績のみの場合、描画されません。", "[child] 2026-05-18 10:39:57,871 - INFO - 先頭シート からガント用セグメント 0 件を生成しました。", "[child] 2026-05-18 10:39:57,882 - INFO - 結果_タスク一覧の列順ソース: 既定（37 列）", "[child] 2026-05-18 10:39:57,884 - INFO - 列順・表示のカスタマイズ: マクロ実行ブックにシート「列設定_結果_タスク一覧」を追加。 見出し「列名」「表示」… 表示は FALSE の列は結果シートで非表示。 1行「履歴」で履歴1～n を挿入。VBA の「列設定_結果_タスク一覧_チェックボックスを配置」でチェックボックスを表示列に連動可能。", "[child] 2026-05-18 10:39:57,996 - INFO - Excel: header row auto-detected at Excel row 6 (pandas header=5). file='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\湖南工場\\\\湖南共有\\\\生産管理システム\\\\管理システム\\\\●DATA\\\\生産計画問合せ\\\\工程別生産計画問合せ問合せ_20260518_071915.xlsx' sheet=0", "[child] 2026-05-18 10:39:58,151 - INFO - Excel: 工程別問合せ風の複合見出し成形を適用しました（header Excel row=6）。", "[child] 2026-05-18 10:39:58,161 - INFO - タスク入力: 列「未加工」の欠損セル 1 件を「換算数量」−「実加工数」で補完しました。", "[child] 2026-05-18 10:39:58,167 - INFO - タスク入力: PM_AI_PROCESSING_PLAN_PATH='\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ問合せ_20260518_071915.xlsx' を読み込みました。", "[child] [stage1-input] 加工計画DATA 読込完了: ファイル='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\湖南工場\\\\湖南共有\\\\生産管理システム\\\\管理システム\\\\●DATA\\\\生産計画問合せ\\\\工程別生産計画問合せ問合せ_20260518_071915.xlsx' シート（文脈ラベル）='先頭シート'", "[child] [stage1-input] 参照環境変数: PM_AI_PROCESSING_PLAN_PATH, PM_AI_PROCESSING_PLAN_SHEET, PM_AI_PROCESSING_PLAN_HEADER_ROW, PM_AI_TASK_INPUT_SOURCE_DIR", "[child] [stage1-input] PM_AI_TASK_INPUT_SOURCE_DIR='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\湖南工場\\\\湖南共有\\\\生産管理システム\\\\管理システム\\\\●DATA\\\\生産計画問合せ'", "[child] 2026-05-18 10:39:58,384 - INFO - 段階2: 表シート正本 JSON（Excel より先）を 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605181039383714表.json' に出力しました（same_dir_as_output）。", "[child] 2026-05-18 10:39:59,269 - INFO - 段階2: 計画ブックへの設備ガント Excel シートは省略します（設備ガント(グラフィック)用の契約 JSON のみ出力。ブックへ含める場合は PM_AI_STAGE2_WRITE_EXCEL_GANTT_SHEETS=1）。", "[child] 2026-05-18 10:39:59,415 - INFO - 段階2: 設備ガント描画契約 JSON（再描画用）を 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605181039383714設.json' に出力しました（same_dir_as_output）。", "[child] 2026-05-18 10:40:03,227 - INFO - 段階2: 結果_タスク一覧 JSON サイドカーを 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605181039383714一覧.json' に出力しました。", "[child] 2026-05-18 10:40:04,747 - INFO - 列設定シート図形コピー: Excel COM を廃止したためスキップしました（手動コピーまたはマクロで代替してください）。", "[child] 2026-05-18 10:40:05,563 - INFO - plan_workbook_sidecar: 同名 JSON を出力しました path=C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605181039383714.json (same_dir_as_output)", "[child] 2026-05-18 10:40:05,570 - INFO - 段階2: 計画ブック（全シート）の JSON を 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605181039383714.json' に出力しました。", "[child] 2026-05-18 10:40:07,519 - INFO - plan_workbook_sidecar: 論理ビュー JSON を出力 path=C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605181039383714論.json (same_dir_as_output)", "[child] 2026-05-18 10:40:07,528 - INFO - 段階2: 計画ブック 論理ビュー JSON（結合展開）を 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605181039383714論.json' に出力しました。", "[child] 2026-05-18 10:40:07,535 - INFO - 完了: 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605181039383714.xlsx' を生成しました。", "[child] 2026-05-18 10:40:07,700 - INFO - 段階2: PowerQuery 用に 'C:\\工程管理AIプロジェクト_JAVA\\code\\output\\結果_配台表.xlsx' を出力しました。", "[child] 2026-05-18 10:40:07,709 - INFO - 段階2: 結果_配台表 JSON を 'C:\\工程管理AIプロジェクト_JAVA\\code\\output\\結果_配台表.json' に出力しました。", "[child] 2026-05-18 10:40:07,716 - INFO - 段階2: メンバー別スケジュールを作成しした → 人員2605181039383714.xlsx", "[child] 2026-05-18 10:40:08,817 - INFO - 完了: 個人別スケジュールを 'C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605181039383714.xlsx' に出力しました。", "[child] 2026-05-18 10:40:09,132 - INFO - plan_workbook_sidecar: 同名 JSON を出力しました path=C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605181039383714.json (same_dir_as_output)", "[child] 2026-05-18 10:40:09,143 - INFO - 段階2: メンバー別スケジュール JSON を 'C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605181039383714.json' に出力しました。", "[child] 2026-05-18 10:40:09,150 - INFO - 段階2: OOXML に xl/sharedStrings.xml が無いブックのため、メイン AI サマリ（openpyxl）をスキップしました。Excel で対象ブックを開いて通常保存すると解消することがあります。", "[child] 2026-05-18 10:40:09,157 - INFO - 段階2: メイン P 列・グラフをブックへ保存できませんでした。 C:\\工程管理AIプロジェクト_JAVA\\code\\log\\gemini_usage_summary_for_main.txt に出力済み → マクロ「メインシート_Gemini利用サマリをP列に反映」で P 列のみ反映できます。", "[end] exitCode=0 (success)", "[stage2-ui] 最新成果物: production_plan=C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605181039383714.xlsx | member_schedule=C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605181039383714.xlsx", "[summary-ai-dispatch] パイプライン後エクセル出力: C:\\工程管理AIプロジェクト_JAVA\\code\\サマリ_AI配台.xlsx", "[delivery-calendar] バックグラウンド再読み込みを開始します。", "[equipment-gantt-graphic] ガントを更新: 計画2605181039383714.json（対象シート数=3, 表示=結果_設備ガント）", "[equipment-gantt-graphic] ガントを更新: 計画2605181039383714.json（対象シート数=3, 表示=結果_設備ガント）", "[dispatch-editor] trial: 試行前にメモリ上の表を JSON に同期 C:\\工程管理AIプロジェクト_JAVA\\code\\output\\結果_配台表.json", "[aladdin-plan-data] キャッシュ使用（同一ファイル名）: 工程別生産計画問合せ問合せ_20260518_071915.xlsx", "[processing-actuals-detail] 加工実績の元データが大きすぎます（21072064 バイト）。上限 20971520 バイト（環境変数 PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES）。値を引き上げるか、出力ファイルを分割してください。", "[summary-ai-dispatch] エクセル出力: C:\\工程管理AIプロジェクト_JAVA\\code\\サマリ_AI配台.xlsx （アラ・実績・シス比較=72 配台結果=82 加工実績=3631 アラジン加工計画取得データ=60）", "[stage2-ui] 最新成果物: production_plan=C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605181040404098.xlsx | member_schedule=C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605181040404098.xlsx", "[equipment-gantt-graphic] ガントを更新: 計画2605181040404098.json（対象シート数=3, 表示=結果_設備ガント）", "[dispatch-editor] trial: C:\\工程管理AIプロジェクト_JAVA\\code\\output\\dispatch_trial_shortages.json", "[equipment-gantt-graphic] ガントを更新: 計画2605181040404098.json（対象シート数=3, 表示=結果_設備ガント）", "[delivery-calendar] 段階3後: 段階3前・段階3後のみ反映（Python 再取得はスキップ）", "[equipment-gantt-graphic] ガントを更新: 計画2605181040404098.json（対象シート数=3, 表示=結果_設備ガント）", "[summary-ai-dispatch] 段階3後エクセル出力: C:\\工程管理AIプロジェクト_JAVA\\code\\サマリ_AI配台.xlsx", "[dispatch-editor] trial: 整合性OK（保存表と再読込JSONの数量・試行順）", "[aladdin-plan-data] キャッシュ使用（同一ファイル名）: 工程別生産計画問合せ問合せ_20260518_071915.xlsx", "[processing-actuals-detail] 加工実績の元データが大きすぎます（21072064 バイト）。上限 20971520 バイト（環境変数 PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES）。値を引き上げるか、出力ファイルを分割してください。", "[summary-ai-dispatch] エクセル出力: C:\\工程管理AIプロジェクト_JAVA\\code\\サマリ_AI配台.xlsx （アラ・実績・シス比較=72 配台結果=85 加工実績=3631 アラジン加工計画取得データ=60）", "[exclude-json] restored session: C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反,ロール単位の長さ.txt", "[equipment-gantt-graphic] ガントを更新: 計画2605181040404098.json（対象シート数=3, 表示=結果_設備ガント）", "[plan-input] loaded rows=58 cols=36 path=C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx", "[stage1-preview] loaded rows=59 cols=134 path=C:\\工程管理AIプロジェクト_JAVA\\output\\stage1_task_input_table.xlsx", "[exclude-json] restored session: C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品長.txt", "[boot] JavaFX Prism: ソフトウェア描画（GPU テスト不合格） order=sw — GPU テスト不合格", "[boot] PYTHONUTF8=1 PYTHONIOENCODING=utf-8 for child process.", "[startup] 自動バージョンアップは対象外（PMD.exe 直下に pm-ai-data のポータブル配布レイアウトがありません）。 user.dir=C:\\工程管理AIプロジェクト_JAVA\\code_java", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反,ロール単位の長さ.txt", "[equipment-gantt-graphic] ガントを更新: 計画2605181040404098.json（対象シート数=3, 表示=結果_設備ガント）", "[plan-input] loaded rows=58 cols=36 path=C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx", "[stage1-preview] loaded rows=59 cols=134 path=C:\\工程管理AIプロジェクト_JAVA\\output\\stage1_task_input_table.xlsx", "[exclude-json] restored session: C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品長.txt", "[boot] JavaFX Prism: ソフトウェア描画（GPU テスト不合格） order=sw — GPU テスト不合格", "[boot] PYTHONUTF8=1 PYTHONIOENCODING=utf-8 for child process.", "[startup] 自動バージョンアップは対象外（PMD.exe 直下に pm-ai-data のポータブル配布レイアウトがありません）。 user.dir=C:\\工程管理AIプロジェクト_JAVA\\code_java", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反,ロール単位の長さ.txt", "[equipment-gantt-graphic] ガントを更新: 計画2605181040404098.json（対象シート数=3, 表示=結果_設備ガント）", "[plan-input] loaded rows=58 cols=36 path=C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx", "[stage1-preview] loaded rows=59 cols=134 path=C:\\工程管理AIプロジェクト_JAVA\\output\\stage1_task_input_table.xlsx", "[exclude-json] restored session: C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品長.txt", "[boot] JavaFX Prism: ソフトウェア描画（GPU テスト不合格） order=sw — GPU テスト不合格", "[boot] PYTHONUTF8=1 PYTHONIOENCODING=utf-8 for child process.", "[startup] 自動バージョンアップは対象外（PMD.exe 直下に pm-ai-data のポータブル配布レイアウトがありません）。 user.dir=C:\\工程管理AIプロジェクト_JAVA\\code_java" ],
+  "mainRunLogScroll" : 0.9999420803671157,
+  "mainRunStage2ProductionPlan" : "C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605181040404098.xlsx",
+  "mainRunStage2MemberSchedule" : "C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605181040404098.xlsx",
   "mainRunStage2WriteExcel" : true,
   "mainRunStage2SkipTodayDispatch" : true,
   "mainRunStage2SkipInProgressDispatch" : false,
   "mainRunStage2ResultBookFont" : "Meiryo UI",
   "uiEnvRows" : [ {
     "name" : "PM_AI_PYTHON",
-    "value" : "python",
+    "value" : "C:\\pm-ai-data\\runtime\\python-embed\\python.exe",
     "description" : "段階1/2 等の子プロセスで使う Python 実行ファイル（パスは実行ファイル。フォルダのみ指定すると実行時に python.exe 等へ補正）。編集は環境変数タブのみ（実行・ログタブに Python 入力は無い）。値が空のとき: まず user.dir 周辺で pm-ai-data/runtime/python-embed/python.exe が実在すればそれを使い、無ければ OS の PATH 上の python / python3（開発ツリーに python-embed を置いていない場合はここに落ちる）。複数 Python を PATH で切り替えている／特定の python.exe に固定したいときは、本変数にその絶対パスを明示する。環境変数タブを空にしても動くのはこのフォールバックのため。初期化・空欄補完では pm-ai-data/runtime/python-embed/python.exe を user.dir から親ディレクトリへ最大12段まで辿って探索し、見つかれば絶対パスで入れる（ショートカットで user.dir が bin 等になる場合のため）。見つからずインストール根がポータル配布なら相対パス。開発などでは同梱 exe が取れたら絶対パス、無ければ PATH の python/python3。"
   }, {
     "name" : "PM_AI_REPO_ROOT",
@@ -92,7 +92,7 @@
   }, {
     "name" : "PM_AI_PORTABLE_BUNDLE_SOURCE_DIR",
     "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\pm-ai-package-release",
-    "description" : "ポータブル配布（PMD.exe と pm-ai-data）向け。正本は次のいずれか。（1）リポジトリルートのフォルダパス（UNC 可）。直下の version.txt とローカル pm-ai-data を比較し、新しいときのみ起動時に pm-ai-data を同期する。（2）バージョンアップ用の .zip ファイルのパス（配布は固定名 PMD_version_upgrade.zip を推奨。バージョンは ZIP と同じフォルダの外付け version.txt で区別）。起動時に ZIP を自動展開してから pm-ai-data に同期する。空のときは自動更新しない（情報表示のみ）。"
+    "description" : "ポータブル配布（PMD.exe と pm-ai-data）向け。正本は次のいずれか。（1）pm-ai-package-release フォルダの UNC（推奨。湖南／国分は工場既定で切替）。直下の外付け version.txt と PMD_version_upgrade.zip を参照する。（2）PMD_version_upgrade.zip のフルパス（ZIP 隣の version.txt で版比較）。空のときは自動更新しない（情報表示のみ）。"
   }, {
     "name" : "PM_AI_EXCEL_TRACE_TASK_ID",
     "value" : "",
@@ -382,7 +382,7 @@
     "value" : "0",
     "description" : "配台手動修正: 段階3試行後の日付セルで（段階3前）（段階3後）を改行せず1行表示（スペース区切り）。1/true/yes/on で有効。0/false/no/off/none で2行（改行）表示。既定は0（2行表示）。 — 配台計画手動修正タブ: 段階3試行後の日付セル表示。 1/true/yes/on で（段階3前）（段階3後）を1行（スペース区切り）。 0/false/no/off/none（既定）で2行（改行）。2行は固定行高44px・wrap-text なし。 Spreadsheet の layout IOOBE 回避のため。"
   } ],
-  "mainShellTabOrder" : [ "run", "planInput", "equipmentGanttGraphic", "deliveryCalendarView", "dispatchInteractive", "operatorCard", "uiBadgeDesign", "pushButtonDesign", "ganttPersonBadgeDesign", "env", "memorySettings", "globalSettings", "apiModelBenchmark", "userProfiles", "summaryAiDispatchExportCustomize", "masterSummary", "excludeRules", "specialRules", "actualsStatus", "planWorkspaceHistory", "codeLookupTables", "stage1Preview", "resultDispatch", "planResultViewer" ],
+  "mainShellTabOrder" : [ "run", "planInput", "dispatchInteractive", "equipmentGanttGraphic", "deliveryCalendarView", "operatorCard", "codeLookupTables", "uiBadgeDesign", "pushButtonDesign", "ganttPersonBadgeDesign", "planResultViewer", "stage1Preview", "resultDispatch", "masterSummary", "excludeRules", "specialRules", "planWorkspaceHistory", "summaryAiDispatchExportCustomize", "memorySettings", "apiModelBenchmark", "actualsStatus", "env", "globalSettings", "userProfiles" ],
   "mainShellTabLayout" : [ {
     "kind" : "tab",
     "color" : "#0000ff",
@@ -393,6 +393,10 @@
     "id" : "planInput"
   }, {
     "kind" : "tab",
+    "color" : "#1a3399",
+    "id" : "dispatchInteractive"
+  }, {
+    "kind" : "tab",
     "color" : "#1a4d1a",
     "id" : "equipmentGanttGraphic"
   }, {
@@ -401,15 +405,15 @@
     "id" : "deliveryCalendarView"
   }, {
     "kind" : "tab",
-    "color" : "#1a3399",
-    "id" : "dispatchInteractive"
-  }, {
-    "kind" : "tab",
     "color" : "#336666",
     "id" : "operatorCard"
   }, {
+    "kind" : "tab",
+    "color" : "#0000ff",
+    "id" : "codeLookupTables"
+  }, {
     "kind" : "group",
-    "color" : "#996600",
+    "color" : "#ffff00",
     "title" : "バッジ設定",
     "children" : [ {
       "kind" : "tab",
@@ -424,30 +428,22 @@
   }, {
     "kind" : "group",
     "color" : "#800080",
-    "title" : "環境設定",
+    "title" : "結果情報(デバッグ用)",
     "children" : [ {
       "kind" : "tab",
-      "id" : "env"
+      "id" : "planResultViewer"
     }, {
       "kind" : "tab",
-      "id" : "memorySettings"
+      "id" : "stage1Preview"
     }, {
       "kind" : "tab",
-      "id" : "globalSettings"
-    }, {
-      "kind" : "tab",
-      "id" : "apiModelBenchmark"
-    }, {
-      "kind" : "tab",
-      "id" : "userProfiles"
+      "id" : "resultDispatch"
     } ]
   }, {
     "kind" : "group",
+    "color" : "#666666",
     "title" : "その他",
     "children" : [ {
-      "kind" : "tab",
-      "id" : "summaryAiDispatchExportCustomize"
-    }, {
       "kind" : "tab",
       "id" : "masterSummary"
     }, {
@@ -458,31 +454,38 @@
       "id" : "specialRules"
     }, {
       "kind" : "tab",
-      "id" : "actualsStatus"
-    }, {
-      "kind" : "tab",
       "id" : "planWorkspaceHistory"
     }, {
       "kind" : "tab",
-      "id" : "codeLookupTables"
+      "id" : "summaryAiDispatchExportCustomize"
+    }, {
+      "kind" : "tab",
+      "id" : "memorySettings"
+    }, {
+      "kind" : "tab",
+      "id" : "apiModelBenchmark"
+    }, {
+      "kind" : "tab",
+      "id" : "actualsStatus"
     } ]
   }, {
     "kind" : "group",
-    "title" : "その他結果",
+    "color" : "#e64d4d",
+    "title" : "環境設定",
     "children" : [ {
       "kind" : "tab",
-      "id" : "stage1Preview"
+      "id" : "env"
     }, {
       "kind" : "tab",
-      "id" : "resultDispatch"
+      "id" : "globalSettings"
     }, {
       "kind" : "tab",
-      "id" : "planResultViewer"
+      "id" : "userProfiles"
     } ]
   } ],
   "innerTabSelectedIndexByShellTabKey" : {
+    "deliveryCalendarView" : 0,
     "codeLookupTables" : 4,
-    "deliveryCalendarView" : 1,
     "dispatchInteractive" : 0
   },
   "equipmentGanttGraphicZoomPercent" : 119.2307784007146,
@@ -494,7 +497,7 @@
   "equipmentGanttShiftWheelHScrollPercent" : 200.0,
   "equipmentGanttPersonBadgeGapPx" : 32.78048706054687,
   "equipmentGanttPersonBadgeBandVerticalOffsetPx" : -8.975611244759897,
-  "equipmentGanttGraphicDataFingerprint" : "89fd67a3063de53f52234f9cb785f347675f1e606318a8612efaa9eb313bca1d",
+  "equipmentGanttGraphicDataFingerprint" : "fa3827094886c4fe0795340979747fd717e844425584dfd89e4dffed656a1846",
   "equipmentGanttPersonBadgeDragAdjustEnabled" : true,
   "equipmentGanttPersonBadgeEnabled" : true,
   "equipmentGanttPersonBadgeWireEnabled" : true,
@@ -514,271 +517,61 @@
   "equipmentGanttPersonBadgeGlowSpread" : 0.13440000000000005,
   "equipmentGanttPersonBadgeOpacity" : 0.84,
   "equipmentGanttPersonBadgeStylesByMemberKey" : {
-    "岩崎 智香" : {
-      "fontFamily" : "Sans Serif Collection",
+    "沈 春光" : {
+      "fontFamily" : "Segoe UI Emoji",
       "fontPercent" : 88.0188639658802,
-      "fillHex" : "#c338b9",
+      "fillHex" : "#723974",
       "textHex" : "#f0f2f7",
-      "strokeHex" : "#500b4c",
-      "strokeWidth" : 0.0,
-      "cornerRadius" : 7.0,
-      "pill" : false,
-      "glowColorHex" : "#2fde6b",
-      "glowRadius" : 16.66,
-      "glowSpread" : 0.11200000000000002,
-      "opacity" : 0.67
-    },
-    "冨田 裕子" : {
-      "fontFamily" : "Agency FB",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#96b13a",
-      "textHex" : "#14171f",
-      "strokeHex" : "#455410",
-      "strokeWidth" : 3.0,
-      "cornerRadius" : 4.0,
-      "pill" : false,
-      "glowColorHex" : "#367cdc",
-      "glowRadius" : 31.919999999999998,
-      "glowSpread" : 0.13720000000000002,
-      "opacity" : 0.9
-    },
-    "宮島  剛" : {
-      "fontFamily" : "Colonna MT",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#5c9845",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#274a19",
-      "strokeWidth" : 3.0,
-      "cornerRadius" : 16.0,
-      "pill" : true,
-      "glowColorHex" : "#5bd12c",
-      "glowRadius" : 19.88,
-      "glowSpread" : 0.5516000000000001,
-      "opacity" : 0.67
-    },
-    "河合 直樹" : {
-      "fontFamily" : "French Script MT",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#632046",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#360a23",
-      "strokeWidth" : 1.0,
-      "cornerRadius" : 18.0,
-      "pill" : false,
-      "glowColorHex" : "#e632cb",
-      "glowRadius" : 20.58,
-      "glowSpread" : 0.2772,
-      "opacity" : 0.73
-    },
-    "大平 有希子" : {
-      "fontFamily" : "MS Reference Sans Serif",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#5699be",
-      "textHex" : "#14171f",
-      "strokeHex" : "#214a60",
-      "strokeWidth" : 0.5,
-      "cornerRadius" : 15.0,
-      "pill" : false,
-      "glowColorHex" : "#c18bf7",
-      "glowRadius" : 15.959999999999999,
-      "glowSpread" : 0.3556,
-      "opacity" : 0.88
-    },
-    "図司 智子" : {
-      "fontFamily" : "Dubai Medium",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#c9866f",
-      "textHex" : "#14171f",
-      "strokeHex" : "#603a2c",
-      "strokeWidth" : 2.0,
-      "cornerRadius" : 15.0,
-      "pill" : true,
-      "glowColorHex" : "#d165e8",
-      "glowRadius" : 9.1,
-      "glowSpread" : 0.5068,
-      "opacity" : 0.89
-    },
-    "松本 匡矢" : {
-      "fontFamily" : "Harlow Solid Italic",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#3963c4",
-      "textHex" : "#cbedba",
-      "strokeHex" : "#0d2459",
-      "strokeWidth" : 1.0,
-      "cornerRadius" : 0.0,
-      "pill" : false,
-      "glowColorHex" : "#3f6bd0",
-      "glowRadius" : 13.86,
-      "glowSpread" : 0.36680000000000007,
-      "opacity" : 0.92
-    },
-    "森下  誠" : {
-      "fontFamily" : "HG明朝E",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#81239f",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#3a054a",
-      "strokeWidth" : 2.0,
-      "cornerRadius" : 1.0,
-      "pill" : false,
-      "glowColorHex" : "#77d976",
-      "glowRadius" : 6.72,
-      "glowSpread" : 0.4732,
-      "opacity" : 0.97
-    },
-    "増田 治樹" : {
-      "fontFamily" : "Brush Script MT",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#3d5072",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#1b273e",
+      "strokeHex" : "#3d183e",
       "strokeWidth" : 2.5,
-      "cornerRadius" : 8.0,
+      "cornerRadius" : 10.0,
       "pill" : true,
-      "glowColorHex" : "#89a6dd",
-      "glowRadius" : 9.24,
-      "glowSpread" : 0.24080000000000001,
-      "opacity" : 0.76
+      "glowColorHex" : "#def654",
+      "glowRadius" : 28.28,
+      "glowSpread" : 0.1988,
+      "opacity" : 0.95
     },
-    "大谷 晴香" : {
+    "竹内 正美" : {
       "fontFamily" : "",
       "fontPercent" : 88.0188639658802,
-      "fillHex" : "#2367b9",
+      "fillHex" : "#257236",
+      "textHex" : "#e1a8c9",
+      "strokeHex" : "#0c3f17",
+      "strokeWidth" : 2.5,
+      "cornerRadius" : 17.0,
+      "pill" : false,
+      "glowColorHex" : "#50da6e",
+      "glowRadius" : 18.900000000000002,
+      "glowSpread" : 0.3892,
+      "opacity" : 0.68
+    },
+    "大久保 俊彦" : {
+      "fontFamily" : "Agency FB",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#66c7ac",
+      "textHex" : "#f1b3bd",
+      "strokeHex" : "#2c6a58",
+      "strokeWidth" : 3.5,
+      "cornerRadius" : 4.0,
+      "pill" : false,
+      "glowColorHex" : "#ed3589",
+      "glowRadius" : 7.28,
+      "glowSpread" : 0.5516000000000001,
+      "opacity" : 0.87
+    },
+    "中川 直也" : {
+      "fontFamily" : "Eras Medium ITC",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#803d8a",
       "textHex" : "#f0f2f7",
-      "strokeHex" : "#033168",
+      "strokeHex" : "#3a1540",
       "strokeWidth" : 0.5,
-      "cornerRadius" : 6.0,
+      "cornerRadius" : 11.0,
       "pill" : false,
-      "glowColorHex" : "#f08bc8",
-      "glowRadius" : 17.78,
-      "glowSpread" : 0.36680000000000007,
-      "opacity" : 0.9
-    },
-    "角 正彦" : {
-      "fontFamily" : "HG教科書体",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#36702c",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#173c10",
-      "strokeWidth" : 2.0,
-      "cornerRadius" : 6.0,
-      "pill" : true,
-      "glowColorHex" : "#85f772",
-      "glowRadius" : 30.38,
-      "glowSpread" : 0.462,
-      "opacity" : 0.82
-    },
-    "河林 陽介" : {
-      "fontFamily" : "HGP明朝B",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#a9559b",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#5b2452",
-      "strokeWidth" : 3.0,
-      "cornerRadius" : 12.0,
-      "pill" : true,
-      "glowColorHex" : "#c680bb",
-      "glowRadius" : 26.32,
-      "glowSpread" : 0.12600000000000003,
-      "opacity" : 0.73
-    },
-    "坂野 香織" : {
-      "fontFamily" : "Informal Roman",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#426cbb",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#142d5b",
-      "strokeWidth" : 1.0,
-      "cornerRadius" : 13.0,
-      "pill" : true,
-      "glowColorHex" : "#d6eb8c",
-      "glowRadius" : 22.26,
-      "glowSpread" : 0.4172,
-      "opacity" : 0.99
-    },
-    "山本 敬" : {
-      "fontFamily" : "Segoe Fluent Icons",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#40c459",
-      "textHex" : "#c1ecac",
-      "strokeHex" : "#136423",
-      "strokeWidth" : 0.0,
-      "cornerRadius" : 20.0,
-      "pill" : false,
-      "glowColorHex" : "#45f065",
-      "glowRadius" : 30.240000000000002,
-      "glowSpread" : 0.1708,
-      "opacity" : 0.63
-    },
-    "小野 眞太郎" : {
-      "fontFamily" : "Courier New",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#6dc159",
-      "textHex" : "#14171f",
-      "strokeHex" : "#2b5920",
-      "strokeWidth" : 1.5,
-      "cornerRadius" : 21.0,
-      "pill" : true,
-      "glowColorHex" : "#62c84a",
-      "glowRadius" : 21.84,
-      "glowSpread" : 0.4172,
+      "glowColorHex" : "#c6d32f",
+      "glowRadius" : 31.080000000000002,
+      "glowSpread" : 0.47600000000000003,
       "opacity" : 0.57
-    },
-    "近藤 厚生" : {
-      "fontFamily" : "HGｺﾞｼｯｸE",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#59c929",
-      "textHex" : "#14171f",
-      "strokeHex" : "#267205",
-      "strokeWidth" : 1.0,
-      "cornerRadius" : 0.0,
-      "pill" : false,
-      "glowColorHex" : "#dcf47f",
-      "glowRadius" : 11.479999999999999,
-      "glowSpread" : 0.5292,
-      "opacity" : 0.65
-    },
-    "京 直道" : {
-      "fontFamily" : "Constantia",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#361c7a",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#15053f",
-      "strokeWidth" : 3.0,
-      "cornerRadius" : 19.0,
-      "pill" : false,
-      "glowColorHex" : "#7556c6",
-      "glowRadius" : 18.060000000000002,
-      "glowSpread" : 0.5544,
-      "opacity" : 0.73
-    },
-    "飯田 剛成" : {
-      "fontFamily" : "Century",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#c4c852",
-      "textHex" : "#14171f",
-      "strokeHex" : "#595b1b",
-      "strokeWidth" : 1.0,
-      "cornerRadius" : 3.0,
-      "pill" : true,
-      "glowColorHex" : "#cfd370",
-      "glowRadius" : 29.259999999999998,
-      "glowSpread" : 0.40880000000000005,
-      "opacity" : 0.58
-    },
-    "東 龍平" : {
-      "fontFamily" : "Lucida Console",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#7a301b",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#370f03",
-      "strokeWidth" : 1.5,
-      "cornerRadius" : 21.0,
-      "pill" : false,
-      "glowColorHex" : "#e56a47",
-      "glowRadius" : 16.099999999999998,
-      "glowSpread" : 0.2632,
-      "opacity" : 0.58
     },
     "川島 吉伸" : {
       "fontFamily" : "High Tower Text",
@@ -822,75 +615,271 @@
       "glowSpread" : 0.4032,
       "opacity" : 0.69
     },
-    "中川 直也" : {
-      "fontFamily" : "Eras Medium ITC",
+    "東 龍平" : {
+      "fontFamily" : "Lucida Console",
       "fontPercent" : 88.0188639658802,
-      "fillHex" : "#803d8a",
+      "fillHex" : "#7a301b",
       "textHex" : "#f0f2f7",
-      "strokeHex" : "#3a1540",
-      "strokeWidth" : 0.5,
-      "cornerRadius" : 11.0,
+      "strokeHex" : "#370f03",
+      "strokeWidth" : 1.5,
+      "cornerRadius" : 21.0,
       "pill" : false,
-      "glowColorHex" : "#c6d32f",
-      "glowRadius" : 31.080000000000002,
-      "glowSpread" : 0.47600000000000003,
+      "glowColorHex" : "#e56a47",
+      "glowRadius" : 16.099999999999998,
+      "glowSpread" : 0.2632,
+      "opacity" : 0.58
+    },
+    "飯田 剛成" : {
+      "fontFamily" : "Century",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#c4c852",
+      "textHex" : "#14171f",
+      "strokeHex" : "#595b1b",
+      "strokeWidth" : 1.0,
+      "cornerRadius" : 3.0,
+      "pill" : true,
+      "glowColorHex" : "#cfd370",
+      "glowRadius" : 29.259999999999998,
+      "glowSpread" : 0.40880000000000005,
+      "opacity" : 0.58
+    },
+    "京 直道" : {
+      "fontFamily" : "Constantia",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#361c7a",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#15053f",
+      "strokeWidth" : 3.0,
+      "cornerRadius" : 19.0,
+      "pill" : false,
+      "glowColorHex" : "#7556c6",
+      "glowRadius" : 18.060000000000002,
+      "glowSpread" : 0.5544,
+      "opacity" : 0.73
+    },
+    "近藤 厚生" : {
+      "fontFamily" : "HGｺﾞｼｯｸE",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#59c929",
+      "textHex" : "#14171f",
+      "strokeHex" : "#267205",
+      "strokeWidth" : 1.0,
+      "cornerRadius" : 0.0,
+      "pill" : false,
+      "glowColorHex" : "#dcf47f",
+      "glowRadius" : 11.479999999999999,
+      "glowSpread" : 0.5292,
+      "opacity" : 0.65
+    },
+    "小野 眞太郎" : {
+      "fontFamily" : "Courier New",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#6dc159",
+      "textHex" : "#14171f",
+      "strokeHex" : "#2b5920",
+      "strokeWidth" : 1.5,
+      "cornerRadius" : 21.0,
+      "pill" : true,
+      "glowColorHex" : "#62c84a",
+      "glowRadius" : 21.84,
+      "glowSpread" : 0.4172,
       "opacity" : 0.57
     },
-    "大久保 俊彦" : {
-      "fontFamily" : "Agency FB",
+    "坂野 香織" : {
+      "fontFamily" : "Informal Roman",
       "fontPercent" : 88.0188639658802,
-      "fillHex" : "#66c7ac",
-      "textHex" : "#f1b3bd",
-      "strokeHex" : "#2c6a58",
-      "strokeWidth" : 3.5,
-      "cornerRadius" : 4.0,
-      "pill" : false,
-      "glowColorHex" : "#ed3589",
-      "glowRadius" : 7.28,
-      "glowSpread" : 0.5516000000000001,
-      "opacity" : 0.87
+      "fillHex" : "#426cbb",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#142d5b",
+      "strokeWidth" : 1.0,
+      "cornerRadius" : 13.0,
+      "pill" : true,
+      "glowColorHex" : "#d6eb8c",
+      "glowRadius" : 22.26,
+      "glowSpread" : 0.4172,
+      "opacity" : 0.99
     },
-    "竹内 正美" : {
+    "山本 敬" : {
+      "fontFamily" : "Segoe Fluent Icons",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#40c459",
+      "textHex" : "#c1ecac",
+      "strokeHex" : "#136423",
+      "strokeWidth" : 0.0,
+      "cornerRadius" : 20.0,
+      "pill" : false,
+      "glowColorHex" : "#45f065",
+      "glowRadius" : 30.240000000000002,
+      "glowSpread" : 0.1708,
+      "opacity" : 0.63
+    },
+    "河林 陽介" : {
+      "fontFamily" : "HGP明朝B",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#a9559b",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#5b2452",
+      "strokeWidth" : 3.0,
+      "cornerRadius" : 12.0,
+      "pill" : true,
+      "glowColorHex" : "#c680bb",
+      "glowRadius" : 26.32,
+      "glowSpread" : 0.12600000000000003,
+      "opacity" : 0.73
+    },
+    "角 正彦" : {
+      "fontFamily" : "HG教科書体",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#36702c",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#173c10",
+      "strokeWidth" : 2.0,
+      "cornerRadius" : 6.0,
+      "pill" : true,
+      "glowColorHex" : "#85f772",
+      "glowRadius" : 30.38,
+      "glowSpread" : 0.462,
+      "opacity" : 0.82
+    },
+    "増田 治樹" : {
+      "fontFamily" : "Brush Script MT",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#3d5072",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#1b273e",
+      "strokeWidth" : 2.5,
+      "cornerRadius" : 8.0,
+      "pill" : true,
+      "glowColorHex" : "#89a6dd",
+      "glowRadius" : 9.24,
+      "glowSpread" : 0.24080000000000001,
+      "opacity" : 0.76
+    },
+    "大谷 晴香" : {
       "fontFamily" : "",
       "fontPercent" : 88.0188639658802,
-      "fillHex" : "#257236",
-      "textHex" : "#e1a8c9",
-      "strokeHex" : "#0c3f17",
-      "strokeWidth" : 2.5,
-      "cornerRadius" : 17.0,
-      "pill" : false,
-      "glowColorHex" : "#50da6e",
-      "glowRadius" : 18.900000000000002,
-      "glowSpread" : 0.3892,
-      "opacity" : 0.68
-    },
-    "沈 春光" : {
-      "fontFamily" : "Segoe UI Emoji",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#723974",
+      "fillHex" : "#2367b9",
       "textHex" : "#f0f2f7",
-      "strokeHex" : "#3d183e",
-      "strokeWidth" : 2.5,
-      "cornerRadius" : 10.0,
+      "strokeHex" : "#033168",
+      "strokeWidth" : 0.5,
+      "cornerRadius" : 6.0,
+      "pill" : false,
+      "glowColorHex" : "#f08bc8",
+      "glowRadius" : 17.78,
+      "glowSpread" : 0.36680000000000007,
+      "opacity" : 0.9
+    },
+    "松本 匡矢" : {
+      "fontFamily" : "Harlow Solid Italic",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#3963c4",
+      "textHex" : "#cbedba",
+      "strokeHex" : "#0d2459",
+      "strokeWidth" : 1.0,
+      "cornerRadius" : 0.0,
+      "pill" : false,
+      "glowColorHex" : "#3f6bd0",
+      "glowRadius" : 13.86,
+      "glowSpread" : 0.36680000000000007,
+      "opacity" : 0.92
+    },
+    "森下  誠" : {
+      "fontFamily" : "HG明朝E",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#81239f",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#3a054a",
+      "strokeWidth" : 2.0,
+      "cornerRadius" : 1.0,
+      "pill" : false,
+      "glowColorHex" : "#77d976",
+      "glowRadius" : 6.72,
+      "glowSpread" : 0.4732,
+      "opacity" : 0.97
+    },
+    "大平 有希子" : {
+      "fontFamily" : "MS Reference Sans Serif",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#5699be",
+      "textHex" : "#14171f",
+      "strokeHex" : "#214a60",
+      "strokeWidth" : 0.5,
+      "cornerRadius" : 15.0,
+      "pill" : false,
+      "glowColorHex" : "#c18bf7",
+      "glowRadius" : 15.959999999999999,
+      "glowSpread" : 0.3556,
+      "opacity" : 0.88
+    },
+    "図司 智子" : {
+      "fontFamily" : "Dubai Medium",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#c9866f",
+      "textHex" : "#14171f",
+      "strokeHex" : "#603a2c",
+      "strokeWidth" : 2.0,
+      "cornerRadius" : 15.0,
       "pill" : true,
-      "glowColorHex" : "#def654",
-      "glowRadius" : 28.28,
-      "glowSpread" : 0.1988,
-      "opacity" : 0.95
+      "glowColorHex" : "#d165e8",
+      "glowRadius" : 9.1,
+      "glowSpread" : 0.5068,
+      "opacity" : 0.89
     },
-    "吉岡 廣海" : {
-      "fontFamily" : "Old English Text MT",
+    "河合 直樹" : {
+      "fontFamily" : "French Script MT",
       "fontPercent" : 88.0188639658802,
-      "fillHex" : "#af2e14",
+      "fillHex" : "#632046",
       "textHex" : "#f0f2f7",
-      "strokeHex" : "#601000",
-      "strokeWidth" : 3.5,
-      "cornerRadius" : 17.0,
+      "strokeHex" : "#360a23",
+      "strokeWidth" : 1.0,
+      "cornerRadius" : 18.0,
       "pill" : false,
-      "glowColorHex" : "#ca5841",
-      "glowRadius" : 12.18,
-      "glowSpread" : 0.15680000000000002,
-      "opacity" : 0.65
+      "glowColorHex" : "#e632cb",
+      "glowRadius" : 20.58,
+      "glowSpread" : 0.2772,
+      "opacity" : 0.73
+    },
+    "冨田 裕子" : {
+      "fontFamily" : "Agency FB",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#96b13a",
+      "textHex" : "#14171f",
+      "strokeHex" : "#455410",
+      "strokeWidth" : 3.0,
+      "cornerRadius" : 4.0,
+      "pill" : false,
+      "glowColorHex" : "#367cdc",
+      "glowRadius" : 31.919999999999998,
+      "glowSpread" : 0.13720000000000002,
+      "opacity" : 0.9
+    },
+    "宮島  剛" : {
+      "fontFamily" : "Colonna MT",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#5c9845",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#274a19",
+      "strokeWidth" : 3.0,
+      "cornerRadius" : 16.0,
+      "pill" : true,
+      "glowColorHex" : "#5bd12c",
+      "glowRadius" : 19.88,
+      "glowSpread" : 0.5516000000000001,
+      "opacity" : 0.67
+    },
+    "岩崎 智香" : {
+      "fontFamily" : "Sans Serif Collection",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#c338b9",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#500b4c",
+      "strokeWidth" : 0.0,
+      "cornerRadius" : 7.0,
+      "pill" : false,
+      "glowColorHex" : "#2fde6b",
+      "glowRadius" : 16.66,
+      "glowSpread" : 0.11200000000000002,
+      "opacity" : 0.67
     },
     "森岡 真由美" : {
       "fontFamily" : "HGSｺﾞｼｯｸE",
@@ -905,9 +894,23 @@
       "glowRadius" : 32.199999999999996,
       "glowSpread" : 0.5544,
       "opacity" : 0.75
+    },
+    "吉岡 廣海" : {
+      "fontFamily" : "Old English Text MT",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#af2e14",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#601000",
+      "strokeWidth" : 3.5,
+      "cornerRadius" : 17.0,
+      "pill" : false,
+      "glowColorHex" : "#ca5841",
+      "glowRadius" : 12.18,
+      "glowSpread" : 0.15680000000000002,
+      "opacity" : 0.65
     }
   },
-  "equipmentGanttPlanJsonPath" : "C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605171814414851.json",
+  "equipmentGanttPlanJsonPath" : "C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605181040404098.json",
   "stage1NetworkCacheBadgeLabel" : "キャッシュ",
   "stage1NetworkCacheBadgeStyle" : {
     "fontFamily" : "",
@@ -923,8 +926,8 @@
     "glowSpread" : 0.22000000000000003,
     "opacity" : 1.0
   },
-  "mainShellTabOrganizerHeaderGlow" : true,
-  "mainShellTabOrganizerHeaderGlowStrength" : 1.0,
+  "mainShellTabOrganizerHeaderGlow" : false,
+  "mainShellTabOrganizerHeaderGlowStrength" : 0.1,
   "pushButtonDesignPrefs" : {
     "customizeGeneralRunTab" : false,
     "customizeStageRunButtons" : true,
@@ -978,8 +981,8 @@
   "memoryMonitorEnabled" : true,
   "memoryMonitorIntervalSec" : 5,
   "nextLaunchHeapMaxMiB" : 5120,
-  "windowWidth" : 1721.3333740234375,
-  "windowHeight" : 765.3333129882812,
+  "windowWidth" : 2574.666748046875,
+  "windowHeight" : 1406.6666259765625,
   "windowX" : -7.333333492279053,
   "windowY" : -7.333333492279053
 }

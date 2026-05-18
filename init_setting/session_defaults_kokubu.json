@@ -9,10 +9,9 @@
   "uiTheme" : "midnight-blue",
   "logFontSize" : 12.0,
   "mainRunLogFilter" : "ALL",
-  "mainRunLogLines" : [ "--- start: task_extract_stage1.py ---", "[network-source] PM_AI_TASK_INPUT_SOURCE_DIR 最新: \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ問合せ_20260516_172911.xlsx", "[network-source] PM_AI_ACTUAL_DETAIL_SOURCE_DIR 最新: \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA\\NO(ロット)別問合せ_20260515_232751.xlsx", "--- 段階1 子プロセス入力（環境変数キー → 渡す値）---", "[段階1-input] PM_AI_TASK_INPUT_SOURCE_DIR = \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ", "[段階1-input] PM_AI_PROCESSING_PLAN_PATH = \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ問合せ_20260516_172911.xlsx", "[段階1-input] PM_AI_PROCESSING_PLAN_SHEET = （未設定または空）", "[段階1-input] PM_AI_PROCESSING_PLAN_HEADER_ROW = （未設定または空）", "[段階1-input] PM_AI_ACTUAL_DETAIL_SOURCE_DIR = \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA", "[段階1-input] PM_AI_ACTUAL_DETAIL_WORKBOOK = \\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●検査表作成\\加工実績明細DATA\\NO(ロット)別問合せ_20260515_232751.xlsx", "[段階1-input] PM_AI_ACTUAL_DETAIL_SHEET = （未設定または空）", "[段階1-input] PM_AI_PLAN_INPUT_PATH = C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx", "[段階1-input] PM_AI_MASTER_WORKBOOK = C:\\工程管理AIプロジェクト_JAVA\\code\\master.xlsm", "[段階1-input] MASTER_WORKBOOK_FILE = master.xlsm", "[段階1-input] PM_AI_EXCLUDE_RULES_JSON = C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json", "[段階1-input] PM_AI_OUTPUT_DIR = C:\\工程管理AIプロジェクト_JAVA\\output", "[段階1-input] PM_AI_REPO_ROOT = C:\\工程管理AIプロジェクト_JAVA", "[段階1-input] PM_AI_DEBUG_LOG = （未設定または空）", "[段階1-input] PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH = 0", "[段階1-input] 加工計画DATAの実ファイルは PM_AI_PROCESSING_PLAN_PATH（未設定時は PM_AI_TASK_INPUT_SOURCE_DIR 直下の最新表から解決）。実績明細は PM_AI_ACTUAL_DETAIL_WORKBOOK または PM_AI_ACTUAL_DETAIL_SOURCE_DIR。", "[child] Error processing line 7 of C:\\pm-ai-data\\runtime\\python-embed\\Lib\\site-packages\\pywin32.pth:", "[child] ", "[child]   Traceback (most recent call last):", "[child]     File \"<frozen site>\", line 213, in addpackage", "[child]     File \"<string>\", line 1, in <module>", "[child]   ModuleNotFoundError: No module named 'pywin32_bootstrap'", "[child] ", "[child] Remainder of file ignored", "[interrupt] 段階1/2 の子プロセスを終了します…", "[end] exitCode=1 (general failure)", "[ui] 段階処理が異常終了しました。エラーダイアログを表示します。", "--- start: task_extract_stage1.py ---", "[network-source] PM_AI_TASK_INPUT_SOURCE_DIR 最新: \\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\計画\\工程別生産計画問合せ問合せ_20260517_213841.xlsx", "[network-source] PM_AI_ACTUAL_DETAIL_SOURCE_DIR 最新: \\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\実績\\NO(ロット)別問合せ_20260517_213933.xlsx", "--- 段階1 子プロセス入力（環境変数キー → 渡す値）---", "[段階1-input] PM_AI_TASK_INPUT_SOURCE_DIR = \\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\計画", "[段階1-input] PM_AI_PROCESSING_PLAN_PATH = \\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\計画\\工程別生産計画問合せ問合せ_20260517_213841.xlsx", "[段階1-input] PM_AI_PROCESSING_PLAN_SHEET = （未設定または空）", "[段階1-input] PM_AI_PROCESSING_PLAN_HEADER_ROW = （未設定または空）", "[段階1-input] PM_AI_ACTUAL_DETAIL_SOURCE_DIR = \\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\実績", "[段階1-input] PM_AI_ACTUAL_DETAIL_WORKBOOK = \\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\実績\\NO(ロット)別問合せ_20260517_213933.xlsx", "[段階1-input] PM_AI_ACTUAL_DETAIL_SHEET = （未設定または空）", "[段階1-input] PM_AI_PLAN_INPUT_PATH = C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx", "[段階1-input] PM_AI_MASTER_WORKBOOK = C:\\工程管理AIプロジェクト_JAVA\\code\\国分master.xlsm", "[段階1-input] MASTER_WORKBOOK_FILE = 国分master.xlsm", "[段階1-input] PM_AI_EXCLUDE_RULES_JSON = C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json", "[段階1-input] PM_AI_OUTPUT_DIR = C:\\工程管理AIプロジェクト_JAVA\\output", "[段階1-input] PM_AI_REPO_ROOT = C:\\工程管理AIプロジェクト_JAVA", "[段階1-input] PM_AI_DEBUG_LOG = （未設定または空）", "[段階1-input] PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH = 0", "[段階1-input] 加工計画DATAの実ファイルは PM_AI_PROCESSING_PLAN_PATH（未設定時は PM_AI_TASK_INPUT_SOURCE_DIR 直下の最新表から解決）。実績明細は PM_AI_ACTUAL_DETAIL_WORKBOOK または PM_AI_ACTUAL_DETAIL_SOURCE_DIR。", "[child] 2026-05-17 22:12:12,835 - INFO - Gemini API キー: 暗号化証明書 JSON から読み込みました。", "[child] 2026-05-17 22:12:12,988 - INFO - Excel: header row auto-detected at Excel row 6 (pandas header=5). file='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\国分工場\\\\国分共有\\\\●配台AIシステム\\\\DATA\\\\計画\\\\工程別生産計画問合せ問合せ_20260517_213841.xlsx' sheet=0", "[child] 2026-05-17 22:12:13,240 - INFO - Excel: 工程別問合せ風の複合見出し成形を適用しました（header Excel row=6）。", "[child] 2026-05-17 22:12:13,249 - INFO - タスク入力: 列「未加工」の欠損セル 1 件を「換算数量」−「実加工数」で補完しました。", "[child] 2026-05-17 22:12:13,258 - INFO - タスク入力: PM_AI_PROCESSING_PLAN_PATH='\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\計画\\工程別生産計画問合せ問合せ_20260517_213841.xlsx' を読み込みました。", "[child] [stage1-input] 加工計画DATA 読込完了: ファイル='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\国分工場\\\\国分共有\\\\●配台AIシステム\\\\DATA\\\\計画\\\\工程別生産計画問合せ問合せ_20260517_213841.xlsx' シート（文脈ラベル）='先頭シート'", "[child] [stage1-input] 参照環境変数: PM_AI_PROCESSING_PLAN_PATH, PM_AI_PROCESSING_PLAN_SHEET, PM_AI_PROCESSING_PLAN_HEADER_ROW, PM_AI_TASK_INPUT_SOURCE_DIR", "[child] [stage1-input] PM_AI_TASK_INPUT_SOURCE_DIR='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\国分工場\\\\国分共有\\\\●配台AIシステム\\\\DATA\\\\計画'", "[child] 2026-05-17 22:12:13,471 - INFO - 段階1: タスク入力整形プレビュー 'C:\\工程管理AIプロジェクト_JAVA\\output\\stage1_task_input_table.xlsx'（シート「タスク入力整形」103 行）を出力しました。", "[child] 2026-05-17 22:12:13,478 - INFO - 原反幅テーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反, 加工幅.txt (101 件)", "[child] 2026-05-17 22:12:13,484 - INFO - 製品幅テーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名, 製品幅.txt (143 件)", "[child] 2026-05-17 22:12:13,488 - INFO - 製品長テーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品長.txt (152 件)", "[child] 2026-05-17 22:12:13,493 - INFO - 製品厚みテーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品厚み.txt (142 件)", "[child] 2026-05-17 22:12:13,507 - INFO - ロール単位長さテーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,ロール単位の長さ.txt (153 件)", "[child] 2026-05-17 22:12:13,511 - INFO - 使用原反ロール単位長さテーブルを読み込みました: C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反,ロール単位の長さ.txt (99 件)", "[child] 2026-05-17 22:12:13,677 - INFO - skillsシート: 2段ヘッダ形式で読み込みました（工程+機械=27列, メンバー=21人）。", "[child] 2026-05-17 22:12:13,699 - INFO - need シート: 配台時追加人数行を検出（Excel行≈5）。列ととの上限を読み込みました。", "[child] 2026-05-17 22:12:13,701 - INFO - need人数マスタ: C:\\工程管理AIプロジェクト_JAVA\\code\\国分master.xlsm の need シートを読み込み（skills と同一 ExcelFile で開いた直後。need 専用ディスクキャッシュは無し・AI json とは無関係）。", "[child] 2026-05-17 22:12:13,705 - INFO - need列サマリ combo='スライス+スライス機1' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,714 - INFO - need列サマリ combo='スライス+スライス機3' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,721 - INFO - need列サマリ combo='スリット+スリット機4' 基本必須人数=1 配台時追加人数上限=1", "[child] 2026-05-17 22:12:13,726 - INFO - need列サマリ combo='スリット+スリット機2' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,734 - INFO - need列サマリ combo='スリット+スリット機1' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,741 - INFO - need列サマリ combo='スリット+スリット機3' 基本必須人数=4 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,747 - INFO - need列サマリ combo='虫検査+スリット機4' 基本必須人数=1 配台時追加人数上限=1", "[child] 2026-05-17 22:12:13,754 - INFO - need列サマリ combo='EC+EC' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,759 - INFO - need列サマリ combo='EC+LAC/EC機' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,764 - INFO - need列サマリ combo='LAC+LAC/EC機' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,775 - INFO - need列サマリ combo='間紙入れ+フィルム挿入機(間紙)' 基本必須人数=1 配台時追加人数上限=1", "[child] 2026-05-17 22:12:13,781 - INFO - need列サマリ combo='検反+フィルム挿入機(間紙)' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,790 - INFO - need列サマリ combo='分割+EC' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,795 - INFO - need列サマリ combo='分割+スリット機2' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,809 - INFO - need列サマリ combo='分割+融着機' 基本必須人数=3 配台時追加人数上限=1", "[child] 2026-05-17 22:12:13,818 - INFO - need列サマリ combo='分割+EC' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,826 - INFO - need列サマリ combo='分割+スライス機3' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,868 - INFO - need列サマリ combo='カット+単板カット機' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,878 - INFO - need列サマリ combo='カット+融着機' 基本必須人数=3 配台時追加人数上限=1", "[child] 2026-05-17 22:12:13,887 - INFO - need列サマリ combo='接続+スリット機2' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,892 - INFO - need列サマリ combo='改装+スリット機2' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,901 - INFO - need列サマリ combo='欠点表示+スリット機2' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,907 - INFO - need列サマリ combo='トリミング+スリット機2' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,919 - INFO - need列サマリ combo='打抜き+打抜き' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:12:13,924 - INFO - need列サマリ combo='目抜き+目抜き(国分)' 基本必須人数=1 配台時追加人数上限=1", "[child] 2026-05-17 22:12:13,931 - INFO - need列サマリ combo='バーチカル+バーチカルカット' 基本必須人数=2 配台時追加人数上限=1", "[child] 2026-05-17 22:12:13,941 - INFO - need列サマリ combo='融着+融着機' 基本必須人数=3 配台時追加人数上限=1", "[child] 2026-05-17 22:12:13,974 - INFO - need 特別指定ルール: 0 件（工程名+機械名キー）。", "[child] 2026-05-17 22:12:13,980 - INFO - 『国分master.xlsm」からスキルと設備覝件(need)を読み込みました。", "[child] 2026-05-17 22:12:13,988 - INFO - 段階1: 既存の配台シートを読めないため上書き継承をスキップ (\"There is no item named 'xl/sharedStrings.xml' in the archive\")", "[child] 2026-05-17 22:12:14,152 - INFO - master.xlsm speed: シート 'speed' から 26 件の (工程名, 機械名) 速度を読み込みました。", "[child] 2026-05-17 22:12:14,161 - INFO - 段階1: master.xlsm「speed」の速度を 83 行に適用（マスタ未該当 9 行は加工速度セルを変更しませんでした）。", "[child] 2026-05-17 22:12:14,210 - INFO - 段階1: 同一依頼NOかつ同一機械名は複数行あるグループで」工程名「分割」の行 1 件に「配台試行」=yes を自動設定しました。", "[child] 2026-05-17 22:12:14,221 - INFO - 配台試行ルール: JSON 'C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json' から 42 件（Excel の「設定_配台不要工程」read_excel はスキップ）。", "[child] 2026-05-17 22:12:14,224 - INFO - 段階1: 配台不要は JSON のみのため master からの stage1_exclude_rules.json 書き出しをスキップします。", "[child] 2026-05-17 22:12:14,272 - WARNING - タスク特別指定: AI 解析対象はありません（「特別指定_備考」列は空の可能性はありした）。总行数=92」依頼NOのある行=92」備考は入っている行=0。段階2実行剝にブックを保存し、本当に「特別指定_備考」列へ入力しているか確認してください。", "[child] 2026-05-17 22:12:14,284 - INFO - 配台シミュレータ: ロール単位を実効化 依頼NO=Y5-133 qty_m=1500.0 シートロール単位=200.0 → 実効=214.28571428571428", "[child] 2026-05-17 22:12:14,299 - INFO - 配台シミュレータ: ロール単位を実効化 依頼NO=Y5-114 qty_m=200.0 シートロール単位=300.0 → 実効=200.0", "[child] 2026-05-17 22:12:14,307 - INFO - 配台シミュレータ: ロール単位を実効化 依頼NO=Y5-119 qty_m=100.0 シートロール単位=151.0 → 実効=100.0", "[child] 2026-05-17 22:12:14,313 - INFO - 配台シミュレータ: ロール単位を実効化 依頼NO=V5-15 qty_m=400.0 シートロール単位=130.0 → 実効=133.33333333333334", "[child] 2026-05-17 22:12:14,321 - INFO - task_queue 構築完了: total=91（配台試行によりスキップ 1 行）", "[child] 2026-05-17 22:12:14,325 - INFO - 配台試行順番: マスタ・タスク入力から自動計算し 1..91 を付与しました。", "[child] 2026-05-17 22:12:14,584 - INFO - 段階1完了: 'C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx' を出力しました。マクロで '配台計画_タスク入力' に坖り込んでしてさい。", "[child] 2026-05-17 22:12:14,598 - INFO - 段階1: メイン相当シートが無いため Gemini の反映をスキップしました（Excel 起動なし）。plan_input_tasks.xlsx", "[child] 2026-05-17 22:12:14,609 - INFO - 段階1: メイン P 列・グラフをブックへ保存できませんでした。 C:\\工程管理AIプロジェクト_JAVA\\code\\log\\gemini_usage_summary_for_main.txt に出力済み → マクロ「メインシート_Gemini利用サマリをP列に反映」で P 列のみ反映できます。", "[end] exitCode=0 (success)", "[env] PM_AI_EXCLUDE_RULES_JSON=C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json", "[stage1-preview] loaded rows=103 cols=134 path=C:\\工程管理AIプロジェクト_JAVA\\output\\stage1_task_input_table.xlsx", "[plan-input] loaded rows=92 cols=36 path=C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx", "[equipment-gantt-graphic] ガントを更新: 計画2605172149152674.json（対象シート数=3, 表示=結果_設備ガント）", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品厚み.txt", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,製品長.txt", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反,ロール単位の長さ.txt", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名,ロール単位の長さ.txt", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\製品名, 製品幅.txt", "[code-lookup] 読込: C:\\工程管理AIプロジェクト_JAVA\\code\\使用原反, 加工幅.txt", "[plan-input] saved C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx", "--- start: plan_simulation_stage2.py ---", "[network-source] PM_AI_TASK_INPUT_SOURCE_DIR 最新: \\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\計画\\工程別生産計画問合せ問合せ_20260517_213841.xlsx", "[network-source] PM_AI_ACTUAL_DETAIL_SOURCE_DIR 最新: \\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\実績\\NO(ロット)別問合せ_20260517_213933.xlsx", "--- 段階2 子プロセス入力（環境変数キー → 渡す値）---", "[段階2-input] PM_AI_PLAN_INPUT_PATH = C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx", "[段階2-input] TASK_PLAN_SHEET = 配台計画_タスク入力", "[段階2-input] PM_AI_MASTER_WORKBOOK = C:\\工程管理AIプロジェクト_JAVA\\code\\国分master.xlsm", "[段階2-input] MASTER_WORKBOOK_FILE = 国分master.xlsm", "[段階2-input] PM_AI_OUTPUT_DIR = C:\\工程管理AIプロジェクト_JAVA\\output", "[段階2-input] PM_AI_PROCESSING_PLAN_PATH = \\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\計画\\工程別生産計画問合せ問合せ_20260517_213841.xlsx", "[段階2-input] PM_AI_ACTUAL_DETAIL_WORKBOOK = \\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\実績\\NO(ロット)別問合せ_20260517_213933.xlsx", "[段階2-input] PM_AI_PLAN_WORKBOOK_JSON = （未設定または空）", "[段階2-input] PM_AI_MEMBER_SCHEDULE_JSON = （未設定または空）", "[段階2-input] PM_AI_EXCLUDE_RULES_JSON = C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json", "[段階2-input] PM_AI_STAGE2_ENGINE = （未設定または空）", "[段階2-input] PM_AI_STAGE2_WRITE_EXCEL = 1", "[段階2-input] PM_AI_STAGE2_SKIP_TODAY_DISPATCH = 1", "[段階2-input] PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH = 0", "[段階2-input] PM_AI_DEBUG_LOG = （未設定または空）", "[段階2-input] 配台計画の入力は PM_AI_PLAN_INPUT_PATH とシート名 TASK_PLAN_SHEET。マスタは PM_AI_MASTER_WORKBOOK / MASTER_WORKBOOK_FILE。", "[child] 2026-05-17 22:13:12,746 - INFO - Gemini API キー: 暗号化証明書 JSON から読み込みました。", "[child] 2026-05-17 22:13:14,841 - INFO - 工場稼働枠: master.xlsm メイン A12/B12 を採用 → 08:00 ～ 19:00（結果_* の日内グリッド・配台枠）", "[child] 2026-05-17 22:13:14,845 - INFO - 設定シート「設定」A3:A26: トレース用依頼NOは無し（空またはシート無し）", "[child] 2026-05-17 22:13:14,849 - INFO - 配台トレース: 対象なし（[配台トレース …] ログは出ません）", "[child] 2026-05-17 22:13:14,996 - INFO - skillsシート: 2段ヘッダ形式で読み込みました（工程+機械=27列, メンバー=21人）。", "[child] 2026-05-17 22:13:15,018 - INFO - need シート: 配台時追加人数行を検出（Excel行≈5）。列ととの上限を読み込みました。", "[child] 2026-05-17 22:13:15,020 - INFO - need人数マスタ: C:\\工程管理AIプロジェクト_JAVA\\code\\国分master.xlsm の need シートを読み込み（skills と同一 ExcelFile で開いた直後。need 専用ディスクキャッシュは無し・AI json とは無関係）。", "[child] 2026-05-17 22:13:15,026 - INFO - need列サマリ combo='スライス+スライス機1' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,033 - INFO - need列サマリ combo='スライス+スライス機3' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,041 - INFO - need列サマリ combo='スリット+スリット機4' 基本必須人数=1 配台時追加人数上限=1", "[child] 2026-05-17 22:13:15,046 - INFO - need列サマリ combo='スリット+スリット機2' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,052 - INFO - need列サマリ combo='スリット+スリット機1' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,060 - INFO - need列サマリ combo='スリット+スリット機3' 基本必須人数=4 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,066 - INFO - need列サマリ combo='虫検査+スリット機4' 基本必須人数=1 配台時追加人数上限=1", "[child] 2026-05-17 22:13:15,075 - INFO - need列サマリ combo='EC+EC' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,083 - INFO - need列サマリ combo='EC+LAC/EC機' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,090 - INFO - need列サマリ combo='LAC+LAC/EC機' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,097 - INFO - need列サマリ combo='間紙入れ+フィルム挿入機(間紙)' 基本必須人数=1 配台時追加人数上限=1", "[child] 2026-05-17 22:13:15,104 - INFO - need列サマリ combo='検反+フィルム挿入機(間紙)' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,116 - INFO - need列サマリ combo='分割+EC' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,123 - INFO - need列サマリ combo='分割+スリット機2' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,129 - INFO - need列サマリ combo='分割+融着機' 基本必須人数=3 配台時追加人数上限=1", "[child] 2026-05-17 22:13:15,136 - INFO - need列サマリ combo='分割+EC' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,143 - INFO - need列サマリ combo='分割+スライス機3' 基本必須人数=2 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,156 - INFO - need列サマリ combo='カット+単板カット機' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,162 - INFO - need列サマリ combo='カット+融着機' 基本必須人数=3 配台時追加人数上限=1", "[child] 2026-05-17 22:13:15,167 - INFO - need列サマリ combo='接続+スリット機2' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,172 - INFO - need列サマリ combo='改装+スリット機2' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,177 - INFO - need列サマリ combo='欠点表示+スリット機2' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,183 - INFO - need列サマリ combo='トリミング+スリット機2' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,191 - INFO - need列サマリ combo='打抜き+打抜き' 基本必須人数=1 配台時追加人数上限=0", "[child] 2026-05-17 22:13:15,199 - INFO - need列サマリ combo='目抜き+目抜き(国分)' 基本必須人数=1 配台時追加人数上限=1", "[child] 2026-05-17 22:13:15,209 - INFO - need列サマリ combo='バーチカル+バーチカルカット' 基本必須人数=2 配台時追加人数上限=1", "[child] 2026-05-17 22:13:15,221 - INFO - need列サマリ combo='融着+融着機' 基本必須人数=3 配台時追加人数上限=1", "[child] 2026-05-17 22:13:15,307 - INFO - need 特別指定ルール: 0 件（工程名+機械名キー）。", "[child] 2026-05-17 22:13:15,314 - INFO - 『国分master.xlsm」からスキルと設備覝件(need)を読み込みました。", "[child] 2026-05-17 22:13:15,937 - INFO - 組み合わせ表: 工程+機械キー 26 種類・編集行 622 を配台プリセットとして読み込みました。", "[child] 2026-05-17 22:13:23,247 - INFO - 定常枠: master メイン A15=08:25（結果シートの定常外着色・出勤簿生成の参照）", "[child] 2026-05-17 22:13:23,250 - INFO - need配台時追加人数: メイン割付は基本必須人数のみ。余力は全シミュレーション後」未割当かつスキル保有社をサブに追記しました。（メインで増員探索れる従来挙動: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1）", "[child] C:\\Users\\0585\\AppData\\Local\\Programs\\Python\\Python314\\Lib\\site-packages\\openpyxl\\styles\\stylesheet.py:237: UserWarning: Workbook contains no default style, apply openpyxl's default", "[child]   warn(\"Workbook contains no default style, apply openpyxl's default\")", "[child] 2026-05-17 22:13:23,277 - INFO - 段階2: PM_AI_STAGE2_SKIP_TODAY_DISPATCH により当日は配台せず、計画開始日を 2026-05-18 にずらしました。", "[child] 2026-05-17 22:13:23,281 - INFO - 計画基準日時: 2026/05/17 22:13:23（現在時刻フォールバック）", "[child] 2026-05-17 22:13:23,605 - INFO - 「国分master.xlsm」の各メンバーの勤怠シートを読み込みました。", "[child] 2026-05-17 22:13:23,610 - INFO - 勤怠列: AI 入力は「備考」のみ。備考は空の日は「休暇区分」（公休・後休・他拠点勤務など）を reason に反映しました。", "[child] 2026-05-17 22:13:23,616 - INFO - 勤怠列: 任意「残業(分)」は退勤上限の時刻、または定時退勤からの延長分（1〜720 の整数＝分）を指定できます（全日休み行では無視）。", "[child] 2026-05-17 22:13:23,976 - WARNING - Sheet '配台計画_タスク入力' not in workbook; only one sheet 'タスク一覧' — using it.", "[child] C:\\Users\\0585\\AppData\\Local\\Programs\\Python\\Python314\\Lib\\site-packages\\openpyxl\\styles\\stylesheet.py:237: UserWarning: Workbook contains no default style, apply openpyxl's default", "[child]   warn(\"Workbook contains no default style, apply openpyxl's default\")", "[child] 2026-05-17 22:13:24,013 - WARNING - probe excel failed (no header): path='C:\\\\工程管理AIプロジェクト_JAVA\\\\output\\\\plan_input_tasks.xlsx' sheet='配台計画_タスク入力' err=Worksheet named '配台計画_タスク入力' not found", "[child] 2026-05-17 22:13:24,018 - WARNING - Sheet '配台計画_タスク入力' not in workbook; only one sheet 'タスク一覧' — using it.", "[child] 2026-05-17 22:13:24,038 - INFO - 配台試行ルール: JSON 'C:\\工程管理AIプロジェクト_JAVA\\code\\json\\stage1_exclude_rules.json' から 42 件（Excel の「設定_配台不要工程」read_excel はスキップ）。", "[child] 2026-05-17 22:13:24,175 - INFO - master.xlsm speed: シート 'speed' から 26 件の (工程名, 機械名) 速度を読み込みました。", "[child] 2026-05-17 22:13:24,191 - INFO - 配台シート読込: master.xlsm「speed」の速度を 83 行に適用（マスタ未該当 9 行は加工速度セルを変更しませんでした）。", "[child] 2026-05-17 22:13:24,195 - INFO - 計画タスク入力: PM_AI_PLAN_INPUT_PATH='C:\\工程管理AIプロジェクト_JAVA\\output\\plan_input_tasks.xlsx' を読み込みました。", "[child] 2026-05-17 22:13:24,236 - WARNING - タスク特別指定: AI 解析対象はありません（「特別指定_備考」列は空の可能性はありした）。总行数=92」依頼NOのある行=92」備考は入っている行=0。段階2実行剝にブックを保存し、本当に「特別指定_備考」列へ入力しているか確認してください。", "[child] 2026-05-17 22:13:24,382 - INFO - 配台シミュレータ: ロール単位を実効化 依頼NO=V5-15 qty_m=400.0 シートロール単位=130.0 → 実効=133.33333333333334", "[child] 2026-05-17 22:13:24,387 - WARNING - 列「ロール単位長さ」の明示更新に失敗（行=39 依頼NO=V5-15）: Invalid value '133.33333333333334' for dtype 'int64'", "[child] 2026-05-17 22:13:24,542 - INFO - 配台シミュレータ: ロール単位を実効化 依頼NO=Y5-133 qty_m=1500.0 シートロール単位=200.0 → 実効=214.28571428571428", "[child] 2026-05-17 22:13:24,547 - WARNING - 列「ロール単位長さ」の明示更新に失敗（行=89 依頼NO=Y5-133）: Invalid value '214.28571428571428' for dtype 'int64'", "[child] 2026-05-17 22:13:24,560 - INFO - task_queue 構築完了: total=91（配台試行によりスキップ 1 行）", "[child] C:\\Users\\0585\\AppData\\Local\\Programs\\Python\\Python314\\Lib\\site-packages\\openpyxl\\styles\\stylesheet.py:237: UserWarning: Workbook contains no default style, apply openpyxl's default", "[child]   warn(\"Workbook contains no default style, apply openpyxl's default\")", "[child] 2026-05-17 22:13:24,632 - INFO - 段階2: シート '配台計画_タスク入力' はないため、グローバル解析・矛盾着色をスキップ。", "[child] 2026-05-17 22:13:24,637 - INFO - 配台試行順番: 「配台試行順番」列の値をしのまま使用しました（全 91 行）。", "[child] 2026-05-17 22:13:24,646 - INFO - DEBUG[task=Y3-26] task_queueに存在しません（完了/残量0/依頼NO厳密一致の可能性）。", "[child] 2026-05-17 22:13:24,648 - INFO - DISPATCH_INTERVAL_MIRROR_ENFORCE: 設備・人の占有を区間ミラーで追跡しした（無効化は 設定_環境変数 等で DISPATCH_INTERVAL_MIRROR_ENFORCE=0）。", "[child] 2026-05-17 22:13:24,656 - INFO - 依頼NO直列配台: 無効。start_date を満たれ全行は当日候補になり」配台試行順・設備ルールで順庝付けしした。", "[child] 2026-05-17 22:13:24,667 - INFO - need人数(試行順優先フロー) order=1 task=Y5-25 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:24,684 - INFO - need人数(試行順優先フロー) order=1 task=Y5-25 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:24,706 - INFO - need人数(試行順優先フロー) order=2 task=C5-4 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:24,719 - INFO - need人数(試行順優先フロー) order=2 task=C5-4 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:24,729 - INFO - need人数(試行順優先フロー) order=3 task=Y5-114 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:24,759 - INFO - need人数(試行順優先フロー) order=3 task=Y5-114 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:24,771 - INFO - need人数(試行順優先フロー) order=4 task=E5-1 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:24,786 - INFO - need人数(試行順優先フロー) order=4 task=E5-1 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:24,801 - INFO - need人数(試行順優先フロー) order=5 task=Y5-28 工程/機械=間紙入れ/フィルム挿入機(間紙) req_num=1 [req_map['間紙入れ+フィルム挿入機(間紙)']=1] extra_max=0 [surplus_map['間紙入れ+フィルム挿入機(間紙)']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=3人", "[child] 2026-05-17 22:13:24,818 - INFO - need人数(試行順優先フロー) order=5 task=Y5-28 工程/機械=間紙入れ/フィルム挿入機(間紙) req_num=1 [req_map['間紙入れ+フィルム挿入機(間紙)']=1] extra_max=0 [surplus_map['間紙入れ+フィルム挿入機(間紙)']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=3人", "[child] 2026-05-17 22:13:24,836 - INFO - need人数(試行順優先フロー) order=7 task=Y5-63 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:24,859 - INFO - need人数(試行順優先フロー) order=7 task=Y5-63 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:24,873 - INFO - need人数(試行順優先フロー) order=8 task=W5-23 工程/機械=スリット/スリット機2 req_num=1 [req_map['スリット+スリット機2']=1] extra_max=0 [surplus_map['スリット+スリット機2']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:24,890 - INFO - need人数(試行順優先フロー) order=8 task=W5-23 工程/機械=スリット/スリット機2 req_num=1 [req_map['スリット+スリット機2']=1] extra_max=0 [surplus_map['スリット+スリット機2']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:24,897 - INFO - need人数(試行順優先フロー) order=9 task=Y5-129 工程/機械=EC/LAC/EC機 req_num=2 [req_map['EC+LAC/EC機']=2] extra_max=0 [surplus_map['EC+LAC/EC機']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:24,912 - INFO - need人数(試行順優先フロー) order=9 task=Y5-129 工程/機械=EC/LAC/EC機 req_num=2 [req_map['EC+LAC/EC機']=2] extra_max=0 [surplus_map['EC+LAC/EC機']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:24,924 - INFO - need人数(試行順優先フロー) order=10 task=Y5-14 工程/機械=検反/フィルム挿入機(間紙) req_num=1 [req_map['検反+フィルム挿入機(間紙)']=1] extra_max=0 [surplus_map['検反+フィルム挿入機(間紙)']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 22:13:24,937 - INFO - need人数(試行順優先フロー) order=10 task=Y5-14 工程/機械=検反/フィルム挿入機(間紙) req_num=1 [req_map['検反+フィルム挿入機(間紙)']=1] extra_max=0 [surplus_map['検反+フィルム挿入機(間紙)']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 22:13:24,944 - INFO - need人数(試行順優先フロー) order=11 task=T5-22 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:24,956 - INFO - need人数(試行順優先フロー) order=11 task=T5-22 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:24,968 - INFO - need人数(試行順優先フロー) order=12 task=Y5-100 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:24,987 - INFO - need人数(試行順優先フロー) order=12 task=Y5-100 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:25,002 - INFO - need人数(試行順優先フロー) order=13 task=E5-2 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:25,022 - INFO - need人数(試行順優先フロー) order=13 task=E5-2 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:25,036 - INFO - need人数(試行順優先フロー) order=14 task=E5-3 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:25,047 - INFO - need人数(試行順優先フロー) order=14 task=E5-3 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:25,056 - INFO - need人数(試行順優先フロー) order=15 task=W5-22 工程/機械=スリット/スリット機2 req_num=1 [req_map['スリット+スリット機2']=1] extra_max=0 [surplus_map['スリット+スリット機2']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:25,072 - INFO - need人数(試行順優先フロー) order=15 task=W5-22 工程/機械=スリット/スリット機2 req_num=1 [req_map['スリット+スリット機2']=1] extra_max=0 [surplus_map['スリット+スリット機2']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:25,093 - INFO - need人数(試行順優先フロー) order=16 task=W5-22 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,111 - INFO - need人数(試行順優先フロー) order=16 task=W5-22 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,126 - INFO - need人数(試行順優先フロー) order=17 task=Y5-104 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:25,149 - INFO - need人数(試行順優先フロー) order=17 task=Y5-104 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:25,171 - INFO - need人数(試行順優先フロー) order=18 task=Y5-123 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:25,195 - INFO - need人数(試行順優先フロー) order=18 task=Y5-123 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:25,219 - INFO - need人数(試行順優先フロー) order=22 task=V5-16 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:25,236 - INFO - need人数(試行順優先フロー) order=22 task=V5-16 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:25,246 - INFO - need人数(試行順優先フロー) order=23 task=Y5-130 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:25,258 - INFO - need人数(試行順優先フロー) order=23 task=Y5-130 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:25,281 - INFO - need人数(試行順優先フロー) order=26 task=Y5-121 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:25,289 - INFO - need人数(試行順優先フロー) order=26 task=Y5-121 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:25,299 - INFO - need人数(試行順優先フロー) order=27 task=Y5-122 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:25,313 - INFO - need人数(試行順優先フロー) order=27 task=Y5-122 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:25,328 - INFO - need人数(試行順優先フロー) order=28 task=W5-20 工程/機械=スリット/スリット機2 req_num=1 [req_map['スリット+スリット機2']=1] extra_max=0 [surplus_map['スリット+スリット機2']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:25,341 - INFO - need人数(試行順優先フロー) order=28 task=W5-20 工程/機械=スリット/スリット機2 req_num=1 [req_map['スリット+スリット機2']=1] extra_max=0 [surplus_map['スリット+スリット機2']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:25,352 - INFO - need人数(試行順優先フロー) order=30 task=T5-20 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,367 - INFO - need人数(試行順優先フロー) order=30 task=T5-20 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,379 - INFO - need人数(試行順優先フロー) order=24 task=T5-20 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:25,394 - INFO - need人数(試行順優先フロー) order=24 task=T5-20 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:25,405 - INFO - need人数(試行順優先フロー) order=31 task=W5-20 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,426 - INFO - need人数(試行順優先フロー) order=31 task=W5-20 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,437 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,444 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,453 - INFO - need人数(試行順優先フロー) order=35 task=Y5-74 工程/機械=カット/単板カット機 req_num=1 [req_map['カット+単板カット機']=1] extra_max=0 [surplus_map['カット+単板カット機']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:25,462 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,471 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,476 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,483 - INFO - need人数(試行順優先フロー) order=35 task=Y5-74 工程/機械=カット/単板カット機 req_num=1 [req_map['カット+単板カット機']=1] extra_max=0 [surplus_map['カット+単板カット機']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:25,491 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,498 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,505 - INFO - need人数(試行順優先フロー) order=36 task=Y5-75 工程/機械=カット/単板カット機 req_num=1 [req_map['カット+単板カット機']=1] extra_max=0 [surplus_map['カット+単板カット機']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:25,522 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,531 - INFO - need人数(試行順優先フロー) order=36 task=Y5-75 工程/機械=カット/単板カット機 req_num=1 [req_map['カット+単板カット機']=1] extra_max=0 [surplus_map['カット+単板カット機']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:25,536 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,540 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,547 - INFO - need人数(試行順優先フロー) order=37 task=Y5-81 工程/機械=カット/単板カット機 req_num=1 [req_map['カット+単板カット機']=1] extra_max=0 [surplus_map['カット+単板カット機']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:25,563 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,569 - INFO - need人数(試行順優先フロー) order=37 task=Y5-81 工程/機械=カット/単板カット機 req_num=1 [req_map['カット+単板カット機']=1] extra_max=0 [surplus_map['カット+単板カット機']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:25,573 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,577 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,581 - INFO - need人数(試行順優先フロー) order=38 task=V5-13 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:25,593 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,600 - INFO - need人数(試行順優先フロー) order=38 task=V5-13 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:25,610 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,614 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,622 - INFO - need人数(試行順優先フロー) order=39 task=V5-14 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:25,643 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,666 - INFO - need人数(試行順優先フロー) order=39 task=V5-14 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:25,704 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,710 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,717 - INFO - need人数(試行順優先フロー) order=40 task=V5-15 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:25,740 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,752 - INFO - need人数(試行順優先フロー) order=40 task=V5-15 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:25,764 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,767 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,770 - INFO - need人数(試行順優先フロー) order=44 task=Y5-21 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:25,780 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,789 - INFO - need人数(試行順優先フロー) order=44 task=Y5-21 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:25,798 - WARNING - 段階2: 依頼NO=Y5-21 日付=2026-05-18 工程/機械=スライス/スライス機1 でフォーム候補は0件。スキル革坈(OP/AS)は 7 人いしたは」設備の加工開始下限=2026-05-18 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-18 17:00 占有キー=スライス機1", "[child] 2026-05-17 22:13:25,803 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,809 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,817 - INFO - need人数(試行順優先フロー) order=49 task=Y5-59 工程/機械=スリット/スリット機4 req_num=1 [req_map['スリット+スリット機4']=1] extra_max=0 [surplus_map['スリット+スリット機4']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=7人", "[child] 2026-05-17 22:13:25,825 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,839 - INFO - need人数(試行順優先フロー) order=49 task=Y5-59 工程/機械=スリット/スリット機4 req_num=1 [req_map['スリット+スリット機4']=1] extra_max=0 [surplus_map['スリット+スリット機4']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=7人", "[child] 2026-05-17 22:13:25,865 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,873 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,881 - INFO - need人数(試行順優先フロー) order=50 task=Y5-41 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,891 - INFO - need人数(試行順優先フロー) order=51 task=C5-3 工程/機械=分割/スリット機2 req_num=1 [req_map['分割+スリット機2']=1] extra_max=0 [surplus_map['分割+スリット機2']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 22:13:25,905 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,913 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,919 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,931 - INFO - need人数(試行順優先フロー) order=50 task=Y5-41 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,935 - INFO - need人数(試行順優先フロー) order=51 task=C5-3 工程/機械=分割/スリット機2 req_num=1 [req_map['分割+スリット機2']=1] extra_max=0 [surplus_map['分割+スリット機2']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 22:13:25,949 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,956 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,963 - INFO - need人数(試行順優先フロー) order=50 task=Y5-41 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,970 - INFO - need人数(試行順優先フロー) order=53 task=Y5-76 工程/機械=カット/単板カット機 req_num=1 [req_map['カット+単板カット機']=1] extra_max=0 [surplus_map['カット+単板カット機']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:25,985 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:25,995 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,011 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,018 - INFO - need人数(試行順優先フロー) order=53 task=Y5-76 工程/機械=カット/単板カット機 req_num=1 [req_map['カット+単板カット機']=1] extra_max=0 [surplus_map['カット+単板カット機']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:26,025 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,032 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,041 - INFO - need人数(試行順優先フロー) order=50 task=Y5-41 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,057 - INFO - need人数(試行順優先フロー) order=54 task=Y5-79 工程/機械=カット/単板カット機 req_num=1 [req_map['カット+単板カット機']=1] extra_max=0 [surplus_map['カット+単板カット機']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:26,068 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,078 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,082 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,090 - INFO - need人数(試行順優先フロー) order=54 task=Y5-79 工程/機械=カット/単板カット機 req_num=1 [req_map['カット+単板カット機']=1] extra_max=0 [surplus_map['カット+単板カット機']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:26,097 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,101 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,108 - INFO - need人数(試行順優先フロー) order=50 task=Y5-41 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,113 - INFO - need人数(試行順優先フロー) order=55 task=Y5-80 工程/機械=カット/単板カット機 req_num=1 [req_map['カット+単板カット機']=1] extra_max=0 [surplus_map['カット+単板カット機']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:26,124 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,135 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,142 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,153 - INFO - need人数(試行順優先フロー) order=55 task=Y5-80 工程/機械=カット/単板カット機 req_num=1 [req_map['カット+単板カット機']=1] extra_max=0 [surplus_map['カット+単板カット機']=0] max_team候補=1 capable=2人", "[child] 2026-05-17 22:13:26,162 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,171 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,182 - INFO - need人数(試行順優先フロー) order=50 task=Y5-41 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,199 - INFO - need人数(試行順優先フロー) order=77 task=W5-6 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:26,215 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,231 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,241 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,252 - INFO - need人数(試行順優先フロー) order=77 task=W5-6 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:26,266 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,276 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,283 - INFO - need人数(試行順優先フロー) order=50 task=Y5-41 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,289 - INFO - need人数(試行順優先フロー) order=78 task=W5-6 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:26,296 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,304 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,310 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,319 - INFO - need人数(試行順優先フロー) order=78 task=W5-6 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:26,330 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,337 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,344 - INFO - need人数(試行順優先フロー) order=50 task=Y5-41 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,354 - INFO - need人数(試行順優先フロー) order=81 task=Y5-128 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:26,375 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,389 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,398 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,409 - INFO - need人数(試行順優先フロー) order=81 task=Y5-128 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:26,419 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,426 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,432 - INFO - need人数(試行順優先フロー) order=50 task=Y5-41 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,467 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,479 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,502 - INFO - need人数(試行順優先フロー) order=29 task=W5-19 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,512 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,522 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,524 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,531 - INFO - need人数(試行順優先フロー) order=29 task=W5-19 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:26,549 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,554 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,561 - INFO - need人数(試行順優先フロー) order=41 task=Y5-87 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:26,584 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,594 - INFO - need人数(試行順優先フロー) order=41 task=Y5-87 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:26,622 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,626 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,630 - INFO - need人数(試行順優先フロー) order=42 task=Y5-119 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:26,641 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,647 - INFO - need人数(試行順優先フロー) order=42 task=Y5-119 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:26,659 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,662 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,668 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,674 - INFO - need人数(試行順優先フロー) order=44 task=Y5-21 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:26,680 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,689 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,698 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,709 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,724 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,729 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,735 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,744 - INFO - need人数(試行順優先フロー) order=45 task=Y5-22 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:26,760 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,769 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,777 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,786 - INFO - need人数(試行順優先フロー) order=45 task=Y5-22 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:26,803 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,808 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,832 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,839 - INFO - need人数(試行順優先フロー) order=49 task=Y5-59 工程/機械=スリット/スリット機4 req_num=1 [req_map['スリット+スリット機4']=1] extra_max=0 [surplus_map['スリット+スリット機4']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=7人", "[child] 2026-05-17 22:13:26,859 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,871 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,881 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,897 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,902 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,910 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,919 - INFO - need人数(試行順優先フロー) order=56 task=Y5-106 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:26,928 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,935 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,942 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,951 - INFO - need人数(試行順優先フロー) order=56 task=Y5-106 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:26,968 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,974 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,983 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:26,991 - INFO - need人数(試行順優先フロー) order=76 task=Y5-140 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:27,003 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,012 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,018 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,028 - INFO - need人数(試行順優先フロー) order=76 task=Y5-140 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:27,047 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,054 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,061 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,067 - INFO - need人数(試行順優先フロー) order=78 task=W5-6 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:27,078 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,086 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,091 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,110 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,117 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,121 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,126 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:27,132 - INFO - need人数(試行順優先フロー) order=82 task=Y5-128 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:27,148 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,155 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,161 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,171 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:27,175 - INFO - need人数(試行順優先フロー) order=82 task=Y5-128 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:27,183 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,189 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,210 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,216 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:27,223 - INFO - need人数(試行順優先フロー) order=83 task=Y5-128 工程/機械=検反/フィルム挿入機(間紙) req_num=1 [req_map['検反+フィルム挿入機(間紙)']=1] extra_max=0 [surplus_map['検反+フィルム挿入機(間紙)']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 22:13:27,239 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,246 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,252 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,262 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:27,266 - INFO - need人数(試行順優先フロー) order=83 task=Y5-128 工程/機械=検反/フィルム挿入機(間紙) req_num=1 [req_map['検反+フィルム挿入機(間紙)']=1] extra_max=0 [surplus_map['検反+フィルム挿入機(間紙)']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 22:13:27,273 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,278 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,285 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,295 - INFO - need人数(試行順優先フロー) order=85 task=Y5-60 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:27,304 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,311 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,317 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,325 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,331 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,336 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,341 - INFO - need人数(試行順優先フロー) order=85 task=Y5-60 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:27,354 - INFO - need人数(試行順優先フロー) order=86 task=Y5-135 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:27,363 - INFO - need人数(試行順優先フロー) order=86 task=Y5-135 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:27,385 - INFO - need人数(試行順優先フロー) order=87 task=Y5-60 工程/機械=スリット/スリット機4 req_num=1 [req_map['スリット+スリット機4']=1] extra_max=0 [surplus_map['スリット+スリット機4']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=7人", "[child] 2026-05-17 22:13:27,399 - INFO - need人数(試行順優先フロー) order=87 task=Y5-60 工程/機械=スリット/スリット機4 req_num=1 [req_map['スリット+スリット機4']=1] extra_max=0 [surplus_map['スリット+スリット機4']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=7人", "[child] 2026-05-17 22:13:27,430 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,438 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,443 - INFO - need人数(試行順優先フロー) order=29 task=W5-19 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:27,457 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,470 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,475 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,482 - INFO - need人数(試行順優先フロー) order=32 task=T5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:27,494 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,505 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,510 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,516 - INFO - need人数(試行順優先フロー) order=33 task=W5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:27,521 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,526 - INFO - need人数(試行順優先フロー) order=33 task=W5-21 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:27,532 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,535 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,539 - INFO - need人数(試行順優先フロー) order=34 task=Y5-84 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:27,550 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,558 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,563 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,566 - INFO - need人数(試行順優先フロー) order=25 task=Y5-84 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:27,574 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,580 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,585 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,595 - INFO - need人数(試行順優先フロー) order=25 task=Y5-84 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:27,611 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,617 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,628 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,636 - INFO - need人数(試行順優先フロー) order=47 task=Y5-127 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:27,649 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,657 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,667 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,673 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,683 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,698 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:27,706 - INFO - need人数(試行順優先フロー) order=47 task=Y5-127 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:27,711 - INFO - need人数(試行順優先フロー) order=48 task=Y5-131 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:27,721 - INFO - need人数(試行順優先フロー) order=48 task=Y5-131 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:27,727 - INFO - need人数(試行順優先フロー) order=50 task=Y5-41 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:27,735 - WARNING - 段階2: 依頼NO=Y5-41 日付=2026-05-20 工程/機械=EC/EC でフォーム候補は0件。スキル革坈(OP/AS)は 4 人いしたは」設備の加工開始下限=2026-05-20 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-20 17:00 占有キー=EC", "[child] 2026-05-17 22:13:27,740 - INFO - need人数(試行順優先フロー) order=52 task=Y5-120 工程/機械=分割/スリット機2 req_num=1 [req_map['分割+スリット機2']=1] extra_max=0 [surplus_map['分割+スリット機2']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 22:13:27,753 - INFO - need人数(試行順優先フロー) order=52 task=Y5-120 工程/機械=分割/スリット機2 req_num=1 [req_map['分割+スリット機2']=1] extra_max=0 [surplus_map['分割+スリット機2']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 22:13:27,761 - INFO - need人数(試行順優先フロー) order=59 task=Y5-26 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:27,772 - INFO - need人数(試行順優先フロー) order=59 task=Y5-26 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:27,787 - WARNING - 段階2: 依頼NO=Y5-26 日付=2026-05-20 工程/機械=スライス/スライス機1 でフォーム候補は0件。スキル革坈(OP/AS)は 7 人いしたは」設備の加工開始下限=2026-05-20 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-20 17:00 占有キー=スライス機1", "[child] 2026-05-17 22:13:27,803 - INFO - need人数(試行順優先フロー) order=72 task=Y5-107 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:27,821 - INFO - need人数(試行順優先フロー) order=72 task=Y5-107 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:27,849 - INFO - need人数(試行順優先フロー) order=73 task=Y5-108 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:27,870 - INFO - need人数(試行順優先フロー) order=73 task=Y5-108 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:27,880 - INFO - need人数(試行順優先フロー) order=74 task=Y5-110 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:27,891 - INFO - need人数(試行順優先フロー) order=74 task=Y5-110 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:27,905 - INFO - need人数(試行順優先フロー) order=75 task=Y5-112 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:27,925 - INFO - need人数(試行順優先フロー) order=75 task=Y5-112 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:27,939 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:27,943 - INFO - need人数(試行順優先フロー) order=86 task=Y5-135 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:27,975 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:27,987 - INFO - need人数(試行順優先フロー) order=87 task=Y5-60 工程/機械=スリット/スリット機4 req_num=1 [req_map['スリット+スリット機4']=1] extra_max=0 [surplus_map['スリット+スリット機4']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=7人", "[child] 2026-05-17 22:13:28,007 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:28,014 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,067 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,072 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,077 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,083 - INFO - need人数(試行順優先フロー) order=50 task=Y5-41 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:28,091 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,097 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,100 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,114 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,118 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,130 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,145 - INFO - need人数(試行順優先フロー) order=46 task=Y5-41 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:28,155 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,159 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,162 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,171 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,176 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,183 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,193 - INFO - need人数(試行順優先フロー) order=46 task=Y5-41 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:28,210 - INFO - need人数(試行順優先フロー) order=59 task=Y5-26 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:28,242 - INFO - need人数(試行順優先フロー) order=60 task=Y5-124 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:28,255 - INFO - need人数(試行順優先フロー) order=60 task=Y5-124 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:28,264 - INFO - need人数(試行順優先フロー) order=61 task=Y5-132 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:28,276 - INFO - need人数(試行順優先フロー) order=61 task=Y5-132 工程/機械=スライス/スライス機3 req_num=2 [req_map['スライス+スライス機3']=2] extra_max=0 [surplus_map['スライス+スライス機3']=0] max_team候補=2 capable=6人", "[child] 2026-05-17 22:13:28,286 - INFO - need人数(試行順優先フロー) order=62 task=T5-23 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:28,296 - INFO - need人数(試行順優先フロー) order=62 task=T5-23 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:28,302 - INFO - need人数(試行順優先フロー) order=58 task=T5-23 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:28,312 - INFO - need人数(試行順優先フロー) order=58 task=T5-23 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:28,321 - INFO - need人数(試行順優先フロー) order=63 task=T5-24 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:28,328 - INFO - need人数(試行順優先フロー) order=63 task=T5-24 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:28,336 - INFO - need人数(試行順優先フロー) order=64 task=T5-25 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:28,343 - INFO - need人数(試行順優先フロー) order=64 task=T5-25 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:28,355 - INFO - need人数(試行順優先フロー) order=65 task=T5-26 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:28,367 - INFO - need人数(試行順優先フロー) order=65 task=T5-26 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:28,378 - INFO - need人数(試行順優先フロー) order=66 task=T5-27 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:28,389 - INFO - need人数(試行順優先フロー) order=66 task=T5-27 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:28,399 - INFO - need人数(試行順優先フロー) order=67 task=T5-28 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:28,408 - INFO - need人数(試行順優先フロー) order=67 task=T5-28 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:28,419 - INFO - need人数(試行順優先フロー) order=68 task=T5-29 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:28,428 - INFO - need人数(試行順優先フロー) order=68 task=T5-29 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:28,437 - INFO - need人数(試行順優先フロー) order=69 task=T5-30 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:28,448 - INFO - need人数(試行順優先フロー) order=69 task=T5-30 工程/機械=EC/EC req_num=2 [req_map['EC+EC']=2] extra_max=0 [surplus_map['EC+EC']=0] max_team候補=2 capable=4人", "[child] 2026-05-17 22:13:28,457 - INFO - need人数(試行順優先フロー) order=70 task=T5-25 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:28,481 - INFO - need人数(試行順優先フロー) order=70 task=T5-25 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:28,499 - INFO - need人数(試行順優先フロー) order=71 task=T5-26 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:28,532 - INFO - need人数(試行順優先フロー) order=71 task=T5-26 工程/機械=融着/融着機 req_num=3 [req_map['融着+融着機']=3] extra_max=0 [surplus_map['融着+融着機']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=3 capable=10人", "[child] 2026-05-17 22:13:28,554 - INFO - need人数(試行順優先フロー) order=79 task=Y5-136 工程/機械=分割/スリット機2 req_num=1 [req_map['分割+スリット機2']=1] extra_max=0 [surplus_map['分割+スリット機2']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 22:13:28,566 - INFO - need人数(試行順優先フロー) order=79 task=Y5-136 工程/機械=分割/スリット機2 req_num=1 [req_map['分割+スリット機2']=1] extra_max=0 [surplus_map['分割+スリット機2']=0] max_team候補=1 capable=3人", "[child] 2026-05-17 22:13:28,581 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:28,586 - INFO - need人数(試行順優先フロー) order=84 task=Y5-141 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:28,600 - INFO - need人数(試行順優先フロー) order=84 task=Y5-141 工程/機械=スライス/スライス機1 req_num=2 [req_map['スライス+スライス機1']=2] extra_max=0 [surplus_map['スライス+スライス機1']=0] max_team候補=2 capable=7人", "[child] 2026-05-17 22:13:28,612 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:28,617 - INFO - need人数(試行順優先フロー) order=87 task=Y5-60 工程/機械=スリット/スリット機4 req_num=1 [req_map['スリット+スリット機4']=1] extra_max=0 [surplus_map['スリット+スリット機4']=1 → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=7人", "[child] 2026-05-17 22:13:28,633 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:28,638 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,663 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,670 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,674 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,677 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:28,681 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,693 - INFO - DEBUG[day=2026-05-23] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 22:13:28,697 - INFO - DEBUG[day=2026-05-24] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 22:13:28,709 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,714 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,723 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,729 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:28,733 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,743 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,750 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,756 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,760 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:28,768 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,791 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,800 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,805 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,810 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:28,818 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,834 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,840 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,848 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,853 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:28,860 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,890 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,897 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,904 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,909 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:28,914 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,924 - INFO - DEBUG[day=2026-05-30] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 22:13:28,927 - INFO - DEBUG[day=2026-05-31] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 22:13:28,941 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,948 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,954 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,961 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:28,970 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:28,979 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:28,983 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:28,998 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,002 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,008 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,014 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:29,018 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,023 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,039 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,061 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,065 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,068 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,072 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:29,077 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,081 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,086 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,106 - INFO - DEBUG[day=2026-06-04] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 22:13:29,109 - INFO - DEBUG[day=2026-06-05] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 22:13:29,113 - INFO - DEBUG[day=2026-06-06] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 22:13:29,118 - INFO - DEBUG[day=2026-06-07] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 22:13:29,130 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,148 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,156 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,177 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:29,186 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,192 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,196 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,209 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,213 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,218 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,222 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:29,227 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,234 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,240 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,265 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,272 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,281 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,287 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:29,298 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,302 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,307 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,327 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,331 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,336 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,343 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:29,354 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,378 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,386 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,404 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,413 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,424 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,429 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:29,436 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,445 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,452 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,462 - INFO - DEBUG[day=2026-06-13] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 22:13:29,466 - INFO - DEBUG[day=2026-06-14] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 22:13:29,475 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,482 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,488 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,496 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:29,503 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,510 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,516 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,529 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,535 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,540 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,548 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:29,552 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,558 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,566 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,585 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,589 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,597 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,604 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:29,611 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,616 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,624 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,640 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,643 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,647 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,657 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:29,669 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,675 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,679 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,702 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,706 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,710 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,718 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:29,724 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,731 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,737 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,748 - INFO - DEBUG[day=2026-06-20] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 22:13:29,752 - INFO - DEBUG[day=2026-06-21] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 22:13:29,766 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,770 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,778 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,786 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:29,789 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,792 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,797 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,810 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,814 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,820 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,826 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:29,832 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,837 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,846 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,868 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,872 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,877 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,880 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:29,884 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,890 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,894 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,909 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,913 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,917 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,922 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:29,927 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,971 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,975 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:29,991 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:29,995 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:30,004 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:30,014 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:30,018 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:30,024 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:30,031 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:30,046 - INFO - DEBUG[day=2026-06-27] 稼働メンバー0のため、割付スキップ", "[child] 2026-05-17 22:13:30,051 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:30,055 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:30,063 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:30,069 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:30,073 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:30,082 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:30,086 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:30,103 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:30,109 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:30,114 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:30,119 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:30,127 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:30,134 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:30,140 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:30,154 - INFO - need人数(試行順優先フロー) order=20 task=E5-2 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:30,160 - INFO - need人数(試行順優先フロー) order=21 task=E5-3 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:30,167 - INFO - need人数(試行順優先フロー) order=43 task=Y5-122 工程/機械=輸出梱包/スライス機3 req_num=2 [req_map[機械名のみ 'スライス機3']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'スライス機3']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:30,174 - INFO - need人数(試行順優先フロー) order=80 task=W5-6 工程/機械=巻返し/フィルム挿入機(間紙) req_num=1 [req_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'フィルム挿入機(間紙)']=1（複坈キー丝在） → メインは基本人数のみ（余力枠は全配台後に未割当×スキルで追記）] max_team候補=1 capable=0人", "[child] 2026-05-17 22:13:30,178 - INFO - need人数(試行順優先フロー) order=89 task=Y5-135 工程/機械=分割/LAC/EC機 req_num=2 [req_map[機械名のみ 'LAC/EC機']=2（複坈キー丝在）] extra_max=0 [surplus_map[機械名のみ 'LAC/EC機']=0（複坈キー丝在）] max_team候補=2 capable=0人", "[child] 2026-05-17 22:13:30,182 - INFO - need人数(試行順優先フロー) order=90 task=Y5-133 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:30,191 - INFO - need人数(試行順優先フロー) order=91 task=Y5-134 工程/機械=LAC/LAC/EC機 req_num=2 [req_map['LAC+LAC/EC機']=2] extra_max=0 [surplus_map['LAC+LAC/EC機']=0] max_team候補=2 capable=5人", "[child] 2026-05-17 22:13:30,228 - INFO - need余力: メイン割付完了後にサブ 73 坝を追記（未割当×スキル・時間重なりなし）", "[child] 2026-05-17 22:13:30,239 - INFO - 段階2出力の整理: 計画*・人員*（および旧 production_plan_multi_day_* / member_schedule_*）の .xlsx/.json を 8 件削除しました。", "[child] 2026-05-17 22:13:33,581 - INFO - 定常枠: master メイン A15/B15 → 08:25 ～ 17:00（結果の定常外「日時帯」着色）", "[child] 2026-05-17 22:13:33,585 - INFO - 段階2: 結果ブックを作成しした → 計画2605172213231816.xlsx", "[child] C:\\Users\\0585\\AppData\\Local\\Programs\\Python\\Python314\\Lib\\site-packages\\openpyxl\\styles\\stylesheet.py:237: UserWarning: Workbook contains no default style, apply openpyxl's default", "[child]   warn(\"Workbook contains no default style, apply openpyxl's default\")", "[child] 2026-05-17 22:13:35,724 - INFO - 加工実績明細: '\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\実績\\NO(ロット)別問合せ_20260517_213933.xlsx' の '先頭シート' を 3634 行読み込み。", "[child] 2026-05-17 22:13:36,135 - INFO - 先頭シート: ガント用セグメントは0件です。表示日（sorted_dates）に重ならない実績のみの場合、描画されません。", "[child] 2026-05-17 22:13:36,139 - INFO - 先頭シート からガント用セグメント 0 件を生成しました。", "[child] 2026-05-17 22:13:36,148 - INFO - 結果_タスク一覧の列順ソース: 既定（34 列）", "[child] 2026-05-17 22:13:36,153 - INFO - 列順・表示のカスタマイズ: マクロ実行ブックにシート「列設定_結果_タスク一覧」を追加。 見出し「列名」「表示」… 表示は FALSE の列は結果シートで非表示。 1行「履歴」で履歴1～n を挿入。VBA の「列設定_結果_タスク一覧_チェックボックスを配置」でチェックボックスを表示列に連動可能。", "[child] 2026-05-17 22:13:36,319 - INFO - Excel: header row auto-detected at Excel row 6 (pandas header=5). file='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\国分工場\\\\国分共有\\\\●配台AIシステム\\\\DATA\\\\計画\\\\工程別生産計画問合せ問合せ_20260517_213841.xlsx' sheet=0", "[child] 2026-05-17 22:13:36,644 - INFO - Excel: 工程別問合せ風の複合見出し成形を適用しました（header Excel row=6）。", "[child] 2026-05-17 22:13:36,656 - INFO - タスク入力: 列「未加工」の欠損セル 1 件を「換算数量」−「実加工数」で補完しました。", "[child] 2026-05-17 22:13:36,673 - INFO - タスク入力: PM_AI_PROCESSING_PLAN_PATH='\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\計画\\工程別生産計画問合せ問合せ_20260517_213841.xlsx' を読み込みました。", "[child] [stage1-input] 加工計画DATA 読込完了: ファイル='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\国分工場\\\\国分共有\\\\●配台AIシステム\\\\DATA\\\\計画\\\\工程別生産計画問合せ問合せ_20260517_213841.xlsx' シート（文脈ラベル）='先頭シート'", "[child] [stage1-input] 参照環境変数: PM_AI_PROCESSING_PLAN_PATH, PM_AI_PROCESSING_PLAN_SHEET, PM_AI_PROCESSING_PLAN_HEADER_ROW, PM_AI_TASK_INPUT_SOURCE_DIR", "[child] [stage1-input] PM_AI_TASK_INPUT_SOURCE_DIR='\\\\\\\\192.168.0.101\\\\共有フォルダ\\\\国分工場\\\\国分共有\\\\●配台AIシステム\\\\DATA\\\\計画'", "[child] 2026-05-17 22:13:37,133 - INFO - 段階2: 表シート正本 JSON（Excel より先）を 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605172213231816表.json' に出力しました（same_dir_as_output）。", "[child] 2026-05-17 22:13:38,670 - INFO - 段階2: 計画ブックへの設備ガント Excel シートは省略します（設備ガント(グラフィック)用の契約 JSON のみ出力。ブックへ含める場合は PM_AI_STAGE2_WRITE_EXCEL_GANTT_SHEETS=1）。", "[child] 2026-05-17 22:13:38,840 - INFO - 段階2: 設備ガント描画契約 JSON（再描画用）を 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605172213231816設.json' に出力しました（same_dir_as_output）。", "[child] 2026-05-17 22:13:47,116 - INFO - 段階2: 結果_タスク一覧 JSON サイドカーを 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605172213231816一覧.json' に出力しました。", "[child] 2026-05-17 22:13:50,337 - INFO - 列設定シート図形コピー: Excel COM を廃止したためスキップしました（手動コピーまたはマクロで代替してください）。", "[child] 2026-05-17 22:13:52,001 - INFO - plan_workbook_sidecar: 同名 JSON を出力しました path=C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605172213231816.json (same_dir_as_output)", "[child] 2026-05-17 22:13:52,010 - INFO - 段階2: 計画ブック（全シート）の JSON を 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605172213231816.json' に出力しました。", "[child] 2026-05-17 22:13:57,209 - INFO - plan_workbook_sidecar: 論理ビュー JSON を出力 path=C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605172213231816論.json (same_dir_as_output)", "[child] 2026-05-17 22:13:57,217 - INFO - 段階2: 計画ブック 論理ビュー JSON（結合展開）を 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605172213231816論.json' に出力しました。", "[child] 2026-05-17 22:13:57,223 - INFO - 完了: 'C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605172213231816.xlsx' を生成しました。", "[child] 2026-05-17 22:13:57,407 - INFO - 段階2: PowerQuery 用に 'C:\\工程管理AIプロジェクト_JAVA\\code\\output\\結果_配台表.xlsx' を出力しました。", "[child] 2026-05-17 22:13:57,413 - INFO - 段階2: 結果_配台表 JSON を 'C:\\工程管理AIプロジェクト_JAVA\\code\\output\\結果_配台表.json' に出力しました。", "[child] 2026-05-17 22:13:57,415 - INFO - 段階2: メンバー別スケジュールを作成しした → 人員2605172213231816.xlsx", "[child] 2026-05-17 22:14:01,192 - INFO - 完了: 個人別スケジュールを 'C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605172213231816.xlsx' に出力しました。", "[child] 2026-05-17 22:14:02,349 - INFO - plan_workbook_sidecar: 同名 JSON を出力しました path=C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605172213231816.json (same_dir_as_output)", "[child] 2026-05-17 22:14:02,354 - INFO - 段階2: メンバー別スケジュール JSON を 'C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605172213231816.json' に出力しました。", "[child] C:\\Users\\0585\\AppData\\Local\\Programs\\Python\\Python314\\Lib\\site-packages\\openpyxl\\styles\\stylesheet.py:237: UserWarning: Workbook contains no default style, apply openpyxl's default", "[child]   warn(\"Workbook contains no default style, apply openpyxl's default\")", "[child] 2026-05-17 22:14:02,364 - INFO - 段階2: メイン相当シートが無いため Gemini の反映をスキップしました（Excel 起動なし）。plan_input_tasks.xlsx", "[child] 2026-05-17 22:14:02,369 - INFO - 段階2: メイン P 列・グラフをブックへ保存できませんでした。 C:\\工程管理AIプロジェクト_JAVA\\code\\log\\gemini_usage_summary_for_main.txt に出力済み → マクロ「メインシート_Gemini利用サマリをP列に反映」で P 列のみ反映できます。", "[end] exitCode=0 (success)", "[stage2-ui] 最新成果物: production_plan=C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605172213231816.xlsx | member_schedule=C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605172213231816.xlsx", "[summary-ai-dispatch] パイプライン後エクセル出力: C:\\工程管理AIプロジェクト_JAVA\\code\\国分サマリ_AI配台.xlsx", "[delivery-calendar] バックグラウンド再読み込みを開始します。", "[equipment-gantt-graphic] ガントを更新: 計画2605172213231816.json（対象シート数=3, 表示=結果_設備ガント）", "[equipment-gantt-graphic] ガントを更新: 計画2605172213231816.json（対象シート数=3, 表示=結果_設備ガント）", "[aladdin-plan-data] キャッシュ使用（同一ファイル名）: 工程別生産計画問合せ問合せ_20260517_213841.xlsx", "[summary-ai-dispatch] エクセル出力: C:\\工程管理AIプロジェクト_JAVA\\code\\国分サマリ_AI配台.xlsx （アラ・実績・シス比較=114 配台結果=89 加工実績=3631 アラジン加工計画取得データ=173）" ],
-  "mainRunLogScroll" : 0.9987506229599227,
-  "mainRunStage2ProductionPlan" : "C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605172213231816.xlsx",
-  "mainRunStage2MemberSchedule" : "C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605172213231816.xlsx",
+  "mainRunLogScroll" : 0.0,
+  "mainRunStage2ProductionPlan" : "C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605181040404098.xlsx",
+  "mainRunStage2MemberSchedule" : "C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605181040404098.xlsx",
   "mainRunStage2WriteExcel" : true,
   "mainRunStage2SkipTodayDispatch" : true,
   "mainRunStage2SkipInProgressDispatch" : false,
@@ -382,7 +381,7 @@
     "value" : "0",
     "description" : "配台手動修正: 段階3試行後の日付セルで（段階3前）（段階3後）を改行せず1行表示（スペース区切り）。1/true/yes/on で有効。0/false/no/off/none で2行（改行）表示。既定は0（2行表示）。 — 配台計画手動修正タブ: 段階3試行後の日付セル表示。 1/true/yes/on で（段階3前）（段階3後）を1行（スペース区切り）。 0/false/no/off/none（既定）で2行（改行）。2行は固定行高44px・wrap-text なし。 Spreadsheet の layout IOOBE 回避のため。"
   } ],
-  "mainShellTabOrder" : [ "run", "planInput", "equipmentGanttGraphic", "deliveryCalendarView", "dispatchInteractive", "operatorCard", "env", "memorySettings", "globalSettings", "apiModelBenchmark", "userProfiles" ],
+  "mainShellTabOrder" : [ "run", "planInput", "dispatchInteractive", "equipmentGanttGraphic", "deliveryCalendarView", "operatorCard", "codeLookupTables", "env", "globalSettings", "userProfiles" ],
   "mainShellTabLayout" : [ {
     "kind" : "tab",
     "color" : "#0000ff",
@@ -393,6 +392,10 @@
     "id" : "planInput"
   }, {
     "kind" : "tab",
+    "color" : "#1a3399",
+    "id" : "dispatchInteractive"
+  }, {
+    "kind" : "tab",
     "color" : "#1a4d1a",
     "id" : "equipmentGanttGraphic"
   }, {
@@ -401,37 +404,88 @@
     "id" : "deliveryCalendarView"
   }, {
     "kind" : "tab",
-    "color" : "#1a3399",
-    "id" : "dispatchInteractive"
-  }, {
-    "kind" : "tab",
     "color" : "#336666",
     "id" : "operatorCard"
   }, {
+    "kind" : "tab",
+    "color" : "#0000ff",
+    "id" : "codeLookupTables"
+  }, {
+    "kind" : "group",
+    "color" : "#ffff00",
+    "title" : "バッジ設定",
+    "children" : [ {
+      "kind" : "tab",
+      "id" : "uiBadgeDesign"
+    }, {
+      "kind" : "tab",
+      "id" : "pushButtonDesign"
+    }, {
+      "kind" : "tab",
+      "id" : "ganttPersonBadgeDesign"
+    } ]
+  }, {
     "kind" : "group",
     "color" : "#800080",
+    "title" : "結果情報(デバッグ用)",
+    "children" : [ {
+      "kind" : "tab",
+      "id" : "planResultViewer"
+    }, {
+      "kind" : "tab",
+      "id" : "stage1Preview"
+    }, {
+      "kind" : "tab",
+      "id" : "resultDispatch"
+    } ]
+  }, {
+    "kind" : "group",
+    "color" : "#666666",
+    "title" : "その他",
+    "children" : [ {
+      "kind" : "tab",
+      "id" : "masterSummary"
+    }, {
+      "kind" : "tab",
+      "id" : "excludeRules"
+    }, {
+      "kind" : "tab",
+      "id" : "specialRules"
+    }, {
+      "kind" : "tab",
+      "id" : "planWorkspaceHistory"
+    }, {
+      "kind" : "tab",
+      "id" : "summaryAiDispatchExportCustomize"
+    }, {
+      "kind" : "tab",
+      "id" : "memorySettings"
+    }, {
+      "kind" : "tab",
+      "id" : "apiModelBenchmark"
+    }, {
+      "kind" : "tab",
+      "id" : "actualsStatus"
+    } ]
+  }, {
+    "kind" : "group",
+    "color" : "#e64d4d",
     "title" : "環境設定",
     "children" : [ {
       "kind" : "tab",
       "id" : "env"
     }, {
       "kind" : "tab",
-      "id" : "memorySettings"
-    }, {
-      "kind" : "tab",
       "id" : "globalSettings"
-    }, {
-      "kind" : "tab",
-      "id" : "apiModelBenchmark"
     }, {
       "kind" : "tab",
       "id" : "userProfiles"
     } ]
   } ],
   "innerTabSelectedIndexByShellTabKey" : {
-    "codeLookupTables" : 0,
-    "dispatchInteractive" : 1,
-    "deliveryCalendarView" : 1
+    "dispatchInteractive" : 0,
+    "codeLookupTables" : 4,
+    "deliveryCalendarView" : 0
   },
   "equipmentGanttGraphicZoomPercent" : 119.2307784007146,
   "equipmentGanttBarFontFamily" : "Meiryo UI",
@@ -442,7 +496,7 @@
   "equipmentGanttShiftWheelHScrollPercent" : 200.0,
   "equipmentGanttPersonBadgeGapPx" : 32.78048706054687,
   "equipmentGanttPersonBadgeBandVerticalOffsetPx" : -8.975611244759897,
-  "equipmentGanttGraphicDataFingerprint" : "347ac69a92d3610c4bbd2ea1c45a59c9707a1faf25b93ebb7ba1512b32cb93b2",
+  "equipmentGanttGraphicDataFingerprint" : "fa3827094886c4fe0795340979747fd717e844425584dfd89e4dffed656a1846",
   "equipmentGanttPersonBadgeDragAdjustEnabled" : true,
   "equipmentGanttPersonBadgeEnabled" : true,
   "equipmentGanttPersonBadgeWireEnabled" : true,
@@ -462,131 +516,173 @@
   "equipmentGanttPersonBadgeGlowSpread" : 0.13440000000000005,
   "equipmentGanttPersonBadgeOpacity" : 0.84,
   "equipmentGanttPersonBadgeStylesByMemberKey" : {
-    "河林 陽介" : {
-      "fontFamily" : "HGP明朝B",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#a9559b",
+    "飯田 剛成" : {
+      "fontFamily" : "",
+      "fontPercent" : 106.0,
+      "fillHex" : "#3d7655",
       "textHex" : "#f0f2f7",
-      "strokeHex" : "#5b2452",
-      "strokeWidth" : 3.0,
-      "cornerRadius" : 12.0,
-      "pill" : true,
-      "glowColorHex" : "#c680bb",
-      "glowRadius" : 26.32,
-      "glowSpread" : 0.12600000000000003,
-      "opacity" : 0.73
-    },
-    "角 正彦" : {
-      "fontFamily" : "HG教科書体",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#36702c",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#173c10",
+      "strokeHex" : "#143020",
       "strokeWidth" : 2.0,
-      "cornerRadius" : 6.0,
+      "cornerRadius" : 0.0,
       "pill" : true,
-      "glowColorHex" : "#85f772",
-      "glowRadius" : 30.38,
-      "glowSpread" : 0.462,
-      "opacity" : 0.82
+      "glowColorHex" : "#81f4d6",
+      "glowRadius" : 21.14,
+      "glowSpread" : 0.1652,
+      "opacity" : 0.67
     },
-    "増田 治樹" : {
-      "fontFamily" : "Brush Script MT",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#3d5072",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#1b273e",
-      "strokeWidth" : 2.5,
-      "cornerRadius" : 8.0,
+    "東 龍平" : {
+      "fontFamily" : "",
+      "fontPercent" : 106.0,
+      "fillHex" : "#7433ac",
+      "textHex" : "#d3edbe",
+      "strokeHex" : "#2b0b46",
+      "strokeWidth" : 3.0,
+      "cornerRadius" : 4.0,
       "pill" : true,
-      "glowColorHex" : "#89a6dd",
-      "glowRadius" : 9.24,
-      "glowSpread" : 0.24080000000000001,
+      "glowColorHex" : "#7dd89d",
+      "glowRadius" : 22.400000000000002,
+      "glowSpread" : 0.20440000000000003,
       "opacity" : 0.76
     },
-    "大谷 晴香" : {
+    "川島 吉伸" : {
+      "fontFamily" : "Microsoft YaHei",
+      "fontPercent" : 106.0,
+      "fillHex" : "#a93f82",
+      "textHex" : "#efeec6",
+      "strokeHex" : "#4d1337",
+      "strokeWidth" : 2.5,
+      "cornerRadius" : 2.0,
+      "pill" : true,
+      "glowColorHex" : "#eb4bb0",
+      "glowRadius" : 26.040000000000003,
+      "glowSpread" : 0.27440000000000003,
+      "opacity" : 0.83
+    },
+    "菅沼 めぐみ" : {
+      "fontFamily" : "Onyx",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#2c8927",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#0e4c0b",
+      "strokeWidth" : 1.5,
+      "cornerRadius" : 9.0,
+      "pill" : true,
+      "glowColorHex" : "#4fda49",
+      "glowRadius" : 27.86,
+      "glowSpread" : 0.5124000000000001,
+      "opacity" : 0.62
+    },
+    "中村 久男" : {
+      "fontFamily" : "Yu Gothic UI Semilight",
+      "fontPercent" : 106.0,
+      "fillHex" : "#8b47b7",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#42185c",
+      "strokeWidth" : 0.5,
+      "cornerRadius" : 13.0,
+      "pill" : false,
+      "glowColorHex" : "#bc7de4",
+      "glowRadius" : 11.200000000000001,
+      "glowSpread" : 0.2156,
+      "opacity" : 0.93
+    },
+    "中川 直也" : {
+      "fontFamily" : "Microsoft Himalaya",
+      "fontPercent" : 106.0,
+      "fillHex" : "#93aa38",
+      "textHex" : "#14171f",
+      "strokeHex" : "#516113",
+      "strokeWidth" : 1.0,
+      "cornerRadius" : 4.0,
+      "pill" : false,
+      "glowColorHex" : "#5754dd",
+      "glowRadius" : 22.82,
+      "glowSpread" : 0.2632,
+      "opacity" : 0.98
+    },
+    "大久保 俊彦" : {
+      "fontFamily" : "Mistral",
+      "fontPercent" : 106.0,
+      "fillHex" : "#5d9894",
+      "textHex" : "#14171f",
+      "strokeHex" : "#294e4c",
+      "strokeWidth" : 3.5,
+      "cornerRadius" : 13.0,
+      "pill" : false,
+      "glowColorHex" : "#e43468",
+      "glowRadius" : 20.58,
+      "glowSpread" : 0.11760000000000001,
+      "opacity" : 0.75
+    },
+    "竹内 正美" : {
       "fontFamily" : "",
       "fontPercent" : 88.0188639658802,
-      "fillHex" : "#2367b9",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#033168",
-      "strokeWidth" : 0.5,
-      "cornerRadius" : 6.0,
+      "fillHex" : "#257236",
+      "textHex" : "#e1a8c9",
+      "strokeHex" : "#0c3f17",
+      "strokeWidth" : 2.5,
+      "cornerRadius" : 17.0,
       "pill" : false,
-      "glowColorHex" : "#f08bc8",
-      "glowRadius" : 17.78,
-      "glowSpread" : 0.36680000000000007,
-      "opacity" : 0.9
+      "glowColorHex" : "#50da6e",
+      "glowRadius" : 18.900000000000002,
+      "glowSpread" : 0.3892,
+      "opacity" : 0.68
     },
-    "松本 匡矢" : {
-      "fontFamily" : "Harlow Solid Italic",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#3963c4",
-      "textHex" : "#cbedba",
-      "strokeHex" : "#0d2459",
+    "沈 春光" : {
+      "fontFamily" : "SimSun-ExtB",
+      "fontPercent" : 106.0,
+      "fillHex" : "#226246",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#0c3825",
       "strokeWidth" : 1.0,
-      "cornerRadius" : 0.0,
-      "pill" : false,
-      "glowColorHex" : "#3f6bd0",
-      "glowRadius" : 13.86,
-      "glowSpread" : 0.36680000000000007,
-      "opacity" : 0.92
-    },
-    "森下  誠" : {
-      "fontFamily" : "HG明朝E",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#81239f",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#3a054a",
-      "strokeWidth" : 2.0,
-      "cornerRadius" : 1.0,
-      "pill" : false,
-      "glowColorHex" : "#77d976",
-      "glowRadius" : 6.72,
-      "glowSpread" : 0.4732,
-      "opacity" : 0.97
-    },
-    "大平 有希子" : {
-      "fontFamily" : "MS Reference Sans Serif",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#5699be",
-      "textHex" : "#14171f",
-      "strokeHex" : "#214a60",
-      "strokeWidth" : 0.5,
-      "cornerRadius" : 15.0,
-      "pill" : false,
-      "glowColorHex" : "#c18bf7",
-      "glowRadius" : 15.959999999999999,
-      "glowSpread" : 0.3556,
-      "opacity" : 0.88
-    },
-    "図司 智子" : {
-      "fontFamily" : "Dubai Medium",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#c9866f",
-      "textHex" : "#14171f",
-      "strokeHex" : "#603a2c",
-      "strokeWidth" : 2.0,
-      "cornerRadius" : 15.0,
+      "cornerRadius" : 21.0,
       "pill" : true,
-      "glowColorHex" : "#d165e8",
-      "glowRadius" : 9.1,
-      "glowSpread" : 0.5068,
-      "opacity" : 0.89
+      "glowColorHex" : "#67c99e",
+      "glowRadius" : 21.28,
+      "glowSpread" : 0.23800000000000002,
+      "opacity" : 0.74
     },
-    "河合 直樹" : {
-      "fontFamily" : "French Script MT",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#632046",
+    "吉岡 廣海" : {
+      "fontFamily" : "Microsoft New Tai Lue",
+      "fontPercent" : 106.0,
+      "fillHex" : "#4d846f",
       "textHex" : "#f0f2f7",
-      "strokeHex" : "#360a23",
-      "strokeWidth" : 1.0,
-      "cornerRadius" : 18.0,
-      "pill" : false,
-      "glowColorHex" : "#e632cb",
-      "glowRadius" : 20.58,
-      "glowSpread" : 0.2772,
-      "opacity" : 0.73
+      "strokeHex" : "#214235",
+      "strokeWidth" : 1.5,
+      "cornerRadius" : 4.0,
+      "pill" : true,
+      "glowColorHex" : "#f09387",
+      "glowRadius" : 25.900000000000002,
+      "glowSpread" : 0.2632,
+      "opacity" : 0.75
+    },
+    "森岡 真由美" : {
+      "fontFamily" : "HGSｺﾞｼｯｸE",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#a52b85",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#5d0b47",
+      "strokeWidth" : 2.5,
+      "cornerRadius" : 2.0,
+      "pill" : true,
+      "glowColorHex" : "#9ceb83",
+      "glowRadius" : 32.199999999999996,
+      "glowSpread" : 0.5544,
+      "opacity" : 0.75
+    },
+    "岩崎 智香" : {
+      "fontFamily" : "Juice ITC",
+      "fontPercent" : 106.0,
+      "fillHex" : "#8e4556",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#3c1720",
+      "strokeWidth" : 1.5,
+      "cornerRadius" : 1.0,
+      "pill" : true,
+      "glowColorHex" : "#e6315c",
+      "glowRadius" : 17.64,
+      "glowSpread" : 0.1736,
+      "opacity" : 0.79
     },
     "冨田 裕子" : {
       "fontFamily" : "Agency FB",
@@ -616,246 +712,204 @@
       "glowSpread" : 0.5516000000000001,
       "opacity" : 0.67
     },
-    "岩崎 智香" : {
-      "fontFamily" : "Sans Serif Collection",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#c338b9",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#500b4c",
-      "strokeWidth" : 0.0,
-      "cornerRadius" : 7.0,
-      "pill" : false,
-      "glowColorHex" : "#2fde6b",
-      "glowRadius" : 16.66,
-      "glowSpread" : 0.11200000000000002,
-      "opacity" : 0.67
-    },
-    "森岡 真由美" : {
-      "fontFamily" : "HGSｺﾞｼｯｸE",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#a52b85",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#5d0b47",
-      "strokeWidth" : 2.5,
-      "cornerRadius" : 2.0,
-      "pill" : true,
-      "glowColorHex" : "#9ceb83",
-      "glowRadius" : 32.199999999999996,
-      "glowSpread" : 0.5544,
-      "opacity" : 0.75
-    },
-    "吉岡 廣海" : {
-      "fontFamily" : "Old English Text MT",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#af2e14",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#601000",
-      "strokeWidth" : 3.5,
-      "cornerRadius" : 17.0,
-      "pill" : false,
-      "glowColorHex" : "#ca5841",
-      "glowRadius" : 12.18,
-      "glowSpread" : 0.15680000000000002,
-      "opacity" : 0.65
-    },
-    "沈 春光" : {
-      "fontFamily" : "Segoe UI Emoji",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#723974",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#3d183e",
-      "strokeWidth" : 2.5,
-      "cornerRadius" : 10.0,
-      "pill" : true,
-      "glowColorHex" : "#def654",
-      "glowRadius" : 28.28,
-      "glowSpread" : 0.1988,
-      "opacity" : 0.95
-    },
-    "竹内 正美" : {
+    "河合 直樹" : {
       "fontFamily" : "",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#257236",
-      "textHex" : "#e1a8c9",
-      "strokeHex" : "#0c3f17",
-      "strokeWidth" : 2.5,
-      "cornerRadius" : 17.0,
-      "pill" : false,
-      "glowColorHex" : "#50da6e",
-      "glowRadius" : 18.900000000000002,
-      "glowSpread" : 0.3892,
-      "opacity" : 0.68
-    },
-    "大久保 俊彦" : {
-      "fontFamily" : "Agency FB",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#66c7ac",
-      "textHex" : "#f1b3bd",
-      "strokeHex" : "#2c6a58",
-      "strokeWidth" : 3.5,
-      "cornerRadius" : 4.0,
-      "pill" : false,
-      "glowColorHex" : "#ed3589",
-      "glowRadius" : 7.28,
-      "glowSpread" : 0.5516000000000001,
-      "opacity" : 0.87
-    },
-    "中川 直也" : {
-      "fontFamily" : "Eras Medium ITC",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#803d8a",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#3a1540",
+      "fontPercent" : 106.0,
+      "fillHex" : "#775ca6",
+      "textHex" : "#e4a4bd",
+      "strokeHex" : "#3c2b5b",
       "strokeWidth" : 0.5,
-      "cornerRadius" : 11.0,
-      "pill" : false,
-      "glowColorHex" : "#c6d32f",
-      "glowRadius" : 31.080000000000002,
-      "glowSpread" : 0.47600000000000003,
-      "opacity" : 0.57
-    },
-    "川島 吉伸" : {
-      "fontFamily" : "High Tower Text",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#6ea437",
-      "textHex" : "#bae9eb",
-      "strokeHex" : "#385d13",
-      "strokeWidth" : 1.5,
-      "cornerRadius" : 6.0,
-      "pill" : true,
-      "glowColorHex" : "#e653a5",
-      "glowRadius" : 21.7,
-      "glowSpread" : 0.32480000000000003,
-      "opacity" : 0.82
-    },
-    "菅沼 めぐみ" : {
-      "fontFamily" : "Onyx",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#2c8927",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#0e4c0b",
-      "strokeWidth" : 1.5,
-      "cornerRadius" : 9.0,
-      "pill" : true,
-      "glowColorHex" : "#4fda49",
-      "glowRadius" : 27.86,
-      "glowSpread" : 0.5124000000000001,
-      "opacity" : 0.62
-    },
-    "中村 久男" : {
-      "fontFamily" : "Lucida Sans Typewriter",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#1b8d15",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#033e00",
-      "strokeWidth" : 3.5,
-      "cornerRadius" : 15.0,
-      "pill" : false,
-      "glowColorHex" : "#79d374",
-      "glowRadius" : 21.28,
-      "glowSpread" : 0.4032,
-      "opacity" : 0.69
-    },
-    "東 龍平" : {
-      "fontFamily" : "Lucida Console",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#7a301b",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#370f03",
-      "strokeWidth" : 1.5,
-      "cornerRadius" : 21.0,
-      "pill" : false,
-      "glowColorHex" : "#e56a47",
-      "glowRadius" : 16.099999999999998,
-      "glowSpread" : 0.2632,
-      "opacity" : 0.58
-    },
-    "飯田 剛成" : {
-      "fontFamily" : "Century",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#c4c852",
-      "textHex" : "#14171f",
-      "strokeHex" : "#595b1b",
-      "strokeWidth" : 1.0,
-      "cornerRadius" : 3.0,
-      "pill" : true,
-      "glowColorHex" : "#cfd370",
-      "glowRadius" : 29.259999999999998,
-      "glowSpread" : 0.40880000000000005,
-      "opacity" : 0.58
-    },
-    "京 直道" : {
-      "fontFamily" : "Constantia",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#361c7a",
-      "textHex" : "#f0f2f7",
-      "strokeHex" : "#15053f",
-      "strokeWidth" : 3.0,
       "cornerRadius" : 19.0,
       "pill" : false,
-      "glowColorHex" : "#7556c6",
-      "glowRadius" : 18.060000000000002,
-      "glowSpread" : 0.5544,
-      "opacity" : 0.73
+      "glowColorHex" : "#b4d268",
+      "glowRadius" : 26.32,
+      "glowSpread" : 0.19040000000000004,
+      "opacity" : 0.89
     },
-    "近藤 厚生" : {
-      "fontFamily" : "HGｺﾞｼｯｸE",
+    "大平 有希子" : {
+      "fontFamily" : "SimSun",
+      "fontPercent" : 106.0,
+      "fillHex" : "#517483",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#20323b",
+      "strokeWidth" : 1.5,
+      "cornerRadius" : 8.0,
+      "pill" : false,
+      "glowColorHex" : "#58b4dd",
+      "glowRadius" : 16.8,
+      "glowSpread" : 0.392,
+      "opacity" : 0.81
+    },
+    "図司 智子" : {
+      "fontFamily" : "Dubai Medium",
       "fontPercent" : 88.0188639658802,
-      "fillHex" : "#59c929",
+      "fillHex" : "#c9866f",
       "textHex" : "#14171f",
-      "strokeHex" : "#267205",
-      "strokeWidth" : 1.0,
+      "strokeHex" : "#603a2c",
+      "strokeWidth" : 2.0,
+      "cornerRadius" : 15.0,
+      "pill" : true,
+      "glowColorHex" : "#d165e8",
+      "glowRadius" : 9.1,
+      "glowSpread" : 0.5068,
+      "opacity" : 0.89
+    },
+    "松本 匡矢" : {
+      "fontFamily" : "HGSｺﾞｼｯｸE",
+      "fontPercent" : 106.0,
+      "fillHex" : "#11a170",
+      "textHex" : "#c2e7cf",
+      "strokeHex" : "#005638",
+      "strokeWidth" : 2.0,
+      "cornerRadius" : 21.0,
+      "pill" : false,
+      "glowColorHex" : "#9bd56e",
+      "glowRadius" : 12.46,
+      "glowSpread" : 0.28280000000000005,
+      "opacity" : 0.94
+    },
+    "森下  誠" : {
+      "fontFamily" : "HG明朝E",
+      "fontPercent" : 88.0188639658802,
+      "fillHex" : "#81239f",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#3a054a",
+      "strokeWidth" : 2.0,
+      "cornerRadius" : 1.0,
+      "pill" : false,
+      "glowColorHex" : "#77d976",
+      "glowRadius" : 6.72,
+      "glowSpread" : 0.4732,
+      "opacity" : 0.97
+    },
+    "増田 治樹" : {
+      "fontFamily" : "Wide Latin",
+      "fontPercent" : 106.0,
+      "fillHex" : "#93ae4b",
+      "textHex" : "#14171f",
+      "strokeHex" : "#41511a",
+      "strokeWidth" : 1.5,
+      "cornerRadius" : 18.0,
+      "pill" : false,
+      "glowColorHex" : "#acd938",
+      "glowRadius" : 32.06,
+      "glowSpread" : 0.47600000000000003,
+      "opacity" : 0.62
+    },
+    "大谷 晴香" : {
+      "fontFamily" : "Tw Cen MT Condensed Extra Bold",
+      "fontPercent" : 106.0,
+      "fillHex" : "#67193e",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#38051e",
+      "strokeWidth" : 3.0,
+      "cornerRadius" : 11.0,
+      "pill" : true,
+      "glowColorHex" : "#f63692",
+      "glowRadius" : 24.36,
+      "glowSpread" : 0.2296,
+      "opacity" : 0.9
+    },
+    "角 正彦" : {
+      "fontFamily" : "Palace Script MT",
+      "fontPercent" : 106.0,
+      "fillHex" : "#bac03d",
+      "textHex" : "#14171f",
+      "strokeHex" : "#626612",
+      "strokeWidth" : 2.0,
+      "cornerRadius" : 17.0,
+      "pill" : true,
+      "glowColorHex" : "#dc34e3",
+      "glowRadius" : 30.38,
+      "glowSpread" : 0.24640000000000004,
+      "opacity" : 0.92
+    },
+    "河林 陽介" : {
+      "fontFamily" : "HG正楷書体-PRO",
+      "fontPercent" : 106.0,
+      "fillHex" : "#7f3131",
+      "textHex" : "#b7f3ce",
+      "strokeHex" : "#481313",
+      "strokeWidth" : 1.5,
+      "cornerRadius" : 18.0,
+      "pill" : true,
+      "glowColorHex" : "#2fdf2a",
+      "glowRadius" : 30.240000000000002,
+      "glowSpread" : 0.49560000000000004,
+      "opacity" : 0.97
+    },
+    "坂野 香織" : {
+      "fontFamily" : "Imprint MT Shadow",
+      "fontPercent" : 106.0,
+      "fillHex" : "#687a47",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#354120",
+      "strokeWidth" : 0.0,
+      "cornerRadius" : 17.0,
+      "pill" : false,
+      "glowColorHex" : "#b87bdc",
+      "glowRadius" : 17.5,
+      "glowSpread" : 0.31360000000000005,
+      "opacity" : 0.79
+    },
+    "山本 敬" : {
+      "fontFamily" : "",
+      "fontPercent" : 106.0,
+      "fillHex" : "#48caa3",
+      "textHex" : "#14171f",
+      "strokeHex" : "#17674f",
+      "strokeWidth" : 3.0,
+      "cornerRadius" : 0.0,
+      "pill" : true,
+      "glowColorHex" : "#7bceb5",
+      "glowRadius" : 28.84,
+      "glowSpread" : 0.42280000000000006,
+      "opacity" : 0.57
+    },
+    "小野 眞太郎" : {
+      "fontFamily" : "Tw Cen MT Condensed",
+      "fontPercent" : 106.0,
+      "fillHex" : "#27558b",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#0a2748",
+      "strokeWidth" : 3.5,
       "cornerRadius" : 0.0,
       "pill" : false,
-      "glowColorHex" : "#dcf47f",
-      "glowRadius" : 11.479999999999999,
+      "glowColorHex" : "#f166bb",
+      "glowRadius" : 16.099999999999998,
       "glowSpread" : 0.5292,
       "opacity" : 0.65
     },
-    "小野 眞太郎" : {
-      "fontFamily" : "Courier New",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#6dc159",
-      "textHex" : "#14171f",
-      "strokeHex" : "#2b5920",
-      "strokeWidth" : 1.5,
-      "cornerRadius" : 21.0,
-      "pill" : true,
-      "glowColorHex" : "#62c84a",
-      "glowRadius" : 21.84,
-      "glowSpread" : 0.4172,
-      "opacity" : 0.57
-    },
-    "坂野 香織" : {
-      "fontFamily" : "Informal Roman",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#426cbb",
+    "近藤 厚生" : {
+      "fontFamily" : "Yu Gothic UI Semilight",
+      "fontPercent" : 106.0,
+      "fillHex" : "#3e3d63",
       "textHex" : "#f0f2f7",
-      "strokeHex" : "#142d5b",
-      "strokeWidth" : 1.0,
+      "strokeHex" : "#1c1b33",
+      "strokeWidth" : 3.5,
       "cornerRadius" : 13.0,
       "pill" : true,
-      "glowColorHex" : "#d6eb8c",
-      "glowRadius" : 22.26,
-      "glowSpread" : 0.4172,
-      "opacity" : 0.99
+      "glowColorHex" : "#5453c2",
+      "glowRadius" : 31.78,
+      "glowSpread" : 0.23520000000000002,
+      "opacity" : 0.81
     },
-    "山本 敬" : {
-      "fontFamily" : "Segoe Fluent Icons",
-      "fontPercent" : 88.0188639658802,
-      "fillHex" : "#40c459",
-      "textHex" : "#c1ecac",
-      "strokeHex" : "#136423",
-      "strokeWidth" : 0.0,
-      "cornerRadius" : 20.0,
+    "京 直道" : {
+      "fontFamily" : "Gill Sans Ultra Bold Condensed",
+      "fontPercent" : 106.0,
+      "fillHex" : "#9f67b9",
+      "textHex" : "#f0f2f7",
+      "strokeHex" : "#563067",
+      "strokeWidth" : 3.0,
+      "cornerRadius" : 7.0,
       "pill" : false,
-      "glowColorHex" : "#45f065",
-      "glowRadius" : 30.240000000000002,
-      "glowSpread" : 0.1708,
-      "opacity" : 0.63
+      "glowColorHex" : "#b153de",
+      "glowRadius" : 26.88,
+      "glowSpread" : 0.16240000000000002,
+      "opacity" : 0.77
     }
   },
-  "equipmentGanttPlanJsonPath" : "C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605172213231816.json",
+  "equipmentGanttPlanJsonPath" : "C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605181040404098.json",
   "stage1NetworkCacheBadgeLabel" : "キャッシュ",
   "stage1NetworkCacheBadgeStyle" : {
     "fontFamily" : "",
@@ -871,8 +925,8 @@
     "glowSpread" : 0.22000000000000003,
     "opacity" : 1.0
   },
-  "mainShellTabOrganizerHeaderGlow" : true,
-  "mainShellTabOrganizerHeaderGlowStrength" : 1.0,
+  "mainShellTabOrganizerHeaderGlow" : false,
+  "mainShellTabOrganizerHeaderGlowStrength" : 0.1,
   "pushButtonDesignPrefs" : {
     "customizeGeneralRunTab" : false,
     "customizeStageRunButtons" : true,
@@ -926,8 +980,8 @@
   "memoryMonitorEnabled" : true,
   "memoryMonitorIntervalSec" : 5,
   "nextLaunchHeapMaxMiB" : 5120,
-  "windowWidth" : 1721.3333740234375,
-  "windowHeight" : 765.3333129882812,
-  "windowX" : 0.0,
-  "windowY" : 0.0
+  "windowWidth" : 2574.666748046875,
+  "windowHeight" : 1406.6666259765625,
+  "windowX" : -7.333333492279053,
+  "windowY" : -7.333333492279053
 }

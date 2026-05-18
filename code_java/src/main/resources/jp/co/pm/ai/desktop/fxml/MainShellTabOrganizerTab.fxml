@@ -95,7 +95,7 @@
                             onAction="#onMoveSelectionDown" styleClass="pm-org-move-button" text="↓ 下へ"/>
                 </HBox>
                 <Label wrapText="true" styleClass="pm-main-shell-tab-organizer-hint"
-                       text="チップをドラッグするか「上へ」「下へ」で順序を変更します。タブ行の上へ＝その前に挿入、グループ行へ＝グループ内の末尾へ。Ctrl+クリックで複数選択。子タブ・折りたたみ行は参照のみです。"/>
+                       text="「グループ」はメインタブをまとめる入れ物（▶で開閉）。「メイン」は並べ替え可能な作業タブ。固定子タブはメイン行の▶で表示（既定は非表示）。「子タブ」「パネル」は変更できません。チップをドラッグするか「上へ」「下へ」で順序を変更。Ctrl+クリックで複数選択。"/>
                 <StackPane minHeight="120.0" styleClass="pm-org-organizer-stack" VBox.vgrow="ALWAYS">
                     <ScrollPane fx:id="organizerListScroll" fitToWidth="true" hbarPolicy="NEVER"
                                 minHeight="0.0" pannable="true" styleClass="pm-org-organizer-visual-scroll"

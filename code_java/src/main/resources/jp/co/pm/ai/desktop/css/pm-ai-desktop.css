@@ -500,10 +500,84 @@
 
 /* ツリー：色付きピル（文字に合わせたコンパクトサイズ・グローなし） */
 .pm-org-tree-pill {
-    -fx-padding: 4 12 4 12;
+    -fx-padding: 4 10 4 10;
     -fx-background-insets: 0;
     -fx-effect: null;
     -fx-cursor: hand;
+}
+
+.pm-org-kind-badge {
+    -fx-padding: 1 6 1 6;
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+    -fx-font-size: 9px;
+    -fx-font-weight: bold;
+}
+
+.pm-org-kind-badge-group {
+    -fx-background-color: derive(-fx-accent, 70%);
+    -fx-text-fill: derive(-fx-accent, -55%);
+}
+
+.pm-org-kind-badge-main {
+    -fx-background-color: derive(-fx-base, -8%);
+    -fx-border-color: derive(-fx-text-box-border, -10%);
+    -fx-border-width: 1;
+    -fx-text-fill: -fx-text-base-color;
+}
+
+.pm-org-kind-badge-inner,
+.pm-org-kind-badge-accordion {
+    -fx-background-color: transparent;
+    -fx-border-color: derive(-fx-text-box-border, 5%);
+    -fx-border-width: 1;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-org-tree-pill-group {
+    -fx-border-width: 2;
+    -fx-border-color: derive(-fx-accent, 25%);
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+}
+
+.pm-org-tree-pill-main {
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+}
+
+.pm-org-tree-pill-locked {
+    -fx-cursor: default;
+    -fx-opacity: 0.88;
+}
+
+.pm-org-group-block {
+    -fx-padding: 4 0 8 0;
+    -fx-border-color: derive(-fx-accent, 45%) transparent transparent transparent;
+    -fx-border-width: 0 0 0 3;
+}
+
+.pm-org-group-child-count,
+.pm-org-inner-child-count {
+    -fx-font-size: 10px;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-org-group-child-strip,
+.pm-org-inner-child-strip {
+    -fx-padding: 0 0 0 12;
+    -fx-border-color: transparent transparent transparent derive(-fx-text-box-border, 15%);
+    -fx-border-width: 0 0 0 2;
+}
+
+.pm-org-inner-section-caption {
+    -fx-font-size: 10px;
+    -fx-text-fill: -fx-mid-text-color;
+    -fx-padding: 0 0 0 28;
+}
+
+.pm-org-main-with-inner {
+    -fx-padding: 0 0 6 0;
 }
 
 .pm-org-tree-pill-empty {

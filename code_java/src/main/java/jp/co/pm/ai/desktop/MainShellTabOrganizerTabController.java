@@ -160,6 +160,11 @@ public final class MainShellTabOrganizerTabController {
         reloadTreeFromShell();
     }
 
+    /** メインシェルで「タブ整理」を開いたとき、現在のタブ構成でツリーを組み直す。 */
+    void refreshFromShell() {
+        reloadTreeFromShell();
+    }
+
     /** セッション復元後にチェック状態だけシェルと揃える。 */
     void syncHeaderGlowCheckFromShell() {
         if (headerGlowCheck == null || shell == null) {
@@ -262,7 +267,7 @@ public final class MainShellTabOrganizerTabController {
             }
         }
         treeView.setRoot(invisibleRoot);
-        expandAll(invisibleRoot);
+        applyDefaultTreeExpansion(invisibleRoot);
         syncOrganizerSideFields();
         rebuildOrganizerVisualTree();
     }
@@ -378,11 +383,47 @@ public final class MainShellTabOrganizerTabController {
         syncTabAliasField();
     }
 
-    private static void expandAll(TreeItem<OrgRow> n) {
-        n.setExpanded(true);
-        for (TreeItem<OrgRow> c : n.getChildren()) {
-            expandAll(c);
+    /** グループは開く。固定子タブ付きメインタブは既定で閉じる。 */
+    private void applyDefaultTreeExpansion(TreeItem<OrgRow> root) {
+        if (root == null) {
+            return;
         }
+        for (TreeItem<OrgRow> ch : root.getChildren()) {
+            applyDefaultTreeExpansionRecursive(ch);
+        }
+    }
+
+    private void applyDefaultTreeExpansionRecursive(TreeItem<OrgRow> item) {
+        if (item == null || item.getValue() == null) {
+            return;
+        }
+        OrgRow r = item.getValue();
+        if (r.kind == OrgRow.Kind.TAB && hasInnerTabChildren(item)) {
+            item.setExpanded(false);
+        } else if (r.kind == OrgRow.Kind.GROUP) {
+            item.setExpanded(true);
+            for (TreeItem<OrgRow> c : item.getChildren()) {
+                applyDefaultTreeExpansionRecursive(c);
+            }
+        } else {
+            item.setExpanded(true);
+        }
+        for (TreeItem<OrgRow> c : item.getChildren()) {
+            if (c.getValue() != null && c.getValue().kind == OrgRow.Kind.INNER_TAB) {
+                c.setExpanded(true);
+            }
+        }
+    }
+
+    private static boolean hasInnerTabChildren(TreeItem<OrgRow> tabItem) {
+        if (tabItem == null) {
+            return false;
+        }
+        return tabItem.getChildren().stream()
+                .anyMatch(
+                        ch ->
+                                ch.getValue() != null
+                                        && ch.getValue().kind == OrgRow.Kind.INNER_TAB);
     }
 
     private TreeItem<OrgRow> treeItemForLayoutNode(MainShellTabLayoutNode n) {
@@ -396,6 +437,9 @@ public final class MainShellTabOrganizerTabController {
             }
             TreeItem<OrgRow> tabItem = leafItem(OrgRow.tab(id, n.colorHex()));
             appendInnerTabCatalogRows(tabItem, id);
+            if (!tabItem.getChildren().isEmpty()) {
+                tabItem.setExpanded(false);
+            }
             return tabItem;
         }
         if (n.isGroup()) {
@@ -1018,10 +1062,10 @@ public final class MainShellTabOrganizerTabController {
             return shellCtl != null ? shellCtl.mainShellTabTitle(tabId) : tabId.name();
         }
 
-        /** ツリー色ピル用の短い見出し（[グループ] プレフィックスなし）。 */
+        /** ツリー色ピル用の短い見出し（種別バッジは {@link #kindBadgeFor} で付与）。 */
         String treePillPrimaryLabel(MainShellController shellCtl) {
             if (kind == Kind.GROUP) {
-                return groupTitle != null && !groupTitle.isBlank() ? groupTitle : "グループ";
+                return groupTitle != null && !groupTitle.isBlank() ? groupTitle : "（名称未設定）";
             }
             if (kind == Kind.INNER_TAB) {
                 return groupTitle != null && !groupTitle.isBlank() ? groupTitle : "子タブ";
@@ -1059,47 +1103,100 @@ public final class MainShellTabOrganizerTabController {
         }
         OrgRow r = item.getValue();
         if (r.kind == OrgRow.Kind.TAB) {
-            boolean hasInner =
-                    item.getChildren().stream()
-                            .anyMatch(
-                                    ch ->
-                                            ch.getValue() != null
-                                                    && ch.getValue().kind == OrgRow.Kind.INNER_TAB);
-            if (hasInner) {
+            if (hasInnerTabChildren(item)) {
                 VBox col = new VBox(6);
                 col.setFillWidth(false);
+                col.getStyleClass().add("pm-org-main-with-inner");
                 HBox head = new HBox(8);
                 head.setAlignment(Pos.CENTER_LEFT);
-                head.getChildren().add(createPillForTreeItem(item));
+
+                Button disclosure = new Button(item.isExpanded() ? "▼" : "▶");
+                disclosure.setFocusTraversable(false);
+                disclosure.getStyleClass().add("pm-org-tree-disclosure");
+                disclosure.setMinSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+                disclosure.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+                disclosure.setOnAction(
+                        e -> {
+                            item.setExpanded(!item.isExpanded());
+                            rebuildOrganizerVisualTree();
+                        });
+
+                int innerCount =
+                        (int)
+                                item.getChildren().stream()
+                                        .filter(
+                                                ch ->
+                                                        ch.getValue() != null
+                                                                && ch.getValue().kind
+                                                                        == OrgRow.Kind.INNER_TAB)
+                                        .count();
+                Label count =
+                        new Label(
+                                String.format(
+                                        Locale.JAPAN, "固定子タブ %d 件", Math.max(0, innerCount)));
+                count.getStyleClass().add("pm-org-inner-child-count");
+
+                head.getChildren()
+                        .addAll(disclosure, createPillForTreeItem(item), count);
                 col.getChildren().add(head);
-                col.getChildren().add(buildInnerTabChildStrip(item));
+                if (item.isExpanded()) {
+                    Label innerCaption =
+                            new Label("固定の子タブ（並べ替え・グループ化の対象外）");
+                    innerCaption.setWrapText(true);
+                    innerCaption.getStyleClass().add("pm-org-inner-section-caption");
+                    col.getChildren().add(innerCaption);
+                    VBox innerStrip = buildInnerTabChildStrip(item);
+                    innerStrip.getStyleClass().add("pm-org-inner-child-strip");
+                    col.getChildren().add(innerStrip);
+                }
                 return col;
             }
             return createPillForTreeItem(item);
         }
-        HBox row = new HBox(8);
-        row.setAlignment(Pos.TOP_LEFT);
-        row.setFillHeight(false);
+        if (r.kind == OrgRow.Kind.GROUP) {
+            VBox block = new VBox(6);
+            block.setFillWidth(false);
+            block.getStyleClass().add("pm-org-group-block");
+            HBox row = new HBox(8);
+            row.setAlignment(Pos.CENTER_LEFT);
+            row.setFillHeight(false);
 
-        Button disclosure = new Button(item.isExpanded() ? "▼" : "▶");
-        disclosure.setFocusTraversable(false);
-        disclosure.getStyleClass().add("pm-org-tree-disclosure");
-        disclosure.setMinSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
-        disclosure.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
-        disclosure.setOnAction(
-                e -> {
-                    item.setExpanded(!item.isExpanded());
-                    rebuildOrganizerVisualTree();
-                });
+            Button disclosure = new Button(item.isExpanded() ? "▼" : "▶");
+            disclosure.setFocusTraversable(false);
+            disclosure.getStyleClass().add("pm-org-tree-disclosure");
+            disclosure.setMinSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+            disclosure.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+            disclosure.setOnAction(
+                    e -> {
+                        item.setExpanded(!item.isExpanded());
+                        rebuildOrganizerVisualTree();
+                    });
 
-        StackPane pill = createPillForTreeItem(item);
-        row.getChildren().addAll(disclosure, pill);
-        attachDropTarget(row, item);
-
-        if (item.isExpanded() && !item.getChildren().isEmpty()) {
-            row.getChildren().add(buildStaggeredChildStrip(item));
+            StackPane pill = createPillForTreeItem(item);
+            int childTabs =
+                    (int)
+                            item.getChildren().stream()
+                                    .filter(
+                                            ch ->
+                                                    ch.getValue() != null
+                                                            && ch.getValue().kind == OrgRow.Kind.TAB)
+                                    .count();
+            Label count =
+                    new Label(
+                            String.format(
+                                    Locale.JAPAN, "メインタブ %d 件", Math.max(0, childTabs)));
+            count.getStyleClass().add("pm-org-group-child-count");
+            row.getChildren().addAll(disclosure, pill, count);
+            attachDropTarget(row, item);
+            block.getChildren().add(row);
+            if (item.isExpanded() && !item.getChildren().isEmpty()) {
+                VBox strip = buildStaggeredChildStrip(item);
+                strip.getStyleClass().add("pm-org-group-child-strip");
+                block.getChildren().add(strip);
+            }
+            return block;
         }
-        return row;
+        return createPillForTreeItem(item);
     }
 
     /**
@@ -1205,12 +1302,20 @@ public final class MainShellTabOrganizerTabController {
         pill.setMinSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
         pill.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
         pill.getStyleClass().setAll("pm-org-tree-pill");
+        if (row.kind == OrgRow.Kind.GROUP) {
+            pill.getStyleClass().add("pm-org-tree-pill-group");
+        } else if (row.kind == OrgRow.Kind.TAB) {
+            pill.getStyleClass().add("pm-org-tree-pill-main");
+        }
         if (row.kind == OrgRow.Kind.INNER_TAB || row.kind == OrgRow.Kind.INNER_ACCORDION) {
             pill.getStyleClass().add("pm-org-tree-pill-inner");
         }
         if (row.kind == OrgRow.Kind.INNER_ACCORDION) {
             pill.getStyleClass().add("pm-org-tree-pill-accordion");
         }
+        HBox pillBody = new HBox(6);
+        pillBody.setAlignment(Pos.CENTER_LEFT);
+        pillBody.getChildren().add(kindBadgeFor(row));
         Label lab = new Label(row.treePillPrimaryLabel(shell));
         lab.setWrapText(false);
         lab.getStyleClass().add("pm-org-tree-pill-label");
@@ -1231,17 +1336,50 @@ public final class MainShellTabOrganizerTabController {
                             + emptyFill
                             + ";");
         }
+        pillBody.getChildren().add(lab);
         Tooltip.install(pill, new Tooltip(row.treeDetailWithoutHex(shell)));
-        pill.getChildren().setAll(lab);
+        pill.getChildren().setAll(pillBody);
         wirePillInteractions(pill, item);
         updatePillSelectionStyle(pill, item);
         return pill;
+    }
+
+    private static Label kindBadgeFor(OrgRow row) {
+        String text;
+        String styleClass;
+        switch (row.kind) {
+            case GROUP -> {
+                text = "グループ";
+                styleClass = "pm-org-kind-badge-group";
+            }
+            case TAB -> {
+                text = "メイン";
+                styleClass = "pm-org-kind-badge-main";
+            }
+            case INNER_TAB -> {
+                text = "子タブ";
+                styleClass = "pm-org-kind-badge-inner";
+            }
+            case INNER_ACCORDION -> {
+                text = "パネル";
+                styleClass = "pm-org-kind-badge-accordion";
+            }
+            default -> {
+                text = "";
+                styleClass = "pm-org-kind-badge";
+            }
+        }
+        Label badge = new Label(text);
+        badge.getStyleClass().addAll("pm-org-kind-badge", styleClass);
+        badge.setMouseTransparent(true);
+        return badge;
     }
 
     private void wirePillInteractions(StackPane pill, TreeItem<OrgRow> item) {
         OrgRow ov = item.getValue();
         if (ov != null
                 && (ov.kind == OrgRow.Kind.INNER_TAB || ov.kind == OrgRow.Kind.INNER_ACCORDION)) {
+            pill.getStyleClass().add("pm-org-tree-pill-locked");
             pill.setOnMouseClicked(
                     ev -> {
                         if (treeView == null) {
