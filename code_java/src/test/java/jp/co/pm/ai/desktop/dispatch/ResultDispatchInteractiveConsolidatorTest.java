@@ -79,11 +79,19 @@ class ResultDispatchInteractiveConsolidatorTest {
 
         ResultDispatchInteractiveConsolidator.consolidatePlanAndTimelineRowsInPlace(cols, rows);
 
-        assertEquals(2, rows.size());
-        assertEquals("4400", rows.get(0).get(ResultDispatchSchema.COL_DISPATCH_QTY));
-        assertEquals("3600", rows.get(1).get(ResultDispatchSchema.COL_DISPATCH_QTY));
-        assertEquals("2026/05/21 15:00", rows.get(0).get("加工開始日時"));
-        assertEquals("2026/05/22 11:38", rows.get(1).get("加工開始日時"));
+        assertEquals(3, rows.size());
+        Map<String, String> may21 = rows.get(0);
+        Map<String, String> may22 = rows.get(1);
+        Map<String, String> may26 = rows.get(2);
+        assertEquals("2026/05/21", may21.get(ResultDispatchSchema.COL_DISPATCH_DATE));
+        assertEquals("4400", may21.get(ResultDispatchSchema.COL_DISPATCH_QTY));
+        assertEquals("2026/05/22", may22.get(ResultDispatchSchema.COL_DISPATCH_DATE));
+        assertEquals("3600", may22.get(ResultDispatchSchema.COL_DISPATCH_QTY));
+        assertEquals("2026/05/26", may26.get(ResultDispatchSchema.COL_DISPATCH_DATE));
+        assertEquals("1400", may26.get(ResultDispatchSchema.COL_DISPATCH_QTY));
+        assertEquals("2026/05/21 15:00", may21.get("加工開始日時"));
+        assertEquals("2026/05/22 11:38", may22.get("加工開始日時"));
+        assertEquals("2026/05/26 09:27", may26.get("加工開始日時"));
     }
 
     @Test

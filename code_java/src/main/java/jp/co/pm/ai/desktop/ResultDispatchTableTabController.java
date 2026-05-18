@@ -36,6 +36,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDeadlineJudgment;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveConsolidator;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
