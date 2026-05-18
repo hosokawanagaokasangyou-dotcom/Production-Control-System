@@ -243,29 +243,28 @@ MASTER_FILE = master_workbook_filename()
 
 
 def _master_workbook_path_resolved() -> str:
-    """MASTER_WORKBOOK_FILE / cwd に加え、PM_AI_MASTER_WORKBOOK でフルパスを上書き可。"""
+    """
+    マスタブックの絶対パス。環境変数 ``PM_AI_MASTER_WORKBOOK`` のみ（必須・実在ファイル）。
+
+    ``MASTER_WORKBOOK_FILE`` やカレントの ``master.xlsm`` へのフォールバックは行わない。
+    """
     alt = (os.environ.get("PM_AI_MASTER_WORKBOOK") or "").strip()
-    if alt and os.path.isfile(alt):
-        return os.path.normpath(os.path.abspath(alt))
-    mf = MASTER_FILE
-    if not mf:
-        return os.path.normpath(os.path.join(os.getcwd(), "master.xlsm"))
-    if os.path.isabs(mf):
-        return os.path.normpath(mf)
-    if mf.startswith("\\\\"):
-        return mf
-    return os.path.normpath(os.path.join(os.getcwd(), mf))
+    if not alt:
+        raise PlanningValidationError(
+            "環境変数 PM_AI_MASTER_WORKBOOK が未設定です。"
+            "JavaFX の環境変数タブでマスタブック（.xlsm）の絶対パスを設定してください。"
+        )
+    if not os.path.isfile(alt):
+        raise PlanningValidationError(
+            "PM_AI_MASTER_WORKBOOK で指定したマスタブックが見つかりません: "
+            f"{alt!r}"
+        )
+    return os.path.normpath(os.path.abspath(alt))
 
 
 def _require_master_workbook_path_exists() -> str:
-    """マスタブックが実在しないときはフォールバックせず ``FileNotFoundError`` で中止する。"""
-    p = _master_workbook_path_resolved()
-    if not p or not os.path.isfile(p):
-        raise FileNotFoundError(
-            "マスタブックが見つかりません（想定外のため中止します）。"
-            f" 解決パス: {p!r}（MASTER_WORKBOOK_FILE / PM_AI_MASTER_WORKBOOK / カレントを確認）"
-        )
-    return os.path.normpath(os.path.abspath(p))
+    """``_master_workbook_path_resolved`` と同じ（未設定・未存在時は ``PlanningValidationError``）。"""
+    return _master_workbook_path_resolved()
 
 
 # VBA「master_機械カレンダーを作成」シート（30分スロット占有を段階2の machine_avail_dt に反映）
@@ -282,12 +281,18 @@ _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE: dict[
     date, list[tuple[datetime, datetime]]
 ] = {}
 
-# master.xlsm: 機械との日次始業準備（分）。依頼切替の準備・後始末は廃止（シートは未読込）。
+# master.xlsm: 機械との日次始業準備（分）。
 SHEET_MACHINE_DAILY_STARTUP = "設定_機械_日次始業準備"
+SHEET_REQUEST_SWITCH_PREP = "設定_依頼切替前後時間"
 # ``generate_plan`` 開始時に再設定（シート無し・空は空辞書＝従来どおり）
 _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE: dict[str, int] = {}
 # 設定_機械_日次始業準備「必要人数」（機械名キー・正規化キー）。0 は人数割当なし。
 _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE: dict[str, int] = {}
+# 設定_依頼切替前後時間（generate_plan 開始時に再設定）
+_STAGE2_REQUEST_SWITCH_PREP_BY_PROC_MACHINE: dict[tuple[str, str], int] = {}
+_STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE: dict[str, int] = {}
+_STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE: dict[tuple[str, str], int] = {}
+_STAGE2_BREAK_RESUME_PREP_BY_MACHINE: dict[str, int] = {}
 # master メイン A15（定常開始）。日次始業準備を勤怠 forward ではなく [開始, 開始+N分) のタイムラインに載せる。
 _STAGE2_REGULAR_SHIFT_START: time | None = None
 # 段階2で採用した加工計画DATAのデータ抽出日時（generate_plan / 実績明細ガント更新入口で設定。無いとき None）。
@@ -295,6 +300,8 @@ _STAGE2_DATA_EXTRACTION_DATETIME: datetime | None = None
 # timeline_events の event_kind（省略時は加工とみなす）
 TIMELINE_EVENT_MACHINING = "machining"
 TIMELINE_EVENT_MACHINE_DAILY_STARTUP = "machine_daily_startup"
+TIMELINE_EVENT_REQUEST_SWITCH_PREP = "request_switch_prep"
+TIMELINE_EVENT_BREAK_RESUME_PREP = "break_resume_prep"
 # VBA「master_組み合わせ表を更新」で作るシート（工程+機械キーとメンバー編集）
 MASTER_SHEET_TEAM_COMBINATIONS = "組み合わせ表"
 # master.xlsm「speed」: 1行目=工程名、2行目=機械名、4行目=基本速度、5行目=実稼働比率（データ列は既定で D 列から）
@@ -2411,7 +2418,12 @@ def _gantt_slot_state_tuple_from_active(active, slot_start, slot_mins, task_fill
     slot_mid = slot_start + timedelta(minutes=float(slot_mins) / 2.0)
     if active is None:
         return ("idle",)
-    if _timeline_event_kind(active) == TIMELINE_EVENT_MACHINE_DAILY_STARTUP:
+    _ek_slot = _timeline_event_kind(active)
+    if _ek_slot in (
+        TIMELINE_EVENT_MACHINE_DAILY_STARTUP,
+        TIMELINE_EVENT_REQUEST_SWITCH_PREP,
+        TIMELINE_EVENT_BREAK_RESUME_PREP,
+    ):
         return ("daily_startup", _gantt_daily_startup_fill_hex())
     sample_t = _eq_grid_overlap_sample_t(active, slot_start, slot_end, slot_mid)
     if any(b_s <= sample_t < b_e for b_s, b_e in active.get("breaks") or ()):
@@ -2788,7 +2800,14 @@ def _apply_equipment_schedule_prep_cleanup_fill(ws) -> None:
         start_color=RESULT_DISPATCHED_REQUEST_FILL,
         end_color=RESULT_DISPATCHED_REQUEST_FILL,
     )
-    markers = ("(日次始業準備)", "日次始業準備")
+    markers = (
+        "(日次始業準備)",
+        "日次始業準備",
+        "(依頼切替準備)",
+        "依頼切替準備",
+        "(休憩再開準備)",
+        "休憩再開準備",
+    )
     col_tb = None
     equip_cols: list[int] = []
     for i, c in enumerate(ws[1], start=1):
@@ -22424,6 +22443,8 @@ def _build_equipment_schedule_dataframe(
                         _ek_disp = _timeline_event_kind(active_ev)
                         _tag = {
                             TIMELINE_EVENT_MACHINE_DAILY_STARTUP: "日次始業準備",
+                            TIMELINE_EVENT_REQUEST_SWITCH_PREP: "依頼切替準備",
+                            TIMELINE_EVENT_BREAK_RESUME_PREP: "休憩再開準備",
                         }.get(
                             _ek_disp,
                             "セットアップ",
@@ -22432,7 +22453,11 @@ def _build_equipment_schedule_dataframe(
                         _sub_text = f" 補:{_sub_n}" if _sub_n else ""
                         _tid_d = str(active_ev.get("task_id") or "").strip()
                         # 日次始業準備は括弧なし（設備ガントのメインシェイプ文言と整合）
-                        if _ek_disp in (TIMELINE_EVENT_MACHINE_DAILY_STARTUP,):
+                        if _ek_disp in (
+                            TIMELINE_EVENT_MACHINE_DAILY_STARTUP,
+                            TIMELINE_EVENT_REQUEST_SWITCH_PREP,
+                            TIMELINE_EVENT_BREAK_RESUME_PREP,
+                        ):
                             eq_text = str(_tag)
                         else:
                             eq_text = (
@@ -23671,7 +23696,7 @@ def load_machine_daily_startup_settings(
     """
     master.xlsm の任意シート「設定_機械_日次始業準備」… 機械名・日次始業準備分・任意で必要人数。
 
-    戻り値: (分 dict, 必要人数 dict)。「設定_依頼切替前後時間」は読み込まない（廃止）。
+    戻り値: (分 dict, 必要人数 dict)。
     """
     startup: dict[str, int] = {}
     req_staff: dict[str, int] = {}
@@ -23729,6 +23754,314 @@ def load_machine_daily_startup_settings(
             )
 
     return startup, req_staff
+
+
+def load_request_switch_prep_settings(
+    master_path: str,
+    *,
+    _allow_kokubu_merge: bool = True,
+) -> tuple[
+    dict[tuple[str, str], int],
+    dict[str, int],
+    dict[tuple[str, str], int],
+    dict[str, int],
+]:
+    """
+    master.xlsm「設定_依頼切替前後時間」… 工程名・機械名・準備時間_分・一時停止後_再開準備時間。
+
+    戻り値: (依頼切替準備 by (工程,機械), 依頼切替準備 by 機械名のみ,
+            休憩再開準備 by (工程,機械), 休憩再開準備 by 機械名のみ)。
+    """
+    switch_pair: dict[tuple[str, str], int] = {}
+    switch_machine: dict[str, int] = {}
+    resume_pair: dict[tuple[str, str], int] = {}
+    resume_machine: dict[str, int] = {}
+    if not master_path or not os.path.isfile(master_path):
+        return switch_pair, switch_machine, resume_pair, resume_machine
+    try:
+        xls = pd.ExcelFile(master_path)
+    except Exception as e:
+        logging.warning("依頼切替準備設定: ブックを開きません (%s)", e)
+        return switch_pair, switch_machine, resume_pair, resume_machine
+    if SHEET_REQUEST_SWITCH_PREP not in xls.sheet_names:
+        return switch_pair, switch_machine, resume_pair, resume_machine
+    try:
+        df = pd.read_excel(
+            master_path, sheet_name=SHEET_REQUEST_SWITCH_PREP, header=0
+        )
+        df.columns = [str(c).strip() for c in df.columns]
+
+        def _col_variants(*bases: str) -> list[str]:
+            out: list[str] = []
+            for b in bases:
+                b0 = str(b).strip()
+                if not b0:
+                    continue
+                for c in df.columns:
+                    cs = str(c).strip()
+                    if cs == b0 or cs.startswith(b0 + "."):
+                        if cs not in out:
+                            out.append(cs)
+            return out
+
+        def _row_text(row, cols: list[str]) -> str:
+            for c in cols:
+                v = row.get(c)
+                if v is None or (isinstance(v, float) and pd.isna(v)):
+                    continue
+                s = str(v).strip()
+                if s and s.lower() != "nan":
+                    return s
+            return ""
+
+        def _row_minutes(row, cols: list[str]) -> int:
+            best = 0
+            for c in cols:
+                v = _parse_nonneg_minutes_cell(row.get(c))
+                if v > best:
+                    best = v
+            return best
+
+        proc_cols = _col_variants("工程名", "工程")
+        mn_cols = _col_variants("機械名", "機械")
+        prep_cols = [
+            c
+            for c in df.columns
+            if "後始末" not in str(c)
+            and "再開" not in str(c)
+            and (
+                str(c).strip() in _col_variants(
+                    "準備時間_分", "準備分", "準備時間", "依頼切替準備_分"
+                )
+                or "準備時間" in str(c)
+                or "依頼切替準備" in str(c)
+            )
+        ]
+        prep_cols = list(dict.fromkeys(prep_cols))
+        resume_cols = _col_variants(
+            "一時停止後_再開準備時間",
+            "再開準備時間",
+            "一時停止後_再開準備時間_分",
+            "再開準備_分",
+        )
+        if not mn_cols:
+            return switch_pair, switch_machine, resume_pair, resume_machine
+        for _, row in df.iterrows():
+            mn_s = _row_text(row, mn_cols)
+            if not mn_s:
+                continue
+            proc_s = _row_text(row, proc_cols)
+            prep_m = _row_minutes(row, prep_cols)
+            resume_m = _row_minutes(row, resume_cols)
+            nk = _normalize_equipment_match_key(mn_s)
+            if proc_s:
+                if prep_m > 0:
+                    switch_pair[(proc_s, mn_s)] = prep_m
+                if resume_m > 0:
+                    resume_pair[(proc_s, mn_s)] = resume_m
+            else:
+                if prep_m > 0:
+                    switch_machine[mn_s] = prep_m
+                    if nk:
+                        switch_machine[nk] = prep_m
+                if resume_m > 0:
+                    resume_machine[mn_s] = resume_m
+                    if nk:
+                        resume_machine[nk] = resume_m
+        if switch_pair or switch_machine or resume_pair or resume_machine:
+            logging.info(
+                "マスタ「%s」: 依頼切替準備 %s 件・休憩再開準備 %s 件（工程+機械 / 機械のみの内訳はログのみ）。",
+                SHEET_REQUEST_SWITCH_PREP,
+                len(switch_pair) + len(switch_machine),
+                len(resume_pair) + len(resume_machine),
+            )
+    except Exception as e:
+        logging.warning(
+            "マスタ「%s」読込失敗（無視）: %s", SHEET_REQUEST_SWITCH_PREP, e
+        )
+    if _allow_kokubu_merge:
+        _added = _merge_request_switch_prep_from_sibling_kokubu_master(
+            master_path,
+            switch_pair,
+            switch_machine,
+            resume_pair,
+            resume_machine,
+        )
+        if _added > 0:
+            logging.info(
+                "マスタ「%s」: 同フォルダの国分master.xlsm から不足分 %s 件を補完しました。",
+                SHEET_REQUEST_SWITCH_PREP,
+                _added,
+            )
+    return switch_pair, switch_machine, resume_pair, resume_machine
+
+
+def _merge_request_switch_prep_from_sibling_kokubu_master(
+    primary_path: str,
+    switch_pair: dict[tuple[str, str], int],
+    switch_machine: dict[str, int],
+    resume_pair: dict[tuple[str, str], int],
+    resume_machine: dict[str, int],
+) -> int:
+    """正本マスタに無い (工程,機械) を同ディレクトリの国分master.xlsm から補完（上書きしない）。"""
+    if not primary_path:
+        return 0
+    try:
+        base = os.path.dirname(os.path.abspath(primary_path))
+        alt = os.path.join(base, "国分master.xlsm")
+        if not os.path.isfile(alt):
+            return 0
+        if os.path.normcase(os.path.abspath(alt)) == os.path.normcase(
+            os.path.abspath(primary_path)
+        ):
+            return 0
+        sp2, sm2, rp2, rm2 = load_request_switch_prep_settings(
+            alt, _allow_kokubu_merge=False
+        )
+    except Exception as e:
+        logging.warning("国分master 依頼切替準備の補完読込をスキップ: %s", e)
+        return 0
+    added = 0
+    for src, dst in (
+        (sp2, switch_pair),
+        (sm2, switch_machine),
+        (rp2, resume_pair),
+        (rm2, resume_machine),
+    ):
+        for k, v in src.items():
+            try:
+                iv = int(v or 0)
+            except (TypeError, ValueError):
+                iv = 0
+            if iv <= 0 or k in dst:
+                continue
+            dst[k] = iv
+            added += 1
+    return added
+
+
+def _normalize_proc_machine_for_prep_lookup(
+    machine_proc: str,
+    machine_name: str,
+    *,
+    eq_line: str = "",
+) -> tuple[str, str]:
+    """マスタ「設定_依頼切替前後時間」ルックアップ用に (工程, 機械名) を正規化する。"""
+    proc = str(machine_proc or "").strip()
+    mn = str(machine_name or "").strip()
+    if proc and mn:
+        return proc, mn
+    ek = str(eq_line or "").strip()
+    if ek:
+        nek = _normalize_equipment_match_key(ek)
+        if "+" in nek:
+            a, b = ek.split("+", 1)
+            return str(a).strip(), str(b).strip()
+    if proc:
+        pk = _normalize_equipment_match_key(proc)
+        if "+" in pk:
+            a, b = proc.split("+", 1)
+            return str(a).strip(), str(b).strip()
+    return proc, mn
+
+
+def _equipment_names_match_for_prep_lookup(a: str, b: str) -> bool:
+    """機械名照合（NFKC・空白正規化・拠点名付き表記の前方一致）。"""
+    na = _normalize_equipment_match_key(a)
+    nb = _normalize_equipment_match_key(b)
+    if not na or not nb:
+        return na == nb
+    if na == nb:
+        return True
+    short, long = (na, nb) if len(na) <= len(nb) else (nb, na)
+    return long.startswith(short)
+
+
+def _lookup_prep_minutes_from_stage2_tables(
+    machine_proc: str,
+    machine_name: str,
+    by_pair: dict[tuple[str, str], int] | None,
+    by_machine: dict[str, int] | None,
+) -> int:
+    proc = str(machine_proc or "").strip()
+    mn = str(machine_name or "").strip()
+    pair_d = by_pair if by_pair is not None else {}
+    mach_d = by_machine if by_machine is not None else {}
+    pn = _normalize_process_name_for_rule_match(proc) if proc else ""
+    if proc and mn:
+        v = pair_d.get((proc, mn))
+        if v is not None and int(v) > 0:
+            return int(v)
+    if mn:
+        if mn in mach_d and int(mach_d[mn]) > 0:
+            return int(mach_d[mn])
+        nk = _normalize_equipment_match_key(mn)
+        if nk in mach_d and int(mach_d[nk]) > 0:
+            return int(mach_d[nk])
+        for k, val in mach_d.items():
+            if _equipment_names_match_for_prep_lookup(k, mn) and int(val) > 0:
+                return int(val)
+    best_pm = 0
+    for (p, m), val in pair_d.items():
+        try:
+            iv = int(val or 0)
+        except (TypeError, ValueError):
+            iv = 0
+        if iv <= 0:
+            continue
+        if pn and _normalize_process_name_for_rule_match(p) != pn:
+            continue
+        if mn and not _equipment_names_match_for_prep_lookup(m, mn):
+            continue
+        best_pm = max(best_pm, iv)
+    if best_pm > 0:
+        return best_pm
+    if mn:
+        for (_p, m), val in pair_d.items():
+            try:
+                iv = int(val or 0)
+            except (TypeError, ValueError):
+                iv = 0
+            if iv <= 0:
+                continue
+            if not _equipment_names_match_for_prep_lookup(m, mn):
+                continue
+            best_pm = max(best_pm, iv)
+    return best_pm
+
+
+def _lookup_request_switch_prep_minutes(
+    machine_proc: str,
+    machine_name: str,
+    *,
+    eq_line: str = "",
+) -> int:
+    proc, mn = _normalize_proc_machine_for_prep_lookup(
+        machine_proc, machine_name, eq_line=eq_line
+    )
+    return _lookup_prep_minutes_from_stage2_tables(
+        proc,
+        mn,
+        _STAGE2_REQUEST_SWITCH_PREP_BY_PROC_MACHINE,
+        _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE,
+    )
+
+
+def _lookup_break_resume_prep_minutes(
+    machine_proc: str,
+    machine_name: str,
+    *,
+    eq_line: str = "",
+) -> int:
+    proc, mn = _normalize_proc_machine_for_prep_lookup(
+        machine_proc, machine_name, eq_line=eq_line
+    )
+    return _lookup_prep_minutes_from_stage2_tables(
+        proc,
+        mn,
+        _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE,
+        _STAGE2_BREAK_RESUME_PREP_BY_MACHINE,
+    )
 
 
 def _lookup_daily_startup_minutes(
@@ -25628,37 +25961,6 @@ def _overlay_timeline_meta_onto_interactive_dispatch_df(
                 dd_st = None
         if dd_out is not None and dd_st is not None and dd_st != dd_out:
             _clear_meta_at_pos(pos)
-    # #region agent log
-    try:
-        from planning_core import agent_debug_ndjson as _adn_ov
-
-        samples = []
-        tid_col = TASK_COL_TASK_ID
-        if tid_col in out.columns:
-            for pos in range(len(out)):
-                tid = str(out.iloc[pos].get(tid_col) or "")
-                if "Y5-21" not in tid:
-                    continue
-                samples.append(
-                    {
-                        "pos": int(pos),
-                        "配台日": str(out.iloc[pos].get("配台日")),
-                        "加工開始": str(out.iloc[pos].get("加工開始日時")),
-                        "加工終了": str(out.iloc[pos].get("加工終了日時")),
-                    }
-                )
-                if len(samples) >= 8:
-                    break
-        if samples:
-            _adn_ov.append_structured(
-                "H3",
-                "_overlay_timeline_meta_onto_interactive_dispatch_df",
-                "Y5-21 rows after overlay",
-                {"samples": samples},
-            )
-    except Exception:
-        pass
-    # #endregion
     return out
 
 
@@ -26184,6 +26486,134 @@ def _cleanup_full_duration_fits_from_start(
     return rem <= 0 and act >= cleanup_minutes
 
 
+def _lookup_changeover_minutes_for_eq(
+    eq_line: str,
+    by_dict: object | None,
+) -> tuple[int, int]:
+    """後始末は廃止。互換のため常に (準備分, 後始末分) = (0, 0)。"""
+    return 0, 0
+
+
+def _needs_request_switch_prep(
+    machine_handoff: dict,
+    machine_occ_key: str,
+    current_date: date,
+    task_id: str,
+) -> bool:
+    mach_occ = str(machine_occ_key or "").strip()
+    if not mach_occ:
+        return False
+    machining_today_occ = machine_handoff.get("machining_today_occ") or machine_handoff.get(
+        "started_today", set()
+    )
+    last_tid = str((machine_handoff.get("last_tid") or {}).get(mach_occ, "") or "").strip()
+    cur_tid = str(task_id or "").strip()
+    last_d = (machine_handoff.get("last_machining_date") or {}).get(mach_occ)
+    return (
+        bool(last_tid)
+        and bool(cur_tid)
+        and last_tid != cur_tid
+        and last_d == current_date
+        and mach_occ in machining_today_occ
+    )
+
+
+def _team_start_is_immediate_post_break_resume(
+    team_start: datetime,
+    team_breaks: list,
+) -> bool:
+    if not isinstance(team_start, datetime):
+        return False
+    for item in team_breaks or []:
+        if not isinstance(item, (list, tuple)) or len(item) < 2:
+            continue
+        be = item[1]
+        if isinstance(be, datetime) and team_start == be:
+            return True
+    return False
+
+
+def _prep_segments_immediately_before_machining(
+    *,
+    machining_start: datetime,
+    prep_minutes: int,
+    event_kind: str,
+    eq_line: str,
+    machine_occ_key: str,
+    task_id: str = "",
+) -> tuple[datetime, list[dict]]:
+    """加工開始直前に [開始, 開始+分) の準備ブロックを置き、加工開始をその終了にずらす。"""
+    if prep_minutes <= 0 or not isinstance(machining_start, datetime):
+        return machining_start, []
+    prep_start = machining_start
+    prep_end = prep_start + timedelta(minutes=int(prep_minutes))
+    seg = {
+        "start_dt": prep_start,
+        "end_dt": prep_end,
+        "op": "",
+        "event_kind": str(event_kind or "").strip(),
+        "machine": str(eq_line or "").strip(),
+        "machine_occupancy_key": str(machine_occ_key or "").strip(),
+    }
+    return prep_end, [seg]
+
+
+def _roll_prep_segments_for_assign(
+    *,
+    team_start: datetime,
+    team_breaks: list,
+    machine_handoff: dict,
+    machine_occ_key: str,
+    current_date: date,
+    task_id: str,
+    machine_proc: str,
+    machine_name: str,
+    eq_line: str,
+    abolish_limits: bool,
+) -> tuple[datetime, list[dict]]:
+    if abolish_limits:
+        return team_start, []
+    segments: list[dict] = []
+    ts = team_start
+    _proc_lu, _mn_lu = _normalize_proc_machine_for_prep_lookup(
+        machine_proc, machine_name, eq_line=eq_line
+    )
+    _need_sw = _needs_request_switch_prep(
+        machine_handoff, machine_occ_key, current_date, task_id
+    )
+    _post_break = _team_start_is_immediate_post_break_resume(ts, team_breaks)
+    pm = 0
+    rm = 0
+    if _need_sw:
+        pm = _lookup_request_switch_prep_minutes(
+            _proc_lu, _mn_lu, eq_line=eq_line
+        )
+        if pm > 0:
+            ts, segs = _prep_segments_immediately_before_machining(
+                machining_start=ts,
+                prep_minutes=pm,
+                event_kind=TIMELINE_EVENT_REQUEST_SWITCH_PREP,
+                eq_line=eq_line,
+                machine_occ_key=machine_occ_key,
+            )
+            segments.extend(segs)
+    elif _post_break:
+        rm = _lookup_break_resume_prep_minutes(
+            _proc_lu, _mn_lu, eq_line=eq_line
+        )
+        if rm > 0:
+            ts, segs = _prep_segments_immediately_before_machining(
+                machining_start=ts,
+                prep_minutes=rm,
+                event_kind=TIMELINE_EVENT_BREAK_RESUME_PREP,
+                eq_line=eq_line,
+                machine_occ_key=machine_occ_key,
+                task_id=str(task_id or "").strip(),
+            )
+            segments.extend(segs)
+    return ts, segments
+
+
 def _changeover_need_cleanup_for_next_assign(
     *,
     machine_handoff: dict,
@@ -26193,8 +26623,7 @@ def _changeover_need_cleanup_for_next_assign(
     last_eq: str | None,
 ) -> tuple[bool, int, str, str]:
     """
-    依頼切替後始末が次ロール前に必要か、後始末分、直前主、直前設備行を返す。
-    _changeover_plan_segments_and_machining_lower_bound の need_cleanup と整合。
+    依頼切替後始末（廃止・常に不要）。
     """
     mach_occ = str(machine_occ_key or "").strip()
     machining_today_occ = machine_handoff.get("machining_today_occ") or machine_handoff.get(
@@ -26206,17 +26635,7 @@ def _changeover_need_cleanup_for_next_assign(
     last_eq_s = str(last_eq or "").strip() or str(
         (machine_handoff.get("last_eq") or {}).get(mach_occ, "") or ""
     ).strip()
-    _prep_unused, cu_prev = _lookup_changeover_minutes_for_eq(last_eq_s, None)
-    need = (
-        bool(str(last_tid or "").strip())
-        and bool(cur_tid)
-        and str(last_tid).strip() != cur_tid
-        and last_d == current_date
-        and cu_prev > 0
-        and mach_occ in machining_today_occ
-    )
-    last_lead = str((machine_handoff.get("last_lead_op") or {}).get(mach_occ, "") or "").strip()
-    return need, cu_prev, last_lead, last_eq_s
+    return False, 0, "", last_eq_s
 
 
 def _avail_dt_reapply_member_max_end_from_timeline(
@@ -26265,9 +26684,8 @@ def _repair_timeline_for_same_tid_prebreak_cleanup(
     task_queue: list,
     machine_day_floor: datetime,
 ) -> bool:
-    """
-    同一依頼のまま長い勤務休憩の直前に後始末を載せるため、直前加工終了を逆算開始に合わせて短縮する。
-    """
+    """後始末は廃止。常に False。"""
+    return False
     mach_occ = str(machine_occ_key or "").strip()
     if not mach_occ:
         return False
@@ -26440,11 +26858,8 @@ def _repair_timeline_shorten_machining_for_changeover_cleanup(
     task_queue: list,
     machine_day_floor: datetime,
 ) -> bool:
-    """
-    依頼切替の後始末が担当者勤務線で実寸積めないとき、当日・同一占有の加工タイムラインを
-    終了が新しい順に短縮し、必要ならその直後以降の区間を壁時計で繰り上げる。
-    後始末実寸優先（加工量は短縮で犠牲）。
-    """
+    """後始末は廃止。常に False。"""
+    return False
     need, cu_prev, last_lead, last_eq_s = _changeover_need_cleanup_for_next_assign(
         machine_handoff=machine_handoff,
         machine_occ_key=machine_occ_key,
@@ -26905,50 +27320,19 @@ def _resolve_machine_changeover_floor_segments(
         skills_dict=skills_dict,
         abolish_limits=False,
     )
-    if co_lb is None:
-        if (
-            timeline_events is not None
-            and task_queue is not None
-            and _repair_timeline_shorten_machining_for_changeover_cleanup(
-                timeline_events=timeline_events,
-                machine_avail_dt=machine_avail_dt,
-                machine_handoff=machine_handoff,
-                current_date=current_date,
-                machine_occ_key=machine_occ_key,
-                next_task_id=task_id,
-                machine_proc=str(machine_proc or "").strip(),
-                machine_name=str(machine_name or "").strip(),
-                daily_status=daily_status,
-                skills_dict=skills_dict,
-                avail_dt=avail_dt,
-                dispatch_interval_mirror=dispatch_interval_mirror,
-                task_queue=task_queue,
-                machine_day_floor=machine_day_floor,
-            )
-        ):
-            prev_mach = machine_avail_dt.get(machine_occ_key, machine_day_floor)
-            co_lb, co_segs = _changeover_plan_segments_and_machining_lower_bound(
-                prev_machining_end_dt=prev_mach,
-                machine_day_floor=machine_day_floor,
-                current_date=current_date,
-                machine_occ_key=machine_occ_key,
-                task_id=task_id,
-                eq_line=eq_line,
-                machine_name=machine_name,
-                machine_proc=str(machine_proc or "").strip(),
-                machine_handoff=machine_handoff,
-                daily_status=daily_status,
-                skills_dict=skills_dict,
-                abolish_limits=False,
-            )
-            if co_lb is not None:
-                logging.info(
-                    "依頼切替後始末の勤務線確保のため、当日タイムライン上の加工を短縮しました。"
-                    " date=%s occ=%s next_task=%s",
-                    current_date,
-                    machine_occ_key,
-                    task_id,
-                )
+    if co_lb is not None and _needs_request_switch_prep(
+        machine_handoff,
+        machine_occ_key,
+        current_date,
+        task_id,
+    ):
+        _sw_prep = _lookup_request_switch_prep_minutes(
+            str(machine_proc or "").strip(),
+            str(machine_name or "").strip(),
+            eq_line=str(eq_line or "").strip(),
+        )
+        if _sw_prep > 0:
+            co_lb = co_lb + timedelta(minutes=_sw_prep)
     if co_lb is None:
         if (
             _pick_skilled_op_for_changeover_interval(
@@ -27012,7 +27396,11 @@ def _changeover_timeline_op_sub_for_event(
     """タイムライン用の主＝補。日次始業はセグメントに事前設定があればそれを採用。"""
     ek = str(event_kind or "").strip()
     op_s = str(op_from_segment or "").strip()
-    if ek == TIMELINE_EVENT_MACHINE_DAILY_STARTUP:
+    if ek in (
+        TIMELINE_EVENT_MACHINE_DAILY_STARTUP,
+        TIMELINE_EVENT_REQUEST_SWITCH_PREP,
+        TIMELINE_EVENT_BREAK_RESUME_PREP,
+    ):
         if op_s:
             return op_s, str(sub_from_segment or "").strip()
         return "", ""
@@ -27081,7 +27469,11 @@ def _append_changeover_segments_to_timeline(
         br_seg = merge_time_intervals(br_acc)
         tid_ev = (
             ""
-            if ek == TIMELINE_EVENT_MACHINE_DAILY_STARTUP
+            if ek
+            in (
+                TIMELINE_EVENT_MACHINE_DAILY_STARTUP,
+                TIMELINE_EVENT_REQUEST_SWITCH_PREP,
+            )
             else str(task_id or "").strip()
         )
         ev = {
@@ -27733,8 +28125,35 @@ def _append_legacy_dispatch_candidate_for_team(
     if team_start_adj is None:
         return False
     team_start = team_start_adj
+    _roll_prep_extra_l: list[dict] = []
+    if not _gpo.get("abolish_all_scheduling_limits"):
+        team_start, _roll_prep_extra_l = _roll_prep_segments_for_assign(
+            team_start=team_start,
+            team_breaks=team_breaks,
+            machine_handoff=_mh_legacy,
+            machine_occ_key=_machine_occ_key,
+            current_date=current_date,
+            task_id=str(task.get("task_id") or "").strip(),
+            machine_proc=str(task.get("machine") or "").strip(),
+            machine_name=str(task.get("machine_name") or "").strip(),
+            eq_line=eq_line,
+            abolish_limits=False,
+        )
+        team_start = _refloor_legacy_roll(team_start)
     if team_start >= team_end_limit:
         return False
+    if dispatch_interval_mirror is not None and _roll_prep_extra_l:
+        for _pseg in _roll_prep_extra_l:
+            _pst = _pseg.get("start_dt")
+            _ped = _pseg.get("end_dt")
+            _pok = str(_pseg.get("machine_occupancy_key") or _machine_occ_key).strip()
+            if (
+                isinstance(_pst, datetime)
+                and isinstance(_ped, datetime)
+                and _pok
+                and dispatch_interval_mirror.would_block_equipment(_pok, _pst, _ped)
+            ):
+                return False
 
     _, avail_mins, _ = calculate_end_time(team_start, 9999, team_breaks, team_end_limit)
     units_can_do = int(avail_mins / eff_time_per_unit)
@@ -27778,6 +28197,7 @@ def _append_legacy_dispatch_candidate_for_team(
             "eff_time_per_unit": eff_time_per_unit,
             "combo_sheet_row_id": combo_sheet_row_id,
             "combo_preset_team": combo_preset_team,
+            "roll_prep_segments": _roll_prep_extra_l,
         }
     )
     return True
@@ -28208,6 +28628,21 @@ def _assign_one_roll_trial_order_flow(
             )
             return None
         team_start = team_start_d
+        _roll_prep_extra: list[dict] = []
+        if not _gpo.get("abolish_all_scheduling_limits"):
+            team_start, _roll_prep_extra = _roll_prep_segments_for_assign(
+                team_start=team_start,
+                team_breaks=team_breaks,
+                machine_handoff=_mh,
+                machine_occ_key=machine_occ_key,
+                current_date=current_date,
+                task_id=str(task.get("task_id") or "").strip(),
+                machine_proc=str(machine_proc or "").strip(),
+                machine_name=str(machine_name or "").strip(),
+                eq_line=eq_line,
+                abolish_limits=False,
+            )
+            team_start = _refloor_trial_roll(team_start)
         if team_start >= team_end_limit:
             _trace_assign(
                 "候補坴下: デファー後に開始>=終業 team=%s start=%s end_limit=%s",
@@ -28216,6 +28651,28 @@ def _assign_one_roll_trial_order_flow(
                 team_end_limit,
             )
             return None
+        if dispatch_interval_mirror is not None and _roll_prep_extra:
+            for _pseg in _roll_prep_extra:
+                _pst = _pseg.get("start_dt")
+                _ped = _pseg.get("end_dt")
+                _pok = str(
+                    _pseg.get("machine_occupancy_key") or machine_occ_key
+                ).strip()
+                if (
+                    isinstance(_pst, datetime)
+                    and isinstance(_ped, datetime)
+                    and _pok
+                    and dispatch_interval_mirror.would_block_equipment(
+                        _pok, _pst, _ped
+                    )
+                ):
+                    _trace_assign(
+                        "区間ミラー坴下(準備): eq=%s start=%s end=%s",
+                        _pok,
+                        _pst,
+                        _ped,
+                    )
+                    return None
 
         _, avail_mins, _ = calculate_end_time(
             team_start, 9999, team_breaks, team_end_limit
@@ -28295,7 +28752,7 @@ def _assign_one_roll_trial_order_flow(
             "op_list": op_list,
             "eff_time_per_unit": eff_time_per_unit,
             "lead_op": lead_op,
-            "changeover_segments": _co_segs,
+            "changeover_segments": list(_co_segs or []) + list(_roll_prep_extra or []),
             "startup_skill_role_priority": skill_role_priority,
         }
 
@@ -28327,7 +28784,6 @@ def _assign_one_roll_trial_order_flow(
                     "max_team_size": max_team_size,
                     "combo_sheet_row_id": _cid_pt,
                     "combo_preset_team": pt if _cid_pt is not None else None,
-                    "changeover_segments": _co_segs,
                     "startup_skill_role_priority": skill_role_priority,
                 }
 
@@ -28609,7 +29065,6 @@ def _assign_one_roll_trial_order_flow(
         "max_team_size": max_team_size,
         "combo_sheet_row_id": best_c.get("combo_sheet_row_id"),
         "combo_preset_team": best_c.get("combo_preset_team"),
-        "changeover_segments": _co_segs,
         "startup_skill_role_priority": skill_role_priority,
     }
 
@@ -29901,6 +30356,59 @@ def _interactive_trial_recompute_meters_done_from_timeline(
     return acc
 
 
+def _timeline_break_intervals_for_occ(
+    timeline_events: list, day_d: date, occ: str
+) -> list[tuple[datetime, datetime]]:
+    occ_n = str(occ or "").strip()
+    breaks_acc: list = []
+    for e in timeline_events:
+        if e.get("date") != day_d:
+            continue
+        if str(e.get("machine_occupancy_key") or "").strip() != occ_n:
+            continue
+        for item in e.get("breaks") or []:
+            if not isinstance(item, (list, tuple)) or len(item) < 2:
+                continue
+            bs, be = item[0], item[1]
+            if isinstance(bs, datetime) and isinstance(be, datetime):
+                breaks_acc.append((bs, be))
+    return merge_time_intervals(breaks_acc)
+
+
+def _daily_startup_snap_end_before_first_machining(
+    timeline_events: list,
+    day_d: date,
+    occ: str,
+    startup_end: datetime,
+    first_machining_start: datetime,
+    align_tol: timedelta,
+) -> datetime | None:
+    """
+    日次始業帯を寄せるときの終了時刻（半開区間 [start, end) の end）。
+
+    - 通常: 先頭加工開始
+    - 日次始業終了と先頭加工の間に暦休憩がある、または先頭加工が休憩再開準備直後:
+      その間で先頭加工に最も近い休憩の開始（休憩直前）
+    """
+    m_st = first_machining_start
+    if not isinstance(m_st, datetime) or not isinstance(startup_end, datetime):
+        return None
+    best_bs: datetime | None = None
+    best_be: datetime | None = None
+    for bs, be in _timeline_break_intervals_for_occ(timeline_events, day_d, occ):
+        if be <= startup_end + align_tol:
+            continue
+        if bs >= m_st - align_tol:
+            continue
+        if be > startup_end and bs < m_st:
+            if best_be is None or be > best_be:
+                best_bs = bs
+                best_be = be
+    if best_bs is not None:
+        return best_bs
+    return m_st
+
+
 def _repair_timeline_daily_startup_snapped_to_first_machining(
     timeline_events: list,
     task_queue: list,
@@ -29910,7 +30418,10 @@ def _repair_timeline_daily_startup_snapped_to_first_machining(
 ) -> int:
     """
     当日・同一占有キーで、日次始業準備の終了が先頭の加工開始より前に空きがあるとき、
-    壁時計の長さを保ったまま [加工開始−N分, 加工開始) に寄せる（表示・ミラー整合用の後処理）。
+    壁時計の長さを保って寄せる（表示・ミラー整合用の後処理）。
+
+    寄せ先の終了は通常は先頭加工開始。日次始業と先頭加工の間に暦休憩があるときは
+    直前休憩の開始（休憩直前）。休憩再開準備は先頭加工直前のまま維持する。
     """
     gpo = global_priority_override or {}
     if not timeline_events:
@@ -29964,12 +30475,17 @@ def _repair_timeline_daily_startup_snapped_to_first_machining(
             continue
         if ed0 <= st0 or st0 >= m_st:
             continue
-        if ed0 >= m_st - align_tol:
+        snap_end = _daily_startup_snap_end_before_first_machining(
+            timeline_events, day_d, occ, ed0, m_st, align_tol
+        )
+        if snap_end is None:
+            continue
+        if ed0 >= snap_end - align_tol:
             continue
         dur = ed0 - st0
         if dur <= timedelta(0):
             continue
-        new_ed = m_st
+        new_ed = snap_end
         new_st = new_ed - dur
         if new_st >= m_st:
             continue
@@ -30321,6 +30837,10 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
         global _MACHINE_CALENDAR_BLOCKS_BY_DATE
         global _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE
         global _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE
+        global _STAGE2_REQUEST_SWITCH_PREP_BY_PROC_MACHINE
+        global _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE
+        global _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE
+        global _STAGE2_BREAK_RESUME_PREP_BY_MACHINE
         global _STAGE2_REGULAR_SHIFT_START
         global _STAGE2_DATA_EXTRACTION_DATETIME
         (
@@ -30357,6 +30877,21 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
             )
             _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = {}
             _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE = {}
+        try:
+            (
+                _STAGE2_REQUEST_SWITCH_PREP_BY_PROC_MACHINE,
+                _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE,
+                _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE,
+                _STAGE2_BREAK_RESUME_PREP_BY_MACHINE,
+            ) = load_request_switch_prep_settings(master_abs)
+        except Exception as e:
+            logging.warning(
+                "依頼切替準備設定: 読込例外のため無視します (%s)", e
+            )
+            _STAGE2_REQUEST_SWITCH_PREP_BY_PROC_MACHINE = {}
+            _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE = {}
+            _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE = {}
+            _STAGE2_BREAK_RESUME_PREP_BY_MACHINE = {}
         if any(int(v or 0) > 0 for v in _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE.values()):
             _a12r, _a12r2 = _read_master_main_factory_operating_times(master_abs)
             if _a12r is None or _a12r2 is None:
@@ -31259,6 +31794,10 @@ def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
         global _MACHINE_CALENDAR_BLOCKS_BY_DATE
         global _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE
         global _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE
+        global _STAGE2_REQUEST_SWITCH_PREP_BY_PROC_MACHINE
+        global _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE
+        global _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE
+        global _STAGE2_BREAK_RESUME_PREP_BY_MACHINE
         global _STAGE2_REGULAR_SHIFT_START
         global _STAGE2_DATA_EXTRACTION_DATETIME
         (
@@ -31295,6 +31834,21 @@ def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
             )
             _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = {}
             _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE = {}
+        try:
+            (
+                _STAGE2_REQUEST_SWITCH_PREP_BY_PROC_MACHINE,
+                _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE,
+                _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE,
+                _STAGE2_BREAK_RESUME_PREP_BY_MACHINE,
+            ) = load_request_switch_prep_settings(master_abs)
+        except Exception as e:
+            logging.warning(
+                "計画実績比較ガント: 依頼切替準備設定読込例外 (%s)", e
+            )
+            _STAGE2_REQUEST_SWITCH_PREP_BY_PROC_MACHINE = {}
+            _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE = {}
+            _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE = {}
+            _STAGE2_BREAK_RESUME_PREP_BY_MACHINE = {}
         if any(
             int(v or 0) > 0
             for v in _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE.values()
@@ -31635,6 +32189,10 @@ def _generate_plan_impl(
     global _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE
     global _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE
     global _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE
+    global _STAGE2_REQUEST_SWITCH_PREP_BY_PROC_MACHINE
+    global _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE
+    global _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE
+    global _STAGE2_BREAK_RESUME_PREP_BY_MACHINE
     global _STAGE2_REGULAR_SHIFT_START
     global _STAGE2_DATA_EXTRACTION_DATETIME
     global DEFAULT_START_TIME, DEFAULT_END_TIME
@@ -31666,6 +32224,21 @@ def _generate_plan_impl(
         )
         _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE = {}
         _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE = {}
+    try:
+        (
+            _STAGE2_REQUEST_SWITCH_PREP_BY_PROC_MACHINE,
+            _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE,
+            _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE,
+            _STAGE2_BREAK_RESUME_PREP_BY_MACHINE,
+        ) = load_request_switch_prep_settings(_master_workbook_path_resolved())
+    except Exception as e:
+        logging.warning(
+            "依頼切替準備設定: 読込例外のため無視します (%s)", e
+        )
+        _STAGE2_REQUEST_SWITCH_PREP_BY_PROC_MACHINE = {}
+        _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE = {}
+        _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE = {}
+        _STAGE2_BREAK_RESUME_PREP_BY_MACHINE = {}
     _master_path_stage2 = _master_workbook_path_resolved()
     if any(int(v or 0) > 0 for v in _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE.values()):
         _a12s_chk, _a12e_chk = _read_master_main_factory_operating_times(_master_path_stage2)
@@ -31943,44 +32516,9 @@ def _generate_plan_impl(
         )
 
     # 配台試行順: シート列は权っていれみしれを採用。欠損時は §B 帯・紝期・need 列順でソートし EC 隣接後に 1..n
-    _dbg_all_sheet_dto = _task_queue_all_have_sheet_dispatch_trial_order(task_queue)
     _apply_dispatch_trial_order_for_generate_plan(
         task_queue, req_map, need_rules, need_combo_col_index
     )
-    # #region agent log
-    try:
-        from planning_core import agent_debug_ndjson as _adn_tq
-
-        _y5_rows = []
-        for _t in task_queue:
-            _tid = str(_t.get("task_id") or "").strip()
-            if _tid not in ("Y5-21", "Y5-22", "Y5-23"):
-                continue
-            _y5_rows.append(
-                {
-                    "task_id": _tid,
-                    "dispatch_trial_order_from_sheet": _t.get("dispatch_trial_order_from_sheet"),
-                    "dispatch_trial_order": _t.get("dispatch_trial_order"),
-                    "machine": str(_t.get("machine") or ""),
-                    "machine_name": str(_t.get("machine_name") or ""),
-                    "planning_sheet_row_seq": _t.get("planning_sheet_row_seq"),
-                }
-            )
-        _adn_tq.append_structured(
-            "H5",
-            "_generate_plan_impl",
-            "dispatch trial order branch and Y5-21/22/23 queue snapshot",
-            {
-                "all_rows_had_valid_sheet_dispatch_trial_order": _dbg_all_sheet_dto,
-                "task_queue_len": len(task_queue),
-                "y5_21_22_23": sorted(
-                    _y5_rows, key=lambda r: (int(r.get("dispatch_trial_order") or 10**9), str(r.get("task_id")))
-                ),
-            },
-        )
-    except Exception:
-        pass
-    # #endregion
     # 段階3: 手動修正 JSON で正の「当日配台数量」がある配台日の最奨を start_date_req 下限とする
     # （原反投入・既定開始より前にはしない: max(既存, 最奨暦日)。非稼働日は直前稼働日へ寄せる）
     if (
@@ -32915,8 +33453,51 @@ def _generate_plan_impl(
                                 if _ts_adj is None:
                                     continue
                                 team_start = _ts_adj
+                                _roll_prep_inline: list[dict] = []
+                                if not _gpo.get("abolish_all_scheduling_limits"):
+                                    team_start, _roll_prep_inline = (
+                                        _roll_prep_segments_for_assign(
+                                            team_start=team_start,
+                                            team_breaks=team_breaks,
+                                            machine_handoff=machine_handoff_legacy,
+                                            machine_occ_key=machine_occ_key,
+                                            current_date=current_date,
+                                            task_id=str(task.get("task_id") or "").strip(),
+                                            machine_proc=machine_proc,
+                                            machine_name=str(
+                                                task.get("machine_name") or ""
+                                            ).strip(),
+                                            eq_line=eq_line,
+                                            abolish_limits=False,
+                                        )
+                                    )
+                                    team_start = _refloor_legacy_inline(team_start)
                                 if team_start >= team_end_limit:
                                     continue
+                                if (
+                                    _dispatch_interval_mirror is not None
+                                    and _roll_prep_inline
+                                ):
+                                    _prep_mirror_block = False
+                                    for _pseg in _roll_prep_inline:
+                                        _pst = _pseg.get("start_dt")
+                                        _ped = _pseg.get("end_dt")
+                                        _pok = str(
+                                            _pseg.get("machine_occupancy_key")
+                                            or machine_occ_key
+                                        ).strip()
+                                        if (
+                                            isinstance(_pst, datetime)
+                                            and isinstance(_ped, datetime)
+                                            and _pok
+                                            and _dispatch_interval_mirror.would_block_equipment(
+                                                _pok, _pst, _ped
+                                            )
+                                        ):
+                                            _prep_mirror_block = True
+                                            break
+                                    if _prep_mirror_block:
+                                        continue
     
                                 _, avail_mins, _ = calculate_end_time(team_start, 9999, team_breaks, team_end_limit)
     
@@ -32970,6 +33551,7 @@ def _generate_plan_impl(
                                         "combo_sheet_row_id": None,
                                         "combo_preset_team": None,
                                         "combo_preset_priority": None,
+                                        "roll_prep_segments": _roll_prep_inline,
                                     }
                                 )
     
@@ -33196,7 +33778,9 @@ def _generate_plan_impl(
                                 for s in sub_members
                                 if s and str(s).strip()
                             )
-                            _co_append_l = list(_co_segs_legacy or [])
+                            _co_append_l = list(_co_segs_legacy or []) + list(
+                                best_info.get("roll_prep_segments") or []
+                            )
                             _append_changeover_segments_to_timeline(
                                 timeline_events,
                                 _dispatch_interval_mirror,
@@ -33620,7 +34204,7 @@ def _generate_plan_impl(
     )
     if _n_snap:
         logging.info(
-            "日次始業準備: 当日先頭の加工から離れていた帯を %s 件、先頭加工の直前に寄せました。",
+            "日次始業準備: 当日先頭の加工から離れていた帯を %s 件、先頭加工または直前休憩の直前に寄せました。",
             _n_snap,
         )
 
