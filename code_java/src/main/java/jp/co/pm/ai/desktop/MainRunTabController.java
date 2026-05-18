@@ -693,8 +693,10 @@ public final class MainRunTabController {
             return;
         }
         try {
-            DesktopFileOpener.openFile(p);
-            appendLog("[summary-ai-dispatch] opened: " + p.toAbsolutePath().normalize());
+            DesktopFileOpener.openFileReadOnly(p);
+            appendLog(
+                    "[summary-ai-dispatch] opened (read-only): "
+                            + p.toAbsolutePath().normalize());
         } catch (Exception e) {
             appendLog("[summary-ai-dispatch] open failed: " + e.getMessage());
         }

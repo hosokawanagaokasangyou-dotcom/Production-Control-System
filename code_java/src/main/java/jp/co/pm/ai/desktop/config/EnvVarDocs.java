@@ -229,7 +229,8 @@ public final class EnvVarDocs {
                         + " サマリ_AI配台.xlsx（"
                         + "PM_AI_REPO_ROOT 準拠）。"
                         + " ファイル名のみのときは code/ からの相対パス"
-                        + "として解決。");
+                        + "として解決。"
+                        + " UI の「エクセルを開く」は読み取り専用で起動する。");
         put(
                 "PM_AI_SKIP_WORKBOOK_ENV_SHEET",
                 "1/true 等で workbook_env_bootstrap がマクロブックの"
