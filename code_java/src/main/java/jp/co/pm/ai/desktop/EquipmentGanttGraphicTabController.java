@@ -1587,12 +1587,13 @@ public final class EquipmentGanttGraphicTabController {
             statusLabel.setText(
                     "印刷ジョブを送信しました（"
                             + okPages
-                            + " ページ・暦日 1 枚・ダイアログの用紙設定に従います）。");
+                            + " ページ・暦日 1 枚・ベクター・ダイアログの用紙設定に従います）。");
         }
     }
 
     /**
-     * 印刷 1 ページ分のガントを組み立てる。内容幅が可印刷幅を超えるときは時刻列幅％だけ縮小し、最後に高解像度で再構築する。
+     * 印刷 1 ページ分のガントを組み立てる。時刻列幅％を、左 3 列と進捗列以外の「時刻軸幅」が可印刷幅にちょうど収まるよう
+     * 拡大／縮小してから、ベクター用に再構築する。
      */
     private BorderPane buildEquipmentGanttBorderPaneForPrint(
             List<String> columns,
@@ -1605,15 +1606,15 @@ public final class EquipmentGanttGraphicTabController {
         Object udProbe = probe.getUserData();
         if (udProbe instanceof EquipmentGraphicGanttPane.EquipmentGanttViewHandles handles) {
             double contentW = handles.printContentWidth();
-            double targetW =
-                    printableWidthPx
-                            * 0.97
-                            / EquipmentGraphicGanttPane.PRINT_LAYOUT_SCALE;
-            if (contentW > targetW && contentW >= 2 && targetW >= 2) {
+            double timelineW = handles.printTimelineWidth();
+            double nonTimelineW = Math.max(0d, contentW - timelineW);
+            double targetW = printableWidthPx * 0.99;
+            double targetTimelineW = targetW - nonTimelineW;
+            if (timelineW >= 2 && targetTimelineW >= 2) {
                 double uiSlotPct =
                         graphicSlotWidthSlider != null ? graphicSlotWidthSlider.getValue() : 100d;
-                double adjustedSlotPct = uiSlotPct * (targetW / contentW);
-                slotOverride = Math.clamp(adjustedSlotPct, 30d, uiSlotPct);
+                double adjustedSlotPct = uiSlotPct * (targetTimelineW / timelineW);
+                slotOverride = Math.clamp(adjustedSlotPct, 30d, 2000d);
             }
         }
         return buildEquipmentGanttBorderPane(

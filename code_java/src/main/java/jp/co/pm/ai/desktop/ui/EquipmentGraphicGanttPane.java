@@ -47,6 +47,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
+import javafx.scene.shape.Rectangle;
 
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
@@ -100,13 +101,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      */
     private static final double MAX_TIMELINE_CANVAS_WIDTH_PX = 3072.0;
 
-    /** 印刷時のタイムライン {@link Canvas} 幅上限（{@link #build} の {@code highQualityPrint}）。 */
-    private static final double MAX_TIMELINE_CANVAS_WIDTH_PRINT_PX = 4096.0;
-
     /**
-     * 印刷向けレイアウト倍率。大きすぎると snapshot／PDF でネイティブクラッシュしやすいため控えめにする。
+     * 印刷時は用紙幅にスロット列を合わせる（{@link jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageWrapper} で拡大）。
      */
-    public static final double PRINT_LAYOUT_SCALE = 1.25;
+    public static final double PRINT_LAYOUT_SCALE = 1.0;
 
     /**
      * 行 Canvas 合計の RGBA ナイーブ見積（MiB）がこの値を超えると、面積比の平方根でスロット幅を追加縮小する。
@@ -137,8 +135,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             HBox bodySplit,
             HBox headRow,
             double printContentWidth,
-            double printContentHeight) {
-        /** @deprecated 左スクロールが不要な呼び出し向け。印刷では左も展開するため 5 引数コンストラクタを使う。 */
+            double printContentHeight,
+            double printTimelineWidth) {
+        /** @deprecated 左スクロールが不要な呼び出し向け。印刷では左も展開するため拡張コンストラクタを使う。 */
         @Deprecated
         public EquipmentGanttViewHandles(ScrollPane timelineScroll, Runnable scheduleViewportRepaint) {
             this(
@@ -150,6 +149,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     null,
                     null,
                     null,
+                    0.0,
                     0.0,
                     0.0);
         }
@@ -690,7 +690,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     /**
-     * @param highQualityPrint true のとき印刷向けにレイアウト・Canvas 解像度を上げる（画面表示用 build では false）
+     * @param highQualityPrint true のとき印刷向けベクタータイムライン（Pane）を使う（画面表示用 build では false）
      */
     public static BorderPane build(
             List<String> columns,
@@ -750,9 +750,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         slotWidthPercent,
                         barFontPercent,
                         headerHeightPercent);
-        if (highQualityPrint) {
-            layout = layout.scaleUniform(PRINT_LAYOUT_SCALE);
-        }
+        final boolean vectorPrint = highQualityPrint;
         GanttPalette palette = GanttPalette.forTheme(theme);
         EquipmentGanttPersonBadgeWireDashStyle wireDashResolved =
                 EquipmentGanttPersonBadgeWireDashStyle.fromStored(
@@ -797,25 +795,21 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         double naiveTotalRgbaMiB =
                 (timelineWidthBeforeCap * cellBodyH * approxTimelineRows * 4.0)
                         / (1024.0 * 1024.0);
-        double maxTimelineCanvasW =
-                highQualityPrint ? MAX_TIMELINE_CANVAS_WIDTH_PRINT_PX : MAX_TIMELINE_CANVAS_WIDTH_PX;
-        double maxNaiveRgbaMiB =
-                highQualityPrint
-                        ? MAX_NAIVE_ROW_CANVAS_RGBA_TOTAL_MIB
-                                * PRINT_LAYOUT_SCALE
-                                * PRINT_LAYOUT_SCALE
-                        : MAX_NAIVE_ROW_CANVAS_RGBA_TOTAL_MIB;
         double slotWidthScale = 1.0;
-        if (timelineWidthBeforeCap > maxTimelineCanvasW) {
-            slotWidthScale =
-                    Math.min(slotWidthScale, maxTimelineCanvasW / timelineWidthBeforeCap);
-        }
-        if (naiveTotalRgbaMiB > maxNaiveRgbaMiB && naiveTotalRgbaMiB > 0) {
-            slotWidthScale =
-                    Math.min(slotWidthScale, Math.sqrt(maxNaiveRgbaMiB / naiveTotalRgbaMiB));
-        }
-        if (slotWidthScale < 1.0 - 1e-12) {
-            layout = layout.scaleSlotWidth(slotWidthScale);
+        if (!vectorPrint) {
+            double maxTimelineCanvasW = MAX_TIMELINE_CANVAS_WIDTH_PX;
+            double maxNaiveRgbaMiB = MAX_NAIVE_ROW_CANVAS_RGBA_TOTAL_MIB;
+            if (timelineWidthBeforeCap > maxTimelineCanvasW) {
+                slotWidthScale =
+                        Math.min(slotWidthScale, maxTimelineCanvasW / timelineWidthBeforeCap);
+            }
+            if (naiveTotalRgbaMiB > maxNaiveRgbaMiB && naiveTotalRgbaMiB > 0) {
+                slotWidthScale =
+                        Math.min(slotWidthScale, Math.sqrt(maxNaiveRgbaMiB / naiveTotalRgbaMiB));
+            }
+            if (slotWidthScale < 1.0 - 1e-12) {
+                layout = layout.scaleSlotWidth(slotWidthScale);
+            }
         }
 
         double wireWidthResolved =
@@ -852,8 +846,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         final double canvasTimelineW = Math.max(1.0, timelineWidth);
         final double canvasHeaderH = Math.max(1.0, layout.headerHeight);
 
-        Canvas headerCanvas = new Canvas(canvasTimelineW, canvasHeaderH);
-        headerCanvas.setCache(false);
+        Canvas headerCanvas = null;
+        Node headerTimelineNode;
+        if (vectorPrint) {
+            headerTimelineNode =
+                    buildVectorTimeAxisPane(parsed, canvasTimelineW, layout, palette);
+        } else {
+            headerCanvas = new Canvas(canvasTimelineW, canvasHeaderH);
+            headerCanvas.setCache(false);
+            headerTimelineNode = headerCanvas;
+        }
 
         Label hDate = new Label("");
         Label hMach = new Label("機械名");
@@ -1044,18 +1046,34 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             List<String> cellsInSlots = dr.cellsInSlots();
             List<BarRun> cachedBarRuns = collectBarRuns(cellsInSlots);
             int slotCountForRow = cellsInSlots.size();
-            Canvas rowCanvas = new Canvas(canvasTimelineW, rowCanvasH);
-            timelineCanvasRowCount++;
-            rowCanvas.setCache(false);
-            viewportRowSpecs.add(
-                    new ViewportRowSpec(
-                            rowCanvas,
-                            timelineOuterPad,
-                            machineGroupIndex,
-                            rowCanvasH,
-                            timelineRowContentMinY,
-                            slotCountForRow,
-                            cachedBarRuns));
+            Node timelineNode;
+            if (vectorPrint) {
+                timelineNode =
+                        buildVectorTimelineRowPane(
+                                cachedBarRuns,
+                                slotCountForRow,
+                                machineGroupIndex,
+                                canvasTimelineW,
+                                rowCanvasH,
+                                timelineOuterPad,
+                                layout,
+                                palette,
+                                barFont);
+            } else {
+                Canvas rowCanvas = new Canvas(canvasTimelineW, rowCanvasH);
+                timelineCanvasRowCount++;
+                rowCanvas.setCache(false);
+                viewportRowSpecs.add(
+                        new ViewportRowSpec(
+                                rowCanvas,
+                                timelineOuterPad,
+                                machineGroupIndex,
+                                rowCanvasH,
+                                timelineRowContentMinY,
+                                slotCountForRow,
+                                cachedBarRuns));
+                timelineNode = rowCanvas;
+            }
 
             Pane badgePane = new Pane();
             /*
@@ -1088,7 +1106,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                  */
                 badgePane.setTranslateY(bandVertEff);
             }
-            StackPane rowStack = new StackPane(rowCanvas, badgePane);
+            StackPane rowStack = new StackPane(timelineNode, badgePane);
             /*
              * Canvas と Pane を並べるだけでも後勝ちだが、子追加や再有効化時に順序がずれたとき備えて明示的に最前面へ。
              */
@@ -1154,7 +1172,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         Region progressHeaderSpacer = new Region();
         progressHeaderSpacer.setMinWidth(progressTotal);
         progressHeaderSpacer.setPrefWidth(progressTotal);
-        HBox headerRightContent = new HBox(0, headerCanvas, progressHeaderSpacer);
+        HBox headerRightContent = new HBox(0, headerTimelineNode, progressHeaderSpacer);
         headerRightContent.setMinHeight(layout.headerHeight);
         headerRightContent.setPrefHeight(layout.headerHeight);
         headerRightContent.setMaxHeight(layout.headerHeight);
@@ -1185,8 +1203,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
          * pending を立てて timer を start し、handle で 1 回だけ paint したら stop してアイドル時はパルスを消費しない。
          */
         final boolean[] viewportRepaintPending = {false};
+        final Canvas headerCanvasForPaint = headerCanvas;
         java.util.function.Consumer<Boolean> paintTimeline =
                 fullPaint -> {
+                    if (vectorPrint || headerCanvasForPaint == null) {
+                        return;
+                    }
                     long t0Ns = System.nanoTime();
                     int paintedRows = 0;
                     int nSlots = slotColCount;
@@ -1201,7 +1223,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                         nSlots,
                                         VIEWPORT_SLOT_MARGIN);
                     }
-                    GraphicsContext hg = headerCanvas.getGraphicsContext2D();
+                    GraphicsContext hg = headerCanvasForPaint.getGraphicsContext2D();
                     hg.clearRect(0, 0, canvasTimelineW, canvasHeaderH);
                     drawTimeAxis(
                             hg,
@@ -1250,30 +1272,36 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     }
                 };
         Runnable paintTimelineViewport = () -> paintTimeline.accept(false);
-        Runnable paintFullContentForPrint = () -> paintTimeline.accept(true);
-        AnimationTimer viewportRepaintFrameTimer =
-                new AnimationTimer() {
-                    @Override
-                    public void handle(long now) {
-                        if (!viewportRepaintPending[0]) {
+        Runnable paintFullContentForPrint =
+                vectorPrint ? () -> {} : () -> paintTimeline.accept(true);
+        Runnable scheduleViewportRepaint;
+        if (vectorPrint) {
+            scheduleViewportRepaint = () -> {};
+        } else {
+            AnimationTimer viewportRepaintFrameTimer =
+                    new AnimationTimer() {
+                        @Override
+                        public void handle(long now) {
+                            if (!viewportRepaintPending[0]) {
+                                stop();
+                                return;
+                            }
+                            viewportRepaintPending[0] = false;
+                            paintTimelineViewport.run();
                             stop();
-                            return;
                         }
-                        viewportRepaintPending[0] = false;
-                        paintTimelineViewport.run();
-                        stop();
-                    }
-                };
-        Runnable scheduleViewportRepaint =
-                () -> {
-                    viewportRepaintPending[0] = true;
-                    viewportRepaintFrameTimer.start();
-                };
-        rightBodyScroll.hvalueProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
-        rightBodyScroll.vvalueProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
-        rightBodyScroll.widthProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
-        rightBodyScroll.heightProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
-        Platform.runLater(paintTimelineViewport);
+                    };
+            scheduleViewportRepaint =
+                    () -> {
+                        viewportRepaintPending[0] = true;
+                        viewportRepaintFrameTimer.start();
+                    };
+            rightBodyScroll.hvalueProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
+            rightBodyScroll.vvalueProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
+            rightBodyScroll.widthProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
+            rightBodyScroll.heightProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
+            Platform.runLater(paintTimelineViewport);
+        }
 
         double shiftSens =
                 effectiveShiftWheelHorizontalSensitivity(shiftWheelHorizontalSensitivityPercent);
@@ -1321,7 +1349,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         bodySplit,
                         headRow,
                         printContentWidth,
-                        printContentHeight));
+                        printContentHeight,
+                        timelineWidth));
 
         Label hint =
                 new Label(
@@ -1881,6 +1910,228 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         int g = (int) Math.round(c.getGreen() * 255);
         int b = (int) Math.round(c.getBlue() * 255);
         return String.format("#%02x%02x%02x", r, g, b);
+    }
+
+    /** 印刷用：時刻見出しを Shape／Text のみで構成（PDF ベクター出力向け）。 */
+    private static Pane buildVectorTimeAxisPane(
+            ParseResult parsed, double timelineWidth, LayoutMetrics layout, GanttPalette palette) {
+        double headerH = layout.headerHeight;
+        Pane pane = new Pane();
+        pane.setPrefSize(timelineWidth, headerH);
+        pane.setMinSize(timelineWidth, headerH);
+        pane.setMaxSize(timelineWidth, headerH);
+        Rectangle bg = new Rectangle(0, 0, timelineWidth, headerH);
+        bg.setFill(palette.headerAxis());
+        pane.getChildren().add(bg);
+        List<Integer> slotCols = parsed.slotColumnIndices();
+        int n = slotCols.size();
+        if (n <= 0) {
+            return pane;
+        }
+        Color grid = palette.grid();
+        for (int i = 0; i <= n; i++) {
+            double x = i * layout.slotWidth;
+            Line vl = new Line(x, 0, x, headerH);
+            vl.setStroke(grid);
+            vl.setStrokeWidth(0.35);
+            pane.getChildren().add(vl);
+        }
+        Rectangle border = new Rectangle(0, 0, timelineWidth, headerH);
+        border.setFill(Color.TRANSPARENT);
+        border.setStroke(grid);
+        border.setStrokeWidth(0.35);
+        pane.getChildren().add(border);
+        LocalTime t0 = parsed.slotBaseTime();
+        int slotMin = Math.max(1, parsed.slotMinutes());
+        int labelStep = timeLabelStep(n, slotMin, layout.slotWidth);
+        double labelFont = Math.min(layout.axisFontSize, Math.max(7, layout.slotWidth * 0.95));
+        DateTimeFormatter tf = DateTimeFormatter.ofPattern("H:mm");
+        for (int i = 0; i < n; i += labelStep) {
+            double cx = i * layout.slotWidth + layout.slotWidth * 0.5;
+            LocalTime tt = t0.plusMinutes((long) i * slotMin);
+            Text txt = new Text(tt.format(tf));
+            txt.setFill(palette.axisLabel());
+            txt.setFont(Font.font(labelFont));
+            txt.setRotate(-90);
+            txt.setLayoutX(cx);
+            txt.setLayoutY(headerH * 0.38);
+            pane.getChildren().add(txt);
+        }
+        return pane;
+    }
+
+    /** 印刷用：1 行分のタイムライン（帯・格子・バー・ラベルをベクター形状で構成）。 */
+    private static Pane buildVectorTimelineRowPane(
+            List<BarRun> barRuns,
+            int slotCount,
+            int machineGroupIndex,
+            double timelineWidth,
+            double paneHeight,
+            double outerPad,
+            LayoutMetrics layout,
+            GanttPalette palette,
+            Font barFont) {
+        Pane pane = new Pane();
+        pane.setPrefSize(timelineWidth, paneHeight);
+        pane.setMinSize(timelineWidth, paneHeight);
+        pane.setMaxSize(timelineWidth, paneHeight);
+        int n = Math.max(0, slotCount);
+        Color band = palette.machineBandFill(machineGroupIndex);
+        double rowH = layout.rowHeight;
+        for (int i = 0; i < n; i++) {
+            Rectangle cell = new Rectangle(i * layout.slotWidth, outerPad, layout.slotWidth, rowH);
+            cell.setFill(band);
+            pane.getChildren().add(cell);
+        }
+        Color grid = palette.grid();
+        for (int i = 0; i <= n; i++) {
+            double x = i * layout.slotWidth;
+            Line vl = new Line(x, outerPad, x, outerPad + rowH);
+            vl.setStroke(grid);
+            vl.setStrokeWidth(0.35);
+            pane.getChildren().add(vl);
+        }
+        List<BarRun> runs = barRuns != null ? barRuns : List.of();
+        for (BarRun run : runs) {
+            addVectorBar(pane, run, layout, palette, outerPad);
+        }
+        addVectorBarLabelsOutside(pane, runs, layout, palette, barFont, outerPad);
+        return pane;
+    }
+
+    private static void addVectorBar(
+            Pane layer, BarRun run, LayoutMetrics layout, GanttPalette palette, double outerPad) {
+        int fromSlot = run.fromSlot();
+        int toSlot = run.toSlot();
+        double x = fromSlot * layout.slotWidth;
+        double w = (toSlot - fromSlot + 1) * layout.slotWidth;
+        BarKind kind = run.kind();
+        Color fill =
+                switch (kind) {
+                    case BREAK -> palette.barBreak();
+                    case STARTUP -> palette.barStartup();
+                    case REQUEST_SWITCH_PREP -> palette.barRequestSwitchPrep();
+                    case BREAK_RESUME_PREP -> palette.barBreakResumePrep();
+                    default -> palette.barDefault();
+                };
+        double arc = Math.max(2, 3 * layout.zoom);
+        double inset = 0.5 * layout.zoom;
+        double barTop = outerPad + 3 * layout.zoom;
+        double barH = layout.rowHeight - 2 * (3 * layout.zoom);
+        double bx = x + inset;
+        double bw = Math.max(1, w - 2 * inset);
+        if (isPrepHatchedBar(kind)) {
+            Pane hatch = buildVectorPrepHatchedBar(bx, barTop, bw, barH, arc, fill, layout.zoom, palette);
+            layer.getChildren().add(hatch);
+            return;
+        }
+        Rectangle bar = new Rectangle(bx, barTop, bw, barH);
+        bar.setArcWidth(arc * 2);
+        bar.setArcHeight(arc * 2);
+        bar.setFill(fill);
+        bar.setStroke(palette.barStroke());
+        bar.setStrokeWidth(0.5 * layout.zoom);
+        layer.getChildren().add(bar);
+    }
+
+    private static Pane buildVectorPrepHatchedBar(
+            double x,
+            double y,
+            double w,
+            double h,
+            double arc,
+            Color baseFill,
+            double zoom,
+            GanttPalette palette) {
+        Pane g = new Pane();
+        g.setLayoutX(x);
+        g.setLayoutY(y);
+        Color background = prepHatchBackground(baseFill);
+        Color stroke = complementaryContrastStroke(background);
+        Rectangle bg = new Rectangle(0, 0, w, h);
+        bg.setArcWidth(arc * 2);
+        bg.setArcHeight(arc * 2);
+        bg.setFill(background);
+        g.getChildren().add(bg);
+        double hatchW = Math.max(0.75, 0.85 * zoom);
+        double spacing = Math.max(4.0, 5.0 * zoom);
+        double span = w + h;
+        for (double offset = -h; offset < span; offset += spacing) {
+            Line hl = new Line(offset, h, offset + h, 0);
+            hl.setStroke(stroke);
+            hl.setStrokeWidth(hatchW);
+            g.getChildren().add(hl);
+        }
+        Rectangle border = new Rectangle(0, 0, w, h);
+        border.setFill(Color.TRANSPARENT);
+        border.setStroke(stroke);
+        border.setStrokeWidth(Math.max(1.0, 1.35 * zoom));
+        border.setArcWidth(arc * 2);
+        border.setArcHeight(arc * 2);
+        g.getChildren().add(border);
+        return g;
+    }
+
+    private static void addVectorBarLabelsOutside(
+            Pane layer,
+            List<BarRun> runs,
+            LayoutMetrics layout,
+            GanttPalette palette,
+            Font barFont,
+            double outerPad) {
+        if (runs == null || runs.isEmpty()) {
+            return;
+        }
+        List<BarRun> sorted = new ArrayList<>(runs);
+        sorted.sort(Comparator.comparingInt(BarRun::fromSlot));
+        double inset = 0.5 * layout.zoom;
+        double barTop = outerPad + 3 * layout.zoom;
+        double barH = layout.rowHeight - 2 * (3 * layout.zoom);
+        double pad = 6 * layout.zoom;
+        List<double[]> aboveRanges = new ArrayList<>();
+        List<double[]> belowRanges = new ArrayList<>();
+        for (BarRun run : sorted) {
+            String full = run.text().replace('\n', ' ');
+            if (full.length() > 220) {
+                full = full.substring(0, 217) + "...";
+            }
+            if (full.isEmpty()) {
+                continue;
+            }
+            Color labelColor =
+                    switch (run.kind()) {
+                        case BREAK -> palette.barBreakText();
+                        case STARTUP -> palette.barStartupText();
+                        case REQUEST_SWITCH_PREP -> palette.barRequestSwitchPrepText();
+                        case BREAK_RESUME_PREP -> palette.barBreakResumePrepText();
+                        default -> palette.barDefaultText();
+                    };
+            double lx = run.fromSlot() * layout.slotWidth + inset + 3 * layout.zoom;
+            double tw = measureTextWidth(full, barFont);
+            double fh = measureTextHeight(full, barFont);
+            double rx = lx + tw;
+            boolean useAbove;
+            if (!horizontalHits(aboveRanges, lx, rx, pad)) {
+                useAbove = true;
+            } else if (!horizontalHits(belowRanges, lx, rx, pad)) {
+                useAbove = false;
+            } else {
+                useAbove = (run.fromSlot() & 1) == 0;
+            }
+            if (useAbove) {
+                aboveRanges.add(new double[] {lx, rx});
+            } else {
+                belowRanges.add(new double[] {lx, rx});
+            }
+            double baseline =
+                    useAbove ? barTop - fh * 0.35 : barTop + barH + fh * 0.75;
+            Text t = new Text(full);
+            t.setFill(labelColor);
+            t.setFont(barFont);
+            t.setLayoutX(lx);
+            t.setLayoutY(baseline);
+            layer.getChildren().add(t);
+        }
     }
 
     private static void drawTimeAxis(
