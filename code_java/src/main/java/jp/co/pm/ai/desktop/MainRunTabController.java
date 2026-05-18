@@ -242,16 +242,6 @@ public final class MainRunTabController {
         if (prismPipelineLabel != null) {
             prismPipelineLabel.setText(PrismGpuBootstrapStatus.runTabSummary());
         }
-        if (stage1ClearCacheAndRunCheckBox != null) {
-            stage1ClearCacheAndRunCheckBox
-                    .selectedProperty()
-                    .addListener(
-                            (o, a, b) -> {
-                                if (shell != null) {
-                                    shell.scheduleDesktopSessionSave();
-                                }
-                            });
-        }
         if (stage2WriteExcelCheckBox != null) {
             stage2WriteExcelCheckBox
                     .selectedProperty()
@@ -822,9 +812,10 @@ public final class MainRunTabController {
                 && stage1ClearCacheAndRunCheckBox.isSelected();
     }
 
-    void applyStage1ClearCacheAndRunFromSession(boolean clearCacheAndRun) {
+    /** 段階1実行後は毎回オフ（ワンショット）。セッションには保存しない。 */
+    void resetStage1ClearCacheAndRunCheckbox() {
         if (stage1ClearCacheAndRunCheckBox != null) {
-            stage1ClearCacheAndRunCheckBox.setSelected(clearCacheAndRun);
+            stage1ClearCacheAndRunCheckBox.setSelected(false);
         }
     }
 

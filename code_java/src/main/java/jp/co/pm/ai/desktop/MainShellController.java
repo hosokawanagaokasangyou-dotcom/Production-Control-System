@@ -801,7 +801,6 @@ public final class MainShellController {
         planInputTabController.applyStage2SkipTodayDispatchFromSession(s.mainRunStage2SkipTodayDispatch());
         mainRunTabController.applyStage2SkipInProgressDispatchFromSession(
                 s.mainRunStage2SkipInProgressDispatch());
-        mainRunTabController.applyStage1ClearCacheAndRunFromSession(s.mainRunStage1ClearCacheAndRun());
         mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
         /*
          * 設備ガントの apply は末尾で Canvas を再構築し personBadgeStyleResolverForGantt を参照する。
@@ -898,7 +897,6 @@ public final class MainShellController {
                 mainRunTabController.snapshotStage2WriteExcel(),
                 planInputTabController.snapshotStage2SkipTodayDispatch(),
                 mainRunTabController.snapshotStage2SkipInProgressDispatch(),
-                mainRunTabController.snapshotStage1ClearCacheAndRun(),
                 mainRunTabController.snapshotStage2ResultBookFont(),
                 snapshotUiEnvRows(),
                 snapshotMainShellTabOrder(),
@@ -3353,6 +3351,9 @@ public final class MainShellController {
                         if (stage2 && dispatchInteractiveTabController != null) {
                             dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
                         }
+                        if (stage1) {
+                            mainRunTabController.resetStage1ClearCacheAndRunCheckbox();
+                        }
                         if (stage1 || stage2) {
                             selectMainShellTab(MainShellTabId.RUN);
                             showStageFailureDialog(script, null, t, List.of());
@@ -3434,6 +3435,9 @@ public final class MainShellController {
             appendLog("[ui] 段階処理が異常終了しました。エラーダイアログを表示します。");
             selectMainShellTab(MainShellTabId.RUN);
             showStageFailureDialog(script, err != null ? null : code, err, tailSnap);
+        }
+        if (STAGE1.equals(script)) {
+            mainRunTabController.resetStage1ClearCacheAndRunCheckbox();
         }
     }
 
