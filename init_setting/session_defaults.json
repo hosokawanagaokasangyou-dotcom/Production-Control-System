@@ -45,7 +45,7 @@
     "description" : "段階1の配台不要ルールを JSON に寄せる場合のフルパス（list または {\"rules\":[...]}）。既定は code/exclude_rules.json（実在時）、無ければ code/json/stage1_exclude_rules.json（実在時）。有効時はマクロブックの「設定_配台不要工程」Excel 保守も省略。 — 段階1（run_stage1_extract）で master.xlsm 「設定_配台不要工程」を json/stage1_exclude_rules.json へ書き出し、本変数を その絶対パスに自動設定（子プロセス内）。 手動でも UTF-8 JSON（list または {\"rules\":[...]}、 列構造は設定シートと同槗。 有効ファイルがあれば read_excel 経路を省略可。 JavaFX 環境変数タブの既定は code/exclude_rules.json（実在時）、無ければ code/json/stage1_exclude_rules.json（実在時）。 JavaFX は「ファイル...」で選択可。"
   }, {
     "name" : "PM_AI_MASTER_WORKBOOK",
-    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\master.xlsm",
+    "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\master.xlsm",
     "description" : "マスタブック（master.xlsm 等）のフルパス。MASTER_WORKBOOK_FILE より優先。環境変数タブの「ファイル...」で .xlsm/.xlsx を選択可。内容の要約は「マスタ読込サマリ」タブの「サマリを更新」で planning_core 基準の JSON を表示（人が読みやすい形に整形）。 — master 系 .xlsm の絶対パス（実在ファイルのとき MASTER_WORKBOOK_FILE より優先。planning_core の マスタ読込・機械カレンダー等に使用。 JavaFX の「マスタ読込サマリ」タブで内容を確認可。"
   }, {
     "name" : "PM_AI_COLUMN_CONFIG_WORKBOOK",
@@ -97,7 +97,7 @@
     "description" : "段階2 Excel 生成デバッグ: 追跡する依頼NO（例 Y5-14）。JavaFX「環境変数」タブのみ。空で無効。有効時 .cursor/debug-excel-trace.log に EX1/EX4/EX5（df vs サイドカーJSON 差分）等。詳細は EnvVarDocs。 — 段階2（配台試行含む）の Excel 生成経路を 1 依頼で追跡するデバッグ用依頼NO（例: Y5-14）。本アプリの「環境変数」タブにのみ設定（子プロセスへ引き渡し）。OS の PM_AI_* は起動に使わない（空のまま推奨）。有効時は .cursor/debug-excel-trace.log に NDJSON（EX1=df_tasks、EX4=サイドカー JSON、EX5=両者のセル差分）。全ブック JSON（PM_AI_PLAN_WORKBOOK_JSON）とは別。"
   }, {
     "name" : "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK",
-    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\サマリ_AI配台.xlsx",
+    "value" : "\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\002  加工G\\●配台AIシステム\\共有DATA\\サマリ_AI配台.xlsx",
     "description" : "実行・ログタブの「開く」で開くサマリ用ブック（.xlsx 等）のフルパス。空のときは PM_AI_REPO_ROOT 下 code/サマリ_AI配台.xlsx。ファイル名のみのときは code/ からの相対として解決。 — 実行・ログタブの「開く」（サマリ AI 配台 等）が開くブックの絶対パス（.xlsx 等）。 空で code/ 下の サマリ_AI配台.xlsx（PM_AI_REPO_ROOT 準拠）。 ファイル名のみのときは code/ からの相対パスとして解決。"
   }, {
     "name" : "MASTER_WORKBOOK_FILE",

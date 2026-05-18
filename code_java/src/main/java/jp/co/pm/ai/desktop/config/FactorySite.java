@@ -11,11 +11,11 @@ import java.util.Optional;
  * 工場別の環境タブ既定（ネットワークソース・バージョンアップ正本 ZIP・マスタ名・サマリ用ブック）。
  *
  * <p>ポータル自動バージョンアップ完了時、および「環境変数を初期値に戻す」で工場を選んだときに適用する。
- * 湖南（{@link #KONAN}）は従来のコード既定、国分（{@link #KOKUBU}）は国分共有パスと {@code code/国分master.xlsm} 絶対パス等を使う。
+ * 湖南（{@link #KONAN}）は工場共有 {@link AppPaths#DEFAULT_KONAN_SHARED_DATA_DIR} のマスタ／サマリ UNC、国分（{@link #KOKUBU}）は国分共有と {@code code/国分master.xlsm} 等を使う。
  */
 public enum FactorySite {
 
-    /** 湖南工場（従来のコード既定・工場共有 UNC）。 */
+    /** 湖南工場（工場共有 UNC・{@link AppPaths#DEFAULT_KONAN_SHARED_DATA_DIR} のマスタ／サマリ）。 */
     KONAN(
             "湖南工場",
             AppPaths.DEFAULT_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR,
@@ -91,12 +91,15 @@ public enum FactorySite {
     /**
      * {@link AppPaths#KEY_PM_AI_MASTER_WORKBOOK} 環境タブへ書く既定。
      *
-     * <p>湖南は空（{@code MASTER_WORKBOOK_FILE} の basename のみで解決）。国分は
+     * <p>湖南は {@link AppPaths#DEFAULT_PM_AI_MASTER_WORKBOOK_KONAN}。国分は
      * {@code (リポジトリルート)/code/(}{@link #masterWorkbookFileBasename()}{@code )} の絶対パス文字列。
      *
      * @param ui {@link AppPaths#resolveRepoRoot(Map)} に必要なキーを含む（未設定時は cwd 系の既定）
      */
     public String pmAiMasterWorkbookEnvValue(Map<String, String> ui) {
+        if (this == KONAN) {
+            return AppPaths.DEFAULT_PM_AI_MASTER_WORKBOOK_KONAN;
+        }
         if (this != KOKUBU) {
             return "";
         }
@@ -112,11 +115,15 @@ public enum FactorySite {
     /**
      * {@link AppPaths#KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 環境タブへ書く既定（絶対パス）。
      *
-     * <p>{@code (リポジトリルート)/code/}{@link #summaryAiDispatchWorkbookCodeFilename}。
+     * <p>湖南は {@link AppPaths#DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KONAN}。国分は
+     * {@code (リポジトリルート)/code/}{@link #summaryAiDispatchWorkbookCodeFilename}。
      *
      * @param ui {@link AppPaths#resolveRepoRoot(Map)} に必要なキーを含む
      */
     public String pmAiSummaryAiDispatchWorkbookEnvValue(Map<String, String> ui) {
+        if (this == KONAN) {
+            return AppPaths.DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KONAN;
+        }
         Path p =
                 AppPaths.resolveRepoRoot(ui != null ? ui : Map.of())
                         .resolve("code")

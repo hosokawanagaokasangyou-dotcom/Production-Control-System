@@ -38,8 +38,10 @@ class FactorySiteTest {
     }
 
     @Test
-    void konanPmAiMasterWorkbookEnvValueEmpty() {
-        assertEquals("", FactorySite.KONAN.pmAiMasterWorkbookEnvValue(Map.of()));
+    void konanPmAiMasterWorkbookEnvValueUsesSharedDataUnc() {
+        assertEquals(
+                AppPaths.DEFAULT_PM_AI_MASTER_WORKBOOK_KONAN,
+                FactorySite.KONAN.pmAiMasterWorkbookEnvValue(Map.of()));
     }
 
     @Test
@@ -56,16 +58,10 @@ class FactorySiteTest {
     }
 
     @Test
-    void konanPmAiSummaryDispatchUnderRepoCode(@TempDir Path repo) throws Exception {
-        Files.createDirectories(repo.resolve("code"));
-        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, repo.toString());
+    void konanPmAiSummaryDispatchUsesSharedDataUnc() {
         assertEquals(
-                repo.resolve("code")
-                        .resolve("サマリ_AI配台.xlsx")
-                        .normalize()
-                        .toAbsolutePath()
-                        .toString(),
-                FactorySite.KONAN.pmAiSummaryAiDispatchWorkbookEnvValue(ui));
+                AppPaths.DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KONAN,
+                FactorySite.KONAN.pmAiSummaryAiDispatchWorkbookEnvValue(Map.of()));
     }
 
     @Test

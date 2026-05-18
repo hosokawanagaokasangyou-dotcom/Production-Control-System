@@ -872,6 +872,26 @@ public final class AppPaths {
      */
     public static final String SUMMARY_AI_DISPATCH_XLSX = "サマリ_AI配台.xlsx";
 
+    /**
+     * 湖南工場・配台AI {@code 共有DATA} フォルダ（UNC）。{@link FactorySite#KONAN} のマスタ／サマリ既定の親。
+     */
+    public static final String DEFAULT_KONAN_SHARED_DATA_DIR =
+            "\\\\192.168.0.101\\"
+                    + "共有フォルダ\\"
+                    + "湖南工場\\"
+                    + "湖南共有\\"
+                    + "002  加工G\\"
+                    + "●配台AIシステム\\"
+                    + "共有DATA";
+
+    /** {@link FactorySite#KONAN} の {@link #KEY_PM_AI_MASTER_WORKBOOK} 既定（UNC）。 */
+    public static final String DEFAULT_PM_AI_MASTER_WORKBOOK_KONAN =
+            DEFAULT_KONAN_SHARED_DATA_DIR + "\\master.xlsm";
+
+    /** {@link FactorySite#KONAN} の {@link #KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 既定（UNC）。 */
+    public static final String DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KONAN =
+            DEFAULT_KONAN_SHARED_DATA_DIR + "\\" + SUMMARY_AI_DISPATCH_XLSX;
+
     /** 国分工場プリセット: {@code code/} 直下のサマリ用ブック名。 */
     public static final String KOKUBU_SUMMARY_AI_DISPATCH_WORKBOOK_XLSX = "国分サマリ_AI配台.xlsx";
 
