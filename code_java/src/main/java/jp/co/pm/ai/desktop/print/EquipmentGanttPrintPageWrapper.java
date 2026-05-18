@@ -12,9 +12,7 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.image.WritableImage;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
-import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.transform.Scale;
 import javafx.print.PageLayout;
@@ -64,9 +62,14 @@ public final class EquipmentGanttPrintPageWrapper {
         prepareGanttForPrinting(gantt);
         gantt.applyCss();
         gantt.layout();
-        Runnable repaint = extractRepaint(gantt);
-        if (repaint != null) {
-            repaint.run();
+        Runnable fullPaint = extractFullPaint(gantt);
+        if (fullPaint != null) {
+            fullPaint.run();
+        } else {
+            Runnable repaint = extractViewportRepaint(gantt);
+            if (repaint != null) {
+                repaint.run();
+            }
         }
         gantt.applyCss();
         gantt.layout();
@@ -89,8 +92,13 @@ public final class EquipmentGanttPrintPageWrapper {
         Scene shotScene = new Scene(gantt, bw, bh, Color.WHITE);
         gantt.applyCss();
         gantt.layout();
-        if (repaint != null) {
-            repaint.run();
+        if (fullPaint != null) {
+            fullPaint.run();
+        } else {
+            Runnable repaint = extractViewportRepaint(gantt);
+            if (repaint != null) {
+                repaint.run();
+            }
         }
         gantt.applyCss();
         gantt.layout();
@@ -124,9 +132,7 @@ public final class EquipmentGanttPrintPageWrapper {
         double s = Math.min(paperW / iw, paperH / ih);
         double dw = iw * s;
         double dh = ih * s;
-        double ox = (paperW - dw) / 2.0;
-        double oy = (paperH - dh) / 2.0;
-        gc.drawImage(img, ox, oy, dw, dh);
+        gc.drawImage(img, 0, 0, dw, dh);
 
         StackPane paper = new StackPane(canvas);
         paper.setPrefSize(paperW, paperH);
@@ -135,7 +141,15 @@ public final class EquipmentGanttPrintPageWrapper {
         return paper;
     }
 
-    private static Runnable extractRepaint(BorderPane gantt) {
+    private static Runnable extractFullPaint(BorderPane gantt) {
+        Object ud = gantt.getUserData();
+        if (ud instanceof EquipmentGraphicGanttPane.EquipmentGanttViewHandles h) {
+            return h.paintFullContentForPrint();
+        }
+        return null;
+    }
+
+    private static Runnable extractViewportRepaint(BorderPane gantt) {
         Object ud = gantt.getUserData();
         if (ud instanceof EquipmentGraphicGanttPane.EquipmentGanttViewHandles h) {
             return h.scheduleViewportRepaint();
@@ -153,26 +167,20 @@ public final class EquipmentGanttPrintPageWrapper {
         if (!(ud instanceof EquipmentGraphicGanttPane.EquipmentGanttViewHandles h)) {
             return;
         }
+        resetScrollPaneOrigin(h.leftBodyScroll());
+        resetScrollPaneOrigin(h.timelineScroll());
+        resetScrollPaneOrigin(h.headerScroll());
         expandScrollPaneToFullContent(h.leftBodyScroll());
         expandScrollPaneToFullContent(h.timelineScroll());
-        expandScrollPaneToFullContent(findHeaderScrollFromRoot(gantt));
+        expandScrollPaneToFullContent(h.headerScroll());
     }
 
-    private static ScrollPane findHeaderScrollFromRoot(BorderPane gantt) {
-        Node center = gantt.getCenter();
-        if (!(center instanceof VBox vb)) {
-            return null;
+    private static void resetScrollPaneOrigin(ScrollPane sp) {
+        if (sp == null) {
+            return;
         }
-        for (Node ch : vb.getChildren()) {
-            if (ch instanceof HBox hb) {
-                for (Node c2 : hb.getChildren()) {
-                    if (c2 instanceof ScrollPane sp) {
-                        return sp;
-                    }
-                }
-            }
-        }
-        return null;
+        sp.setHvalue(0);
+        sp.setVvalue(0);
     }
 
     private static void expandScrollPaneToFullContent(ScrollPane sp) {
@@ -207,7 +215,7 @@ public final class EquipmentGanttPrintPageWrapper {
             holder.getTransforms().add(new Scale(scale, scale, 0, 0));
         }
         StackPane paper = new StackPane(holder);
-        paper.setAlignment(Pos.CENTER);
+        paper.setAlignment(Pos.TOP_LEFT);
         paper.setPrefSize(paperW, paperH);
         paper.setMinSize(paperW, paperH);
         paper.setMaxSize(paperW, paperH);

@@ -122,11 +122,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     public record EquipmentGanttViewHandles(
             ScrollPane leftBodyScroll,
             ScrollPane timelineScroll,
-            Runnable scheduleViewportRepaint) {
-        /** @deprecated 左スクロールが不要な呼び出し向け。印刷では左も展開するため {@link #EquipmentGanttViewHandles(ScrollPane, ScrollPane, Runnable)} を使う。 */
+            ScrollPane headerScroll,
+            Runnable scheduleViewportRepaint,
+            Runnable paintFullContentForPrint) {
+        /** @deprecated 左スクロールが不要な呼び出し向け。印刷では左も展開するため 5 引数コンストラクタを使う。 */
         @Deprecated
         public EquipmentGanttViewHandles(ScrollPane timelineScroll, Runnable scheduleViewportRepaint) {
-            this(null, timelineScroll, scheduleViewportRepaint);
+            this(null, timelineScroll, null, scheduleViewportRepaint, null);
         }
     }
 
@@ -1092,17 +1094,22 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
          * pending を立てて timer を start し、handle で 1 回だけ paint したら stop してアイドル時はパルスを消費しない。
          */
         final boolean[] viewportRepaintPending = {false};
-        Runnable paintTimelineViewport =
-                () -> {
+        java.util.function.Consumer<Boolean> paintTimeline =
+                fullPaint -> {
                     long t0Ns = System.nanoTime();
                     int paintedRows = 0;
                     int nSlots = slotColCount;
-                    int[] vr =
-                            visibleSlotRangeInclusive(
-                                    rightBodyScroll,
-                                    layoutViewport.slotWidth,
-                                    nSlots,
-                                    VIEWPORT_SLOT_MARGIN);
+                    int[] vr;
+                    if (Boolean.TRUE.equals(fullPaint)) {
+                        vr = new int[] {0, Math.max(0, nSlots - 1)};
+                    } else {
+                        vr =
+                                visibleSlotRangeInclusive(
+                                        rightBodyScroll,
+                                        layoutViewport.slotWidth,
+                                        nSlots,
+                                        VIEWPORT_SLOT_MARGIN);
+                    }
                     GraphicsContext hg = headerCanvas.getGraphicsContext2D();
                     hg.clearRect(0, 0, canvasTimelineW, canvasHeaderH);
                     drawTimeAxis(
@@ -1114,11 +1121,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             vr[0],
                             vr[1]);
                     for (ViewportRowSpec s : viewportRowSpecs) {
-                        if (!intersectsVerticalViewport(
-                                rightBodyScroll,
-                                s.contentMinY(),
-                                s.rowH(),
-                                VIEWPORT_VERTICAL_MARGIN_PX)) {
+                        if (!Boolean.TRUE.equals(fullPaint)
+                                && !intersectsVerticalViewport(
+                                        rightBodyScroll,
+                                        s.contentMinY(),
+                                        s.rowH(),
+                                        VIEWPORT_VERTICAL_MARGIN_PX)) {
                             continue;
                         }
                         paintedRows++;
@@ -1142,12 +1150,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         System.err.println(
                                 "[gantt-profile] paintTimelineViewport ms="
                                         + elapsedMs
+                                        + " fullPaint="
+                                        + fullPaint
                                         + " rowsPainted="
                                         + paintedRows
                                         + "/"
                                         + viewportRowSpecs.size());
                     }
                 };
+        Runnable paintTimelineViewport = () -> paintTimeline.accept(false);
+        Runnable paintFullContentForPrint = () -> paintTimeline.accept(true);
         AnimationTimer viewportRepaintFrameTimer =
                 new AnimationTimer() {
                     @Override
@@ -1206,7 +1218,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         root.setCenter(mainColumn);
         root.setUserData(
                 new EquipmentGanttViewHandles(
-                        leftBodyScroll, rightBodyScroll, scheduleViewportRepaint));
+                        leftBodyScroll,
+                        rightBodyScroll,
+                        headerRightScroll,
+                        scheduleViewportRepaint,
+                        paintFullContentForPrint));
 
         Label hint =
                 new Label(

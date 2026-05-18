@@ -1512,7 +1512,9 @@ public final class EquipmentGanttGraphicTabController {
         }
         PageLayout layout =
                 printer.createPageLayout(
-                        Paper.A3, PageOrientation.LANDSCAPE, Printer.MarginType.DEFAULT);
+                        Paper.A3,
+                        PageOrientation.LANDSCAPE,
+                        Printer.MarginType.HARDWARE_MINIMUM);
         job.getJobSettings().setPageLayout(layout);
 
         int okPages = 0;
@@ -1552,9 +1554,9 @@ public final class EquipmentGanttGraphicTabController {
         }
         if (statusLabel != null) {
             statusLabel.setText(
-                    "印刷ジョブを送信しました（A3 横向き・"
+                    "印刷ジョブを送信しました（A3 横向き・余白狭・"
                             + okPages
-                            + " ページ。各ページは暦日単位で分割し、用紙 1 枚に収まるよう縮小します）。");
+                            + " ページ。暦日ごとに 1 枚、時刻行見出し付きで可印刷領域に収めます）。");
         }
     }
 
