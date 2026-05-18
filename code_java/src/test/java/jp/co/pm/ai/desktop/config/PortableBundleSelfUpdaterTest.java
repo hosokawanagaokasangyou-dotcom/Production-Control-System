@@ -138,7 +138,6 @@ class PortableBundleSelfUpdaterTest {
     }
 
     @Test
-    @Test
     void shouldUpdateBundle_trueWhenJarHashDiffers(@TempDir Path tmp) throws IOException {
         Path install = tmp.resolve("install");
         Path pm = install.resolve("pm-ai-data");
