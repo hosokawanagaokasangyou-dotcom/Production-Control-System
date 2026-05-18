@@ -45,16 +45,10 @@ class FactorySiteTest {
     }
 
     @Test
-    void kokubuPmAiMasterWorkbookEnvValueUnderRepoCode(@TempDir Path repo) throws Exception {
-        Files.createDirectories(repo.resolve("code"));
-        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, repo.toString());
+    void kokubuPmAiMasterWorkbookEnvValueUsesSharedUnc() {
         assertEquals(
-                repo.resolve("code")
-                        .resolve("国分master.xlsm")
-                        .normalize()
-                        .toAbsolutePath()
-                        .toString(),
-                FactorySite.KOKUBU.pmAiMasterWorkbookEnvValue(ui));
+                AppPaths.DEFAULT_PM_AI_MASTER_WORKBOOK_KOKUBU,
+                FactorySite.KOKUBU.pmAiMasterWorkbookEnvValue(Map.of()));
     }
 
     @Test
@@ -65,21 +59,10 @@ class FactorySiteTest {
     }
 
     @Test
-    void kokubuPmAiSummaryDispatchUnderRepoCode(@TempDir Path repo) throws Exception {
-        Files.createDirectories(repo.resolve("code"));
-        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, repo.toString());
+    void kokubuPmAiSummaryDispatchUsesSharedUnc() {
         assertEquals(
-                repo.resolve("code")
-                        .resolve("国分サマリ_AI配台.xlsx")
-                        .normalize()
-                        .toAbsolutePath()
-                        .toString(),
-                FactorySite.KOKUBU.pmAiSummaryAiDispatchWorkbookEnvValue(ui));
-    }
-
-    @Test
-    void kokubuSummaryFilenameConstant() {
-        assertEquals("国分サマリ_AI配台.xlsx", AppPaths.KOKUBU_SUMMARY_AI_DISPATCH_WORKBOOK_XLSX);
+                AppPaths.DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KOKUBU,
+                FactorySite.KOKUBU.pmAiSummaryAiDispatchWorkbookEnvValue(Map.of()));
     }
 
     @Test

@@ -892,7 +892,32 @@ public final class AppPaths {
     public static final String DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KONAN =
             DEFAULT_KONAN_SHARED_DATA_DIR + "\\" + SUMMARY_AI_DISPATCH_XLSX;
 
-    /** 国分工場プリセット: {@code code/} 直下のサマリ用ブック名。 */
+    /**
+     * 国分工場・配台AIシステム共有フォルダ（UNC）。{@link #DEFAULT_KOKUBU_DATA_DIR} の親。
+     */
+    public static final String DEFAULT_KOKUBU_SHARED_DATA_DIR =
+            "\\\\192.168.0.101\\"
+                    + "共有フォルダ\\"
+                    + "国分工場\\"
+                    + "国分共有\\"
+                    + "●配台AIシステム";
+
+    /** 国分工場 {@code DATA} フォルダ（UNC）。{@link FactorySite#KOKUBU} のマスタ／サマリ既定の親。 */
+    public static final String DEFAULT_KOKUBU_DATA_DIR = DEFAULT_KOKUBU_SHARED_DATA_DIR + "\\DATA";
+
+    /** {@link FactorySite#KOKUBU} の {@link #KEY_PM_AI_MASTER_WORKBOOK} 既定（UNC）。 */
+    public static final String DEFAULT_PM_AI_MASTER_WORKBOOK_KOKUBU =
+            DEFAULT_KOKUBU_DATA_DIR + "\\国分master.xlsm";
+
+    /** {@link FactorySite#KOKUBU} の {@link #KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 既定（UNC）。 */
+    public static final String DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KOKUBU =
+            DEFAULT_KOKUBU_DATA_DIR + "\\" + SUMMARY_AI_DISPATCH_XLSX;
+
+    /**
+     * @deprecated 国分プリセットのサマリ既定は {@link #DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KOKUBU}
+     *     （{@link #SUMMARY_AI_DISPATCH_XLSX}）を使用。
+     */
+    @Deprecated
     public static final String KOKUBU_SUMMARY_AI_DISPATCH_WORKBOOK_XLSX = "国分サマリ_AI配台.xlsx";
 
     /**

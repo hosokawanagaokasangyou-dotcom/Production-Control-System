@@ -46,7 +46,7 @@
     "description" : "段階1の配台不要ルールを JSON に寄せる場合のフルパス（list または {\"rules\":[...]}）。既定は code/exclude_rules.json（実在時）、無ければ code/json/stage1_exclude_rules.json（実在時）。有効時はマクロブックの「設定_配台不要工程」Excel 保守も省略。 — 段階1（run_stage1_extract）で master.xlsm 「設定_配台不要工程」を json/stage1_exclude_rules.json へ書き出し、本変数を その絶対パスに自動設定（子プロセス内）。 手動でも UTF-8 JSON（list または {\"rules\":[...]}、 列構造は設定シートと同槗。 有効ファイルがあれば read_excel 経路を省略可。 JavaFX 環境変数タブの既定は code/exclude_rules.json（実在時）、無ければ code/json/stage1_exclude_rules.json（実在時）。 JavaFX は「ファイル...」で選択可。"
   }, {
     "name" : "PM_AI_MASTER_WORKBOOK",
-    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\国分master.xlsm",
+    "value" : "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\国分master.xlsm",
     "description" : "マスタブック（master.xlsm 等）のフルパス。MASTER_WORKBOOK_FILE より優先。環境変数タブの「ファイル...」で .xlsm/.xlsx を選択可。内容の要約は「マスタ読込サマリ」タブの「サマリを更新」で planning_core 基準の JSON を表示（人が読みやすい形に整形）。 — master 系 .xlsm の絶対パス（実在ファイルのとき MASTER_WORKBOOK_FILE より優先。planning_core の マスタ読込・機械カレンダー等に使用。 JavaFX の「マスタ読込サマリ」タブで内容を確認可。"
   }, {
     "name" : "PM_AI_COLUMN_CONFIG_WORKBOOK",
@@ -102,7 +102,7 @@
     "description" : "段階2エンジン（互換キー）。JavaFX からの段階2は常に Python 子 plan_simulation_stage2.py のみ。未設定・空・python で従来どおり。java は無視（旧 JVM 段階2は撤去済み）。 — 段階2の実行エンジン（互換用キー）。JavaFX 実行タブからの段階2は常に Python 子プロセス（plan_simulation_stage2.py）のみ。 未設定・空・python（大小無視）で従来どおり。java が指定されていても無視され Python が起動する（旧 JVM 段階2は撤去済み）。"
   }, {
     "name" : "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK",
-    "value" : "C:\\工程管理AIプロジェクト_JAVA\\code\\国分サマリ_AI配台.xlsx",
+    "value" : "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\サマリ_AI配台.xlsx",
     "description" : "実行・ログタブの「開く」で開くサマリ用ブック（.xlsx 等）のフルパス。空のときは PM_AI_REPO_ROOT 下 code/サマリ_AI配台.xlsx。ファイル名のみのときは code/ からの相対として解決。 — 実行・ログタブの「開く」（サマリ AI 配台 等）が開くブックの絶対パス（.xlsx 等）。 空で code/ 下の サマリ_AI配台.xlsx（PM_AI_REPO_ROOT 準拠）。 ファイル名のみのときは code/ からの相対パスとして解決。"
   }, {
     "name" : "MASTER_WORKBOOK_FILE",

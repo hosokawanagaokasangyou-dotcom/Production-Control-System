@@ -11,7 +11,8 @@ import java.util.Optional;
  * 工場別の環境タブ既定（ネットワークソース・バージョンアップ正本 ZIP・マスタ名・サマリ用ブック）。
  *
  * <p>ポータル自動バージョンアップ完了時、および「環境変数を初期値に戻す」で工場を選んだときに適用する。
- * 湖南（{@link #KONAN}）は工場共有 {@link AppPaths#DEFAULT_KONAN_SHARED_DATA_DIR} のマスタ／サマリ UNC、国分（{@link #KOKUBU}）は国分共有と {@code code/国分master.xlsm} 等を使う。
+ * 湖南（{@link #KONAN}）は {@link AppPaths#DEFAULT_KONAN_SHARED_DATA_DIR}、国分（{@link #KOKUBU}）は
+ * {@link AppPaths#DEFAULT_KOKUBU_DATA_DIR} 配下のマスタ／サマリ UNC を既定とする。
  */
 public enum FactorySite {
 
@@ -31,7 +32,7 @@ public enum FactorySite {
             "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\計画",
             "\\\\192.168.0.101\\共有フォルダ\\国分工場\\国分共有\\●配台AIシステム\\DATA\\実績",
             "国分master.xlsm",
-            AppPaths.KOKUBU_SUMMARY_AI_DISPATCH_WORKBOOK_XLSX);
+            AppPaths.SUMMARY_AI_DISPATCH_XLSX);
 
     private final String displayLabelJa;
     private final String portableBundleSourceDir;
@@ -92,45 +93,32 @@ public enum FactorySite {
      * {@link AppPaths#KEY_PM_AI_MASTER_WORKBOOK} 環境タブへ書く既定。
      *
      * <p>湖南は {@link AppPaths#DEFAULT_PM_AI_MASTER_WORKBOOK_KONAN}。国分は
-     * {@code (リポジトリルート)/code/(}{@link #masterWorkbookFileBasename()}{@code )} の絶対パス文字列。
-     *
-     * @param ui {@link AppPaths#resolveRepoRoot(Map)} に必要なキーを含む（未設定時は cwd 系の既定）
+     * {@link AppPaths#DEFAULT_PM_AI_MASTER_WORKBOOK_KOKUBU}。
      */
     public String pmAiMasterWorkbookEnvValue(Map<String, String> ui) {
         if (this == KONAN) {
             return AppPaths.DEFAULT_PM_AI_MASTER_WORKBOOK_KONAN;
         }
-        if (this != KOKUBU) {
-            return "";
+        if (this == KOKUBU) {
+            return AppPaths.DEFAULT_PM_AI_MASTER_WORKBOOK_KOKUBU;
         }
-        Path p =
-                AppPaths.resolveRepoRoot(ui != null ? ui : Map.of())
-                        .resolve("code")
-                        .resolve(masterWorkbookFileBasename)
-                        .normalize()
-                        .toAbsolutePath();
-        return p.toString();
+        return "";
     }
 
     /**
      * {@link AppPaths#KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 環境タブへ書く既定（絶対パス）。
      *
      * <p>湖南は {@link AppPaths#DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KONAN}。国分は
-     * {@code (リポジトリルート)/code/}{@link #summaryAiDispatchWorkbookCodeFilename}。
-     *
-     * @param ui {@link AppPaths#resolveRepoRoot(Map)} に必要なキーを含む
+     * {@link AppPaths#DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KOKUBU}。
      */
     public String pmAiSummaryAiDispatchWorkbookEnvValue(Map<String, String> ui) {
         if (this == KONAN) {
             return AppPaths.DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KONAN;
         }
-        Path p =
-                AppPaths.resolveRepoRoot(ui != null ? ui : Map.of())
-                        .resolve("code")
-                        .resolve(summaryAiDispatchWorkbookCodeFilename)
-                        .normalize()
-                        .toAbsolutePath();
-        return p.toString();
+        if (this == KOKUBU) {
+            return AppPaths.DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KOKUBU;
+        }
+        return "";
     }
 
     /**
