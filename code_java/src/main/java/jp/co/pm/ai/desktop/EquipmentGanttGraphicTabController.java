@@ -62,8 +62,9 @@ import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttContractSheetTableBuilder;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttSheetBundle;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
+import jp.co.pm.ai.desktop.print.EquipmentGanttPrintCompositor;
 import jp.co.pm.ai.desktop.print.EquipmentGanttPrintDaySlices;
-import jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageWrapper;
+import jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
 import jp.co.pm.ai.desktop.ui.EquipmentGanttPersonBadgeWireDashStyle;
@@ -1538,8 +1539,6 @@ public final class EquipmentGanttGraphicTabController {
                             Printer.MarginType.HARDWARE_MINIMUM);
             job.getJobSettings().setPageLayout(layout);
         }
-        double printableWidthPx = layout.getPrintableWidth();
-
         int okPages = 0;
         try {
             for (List<Integer> idxGroup : groups) {
@@ -1548,10 +1547,9 @@ public final class EquipmentGanttGraphicTabController {
                 List<List<String>> badgeSlice =
                         EquipmentGanttPrintDaySlices.sliceBadgeRowsAligned(
                                 badgeRowsForCurrentGraphic, idxGroup, slotCols);
-                BorderPane page =
-                        buildEquipmentGanttBorderPaneForPrint(cols, slice, badgeSlice, printableWidthPx);
-                Parent printRoot =
-                        EquipmentGanttPrintPageWrapper.fitGanttToSinglePrintablePage(page, layout);
+                EquipmentGanttPrintPageSpec printSpec =
+                        equipmentGanttPrintPageSpec(cols, slice, badgeSlice);
+                Parent printRoot = EquipmentGanttPrintCompositor.composePage(printSpec, layout);
                 if (!job.printPage(layout, printRoot)) {
                     if (shell != null) {
                         shell.appendLog(
@@ -1587,38 +1585,42 @@ public final class EquipmentGanttGraphicTabController {
             statusLabel.setText(
                     "印刷ジョブを送信しました（"
                             + okPages
-                            + " ページ・暦日 1 枚・ベクター・ダイアログの用紙設定に従います）。");
+                            + " ページ・暦日 1 枚・印刷専用組み立て・ダイアログの用紙設定に従います）。");
         }
     }
 
-    /**
-     * 印刷 1 ページ分のガントを組み立てる。時刻列幅％を、左 3 列と進捗列以外の「時刻軸幅」が可印刷幅にちょうど収まるよう
-     * 拡大／縮小してから、ベクター用に再構築する。
-     */
-    private BorderPane buildEquipmentGanttBorderPaneForPrint(
+  /** {@link EquipmentGanttPrintCompositor} 向けにツールバー設定を束ねた印刷仕様。 */
+    private EquipmentGanttPrintPageSpec equipmentGanttPrintPageSpec(
             List<String> columns,
             ObservableList<ObservableList<String>> rows,
-            List<List<String>> badgeSlotRowsSlice,
-            double printableWidthPx) {
-        BorderPane probe =
-                buildEquipmentGanttBorderPane(columns, rows, badgeSlotRowsSlice, false, null, false);
-        Double slotOverride = null;
-        Object udProbe = probe.getUserData();
-        if (udProbe instanceof EquipmentGraphicGanttPane.EquipmentGanttViewHandles handles) {
-            double contentW = handles.printContentWidth();
-            double timelineW = handles.printTimelineWidth();
-            double nonTimelineW = Math.max(0d, contentW - timelineW);
-            double targetW = printableWidthPx * 0.99;
-            double targetTimelineW = targetW - nonTimelineW;
-            if (timelineW >= 2 && targetTimelineW >= 2) {
-                double uiSlotPct =
-                        graphicSlotWidthSlider != null ? graphicSlotWidthSlider.getValue() : 100d;
-                double adjustedSlotPct = uiSlotPct * (targetTimelineW / timelineW);
-                slotOverride = Math.clamp(adjustedSlotPct, 30d, 2000d);
-            }
-        }
-        return buildEquipmentGanttBorderPane(
-                columns, rows, badgeSlotRowsSlice, false, slotOverride, true);
+            List<List<String>> badgeSlotRowsSlice) {
+        java.util.function.Function<String, PersonBadgeStyle> badgeResolver =
+                shell != null
+                        ? shell.personBadgeStyleResolverForGantt()
+                        : (String __) -> PersonBadgeStyle.defaultStyle();
+        return new EquipmentGanttPrintPageSpec(
+                columns,
+                rows,
+                badgeSlotRowsSlice,
+                graphicZoomSlider != null ? graphicZoomSlider.getValue() / 100.0 : 1.0,
+                graphicRowHeightSlider != null ? graphicRowHeightSlider.getValue() : 100d,
+                graphicSlotWidthSlider != null ? graphicSlotWidthSlider.getValue() : 100d,
+                snapshotEquipmentGanttBarFontFamily(),
+                graphicBarFontPctSlider != null ? graphicBarFontPctSlider.getValue() : 100d,
+                graphicHeaderHeightSlider != null ? graphicHeaderHeightSlider.getValue() : 100d,
+                snapshotEquipmentGanttDateColWidth(),
+                snapshotEquipmentGanttMachineColWidth(),
+                snapshotEquipmentGanttProcessColWidth(),
+                snapshotEquipmentGanttPersonBadgeEnabled(),
+                badgeResolver,
+                snapshotEquipmentGanttPersonBadgeGapPx(),
+                snapshotEquipmentGanttPersonBadgeBandVerticalOffsetPx(),
+                equipmentGanttBadgeDragDeltas,
+                snapshotEquipmentGanttPersonBadgeWireStrokeHex(),
+                snapshotEquipmentGanttPersonBadgeWireWidthPx(),
+                snapshotEquipmentGanttPersonBadgeWireDashStyleKey(),
+                snapshotEquipmentGanttPersonBadgeWireMaxLengthPx(),
+                snapshotEquipmentGanttPersonBadgeWireEnabled());
     }
 
     private static Printer findLikelyPdfPrinter() {

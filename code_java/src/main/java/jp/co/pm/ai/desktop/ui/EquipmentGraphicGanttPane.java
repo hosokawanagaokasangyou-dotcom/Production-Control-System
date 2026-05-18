@@ -60,6 +60,7 @@ import javafx.geometry.BoundingBox;
 import javafx.geometry.Bounds;
 import javafx.geometry.Point2D;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
@@ -102,7 +103,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static final double MAX_TIMELINE_CANVAS_WIDTH_PX = 3072.0;
 
     /**
-     * 印刷時は用紙幅にスロット列を合わせる（{@link jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageWrapper} で拡大）。
+     * 印刷時は用紙幅にスロット列を合わせる（{@link jp.co.pm.ai.desktop.print.EquipmentGanttPrintCompositor}）。
      */
     public static final double PRINT_LAYOUT_SCALE = 1.0;
 
@@ -123,6 +124,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
     /** {@link #build} のルート {@link BorderPane} から再構築前に保存するスクロール位置。 */
     public record EquipmentGanttScrollState(double hValue, double vValue) {}
+
+    /** 印刷レイアウト計測（{@link #measurePrintLayout}）。 */
+    public record EquipmentGanttPrintMetrics(
+            double contentWidth,
+            double contentHeight,
+            double timelineWidth,
+            double leftWidth,
+            double progressWidth) {}
 
     /** 時刻軸（右ペイン）の {@link ScrollPane}。縦スクロールは左ペインと双方向バインド済み。 */
     public record EquipmentGanttViewHandles(
@@ -1371,6 +1380,246 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         hint.setPadding(new Insets(0, 8, 8, 8));
         root.setBottom(hint);
         return root;
+    }
+
+    /**
+     * 印刷専用：{@link jp.co.pm.ai.desktop.print.EquipmentGanttPrintCompositor} 向けに、ScrollPane を使わない平坦な
+     * ベクターチャートを組み立てる。
+     */
+    public static Parent composePrintPage(
+            jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec spec, double slotWidthPercent) {
+        BorderPane built = buildForPrintSpec(spec, slotWidthPercent);
+        return flattenBuiltGanttForPrint(built);
+    }
+
+    /** 印刷前のスロット幅合わせ用に、左列・進捗・時刻軸・概算高さを測る（グリッドは構築しない）。 */
+    public static EquipmentGanttPrintMetrics measurePrintLayout(
+            jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec spec) {
+        RepairedGanttTable repairedTable =
+                RepairedGanttTable.from(spec.columns(), spec.rows(), spec.badgeSlotRows());
+        ParseResult parsed = parse(repairedTable.effCols(), repairedTable.effRows(), repairedTable.badgeEff());
+        LayoutMetrics layout =
+                LayoutMetrics.fromScales(
+                        spec.zoom(),
+                        spec.rowHeightPercent(),
+                        spec.slotWidthPercent(),
+                        spec.barFontPercent(),
+                        spec.headerHeightPercent());
+        List<MachineColumnPlan> machPlans =
+                computeMachineColumnPlans(repairedTable.effCols(), parsed.displayRows());
+        MeasuredLeftWidths auto =
+                measureAutoLeftWidths(repairedTable.effCols(), parsed, machPlans, layout);
+        double dateW = effectiveLeftColWidth(auto.dateW(), spec.dateColWidthOverridePx());
+        double machW = effectiveLeftColWidth(auto.machW(), spec.machineColWidthOverridePx());
+        double procW = effectiveLeftColWidth(auto.procW(), spec.processColWidthOverridePx());
+        double leftTotal = dateW + machW + procW;
+        int progCell = layout.progressCellWidth;
+        int gap = layout.progressGap;
+        int progressTotal =
+                parsed.progressColumnIndices().size() * progCell
+                        + Math.max(0, parsed.progressColumnIndices().size() - 1) * gap;
+        int slotColCount = parsed.slotColumnIndices().size();
+        double timelineWidth = slotColCount * layout.slotWidth;
+        double bodyH = estimatePrintBodyHeight(parsed, layout);
+        double contentH = layout.headerHeight + bodyH;
+        double contentW = leftTotal + timelineWidth + progressTotal;
+        return new EquipmentGanttPrintMetrics(
+                contentW, contentH, timelineWidth, leftTotal, progressTotal);
+    }
+
+    private static double estimatePrintBodyHeight(ParseResult parsed, LayoutMetrics layout) {
+        double timelineOuterPad =
+                Math.min(
+                        layout.rowHeight * 0.32,
+                        Math.max(5 * layout.zoom, layout.barFontSize * 0.9));
+        double cellBodyH = layout.rowHeight + 2 * timelineOuterPad;
+        double y = 0;
+        for (DisplayRow dr : parsed.displayRows()) {
+            if (dr.sectionBanner() != null) {
+                y += layout.sectionRowHeight;
+            } else {
+                y += cellBodyH;
+            }
+        }
+        return y;
+    }
+
+    private static BorderPane buildForPrintSpec(
+            jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec spec, double slotWidthPercent) {
+        return build(
+                spec.columns(),
+                spec.rows(),
+                DesktopTheme.LIGHT,
+                spec.zoom(),
+                spec.rowHeightPercent(),
+                slotWidthPercent,
+                spec.barFontFamily(),
+                spec.barFontPercent(),
+                spec.headerHeightPercent(),
+                spec.dateColWidthOverridePx(),
+                spec.machineColWidthOverridePx(),
+                spec.processColWidthOverridePx(),
+                200.0,
+                spec.badgeSlotRows(),
+                spec.showPersonBadges(),
+                spec.personBadgeStyleResolver(),
+                spec.personBadgeGapPx(),
+                spec.personBadgeBandVerticalOffsetPx(),
+                false,
+                spec.personBadgeDragDeltas(),
+                null,
+                spec.personBadgeWireStrokeHex(),
+                spec.personBadgeWireWidthPx(),
+                spec.personBadgeWireDashStyleKey(),
+                spec.personBadgeWireMaxLengthPx(),
+                spec.showPersonBadgeWires(),
+                true);
+    }
+
+    /**
+     * 画面用 {@link #build} 結果から ScrollPane を外し、印刷用の固定サイズ {@link VBox} にする。
+     */
+    private static Parent flattenBuiltGanttForPrint(BorderPane root) {
+        if (root == null) {
+            return new VBox();
+        }
+        root.setBottom(null);
+        Object ud = root.getUserData();
+        if (!(ud instanceof EquipmentGanttViewHandles handles)) {
+            return root;
+        }
+
+        double cw = Math.max(1.0, handles.printContentWidth());
+        double ch = Math.max(1.0, handles.printContentHeight());
+        double headerH = Math.max(1.0, handles.headRow() != null ? handles.headRow().getPrefHeight() : 0);
+
+        GridPane leftGrid = detachGrid(handles.leftBodyScroll());
+        GridPane rightGrid = detachGrid(handles.timelineScroll());
+        HBox headRow = flattenHeaderRow(handles);
+
+        if (leftGrid != null) {
+            leftGrid.setMinWidth(handles.printLeftWidth());
+            leftGrid.setPrefWidth(handles.printLeftWidth());
+            leftGrid.setMaxWidth(handles.printLeftWidth());
+        }
+        if (rightGrid != null) {
+            double rightW = Math.max(1.0, cw - handles.printLeftWidth());
+            rightGrid.setMinWidth(rightW);
+            rightGrid.setPrefWidth(rightW);
+            rightGrid.setMaxWidth(rightW);
+        }
+
+        double bodyH = Math.max(1.0, ch - headerH);
+        HBox bodyRow = new HBox(0);
+        if (leftGrid != null) {
+            bodyRow.getChildren().add(leftGrid);
+        }
+        if (rightGrid != null) {
+            bodyRow.getChildren().add(rightGrid);
+            HBox.setHgrow(rightGrid, Priority.ALWAYS);
+        }
+        bodyRow.setMinSize(cw, bodyH);
+        bodyRow.setPrefSize(cw, bodyH);
+        bodyRow.setMaxSize(cw, bodyH);
+        bodyRow.setAlignment(Pos.TOP_LEFT);
+
+        VBox chart = new VBox(0);
+        if (headRow != null) {
+            headRow.setMinSize(cw, headerH);
+            headRow.setPrefSize(cw, headerH);
+            headRow.setMaxSize(cw, headerH);
+            chart.getChildren().add(headRow);
+        }
+        chart.getChildren().add(bodyRow);
+        chart.setMinSize(cw, ch);
+        chart.setPrefSize(cw, ch);
+        chart.setMaxSize(cw, ch);
+        chart.setFillWidth(true);
+        chart.setCache(false);
+
+        VBox main = handles.mainColumn();
+        if (main != null) {
+            hidePrintWarningInColumn(main);
+        }
+
+        chart.setUserData(
+                new EquipmentGanttPrintMetrics(
+                        cw,
+                        ch,
+                        handles.printTimelineWidth(),
+                        handles.printLeftWidth(),
+                        Math.max(0, cw - handles.printLeftWidth() - handles.printTimelineWidth())));
+
+        if (chart.getScene() == null) {
+            new Scene(chart, cw, ch, Color.WHITE);
+        }
+        chart.applyCss();
+        chart.layout();
+        return chart;
+    }
+
+    private static void hidePrintWarningInColumn(VBox main) {
+        if (main.getChildren().isEmpty()) {
+            return;
+        }
+        Node first = main.getChildren().get(0);
+        if (first instanceof Label) {
+            first.setVisible(false);
+            first.setManaged(false);
+        }
+    }
+
+    private static GridPane detachGrid(ScrollPane scroll) {
+        if (scroll == null) {
+            return null;
+        }
+        Node content = scroll.getContent();
+        scroll.setContent(null);
+        if (content instanceof GridPane grid) {
+            return grid;
+        }
+        return null;
+    }
+
+    private static HBox flattenHeaderRow(EquipmentGanttViewHandles handles) {
+        HBox head = handles.headRow();
+        if (head == null) {
+            return null;
+        }
+        if (!head.getChildren().isEmpty()) {
+            Node left = head.getChildren().get(0);
+            if (left instanceof HBox leftHead) {
+                try {
+                    leftHead.minWidthProperty().unbind();
+                } catch (RuntimeException ignored) {
+                    // 未バインド
+                }
+                double lw = handles.printLeftWidth();
+                if (lw > 0.5) {
+                    leftHead.setMinWidth(lw);
+                    leftHead.setPrefWidth(lw);
+                    leftHead.setMaxWidth(lw);
+                }
+            }
+        }
+        HBox headerContent = handles.headerRightContent();
+        if (head.getChildren().size() >= 2 && head.getChildren().get(1) instanceof ScrollPane headerScroll) {
+            Node content = headerScroll.getContent();
+            headerScroll.setContent(null);
+            if (content != null) {
+                head.getChildren().set(1, content);
+            } else if (headerContent != null) {
+                head.getChildren().set(1, headerContent);
+            }
+        }
+        if (headerContent != null) {
+            double headerRightW =
+                    Math.max(1.0, handles.printContentWidth() - handles.printLeftWidth());
+            headerContent.setMinWidth(headerRightW);
+            headerContent.setPrefWidth(headerRightW);
+            headerContent.setMaxWidth(headerRightW);
+        }
+        return head;
     }
 
     /**
