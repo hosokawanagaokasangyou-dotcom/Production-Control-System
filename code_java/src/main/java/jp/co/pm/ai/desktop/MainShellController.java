@@ -91,6 +91,7 @@ import jp.co.pm.ai.desktop.config.PushButtonCssEmitter;
 import jp.co.pm.ai.desktop.config.PushButtonDesignPrefs;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
 import jp.co.pm.ai.desktop.config.PortableBundleSelfUpdater;
+import jp.co.pm.ai.desktop.config.PortableBundleUpgradeLog;
 import jp.co.pm.ai.desktop.config.PortableBundleUpgradeProgress;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.config.PlanWorkspaceSessionFragment;
@@ -4576,14 +4577,41 @@ public final class MainShellController {
 
         selectMainShellTab(MainShellTabId.RUN);
         mainRunTabController.prepareRunTabForPortableBundleSync();
-        appendLog("[startup] --- ポータルバージョンアップ開始（正本 " + canonVerStr + " → ローカル " + localVerStr + "）---");
-        appendLog(
+
+        PortableBundleUpgradeLog upgradeFileLog = null;
+        try {
+            upgradeFileLog = PortableBundleUpgradeLog.open(cwd, localData);
+        } catch (IOException logOpenEx) {
+            appendLog(
+                    "[startup] バージョンアップログファイルを作成できません: "
+                            + logOpenEx.getMessage());
+        }
+        final PortableBundleUpgradeLog fileLog = upgradeFileLog;
+
+        String startBanner =
+                "[startup] --- ポータルバージョンアップ開始（正本 "
+                        + canonVerStr
+                        + " → ローカル "
+                        + localVerStr
+                        + "）---";
+        appendLog(startBanner);
+        fileLogLine(fileLog, startBanner);
+        if (fileLog != null) {
+            String logPathMsg =
+                    "[startup] バージョンアップログファイル: "
+                            + PortableBundleSelfUpdater.safePathForLog(fileLog.logFile());
+            appendLog(logPathMsg);
+            fileLogLine(fileLog, logPathMsg);
+        }
+        String sourceMsg =
                 "[startup] 正本: "
                         + PortableBundleSelfUpdater.safePathForLog(canonical)
                         + (upgradeZip.isPresent()
                                 ? " / ZIP: "
                                         + PortableBundleSelfUpdater.safePathForLog(upgradeZip.get())
-                                : " / フォルダ同期"));
+                                : " / フォルダ同期");
+        appendLog(sourceMsg);
+        fileLogLine(fileLog, sourceMsg);
 
         final boolean zipUpgradeMode = upgradeZip.isPresent();
         Stage wait = new Stage();
@@ -4595,7 +4623,11 @@ public final class MainShellController {
         VBox root = new VBox(14);
         root.setAlignment(Pos.CENTER_LEFT);
         root.setStyle("-fx-padding: 24;");
-        Label msg = new Label("正本から pm-ai-data を更新しています…\n詳細は「実行・ログ」タブに追記されます。");
+        String waitHint =
+                fileLog != null
+                        ? "正本から pm-ai-data を更新しています…\n詳細は「実行・ログ」タブとログファイルに記録します。"
+                        : "正本から pm-ai-data を更新しています…\n詳細は「実行・ログ」タブに追記されます。";
+        Label msg = new Label(waitHint);
         msg.setWrapText(true);
         msg.setMaxWidth(520);
 
@@ -4645,10 +4677,19 @@ public final class MainShellController {
         final AtomicLong lastProgressUiNanos = new AtomicLong(0);
         PortableBundleUpgradeProgress.Listener upgradeProgress =
                 (phase, done, total, detailLine) -> {
+                    boolean phaseEdge = done <= 0 || (total > 0 && done >= total);
+                    if (phaseEdge && fileLog != null) {
+                        fileLog.appendLine(
+                                "[progress] "
+                                        + phase
+                                        + " "
+                                        + done
+                                        + "/"
+                                        + (total > 0 ? total : "?"));
+                    }
                     long now = System.nanoTime();
                     boolean force =
-                            done <= 0
-                                    || (total > 0 && done >= total)
+                            phaseEdge
                                     || detailLine != null && !detailLine.isBlank();
                     if (!force && now - lastProgressUiNanos.get() < 50_000_000L) {
                         return;
@@ -4679,6 +4720,7 @@ public final class MainShellController {
                     if (line != null && line.contains("同期: ")) {
                         filesSynced.incrementAndGet();
                     }
+                    fileLogLine(fileLog, line);
                     mainRunTabController.appendPortableBundleSyncLog(line);
                 };
         Task<Void> task =
@@ -4745,10 +4787,16 @@ public final class MainShellController {
                     }
                     performGlobalUiFactoryResetWithoutConfirmation();
                     applyBundledPortableDefaultsIfPresent();
-                    appendLog(
+                    String doneBanner =
                             "[startup] --- ポータルバージョンアップ完了（同期ファイル約 "
                                     + filesSynced.get()
-                                    + " 件。上記 [portable-sync] 行を参照）---");
+                                    + " 件。上記 [portable-sync] 行を参照）---";
+                    appendLog(doneBanner);
+                    fileLogLine(fileLog, doneBanner);
+                    if (fileLog != null) {
+                        fileLog.close(
+                                true, "同期ファイル約 " + filesSynced.get() + " 件");
+                    }
                     applyRepoFolderPathNormalization();
                     Optional<FactorySite> chosenOpt = promptFactorySiteAfterPortableUpgrade();
                     FactorySite siteAfterUpgrade = chosenOpt.orElse(FactorySite.KONAN);
@@ -4789,6 +4837,13 @@ public final class MainShellController {
                     Throwable ex = task.getException();
                     String errorDetail = ex != null ? ex.getMessage() : "不明なエラー";
                     appendLog("[startup] ポータル同期に失敗: " + errorDetail);
+                    fileLogLine(fileLog, "[startup] ポータル同期に失敗: " + errorDetail);
+                    if (fileLog != null) {
+                        if (ex != null) {
+                            fileLog.appendThrowable("portable-sync task", ex);
+                        }
+                        fileLog.close(false, errorDetail);
+                    }
                     Alert er = new Alert(AlertType.WARNING);
                     er.initOwner(primaryStage);
                     applyAlertStylesheetsFromOwner(er);
@@ -4800,6 +4855,12 @@ public final class MainShellController {
         Thread t = new Thread(task, "pm-ai-portable-sync");
         t.setDaemon(true);
         t.start();
+    }
+
+    private static void fileLogLine(PortableBundleUpgradeLog fileLog, String line) {
+        if (fileLog != null && line != null && !line.isBlank()) {
+            fileLog.appendLine(line);
+        }
     }
 
     private static void applyPortableUpgradeProgressToBars(
