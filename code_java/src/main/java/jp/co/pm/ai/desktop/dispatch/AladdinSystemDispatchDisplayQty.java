@@ -7,7 +7,7 @@ import java.util.Optional;
 import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
 
 /**
- * 納期管理ビュー・サマリ Excel の (シス配台) 表示用数量。
+ * 納期管理ビュー・サマリ Excel の (段階3前) 表示用数量。
  *
  * <p>換算数量 &lt; (原反)ロール単位長さ のとき、アラジン再入力値は換算数量（配台の当日配台数量 m ではない）。
  * 配台タイムライン・加工時間算定は従来どおり原反ロール長ベースの数量を使う。

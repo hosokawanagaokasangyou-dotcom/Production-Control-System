@@ -35,6 +35,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDeadlineJudgment;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveConsolidator;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
@@ -438,6 +439,8 @@ public final class ResultDispatchTableTabController {
                 }
                 rowMaps.add(row);
             }
+            ResultDispatchInteractiveConsolidator.consolidatePlanAndTimelineRowsInPlace(
+                    headerOrder, rowMaps);
             statusLabel.setText(rowMaps.size() + " 行");
 
             headersRef.clear();

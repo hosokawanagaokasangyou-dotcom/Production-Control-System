@@ -928,7 +928,7 @@ public final class DeliveryCalendarViewTabController {
 
     /**
      * 配台試行（段階3）正常終了後: Python ペイロード再取得・アラジン・加工実績の再読込は行わず、
-     * {@code 結果_配台表.json} とメイン表の (シス配台) 行のみ更新する。
+     * {@code 結果_配台表.json} とメイン表の (段階3前)・(段階3後) 行のみ更新する。
      *
      * @param afterUiUpdated UI 反映後に呼ぶ（例: サマリ xlsx 出力）。JavaFX スレッドから呼ぶこと。
      */
@@ -1496,7 +1496,7 @@ public final class DeliveryCalendarViewTabController {
     private void applyStage3DispatchOnlyReload(Runnable afterUiUpdated) {
         if (shell != null) {
             shell.appendLog(
-                    "[delivery-calendar] 段階3後: シス配台（配台結果）のみ反映（Python 再取得はスキップ）");
+                    "[delivery-calendar] 段階3後: 段階3前・段階3後のみ反映（Python 再取得はスキップ）");
         }
         statusLabel.setText("反映中… 配台結果（段階3）");
         try {
@@ -1504,7 +1504,7 @@ public final class DeliveryCalendarViewTabController {
                 deliveryCalendarResultDispatchTableTabController.reloadResultDispatchTableFromDisk();
             }
             if (!mainHeadersRef.isEmpty() && !mainRows.isEmpty()) {
-                // 成形 JSON キャッシュから (アラ計画)/(実績) も再合成し、(シス配台) は配台表 JSON で更新する
+                // 成形 JSON キャッシュから (アラ計画)/(実績) も再合成し、(段階3前)/(段階3後) は配台表 JSON で更新する
                 overlayChildTabValues();
                 rebuildMainSpreadsheet();
             }
@@ -1612,11 +1612,15 @@ public final class DeliveryCalendarViewTabController {
     private static final String COL_ACT_QTY = "\u5b9f\u52a0\u5de5\u6570"; // ????
     private static final String COL_MFG_COND = "\u88fd\u9020\u6761\u4ef6(\u5185\u8a33)"; // ????(??)
     private static final String MFG_COND_LENGTH = "\u9577\u3055"; // ??
-    private static final String COL_DIS_DATE = "\u914d\u53f0\u65e5"; // ???
-    private static final String COL_DIS_QTY  = "\u5f53\u65e5\u914d\u53f0\u6570\u91cf"; // ??????
+    private static final String COL_DIS_DATE = "\u914d\u53f0\u65e5";
+    /** (段階3前): 結果_配台表の当日配台数量（段階3手動修正の編集目標 m）。 */
+    private static final String COL_DIS_QTY = "\u5f53\u65e5\u914d\u53f0\u6570\u91cf";
+    /** (段階3後): 結果_配台表の実配台数量（段階3試行後タイムライン m）。 */
+    private static final String COL_DIS_QTY_STAGE3 =
+            jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL;
 
     /**
-     * Replaces triple-cell p/a/d values in {@link #mainRows} using shaped JSON cache files written by
+     * Replaces triple-cell p/a/d/s3 values in {@link #mainRows} using shaped JSON cache files written by
      * child tabs on each load (falling back to in-memory child-tab data when the files are absent).
      * This is called after {@link #loadMainCalendar} so column permutation is already applied to
      * {@link #mainHeadersRef}; row order is unchanged so {@link #mainRowMeta} indices stay aligned.
@@ -1691,7 +1695,9 @@ public final class DeliveryCalendarViewTabController {
         Map<String, Map<String, Map<String, Double>>> actualLookup =
                 buildActualLookup(actHeaders, actRows);
         Map<String, Map<String, Map<String, Double>>> dispatchLookup =
-                buildDispatchLookup(dispatchSnap.headers(), dispatchSnap.rows());
+                buildDispatchQtyLookup(dispatchSnap.headers(), dispatchSnap.rows(), COL_DIS_QTY);
+        Map<String, Map<String, Map<String, Double>>> stage3Lookup =
+                buildDispatchQtyLookup(dispatchSnap.headers(), dispatchSnap.rows(), COL_DIS_QTY_STAGE3);
 
         Map<String, AladdinSystemDispatchDisplayQty.TaskQtyContext> dispatchQtyCtx =
                 buildDispatchQtyContext(ui, dispatchSnap.headers(), dispatchSnap.rows());
@@ -1746,27 +1752,30 @@ public final class DeliveryCalendarViewTabController {
                     d = day.displayM();
                     aladdinConvCap = day.remainingConvCap();
                 }
+                double s3 = lookupQty(stage3Lookup, mk, tid, dateStr);
                 String sp = Math.abs(p) > 1e-12 ? formatQtyShort(p) : "";
                 String sa = Math.abs(a) > 1e-12 ? formatQtyShort(a) : "";
                 String sd = Math.abs(d) > 1e-12 ? formatQtyShort(d) : "";
-                row.set(j, overlayTripleQty(sp, sa, sd));
+                String ss3 = Math.abs(s3) > 1e-12 ? formatQtyShort(s3) : "";
+                row.set(j, overlayTripleQty(sp, sa, sd, ss3));
             }
         }
     }
 
     /**
-     * アラジン計画・実績・シス配台の3数量を日付セルに載せる（2段表示＝セル内の (アラ計画)/(実績) と (シス配台)）。
+     * アラジン計画・実績・段階3前・段階3後の4数量を日付セルに載せる。
      */
     static DeliveryCalendarMainCell overlayTripleQty(
-            String planQty, String actualQty, String dispatchQty) {
+            String planQty, String actualQty, String dispatchQty, String stage3AfterQty) {
         return new DeliveryCalendarMainCell.TripleQty(
                 planQty != null ? planQty : "",
                 actualQty != null ? actualQty : "",
-                dispatchQty != null ? dispatchQty : "");
+                dispatchQty != null ? dispatchQty : "",
+                stage3AfterQty != null ? stage3AfterQty : "");
     }
 
     /**
-     * メイン表の日付列について (シス配台) のみ {@code 結果_配台表.json} から再計算する。
+     * メイン表の日付列について (段階3前) と (段階3後) を {@code 結果_配台表.json} から再計算する。
      * (アラ計画)・(実績) は既存セルを維持する。
      */
     private void overlayDispatchValuesOnly() {
@@ -1786,7 +1795,9 @@ public final class DeliveryCalendarViewTabController {
         Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
         DispatchTableSnapshot dispatchSnap = loadDispatchTableSnapshot(ui);
         Map<String, Map<String, Map<String, Double>>> dispatchLookup =
-                buildDispatchLookup(dispatchSnap.headers(), dispatchSnap.rows());
+                buildDispatchQtyLookup(dispatchSnap.headers(), dispatchSnap.rows(), COL_DIS_QTY);
+        Map<String, Map<String, Map<String, Double>>> stage3Lookup =
+                buildDispatchQtyLookup(dispatchSnap.headers(), dispatchSnap.rows(), COL_DIS_QTY_STAGE3);
         Map<String, AladdinSystemDispatchDisplayQty.TaskQtyContext> dispatchQtyCtx =
                 buildDispatchQtyContext(ui, dispatchSnap.headers(), dispatchSnap.rows());
 
@@ -1836,20 +1847,32 @@ public final class DeliveryCalendarViewTabController {
                     d = day.displayM();
                     aladdinConvCap = day.remainingConvCap();
                 }
+                double s3 = lookupQty(stage3Lookup, mk, tid, dateStr);
                 String sd = Math.abs(d) > 1e-12 ? formatQtyShort(d) : "";
-                row.set(j, mergeTripleDispatchQty(row.get(j), sd));
+                String ss3 = Math.abs(s3) > 1e-12 ? formatQtyShort(s3) : "";
+                row.set(j, mergeTripleDispatchAndStage3Qty(row.get(j), sd, ss3));
             }
         }
     }
 
-    /** 既存 Triple の plan/actual を維持し dispatch（シス配台）だけ差し替える。 */
+    /** 既存 Triple の plan/actual を維持し (段階3前) と (段階3後) だけ差し替える。 */
+    static DeliveryCalendarMainCell mergeTripleDispatchAndStage3Qty(
+            DeliveryCalendarMainCell existing, String dispatchQty, String stage3AfterQty) {
+        String d = dispatchQty != null ? dispatchQty : "";
+        String s3 = stage3AfterQty != null ? stage3AfterQty : "";
+        if (existing instanceof DeliveryCalendarMainCell.TripleQty t) {
+            return new DeliveryCalendarMainCell.TripleQty(t.plan(), t.actual(), d, s3);
+        }
+        return new DeliveryCalendarMainCell.TripleQty("", "", d, s3);
+    }
+
+    /** @deprecated {@link #mergeTripleDispatchAndStage3Qty} を使用（段階3後は空で維持）。 */
+    @Deprecated
     static DeliveryCalendarMainCell mergeTripleDispatchQty(
             DeliveryCalendarMainCell existing, String dispatchQty) {
-        String d = dispatchQty != null ? dispatchQty : "";
-        if (existing instanceof DeliveryCalendarMainCell.TripleQty t) {
-            return new DeliveryCalendarMainCell.TripleQty(t.plan(), t.actual(), d);
-        }
-        return new DeliveryCalendarMainCell.TripleQty("", "", d);
+        String s3 =
+                existing instanceof DeliveryCalendarMainCell.TripleQty t ? t.stage3After() : "";
+        return mergeTripleDispatchAndStage3Qty(existing, dispatchQty, s3);
     }
 
     private record DispatchTableSnapshot(List<String> headers, List<List<String>> rows) {}
@@ -2157,16 +2180,15 @@ public final class DeliveryCalendarViewTabController {
     }
 
     /**
-     * Builds dispatch qty lookup from shaped dispatch table data.
+     * Builds dispatch-table qty lookup from shaped {@code 結果_配台表} rows.
      * Key: {@code normalizedMk -> tid -> "yyyy/MM/dd" -> sumQty}.
-     * The {@code ???} column comes from JSON and is in ISO {@code yyyy-MM-dd} format.
      */
-    private static Map<String, Map<String, Map<String, Double>>> buildDispatchLookup(
-            List<String> headers, List<List<String>> rows) {
+    private static Map<String, Map<String, Map<String, Double>>> buildDispatchQtyLookup(
+            List<String> headers, List<List<String>> rows, String qtyColumnName) {
         int mkIdx   = colIdx(headers, COL_MK_NAME);
         int tidIdx  = colIdx(headers, COL_TID);
         int dateIdx = colIdx(headers, COL_DIS_DATE);
-        int qtyIdx  = colIdx(headers, COL_DIS_QTY);
+        int qtyIdx  = colIdx(headers, qtyColumnName);
         if (mkIdx < 0 || tidIdx < 0 || dateIdx < 0 || qtyIdx < 0) {
             return Map.of();
         }
@@ -2197,7 +2219,8 @@ public final class DeliveryCalendarViewTabController {
             return new DeliveryCalendarMainCell.TripleQty(
                     t.path("p").asText(""),
                     t.path("a").asText(""),
-                    t.path("d").asText(""));
+                    t.path("d").asText(""),
+                    t.path("s3").asText(""));
         }
         return new DeliveryCalendarMainCell.PlainText(cell.asText(""));
     }

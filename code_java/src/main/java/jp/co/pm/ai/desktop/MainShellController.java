@@ -4151,7 +4151,7 @@ public final class MainShellController {
     }
 
     /**
-     * 配台試行（段階3）正常終了後: 納期管理ビューはシス配台（配台結果）のみ反映し、サマリ xlsx を更新する。
+     * 配台試行（段階3）正常終了後: 納期管理ビューは段階3前・段階3後（配台結果）のみ反映し、サマリ xlsx を更新する。
      */
     void reloadDeliveryCalendarInBackgroundAfterDispatchTrialSuccess() {
         if (deliveryCalendarViewTabController != null) {

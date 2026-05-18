@@ -3970,7 +3970,7 @@ def aladdin_system_dispatch_display_qty_m(
     remaining_conv_cap: float | None = None,
 ) -> tuple[float, float | None]:
     """
-    納期管理ビュー・サマリ Excel の (シス配台) 表示用数量。
+    納期管理ビュー・サマリ Excel の (段階3前) 表示用数量。
 
     換算数量 < (原反)ロール単位長さ のとき、アラジン再入力値は換算数量（配台タイムラインの m ではない）。
     ``remaining_conv_cap`` 指定時は依頼NO単位で換算数量を超えないよう暦日順に配分する。

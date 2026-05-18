@@ -88,7 +88,10 @@ public final class SpreadsheetTabularSupport {
 
     private static final String DC_TRIPLE_PREFIX_ACTUAL = "(\u5b9f\u7e3e)";
 
-    private static final String DC_TRIPLE_PREFIX_DISPATCH = "(\u30b7\u30b9\u914d\u53f0)";
+    /** 結果_配台表の {@code 当日配台数量}（段階3手動修正の編集目標 m）。 */
+    private static final String DC_TRIPLE_PREFIX_DISPATCH = "(\u6bb5\u968e3\u524d)";
+
+    private static final String DC_TRIPLE_PREFIX_STAGE3_AFTER = "(\u6bb5\u968e3\u5f8c)";
 
     /** Grid row index reserved for ControlsFX column filters ({@link SpreadsheetView#setFilteredRow}). */
     public static final int SPREADSHEET_FILTER_ROW = 0;
@@ -1029,7 +1032,8 @@ public final class SpreadsheetTabularSupport {
                             new Tooltip(
                                     "\u30a2\u30e9\u30b8\u30f3\u52a0\u5de5\u8a08\u753b\u53d6\u5f97\u30c7\u30fc\u30bf / "
                                             + "\u52a0\u5de5\u5b9f\u7e3e / "
-                                            + "\u914d\u53f0\u7d50\u679c\uff08\u7d50\u679c_\u914d\u53f0\u8868.json\uff09");
+                                            + "\u6bb5\u968e3\u524d\uff08\u7d50\u679c_\u914d\u53f0\u8868\u30fb\u5f53\u65e5\u914d\u53f0\u6570\u91cf\uff09 / "
+                                            + "\u6bb5\u968e3\u5f8c\uff08\u5b9f\u914d\u53f0\u6570\u91cf\uff09");
                     Tooltip.install(g, tt);
                     rowCells.add(cell);
                 } else {
@@ -1097,7 +1101,7 @@ public final class SpreadsheetTabularSupport {
      */
     private static List<String> deliveryCalendarTripleVisibleFormattedLines(
             DeliveryCalendarMainCell.TripleQty t) {
-        List<String> lines = new ArrayList<>(3);
+        List<String> lines = new ArrayList<>(4);
         if (!deliveryCalendarTripleQtyHidden(t.plan())) {
             lines.add(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_PLAN, t.plan()));
         }
@@ -1106,6 +1110,9 @@ public final class SpreadsheetTabularSupport {
         }
         if (!deliveryCalendarTripleQtyHidden(t.dispatch())) {
             lines.add(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_DISPATCH, t.dispatch()));
+        }
+        if (!deliveryCalendarTripleQtyHidden(t.stage3After())) {
+            lines.add(formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_STAGE3_AFTER, t.stage3After()));
         }
         return lines;
     }
@@ -1150,6 +1157,10 @@ public final class SpreadsheetTabularSupport {
 
     public static String deliveryCalendarDispatchLineForInspector(String qty) {
         return formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_DISPATCH, qty);
+    }
+
+    public static String deliveryCalendarStage3AfterLineForInspector(String qty) {
+        return formatDeliveryCalendarTripleLine(DC_TRIPLE_PREFIX_STAGE3_AFTER, qty);
     }
 
     private static String formatDeliveryCalendarTripleLine(String prefix, String qty) {

@@ -47,7 +47,7 @@ public final class SummaryAiDispatchWorkbookExporter {
     public static final String SHEET_ALADDIN =
             "\u30a2\u30e9\u30b8\u30f3\u52a0\u5de5\u8a08\u753b\u53d6\u5f97\u30c7\u30fc\u30bf";
 
-    /** 日付列の (シス配台) 数量を横集計した列（サマリ Excel のみ。UI 列とは別）。 */
+    /** 日付列の (段階3前) 数量を横集計した列（サマリ Excel のみ。UI 列とは別）。 */
     public static final String COL_SYSTEM_DISPATCH_QTY_TOTAL = "\u30b7\u30b9\u30c6\u30e0\u914d\u53f0\u6570\u91cf\u5408\u8a08";
 
     private static final Pattern CAL_DATE_HDR =
@@ -383,7 +383,7 @@ public final class SummaryAiDispatchWorkbookExporter {
     }
 
     private static String formatTripleForExcel(DeliveryCalendarMainCell.TripleQty t) {
-        List<String> lines = new ArrayList<>(3);
+        List<String> lines = new ArrayList<>(4);
         if (!tripleQtyHidden(t.plan())) {
             lines.add(SpreadsheetTabularSupport.deliveryCalendarPlanLineForInspector(t.plan()));
         }
@@ -393,6 +393,11 @@ public final class SummaryAiDispatchWorkbookExporter {
         if (!tripleQtyHidden(t.dispatch())) {
             lines.add(
                     SpreadsheetTabularSupport.deliveryCalendarDispatchLineForInspector(t.dispatch()));
+        }
+        if (!tripleQtyHidden(t.stage3After())) {
+            lines.add(
+                    SpreadsheetTabularSupport.deliveryCalendarStage3AfterLineForInspector(
+                            t.stage3After()));
         }
         return String.join("\n", lines);
     }

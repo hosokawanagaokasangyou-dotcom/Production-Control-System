@@ -44,8 +44,8 @@ class SummaryAiDispatchWorkbookExporterTest {
                         List.of(
                                 List.of(
                                         new DeliveryCalendarMainCell.PlainText("Y5-1"),
-                                        new DeliveryCalendarMainCell.TripleQty("", "", "40"),
-                                        new DeliveryCalendarMainCell.TripleQty("", "", "60"))));
+                                        new DeliveryCalendarMainCell.TripleQty("", "", "40", ""),
+                                        new DeliveryCalendarMainCell.TripleQty("", "", "60", ""))));
         assertEquals(
                 List.of(
                         "依頼NO",
@@ -97,8 +97,8 @@ class SummaryAiDispatchWorkbookExporterTest {
                         List.of(
                                 List.of(
                                         new DeliveryCalendarMainCell.PlainText("M1"),
-                                        new DeliveryCalendarMainCell.TripleQty("10", "", "100"),
-                                        new DeliveryCalendarMainCell.TripleQty("10", "", "50"))));
+                                        new DeliveryCalendarMainCell.TripleQty("10", "", "100", ""),
+                                        new DeliveryCalendarMainCell.TripleQty("10", "", "50", ""))));
         PlanInputTabularIo.TabularSheet dispatch =
                 new PlanInputTabularIo.TabularSheet(
                         List.of("依頼NO"), List.of(List.of("A001")));

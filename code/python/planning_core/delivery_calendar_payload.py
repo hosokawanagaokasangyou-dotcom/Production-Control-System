@@ -36,6 +36,7 @@ _DIS_JSON_MACH = "\u6a5f\u68b0\u540d"
 _DIS_JSON_TID = "\u4f9d\u983cNO"
 _DIS_JSON_DAY = "\u914d\u53f0\u65e5"
 _DIS_JSON_QTY = "\u5f53\u65e5\u914d\u53f0\u6570\u91cf"
+_DIS_JSON_QTY_STAGE3 = "\u5b9f\u914d\u53f0\u6570\u91cf"
 
 # Actual-detail (per-request roll-level raw) column names; must match Power Query in the task workbook.
 #   Aggregation/filter shapes follow the Excel query (Group by request id / process / day, etc.).
@@ -416,7 +417,7 @@ def _load_dispatch_json_rows(path: str | None) -> tuple[list[str], list[dict[str
     return header, out
 
 
-def _aggregate_dispatch_quantities(rows: Iterable[dict[str, Any]]):
+def _aggregate_dispatch_quantities(rows: Iterable[dict[str, Any]], *, qty_col: str):
     agg: dict[tuple[str, date, str], float] = defaultdict(float)
     for row in rows:
         mach = row.get(_DIS_JSON_MACH)
@@ -429,7 +430,7 @@ def _aggregate_dispatch_quantities(rows: Iterable[dict[str, Any]]):
         d = _parse_cell_date(row.get(_DIS_JSON_DAY))
         if d is None:
             continue
-        q = core._parse_optional_float_non_nan(row.get(_DIS_JSON_QTY))
+        q = core._parse_optional_float_non_nan(row.get(qty_col))
         if q is None:
             continue
         agg[(mk, d, tid)] += float(q)
@@ -928,7 +929,10 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
         dispatch_path = _resolve_dispatch_json_path(pp)
         meta["dispatchJsonPath"] = dispatch_path or ""
         _disp_header, disp_rows = _load_dispatch_json_rows(dispatch_path)
-        dispatch_agg = _aggregate_dispatch_quantities(disp_rows)
+        dispatch_agg = _aggregate_dispatch_quantities(disp_rows, qty_col=_DIS_JSON_QTY)
+        dispatch_stage3_agg = _aggregate_dispatch_quantities(
+            disp_rows, qty_col=_DIS_JSON_QTY_STAGE3
+        )
         _pm_ai_progress(16)
 
         df_actual = core.load_machining_actual_detail_df()
@@ -1103,7 +1107,7 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
             for h in core.RESULT_DISPATCH_TABLE_STATIC_HEADERS
             if h not in _DELIVERY_CALENDAR_MAIN_LEFT_EXCLUDED
         ]
-        # One column per calendar day: JSON cell {"triple": {p,a,d}} stacked in JavaFX (plan / actual / dispatch).
+        # One column per calendar day: JSON cell {"triple": {p,a,d,s3}} stacked in JavaFX.
         cal_cols: list[str] = []
         for d in sorted_dates:
             ds = _format_delivery_calendar_date_header(d) if isinstance(d, date) else str(d)
@@ -1203,6 +1207,7 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                 )
                 q_act = float(actual_agg.get((mk, d), {}).get(tid, 0.0))
                 q_disp_raw = float(dispatch_agg.get((mk, d, tid), 0.0))
+                q_stage3_raw = float(dispatch_stage3_agg.get((mk, d, tid), 0.0))
                 q_conv_for_disp = (
                     max(0.0, core.parse_float_safe(plan_row.get(core.TASK_COL_QTY), 0.0))
                     if plan_row is not None
@@ -1222,7 +1227,12 @@ def build_delivery_calendar_payload() -> dict[str, Any]:
                 tp = core._format_qty_short(q_in) if abs(q_in) > 1e-12 else ""
                 ta = core._format_qty_short(q_act) if abs(q_act) > 1e-12 else ""
                 td = core._format_qty_short(q_disp) if abs(q_disp) > 1e-12 else ""
-                cal_cells.append({"triple": {"p": tp, "a": ta, "d": td}})
+                ts3 = (
+                    core._format_qty_short(q_stage3_raw)
+                    if abs(q_stage3_raw) > 1e-12
+                    else ""
+                )
+                cal_cells.append({"triple": {"p": tp, "a": ta, "d": td, "s3": ts3}})
 
             main_rows_out.append(
                 {
