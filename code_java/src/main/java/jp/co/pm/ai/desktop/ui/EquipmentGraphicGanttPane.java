@@ -2578,8 +2578,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         double bx = x + inset;
         double bw = Math.max(1, w - 2 * inset);
         if (isPrepHatchedBar(kind)) {
-            Pane hatch = buildVectorPrepHatchedBar(bx, barTop, bw, barH, arc, fill, layout.zoom, palette);
-            layer.getChildren().add(hatch);
+            layer.getChildren()
+                    .add(buildVectorPrepHatchedBar(bx, barTop, bw, barH, arc, fill, layout.zoom, palette));
             return;
         }
         Rectangle bar = new Rectangle(bx, barTop, bw, barH);
@@ -2591,7 +2591,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         layer.getChildren().add(bar);
     }
 
-    private static Pane buildVectorPrepHatchedBar(
+    /**
+     * 準備バー（斜線ハッチ）。Canvas の {@link #fillPrepHatchedBar} と同様にクリップし、PDF 印刷では
+     * {@code layoutX}/{@code layoutY} ではなく {@code translate} で親座標へ配置する。
+     */
+    private static Group buildVectorPrepHatchedBar(
             double x,
             double y,
             double w,
@@ -2600,9 +2604,15 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             Color baseFill,
             double zoom,
             GanttPalette palette) {
-        Pane g = new Pane();
-        g.setLayoutX(x);
-        g.setLayoutY(y);
+        Group g = new Group();
+        g.setAutoSizeChildren(false);
+        g.setTranslateX(x);
+        g.setTranslateY(y);
+        Rectangle clip = new Rectangle(0, 0, w, h);
+        clip.setArcWidth(arc * 2);
+        clip.setArcHeight(arc * 2);
+        g.setClip(clip);
+
         Color background = prepHatchBackground(baseFill);
         Color stroke = complementaryContrastStroke(background);
         Rectangle bg = new Rectangle(0, 0, w, h);
@@ -2610,6 +2620,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         bg.setArcHeight(arc * 2);
         bg.setFill(background);
         g.getChildren().add(bg);
+
         double hatchW = Math.max(0.75, 0.85 * zoom);
         double spacing = Math.max(4.0, 5.0 * zoom);
         double span = w + h;
@@ -2619,6 +2630,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             hl.setStrokeWidth(hatchW);
             g.getChildren().add(hl);
         }
+
         Rectangle border = new Rectangle(0, 0, w, h);
         border.setFill(Color.TRANSPARENT);
         border.setStroke(stroke);
