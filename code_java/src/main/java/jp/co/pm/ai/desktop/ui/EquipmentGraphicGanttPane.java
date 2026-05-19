@@ -1416,12 +1416,15 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static final double PRINT_SECTION_H = 22;
     private static final double PRINT_MIN_ROW_H = 14;
     private static final double PRINT_MAX_ROW_H = 40;
-    private static final double PRINT_DATE_COL_W = 38;
-    private static final double PRINT_MIN_MACHINE_W = 76;
-    private static final double PRINT_MAX_MACHINE_W = 128;
-    private static final double PRINT_MIN_PROCESS_W = 68;
-    private static final double PRINT_MAX_PROCESS_W = 148;
-    private static final int PRINT_PROGRESS_CELL_W = 46;
+    private static final double PRINT_DATE_COL_W = 30;
+    private static final double PRINT_MIN_MACHINE_W = 48;
+    private static final double PRINT_MAX_MACHINE_W = 72;
+    private static final double PRINT_MIN_PROCESS_W = 40;
+    private static final double PRINT_MAX_PROCESS_W = 64;
+    /** 日付＋機械名＋工程名が占めてよい可印刷幅の上限比（残りはタイムライン）。 */
+    private static final double PRINT_MAX_LEFT_COLS_SHARE = 0.18;
+    private static final int PRINT_PROGRESS_CELL_W = 40;
+    private static final double PRINT_SIDE_LABEL_MAX_FONT = 9;
 
     private record PrintSheetDims(
             double pad,
@@ -1481,6 +1484,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 progressCount * PRINT_PROGRESS_CELL_W
                         + Math.max(0, progressCount - 1) * progressGap;
         double contentW = paperW - 2 * PRINT_SHEET_PAD;
+        double[] machProc =
+                shrinkPrintMachineAndProcessWidths(
+                        machW, procW, dateW, progressTotal, contentW);
+        machW = machProc[0];
+        procW = machProc[1];
         int slotCount = Math.max(1, parsed.slotColumnIndices().size());
         double timelineW = Math.max(1.0, contentW - dateW - machW - procW - progressTotal);
         double slotWidth = timelineW / slotCount;
@@ -1543,6 +1551,37 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             return min;
         }
         return Math.clamp(measured, min, max);
+    }
+
+    /**
+     * 機械名・工程名列の合計が上限を超えるときは縮小し、タイムライン幅を優先する。
+     *
+     * @return {@code [machineW, processW]}
+     */
+    private static double[] shrinkPrintMachineAndProcessWidths(
+            double machW,
+            double procW,
+            double dateW,
+            double progressTotal,
+            double contentW) {
+        double maxLeft = contentW * PRINT_MAX_LEFT_COLS_SHARE;
+        double leftOther = dateW + progressTotal;
+        double maxMachProc =
+                Math.max(
+                        PRINT_MIN_MACHINE_W + PRINT_MIN_PROCESS_W,
+                        maxLeft - leftOther);
+        if (machW + procW <= maxMachProc) {
+            return new double[] {machW, procW};
+        }
+        double scale = maxMachProc / (machW + procW);
+        double m = Math.max(PRINT_MIN_MACHINE_W, machW * scale);
+        double p = Math.max(PRINT_MIN_PROCESS_W, procW * scale);
+        if (m + p > maxMachProc) {
+            double s2 = maxMachProc / (m + p);
+            m = Math.max(PRINT_MIN_MACHINE_W, m * s2);
+            p = Math.max(PRINT_MIN_PROCESS_W, p * s2);
+        }
+        return new double[] {m, p};
     }
 
     private static Parent assembleDedicatedPrintSheet(
@@ -1651,10 +1690,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         lb.setPrefHeight(dims.headerH());
         lb.setMaxHeight(dims.headerH());
         lb.setAlignment(Pos.CENTER);
-        lb.setFont(Font.font(11));
+        lb.setFont(Font.font(10));
         lb.setStyle(
                 "-fx-background-color: #4472c4; -fx-text-fill: white; -fx-border-color: #bfbfbf;"
-                        + " -fx-border-width: 0 1 1 0;");
+                        + " -fx-border-width: 0 1 1 0; -fx-padding: 2 3;");
     }
 
     private static Pane buildDedicatedPrintTimeAxis(ParseResult parsed, PrintSheetDims dims) {
@@ -1836,7 +1875,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         lb.setWrapText(true);
         lb.setAlignment(Pos.TOP_LEFT);
         lb.setStyle(dims.palette().machineSideCellCss(machineGroupIndex));
-        fitFontIntoColumn(lb, text, dims.machW() - 8, h - 4, dims.layout().rowLabelFontSize);
+        fitFontIntoColumn(
+                lb,
+                text,
+                dims.machW() - 6,
+                h - 3,
+                Math.min(PRINT_SIDE_LABEL_MAX_FONT, dims.layout().rowLabelFontSize));
         return lb;
     }
 
@@ -1849,7 +1893,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         lb.setWrapText(true);
         lb.setAlignment(Pos.CENTER_LEFT);
         lb.setStyle(dims.palette().machineSideCellCss(machineGroupIndex));
-        fitFontIntoColumn(lb, text, dims.procW() - 8, cellBodyH - 4, dims.layout().rowLabelFontSize);
+        fitFontIntoColumn(
+                lb,
+                text,
+                dims.procW() - 6,
+                cellBodyH - 3,
+                Math.min(PRINT_SIDE_LABEL_MAX_FONT, dims.layout().rowLabelFontSize));
         return lb;
     }
 
