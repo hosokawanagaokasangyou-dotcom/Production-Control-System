@@ -49,7 +49,7 @@
                                     text="最新JSONを検索"
                                     onAction="#onSyncLatestButtonAction"/>
                             <Button fx:id="printGanttButton" mnemonicParsing="false"
-                                    text="印刷（A3・1日／ページ・ダイアログで向き指定）"
+                                    text="印刷（A3 横・1日／ページ）"
                                     onAction="#onPrintGanttAction"/>
                             <Button fx:id="exportGanttPdfButton" mnemonicParsing="false"
                                     text="PDFへ…"

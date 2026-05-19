@@ -1517,6 +1517,7 @@ public final class EquipmentGanttGraphicTabController {
                 info.showAndWait();
             }
         }
+        applyDefaultEquipmentGanttPrintPageLayout(job);
         if (!job.showPrintDialog(stage)) {
             if (statusLabel != null) {
                 statusLabel.setText("印刷をキャンセルしました。");
@@ -1532,11 +1533,7 @@ public final class EquipmentGanttGraphicTabController {
         }
         PageLayout layout = job.getJobSettings().getPageLayout();
         if (layout == null) {
-            layout =
-                    printer.createPageLayout(
-                            Paper.A3,
-                            PageOrientation.PORTRAIT,
-                            Printer.MarginType.HARDWARE_MINIMUM);
+            layout = defaultEquipmentGanttPrintPageLayout(printer);
             job.getJobSettings().setPageLayout(layout);
         }
         int okPages = 0;
@@ -1585,8 +1582,30 @@ public final class EquipmentGanttGraphicTabController {
             statusLabel.setText(
                     "印刷ジョブを送信しました（"
                             + okPages
-                            + " ページ・暦日 1 枚・印刷専用レイアウト・ダイアログの用紙設定に従います）。");
+                            + " ページ・暦日 1 枚・A3 横・印刷専用レイアウト）。");
         }
+    }
+
+    /** 設備ガント印刷の既定：A3 横向き・余白はプリンター最小。 */
+    private static void applyDefaultEquipmentGanttPrintPageLayout(PrinterJob job) {
+        if (job == null) {
+            return;
+        }
+        Printer printer = job.getPrinter();
+        if (printer == null) {
+            printer = Printer.getDefaultPrinter();
+        }
+        if (printer == null) {
+            return;
+        }
+        job.getJobSettings().setPageLayout(defaultEquipmentGanttPrintPageLayout(printer));
+    }
+
+    private static PageLayout defaultEquipmentGanttPrintPageLayout(Printer printer) {
+        return printer.createPageLayout(
+                Paper.A3,
+                PageOrientation.LANDSCAPE,
+                Printer.MarginType.HARDWARE_MINIMUM);
     }
 
   /** {@link EquipmentGanttPrintCompositor} 向けにツールバー設定を束ねた印刷仕様。 */
