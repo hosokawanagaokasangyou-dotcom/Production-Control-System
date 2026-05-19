@@ -10,6 +10,8 @@
 <?import javafx.scene.control.ColorPicker?>
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Slider?>
+<?import javafx.scene.control.RadioButton?>
+<?import javafx.scene.control.ToggleGroup?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
@@ -56,6 +58,24 @@
                                     onAction="#onExportGanttPdfAction"/>
                             <Label styleClass="pm-plan-result-viewer-hint-inline"
                                    text="計画*.json の設備ガント系シートを表示"/>
+                        </HBox>
+                        <HBox alignment="CENTER_LEFT" spacing="6.0">
+                            <Label prefWidth="96.0" text="印刷・時刻列"/>
+                            <RadioButton fx:id="printTimeModeRegularRadio" mnemonicParsing="false"
+                                         text="定常時刻" selected="true">
+                                <toggleGroup>
+                                    <ToggleGroup fx:id="printTimeModeToggleGroup"/>
+                                </toggleGroup>
+                            </RadioButton>
+                            <RadioButton fx:id="printTimeModeRangeRadio" mnemonicParsing="false"
+                                         text="範囲指定" toggleGroup="$printTimeModeToggleGroup"/>
+                            <TextField fx:id="printTimeRangeStartField" prefWidth="56.0"
+                                       promptText="08:00" disable="true"/>
+                            <Label text="～"/>
+                            <TextField fx:id="printTimeRangeEndField" prefWidth="56.0"
+                                       promptText="17:00" disable="true"/>
+                            <Label fx:id="printTimeRegularHintLabel" styleClass="pm-plan-result-viewer-hint-inline"
+                                   wrapText="true"/>
                         </HBox>
                         <HBox alignment="CENTER_LEFT" spacing="8.0">
                             <TextField fx:id="planJsonField" maxWidth="Infinity" prefWidth="560.0"

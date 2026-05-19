@@ -1,8 +1,8 @@
 package jp.co.pm.ai.desktop.print;
 
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 import javafx.collections.ObservableList;
@@ -35,4 +35,8 @@ public record EquipmentGanttPrintPageSpec(
         double personBadgeWireWidthPx,
         String personBadgeWireDashStyleKey,
         double personBadgeWireMaxLengthPx,
-        boolean showPersonBadgeWires) {}
+        boolean showPersonBadgeWires,
+        /** 印刷タイムライン列の半開区間開始（{@code null} は全スロット列）。 */
+        LocalTime printTimeRangeStartInclusive,
+        /** 印刷タイムライン列の半開区間終了（{@code null} は全スロット列）。 */
+        LocalTime printTimeRangeEndExclusive) {}

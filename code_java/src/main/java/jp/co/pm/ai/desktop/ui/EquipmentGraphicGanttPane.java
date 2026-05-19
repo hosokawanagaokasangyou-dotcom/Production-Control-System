@@ -1072,7 +1072,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 timelineOuterPad,
                                 layout,
                                 palette,
-                                barFont);
+                                barFont,
+                                false);
             } else {
                 Canvas rowCanvas = new Canvas(canvasTimelineW, rowCanvasH);
                 timelineCanvasRowCount++;
@@ -1260,7 +1261,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         paintedRows++;
                         GraphicsContext gcx = s.canvas().getGraphicsContext2D();
                         gcx.clearRect(0, 0, canvasTimelineW, s.rowH());
-                        gcx.translate(0, s.outerPad());
                         drawTimelineRow(
                                 gcx,
                                 s.barRuns(),
@@ -1270,8 +1270,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 palette,
                                 barFont,
                                 vr[0],
-                                vr[1]);
-                        gcx.translate(0, -s.outerPad());
+                                vr[1],
+                                s.outerPad());
                     }
                     if (Boolean.getBoolean(PROFILE_PROP)) {
                         long elapsedMs = (System.nanoTime() - t0Ns) / 1_000_000L;
@@ -1396,8 +1396,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         }
         double paperW = Math.max(2, paperWidthPx);
         double paperH = Math.max(2, paperHeightPx);
+        jp.co.pm.ai.desktop.print.EquipmentGanttPrintTableData densified =
+                jp.co.pm.ai.desktop.print.EquipmentGanttPrintTimelineColumnDensifier.densify(
+                        spec.columns(),
+                        spec.rows(),
+                        spec.badgeSlotRows(),
+                        spec.printTimeRangeStartInclusive(),
+                        spec.printTimeRangeEndExclusive());
         RepairedGanttTable repaired =
-                RepairedGanttTable.from(spec.columns(), spec.rows(), spec.badgeSlotRows());
+                RepairedGanttTable.from(
+                        densified.columns(), densified.rows(), densified.badgeSlotRows());
         ParseResult parsed = parse(repaired.effCols(), repaired.effRows(), repaired.badgeEff());
         if (parsed.slotColumnIndices().isEmpty()) {
             Label msg = new Label("時刻列（HH:MM）を検出できませんでした。");
@@ -1416,7 +1424,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static final double PRINT_SECTION_H = 22;
     private static final double PRINT_MIN_ROW_H = 14;
     private static final double PRINT_MAX_ROW_H = 40;
-    private static final double PRINT_DATE_COL_W = 30;
+    /** 印刷日付列の最小幅（縦書き -90° の字形高さ＋余白）。旧 30px 固定は長い日付が欠ける。 */
+    private static final double PRINT_DATE_COL_MIN = 36;
+    private static final double PRINT_DATE_COL_MAX = 56;
     private static final double PRINT_MIN_MACHINE_W = 48;
     private static final double PRINT_MAX_MACHINE_W = 72;
     private static final double PRINT_MIN_PROCESS_W = 40;
@@ -1451,7 +1461,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double paperH,
             RepairedGanttTable repaired,
             ParseResult parsed) {
-        GanttPalette palette = GanttPalette.forTheme(DesktopTheme.LIGHT);
+        GanttPalette palette = GanttPalette.forMonochrome(DesktopTheme.LIGHT);
         LayoutMetrics probe =
                 LayoutMetrics.fromScales(
                         Math.clamp(spec.zoom(), 0.5, 2.0),
@@ -1463,11 +1473,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 computeMachineColumnPlans(repaired.effCols(), parsed.displayRows());
         MeasuredLeftWidths auto =
                 measureAutoLeftWidths(repaired.effCols(), parsed, machPlans, probe);
+        double dateBodyFontPx = probe.rowLabelFontSize * 0.9;
+        double measuredDateW =
+                Math.max(
+                        auto.dateW(),
+                        measurePrintDateColumnWidth(parsed.displayRows(), dateBodyFontPx));
         double dateW =
                 clampPrintCol(
-                        effectiveLeftColWidth(auto.dateW(), spec.dateColWidthOverridePx()),
-                        PRINT_DATE_COL_W,
-                        PRINT_DATE_COL_W);
+                        effectiveLeftColWidth(measuredDateW, spec.dateColWidthOverridePx()),
+                        PRINT_DATE_COL_MIN,
+                        PRINT_DATE_COL_MAX);
         double machW =
                 clampPrintCol(
                         effectiveLeftColWidth(auto.machW(), spec.machineColWidthOverridePx()),
@@ -1602,14 +1617,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         sheet.getChildren().add(pageBg);
 
         double y = dims.pad();
-        HBox header = buildDedicatedPrintHeader(parsed, dims);
+        HBox header = buildDedicatedPrintHeader(effCols, parsed, dims);
         header.setLayoutX(dims.pad());
         header.setLayoutY(y);
         sheet.getChildren().add(header);
         y += dims.headerH();
 
         List<MachineColumnPlan> machPlans = computeMachineColumnPlans(effCols, parsed.displayRows());
-        List<DateColumnPlan> datePlans = computeDateColumnPlans(effCols, parsed.displayRows());
+        String pageDateTitle = resolvePrintSheetDateTitle(parsed);
+        List<DateColumnPlan> datePlans =
+                computeDateColumnPlans(effCols, parsed.displayRows(), pageDateTitle);
         int machineColorSeq = -1;
         double cellBodyH = dims.rowBodyH() + 2 * dims.outerPad();
 
@@ -1639,18 +1656,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             }
             int dateSpan = Math.max(1, dplan.rowSpan());
             boolean dateAsOverlay = !dplan.continuation() && dateSpan > 1;
-            if (dateAsOverlay) {
-                StackPane datePane =
-                        buildDedicatedPrintDateCell(
-                                dplan.dateText(),
-                                dims.dateW(),
-                                dateSpan * cellBodyH,
-                                dims,
-                                machineGroupIndex);
-                datePane.setLayoutX(dims.pad());
-                datePane.setLayoutY(y);
-                sheet.getChildren().add(datePane);
-            }
             HBox row =
                     buildDedicatedPrintDataRow(
                             dr,
@@ -1665,6 +1670,19 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             row.setLayoutX(dims.pad());
             row.setLayoutY(y);
             sheet.getChildren().add(row);
+            if (dateAsOverlay) {
+                StackPane datePane =
+                        buildDedicatedPrintDateCell(
+                                dplan.dateText(),
+                                dims.dateW(),
+                                dateSpan * cellBodyH,
+                                dims,
+                                machineGroupIndex);
+                datePane.setLayoutX(dims.pad());
+                datePane.setLayoutY(y);
+                sheet.getChildren().add(datePane);
+                datePane.toFront();
+            }
             y += cellBodyH;
         }
 
@@ -1676,14 +1694,17 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         return sheet;
     }
 
-    private static HBox buildDedicatedPrintHeader(ParseResult parsed, PrintSheetDims dims) {
-        Label hDate = new Label("");
+    private static HBox buildDedicatedPrintHeader(
+            List<String> effCols, ParseResult parsed, PrintSheetDims dims) {
+        String pageDate = resolvePrintSheetDateTitle(parsed);
+        Label hDate = new Label(pageDate);
+        hDate.setWrapText(true);
         Label hMach = new Label("機械名");
         Label hProc = new Label("工程名");
         applyDedicatedPrintHeaderLabel(hDate, dims.dateW(), dims);
         applyDedicatedPrintHeaderLabel(hMach, dims.machW(), dims);
         applyDedicatedPrintHeaderLabel(hProc, dims.procW(), dims);
-        Pane timeAxis = buildDedicatedPrintTimeAxis(parsed, dims);
+        Pane timeAxis = buildDedicatedPrintTimeAxis(effCols, parsed, dims);
         HBox header = new HBox(0, hDate, hMach, hProc, timeAxis);
         if (dims.progressCount() > 0) {
             for (int i = 0; i < dims.progressCount(); i++) {
@@ -1713,12 +1734,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         lb.setMaxHeight(dims.headerH());
         lb.setAlignment(Pos.CENTER);
         lb.setFont(Font.font(10));
-        lb.setStyle(
-                "-fx-background-color: #4472c4; -fx-text-fill: white; -fx-border-color: #bfbfbf;"
-                        + " -fx-border-width: 0 1 1 0; -fx-padding: 2 3;");
+        lb.setStyle(dims.palette().rowLabelCss() + " -fx-padding: 2 3;");
     }
 
-    private static Pane buildDedicatedPrintTimeAxis(ParseResult parsed, PrintSheetDims dims) {
+    private static Pane buildDedicatedPrintTimeAxis(
+            List<String> effCols, ParseResult parsed, PrintSheetDims dims) {
         double timelineW = dims.timelineW();
         double headerH = dims.headerH();
         Pane pane = new Pane();
@@ -1733,10 +1753,32 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             return pane;
         }
         Color grid = dims.palette().grid();
+        String dateTitle = resolvePrintSheetDateTitle(parsed);
+        double dateBandH =
+                dateTitle.isEmpty() ? 0.0 : Math.clamp(headerH * 0.42, 12.0, headerH - 10.0);
+        double timeBandTop = dateBandH;
+        double timeBandH = Math.max(8.0, headerH - timeBandTop);
+        if (!dateTitle.isEmpty()) {
+            Line dateSep = new Line(0, dateBandH, timelineW, dateBandH);
+            dateSep.setStroke(grid);
+            dateSep.setStrokeWidth(0.4);
+            pane.getChildren().add(dateSep);
+            Text dateTxt = new Text(dateTitle);
+            dateTxt.setFill(dims.palette().axisLabel());
+            double dateFont = Math.min(12, Math.max(9, dateBandH * 0.72));
+            dateTxt.setFont(Font.font(dateFont));
+            MEASURE_ROOT.getChildren().setAll(dateTxt);
+            dateTxt.applyCss();
+            Bounds db = dateTxt.getLayoutBounds();
+            double dw = db.getWidth();
+            dateTxt.setLayoutX(Math.max(4, (timelineW - dw) * 0.5));
+            dateTxt.setLayoutY(Math.max(2, dateBandH * 0.5 - db.getHeight() * 0.35));
+            pane.getChildren().add(dateTxt);
+        }
         double slotW = dims.slotWidth();
         for (int i = 0; i <= n; i++) {
             double x = i * slotW;
-            Line vl = new Line(x, 0, x, headerH);
+            Line vl = new Line(x, timeBandTop, x, headerH);
             vl.setStroke(grid);
             vl.setStrokeWidth(0.4);
             pane.getChildren().add(vl);
@@ -1750,19 +1792,59 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         int labelStep = dedicatedPrintTimeLabelStep(n, slotMin, slotW);
         double fontSize = Math.min(11, Math.max(8, slotW * 0.75));
         DateTimeFormatter tf = DateTimeFormatter.ofPattern("H:mm");
-        LocalTime t0 = parsed.slotBaseTime();
+        List<Integer> slotCols = parsed.slotColumnIndices();
         for (int i = 0; i < n; i += labelStep) {
-            String label = t0.plusMinutes((long) i * slotMin).format(tf);
+            int colIdx = slotCols.get(i);
+            LocalTime ht =
+                    colIdx >= 0 && effCols != null && colIdx < effCols.size()
+                            ? parseTimeHeader(effCols.get(colIdx))
+                            : null;
+            String label = ht != null ? ht.format(tf) : "";
+            if (label.isEmpty()) {
+                continue;
+            }
             Text txt = new Text(label);
             txt.setFill(dims.palette().axisLabel());
             txt.setFont(Font.font(fontSize));
             double bandW = labelStep * slotW;
             double tw = approxLatinDigitTextWidth(label, fontSize);
             txt.setLayoutX(i * slotW + Math.max(2, (bandW - tw) * 0.5));
-            txt.setLayoutY(headerH - fontSize - 5);
+            txt.setLayoutY(timeBandTop + timeBandH - fontSize - 4);
             pane.getChildren().add(txt);
         }
         return pane;
+    }
+
+    /** 印刷 1 ページ分の表から、見出しに載せる暦日ラベル（先頭データ行の日付列）を得る。 */
+    private static String resolvePrintSheetDateTitle(ParseResult parsed) {
+        if (parsed == null || parsed.displayRows() == null) {
+            return "";
+        }
+        for (DisplayRow dr : parsed.displayRows()) {
+            if (dr.sectionBanner() != null) {
+                continue;
+            }
+            String d = dr.dateCompact();
+            if (d != null && !d.isBlank()) {
+                return d.strip();
+            }
+        }
+        for (DisplayRow dr : parsed.displayRows()) {
+            if (dr.sectionBanner() != null || dr.rawRow() == null) {
+                continue;
+            }
+            for (int c = 0; c < Math.min(4, dr.rawRow().size()); c++) {
+                String raw = dr.rawRow().get(c) != null ? dr.rawRow().get(c).strip() : "";
+                if (raw.isEmpty()) {
+                    continue;
+                }
+                String compact = compactDateLine(raw);
+                if (!compact.isEmpty()) {
+                    return compact;
+                }
+            }
+        }
+        return "";
     }
 
     private static int dedicatedPrintTimeLabelStep(int slotCount, int slotMinutes, double slotWidthPx) {
@@ -1805,9 +1887,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             boolean dateSpacerInRow) {
         List<Node> parts = new ArrayList<>();
         if (dateSpacerInRow) {
-            parts.add(
-                    buildDedicatedPrintSideSpacer(
-                            dims.dateW(), cellBodyH, dims.palette(), machineGroupIndex));
+            parts.add(buildDedicatedPrintDateOverlaySpacer(dims.dateW(), cellBodyH));
         } else {
             parts.add(
                     buildDedicatedPrintDateCell(
@@ -1840,7 +1920,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         dims.outerPad(),
                         dims.layout(),
                         dims.palette(),
-                        dims.barFont());
+                        dims.barFont(),
+                        true);
         parts.add(timeline);
         if (dims.progressCount() > 0) {
             int gap = dims.progressGap();
@@ -1886,6 +1967,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         return r;
     }
 
+    /** 縦結合日付のオーバーレイ下に置く透明プレースホルダ（罫線用スペーサで日付を隠さない）。 */
+    private static Region buildDedicatedPrintDateOverlaySpacer(double w, double h) {
+        Region r = new Region();
+        r.setMinSize(w, h);
+        r.setPrefSize(w, h);
+        r.setMaxSize(w, h);
+        r.setMouseTransparent(true);
+        return r;
+    }
+
     private static StackPane buildDedicatedPrintDateCell(
             String dateText,
             double cellW,
@@ -1899,21 +1990,66 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         wrap.setAlignment(Pos.CENTER);
         wrap.setStyle(dims.palette().machineSideCellCss(machineGroupIndex));
 
-        String t = dateText != null ? dateText : "";
+        String t = dateText != null ? dateText.strip() : "";
+        if (t.isEmpty()) {
+            return wrap;
+        }
         double fontPx = dims.layout().rowLabelFontSize * 0.9;
-        Text dt = new Text(t);
-        dt.setFont(Font.font(fontPx));
-        dt.setFill(Color.web(dims.palette().machineSideTextFill()));
-        double tw = approxLatinDigitTextWidth(t, fontPx);
-        Bounds tb = dt.getLayoutBounds();
-        double th = Math.max(tb.getHeight(), fontPx);
-        Group anchor = new Group();
-        dt.setRotate(-90);
-        dt.setTranslateX(-tw / 2);
-        dt.setTranslateY(th / 2);
-        anchor.getChildren().add(dt);
-        wrap.getChildren().add(anchor);
+        Label dt = new Label(t);
+        dt.setTextFill(Color.web(dims.palette().machineSideTextFill()));
+        dt.setWrapText(false);
+        fitRotatedDateLabel(dt, cellW, cellH, fontPx);
+        StackPane.setAlignment(dt, Pos.CENTER);
+        wrap.getChildren().add(dt);
         return wrap;
+    }
+
+    /**
+     * 縦書き（-90°）でセルに収める。列幅は字形の高さ、行高は文字列の横方向幅が必要。
+     */
+    private static void fitRotatedDateLabel(Label lb, double cellW, double cellH, double baseFontPx) {
+        double fontPx = Math.max(6, baseFontPx);
+        lb.setRotate(0);
+        for (int i = 0; i < 14; i++) {
+            lb.setFont(Font.font(fontPx));
+            MEASURE_ROOT.getChildren().setAll(lb);
+            lb.applyCss();
+            lb.layout();
+            Bounds b = lb.getBoundsInParent();
+            double unrotW = Math.max(1, b.getWidth());
+            double unrotH = Math.max(1, b.getHeight());
+            if (unrotH <= cellW - 4 && unrotW <= cellH - 4) {
+                lb.setRotate(-90);
+                return;
+            }
+            fontPx = Math.max(6, fontPx * 0.88);
+        }
+        lb.setRotate(-90);
+    }
+
+    /** 印刷日付列幅: 縦書き時に列方向へ必要な幅（未回転テキストの高さ）の最大。 */
+    private static double measurePrintDateColumnWidth(
+            List<DisplayRow> displayRows, double fontPx) {
+        double max = PRINT_DATE_COL_MIN;
+        if (displayRows == null) {
+            return max;
+        }
+        for (DisplayRow dr : displayRows) {
+            if (dr.sectionBanner() != null) {
+                continue;
+            }
+            String d = dr.dateCompact();
+            if (d == null || d.isBlank()) {
+                continue;
+            }
+            Text probe = new Text(d.strip());
+            probe.setFont(Font.font(fontPx));
+            MEASURE_ROOT.getChildren().setAll(probe);
+            probe.applyCss();
+            Bounds b = probe.getLayoutBounds();
+            max = Math.max(max, Math.ceil(b.getHeight()) + 10);
+        }
+        return Math.min(PRINT_DATE_COL_MAX, max);
     }
 
     private static Label buildDedicatedPrintMachineCell(
@@ -2237,11 +2373,18 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
     private static List<DateColumnPlan> computeDateColumnPlans(
             List<String> columns, List<DisplayRow> displayRows) {
+        return computeDateColumnPlans(columns, displayRows, "");
+    }
+
+    private static List<DateColumnPlan> computeDateColumnPlans(
+            List<String> columns, List<DisplayRow> displayRows, String pageDateFallback) {
         List<DateColumnPlan> plans = new ArrayList<>();
         for (int i = 0; i < displayRows.size(); i++) {
             plans.add(null);
         }
         String[] carriedAt = computeCarriedDates(columns, displayRows);
+        String fallback =
+                pageDateFallback != null ? pageDateFallback.strip() : "";
         int r = 0;
         while (r < displayRows.size()) {
             DisplayRow dr = displayRows.get(r);
@@ -2249,7 +2392,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 r++;
                 continue;
             }
-            String dateKey = compactDateLine(carriedAt[r]).strip();
+            String dateKey =
+                    dr.dateCompact() != null && !dr.dateCompact().isBlank()
+                            ? dr.dateCompact().strip()
+                            : compactDateLine(carriedAt[r]).strip();
+            if (dateKey.isEmpty() && !fallback.isEmpty()) {
+                dateKey = fallback;
+            }
             if (dateKey.isEmpty()) {
                 plans.set(r, new DateColumnPlan(false, "", 1));
                 r++;
@@ -2261,7 +2410,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 if (drj.sectionBanner() != null) {
                     break;
                 }
-                String keyJ = compactDateLine(carriedAt[j]).strip();
+                String keyJ =
+                        drj.dateCompact() != null && !drj.dateCompact().isBlank()
+                                ? drj.dateCompact().strip()
+                                : compactDateLine(carriedAt[j]).strip();
                 if (!dateKey.equals(keyJ)) {
                     break;
                 }
@@ -2434,6 +2586,85 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     + "; -fx-border-width: 0 1 1 0;";
         }
 
+        /**
+         * 印刷 PDF 向けモノトーン。バーは薄めのグレー＋ハッチで区別し、バー外の黒文字が読みやすいトーンにする。
+         */
+        static GanttPalette forMonochrome(DesktopTheme theme) {
+            boolean dark = theme.isDarkUi();
+            if (dark) {
+                Color[] bandsDark =
+                        new Color[] {
+                            Color.web("#2b2b2b"),
+                            Color.web("#333333"),
+                            Color.web("#303030"),
+                            Color.web("#383838")
+                        };
+                Color ink = Color.web("#ececec");
+                return new GanttPalette(
+                        Color.web("#1a1a1a"),
+                        Color.web("#222222"),
+                        Color.web("#555555"),
+                        Color.web("#262626"),
+                        ink,
+                        Color.web("#9a9a9a"),
+                        Color.web("#c4c4c4"),
+                        Color.web("#707070"),
+                        Color.web("#4a4a4a"),
+                        Color.web("#585858"),
+                        ink,
+                        ink,
+                        ink,
+                        ink,
+                        ink,
+                        Color.web("#d0d0d0"),
+                        bandsDark,
+                        "#ececec",
+                        "#555555",
+                        "-fx-background-color: #3a3a3a; -fx-text-fill: #f5f5f5; "
+                                + "-fx-border-color: #555555; -fx-border-width: 0 1 0 0;",
+                        "-fx-background-color: #404040; -fx-font-weight: bold; -fx-font-size: 12px; "
+                                + "-fx-text-fill: #f0f0f0;",
+                        "-fx-text-fill: #a3a3a3; -fx-font-size: 11px;",
+                        "-fx-background-color: #262626; -fx-border-color: #555555; -fx-text-fill: #d4d4d4;",
+                        "-fx-background-color: #3d3d3d; -fx-border-color: #666666; -fx-text-fill: #e8e8e8;");
+            }
+            Color[] bandsLight =
+                    new Color[] {
+                        Color.web("#fafafa"),
+                        Color.web("#f3f3f3"),
+                        Color.web("#f7f7f7"),
+                        Color.web("#efefef")
+                    };
+            Color ink = Color.web("#1a1a1a");
+            return new GanttPalette(
+                    Color.web("#ffffff"),
+                    Color.web("#fafafa"),
+                    Color.web("#d8d8d8"),
+                    Color.web("#f5f5f5"),
+                    ink,
+                    Color.web("#b0b0b0"),
+                    Color.web("#d0d0d0"),
+                    Color.web("#9a9a9a"),
+                    Color.web("#e4e4e4"),
+                    Color.web("#cccccc"),
+                    ink,
+                    ink,
+                    ink,
+                    ink,
+                    ink,
+                    Color.web("#707070"),
+                    bandsLight,
+                    "#1a1a1a",
+                    "#b8b8b8",
+                    "-fx-background-color: #e8e8e8; -fx-text-fill: #1a1a1a; -fx-font-weight: bold; "
+                            + "-fx-border-color: #b8b8b8; -fx-border-width: 0 1 1 0;",
+                    "-fx-background-color: #d4d4d4; -fx-font-weight: bold; -fx-font-size: 12px; "
+                            + "-fx-text-fill: #1a1a1a;",
+                    "-fx-text-fill: #595959; -fx-font-size: 11px;",
+                    "-fx-background-color: #ffffff; -fx-border-color: #c8c8c8; -fx-text-fill: #333333;",
+                    "-fx-background-color: #e0e0e0; -fx-border-color: #b8b8b8; -fx-text-fill: #1a1a1a;");
+        }
+
         static GanttPalette forTheme(DesktopTheme theme) {
             boolean dark = theme.isDarkUi();
             if (dark) {
@@ -2572,7 +2803,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         return pane;
     }
 
-    /** 印刷用：1 行分のタイムライン（帯・格子・バー・ラベルをベクター形状で構成）。 */
+    /**
+     * 1 行分のタイムライン（帯・格子・バー・ラベルをベクター形状で構成）。
+     *
+     * @param dedicatedPrintLayout true のときのみ印刷専用の全幅帯背景を敷く（画面ガントは変更しない）
+     */
     private static Pane buildVectorTimelineRowPane(
             List<BarRun> barRuns,
             int slotCount,
@@ -2582,7 +2817,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double outerPad,
             LayoutMetrics layout,
             GanttPalette palette,
-            Font barFont) {
+            Font barFont,
+            boolean dedicatedPrintLayout) {
         Pane pane = new Pane();
         pane.setPrefSize(timelineWidth, paneHeight);
         pane.setMinSize(timelineWidth, paneHeight);
@@ -2590,6 +2826,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         int n = Math.max(0, slotCount);
         Color band = palette.machineBandFill(machineGroupIndex);
         double rowH = layout.rowHeight;
+        if (dedicatedPrintLayout) {
+            Rectangle bandBg = new Rectangle(0, outerPad, timelineWidth, rowH);
+            bandBg.setFill(band);
+            pane.getChildren().add(bandBg);
+        }
         for (int i = 0; i < n; i++) {
             Rectangle cell = new Rectangle(i * layout.slotWidth, outerPad, layout.slotWidth, rowH);
             cell.setFill(band);
@@ -2605,14 +2846,20 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         }
         List<BarRun> runs = barRuns != null ? barRuns : List.of();
         for (BarRun run : runs) {
-            addVectorBar(pane, run, layout, palette, outerPad);
+            addVectorBar(pane, run, layout, palette, outerPad, dedicatedPrintLayout);
         }
-        addVectorBarLabelsOutside(pane, runs, layout, palette, barFont, outerPad);
+        addVectorBarLabelsOutside(
+                pane, runs, layout, palette, barFont, outerPad, dedicatedPrintLayout);
         return pane;
     }
 
     private static void addVectorBar(
-            Pane layer, BarRun run, LayoutMetrics layout, GanttPalette palette, double outerPad) {
+            Pane layer,
+            BarRun run,
+            LayoutMetrics layout,
+            GanttPalette palette,
+            double outerPad,
+            boolean dedicatedPrintLayout) {
         int fromSlot = run.fromSlot();
         int toSlot = run.toSlot();
         double x = fromSlot * layout.slotWidth;
@@ -2633,7 +2880,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         double bx = x + inset;
         double bw = Math.max(1, w - 2 * inset);
         if (isPrepHatchedBar(kind)) {
-            addVectorPrepHatchedBar(layer, bx, barTop, bw, barH, arc, fill, layout.zoom, palette);
+            addVectorPrepHatchedBar(
+                    layer, bx, barTop, bw, barH, arc, fill, layout.zoom, palette, dedicatedPrintLayout);
             return;
         }
         Rectangle bar = new Rectangle(bx, barTop, bw, barH);
@@ -2658,7 +2906,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double arc,
             Color baseFill,
             double zoom,
-            GanttPalette palette) {
+            GanttPalette palette,
+            boolean dedicatedPrintLayout) {
         Color background = prepHatchBackground(baseFill);
         Color stroke = complementaryContrastStroke(background);
         Rectangle bg = new Rectangle(x, y, w, h);
@@ -2667,7 +2916,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         bg.setFill(background);
         layer.getChildren().add(bg);
 
-        double hatchW = Math.max(0.75, 0.85 * zoom);
+        double hatchW =
+                dedicatedPrintLayout
+                        ? prepHatchStrokeWidthPxPrint(zoom)
+                        : prepHatchStrokeWidthPxScreen(zoom);
         double halfStroke = hatchW * 0.5;
         double clipL = x + halfStroke + 0.5;
         double clipT = y + halfStroke + 0.5;
@@ -2680,7 +2932,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             clipB = y + h;
         }
 
-        double spacing = Math.max(4.0, 5.0 * zoom);
+        double spacing = prepHatchLineSpacingPx(zoom);
         double span = w + h;
         for (double offset = -h; offset < span; offset += spacing) {
             double x0 = x + offset;
@@ -2761,22 +3013,84 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             LayoutMetrics layout,
             GanttPalette palette,
             Font barFont,
-            double outerPad) {
+            double outerPad,
+            boolean omitPrepHatchedBarLabels) {
         if (runs == null || runs.isEmpty()) {
             return;
+        }
+        double barTop = outerPad + 3 * layout.zoom;
+        double barH = layout.rowHeight - 2 * (3 * layout.zoom);
+        double canvasH = outerPad + layout.rowHeight + outerPad;
+        for (PlannedBarOutsideLabel planned :
+                planBarOutsideLabelsThreeTiers(
+                        runs,
+                        layout,
+                        palette,
+                        barFont,
+                        barTop,
+                        barH,
+                        canvasH,
+                        omitPrepHatchedBarLabels)) {
+            Text t = new Text(planned.text());
+            t.setFill(planned.color());
+            t.setFont(barFont);
+            t.setLayoutX(planned.x());
+            t.setLayoutY(planned.y());
+            layer.getChildren().add(t);
+        }
+    }
+
+    /** バー外ラベルの縦位置（上・中・下の 3 段）。 */
+    private enum BarOutsideLabelTier {
+        TOP,
+        MIDDLE,
+        BOTTOM
+    }
+
+    private record PlannedBarOutsideLabel(String text, Color color, double x, double y) {}
+
+    /**
+     * 横方向で重なるラベルを上段・中段（バー直上）・下段に振り分ける。同一段内ではさらに縦にずらす。
+     */
+    private static List<PlannedBarOutsideLabel> planBarOutsideLabelsThreeTiers(
+            List<BarRun> runs,
+            LayoutMetrics layout,
+            GanttPalette palette,
+            Font barFont,
+            double barTop,
+            double barH,
+            double canvasH) {
+        return planBarOutsideLabelsThreeTiers(
+                runs, layout, palette, barFont, barTop, barH, canvasH, false);
+    }
+
+    private static List<PlannedBarOutsideLabel> planBarOutsideLabelsThreeTiers(
+            List<BarRun> runs,
+            LayoutMetrics layout,
+            GanttPalette palette,
+            Font barFont,
+            double barTop,
+            double barH,
+            double canvasH,
+            boolean omitPrepHatchedBarLabels) {
+        List<PlannedBarOutsideLabel> out = new ArrayList<>();
+        if (runs == null || runs.isEmpty()) {
+            return out;
         }
         List<BarRun> sorted = new ArrayList<>(runs);
         sorted.sort(Comparator.comparingInt(BarRun::fromSlot));
         double inset = 0.5 * layout.zoom;
-        double barTop = outerPad + 3 * layout.zoom;
-        double barH = layout.rowHeight - 2 * (3 * layout.zoom);
-        double pad = 6 * layout.zoom;
-        List<double[]> aboveRanges = new ArrayList<>();
-        List<double[]> belowRanges = new ArrayList<>();
+        double pad = Math.max(4 * layout.zoom, 2);
+        List<double[]> topRanges = new ArrayList<>();
+        List<double[]> middleRanges = new ArrayList<>();
+        List<double[]> bottomRanges = new ArrayList<>();
         for (BarRun run : sorted) {
+            if (omitPrepHatchedBarLabels && isPrepHatchedBar(run.kind())) {
+                continue;
+            }
             String full = run.text().replace('\n', ' ');
             if (full.length() > 220) {
-                full = full.substring(0, 217) + "...";
+                full = full.substring(0, 217) + "…";
             }
             if (full.isEmpty()) {
                 continue;
@@ -2793,28 +3107,78 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double tw = measureTextWidth(full, barFont);
             double fh = measureTextHeight(full, barFont);
             double rx = lx + tw;
-            boolean useAbove;
-            if (!horizontalHits(aboveRanges, lx, rx, pad)) {
-                useAbove = true;
-            } else if (!horizontalHits(belowRanges, lx, rx, pad)) {
-                useAbove = false;
-            } else {
-                useAbove = (run.fromSlot() & 1) == 0;
-            }
-            if (useAbove) {
-                aboveRanges.add(new double[] {lx, rx});
-            } else {
-                belowRanges.add(new double[] {lx, rx});
-            }
+            BarOutsideLabelTier tier = pickBarOutsideLabelTier(lx, rx, pad, topRanges, middleRanges, bottomRanges);
+            List<double[]> tierRanges =
+                    switch (tier) {
+                        case TOP -> topRanges;
+                        case MIDDLE -> middleRanges;
+                        case BOTTOM -> bottomRanges;
+                    };
+            int stack = overlapCountHorizontal(tierRanges, lx, rx, pad);
+            tierRanges.add(new double[] {lx, rx});
             double baseline =
-                    useAbove ? barTop - fh * 0.35 : barTop + barH + fh * 0.75;
-            Text t = new Text(full);
-            t.setFill(labelColor);
-            t.setFont(barFont);
-            t.setLayoutX(lx);
-            t.setLayoutY(baseline);
-            layer.getChildren().add(t);
+                    baselineForBarOutsideLabelTier(
+                            tier, stack, barTop, barH, fh, layout.zoom, canvasH);
+            out.add(new PlannedBarOutsideLabel(full, labelColor, lx, baseline));
         }
+        return out;
+    }
+
+    private static BarOutsideLabelTier pickBarOutsideLabelTier(
+            double lx,
+            double rx,
+            double pad,
+            List<double[]> topRanges,
+            List<double[]> middleRanges,
+            List<double[]> bottomRanges) {
+        if (!horizontalHits(topRanges, lx, rx, pad)) {
+            return BarOutsideLabelTier.TOP;
+        }
+        if (!horizontalHits(middleRanges, lx, rx, pad)) {
+            return BarOutsideLabelTier.MIDDLE;
+        }
+        if (!horizontalHits(bottomRanges, lx, rx, pad)) {
+            return BarOutsideLabelTier.BOTTOM;
+        }
+        int topN = overlapCountHorizontal(topRanges, lx, rx, pad);
+        int midN = overlapCountHorizontal(middleRanges, lx, rx, pad);
+        int botN = overlapCountHorizontal(bottomRanges, lx, rx, pad);
+        if (topN <= midN && topN <= botN) {
+            return BarOutsideLabelTier.TOP;
+        }
+        if (midN <= botN) {
+            return BarOutsideLabelTier.MIDDLE;
+        }
+        return BarOutsideLabelTier.BOTTOM;
+    }
+
+    private static double baselineForBarOutsideLabelTier(
+            BarOutsideLabelTier tier,
+            int stackLevel,
+            double barTop,
+            double barH,
+            double fh,
+            double zoom,
+            double canvasH) {
+        double lineGap = fh + Math.max(2, 2 * zoom);
+        double maxY = Math.max(fh + 2, canvasH - 2);
+        return switch (tier) {
+            // 上段は行上余白内で stack ごとに下へ（y 増）。負の座標にしない。
+            case TOP -> Math.min(2 + stackLevel * lineGap, maxY);
+            case MIDDLE -> Math.min(barTop - fh * 0.35 - stackLevel * lineGap, maxY);
+            case BOTTOM -> Math.min(barTop + barH + fh * 0.75 + stackLevel * lineGap, maxY);
+        };
+    }
+
+    private static int overlapCountHorizontal(
+            List<double[]> ranges, double lo, double hi, double pad) {
+        int n = 0;
+        for (double[] r : ranges) {
+            if (!(hi + pad < r[0] || lo - pad > r[1])) {
+                n++;
+            }
+        }
+        return n;
     }
 
     private static void drawTimeAxis(
@@ -3957,7 +4321,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             GanttPalette palette,
             Font barFont,
             int slotVisibleFrom,
-            int slotVisibleToIncl) {
+            int slotVisibleToIncl,
+            double outerPad) {
         int n = Math.max(0, slotCount);
         int vf = Math.max(0, slotVisibleFrom);
         int vt = Math.min(n - 1, slotVisibleToIncl);
@@ -3966,16 +4331,19 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             vt = Math.max(0, n - 1);
         }
 
+        double bandTop = Math.max(0, outerPad);
+        double bandH = layout.rowHeight;
         Color band = palette.machineBandFill(machineGroupIndex);
         for (int i = vf; i <= vt; i++) {
             double x = i * layout.slotWidth;
             gc.setFill(band);
-            gc.fillRect(x, 0, layout.slotWidth, layout.rowHeight);
+            gc.fillRect(x, bandTop, layout.slotWidth, bandH);
         }
         gc.setStroke(palette.grid());
         gc.setLineWidth(0.35);
         for (int i = vf; i <= vt + 1 && i <= n; i++) {
-            gc.strokeLine(i * layout.slotWidth, 0, i * layout.slotWidth, layout.rowHeight);
+            double x = i * layout.slotWidth;
+            gc.strokeLine(x, bandTop, x, bandTop + bandH);
         }
 
         List<BarRun> runs = barRuns != null ? barRuns : List.of();
@@ -3983,9 +4351,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             if (run.toSlot() < vf || run.fromSlot() > vt) {
                 continue;
             }
-            fillBar(gc, run, layout, palette);
+            fillBar(gc, run, layout, palette, outerPad);
         }
-        drawBarLabelsOutside(gc, runs, layout, palette, barFont, vf, vt);
+        drawBarLabelsOutside(gc, runs, layout, palette, barFont, vf, vt, outerPad);
     }
 
     private static List<BarRun> collectBarRuns(List<String> slotTexts) {
@@ -4115,15 +4483,41 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 || kind == BarKind.BREAK_RESUME_PREP;
     }
 
-    /** 準備帯の薄い下地（ハッチ線は対色で上描き）。 */
+    /** 画面 Canvas 向け準備バー斜線ハッチの線幅（px）。 */
+    private static double prepHatchStrokeWidthPxScreen(double zoom) {
+        return Math.max(0.75, 0.85 * zoom);
+    }
+
+    /** 印刷ベクター向け準備バー斜線ハッチの線幅（px）。 */
+    private static double prepHatchStrokeWidthPxPrint(double zoom) {
+        return Math.max(0.45, 0.52 * zoom);
+    }
+
+    /** 準備バー斜線ハッチの線間隔（px）。 */
+    private static double prepHatchLineSpacingPx(double zoom) {
+        return Math.max(4.0, 5.0 * zoom);
+    }
+
+    /** 準備帯の薄い下地（ハッチ線は対色で上描き）。モノトーン時は明度のみで調整。 */
     private static Color prepHatchBackground(Color base) {
+        if (base.getSaturation() < 0.12) {
+            double bri = Math.min(0.96, Math.max(0.72, 0.52 + base.getBrightness() * 0.38));
+            return Color.gray(bri);
+        }
         double sat = Math.min(0.55, Math.max(0.18, base.getSaturation() * 0.42));
         double bri = Math.min(0.97, Math.max(0.78, base.getBrightness() * 0.35 + 0.58));
         return Color.hsb(base.getHue(), sat, bri, 0.92);
     }
 
-    /** 背景色の補色（色相 +180°）をベースに、明度でコントラストを確保。 */
+    /** 背景色の補色（色相 +180°）をベースに、明度でコントラストを確保。モノトーン時はグレー線。 */
     private static Color complementaryContrastStroke(Color background) {
+        if (background.getSaturation() < 0.12) {
+            double lum =
+                    0.2126 * background.getRed()
+                            + 0.7152 * background.getGreen()
+                            + 0.0722 * background.getBlue();
+            return lum > 0.62 ? Color.gray(0.28) : Color.gray(0.82);
+        }
         double h = (background.getHue() + 180.0) % 360.0;
         double s = Math.min(1.0, Math.max(0.45, background.getSaturation() * 0.75 + 0.2));
         double lum =
@@ -4166,9 +4560,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         gc.setFill(background);
         gc.fillRect(x, y, w, h);
         gc.setStroke(stroke);
-        double hatchW = Math.max(0.75, 0.85 * zoom);
+        double hatchW = prepHatchStrokeWidthPxScreen(zoom);
         gc.setLineWidth(hatchW);
-        double spacing = Math.max(4.0, 5.0 * zoom);
+        double spacing = prepHatchLineSpacingPx(zoom);
         double span = w + h;
         for (double offset = -h; offset < span; offset += spacing) {
             gc.strokeLine(x + offset, y + h, x + offset + h, y);
@@ -4180,7 +4574,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     private static void fillBar(
-            GraphicsContext gc, BarRun run, LayoutMetrics layout, GanttPalette palette) {
+            GraphicsContext gc,
+            BarRun run,
+            LayoutMetrics layout,
+            GanttPalette palette,
+            double outerPad) {
         int fromSlot = run.fromSlot();
         int toSlot = run.toSlot();
         double x = fromSlot * layout.slotWidth;
@@ -4196,8 +4594,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 };
         double arc = Math.max(2, 3 * layout.zoom);
         double inset = 0.5 * layout.zoom;
-        double barTop = 3 * layout.zoom;
-        double barH = layout.rowHeight - 2 * barTop;
+        double barTop = outerPad + 3 * layout.zoom;
+        double barH = layout.rowHeight - 2 * (3 * layout.zoom);
         double bx = x + inset;
         double bw = w - 2 * inset;
         if (isPrepHatchedBar(kind)) {
@@ -4218,7 +4616,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             GanttPalette palette,
             Font barFont,
             int slotVisibleFrom,
-            int slotVisibleToIncl) {
+            int slotVisibleToIncl,
+            double outerPad) {
         List<BarRun> sorted = new ArrayList<>();
         for (BarRun run : runs) {
             if (run.toSlot() < slotVisibleFrom || run.fromSlot() > slotVisibleToIncl) {
@@ -4230,59 +4629,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             return;
         }
         sorted.sort(Comparator.comparingInt(BarRun::fromSlot));
-        double inset = 0.5 * layout.zoom;
-        double barTop = 3 * layout.zoom;
-        double barH = layout.rowHeight - 2 * barTop;
-        double pad = 6 * layout.zoom;
-
-        List<double[]> aboveRanges = new ArrayList<>();
-        List<double[]> belowRanges = new ArrayList<>();
-
+        double barTop = outerPad + 3 * layout.zoom;
+        double barH = layout.rowHeight - 2 * (3 * layout.zoom);
+        double canvasH = outerPad + layout.rowHeight + outerPad;
         gc.setFont(barFont);
-
-        for (BarRun run : sorted) {
-            String full = run.text().replace('\n', ' ');
-            if (full.length() > 220) {
-                full = full.substring(0, 217) + "...";
-            }
-            if (full.isEmpty()) {
-                continue;
-            }
-            Color labelColor =
-                    switch (run.kind()) {
-                        case BREAK -> palette.barBreakText();
-                        case STARTUP -> palette.barStartupText();
-                        case REQUEST_SWITCH_PREP -> palette.barRequestSwitchPrepText();
-                        case BREAK_RESUME_PREP -> palette.barBreakResumePrepText();
-                        default -> palette.barDefaultText();
-                    };
-
-            double lx = run.fromSlot() * layout.slotWidth + inset + 3 * layout.zoom;
-            double tw = measureTextWidth(full, barFont);
-            double fh = measureTextHeight(full, barFont);
-            double rx = lx + tw;
-
-            boolean useAbove;
-            if (!horizontalHits(aboveRanges, lx, rx, pad)) {
-                useAbove = true;
-            } else if (!horizontalHits(belowRanges, lx, rx, pad)) {
-                useAbove = false;
-            } else {
-                useAbove = (run.fromSlot() & 1) == 0;
-            }
-            if (useAbove) {
-                aboveRanges.add(new double[] {lx, rx});
-            } else {
-                belowRanges.add(new double[] {lx, rx});
-            }
-
-            double baseline =
-                    useAbove
-                            ? barTop - fh * 0.35
-                            : barTop + barH + fh * 0.75;
-
-            gc.setFill(labelColor);
-            gc.fillText(full, lx, baseline);
+        for (PlannedBarOutsideLabel planned :
+                planBarOutsideLabelsThreeTiers(
+                        sorted, layout, palette, barFont, barTop, barH, canvasH)) {
+            double y = Math.clamp(planned.y(), 1, canvasH - 2);
+            gc.setFill(planned.color());
+            gc.fillText(planned.text(), planned.x(), y);
         }
     }
 
@@ -4299,13 +4655,19 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static double measureTextWidth(String s, Font f) {
         Text t = new Text(s != null ? s : "");
         t.setFont(f);
-        return t.getLayoutBounds().getWidth();
+        MEASURE_ROOT.getChildren().setAll(t);
+        t.applyCss();
+        double w = t.getLayoutBounds().getWidth();
+        return Double.isFinite(w) && w > 0 ? w : approxLatinDigitTextWidth(s != null ? s : "", f.getSize());
     }
 
     private static double measureTextHeight(String s, Font f) {
         Text t = new Text(s != null ? s : "");
         t.setFont(f);
-        return t.getLayoutBounds().getHeight();
+        MEASURE_ROOT.getChildren().setAll(t);
+        t.applyCss();
+        double h = t.getLayoutBounds().getHeight();
+        return Double.isFinite(h) && h > 0 ? h : f.getSize();
     }
 
     private enum BarKind {
@@ -4327,6 +4689,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     private static LocalTime parseTimeHeader(String col) {
+        return parseSlotColumnHeaderTime(col);
+    }
+
+    /** 列見出しが HH:MM スロットならその開始時刻。印刷の時刻窓フィルタ等で使用。 */
+    public static LocalTime parseSlotColumnHeaderTime(String col) {
         if (col == null) {
             return null;
         }

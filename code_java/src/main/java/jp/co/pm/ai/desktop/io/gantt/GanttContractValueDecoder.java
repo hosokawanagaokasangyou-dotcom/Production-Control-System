@@ -91,4 +91,11 @@ public final class GanttContractValueDecoder {
         }
         return null;
     }
+
+    public static LocalTime toLocalTime(Object o) {
+        if (o instanceof LocalTime lt) {
+            return lt;
+        }
+        return null;
+    }
 }

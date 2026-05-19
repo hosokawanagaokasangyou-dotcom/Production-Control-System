@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -33,10 +34,12 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.RadioButton;
 import javafx.scene.control.Slider;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -60,11 +63,14 @@ import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttContractSheetTableBuilder;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttSheetBundle;
+import jp.co.pm.ai.desktop.io.gantt.GanttContractValueDecoder;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.print.EquipmentGanttPrintCompositor;
 import jp.co.pm.ai.desktop.print.EquipmentGanttPrintDaySlices;
 import jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec;
+import jp.co.pm.ai.desktop.print.EquipmentGanttPrintTableData;
+import jp.co.pm.ai.desktop.print.EquipmentGanttPrintTimelineColumnDensifier;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
 import jp.co.pm.ai.desktop.ui.EquipmentGanttPersonBadgeWireDashStyle;
@@ -114,6 +120,29 @@ public final class EquipmentGanttGraphicTabController {
 
     @FXML
     private Button exportGanttPdfButton;
+
+    @FXML
+    private RadioButton printTimeModeRegularRadio;
+
+    @FXML
+    private RadioButton printTimeModeRangeRadio;
+
+    @FXML
+    private ToggleGroup printTimeModeToggleGroup;
+
+    @FXML
+    private TextField printTimeRangeStartField;
+
+    @FXML
+    private TextField printTimeRangeEndField;
+
+    @FXML
+    private Label printTimeRegularHintLabel;
+
+    /** 契約 JSON の {@code regular_shift_times}（定常 A15/B15 相当）。 */
+    private LocalTime loadedRegularShiftStart;
+
+    private LocalTime loadedRegularShiftEnd;
 
     @FXML
     private TextField planJsonField;
@@ -325,6 +354,8 @@ public final class EquipmentGanttGraphicTabController {
         }
         populateEquipmentGraphicBarFontComboItems();
         attachGraphicToolbarListeners();
+        attachPrintTimeRangeListeners();
+        refreshPrintTimeRegularHint();
     }
 
     /** FXML で定義済みのコントロールへ値変更リスナーを付ける（ノード生成は FXML 側）。 */
@@ -454,6 +485,110 @@ public final class EquipmentGanttGraphicTabController {
                             });
         }
         configurePersonBadgeWireToolbar(graphicCommitted);
+    }
+
+    private void attachPrintTimeRangeListeners() {
+        if (printTimeModeToggleGroup != null) {
+            printTimeModeToggleGroup
+                    .selectedToggleProperty()
+                    .addListener((o, a, b) -> updatePrintTimeRangeFieldsEnabled());
+        }
+        updatePrintTimeRangeFieldsEnabled();
+    }
+
+    private void updatePrintTimeRangeFieldsEnabled() {
+        boolean custom = printTimeModeRangeRadio != null && printTimeModeRangeRadio.isSelected();
+        if (printTimeRangeStartField != null) {
+            printTimeRangeStartField.setDisable(!custom);
+        }
+        if (printTimeRangeEndField != null) {
+            printTimeRangeEndField.setDisable(!custom);
+        }
+        if (printTimeRegularHintLabel != null) {
+            printTimeRegularHintLabel.setManaged(!custom);
+            printTimeRegularHintLabel.setVisible(!custom);
+        }
+    }
+
+    private void refreshPrintTimeRegularHint() {
+        if (printTimeRegularHintLabel == null) {
+            return;
+        }
+        if (loadedRegularShiftStart != null && loadedRegularShiftEnd != null) {
+            printTimeRegularHintLabel.setText(
+                    "（定常 "
+                            + formatHm(loadedRegularShiftStart)
+                            + "～"
+                            + formatHm(loadedRegularShiftEnd)
+                            + "）");
+        } else {
+            printTimeRegularHintLabel.setText("（定常時刻は契約 JSON に未設定）");
+        }
+    }
+
+    private void applyRegularShiftTimesToPrintFields() {
+        if (loadedRegularShiftStart == null || loadedRegularShiftEnd == null) {
+            return;
+        }
+        if (printTimeRangeStartField != null) {
+            printTimeRangeStartField.setText(formatHm(loadedRegularShiftStart));
+        }
+        if (printTimeRangeEndField != null) {
+            printTimeRangeEndField.setText(formatHm(loadedRegularShiftEnd));
+        }
+    }
+
+    private static String formatHm(LocalTime t) {
+        return t != null ? String.format("%d:%02d", t.getHour(), t.getMinute()) : "";
+    }
+
+    private record ResolvedPrintTimeRange(LocalTime startInclusive, LocalTime endExclusive) {}
+
+    /**
+     * 印刷用タイムライン列の半開区間。解決できないときは {@code null}（呼び出し側でメッセージ表示）。
+     */
+    private ResolvedPrintTimeRange resolvePrintTimeRangeForJob() {
+        if (printTimeModeRangeRadio != null && printTimeModeRangeRadio.isSelected()) {
+            LocalTime start = parseHmField(printTimeRangeStartField);
+            LocalTime end = parseHmField(printTimeRangeEndField);
+            if (start == null || end == null) {
+                return null;
+            }
+            if (!start.isBefore(end)) {
+                return null;
+            }
+            return new ResolvedPrintTimeRange(start, end);
+        }
+        if (loadedRegularShiftStart == null || loadedRegularShiftEnd == null) {
+            return null;
+        }
+        if (!loadedRegularShiftStart.isBefore(loadedRegularShiftEnd)) {
+            return null;
+        }
+        return new ResolvedPrintTimeRange(loadedRegularShiftStart, loadedRegularShiftEnd);
+    }
+
+    private static LocalTime parseHmField(TextField field) {
+        if (field == null) {
+            return null;
+        }
+        return parseHmText(field.getText());
+    }
+
+    private static LocalTime parseHmText(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String t = raw.strip();
+        var m = HH_MM_COLUMN_HEADER.matcher(t);
+        if (!m.matches()) {
+            return null;
+        }
+        try {
+            return LocalTime.of(Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private void configurePersonBadgeWireToolbar(Runnable graphicCommitted) {
@@ -1147,6 +1282,7 @@ public final class EquipmentGanttGraphicTabController {
             SheetLoad loaded = loadWorkbookSheetsForGraphic(planPath);
             Map<String, JsonTableIo.SheetTable> sheets = loaded.sheets();
             loadedContractBadgeRows = loaded.contractBadgeSlotRows();
+            loadRegularShiftTimesFromPlan(planPath);
             lastLoadedPlanPath = planPath.toString();
 
             Map<String, JsonTableIo.SheetTable> eligible = filterEquipmentTimelineSheets(sheets);
@@ -1278,6 +1414,9 @@ public final class EquipmentGanttGraphicTabController {
     private void resetGraphicState(String placeholderMsg, boolean clearBadgeSessionData) {
         lastGraphicSheet = null;
         loadedContractBadgeRows = null;
+        loadedRegularShiftStart = null;
+        loadedRegularShiftEnd = null;
+        refreshPrintTimeRegularHint();
         badgeRowsForCurrentGraphic = null;
         if (clearBadgeSessionData) {
             equipmentGanttGraphicDataFingerprint = "";
@@ -1477,20 +1616,47 @@ public final class EquipmentGanttGraphicTabController {
         if (stage == null) {
             return;
         }
+        ResolvedPrintTimeRange printRange = resolvePrintTimeRangeForJob();
+        if (printRange == null) {
+            if (statusLabel != null) {
+                if (printTimeModeRangeRadio != null && printTimeModeRangeRadio.isSelected()) {
+                    statusLabel.setText(
+                            "印刷の時刻範囲を HH:MM 形式で指定してください（開始＜終了）。");
+                } else {
+                    statusLabel.setText(
+                            "定常時刻が契約 JSON に無いか不正です。範囲指定に切り替えるか、段階2を再実行してください。");
+                }
+            }
+            return;
+        }
         ObservableList<ObservableList<String>> fullRows = toObservableRows(lastGraphicSheet);
         List<String> cols = lastGraphicSheet.columns();
+        EquipmentGanttPrintTableData printTable =
+                EquipmentGanttPrintTimelineColumnDensifier.densify(
+                        cols,
+                        fullRows,
+                        badgeRowsForCurrentGraphic,
+                        printRange.startInclusive(),
+                        printRange.endExclusive());
+        List<String> printCols = printTable.columns();
+        ObservableList<ObservableList<String>> printRows = printTable.rows();
         List<List<Integer>> groups =
-                EquipmentGanttPrintDaySlices.rowIndexGroupsOnePagePerDay(cols, fullRows);
+                EquipmentGanttPrintDaySlices.rowIndexGroupsOnePagePerDay(printCols, printRows);
         if (groups.isEmpty()) {
             if (statusLabel != null) {
                 statusLabel.setText("印刷する行がありません。");
             }
             return;
         }
-        int slotCols = EquipmentGraphicGanttPane.countTimeSlotHeadersInColumns(cols);
+        int slotCols = EquipmentGraphicGanttPane.countTimeSlotHeadersInColumns(printCols);
         if (slotCols <= 0) {
             if (statusLabel != null) {
-                statusLabel.setText("時刻列（HH:MM）が無いため印刷できません。");
+                statusLabel.setText(
+                        "指定した時刻範囲（"
+                                + formatHm(printRange.startInclusive())
+                                + "～"
+                                + formatHm(printRange.endExclusive())
+                                + "）に該当する時刻列がありません。");
             }
             return;
         }
@@ -1540,12 +1706,13 @@ public final class EquipmentGanttGraphicTabController {
         try {
             for (List<Integer> idxGroup : groups) {
                 ObservableList<ObservableList<String>> slice =
-                        EquipmentGanttPrintDaySlices.sliceRowsByIndices(fullRows, idxGroup);
+                        EquipmentGanttPrintDaySlices.sliceRowsByIndices(printRows, idxGroup);
                 List<List<String>> badgeSlice =
                         EquipmentGanttPrintDaySlices.sliceBadgeRowsAligned(
-                                badgeRowsForCurrentGraphic, idxGroup, slotCols);
+                                printTable.badgeSlotRows(), idxGroup, slotCols);
                 EquipmentGanttPrintPageSpec printSpec =
-                        equipmentGanttPrintPageSpec(cols, slice, badgeSlice);
+                        equipmentGanttPrintPageSpec(
+                                printCols, slice, badgeSlice, printRange);
                 Parent printRoot = EquipmentGanttPrintCompositor.composePage(printSpec, layout);
                 if (!job.printPage(layout, printRoot)) {
                     if (shell != null) {
@@ -1582,7 +1749,11 @@ public final class EquipmentGanttGraphicTabController {
             statusLabel.setText(
                     "印刷ジョブを送信しました（"
                             + okPages
-                            + " ページ・暦日 1 枚・A3 横・印刷専用レイアウト）。");
+                            + " ページ・時刻 "
+                            + formatHm(printRange.startInclusive())
+                            + "～"
+                            + formatHm(printRange.endExclusive())
+                            + "・A3 横）。");
         }
     }
 
@@ -1612,7 +1783,8 @@ public final class EquipmentGanttGraphicTabController {
     private EquipmentGanttPrintPageSpec equipmentGanttPrintPageSpec(
             List<String> columns,
             ObservableList<ObservableList<String>> rows,
-            List<List<String>> badgeSlotRowsSlice) {
+            List<List<String>> badgeSlotRowsSlice,
+            ResolvedPrintTimeRange printRange) {
         java.util.function.Function<String, PersonBadgeStyle> badgeResolver =
                 shell != null
                         ? shell.personBadgeStyleResolverForGantt()
@@ -1639,7 +1811,9 @@ public final class EquipmentGanttGraphicTabController {
                 snapshotEquipmentGanttPersonBadgeWireWidthPx(),
                 snapshotEquipmentGanttPersonBadgeWireDashStyleKey(),
                 snapshotEquipmentGanttPersonBadgeWireMaxLengthPx(),
-                snapshotEquipmentGanttPersonBadgeWireEnabled());
+                snapshotEquipmentGanttPersonBadgeWireEnabled(),
+                printRange != null ? printRange.startInclusive() : null,
+                printRange != null ? printRange.endExclusive() : null);
     }
 
     private static Printer findLikelyPdfPrinter() {
@@ -1750,6 +1924,41 @@ public final class EquipmentGanttGraphicTabController {
             }
         }
         return GanttSheetKind.DEFAULT;
+    }
+
+    /** 契約 JSON の {@code kwargs_packed.regular_shift_times} を読み、印刷「定常時刻」に使う。 */
+    private void loadRegularShiftTimesFromPlan(Path planJsonPath) {
+        loadedRegularShiftStart = null;
+        loadedRegularShiftEnd = null;
+        if (planJsonPath == null || !Files.isRegularFile(planJsonPath)) {
+            refreshPrintTimeRegularHint();
+            return;
+        }
+        Path contract = resolveContractJsonForPlanPath(planJsonPath);
+        if (contract == null || !Files.isRegularFile(contract)) {
+            refreshPrintTimeRegularHint();
+            return;
+        }
+        try {
+            JsonNode root =
+                    GANTT_CONTRACT_PEEK_OM.readTree(
+                            Files.readString(contract, StandardCharsets.UTF_8));
+            JsonNode packed = root.get("kwargs_packed");
+            if (packed == null || !packed.isObject()) {
+                refreshPrintTimeRegularHint();
+                return;
+            }
+            Object decoded = GanttContractValueDecoder.decodeValue(packed.get("regular_shift_times"));
+            if (decoded instanceof List<?> list && list.size() >= 2) {
+                loadedRegularShiftStart = GanttContractValueDecoder.toLocalTime(list.get(0));
+                loadedRegularShiftEnd = GanttContractValueDecoder.toLocalTime(list.get(1));
+            }
+        } catch (IOException | RuntimeException ignored) {
+            loadedRegularShiftStart = null;
+            loadedRegularShiftEnd = null;
+        }
+        applyRegularShiftTimesToPrintFields();
+        refreshPrintTimeRegularHint();
     }
 
     /**
