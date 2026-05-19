@@ -1383,243 +1383,487 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     /**
-     * 印刷専用：{@link jp.co.pm.ai.desktop.print.EquipmentGanttPrintCompositor} 向けに、ScrollPane を使わない平坦な
-     * ベクターチャートを組み立てる。
+     * 印刷専用デザイン（画面ガントの流用なし）。用紙可印刷領域いっぱいにレイアウトしたベクター {@link Pane} を返す。
+     *
+     * @see jp.co.pm.ai.desktop.print.EquipmentGanttPrintCompositor
      */
-    public static Parent composePrintPage(
-            jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec spec, double slotWidthPercent) {
-        BorderPane built = buildForPrintSpec(spec, slotWidthPercent);
-        return flattenBuiltGanttForPrint(built);
+    public static Parent buildDedicatedPrintSheet(
+            jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec spec,
+            double paperWidthPx,
+            double paperHeightPx) {
+        if (spec == null || !Double.isFinite(paperWidthPx) || !Double.isFinite(paperHeightPx)) {
+            return new StackPane();
+        }
+        double paperW = Math.max(2, paperWidthPx);
+        double paperH = Math.max(2, paperHeightPx);
+        RepairedGanttTable repaired =
+                RepairedGanttTable.from(spec.columns(), spec.rows(), spec.badgeSlotRows());
+        ParseResult parsed = parse(repaired.effCols(), repaired.effRows(), repaired.badgeEff());
+        if (parsed.slotColumnIndices().isEmpty()) {
+            Label msg = new Label("時刻列（HH:MM）を検出できませんでした。");
+            msg.setWrapText(true);
+            msg.setPadding(new Insets(16));
+            StackPane err = new StackPane(msg);
+            err.setPrefSize(paperW, paperH);
+            return err;
+        }
+        PrintSheetDims dims = computeDedicatedPrintDims(spec, paperW, paperH, repaired, parsed);
+        return assembleDedicatedPrintSheet(repaired.effCols(), parsed, dims, paperW, paperH, spec);
     }
 
-    /** 印刷前のスロット幅合わせ用に、左列・進捗・時刻軸・概算高さを測る（グリッドは構築しない）。 */
-    public static EquipmentGanttPrintMetrics measurePrintLayout(
-            jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec spec) {
-        RepairedGanttTable repairedTable =
-                RepairedGanttTable.from(spec.columns(), spec.rows(), spec.badgeSlotRows());
-        ParseResult parsed = parse(repairedTable.effCols(), repairedTable.effRows(), repairedTable.badgeEff());
-        LayoutMetrics layout =
+    private static final double PRINT_SHEET_PAD = 8;
+    private static final double PRINT_HEADER_H = 34;
+    private static final double PRINT_SECTION_H = 22;
+    private static final double PRINT_MIN_ROW_H = 14;
+    private static final double PRINT_MAX_ROW_H = 40;
+    private static final double PRINT_DATE_COL_W = 38;
+    private static final double PRINT_MIN_MACHINE_W = 76;
+    private static final double PRINT_MAX_MACHINE_W = 128;
+    private static final double PRINT_MIN_PROCESS_W = 68;
+    private static final double PRINT_MAX_PROCESS_W = 148;
+    private static final int PRINT_PROGRESS_CELL_W = 46;
+
+    private record PrintSheetDims(
+            double pad,
+            double headerH,
+            double sectionH,
+            double rowBodyH,
+            double outerPad,
+            double dateW,
+            double machW,
+            double procW,
+            double timelineW,
+            double slotWidth,
+            int progressCellW,
+            int progressGap,
+            int progressCount,
+            double contentW,
+            LayoutMetrics layout,
+            GanttPalette palette,
+            Font barFont) {}
+
+    private static PrintSheetDims computeDedicatedPrintDims(
+            jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec spec,
+            double paperW,
+            double paperH,
+            RepairedGanttTable repaired,
+            ParseResult parsed) {
+        GanttPalette palette = GanttPalette.forTheme(DesktopTheme.LIGHT);
+        LayoutMetrics probe =
                 LayoutMetrics.fromScales(
-                        spec.zoom(),
+                        Math.clamp(spec.zoom(), 0.5, 2.0),
                         spec.rowHeightPercent(),
-                        spec.slotWidthPercent(),
+                        100,
                         spec.barFontPercent(),
                         spec.headerHeightPercent());
         List<MachineColumnPlan> machPlans =
-                computeMachineColumnPlans(repairedTable.effCols(), parsed.displayRows());
+                computeMachineColumnPlans(repaired.effCols(), parsed.displayRows());
         MeasuredLeftWidths auto =
-                measureAutoLeftWidths(repairedTable.effCols(), parsed, machPlans, layout);
-        double dateW = effectiveLeftColWidth(auto.dateW(), spec.dateColWidthOverridePx());
-        double machW = effectiveLeftColWidth(auto.machW(), spec.machineColWidthOverridePx());
-        double procW = effectiveLeftColWidth(auto.procW(), spec.processColWidthOverridePx());
-        double leftTotal = dateW + machW + procW;
-        int progCell = layout.progressCellWidth;
-        int gap = layout.progressGap;
+                measureAutoLeftWidths(repaired.effCols(), parsed, machPlans, probe);
+        double dateW =
+                clampPrintCol(
+                        effectiveLeftColWidth(auto.dateW(), spec.dateColWidthOverridePx()),
+                        PRINT_DATE_COL_W,
+                        PRINT_DATE_COL_W);
+        double machW =
+                clampPrintCol(
+                        effectiveLeftColWidth(auto.machW(), spec.machineColWidthOverridePx()),
+                        PRINT_MIN_MACHINE_W,
+                        PRINT_MAX_MACHINE_W);
+        double procW =
+                clampPrintCol(
+                        effectiveLeftColWidth(auto.procW(), spec.processColWidthOverridePx()),
+                        PRINT_MIN_PROCESS_W,
+                        PRINT_MAX_PROCESS_W);
+        int progressCount = parsed.progressColumnIndices().size();
+        int progressGap = probe.progressGap;
         int progressTotal =
-                parsed.progressColumnIndices().size() * progCell
-                        + Math.max(0, parsed.progressColumnIndices().size() - 1) * gap;
-        int slotColCount = parsed.slotColumnIndices().size();
-        double timelineWidth = slotColCount * layout.slotWidth;
-        double bodyH = estimatePrintBodyHeight(parsed, layout);
-        double contentH = layout.headerHeight + bodyH;
-        double contentW = leftTotal + timelineWidth + progressTotal;
-        return new EquipmentGanttPrintMetrics(
-                contentW, contentH, timelineWidth, leftTotal, progressTotal);
-    }
+                progressCount * PRINT_PROGRESS_CELL_W
+                        + Math.max(0, progressCount - 1) * progressGap;
+        double contentW = paperW - 2 * PRINT_SHEET_PAD;
+        int slotCount = Math.max(1, parsed.slotColumnIndices().size());
+        double timelineW = Math.max(1.0, contentW - dateW - machW - procW - progressTotal);
+        double slotWidth = timelineW / slotCount;
 
-    private static double estimatePrintBodyHeight(ParseResult parsed, LayoutMetrics layout) {
-        double timelineOuterPad =
-                Math.min(
-                        layout.rowHeight * 0.32,
-                        Math.max(5 * layout.zoom, layout.barFontSize * 0.9));
-        double cellBodyH = layout.rowHeight + 2 * timelineOuterPad;
-        double y = 0;
+        int sectionRows = 0;
+        int dataRows = 0;
         for (DisplayRow dr : parsed.displayRows()) {
             if (dr.sectionBanner() != null) {
-                y += layout.sectionRowHeight;
+                sectionRows++;
             } else {
-                y += cellBodyH;
+                dataRows++;
             }
         }
-        return y;
+        double availableBody =
+                paperH - 2 * PRINT_SHEET_PAD - PRINT_HEADER_H - sectionRows * PRINT_SECTION_H;
+        double rowBodyH =
+                dataRows > 0
+                        ? Math.clamp(availableBody / dataRows - 4, PRINT_MIN_ROW_H, PRINT_MAX_ROW_H)
+                        : PRINT_MIN_ROW_H;
+        double outerPad = Math.min(rowBodyH * 0.22, 4);
+        double barFontPx = Math.clamp(rowBodyH * 0.42, 7, 12);
+        LayoutMetrics layout =
+                new LayoutMetrics(
+                        1.0,
+                        slotWidth,
+                        rowBodyH,
+                        PRINT_SECTION_H,
+                        PRINT_HEADER_H,
+                        probe.labelMinWidth,
+                        probe.labelMaxWidth,
+                        Math.clamp(rowBodyH * 0.48, 8, 13),
+                        10,
+                        barFontPx,
+                        Math.max(8, barFontPx - 1),
+                        PRINT_PROGRESS_CELL_W,
+                        progressGap);
+        Font barFont = resolveBarFont(spec.barFontFamily(), layout.barFontSize);
+        return new PrintSheetDims(
+                PRINT_SHEET_PAD,
+                PRINT_HEADER_H,
+                PRINT_SECTION_H,
+                rowBodyH,
+                outerPad,
+                dateW,
+                machW,
+                procW,
+                timelineW,
+                slotWidth,
+                PRINT_PROGRESS_CELL_W,
+                progressGap,
+                progressCount,
+                contentW,
+                layout,
+                palette,
+                barFont);
     }
 
-    private static BorderPane buildForPrintSpec(
-            jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec spec, double slotWidthPercent) {
-        return build(
-                spec.columns(),
-                spec.rows(),
-                DesktopTheme.LIGHT,
-                spec.zoom(),
-                spec.rowHeightPercent(),
-                slotWidthPercent,
-                spec.barFontFamily(),
-                spec.barFontPercent(),
-                spec.headerHeightPercent(),
-                spec.dateColWidthOverridePx(),
-                spec.machineColWidthOverridePx(),
-                spec.processColWidthOverridePx(),
-                200.0,
-                spec.badgeSlotRows(),
-                spec.showPersonBadges(),
-                spec.personBadgeStyleResolver(),
-                spec.personBadgeGapPx(),
-                spec.personBadgeBandVerticalOffsetPx(),
-                false,
-                spec.personBadgeDragDeltas(),
-                null,
-                spec.personBadgeWireStrokeHex(),
-                spec.personBadgeWireWidthPx(),
-                spec.personBadgeWireDashStyleKey(),
-                spec.personBadgeWireMaxLengthPx(),
-                spec.showPersonBadgeWires(),
-                true);
+    private static double clampPrintCol(double measured, double min, double max) {
+        if (!Double.isFinite(measured) || measured <= 0) {
+            return min;
+        }
+        return Math.clamp(measured, min, max);
     }
 
-    /**
-     * 画面用 {@link #build} 結果から ScrollPane を外し、印刷用の固定サイズ {@link VBox} にする。
-     */
-    private static Parent flattenBuiltGanttForPrint(BorderPane root) {
-        if (root == null) {
-            return new VBox();
-        }
-        root.setBottom(null);
-        Object ud = root.getUserData();
-        if (!(ud instanceof EquipmentGanttViewHandles handles)) {
-            return root;
+    private static Parent assembleDedicatedPrintSheet(
+            List<String> effCols,
+            ParseResult parsed,
+            PrintSheetDims dims,
+            double paperW,
+            double paperH,
+            jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec spec) {
+        Pane sheet = new Pane();
+        sheet.setPrefSize(paperW, paperH);
+        sheet.setMinSize(paperW, paperH);
+        sheet.setMaxSize(paperW, paperH);
+        sheet.setCache(false);
+
+        Rectangle pageBg = new Rectangle(0, 0, paperW, paperH);
+        pageBg.setFill(Color.WHITE);
+        sheet.getChildren().add(pageBg);
+
+        double y = dims.pad();
+        HBox header = buildDedicatedPrintHeader(parsed, dims);
+        header.setLayoutX(dims.pad());
+        header.setLayoutY(y);
+        sheet.getChildren().add(header);
+        y += dims.headerH();
+
+        List<MachineColumnPlan> machPlans = computeMachineColumnPlans(effCols, parsed.displayRows());
+        List<DateColumnPlan> datePlans = computeDateColumnPlans(effCols, parsed.displayRows());
+        int machineColorSeq = -1;
+        double cellBodyH = dims.rowBodyH() + 2 * dims.outerPad();
+
+        for (int ri = 0; ri < parsed.displayRows().size(); ri++) {
+            DisplayRow dr = parsed.displayRows().get(ri);
+            if (dr.sectionBanner() != null) {
+                Pane sec = buildDedicatedPrintSectionRow(dr.sectionBanner(), dims);
+                sec.setLayoutX(dims.pad());
+                sec.setLayoutY(y);
+                sheet.getChildren().add(sec);
+                y += dims.sectionH();
+                continue;
+            }
+            MachineColumnPlan mplan = machPlans.get(ri);
+            if (mplan == null) {
+                mplan =
+                        new MachineColumnPlan(
+                                false, dr.machineLine() != null ? dr.machineLine() : "", 1);
+            }
+            if (!mplan.continuation()) {
+                machineColorSeq++;
+            }
+            int machineGroupIndex = Math.max(0, machineColorSeq);
+            DateColumnPlan dplan = datePlans.get(ri);
+            if (dplan == null) {
+                dplan = new DateColumnPlan(false, "", 1);
+            }
+            HBox row =
+                    buildDedicatedPrintDataRow(
+                            dr, mplan, dplan, machineGroupIndex, dims, parsed, spec, cellBodyH);
+            row.setLayoutX(dims.pad());
+            row.setLayoutY(y);
+            sheet.getChildren().add(row);
+            y += cellBodyH;
         }
 
-        double cw = Math.max(1.0, handles.printContentWidth());
-        double ch = Math.max(1.0, handles.printContentHeight());
-        double headerH = Math.max(1.0, handles.headRow() != null ? handles.headRow().getPrefHeight() : 0);
-
-        GridPane leftGrid = detachGrid(handles.leftBodyScroll());
-        GridPane rightGrid = detachGrid(handles.timelineScroll());
-        HBox headRow = flattenHeaderRow(handles);
-
-        if (leftGrid != null) {
-            leftGrid.setMinWidth(handles.printLeftWidth());
-            leftGrid.setPrefWidth(handles.printLeftWidth());
-            leftGrid.setMaxWidth(handles.printLeftWidth());
+        if (sheet.getScene() == null) {
+            new Scene(sheet, paperW, paperH, Color.WHITE);
         }
-        if (rightGrid != null) {
-            double rightW = Math.max(1.0, cw - handles.printLeftWidth());
-            rightGrid.setMinWidth(rightW);
-            rightGrid.setPrefWidth(rightW);
-            rightGrid.setMaxWidth(rightW);
-        }
-
-        double bodyH = Math.max(1.0, ch - headerH);
-        HBox bodyRow = new HBox(0);
-        if (leftGrid != null) {
-            bodyRow.getChildren().add(leftGrid);
-        }
-        if (rightGrid != null) {
-            bodyRow.getChildren().add(rightGrid);
-            HBox.setHgrow(rightGrid, Priority.ALWAYS);
-        }
-        bodyRow.setMinSize(cw, bodyH);
-        bodyRow.setPrefSize(cw, bodyH);
-        bodyRow.setMaxSize(cw, bodyH);
-        bodyRow.setAlignment(Pos.TOP_LEFT);
-
-        VBox chart = new VBox(0);
-        if (headRow != null) {
-            headRow.setMinSize(cw, headerH);
-            headRow.setPrefSize(cw, headerH);
-            headRow.setMaxSize(cw, headerH);
-            chart.getChildren().add(headRow);
-        }
-        chart.getChildren().add(bodyRow);
-        chart.setMinSize(cw, ch);
-        chart.setPrefSize(cw, ch);
-        chart.setMaxSize(cw, ch);
-        chart.setFillWidth(true);
-        chart.setCache(false);
-
-        VBox main = handles.mainColumn();
-        if (main != null) {
-            hidePrintWarningInColumn(main);
-        }
-
-        chart.setUserData(
-                new EquipmentGanttPrintMetrics(
-                        cw,
-                        ch,
-                        handles.printTimelineWidth(),
-                        handles.printLeftWidth(),
-                        Math.max(0, cw - handles.printLeftWidth() - handles.printTimelineWidth())));
-
-        if (chart.getScene() == null) {
-            new Scene(chart, cw, ch, Color.WHITE);
-        }
-        chart.applyCss();
-        chart.layout();
-        return chart;
+        sheet.applyCss();
+        sheet.layout();
+        return sheet;
     }
 
-    private static void hidePrintWarningInColumn(VBox main) {
-        if (main.getChildren().isEmpty()) {
-            return;
-        }
-        Node first = main.getChildren().get(0);
-        if (first instanceof Label) {
-            first.setVisible(false);
-            first.setManaged(false);
-        }
-    }
-
-    private static GridPane detachGrid(ScrollPane scroll) {
-        if (scroll == null) {
-            return null;
-        }
-        Node content = scroll.getContent();
-        scroll.setContent(null);
-        if (content instanceof GridPane grid) {
-            return grid;
-        }
-        return null;
-    }
-
-    private static HBox flattenHeaderRow(EquipmentGanttViewHandles handles) {
-        HBox head = handles.headRow();
-        if (head == null) {
-            return null;
-        }
-        if (!head.getChildren().isEmpty()) {
-            Node left = head.getChildren().get(0);
-            if (left instanceof HBox leftHead) {
-                try {
-                    leftHead.minWidthProperty().unbind();
-                } catch (RuntimeException ignored) {
-                    // 未バインド
+    private static HBox buildDedicatedPrintHeader(ParseResult parsed, PrintSheetDims dims) {
+        Label hDate = new Label("");
+        Label hMach = new Label("機械名");
+        Label hProc = new Label("工程名");
+        applyDedicatedPrintHeaderLabel(hDate, dims.dateW(), dims);
+        applyDedicatedPrintHeaderLabel(hMach, dims.machW(), dims);
+        applyDedicatedPrintHeaderLabel(hProc, dims.procW(), dims);
+        Pane timeAxis = buildDedicatedPrintTimeAxis(parsed, dims);
+        HBox header = new HBox(0, hDate, hMach, hProc, timeAxis);
+        if (dims.progressCount() > 0) {
+            for (int i = 0; i < dims.progressCount(); i++) {
+                Label ph = new Label(i == 0 ? "進捗" : "");
+                applyDedicatedPrintHeaderLabel(ph, dims.progressCellW(), dims);
+                if (i > 0) {
+                    Region gap = new Region();
+                    gap.setMinWidth(dims.progressGap());
+                    gap.setPrefWidth(dims.progressGap());
+                    header.getChildren().add(gap);
                 }
-                double lw = handles.printLeftWidth();
-                if (lw > 0.5) {
-                    leftHead.setMinWidth(lw);
-                    leftHead.setPrefWidth(lw);
-                    leftHead.setMaxWidth(lw);
+                header.getChildren().add(ph);
+            }
+        }
+        header.setMinSize(dims.contentW(), dims.headerH());
+        header.setPrefSize(dims.contentW(), dims.headerH());
+        header.setMaxSize(dims.contentW(), dims.headerH());
+        return header;
+    }
+
+    private static void applyDedicatedPrintHeaderLabel(Label lb, double colW, PrintSheetDims dims) {
+        lb.setMinWidth(colW);
+        lb.setPrefWidth(colW);
+        lb.setMaxWidth(colW);
+        lb.setMinHeight(dims.headerH());
+        lb.setPrefHeight(dims.headerH());
+        lb.setMaxHeight(dims.headerH());
+        lb.setAlignment(Pos.CENTER);
+        lb.setFont(Font.font(11));
+        lb.setStyle(
+                "-fx-background-color: #4472c4; -fx-text-fill: white; -fx-border-color: #bfbfbf;"
+                        + " -fx-border-width: 0 1 1 0;");
+    }
+
+    private static Pane buildDedicatedPrintTimeAxis(ParseResult parsed, PrintSheetDims dims) {
+        double timelineW = dims.timelineW();
+        double headerH = dims.headerH();
+        Pane pane = new Pane();
+        pane.setMinSize(timelineW, headerH);
+        pane.setPrefSize(timelineW, headerH);
+        pane.setMaxSize(timelineW, headerH);
+        Rectangle bg = new Rectangle(0, 0, timelineW, headerH);
+        bg.setFill(dims.palette().headerAxis());
+        pane.getChildren().add(bg);
+        int n = parsed.slotColumnIndices().size();
+        if (n <= 0) {
+            return pane;
+        }
+        Color grid = dims.palette().grid();
+        double slotW = dims.slotWidth();
+        for (int i = 0; i <= n; i++) {
+            double x = i * slotW;
+            Line vl = new Line(x, 0, x, headerH);
+            vl.setStroke(grid);
+            vl.setStrokeWidth(0.4);
+            pane.getChildren().add(vl);
+        }
+        Rectangle border = new Rectangle(0, 0, timelineW, headerH);
+        border.setFill(Color.TRANSPARENT);
+        border.setStroke(grid);
+        border.setStrokeWidth(0.4);
+        pane.getChildren().add(border);
+        int slotMin = Math.max(1, parsed.slotMinutes());
+        int labelStep = dedicatedPrintTimeLabelStep(n, slotMin, slotW);
+        double fontSize = Math.min(11, Math.max(8, slotW * 0.75));
+        DateTimeFormatter tf = DateTimeFormatter.ofPattern("H:mm");
+        LocalTime t0 = parsed.slotBaseTime();
+        for (int i = 0; i < n; i += labelStep) {
+            String label = t0.plusMinutes((long) i * slotMin).format(tf);
+            Text txt = new Text(label);
+            txt.setFill(dims.palette().axisLabel());
+            txt.setFont(Font.font(fontSize));
+            double bandW = labelStep * slotW;
+            double tw = approxLatinDigitTextWidth(label, fontSize);
+            txt.setLayoutX(i * slotW + Math.max(2, (bandW - tw) * 0.5));
+            txt.setLayoutY(headerH - fontSize - 5);
+            pane.getChildren().add(txt);
+        }
+        return pane;
+    }
+
+    private static int dedicatedPrintTimeLabelStep(int slotCount, int slotMinutes, double slotWidthPx) {
+        int minPx = 34;
+        int perSlot = Math.max(1, (int) Math.ceil(minPx / Math.max(1, slotWidthPx)));
+        int perHour = Math.max(1, 60 / Math.max(1, slotMinutes));
+        int step = Math.max(perSlot, perHour);
+        while (slotCount > 0 && slotCount / step > 40) {
+            step *= 2;
+        }
+        return Math.max(1, step);
+    }
+
+    private static Pane buildDedicatedPrintSectionRow(String banner, PrintSheetDims dims) {
+        Pane row = new Pane();
+        row.setMinSize(dims.contentW(), dims.sectionH());
+        row.setPrefSize(dims.contentW(), dims.sectionH());
+        row.setMaxSize(dims.contentW(), dims.sectionH());
+        Rectangle bg = new Rectangle(0, 0, dims.contentW(), dims.sectionH());
+        bg.setFill(Color.web("#1e293b"));
+        row.getChildren().add(bg);
+        Text t = new Text(banner != null ? banner : "");
+        t.setFill(Color.web("#f1f5f9"));
+        t.setFont(Font.font(11));
+        t.setLayoutX(8);
+        t.setLayoutY(dims.sectionH() * 0.72);
+        row.getChildren().add(t);
+        return row;
+    }
+
+    private static HBox buildDedicatedPrintDataRow(
+            DisplayRow dr,
+            MachineColumnPlan mplan,
+            DateColumnPlan dplan,
+            int machineGroupIndex,
+            PrintSheetDims dims,
+            ParseResult parsed,
+            jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec spec,
+            double cellBodyH) {
+        List<Node> parts = new ArrayList<>();
+        if (!dplan.continuation()) {
+            parts.add(buildDedicatedPrintDateCell(dplan.dateText(), dplan.rowSpan(), dims, machineGroupIndex, cellBodyH));
+        } else {
+            parts.add(placeholderCol(dims.dateW(), cellBodyH));
+        }
+        if (!mplan.continuation()) {
+            parts.add(
+                    buildDedicatedPrintMachineCell(
+                            mplan.machineCellText(), mplan.rowSpan(), dims, machineGroupIndex, cellBodyH));
+        } else {
+            parts.add(placeholderCol(dims.machW(), cellBodyH));
+        }
+        parts.add(
+                buildDedicatedPrintProcessCell(
+                        dr.processBlock() != null ? dr.processBlock() : "", dims, machineGroupIndex, cellBodyH));
+        List<BarRun> barRuns = collectBarRuns(dr.cellsInSlots());
+        Pane timeline =
+                buildVectorTimelineRowPane(
+                        barRuns,
+                        dr.cellsInSlots().size(),
+                        machineGroupIndex,
+                        dims.timelineW(),
+                        cellBodyH,
+                        dims.outerPad(),
+                        dims.layout(),
+                        dims.palette(),
+                        dims.barFont());
+        parts.add(timeline);
+        if (dims.progressCount() > 0) {
+            int gap = dims.progressGap();
+            for (int pi = 0; pi < dims.progressCount(); pi++) {
+                if (pi > 0 && gap > 0) {
+                    parts.add(placeholderCol(gap, cellBodyH));
                 }
+                int pc = parsed.progressColumnIndices().get(pi);
+                String pv =
+                        dr.rawRow().size() > pc && dr.rawRow().get(pc) != null
+                                ? dr.rawRow().get(pc).strip()
+                                : "";
+                parts.add(
+                        buildDedicatedPrintProgressCell(pv, dims, machineGroupIndex, cellBodyH));
             }
         }
-        HBox headerContent = handles.headerRightContent();
-        if (head.getChildren().size() >= 2 && head.getChildren().get(1) instanceof ScrollPane headerScroll) {
-            Node content = headerScroll.getContent();
-            headerScroll.setContent(null);
-            if (content != null) {
-                head.getChildren().set(1, content);
-            } else if (headerContent != null) {
-                head.getChildren().set(1, headerContent);
-            }
-        }
-        if (headerContent != null) {
-            double headerRightW =
-                    Math.max(1.0, handles.printContentWidth() - handles.printLeftWidth());
-            headerContent.setMinWidth(headerRightW);
-            headerContent.setPrefWidth(headerRightW);
-            headerContent.setMaxWidth(headerRightW);
-        }
-        return head;
+        HBox row = new HBox(0, parts.toArray(Node[]::new));
+        row.setMinSize(dims.contentW(), cellBodyH);
+        row.setPrefSize(dims.contentW(), cellBodyH);
+        row.setMaxSize(dims.contentW(), cellBodyH);
+        row.setAlignment(Pos.TOP_LEFT);
+        return row;
+    }
+
+    private static Region placeholderCol(double w, double h) {
+        Region r = new Region();
+        r.setMinSize(w, h);
+        r.setPrefSize(w, h);
+        r.setMaxSize(w, h);
+        return r;
+    }
+
+    private static StackPane buildDedicatedPrintDateCell(
+            String dateText,
+            int rowSpan,
+            PrintSheetDims dims,
+            int machineGroupIndex,
+            double cellBodyH) {
+        double h = cellBodyH;
+        StackPane wrap = new StackPane();
+        wrap.setMinSize(dims.dateW(), h);
+        wrap.setPrefSize(dims.dateW(), h);
+        wrap.setMaxSize(dims.dateW(), h);
+        wrap.setStyle(dims.palette().machineSideCellCss(machineGroupIndex));
+        Text dt = new Text(dateText != null ? dateText : "");
+        dt.setFont(Font.font(dims.layout().rowLabelFontSize * 0.9));
+        dt.setFill(Color.web(dims.palette().machineSideTextFill()));
+        dt.setRotate(-90);
+        StackPane.setAlignment(dt, Pos.CENTER);
+        wrap.getChildren().add(dt);
+        return wrap;
+    }
+
+    private static Label buildDedicatedPrintMachineCell(
+            String text,
+            int rowSpan,
+            PrintSheetDims dims,
+            int machineGroupIndex,
+            double cellBodyH) {
+        double h = cellBodyH;
+        Label lb = new Label(text != null ? text : "");
+        lb.setMinSize(dims.machW(), h);
+        lb.setPrefSize(dims.machW(), h);
+        lb.setMaxSize(dims.machW(), h);
+        lb.setWrapText(true);
+        lb.setAlignment(Pos.TOP_LEFT);
+        lb.setStyle(dims.palette().machineSideCellCss(machineGroupIndex));
+        fitFontIntoColumn(lb, text, dims.machW() - 8, h - 4, dims.layout().rowLabelFontSize);
+        return lb;
+    }
+
+    private static Label buildDedicatedPrintProcessCell(
+            String text, PrintSheetDims dims, int machineGroupIndex, double cellBodyH) {
+        Label lb = new Label(text != null ? text : "");
+        lb.setMinSize(dims.procW(), cellBodyH);
+        lb.setPrefSize(dims.procW(), cellBodyH);
+        lb.setMaxSize(dims.procW(), cellBodyH);
+        lb.setWrapText(true);
+        lb.setAlignment(Pos.CENTER_LEFT);
+        lb.setStyle(dims.palette().machineSideCellCss(machineGroupIndex));
+        fitFontIntoColumn(lb, text, dims.procW() - 8, cellBodyH - 4, dims.layout().rowLabelFontSize);
+        return lb;
+    }
+
+    private static Label buildDedicatedPrintProgressCell(
+            String text, PrintSheetDims dims, int machineGroupIndex, double cellBodyH) {
+        Label lb = new Label(text);
+        lb.setMinSize(dims.progressCellW(), cellBodyH);
+        lb.setPrefSize(dims.progressCellW(), cellBodyH);
+        lb.setMaxSize(dims.progressCellW(), cellBodyH);
+        lb.setWrapText(true);
+        lb.setAlignment(Pos.CENTER);
+        lb.setFont(Font.font(dims.layout().progressFontSize));
+        lb.setStyle(dims.palette().machineSideCellCss(machineGroupIndex));
+        return lb;
     }
 
     /**

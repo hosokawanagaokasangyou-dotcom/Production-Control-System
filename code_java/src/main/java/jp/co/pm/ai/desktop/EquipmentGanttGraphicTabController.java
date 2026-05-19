@@ -1585,7 +1585,7 @@ public final class EquipmentGanttGraphicTabController {
             statusLabel.setText(
                     "印刷ジョブを送信しました（"
                             + okPages
-                            + " ページ・暦日 1 枚・印刷専用組み立て・ダイアログの用紙設定に従います）。");
+                            + " ページ・暦日 1 枚・印刷専用レイアウト・ダイアログの用紙設定に従います）。");
         }
     }
 
