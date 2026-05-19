@@ -1784,14 +1784,18 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         if (!dplan.continuation()) {
             parts.add(buildDedicatedPrintDateCell(dplan.dateText(), dplan.rowSpan(), dims, machineGroupIndex, cellBodyH));
         } else {
-            parts.add(placeholderCol(dims.dateW(), cellBodyH));
+            parts.add(
+                    buildDedicatedPrintSideSpacer(
+                            dims.dateW(), cellBodyH, dims.palette(), machineGroupIndex));
         }
         if (!mplan.continuation()) {
             parts.add(
                     buildDedicatedPrintMachineCell(
                             mplan.machineCellText(), mplan.rowSpan(), dims, machineGroupIndex, cellBodyH));
         } else {
-            parts.add(placeholderCol(dims.machW(), cellBodyH));
+            parts.add(
+                    buildDedicatedPrintSideSpacer(
+                            dims.machW(), cellBodyH, dims.palette(), machineGroupIndex));
         }
         parts.add(
                 buildDedicatedPrintProcessCell(
@@ -1837,6 +1841,19 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         r.setMinSize(w, h);
         r.setPrefSize(w, h);
         r.setMaxSize(w, h);
+        return r;
+    }
+
+    /**
+     * 日付・機械名の縦結合における「続き行」用。背景と右・下罫線をデータセルと揃え、機械名列の縦線が途切れないようにする。
+     */
+    private static Region buildDedicatedPrintSideSpacer(
+            double w, double h, GanttPalette palette, int machineGroupIndex) {
+        Region r = new Region();
+        r.setMinSize(w, h);
+        r.setPrefSize(w, h);
+        r.setMaxSize(w, h);
+        r.setStyle(palette.machineSideCellCss(machineGroupIndex));
         return r;
     }
 
