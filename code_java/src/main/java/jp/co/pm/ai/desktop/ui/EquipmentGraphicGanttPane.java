@@ -1637,9 +1637,31 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             if (dplan == null) {
                 dplan = new DateColumnPlan(false, "", 1);
             }
+            int dateSpan = Math.max(1, dplan.rowSpan());
+            boolean dateAsOverlay = !dplan.continuation() && dateSpan > 1;
+            if (dateAsOverlay) {
+                StackPane datePane =
+                        buildDedicatedPrintDateCell(
+                                dplan.dateText(),
+                                dims.dateW(),
+                                dateSpan * cellBodyH,
+                                dims,
+                                machineGroupIndex);
+                datePane.setLayoutX(dims.pad());
+                datePane.setLayoutY(y);
+                sheet.getChildren().add(datePane);
+            }
             HBox row =
                     buildDedicatedPrintDataRow(
-                            dr, mplan, dplan, machineGroupIndex, dims, parsed, spec, cellBodyH);
+                            dr,
+                            mplan,
+                            dplan,
+                            machineGroupIndex,
+                            dims,
+                            parsed,
+                            spec,
+                            cellBodyH,
+                            dateAsOverlay || dplan.continuation());
             row.setLayoutX(dims.pad());
             row.setLayoutY(y);
             sheet.getChildren().add(row);
@@ -1779,14 +1801,21 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             PrintSheetDims dims,
             ParseResult parsed,
             jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec spec,
-            double cellBodyH) {
+            double cellBodyH,
+            boolean dateSpacerInRow) {
         List<Node> parts = new ArrayList<>();
-        if (!dplan.continuation()) {
-            parts.add(buildDedicatedPrintDateCell(dplan.dateText(), dplan.rowSpan(), dims, machineGroupIndex, cellBodyH));
-        } else {
+        if (dateSpacerInRow) {
             parts.add(
                     buildDedicatedPrintSideSpacer(
                             dims.dateW(), cellBodyH, dims.palette(), machineGroupIndex));
+        } else {
+            parts.add(
+                    buildDedicatedPrintDateCell(
+                            dplan.dateText(),
+                            dims.dateW(),
+                            cellBodyH,
+                            dims,
+                            machineGroupIndex));
         }
         if (!mplan.continuation()) {
             parts.add(
@@ -1859,22 +1888,31 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
     private static StackPane buildDedicatedPrintDateCell(
             String dateText,
-            int rowSpan,
+            double cellW,
+            double cellH,
             PrintSheetDims dims,
-            int machineGroupIndex,
-            double cellBodyH) {
-        double h = cellBodyH;
+            int machineGroupIndex) {
         StackPane wrap = new StackPane();
-        wrap.setMinSize(dims.dateW(), h);
-        wrap.setPrefSize(dims.dateW(), h);
-        wrap.setMaxSize(dims.dateW(), h);
+        wrap.setMinSize(cellW, cellH);
+        wrap.setPrefSize(cellW, cellH);
+        wrap.setMaxSize(cellW, cellH);
+        wrap.setAlignment(Pos.CENTER);
         wrap.setStyle(dims.palette().machineSideCellCss(machineGroupIndex));
-        Text dt = new Text(dateText != null ? dateText : "");
-        dt.setFont(Font.font(dims.layout().rowLabelFontSize * 0.9));
+
+        String t = dateText != null ? dateText : "";
+        double fontPx = dims.layout().rowLabelFontSize * 0.9;
+        Text dt = new Text(t);
+        dt.setFont(Font.font(fontPx));
         dt.setFill(Color.web(dims.palette().machineSideTextFill()));
+        double tw = approxLatinDigitTextWidth(t, fontPx);
+        Bounds tb = dt.getLayoutBounds();
+        double th = Math.max(tb.getHeight(), fontPx);
+        Group anchor = new Group();
         dt.setRotate(-90);
-        StackPane.setAlignment(dt, Pos.CENTER);
-        wrap.getChildren().add(dt);
+        dt.setTranslateX(-tw / 2);
+        dt.setTranslateY(th / 2);
+        anchor.getChildren().add(dt);
+        wrap.getChildren().add(anchor);
         return wrap;
     }
 
