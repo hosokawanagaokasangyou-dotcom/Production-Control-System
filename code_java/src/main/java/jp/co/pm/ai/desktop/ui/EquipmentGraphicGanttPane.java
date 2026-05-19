@@ -2578,8 +2578,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         double bx = x + inset;
         double bw = Math.max(1, w - 2 * inset);
         if (isPrepHatchedBar(kind)) {
-            layer.getChildren()
-                    .add(buildVectorPrepHatchedBar(bx, barTop, bw, barH, arc, fill, layout.zoom, palette));
+            addVectorPrepHatchedBar(layer, bx, barTop, bw, barH, arc, fill, layout.zoom, palette);
             return;
         }
         Rectangle bar = new Rectangle(bx, barTop, bw, barH);
@@ -2592,10 +2591,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     /**
-     * 準備バー（斜線ハッチ）。Canvas の {@link #fillPrepHatchedBar} と同様にクリップし、PDF 印刷では
-     * {@code layoutX}/{@code layoutY} ではなく {@code translate} で親座標へ配置する。
+     * 準備バー（斜線ハッチ）。PDF 印刷で {@code Group#setClip} が効かないことがあるため、
+     * 親 {@link Pane} の絶対座標に描き、各斜線を矩形内へ数値クリップする。
      */
-    private static Group buildVectorPrepHatchedBar(
+    private static void addVectorPrepHatchedBar(
+            Pane layer,
             double x,
             double y,
             double w,
@@ -2604,41 +2604,100 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             Color baseFill,
             double zoom,
             GanttPalette palette) {
-        Group g = new Group();
-        g.setAutoSizeChildren(false);
-        g.setTranslateX(x);
-        g.setTranslateY(y);
-        Rectangle clip = new Rectangle(0, 0, w, h);
-        clip.setArcWidth(arc * 2);
-        clip.setArcHeight(arc * 2);
-        g.setClip(clip);
-
         Color background = prepHatchBackground(baseFill);
         Color stroke = complementaryContrastStroke(background);
-        Rectangle bg = new Rectangle(0, 0, w, h);
+        Rectangle bg = new Rectangle(x, y, w, h);
         bg.setArcWidth(arc * 2);
         bg.setArcHeight(arc * 2);
         bg.setFill(background);
-        g.getChildren().add(bg);
+        layer.getChildren().add(bg);
 
         double hatchW = Math.max(0.75, 0.85 * zoom);
+        double halfStroke = hatchW * 0.5;
+        double clipL = x + halfStroke + 0.5;
+        double clipT = y + halfStroke + 0.5;
+        double clipR = x + w - halfStroke - 0.5;
+        double clipB = y + h - halfStroke - 0.5;
+        if (clipR <= clipL || clipB <= clipT) {
+            clipL = x;
+            clipT = y;
+            clipR = x + w;
+            clipB = y + h;
+        }
+
         double spacing = Math.max(4.0, 5.0 * zoom);
         double span = w + h;
         for (double offset = -h; offset < span; offset += spacing) {
-            Line hl = new Line(offset, h, offset + h, 0);
+            double x0 = x + offset;
+            double y0 = y + h;
+            double x1 = x + offset + h;
+            double y1 = y;
+            double[] seg = clipSegmentToRect(x0, y0, x1, y1, clipL, clipT, clipR, clipB);
+            if (seg == null) {
+                continue;
+            }
+            Line hl = new Line(seg[0], seg[1], seg[2], seg[3]);
             hl.setStroke(stroke);
             hl.setStrokeWidth(hatchW);
-            g.getChildren().add(hl);
+            layer.getChildren().add(hl);
         }
 
-        Rectangle border = new Rectangle(0, 0, w, h);
+        Rectangle border = new Rectangle(x, y, w, h);
         border.setFill(Color.TRANSPARENT);
         border.setStroke(stroke);
         border.setStrokeWidth(Math.max(1.0, 1.35 * zoom));
         border.setArcWidth(arc * 2);
         border.setArcHeight(arc * 2);
-        g.getChildren().add(border);
-        return g;
+        layer.getChildren().add(border);
+    }
+
+    /**
+     * 線分を軸平行矩形へクリップ（Liang–Barsky）。完全に外なら {@code null}。
+     *
+     * @return {@code [x0,y0,x1,y1]} または {@code null}
+     */
+    private static double[] clipSegmentToRect(
+            double x0,
+            double y0,
+            double x1,
+            double y1,
+            double minX,
+            double minY,
+            double maxX,
+            double maxY) {
+        double dx = x1 - x0;
+        double dy = y1 - y0;
+        double t0 = 0.0;
+        double t1 = 1.0;
+        double[] p = {-dx, dx, -dy, dy};
+        double[] q = {x0 - minX, maxX - x0, y0 - minY, maxY - y0};
+        for (int i = 0; i < 4; i++) {
+            if (Math.abs(p[i]) < 1e-12) {
+                if (q[i] < 0) {
+                    return null;
+                }
+            } else {
+                double r = q[i] / p[i];
+                if (p[i] < 0) {
+                    if (r > t1) {
+                        return null;
+                    }
+                    if (r > t0) {
+                        t0 = r;
+                    }
+                } else {
+                    if (r < t0) {
+                        return null;
+                    }
+                    if (r < t1) {
+                        t1 = r;
+                    }
+                }
+            }
+        }
+        return new double[] {
+            x0 + t0 * dx, y0 + t0 * dy, x0 + t1 * dx, y0 + t1 * dy
+        };
     }
 
     private static void addVectorBarLabelsOutside(
