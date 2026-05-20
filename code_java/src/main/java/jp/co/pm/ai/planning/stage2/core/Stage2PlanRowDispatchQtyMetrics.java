@@ -7,7 +7,7 @@ import java.util.Optional;
  * Python {@code planning_core._core._plan_row_dispatch_qty_metrics} に相当（結果シート・配台メトリクス）。
  *
  * <p>正: 段階1の列「配台使用残数量」「配台ロール数」（欠損時は段階1式で補完）。
- * 済相当 = max(0, 換算数量 − 配台使用残数量)。総量 = 残り + 済相当。
+ * 済相当 = max(0, 換算数量 − 配台使用残数量)。総量 = 残り + 済相当（換算数量 raw。100m 切上げなし）。
  *
  * <p>「未加工」列が無い・空・非数値の行は {@link Optional#empty()}（結果シートは残量列を埋めない）。
  * 未加工は行の有効性検証のみ（数値の意味はメトリクスに使わない）。
@@ -15,7 +15,6 @@ import java.util.Optional;
 public final class Stage2PlanRowDispatchQtyMetrics {
 
     private static final double EPS = 1e-12;
-    private static final double CEIL_STEP_M = 100.0;
 
     private static final String COL_DISPATCH_REMAINING = "配台使用残数量";
     private static final String COL_DISPATCH_ROLLS = "配台ロール数";
@@ -37,10 +36,6 @@ public final class Stage2PlanRowDispatchQtyMetrics {
         double remainingM = planDispatchRemainingM(row, tables);
         double doneM = Math.max(0.0, qtyConvRaw - remainingM);
         double qtyTotalForDispatchM = remainingM + doneM;
-        if (qtyTotalForDispatchM <= EPS) {
-            double qtyTotalCeiled = ceilRollUnitLengthMToNextStep(qtyConvRaw, CEIL_STEP_M);
-            qtyTotalForDispatchM = Math.max(qtyTotalCeiled, remainingM);
-        }
         return Optional.of(new Metrics(remainingM, doneM, qtyTotalForDispatchM));
     }
 
@@ -90,14 +85,6 @@ public final class Stage2PlanRowDispatchQtyMetrics {
             return Math.rint(n);
         }
         return n;
-    }
-
-    static double ceilRollUnitLengthMToNextStep(double rollM, double stepM) {
-        if (!(rollM > 0)) {
-            return rollM;
-        }
-        double step = stepM > 0 ? stepM : 100.0;
-        return Math.ceil(rollM / step) * step;
     }
 
     /** Python {@code _dispatch_simulator_unit_m_from_plan_row} に相当（原反ロール長のみ）。 */

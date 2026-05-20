@@ -4084,7 +4084,7 @@ def _plan_row_dispatch_qty_metrics(row):
 
     **正**: 段階1の列「配台使用残数量」「配台ロール数」（欠損時は段階1と同一式で補完）。
     済相当m = max(0, 換算数量(raw) - 配台使用残数量)。
-    総量m = 残り + 済相当（実質 換算数量。ゼロ付近のみ 100m 切上げで補正）。
+    総量m = 残り + 済相当（＝換算数量 raw。100m 切上げは行わない）。
 
     **未加工列**は行の有効性検証のみ（空・非数値は ``PlanningValidationError``）。
     実出来高・実加工数から済相当へ直接フォールバックしない。
@@ -4103,9 +4103,6 @@ def _plan_row_dispatch_qty_metrics(row):
     remaining_m = _plan_cell_dispatch_remaining_m(row)
     done_m = max(0.0, qty_conv_raw - remaining_m)
     qty_total_for_dispatch_m = remaining_m + done_m
-    if qty_total_for_dispatch_m <= 1e-12:
-        qty_total_ceiled = _ceil_roll_unit_length_m_to_next_step(qty_conv_raw)
-        qty_total_for_dispatch_m = max(qty_total_ceiled, remaining_m)
     return remaining_m, done_m, qty_total_for_dispatch_m, True
 
 
