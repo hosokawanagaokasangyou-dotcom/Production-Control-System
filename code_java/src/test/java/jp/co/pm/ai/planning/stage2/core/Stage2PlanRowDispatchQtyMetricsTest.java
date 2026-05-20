@@ -89,6 +89,22 @@ class Stage2PlanRowDispatchQtyMetricsTest {
         Optional<Stage2PlanRowDispatchQtyMetrics.Metrics> m = Stage2PlanRowDispatchQtyMetrics.compute(row, tables);
         assertTrue(m.isPresent());
         assertEquals(250.0, m.get().remainingM(), 1e-9);
+        assertEquals(0.0, m.get().doneM(), 1e-9);
+        assertEquals(250.0, m.get().qtyTotalForDispatchM(), 1e-9);
+    }
+
+    @Test
+    void derivesDoneFromConvertedMinusDispatchRemaining() {
+        Map<String, String> row = baseRow();
+        row.put("換算数量", "100");
+        row.put("未加工", "40");
+        row.put("配台使用残数量", "60");
+        Optional<Stage2PlanRowDispatchQtyMetrics.Metrics> m =
+                Stage2PlanRowDispatchQtyMetrics.compute(row, Stage2RollUnitLengthTables.empty());
+        assertTrue(m.isPresent());
+        assertEquals(60.0, m.get().remainingM(), 1e-9);
+        assertEquals(40.0, m.get().doneM(), 1e-9);
+        assertEquals(100.0, m.get().qtyTotalForDispatchM(), 1e-9);
     }
 
     private static Map<String, String> baseRow() {

@@ -830,7 +830,7 @@ TASK_COL_TASK_ID = "依頼NO"
 TASK_COL_MACHINE = "工程名"
 TASK_COL_MACHINE_NAME = "機械名"
 TASK_COL_QTY = "換算数量"
-# 加工計画DATA にある場合のみ段階1で配台計画へコピー。結果_タスク一覧「残加工量」はこの列の数値基準で出力する。
+# 加工計画DATA にある場合のみ段階1で配台計画へコピー。結果_タスク一覧「残加工量」は段階1列「配台使用残数量」を基準に出力する。
 TASK_COL_UNPROCESSED = "未加工"
 TASK_COL_ORDER_QTY = "受注数"
 # 加工速度: 加工計画DATA から段階1でコピー後、master.xlsm「speed」で (工程名, 機械名) が一致すれば基本速度×実稼働比率で上書き。
@@ -4080,69 +4080,33 @@ def _dispatch_simulator_unit_m_from_plan_row(row, *, fallback_m: float) -> float
 
 def _plan_row_dispatch_qty_metrics(row):
     """
-    1行分の換算数量・未加工に基づき、配台用の残り(m)・済相当(m)・換算数量(100m切上)を返す。
+    結果シート・配台メトリクス用の残り(m)・済相当(m)・総量(m)を返す。
 
-    **未加工列は必須**（シートに列が無い場合は ``load_tasks_df`` / ``load_planning_tasks_df`` で
-    ``PlanningValidationError``）。セルが空・数値化できない場合も同様にエラーとする。
-    実出来高・実加工数からの済相当フォールバックは行わない。
+    **正**: 段階1の列「配台使用残数量」「配台ロール数」（欠損時は段階1と同一式で補完）。
+    済相当m = max(0, 換算数量(raw) - 配台使用残数量)。
+    総量m = 残り + 済相当（実質 換算数量。ゼロ付近のみ 100m 切上げで補正）。
 
-    未加工に有効数値があるとき:
-      ① 未加工 > 0: 済相当m = max(0, 換算数量(raw) - 未加工)、残りm = max(0, 未加工)
-      ② 未加工 <= 0: 換算数量(100m切上)を残りm の基準とし、それが **(原反)ロール単位長さ** 未満なら原反1ロール分まで引き上げ（最小加工単位）。済相当m = 0。
-      さらに **換算数量(raw) が (原反)ロール単位長さ m 未満**のときは、残りm を **少なくともその原反ロール長**まで引き上げる。
-      換算数量が (原反)ロール単位長さの整数倍に一致するときは、100m 切上げだけが残量を膨らませるのを避けるため raw 換算数量を基準とする。
-      **(製品)ロール単位長さは参照しない。**
-      第三要素は配台総量(m)用: ①では 100m 切上げ値、②では残りm と一致（ロール数整合）。
+    **未加工列**は行の有効性検証のみ（空・非数値は ``PlanningValidationError``）。
+    実出来高・実加工数から済相当へ直接フォールバックしない。
 
     Returns:
         tuple[float, float, float, bool]:
             (remaining_m, done_m, qty_total_for_dispatch_m, used_unprocessed)
     """
-    qty_conv_raw = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
-    qty_total_ceiled = _ceil_roll_unit_length_m_to_next_step(qty_conv_raw)
     unp = _optional_unprocessed_m_from_plan_row(row)
-    if unp is not None:
-        fu = float(unp)
-        actual_done = parse_float_safe(row.get(TASK_COL_ACTUAL_DONE), 0.0)
-        if qty_conv_raw > 1e-12 and abs(fu) <= 1e-12 and actual_done <= 1e-12:
-            fu = qty_conv_raw
-        if fu > 1e-12:
-            remaining_m = max(0.0, fu)
-            done_m = max(0.0, qty_conv_raw - fu)
-            if abs(remaining_m - qty_conv_raw) <= 1e-9:
-                qty_total_for_dispatch_m = remaining_m
-            else:
-                qty_total_for_dispatch_m = qty_total_ceiled
-            return remaining_m, done_m, qty_total_for_dispatch_m, True
-        else:
-            # 未加工が 0 付近: 換算数量(100m切上)を基準にするが、(原反)ロール単位長さ未満は 1 原反ロール分に引き上げ
-            roll_m = _dispatch_simulator_unit_m_from_plan_row(
-                row, fallback_m=qty_total_ceiled or qty_conv_raw or 1.0
-            )
-            try:
-                roll_m_f = float(roll_m)
-            except (TypeError, ValueError):
-                roll_m_f = 0.0
-            base_m = max(0.0, qty_total_ceiled)
-            if roll_m_f > 1e-12 and qty_conv_raw > 1e-12:
-                n_rolls_raw = qty_conv_raw / roll_m_f
-                if abs(n_rolls_raw - round(n_rolls_raw)) <= 1e-9:
-                    base_m = max(0.0, qty_conv_raw)
-            remaining_m = max(base_m, roll_m_f) if roll_m_f > 0 else base_m
-            raw_floor_m = _raw_roll_unit_m_resolved_for_dispatch_qty(row)
-            if (
-                raw_floor_m > 1e-12
-                and qty_conv_raw > 1e-12
-                and qty_conv_raw + 1e-9 < raw_floor_m
-            ):
-                remaining_m = max(remaining_m, raw_floor_m)
-            done_m = 0.0
-            qty_total_for_dispatch_m = remaining_m
-            return remaining_m, done_m, qty_total_for_dispatch_m, True
-    raise PlanningValidationError(
-        f"「{TASK_COL_UNPROCESSED}」が数値として読めません（セルが空または不正）、"
-        "または列がありません。配台残量は未加工列のみで算定するため、配台処理を中止します。"
-    )
+    if unp is None:
+        raise PlanningValidationError(
+            f"「{TASK_COL_UNPROCESSED}」が数値として読めません（セルが空または不正）、"
+            "または列がありません。配台計画行の検証のため未加工列が必要です。"
+        )
+    qty_conv_raw = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
+    remaining_m = _plan_cell_dispatch_remaining_m(row)
+    done_m = max(0.0, qty_conv_raw - remaining_m)
+    qty_total_for_dispatch_m = remaining_m + done_m
+    if qty_total_for_dispatch_m <= 1e-12:
+        qty_total_ceiled = _ceil_roll_unit_length_m_to_next_step(qty_conv_raw)
+        qty_total_for_dispatch_m = max(qty_total_ceiled, remaining_m)
+    return remaining_m, done_m, qty_total_for_dispatch_m, True
 
 
 def _dispatch_remaining_qty_m_from_row(row) -> float:
@@ -12656,12 +12620,7 @@ def build_task_queue_from_planning_df(
                 _planning_df_cell_scalar(row, RESULT_TASK_COL_DISPATCH_TRIAL_ORDER)
             )
 
-        if _has_unprocessed_col:
-            _unp_base = _optional_float_unprocessed_column(
-                _planning_df_cell_scalar(row, TASK_COL_UNPROCESSED)
-            )
-        else:
-            _unp_base = None
+        _unp_base = _plan_cell_dispatch_remaining_m(row)
 
         task_queue.append(
             {
@@ -16493,8 +16452,7 @@ def run_stage1_extract():
                 rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = float(_raw_dim_m)
             else:
                 rec[PLAN_COL_RAW_ROLL_UNIT_LENGTH] = "不明"
-        # 換算数量列は加工計画DATAの値のまま（§7.1）。原反ロール長未満への引き上げは
-        # _plan_row_dispatch_qty_metrics の配台残量(m)算定のみ（列は書き換えない）。
+        # 換算数量列は加工計画DATAの値のまま（§7.1）。配台使用残数量・配台ロール数は段階1列で埋める。
         if TASK_COL_QTY in rec:
             rec[TASK_COL_QTY] = max(0.0, parse_float_safe(row.get(TASK_COL_QTY), 0.0))
         # 工程名 + 機械名 を“因孝”として表示用に追加（後段は計算キーにも使用）

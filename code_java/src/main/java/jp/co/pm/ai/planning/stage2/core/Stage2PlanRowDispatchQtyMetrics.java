@@ -4,14 +4,13 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Python {@code planning_core._core._plan_row_dispatch_qty_metrics} に相当する純粋関数（配台前の行メトリクス）。
+ * Python {@code planning_core._core._plan_row_dispatch_qty_metrics} に相当（結果シート・配台メトリクス）。
+ *
+ * <p>正: 段階1の列「配台使用残数量」「配台ロール数」（欠損時は段階1式で補完）。
+ * 済相当 = max(0, 換算数量 − 配台使用残数量)。総量 = 残り + 済相当。
  *
  * <p>「未加工」列が無い・空・非数値の行は {@link Optional#empty()}（結果シートは残量列を埋めない）。
- * ワークスペース解釈（換算数量&gt;0 かつ実加工数=0 かつ未加工セル=0 → 全数未加工＝換算数量ぶん残り）を適用する。
- *
- * <p>段階2配台の加工量・ロール本数（列「配台使用残数量」「配台ロール数」）は
- * {@link #planDispatchRemainingM} / {@link #planDispatchRollCount} を参照（Python
- * {@code _plan_row_stage2_dispatch_qty_and_rolls}）。
+ * 未加工は行の有効性検証のみ（数値の意味はメトリクスに使わない）。
  */
 public final class Stage2PlanRowDispatchQtyMetrics {
 
@@ -31,51 +30,21 @@ public final class Stage2PlanRowDispatchQtyMetrics {
         if (row == null || !row.containsKey("未加工")) {
             return Optional.empty();
         }
-        Optional<Double> unpCell = Stage2RollUnitLengthTables.optionalUnprocessedCell(row.get("未加工"));
-        if (unpCell.isEmpty()) {
+        if (Stage2RollUnitLengthTables.optionalUnprocessedCell(row.get("未加工")).isEmpty()) {
             return Optional.empty();
         }
         double qtyConvRaw = Stage2RollUnitLengthTables.parseFloatSafe(row.get("換算数量"), 0.0);
-        double qtyTotalCeiled = ceilRollUnitLengthMToNextStep(qtyConvRaw, CEIL_STEP_M);
-        double actualDone = Stage2RollUnitLengthTables.parseFloatSafe(row.get("実加工数"), 0.0);
-
-        double unp = unpCell.get();
-        if (qtyConvRaw > EPS && Math.abs(unp) <= EPS && actualDone <= EPS) {
-            unp = qtyConvRaw;
+        double remainingM = planDispatchRemainingM(row, tables);
+        double doneM = Math.max(0.0, qtyConvRaw - remainingM);
+        double qtyTotalForDispatchM = remainingM + doneM;
+        if (qtyTotalForDispatchM <= EPS) {
+            double qtyTotalCeiled = ceilRollUnitLengthMToNextStep(qtyConvRaw, CEIL_STEP_M);
+            qtyTotalForDispatchM = Math.max(qtyTotalCeiled, remainingM);
         }
-
-        if (unp > EPS) {
-            double remainingM = Math.max(0.0, unp);
-            double doneM = Math.max(0.0, qtyConvRaw - unp);
-            double qtyTotalForDispatchM =
-                    Math.abs(remainingM - qtyConvRaw) <= 1e-9 ? remainingM : qtyTotalCeiled;
-            return Optional.of(new Metrics(remainingM, doneM, qtyTotalForDispatchM));
-        }
-        double fallbackM =
-                Math.max(1e-9, Stage2RollUnitLengthTables.parseFloatSafe(String.valueOf(qtyTotalCeiled), 0.0));
-        if (fallbackM <= 1e-9) {
-            fallbackM = Math.max(1e-9, qtyConvRaw);
-        }
-        if (fallbackM <= 1e-9) {
-            fallbackM = 1.0;
-        }
-        double rollM = rawRollUnitMFromPlanRow(row, fallbackM, tables);
-        double baseM = Math.max(0.0, qtyTotalCeiled);
-        if (rollM > EPS && qtyConvRaw > EPS) {
-            double nRollsRaw = qtyConvRaw / rollM;
-            if (Math.abs(nRollsRaw - Math.rint(nRollsRaw)) <= 1e-9) {
-                baseM = Math.max(0.0, qtyConvRaw);
-            }
-        }
-        double remainingM = rollM > 0 ? Math.max(baseM, rollM) : baseM;
-        if (rollM > EPS && qtyConvRaw > EPS && qtyConvRaw + 1e-9 < rollM) {
-            remainingM = Math.max(remainingM, rollM);
-        }
-        double qtyTotalForDispatchM = remainingM;
-        return Optional.of(new Metrics(remainingM, 0.0, qtyTotalForDispatchM));
+        return Optional.of(new Metrics(remainingM, doneM, qtyTotalForDispatchM));
     }
 
-    /** 段階2: 列「配台使用残数量」を正とする残量(m)。欠損時は段階1式で補完。 */
+    /** 段階1/2: 列「配台使用残数量」を正とする残量(m)。欠損時は段階1式で補完。 */
     static double planDispatchRemainingM(Map<String, String> row, Stage2RollUnitLengthTables tables) {
         double fromCol = Stage2RollUnitLengthTables.parseFloatSafe(row.get(COL_DISPATCH_REMAINING), -1.0);
         if (fromCol >= 0) {
@@ -84,7 +53,7 @@ public final class Stage2PlanRowDispatchQtyMetrics {
         return computeDispatchRemainingFromFormula(row, tables);
     }
 
-    /** 段階2: 列「配台ロール数」を正とする本数。欠損時は残量÷原反ロール長で補完。 */
+    /** 段階1/2: 列「配台ロール数」を正とする本数。欠損時は残量÷原反ロール長で補完。 */
     static double planDispatchRollCount(
             Map<String, String> row, double remainingM, Stage2RollUnitLengthTables tables) {
         double fromCol = Stage2RollUnitLengthTables.parseFloatSafe(row.get(COL_DISPATCH_ROLLS), -1.0);
@@ -99,7 +68,7 @@ public final class Stage2PlanRowDispatchQtyMetrics {
         double qtyConv = Stage2RollUnitLengthTables.parseFloatSafe(row.get("換算数量"), 0.0);
         double actualDone = Stage2RollUnitLengthTables.parseFloatSafe(row.get("実加工数"), 0.0);
         double b = Math.max(0.0, qtyConv - actualDone);
-        double rawRoll = rawRollUnitMResolved(row, tables);
+        double rawRoll = rawRollUnitMFromPlanRow(row, 100.0, tables);
         if (rawRoll <= EPS) {
             return b;
         }
@@ -112,7 +81,7 @@ public final class Stage2PlanRowDispatchQtyMetrics {
 
     private static double rollCountFromRemaining(
             Map<String, String> row, double remainingM, Stage2RollUnitLengthTables tables) {
-        double rawRoll = rawRollUnitMResolved(row, tables);
+        double rawRoll = rawRollUnitMFromPlanRow(row, 100.0, tables);
         if (rawRoll <= EPS || remainingM <= EPS) {
             return 0.0;
         }
@@ -121,10 +90,6 @@ public final class Stage2PlanRowDispatchQtyMetrics {
             return Math.rint(n);
         }
         return n;
-    }
-
-    private static double rawRollUnitMResolved(Map<String, String> row, Stage2RollUnitLengthTables tables) {
-        return rawRollUnitMFromPlanRow(row, 100.0, tables);
     }
 
     static double ceilRollUnitLengthMToNextStep(double rollM, double stepM) {
