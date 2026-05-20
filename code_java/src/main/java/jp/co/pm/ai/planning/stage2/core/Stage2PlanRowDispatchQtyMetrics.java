@@ -38,7 +38,9 @@ public final class Stage2PlanRowDispatchQtyMetrics {
         if (unp > EPS) {
             double remainingM = Math.max(0.0, unp);
             double doneM = Math.max(0.0, qtyConvRaw - unp);
-            return Optional.of(new Metrics(remainingM, doneM, qtyTotalCeiled));
+            double qtyTotalForDispatchM =
+                    Math.abs(remainingM - qtyConvRaw) <= 1e-9 ? remainingM : qtyTotalCeiled;
+            return Optional.of(new Metrics(remainingM, doneM, qtyTotalForDispatchM));
         }
         double fallbackM =
                 Math.max(1e-9, Stage2RollUnitLengthTables.parseFloatSafe(String.valueOf(qtyTotalCeiled), 0.0));
@@ -73,7 +75,11 @@ public final class Stage2PlanRowDispatchQtyMetrics {
             Map<String, String> row, double fallbackM, Stage2RollUnitLengthTables tables) {
         String product = nz(row.get("製品名"));
         String usedRaw = nz(row.get("使用原反"));
-        double unit = Stage2RollUnitLengthTables.parseFloatSafe(row.get("ロール単位長さ"), 0.0);
+        double unit =
+                Stage2RollUnitLengthTables.parseFloatSafe(row.get("(製品)ロール単位長さ"), 0.0);
+        if (unit <= 0) {
+            unit = Stage2RollUnitLengthTables.parseFloatSafe(row.get("ロール単位長さ"), 0.0);
+        }
         double fb = Math.max(1e-9, fallbackM);
         if (unit <= 0) {
             unit =

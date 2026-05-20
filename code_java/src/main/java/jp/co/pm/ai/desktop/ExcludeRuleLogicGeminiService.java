@@ -66,7 +66,7 @@ public final class ExcludeRuleLogicGeminiService {
         u.add("製品幅");
         u.add("製品長");
         u.add("特別指定_備考");
-        u.add("ロール単位長さ");
+        u.add("(製品)ロール単位長さ");
         u.add("配台使用残数量");
         u.add("配台ロール数");
         u.sort(Comparator.naturalOrder());

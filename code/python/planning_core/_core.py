@@ -1162,7 +1162,8 @@ PLAN_COL_AI_PARSE = "AI特別指定_解析"
 PLAN_COL_PROCESS_FACTOR = "加工工程の決定プロセスの因子"
 # 1ロールあたりの長さ（m）。配台計画_タスク入力にのみ存在（加工計画DATA には無い）。製品名列の右隣に配置。
 # 段階1は「製品名,ロール単位の長さ.txt」→製品名寸法のみ（使用原反列・原反ロール長テーブルとは独立）。
-PLAN_COL_ROLL_UNIT_LENGTH = "ロール単位長さ"
+PLAN_COL_ROLL_UNIT_LENGTH = "(製品)ロール単位長さ"
+PLAN_COL_ROLL_UNIT_LENGTH_LEGACY = "ロール単位長さ"
 # ``build_task_queue_from_planning_df`` が実効ロール長に上書きしたデータ行の iloc（0 始まり・iterrows 順）。
 # 段階2の ``write_plan_sheet_global_parse_and_conflict_styles_one_io`` でブックの当該セルへ値反映＋黄地黒字に使う。
 PLAN_DF_ATTR_EFFECTIVE_ROLL_UNIT_DATA_ILOCS = "_pm_ai_effective_roll_unit_data_ilocs"
@@ -1175,7 +1176,7 @@ PLAN_COL_DISPATCH_ROLL_COUNT = "配台ロール数"
 # 「使用原反」キー照合は _normalize_mm_table_lookup_key（NFKC 後に全角・半角など空白類を除去）で加工計画の使用原反／製品名と突き合わせる。
 PLAN_COL_RAW_FABRIC_WIDTH = "原反幅"
 # 使用原反列の値をキーに「使用原反,ロール単位の長さ.txt」を優先し、無ければ使用原反文字列の寸法（NNNxMM 等）のみから推定。
-# テーブルにも寸法にも無いときは「不明」。列「ロール単位長さ」とは独立。
+# テーブルにも寸法にも無いときは「不明」。列「(製品)ロール単位長さ」とは独立。
 PLAN_COL_RAW_ROLL_UNIT_LENGTH = "(原反)ロール単位長さ"
 # マクロブックと同じフォルダ（またはカレント・code/）の CSV。環境変数 RAW_FABRIC_WIDTH_TABLE_PATH で上書き可。
 RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME = "使用原反, 加工幅.txt"
@@ -1641,8 +1642,8 @@ def plan_input_sheet_column_order():
 
     0. 配台試行順番（段階1抽出直後に空クリア→段階2と同じ趣旨に付与。段階2は全行に値はあるとしこの順を優先）
     1. 配台不要（参照列なし）
-    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量→配台ロール数、製品名の直後にロール単位長さ・製品幅、原反投入日の直後に在庫場所・使用原反の直後に(原反)ロール単位長さ・原反幅）
-       （ロール単位長さは製品名テーブル→製品名寸法のみ。(原反)ロール単位長さは使用原反テーブル→使用原反文字列の寸法→いずれも不可なら「不明」）
+    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量→配台ロール数、製品名の直後に(製品)ロール単位長さ・製品幅、原反投入日の直後に在庫場所・使用原反の直後に(原反)ロール単位長さ・原反幅）
+       （(製品)ロール単位長さは製品名テーブル→製品名寸法のみ。(原反)ロール単位長さは使用原反テーブル→使用原反文字列の寸法→いずれも不可なら「不明」）
     3. 加工工程の決定プロセスの因孝
     4. 上書き列… 複数列の直後に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
        （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
@@ -5367,6 +5368,10 @@ def _align_dataframe_headers_to_canonical(df, canonical_names):
         _ref_canon = plan_reference_column_name(PLAN_COL_RAW_INPUT_DATE_OVERRIDE)
         if _ref_canon in canonical_names:
             key_to_canonical[_nfkc_column_aliases("（元）原板投入日_上書き")] = _ref_canon
+    if PLAN_COL_ROLL_UNIT_LENGTH in canonical_names:
+        key_to_canonical[_nfkc_column_aliases(PLAN_COL_ROLL_UNIT_LENGTH_LEGACY)] = (
+            PLAN_COL_ROLL_UNIT_LENGTH
+        )
     rename_map = {}
     for col in df.columns:
         k = _nfkc_column_aliases(col)

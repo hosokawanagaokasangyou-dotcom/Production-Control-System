@@ -35,7 +35,8 @@ public final class CodeDispatchLookupTablesMerge {
 
     private static final String COL_PRODUCT = "製品名";
     private static final String COL_USED_RAW = "使用原反";
-    private static final String COL_ROLL_M = "ロール単位長さ";
+    private static final String COL_ROLL_M = "(製品)ロール単位長さ";
+    private static final String COL_ROLL_M_LEGACY = "ロール単位長さ";
     private static final String COL_WIDTH = "製品幅";
     private static final String COL_THICK = "製品厚み";
     private static final String COL_LENGTH = "製品長";
@@ -106,6 +107,9 @@ public final class CodeDispatchLookupTablesMerge {
         int iProd = headers.indexOf(COL_PRODUCT);
         int iUsed = headers.indexOf(COL_USED_RAW);
         int iRoll = headers.indexOf(COL_ROLL_M);
+        if (iRoll < 0) {
+            iRoll = headers.indexOf(COL_ROLL_M_LEGACY);
+        }
         int iPw = headers.indexOf(COL_WIDTH);
         int iPt = headers.indexOf(COL_THICK);
         int iPl = headers.indexOf(COL_LENGTH);

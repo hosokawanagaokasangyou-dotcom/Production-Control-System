@@ -618,7 +618,8 @@ public final class SpreadsheetTabularSupport {
     }
 
     private static final String PLAN_INPUT_COL_UNPROCESSED = "未加工";
-    private static final String PLAN_INPUT_COL_ROLL_UNIT_M = "ロール単位長さ";
+    private static final String PLAN_INPUT_COL_ROLL_UNIT_M = "(製品)ロール単位長さ";
+    private static final String PLAN_INPUT_COL_ROLL_UNIT_M_LEGACY = "ロール単位長さ";
     private static final String PLAN_INPUT_COL_QTY_CONV = "換算数量";
     private static final String PLAN_INPUT_COL_ACTUAL = "実加工数";
     private static final String PLAN_INPUT_COL_PRODUCT = "製品名";
@@ -743,7 +744,7 @@ public final class SpreadsheetTabularSupport {
 
     /**
      * 配台計画タスク入力の編集可能グリッド。先頭固定列は白地、それ以外は既定で白地とし、「未加工」列のみ正の数値で薄緑、
-     * 「ロール単位長さ」は実効ロール化が想定されるセルを黄で示す（Excel 側の実効ロール着色と整合）。
+     * 「(製品)ロール単位長さ」は実効ロール化が想定されるセルを黄で示す（Excel 側の実効ロール着色と整合）。
      *
      * @param leadingColumnCount 先頭から固定する属性列の本数
      * @param rollUnitLengthTablesOrNull 製品名／使用原反テーブル（黄の「上書き後セル」判定に使用）。{@code null}
@@ -800,7 +801,8 @@ public final class SpreadsheetTabularSupport {
                 } else if (PLAN_INPUT_COL_UNPROCESSED.equals(headerTitle)
                         && TabularCellHighlight.isStrictPositiveNumber(raw)) {
                     cell.setStyle(READABLE_STYLE_DATA_GREEN);
-                } else if (PLAN_INPUT_COL_ROLL_UNIT_M.equals(headerTitle)
+                } else if ((PLAN_INPUT_COL_ROLL_UNIT_M.equals(headerTitle)
+                                || PLAN_INPUT_COL_ROLL_UNIT_M_LEGACY.equals(headerTitle))
                         && planInputRollUnitLengthCellIsYellowHighlight(
                                 src,
                                 idxConv,
