@@ -183,6 +183,11 @@ public final class EquipmentGanttGraphicTabController {
     /** {@link jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane#computeDataFingerprint} と同一キーでデータ同一判定に使う。 */
     private String equipmentGanttGraphicDataFingerprint = "";
 
+    /**
+     * 表データ＋表示パラメータの合成キー。直前と同一なら {@link EquipmentGraphicGanttPane#build} を省略する。
+     */
+    private String equipmentGanttGraphicRenderKey = "";
+
     /** データ同一時のみ有効なバッジドラッグずれ（セッションと同期）。 */
     private final Map<String, EquipmentGanttBadgeDragDelta> equipmentGanttBadgeDragDeltas =
             new LinkedHashMap<>();
@@ -346,7 +351,6 @@ public final class EquipmentGanttGraphicTabController {
                     .addListener(
                             (o, a, b) -> {
                                 scheduleEquipmentGraphicPersist();
-                                requestThrottledGraphicRebuild();
                             });
         }
         if (contentPane != null) {
@@ -1418,6 +1422,7 @@ public final class EquipmentGanttGraphicTabController {
         loadedRegularShiftEnd = null;
         refreshPrintTimeRegularHint();
         badgeRowsForCurrentGraphic = null;
+        equipmentGanttGraphicRenderKey = "";
         if (clearBadgeSessionData) {
             equipmentGanttGraphicDataFingerprint = "";
             equipmentGanttBadgeDragDeltas.clear();
@@ -1441,6 +1446,7 @@ public final class EquipmentGanttGraphicTabController {
                         : null;
         String skipReason = skipHeavyGraphicReason(planPath, st);
         if (skipReason != null) {
+            equipmentGanttGraphicRenderKey = "";
             if (shell != null) {
                 shell.refreshEquipmentGanttObservedBadgeLabels(List.of());
             }
@@ -1475,6 +1481,19 @@ public final class EquipmentGanttGraphicTabController {
             equipmentGanttBadgeDragDeltas.clear();
         }
         equipmentGanttGraphicDataFingerprint = fpNow;
+
+        String renderKeyNow = computeGraphicRenderKey(st.columns(), rows, fpNow);
+        if (oldGantt != null && renderKeyNow.equals(equipmentGanttGraphicRenderKey)) {
+            EquipmentGraphicGanttPane.restoreScrollAfterRebuild(oldGantt, scrollSnap, zoomAnchor);
+            installGraphicWheelZoomIfNeeded();
+            Object ud = oldGantt.getUserData();
+            if (ud instanceof EquipmentGraphicGanttPane.EquipmentGanttViewHandles h
+                    && h.scheduleViewportRepaint() != null) {
+                Platform.runLater(h.scheduleViewportRepaint());
+            }
+            return;
+        }
+        equipmentGanttGraphicRenderKey = renderKeyNow;
 
         long buildT0 = System.nanoTime();
         BorderPane gantt =
@@ -1896,6 +1915,62 @@ public final class EquipmentGanttGraphicTabController {
             return;
         }
         applyGraphicCenter(lastGraphicSheet);
+    }
+
+    /**
+     * {@link #buildEquipmentGanttBorderPane} に渡す表示設定と表データ指紋を連結したキー。
+     * 印刷専用 build は対象外。
+     */
+    private String computeGraphicRenderKey(
+            List<String> columns,
+            ObservableList<ObservableList<String>> rows,
+            String dataFingerprint) {
+        StringBuilder sb = new StringBuilder(384);
+        sb.append(dataFingerprint != null ? dataFingerprint : "").append('\u0001');
+        DesktopTheme theme =
+                shell != null ? shell.currentDesktopTheme() : DesktopTheme.LIGHT;
+        sb.append(theme.name()).append('\u0001');
+        sb.append(graphicZoomSlider != null ? graphicZoomSlider.getValue() : 100d)
+                .append('\u0001');
+        sb.append(graphicRowHeightSlider != null ? graphicRowHeightSlider.getValue() : 100d)
+                .append('\u0001');
+        sb.append(graphicSlotWidthSlider != null ? graphicSlotWidthSlider.getValue() : 100d)
+                .append('\u0001');
+        sb.append(graphicHeaderHeightSlider != null ? graphicHeaderHeightSlider.getValue() : 100d)
+                .append('\u0001');
+        sb.append(graphicBarFontPctSlider != null ? graphicBarFontPctSlider.getValue() : 100d)
+                .append('\u0001');
+        sb.append(snapshotEquipmentGanttBarFontFamily()).append('\u0001');
+        sb.append(snapshotEquipmentGanttDateColWidth()).append('\u0001');
+        sb.append(snapshotEquipmentGanttMachineColWidth()).append('\u0001');
+        sb.append(snapshotEquipmentGanttProcessColWidth()).append('\u0001');
+        sb.append(snapshotEquipmentGanttShiftWheelHScrollPercent()).append('\u0001');
+        sb.append(snapshotEquipmentGanttPersonBadgeEnabled()).append('\u0001');
+        sb.append(snapshotEquipmentGanttPersonBadgeGapPx()).append('\u0001');
+        sb.append(snapshotEquipmentGanttPersonBadgeBandVerticalOffsetPx()).append('\u0001');
+        sb.append(effectivePersonBadgeDragAdjustEnabled()).append('\u0001');
+        sb.append(snapshotEquipmentGanttPersonBadgeWireEnabled()).append('\u0001');
+        sb.append(snapshotEquipmentGanttPersonBadgeWireStrokeHex()).append('\u0001');
+        sb.append(snapshotEquipmentGanttPersonBadgeWireWidthPx()).append('\u0001');
+        sb.append(snapshotEquipmentGanttPersonBadgeWireDashStyleKey()).append('\u0001');
+        sb.append(snapshotEquipmentGanttPersonBadgeWireMaxLengthPx()).append('\u0001');
+        sb.append(columns != null ? columns.size() : 0).append('\u0001');
+        sb.append(rows != null ? rows.size() : 0);
+        if (effectivePersonBadgeDragAdjustEnabled() && !equipmentGanttBadgeDragDeltas.isEmpty()) {
+            equipmentGanttBadgeDragDeltas.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .forEach(
+                            e -> {
+                                EquipmentGanttBadgeDragDelta d = e.getValue();
+                                sb.append('\u0001')
+                                        .append(e.getKey())
+                                        .append(':')
+                                        .append(d != null ? d.dx() : 0)
+                                        .append(',')
+                                        .append(d != null ? d.dy() : 0);
+                            });
+        }
+        return sb.toString();
     }
 
     /** メインの {@link DesktopTheme} 変更時に Canvas 帯の配色を合わせて再描画する。 */

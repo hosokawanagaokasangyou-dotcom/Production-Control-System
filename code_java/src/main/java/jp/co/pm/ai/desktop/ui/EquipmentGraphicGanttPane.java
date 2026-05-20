@@ -10,8 +10,10 @@ import java.util.Locale;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.function.BiConsumer;
@@ -183,6 +185,21 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     /** 縦スクロールでタイムライン行を部分描画するときの余白（px、コンテンツ座標）。 */
     private static final double VIEWPORT_VERTICAL_MARGIN_PX = 80.0;
 
+    /** この行数以上でタイムライン Canvas を初回は Region プレースホルダにし、見えている行だけ実体化する。 */
+    private static final int LAZY_TIMELINE_CANVAS_MIN_ROWS = 50;
+
+    /** この行数以上で担当バッジ配置をスクロール連動の遅延配置にする。 */
+    private static final int LAZY_BADGE_LAYOUT_MIN_ROWS = 60;
+
+    /** 見えなくなった行の Canvas をプレースホルダへ戻す（行数が多いときのみ）。 */
+    private static final int TIMELINE_CANVAS_DEMOTE_MIN_ROWS = 120;
+
+    /** この行数以上で左右ボディを行仮想化（Pane + 動的行生成）に切り替える。 */
+    private static final int ROW_VIRTUALIZATION_MIN_ROWS = 100;
+
+    /** 仮想化時、見えている行の前後に確保する行数。 */
+    private static final int VIRTUAL_ROW_BUFFER = 15;
+
     private static final String PROFILE_PROP = "pm.ai.gantt.profile";
 
     /**
@@ -245,6 +262,80 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         double rowTop = rowContentMinY;
         double rowBottom = rowContentMinY + rowHeight;
         return rowBottom > visTop && rowTop < visBottom;
+    }
+
+    private static Canvas ensurePromotedTimelineCanvas(ViewportRowSpec spec, double canvasTimelineW) {
+        if (spec.canvas != null) {
+            return spec.canvas;
+        }
+        Canvas c = new Canvas(canvasTimelineW, spec.rowH);
+        c.setCache(false);
+        if (spec.timelinePlaceholder != null) {
+            int idx = spec.rowStack.getChildren().indexOf(spec.timelinePlaceholder);
+            if (idx >= 0) {
+                spec.rowStack.getChildren().set(idx, c);
+            } else {
+                spec.rowStack.getChildren().add(0, c);
+            }
+        } else {
+            spec.rowStack.getChildren().add(0, c);
+        }
+        spec.canvas = c;
+        return c;
+    }
+
+    private static void demoteTimelineCanvasIfFar(
+            ViewportRowSpec spec,
+            ScrollPane sp,
+            double canvasTimelineW,
+            boolean demoteEnabled) {
+        if (!demoteEnabled || spec.canvas == null) {
+            return;
+        }
+        if (intersectsVerticalViewport(
+                sp, spec.contentMinY, spec.rowH, VIEWPORT_VERTICAL_MARGIN_PX * 2.5)) {
+            return;
+        }
+        Region ph = new Region();
+        ph.setMinSize(canvasTimelineW, spec.rowH);
+        ph.setPrefSize(canvasTimelineW, spec.rowH);
+        ph.setMaxSize(canvasTimelineW, spec.rowH);
+        int idx = spec.rowStack.getChildren().indexOf(spec.canvas);
+        if (idx >= 0) {
+            spec.rowStack.getChildren().set(idx, ph);
+        }
+        spec.timelinePlaceholder = ph;
+        spec.canvas = null;
+    }
+
+    private static void applyLazyBadgeLayout(
+            ViewportRowSpec spec,
+            LayoutMetrics layout,
+            Function<String, PersonBadgeStyle> badgeResolver) {
+        LazyBadgeLayoutRequest req = spec.lazyBadge;
+        if (req == null || spec.badgePane == null || !spec.badgePane.getChildren().isEmpty()) {
+            return;
+        }
+        layoutPersonBadgeOverlay(
+                spec.badgePane,
+                req.badgeSlotTexts(),
+                req.slotTexts(),
+                layout,
+                badgeResolver,
+                req.displayRowIndex(),
+                req.gapPx(),
+                req.badgeDragAdjustEnabled(),
+                req.timelineBandTop(),
+                req.timelineBandHeight(),
+                req.badgePaneVerticalOffsetPx(),
+                req.timelinePaneWidth(),
+                req.overlayPaneHeight(),
+                req.dragDeltas(),
+                req.dragDeltaSink(),
+                req.personBadgeWiresEnabled(),
+                req.wirePaintOrNull(),
+                req.personBadgeWireMaxLengthPxOrZero());
+        spec.badgePane.setTranslateY(req.badgePaneVerticalOffsetPx());
     }
 
     /**
@@ -943,9 +1034,27 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         /** {@link #rightBodyGrid} 内コンテンツ座標でのタイムライン列の累積 Y（セクション行・データ行の高さを積む）。 */
         double gridTimelineContentY = 0.0;
         List<ViewportRowSpec> viewportRowSpecs = new ArrayList<>();
+        final boolean lazyTimelineCanvas =
+                !vectorPrint && approxTimelineRows >= LAZY_TIMELINE_CANVAS_MIN_ROWS;
+        final boolean lazyBadgeLayout =
+                showPersonBadges && approxTimelineRows >= LAZY_BADGE_LAYOUT_MIN_ROWS;
+        final boolean demoteTimelineCanvas =
+                !vectorPrint && approxTimelineRows >= TIMELINE_CANVAS_DEMOTE_MIN_ROWS;
+        final boolean useVirtualBody =
+                !vectorPrint && parsed.displayRows().size() >= ROW_VIRTUALIZATION_MIN_ROWS;
+        List<GanttBodyRowPlan> bodyRowPlans = new ArrayList<>();
         for (int ri = 0; ri < parsed.displayRows().size(); ri++) {
             DisplayRow dr = parsed.displayRows().get(ri);
             if (dr.sectionBanner() != null) {
+                double sectionH = layout.sectionRowHeight;
+                bodyRowPlans.add(
+                        GanttBodyRowPlan.section(
+                                ri, gridTimelineContentY, sectionH, dr.sectionBanner()));
+                if (useVirtualBody) {
+                    gridR++;
+                    gridTimelineContentY += layout.sectionRowHeight;
+                    continue;
+                }
                 Label banL = new Label(dr.sectionBanner());
                 banL.setPrefHeight(layout.sectionRowHeight);
                 banL.setMinHeight(layout.sectionRowHeight);
@@ -1088,20 +1197,39 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 barFont,
                                 false);
             } else {
-                Canvas rowCanvas = new Canvas(canvasTimelineW, rowCanvasH);
-                timelineCanvasRowCount++;
-                rowCanvas.setCache(false);
-                viewportRowSpecs.add(
-                        new ViewportRowSpec(
-                                rowCanvas,
-                                timelineDrawOuterPad,
-                                timelineBandHeight,
-                                machineGroupIndex,
-                                rowCanvasH,
-                                timelineRowContentMinY,
-                                slotCountForRow,
-                                cachedBarRuns));
-                timelineNode = rowCanvas;
+                Region timelinePlaceholder = null;
+                Canvas rowCanvas = null;
+                if (lazyTimelineCanvas) {
+                    timelinePlaceholder = new Region();
+                    timelinePlaceholder.setMinSize(canvasTimelineW, rowCanvasH);
+                    timelinePlaceholder.setPrefSize(canvasTimelineW, rowCanvasH);
+                    timelinePlaceholder.setMaxSize(canvasTimelineW, rowCanvasH);
+                    timelineNode = timelinePlaceholder;
+                } else {
+                    rowCanvas = new Canvas(canvasTimelineW, rowCanvasH);
+                    timelineCanvasRowCount++;
+                    rowCanvas.setCache(false);
+                    timelineNode = rowCanvas;
+                }
+            }
+
+            bodyRowPlans.add(
+                    GanttBodyRowPlan.data(
+                            ri,
+                            gridR,
+                            timelineRowContentMinY,
+                            rowCanvasH,
+                            dr,
+                            mplan,
+                            dplan,
+                            machineGroupIndex,
+                            cachedBarRuns,
+                            slotCountForRow));
+
+            if (useVirtualBody) {
+                gridR++;
+                gridTimelineContentY += cellBodyH;
+                continue;
             }
 
             Pane badgePane = new Pane();
@@ -1111,7 +1239,26 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
              */
             badgePane.setPickOnBounds(false);
             badgePane.setMouseTransparent(!(showPersonBadges && personBadgeDragAdjustEnabled));
-            if (showPersonBadges) {
+            LazyBadgeLayoutRequest lazyBadgeReq = null;
+            if (showPersonBadges && lazyBadgeLayout) {
+                lazyBadgeReq =
+                        new LazyBadgeLayoutRequest(
+                                dr.badgeCellsInSlots(),
+                                dr.cellsInSlots(),
+                                ri,
+                                gapPxEff,
+                                personBadgeDragAdjustEnabled,
+                                timelineDrawOuterPad,
+                                timelineBandHeight,
+                                bandVertEff,
+                                canvasTimelineW,
+                                rowCanvasH,
+                                dragEff,
+                                personBadgeDragDeltaSink,
+                                personBadgeWiresEffective,
+                                personBadgeWiresEffective ? personBadgeWirePaint : null,
+                                personBadgeWireMaxLengthPxEff);
+            } else if (showPersonBadges) {
                 layoutPersonBadgeOverlay(
                         badgePane,
                         dr.badgeCellsInSlots(),
@@ -1131,13 +1278,28 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         personBadgeWiresEffective,
                         personBadgeWiresEffective ? personBadgeWirePaint : null,
                         personBadgeWireMaxLengthPxEff);
-                /*
-                 * 帯内クランプ（clampBadgeLayoutYInBand）がスタック高≧帯のときオフセットを打ち消すため、
-                 * レイアウト後にオーバーレイPaneへ縦移動だけ適用する（アンカー座標は layout 内で補正済み）。
-                 */
                 badgePane.setTranslateY(bandVertEff);
             }
             StackPane rowStack = new StackPane(timelineNode, badgePane);
+            if (!vectorPrint) {
+                Region timelinePlaceholder =
+                        timelineNode instanceof Region r && !(timelineNode instanceof Canvas) ? r : null;
+                Canvas rowCanvas = timelineNode instanceof Canvas c ? c : null;
+                viewportRowSpecs.add(
+                        new ViewportRowSpec(
+                                rowStack,
+                                badgePane,
+                                rowCanvas,
+                                timelinePlaceholder,
+                                lazyBadgeReq,
+                                timelineDrawOuterPad,
+                                timelineBandHeight,
+                                machineGroupIndex,
+                                rowCanvasH,
+                                timelineRowContentMinY,
+                                slotCountForRow,
+                                cachedBarRuns));
+            }
             /*
              * Canvas と Pane を並べるだけでも後勝ちだが、子追加や再有効化時に順序がずれたとき備えて明示的に最前面へ。
              */
@@ -1180,7 +1342,59 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             gridTimelineContentY += cellBodyH;
         }
 
-        ScrollPane leftBodyScroll = new ScrollPane(leftBodyGrid);
+        Pane leftBodyHost = null;
+        Pane rightBodyHost = null;
+        VirtualGanttBodyHost virtualHost = null;
+        if (useVirtualBody) {
+            double bodyH = Math.max(1.0, gridTimelineContentY);
+            leftBodyHost = new Pane();
+            leftBodyHost.setMinSize(leftTotal, bodyH);
+            leftBodyHost.setPrefSize(leftTotal, bodyH);
+            rightBodyHost = new Pane();
+            double rightW = timelineWidth + progressTotal;
+            rightBodyHost.setMinSize(rightW, bodyH);
+            rightBodyHost.setPrefSize(rightW, bodyH);
+            virtualHost =
+                    new VirtualGanttBodyHost(
+                            bodyRowPlans,
+                            leftBodyHost,
+                            rightBodyHost,
+                            viewportRowSpecs,
+                            new VirtualGanttBodyHost.BuildContext(
+                                    parsed,
+                                    layout,
+                                    palette,
+                                    barFont,
+                                    effCols,
+                                    dateW,
+                                    machW,
+                                    procW,
+                                    leftTotal,
+                                    timelineWidth,
+                                    progressTotal,
+                                    progressTotal > 0,
+                                    parsed.progressColumnIndices(),
+                                    layout.progressCellWidth,
+                                    layout.progressGap,
+                                    canvasTimelineW,
+                                    timelineDrawOuterPad,
+                                    timelineBandHeight,
+                                    cellBodyH,
+                                    lazyTimelineCanvas,
+                                    lazyBadgeLayout,
+                                    showPersonBadges,
+                                    personBadgeDragAdjustEnabled,
+                                    gapPxEff,
+                                    bandVertEff,
+                                    dragEff,
+                                    personBadgeDragDeltaSink,
+                                    personBadgeWiresEffective,
+                                    personBadgeWirePaint,
+                                    personBadgeWireMaxLengthPxEff,
+                                    badgeResolver));
+        }
+
+        ScrollPane leftBodyScroll = new ScrollPane(useVirtualBody ? leftBodyHost : leftBodyGrid);
         leftBodyScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         leftBodyScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         /* true のときビューポートより狭いグリッドが横に引き伸ばされ、機械名・工程名列が余白だらけになる */
@@ -1188,7 +1402,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         leftBodyScroll.setMinViewportWidth(leftTotal);
         leftBodyScroll.setPrefViewportWidth(leftTotal);
 
-        ScrollPane rightBodyScroll = new ScrollPane(rightBodyGrid);
+        ScrollPane rightBodyScroll = new ScrollPane(useVirtualBody ? rightBodyHost : rightBodyGrid);
         rightBodyScroll.setFitToWidth(false);
         /*
          * 既定の setPannable(true) は主ボタンドラッグでパンするため、担当バッジの左ドラッグと競合する。
@@ -1229,6 +1443,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         leftBodyScroll.vvalueProperty().bindBidirectional(rightBodyScroll.vvalueProperty());
 
         final LayoutMetrics layoutViewport = layout;
+        final VirtualGanttBodyHost virtualHostForSync = virtualHost;
+        final Function<String, PersonBadgeStyle> badgeResolverForPaint = badgeResolver;
 
         /*
          * スクロール由来の再描画は PauseTransition ではなく AnimationTimer でフレームに合わせて共通化する。
@@ -1266,30 +1482,40 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             vr[0],
                             vr[1]);
                     for (ViewportRowSpec s : viewportRowSpecs) {
-                        if (!Boolean.TRUE.equals(fullPaint)
-                                && !intersectsVerticalViewport(
-                                        rightBodyScroll,
-                                        s.contentMinY(),
-                                        s.rowH(),
-                                        VIEWPORT_VERTICAL_MARGIN_PX)) {
+                        boolean rowVisible =
+                                Boolean.TRUE.equals(fullPaint)
+                                        || intersectsVerticalViewport(
+                                                rightBodyScroll,
+                                                s.contentMinY,
+                                                s.rowH,
+                                                VIEWPORT_VERTICAL_MARGIN_PX);
+                        if (!rowVisible) {
+                            if (demoteTimelineCanvas) {
+                                demoteTimelineCanvasIfFar(
+                                        s, rightBodyScroll, canvasTimelineW, demoteTimelineCanvas);
+                            }
                             continue;
                         }
+                        Canvas rowCanvas = ensurePromotedTimelineCanvas(s, canvasTimelineW);
+                        if (s.lazyBadge != null && s.badgePane.getChildren().isEmpty()) {
+                            applyLazyBadgeLayout(s, layoutViewport, badgeResolverForPaint);
+                        }
                         paintedRows++;
-                        GraphicsContext gcx = s.canvas().getGraphicsContext2D();
-                        gcx.clearRect(0, 0, canvasTimelineW, s.rowH());
+                        GraphicsContext gcx = rowCanvas.getGraphicsContext2D();
+                        gcx.clearRect(0, 0, canvasTimelineW, s.rowH);
                         drawTimelineRow(
                                 gcx,
-                                s.barRuns(),
-                                s.slotCount(),
-                                s.machineGroupIndex(),
+                                s.barRuns,
+                                s.slotCount,
+                                s.machineGroupIndex,
                                 layoutViewport,
                                 palette,
                                 barFont,
                                 vr[0],
                                 vr[1],
-                                s.outerPad(),
-                                s.timelineBandHeight(),
-                                s.rowH());
+                                s.outerPad,
+                                s.timelineBandHeight,
+                                s.rowH);
                     }
                     if (Boolean.getBoolean(PROFILE_PROP)) {
                         long elapsedMs = (System.nanoTime() - t0Ns) / 1_000_000L;
@@ -1306,7 +1532,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 };
         Runnable paintTimelineViewport = () -> paintTimeline.accept(false);
         Runnable paintFullContentForPrint =
-                vectorPrint ? () -> {} : () -> paintTimeline.accept(true);
+                vectorPrint
+                        ? () -> {}
+                        : () -> {
+                            if (virtualHostForSync != null) {
+                                virtualHostForSync.materializeAll();
+                            }
+                            paintTimeline.accept(true);
+                        };
         Runnable scheduleViewportRepaint;
         if (vectorPrint) {
             scheduleViewportRepaint = () -> {};
@@ -1333,6 +1566,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             rightBodyScroll.vvalueProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
             rightBodyScroll.widthProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
             rightBodyScroll.heightProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
+            if (virtualHostForSync != null) {
+                Runnable syncVirtual =
+                        () -> virtualHostForSync.syncToViewport(rightBodyScroll);
+                rightBodyScroll.vvalueProperty().addListener((o, a, b) -> syncVirtual.run());
+                rightBodyScroll.heightProperty().addListener((o, a, b) -> syncVirtual.run());
+                Platform.runLater(syncVirtual);
+            }
             Platform.runLater(paintTimelineViewport);
         }
 
@@ -4955,15 +5195,528 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private record RepairResult(
             List<String> columns, ObservableList<ObservableList<String>> rows) {}
 
-    private record ViewportRowSpec(
-            Canvas canvas,
-            double outerPad,
+    /** タイムライン行の描画・遅延バッジ用（Canvas は見えている行だけ実体化）。 */
+    private static final class ViewportRowSpec {
+        final StackPane rowStack;
+        final Pane badgePane;
+        Canvas canvas;
+        Region timelinePlaceholder;
+        final LazyBadgeLayoutRequest lazyBadge;
+        final double outerPad;
+        final double timelineBandHeight;
+        final int machineGroupIndex;
+        final double rowH;
+        final double contentMinY;
+        final int slotCount;
+        final List<BarRun> barRuns;
+
+        ViewportRowSpec(
+                StackPane rowStack,
+                Pane badgePane,
+                Canvas canvas,
+                Region timelinePlaceholder,
+                LazyBadgeLayoutRequest lazyBadge,
+                double outerPad,
+                double timelineBandHeight,
+                int machineGroupIndex,
+                double rowH,
+                double contentMinY,
+                int slotCount,
+                List<BarRun> barRuns) {
+            this.rowStack = rowStack;
+            this.badgePane = badgePane;
+            this.canvas = canvas;
+            this.timelinePlaceholder = timelinePlaceholder;
+            this.lazyBadge = lazyBadge;
+            this.outerPad = outerPad;
+            this.timelineBandHeight = timelineBandHeight;
+            this.machineGroupIndex = machineGroupIndex;
+            this.rowH = rowH;
+            this.contentMinY = contentMinY;
+            this.slotCount = slotCount;
+            this.barRuns = barRuns;
+        }
+    }
+
+    private record LazyBadgeLayoutRequest(
+            List<String> badgeSlotTexts,
+            List<String> slotTexts,
+            int displayRowIndex,
+            double gapPx,
+            boolean badgeDragAdjustEnabled,
+            double timelineBandTop,
             double timelineBandHeight,
-            int machineGroupIndex,
-            double rowH,
+            double badgePaneVerticalOffsetPx,
+            double timelinePaneWidth,
+            double overlayPaneHeight,
+            Map<String, EquipmentGanttBadgeDragDelta> dragDeltas,
+            BiConsumer<String, EquipmentGanttBadgeDragDelta> dragDeltaSink,
+            boolean personBadgeWiresEnabled,
+            PersonBadgeWirePaint wirePaintOrNull,
+            double personBadgeWireMaxLengthPxOrZero) {}
+
+    private record GanttBodyRowPlan(
+            int displayRowIndex,
+            int gridRow,
             double contentMinY,
-            int slotCount,
-            List<BarRun> barRuns) {}
+            double rowHeight,
+            boolean section,
+            String sectionBanner,
+            DisplayRow displayRow,
+            MachineColumnPlan machinePlan,
+            DateColumnPlan datePlan,
+            int machineGroupIndex,
+            List<BarRun> barRuns,
+            int slotCount) {
+
+        static GanttBodyRowPlan section(
+                int displayRowIndex, double contentMinY, double rowHeight, String sectionBanner) {
+            return new GanttBodyRowPlan(
+                    displayRowIndex,
+                    -1,
+                    contentMinY,
+                    rowHeight,
+                    true,
+                    sectionBanner,
+                    null,
+                    null,
+                    null,
+                    0,
+                    List.of(),
+                    0);
+        }
+
+        static GanttBodyRowPlan data(
+                int displayRowIndex,
+                int gridRow,
+                double contentMinY,
+                double rowHeight,
+                DisplayRow displayRow,
+                MachineColumnPlan machinePlan,
+                DateColumnPlan datePlan,
+                int machineGroupIndex,
+                List<BarRun> barRuns,
+                int slotCount) {
+            return new GanttBodyRowPlan(
+                    displayRowIndex,
+                    gridRow,
+                    contentMinY,
+                    rowHeight,
+                    false,
+                    null,
+                    displayRow,
+                    machinePlan,
+                    datePlan,
+                    machineGroupIndex,
+                    barRuns,
+                    slotCount);
+        }
+    }
+
+    /**
+     * 大行ガントの左右ボディを、見えている行＋バッファだけ Pane 上に載せ替える。
+     */
+    private static final class VirtualGanttBodyHost {
+
+        record BuildContext(
+                ParseResult parsed,
+                LayoutMetrics layout,
+                GanttPalette palette,
+                Font barFont,
+                List<String> effCols,
+                double dateW,
+                double machW,
+                double procW,
+                double leftTotal,
+                double timelineWidth,
+                double progressTotal,
+                boolean hasProgress,
+                List<Integer> progressColumnIndices,
+                int progCell,
+                int progGap,
+                double canvasTimelineW,
+                double timelineDrawOuterPad,
+                double timelineBandHeight,
+                double cellBodyH,
+                boolean lazyTimelineCanvas,
+                boolean lazyBadgeLayout,
+                boolean showPersonBadges,
+                boolean personBadgeDragAdjustEnabled,
+                double gapPxEff,
+                double bandVertEff,
+                Map<String, EquipmentGanttBadgeDragDelta> dragEff,
+                BiConsumer<String, EquipmentGanttBadgeDragDelta> dragDeltaSink,
+                boolean personBadgeWiresEffective,
+                PersonBadgeWirePaint personBadgeWirePaint,
+                double personBadgeWireMaxLengthPxEff,
+                Function<String, PersonBadgeStyle> badgeResolver) {}
+
+        private final List<GanttBodyRowPlan> plans;
+        private final Pane leftHost;
+        private final Pane rightHost;
+        private final List<ViewportRowSpec> viewportSpecs;
+        private final BuildContext ctx;
+        private final Map<Integer, MaterializedRow> materialized = new LinkedHashMap<>();
+
+        VirtualGanttBodyHost(
+                List<GanttBodyRowPlan> plans,
+                Pane leftHost,
+                Pane rightHost,
+                List<ViewportRowSpec> viewportSpecs,
+                BuildContext ctx) {
+            this.plans = plans;
+            this.leftHost = leftHost;
+            this.rightHost = rightHost;
+            this.viewportSpecs = viewportSpecs;
+            this.ctx = ctx;
+        }
+
+        void materializeAll() {
+            for (int pi = 0; pi < plans.size(); pi++) {
+                if (!materialized.containsKey(pi)) {
+                    materialize(pi);
+                }
+            }
+        }
+
+        void syncToViewport(ScrollPane scroll) {
+            Set<Integer> target = expandForRowSpan(computeVisiblePlanIndices(scroll));
+            List<Integer> toRemove = new ArrayList<>();
+            for (Integer pi : materialized.keySet()) {
+                if (!target.contains(pi)) {
+                    toRemove.add(pi);
+                }
+            }
+            for (int pi : toRemove) {
+                dematerialize(pi);
+            }
+            for (int pi : target) {
+                if (!materialized.containsKey(pi)) {
+                    materialize(pi);
+                }
+            }
+        }
+
+        private Set<Integer> computeVisiblePlanIndices(ScrollPane sp) {
+            LinkedHashSet<Integer> out = new LinkedHashSet<>();
+            if (sp == null || plans.isEmpty()) {
+                return out;
+            }
+            for (int pi = 0; pi < plans.size(); pi++) {
+                GanttBodyRowPlan p = plans.get(pi);
+                if (intersectsVerticalViewport(
+                        sp, p.contentMinY(), p.rowHeight(), VIEWPORT_VERTICAL_MARGIN_PX)) {
+                    out.add(pi);
+                }
+            }
+            if (out.isEmpty() && !plans.isEmpty()) {
+                out.add(0);
+            }
+            int minPi = out.stream().min(Integer::compareTo).orElse(0);
+            int maxPi = out.stream().max(Integer::compareTo).orElse(0);
+            LinkedHashSet<Integer> buffered = new LinkedHashSet<>();
+            for (int pi = Math.max(0, minPi - VIRTUAL_ROW_BUFFER);
+                    pi <= Math.min(plans.size() - 1, maxPi + VIRTUAL_ROW_BUFFER);
+                    pi++) {
+                buffered.add(pi);
+            }
+            return buffered;
+        }
+
+        private Set<Integer> expandForRowSpan(Set<Integer> base) {
+            LinkedHashSet<Integer> out = new LinkedHashSet<>(base);
+            for (int pi : base) {
+                GanttBodyRowPlan p = plans.get(pi);
+                if (p.section() || p.displayRow() == null) {
+                    continue;
+                }
+                if (p.datePlan() != null && p.datePlan().continuation()) {
+                    includeSpanStart(out, pi, true);
+                }
+                if (p.machinePlan() != null && p.machinePlan().continuation()) {
+                    includeSpanStart(out, pi, false);
+                }
+            }
+            return out;
+        }
+
+        private void includeSpanStart(LinkedHashSet<Integer> out, int pi, boolean dateSpan) {
+            for (int back = pi - 1; back >= 0; back--) {
+                GanttBodyRowPlan prev = plans.get(back);
+                if (prev.section()) {
+                    break;
+                }
+                if (dateSpan) {
+                    if (prev.datePlan() != null && !prev.datePlan().continuation()) {
+                        out.add(back);
+                        break;
+                    }
+                } else {
+                    if (prev.machinePlan() != null && !prev.machinePlan().continuation()) {
+                        out.add(back);
+                        break;
+                    }
+                }
+            }
+        }
+
+        private void dematerialize(int planIndex) {
+            MaterializedRow row = materialized.remove(planIndex);
+            if (row == null) {
+                return;
+            }
+            for (Node n : row.leftNodes()) {
+                leftHost.getChildren().remove(n);
+            }
+            for (Node n : row.rightNodes()) {
+                rightHost.getChildren().remove(n);
+            }
+            if (row.viewportSpec() != null) {
+                viewportSpecs.remove(row.viewportSpec());
+            }
+        }
+
+        private void materialize(int planIndex) {
+            GanttBodyRowPlan plan = plans.get(planIndex);
+            if (plan.section()) {
+                materialized.put(planIndex, materializeSection(plan));
+            } else {
+                materialized.put(planIndex, materializeData(plan));
+            }
+        }
+
+        private MaterializedRow materializeSection(GanttBodyRowPlan plan) {
+            List<Node> leftNodes = new ArrayList<>();
+            List<Node> rightNodes = new ArrayList<>();
+            double y = plan.contentMinY();
+            double h = plan.rowHeight();
+            Label banL = new Label(plan.sectionBanner() != null ? plan.sectionBanner() : "");
+            banL.setPrefHeight(h);
+            banL.setMinHeight(h);
+            banL.setMaxHeight(h);
+            banL.setMaxWidth(ctx.leftTotal());
+            banL.setAlignment(Pos.CENTER_LEFT);
+            banL.setPadding(
+                    new Insets(
+                            2 * ctx.layout().zoom,
+                            8 * ctx.layout().zoom,
+                            2 * ctx.layout().zoom,
+                            8 * ctx.layout().zoom));
+            banL.setStyle(ctx.palette().sectionBannerCss());
+            banL.setWrapText(true);
+            banL.setLayoutX(0);
+            banL.setLayoutY(y);
+            leftHost.getChildren().add(banL);
+            leftNodes.add(banL);
+            Region banR = new Region();
+            banR.setPrefHeight(h);
+            banR.setMinHeight(h);
+            banR.setMaxHeight(h);
+            banR.setMinWidth(ctx.timelineWidth() + ctx.progressTotal());
+            banR.setStyle(ctx.palette().sectionBannerCss());
+            banR.setLayoutX(0);
+            banR.setLayoutY(y);
+            rightHost.getChildren().add(banR);
+            rightNodes.add(banR);
+            return new MaterializedRow(leftNodes, rightNodes, null);
+        }
+
+        private MaterializedRow materializeData(GanttBodyRowPlan plan) {
+            List<Node> leftNodes = new ArrayList<>();
+            List<Node> rightNodes = new ArrayList<>();
+            DisplayRow dr = plan.displayRow();
+            LayoutMetrics layout = ctx.layout();
+            GanttPalette palette = ctx.palette();
+            double y = plan.contentMinY();
+            double rowH = plan.rowHeight();
+            MachineColumnPlan mplan = plan.machinePlan();
+            DateColumnPlan dplan = plan.datePlan();
+            int machineGroupIndex = plan.machineGroupIndex();
+
+            if (dplan != null && !dplan.continuation()) {
+                String dateTxt = dplan.dateText() != null ? dplan.dateText() : "";
+                int dRows = Math.max(1, dplan.rowSpan());
+                double spanDateH = dRows * ctx.cellBodyH();
+                StackPane dateWrap = new StackPane();
+                dateWrap.setMinWidth(ctx.dateW());
+                dateWrap.setPrefWidth(ctx.dateW());
+                dateWrap.setMaxWidth(ctx.dateW());
+                dateWrap.setMinHeight(spanDateH);
+                dateWrap.setPrefHeight(spanDateH);
+                dateWrap.setMaxHeight(spanDateH);
+                dateWrap.setPadding(
+                        new Insets(
+                                2 * layout.zoom,
+                                6 * layout.zoom,
+                                2 * layout.zoom,
+                                6 * layout.zoom));
+                dateWrap.setStyle(palette.machineSideCellCss(machineGroupIndex));
+                Text dt = new Text(dateTxt);
+                dt.setFont(Font.font(layout.rowLabelFontSize * 0.92));
+                dt.setFill(Color.web(palette.machineSideTextFill()));
+                dt.setRotate(-90);
+                StackPane.setAlignment(dt, Pos.CENTER);
+                dateWrap.getChildren().add(dt);
+                dateWrap.setLayoutX(0);
+                dateWrap.setLayoutY(y);
+                leftHost.getChildren().add(dateWrap);
+                leftNodes.add(dateWrap);
+            }
+
+            if (mplan != null && !mplan.continuation()) {
+                String machTxt = mplan.machineCellText() != null ? mplan.machineCellText() : "";
+                Label ml = new Label(machTxt);
+                applySideDataStyle(ml, ctx.machW(), layout, palette, machineGroupIndex);
+                ml.setWrapText(true);
+                if (mplan.rowSpan() > 1) {
+                    double spanH = mplan.rowSpan() * ctx.cellBodyH();
+                    ml.setMinHeight(spanH);
+                    ml.setPrefHeight(spanH);
+                    ml.setMaxHeight(spanH);
+                    ml.setAlignment(Pos.TOP_LEFT);
+                    fitFontIntoColumn(
+                            ml, machTxt, ctx.machW() - 8, spanH - 4, layout.rowLabelFontSize);
+                } else {
+                    ml.setMinHeight(rowH);
+                    ml.setPrefHeight(rowH);
+                    ml.setMaxHeight(rowH);
+                    fitFontIntoColumn(
+                            ml, machTxt, ctx.machW() - 8, rowH - 4, layout.rowLabelFontSize);
+                }
+                ml.setLayoutX(ctx.dateW());
+                ml.setLayoutY(y);
+                leftHost.getChildren().add(ml);
+                leftNodes.add(ml);
+            }
+
+            String procTxt = dr.processBlock() != null ? dr.processBlock() : "";
+            Label pl = new Label(procTxt);
+            applySideDataStyle(pl, ctx.procW(), layout, palette, machineGroupIndex);
+            pl.setMinHeight(rowH);
+            pl.setPrefHeight(rowH);
+            pl.setMaxHeight(rowH);
+            pl.setWrapText(true);
+            fitFontIntoColumn(pl, procTxt, ctx.procW() - 8, rowH - 4, layout.rowLabelFontSize);
+            pl.setLayoutX(ctx.dateW() + ctx.machW());
+            pl.setLayoutY(y);
+            leftHost.getChildren().add(pl);
+            leftNodes.add(pl);
+
+            Node timelineNode;
+            Canvas rowCanvas = null;
+            Region timelinePlaceholder = null;
+            if (ctx.lazyTimelineCanvas()) {
+                timelinePlaceholder = new Region();
+                timelinePlaceholder.setMinSize(ctx.canvasTimelineW(), rowH);
+                timelinePlaceholder.setPrefSize(ctx.canvasTimelineW(), rowH);
+                timelinePlaceholder.setMaxSize(ctx.canvasTimelineW(), rowH);
+                timelineNode = timelinePlaceholder;
+            } else {
+                rowCanvas = new Canvas(ctx.canvasTimelineW(), rowH);
+                rowCanvas.setCache(false);
+                timelineNode = rowCanvas;
+            }
+
+            Pane badgePane = new Pane();
+            badgePane.setPickOnBounds(false);
+            badgePane.setMouseTransparent(!(ctx.showPersonBadges() && ctx.personBadgeDragAdjustEnabled()));
+            LazyBadgeLayoutRequest lazyBadgeReq = null;
+            if (ctx.showPersonBadges() && ctx.lazyBadgeLayout()) {
+                lazyBadgeReq =
+                        new LazyBadgeLayoutRequest(
+                                dr.badgeCellsInSlots(),
+                                dr.cellsInSlots(),
+                                plan.displayRowIndex(),
+                                ctx.gapPxEff(),
+                                ctx.personBadgeDragAdjustEnabled(),
+                                ctx.timelineDrawOuterPad(),
+                                ctx.timelineBandHeight(),
+                                ctx.bandVertEff(),
+                                ctx.canvasTimelineW(),
+                                rowH,
+                                ctx.dragEff(),
+                                ctx.dragDeltaSink(),
+                                ctx.personBadgeWiresEffective(),
+                                ctx.personBadgeWiresEffective() ? ctx.personBadgeWirePaint() : null,
+                                ctx.personBadgeWireMaxLengthPxEff());
+            } else if (ctx.showPersonBadges()) {
+                layoutPersonBadgeOverlay(
+                        badgePane,
+                        dr.badgeCellsInSlots(),
+                        dr.cellsInSlots(),
+                        layout,
+                        ctx.badgeResolver(),
+                        plan.displayRowIndex(),
+                        ctx.gapPxEff(),
+                        ctx.personBadgeDragAdjustEnabled(),
+                        ctx.timelineDrawOuterPad(),
+                        ctx.timelineBandHeight(),
+                        ctx.bandVertEff(),
+                        ctx.canvasTimelineW(),
+                        rowH,
+                        ctx.dragEff(),
+                        ctx.dragDeltaSink(),
+                        ctx.personBadgeWiresEffective(),
+                        ctx.personBadgeWiresEffective() ? ctx.personBadgeWirePaint() : null,
+                        ctx.personBadgeWireMaxLengthPxEff());
+                badgePane.setTranslateY(ctx.bandVertEff());
+            }
+            StackPane rowStack = new StackPane(timelineNode, badgePane);
+            if (ctx.showPersonBadges() && ctx.personBadgeDragAdjustEnabled()) {
+                badgePane.toFront();
+            }
+            rowStack.setLayoutX(0);
+            rowStack.setLayoutY(y);
+            rightHost.getChildren().add(rowStack);
+            rightNodes.add(rowStack);
+
+            ViewportRowSpec spec =
+                    new ViewportRowSpec(
+                            rowStack,
+                            badgePane,
+                            rowCanvas,
+                            timelinePlaceholder,
+                            lazyBadgeReq,
+                            ctx.timelineDrawOuterPad(),
+                            ctx.timelineBandHeight(),
+                            machineGroupIndex,
+                            rowH,
+                            y,
+                            plan.slotCount(),
+                            plan.barRuns());
+            viewportSpecs.add(spec);
+
+            HBox progBox = new HBox(ctx.progGap());
+            progBox.setMinHeight(rowH);
+            progBox.setAlignment(Pos.CENTER_LEFT);
+            for (int pc : ctx.progressColumnIndices()) {
+                String pv =
+                        dr.rawRow().size() > pc && dr.rawRow().get(pc) != null
+                                ? dr.rawRow().get(pc).strip()
+                                : "";
+                Label pLab = new Label(pv);
+                pLab.setMinWidth(ctx.progCell());
+                pLab.setPrefWidth(ctx.progCell());
+                pLab.setMaxWidth(ctx.progCell());
+                pLab.setWrapText(true);
+                pLab.setAlignment(Pos.CENTER);
+                pLab.setFont(Font.font(layout.progressFontSize));
+                pLab.setStyle(palette.machineSideCellCss(machineGroupIndex));
+                progBox.getChildren().add(pLab);
+            }
+            if (!progBox.getChildren().isEmpty()) {
+                progBox.setLayoutX(ctx.timelineWidth());
+                progBox.setLayoutY(y);
+                rightHost.getChildren().add(progBox);
+                rightNodes.add(progBox);
+            }
+
+            return new MaterializedRow(leftNodes, rightNodes, spec);
+        }
+
+        private record MaterializedRow(
+                List<Node> leftNodes, List<Node> rightNodes, ViewportRowSpec viewportSpec) {}
+    }
 
     /**
      * {@link #build} と {@link #computeDataFingerprint} で同一の pandas 救済を適用した列・行・担当バッジ列。
