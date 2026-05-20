@@ -1168,7 +1168,7 @@ PLAN_COL_ROLL_UNIT_LENGTH_LEGACY = "ロール単位長さ"
 # 段階2の ``write_plan_sheet_global_parse_and_conflict_styles_one_io`` でブックの当該セルへ値反映＋黄地黒字に使う。
 PLAN_DF_ATTR_EFFECTIVE_ROLL_UNIT_DATA_ILOCS = "_pm_ai_effective_roll_unit_data_ilocs"
 # 段階1で算出し配台計画に出力（_dispatch_remaining_qty_m_from_row）。
-# 配台キュー本体の残量は _plan_row_dispatch_qty_metrics（未加工列ベース）のまま。
+# 配台キュー本体の残量は _plan_row_dispatch_qty_metrics（未加工列・原反ロール長ベース）。
 PLAN_COL_DISPATCH_REMAINING_QTY = "配台使用残数量"
 # 段階1で算出。配台使用残数量 ÷ (原反)ロール単位長さ（列は配台使用残数量の直右）。
 PLAN_COL_DISPATCH_ROLL_COUNT = "配台ロール数"
@@ -4088,9 +4088,10 @@ def _plan_row_dispatch_qty_metrics(row):
 
     未加工に有効数値があるとき:
       ① 未加工 > 0: 済相当m = max(0, 換算数量(raw) - 未加工)、残りm = max(0, 未加工)
-      ② 未加工 <= 0: 換算数量(100m切上)を残りm の基準とし、それがロール単位長さ未満ならロール長を採用（最小加工単位=1ロール）。済相当m = 0。
-      さらに **換算数量(raw) が (原反)ロール単位長さ m 未満**のときは、残りm を **少なくともその原反ロール長**まで引き上げる（配台に使う数量の下限）。
-      換算数量がロール単位長さの整数倍に一致するときは、100m 切上げだけが残量を膨らませるのを避けるため raw を基準とする。
+      ② 未加工 <= 0: 換算数量(100m切上)を残りm の基準とし、それが **(原反)ロール単位長さ** 未満なら原反1ロール分まで引き上げ（最小加工単位）。済相当m = 0。
+      さらに **換算数量(raw) が (原反)ロール単位長さ m 未満**のときは、残りm を **少なくともその原反ロール長**まで引き上げる。
+      換算数量が (原反)ロール単位長さの整数倍に一致するときは、100m 切上げだけが残量を膨らませるのを避けるため raw 換算数量を基準とする。
+      **(製品)ロール単位長さは参照しない。**
       第三要素は配台総量(m)用: ①では 100m 切上げ値、②では残りm と一致（ロール数整合）。
 
     Returns:
@@ -4114,9 +4115,9 @@ def _plan_row_dispatch_qty_metrics(row):
                 qty_total_for_dispatch_m = qty_total_ceiled
             return remaining_m, done_m, qty_total_for_dispatch_m, True
         else:
-            # 未加工が 0 付近: 換算数量(100m切上)を基準にするが、ロール単位長さ未満は 1 ロール分に引き上げ
-            roll_m = _roll_unit_m_estimate_from_plan_row(
-                row, qty_total_ceiled or qty_conv_raw or 1.0
+            # 未加工が 0 付近: 換算数量(100m切上)を基準にするが、(原反)ロール単位長さ未満は 1 原反ロール分に引き上げ
+            roll_m = _dispatch_simulator_unit_m_from_plan_row(
+                row, fallback_m=qty_total_ceiled or qty_conv_raw or 1.0
             )
             try:
                 roll_m_f = float(roll_m)

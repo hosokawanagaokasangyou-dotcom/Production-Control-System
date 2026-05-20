@@ -50,7 +50,7 @@ public final class Stage2PlanRowDispatchQtyMetrics {
         if (fallbackM <= 1e-9) {
             fallbackM = 1.0;
         }
-        double rollM = rollUnitMFromPlanRow(row, fallbackM, tables);
+        double rollM = rawRollUnitMFromPlanRow(row, fallbackM, tables);
         double baseM = Math.max(0.0, qtyTotalCeiled);
         if (rollM > EPS && qtyConvRaw > EPS) {
             double nRollsRaw = qtyConvRaw / rollM;
@@ -59,6 +59,9 @@ public final class Stage2PlanRowDispatchQtyMetrics {
             }
         }
         double remainingM = rollM > 0 ? Math.max(baseM, rollM) : baseM;
+        if (rollM > EPS && qtyConvRaw > EPS && qtyConvRaw + 1e-9 < rollM) {
+            remainingM = Math.max(remainingM, rollM);
+        }
         double qtyTotalForDispatchM = remainingM;
         return Optional.of(new Metrics(remainingM, 0.0, qtyTotalForDispatchM));
     }
@@ -71,24 +74,20 @@ public final class Stage2PlanRowDispatchQtyMetrics {
         return Math.ceil(rollM / step) * step;
     }
 
-    static double rollUnitMFromPlanRow(
+    /** Python {@code _dispatch_simulator_unit_m_from_plan_row} に相当（原反ロール長のみ）。 */
+    static double rawRollUnitMFromPlanRow(
             Map<String, String> row, double fallbackM, Stage2RollUnitLengthTables tables) {
-        String product = nz(row.get("製品名"));
         String usedRaw = nz(row.get("使用原反"));
-        double unit =
-                Stage2RollUnitLengthTables.parseFloatSafe(row.get("(製品)ロール単位長さ"), 0.0);
+        double unit = Stage2RollUnitLengthTables.parseFloatSafe(row.get("(原反)ロール単位長さ"), 0.0);
         if (unit <= 0) {
-            unit = Stage2RollUnitLengthTables.parseFloatSafe(row.get("ロール単位長さ"), 0.0);
+            unit = Stage2RollUnitLengthTables.parseFloatSafe(row.get("（原反）ロール単位長さ"), 0.0);
         }
         double fb = Math.max(1e-9, fallbackM);
-        if (unit <= 0) {
-            unit =
-                    tables.lookupByUsedRaw(usedRaw)
-                            .or(() -> tables.lookupByProductName(product))
-                            .orElse(0.0);
+        if (unit <= 0 && tables != null) {
+            unit = tables.lookupByUsedRaw(usedRaw).orElse(0.0);
         }
         if (unit <= 0) {
-            unit = Stage2RollUnitLengthTables.inferFromProductDimensions(product, fb);
+            unit = Stage2RollUnitLengthTables.inferFromProductDimensions(usedRaw, fb);
         }
         if (unit <= 0) {
             unit = fb;
