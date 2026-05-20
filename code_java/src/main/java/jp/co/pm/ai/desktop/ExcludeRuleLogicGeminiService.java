@@ -68,6 +68,7 @@ public final class ExcludeRuleLogicGeminiService {
         u.add("特別指定_備考");
         u.add("ロール単位長さ");
         u.add("配台使用残数量");
+        u.add("配台ロール数");
         u.sort(Comparator.naturalOrder());
         return List.copyOf(u);
     }

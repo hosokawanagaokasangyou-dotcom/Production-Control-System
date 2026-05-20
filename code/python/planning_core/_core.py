@@ -1169,6 +1169,8 @@ PLAN_DF_ATTR_EFFECTIVE_ROLL_UNIT_DATA_ILOCS = "_pm_ai_effective_roll_unit_data_i
 # 段階1で算出し配台計画に出力（_dispatch_remaining_qty_m_from_row）。
 # 配台キュー本体の残量は _plan_row_dispatch_qty_metrics（未加工列ベース）のまま。
 PLAN_COL_DISPATCH_REMAINING_QTY = "配台使用残数量"
+# 段階1で算出。配台使用残数量 ÷ (原反)ロール単位長さ（列は配台使用残数量の直右）。
+PLAN_COL_DISPATCH_ROLL_COUNT = "配台ロール数"
 # 原反幅（mm 想定）。段階1のみ算出。テーブル「使用原反, 加工幅.txt」優先、未登録時は最後の NNNxMM の左辺を採用。いずれも不可なら PlanningValidationError。
 # 「使用原反」キー照合は _normalize_mm_table_lookup_key（NFKC 後に全角・半角など空白類を除去）で加工計画の使用原反／製品名と突き合わせる。
 PLAN_COL_RAW_FABRIC_WIDTH = "原反幅"
@@ -1428,6 +1430,7 @@ EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
         PLAN_COL_PROCESS_FACTOR,
         PLAN_COL_ROLL_UNIT_LENGTH,
         PLAN_COL_DISPATCH_REMAINING_QTY,
+        PLAN_COL_DISPATCH_ROLL_COUNT,
     }
 )
 
@@ -1638,7 +1641,7 @@ def plan_input_sheet_column_order():
 
     0. 配台試行順番（段階1抽出直後に空クリア→段階2と同じ趣旨に付与。段階2は全行に値はあるとしこの順を優先）
     1. 配台不要（参照列なし）
-    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量、製品名の直後にロール単位長さ・製品幅、原反投入日の直後に在庫場所・使用原反の直後に(原反)ロール単位長さ・原反幅）
+    2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量→配台ロール数、製品名の直後にロール単位長さ・製品幅、原反投入日の直後に在庫場所・使用原反の直後に(原反)ロール単位長さ・原反幅）
        （ロール単位長さは製品名テーブル→製品名寸法のみ。(原反)ロール単位長さは使用原反テーブル→使用原反文字列の寸法→いずれも不可なら「不明」）
     3. 加工工程の決定プロセスの因孝
     4. 上書き列… 複数列の直後に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
@@ -1653,6 +1656,7 @@ def plan_input_sheet_column_order():
         cols.append(c)
         if c == TASK_COL_UNPROCESSED:
             cols.append(PLAN_COL_DISPATCH_REMAINING_QTY)
+            cols.append(PLAN_COL_DISPATCH_ROLL_COUNT)
         if c == TASK_COL_PRODUCT:
             cols.append(PLAN_COL_ROLL_UNIT_LENGTH)
             cols.append(PLAN_COL_PRODUCT_WIDTH)
@@ -4138,15 +4142,33 @@ def _dispatch_remaining_qty_m_from_row(row) -> float:
     return float(raw_roll_m) * float(n_rolls)
 
 
+def _dispatch_roll_count_from_row(row, remaining_m: float) -> float | int | str:
+    """配台使用残数量(m) ÷ (原反)ロール単位長さ。原反ロール長が無いときは空文字。"""
+    raw_roll_m = _raw_roll_unit_m_resolved_for_dispatch_qty(row)
+    rem = max(0.0, float(remaining_m))
+    if raw_roll_m <= 1e-12:
+        return ""
+    if rem <= 1e-12:
+        return 0
+    n = rem / float(raw_roll_m)
+    if abs(n - round(n)) <= 1e-9:
+        return int(round(n))
+    return n
+
+
 def _fill_plan_dispatch_remaining_qty_column(plan_df: pd.DataFrame) -> None:
-    """配台計画 DataFrame の「配台使用残数量」を _dispatch_remaining_qty_m_from_row で埋める。"""
+    """配台計画 DataFrame の「配台使用残数量」「配台ロール数」を段階1式で埋める。"""
     if plan_df is None or getattr(plan_df, "empty", True):
         return
     if PLAN_COL_DISPATCH_REMAINING_QTY not in plan_df.columns:
         return
+    fill_roll_count = PLAN_COL_DISPATCH_ROLL_COUNT in plan_df.columns
     for i in plan_df.index:
         row = plan_df.loc[i]
-        plan_df.at[i, PLAN_COL_DISPATCH_REMAINING_QTY] = _dispatch_remaining_qty_m_from_row(row)
+        rem = _dispatch_remaining_qty_m_from_row(row)
+        plan_df.at[i, PLAN_COL_DISPATCH_REMAINING_QTY] = rem
+        if fill_roll_count:
+            plan_df.at[i, PLAN_COL_DISPATCH_ROLL_COUNT] = _dispatch_roll_count_from_row(row, rem)
 
 
 def parse_optional_int(val):
