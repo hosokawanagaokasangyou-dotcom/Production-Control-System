@@ -15,12 +15,18 @@ public final class EquipmentGanttWireAnchorMath {
         return fromSlot * slotWidth + inset + (spanW - 2 * inset) / 2;
     }
 
-    /** チャートバー帯の垂直中心（オーバーレイ Y）。 */
-    public static double barAnchorCenterY(double timelineOuterPad, double rowHeight, double zoom) {
-        double innerBarTop = 3 * zoom;
-        double barTop = timelineOuterPad + innerBarTop;
-        double barH = rowHeight - 2 * innerBarTop;
-        return barTop + barH / 2;
+    /** タイムライン帯の垂直中心（担当バッジワイヤーのアンカー Y）。 */
+    public static double timelineBandCenterY(double timelineBandTop, double timelineBandHeight) {
+        return timelineBandTop + timelineBandHeight / 2.0;
+    }
+
+    /**
+     * @deprecated {@link #timelineBandCenterY} を使用（zoom は帯中心には不要）
+     */
+    @Deprecated
+    public static double barAnchorCenterY(
+            double timelineBandTop, double timelineBandHeight, double zoom) {
+        return timelineBandCenterY(timelineBandTop, timelineBandHeight);
     }
 
     /** 円環配置で最初のバッジを置く方向（ラジアン）。画面で右上がり 45°（+X と上方向の中間、{@code atan2} 基準）。 */

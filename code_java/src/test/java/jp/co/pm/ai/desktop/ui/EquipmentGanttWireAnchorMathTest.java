@@ -21,17 +21,12 @@ class EquipmentGanttWireAnchorMathTest {
     }
 
     @Test
-    void barAnchorCenterY_matchesBandMid() {
-        double pad = 8.0;
-        double rowH = 26.0;
-        double zoom = 1.0;
-        double innerTop = 3 * zoom;
-        double barTop = pad + innerTop;
-        double barH = rowH - 2 * innerTop;
-        double expected = barTop + barH / 2;
+    void timelineBandCenterY_isVerticalMidpointOfBand() {
+        double bandTop = 48.0;
+        double bandH = 60.0;
         assertEquals(
-                expected,
-                EquipmentGanttWireAnchorMath.barAnchorCenterY(pad, rowH, zoom),
+                bandTop + bandH / 2.0,
+                EquipmentGanttWireAnchorMath.timelineBandCenterY(bandTop, bandH),
                 1e-9);
     }
 

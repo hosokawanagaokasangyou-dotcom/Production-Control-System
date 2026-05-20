@@ -92,6 +92,15 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     /** 1 スロットあたりの幅（px、倍率1のとき）。Excel の 10 分スロットを想定 */
     private static final double BASE_SLOT_WIDTH = 9;
 
+    /** 1 行（{@link TimelineRowHeights#cellBodyH}）のうちタイムライン帯が占める高さ比。 */
+    private static final double TIMELINE_BAND_IN_ROW_FRACTION = 0.5;
+
+    /**
+     * タイムライン帯に対するチャートバーの高さ比。
+     * 1/2 にして帯内の上下をバー外ラベル用余白に回す。
+     */
+    private static final double BAR_HEIGHT_IN_BAND_FRACTION = 0.5;
+
     public static final double DEFAULT_MACHINE_COLUMN_WIDTH = 140;
     public static final double DEFAULT_PROCESS_COLUMN_WIDTH = 220;
     private static final double MIN_SIDE_COL_WIDTH = 48;
@@ -797,11 +806,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         Map<String, EquipmentGanttBadgeDragDelta> dragEff =
                 personBadgeDragDeltas != null ? personBadgeDragDeltas : Map.of();
 
-        double timelineOuterPad =
-                Math.min(
-                        layout.rowHeight * 0.32,
-                        Math.max(5 * layout.zoom, barFont.getSize() * 0.9));
-        double cellBodyH = layout.rowHeight + 2 * timelineOuterPad;
+        TimelineRowHeights rowHeights =
+                computeTimelineRowHeights(
+                        layout, barFont, rowContentScaleFromLayout(layout));
+        double timelineBandHeight = rowHeights.timelineBandHeight();
+        double barLabelTopReserve = rowHeights.barLabelTopReserve();
+        double barLabelBottomReserve = rowHeights.barLabelBottomReserve();
+        double timelineDrawOuterPad = rowHeights.timelineDrawOuterPad();
+        double cellBodyH = rowHeights.cellBodyH();
 
         final int slotColCount = parsed.slotColumnIndices().size();
         int approxTimelineRows = countNonSectionDisplayRows(parsed.displayRows());
@@ -1069,7 +1081,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 machineGroupIndex,
                                 canvasTimelineW,
                                 rowCanvasH,
-                                timelineOuterPad,
+                                timelineDrawOuterPad,
+                                timelineBandHeight,
                                 layout,
                                 palette,
                                 barFont,
@@ -1081,7 +1094,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 viewportRowSpecs.add(
                         new ViewportRowSpec(
                                 rowCanvas,
-                                timelineOuterPad,
+                                timelineDrawOuterPad,
+                                timelineBandHeight,
                                 machineGroupIndex,
                                 rowCanvasH,
                                 timelineRowContentMinY,
@@ -1107,7 +1121,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         ri,
                         gapPxEff,
                         personBadgeDragAdjustEnabled,
-                        timelineOuterPad,
+                        timelineDrawOuterPad,
+                        timelineBandHeight,
+                        bandVertEff,
                         canvasTimelineW,
                         rowCanvasH,
                         dragEff,
@@ -1117,7 +1133,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         personBadgeWireMaxLengthPxEff);
                 /*
                  * 帯内クランプ（clampBadgeLayoutYInBand）がスタック高≧帯のときオフセットを打ち消すため、
-                 * レイアウト後にオーバーレイPaneへ縦移動だけ適用する。
+                 * レイアウト後にオーバーレイPaneへ縦移動だけ適用する（アンカー座標は layout 内で補正済み）。
                  */
                 badgePane.setTranslateY(bandVertEff);
             }
@@ -1271,7 +1287,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 barFont,
                                 vr[0],
                                 vr[1],
-                                s.outerPad());
+                                s.outerPad(),
+                                s.timelineBandHeight(),
+                                s.rowH());
                     }
                     if (Boolean.getBoolean(PROFILE_PROP)) {
                         long elapsedMs = (System.nanoTime() - t0Ns) / 1_000_000L;
@@ -1628,7 +1646,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         List<DateColumnPlan> datePlans =
                 computeDateColumnPlans(effCols, parsed.displayRows(), pageDateTitle);
         int machineColorSeq = -1;
-        double cellBodyH = dims.rowBodyH() + 2 * dims.outerPad();
+        double printRowScale =
+                Math.clamp(spec.rowHeightPercent(), 50, 200) / 100.0;
+        TimelineRowHeights rowHeights =
+                computeTimelineRowHeights(dims.layout(), dims.barFont(), printRowScale);
+        double cellBodyH = rowHeights.cellBodyH();
+        double timelineDrawOuterPad = rowHeights.timelineDrawOuterPad();
+        double timelineBandHeight = rowHeights.timelineBandHeight();
 
         for (int ri = 0; ri < parsed.displayRows().size(); ri++) {
             DisplayRow dr = parsed.displayRows().get(ri);
@@ -1666,6 +1690,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             parsed,
                             spec,
                             cellBodyH,
+                            timelineDrawOuterPad,
+                            timelineBandHeight,
                             dateAsOverlay || dplan.continuation());
             row.setLayoutX(dims.pad());
             row.setLayoutY(y);
@@ -1884,6 +1910,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             ParseResult parsed,
             jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec spec,
             double cellBodyH,
+            double timelineDrawOuterPad,
+            double timelineBandHeight,
             boolean dateSpacerInRow) {
         List<Node> parts = new ArrayList<>();
         if (dateSpacerInRow) {
@@ -1917,7 +1945,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         machineGroupIndex,
                         dims.timelineW(),
                         cellBodyH,
-                        dims.outerPad(),
+                        timelineDrawOuterPad,
+                        timelineBandHeight,
                         dims.layout(),
                         dims.palette(),
                         dims.barFont(),
@@ -2815,6 +2844,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double timelineWidth,
             double paneHeight,
             double outerPad,
+            double timelineBandHeight,
             LayoutMetrics layout,
             GanttPalette palette,
             Font barFont,
@@ -2825,31 +2855,40 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         pane.setMaxSize(timelineWidth, paneHeight);
         int n = Math.max(0, slotCount);
         Color band = palette.machineBandFill(machineGroupIndex);
-        double rowH = layout.rowHeight;
+        double bandH = timelineBandHeight;
         if (dedicatedPrintLayout) {
-            Rectangle bandBg = new Rectangle(0, outerPad, timelineWidth, rowH);
+            Rectangle bandBg = new Rectangle(0, outerPad, timelineWidth, bandH);
             bandBg.setFill(band);
             pane.getChildren().add(bandBg);
         }
         for (int i = 0; i < n; i++) {
-            Rectangle cell = new Rectangle(i * layout.slotWidth, outerPad, layout.slotWidth, rowH);
+            Rectangle cell = new Rectangle(i * layout.slotWidth, outerPad, layout.slotWidth, bandH);
             cell.setFill(band);
             pane.getChildren().add(cell);
         }
         Color grid = palette.grid();
         for (int i = 0; i <= n; i++) {
             double x = i * layout.slotWidth;
-            Line vl = new Line(x, outerPad, x, outerPad + rowH);
+            Line vl = new Line(x, outerPad, x, outerPad + bandH);
             vl.setStroke(grid);
             vl.setStrokeWidth(0.35);
             pane.getChildren().add(vl);
         }
         List<BarRun> runs = barRuns != null ? barRuns : List.of();
         for (BarRun run : runs) {
-            addVectorBar(pane, run, layout, palette, outerPad, dedicatedPrintLayout);
+            addVectorBar(
+                    pane, run, layout, palette, outerPad, timelineBandHeight, dedicatedPrintLayout);
         }
         addVectorBarLabelsOutside(
-                pane, runs, layout, palette, barFont, outerPad, dedicatedPrintLayout);
+                pane,
+                runs,
+                layout,
+                palette,
+                barFont,
+                outerPad,
+                timelineBandHeight,
+                paneHeight,
+                dedicatedPrintLayout);
         return pane;
     }
 
@@ -2859,6 +2898,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             LayoutMetrics layout,
             GanttPalette palette,
             double outerPad,
+            double timelineBandHeight,
             boolean dedicatedPrintLayout) {
         int fromSlot = run.fromSlot();
         int toSlot = run.toSlot();
@@ -2875,8 +2915,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 };
         double arc = Math.max(2, 3 * layout.zoom);
         double inset = 0.5 * layout.zoom;
-        double barTop = outerPad + 3 * layout.zoom;
-        double barH = layout.rowHeight - 2 * (3 * layout.zoom);
+        double barH = chartBarHeightInBand(timelineBandHeight, layout.zoom);
+        double barTop = chartBarTopInBand(outerPad, timelineBandHeight, barH);
         double bx = x + inset;
         double bw = Math.max(1, w - 2 * inset);
         if (isPrepHatchedBar(kind)) {
@@ -3014,13 +3054,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             GanttPalette palette,
             Font barFont,
             double outerPad,
+            double timelineBandHeight,
+            double canvasHeight,
             boolean omitPrepHatchedBarLabels) {
         if (runs == null || runs.isEmpty()) {
             return;
         }
-        double barTop = outerPad + 3 * layout.zoom;
-        double barH = layout.rowHeight - 2 * (3 * layout.zoom);
-        double canvasH = outerPad + layout.rowHeight + outerPad;
+        double barH = chartBarHeightInBand(timelineBandHeight, layout.zoom);
+        double barTop = chartBarTopInBand(outerPad, timelineBandHeight, barH);
+        double canvasH = canvasHeight;
+        double minBaseline = measureTextHeight("Ag", barFont) + 2;
         for (PlannedBarOutsideLabel planned :
                 planBarOutsideLabelsThreeTiers(
                         runs,
@@ -3035,7 +3078,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             t.setFill(planned.color());
             t.setFont(barFont);
             t.setLayoutX(planned.x());
-            t.setLayoutY(planned.y());
+            t.setLayoutY(Math.clamp(planned.y(), minBaseline, canvasH - 2));
             layer.getChildren().add(t);
         }
     }
@@ -3161,13 +3204,97 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double zoom,
             double canvasH) {
         double lineGap = fh + Math.max(2, 2 * zoom);
-        double maxY = Math.max(fh + 2, canvasH - 2);
+        double minBaseline = fh * 0.92 + Math.max(2, 2 * zoom);
+        double maxY = Math.max(minBaseline, canvasH - 2);
         return switch (tier) {
-            // 上段は行上余白内で stack ごとに下へ（y 増）。負の座標にしない。
-            case TOP -> Math.min(2 + stackLevel * lineGap, maxY);
-            case MIDDLE -> Math.min(barTop - fh * 0.35 - stackLevel * lineGap, maxY);
-            case BOTTOM -> Math.min(barTop + barH + fh * 0.75 + stackLevel * lineGap, maxY);
+            // fillText / Text の y はベースライン。上端クリップを避けるため minBaseline 以上に置く。
+            case TOP -> Math.min(minBaseline + stackLevel * lineGap, maxY);
+            case MIDDLE -> {
+                double y = barTop - 4 - stackLevel * lineGap;
+                yield Math.max(minBaseline, Math.min(y, maxY));
+            }
+            case BOTTOM -> Math.min(barTop + barH + fh * 0.85 + stackLevel * lineGap, maxY);
         };
+    }
+
+    /**
+     * タイムライン 1 行分の縦寸法。{@code rowContentScale} は行の高さスライダー（50〜200%）に連動させ、
+     * バー外ラベル余白も含めて行全体が伸縮するようにする。
+     */
+    private record TimelineRowHeights(
+            double timelineBandHeight,
+            double barLabelTopReserve,
+            double barLabelBottomReserve,
+            double timelineDrawOuterPad,
+            double cellBodyH) {}
+
+    /** {@link LayoutMetrics#rowHeight} が行高スライダーでどれだけ伸縮しているか（100%＝1.0）。 */
+    private static double rowContentScaleFromLayout(LayoutMetrics layout) {
+        double base = BASE_ROW_HEIGHT * layout.zoom;
+        return base > 1e-9 ? layout.rowHeight / base : 1.0;
+    }
+
+    private static TimelineRowHeights computeTimelineRowHeights(
+            LayoutMetrics layout, Font barFont, double rowContentScale) {
+        double scale = rowContentScale <= 0 || !Double.isFinite(rowContentScale) ? 1.0 : rowContentScale;
+        double zoom = layout.zoom;
+        double baseBand = BASE_ROW_HEIGHT * zoom;
+        double baseOuterPad =
+                Math.min(
+                        baseBand * 0.32,
+                        Math.max(5 * zoom, barFont.getSize() * 0.9));
+        double baseTop = computeBarOutsideLabelTopReserve(barFont, zoom);
+        double baseBottom = computeBarOutsideLabelBottomReserve(barFont, zoom);
+        double baseCellBodyH = baseBand + 2 * baseOuterPad + baseTop + baseBottom;
+
+        double cellBodyH = baseCellBodyH * scale;
+        double timelineBandHeight =
+                Math.max(6, cellBodyH * TIMELINE_BAND_IN_ROW_FRACTION);
+        double labelArea = Math.max(0, cellBodyH - timelineBandHeight);
+        double labelSplit = baseTop + baseBottom;
+        double barLabelTopReserve =
+                labelSplit > 1e-9 ? labelArea * (baseTop / labelSplit) : labelArea * 0.65;
+        double barLabelBottomReserve = labelArea - barLabelTopReserve;
+        double timelineDrawOuterPad = barLabelTopReserve;
+        return new TimelineRowHeights(
+                timelineBandHeight,
+                barLabelTopReserve,
+                barLabelBottomReserve,
+                timelineDrawOuterPad,
+                cellBodyH);
+    }
+
+    /** バー上段ラベル用の追加高さ（行 Canvas 全体の上余白、100% 行高時の基準）。 */
+    private static double computeBarOutsideLabelTopReserve(Font barFont, double zoom) {
+        double fh = Math.max(8, barFont.getSize() * 1.05);
+        double lineGap = fh + Math.max(2, 2 * zoom);
+        return Math.ceil(2 * (fh + lineGap) + 6 * zoom);
+    }
+
+    /** バー下段ラベル用の追加高さ（行 Canvas 下端）。 */
+    private static double computeBarOutsideLabelBottomReserve(Font barFont, double zoom) {
+        double fh = Math.max(8, barFont.getSize() * 1.05);
+        double lineGap = fh + Math.max(2, 2 * zoom);
+        return Math.ceil(fh + lineGap + 6 * zoom);
+    }
+
+    /** 帯いっぱいに伸ばした場合のチャートバー高さ（スケール前）。 */
+    private static double legacyFullChartBarHeightInBand(double timelineBandHeight, double zoom) {
+        return Math.max(4, timelineBandHeight - 2 * (3 * zoom));
+    }
+
+    /** 帯内チャートバー高さ（{@link #BAR_HEIGHT_IN_BAND_FRACTION}）。 */
+    private static double chartBarHeightInBand(double timelineBandHeight, double zoom) {
+        return Math.max(
+                4,
+                legacyFullChartBarHeightInBand(timelineBandHeight, zoom)
+                        * BAR_HEIGHT_IN_BAND_FRACTION);
+    }
+
+    /** 帯内でチャートバーを縦中央寄せしたときの上端 Y。 */
+    private static double chartBarTopInBand(
+            double bandTop, double timelineBandHeight, double chartBarHeight) {
+        return bandTop + Math.max(0, timelineBandHeight - chartBarHeight) * 0.5;
     }
 
     private static int overlapCountHorizontal(
@@ -3392,9 +3519,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 layout.slotWidth(), layout.zoom(), run.fromSlot(), run.toSlot());
     }
 
-    private static double barAnchorCenterY(double timelineOuterPad, LayoutMetrics layout) {
-        return EquipmentGanttWireAnchorMath.barAnchorCenterY(
-                timelineOuterPad, layout.rowHeight(), layout.zoom());
+    private static double barAnchorCenterY(double timelineBandTop, double timelineBandHeight) {
+        return EquipmentGanttWireAnchorMath.timelineBandCenterY(
+                timelineBandTop, timelineBandHeight);
     }
 
     /**
@@ -3488,7 +3615,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double anchorY,
             double ringRadiusPx,
             LayoutMetrics layout,
-            double timelineOuterPad,
+            double timelineBandTop,
+            double timelineBandHeight,
             double timelinePaneWidth,
             double overlayPaneHeight,
             List<BoundingBox> placedBadgeLogicalRects,
@@ -3501,9 +3629,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         if (n == 0) {
             return;
         }
-        double innerBarTop = 3 * layout.zoom;
-        double barTop = timelineOuterPad + innerBarTop;
-        double barH = layout.rowHeight - 2 * innerBarTop;
+        double bandBottom = timelineBandTop + timelineBandHeight;
+        double barH = chartBarHeightInBand(timelineBandHeight, layout.zoom);
         double maxStackH = 1.0;
         for (Double h : stackHeights) {
             maxStackH = Math.max(maxStackH, h);
@@ -3512,14 +3639,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 Math.max(barH, ringRadiusPx + maxStackH + 6 * layout.zoom);
         double insetBottom = Math.max(2.0, layout.zoom);
         double maxBottom =
-                Double.isFinite(overlayPaneHeight) && overlayPaneHeight > insetBottom + barTop
+                Double.isFinite(overlayPaneHeight) && overlayPaneHeight > insetBottom + timelineBandTop
                         ? overlayPaneHeight - insetBottom
-                        : barTop + barH;
-        double desiredClampBottom = barTop + Math.max(barH, totalStackH);
+                        : bandBottom;
+        double desiredClampBottom = bandBottom + Math.max(0, totalStackH - timelineBandHeight);
         double badgeClampBottom = Math.min(desiredClampBottom, maxBottom);
 
         double badgeBandVerticalExtraPx = Math.max(36.0, 11.0 * layout.zoom);
-        double badgeDragBandTop = Math.max(0.0, barTop - badgeBandVerticalExtraPx);
+        double badgeDragBandTop = Math.max(0.0, timelineBandTop - badgeBandVerticalExtraPx);
         double paneBottomLimit =
                 Double.isFinite(overlayPaneHeight) && overlayPaneHeight > insetBottom + 1e-6
                         ? overlayPaneHeight - insetBottom
@@ -3650,7 +3777,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             int displayRowIndex,
             double personBadgeGapPx,
             boolean badgeDragAdjustEnabled,
-            double timelineOuterPad,
+            double timelineBandTop,
+            double timelineBandHeight,
+            double badgePaneVerticalOffsetPx,
             double timelinePaneWidth,
             double overlayPaneHeight,
             Map<String, EquipmentGanttBadgeDragDelta> dragDeltas,
@@ -3674,6 +3803,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
          */
         List<BoundingBox> placedBadgeLogicalRects = new ArrayList<>();
         List<BadgeWirePlacement> wirePlacementBatch = new ArrayList<>();
+        double bandCenterY =
+                barAnchorCenterY(timelineBandTop, timelineBandHeight)
+                        - badgePaneVerticalOffsetPx;
+        double bandBottom = timelineBandTop + timelineBandHeight;
         for (BarRun run : runs) {
             if (run.kind() == BarKind.BREAK) {
                 continue;
@@ -3689,7 +3822,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double anchorY = 0d;
             if (wireThisRun) {
                 anchorX = barAnchorCenterX(layout, run);
-                anchorY = barAnchorCenterY(timelineOuterPad, layout);
+                anchorY = bandCenterY;
             }
             List<String> parts = PersonNameBadgeText.splitBadgeCell(frag);
             if (parts.isEmpty()) {
@@ -3733,7 +3866,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         anchorY,
                         personBadgeWireMaxLengthPxOrZero,
                         layout,
-                        timelineOuterPad,
+                        timelineBandTop,
+                        timelineBandHeight,
                         timelinePaneWidth,
                         overlayPaneHeight,
                         placedBadgeLogicalRects,
@@ -3746,9 +3880,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             }
 
             double inset = 0.5 * layout.zoom;
-            double innerBarTop = 3 * layout.zoom;
-            double barTop = timelineOuterPad + innerBarTop;
-            double barH = layout.rowHeight - 2 * innerBarTop;
+            double barH = chartBarHeightInBand(timelineBandHeight, layout.zoom);
             double xPad = 3 * layout.zoom;
             double bandRight = (run.toSlot() + 1) * layout.slotWidth - inset;
             double x0 = run.fromSlot() * layout.slotWidth + inset + xPad;
@@ -3808,23 +3940,18 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 }
             }
             /*
-             * 帯の描画高 barH がバッジより短いと、縦クランプでバッジが同じ Y に寄り横押し出しが増え、
-             * UI の横間隔（gapPx）が潰れる。スタック高まで縦クランプ領域を広げる（行 Pane 高で上限）。
+             * 帯高がバッジより短いと縦クランプで横押し出しが増える。スタック高まで縦クランプ領域を広げる。
              */
             double insetBottom = Math.max(2.0, layout.zoom);
             double maxBottom =
-                    Double.isFinite(overlayPaneHeight) && overlayPaneHeight > insetBottom + barTop
+                    Double.isFinite(overlayPaneHeight) && overlayPaneHeight > insetBottom + timelineBandTop
                             ? overlayPaneHeight - insetBottom
-                            : barTop + barH;
-            double desiredClampBottom = barTop + Math.max(barH, totalStackH);
+                            : bandBottom;
+            double desiredClampBottom = bandBottom + Math.max(0, totalStackH - timelineBandHeight);
             double badgeClampBottom = Math.min(desiredClampBottom, maxBottom);
 
-            /*
-             * ドラッグ・レイアウト確定時の縦クランプを帯よりやや広げ、バッジを上下へ動かしやすくする。
-             * 上端は Pane 上端 0、下端は行 Pane の下端まで。
-             */
             double badgeBandVerticalExtraPx = Math.max(36.0, 11.0 * layout.zoom);
-            double badgeDragBandTop = Math.max(0.0, barTop - badgeBandVerticalExtraPx);
+            double badgeDragBandTop = Math.max(0.0, timelineBandTop - badgeBandVerticalExtraPx);
             double paneBottomLimit =
                     Double.isFinite(overlayPaneHeight) && overlayPaneHeight > insetBottom + 1e-6
                             ? overlayPaneHeight - insetBottom
@@ -3835,7 +3962,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                             : badgeClampBottom + badgeBandVerticalExtraPx;
 
             double ySegCursor =
-                    barTop + Math.max(0, (barH - totalStackH) / 2);
+                    timelineBandTop + Math.max(0, (timelineBandHeight - totalStackH) / 2);
 
             boolean anchorDotPlacedForRun = false;
             for (int si = 0; si < segments.size(); si++) {
@@ -4322,7 +4449,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             Font barFont,
             int slotVisibleFrom,
             int slotVisibleToIncl,
-            double outerPad) {
+            double outerPad,
+            double timelineBandHeight,
+            double canvasHeight) {
         int n = Math.max(0, slotCount);
         int vf = Math.max(0, slotVisibleFrom);
         int vt = Math.min(n - 1, slotVisibleToIncl);
@@ -4332,7 +4461,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         }
 
         double bandTop = Math.max(0, outerPad);
-        double bandH = layout.rowHeight;
+        double bandH = timelineBandHeight;
         Color band = palette.machineBandFill(machineGroupIndex);
         for (int i = vf; i <= vt; i++) {
             double x = i * layout.slotWidth;
@@ -4351,9 +4480,19 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             if (run.toSlot() < vf || run.fromSlot() > vt) {
                 continue;
             }
-            fillBar(gc, run, layout, palette, outerPad);
+            fillBar(gc, run, layout, palette, outerPad, timelineBandHeight);
         }
-        drawBarLabelsOutside(gc, runs, layout, palette, barFont, vf, vt, outerPad);
+        drawBarLabelsOutside(
+                gc,
+                runs,
+                layout,
+                palette,
+                barFont,
+                vf,
+                vt,
+                outerPad,
+                timelineBandHeight,
+                canvasHeight);
     }
 
     private static List<BarRun> collectBarRuns(List<String> slotTexts) {
@@ -4578,7 +4717,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             BarRun run,
             LayoutMetrics layout,
             GanttPalette palette,
-            double outerPad) {
+            double outerPad,
+            double timelineBandHeight) {
         int fromSlot = run.fromSlot();
         int toSlot = run.toSlot();
         double x = fromSlot * layout.slotWidth;
@@ -4594,8 +4734,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 };
         double arc = Math.max(2, 3 * layout.zoom);
         double inset = 0.5 * layout.zoom;
-        double barTop = outerPad + 3 * layout.zoom;
-        double barH = layout.rowHeight - 2 * (3 * layout.zoom);
+        double barH = chartBarHeightInBand(timelineBandHeight, layout.zoom);
+        double barTop = chartBarTopInBand(outerPad, timelineBandHeight, barH);
         double bx = x + inset;
         double bw = w - 2 * inset;
         if (isPrepHatchedBar(kind)) {
@@ -4617,7 +4757,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             Font barFont,
             int slotVisibleFrom,
             int slotVisibleToIncl,
-            double outerPad) {
+            double outerPad,
+            double timelineBandHeight,
+            double canvasHeight) {
         List<BarRun> sorted = new ArrayList<>();
         for (BarRun run : runs) {
             if (run.toSlot() < slotVisibleFrom || run.fromSlot() > slotVisibleToIncl) {
@@ -4629,14 +4771,16 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             return;
         }
         sorted.sort(Comparator.comparingInt(BarRun::fromSlot));
-        double barTop = outerPad + 3 * layout.zoom;
-        double barH = layout.rowHeight - 2 * (3 * layout.zoom);
-        double canvasH = outerPad + layout.rowHeight + outerPad;
+        double barH = chartBarHeightInBand(timelineBandHeight, layout.zoom);
+        double barTop = chartBarTopInBand(outerPad, timelineBandHeight, barH);
+        double canvasH = canvasHeight;
         gc.setFont(barFont);
+        double fh = measureTextHeight("Ag", barFont);
+        double minY = fh + 2;
         for (PlannedBarOutsideLabel planned :
                 planBarOutsideLabelsThreeTiers(
                         sorted, layout, palette, barFont, barTop, barH, canvasH)) {
-            double y = Math.clamp(planned.y(), 1, canvasH - 2);
+            double y = Math.clamp(planned.y(), minY, canvasH - 2);
             gc.setFill(planned.color());
             gc.fillText(planned.text(), planned.x(), y);
         }
@@ -4814,6 +4958,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private record ViewportRowSpec(
             Canvas canvas,
             double outerPad,
+            double timelineBandHeight,
             int machineGroupIndex,
             double rowH,
             double contentMinY,
