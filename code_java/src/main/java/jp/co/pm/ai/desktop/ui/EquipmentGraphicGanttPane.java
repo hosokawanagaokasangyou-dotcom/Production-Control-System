@@ -233,35 +233,52 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     /**
-     * タイムライン行（右ボディグリッド上の Y 範囲）が、縦スクロールの見えている範囲と交差するか。
-     * レイアウト未確定などで判定できないときは true（全行描画にフォールバック）。
+     * 縦スクロールの見えている帯（コンテンツ座標）。レイアウト未確定のときは empty。
+     * 未確定時に「全行表示」とみなすと行仮想化が一括実体化し UI が固まるため、判定不能は empty にする。
      */
-    private static boolean intersectsVerticalViewport(
-            ScrollPane sp, double rowContentMinY, double rowHeight, double marginPx) {
-        if (sp == null || !Double.isFinite(rowContentMinY) || !Double.isFinite(rowHeight)) {
-            return true;
-        }
-        if (rowHeight <= 1e-9) {
-            return true;
+    private static java.util.Optional<VerticalScrollBand> verticalScrollBand(
+            ScrollPane sp, double marginPx) {
+        if (sp == null) {
+            return java.util.Optional.empty();
         }
         Node content = sp.getContent();
         Bounds vp = sp.getViewportBounds();
         if (content == null || vp == null || vp.getHeight() <= 1.0) {
-            return true;
+            return java.util.Optional.empty();
         }
         double contentH = content.getLayoutBounds().getHeight();
         double viewportH = vp.getHeight();
-        if (!Double.isFinite(contentH) || contentH <= 1.0) {
-            return true;
+        if (!Double.isFinite(contentH) || contentH <= 1.0 || !Double.isFinite(viewportH)) {
+            return java.util.Optional.empty();
         }
         double excess = Math.max(0.0, contentH - viewportH);
         double scrollPy = excess > 1e-6 ? sp.getVvalue() * excess : 0.0;
         double m = Math.max(0.0, marginPx);
-        double visTop = scrollPy - m;
-        double visBottom = scrollPy + viewportH + m;
-        double rowTop = rowContentMinY;
-        double rowBottom = rowContentMinY + rowHeight;
-        return rowBottom > visTop && rowTop < visBottom;
+        return java.util.Optional.of(new VerticalScrollBand(scrollPy - m, scrollPy + viewportH + m));
+    }
+
+    private record VerticalScrollBand(double visTop, double visBottom) {}
+
+    /**
+     * タイムライン行（右ボディ上の Y 範囲）が、縦スクロールの見えている範囲と交差するか。
+     * レイアウト未確定のときは false（何も描画／実体化しない。確定後の再描画で追従する）。
+     */
+    private static boolean intersectsVerticalViewport(
+            ScrollPane sp, double rowContentMinY, double rowHeight, double marginPx) {
+        if (sp == null || !Double.isFinite(rowContentMinY) || !Double.isFinite(rowHeight)) {
+            return false;
+        }
+        if (rowHeight <= 1e-9) {
+            return false;
+        }
+        return verticalScrollBand(sp, marginPx)
+                .map(
+                        band -> {
+                            double rowTop = rowContentMinY;
+                            double rowBottom = rowContentMinY + rowHeight;
+                            return rowBottom > band.visTop() && rowTop < band.visBottom();
+                        })
+                .orElse(false);
     }
 
     private static Canvas ensurePromotedTimelineCanvas(ViewportRowSpec spec, double canvasTimelineW) {
@@ -1457,6 +1474,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     if (vectorPrint || headerCanvasForPaint == null) {
                         return;
                     }
+                    if (virtualHostForSync != null && !Boolean.TRUE.equals(fullPaint)) {
+                        virtualHostForSync.syncToViewport(rightBodyScroll);
+                    }
                     long t0Ns = System.nanoTime();
                     int paintedRows = 0;
                     int nSlots = slotColCount;
@@ -1566,14 +1586,13 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             rightBodyScroll.vvalueProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
             rightBodyScroll.widthProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
             rightBodyScroll.heightProperty().addListener((o, a, b) -> scheduleViewportRepaint.run());
-            if (virtualHostForSync != null) {
-                Runnable syncVirtual =
-                        () -> virtualHostForSync.syncToViewport(rightBodyScroll);
-                rightBodyScroll.vvalueProperty().addListener((o, a, b) -> syncVirtual.run());
-                rightBodyScroll.heightProperty().addListener((o, a, b) -> syncVirtual.run());
-                Platform.runLater(syncVirtual);
-            }
-            Platform.runLater(paintTimelineViewport);
+            Platform.runLater(
+                    () -> {
+                        if (virtualHostForSync != null) {
+                            virtualHostForSync.syncToViewport(rightBodyScroll);
+                        }
+                        paintTimelineViewport.run();
+                    });
         }
 
         double shiftSens =
@@ -5381,6 +5400,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
         void syncToViewport(ScrollPane scroll) {
             Set<Integer> target = expandForRowSpan(computeVisiblePlanIndices(scroll));
+            if (target.equals(materialized.keySet())) {
+                return;
+            }
             List<Integer> toRemove = new ArrayList<>();
             for (Integer pi : materialized.keySet()) {
                 if (!target.contains(pi)) {
@@ -5402,15 +5424,22 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             if (sp == null || plans.isEmpty()) {
                 return out;
             }
+            java.util.Optional<VerticalScrollBand> band =
+                    verticalScrollBand(sp, VIEWPORT_VERTICAL_MARGIN_PX);
+            if (band.isEmpty()) {
+                return initialPlanIndexWindow(estimateInitialPlanCount(sp));
+            }
+            VerticalScrollBand b = band.get();
             for (int pi = 0; pi < plans.size(); pi++) {
                 GanttBodyRowPlan p = plans.get(pi);
-                if (intersectsVerticalViewport(
-                        sp, p.contentMinY(), p.rowHeight(), VIEWPORT_VERTICAL_MARGIN_PX)) {
+                double rowTop = p.contentMinY();
+                double rowBottom = p.contentMinY() + p.rowHeight();
+                if (rowBottom > b.visTop() && rowTop < b.visBottom()) {
                     out.add(pi);
                 }
             }
-            if (out.isEmpty() && !plans.isEmpty()) {
-                out.add(0);
+            if (out.isEmpty()) {
+                return initialPlanIndexWindow(estimateInitialPlanCount(sp));
             }
             int minPi = out.stream().min(Integer::compareTo).orElse(0);
             int maxPi = out.stream().max(Integer::compareTo).orElse(0);
@@ -5421,6 +5450,25 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 buffered.add(pi);
             }
             return buffered;
+        }
+
+        private static int estimateInitialPlanCount(ScrollPane sp) {
+            Bounds vp = sp != null ? sp.getViewportBounds() : null;
+            double viewportH = vp != null ? vp.getHeight() : 480.0;
+            if (!Double.isFinite(viewportH) || viewportH < 48.0) {
+                viewportH = 480.0;
+            }
+            int est = (int) Math.ceil(viewportH / 24.0) + VIRTUAL_ROW_BUFFER * 2;
+            return Math.max(24, Math.min(120, est));
+        }
+
+        private Set<Integer> initialPlanIndexWindow(int count) {
+            LinkedHashSet<Integer> out = new LinkedHashSet<>();
+            int n = Math.min(plans.size(), Math.max(1, count));
+            for (int pi = 0; pi < n; pi++) {
+                out.add(pi);
+            }
+            return out;
         }
 
         private Set<Integer> expandForRowSpan(Set<Integer> base) {
