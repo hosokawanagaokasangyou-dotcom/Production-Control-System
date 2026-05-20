@@ -1166,7 +1166,8 @@ PLAN_COL_ROLL_UNIT_LENGTH = "ロール単位長さ"
 # ``build_task_queue_from_planning_df`` が実効ロール長に上書きしたデータ行の iloc（0 始まり・iterrows 順）。
 # 段階2の ``write_plan_sheet_global_parse_and_conflict_styles_one_io`` でブックの当該セルへ値反映＋黄地黒字に使う。
 PLAN_DF_ATTR_EFFECTIVE_ROLL_UNIT_DATA_ILOCS = "_pm_ai_effective_roll_unit_data_ilocs"
-# 段階1で算出し配台計画に出力。段階2の build_task_queue と同一式（_plan_row_dispatch_qty_metrics の残りm）。
+# 段階1で算出し配台計画に出力（_dispatch_remaining_qty_m_from_row）。
+# 配台キュー本体の残量は _plan_row_dispatch_qty_metrics（未加工列ベース）のまま。
 PLAN_COL_DISPATCH_REMAINING_QTY = "配台使用残数量"
 # 原反幅（mm 想定）。段階1のみ算出。テーブル「使用原反, 加工幅.txt」優先、未登録時は最後の NNNxMM の左辺を採用。いずれも不可なら PlanningValidationError。
 # 「使用原反」キー照合は _normalize_mm_table_lookup_key（NFKC 後に全角・半角など空白類を除去）で加工計画の使用原反／製品名と突き合わせる。
@@ -4115,16 +4116,37 @@ def _plan_row_dispatch_qty_metrics(row):
     )
 
 
+def _dispatch_remaining_qty_m_from_row(row) -> float:
+    """
+    配台計画_タスク入力の列「配台使用残数量」(m)。
+
+    ① B = 換算数量 − 実加工数
+    ② A = ceil(B / (原反)ロール単位長さ)（B≦0 のとき A=0）
+    ③ 配台使用残数量 = (原反)ロール単位長さ × A
+
+    (原反)ロール単位長さが解決できないときは B をそのまま返す。
+    """
+    qty_conv = parse_float_safe(row.get(TASK_COL_QTY), 0.0)
+    actual_done = parse_float_safe(row.get(TASK_COL_ACTUAL_DONE), 0.0)
+    b = max(0.0, qty_conv - actual_done)
+    raw_roll_m = _raw_roll_unit_m_resolved_for_dispatch_qty(row)
+    if raw_roll_m <= 1e-12:
+        return b
+    if b <= 1e-12:
+        return 0.0
+    n_rolls = math.ceil(b / raw_roll_m)
+    return float(raw_roll_m) * float(n_rolls)
+
+
 def _fill_plan_dispatch_remaining_qty_column(plan_df: pd.DataFrame) -> None:
-    """配台計画 DataFrame の「配台使用残数量」を _plan_row_dispatch_qty_metrics と同一式で埋める。"""
+    """配台計画 DataFrame の「配台使用残数量」を _dispatch_remaining_qty_m_from_row で埋める。"""
     if plan_df is None or getattr(plan_df, "empty", True):
         return
     if PLAN_COL_DISPATCH_REMAINING_QTY not in plan_df.columns:
         return
     for i in plan_df.index:
         row = plan_df.loc[i]
-        rem, _d, _t, _fu = _plan_row_dispatch_qty_metrics(row)
-        plan_df.at[i, PLAN_COL_DISPATCH_REMAINING_QTY] = rem
+        plan_df.at[i, PLAN_COL_DISPATCH_REMAINING_QTY] = _dispatch_remaining_qty_m_from_row(row)
 
 
 def parse_optional_int(val):
