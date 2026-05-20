@@ -618,8 +618,8 @@ public final class SpreadsheetTabularSupport {
     }
 
     private static final String PLAN_INPUT_COL_UNPROCESSED = "未加工";
-    private static final String PLAN_INPUT_COL_ROLL_UNIT_M = "(製品)ロール単位長さ";
-    private static final String PLAN_INPUT_COL_ROLL_UNIT_M_LEGACY = "ロール単位長さ";
+    private static final String PLAN_INPUT_COL_RAW_ROLL_UNIT_M = "(原反)ロール単位長さ";
+    private static final String PLAN_INPUT_COL_RAW_ROLL_UNIT_M_ALT = "（原反）ロール単位長さ";
     private static final String PLAN_INPUT_COL_QTY_CONV = "換算数量";
     private static final String PLAN_INPUT_COL_ACTUAL = "実加工数";
     private static final String PLAN_INPUT_COL_PRODUCT = "製品名";
@@ -687,23 +687,17 @@ public final class SpreadsheetTabularSupport {
         return Math.max(0.0, conv);
     }
 
-    private static double intrinsicProductRollSheetGuess(
-            String product,
-            String usedRaw,
-            Stage2RollUnitLengthTables tablesOrNull,
-            double qtyFallback) {
+    /** 配台シミュレータ {@code unit_m} 用の原反ロール長の参照値（使用原反テーブル→寸法推定）。 */
+    private static double intrinsicRawRollSheetGuess(
+            String usedRaw, Stage2RollUnitLengthTables tablesOrNull, double qtyFallback) {
         if (tablesOrNull != null) {
             Optional<Double> byRaw = tablesOrNull.lookupByUsedRaw(usedRaw);
             if (byRaw.isPresent()) {
                 return byRaw.get();
             }
-            Optional<Double> byProd = tablesOrNull.lookupByProductName(product);
-            if (byProd.isPresent()) {
-                return byProd.get();
-            }
         }
         double fb = qtyFallback > 1e-12 ? qtyFallback : 100.0;
-        return Stage2RollUnitLengthTables.inferFromProductDimensions(product, fb);
+        return Stage2RollUnitLengthTables.inferFromProductDimensions(usedRaw, fb);
     }
 
     private static boolean planInputRollUnitLengthCellIsYellowHighlight(
@@ -711,11 +705,10 @@ public final class SpreadsheetTabularSupport {
             int idxConv,
             int idxUnp,
             int idxAct,
-            int idxProd,
             int idxUsed,
-            String rawRoll,
+            String rawRollUnitCell,
             Stage2RollUnitLengthTables tablesOrNull) {
-        double uDisp = Stage2RollUnitLengthTables.parseFloatSafe(rawRoll, 0.0);
+        double uDisp = Stage2RollUnitLengthTables.parseFloatSafe(rawRollUnitCell, 0.0);
         if (!(uDisp > 1e-12)) {
             return false;
         }
@@ -726,15 +719,14 @@ public final class SpreadsheetTabularSupport {
         double effFromDisplay = effectiveRollUnitMForDispatchTaskSimulator(q, uDisp);
         /*
          * 換算数量に満たない残量（q < シートの u）では Python も n_work=1 とし実効は q に近づく。
-         * このときセルの製品ロール長（例: 17）と effective の数値差だけで黄にすると誤検知になる（ログ077782 E5-2）。
+         * このときセルの原反ロール長（例: 17）と effective の数値差だけで黄にすると誤検知になる（ログ077782 E5-2）。
          */
         double nRawOverDisplay = uDisp > 1e-12 ? q / uDisp : 0.0;
         if (nRawOverDisplay >= 1.0 - 1e-9 && Math.abs(effFromDisplay - uDisp) > 1e-6) {
             return true;
         }
-        String product = idxProd >= 0 ? planInputCellAt(src, idxProd) : "";
         String usedRaw = idxUsed >= 0 ? planInputCellAt(src, idxUsed) : "";
-        double uSheet = intrinsicProductRollSheetGuess(product, usedRaw, tablesOrNull, q);
+        double uSheet = intrinsicRawRollSheetGuess(usedRaw, tablesOrNull, q);
         if (!(uSheet > 1e-12) || Math.abs(uSheet - uDisp) <= 1e-6) {
             return false;
         }
@@ -744,11 +736,11 @@ public final class SpreadsheetTabularSupport {
 
     /**
      * 配台計画タスク入力の編集可能グリッド。先頭固定列は白地、それ以外は既定で白地とし、「未加工」列のみ正の数値で薄緑、
-     * 「(製品)ロール単位長さ」は実効ロール化が想定されるセルを黄で示す（Excel 側の実効ロール着色と整合）。
+     * 「(原反)ロール単位長さ」は実効ロール化が想定されるセルを黄で示す（Excel 側の実効ロール着色と整合）。
      *
      * @param leadingColumnCount 先頭から固定する属性列の本数
-     * @param rollUnitLengthTablesOrNull 製品名／使用原反テーブル（黄の「上書き後セル」判定に使用）。{@code null}
-     *     のときは製品名寸法推定のみで近似する。
+     * @param rollUnitLengthTablesOrNull 使用原反テーブル（黄の「上書き後セル」判定に使用）。{@code null}
+     *     のときは使用原反文字列の寸法推定のみで近似する。
      * @see #buildPlanInputGrid(List, ObservableList, boolean, int)
      */
     public static GridBase buildPlanInputGrid(
@@ -781,7 +773,6 @@ public final class SpreadsheetTabularSupport {
         int idxUnp = headersRef.indexOf(PLAN_INPUT_COL_UNPROCESSED);
         int idxConv = headersRef.indexOf(PLAN_INPUT_COL_QTY_CONV);
         int idxAct = headersRef.indexOf(PLAN_INPUT_COL_ACTUAL);
-        int idxProd = headersRef.indexOf(PLAN_INPUT_COL_PRODUCT);
         int idxUsed = headersRef.indexOf(PLAN_INPUT_COL_USED_RAW);
         for (int r = 0; r < rc; r++) {
             int gridRow = firstData + r;
@@ -801,14 +792,13 @@ public final class SpreadsheetTabularSupport {
                 } else if (PLAN_INPUT_COL_UNPROCESSED.equals(headerTitle)
                         && TabularCellHighlight.isStrictPositiveNumber(raw)) {
                     cell.setStyle(READABLE_STYLE_DATA_GREEN);
-                } else if ((PLAN_INPUT_COL_ROLL_UNIT_M.equals(headerTitle)
-                                || PLAN_INPUT_COL_ROLL_UNIT_M_LEGACY.equals(headerTitle))
+                } else if ((PLAN_INPUT_COL_RAW_ROLL_UNIT_M.equals(headerTitle)
+                                || PLAN_INPUT_COL_RAW_ROLL_UNIT_M_ALT.equals(headerTitle))
                         && planInputRollUnitLengthCellIsYellowHighlight(
                                 src,
                                 idxConv,
                                 idxUnp,
                                 idxAct,
-                                idxProd,
                                 idxUsed,
                                 raw,
                                 rollUnitLengthTablesOrNull)) {

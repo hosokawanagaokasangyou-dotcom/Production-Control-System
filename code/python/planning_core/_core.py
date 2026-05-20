@@ -4055,6 +4055,29 @@ def _raw_roll_unit_m_resolved_for_dispatch_qty(row) -> float:
     return float(dim) if dim is not None and dim > 1e-12 else 0.0
 
 
+def _dispatch_simulator_unit_m_from_plan_row(row, *, fallback_m: float) -> float:
+    """
+    配台シミュレーション ``task_queue`` の ``unit_m`` (m/ロール)。
+
+    **(原反)ロール単位長さ**（列→使用原反テーブル→使用原反寸法）を正とし、
+    解決できないときだけ ``infer_roll_unit_m_from_used_raw_then_product_dims`` で補う。
+    """
+    unit = _raw_roll_unit_m_resolved_for_dispatch_qty(row)
+    if unit <= 1e-12 and hasattr(row, "get"):
+        unit = infer_roll_unit_m_from_used_raw_then_product_dims(
+            row.get(TASK_COL_PRODUCT, None),
+            row.get(TASK_COL_USED_RAW, None),
+            fallback_unit=fallback_m,
+        )
+    try:
+        unit = float(unit)
+    except (TypeError, ValueError):
+        unit = 0.0
+    if unit <= 1e-12:
+        unit = float(fallback_m)
+    return unit
+
+
 def _plan_row_dispatch_qty_metrics(row):
     """
     1行分の換算数量・未加工に基づき、配台用の残り(m)・済相当(m)・換算数量(100m切上)を返す。
@@ -4242,7 +4265,7 @@ def _effective_roll_unit_m_for_dispatch_task_simulator(
     qty_m: float, sheet_roll_unit_m: float
 ) -> float:
     """
-    換算数量（配台に使う残 m）をシートのロール単位長さで割ったとき整数ロールにならない場合、
+    換算数量（配台に使う残 m）を (原反)ロール単位長さで割ったとき整数ロールにならない場合、
     作業ロール数を ``floor(換算数量 / ロール単位)`` 本（少なくとも 1 本）とし、
     ``換算数量 / 作業ロール数`` を配台シミュレータ用の実効 1 ロール長さ (m) として返す。
 
@@ -4981,9 +5004,8 @@ def infer_roll_unit_m_from_used_raw_then_product_dims(
     使用原反テーブル（``使用原反,ロール単位の長さ.txt``）を優先し、
     未登録なら製品名の寸法、さらに製品名に寸法が無い場合は使用原反文字列の寸法から推定する。
 
-    **配台計画シートの列「ロール単位長さ」**（製品側1ロール長）の算出には使わない
-    （当列は ``infer_unit_m_from_product_name`` のみ）。原反ロール長の表示列とも別経路。
-    検証・他処理で「原反由来を優先したい」場合の補助として残す。
+    **(製品)ロール単位長さ**列（段階1の ``_stage1_roll_length_for_planning_row``）の算出には使わない。
+    段階2 ``build_task_queue_from_planning_df`` の ``unit_m`` 解決不能時の補完に使用する。
     """
     v = _lookup_roll_unit_length_m_from_used_raw(used_raw)
     if v is not None and v > 0:
@@ -5010,9 +5032,9 @@ def infer_unit_m_from_product_name(product_name, fallback_unit):
     まず「製品名,ロール単位の長さ.txt」の完全一致があれば採用し、
     無ければ寸法（``_infer_roll_unit_m_from_product_name_dimensions_only`` と同じ）へフォールバックする。
 
-    **配台計画_タスク入力**の列 **「ロール単位長さ」**（段階1の ``_stage1_roll_length_for_planning_row``）、
-    段階2 ``build_task_queue_from_planning_df`` でシート値が空・0 のときの補完、
+    **配台計画_タスク入力**の列 **「(製品)ロール単位長さ」**（段階1の ``_stage1_roll_length_for_planning_row``）、
     ``_roll_unit_m_estimate_from_plan_row`` のフォールバックで使用する。
+    段階2の ``unit_m`` には使わない（``_dispatch_simulator_unit_m_from_plan_row`` が原反ロール長を用いる）。
     """
     if product_name is None or pd.isna(product_name):
         return fallback_unit
@@ -11770,7 +11792,7 @@ def _plan_sheet_apply_effective_roll_unit_cells_from_df(
     ws, tasks_df, num_data_rows: int, *, log_prefix: str = "段階2"
 ) -> int:
     """
-    実効ロール単位に更新した行について、シート上の「ロール単位長さ」を DataFrame 値で上書きし、
+    実効ロール単位に更新した行について、シート上の「(原反)ロール単位長さ」を DataFrame 値で上書きし、
     背景=黄・文字=黒にする（矛盾着色のあとに適用。ロール列は PLAN_CONFLICT_STYLABLE に含まれない）。
     戻り値: 書式を付けたセル数。
     """
@@ -11782,14 +11804,14 @@ def _plan_sheet_apply_effective_roll_unit_cells_from_df(
         ilocs = None
     if not ilocs or not isinstance(ilocs, set):
         return 0
-    if PLAN_COL_ROLL_UNIT_LENGTH not in tasks_df.columns:
+    if PLAN_COL_RAW_ROLL_UNIT_LENGTH not in tasks_df.columns:
         return 0
     header_map: dict[str, int] = {}
     for col_idx in range(1, ws.max_column + 1):
         v = ws.cell(1, col_idx).value
         if v is not None:
             header_map[str(v).strip()] = col_idx
-    ci = header_map.get(PLAN_COL_ROLL_UNIT_LENGTH)
+    ci = header_map.get(PLAN_COL_RAW_ROLL_UNIT_LENGTH)
     if not ci:
         return 0
     fill_yellow = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
@@ -11804,7 +11826,7 @@ def _plan_sheet_apply_effective_roll_unit_cells_from_df(
         if excel_r > last_row:
             continue
         try:
-            val = tasks_df.iloc[i][PLAN_COL_ROLL_UNIT_LENGTH]
+            val = tasks_df.iloc[i][PLAN_COL_RAW_ROLL_UNIT_LENGTH]
         except Exception:
             continue
         cell = ws.cell(row=excel_r, column=ci)
@@ -11816,7 +11838,7 @@ def _plan_sheet_apply_effective_roll_unit_cells_from_df(
         logging.info(
             "%s: 実効ロール単位の「%s」セルを %s 件、黄地・黒字で反映しました。",
             log_prefix,
-            PLAN_COL_ROLL_UNIT_LENGTH,
+            PLAN_COL_RAW_ROLL_UNIT_LENGTH,
             n_done,
         )
     return n_done
@@ -12484,42 +12506,30 @@ def build_task_queue_from_planning_df(
         except (TypeError, ValueError):
             _prod_w_i = None
 
-        unit = parse_float_safe(
-            _planning_df_cell_scalar(row, PLAN_COL_ROLL_UNIT_LENGTH), 0.0
+        unit = _dispatch_simulator_unit_m_from_plan_row(
+            row, fallback_m=qty_total if qty_total > 0 else qty
         )
-        if unit <= 0:
-            unit = infer_unit_m_from_product_name(
-                product_name,
-                fallback_unit=qty_total if qty_total > 0 else qty,
-            )
-        try:
-            unit = float(unit)
-        except Exception:
-            unit = qty
-        if unit <= 0:
-            unit = qty
 
-        # 換算数量 ÷ シートのロール単位が整数ロールにならないとき、切り捨て本数で割った実効ロール長を
+        # 換算数量 ÷ (原反)ロール単位が整数ロールにならないとき、切り捨て本数で割った実効ロール長を
         # 配台シミュレータ（unit_m・remaining_units）に採用する（例: 800/95 → 8 本・100m/本）。
         _sheet_roll_unit_before_sim_adjust = float(unit)
         if qty > 1e-12 and unit > 1e-12:
             unit = _effective_roll_unit_m_for_dispatch_task_simulator(qty, unit)
             if abs(unit - _sheet_roll_unit_before_sim_adjust) > 1e-6:
                 logging.info(
-                    "配台シミュレータ: ロール単位を実効化 依頼NO=%s qty_m=%s シートロール単位=%s → 実効=%s",
+                    "配台シミュレータ: 原反ロール単位を実効化 依頼NO=%s qty_m=%s シート原反ロール=%s → 実効=%s",
                     task_id,
                     qty,
                     _sheet_roll_unit_before_sim_adjust,
                     unit,
                 )
-                # 計画 DataFrame の「ロール単位長さ」を実効値で明示上書き（出力・後段がシート列と整合するようにする）
-                if PLAN_COL_ROLL_UNIT_LENGTH in tasks_df.columns:
+                if PLAN_COL_RAW_ROLL_UNIT_LENGTH in tasks_df.columns:
                     try:
-                        tasks_df.at[row_idx, PLAN_COL_ROLL_UNIT_LENGTH] = float(unit)
+                        tasks_df.at[row_idx, PLAN_COL_RAW_ROLL_UNIT_LENGTH] = float(unit)
                     except Exception as e:
                         logging.warning(
                             "列「%s」の明示更新に失敗（行=%s 依頼NO=%s）: %s",
-                            PLAN_COL_ROLL_UNIT_LENGTH,
+                            PLAN_COL_RAW_ROLL_UNIT_LENGTH,
                             row_idx,
                             task_id,
                             e,
@@ -12527,7 +12537,7 @@ def build_task_queue_from_planning_df(
                     else:
                         _plan_df_note_effective_roll_unit_iloc(tasks_df, planning_df_iloc)
 
-        # (製品)ロール単位長さの推定・矯正は段階1のみ。段階2はシート値を採用し、空・0 のときだけ推定フォールバックする。
+        # (製品)ロール単位長さの推定・矯正は段階1のみ。unit_m は (原反)ロール単位長さ（上記）を用いる。
 
         # 納期は優先順位・緊急度には使うが、開始日の下限には使わない（余力があれば前倒し開始するため）。
         if due_basis is None:
@@ -12576,7 +12586,7 @@ def build_task_queue_from_planning_df(
         _order_list = seq_by_tid.get(task_id) or []
         _p_rank = _process_sequence_rank_for_machine(machine, _order_list)
         if from_unprocessed_qty and unit > 0:
-            # ③ 未加工(m) ÷ ロール単位長さ を切り上げ整数ロール
+            # ③ 未加工(m) ÷ (原反)ロール単位長さ を切り上げ整数ロール
             _init_rem = float(math.ceil(max(0.0, qty) / float(unit)))
         else:
             _init_rem = float(qty / unit if unit else 0.0)
