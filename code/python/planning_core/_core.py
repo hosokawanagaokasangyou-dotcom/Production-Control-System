@@ -1441,6 +1441,15 @@ RESULT_DISPATCH_TABLE_EXCEL_TABLE_NAME = "_t結果_配台表"
 # xlsx と同階層に同名 stem の JSON（非 Excel 連携・API 向け）
 RESULT_DISPATCH_TABLE_JSON_FILENAME = "結果_配台表.json"
 # 結果_配台表の左側列（加工計画DATA に対応する想定の見出し。無い列は空）。工程名の次に機械名を置く。
+# 結果_配台表: 配台計画入力（tasks_df）が加工計画DATA より正とする静的列（手動修正・段階2残量と整合）
+_RESULT_DISPATCH_PLAN_INPUT_OVERRIDE_SRC_COLS: frozenset[str] = frozenset(
+    {
+        TASK_COL_ACTUAL_DONE,
+        TASK_COL_ACTUAL_OUTPUT,
+        TASK_COL_QTY,
+    }
+)
+
 RESULT_DISPATCH_TABLE_STATIC_HEADERS: tuple[str, ...] = (
     "配台試行順番",
     "工程名",
@@ -4064,10 +4073,17 @@ def _plan_row_dispatch_qty_metrics(row):
     unp = _optional_unprocessed_m_from_plan_row(row)
     if unp is not None:
         fu = float(unp)
+        actual_done = parse_float_safe(row.get(TASK_COL_ACTUAL_DONE), 0.0)
+        if qty_conv_raw > 1e-12 and abs(fu) <= 1e-12 and actual_done <= 1e-12:
+            fu = qty_conv_raw
         if fu > 1e-12:
             remaining_m = max(0.0, fu)
             done_m = max(0.0, qty_conv_raw - fu)
-            return remaining_m, done_m, qty_total_ceiled, True
+            if abs(remaining_m - qty_conv_raw) <= 1e-9:
+                qty_total_for_dispatch_m = remaining_m
+            else:
+                qty_total_for_dispatch_m = qty_total_ceiled
+            return remaining_m, done_m, qty_total_for_dispatch_m, True
         else:
             # 未加工が 0 付近: 換算数量(100m切上)を基準にするが、ロール単位長さ未満は 1 ロール分に引き上げ
             roll_m = _roll_unit_m_estimate_from_plan_row(
@@ -24242,6 +24258,20 @@ def _timeline_event_calendar_date(ev: dict) -> date | None:
     return None
 
 
+def _sanitize_dispatch_qty_m(qty_m: float) -> float:
+    """配台 m の float 加算誤差を抑え、整数に近い値は整数へ寄せる。"""
+    try:
+        q = float(qty_m)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(q):
+        return 0.0
+    r = round(q)
+    if abs(q - r) <= 1e-6:
+        return float(r)
+    return round(q, 6)
+
+
 def _dispatch_table_event_qty_m(ev: dict) -> float:
     """イベント当たりの配台量（メートル）。unit_m が無いときは units_done のみ。"""
     try:
@@ -24250,8 +24280,8 @@ def _dispatch_table_event_qty_m(ev: dict) -> float:
     except Exception:
         return 0.0
     if um > 1e-18:
-        return float(ud * um)
-    return float(ud)
+        return _sanitize_dispatch_qty_m(float(ud * um))
+    return _sanitize_dispatch_qty_m(float(ud))
 
 
 def _resolve_task_dict_for_timeline_line(
@@ -24361,6 +24391,23 @@ def _build_source_task_row_lookups_for_dispatch_table(df_src):
     return idx3, idx2
 
 
+def _dispatch_table_scalar_from_dataframe_row(row, col_name: str):
+    """加工計画DATA / 配台計画入力の Series 行から列値を取る（空・NaN は None）。"""
+    if row is None:
+        return None
+    try:
+        if not (hasattr(row, "index") and col_name in row.index):
+            return None
+        v = _planning_df_cell_scalar(row, col_name)
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            return None
+        if str(v).strip() == "":
+            return None
+        return v
+    except Exception:
+        return None
+
+
 def _dispatch_table_cell_from_sources(
     *,
     src_row,
@@ -24368,29 +24415,57 @@ def _dispatch_table_cell_from_sources(
     task_dict: dict | None,
     col_name: str,
 ):
-    """結果_配台表の静的列: 加工計画DATA→計画入力→task_queue の順に補完。"""
+    """結果_配台表の静的列を補完。
+
+    既定は 加工計画DATA → 配台計画入力 → task_queue。
+    ``_RESULT_DISPATCH_PLAN_INPUT_OVERRIDE_SRC_COLS``（実加工数・換算数量・実出来高など）は
+    配台計画入力を優先（Aladdin 側の実加工数が受注数と同値で残るケースを避ける）。
+    """
     if col_name in ("加工開始日時", "加工終了日時", "メンバー名"):
         return ""
-    # 1) 加工計画DATA
-    if src_row is not None:
-        try:
-            if hasattr(src_row, "index") and col_name in src_row.index:
-                v = _planning_df_cell_scalar(src_row, col_name)
-                if v is not None and not (isinstance(v, float) and pd.isna(v)):
-                    if str(v).strip() != "":
-                        return v
-        except Exception:
-            pass
-    # 2) 配台計画入力
-    if plan_row is not None:
-        try:
-            if hasattr(plan_row, "index") and col_name in plan_row.index:
-                v = _planning_df_cell_scalar(plan_row, col_name)
-                if v is not None and not (isinstance(v, float) and pd.isna(v)):
-                    if str(v).strip() != "":
-                        return v
-        except Exception:
-            pass
+    plan_first = col_name in _RESULT_DISPATCH_PLAN_INPUT_OVERRIDE_SRC_COLS
+    row_order = (
+        (plan_row, src_row) if plan_first else (src_row, plan_row)
+    )
+    tid_dbg = ""
+    for row in (plan_row, src_row):
+        if row is not None:
+            try:
+                tid_dbg = str(
+                    _planning_df_cell_scalar(row, TASK_COL_TASK_ID) or ""
+                ).strip()
+            except Exception:
+                tid_dbg = ""
+            if tid_dbg:
+                break
+    src_scalar = _dispatch_table_scalar_from_dataframe_row(src_row, col_name)
+    plan_scalar = _dispatch_table_scalar_from_dataframe_row(plan_row, col_name)
+    for row in row_order:
+        v = _dispatch_table_scalar_from_dataframe_row(row, col_name)
+        if v is not None:
+            # #region agent log
+            if col_name == TASK_COL_ACTUAL_DONE and tid_dbg == "W5-5":
+                try:
+                    from planning_core import agent_debug_ndjson as _adn
+
+                    _adn.append_structured(
+                        "H1",
+                        "_dispatch_table_cell_from_sources",
+                        "W5-5 実加工数の採用元",
+                        {
+                            "planFirst": plan_first,
+                            "srcValue": src_scalar,
+                            "planValue": plan_scalar,
+                            "chosen": v,
+                            "source": "plan_input"
+                            if row is plan_row
+                            else "processing_plan_data",
+                        },
+                    )
+                except Exception:
+                    pass
+            # #endregion
+            return v
     t = task_dict
     if not t:
         return ""
@@ -24435,7 +24510,11 @@ def _dispatch_table_cell_from_sources(
     if col_name == TASK_COL_COMPLETION_FLAG:
         return t.get(TASK_COL_COMPLETION_FLAG) or ""
     if col_name == TASK_COL_ACTUAL_DONE:
-        return t.get(TASK_COL_ACTUAL_DONE) or ""
+        return (
+            t.get(TASK_COL_ACTUAL_DONE)
+            or t.get("done_qty_reported")
+            or ""
+        )
     if col_name == TASK_COL_ACTUAL_OUTPUT:
         return t.get(TASK_COL_ACTUAL_OUTPUT) or ""
     if col_name == RESULT_TASK_COL_DISPATCH_TRIAL_ORDER:
@@ -24679,7 +24758,7 @@ def build_result_dispatch_table_dataframe(
             member_ops.get(row_key, []),
         )
         r["配台日"] = day_k
-        r["当日配台数量"] = float(qty_sum)
+        r["当日配台数量"] = _sanitize_dispatch_qty_m(float(qty_sum))
         rows.append(r)
     return pd.DataFrame(rows, columns=cols)
 
@@ -24890,8 +24969,9 @@ def fill_interactive_result_dispatch_json_rows_from_planning_sources(
         for h in RESULT_DISPATCH_TABLE_STATIC_HEADERS:
             if h in skip_cols:
                 continue
+            force_plan = h in _RESULT_DISPATCH_PLAN_INPUT_OVERRIDE_SRC_COLS
             cur = r.get(h)
-            if cur is not None and str(cur).strip() != "":
+            if not force_plan and cur is not None and str(cur).strip() != "":
                 continue
             cell = _dispatch_table_cell_from_sources(
                 src_row=src_row, plan_row=plan_row, task_dict=None, col_name=h
@@ -24901,6 +24981,12 @@ def fill_interactive_result_dispatch_json_rows_from_planning_sources(
             if isinstance(cell, float) and pd.isna(cell):
                 continue
             if isinstance(cell, str) and not cell.strip():
+                continue
+            if (
+                not force_plan
+                and cur is not None
+                and str(cur).strip() == str(cell).strip()
+            ):
                 continue
             r[h] = cell
             filled += 1

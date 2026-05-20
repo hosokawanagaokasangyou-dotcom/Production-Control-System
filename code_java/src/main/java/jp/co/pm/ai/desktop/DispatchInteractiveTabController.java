@@ -83,6 +83,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialConsistency;
@@ -1181,6 +1182,9 @@ public final class DispatchInteractiveTabController {
                 ev -> {
                     ReloadBundle b = task.getValue();
                     doc = b.doc();
+                    // #region agent log
+                    logDispatchActualDoneForTaskId("W5-5", "reloadFromDiskQuiet", "H2");
+                    // #endregion
                     boolean stage2ColsFilled =
                             ResultDispatchStage2ColumnSupport.ensureStage2RequiredColumns(doc);
                     if (stage2ColsFilled) {
@@ -3426,6 +3430,40 @@ public final class DispatchInteractiveTabController {
                 .map(ResultDispatchNormalizer::parseDouble)
                 .filter(v -> v > 0);
     }
+
+    // #region agent log
+    private void logDispatchActualDoneForTaskId(String taskId, String location, String hypothesisId) {
+        if (shell == null || doc == null || taskId == null || taskId.isBlank()) {
+            return;
+        }
+        String tid = taskId.strip();
+        for (Map<String, String> row : doc.rows()) {
+            if (row == null) {
+                continue;
+            }
+            String rowTid = row.getOrDefault("依頼NO", "").strip();
+            if (!tid.equals(rowTid)) {
+                continue;
+            }
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("taskId", tid);
+            data.put("process", row.getOrDefault(ResultDispatchSchema.COL_PROCESS, ""));
+            data.put("machine", row.getOrDefault(ResultDispatchSchema.COL_MACHINE, ""));
+            data.put("qtyConverted", row.getOrDefault("換算数量", ""));
+            data.put("actualDone", row.getOrDefault("実加工数", ""));
+            data.put("planTotal", row.getOrDefault("計画合計", ""));
+            data.put("jsonPath", AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv()).toString());
+            AgentDebugLog.appendStructured(
+                    shell.snapshotUiEnv(),
+                    "69e69b",
+                    hypothesisId,
+                    "DispatchInteractiveTabController." + location,
+                    "結果_配台表.json 行の実加工数（読込直後）",
+                    data);
+            break;
+        }
+    }
+    // #endregion
 
     /** Mutable wide row (amounts indexed by {@link #dateAxis}). */
     public static final class WideRow {
