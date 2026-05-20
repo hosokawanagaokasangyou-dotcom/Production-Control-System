@@ -1168,7 +1168,7 @@ PLAN_COL_ROLL_UNIT_LENGTH_LEGACY = "ロール単位長さ"
 # 段階2の ``write_plan_sheet_global_parse_and_conflict_styles_one_io`` でブックの当該セルへ値反映＋黄地黒字に使う。
 PLAN_DF_ATTR_EFFECTIVE_ROLL_UNIT_DATA_ILOCS = "_pm_ai_effective_roll_unit_data_ilocs"
 # 段階1で算出し配台計画に出力（_dispatch_remaining_qty_m_from_row）。
-# 配台キュー本体の残量は _plan_row_dispatch_qty_metrics（未加工列・原反ロール長ベース）。
+# 段階2配台シミュレーションの加工量(m)・ロール本数は当列と「配台ロール数」を正とする（_plan_row_stage2_dispatch_qty_and_rolls）。
 PLAN_COL_DISPATCH_REMAINING_QTY = "配台使用残数量"
 # 段階1で算出。配台使用残数量 ÷ (原反)ロール単位長さ（列は配台使用残数量の直右）。
 PLAN_COL_DISPATCH_ROLL_COUNT = "配台ロール数"
@@ -4181,6 +4181,54 @@ def _dispatch_roll_count_from_row(row, remaining_m: float) -> float | int | str:
     return n
 
 
+def _parse_plan_dispatch_roll_count_cell(val) -> float | None:
+    """シート列「配台ロール数」のセル値。数値化できないとき None。"""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    s = str(val).strip()
+    if not s or s.lower() in ("nan", "none", ""):
+        return None
+    m = parse_float_safe(val, float("nan"))
+    if isinstance(m, float) and pd.isna(m):
+        return None
+    return float(m)
+
+
+def _plan_cell_dispatch_remaining_m(row) -> float:
+    """段階2用: 列「配台使用残数量」があれば採用、無ければ段階1と同一式で算出。"""
+    if hasattr(row, "get"):
+        v = _planning_df_cell_scalar(row, PLAN_COL_DISPATCH_REMAINING_QTY)
+        if v is not None and not (isinstance(v, float) and pd.isna(v)):
+            s = str(v).strip()
+            if s and s.lower() not in ("nan", "none"):
+                m = parse_float_safe(v, -1.0)
+                if m >= 0:
+                    return max(0.0, float(m))
+    return _dispatch_remaining_qty_m_from_row(row)
+
+
+def _plan_row_stage2_dispatch_qty_and_rolls(row) -> tuple[float, float]:
+    """
+    段階2配台の加工量(m)とロール本数。
+
+    正: 列「配台使用残数量」「配台ロール数」。欠損・空のときは
+    ``_dispatch_remaining_qty_m_from_row`` / ``_dispatch_roll_count_from_row`` で補完。
+    """
+    rem_m = _plan_cell_dispatch_remaining_m(row)
+    rolls = None
+    if hasattr(row, "get"):
+        rolls = _parse_plan_dispatch_roll_count_cell(
+            _planning_df_cell_scalar(row, PLAN_COL_DISPATCH_ROLL_COUNT)
+        )
+    if rolls is None:
+        rc = _dispatch_roll_count_from_row(row, rem_m)
+        if rc == "":
+            rolls = 0.0
+        else:
+            rolls = float(rc)
+    return max(0.0, rem_m), max(0.0, float(rolls))
+
+
 def _fill_plan_dispatch_remaining_qty_column(plan_df: pd.DataFrame) -> None:
     """配台計画 DataFrame の「配台使用残数量」「配台ロール数」を段階1式で埋める。"""
     if plan_df is None or getattr(plan_df, "empty", True):
@@ -5727,6 +5775,7 @@ def load_planning_tasks_df():
         compile_exclude_rules_d_to_e_with_ai=False,
     )
     _apply_master_speed_sheet_to_plan_df(df, log_prefix="配台シート読込")
+    _fill_plan_dispatch_remaining_qty_column(df)
     logging.info("計画タスク入力: PM_AI_PLAN_INPUT_PATH='%s' を読み込みました。", _plan_alt)
     return df
 
@@ -12377,9 +12426,10 @@ def build_task_queue_from_planning_df(
 
         machine = str(row.get(TASK_COL_MACHINE, "")).strip()
         machine_name = str(row.get(TASK_COL_MACHINE_NAME, "") or "").strip()
-        qty, done_qty, qty_total, from_unprocessed_qty = _plan_row_dispatch_qty_metrics(
-            row
+        _metrics_rem, done_qty, qty_total, _from_unprocessed_qty = (
+            _plan_row_dispatch_qty_metrics(row)
         )
+        dispatch_m, dispatch_rolls = _plan_row_stage2_dispatch_qty_and_rolls(row)
         # 加工速度: ②列「加工速度」（master.xlsm speed で基本速度×実稼働比率を反映）→
         # speed_ov は列「加工速度_上書き」のみ（①があれば上書き）。
         speed_raw = row.get(TASK_COL_SPEED, 1)
@@ -12413,7 +12463,7 @@ def build_task_queue_from_planning_df(
                 raw_input_date_ov,
             )
 
-        qty = max(0.0, qty_total - done_qty)
+        qty = max(0.0, float(dispatch_m))
         speed = parse_float_safe(speed_raw, 1.0)
         if speed <= 0:
             speed = 1.0
@@ -12507,38 +12557,48 @@ def build_task_queue_from_planning_df(
         except (TypeError, ValueError):
             _prod_w_i = None
 
-        unit = _dispatch_simulator_unit_m_from_plan_row(
-            row, fallback_m=qty_total if qty_total > 0 else qty
-        )
+        if dispatch_rolls > 1e-12 and qty > 1e-12:
+            unit = float(qty) / float(dispatch_rolls)
+            _init_rem = float(dispatch_rolls)
+        else:
+            unit = _dispatch_simulator_unit_m_from_plan_row(
+                row, fallback_m=qty_total if qty_total > 0 else qty
+            )
+            _sheet_roll_unit_before_sim_adjust = float(unit)
+            if qty > 1e-12 and unit > 1e-12:
+                unit = _effective_roll_unit_m_for_dispatch_task_simulator(qty, unit)
+                if abs(unit - _sheet_roll_unit_before_sim_adjust) > 1e-6:
+                    logging.info(
+                        "配台シミュレータ: 原反ロール単位を実効化 依頼NO=%s qty_m=%s シート原反ロール=%s → 実効=%s",
+                        task_id,
+                        qty,
+                        _sheet_roll_unit_before_sim_adjust,
+                        unit,
+                    )
+                    if PLAN_COL_RAW_ROLL_UNIT_LENGTH in tasks_df.columns:
+                        try:
+                            tasks_df.at[row_idx, PLAN_COL_RAW_ROLL_UNIT_LENGTH] = (
+                                float(unit)
+                            )
+                        except Exception as e:
+                            logging.warning(
+                                "列「%s」の明示更新に失敗（行=%s 依頼NO=%s）: %s",
+                                PLAN_COL_RAW_ROLL_UNIT_LENGTH,
+                                row_idx,
+                                task_id,
+                                e,
+                            )
+                        else:
+                            _plan_df_note_effective_roll_unit_iloc(
+                                tasks_df, planning_df_iloc
+                            )
+            _init_rem = (
+                float(math.ceil(qty / unit))
+                if qty > 1e-12 and unit > 1e-12
+                else 0.0
+            )
 
-        # 換算数量 ÷ (原反)ロール単位が整数ロールにならないとき、切り捨て本数で割った実効ロール長を
-        # 配台シミュレータ（unit_m・remaining_units）に採用する（例: 800/95 → 8 本・100m/本）。
-        _sheet_roll_unit_before_sim_adjust = float(unit)
-        if qty > 1e-12 and unit > 1e-12:
-            unit = _effective_roll_unit_m_for_dispatch_task_simulator(qty, unit)
-            if abs(unit - _sheet_roll_unit_before_sim_adjust) > 1e-6:
-                logging.info(
-                    "配台シミュレータ: 原反ロール単位を実効化 依頼NO=%s qty_m=%s シート原反ロール=%s → 実効=%s",
-                    task_id,
-                    qty,
-                    _sheet_roll_unit_before_sim_adjust,
-                    unit,
-                )
-                if PLAN_COL_RAW_ROLL_UNIT_LENGTH in tasks_df.columns:
-                    try:
-                        tasks_df.at[row_idx, PLAN_COL_RAW_ROLL_UNIT_LENGTH] = float(unit)
-                    except Exception as e:
-                        logging.warning(
-                            "列「%s」の明示更新に失敗（行=%s 依頼NO=%s）: %s",
-                            PLAN_COL_RAW_ROLL_UNIT_LENGTH,
-                            row_idx,
-                            task_id,
-                            e,
-                        )
-                    else:
-                        _plan_df_note_effective_roll_unit_iloc(tasks_df, planning_df_iloc)
-
-        # (製品)ロール単位長さの推定・矯正は段階1のみ。unit_m は (原反)ロール単位長さ（上記）を用いる。
+        # 配台使用残数量・配台ロール数が揃っているときは unit_m=残量/本数（実効化しない）。
 
         # 納期は優先順位・緊急度には使うが、開始日の下限には使わない（余力があれば前倒し開始するため）。
         if due_basis is None:
@@ -12586,11 +12646,6 @@ def build_task_queue_from_planning_df(
 
         _order_list = seq_by_tid.get(task_id) or []
         _p_rank = _process_sequence_rank_for_machine(machine, _order_list)
-        if from_unprocessed_qty and unit > 0:
-            # ③ 未加工(m) ÷ (原反)ロール単位長さ を切り上げ整数ロール
-            _init_rem = float(math.ceil(max(0.0, qty) / float(unit)))
-        else:
-            _init_rem = float(qty / unit if unit else 0.0)
         _process_content_mismatch = bool(_order_list) and not _process_name_matches_kakou_content_tokens(
             machine, _order_list
         )
@@ -12601,9 +12656,7 @@ def build_task_queue_from_planning_df(
                 _planning_df_cell_scalar(row, RESULT_TASK_COL_DISPATCH_TRIAL_ORDER)
             )
 
-        if from_unprocessed_qty:
-            _unp_base = max(0.0, qty)
-        elif _has_unprocessed_col:
+        if _has_unprocessed_col:
             _unp_base = _optional_float_unprocessed_column(
                 _planning_df_cell_scalar(row, TASK_COL_UNPROCESSED)
             )

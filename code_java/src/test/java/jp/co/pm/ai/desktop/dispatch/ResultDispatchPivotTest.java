@@ -222,4 +222,10 @@ class ResultDispatchPivotTest {
                         rows.getFirst().get(ResultDispatchSchema.COL_DISPATCH_QTY)),
                 1e-9);
     }
+
+    @Test
+    void formatQty_snapsFloatAccumulationNearInteger() {
+        assertEquals("6100", ResultDispatchNormalizer.formatQty(6099.999999999997));
+        assertEquals("6090", ResultDispatchNormalizer.formatQty(6090.0));
+    }
 }

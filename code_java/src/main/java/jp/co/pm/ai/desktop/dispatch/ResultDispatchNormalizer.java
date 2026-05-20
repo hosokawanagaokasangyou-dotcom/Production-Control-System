@@ -79,10 +79,25 @@ public final class ResultDispatchNormalizer {
         }
     }
 
+    private static final double QTY_NEAR_INTEGER_EPS = 1e-6;
+
+    /** 配台 m の加算誤差で 6099.999… のようになる値を表示用に整数へ寄せる。 */
+    public static double snapDispatchQtyM(double v) {
+        if (Double.isNaN(v) || Double.isInfinite(v)) {
+            return 0d;
+        }
+        double r = Math.rint(v);
+        if (Math.abs(v - r) <= QTY_NEAR_INTEGER_EPS) {
+            return r;
+        }
+        return v;
+    }
+
     public static String formatQty(double v) {
         if (Double.isNaN(v) || Double.isInfinite(v)) {
             return "0";
         }
+        v = snapDispatchQtyM(v);
         if (v == Math.rint(v) && Math.abs(v) < 1e15) {
             return Long.toString((long) v);
         }
