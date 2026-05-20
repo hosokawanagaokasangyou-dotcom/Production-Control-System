@@ -532,7 +532,8 @@ public final class ProcessingActualsDataTabController {
                         SpreadsheetTabularSupport.applyColumnFiltersWithDialog(spreadsheetView);
                         SpreadsheetTabularSupport.pinSpreadsheetFilterRow(spreadsheetView);
                         SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(spreadsheetView);
-                        SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(spreadsheetView);
+                        SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(
+                                spreadsheetView, true);
                         SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
                                 spreadsheetView,
                                 suppressColumnPersistence::get,

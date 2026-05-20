@@ -40,7 +40,7 @@ public final class ColumnVisibilitySupport {
          * 内側 TableColumn の可視性変更でスキンが組み替わると、既定の CONSTRAINED_RESIZE_POLICY に戻り
          * 列境界ドラッグで幅が変えられなくなる（配台計画_タスク入力の「見出し列」付近で顕在化しやすい）。
          */
-        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(view);
+        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicyAfterSkinSettles(view);
     }
 
     private static void refreshSpreadsheetColumnReorderAfterVisibility(SpreadsheetView view) {

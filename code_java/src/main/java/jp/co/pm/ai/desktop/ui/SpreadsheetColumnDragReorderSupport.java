@@ -88,7 +88,7 @@ public final class SpreadsheetColumnDragReorderSupport {
         int fixed = Math.max(0, leadingFixedColumnCount);
         view.getProperties().put(PROP_LEADING_FIXED, fixed);
         updateColumnReorderFlags(view, fixed);
-        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(view);
+        SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicyAfterSkinSettles(view);
         ListChangeListener<TableColumn<?, ?>> listener =
                 c -> {
                     while (c.next()) {

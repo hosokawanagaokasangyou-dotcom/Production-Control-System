@@ -363,7 +363,7 @@ public final class ResultDispatchTableTabController {
                         SpreadsheetTabularSupport.pinSpreadsheetFilterRow(spreadsheetView);
                         SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(spreadsheetView);
                         SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(
-                                spreadsheetView);
+                                spreadsheetView, true);
                         SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
                                 spreadsheetView,
                                 suppressColumnPersistence::get,
@@ -376,7 +376,10 @@ public final class ResultDispatchTableTabController {
                                 () ->
                                         TableColumnOrderPersistence.loadColumnVisibility(
                                                 TableColumnOrderPersistence.TableId.RESULT_DISPATCH_TABLE,
-                                                headersRef.size()));
+                                                headersRef.size()),
+                                () ->
+                                        SpreadsheetTabularSupport.reapplySpreadsheetColumnChrome(
+                                                spreadsheetView, headerColumnCount.get()));
                     });
         } finally {
             suppressColumnPersistence.set(false);

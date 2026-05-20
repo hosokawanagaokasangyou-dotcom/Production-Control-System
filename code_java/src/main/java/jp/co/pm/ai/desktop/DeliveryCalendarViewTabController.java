@@ -845,7 +845,8 @@ public final class DeliveryCalendarViewTabController {
                         applyDefaultMainProcessNameColumnFilter();
                         SpreadsheetTabularSupport.pinSpreadsheetFilterRow(mainSpreadsheet);
                         SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(mainSpreadsheet);
-                        SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(mainSpreadsheet);
+                        SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(
+                                mainSpreadsheet, true);
                         SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
                                 mainSpreadsheet,
                                 suppressMainPersistence::get,

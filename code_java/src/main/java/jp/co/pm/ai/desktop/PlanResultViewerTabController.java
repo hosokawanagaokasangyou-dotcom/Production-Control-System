@@ -282,7 +282,7 @@ public final class PlanResultViewerTabController {
         TableColumnOrderPersistence.PlanResultViewerUiPrefs u = planResultUiPrefs.get();
         SpreadsheetTabularSupport.applyPlanResultGridPresentation(
                 gb, u.cellWrapText(), u.rowHeightPercent());
-        SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(sv);
+        SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(sv, true);
     }
 
     /** フォントスタイルと行高・折り返しを現在の UI 設定で適用する。 */

@@ -474,7 +474,7 @@ public final class Stage1PreviewTabController {
                         SpreadsheetTabularSupport.pinSpreadsheetFilterRow(spreadsheetView);
                         SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(spreadsheetView);
                         SpreadsheetTabularSupport.refreshSpreadsheetAfterRowPresentationChange(
-                                spreadsheetView);
+                                spreadsheetView, true);
                         SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
                                 spreadsheetView,
                                 suppressColumnOrderPersistence::get,

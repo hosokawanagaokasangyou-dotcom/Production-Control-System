@@ -385,7 +385,7 @@ public final class SpreadsheetTabularSupport {
         clearSpreadsheetRowPresentationArtifacts(view);
         applyFixedLeadingColumns(view, headerColumnCount);
         pinSpreadsheetFilterRow(view);
-        applyUnconstrainedColumnResizePolicy(view);
+        applyUnconstrainedColumnResizePolicyAfterSkinSettles(view);
     }
 
     /** スクラッチ 1×1 や列未生成の段階では固定列・UNCONSTRAINED 適用でスキンが壊れやすい。 */
@@ -501,6 +501,24 @@ public final class SpreadsheetTabularSupport {
         for (SpreadsheetColumn col : view.getColumns()) {
             col.setResizable(true);
         }
+    }
+
+    /**
+     * {@link #applyUnconstrainedColumnResizePolicy} を即時と次のレイアウトパルス後にも再適用する。
+     *
+     * <p>{@link SpreadsheetView#resizeRowsToDefault()} や列の並べ替え・可視性変更後のスキン再構築は非同期で続くことがあり、
+     * 1 回だけの適用では {@link TableView#CONSTRAINED_RESIZE_POLICY} に戻って列境界ドラッグで幅が変えられなくなる。
+     */
+    public static void applyUnconstrainedColumnResizePolicyAfterSkinSettles(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        applyUnconstrainedColumnResizePolicy(view);
+        Platform.runLater(
+                () -> {
+                    applyUnconstrainedColumnResizePolicy(view);
+                    Platform.runLater(() -> applyUnconstrainedColumnResizePolicy(view));
+                });
     }
 
     private static void setUnconstrainedOnEmbeddedTableViews(Node n, int depth) {
@@ -1477,7 +1495,7 @@ public final class SpreadsheetTabularSupport {
          * refresh / resizeRowsToDefault 後にスキンが組み替わると CONSTRAINED に戻る。
          * 納期管理「アラ・実績・シス比較」は本メソッドを rebuild 後に呼ぶため、ここでも UNCONSTRAINED を再適用する。
          */
-        applyUnconstrainedColumnResizePolicy(view);
+        applyUnconstrainedColumnResizePolicyAfterSkinSettles(view);
     }
 
     private static void refreshEmbeddedTableViewsRecursive(Node n, int depth) {
