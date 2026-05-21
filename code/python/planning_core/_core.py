@@ -11599,28 +11599,22 @@ def analyze_task_special_remarks(tasks_df, reference_year=None, ai_sheet_sink: d
     """
     lines = _task_special_prompt_lines(tasks_df)
     if not lines:
-        n_rows = len(tasks_df)
-        n_rem_only = 0
-        n_tid_raw = 0
-        for _, row in tasks_df.iterrows():
-            tid = planning_task_id_str_from_plan_row(row)
-            rem = _cell_text_task_special_remark(row.get(PLAN_COL_SPECIAL_REMARK))
-            if tid:
-                n_tid_raw += 1
-            if rem:
-                n_rem_only += 1
         miss_col = PLAN_COL_SPECIAL_REMARK not in tasks_df.columns
-        logging.warning(
-            "タスク特別指定: AI 解析対象はありません（「%s」列は%s）。"
-            "总行数=%s」依頼NOのある行=%s」備考は入っている行=%s。"
-            "段階2実行剝にブックを保存し、本当に「%s」列へ入力しているか確認してください。",
-            PLAN_COL_SPECIAL_REMARK,
-            "見つかりません" if miss_col else "空の可能性はありした",
-            n_rows,
-            n_tid_raw,
-            n_rem_only,
-            PLAN_COL_SPECIAL_REMARK,
-        )
+        if miss_col:
+            n_rows = len(tasks_df)
+            n_tid_raw = 0
+            for _, row in tasks_df.iterrows():
+                if planning_task_id_str_from_plan_row(row):
+                    n_tid_raw += 1
+            logging.warning(
+                "タスク特別指定: AI 解析対象はありません（「%s」列は見つかりません）。"
+                "总行数=%s」依頼NOのある行=%s。"
+                "段階2実行剝にブックを保存し、本当に「%s」列へ入力しているか確認してください。",
+                PLAN_COL_SPECIAL_REMARK,
+                n_rows,
+                n_tid_raw,
+                PLAN_COL_SPECIAL_REMARK,
+            )
         if ai_sheet_sink is not None:
             ai_sheet_sink["特別指定備考_AI_API"] = "スキップ（対象行なし）"
             ai_sheet_sink["特別指定備考_Geminiモデル"] = "—（対象行なし・API 未実行）"
