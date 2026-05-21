@@ -22,7 +22,6 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.RichTextString;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFColor;
@@ -62,9 +61,8 @@ public final class SummaryAiDispatchWorkbookExporter {
     private static final Pattern CAL_DATE_HDR =
             Pattern.compile("(\\d{4})\u5e74(\\d{1,2})\u6708(\\d{1,2})\u65e5\\([\u6708\u706b\u6c34\u6728\u91d1\u571f\u65e5]\\)");
 
-    private static final String TEMPLATE_BASENAME = "\u30b5\u30de\u30ea_AI\u914d\u53f0.xlsx";
-
-    private static final String LEGACY_TEMPLATE_BASENAME = "\u30b5\u30de\u30ea_AI\u914d\u53f0.xlsm";
+    private static final int MIN_COLUMN_WIDTH_UNITS = 256 * 8;
+    private static final int MAX_COLUMN_WIDTH_UNITS = 256 * 48;
 
     /** {@link SpreadsheetTabularSupport} の日付セル4行目と同じ接頭辞。 */
     private static final String STAGE3_AFTER_LINE_PREFIX = "(\u6bb5\u968e3\u5f8c)";
@@ -99,30 +97,28 @@ public final class SummaryAiDispatchWorkbookExporter {
         Path repoRoot = AppPaths.resolveRepoRoot(u);
         Path stagingFinal = repoRoot.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX).toAbsolutePath().normalize();
         Path stagingTmp = repoRoot.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX + ".tmp").toAbsolutePath().normalize();
-        Path template = resolveTemplatePath(u);
-        ensureOutputWorkbookExists(stagingFinal, template);
         SummaryAiDispatchExportPrefs.ExportPrefs prefs = SummaryAiDispatchExportPrefs.load();
-        try (Workbook wb = openWorkbookForUpdate(output, stagingFinal, template)) {
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
             SheetStyles styles = SheetStyles.of(wb, prefs);
-            replaceSheet(
+            writeSheet(
                     wb,
                     SHEET_MAIN_COMPARE,
                     layoutForExport(mainCompare, SummaryAiDispatchExportPrefs.SheetKey.MAIN_COMPARE, prefs),
                     styles,
                     prefs.sheet(SummaryAiDispatchExportPrefs.SheetKey.MAIN_COMPARE).frozenColumnCount());
-            replaceSheet(
+            writeSheet(
                     wb,
                     SHEET_DISPATCH,
                     layoutForExport(dispatch, SummaryAiDispatchExportPrefs.SheetKey.DISPATCH, prefs),
                     styles,
                     prefs.sheet(SummaryAiDispatchExportPrefs.SheetKey.DISPATCH).frozenColumnCount());
-            replaceSheet(
+            writeSheet(
                     wb,
                     SHEET_ACTUALS,
                     layoutForExport(actuals, SummaryAiDispatchExportPrefs.SheetKey.ACTUALS, prefs),
                     styles,
                     prefs.sheet(SummaryAiDispatchExportPrefs.SheetKey.ACTUALS).frozenColumnCount());
-            replaceSheet(
+            writeSheet(
                     wb,
                     SHEET_ALADDIN,
                     layoutForExport(aladdin, SummaryAiDispatchExportPrefs.SheetKey.ALADDIN, prefs),
@@ -221,49 +217,8 @@ public final class SummaryAiDispatchWorkbookExporter {
         return new PlanInputTabularIo.TabularSheet(t.columns(), t.rows());
     }
 
-    private static Path resolveTemplatePath(Map<String, String> ui) {
-        Path code = AppPaths.resolveRepoRoot(ui != null ? ui : Map.of()).resolve("code");
-        Path xlsx = code.resolve(TEMPLATE_BASENAME).normalize();
-        if (Files.isRegularFile(xlsx)) {
-            return xlsx;
-        }
-        Path xlsm = code.resolve(LEGACY_TEMPLATE_BASENAME).normalize();
-        return Files.isRegularFile(xlsm) ? xlsm : null;
-    }
-
     private static PlanInputTabularIo.TabularSheet emptySheet() {
         return new PlanInputTabularIo.TabularSheet(List.of(), List.of());
-    }
-
-    /** 出力先が無いときだけテンプレートをコピーする（既存 {@code サマリ_AI配台.xlsx} は上書き更新）。 */
-    private static void ensureOutputWorkbookExists(Path output, Path template) throws IOException {
-        if (Files.isRegularFile(output)) {
-            return;
-        }
-        if (template != null && Files.isRegularFile(template)) {
-            Files.copy(template, output);
-            return;
-        }
-        try (Workbook wb = new XSSFWorkbook()) {
-            wb.createSheet(SHEET_MAIN_COMPARE);
-            try (var out = Files.newOutputStream(output)) {
-                wb.write(out);
-            }
-        }
-    }
-
-    private static Workbook openWorkbookForUpdate(Path output, Path staging, Path template)
-            throws IOException {
-        if (Files.isRegularFile(output)) {
-            return WorkbookFactory.create(output.toFile());
-        }
-        if (Files.isRegularFile(staging)) {
-            return WorkbookFactory.create(staging.toFile());
-        }
-        if (template != null && Files.isRegularFile(template)) {
-            return WorkbookFactory.create(template.toFile());
-        }
-        return new XSSFWorkbook();
     }
 
     private static PlanInputTabularIo.TabularSheet layoutForExport(
@@ -275,16 +230,12 @@ public final class SummaryAiDispatchWorkbookExporter {
                 src, sheetKey, prefs.sheet(sheetKey).nonDateColumnOrder());
     }
 
-    private static void replaceSheet(
+    private static void writeSheet(
             Workbook wb,
             String sheetName,
             PlanInputTabularIo.TabularSheet data,
             SheetStyles styles,
             int frozenColumnCount) {
-        int idx = wb.getSheetIndex(sheetName);
-        if (idx >= 0) {
-            wb.removeSheetAt(idx);
-        }
         Sheet sh = wb.createSheet(sheetName);
         boolean highlightStage3Qty = SHEET_MAIN_COMPARE.equals(sheetName);
         writeTabular(
@@ -306,20 +257,24 @@ public final class SummaryAiDispatchWorkbookExporter {
             boolean highlightStage3Qty) {
         List<String> headers = data.headers() != null ? data.headers() : List.of();
         List<List<String>> rows = data.rows() != null ? data.rows() : List.of();
+        int[] maxColChars = new int[Math.max(1, headers.size())];
         if (headers.isEmpty() && rows.isEmpty()) {
             Row hr = sh.createRow(0);
             Cell cell = hr.createCell(0);
             cell.setCellValue(EMPTY_SHEET_HINT);
             cell.setCellStyle(styles.dataWrap());
-            sh.autoSizeColumn(0);
+            maxColChars[0] = estimateDisplayLength(EMPTY_SHEET_HINT);
+            applyEstimatedColumnWidths(sh, maxColChars);
             return;
         }
         Row hr = sh.createRow(0);
         hr.setHeightInPoints(20f);
         for (int c = 0; c < headers.size(); c++) {
+            String header = headers.get(c) != null ? headers.get(c) : "";
             Cell cell = hr.createCell(c);
-            cell.setCellValue(headers.get(c) != null ? headers.get(c) : "");
+            cell.setCellValue(header);
             cell.setCellStyle(styles.header());
+            maxColChars[c] = estimateDisplayLength(header);
         }
         int r = 1;
         for (List<String> rowVals : rows) {
@@ -330,16 +285,17 @@ public final class SummaryAiDispatchWorkbookExporter {
                         rowVals != null && c < rowVals.size() && rowVals.get(c) != null
                                 ? rowVals.get(c)
                                 : "";
-                RichTextString rich =
-                        highlightStage3Qty
-                                ? styles.mainCompareRichText(v)
-                                : null;
+                RichTextString rich = null;
+                if (highlightStage3Qty && v.contains(STAGE3_AFTER_LINE_PREFIX)) {
+                    rich = styles.mainCompareRichText(v);
+                }
                 if (rich != null) {
                     cell.setCellValue(rich);
                 } else {
                     cell.setCellValue(v);
                 }
                 cell.setCellStyle(styles.dataWrap());
+                maxColChars[c] = Math.max(maxColChars[c], estimateDisplayLength(v));
             }
         }
         if (!headers.isEmpty()) {
@@ -347,13 +303,30 @@ public final class SummaryAiDispatchWorkbookExporter {
             int frozenCols = Math.max(0, Math.min(frozenColumnCount, headers.size()));
             sh.createFreezePane(frozenCols, 1);
         }
-        for (int c = 0; c < headers.size(); c++) {
-            sh.autoSizeColumn(c);
-            int w = sh.getColumnWidth(c);
-            int max = 256 * 48;
-            if (w > max) {
-                sh.setColumnWidth(c, max);
+        applyEstimatedColumnWidths(sh, maxColChars);
+    }
+
+    /** {@link Sheet#autoSizeColumn} の代替（全セル走査を避け、書き込み中の最大文字数から幅を推定）。 */
+    private static int estimateDisplayLength(String value) {
+        if (value == null || value.isEmpty()) {
+            return 0;
+        }
+        int max = 0;
+        int lineStart = 0;
+        for (int i = 0; i <= value.length(); i++) {
+            if (i == value.length() || value.charAt(i) == '\n') {
+                max = Math.max(max, i - lineStart);
+                lineStart = i + 1;
             }
+        }
+        return max;
+    }
+
+    private static void applyEstimatedColumnWidths(Sheet sh, int[] maxColChars) {
+        for (int c = 0; c < maxColChars.length; c++) {
+            int chars = Math.max(8, Math.min(48, maxColChars[c] + 2));
+            int width = Math.max(MIN_COLUMN_WIDTH_UNITS, Math.min(MAX_COLUMN_WIDTH_UNITS, chars * 256));
+            sh.setColumnWidth(c, width);
         }
     }
 
@@ -370,24 +343,39 @@ public final class SummaryAiDispatchWorkbookExporter {
             totalColIdx = insertAt;
         }
 
+        int[] dateColIndices = dateColumnIndices(srcHdrs);
         List<List<String>> outRows = new ArrayList<>();
         if (rows != null) {
             for (List<? extends DeliveryCalendarMainCell> row : rows) {
-                outRows.add(buildMainCompareExportRow(srcHdrs, row, outHdrs, totalColIdx));
+                outRows.add(buildMainCompareExportRow(srcHdrs, row, outHdrs, totalColIdx, dateColIndices));
             }
         }
         return new PlanInputTabularIo.TabularSheet(outHdrs, outRows);
+    }
+
+    private static int[] dateColumnIndices(List<String> srcHdrs) {
+        if (srcHdrs == null || srcHdrs.isEmpty()) {
+            return new int[0];
+        }
+        List<Integer> indices = new ArrayList<>();
+        for (int c = 0; c < srcHdrs.size(); c++) {
+            if (isDateColumnHeader(srcHdrs.get(c))) {
+                indices.add(c);
+            }
+        }
+        return indices.stream().mapToInt(Integer::intValue).toArray();
     }
 
     private static List<String> buildMainCompareExportRow(
             List<String> srcHdrs,
             List<? extends DeliveryCalendarMainCell> srcRow,
             List<String> outHdrs,
-            int totalColIdx) {
+            int totalColIdx,
+            int[] dateColIndices) {
         List<String> line = new ArrayList<>(outHdrs.size());
         for (int dst = 0; dst < outHdrs.size(); dst++) {
             if (dst == totalColIdx) {
-                line.add(formatSystemDispatchQtyTotal(srcHdrs, srcRow));
+                line.add(formatSystemDispatchQtyTotal(srcRow, dateColIndices));
             } else {
                 int srcCol = dst < totalColIdx ? dst : dst - 1;
                 DeliveryCalendarMainCell cell =
@@ -401,12 +389,9 @@ public final class SummaryAiDispatchWorkbookExporter {
     }
 
     private static String formatSystemDispatchQtyTotal(
-            List<String> srcHdrs, List<? extends DeliveryCalendarMainCell> row) {
+            List<? extends DeliveryCalendarMainCell> row, int[] dateColIndices) {
         double sum = 0;
-        for (int c = 0; c < srcHdrs.size(); c++) {
-            if (!isDateColumnHeader(srcHdrs.get(c))) {
-                continue;
-            }
+        for (int c : dateColIndices) {
             DeliveryCalendarMainCell cell = row != null && c < row.size() ? row.get(c) : null;
             if (cell instanceof DeliveryCalendarMainCell.TripleQty t
                     && !tripleQtyHidden(t.dispatch())) {
