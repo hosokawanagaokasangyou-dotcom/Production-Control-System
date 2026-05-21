@@ -20,7 +20,7 @@ class OperatorCardDocumentBuilderTest {
     }
 
     @Test
-    void resolveThreeDayColumns_finds_mm_dd_headers() {
+    void resolveDayColumns_finds_mm_dd_headers() {
         List<String> cols =
                 List.of(
                         "時間帯",
@@ -28,11 +28,36 @@ class OperatorCardDocumentBuilderTest {
                         "05/08 (Fri)",
                         "05/09 (Sat)");
         LocalDate start = LocalDate.of(2026, 5, 7);
-        List<String> three = OperatorCardDocumentBuilder.resolveThreeDayColumns(cols, start);
+        List<String> three =
+                OperatorCardDocumentBuilder.resolveDayColumns(
+                        cols, start, OperatorCardDocumentBuilder.DEFAULT_DAY_COUNT);
         assertEquals(3, three.size());
         assertEquals("05/07 (Thu)", three.get(0));
         assertEquals("05/08 (Fri)", three.get(1));
         assertEquals("05/09 (Sat)", three.get(2));
+    }
+
+    @Test
+    void resolveDayColumns_honors_custom_day_count() {
+        List<String> cols =
+                List.of(
+                        "時間帯",
+                        "05/07 (Thu)",
+                        "05/08 (Fri)",
+                        "05/09 (Sat)",
+                        "05/10 (Sun)",
+                        "05/11 (Mon)");
+        LocalDate start = LocalDate.of(2026, 5, 7);
+        List<String> five = OperatorCardDocumentBuilder.resolveDayColumns(cols, start, 5);
+        assertEquals(5, five.size());
+        assertEquals("05/11 (Mon)", five.get(4));
+    }
+
+    @Test
+    void clampDayCount_bounds_values() {
+        assertEquals(1, OperatorCardDocumentBuilder.clampDayCount(0));
+        assertEquals(31, OperatorCardDocumentBuilder.clampDayCount(99));
+        assertEquals(7, OperatorCardDocumentBuilder.clampDayCount(7));
     }
 
     @Test

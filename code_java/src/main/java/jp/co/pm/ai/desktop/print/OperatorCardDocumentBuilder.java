@@ -72,12 +72,29 @@ public final class OperatorCardDocumentBuilder {
         return normalizeKey(trimmed);
     }
 
+    public static final int DEFAULT_DAY_COUNT = 3;
+    public static final int MIN_DAY_COUNT = 1;
+    public static final int MAX_DAY_COUNT = 31;
+
     public static OperatorCardPage buildPage(
             String operatorName,
             Map<String, SheetTable> memberSheetsByOperator,
             List<Map<String, String>> dispatchRows,
             LocalDate startDate)
             throws OperatorCardBuildException {
+        return buildPage(
+                operatorName, memberSheetsByOperator, dispatchRows, startDate, DEFAULT_DAY_COUNT);
+    }
+
+    public static OperatorCardPage buildPage(
+            String operatorName,
+            Map<String, SheetTable> memberSheetsByOperator,
+            List<Map<String, String>> dispatchRows,
+            LocalDate startDate,
+            int dayCount)
+            throws OperatorCardBuildException {
+
+        int days = clampDayCount(dayCount);
 
         SheetTable opSheet = memberSheetsByOperator.get(operatorName);
         if (opSheet == null) {
@@ -87,42 +104,54 @@ public final class OperatorCardDocumentBuilder {
             throw new OperatorCardBuildException("sheet missing column " + COL_TIME);
         }
 
-        List<String> threeCols = resolveThreeDayColumns(opSheet.columns(), startDate);
-        if (threeCols.stream().anyMatch(Objects::isNull)) {
+        List<String> dateCols = resolveDayColumns(opSheet.columns(), startDate, days);
+        if (dateCols.stream().anyMatch(Objects::isNull)) {
             throw new OperatorCardBuildException(
                     "could not resolve date columns for "
                             + startDate
                             + " .. "
-                            + startDate.plusDays(2));
+                            + startDate.plusDays(days - 1L));
         }
 
         Map<String, Set<String>> teamMap =
-                buildTeamMap(memberSheetsByOperator, threeCols);
+                buildTeamMap(memberSheetsByOperator, dateCols);
 
-        List<OperatorCardDaySection> days = new ArrayList<>();
-        for (int i = 0; i < 3; i++) {
+        List<OperatorCardDaySection> daySections = new ArrayList<>();
+        for (int i = 0; i < days; i++) {
             LocalDate d = startDate.plusDays(i);
-            String colKey = threeCols.get(i);
+            String colKey = dateCols.get(i);
             List<OperatorCardTaskRow> rows =
                     buildDayRows(opSheet, dispatchRows, teamMap, colKey, d, operatorName);
-            days.add(new OperatorCardDaySection(d, colKey, rows));
+            daySections.add(new OperatorCardDaySection(d, colKey, rows));
         }
 
-        return new OperatorCardPage(operatorName, days);
+        return new OperatorCardPage(operatorName, daySections);
+    }
+
+    public static int clampDayCount(int dayCount) {
+        return Math.max(MIN_DAY_COUNT, Math.min(MAX_DAY_COUNT, dayCount));
     }
 
     /**
-     * Finds header strings matching MM/dd for {@code startDate} and the following two days (same calendar year as
-     * {@code startDate}, with rollover handled only when {@code startDate} month is December).
+     * Finds header strings matching MM/dd for {@code startDate} and the following {@code dayCount - 1} days (same
+     * calendar year as {@code startDate}, with rollover handled only when {@code startDate} month is December).
      */
-    public static List<String> resolveThreeDayColumns(List<String> columns, LocalDate startDate) {
-        List<String> out = new ArrayList<>(3);
-        for (int i = 0; i < 3; i++) {
+    public static List<String> resolveDayColumns(
+            List<String> columns, LocalDate startDate, int dayCount) {
+        int days = clampDayCount(dayCount);
+        List<String> out = new ArrayList<>(days);
+        for (int i = 0; i < days; i++) {
             LocalDate want = startDate.plusDays(i);
             String found = findColumnForDate(columns, want, startDate);
             out.add(found);
         }
         return out;
+    }
+
+    /** @deprecated use {@link #resolveDayColumns(List, LocalDate, int)} */
+    @Deprecated
+    public static List<String> resolveThreeDayColumns(List<String> columns, LocalDate startDate) {
+        return resolveDayColumns(columns, startDate, DEFAULT_DAY_COUNT);
     }
 
     static String findColumnForDate(List<String> columns, LocalDate want, LocalDate anchor) {

@@ -21,7 +21,10 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextField;
+import javafx.scene.control.TextFormatter;
 import javafx.scene.layout.StackPane;
 import javafx.scene.text.Font;
 import javafx.print.PageLayout;
@@ -71,6 +74,9 @@ public final class OperatorCardTabController {
     private DatePicker startDatePicker;
 
     @FXML
+    private Spinner<Integer> dayCountSpinner;
+
+    @FXML
     private ComboBox<String> operatorCombo;
 
     @FXML
@@ -93,6 +99,7 @@ public final class OperatorCardTabController {
 
     @FXML
     private void initialize() {
+        installDayCountSpinner();
         if (startDatePicker != null) {
             startDatePicker.setValue(LocalDate.now());
             startDatePicker
@@ -100,6 +107,16 @@ public final class OperatorCardTabController {
                     .addListener(
                             (obs, previousDate, newDate) -> {
                                 if (!Objects.equals(previousDate, newDate)) {
+                                    rebuildPreview();
+                                }
+                            });
+        }
+        if (dayCountSpinner != null) {
+            dayCountSpinner
+                    .valueProperty()
+                    .addListener(
+                            (obs, previousDays, newDays) -> {
+                                if (!Objects.equals(previousDays, newDays)) {
                                     rebuildPreview();
                                 }
                             });
@@ -122,6 +139,77 @@ public final class OperatorCardTabController {
                                     + " を指定し、プレビュー更新を押してください。");
             previewHost.getChildren().setAll(placeholder);
         }
+    }
+
+    private void installDayCountSpinner() {
+        if (dayCountSpinner == null) {
+            return;
+        }
+        int min = OperatorCardDocumentBuilder.MIN_DAY_COUNT;
+        int max = OperatorCardDocumentBuilder.MAX_DAY_COUNT;
+        int initial = OperatorCardDocumentBuilder.DEFAULT_DAY_COUNT;
+        SpinnerValueFactory.IntegerSpinnerValueFactory vf =
+                new SpinnerValueFactory.IntegerSpinnerValueFactory(min, max, initial);
+        vf.setAmountToStepBy(1);
+        dayCountSpinner.setValueFactory(vf);
+        dayCountSpinner.setEditable(true);
+        TextFormatter<Integer> formatter =
+                new TextFormatter<>(
+                        vf.getConverter(),
+                        vf.getValue(),
+                        change -> {
+                            String text = change.getControlNewText();
+                            if (text.isEmpty()) {
+                                return change;
+                            }
+                            return text.matches("\\d{0,2}") ? change : null;
+                        });
+        dayCountSpinner.getEditor().setTextFormatter(formatter);
+        dayCountSpinner
+                .getEditor()
+                .focusedProperty()
+                .addListener(
+                        (obs, wasFocused, isFocused) -> {
+                            if (Boolean.FALSE.equals(isFocused)) {
+                                commitDayCountSpinnerValue();
+                            }
+                        });
+    }
+
+    private void commitDayCountSpinnerValue() {
+        if (dayCountSpinner == null || !dayCountSpinner.isEditable()) {
+            return;
+        }
+        try {
+            dayCountSpinner.commitValue();
+        } catch (IllegalArgumentException ex) {
+            Integer cur = dayCountSpinner.getValue();
+            if (cur != null) {
+                dayCountSpinner.getEditor().setText(Integer.toString(cur));
+            }
+        }
+    }
+
+    private int selectedDayCount() {
+        commitDayCountSpinnerValue();
+        if (dayCountSpinner == null) {
+            return OperatorCardDocumentBuilder.DEFAULT_DAY_COUNT;
+        }
+        String raw = dayCountSpinner.getEditor().getText();
+        if (raw != null) {
+            String t = raw.trim();
+            if (!t.isEmpty()) {
+                try {
+                    return OperatorCardDocumentBuilder.clampDayCount(Integer.parseInt(t));
+                } catch (NumberFormatException ignored) {
+                    // fall through
+                }
+            }
+        }
+        Integer val = dayCountSpinner.getValue();
+        return val != null
+                ? OperatorCardDocumentBuilder.clampDayCount(val)
+                : OperatorCardDocumentBuilder.DEFAULT_DAY_COUNT;
     }
 
     void bindShell(MainShellController shell) {
@@ -353,7 +441,7 @@ public final class OperatorCardTabController {
             throw new OperatorCardBuildException("select operator");
         }
         return OperatorCardDocumentBuilder.buildPage(
-                op, cachedMemberSheets, dispatchRows, start);
+                op, cachedMemberSheets, dispatchRows, start, selectedDayCount());
     }
 
     private List<Map<String, String>> loadDispatchRows() throws IOException {
@@ -413,6 +501,7 @@ public final class OperatorCardTabController {
         }
 
         String font = fontCombo != null ? fontCombo.getValue() : "SansSerif";
+        int dayCount = selectedDayCount();
 
         PrinterJob job = PrinterJob.createPrinterJob();
         if (!job.showPrintDialog(ownerStage)) {
@@ -427,7 +516,7 @@ public final class OperatorCardTabController {
             for (String opName : operators) {
                 OperatorCardPage page =
                         OperatorCardDocumentBuilder.buildPage(
-                                opName, cachedMemberSheets, dispatchRows, start);
+                                opName, cachedMemberSheets, dispatchRows, start, dayCount);
                 Parent root = OperatorCardPreviewFactory.buildRoot(page, font);
                 boolean ok = job.printPage(layout, root);
                 if (!ok) {

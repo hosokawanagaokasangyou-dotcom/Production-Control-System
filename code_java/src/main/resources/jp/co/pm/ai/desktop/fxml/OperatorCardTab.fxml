@@ -7,6 +7,7 @@
 <?import javafx.scene.control.DatePicker?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Spinner?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.StackPane?>
@@ -52,8 +53,11 @@
     </HBox>
 
     <HBox alignment="CENTER_LEFT" spacing="16.0">
-        <Label text="開始日（3日分）"/>
+        <Label text="開始日"/>
         <DatePicker fx:id="startDatePicker"/>
+        <Label text="日数"/>
+        <Spinner fx:id="dayCountSpinner" editable="true" prefWidth="72.0"/>
+        <Label text="日分"/>
         <Label text="オペレーター"/>
         <ComboBox fx:id="operatorCombo" editable="false" prefWidth="220.0"/>
         <CheckBox fx:id="printAllOperatorsCheckBox"

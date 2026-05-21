@@ -49,7 +49,7 @@ public final class OperatorCardPreviewFactory {
         root.setPrefWidth(A4_PREF_WIDTH);
         root.setMinWidth(A4_PREF_WIDTH);
         root.setMaxWidth(A4_PREF_WIDTH);
-        root.setPrefHeight(A4_PREF_HEIGHT);
+        root.setPrefHeight(prefHeightForDayCount(page.days().size()));
         root.setStyle("-fx-font-family: " + ff + ";");
         root.getStyleClass().add("pm-operator-card-root");
 
@@ -162,6 +162,16 @@ public final class OperatorCardPreviewFactory {
         l.getStyleClass().add(styleClass);
         GridPane.setHgrow(l, Priority.ALWAYS);
         grid.add(l, col, row);
+    }
+
+    static double prefHeightForDayCount(int dayCount) {
+        int days = Math.max(1, dayCount);
+        if (days <= 3) {
+            return A4_PREF_HEIGHT;
+        }
+        double headerHeight = 220.0;
+        double perDayHeight = 280.0;
+        return Math.max(A4_PREF_HEIGHT, headerHeight + days * perDayHeight);
     }
 
     static String cssFontFamily(String fontFamily) {
