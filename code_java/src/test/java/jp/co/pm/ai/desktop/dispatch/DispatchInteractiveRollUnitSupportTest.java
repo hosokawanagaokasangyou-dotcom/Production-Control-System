@@ -24,6 +24,17 @@ class DispatchInteractiveRollUnitSupportTest {
     }
 
     @Test
+    void moveRollCountAndMetersPreview() {
+        assertEquals(29, DispatchInteractiveRollUnitSupport.maxMoveRollCount(6090, 210));
+        assertEquals(29, DispatchInteractiveRollUnitSupport.defaultMoveRollCount(6090, 210));
+        assertEquals(6090.0, DispatchInteractiveRollUnitSupport.metersForRollCount(29, 210), 1e-9);
+        assertEquals(420.0, DispatchInteractiveRollUnitSupport.metersForRollCount(2, 210), 1e-9);
+        String preview = DispatchInteractiveRollUnitSupport.formatMoveMetersPreview(29, 210);
+        assertTrue(preview.contains("6090"));
+        assertTrue(preview.contains("29"));
+    }
+
+    @Test
     void unitMFromDispatchRollColumns() {
         Map<String, String> row =
                 Map.of(
