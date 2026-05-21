@@ -435,6 +435,94 @@ def normalize_ooxml_shared_strings_if_missing(path: str) -> bool:
         return False
 
 
+# region stage2 io cache
+_MASTER_PD_EXCEL_CACHE: dict[str, tuple[int, int, pd.ExcelFile]] = {}
+_TABULAR_DF_LOAD_CACHE: dict[str, tuple[int, int, pd.DataFrame]] = {}
+
+
+def _workbook_file_stat_sig(path: str) -> tuple[int, int] | None:
+    try:
+        st = os.stat(path)
+        return int(st.st_mtime), int(st.st_size)
+    except OSError:
+        return None
+
+
+def _cached_master_pd_excel_file(path: str | None = None) -> pd.ExcelFile | None:
+    """同一 master.xlsm を段階2内で何度も pd.ExcelFile する I/O を避ける。"""
+    global _MASTER_PD_EXCEL_CACHE
+    p = (path or "").strip() or _master_workbook_path_resolved()
+    if not p or not os.path.isfile(p):
+        return None
+    sig = _workbook_file_stat_sig(p)
+    key = os.path.abspath(p)
+    if sig is not None:
+        prev = _MASTER_PD_EXCEL_CACHE.get(key)
+        if prev and prev[0] == sig[0] and prev[1] == sig[1]:
+            return prev[2]
+        if prev:
+            try:
+                prev[2].close()
+            except Exception:
+                pass
+    try:
+        xf = pd.ExcelFile(p)
+    except Exception:
+        return None
+    if sig is not None:
+        _MASTER_PD_EXCEL_CACHE[key] = (sig[0], sig[1], xf)
+    return xf
+
+
+def _cached_tabular_dataframe(
+    cache_namespace: str, path: str, loader
+) -> pd.DataFrame:
+    """ネットワーク上の加工計画DATA・実績明細等の再読込を同一プロセス内で抑える。"""
+    global _TABULAR_DF_LOAD_CACHE
+    p = os.path.abspath((path or "").strip())
+    sig = _workbook_file_stat_sig(p) if p and os.path.isfile(p) else None
+    key = f"{cache_namespace}:{p}"
+    if sig is not None:
+        prev = _TABULAR_DF_LOAD_CACHE.get(key)
+        if prev and prev[0] == sig[0] and prev[1] == sig[1]:
+            return prev[2].copy()
+    df = loader()
+    if sig is not None:
+        _TABULAR_DF_LOAD_CACHE[key] = (sig[0], sig[1], df.copy())
+    return df
+
+
+def _log_stage2_phase_timing(label: str, t_prev: float) -> float:
+    now = time_module.perf_counter()
+    logging.info("段階2 計測: %s %.2f秒", label, now - t_prev)
+    return now
+
+
+def _stage2_skip_actual_detail_gantt_prep(
+    stage2_output_root, publish_plan_xlsx: bool
+) -> bool:
+    if stage2_output_root:
+        return True
+    if not publish_plan_xlsx:
+        return True
+    if _interactive_stage2_parity_active():
+        return True
+    return False
+
+
+def _stage2_skip_heavy_workbook_sidecars() -> bool:
+    """段階3配台試行: 論理ビュー JSON 等、UI 必須でない重い副産物を省略。"""
+    return _interactive_stage2_parity_active()
+
+
+def _stage2_skip_member_schedule_output() -> bool:
+    """段階3配台試行: 人員*.xlsx/json は試行後 UI が必須としないため省略。"""
+    return _interactive_stage2_parity_active()
+
+
+# endregion stage2 io cache
+
+
 def _workbook_should_skip_openpyxl_io(wb_path: str) -> bool:
     """当該パスは OOXML でシート「配台_配台不要工程」を含むとする True（openpyxl 利用を避ける）。"""
     p = (wb_path or "").strip()
@@ -5300,13 +5388,19 @@ def load_tasks_df():
     _sheet_label_for_context = TASKS_SHEET_NAME
     if _alt and os.path.isfile(_alt):
         _low = _alt.lower()
-        if _low.endswith((".csv", ".parquet", ".pq")):
-            df = read_tabular_dataframe(_alt)
-        else:
-            _sn = _excel_sheet_arg_from_env(ENV_PM_AI_PROCESSING_PLAN_SHEET)
-            _sheet_label_for_context = _processing_plan_sheet_label_for_context(_sn)
-            df = read_tabular_dataframe(_alt, sheet_name=_sn)
-        df.columns = df.columns.str.strip()
+
+        def _load_once():
+            if _low.endswith((".csv", ".parquet", ".pq")):
+                out = read_tabular_dataframe(_alt)
+            else:
+                _sn = _excel_sheet_arg_from_env(ENV_PM_AI_PROCESSING_PLAN_SHEET)
+                nonlocal _sheet_label_for_context
+                _sheet_label_for_context = _processing_plan_sheet_label_for_context(_sn)
+                out = read_tabular_dataframe(_alt, sheet_name=_sn)
+            out.columns = out.columns.str.strip()
+            return out
+
+        df = _cached_tabular_dataframe("processing_plan", _alt, _load_once)
     else:
         raise FileNotFoundError(
             "タスク入力が必要です。PM_AI_PROCESSING_PLAN_PATH に表形式ファイル（CSV/Parquet/xlsx）の"
@@ -9511,62 +9605,68 @@ def load_machining_actual_detail_df():
         return pd.DataFrame()
     _sn = _excel_sheet_arg_from_env(ENV_PM_AI_ACTUAL_DETAIL_SHEET)
     _lbl = _excel_sheet_label_for_log(_sn, ACTUAL_DETAIL_SHEET_NAME)
-    try:
+
+    def _load_once():
         try:
-            df = pd.read_excel(_src_wb, sheet_name=_sn, engine="calamine")
-        except ImportError:
-            df = pd.read_excel(_src_wb, sheet_name=_sn)
+            try:
+                out = pd.read_excel(_src_wb, sheet_name=_sn, engine="calamine")
+            except ImportError:
+                out = pd.read_excel(_src_wb, sheet_name=_sn)
+            except ValueError:
+                raise
+            except Exception:
+                out = pd.read_excel(_src_wb, sheet_name=_sn)
         except ValueError:
-            raise
-        except Exception:
-            # openpyxl が styles の不整合で落ちるブックがある（calamine はスタイルをほぼ無視して読める）
-            df = pd.read_excel(_src_wb, sheet_name=_sn)
-    except ValueError:
+            logging.info(
+                "シート「%s」は無いため、実績明細ガントは出力しません。",
+                _lbl,
+            )
+            return pd.DataFrame()
+        out.columns = out.columns.str.strip()
+        if ACT_DETAIL_COL_ROLL not in out.columns:
+            for alias in ("ロール番号", "ロール", "巻番"):
+                if alias in out.columns:
+                    out = out.rename(columns={alias: ACT_DETAIL_COL_ROLL})
+                    break
+        out = _align_dataframe_headers_to_canonical(out, ACTUAL_DETAIL_HEADER_CANONICAL)
+        try:
+            if ACT_COL_MACHINING_START_DT in out.columns:
+                s0 = pd.to_datetime(out[ACT_COL_MACHINING_START_DT], errors="coerce")
+            else:
+                s0 = pd.Series([pd.NaT] * len(out))
+            if ACT_COL_STOP_MIN_CONVERTED in out.columns:
+                stop_min = pd.to_numeric(
+                    out[ACT_COL_STOP_MIN_CONVERTED], errors="coerce"
+                ).fillna(0.0)
+            else:
+                stop_min = pd.Series([0.0] * len(out))
+            s1 = s0 + pd.to_timedelta(stop_min, unit="m")
+
+            if ACT_COL_MACHINING_END_DT in out.columns:
+                e0 = pd.to_datetime(out[ACT_COL_MACHINING_END_DT], errors="coerce")
+                mask = e0.notna() & s1.notna() & (e0 < s1)
+                if mask.any():
+                    s1 = s1.where(~mask, e0 - pd.Timedelta(minutes=5))
+
+            out[ACT_COL_MACHINING_START_DT_WITH_STOP] = s1
+        except Exception as e:
+            logging.warning(
+                "加工実績明細: %s 列の生成に失敗したため従来列で続行します（%s）。",
+                ACT_COL_MACHINING_START_DT_WITH_STOP,
+                e,
+            )
         logging.info(
-            "シート「%s」は無いため、実績明細ガントは出力しません。",
+            "加工実績明細: '%s' の '%s' を %s 行読み込み。",
+            _src_wb,
             _lbl,
+            len(out),
         )
-        return pd.DataFrame()
-    df.columns = df.columns.str.strip()
-    if ACT_DETAIL_COL_ROLL not in df.columns:
-        for alias in ("ロール番号", "ロール", "巻番"):
-            if alias in df.columns:
-                df = df.rename(columns={alias: ACT_DETAIL_COL_ROLL})
-                break
-    df = _align_dataframe_headers_to_canonical(df, ACTUAL_DETAIL_HEADER_CANONICAL)
-    # 実績ガント用: 加工開始日時(停機時間加算後) を生成（停機時間分(変換後) が無ければ 0 分として扱う）
+        return out
+
     try:
-        if ACT_COL_MACHINING_START_DT in df.columns:
-            s0 = pd.to_datetime(df[ACT_COL_MACHINING_START_DT], errors="coerce")
-        else:
-            s0 = pd.Series([pd.NaT] * len(df))
-        if ACT_COL_STOP_MIN_CONVERTED in df.columns:
-            stop_min = pd.to_numeric(df[ACT_COL_STOP_MIN_CONVERTED], errors="coerce").fillna(0.0)
-        else:
-            stop_min = pd.Series([0.0] * len(df))
-        s1 = s0 + pd.to_timedelta(stop_min, unit="m")
-
-        if ACT_COL_MACHINING_END_DT in df.columns:
-            e0 = pd.to_datetime(df[ACT_COL_MACHINING_END_DT], errors="coerce")
-            # 「加工終了日時」<「加工開始日時(停機時間加算後)」のときは、開始を終了-5分に補正
-            mask = e0.notna() & s1.notna() & (e0 < s1)
-            if mask.any():
-                s1 = s1.where(~mask, e0 - pd.Timedelta(minutes=5))
-
-        df[ACT_COL_MACHINING_START_DT_WITH_STOP] = s1
-    except Exception as e:
-        logging.warning(
-            "加工実績明細: %s 列の生成に失敗したため従来列で続行します（%s）。",
-            ACT_COL_MACHINING_START_DT_WITH_STOP,
-            e,
-        )
-    logging.info(
-        "加工実績明細: '%s' の '%s' を %s 行読み込み。",
-        _src_wb,
-        _lbl,
-        len(df),
-    )
-    return df
+        return _cached_tabular_dataframe("actual_detail", _src_wb, _load_once)
+    except ValueError:
+        return pd.DataFrame()
 
 
 def _actual_row_cumulative_completion_pct_macro(row) -> int | None:
@@ -17941,7 +18041,10 @@ def load_skills_and_needs():
     mp = _require_master_workbook_path_exists()
     try:
         # 同一ブックを pd.read_excel で都度開しと I/O は重いめ、ExcelFile を1回の値開いでシートを parse れる。
-        with pd.ExcelFile(mp) as _master_xls:
+        _master_xls = _cached_master_pd_excel_file(mp)
+        if _master_xls is None:
+            raise FileNotFoundError(f"マスタブックを開けません: {mp}")
+        if True:
             # skills は新仕様:
             #   1行目: 工程名
             #   2行目: 機械名
@@ -18270,7 +18373,10 @@ def load_team_combination_presets_from_master() -> dict[
     if not os.path.isfile(path):
         return {}
     try:
-        df = pd.read_excel(path, sheet_name=MASTER_SHEET_TEAM_COMBINATIONS, header=0)
+        xls = _cached_master_pd_excel_file(path)
+        if xls is None:
+            return {}
+        df = pd.read_excel(xls, sheet_name=MASTER_SHEET_TEAM_COMBINATIONS, header=0)
     except Exception as e:
         logging.info("組み合わせ表シートの読込をスキップしました: %s", e)
         return {}
@@ -18850,7 +18956,9 @@ def load_attendance_and_analyze(members):
     # 1. メンバー別シートからの読み込み
     all_records = []
     try:
-        xls = pd.ExcelFile(_master_workbook_path_resolved())
+        xls = _cached_master_pd_excel_file(_master_workbook_path_resolved())
+        if xls is None:
+            raise FileNotFoundError("マスタブックを開けません")
         for sheet_name in xls.sheet_names:
             if "カレンダー" in sheet_name or sheet_name.lower() in ['skills', 'need', 'tasks']:
                 continue 
@@ -23424,7 +23532,21 @@ def load_machine_calendar_occupancy_blocks(
         sig = None
     # endregion stage2 cache
     try:
-        xls = pd.ExcelFile(master_path)
+        xls = _cached_master_pd_excel_file(master_path)
+        if xls is None:
+            out0 = {}
+            # region stage2 cache
+            try:
+                if sig is not None:
+                    _STAGE2_MACHINE_CALENDAR_CACHE = {
+                        "sig": sig,
+                        "value": out0,
+                        "interactive_defined": {},
+                    }
+            except Exception:
+                pass
+            # endregion stage2 cache
+            return out0
         if SHEET_MACHINE_CALENDAR not in xls.sheet_names:
             out0 = {}
             # region stage2 cache
@@ -23439,7 +23561,7 @@ def load_machine_calendar_occupancy_blocks(
                 pass
             # endregion stage2 cache
             return out0
-        raw = pd.read_excel(master_path, sheet_name=SHEET_MACHINE_CALENDAR, header=None)
+        raw = pd.read_excel(xls, sheet_name=SHEET_MACHINE_CALENDAR, header=None)
     except Exception as e:
         logging.warning("機械カレンダー: シート読込をスキップしました (%s)", e)
         out0 = {}
@@ -23883,7 +24005,9 @@ def load_machine_daily_startup_settings(
     if not master_path or not os.path.isfile(master_path):
         return startup, req_staff
     try:
-        xls = pd.ExcelFile(master_path)
+        xls = _cached_master_pd_excel_file(master_path)
+        if xls is None:
+            return startup, req_staff
     except Exception as e:
         logging.warning("機械日次始業準備設定: ブックを開きません (%s)", e)
         return startup, req_staff
@@ -23891,7 +24015,7 @@ def load_machine_daily_startup_settings(
     if SHEET_MACHINE_DAILY_STARTUP in xls.sheet_names:
         try:
             df2 = pd.read_excel(
-                master_path, sheet_name=SHEET_MACHINE_DAILY_STARTUP, header=0
+                xls, sheet_name=SHEET_MACHINE_DAILY_STARTUP, header=0
             )
             df2.columns = [str(c).strip() for c in df2.columns]
             c_mn = _df_pick_column(df2, "機械名", "機械")
@@ -23959,7 +24083,9 @@ def load_request_switch_prep_settings(
     if not master_path or not os.path.isfile(master_path):
         return switch_pair, switch_machine, resume_pair, resume_machine
     try:
-        xls = pd.ExcelFile(master_path)
+        xls = _cached_master_pd_excel_file(master_path)
+        if xls is None:
+            return switch_pair, switch_machine, resume_pair, resume_machine
     except Exception as e:
         logging.warning("依頼切替準備設定: ブックを開きません (%s)", e)
         return switch_pair, switch_machine, resume_pair, resume_machine
@@ -23967,7 +24093,7 @@ def load_request_switch_prep_settings(
         return switch_pair, switch_machine, resume_pair, resume_machine
     try:
         df = pd.read_excel(
-            master_path, sheet_name=SHEET_REQUEST_SWITCH_PREP, header=0
+            xls, sheet_name=SHEET_REQUEST_SWITCH_PREP, header=0
         )
         df.columns = [str(c).strip() for c in df.columns]
 
@@ -32513,7 +32639,7 @@ def _generate_plan_impl(
         surplus_map,
         need_combo_col_index,
     ) = load_skills_and_needs()
-    _t_combo0 = time_module.perf_counter()
+    _t_combo0 = _log_stage2_phase_timing("load_skills_and_needs", _t_s2_entry)
     team_combo_presets = load_team_combination_presets_from_master()
     if team_combo_presets:
         _nrules = sum(len(v) for v in team_combo_presets.values())
@@ -32549,7 +32675,6 @@ def _generate_plan_impl(
     global _STAGE2_DATA_EXTRACTION_DATETIME
     global DEFAULT_START_TIME, DEFAULT_END_TIME
     try:
-        _t_cal0 = time_module.perf_counter()
         _trial_env = _interactive_trial_calendar_legacy_active()
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = load_machine_calendar_occupancy_blocks(
             _master_workbook_path_resolved(),
@@ -32562,8 +32687,8 @@ def _generate_plan_impl(
         )
         _MACHINE_CALENDAR_BLOCKS_BY_DATE = {}
         _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE = {}
+    _t_cal0 = _log_stage2_phase_timing("load_team_combination_presets", _t_combo0)
     try:
-        _t_ds0 = time_module.perf_counter()
         (
             _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE,
             _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE,
@@ -32591,6 +32716,7 @@ def _generate_plan_impl(
         _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE = {}
         _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE = {}
         _STAGE2_BREAK_RESUME_PREP_BY_MACHINE = {}
+    _t_ds0 = _log_stage2_phase_timing("load_machine_calendar_and_master_settings", _t_cal0)
     _master_path_stage2 = _master_workbook_path_resolved()
     if any(int(v or 0) > 0 for v in _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE.values()):
         _a12s_chk, _a12e_chk = _read_master_main_factory_operating_times(_master_path_stage2)
@@ -32661,7 +32787,6 @@ def _generate_plan_impl(
         )
 
     # 段階2の基準日時は「マクロ実行時刻」ではなく加工計画DATA「データ抽出時間」（なければ「抽出時間」→「データ抽出日」）
-    _t_dt0 = time_module.perf_counter()
     data_extract_dt, plan_base_dt_column = _extract_data_extraction_datetime()
     _STAGE2_DATA_EXTRACTION_DATETIME = data_extract_dt
     base_now_dt = data_extract_dt if data_extract_dt is not None else datetime.now()
@@ -32702,9 +32827,9 @@ def _generate_plan_impl(
         plan_base_dt_column if data_extract_dt is not None else "現在時刻フォールバック",
     )
 
-    _t_att0 = time_module.perf_counter()
+    _t_att0 = _log_stage2_phase_timing("extract_data_extraction_datetime", _t_ds0)
     attendance_data, ai_log_data = load_attendance_and_analyze(members)
-    _t_gpo0 = time_module.perf_counter()
+    _t_gpo0 = _log_stage2_phase_timing("load_attendance_and_analyze", _t_att0)
     global_priority_raw = load_main_sheet_global_priority_override_text()
     global_priority_override = analyze_global_priority_override_comment(
         global_priority_raw,
@@ -32813,6 +32938,7 @@ def _generate_plan_impl(
     ai_task_by_tid = analyze_task_special_remarks(
         tasks_df, reference_year=run_date.year,         ai_sheet_sink=ai_log_data
     )
+    _t_tq0 = _log_stage2_phase_timing("analyze_global_priority_and_task_remarks", _t_gpo0)
     if _stage2_truthy_env("PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH"):
         logging.info(
             "段階2: PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH — 実加工数が正の行は配台キューに入れません（当日完了と想定）。"
@@ -32927,6 +33053,8 @@ def _generate_plan_impl(
         else:
             logging.info("DEBUG[task=%s] task_queueに存在しません（完了/残量0/依頼NO厳密一致の可能性）。", DEBUG_TASK_ID)
     timeline_events = []
+
+    _log_stage2_phase_timing("build_task_queue_and_prepare_dispatch", _t_tq0)
 
     # ---------------------------------------------------------
     # 日毎のスケジューリングループ
@@ -35026,15 +35154,21 @@ def _generate_plan_impl(
     # 重い設備ガント（計画・加工実績明細）の生成と明細 DATA 読込を省略する（スコア用の結果シートは従来どおり）。
     # JavaFX から PM_AI_STAGE2_WRITE_EXCEL=0 のときも xlsx/JSON 用の一時ブックにガントを書かないよう、
     # 同様に明細 DATA 読込・実績タイムライン構築・設備ガント描画を省略する（JSON は必須シートのみ）。
-    if stage2_output_root:
-        logging.info(
-            "段階2(試行順パターン別バッチ): 設備ガント（計画・加工実績明細）の生成を省略します。"
-        )
-    elif not _publish_plan_xlsx:
-        logging.info(
-            "段階2: Excel 出力を抑制（PM_AI_STAGE2_WRITE_EXCEL）のため、"
-            "設備ガント（計画・加工実績明細）の準備・生成を省略します。"
-        )
+    # 段階3配台試行（段階2同一パリティ）も同様に省略（結果_配台表 JSON 更新が主目的）。
+    if _stage2_skip_actual_detail_gantt_prep(stage2_output_root, _publish_plan_xlsx):
+        if stage2_output_root:
+            logging.info(
+                "段階2(試行順パターン別バッチ): 設備ガント（計画・加工実績明細）の生成を省略します。"
+            )
+        elif not _publish_plan_xlsx:
+            logging.info(
+                "段階2: Excel 出力を抑制（PM_AI_STAGE2_WRITE_EXCEL）のため、"
+                "設備ガント（計画・加工実績明細）の準備・生成を省略します。"
+            )
+        elif _interactive_stage2_parity_active():
+            logging.info(
+                "段階3(配台試行): 加工実績明細 DATA 読込と実績ガント準備を省略します。"
+            )
     else:
         # 実績明細ガントのメタ・時間軸: 計画ブックは「加工計画DATA_実績比較用」を優先（無ければ段階2本体と同じ基準）
         base_now_dt_act_gantt = base_now_dt
@@ -35606,17 +35740,22 @@ def _generate_plan_impl(
     try:
         from .logical_workbook_view import logical_view_json_path
 
-        _logical_view_out = (
-            logical_view_json_path(plan_xlsx_final) if not _publish_plan_xlsx else None
-        )
-        _plan_lv_json = write_production_plan_logical_view_json(
-            output_filename, json_out_path=_logical_view_out
-        )
-        if _plan_lv_json:
+        if _stage2_skip_heavy_workbook_sidecars():
             logging.info(
-                "段階2: 計画ブック 論理ビュー JSON（結合展開）を '%s' に出力しました。",
-                _plan_lv_json,
+                "段階3(配台試行): 計画ブック 論理ビュー JSON の出力を省略します。"
             )
+        else:
+            _logical_view_out = (
+                logical_view_json_path(plan_xlsx_final) if not _publish_plan_xlsx else None
+            )
+            _plan_lv_json = write_production_plan_logical_view_json(
+                output_filename, json_out_path=_logical_view_out
+            )
+            if _plan_lv_json:
+                logging.info(
+                    "段階2: 計画ブック 論理ビュー JSON（結合展開）を '%s' に出力しました。",
+                    _plan_lv_json,
+                )
     except Exception as e:
         logging.warning("段階2: 論理ビュー JSON 出力をスキップ: %s", e)
 
@@ -35668,158 +35807,163 @@ def _generate_plan_impl(
     member_xlsx_final = os.path.join(
         _stage2_out_root, member_workbook_filename(_stage2_stamp)
     )
-    if _publish_plan_xlsx:
-        member_output_filename = member_xlsx_final
-    else:
-        import tempfile
-
-        _fd_mem_tmp, member_output_filename = tempfile.mkstemp(
-            suffix=".xlsx", prefix="_pm_stage2_member_", dir=_stage2_out_root
-        )
-        os.close(_fd_mem_tmp)
-
-    # 時間帯は全メンバー共通で1回の値生成（メンバー数分の重複計算を避ける）
-    time_labels = []
-    time_grids = []
-    curr_dt = datetime.combine(run_date, DEFAULT_START_TIME)
-    end_dt_grid = datetime.combine(run_date, DEFAULT_END_TIME)
-    while curr_dt < end_dt_grid:
-        next_dt = curr_dt + timedelta(minutes=10)
-        if next_dt > end_dt_grid:
-            next_dt = end_dt_grid
-        time_labels.append(f"{curr_dt.strftime('%H:%M')}-{next_dt.strftime('%H:%M')}")
-        time_grids.append((curr_dt.time(), next_dt.time()))
-        curr_dt = next_dt
-    
-    logging.info(
-        "段階2: メンバー別スケジュールを作成しした → %s",
-        os.path.basename(member_xlsx_final),
-    )
-    try:
-        with pd.ExcelWriter(member_output_filename, engine="openpyxl") as member_writer:
-            for m in members:
-                # 坄行の辞書を初期化
-                m_schedule = {t_label: {"時間帯": t_label} for t_label in time_labels}
-            
-                # 坄日付のスケジュールを列として埋ゝでいし
-                for d in sorted_dates:
-                    d_str = d.strftime("%m/%d (%a)")
-                
-                    # 全日非勤務: 年休（カレンダー *）は『年休」」工場休日などは『休」
-                    if m not in attendance_data[d] or not attendance_data[d][m]['is_working']:
-                        off_label = _member_schedule_full_day_off_label(
-                            attendance_data[d].get(m) if m in attendance_data[d] else None
-                        )
-                        for t_label in time_labels:
-                            m_schedule[t_label][d_str] = off_label
-                        continue
-                
-                    daily_info = attendance_data[d][m]
-                    d_start_dt = daily_info['start_dt']
-                    d_end_dt = daily_info['end_dt']
-                    breaks_dt = daily_info['breaks_dt']
-                
-                    events_today = events_by_date[d]
-                
-                    for i, (t_start, t_end) in enumerate(time_grids):
-                        t_label = time_labels[i]
-                    
-                        # 判定用の中間時刻を計算
-                        grid_start_dt = datetime.combine(d, t_start)
-                        grid_end_dt = datetime.combine(d, t_end)
-                        grid_mid_dt = grid_start_dt + (grid_end_dt - grid_start_dt) / 2
-                    
-                        text = ""
-                        if grid_mid_dt < d_start_dt or grid_mid_dt >= d_end_dt:
-                            text = _member_schedule_off_shift_label(
-                                d, grid_mid_dt, d_start_dt, d_end_dt, daily_info.get("reason")
-                            )
-                        else:
-                            br_txt = _member_schedule_break_cell_label(
-                                grid_mid_dt, breaks_dt, d_end_dt, daily_info.get("reason")
-                            )
-                            if br_txt is not None:
-                                text = br_txt
-                        if text == "":
-                            # 該当れるタスクを探れ（subs_list は事剝解析済み）
-                            active_ev = next((e for e in events_today if e['start_dt'] <= grid_mid_dt < e['end_dt'] and (e['op'] == m or m in e.get('subs_list', []))), None)
-                            if active_ev:
-                                role = "主" if active_ev['op'] == m else "補"
-                                text = f"[{active_ev['task_id']}] {active_ev['machine']}({role})"
-                            else:
-                                text = "" # 何も割り当でられでいない空し時間
-                    
-                        m_schedule[t_label][d_str] = text
-                    
-                # データフレーム化してシートに書き込み
-                df_m = pd.DataFrame(list(m_schedule.values()))
-                cols = ["時間帯"] + [d.strftime("%m/%d (%a)") for d in sorted_dates]
-                df_m = df_m[[c for c in cols if c in df_m.columns]]
-                df_m.to_excel(member_writer, sheet_name=m, index=False)
-            
-                # --- 既定フォント・罫線・見出し背景（列幅は VBA 取り込み時の AutoFit） ---
-                worksheet = member_writer.sheets[m]
-                _apply_output_font_to_result_sheet(worksheet)
-                header_fill = PatternFill(start_color='E2EFDA', end_color='E2EFDA', fill_type='solid')
-                for cell in worksheet[1]:
-                    cell.fill = header_fill
-                
-                thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
-                for row in worksheet.iter_rows(min_row=1, max_row=worksheet.max_row, max_col=worksheet.max_column):
-                    for cell in row:
-                        cell.border = thin_border
-
-    except OSError as e:
-        logging.error(
-            "段階2: メンバー別スケジュールの保存に失敗しました: %s（%s）。"
-            "人員*.xlsx を Excel で開いでいないか確認してください。",
-            member_output_filename,
-            e,
-        )
-        raise
-
-    if _publish_plan_xlsx:
-        logging.info(
-            f"完了: 個人別スケジュールを '{member_output_filename}' に出力しました。"
-        )
-    else:
-        logging.info(
-            "段階2: メンバー別スケジュール xlsx は出力しませんでした（PM_AI_STAGE2_WRITE_EXCEL）。"
-        )
-
     member_schedule_json_path = None
-    try:
-        _meta_ms = (
-            {"source_xlsx": os.path.basename(member_xlsx_final)}
-            if not _publish_plan_xlsx
-            else None
+    if _stage2_skip_member_schedule_output():
+        logging.info(
+            "段階3(配台試行): メンバー別スケジュール出力を省略します。"
         )
-        member_schedule_json_path = write_member_schedule_workbook_json(
-            member_output_filename,
-            json_out_path=(
-                normalized_workbook_json_path(member_xlsx_final)
+    else:
+        if _publish_plan_xlsx:
+            member_output_filename = member_xlsx_final
+        else:
+            import tempfile
+
+            _fd_mem_tmp, member_output_filename = tempfile.mkstemp(
+                suffix=".xlsx", prefix="_pm_stage2_member_", dir=_stage2_out_root
+            )
+            os.close(_fd_mem_tmp)
+
+        # 時間帯は全メンバー共通で1回の値生成（メンバー数分の重複計算を避ける）
+        time_labels = []
+        time_grids = []
+        curr_dt = datetime.combine(run_date, DEFAULT_START_TIME)
+        end_dt_grid = datetime.combine(run_date, DEFAULT_END_TIME)
+        while curr_dt < end_dt_grid:
+            next_dt = curr_dt + timedelta(minutes=10)
+            if next_dt > end_dt_grid:
+                next_dt = end_dt_grid
+            time_labels.append(f"{curr_dt.strftime('%H:%M')}-{next_dt.strftime('%H:%M')}")
+            time_grids.append((curr_dt.time(), next_dt.time()))
+            curr_dt = next_dt
+
+        logging.info(
+            "段階2: メンバー別スケジュールを作成しした → %s",
+            os.path.basename(member_xlsx_final),
+        )
+        try:
+            with pd.ExcelWriter(member_output_filename, engine="openpyxl") as member_writer:
+                for m in members:
+                    # 坄行の辞書を初期化
+                    m_schedule = {t_label: {"時間帯": t_label} for t_label in time_labels}
+
+                    # 坄日付のスケジュールを列として埋ゝでいし
+                    for d in sorted_dates:
+                        d_str = d.strftime("%m/%d (%a)")
+
+                        # 全日非勤務: 年休（カレンダー *）は『年休」」工場休日などは『休」
+                        if m not in attendance_data[d] or not attendance_data[d][m]['is_working']:
+                            off_label = _member_schedule_full_day_off_label(
+                                attendance_data[d].get(m) if m in attendance_data[d] else None
+                            )
+                            for t_label in time_labels:
+                                m_schedule[t_label][d_str] = off_label
+                            continue
+
+                        daily_info = attendance_data[d][m]
+                        d_start_dt = daily_info['start_dt']
+                        d_end_dt = daily_info['end_dt']
+                        breaks_dt = daily_info['breaks_dt']
+
+                        events_today = events_by_date[d]
+
+                        for i, (t_start, t_end) in enumerate(time_grids):
+                            t_label = time_labels[i]
+
+                            # 判定用の中間時刻を計算
+                            grid_start_dt = datetime.combine(d, t_start)
+                            grid_end_dt = datetime.combine(d, t_end)
+                            grid_mid_dt = grid_start_dt + (grid_end_dt - grid_start_dt) / 2
+
+                            text = ""
+                            if grid_mid_dt < d_start_dt or grid_mid_dt >= d_end_dt:
+                                text = _member_schedule_off_shift_label(
+                                    d, grid_mid_dt, d_start_dt, d_end_dt, daily_info.get("reason")
+                                )
+                            else:
+                                br_txt = _member_schedule_break_cell_label(
+                                    grid_mid_dt, breaks_dt, d_end_dt, daily_info.get("reason")
+                                )
+                                if br_txt is not None:
+                                    text = br_txt
+                            if text == "":
+                                # 該当れるタスクを探れ（subs_list は事剝解析済み）
+                                active_ev = next((e for e in events_today if e['start_dt'] <= grid_mid_dt < e['end_dt'] and (e['op'] == m or m in e.get('subs_list', []))), None)
+                                if active_ev:
+                                    role = "主" if active_ev['op'] == m else "補"
+                                    text = f"[{active_ev['task_id']}] {active_ev['machine']}({role})"
+                                else:
+                                    text = "" # 何も割り当でられでいない空し時間
+
+                            m_schedule[t_label][d_str] = text
+
+                    # データフレーム化してシートに書き込み
+                    df_m = pd.DataFrame(list(m_schedule.values()))
+                    cols = ["時間帯"] + [d.strftime("%m/%d (%a)") for d in sorted_dates]
+                    df_m = df_m[[c for c in cols if c in df_m.columns]]
+                    df_m.to_excel(member_writer, sheet_name=m, index=False)
+
+                    # --- 既定フォント・罫線・見出し背景（列幅は VBA 取り込み時の AutoFit） ---
+                    worksheet = member_writer.sheets[m]
+                    _apply_output_font_to_result_sheet(worksheet)
+                    header_fill = PatternFill(start_color='E2EFDA', end_color='E2EFDA', fill_type='solid')
+                    for cell in worksheet[1]:
+                        cell.fill = header_fill
+
+                    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+                    for row in worksheet.iter_rows(min_row=1, max_row=worksheet.max_row, max_col=worksheet.max_column):
+                        for cell in row:
+                            cell.border = thin_border
+
+        except OSError as e:
+            logging.error(
+                "段階2: メンバー別スケジュールの保存に失敗しました: %s（%s）。"
+                "人員*.xlsx を Excel で開いでいないか確認してください。",
+                member_output_filename,
+                e,
+            )
+            raise
+
+        if _publish_plan_xlsx:
+            logging.info(
+                f"完了: 個人別スケジュールを '{member_output_filename}' に出力しました。"
+            )
+        else:
+            logging.info(
+                "段階2: メンバー別スケジュール xlsx は出力しませんでした（PM_AI_STAGE2_WRITE_EXCEL）。"
+            )
+
+        try:
+            _meta_ms = (
+                {"source_xlsx": os.path.basename(member_xlsx_final)}
                 if not _publish_plan_xlsx
                 else None
-            ),
-            metadata_extra=_meta_ms,
-        )
-        if member_schedule_json_path:
-            logging.info(
-                "段階2: メンバー別スケジュール JSON を '%s' に出力しました。",
-                member_schedule_json_path,
             )
-    except Exception as e:
-        logging.warning("段階2: メンバー別スケジュール JSON 出力をスキップ: %s", e)
-
-    if not _publish_plan_xlsx:
-        try:
-            os.remove(member_output_filename)
-        except OSError as _rm_mem_err:
-            logging.warning(
-                "段階2: 一時メンバー別スケジュール xlsx の削除に失敗しました: %s (%s)",
+            member_schedule_json_path = write_member_schedule_workbook_json(
                 member_output_filename,
-                _rm_mem_err,
+                json_out_path=(
+                    normalized_workbook_json_path(member_xlsx_final)
+                    if not _publish_plan_xlsx
+                    else None
+                ),
+                metadata_extra=_meta_ms,
             )
+            if member_schedule_json_path:
+                logging.info(
+                    "段階2: メンバー別スケジュール JSON を '%s' に出力しました。",
+                    member_schedule_json_path,
+                )
+        except Exception as e:
+            logging.warning("段階2: メンバー別スケジュール JSON 出力をスキップ: %s", e)
+
+        if not _publish_plan_xlsx:
+            try:
+                os.remove(member_output_filename)
+            except OSError as _rm_mem_err:
+                logging.warning(
+                    "段階2: 一時メンバー別スケジュール xlsx の削除に失敗しました: %s (%s)",
+                    member_output_filename,
+                    _rm_mem_err,
+                )
 
     _try_write_main_sheet_gemini_usage_summary("段階2")
     if return_output_paths:
