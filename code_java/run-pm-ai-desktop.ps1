@@ -1,28 +1,27 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Windows –{”Ô‘z’è: PowerShell ‚©‚çH’öŠÇ— JavaFX ƒfƒXƒNƒgƒbƒv‚ð‹N“®‚·‚éB
+  Windows ?{??z??: PowerShell ????H????? JavaFX ?f?X?N?g?b?v???N??????B
 
 .DESCRIPTION
-  “¯ŠK‘w‚Ì mvnw.cmd ‚Å compile ‚Æ exec:exec@pm-ai-desktop ‚ðŽÀs‚µ‚Ü‚·Bpom ‚Ì JVM ƒIƒvƒVƒ‡ƒ“i-Xms/-XmxAOOM Žžƒq[ƒvƒ_ƒ“ƒv“™j‚ª‚»‚Ì‚Ü‚Ü“K—p‚³‚ê‚Ü‚·B
+  ???K?w?? mvnw.cmd ?? compile ?? exec:exec@pm-ai-desktop ?????s??????Bpom ?? JVM ?I?v?V?????i-Xms/-Xmx?AOOM ???q?[?v?_???v???j????????K?p???????B
 
-  d—v: ‚±‚ÌƒtƒHƒ‹ƒ_‚ÅŽÀs‚·‚é‚Æ‚«‚ÍƒpƒX‚Ìæ“ª‚É .\ ‚ð•t‚¯‚Ü‚·B
+  ?d?v: ????t?H???_????s????????p?X????? .\ ??t??????B
     .\run-pm-ai-desktop.ps1
-  ƒŠƒ|ƒWƒgƒŠ’¼‰º‚©‚ç‚È‚ç:
+  ???|?W?g????????????:
     .\code_java\run-pm-ai-desktop.ps1
-  irun-pm-ai-desktop.ps1 ‚¾‚¯‚Å‚ÍŽÀs‚Å‚«‚Ü‚¹‚ñBj
 
-  ƒq[ƒvŠÄŽ‹istderr ‚É‰pŒê‚Ì’èŠúƒTƒ“ƒvƒ‹ / è‡’lŒxj‚ð—LŒø‚É‚·‚é—á:
+  javafx:run ã‚‚ exec:exec@pm-ai-desktop ã¨åŒã˜ module-path æ§‹æˆã«æƒãˆæ¸ˆã¿ã€‚
+  ãã‚Œã§ã‚‚ ClassNotFound ãŒå‡ºã‚‹å ´åˆã¯ .\run-pm-ai-desktop.ps1 ã‚’ä½¿ã†ã€‚
+
+  ?q?[?v?????L????????:
     .\run-pm-ai-desktop.ps1 -MonitorIntervalSec 60
 
-  Šù’è‚Å‚ÍŠÂ‹«•Ï” PM_AI_JVM_MEMORY_MONITOR_SEC ‚Íã‘‚«‚µ‚Ü‚¹‚ñi-1jB
-  0 ˆÈã‚ðŽw’è‚µ‚½‚Æ‚«‚¾‚¯A‚»‚ÌƒZƒbƒVƒ‡ƒ“—p‚ÉÝ’è‚µ‚ÄŽq JVM ‚ÉŒp³‚µ‚Ü‚·B
-
 .PARAMETER MaxHeap
-  Maven ƒvƒƒpƒeƒB jvm.max.heapiŠù’è 4gB—á: 2g, 4g, 8gjB
+  Maven ?v???p?e?B jvm.max.heap?i???? 4g?B??: 2g, 4g, 8g?j?B
 
 .PARAMETER MonitorIntervalSec
-  ƒq[ƒvŠÄŽ‹‚ÌŠÔŠui•bjB-1 ‚È‚çŠÂ‹«•Ï”‚ðG‚ç‚È‚¢B0 ˆÈã‚Å PM_AI_JVM_MEMORY_MONITOR_SEC ‚ð‚»‚Ì’l‚ÉÝ’èB
+  ?q?[?v??????u?i?b?j?B-1 ??????????G?????B0 ???? PM_AI_JVM_MEMORY_MONITOR_SEC ????B
 
 .EXAMPLE
   .\run-pm-ai-desktop.ps1
@@ -41,12 +40,38 @@ if ($MonitorIntervalSec -ge 0) {
     $env:PM_AI_JVM_MEMORY_MONITOR_SEC = "$MonitorIntervalSec"
 }
 
-$mvnArgs = @(
-    "-q",
-    "-Djvm.max.heap=$MaxHeap",
-    "compile",
-    "exec:exec@pm-ai-desktop"
-)
+$commonArgs = @("-q", "-Djvm.max.heap=$MaxHeap")
 
-& "$PSScriptRoot\mvnw.cmd" @mvnArgs
+& "$PSScriptRoot\mvnw.cmd" @commonArgs @("compile")
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
+$requiredClasses = @(
+    "target\classes\jp\co\pm\ai\desktop\ui\TableColumnOrderPersistence.class",
+    "target\classes\jp\co\pm\ai\desktop\StartupSplashStage.class",
+    "target\classes\jp\co\pm\ai\desktop\io\Stage2OutputNaming.class",
+    "target\classes\jp\co\pm\ai\desktop\ui\ExcelLikeSpreadsheetFilter.class",
+    "target\classes\jp\co\pm\ai\planning\stage2\core\Stage2PlanRowDispatchQtyMetricsResult.class"
+)
+$missing = @()
+foreach ($rel in $requiredClasses) {
+    $p = Join-Path $PSScriptRoot $rel
+    if (-not (Test-Path -LiteralPath $p)) {
+        $missing += $p
+    }
+}
+if ($missing.Count -gt 0) {
+    Write-Error @"
+compile ???K?v?? .class ??????????:
+$($missing -join [Environment]::NewLine)
+???:
+  1. ???s???? Java / Maven ?v???Z?X???I??
+  2. .\mvnw.cmd clean compile
+  3. .\run-pm-ai-desktop.ps1
+"@
+    exit 1
+}
+
+& "$PSScriptRoot\mvnw.cmd" @commonArgs @("exec:exec@pm-ai-desktop")
 exit $LASTEXITCODE
