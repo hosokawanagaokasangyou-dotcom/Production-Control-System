@@ -83,7 +83,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
 import jp.co.pm.ai.desktop.dispatch.DispatchInteractiveRollUnitSupport;
@@ -241,6 +240,11 @@ public final class DispatchInteractiveTabController {
 
     @FXML
     private Button dispatchTrialButton;
+
+    private static final String DISPATCH_TRIAL_BUTTON_TEXT_DEFAULT = "段階3";
+
+    private static final String DISPATCH_TRIAL_BUTTON_TEXT_SUMMARY_LOCKED =
+            "段階3（サマリエクセル更新中）";
 
     @FXML
     private Button wideRowUpButton;
@@ -710,6 +714,9 @@ public final class DispatchInteractiveTabController {
      */
     private void startDispatchTrial() {
         if (shell == null) {
+            return;
+        }
+        if (shell.blockIfSummaryAiDispatchExportLocked("配台試行（段階3）")) {
             return;
         }
         if (reloadInteractionDisabled || dispatchDocDirtySinceSave) {
@@ -1387,12 +1394,30 @@ public final class DispatchInteractiveTabController {
     /**
      * 配台試行ボタン: 再読込中は無効。表を手動編集して未保存のときは無効（保存または「再読み」で有効化）。
      */
+    void refreshSummaryExportLockPresentation() {
+        applyDispatchTrialButtonEnabledState();
+    }
+
+    private boolean isSummaryExportLockedByLockFile() {
+        return shell != null && shell.isSummaryAiDispatchExportLocked();
+    }
+
     private void applyDispatchTrialButtonEnabledState() {
-        boolean blockTrial = reloadInteractionDisabled || dispatchDocDirtySinceSave;
+        boolean blockTrial =
+                reloadInteractionDisabled
+                        || dispatchDocDirtySinceSave
+                        || isSummaryExportLockedByLockFile();
         if (dispatchTrialButton != null) {
             dispatchTrialButton.setDisable(blockTrial);
         }
-        if (dispatchDocDirtySinceSave && !reloadInteractionDisabled) {
+        if (isSummaryExportLockedByLockFile() && !reloadInteractionDisabled) {
+            Tooltip t =
+                    new Tooltip(
+                            "サマリ xlsx を作成中です。完了後に配台試行するか、実行・ログタブの「ロック解除」を使用してください。");
+            if (dispatchTrialButton != null) {
+                dispatchTrialButton.setTooltip(t);
+            }
+        } else if (dispatchDocDirtySinceSave && !reloadInteractionDisabled) {
             Tooltip t =
                     new Tooltip(
                             "未保存の編集があります。「保存 (JSON+xlsx)」または「再読み」で確定してから配台試行を実行してください。");
@@ -1402,6 +1427,13 @@ public final class DispatchInteractiveTabController {
         } else {
             if (dispatchTrialButton != null) {
                 dispatchTrialButton.setTooltip(null);
+            }
+        }
+        if (dispatchTrialButton != null) {
+            if (isSummaryExportLockedByLockFile() && !reloadInteractionDisabled) {
+                dispatchTrialButton.setText(DISPATCH_TRIAL_BUTTON_TEXT_SUMMARY_LOCKED);
+            } else {
+                dispatchTrialButton.setText(DISPATCH_TRIAL_BUTTON_TEXT_DEFAULT);
             }
         }
     }

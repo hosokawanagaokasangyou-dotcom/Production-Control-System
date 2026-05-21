@@ -3448,22 +3448,6 @@ public final class MainShellController {
         }
     }
 
-    private static void debugMemProbe413a29(
-            Map<String, String> ui, String hypothesisId, String location, String message) {
-        // #region agent log
-        Runtime rt = Runtime.getRuntime();
-        long usedMb = (rt.totalMemory() - rt.freeMemory()) / (1024L * 1024L);
-        long maxMb = rt.maxMemory() / (1024L * 1024L);
-        AgentDebugLog.appendStructured(
-                ui,
-                "413a29",
-                hypothesisId,
-                location,
-                message,
-                Map.of("heapUsedMb", usedMb, "heapMaxMb", maxMb));
-        // #endregion
-    }
-
     private void completeStageRunOnFx(String script, Integer code, Throwable err, List<String> tailSnap) {
         applyRunTabGating();
         if (err != null) {
@@ -3510,32 +3494,10 @@ public final class MainShellController {
             }
             if (STAGE2.equals(script)) {
                 if (c == 0) {
-                    Map<String, String> uiStage2Done = collectUiEnv();
-                    debugMemProbe413a29(
-                            uiStage2Done,
-                            "H3",
-                            "MainShellController.completeStageRunOnFx",
-                            "stage2 exit 0 before UI refresh");
                     refreshStage2OutputArtifacts();
-                    debugMemProbe413a29(
-                            uiStage2Done,
-                            "H3",
-                            "MainShellController.completeStageRunOnFx",
-                            "after refreshStage2OutputArtifacts");
                     Platform.runLater(
                             () -> {
-                                Map<String, String> uiChain = collectUiEnv();
-                                debugMemProbe413a29(
-                                        uiChain,
-                                        "H3",
-                                        "MainShellController.completeStageRunOnFx",
-                                        "stage2 ui continuation (gantt/dispatch first)");
                                 refreshEquipmentGanttGraphicAfterPipelineRun();
-                                debugMemProbe413a29(
-                                        uiChain,
-                                        "H3",
-                                        "MainShellController.completeStageRunOnFx",
-                                        "after refreshEquipmentGanttGraphic");
                                 Runnable afterDispatchReload =
                                         () -> {
                                             MacroCompleteChime.playIfAvailable(collectUiEnv());
@@ -3548,11 +3510,6 @@ public final class MainShellController {
                                             }
                                         };
                                 if (dispatchInteractiveTabController != null) {
-                                    debugMemProbe413a29(
-                                            uiChain,
-                                            "H3",
-                                            "MainShellController.completeStageRunOnFx",
-                                            "before reloadTableFromDiskAfterStage2Success");
                                     dispatchInteractiveTabController.reloadTableFromDiskAfterStage2Success(
                                             afterDispatchReload);
                                 } else {

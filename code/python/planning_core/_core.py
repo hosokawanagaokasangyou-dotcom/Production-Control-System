@@ -370,61 +370,6 @@ def _ooxml_workbook_sheet_names(wb_path: str) -> list[str] | None:
     return names
 
 
-def _agent_debug_mem_probe(
-    hypothesis_id: str,
-    location: str,
-    message: str,
-    **data: object,
-) -> None:
-    # #region agent log
-    try:
-        from planning_core.agent_debug_ndjson import append_structured
-
-        import sys
-
-        rss_mb = None
-        if sys.platform == "win32":
-            try:
-                import ctypes
-
-                class _Pmc(ctypes.Structure):
-                    _fields_ = [
-                        ("cb", ctypes.c_ulong),
-                        ("PageFaultCount", ctypes.c_ulong),
-                        ("PeakWorkingSetSize", ctypes.c_size_t),
-                        ("WorkingSetSize", ctypes.c_size_t),
-                        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
-                        ("QuotaPagedPoolUsage", ctypes.c_size_t),
-                        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
-                        ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-                        ("PagefileUsage", ctypes.c_size_t),
-                        ("PeakPagefileUsage", ctypes.c_size_t),
-                    ]
-
-                pmc = _Pmc()
-                pmc.cb = ctypes.sizeof(pmc)
-                if ctypes.windll.psapi.GetProcessMemoryInfo(
-                    ctypes.windll.kernel32.GetCurrentProcess(),
-                    ctypes.byref(pmc),
-                    pmc.cb,
-                ):
-                    rss_mb = float(pmc.WorkingSetSize) / (1024.0 * 1024.0)
-            except Exception:
-                pass
-        else:
-            try:
-                import resource
-
-                rss_mb = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) / 1024.0
-            except Exception:
-                pass
-        payload = {k: v for k, v in data.items() if v is not None}
-        if rss_mb is not None:
-            payload["rss_mb"] = round(rss_mb, 2)
-        payload["pid"] = os.getpid()
-        append_structured(hypothesis_id, location, message, payload)
-    except Exception:
-        pass
     # #endregion
 
 
@@ -445,13 +390,6 @@ def _ooxml_workbook_missing_shared_strings(wb_path: str) -> bool:
 
         with zipfile.ZipFile(p, "r") as zf:
             missing = "xl/sharedStrings.xml" not in zf.namelist()
-        _agent_debug_mem_probe(
-            "H1",
-            "_core.py:_ooxml_workbook_missing_shared_strings",
-            "sharedStrings zip probe",
-            wb_basename=os.path.basename(p),
-            missing_shared_strings=missing,
-        )
         return missing
     except Exception:
         return False
@@ -5956,29 +5894,11 @@ def load_main_sheet_global_priority_override_text() -> str:
             "openpyxl でグローバルコメントを読みません（メモリ急増回避）。"
             " PM_AI_GLOBAL_PRIORITY_OVERRIDE_PATH のテキスト、または Excel で通常保存したブックを使用してください。"
         )
-        _agent_debug_mem_probe(
-            "H2",
-            "_core.py:load_main_sheet_global_priority_override_text",
-            "skip openpyxl (no sharedStrings)",
-            wb_basename=os.path.basename(wb_path),
-        )
         return ""
-    _agent_debug_mem_probe(
-        "H2",
-        "_core.py:load_main_sheet_global_priority_override_text",
-        "before load_workbook read_only",
-        wb_basename=os.path.basename(wb_path),
-    )
     wb = None
     try:
         # read_only=True でオープン高速化（読み取りのみ）
         wb = load_workbook(wb_path, data_only=True, read_only=True)
-        _agent_debug_mem_probe(
-            "H2",
-            "_core.py:load_main_sheet_global_priority_override_text",
-            "after load_workbook read_only",
-            wb_basename=os.path.basename(wb_path),
-        )
         ws = None
         for name in ("メイン", "メイン_", "Main"):
             if name in wb.sheetnames:
@@ -10718,52 +10638,20 @@ def _workbook_file_has_gemini_target_main_sheet(path: str) -> bool:
     if not p or not os.path.isfile(p):
         return False
     if _ooxml_workbook_missing_shared_strings(p):
-        _agent_debug_mem_probe(
-            "H1",
-            "_core.py:_workbook_file_has_gemini_target_main_sheet",
-            "branch zip_only (no load_workbook)",
-            wb_basename=os.path.basename(p),
-        )
         for nm in _ooxml_workbook_sheet_names(p) or []:
             sn = str(nm or "")
             if sn in ("メイン", "メイン_", "Main") or "メイン" in sn:
                 return True
         return False
-    _agent_debug_mem_probe(
-        "H1",
-        "_core.py:_workbook_file_has_gemini_target_main_sheet",
-        "before load_workbook read_only",
-        wb_basename=os.path.basename(p),
-    )
     try:
         wbr = load_workbook(p, read_only=True, data_only=True)
     except Exception:
-        _agent_debug_mem_probe(
-            "H1",
-            "_core.py:_workbook_file_has_gemini_target_main_sheet",
-            "load_workbook failed -> assume True",
-            wb_basename=os.path.basename(p),
-        )
         return True
     try:
         for nm in wbr.sheetnames:
             sn = str(nm or "")
             if sn in ("メイン", "メイン_", "Main") or "メイン" in sn:
-                _agent_debug_mem_probe(
-                    "H1",
-                    "_core.py:_workbook_file_has_gemini_target_main_sheet",
-                    "after load_workbook read_only",
-                    wb_basename=os.path.basename(p),
-                    has_main=True,
-                )
                 return True
-        _agent_debug_mem_probe(
-            "H1",
-            "_core.py:_workbook_file_has_gemini_target_main_sheet",
-            "after load_workbook read_only",
-            wb_basename=os.path.basename(p),
-            has_main=False,
-        )
         return False
     finally:
         try:
@@ -10917,13 +10805,6 @@ def _write_main_sheet_gemini_usage_via_openpyxl(
 ) -> bool:
     """openpyxl でメイン P 列・Q〜T・推移グラフ（最大2本）を更新し wb.save する。"""
     abs_wb = os.path.abspath((macro_wb_path or "").strip())
-    _agent_debug_mem_probe(
-        "H1",
-        "_core.py:_write_main_sheet_gemini_usage_via_openpyxl",
-        "entry",
-        log_prefix=log_prefix,
-        wb_basename=os.path.basename(abs_wb) if abs_wb else "",
-    )
     if not abs_wb or not os.path.isfile(abs_wb):
         logging.info(
             "%s: Gemini メイン反映: 対象ブックがありません。%s",
@@ -10950,21 +10831,7 @@ def _write_main_sheet_gemini_usage_via_openpyxl(
     keep_vba = abs_wb.lower().endswith(".xlsm")
     wb = None
     try:
-        _agent_debug_mem_probe(
-            "H1",
-            "_core.py:_write_main_sheet_gemini_usage_via_openpyxl",
-            "before load_workbook full",
-            log_prefix=log_prefix,
-            wb_basename=os.path.basename(abs_wb),
-        )
         wb = load_workbook(abs_wb, keep_vba=keep_vba)
-        _agent_debug_mem_probe(
-            "H1",
-            "_core.py:_write_main_sheet_gemini_usage_via_openpyxl",
-            "after load_workbook full",
-            log_prefix=log_prefix,
-            wb_basename=os.path.basename(abs_wb),
-        )
         ws_main = _gemini_resolve_main_sheet_openpyxl(wb)
         if ws_main is None:
             logging.info(
@@ -11231,13 +11098,6 @@ def build_gemini_usage_summary_text() -> str:
 
 def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None:
     """Gemini 利用サマリを log に書き、openpyxl でメイン P 列・推移グラフへ保存する。"""
-    _agent_debug_mem_probe(
-        "H4",
-        "_core.py:write_main_sheet_gemini_usage_summary",
-        "entry",
-        log_prefix=log_prefix,
-        wb_basename=os.path.basename(wb_path) if wb_path else "",
-    )
     text = build_gemini_usage_summary_text()
     path = os.path.join(log_dir, GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE)
     sheet_ok = False
@@ -11262,13 +11122,6 @@ def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None
             _export_gemini_buckets_csv_for_charts(cum2)
     except Exception as ex:
         logging.debug("Gemini ポケット CSV 出力で例外（続行）: %s", ex)
-    _agent_debug_mem_probe(
-        "H4",
-        "_core.py:write_main_sheet_gemini_usage_summary",
-        "exit",
-        log_prefix=log_prefix,
-        sheet_ok=sheet_ok,
-    )
     if sheet_ok:
         return
     if text.strip():
@@ -24738,44 +24591,9 @@ def _dispatch_table_cell_from_sources(
     row_order = (
         (plan_row, src_row) if plan_first else (src_row, plan_row)
     )
-    tid_dbg = ""
-    for row in (plan_row, src_row):
-        if row is not None:
-            try:
-                tid_dbg = str(
-                    _planning_df_cell_scalar(row, TASK_COL_TASK_ID) or ""
-                ).strip()
-            except Exception:
-                tid_dbg = ""
-            if tid_dbg:
-                break
-    src_scalar = _dispatch_table_scalar_from_dataframe_row(src_row, col_name)
-    plan_scalar = _dispatch_table_scalar_from_dataframe_row(plan_row, col_name)
     for row in row_order:
         v = _dispatch_table_scalar_from_dataframe_row(row, col_name)
         if v is not None:
-            # #region agent log
-            if col_name == TASK_COL_ACTUAL_DONE and tid_dbg == "W5-5":
-                try:
-                    from planning_core import agent_debug_ndjson as _adn
-
-                    _adn.append_structured(
-                        "H1",
-                        "_dispatch_table_cell_from_sources",
-                        "W5-5 実加工数の採用元",
-                        {
-                            "planFirst": plan_first,
-                            "srcValue": src_scalar,
-                            "planValue": plan_scalar,
-                            "chosen": v,
-                            "source": "plan_input"
-                            if row is plan_row
-                            else "processing_plan_data",
-                        },
-                    )
-                except Exception:
-                    pass
-            # #endregion
             return v
     t = task_dict
     if not t:
@@ -35431,24 +35249,11 @@ def _generate_plan_impl(
         logging.warning("段階2: 表シート正本 JSON の出力に失敗しました: %s", e)
 
     try:
-        _agent_debug_mem_probe(
-            "H4",
-            "_core.py:_generate_plan_impl",
-            "before pd.ExcelWriter stage2 results",
-            output_basename=os.path.basename(output_filename),
-            tabular_sheet_count=len(_stage2_tabular_sheet_order),
-        )
         with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
             write_tabular_sheets_from_payload_to_excel_writer(
                 writer,
                 _stage2_tabular_payload,
                 sheet_order=_stage2_tabular_sheet_order,
-            )
-            _agent_debug_mem_probe(
-                "H4",
-                "_core.py:_generate_plan_impl",
-                "after tabular sheets in ExcelWriter",
-                output_basename=os.path.basename(output_filename),
             )
 
             from planning_core.gantt_render_contract import (
@@ -35720,12 +35525,6 @@ def _generate_plan_impl(
                     writer.sheets[RESULT_DISPATCH_TABLE_SHEET_NAME]
                 )
 
-        _agent_debug_mem_probe(
-            "H4",
-            "_core.py:_generate_plan_impl",
-            "after pd.ExcelWriter complete",
-            output_basename=os.path.basename(output_filename),
-        )
 
     except OSError as e:
         logging.error(
@@ -36022,17 +35821,7 @@ def _generate_plan_impl(
                 _rm_mem_err,
             )
 
-    _agent_debug_mem_probe(
-        "H4",
-        "_core.py:_generate_plan_impl",
-        "before gemini summary at stage2 end",
-    )
     _try_write_main_sheet_gemini_usage_summary("段階2")
-    _agent_debug_mem_probe(
-        "H4",
-        "_core.py:_generate_plan_impl",
-        "after gemini summary at stage2 end",
-    )
     if return_output_paths:
         _pp_json = normalized_workbook_json_path(plan_xlsx_final)
         _ms_json = normalized_workbook_json_path(member_xlsx_final)
