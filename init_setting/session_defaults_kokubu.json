@@ -108,8 +108,8 @@
     "description" : "マスタブックのファイル名（空なら master.xlsm）。マクロブック所在フォルダ基準の相対可（basename のみ推奨）。planning_core と VBA のマスタ参照で共通。PM_AI_MASTER_WORKBOOK 未指定時の解決に使う。マスタ読込サマリタブの表示と一致確認に利用。 — master.xlsm のファイル名（空で master.xlsm）。マクロブック階層からの相対パス可。 PM_AI_MASTER_WORKBOOK 未指定時の解決に使用。 「マスタ読込サマリ」タブと連動。"
   }, {
     "name" : "TASK_PLAN_SHEET",
-    "value" : "配台計画_タスク入力",
-    "description" : "配台計画シート名（空なら既定 配台計画_タスク入力） — 配台計画シート名（空で既定名）。"
+    "value" : "タスク一覧",
+    "description" : "配台計画シート名（空なら既定 タスク一覧。マクロブック利用時は 配台計画_タスク入力） — 配台計画シート名（空で既定名）。"
   }, {
     "name" : "PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY",
     "value" : "",

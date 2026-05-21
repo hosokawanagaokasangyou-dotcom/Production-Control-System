@@ -38,8 +38,8 @@ public final class PlanInputEditorPane {
     public static final String ENV_PM_AI_PLAN_INPUT_PATH = "PM_AI_PLAN_INPUT_PATH";
     public static final String ENV_TASK_PLAN_SHEET = "TASK_PLAN_SHEET";
 
-    /** Default sheet name (same as planning_core PLAN_INPUT_SHEET_NAME when TASK_PLAN_SHEET is empty). */
-    public static final String DEFAULT_PLAN_INPUT_SHEET_NAME = "\u914d\u53f0\u8a08\u753b_\u30bf\u30b9\u30af\u5165\u529b";
+    /** Default sheet name (same as planning_core STAGE1_PLAN_OUTPUT_SHEET when TASK_PLAN_SHEET is empty). */
+    public static final String DEFAULT_PLAN_INPUT_SHEET_NAME = AppPaths.STAGE1_PLAN_OUTPUT_SHEET;
 
     private PlanInputEditorPane() {}
 

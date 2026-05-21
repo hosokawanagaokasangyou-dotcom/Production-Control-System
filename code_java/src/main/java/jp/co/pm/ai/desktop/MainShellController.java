@@ -3928,7 +3928,7 @@ public final class MainShellController {
         Map<String, String> m = new HashMap<>(ui);
         Stage2PythonChildEnv.stripLegacyWorkbookKeys(m);
         Stage2PythonChildEnv.ensureSkipWorkbookEnvSheetDefault(m);
-        overlayPlanInputTabPathsIfEnvBlank(m);
+        overlayPlanInputTabPathsForStage2(m);
         lastNetworkSourceResolution =
                 Stage2PythonChildEnv.applyNetworkSourceAndChildPause(
                         m,
@@ -3936,6 +3936,42 @@ public final class MainShellController {
                         startupSkipActualDetailSourceDirListing);
         AgentDebugLog.overlayPythonChildDebugEnv(m);
         return m;
+    }
+
+    /**
+     * Fills {@link PlanInputTabController#ENV_PM_AI_PLAN_INPUT_PATH} and {@link
+     * PlanInputTabController#ENV_TASK_PLAN_SHEET} from the dedicated plan-input tab when the env tab
+     * leaves them blank. When the plan path is {@code plan_input_tasks.xlsx}, the tab sheet name
+     * always wins over env {@code TASK_PLAN_SHEET} (stage-1 output uses {@link AppPaths#STAGE1_PLAN_OUTPUT_SHEET}).
+     */
+    private void overlayPlanInputTabPathsForStage2(Map<String, String> m) {
+        overlayPlanInputTabPathsIfEnvBlank(m);
+        String pipKey = PlanInputTabController.ENV_PM_AI_PLAN_INPUT_PATH;
+        String pip = m.get(pipKey);
+        if (!isDedicatedStage1PlanTasksWorkbook(pip)) {
+            return;
+        }
+        String tpsKey = PlanInputTabController.ENV_TASK_PLAN_SHEET;
+        String tabSheet = planInputTabController.snapshotPlanInputSheet();
+        if (tabSheet != null && !tabSheet.isBlank()) {
+            m.put(tpsKey, tabSheet.trim());
+            return;
+        }
+        m.put(tpsKey, AppPaths.STAGE1_PLAN_OUTPUT_SHEET);
+    }
+
+    private static boolean isDedicatedStage1PlanTasksWorkbook(String path) {
+        if (path == null || path.isBlank()) {
+            return false;
+        }
+        try {
+            return Path.of(path.trim())
+                    .getFileName()
+                    .toString()
+                    .equalsIgnoreCase(AppPaths.STAGE1_PLAN_TASKS_FILENAME);
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     /**

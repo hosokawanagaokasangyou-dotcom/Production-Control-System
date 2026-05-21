@@ -54,6 +54,7 @@ import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo;
 import jp.co.pm.ai.planning.stage2.core.Stage2PlanRowDispatchQtyMetrics;
+import jp.co.pm.ai.planning.stage2.core.Stage2PlanRowDispatchQtyMetricsResult;
 import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
 import jp.co.pm.ai.desktop.ui.Stage2InProgressNextDayDispatchDialog;
 
@@ -72,8 +73,7 @@ public final class PlanInputTabController {
     public static final String ENV_PM_AI_PLAN_INPUT_PATH = AppPaths.KEY_PM_AI_PLAN_INPUT_PATH;
     public static final String ENV_TASK_PLAN_SHEET = "TASK_PLAN_SHEET";
 
-    public static final String DEFAULT_PLAN_INPUT_SHEET_NAME =
-            "配台計画_タスク入力";
+    public static final String DEFAULT_PLAN_INPUT_SHEET_NAME = AppPaths.STAGE1_PLAN_OUTPUT_SHEET;
 
     private static final String HINT_TEXT =
             "PM_AI_PLAN_INPUT_PATH に読み込む表ファイルのパスを指定。"
@@ -108,6 +108,11 @@ public final class PlanInputTabController {
 
     @FXML
     private Button stage2RunButton;
+
+    private static final String STAGE2_RUN_BUTTON_TEXT_DEFAULT = "段階2 実行";
+
+    private static final String STAGE2_RUN_BUTTON_TEXT_SUMMARY_LOCKED =
+            "段階2（サマリエクセル更新中）";
 
     @FXML
     private CheckBox stage2SkipTodayDispatchCheckBox;
@@ -327,6 +332,15 @@ public final class PlanInputTabController {
         applyStage2RunButtonEnabledState();
     }
 
+    /** ロックファイルの有無に合わせて段階2ボタン表示を更新する（{@link MainShellController#isSummaryAiDispatchExportLocked}）。 */
+    void refreshSummaryExportLockPresentation() {
+        applyStage2RunButtonEnabledState();
+    }
+
+    private boolean isSummaryExportLockedByLockFile() {
+        return shell != null && shell.isSummaryAiDispatchExportLocked();
+    }
+
     /** タスク入力表が「保存」または「再読み」後と同期しているか（段階2実行可否）。 */
     boolean isPlanInputTableDirtySinceSave() {
         return stage2BlockedByUnsavedPlanInputTableEdit;
@@ -348,6 +362,7 @@ public final class PlanInputTabController {
         }
         boolean disable =
                 stage2RunPipelineBusy
+                        || isSummaryExportLockedByLockFile()
                         || stage2BlockedByDispatchUnsavedEdit
                         || stage2BlockedByUnsavedPlanInputTableEdit;
         if (stage2RunButton != null) {
@@ -356,6 +371,13 @@ public final class PlanInputTabController {
         if (stage2RunPipelineBusy) {
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(null);
+            }
+        } else if (isSummaryExportLockedByLockFile()) {
+            Tooltip blockedTip =
+                    new Tooltip(
+                            "サマリ xlsx を作成中です。完了後に実行するか、実行・ログタブの「ロック解除」を使用してください。");
+            if (stage2RunButton != null) {
+                stage2RunButton.setTooltip(blockedTip);
             }
         } else if (stage2BlockedByDispatchUnsavedEdit) {
             Tooltip blockedTip =
@@ -375,6 +397,11 @@ public final class PlanInputTabController {
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(null);
             }
+        }
+        if (isSummaryExportLockedByLockFile()) {
+            stage2RunButton.setText(STAGE2_RUN_BUTTON_TEXT_SUMMARY_LOCKED);
+        } else {
+            stage2RunButton.setText(STAGE2_RUN_BUTTON_TEXT_DEFAULT);
         }
     }
 
@@ -444,7 +471,7 @@ public final class PlanInputTabController {
             }
             double defaultNext =
                     Stage2PlanRowDispatchQtyMetrics.compute(rowMap, tables)
-                            .map(Stage2PlanRowDispatchQtyMetrics.Metrics::remainingM)
+                            .map(Stage2PlanRowDispatchQtyMetricsResult::remainingM)
                             .orElse(0.0);
             out.add(
                     new Stage2InProgressNextDayDispatchDialog.Row(

@@ -370,6 +370,133 @@ def _ooxml_workbook_sheet_names(wb_path: str) -> list[str] | None:
     return names
 
 
+def _agent_debug_mem_probe(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    **data: object,
+) -> None:
+    # #region agent log
+    try:
+        from planning_core.agent_debug_ndjson import append_structured
+
+        import sys
+
+        rss_mb = None
+        if sys.platform == "win32":
+            try:
+                import ctypes
+
+                class _Pmc(ctypes.Structure):
+                    _fields_ = [
+                        ("cb", ctypes.c_ulong),
+                        ("PageFaultCount", ctypes.c_ulong),
+                        ("PeakWorkingSetSize", ctypes.c_size_t),
+                        ("WorkingSetSize", ctypes.c_size_t),
+                        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                        ("PagefileUsage", ctypes.c_size_t),
+                        ("PeakPagefileUsage", ctypes.c_size_t),
+                    ]
+
+                pmc = _Pmc()
+                pmc.cb = ctypes.sizeof(pmc)
+                if ctypes.windll.psapi.GetProcessMemoryInfo(
+                    ctypes.windll.kernel32.GetCurrentProcess(),
+                    ctypes.byref(pmc),
+                    pmc.cb,
+                ):
+                    rss_mb = float(pmc.WorkingSetSize) / (1024.0 * 1024.0)
+            except Exception:
+                pass
+        else:
+            try:
+                import resource
+
+                rss_mb = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) / 1024.0
+            except Exception:
+                pass
+        payload = {k: v for k, v in data.items() if v is not None}
+        if rss_mb is not None:
+            payload["rss_mb"] = round(rss_mb, 2)
+        payload["pid"] = os.getpid()
+        append_structured(hypothesis_id, location, message, payload)
+    except Exception:
+        pass
+    # #endregion
+
+
+def _ooxml_workbook_missing_shared_strings(wb_path: str) -> bool:
+    """
+    OOXML ブックに xl/sharedStrings.xml が無いとき True。
+
+    openpyxl の load_workbook / read_only 読込はメモリ急増・応答停止の原因になりやすい（専用 UI 等の xlsx）。
+    """
+    p = (wb_path or "").strip()
+    if not p or not os.path.isfile(p):
+        return False
+    low = p.lower()
+    if not low.endswith((".xlsx", ".xlsm", ".xltx", ".xltm")):
+        return False
+    try:
+        import zipfile
+
+        with zipfile.ZipFile(p, "r") as zf:
+            missing = "xl/sharedStrings.xml" not in zf.namelist()
+        _agent_debug_mem_probe(
+            "H1",
+            "_core.py:_ooxml_workbook_missing_shared_strings",
+            "sharedStrings zip probe",
+            wb_basename=os.path.basename(p),
+            missing_shared_strings=missing,
+        )
+        return missing
+    except Exception:
+        return False
+
+
+def normalize_ooxml_shared_strings_if_missing(path: str) -> bool:
+    """
+    xl/sharedStrings.xml が無い xlsx を calamine 読込 + openpyxl 書込で再保存する。
+    段階1出力 plan_input_tasks.xlsx 等で openpyxl 系後処理がスキップされるのを防ぐ。
+    """
+    p = (path or "").strip()
+    if not p or not os.path.isfile(p) or not _ooxml_workbook_missing_shared_strings(p):
+        return False
+    try:
+        xf = pd.ExcelFile(p, engine="calamine")
+    except Exception as ex:
+        logging.debug("sharedStrings 正規化: calamine 読込失敗 path=%r err=%s", p, ex)
+        return False
+    import shutil
+    import tempfile
+
+    fd, tmp = tempfile.mkstemp(suffix=".xlsx")
+    os.close(fd)
+    try:
+        with pd.ExcelWriter(tmp, engine="openpyxl") as writer:
+            for name in xf.sheet_names:
+                df = pd.read_excel(xf, sheet_name=name, header=0)
+                safe = str(name)[:31] if name else "Sheet1"
+                df.to_excel(writer, sheet_name=safe, index=False)
+        shutil.move(tmp, p)
+        logging.info(
+            "Excel: xl/sharedStrings.xml を追加するため %r を openpyxl で再保存しました。",
+            p,
+        )
+        return True
+    except Exception as ex:
+        if os.path.isfile(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+        logging.warning("Excel: sharedStrings 正規化に失敗 path=%r err=%s", p, ex)
+        return False
+
+
 def _workbook_should_skip_openpyxl_io(wb_path: str) -> bool:
     """当該パスは OOXML でシート「配台_配台不要工程」を含むとする True（openpyxl 利用を避ける）。"""
     p = (wb_path or "").strip()
@@ -956,11 +1083,12 @@ COMPARE_GANTT_DAY_ROW_MAP_FIRSTROW_COL = 53  # BA
 
 # --- 2段階処理: 段階1抽出 → ブック「配台計画_タスク入力」編集 → 段階2計画 ---
 STAGE1_OUTPUT_FILENAME = "plan_input_tasks.xlsx"
+STAGE1_PLAN_OUTPUT_SHEET = "タスク一覧"
 # load_tasks_df 直後のスナップショット（タスク一覧シート化・マスタマージ前）。JavaFX「段階1 成形結果」プレビュー用。
 STAGE1_TASK_INPUT_PREVIEW_FILENAME = "stage1_task_input_table.xlsx"
 STAGE1_TASK_INPUT_PREVIEW_SHEET = "タスク入力整形"
-# 既定は Excel 実シート名「配台計画_タスク入力」。旧ソースの「配台計画_」は誤字（UTF-8 保存時の破損）で一致しない。
-PLAN_INPUT_SHEET_NAME = os.environ.get("TASK_PLAN_SHEET", "").strip() or "配台計画_タスク入力"
+# 既定は段階1出力 plan_input_tasks.xlsx のシート名「タスク一覧」。マクロブック利用時は TASK_PLAN_SHEET=配台計画_タスク入力。
+PLAN_INPUT_SHEET_NAME = os.environ.get("TASK_PLAN_SHEET", "").strip() or STAGE1_PLAN_OUTPUT_SHEET
 # 配台試行順の比較用パターン一覧（マクロブック向けに作成）。環境変数 DISPATCH_TRIAL_PATTERN_LIST_SHEET で上書き可。
 DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME = (
     os.environ.get("DISPATCH_TRIAL_PATTERN_LIST_SHEET", "").strip()
@@ -5710,6 +5838,8 @@ def load_planning_tasks_df():
             f"段階2: {ENV_PLAN_INPUT_PATH} が実在しません: {_plan_alt!r}。"
         )
     low = _plan_alt.lower()
+    if low.endswith((".xlsx", ".xlsm", ".xltx", ".xltm")):
+        normalize_ooxml_shared_strings_if_missing(_plan_alt)
     _wb_for_maint = ""
     if low.endswith((".xlsx", ".xlsm", ".xltx", ".xltm")):
         _wb_for_maint = os.path.normpath(os.path.abspath(_plan_alt))
@@ -5820,10 +5950,35 @@ def load_main_sheet_global_priority_override_text() -> str:
                 return ""
     except Exception:
         pass
+    if _ooxml_workbook_missing_shared_strings(wb_path):
+        logging.info(
+            "メイン再優先特記: OOXML に xl/sharedStrings.xml が無いブックのため、"
+            "openpyxl でグローバルコメントを読みません（メモリ急増回避）。"
+            " PM_AI_GLOBAL_PRIORITY_OVERRIDE_PATH のテキスト、または Excel で通常保存したブックを使用してください。"
+        )
+        _agent_debug_mem_probe(
+            "H2",
+            "_core.py:load_main_sheet_global_priority_override_text",
+            "skip openpyxl (no sharedStrings)",
+            wb_basename=os.path.basename(wb_path),
+        )
+        return ""
+    _agent_debug_mem_probe(
+        "H2",
+        "_core.py:load_main_sheet_global_priority_override_text",
+        "before load_workbook read_only",
+        wb_basename=os.path.basename(wb_path),
+    )
     wb = None
     try:
         # read_only=True でオープン高速化（読み取りのみ）
         wb = load_workbook(wb_path, data_only=True, read_only=True)
+        _agent_debug_mem_probe(
+            "H2",
+            "_core.py:load_main_sheet_global_priority_override_text",
+            "after load_workbook read_only",
+            wb_basename=os.path.basename(wb_path),
+        )
         ws = None
         for name in ("メイン", "メイン_", "Main"):
             if name in wb.sheetnames:
@@ -10562,15 +10717,53 @@ def _workbook_file_has_gemini_target_main_sheet(path: str) -> bool:
     p = (path or "").strip()
     if not p or not os.path.isfile(p):
         return False
+    if _ooxml_workbook_missing_shared_strings(p):
+        _agent_debug_mem_probe(
+            "H1",
+            "_core.py:_workbook_file_has_gemini_target_main_sheet",
+            "branch zip_only (no load_workbook)",
+            wb_basename=os.path.basename(p),
+        )
+        for nm in _ooxml_workbook_sheet_names(p) or []:
+            sn = str(nm or "")
+            if sn in ("メイン", "メイン_", "Main") or "メイン" in sn:
+                return True
+        return False
+    _agent_debug_mem_probe(
+        "H1",
+        "_core.py:_workbook_file_has_gemini_target_main_sheet",
+        "before load_workbook read_only",
+        wb_basename=os.path.basename(p),
+    )
     try:
         wbr = load_workbook(p, read_only=True, data_only=True)
     except Exception:
+        _agent_debug_mem_probe(
+            "H1",
+            "_core.py:_workbook_file_has_gemini_target_main_sheet",
+            "load_workbook failed -> assume True",
+            wb_basename=os.path.basename(p),
+        )
         return True
     try:
         for nm in wbr.sheetnames:
             sn = str(nm or "")
             if sn in ("メイン", "メイン_", "Main") or "メイン" in sn:
+                _agent_debug_mem_probe(
+                    "H1",
+                    "_core.py:_workbook_file_has_gemini_target_main_sheet",
+                    "after load_workbook read_only",
+                    wb_basename=os.path.basename(p),
+                    has_main=True,
+                )
                 return True
+        _agent_debug_mem_probe(
+            "H1",
+            "_core.py:_workbook_file_has_gemini_target_main_sheet",
+            "after load_workbook read_only",
+            wb_basename=os.path.basename(p),
+            has_main=False,
+        )
         return False
     finally:
         try:
@@ -10724,11 +10917,26 @@ def _write_main_sheet_gemini_usage_via_openpyxl(
 ) -> bool:
     """openpyxl でメイン P 列・Q〜T・推移グラフ（最大2本）を更新し wb.save する。"""
     abs_wb = os.path.abspath((macro_wb_path or "").strip())
+    _agent_debug_mem_probe(
+        "H1",
+        "_core.py:_write_main_sheet_gemini_usage_via_openpyxl",
+        "entry",
+        log_prefix=log_prefix,
+        wb_basename=os.path.basename(abs_wb) if abs_wb else "",
+    )
     if not abs_wb or not os.path.isfile(abs_wb):
         logging.info(
             "%s: Gemini メイン反映: 対象ブックがありません。%s",
             log_prefix,
             macro_wb_path,
+        )
+        return False
+    if _ooxml_workbook_missing_shared_strings(abs_wb):
+        logging.info(
+            "%s: OOXML に xl/sharedStrings.xml が無いブックのため、"
+            "メイン AI サマリ（openpyxl）をスキップしました。"
+            "Excel で対象ブックを開いて通常保存すると解消することがあります。",
+            log_prefix,
         )
         return False
     if not _workbook_file_has_gemini_target_main_sheet(abs_wb):
@@ -10739,27 +10947,24 @@ def _write_main_sheet_gemini_usage_via_openpyxl(
         )
         return False
 
-    low_wb = str(abs_wb).lower()
-    if low_wb.endswith((".xlsx", ".xlsm", ".xltx", ".xltm")):
-        try:
-            import zipfile
-
-            with zipfile.ZipFile(abs_wb, "r") as zf:
-                if "xl/sharedStrings.xml" not in zf.namelist():
-                    logging.info(
-                        "%s: OOXML に xl/sharedStrings.xml が無いブックのため、"
-                        "メイン AI サマリ（openpyxl）をスキップしました。"
-                        "Excel で対象ブックを開いて通常保存すると解消することがあります。",
-                        log_prefix,
-                    )
-                    return False
-        except Exception:
-            pass
-
     keep_vba = abs_wb.lower().endswith(".xlsm")
     wb = None
     try:
+        _agent_debug_mem_probe(
+            "H1",
+            "_core.py:_write_main_sheet_gemini_usage_via_openpyxl",
+            "before load_workbook full",
+            log_prefix=log_prefix,
+            wb_basename=os.path.basename(abs_wb),
+        )
         wb = load_workbook(abs_wb, keep_vba=keep_vba)
+        _agent_debug_mem_probe(
+            "H1",
+            "_core.py:_write_main_sheet_gemini_usage_via_openpyxl",
+            "after load_workbook full",
+            log_prefix=log_prefix,
+            wb_basename=os.path.basename(abs_wb),
+        )
         ws_main = _gemini_resolve_main_sheet_openpyxl(wb)
         if ws_main is None:
             logging.info(
@@ -11026,6 +11231,13 @@ def build_gemini_usage_summary_text() -> str:
 
 def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None:
     """Gemini 利用サマリを log に書き、openpyxl でメイン P 列・推移グラフへ保存する。"""
+    _agent_debug_mem_probe(
+        "H4",
+        "_core.py:write_main_sheet_gemini_usage_summary",
+        "entry",
+        log_prefix=log_prefix,
+        wb_basename=os.path.basename(wb_path) if wb_path else "",
+    )
     text = build_gemini_usage_summary_text()
     path = os.path.join(log_dir, GEMINI_USAGE_SUMMARY_FOR_MAIN_FILE)
     sheet_ok = False
@@ -11050,6 +11262,13 @@ def write_main_sheet_gemini_usage_summary(wb_path: str, log_prefix: str) -> None
             _export_gemini_buckets_csv_for_charts(cum2)
     except Exception as ex:
         logging.debug("Gemini ポケット CSV 出力で例外（続行）: %s", ex)
+    _agent_debug_mem_probe(
+        "H4",
+        "_core.py:write_main_sheet_gemini_usage_summary",
+        "exit",
+        log_prefix=log_prefix,
+        sheet_ok=sheet_ok,
+    )
     if sheet_ok:
         return
     if text.strip():
@@ -11944,21 +12163,13 @@ def write_plan_sheet_global_parse_and_conflict_styles_one_io(
             OPENPYXL_INCOMPATIBLE_SHEET_MARKER,
         )
         return False
-    low_pb = str(wb_path).lower()
-    if low_pb.endswith((".xlsx", ".xlsm", ".xltx", ".xltm")):
-        try:
-            import zipfile
-
-            with zipfile.ZipFile(wb_path, "r") as zf:
-                if "xl/sharedStrings.xml" not in zf.namelist():
-                    logging.info(
-                        "%s: OOXML に sharedStrings.xml が無いブックのため、"
-                        "配台シート一括書込（openpyxl）をスキップ（専用UI等の xlsx）",
-                        log_prefix,
-                    )
-                    return False
-        except Exception:
-            pass
+    if _ooxml_workbook_missing_shared_strings(wb_path):
+        logging.info(
+            "%s: OOXML に sharedStrings.xml が無いブックのため、"
+            "配台シート一括書込（openpyxl）をスキップ（専用UI等の xlsx）",
+            log_prefix,
+        )
+        return False
     keep_vba = str(wb_path).lower().endswith(".xlsm")
     wb = None
     try:
@@ -12347,6 +12558,59 @@ def _apply_dispatch_speed_special_rules_enumerated_md(
 # 配台用タスクキュー
 #   配台計画 DataFrame 1行 → 割付アルゴリズム用 dict への変杛（優先度・紝期・AI 上書きを集約）
 # ---------------------------------------------------------------------------
+ENV_STAGE2_IN_PROGRESS_NEXT_DAY_DISPATCH_JSON = (
+    "PM_AI_STAGE2_IN_PROGRESS_NEXT_DAY_DISPATCH_JSON"
+)
+
+
+def _stage2_in_progress_next_day_dispatch_key(
+    task_id: str, machine: str, machine_name: str
+) -> str:
+    tid = planning_task_id_str_from_scalar(task_id)
+    return f"{tid}\x1e{str(machine or '').strip()}\x1e{str(machine_name or '').strip()}"
+
+
+def _load_stage2_in_progress_next_day_dispatch_overrides() -> dict[str, float]:
+    """
+    JavaFX 段階2直前ダイアログが書く JSON（entries[].task_id / process / machine_name / next_day_dispatch_m）。
+    """
+    path = (os.environ.get(ENV_STAGE2_IN_PROGRESS_NEXT_DAY_DISPATCH_JSON) or "").strip()
+    if not path or not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        logging.warning(
+            "段階2: 加工途中・翌日配台量 JSON の読込に失敗（%s）: %s", path, e
+        )
+        return {}
+    entries = data.get("entries") if isinstance(data, dict) else data
+    if not isinstance(entries, list):
+        return {}
+    out: dict[str, float] = {}
+    for ent in entries:
+        if not isinstance(ent, dict):
+            continue
+        tid = planning_task_id_str_from_scalar(ent.get("task_id"))
+        proc = str(ent.get("process") or "").strip()
+        mname = str(ent.get("machine_name") or "").strip()
+        if not tid:
+            continue
+        try:
+            m = _sanitize_dispatch_qty_m(float(ent.get("next_day_dispatch_m")))
+        except (TypeError, ValueError):
+            m = 0.0
+        out[_stage2_in_progress_next_day_dispatch_key(tid, proc, mname)] = m
+    if out:
+        logging.info(
+            "段階2: 加工途中の翌日配台量を %s 行分 JSON から読み込みました（%s）。",
+            len(out),
+            path,
+        )
+    return out
+
+
 def build_task_queue_from_planning_df(
     tasks_df,
     run_date,
@@ -12363,6 +12627,7 @@ def build_task_queue_from_planning_df(
     """
     if ai_by_tid is None:
         ai_by_tid = analyze_task_special_remarks(tasks_df, reference_year=run_date.year)
+    in_progress_next_day_m = _load_stage2_in_progress_next_day_dispatch_overrides()
     task_queue = []
     n_exclude_plan = 0
     seq_by_tid = _collect_process_content_order_by_task_id(tasks_df)
@@ -12424,7 +12689,28 @@ def build_task_queue_from_planning_df(
                 raw_input_date_ov,
             )
 
+        in_progress = done_qty > 0.0
+        if in_progress and _stage2_truthy_env("PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH"):
+            continue
+
         qty = max(0.0, float(dispatch_m))
+        qty_from_in_progress_next_day_dialog = False
+        if in_progress and in_progress_next_day_m:
+            ov_key = _stage2_in_progress_next_day_dispatch_key(
+                task_id, machine, machine_name
+            )
+            if ov_key in in_progress_next_day_m:
+                qty = _sanitize_dispatch_qty_m(float(in_progress_next_day_m[ov_key]))
+                qty_from_in_progress_next_day_dialog = True
+                logging.info(
+                    "段階2: 加工途中の翌日配台量を適用 依頼NO=%s 工程=%r 機械名=%r → %s m（シート残量 %s m、1ロール固定）",
+                    task_id,
+                    machine,
+                    machine_name,
+                    qty,
+                    dispatch_m,
+                )
+
         speed = parse_float_safe(speed_raw, 1.0)
         if speed <= 0:
             speed = 1.0
@@ -12440,9 +12726,6 @@ def build_task_queue_from_planning_df(
         remark_implies_due_dispatch_priority = (
             _special_remark_implies_due_related_dispatch_priority(remark_raw)
         )
-        in_progress = done_qty > 0.0
-        if in_progress and _stage2_truthy_env("PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH"):
-            continue
 
         ai_one = _ai_task_special_entry_for_row(ai_by_tid, row)
         allow_from_ai_dispatch_signals = (
@@ -12518,7 +12801,11 @@ def build_task_queue_from_planning_df(
         except (TypeError, ValueError):
             _prod_w_i = None
 
-        if dispatch_rolls > 1e-12 and qty > 1e-12:
+        if qty_from_in_progress_next_day_dialog and qty > 1e-12:
+            # ダイアログ指定 m をそのまま1ロールで配台（実効ロール長の再計算で小数が付くのを防ぐ）
+            unit = float(qty)
+            _init_rem = 1.0
+        elif dispatch_rolls > 1e-12 and qty > 1e-12:
             unit = float(qty) / float(dispatch_rolls)
             _init_rem = float(dispatch_rolls)
         else:
@@ -16570,9 +16857,11 @@ def run_stage1_extract():
     _fill_plan_dispatch_remaining_qty_column(out_df)
     _apply_stage1_in_progress_dispatch_plan_exclude_marker(out_df, log_prefix="段階1")
     out_path = os.path.join(output_dir, STAGE1_OUTPUT_FILENAME)
-    out_df.to_excel(out_path, sheet_name="タスク一覧", index=False)
-    _apply_excel_date_columns_date_only_display(out_path, "タスク一覧")
-    _apply_plan_input_visual_format(out_path, "タスク一覧")
+    with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
+        out_df.to_excel(writer, sheet_name=STAGE1_PLAN_OUTPUT_SHEET, index=False)
+    normalize_ooxml_shared_strings_if_missing(out_path)
+    _apply_excel_date_columns_date_only_display(out_path, STAGE1_PLAN_OUTPUT_SHEET)
+    _apply_plan_input_visual_format(out_path, STAGE1_PLAN_OUTPUT_SHEET)
     logging.info(f"段階1完了: '{out_path}' を出力しました。マクロで '{PLAN_INPUT_SHEET_NAME}' に坖り込んでしてさい。")
     _try_write_main_sheet_gemini_usage_summary("段階1")
     return True
@@ -25262,16 +25551,22 @@ def _interactive_append_team_shortage_op_as(
         "on",
     ):
         return
+    _cap_n = len(capable_members or [])
+    _req_n = int(req_num)
+    if _cap_n < _req_n:
+        _reason = "フォーム候補不足（必要人数に満たない）"
+    else:
+        _reason = "チーム組合せ不可（人数は足りるが割当不可）"
     rec = {
         "task_id": str(task.get("task_id") or ""),
         "date": current_date.isoformat(),
         "process": str(machine or ""),
         "machine_name": str(machine_name or ""),
-        "reason": "フォーム候補0件",
-        "required_headcount": int(req_num),
-        "capable_headcount": len(capable_members or []),
+        "reason": _reason,
+        "required_headcount": _req_n,
+        "capable_headcount": _cap_n,
     }
-    if len(capable_members or []) < int(req_num):
+    if _cap_n < _req_n:
         _INTERACTIVE_TRIAL_OP_SHORTAGE.append(rec)
     else:
         _INTERACTIVE_TRIAL_AS_SHORTAGE.append(rec)
@@ -25364,10 +25659,141 @@ def _interactive_append_machining_end_after_member_shift_shortages(
             _INTERACTIVE_TRIAL_AS_SHORTAGE.append(rec)
 
 
-def interactive_trial_shortages_snapshot() -> dict:
+def _interactive_trial_shortage_meters_done_for_rec(
+    rec: dict,
+    meters_done: dict[tuple[str, str, str, date], float] | None,
+    *,
+    eps: float = 1e-3,
+) -> float:
+    """不足レコードの (依頼NO, 工程, 機械, 日) に対応するタイムライン実績 m。"""
+    if not meters_done:
+        return 0.0
+    tid = _interactive_norm_cell(rec.get("task_id"))
+    proc = _interactive_dispatch_target_process_key(rec.get("process"))
+    mach = _interactive_norm_cell(rec.get("machine_name"))
+    date_s = str(rec.get("date") or "").strip()
+    try:
+        dd = date.fromisoformat(date_s[:10])
+    except ValueError:
+        return 0.0
+    key = (tid, proc, mach, dd)
+    try:
+        done = float(meters_done.get(key, 0.0))
+    except (TypeError, ValueError):
+        done = 0.0
+    if done > eps:
+        return done
+    for kk, vv in meters_done.items():
+        if not isinstance(kk, tuple) or len(kk) != 4:
+            continue
+        if kk[0] != tid or kk[2] != mach or kk[3] != dd:
+            continue
+        try:
+            done = max(done, float(vv or 0.0))
+        except (TypeError, ValueError):
+            continue
+    return done
+
+
+def _interactive_trial_shortage_meters_done_for_triple(
+    rec: dict,
+    meters_done: dict[tuple[str, str, str, date], float] | None,
+    *,
+    eps: float = 1e-3,
+) -> float:
+    """不足レコードの (依頼NO, 工程, 機械) について、全配台日の実績 m 合計。"""
+    if not meters_done:
+        return 0.0
+    tid = _interactive_norm_cell(rec.get("task_id"))
+    proc = _interactive_dispatch_target_process_key(rec.get("process"))
+    mach = _interactive_norm_cell(rec.get("machine_name"))
+    total = 0.0
+    for kk, vv in meters_done.items():
+        if not isinstance(kk, tuple) or len(kk) != 4:
+            continue
+        if kk[0] != tid:
+            continue
+        if _interactive_dispatch_target_process_key(kk[1]) != proc:
+            continue
+        if _interactive_norm_cell(kk[2]) != mach:
+            continue
+        try:
+            total += float(vv or 0.0)
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
+def _dedupe_interactive_trial_shortage_records(recs: list | None) -> list:
+    """同一 (依頼NO, 日, 工程, 機械) のロール試行失敗ログを1件にまとめる。"""
+    if not recs:
+        return []
+    seen: set[tuple[str, str, str, str]] = set()
+    out: list = []
+    for rec in recs:
+        if not isinstance(rec, dict):
+            continue
+        key = (
+            _interactive_norm_cell(rec.get("task_id")),
+            str(rec.get("date") or "").strip()[:10],
+            _interactive_dispatch_target_process_key(rec.get("process")),
+            _interactive_norm_cell(rec.get("machine_name")),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(rec)
+    return out
+
+
+def filter_interactive_trial_shortages_by_meters_done(
+    snap: dict,
+    meters_done: dict[tuple[str, str, str, date], float] | None,
+    *,
+    eps: float = 1e-3,
+) -> dict:
+    """
+    ロール割当プローブで一度 as/op 不足が付いても、タイムラインに実配台 m が載った
+    (依頼NO, 工程, 機械) は「配台不可」一覧から除外する。
+
+    - 当該暦日に m がある場合は除外（従来）
+    - 暦日は違うが別の配台日キーに m が載っている場合も除外
+      （プローブ暦日と結果_配台表の配台日ズレ。例: W5-16 EC は 6/2 失敗ログだが 6/3 に実績）
+    """
+    if not snap:
+        return {"op_shortage": [], "as_shortage": []}
+
+    def _keep(rec: dict) -> bool:
+        if not isinstance(rec, dict):
+            return False
+        if _interactive_trial_shortage_meters_done_for_rec(rec, meters_done, eps=eps) > eps:
+            return False
+        if _interactive_trial_shortage_meters_done_for_triple(rec, meters_done, eps=eps) > eps:
+            return False
+        return True
+
     return {
+        "op_shortage": [r for r in snap.get("op_shortage") or [] if _keep(r)],
+        "as_shortage": [r for r in snap.get("as_shortage") or [] if _keep(r)],
+    }
+
+
+def interactive_trial_shortages_snapshot() -> dict:
+    snap = {
         "op_shortage": list(_INTERACTIVE_TRIAL_OP_SHORTAGE),
         "as_shortage": list(_INTERACTIVE_TRIAL_AS_SHORTAGE),
+    }
+    if _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT:
+        snap = filter_interactive_trial_shortages_by_meters_done(
+            snap, _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT
+        )
+    return {
+        "op_shortage": _dedupe_interactive_trial_shortage_records(
+            snap.get("op_shortage")
+        ),
+        "as_shortage": _dedupe_interactive_trial_shortage_records(
+            snap.get("as_shortage")
+        ),
     }
 
 
@@ -35011,11 +35437,24 @@ def _generate_plan_impl(
         logging.warning("段階2: 表シート正本 JSON の出力に失敗しました: %s", e)
 
     try:
+        _agent_debug_mem_probe(
+            "H4",
+            "_core.py:_generate_plan_impl",
+            "before pd.ExcelWriter stage2 results",
+            output_basename=os.path.basename(output_filename),
+            tabular_sheet_count=len(_stage2_tabular_sheet_order),
+        )
         with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
             write_tabular_sheets_from_payload_to_excel_writer(
                 writer,
                 _stage2_tabular_payload,
                 sheet_order=_stage2_tabular_sheet_order,
+            )
+            _agent_debug_mem_probe(
+                "H4",
+                "_core.py:_generate_plan_impl",
+                "after tabular sheets in ExcelWriter",
+                output_basename=os.path.basename(output_filename),
             )
 
             from planning_core.gantt_render_contract import (
@@ -35286,6 +35725,13 @@ def _generate_plan_impl(
                 _apply_result_dispatch_table_sheet_layout_polish(
                     writer.sheets[RESULT_DISPATCH_TABLE_SHEET_NAME]
                 )
+
+        _agent_debug_mem_probe(
+            "H4",
+            "_core.py:_generate_plan_impl",
+            "after pd.ExcelWriter complete",
+            output_basename=os.path.basename(output_filename),
+        )
 
     except OSError as e:
         logging.error(
@@ -35582,7 +36028,17 @@ def _generate_plan_impl(
                 _rm_mem_err,
             )
 
+    _agent_debug_mem_probe(
+        "H4",
+        "_core.py:_generate_plan_impl",
+        "before gemini summary at stage2 end",
+    )
     _try_write_main_sheet_gemini_usage_summary("段階2")
+    _agent_debug_mem_probe(
+        "H4",
+        "_core.py:_generate_plan_impl",
+        "after gemini summary at stage2 end",
+    )
     if return_output_paths:
         _pp_json = normalized_workbook_json_path(plan_xlsx_final)
         _ms_json = normalized_workbook_json_path(member_xlsx_final)

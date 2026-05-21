@@ -339,7 +339,7 @@ public final class EnvVarDocs {
                 "配台試行順更新時に post_load（事後変形）をスキップ。");
         put(
                 "TASK_PLAN_SHEET",
-                "配台計画シート名（空で既定名）。");
+                "配台計画シート名（空で タスク一覧。マクロブックは 配台計画_タスク入力）。");
         put(
                 "STAGE2_SERIAL_DISPATCH_BY_TASK_ID",
                 "日内配台: 1=依頼NO出現順で直列（他依頼は進まない）。");

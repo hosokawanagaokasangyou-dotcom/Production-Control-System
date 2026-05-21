@@ -60,7 +60,7 @@
   }, {
     "key" : "TASK_PLAN_SHEET",
     "value" : "",
-    "description" : "配台計画シート名（空なら既定 配台計画_タスク入力）"
+    "description" : "配台計画シート名（空なら既定 タスク一覧。マクロブック利用時は 配台計画_タスク入力）"
   }, {
     "key" : "PLAN_INPUT_DISPATCH_TRIAL_ORDER_LOCAL_ONLY",
     "value" : "",

@@ -392,7 +392,7 @@ def _resolve_tabular_sheet_name_calamine(path: str, sheet_name: str | int) -> st
         )
         return n_matches[0]
     if len(names) == 1:
-        _LOG.warning(
+        _LOG.info(
             "Sheet %r not in workbook; only one sheet %r — using it.",
             req,
             names[0],
