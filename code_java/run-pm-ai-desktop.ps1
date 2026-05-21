@@ -11,8 +11,8 @@
   ???|?W?g????????????:
     .\code_java\run-pm-ai-desktop.ps1
 
-  javafx:run も exec:exec@pm-ai-desktop と同じ module-path 構成に揃え済み。
-  それでも ClassNotFound が出る場合は .\run-pm-ai-desktop.ps1 を使う。
+  mvnw javafx:run は mvnw 側で exec:exec@pm-ai-desktop に転送される。
+  直接 exec を使う場合や ClassNotFound 時は .\run-pm-ai-desktop.ps1 を使う。
 
   ?q?[?v?????L????????:
     .\run-pm-ai-desktop.ps1 -MonitorIntervalSec 60

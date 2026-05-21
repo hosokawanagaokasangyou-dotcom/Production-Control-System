@@ -226,29 +226,8 @@
       <!-- ========================================================= -->
 
       <!-- 開発時の推奨起動: mvnw compile exec:exec@pm-ai-desktop または run-pm-ai-desktop.ps1。
-           javafx:run も exec と同じ module-path 構成（PmAiFxApp 直起動）に揃えている。 -->
-      <plugin>
-        <groupId>org.openjfx</groupId>
-        <artifactId>javafx-maven-plugin</artifactId>
-        <version>0.0.8</version>
-        <configuration>
-          <!-- exec:exec@pm-ai-desktop と同じ: OpenJFX=module-path、アプリ=classpath。
-               runtimePathOption=CLASSPATH + Launcher だと target/classes 欠落で ClassNotFound になる環境がある。 -->
-          <mainClass>jp.co.pm.ai.desktop.PmAiFxApp</mainClass>
-          <options>
-            <option>-Dfile.encoding=UTF-8</option>
-            <option>-Dprism.order=${javafx.prism.order}</option>
-            <option>-Xms${jvm.initial.heap}</option>
-            <option>-Xmx${jvm.max.heap}</option>
-            <option>-XX:+HeapDumpOnOutOfMemoryError</option>
-            <option>-XX:+UseStringDeduplication</option>
-            <option>--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED</option>
-            <option>--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED</option>
-            <option>--add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED</option>
-            <option>--enable-native-access=javafx.graphics</option>
-          </options>
-        </configuration>
-      </plugin>
+           mvnw javafx:run は pm-ai-mvn-route 経由で exec:exec@pm-ai-desktop に転送される
+           （javafx-maven-plugin 単体は Windows で target/classes 欠落 ClassNotFound になるため不使用）。 -->
 
       <!-- jpackage 用 exec 起動 -->
       <plugin>

@@ -147,7 +147,16 @@ MAVEN_HOME="${MAVEN_USER_HOME}/wrapper/dists/${distributionUrlNameMain-}/$(hash_
 
 exec_maven() {
   unset MVNW_VERBOSE MVNW_USERNAME MVNW_PASSWORD MVNW_REPOURL || :
-  exec "$MAVEN_HOME/bin/$MVN_CMD" "$@" || die "cannot exec $MAVEN_HOME/bin/$MVN_CMD"
+  _pm_ai_mvn_args=""
+  for _pm_ai_arg in "$@"; do
+    if [ "$_pm_ai_arg" = "javafx:run" ]; then
+      _pm_ai_mvn_args="$_pm_ai_mvn_args exec:exec@pm-ai-desktop"
+    else
+      _pm_ai_mvn_args="$_pm_ai_mvn_args $_pm_ai_arg"
+    fi
+  done
+  # shellcheck disable=SC2086
+  exec "$MAVEN_HOME/bin/$MVN_CMD" $_pm_ai_mvn_args || die "cannot exec $MAVEN_HOME/bin/$MVN_CMD"
 }
 
 if [ -d "$MAVEN_HOME" ]; then
