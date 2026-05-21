@@ -89,16 +89,16 @@
 
 .pm-run-factory-logo-host {
     -fx-alignment: center;
-    -fx-padding: 0 12 0 0;
-    -fx-min-width: 200;
-    -fx-pref-width: 200;
-    -fx-max-width: 200;
-    -fx-min-height: 52;
-    -fx-pref-height: 52;
-    -fx-max-height: 52;
-    -fx-background-radius: 6;
-    -fx-border-radius: 6;
-    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.55), 6, 0, 0, 2);
+    -fx-padding: 0 8 0 0;
+    -fx-min-width: 140;
+    -fx-pref-width: 140;
+    -fx-max-width: 140;
+    -fx-min-height: 36;
+    -fx-pref-height: 36;
+    -fx-max-height: 36;
+    -fx-background-radius: 5;
+    -fx-border-radius: 5;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.55), 4, 0, 0, 1);
 }
 
 .pm-factory-logo-konan.pm-run-factory-logo-host {
@@ -114,7 +114,7 @@
 }
 
 .pm-run-factory-logo-caption {
-    -fx-font-size: 18px;
+    -fx-font-size: 13px;
     -fx-font-weight: bold;
     -fx-text-fill: white;
     -fx-alignment: center;

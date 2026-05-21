@@ -26,9 +26,9 @@
     <top>
         <VBox fillWidth="true" spacing="10.0">
             <HBox alignment="CENTER_LEFT" spacing="8.0">
-                <StackPane fx:id="factoryLogoHost" alignment="CENTER" maxHeight="56.0" minHeight="52.0" minWidth="200.0" prefHeight="52.0" prefWidth="200.0" styleClass="pm-run-factory-logo-host">
-                    <ImageView fx:id="factoryLogoImageView" fitHeight="44.0" fitWidth="184.0" mouseTransparent="true" preserveRatio="true" />
-                    <Label fx:id="factoryLogoCaptionLabel" alignment="CENTER" contentDisplay="CENTER" maxWidth="188.0" mouseTransparent="true" styleClass="pm-run-factory-logo-caption" text="" textAlignment="CENTER" wrapText="false" />
+                <StackPane fx:id="factoryLogoHost" alignment="CENTER" maxHeight="40.0" minHeight="36.0" minWidth="140.0" prefHeight="36.0" prefWidth="140.0" styleClass="pm-run-factory-logo-host">
+                    <ImageView fx:id="factoryLogoImageView" fitHeight="30.0" fitWidth="126.0" mouseTransparent="true" preserveRatio="true" />
+                    <Label fx:id="factoryLogoCaptionLabel" alignment="CENTER" contentDisplay="CENTER" maxWidth="132.0" mouseTransparent="true" styleClass="pm-run-factory-logo-caption" text="" textAlignment="CENTER" wrapText="false" />
                 </StackPane>
                 <Region HBox.hgrow="ALWAYS" />
                 <HBox alignment="CENTER_RIGHT" spacing="8.0">
