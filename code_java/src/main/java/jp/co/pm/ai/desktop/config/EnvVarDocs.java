@@ -266,8 +266,7 @@ public final class EnvVarDocs {
                         + " 0/false/no/off/none で JSON のみ（内部で一時 xlsx を生成し JSON"
                         + " 出力後に破棄）。"
                         + " 未設定または 1 で従来通り xlsx も出力。"
-                        + " JavaFX の「実行・ログ」タブのチェックが段階2"
-                        + " 起動時に本変数を上書きする。"
+                        + " JavaFX から段階2 起動時は常に 1 を渡す。"
                         + " 0 のときは設備ガント（計画・実績明細）系シートは作成しない（処理時間の削減）。");
         put(
                 "PM_AI_STAGE2_SKIP_TODAY_DISPATCH",
@@ -276,7 +275,12 @@ public final class EnvVarDocs {
         put(
                 "PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH",
                 "1/true/yes/on のとき、実加工数が正の行（加工途中相当）を配台キューに入れない（当日完了と想定、段階2）。"
-                        + " JavaFX「実行・ログ」タブのチェックが子プロセス起動時に上書きする。");
+                        + " JavaFX 段階2 起動時は常に無効（0）。加工途中は「配台計画_タスク入力」タブの翌日配台量ダイアログで指定。");
+        put(
+                "PM_AI_STAGE2_IN_PROGRESS_NEXT_DAY_DISPATCH_JSON",
+                "段階2直前に JavaFX が書く UTF-8 JSON（加工途中行の翌日配台量 m）。"
+                        + " build_task_queue_from_planning_df が実加工数>0 の行の配台量を上書きする。"
+                        + " 未設定・ファイル無しのときはシートの配台使用残数量を用いる。");
         put(
                 "PM_AI_DEBUG_STAGE3_PLAN_ACTUAL_SINGLE_LINE",
                 "配台計画手動修正タブ: 段階3試行後の日付セル表示。"

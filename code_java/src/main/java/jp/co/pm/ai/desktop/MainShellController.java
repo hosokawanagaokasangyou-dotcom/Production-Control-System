@@ -110,6 +110,7 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
+import jp.co.pm.ai.desktop.io.SummaryAiDispatchExportLock;
 import jp.co.pm.ai.desktop.io.SummaryAiDispatchWorkbookExporter;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
@@ -570,6 +571,7 @@ public final class MainShellController {
         if (apiModelBenchmarkTabController != null) {
             apiModelBenchmarkTabController.bindShell(this);
         }
+        applySummaryExportRunGating();
 
         primaryStage.setMinWidth(640);
         primaryStage.setMinHeight(480);
@@ -779,14 +781,16 @@ public final class MainShellController {
     }
 
     private void applyDesktopSession(DesktopSessionState s) {
-        applyDesktopSession(s, true);
+        applyDesktopSession(s, true, false);
     }
 
     /**
      * @param restoreUiEnvRowsFromSession {@code false} のとき環境変数タブはセッションから復元せず、呼び出し元で構築済みの行を保持する（ポータル
      *     バージョンアップ直後のバンドル既定への初期化後など）。
+     * @param restoreMainRunLogLines {@code true} のとき実行・ログタブのログ行・スクロールをセッションから復元する。アプリ起動時は {@code false}（ログは空で開始）。
      */
-    private void applyDesktopSession(DesktopSessionState s, boolean restoreUiEnvRowsFromSession) {
+    private void applyDesktopSession(
+            DesktopSessionState s, boolean restoreUiEnvRowsFromSession, boolean restoreMainRunLogLines) {
         if (s == null) {
             return;
         }
@@ -808,15 +812,17 @@ public final class MainShellController {
             mainRunTabController.getScriptDirField().setText(s.mainRunScriptDir());
         }
         mainRunTabController.applyLogFontFromSession(s.logFontFamily(), s.logFontSize());
+        List<String> runLogLines = restoreMainRunLogLines ? s.mainRunLogLines() : List.of();
+        double runLogScroll =
+                restoreMainRunLogLines ? s.mainRunLogScroll() : Double.NaN;
         mainRunTabController.restoreRunLogUiFromSession(
-                s.mainRunLogFilter(), s.mainRunLogLines(), s.mainRunLogScroll());
+                s.mainRunLogFilter(), runLogLines, runLogScroll);
         if (nonBlank(s.mainRunStage2ProductionPlan())
                 || nonBlank(s.mainRunStage2MemberSchedule())) {
             mainRunTabController.setStage2ArtifactPaths(
                     nz(s.mainRunStage2ProductionPlan()),
                     nz(s.mainRunStage2MemberSchedule()));
         }
-        mainRunTabController.applyStage2WriteExcelFromSession(s.mainRunStage2WriteExcel());
         planInputTabController.applyStage2SkipTodayDispatchFromSession(s.mainRunStage2SkipTodayDispatch());
         planInputTabController.applyStage2InProgressNextDayPromptFromSession(
                 s.planInputStage2InProgressNextDayPrompt());
@@ -913,7 +919,6 @@ public final class MainShellController {
                 mainRunTabController.snapshotLogScrollProportion(),
                 mainRunTabController.snapshotStage2ProductionPlanPath(),
                 mainRunTabController.snapshotStage2MemberSchedulePath(),
-                mainRunTabController.snapshotStage2WriteExcel(),
                 planInputTabController.snapshotStage2SkipTodayDispatch(),
                 planInputTabController.snapshotStage2InProgressNextDayPrompt(),
                 mainRunTabController.snapshotStage2ResultBookFont(),
@@ -1160,7 +1165,7 @@ public final class MainShellController {
 
         PlanWorkspaceSessionFragment frag = PlanWorkspaceSnapshotStore.readSessionFragment(entry);
         DesktopSessionState merged = frag.mergeOnto(collectDesktopSession());
-        applyDesktopSession(merged, false);
+        applyDesktopSession(merged, false, true);
         if (dispatchInteractiveTabController != null) {
             dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
         }
@@ -1216,7 +1221,7 @@ public final class MainShellController {
             return;
         }
         TableColumnOrderPersistence.overwriteStoreRoot(tableColumnOrderRoot);
-        applyDesktopSession(state, true);
+        applyDesktopSession(state, true, true);
         applyDesktopThemeFromSession(state);
         refreshDesktopSessionDependentUi();
         persistDesktopSessionNow();
@@ -1368,7 +1373,7 @@ public final class MainShellController {
              * applyUiEnvRowsFromSession（true）でセッションを再適用すると、マージ JSON の uiEnvRows 欠落や
              * 早期 return と相性が悪く、アップグレード直後に「初期化されていない」ように見えることがあるため false。
              */
-            applyDesktopSession(merged, false);
+            applyDesktopSession(merged, false, false);
             TableColumnOrderPersistence.materializeTableColumnStoreAfterFactoryReset(collectUiEnv());
             applyDesktopThemeFromSession(merged);
             refreshDesktopSessionDependentUi();
@@ -3274,6 +3279,9 @@ public final class MainShellController {
     }
 
     private void runStage(String script) {
+        if (STAGE2.equals(script) && blockIfSummaryAiDispatchExportLocked("段階2")) {
+            return;
+        }
         if (!runLock.compareAndSet(false, true)) {
             appendLog("[busy] already running (single flight).");
             return;
@@ -3295,9 +3303,7 @@ public final class MainShellController {
                 uiRun.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
             }
             if (STAGE2.equals(script)) {
-                uiRun.put(
-                        AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL,
-                        mainRunTabController.snapshotStage2WriteExcel() ? "1" : "0");
+                uiRun.put(AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL, "1");
                 uiRun.put(
                         AppPaths.KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH,
                         planInputTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
@@ -3442,6 +3448,22 @@ public final class MainShellController {
         }
     }
 
+    private static void debugMemProbe413a29(
+            Map<String, String> ui, String hypothesisId, String location, String message) {
+        // #region agent log
+        Runtime rt = Runtime.getRuntime();
+        long usedMb = (rt.totalMemory() - rt.freeMemory()) / (1024L * 1024L);
+        long maxMb = rt.maxMemory() / (1024L * 1024L);
+        AgentDebugLog.appendStructured(
+                ui,
+                "413a29",
+                hypothesisId,
+                location,
+                message,
+                Map.of("heapUsedMb", usedMb, "heapMaxMb", maxMb));
+        // #endregion
+    }
+
     private void completeStageRunOnFx(String script, Integer code, Throwable err, List<String> tailSnap) {
         applyRunTabGating();
         if (err != null) {
@@ -3488,22 +3510,56 @@ public final class MainShellController {
             }
             if (STAGE2.equals(script)) {
                 if (c == 0) {
+                    Map<String, String> uiStage2Done = collectUiEnv();
+                    debugMemProbe413a29(
+                            uiStage2Done,
+                            "H3",
+                            "MainShellController.completeStageRunOnFx",
+                            "stage2 exit 0 before UI refresh");
                     refreshStage2OutputArtifacts();
-                    exportSummaryAiDispatchWorkbookAfterPipelineStageRun(true);
-                    refreshEquipmentGanttGraphicAfterPipelineRun();
-                    Runnable afterDispatchReload =
+                    debugMemProbe413a29(
+                            uiStage2Done,
+                            "H3",
+                            "MainShellController.completeStageRunOnFx",
+                            "after refreshStage2OutputArtifacts");
+                    Platform.runLater(
                             () -> {
-                                MacroCompleteChime.playIfAvailable(collectUiEnv());
-                                selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
-                                showStageCompletionDialog(
-                                        "段階2 完了", "段階2 の処理が正常終了しました。");
-                            };
-                    if (dispatchInteractiveTabController != null) {
-                        dispatchInteractiveTabController.reloadTableFromDiskAfterStage2Success(
-                                afterDispatchReload);
-                    } else {
-                        afterDispatchReload.run();
-                    }
+                                Map<String, String> uiChain = collectUiEnv();
+                                debugMemProbe413a29(
+                                        uiChain,
+                                        "H3",
+                                        "MainShellController.completeStageRunOnFx",
+                                        "stage2 ui continuation (gantt/dispatch first)");
+                                refreshEquipmentGanttGraphicAfterPipelineRun();
+                                debugMemProbe413a29(
+                                        uiChain,
+                                        "H3",
+                                        "MainShellController.completeStageRunOnFx",
+                                        "after refreshEquipmentGanttGraphic");
+                                Runnable afterDispatchReload =
+                                        () -> {
+                                            MacroCompleteChime.playIfAvailable(collectUiEnv());
+                                            selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
+                                            showStageCompletionDialog(
+                                                    "段階2 完了", "段階2 の処理が正常終了しました。");
+                                            if (deliveryCalendarViewTabController != null) {
+                                                deliveryCalendarViewTabController
+                                                        .reloadInBackgroundAfterStage2Success();
+                                            }
+                                        };
+                                if (dispatchInteractiveTabController != null) {
+                                    debugMemProbe413a29(
+                                            uiChain,
+                                            "H3",
+                                            "MainShellController.completeStageRunOnFx",
+                                            "before reloadTableFromDiskAfterStage2Success");
+                                    dispatchInteractiveTabController.reloadTableFromDiskAfterStage2Success(
+                                            afterDispatchReload);
+                                } else {
+                                    afterDispatchReload.run();
+                                }
+                            });
+                    // サマリ xlsx は段階2 exit 0 直後には作らない。納期管理ビュー再読込完了後に出力する。
                 } else if (dispatchInteractiveTabController != null) {
                     dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
                 }
@@ -4239,15 +4295,13 @@ public final class MainShellController {
 
     /**
      * Environment for {@code dispatch_interactive_trial.py}: same stage-2 overrides as {@link #runStage}:
-     * {@link AppPaths#KEY_PM_AI_STAGE2_WRITE_EXCEL} and {@link AppPaths#KEY_PM_AI_RESULT_BOOK_FONT} from the run tab,
+     * {@link AppPaths#KEY_PM_AI_STAGE2_WRITE_EXCEL}（常に 1）と {@link AppPaths#KEY_PM_AI_RESULT_BOOK_FONT} from the run tab,
      * {@link AppPaths#KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH} from the plan-input tab, and
      * {@link AppPaths#KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH} は常に無効（加工途中はタスク入力タブで翌日配台量を設定）。
      */
     public Map<String, String> snapshotDispatchTrialPythonEnv() {
         Map<String, String> ui = new HashMap<>(collectUiEnv());
-        ui.put(
-                AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL,
-                mainRunTabController.snapshotStage2WriteExcel() ? "1" : "0");
+        ui.put(AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL, "1");
         ui.put(
                 AppPaths.KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH,
                 planInputTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
@@ -4289,6 +4343,9 @@ public final class MainShellController {
     }
 
     void triggerStage2() {
+        if (blockIfSummaryAiDispatchExportLocked("段階2")) {
+            return;
+        }
         if (dispatchInteractiveTabController != null
                 && dispatchInteractiveTabController.isDispatchDocDirtySinceSave()) {
             appendLog(
@@ -4387,45 +4444,156 @@ public final class MainShellController {
         }
     }
 
-    /** 段階3 配台のみ反映後のサマリ xlsx 出力（メイン表スナップショットは反映済み UI を使用）。 */
+    /** 段階3 配台のみ反映後のサマリ xlsx 出力（メイン表は JavaFX スレッドでスナップショットし、POI はバックグラウンド）。 */
     private void exportSummaryAiDispatchWorkbookAfterStage3DispatchReload() {
-        Map<String, String> ui = collectUiEnv();
-        try {
-            PlanInputTabularIo.TabularSheet main =
-                    deliveryCalendarViewTabController != null
-                            ? deliveryCalendarViewTabController.snapshotMainCompareForExport()
-                            : new PlanInputTabularIo.TabularSheet(List.of(), List.of());
-            Path out = SummaryAiDispatchWorkbookExporter.writeFromPipelineArtifacts(ui, main);
-            ensureSummaryAiDispatchWorkbookEnvPath(out);
-            appendLog("[summary-ai-dispatch] 段階3後エクセル出力: " + out);
-        } catch (Exception ex) {
-            appendLog(
-                    "[summary-ai-dispatch] 段階3後エクセル出力失敗: "
-                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+        PlanInputTabularIo.TabularSheet main =
+                deliveryCalendarViewTabController != null
+                        ? deliveryCalendarViewTabController.snapshotMainCompareForExport()
+                        : new PlanInputTabularIo.TabularSheet(List.of(), List.of());
+        runSummaryExportAsync(
+                ui -> {
+                    Path out =
+                            SummaryAiDispatchWorkbookExporter.writeFromPipelineArtifacts(ui, main);
+                    appendLog("[summary-ai-dispatch] 段階3後エクセル出力: " + out);
+                    return out;
+                });
+    }
+
+    @FunctionalInterface
+    interface SummaryExportJob {
+        Path run(Map<String, String> ui) throws Exception;
+    }
+
+    /**
+     * サマリ xlsx 更新中か。判定の正本は共有ロックファイルの存在のみ（{@link
+     * SummaryAiDispatchExportLock#isLocked}）。メモリ上の実行フラグは使わない。
+     */
+    public boolean isSummaryAiDispatchExportLocked() {
+        return SummaryAiDispatchExportLock.isLocked(
+                AppPaths.summaryAiDispatchXlsxPath(collectUiEnv()));
+    }
+
+    /**
+     * サマリ作成中ならログと警告を出し true（呼び出し側は処理を中止）。
+     *
+     * @param operationLabelJa ユーザー向けの処理名（例: 段階2、配台試行）
+     */
+    boolean blockIfSummaryAiDispatchExportLocked(String operationLabelJa) {
+        if (!isSummaryAiDispatchExportLocked()) {
+            return false;
+        }
+        Path workbook = AppPaths.summaryAiDispatchXlsxPath(collectUiEnv());
+        String host =
+                SummaryAiDispatchExportLock.readLockInfo(workbook)
+                        .map(SummaryAiDispatchExportLock.LockInfo::displayHost)
+                        .orElse("他端末");
+        appendLog(
+                "[summary-ai-dispatch] "
+                        + operationLabelJa
+                        + " を中止（サマリ作成中: "
+                        + host
+                        + "）");
+        showWarningDialog(
+                "サマリ作成中",
+                operationLabelJa
+                        + " は実行できません。\n"
+                        + "サマリ xlsx（"
+                        + workbook.getFileName()
+                        + "）を作成中です（"
+                        + host
+                        + "）。\n"
+                        + "完了後に再試行するか、実行・ログタブの「ロック解除」を使用してください。");
+        refreshSummaryWorkbookLockUi();
+        return true;
+    }
+
+    /** 実行・ログタブのサマリ「開く」ボタンと、段階2／段階3／納期再読込の実行可否を更新する。 */
+    void refreshSummaryWorkbookLockUi() {
+        Platform.runLater(
+                () -> {
+                    if (mainRunTabController != null) {
+                        mainRunTabController.refreshSummaryWorkbookOpenLockState();
+                    }
+                    applySummaryExportRunGating();
+                });
+    }
+
+    /** 段階2／段階3／納期再読込 UI を、ロックファイルの現状態から再描画する。 */
+    private void applySummaryExportRunGating() {
+        if (planInputTabController != null) {
+            planInputTabController.refreshSummaryExportLockPresentation();
+        }
+        if (dispatchInteractiveTabController != null) {
+            dispatchInteractiveTabController.refreshSummaryExportLockPresentation();
+        }
+        if (deliveryCalendarViewTabController != null) {
+            deliveryCalendarViewTabController.refreshSummaryExportLockPresentation();
         }
     }
 
     /**
-     * 段階2 正常完了後: 成果物 JSON でサマリ xlsx を更新し、納期管理ビューをフル再読込する。
+     * サマリ xlsx 出力（ロック取得→バックグラウンド→解放）。他 PC／自 PC の作成中はロックでスキップする。
      */
-    private void exportSummaryAiDispatchWorkbookAfterPipelineStageRun(boolean scheduleDeliveryReload) {
+    void runSummaryExportAsync(SummaryExportJob job) {
         Map<String, String> ui = collectUiEnv();
+        Path workbook = AppPaths.summaryAiDispatchXlsxPath(ui);
+        Optional<SummaryAiDispatchExportLock.AcquiredLock> lock;
         try {
-            PlanInputTabularIo.TabularSheet main =
-                    deliveryCalendarViewTabController != null
-                            ? deliveryCalendarViewTabController.snapshotMainCompareForExport()
-                            : new PlanInputTabularIo.TabularSheet(List.of(), List.of());
-            Path out = SummaryAiDispatchWorkbookExporter.writeFromPipelineArtifacts(ui, main);
-            ensureSummaryAiDispatchWorkbookEnvPath(out);
-            appendLog("[summary-ai-dispatch] パイプライン後エクセル出力: " + out);
-        } catch (Exception ex) {
+            lock = SummaryAiDispatchExportLock.tryAcquire(workbook);
+        } catch (IOException ex) {
             appendLog(
-                    "[summary-ai-dispatch] パイプライン後エクセル出力失敗: "
+                    "[summary-ai-dispatch] ロック取得失敗: "
                             + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+            refreshSummaryWorkbookLockUi();
+            return;
         }
-        if (scheduleDeliveryReload && deliveryCalendarViewTabController != null) {
-            deliveryCalendarViewTabController.reloadInBackgroundAfterStage2Success();
+        if (lock.isEmpty()) {
+            String who =
+                    SummaryAiDispatchExportLock.readLockInfo(workbook)
+                            .map(SummaryAiDispatchExportLock.LockInfo::displayHost)
+                            .orElse("他端末");
+            appendLog("[summary-ai-dispatch] 作成スキップ（ロック中: " + who + "）");
+            refreshSummaryWorkbookLockUi();
+            return;
         }
+        refreshSummaryWorkbookLockUi();
+        SummaryAiDispatchExportLock.AcquiredLock acquired = lock.get();
+        Thread worker =
+                new Thread(
+                        () -> {
+                            try {
+                                Path out = job.run(ui);
+                                Platform.runLater(
+                                        () -> {
+                                            try {
+                                                ensureSummaryAiDispatchWorkbookEnvPath(out);
+                                            } catch (Exception ex) {
+                                                appendLog(
+                                                        "[summary-ai-dispatch] エクセル出力後処理失敗: "
+                                                                + (ex.getMessage() != null
+                                                                        ? ex.getMessage()
+                                                                        : ex.toString()));
+                                            } finally {
+                                                acquired.release();
+                                                refreshSummaryWorkbookLockUi();
+                                            }
+                                        });
+                            } catch (Exception ex) {
+                                Platform.runLater(
+                                        () -> {
+                                            appendLog(
+                                                    "[summary-ai-dispatch] エクセル出力失敗: "
+                                                            + (ex.getMessage() != null
+                                                                    ? ex.getMessage()
+                                                                    : ex.toString()));
+                                            acquired.release();
+                                            refreshSummaryWorkbookLockUi();
+                                        });
+                            }
+                        },
+                        "summary-ai-dispatch-export");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     /**

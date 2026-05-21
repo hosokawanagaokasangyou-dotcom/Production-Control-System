@@ -182,9 +182,10 @@ public final class DesktopSessionStateStore {
         putMainRunLogScroll(root, state.mainRunLogScroll());
         put(root, "mainRunStage2ProductionPlan", state.mainRunStage2ProductionPlan());
         put(root, "mainRunStage2MemberSchedule", state.mainRunStage2MemberSchedule());
-        root.put("mainRunStage2WriteExcel", state.mainRunStage2WriteExcel());
         root.put("mainRunStage2SkipTodayDispatch", state.mainRunStage2SkipTodayDispatch());
-        root.put("mainRunStage2SkipInProgressDispatch", state.mainRunStage2SkipInProgressDispatch());
+        root.put(
+                "planInputStage2InProgressNextDayPrompt",
+                state.planInputStage2InProgressNextDayPrompt());
         put(root, "mainRunStage2ResultBookFont", state.mainRunStage2ResultBookFont());
         putUiEnvRows(root, state.uiEnvRows());
         putMainShellTabOrder(root, state.mainShellTabOrder());
@@ -318,9 +319,8 @@ public final class DesktopSessionStateStore {
                 optionalDouble(root, "mainRunLogScroll", Double.NaN),
                 text(root, "mainRunStage2ProductionPlan"),
                 text(root, "mainRunStage2MemberSchedule"),
-                optionalBoolean(root, "mainRunStage2WriteExcel", true),
                 optionalBoolean(root, "mainRunStage2SkipTodayDispatch", false),
-                optionalBoolean(root, "mainRunStage2SkipInProgressDispatch", false),
+                optionalBoolean(root, "planInputStage2InProgressNextDayPrompt", true),
                 text(root, "mainRunStage2ResultBookFont"),
                 loadUiEnvRows(root),
                 loadStringList(root, "mainShellTabOrder"),

@@ -13,7 +13,6 @@
   "mainRunLogScroll" : 1.0,
   "mainRunStage2ProductionPlan" : "C:\\工程管理AIプロジェクト_JAVA\\output\\計画2605122231290462.xlsx",
   "mainRunStage2MemberSchedule" : "C:\\工程管理AIプロジェクト_JAVA\\output\\人員2605122231290462.xlsx",
-  "mainRunStage2WriteExcel" : true,
   "mainRunStage2ResultBookFont" : "Meiryo UI",
   "uiEnvRows" : [ {
     "name" : "PM_AI_PYTHON",
