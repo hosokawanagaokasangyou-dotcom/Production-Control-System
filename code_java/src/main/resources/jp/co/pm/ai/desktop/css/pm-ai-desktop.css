@@ -122,6 +122,15 @@
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 3, 0, 0, 1);
 }
 
+.pm-run-tab .pm-run-execution-timings {
+    -fx-padding: 0 0 4 0;
+}
+
+.pm-run-tab .label.pm-run-timing-value {
+    -fx-font-family: "Consolas", "Cascadia Mono", monospace;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
 .pm-run-tab .label.pm-section-title {
     -fx-font-size: 13px;
     -fx-font-weight: bold;

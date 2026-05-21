@@ -947,27 +947,32 @@ public final class DispatchInteractiveTabController {
                 new Task<>() {
                     @Override
                     protected String call() throws Exception {
-                        ResultDispatchJsonIo.write(jsonPath, doc.copy());
-                        if (shell != null) {
-                            shell.appendLog(
-                                    "[dispatch-editor] trial: 試行前にメモリ上の表を JSON に同期 "
-                                            + jsonPath.toAbsolutePath().normalize());
+                        shell.beginPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE3);
+                        try {
+                            ResultDispatchJsonIo.write(jsonPath, doc.copy());
+                            if (shell != null) {
+                                shell.appendLog(
+                                        "[dispatch-editor] trial: 試行前にメモリ上の表を JSON に同期 "
+                                                + jsonPath.toAbsolutePath().normalize());
+                            }
+                            Path pyExe = trialPythonExe;
+                            Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
+                            Map<String, String> pyEnv = shell.snapshotDispatchTrialPythonEnv();
+                            return ResultDispatchTrialPython.runTrial(
+                                    jsonPath,
+                                    pyExe,
+                                    pyDir,
+                                    pyEnv,
+                                    line ->
+                                            Platform.runLater(
+                                                    () -> {
+                                                        logLines.add(line);
+                                                        int last = logLines.size() - 1;
+                                                        logList.scrollTo(last);
+                                                    }));
+                        } finally {
+                            shell.endPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE3);
                         }
-                        Path pyExe = trialPythonExe;
-                        Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
-                        Map<String, String> pyEnv = shell.snapshotDispatchTrialPythonEnv();
-                        return ResultDispatchTrialPython.runTrial(
-                                jsonPath,
-                                pyExe,
-                                pyDir,
-                                pyEnv,
-                                line ->
-                                        Platform.runLater(
-                                                () -> {
-                                                    logLines.add(line);
-                                                    int last = logLines.size() - 1;
-                                                    logList.scrollTo(last);
-                                                }));
                     }
                 };
         trialTaskHolder[0] = task;
@@ -2637,8 +2642,9 @@ public final class DispatchInteractiveTabController {
     private String formatStage3DispatchQtyBalanceCheck(WideRow wr) {
         double qtyConv = ResultDispatchNormalizer.parseDouble(wr.getStatic("換算数量"));
         double actualDone = ResultDispatchNormalizer.parseDouble(wr.getStatic("実加工数"));
+        double rollUnitM = resolveRollUnitForWideRow(wr).unitM();
         return Stage3DispatchQtyBalanceCheck.formatCheck(
-                qtyConv, actualDone, wr.sumActualAmounts(), docHasActualDispatchQtyColumn());
+                qtyConv, actualDone, wr.sumActualAmounts(), docHasActualDispatchQtyColumn(), rollUnitM);
     }
 
     private String byDayStaticCellText(ByDayRow br, String title) {

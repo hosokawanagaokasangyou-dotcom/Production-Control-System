@@ -272,6 +272,9 @@ public final class DeliveryCalendarViewTabController {
     /** Python 取得〜子タブ反映完了まで。サマリロック解除時に誤って再有効化しない。 */
     private final AtomicBoolean deliveryCalendarDataReloadInProgress = new AtomicBoolean(false);
 
+    /** {@link #runDeliveryCalendarDataReload} から計測開始した場合のみ {@link #hideDeliveryReloadProgress} で終了する。 */
+    private boolean deliveryCalendarReloadTimingActive;
+
     private volatile boolean innerTabPersistenceWired;
 
     @FXML
@@ -1007,6 +1010,10 @@ public final class DeliveryCalendarViewTabController {
             return;
         }
         deliveryCalendarDataReloadInProgress.set(true);
+        deliveryCalendarReloadTimingActive = true;
+        if (shell != null) {
+            shell.beginPipelineExecutionTiming(PipelineExecutionTimingKind.DELIVERY_CALENDAR_VIEW);
+        }
         applyRefreshButtonEnabledState();
         pendingUserDeliveryRefreshCompletionDialog = completionInfoDialog;
         if (fullProgressShellChrome) {
@@ -1101,6 +1108,7 @@ public final class DeliveryCalendarViewTabController {
     }
 
     private void hideDeliveryReloadProgress() {
+        finishDeliveryCalendarReloadTimingIfActive();
         reloadBlockingMainShellTabNavigation.set(false);
         deliveryCalendarDataReloadInProgress.set(false);
         applyRefreshButtonEnabledState();
@@ -1118,6 +1126,16 @@ public final class DeliveryCalendarViewTabController {
      * パネルを閉じる処理を二脉冲先へ送る。単一 {@link Platform#runLater} では同一脉冲内で閉じ、子バーの更新が
      * 一度も描画されないことがある。
      */
+    private void finishDeliveryCalendarReloadTimingIfActive() {
+        if (!deliveryCalendarReloadTimingActive) {
+            return;
+        }
+        deliveryCalendarReloadTimingActive = false;
+        if (shell != null) {
+            shell.endPipelineExecutionTiming(PipelineExecutionTimingKind.DELIVERY_CALENDAR_VIEW);
+        }
+    }
+
     private void scheduleHideDeliveryReloadProgress() {
         Platform.runLater(() -> Platform.runLater(this::hideDeliveryReloadProgress));
     }
@@ -1536,11 +1554,14 @@ public final class DeliveryCalendarViewTabController {
 
     private void applyStage3DispatchOnlyReload(Runnable afterUiUpdated) {
         if (shell != null) {
-            shell.appendLog(
-                    "[delivery-calendar] 段階3後: 段階3前・段階3後のみ反映（Python 再取得はスキップ）");
+            shell.beginPipelineExecutionTiming(PipelineExecutionTimingKind.DELIVERY_CALENDAR_VIEW);
         }
-        statusLabel.setText("反映中… 配台結果（段階3）");
         try {
+            if (shell != null) {
+                shell.appendLog(
+                        "[delivery-calendar] 段階3後: 段階3前・段階3後のみ反映（Python 再取得はスキップ）");
+            }
+            statusLabel.setText("反映中… 配台結果（段階3）");
             if (deliveryCalendarResultDispatchTableTabController != null) {
                 deliveryCalendarResultDispatchTableTabController.reloadResultDispatchTableFromDisk();
             }
@@ -1562,6 +1583,10 @@ public final class DeliveryCalendarViewTabController {
             statusLabel.setText("error: " + t.getMessage());
             if (shell != null) {
                 shell.appendLog("[delivery-calendar] 段階3配台のみ反映 " + t.getMessage());
+            }
+        } finally {
+            if (shell != null) {
+                shell.endPipelineExecutionTiming(PipelineExecutionTimingKind.DELIVERY_CALENDAR_VIEW);
             }
         }
     }

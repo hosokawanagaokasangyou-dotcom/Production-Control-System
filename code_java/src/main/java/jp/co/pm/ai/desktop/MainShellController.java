@@ -3391,6 +3391,11 @@ public final class MainShellController {
             appendStageChildResolvedEnvForRun(script, childEnv);
             RunRequest req = new RunRequest(py, dir, script, wb, childEnv);
             mainRunTabController.getStatusLabel().setText("実行中…");
+            if (STAGE1.equals(script)) {
+                mainRunTabController.beginPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE1);
+            } else if (STAGE2.equals(script)) {
+                mainRunTabController.beginPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE2);
+            }
 
             ArrayDeque<String> recentChildLines = new ArrayDeque<>(STAGE_CHILD_LOG_TAIL_MAX + 4);
 
@@ -3449,6 +3454,11 @@ public final class MainShellController {
     }
 
     private void completeStageRunOnFx(String script, Integer code, Throwable err, List<String> tailSnap) {
+        if (STAGE1.equals(script)) {
+            mainRunTabController.endPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE1);
+        } else if (STAGE2.equals(script)) {
+            mainRunTabController.endPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE2);
+        }
         applyRunTabGating();
         if (err != null) {
             mainRunTabController
@@ -4258,6 +4268,18 @@ public final class MainShellController {
         mainRunTabController.appendLog(line);
     }
 
+    void beginPipelineExecutionTiming(PipelineExecutionTimingKind kind) {
+        if (mainRunTabController != null) {
+            mainRunTabController.beginPipelineExecutionTiming(kind);
+        }
+    }
+
+    void endPipelineExecutionTiming(PipelineExecutionTimingKind kind) {
+        if (mainRunTabController != null) {
+            mainRunTabController.endPipelineExecutionTiming(kind);
+        }
+    }
+
     /** グローバル設定の工場切替などで実行・ログタブ上部ロゴを更新する。 */
     void refreshMainRunTabFactoryLogo() {
         if (mainRunTabController != null) {
@@ -4554,6 +4576,7 @@ public final class MainShellController {
         Thread worker =
                 new Thread(
                         () -> {
+                            beginPipelineExecutionTiming(PipelineExecutionTimingKind.SUMMARY_EXCEL);
                             try {
                                 Path out = job.run(ui);
                                 Platform.runLater(
@@ -4567,6 +4590,8 @@ public final class MainShellController {
                                                                         ? ex.getMessage()
                                                                         : ex.toString()));
                                             } finally {
+                                                endPipelineExecutionTiming(
+                                                        PipelineExecutionTimingKind.SUMMARY_EXCEL);
                                                 acquired.release();
                                                 refreshSummaryWorkbookLockUi();
                                             }
@@ -4579,6 +4604,8 @@ public final class MainShellController {
                                                             + (ex.getMessage() != null
                                                                     ? ex.getMessage()
                                                                     : ex.toString()));
+                                            endPipelineExecutionTiming(
+                                                    PipelineExecutionTimingKind.SUMMARY_EXCEL);
                                             acquired.release();
                                             refreshSummaryWorkbookLockUi();
                                         });

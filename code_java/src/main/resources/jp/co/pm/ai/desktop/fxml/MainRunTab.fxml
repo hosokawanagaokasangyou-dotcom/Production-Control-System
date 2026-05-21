@@ -97,7 +97,21 @@
                 <Button fx:id="clearLogButton" mnemonicParsing="false" onAction="#onClearLogButtonAction" text="ログをクリア" />
                 <Label fx:id="prismPipelineLabel" styleClass="pm-prism-pipeline-label" text="JavaFX Prism: …" />
             </HBox>
-            <HBox alignment="CENTER_LEFT" spacing="8.0" />
+            <VBox fillWidth="true" spacing="4.0">
+                <Label styleClass="pm-section-title" text="最新の実行時間" />
+                <GridPane hgap="16.0" styleClass="pm-run-execution-timings" vgap="4.0">
+                    <Label text="段階1" GridPane.columnIndex="0" GridPane.rowIndex="0" />
+                    <Label fx:id="pipelineTimingStage1Label" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="1" GridPane.rowIndex="0" />
+                    <Label text="段階2" GridPane.columnIndex="2" GridPane.rowIndex="0" />
+                    <Label fx:id="pipelineTimingStage2Label" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="3" GridPane.rowIndex="0" />
+                    <Label text="段階3" GridPane.columnIndex="4" GridPane.rowIndex="0" />
+                    <Label fx:id="pipelineTimingStage3Label" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="5" GridPane.rowIndex="0" />
+                    <Label text="サマリ Excel" GridPane.columnIndex="0" GridPane.rowIndex="1" />
+                    <Label fx:id="pipelineTimingSummaryExcelLabel" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="1" GridPane.rowIndex="1" />
+                    <Label text="納期管理ビュー" GridPane.columnIndex="2" GridPane.rowIndex="1" />
+                    <Label fx:id="pipelineTimingDeliveryCalendarLabel" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="3" GridPane.rowIndex="1" GridPane.columnSpan="3" />
+                </GridPane>
+            </VBox>
         </VBox>
     </top>
     <center>

@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -147,6 +148,27 @@ public final class MainRunTabController {
 
     @FXML
     private Label factoryLogoCaptionLabel;
+
+    @FXML
+    private Label pipelineTimingStage1Label;
+
+    @FXML
+    private Label pipelineTimingStage2Label;
+
+    @FXML
+    private Label pipelineTimingStage3Label;
+
+    @FXML
+    private Label pipelineTimingSummaryExcelLabel;
+
+    @FXML
+    private Label pipelineTimingDeliveryCalendarLabel;
+
+    private final Map<PipelineExecutionTimingKind, Long> pipelineTimingStartNanos =
+            new EnumMap<>(PipelineExecutionTimingKind.class);
+
+    private final Map<PipelineExecutionTimingKind, Long> pipelineTimingLastDurationMs =
+            new EnumMap<>(PipelineExecutionTimingKind.class);
 
     private final ObservableList<String> logLinesAll = FXCollections.observableArrayList();
     private final FilteredList<String> logLinesVisible =
@@ -913,6 +935,59 @@ public final class MainRunTabController {
 
     Label getStatusLabel() {
         return statusLabel;
+    }
+
+    /** パイプライン処理の wall-clock 計測を開始する（子プロセス／バックグラウンド処理の直前）。 */
+    void beginPipelineExecutionTiming(PipelineExecutionTimingKind kind) {
+        if (kind == null) {
+            return;
+        }
+        pipelineTimingStartNanos.put(kind, System.nanoTime());
+    }
+
+    /** 計測を終了し、実行・ログタブの「最新の実行時間」を更新する。 */
+    void endPipelineExecutionTiming(PipelineExecutionTimingKind kind) {
+        if (kind == null) {
+            return;
+        }
+        Long start = pipelineTimingStartNanos.remove(kind);
+        if (start == null) {
+            return;
+        }
+        long durationMs = Math.max(0L, (System.nanoTime() - start) / 1_000_000L);
+        pipelineTimingLastDurationMs.put(kind, durationMs);
+        Runnable update = () -> applyPipelineExecutionTimingLabel(kind, durationMs);
+        if (Platform.isFxApplicationThread()) {
+            update.run();
+        } else {
+            Platform.runLater(update);
+        }
+    }
+
+    static String formatPipelineExecutionDuration(long durationMs) {
+        if (durationMs < 0L) {
+            return "—";
+        }
+        if (durationMs < 60_000L) {
+            return String.format("%.2f秒", durationMs / 1000.0);
+        }
+        long minutes = durationMs / 60_000L;
+        double seconds = (durationMs % 60_000L) / 1000.0;
+        return String.format("%d分%.1f秒", minutes, seconds);
+    }
+
+    private void applyPipelineExecutionTimingLabel(PipelineExecutionTimingKind kind, long durationMs) {
+        Label target =
+                switch (kind) {
+                    case STAGE1 -> pipelineTimingStage1Label;
+                    case STAGE2 -> pipelineTimingStage2Label;
+                    case STAGE3 -> pipelineTimingStage3Label;
+                    case SUMMARY_EXCEL -> pipelineTimingSummaryExcelLabel;
+                    case DELIVERY_CALENDAR_VIEW -> pipelineTimingDeliveryCalendarLabel;
+                };
+        if (target != null) {
+            target.setText(formatPipelineExecutionDuration(durationMs));
+        }
     }
 
     /**
