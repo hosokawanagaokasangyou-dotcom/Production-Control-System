@@ -40,6 +40,7 @@ import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.control.TitledPane;
+import javafx.scene.control.Tooltip;
 import javafx.scene.text.Font;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -267,6 +268,9 @@ public final class DeliveryCalendarViewTabController {
      * {@link #showDeliveryReloadProgress()} でオン、{@link #hideDeliveryReloadProgress()} でオフ。
      */
     private final AtomicBoolean reloadBlockingMainShellTabNavigation = new AtomicBoolean(false);
+
+    /** Python 取得〜子タブ反映完了まで。サマリロック解除時に誤って再有効化しない。 */
+    private final AtomicBoolean deliveryCalendarDataReloadInProgress = new AtomicBoolean(false);
 
     private volatile boolean innerTabPersistenceWired;
 
@@ -546,6 +550,7 @@ public final class DeliveryCalendarViewTabController {
             deliveryCalendarResultDispatchTableTabController.setEmbeddedInDeliveryCalendar(true);
         }
         ensureInnerTabPersistenceWired();
+        refreshSummaryExportLockPresentation();
     }
 
     /** メインシェルタブの切り替え抑止中（{@link MainShellController} が選択を差し戻す際に参照）。 */
@@ -944,6 +949,10 @@ public final class DeliveryCalendarViewTabController {
      * @param afterUiUpdated UI 反映後に呼ぶ（例: サマリ xlsx 出力）。JavaFX スレッドから呼ぶこと。
      */
     public void reloadInBackgroundAfterStage3DispatchTrialSuccess(Runnable afterUiUpdated) {
+        if (shell != null
+                && shell.blockIfSummaryAiDispatchExportLocked("段階3後の納期管理反映")) {
+            return;
+        }
         Platform.runLater(() -> applyStage3DispatchOnlyReload(afterUiUpdated));
     }
 
@@ -961,10 +970,34 @@ public final class DeliveryCalendarViewTabController {
      * @param completionInfoDialog 完了時の情報／警告／エラーダイアログを出す（手動再読込時のみ true）
      * @param pipelineTriggered 段階2/段階3 完了後など。再読込実行中でもサマリ更新のため再読込を開始する
      */
+    void refreshSummaryExportLockPresentation() {
+        applyRefreshButtonEnabledState();
+    }
+
+    private void applyRefreshButtonEnabledState() {
+        if (refreshButton == null || shell == null) {
+            return;
+        }
+        boolean locked = shell.isSummaryAiDispatchExportLocked();
+        boolean reloadInProgress = deliveryCalendarDataReloadInProgress.get();
+        refreshButton.setDisable(locked || reloadInProgress);
+        if (locked) {
+            refreshButton.setTooltip(
+                    new Tooltip(
+                            "サマリ xlsx を作成中です。完了後に再読み込みするか、実行・ログタブの「ロック解除」を使用してください。"));
+        } else {
+            refreshButton.setTooltip(null);
+        }
+    }
+
     private void runDeliveryCalendarDataReload(
             boolean fullProgressShellChrome, boolean completionInfoDialog, boolean pipelineTriggered) {
         if (requestFactory == null) {
             statusLabel.setText("初期化待ち");
+            return;
+        }
+        if (shell != null
+                && shell.blockIfSummaryAiDispatchExportLocked("納期管理ビューの再読み込み")) {
             return;
         }
         if (!pipelineTriggered && refreshButton != null && refreshButton.isDisabled()) {
@@ -973,9 +1006,8 @@ public final class DeliveryCalendarViewTabController {
             }
             return;
         }
-        if (refreshButton != null) {
-            refreshButton.setDisable(true);
-        }
+        deliveryCalendarDataReloadInProgress.set(true);
+        applyRefreshButtonEnabledState();
         pendingUserDeliveryRefreshCompletionDialog = completionInfoDialog;
         if (fullProgressShellChrome) {
             showDeliveryReloadProgress();
@@ -994,9 +1026,7 @@ public final class DeliveryCalendarViewTabController {
                         (cap, err) ->
                                 Platform.runLater(
                                         () -> {
-                                            if (refreshButton != null) {
-                                                refreshButton.setDisable(false);
-                                            }
+                                            applyRefreshButtonEnabledState();
                                             if (err != null) {
                                                 scheduleHideDeliveryReloadProgress();
                                                 statusLabel.setText("error: " + err.getMessage());
@@ -1072,6 +1102,8 @@ public final class DeliveryCalendarViewTabController {
 
     private void hideDeliveryReloadProgress() {
         reloadBlockingMainShellTabNavigation.set(false);
+        deliveryCalendarDataReloadInProgress.set(false);
+        applyRefreshButtonEnabledState();
         if (shell != null) {
             shell.setDeliveryCalendarReloadGreyOutOtherMainTabs(false);
         }
@@ -1382,7 +1414,7 @@ public final class DeliveryCalendarViewTabController {
                                                 + AppPaths.summaryAiDispatchXlsxPath(
                                                                 shell.snapshotUiEnv())
                                                         .getFileName()
-                                                + " を出力しました。");
+                                                + " の出力はバックグラウンドで行います。");
                             }
                             scheduleHideDeliveryReloadProgress();
                         }
@@ -1405,36 +1437,33 @@ public final class DeliveryCalendarViewTabController {
 
     /**
      * 納期管理ビュー4表を {@link AppPaths#KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 先へ上書き出力する。
-     * 再読み込み完了後（メイン表反映後）に呼ぶ。
+     * 再読み込み完了後（メイン表反映後）に呼ぶ。表データは JavaFX スレッドでスナップショットし、POI 出力はバックグラウンド。
      */
     private void exportSummaryAiDispatchWorkbookAfterReload() {
         if (shell == null) {
             return;
         }
         Map<String, String> ui = shell.snapshotUiEnv();
-        try {
-            PlanInputTabularIo.TabularSheet main =
-                    SummaryAiDispatchWorkbookExporter.mainCompareFromUi(
-                            new ArrayList<>(mainHeadersRef), copyMainRowsForExport());
-            PlanInputTabularIo.TabularSheet dispatch = snapshotDispatchTabularForExport(ui);
-            PlanInputTabularIo.TabularSheet actuals = snapshotActualsTabularForExport(ui);
-            PlanInputTabularIo.TabularSheet aladdin = snapshotAladdinTabularForExport(ui);
-            Path out =
-                    SummaryAiDispatchWorkbookExporter.writeOverwrite(
-                            ui, main, actuals, aladdin, dispatch);
-            shell.ensureSummaryAiDispatchWorkbookEnvPath(out);
-            shell.appendLog(
-                    "[summary-ai-dispatch] エクセル出力: "
-                            + out
-                            + " （"
-                            + SummaryAiDispatchWorkbookExporter.rowCountSummary(
-                                    main, dispatch, actuals, aladdin)
-                            + "）");
-        } catch (Exception ex) {
-            shell.appendLog(
-                    "[summary-ai-dispatch] エクセル出力失敗: "
-                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
-        }
+        PlanInputTabularIo.TabularSheet main =
+                SummaryAiDispatchWorkbookExporter.mainCompareFromUi(
+                        new ArrayList<>(mainHeadersRef), copyMainRowsForExport());
+        PlanInputTabularIo.TabularSheet dispatch = snapshotDispatchTabularForExport(ui);
+        PlanInputTabularIo.TabularSheet actuals = snapshotActualsTabularForExport(ui);
+        PlanInputTabularIo.TabularSheet aladdin = snapshotAladdinTabularForExport(ui);
+        shell.runSummaryExportAsync(
+                exportUi -> {
+                    Path out =
+                            SummaryAiDispatchWorkbookExporter.writeOverwrite(
+                                    exportUi, main, actuals, aladdin, dispatch);
+                    shell.appendLog(
+                            "[summary-ai-dispatch] エクセル出力: "
+                                    + out
+                                    + " （"
+                                    + SummaryAiDispatchWorkbookExporter.rowCountSummary(
+                                            main, dispatch, actuals, aladdin)
+                                    + "）");
+                    return out;
+                });
     }
 
     private List<List<DeliveryCalendarMainCell>> copyMainRowsForExport() {
@@ -1523,11 +1552,11 @@ public final class DeliveryCalendarViewTabController {
             }
             clearPipelineStaleOverlayAfterSuccessfulReload();
             statusLabel.setText("反映完了（段階3・配台のみ）");
-            if (shell != null) {
-                shell.refreshEquipmentGanttGraphicAfterPipelineRun();
-            }
             if (afterUiUpdated != null) {
-                afterUiUpdated.run();
+                Platform.runLater(afterUiUpdated);
+            }
+            if (shell != null) {
+                Platform.runLater(() -> shell.refreshEquipmentGanttGraphicAfterPipelineRun());
             }
         } catch (Throwable t) {
             statusLabel.setText("error: " + t.getMessage());

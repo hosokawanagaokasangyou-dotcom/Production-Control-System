@@ -137,6 +137,9 @@ public final class MainRunTabController {
 
     private Timeline summaryLockPollTimeline;
 
+    /** {@link #refreshSummaryWorkbookOpenLockState()} の前回ポーリング結果（変化時のみ段階2等 UI を同期）。 */
+    private Boolean lastPolledSummaryExportLocked;
+
     private Tooltip summaryOpenButtonTooltip;
 
     @FXML
@@ -484,6 +487,10 @@ public final class MainRunTabController {
         Map<String, String> ui = shell.snapshotUiEnv();
         Path workbook = AppPaths.summaryAiDispatchXlsxPath(ui);
         boolean locked = shell.isSummaryAiDispatchExportLocked();
+        if (lastPolledSummaryExportLocked == null || lastPolledSummaryExportLocked != locked) {
+            lastPolledSummaryExportLocked = locked;
+            shell.refreshSummaryWorkbookLockUi();
+        }
         if (openSummaryAiDispatchButton != null) {
             openSummaryAiDispatchButton.setDisable(locked);
         }
