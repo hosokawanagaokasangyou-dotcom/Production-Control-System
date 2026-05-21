@@ -8,7 +8,6 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.BitSet;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -21,6 +20,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 
 import javafx.beans.property.ObjectProperty;
@@ -86,6 +86,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
+import jp.co.pm.ai.desktop.dispatch.DispatchInteractiveRollUnitSupport;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialConsistency;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialShortages;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialShortages.DispatchQtyShortfallRow;
@@ -103,9 +104,12 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
+import jp.co.pm.ai.desktop.ui.SpreadsheetMultiColumnFilterCoordinator;
 import jp.co.pm.ai.desktop.ui.SpreadsheetRowReorderDragGhost;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
+import jp.co.pm.ai.planning.stage2.core.Stage2PlanRowDispatchQtyMetrics;
+import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
 
 /**
  * Interactive pivot editor for result dispatch JSON (ControlsFX SpreadsheetView: task-by-day columns +
@@ -302,6 +306,9 @@ public final class DispatchInteractiveTabController {
     private final Set<String> dispatchWideShortfallKeys = new HashSet<>();
 
     private final Set<String> dispatchByDayShortfallKeys = new HashSet<>();
+
+    private final AtomicReference<Stage2RollUnitLengthTables> cachedRollUnitTables =
+            new AtomicReference<>();
 
     @FXML
     private void initialize() {
@@ -1182,9 +1189,6 @@ public final class DispatchInteractiveTabController {
                 ev -> {
                     ReloadBundle b = task.getValue();
                     doc = b.doc();
-                    // #region agent log
-                    logDispatchActualDoneForTaskId("W5-5", "reloadFromDiskQuiet", "H2");
-                    // #endregion
                     boolean stage2ColsFilled =
                             ResultDispatchStage2ColumnSupport.ensureStage2RequiredColumns(doc);
                     if (stage2ColsFilled) {
@@ -1843,14 +1847,16 @@ public final class DispatchInteractiveTabController {
             FullGridRebuild bundle, Runnable afterLayoutsReady, int layoutGen) {
         suppressDispatchGridDirty.set(true);
         boolean emptyWide = bundle.wide().profiles().isEmpty();
-        BitSet wideHiddenSnapshot =
+        Map<Integer, Set<String>> wideColumnFilterSnapshot =
                 emptyWide
-                        ? new BitSet()
-                        : SpreadsheetTabularSupport.snapshotHiddenRows(wideSpreadsheet);
-        BitSet byDayHiddenSnapshot =
+                        ? Map.of()
+                        : SpreadsheetMultiColumnFilterCoordinator.copyColumnAllowedByIndex(
+                                wideSpreadsheet);
+        Map<Integer, Set<String>> byDayColumnFilterSnapshot =
                 emptyWide
-                        ? new BitSet()
-                        : SpreadsheetTabularSupport.snapshotHiddenRows(byDaySpreadsheet);
+                        ? Map.of()
+                        : SpreadsheetMultiColumnFilterCoordinator.copyColumnAllowedByIndex(
+                                byDaySpreadsheet);
         clearSpreadsheetSelectionForRebuild(wideSpreadsheet);
         clearSpreadsheetSelectionForRebuild(byDaySpreadsheet);
         if (dispatchShortfallTable != null) {
@@ -1872,9 +1878,6 @@ public final class DispatchInteractiveTabController {
             ByDayGridBundle b = bundle.byDay();
             SpreadsheetTabularSupport.detachAndSetGrid(byDaySpreadsheet, b.grid());
             byDaySpreadsheet.setFilteredRow(SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
-            
-            SpreadsheetTabularSupport.restoreHiddenRows(wideSpreadsheet, wideHiddenSnapshot);
-            SpreadsheetTabularSupport.restoreHiddenRows(byDaySpreadsheet, byDayHiddenSnapshot);
 
             final Runnable layoutsReadyCallback = afterLayoutsReady;
             Platform.runLater(
@@ -1914,8 +1917,10 @@ public final class DispatchInteractiveTabController {
                                                         });
                                             });
                                 };
-                        scheduleWideLayoutAfterColumnSync(w, bothLayoutsReady, layoutGen);
-                        scheduleByDayLayoutAfterColumnSync(b, bothLayoutsReady, layoutGen);
+                        scheduleWideLayoutAfterColumnSync(
+                                w, bothLayoutsReady, layoutGen, wideColumnFilterSnapshot);
+                        scheduleByDayLayoutAfterColumnSync(
+                                b, bothLayoutsReady, layoutGen, byDayColumnFilterSnapshot);
                     });
 
         } finally {
@@ -1959,10 +1964,12 @@ public final class DispatchInteractiveTabController {
         }
     }
 
-    /** 段階3再読込・手動再読込の直前に、列フィルタ／行非表示／並べ替えの残りを消す。 */
+    /** グリッド再構築後: 列フィルタは維持し、非表示行・固定行だけ整える（DnD・セル編集向け）。 */
     private void finalizeDispatchSpreadsheetPresentation() {
-        SpreadsheetTabularSupport.finalizeSpreadsheetPresentationAfterGridRebuild(wideSpreadsheet);
-        SpreadsheetTabularSupport.finalizeSpreadsheetPresentationAfterGridRebuild(byDaySpreadsheet);
+        SpreadsheetTabularSupport.finalizeSpreadsheetPresentationPreservingColumnFilters(
+                wideSpreadsheet);
+        SpreadsheetTabularSupport.finalizeSpreadsheetPresentationPreservingColumnFilters(
+                byDaySpreadsheet);
     }
 
     private void refreshDispatchSpreadsheetForView(SpreadsheetView view) {
@@ -1980,7 +1987,10 @@ public final class DispatchInteractiveTabController {
      * (which skipped date columns and looked like “no date columns”).
      */
     private void scheduleWideLayoutAfterColumnSync(
-            WideGridBundle w, Runnable onComplete, int layoutGen) {
+            WideGridBundle w,
+            Runnable onComplete,
+            int layoutGen,
+            Map<Integer, Set<String>> columnFilterSnapshot) {
         final int expectedCols = w.staticCols() + w.dayCount() * DAY_SLOT_COLUMNS;
         final int[] attempts = {0};
         final Runnable[] job = new Runnable[1];
@@ -2005,7 +2015,9 @@ public final class DispatchInteractiveTabController {
                                         SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
                                 SpreadsheetTabularSupport.applyColumnFiltersWithDialog(
                                         wideSpreadsheet);
-                                                                SpreadsheetTabularSupport.applyFixedLeadingColumns(
+                                SpreadsheetMultiColumnFilterCoordinator.restoreColumnAllowedSnapshot(
+                                        wideSpreadsheet, columnFilterSnapshot);
+                                SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                         wideSpreadsheet, WIDE_STATIC_HEADERS.size());
                                 SpreadsheetTabularSupport.pinSpreadsheetFilterRow(wideSpreadsheet);
                                 SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(
@@ -2045,8 +2057,9 @@ public final class DispatchInteractiveTabController {
                     if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
                         return;
                     }
-                                        SpreadsheetTabularSupport.finalizeSpreadsheetPresentationAfterGridRebuild(
-                            wideSpreadsheet);
+                                        SpreadsheetTabularSupport
+                                                .finalizeSpreadsheetPresentationPreservingColumnFilters(
+                                                        wideSpreadsheet);
                     if (onComplete != null) {
                         onComplete.run();
                     } else {
@@ -2056,7 +2069,10 @@ public final class DispatchInteractiveTabController {
     }
 
     private void scheduleByDayLayoutAfterColumnSync(
-            ByDayGridBundle b, Runnable onComplete, int layoutGen) {
+            ByDayGridBundle b,
+            Runnable onComplete,
+            int layoutGen,
+            Map<Integer, Set<String>> columnFilterSnapshot) {
         final int expectedCols = b.staticCols() + b.dayCount() * DAY_SLOT_COLUMNS;
         final int[] attempts = {0};
         final Runnable[] job = new Runnable[1];
@@ -2079,7 +2095,9 @@ public final class DispatchInteractiveTabController {
                                         SpreadsheetTabularSupport.SPREADSHEET_FILTER_ROW);
                                 SpreadsheetTabularSupport.applyColumnFiltersWithDialog(
                                         byDaySpreadsheet);
-                                                                SpreadsheetTabularSupport.applyFixedLeadingColumns(
+                                SpreadsheetMultiColumnFilterCoordinator.restoreColumnAllowedSnapshot(
+                                        byDaySpreadsheet, columnFilterSnapshot);
+                                SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                         byDaySpreadsheet, BY_DAY_STATIC_HEADERS.size());
                                 SpreadsheetTabularSupport.pinSpreadsheetFilterRow(byDaySpreadsheet);
                                 SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(
@@ -2119,7 +2137,7 @@ public final class DispatchInteractiveTabController {
                     if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
                         return;
                     }
-                    SpreadsheetTabularSupport.finalizeSpreadsheetPresentationAfterGridRebuild(
+                    SpreadsheetTabularSupport.finalizeSpreadsheetPresentationPreservingColumnFilters(
                             byDaySpreadsheet);
                     if (onComplete != null) {
                         onComplete.run();
@@ -3023,29 +3041,39 @@ public final class DispatchInteractiveTabController {
                         dialog.initOwner(shell.primaryStageForDialogs());
                     }
                     dialog.setTitle("当日配台数量（段階3前）");
-                    String profileHint =
-                            Objects.toString(wr.getStatic("依頼NO"), "")
-                                    + " / "
-                                    + Objects.toString(wr.getStatic(ResultDispatchSchema.COL_MACHINE), "")
-                                    + " / "
-                                    + dateAxis.get(dateIdx);
+                    String profileHint = rollUnitProfileHint(wr, dateAxis.get(dateIdx));
+                    Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM unitInfo =
+                            resolveRollUnitForWideRow(wr);
+                    StringBuilder header = new StringBuilder(profileHint);
                     if (hasActual) {
-                        dialog.setHeaderText(
-                                profileHint
-                                        + "\n"
-                                        + LABEL_STAGE3_ACTUAL
-                                        + ResultDispatchNormalizer.formatQty(actualQ)
-                                        + "（固定・ドラッグ移動不可）");
-                        dialog.setContentText(LABEL_STAGE3_PLAN + "の値 (m):");
-                    } else {
-                        dialog.setHeaderText(profileHint);
-                        dialog.setContentText("数量 (m):");
+                        header.append('\n')
+                                .append(LABEL_STAGE3_ACTUAL)
+                                .append(ResultDispatchNormalizer.formatQty(actualQ))
+                                .append("（固定・ドラッグ移動不可）");
                     }
+                    header.append('\n')
+                            .append(
+                                    DispatchInteractiveRollUnitSupport.rollUnitDialogHeader(
+                                            Math.max(planQ, 0.0), unitInfo, null));
+                    dialog.setHeaderText(header.toString());
+                    dialog.setContentText(
+                            (hasActual ? LABEL_STAGE3_PLAN : "数量")
+                                    + " (m) — 配台ロール単位の整数倍のみ:");
                     Optional<String> ov = dialog.showAndWait();
                     ov.filter(s -> !s.isBlank())
+                            .flatMap(
+                                    s ->
+                                            DispatchInteractiveRollUnitSupport
+                                                    .parseRollAlignedTotalQuantity(
+                                                            shell != null
+                                                                    ? shell.primaryStageForDialogs()
+                                                                    : null,
+                                                            s,
+                                                            unitInfo,
+                                                            rollUnitProfileHint(
+                                                                    wr, dateAxis.get(dateIdx))))
                             .ifPresent(
-                                    s -> {
-                                        double newTotal = ResultDispatchNormalizer.parseDouble(s);
+                                    newTotal -> {
                                         ResultDispatchPivot.upsertAllocationForWideMerge(
                                                 doc.columns(),
                                                 doc.rows(),
@@ -3372,15 +3400,31 @@ public final class DispatchInteractiveTabController {
         if (fromRow == toIdx && fromDateIdx == targetDateIdx) {
             return false;
         }
-        Optional<Double> moved = pickMoveQuantity(shell != null ? shell.getPrimaryStage() : null, max);
+        if (fromRow < 0
+                || fromRow >= wideProfiles.size()
+                || fromRow >= wideRowItems.size()
+                || toIdx < 0
+                || toIdx >= wideProfiles.size()) {
+            return false;
+        }
+        WideRow fromWr = wideRowItems.get(fromRow);
+        Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM unitInfo =
+                resolveRollUnitForWideRow(fromWr);
+        String profileHint = rollUnitProfileHint(fromWr, dateAxis.get(fromDateIdx));
+        Optional<Double> moved =
+                DispatchInteractiveRollUnitSupport.pickRollAlignedMoveQuantity(
+                        shell != null ? shell.primaryStageForDialogs() : null,
+                        max,
+                        unitInfo,
+                        profileHint);
         if (moved.isEmpty()) {
             return false;
         }
         double amt = moved.get();
-        if (amt <= 1e-9 || amt > max + 1e-9) {
-            return false;
-        }
-        if (fromRow < 0 || fromRow >= wideProfiles.size() || toIdx < 0 || toIdx >= wideProfiles.size()) {
+        if (amt <= 1e-9
+                || amt > max + 1e-9
+                || !Stage2PlanRowDispatchQtyMetrics.isQtyAlignedToRollUnit(
+                        amt, unitInfo.unitM())) {
             return false;
         }
         Map<String, String> fromProfile = wideProfiles.get(fromRow);
@@ -3415,55 +3459,51 @@ public final class DispatchInteractiveTabController {
                 toSum + amt,
                 ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
         ResultDispatchNormalizer.normalizeInPlace(cols, doc.rows());
-        statusLabel.setText("moved");
+        statusLabel.setText(
+                "移動: "
+                        + ResultDispatchNormalizer.formatQty(amt)
+                        + " m（ロール単位 "
+                        + ResultDispatchNormalizer.formatQty(unitInfo.unitM())
+                        + " m）");
         rebuildGrids();
         markDispatchDocDirty();
         return true;
     }
 
-    private static Optional<Double> pickMoveQuantity(Window owner, double max) {
-        TextInputDialog dialog = new TextInputDialog(ResultDispatchNormalizer.formatQty(max));
-        dialog.initOwner(owner);
-        dialog.setTitle("Quantity");
-        dialog.setHeaderText("Amount to move (max " + ResultDispatchNormalizer.formatQty(max) + ")");
-        return dialog.showAndWait()
-                .map(ResultDispatchNormalizer::parseDouble)
-                .filter(v -> v > 0);
+    private Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM resolveRollUnitForWideRow(
+            WideRow wr) {
+        PlanInputTabController planInput =
+                shell != null ? shell.planInputTabControllerForDispatchRollUnit() : null;
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        return DispatchInteractiveRollUnitSupport.resolveUnitM(
+                wr.profileMap(), planInput, ui, rollUnitTablesCached());
     }
 
-    // #region agent log
-    private void logDispatchActualDoneForTaskId(String taskId, String location, String hypothesisId) {
-        if (shell == null || doc == null || taskId == null || taskId.isBlank()) {
-            return;
-        }
-        String tid = taskId.strip();
-        for (Map<String, String> row : doc.rows()) {
-            if (row == null) {
-                continue;
-            }
-            String rowTid = row.getOrDefault("依頼NO", "").strip();
-            if (!tid.equals(rowTid)) {
-                continue;
-            }
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put("taskId", tid);
-            data.put("process", row.getOrDefault(ResultDispatchSchema.COL_PROCESS, ""));
-            data.put("machine", row.getOrDefault(ResultDispatchSchema.COL_MACHINE, ""));
-            data.put("qtyConverted", row.getOrDefault("換算数量", ""));
-            data.put("actualDone", row.getOrDefault("実加工数", ""));
-            data.put("planTotal", row.getOrDefault("計画合計", ""));
-            data.put("jsonPath", AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv()).toString());
-            AgentDebugLog.appendStructured(
-                    shell.snapshotUiEnv(),
-                    "69e69b",
-                    hypothesisId,
-                    "DispatchInteractiveTabController." + location,
-                    "結果_配台表.json 行の実加工数（読込直後）",
-                    data);
-            break;
-        }
+    private Stage2RollUnitLengthTables rollUnitTablesCached() {
+        return cachedRollUnitTables.updateAndGet(
+                cur -> {
+                    if (cur != null) {
+                        return cur;
+                    }
+                    if (shell == null) {
+                        return Stage2RollUnitLengthTables.empty();
+                    }
+                    try {
+                        return Stage2RollUnitLengthTables.load(
+                                AppPaths.resolveRepoRoot(shell.snapshotUiEnv()));
+                    } catch (Exception ignored) {
+                        return Stage2RollUnitLengthTables.empty();
+                    }
+                });
     }
-    // #endregion
+
+    private static String rollUnitProfileHint(WideRow wr, LocalDate day) {
+        return Objects.toString(wr.getStatic("依頼NO"), "")
+                + " / "
+                + Objects.toString(wr.getStatic(ResultDispatchSchema.COL_MACHINE), "")
+                + " / "
+                + day;
+    }
 
     /** Mutable wide row (amounts indexed by {@link #dateAxis}). */
     public static final class WideRow {

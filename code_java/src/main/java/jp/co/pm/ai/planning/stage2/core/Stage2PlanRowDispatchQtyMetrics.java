@@ -58,6 +58,20 @@ public final class Stage2PlanRowDispatchQtyMetrics {
         return rollCountFromRemaining(row, remainingM, tables);
     }
 
+    /**
+     * 段階2 {@code build_task_queue_from_planning_df} が {@code unit_m = 配台使用残数量 / 配台ロール数} を使う経路か。
+     * このときは {@code _effective_roll_unit_m_for_dispatch_task_simulator} による実効化・(原反)ロール列の黄着色は行わない。
+     */
+    public static boolean stage2SimulatorUsesDispatchRollCountColumns(
+            Map<String, String> row, Stage2RollUnitLengthTables tables) {
+        if (row == null) {
+            return false;
+        }
+        double rem = planDispatchRemainingM(row, tables);
+        double rolls = planDispatchRollCount(row, rem, tables);
+        return rem > EPS && rolls > EPS;
+    }
+
     private static double computeDispatchRemainingFromFormula(
             Map<String, String> row, Stage2RollUnitLengthTables tables) {
         double qtyConv = Stage2RollUnitLengthTables.parseFloatSafe(row.get("換算数量"), 0.0);
@@ -128,4 +142,82 @@ public final class Stage2PlanRowDispatchQtyMetrics {
     }
 
     public record ResultTaskQtyStrings(String remainingM, String cumulativeDoneM, String completionPct) {}
+
+    /**
+     * 段階2 {@code build_task_queue_from_planning_df} の {@code unit_m}（配台ロール単位 m）に相当。
+     *
+     * <p>{@code dispatch_rolls > 0} かつ {@code dispatch_m > 0} のときは {@code dispatch_m / dispatch_rolls}
+     *（実効化しない）。それ以外は原反ロール長＋実効ロール化。
+     */
+    public record DispatchSimulatorUnitM(
+            double unitM, double dispatchQtyM, double dispatchRollCount, boolean fromDispatchRollColumns) {}
+
+    public static DispatchSimulatorUnitM dispatchSimulatorUnitMFromPlanRow(
+            Map<String, String> row, Stage2RollUnitLengthTables tables) {
+        if (row == null || row.isEmpty()) {
+            return new DispatchSimulatorUnitM(0.0, 0.0, 0.0, false);
+        }
+        Stage2RollUnitLengthTables t = tables != null ? tables : Stage2RollUnitLengthTables.empty();
+        double rem = planDispatchRemainingM(row, t);
+        double rolls = planDispatchRollCount(row, rem, t);
+        double qty = Math.max(0.0, rem);
+        if (rolls > EPS && qty > EPS) {
+            return new DispatchSimulatorUnitM(qty / rolls, qty, rolls, true);
+        }
+        double qtyConv = Stage2RollUnitLengthTables.parseFloatSafe(row.get("換算数量"), 0.0);
+        double actualDone = Stage2RollUnitLengthTables.parseFloatSafe(row.get("実加工数"), 0.0);
+        double doneM = Math.max(0.0, qtyConv - actualDone);
+        double qtyTotal = qty + doneM;
+        double fb = qtyTotal > EPS ? qtyTotal : (qty > EPS ? qty : 100.0);
+        double unit = rawRollUnitMFromPlanRow(row, fb, t);
+        if (qty > EPS && unit > EPS) {
+            unit = effectiveRollUnitMForDispatchTaskSimulator(qty, unit);
+        }
+        return new DispatchSimulatorUnitM(unit, qty, rolls, false);
+    }
+
+    /** Python {@code _effective_roll_unit_m_for_dispatch_task_simulator} に相当。 */
+    static double effectiveRollUnitMForDispatchTaskSimulator(double qtyM, double sheetRollUnitM) {
+        double q = qtyM;
+        double u = sheetRollUnitM;
+        if (q <= EPS || u <= EPS) {
+            return u > EPS ? u : 0.0;
+        }
+        double nRaw = q / u;
+        if (nRaw <= EPS) {
+            return u;
+        }
+        if (Math.abs(nRaw - Math.rint(nRaw)) <= 1e-9) {
+            return u;
+        }
+        int nWork = (int) Math.floor(nRaw);
+        if (nWork < 1) {
+            nWork = 1;
+        }
+        return q / (double) nWork;
+    }
+
+    /** 数量が配台ロール単位の整数倍か（0 は可）。 */
+    public static boolean isQtyAlignedToRollUnit(double qtyM, double unitM) {
+        if (qtyM <= EPS) {
+            return true;
+        }
+        if (unitM <= EPS) {
+            return false;
+        }
+        double n = qtyM / unitM;
+        return Math.abs(n - Math.rint(n)) <= 1e-6 * Math.max(1.0, Math.abs(n));
+    }
+
+    /** {@code maxM} を超えない最大のロール整数倍数量 (m)。 */
+    public static double largestRollMultipleNotExceeding(double maxM, double unitM) {
+        if (maxM <= EPS || unitM <= EPS) {
+            return 0.0;
+        }
+        int n = (int) Math.floor((maxM + 1e-9) / unitM);
+        if (n < 1) {
+            return 0.0;
+        }
+        return unitM * n;
+    }
 }

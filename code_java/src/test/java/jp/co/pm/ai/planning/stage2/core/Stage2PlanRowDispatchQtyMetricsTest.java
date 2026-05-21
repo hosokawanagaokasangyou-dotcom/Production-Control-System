@@ -107,6 +107,44 @@ class Stage2PlanRowDispatchQtyMetricsTest {
         assertEquals(100.0, m.get().qtyTotalForDispatchM(), 1e-9);
     }
 
+    @Test
+    void stage2UsesRollColumns_whenDerivedFromRawRollAndQty() {
+        Map<String, String> row = baseRow();
+        row.put("換算数量", "950");
+        row.put("未加工", "0");
+        row.put("実加工数", "0");
+        row.put("(原反)ロール単位長さ", "100");
+        assertTrue(
+                Stage2PlanRowDispatchQtyMetrics.stage2SimulatorUsesDispatchRollCountColumns(
+                        row, Stage2RollUnitLengthTables.empty()));
+    }
+
+    @Test
+    void stage2DoesNotUseRollColumns_whenRemainingOrRollsZero() {
+        Map<String, String> row = baseRow();
+        row.put("換算数量", "0");
+        row.put("未加工", "0");
+        row.put("実加工数", "0");
+        row.put("(原反)ロール単位長さ", "100");
+        assertTrue(
+                !Stage2PlanRowDispatchQtyMetrics.stage2SimulatorUsesDispatchRollCountColumns(
+                        row, Stage2RollUnitLengthTables.empty()));
+    }
+
+    @Test
+    void dispatchSimulatorUnitMUsesRemainingOverRollCount() {
+        Map<String, String> row = baseRow();
+        row.put("換算数量", "8000");
+        row.put("未加工", "8000");
+        row.put("配台使用残数量", "6000");
+        row.put("配台ロール数", "3");
+        Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM u =
+                Stage2PlanRowDispatchQtyMetrics.dispatchSimulatorUnitMFromPlanRow(
+                        row, Stage2RollUnitLengthTables.empty());
+        assertTrue(u.fromDispatchRollColumns());
+        assertEquals(2000.0, u.unitM(), 1e-6);
+    }
+
     private static Map<String, String> baseRow() {
         return new HashMap<>();
     }

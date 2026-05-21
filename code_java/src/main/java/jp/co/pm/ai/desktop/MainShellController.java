@@ -165,6 +165,7 @@ public final class MainShellController {
                     AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL,
                     AppPaths.KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH,
                     AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH,
+                    AppPaths.KEY_PM_AI_STAGE2_IN_PROGRESS_NEXT_DAY_DISPATCH_JSON,
                     "PM_AI_DEBUG_LOG");
 
     private static final String PREFIX_CHILD = "[child] ";
@@ -817,8 +818,8 @@ public final class MainShellController {
         }
         mainRunTabController.applyStage2WriteExcelFromSession(s.mainRunStage2WriteExcel());
         planInputTabController.applyStage2SkipTodayDispatchFromSession(s.mainRunStage2SkipTodayDispatch());
-        mainRunTabController.applyStage2SkipInProgressDispatchFromSession(
-                s.mainRunStage2SkipInProgressDispatch());
+        planInputTabController.applyStage2InProgressNextDayPromptFromSession(
+                s.planInputStage2InProgressNextDayPrompt());
         mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
         /*
          * 設備ガントの apply は末尾で Canvas を再構築し personBadgeStyleResolverForGantt を参照する。
@@ -914,7 +915,7 @@ public final class MainShellController {
                 mainRunTabController.snapshotStage2MemberSchedulePath(),
                 mainRunTabController.snapshotStage2WriteExcel(),
                 planInputTabController.snapshotStage2SkipTodayDispatch(),
-                mainRunTabController.snapshotStage2SkipInProgressDispatch(),
+                planInputTabController.snapshotStage2InProgressNextDayPrompt(),
                 mainRunTabController.snapshotStage2ResultBookFont(),
                 snapshotUiEnvRows(),
                 snapshotMainShellTabOrder(),
@@ -3291,9 +3292,7 @@ public final class MainShellController {
         try {
             Map<String, String> uiRun = collectUiEnv();
             if (STAGE1.equals(script)) {
-                uiRun.put(
-                        AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH,
-                        mainRunTabController.snapshotStage2SkipInProgressDispatch() ? "1" : "0");
+                uiRun.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
             }
             if (STAGE2.equals(script)) {
                 uiRun.put(
@@ -3302,9 +3301,8 @@ public final class MainShellController {
                 uiRun.put(
                         AppPaths.KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH,
                         planInputTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
-                uiRun.put(
-                        AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH,
-                        mainRunTabController.snapshotStage2SkipInProgressDispatch() ? "1" : "0");
+                uiRun.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
+                applyStage2InProgressNextDayDispatchEnv(uiRun);
                 String resultFont = mainRunTabController.snapshotStage2ResultBookFont();
                 if (resultFont != null && !resultFont.isBlank()) {
                     uiRun.put(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT, resultFont.trim());
@@ -4243,7 +4241,7 @@ public final class MainShellController {
      * Environment for {@code dispatch_interactive_trial.py}: same stage-2 overrides as {@link #runStage}:
      * {@link AppPaths#KEY_PM_AI_STAGE2_WRITE_EXCEL} and {@link AppPaths#KEY_PM_AI_RESULT_BOOK_FONT} from the run tab,
      * {@link AppPaths#KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH} from the plan-input tab, and
-     * {@link AppPaths#KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH} from the run tab.
+     * {@link AppPaths#KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH} は常に無効（加工途中はタスク入力タブで翌日配台量を設定）。
      */
     public Map<String, String> snapshotDispatchTrialPythonEnv() {
         Map<String, String> ui = new HashMap<>(collectUiEnv());
@@ -4253,9 +4251,8 @@ public final class MainShellController {
         ui.put(
                 AppPaths.KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH,
                 planInputTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
-        ui.put(
-                AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH,
-                mainRunTabController.snapshotStage2SkipInProgressDispatch() ? "1" : "0");
+        ui.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
+        applyStage2InProgressNextDayDispatchEnv(ui);
         String resultFont = mainRunTabController.snapshotStage2ResultBookFont();
         if (resultFont != null && !resultFont.isBlank()) {
             ui.put(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT, resultFont.trim());
@@ -4304,7 +4301,49 @@ public final class MainShellController {
                     "[stage2] 配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
             return;
         }
+        if (planInputTabController != null
+                && planInputTabController.snapshotStage2InProgressNextDayPrompt()) {
+            var inProgress = planInputTabController.collectInProgressRowsForNextDayDialog();
+            if (!inProgress.isEmpty()) {
+                var entries =
+                        jp.co.pm.ai.desktop.ui.Stage2InProgressNextDayDispatchDialog.prompt(
+                                primaryStage, inProgress);
+                if (entries.isEmpty()) {
+                    appendLog("[stage2] 加工途中の翌日配台量設定をキャンセルしました。");
+                    return;
+                }
+                try {
+                    java.nio.file.Path jsonPath =
+                            jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo
+                                    .defaultCachePath(collectUiEnv());
+                    jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo.write(
+                            jsonPath, entries.get());
+                    pendingStage2InProgressNextDayJsonPath = jsonPath.toAbsolutePath().normalize();
+                } catch (Exception ex) {
+                    appendLog("[stage2] 翌日配台量 JSON の保存に失敗: " + ex.getMessage());
+                    return;
+                }
+            } else {
+                pendingStage2InProgressNextDayJsonPath = null;
+            }
+        } else {
+            pendingStage2InProgressNextDayJsonPath = null;
+        }
         runStage(STAGE2);
+    }
+
+    /** 直前の段階2ダイアログで確定した JSON。{@link #runStage} の段階2のみで子プロセスへ渡す。 */
+    private java.nio.file.Path pendingStage2InProgressNextDayJsonPath;
+
+    private void applyStage2InProgressNextDayDispatchEnv(Map<String, String> ui) {
+        java.nio.file.Path p = pendingStage2InProgressNextDayJsonPath;
+        if (p != null && java.nio.file.Files.isRegularFile(p)) {
+            ui.put(AppPaths.KEY_PM_AI_STAGE2_IN_PROGRESS_NEXT_DAY_DISPATCH_JSON, p.toString());
+        } else {
+            ui.remove(AppPaths.KEY_PM_AI_STAGE2_IN_PROGRESS_NEXT_DAY_DISPATCH_JSON);
+            jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo.deleteIfExists(
+                    jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo.defaultCachePath(ui));
+        }
     }
 
     /**
@@ -4329,6 +4368,11 @@ public final class MainShellController {
         if (planInputTabController != null) {
             planInputTabController.invalidateRollUnitHighlightCacheAndRefresh();
         }
+    }
+
+    /** 配台計画手動修正タブの配台ロール単位 (m) 解決用。未初期化時は {@code null}。 */
+    PlanInputTabController planInputTabControllerForDispatchRollUnit() {
+        return planInputTabController;
     }
 
     /**

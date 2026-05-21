@@ -4,8 +4,10 @@ import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -50,12 +52,15 @@ import jp.co.pm.ai.desktop.ui.SpreadsheetPlanInputRowDragSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
+import jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo;
+import jp.co.pm.ai.planning.stage2.core.Stage2PlanRowDispatchQtyMetrics;
 import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
+import jp.co.pm.ai.desktop.ui.Stage2InProgressNextDayDispatchDialog;
 
 /**
  * 配台計画_タスク入力タブ。レイアウトは {@code PlanInputTab.fxml}。
  *
- * <p>段階2の「当日は配台しない」オプション（{@code PM_AI_STAGE2_SKIP_TODAY_DISPATCH}）のチェックボックスは本タブに配置する。
+ * <p>段階2の「当日は配台しない」オプション（{@code PM_AI_STAGE2_SKIP_TODAY_DISPATCH}）および加工途中の翌日配台量設定は本タブに配置する。
  *
  * <p>ControlsFX {@link SpreadsheetView} で先頭固定列をネイティブに扱う。
  */
@@ -106,6 +111,9 @@ public final class PlanInputTabController {
 
     @FXML
     private CheckBox stage2SkipTodayDispatchCheckBox;
+
+    @FXML
+    private CheckBox stage2InProgressNextDayPromptCheckBox;
 
     @FXML
     private HBox columnStripHost;
@@ -163,6 +171,17 @@ public final class PlanInputTabController {
         installStageRunButtonDepth(stage2RunButton, Color.rgb(194, 65, 12, 0.35));
         if (stage2SkipTodayDispatchCheckBox != null) {
             stage2SkipTodayDispatchCheckBox
+                    .selectedProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (shell != null) {
+                                    shell.scheduleDesktopSessionSave();
+                                }
+                            });
+        }
+        if (stage2InProgressNextDayPromptCheckBox != null) {
+            stage2InProgressNextDayPromptCheckBox.setSelected(true);
+            stage2InProgressNextDayPromptCheckBox
                     .selectedProperty()
                     .addListener(
                             (o, a, b) -> {
@@ -368,6 +387,126 @@ public final class PlanInputTabController {
         if (stage2SkipTodayDispatchCheckBox != null) {
             stage2SkipTodayDispatchCheckBox.setSelected(skipToday);
         }
+    }
+
+    boolean snapshotStage2InProgressNextDayPrompt() {
+        return stage2InProgressNextDayPromptCheckBox == null
+                || stage2InProgressNextDayPromptCheckBox.isSelected();
+    }
+
+    void applyStage2InProgressNextDayPromptFromSession(boolean prompt) {
+        if (stage2InProgressNextDayPromptCheckBox != null) {
+            stage2InProgressNextDayPromptCheckBox.setSelected(prompt);
+        }
+    }
+
+    /**
+     * 段階2直前ダイアログ用: 実加工数が正の行（加工途中相当）。配台計画除外・完了キーワード行は除く。
+     */
+    List<Stage2InProgressNextDayDispatchDialog.Row> collectInProgressRowsForNextDayDialog() {
+        Map<String, String> rowMap = new java.util.LinkedHashMap<>();
+        int colTask = headersRef.indexOf("依頼NO");
+        int colProcess = headersRef.indexOf("工程名");
+        int colMachine = headersRef.indexOf("機械名");
+        Stage2RollUnitLengthTables tables = cachedRollUnitHighlightTables.get();
+        if (tables == null && shell != null) {
+            try {
+                tables = Stage2RollUnitLengthTables.load(AppPaths.resolveRepoRoot(shell.snapshotUiEnv()));
+                cachedRollUnitHighlightTables.set(tables);
+            } catch (Exception ignored) {
+                tables = Stage2RollUnitLengthTables.empty();
+            }
+        }
+        if (tables == null) {
+            tables = Stage2RollUnitLengthTables.empty();
+        }
+        List<Stage2InProgressNextDayDispatchDialog.Row> out = new ArrayList<>();
+        for (ObservableList<String> cells : rows) {
+            rowMap.clear();
+            for (int c = 0; c < headersRef.size(); c++) {
+                String h = headersRef.get(c);
+                String v = c < cells.size() && cells.get(c) != null ? cells.get(c) : "";
+                rowMap.put(h, v);
+            }
+            if (isPlanRowExcludedFromStage2Queue(rowMap)) {
+                continue;
+            }
+            double actual =
+                    Stage2RollUnitLengthTables.parseFloatSafe(rowMap.getOrDefault("実加工数", ""), 0.0);
+            if (actual <= 1e-12) {
+                continue;
+            }
+            String taskId = colTask >= 0 ? cellAt(cells, colTask) : rowMap.getOrDefault("依頼NO", "");
+            String process = colProcess >= 0 ? cellAt(cells, colProcess) : rowMap.getOrDefault("工程名", "");
+            String machine = colMachine >= 0 ? cellAt(cells, colMachine) : rowMap.getOrDefault("機械名", "");
+            if (taskId.isBlank()) {
+                continue;
+            }
+            double defaultNext =
+                    Stage2PlanRowDispatchQtyMetrics.compute(rowMap, tables)
+                            .map(Stage2PlanRowDispatchQtyMetrics.Metrics::remainingM)
+                            .orElse(0.0);
+            out.add(
+                    new Stage2InProgressNextDayDispatchDialog.Row(
+                            taskId, process, machine, actual, defaultNext, defaultNext));
+        }
+        return out;
+    }
+
+    private static String cellAt(ObservableList<String> cells, int col) {
+        if (col < 0 || col >= cells.size()) {
+            return "";
+        }
+        String v = cells.get(col);
+        return v != null ? v.strip() : "";
+    }
+
+    /**
+     * 依頼NO・工程名・機械名が一致する配台計画行（先頭一致）。手動修正タブの配台ロール単位解決用。
+     */
+    public Optional<Map<String, String>> findPlanRowMapByKeys(
+            String taskId, String process, String machine) {
+        String tid = taskId != null ? taskId.strip() : "";
+        if (tid.isEmpty() || headersRef.isEmpty()) {
+            return Optional.empty();
+        }
+        String proc = process != null ? process.strip() : "";
+        String mach = machine != null ? machine.strip() : "";
+        int colTask = headersRef.indexOf("依頼NO");
+        int colProcess = headersRef.indexOf("工程名");
+        int colMachine = headersRef.indexOf("機械名");
+        for (ObservableList<String> cells : rows) {
+            String rowTid = colTask >= 0 ? cellAt(cells, colTask) : "";
+            if (!tid.equals(rowTid)) {
+                continue;
+            }
+            String rowProc = colProcess >= 0 ? cellAt(cells, colProcess) : "";
+            String rowMach = colMachine >= 0 ? cellAt(cells, colMachine) : "";
+            if (!proc.equals(rowProc) || !mach.equals(rowMach)) {
+                continue;
+            }
+            LinkedHashMap<String, String> row = new LinkedHashMap<>();
+            for (int c = 0; c < headersRef.size(); c++) {
+                row.put(headersRef.get(c), cellAt(cells, c));
+            }
+            return Optional.of(row);
+        }
+        return Optional.empty();
+    }
+
+    private static boolean isPlanRowExcludedFromStage2Queue(Map<String, String> row) {
+        String ex = row.getOrDefault("配台不要", "");
+        if (ex.contains("配台計画除外")) {
+            return true;
+        }
+        String status = row.getOrDefault("ステータス", "");
+        if (status != null) {
+            String s = status.strip();
+            if (s.contains("完了") || s.equalsIgnoreCase("done") || s.equalsIgnoreCase("complete")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @FXML
