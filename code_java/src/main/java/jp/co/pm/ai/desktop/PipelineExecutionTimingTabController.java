@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import javafx.application.Platform;
@@ -23,11 +24,13 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
-import javafx.scene.control.TabPane;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
+import javafx.scene.control.ToggleButton;
+import javafx.scene.control.ToggleGroup;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.PipelineExecutionTimingHistoryStore.Stats;
 
 /**
  * パイプライン実行時間のトレンド・分布（ヒストグラム）を表示するメインシェルタブ。
@@ -38,14 +41,14 @@ public final class PipelineExecutionTimingTabController {
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
 
     /** トレンドで全種別を重ね表示するときのコンボ選択肢。 */
-    private static final String KIND_FILTER_ALL = "（すべて・トレンド重ね）";
+    private static final String KIND_FILTER_ALL = "すべて（重ね表示）";
 
     private MainShellController shell;
 
     private final Runnable historyChangeListener = () -> Platform.runLater(this::refreshFromStore);
 
     @FXML
-    private Label hintLabel;
+    private Label storageDetailLabel;
 
     @FXML
     private ComboBox<String> kindFilterCombo;
@@ -60,10 +63,37 @@ public final class PipelineExecutionTimingTabController {
     private Button clearHistoryButton;
 
     @FXML
-    private Label statsLabel;
+    private TableView<StatsRow> statsTable;
 
     @FXML
-    private TabPane chartTabPane;
+    private TableColumn<StatsRow, String> statsKindColumn;
+
+    @FXML
+    private TableColumn<StatsRow, String> statsCountColumn;
+
+    @FXML
+    private TableColumn<StatsRow, String> statsAvgColumn;
+
+    @FXML
+    private TableColumn<StatsRow, String> statsMedianColumn;
+
+    @FXML
+    private TableColumn<StatsRow, String> statsMinColumn;
+
+    @FXML
+    private TableColumn<StatsRow, String> statsMaxColumn;
+
+    @FXML
+    private TableColumn<StatsRow, String> statsStdDevColumn;
+
+    @FXML
+    private ToggleGroup chartViewToggleGroup;
+
+    @FXML
+    private ToggleButton trendViewToggle;
+
+    @FXML
+    private ToggleButton distributionViewToggle;
 
     @FXML
     private LineChart<Number, Number> trendChart;
@@ -107,6 +137,10 @@ public final class PipelineExecutionTimingTabController {
                 new SpinnerValueFactory.IntegerSpinnerValueFactory(10, 500, 100, 10));
         sampleLimitSpinner.valueProperty().addListener((o, a, b) -> refreshFromStore());
 
+        bindStatsColumns();
+        statsTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        historyTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+
         historyTimeColumn.setCellValueFactory(
                 cd -> new ReadOnlyStringWrapper(cd.getValue().finishedAtText()));
         historyKindColumn.setCellValueFactory(
@@ -116,11 +150,44 @@ public final class PipelineExecutionTimingTabController {
         historyWriterColumn.setCellValueFactory(
                 cd -> new ReadOnlyStringWrapper(cd.getValue().writerText()));
 
+        chartViewToggleGroup
+                .selectedToggleProperty()
+                .addListener((o, a, b) -> applyChartViewVisibility());
+
         for (PipelineExecutionTimingKind kind : PipelineExecutionTimingKind.values()) {
             XYChart.Series<Number, Number> series = new XYChart.Series<>();
             series.setName(kind.label());
             trendSeriesByKind.put(kind, series);
             trendChart.getData().add(series);
+        }
+        applyChartViewVisibility();
+    }
+
+    private void bindStatsColumns() {
+        statsKindColumn.setCellValueFactory(cd -> new ReadOnlyStringWrapper(cd.getValue().kindLabel()));
+        statsCountColumn.setCellValueFactory(cd -> new ReadOnlyStringWrapper(cd.getValue().countText()));
+        statsAvgColumn.setCellValueFactory(cd -> new ReadOnlyStringWrapper(cd.getValue().avgText()));
+        statsMedianColumn.setCellValueFactory(cd -> new ReadOnlyStringWrapper(cd.getValue().medianText()));
+        statsMinColumn.setCellValueFactory(cd -> new ReadOnlyStringWrapper(cd.getValue().minText()));
+        statsMaxColumn.setCellValueFactory(cd -> new ReadOnlyStringWrapper(cd.getValue().maxText()));
+        statsStdDevColumn.setCellValueFactory(cd -> new ReadOnlyStringWrapper(cd.getValue().stdDevText()));
+        statsCountColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+        statsAvgColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+        statsMedianColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+        statsMinColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+        statsMaxColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+        statsStdDevColumn.setStyle("-fx-alignment: CENTER-RIGHT;");
+    }
+
+    private void applyChartViewVisibility() {
+        boolean trend = trendViewToggle != null && trendViewToggle.isSelected();
+        if (trendChart != null) {
+            trendChart.setVisible(trend);
+            trendChart.setManaged(trend);
+        }
+        if (distributionChart != null) {
+            distributionChart.setVisible(!trend);
+            distributionChart.setManaged(!trend);
         }
     }
 
@@ -170,29 +237,8 @@ public final class PipelineExecutionTimingTabController {
         if (shell == null) {
             return;
         }
-        if (hintLabel != null) {
-            PipelineExecutionTimingHistoryStore store = shell.pipelineExecutionTimingHistory();
-            String lockHint =
-                    store.isPersistLocked()
-                            ? store.readPersistLockInfo()
-                                    .map(
-                                            info ->
-                                                    " 他端末が保存中: "
-                                                            + info.displayHost()
-                                                            + " / "
-                                                            + info.displayIp())
-                                    .orElse(" 他端末が保存中")
-                            : "";
-            hintLabel.setText(
-                    "段階1～3・サマリ Excel・納期管理ビューの実行時間を記録します。"
-                            + " 履歴ファイルはサマリ Excel（"
-                            + AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK
-                            + "）と同一フォルダに保存されます（保存前に .save.lock で排他）。"
-                            + lockHint
-                            + " ファイル: "
-                            + store.storagePath());
-        }
         PipelineExecutionTimingHistoryStore store = shell.pipelineExecutionTimingHistory();
+        refreshStorageDetail(store);
         int limit = sampleLimitSpinner.getValue() != null ? sampleLimitSpinner.getValue() : 100;
         PipelineExecutionTimingKind selectedKind = selectedKindOrNull();
 
@@ -203,7 +249,31 @@ public final class PipelineExecutionTimingTabController {
         refreshHistoryTable(tableSamples);
         refreshTrendChart(store, selectedKind, limit);
         refreshDistributionChart(selectedKind, limit, tableSamples);
-        refreshStatsLabel(tableSamples);
+        refreshStatsTable(selectedKind, limit);
+    }
+
+    private void refreshStorageDetail(PipelineExecutionTimingHistoryStore store) {
+        if (storageDetailLabel == null) {
+            return;
+        }
+        String lockLine =
+                store.isPersistLocked()
+                        ? store.readPersistLockInfo()
+                                .map(
+                                        info ->
+                                                "他端末が保存中: "
+                                                        + info.displayHost()
+                                                        + " / "
+                                                        + info.displayIp())
+                                .orElse("他端末が保存中")
+                        : "ロック: なし";
+        storageDetailLabel.setText(
+                "履歴 JSON はサマリ Excel（"
+                        + AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK
+                        + "）と同一フォルダに保存されます。保存前に .save.lock で排他します。\n"
+                        + lockLine
+                        + "\n"
+                        + store.storagePath());
     }
 
     private PipelineExecutionTimingKind selectedKindOrNull() {
@@ -280,33 +350,53 @@ public final class PipelineExecutionTimingTabController {
         distributionChart.setTitle(selectedKind.label() + " の分布（" + samples.size() + " 件）");
     }
 
-    private void refreshStatsLabel(List<PipelineExecutionTimingSample> samples) {
-        PipelineExecutionTimingKind selectedKind = selectedKindOrNull();
+    private void refreshStatsTable(PipelineExecutionTimingKind selectedKind, int limit) {
+        List<StatsRow> rows = new ArrayList<>();
         if (selectedKind == null) {
-            Map<PipelineExecutionTimingKind, PipelineExecutionTimingHistoryStore.Stats> byKind =
-                    new LinkedHashMap<>();
-            int limit = sampleLimitSpinner.getValue() != null ? sampleLimitSpinner.getValue() : 100;
             for (PipelineExecutionTimingKind kind : PipelineExecutionTimingKind.values()) {
                 List<PipelineExecutionTimingSample> kindSamples =
                         shell.pipelineExecutionTimingHistory().recentSamplesForKind(kind, limit);
-                byKind.put(kind, PipelineExecutionTimingHistoryStore.computeStats(kindSamples));
+                rows.add(StatsRow.from(kind.label(), PipelineExecutionTimingHistoryStore.computeStats(kindSamples)));
             }
-            StringBuilder sb = new StringBuilder();
-            for (Map.Entry<PipelineExecutionTimingKind, PipelineExecutionTimingHistoryStore.Stats> e :
-                    byKind.entrySet()) {
-                if (sb.length() > 0) {
-                    sb.append('\n');
-                }
-                sb.append(e.getKey().label())
-                        .append(": ")
-                        .append(e.getValue().summaryJa());
-            }
-            statsLabel.setText(sb.toString());
-            return;
+        } else {
+            List<PipelineExecutionTimingSample> samples =
+                    shell.pipelineExecutionTimingHistory().recentSamplesForKind(selectedKind, limit);
+            rows.add(
+                    StatsRow.from(
+                            selectedKind.label(),
+                            PipelineExecutionTimingHistoryStore.computeStats(samples)));
         }
-        statsLabel.setText(PipelineExecutionTimingHistoryStore.computeStats(samples).summaryJa());
+        statsTable.setItems(FXCollections.observableArrayList(rows));
     }
 
     private record HistoryRow(
             String finishedAtText, String kindLabel, String durationText, String writerText) {}
+
+    private record StatsRow(
+            String kindLabel,
+            String countText,
+            String avgText,
+            String medianText,
+            String minText,
+            String maxText,
+            String stdDevText) {
+
+        static StatsRow from(String kindLabel, Stats stats) {
+            if (stats.count() <= 0L) {
+                return new StatsRow(kindLabel, "—", "—", "—", "—", "—", "—");
+            }
+            return new StatsRow(
+                    kindLabel,
+                    Long.toString(stats.count()),
+                    formatSec(stats.avgSec()),
+                    formatSec(stats.medianSec()),
+                    formatSec(stats.minSec()),
+                    formatSec(stats.maxSec()),
+                    formatSec(stats.stdDevSec()));
+        }
+
+        private static String formatSec(double sec) {
+            return String.format(Locale.ROOT, "%.2f", sec);
+        }
+    }
 }

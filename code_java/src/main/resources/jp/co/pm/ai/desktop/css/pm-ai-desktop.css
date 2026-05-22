@@ -193,11 +193,53 @@
 
 .pm-pipeline-timing-tab .label.pm-pipeline-timing-hint {
     -fx-text-fill: -fx-mid-text-color;
+    -fx-font-size: 12px;
 }
 
-.pm-pipeline-timing-tab .label.pm-pipeline-timing-stats {
-    -fx-font-family: "Consolas", "Cascadia Mono", monospace;
+.pm-pipeline-timing-tab .pm-pipeline-timing-toolbar {
+    -fx-padding: 4 0 0 0;
+}
+
+.pm-pipeline-timing-tab .pm-pipeline-timing-stats-section {
+    -fx-padding: 0;
+}
+
+.pm-pipeline-timing-tab .label.pm-pipeline-timing-stats-heading {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
     -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-pipeline-timing-tab .table-view.pm-pipeline-timing-stats-table {
+    -fx-pref-height: 158;
+}
+
+.pm-pipeline-timing-tab .table-view .table-row-cell .table-cell {
+    -fx-font-family: "Consolas", "Cascadia Mono", monospace;
+    -fx-font-size: 12px;
+}
+
+.pm-pipeline-timing-tab .pm-pipeline-timing-storage-pane > .title {
+    -fx-font-size: 12px;
+}
+
+.pm-pipeline-timing-tab .label.pm-pipeline-timing-storage-detail {
+    -fx-font-family: "Consolas", "Cascadia Mono", monospace;
+    -fx-font-size: 11px;
+    -fx-text-fill: -fx-mid-text-color;
+    -fx-padding: 0 4 4 4;
+}
+
+.pm-pipeline-timing-tab .pm-pipeline-timing-chart-toolbar {
+    -fx-padding: 0 0 4 0;
+}
+
+.pm-pipeline-timing-tab .pm-pipeline-timing-chart-toolbar .toggle-button {
+    -fx-min-width: 120;
+}
+
+.pm-pipeline-timing-tab .split-pane > .split-pane-divider {
+    -fx-padding: 2 0 2 0;
 }
 
 .pm-run-tab .label.pm-run-timing-value {

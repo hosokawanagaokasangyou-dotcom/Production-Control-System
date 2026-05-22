@@ -9,75 +9,99 @@
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.Spinner?>
-<?import javafx.scene.control.Tab?>
-<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.SplitPane?>
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TitledPane?>
+<?import javafx.scene.control.ToggleButton?>
+<?import javafx.scene.control.ToggleGroup?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
 <BorderPane styleClass="pm-pipeline-timing-tab" xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="jp.co.pm.ai.desktop.PipelineExecutionTimingTabController">
     <padding>
-        <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+        <Insets bottom="10.0" left="12.0" right="12.0" top="10.0"/>
     </padding>
     <top>
-        <VBox fillWidth="true" spacing="8.0">
-            <Label styleClass="pm-section-title" text="実行時間のトレンドと分布"/>
+        <VBox fillWidth="true" spacing="10.0">
+            <Label styleClass="pm-section-title" text="実行時間分析"/>
             <Label fx:id="hintLabel" styleClass="pm-pipeline-timing-hint" wrapText="true"
-                   text="段階1～3・サマリ Excel・納期管理ビューの実行時間を記録します。"/>
-            <HBox alignment="CENTER_LEFT" spacing="12.0">
+                   text="段階1～3・サマリ Excel・納期管理ビューの所要時間を記録・表示します。"/>
+            <HBox alignment="CENTER_LEFT" spacing="12.0" styleClass="pm-pipeline-timing-toolbar">
                 <Label text="対象"/>
-                <ComboBox fx:id="kindFilterCombo" prefWidth="200.0"/>
+                <ComboBox fx:id="kindFilterCombo" prefWidth="220.0"/>
                 <Label text="表示件数"/>
                 <Spinner fx:id="sampleLimitSpinner" editable="true" prefWidth="88.0"/>
                 <Button fx:id="refreshChartsButton" mnemonicParsing="false" onAction="#onRefreshChartsAction" text="再描画"/>
                 <Button fx:id="clearHistoryButton" mnemonicParsing="false" onAction="#onClearHistoryAction" text="履歴をクリア"/>
             </HBox>
-            <Label fx:id="statsLabel" styleClass="pm-pipeline-timing-stats" wrapText="true" text="—"/>
+            <VBox spacing="4.0" styleClass="pm-pipeline-timing-stats-section">
+                <Label styleClass="pm-pipeline-timing-stats-heading" text="集計（表示件数内）"/>
+                <TableView fx:id="statsTable" fixedCellSize="26.0" maxHeight="180.0" prefHeight="158.0"
+                           styleClass="pm-pipeline-timing-stats-table">
+                    <columns>
+                        <TableColumn fx:id="statsKindColumn" prefWidth="128.0" text="処理"/>
+                        <TableColumn fx:id="statsCountColumn" prefWidth="52.0" text="件数"/>
+                        <TableColumn fx:id="statsAvgColumn" prefWidth="72.0" text="平均(秒)"/>
+                        <TableColumn fx:id="statsMedianColumn" prefWidth="72.0" text="中央値"/>
+                        <TableColumn fx:id="statsMinColumn" prefWidth="64.0" text="最小"/>
+                        <TableColumn fx:id="statsMaxColumn" prefWidth="64.0" text="最大"/>
+                        <TableColumn fx:id="statsStdDevColumn" prefWidth="72.0" text="標準偏差"/>
+                    </columns>
+                </TableView>
+            </VBox>
+            <TitledPane animated="true" expanded="false" styleClass="pm-pipeline-timing-storage-pane" text="保存先・ロック状態">
+                <Label fx:id="storageDetailLabel" styleClass="pm-pipeline-timing-storage-detail" wrapText="true" text="—"/>
+            </TitledPane>
         </VBox>
     </top>
     <center>
-        <TabPane fx:id="chartTabPane" tabClosingPolicy="UNAVAILABLE" BorderPane.alignment="CENTER">
-            <tabs>
-                <Tab text="トレンド">
-                    <LineChart fx:id="trendChart" animated="false" createSymbols="true" legendVisible="true" minHeight="280.0">
-                        <xAxis>
-                            <NumberAxis animated="false" autoRanging="true" label="実行回（古→新）" minorTickVisible="false"/>
-                        </xAxis>
-                        <yAxis>
-                            <NumberAxis animated="false" autoRanging="true" label="秒" minorTickVisible="false"/>
-                        </yAxis>
-                    </LineChart>
-                </Tab>
-                <Tab text="分布（ヒストグラム）">
-                    <BarChart fx:id="distributionChart" animated="false" legendVisible="false" minHeight="280.0">
-                        <xAxis>
-                            <CategoryAxis animated="false" label="所要時間の区間"/>
-                        </xAxis>
-                        <yAxis>
-                            <NumberAxis animated="false" autoRanging="true" label="件数" minorTickVisible="false"/>
-                        </yAxis>
-                    </BarChart>
-                </Tab>
-            </tabs>
-        </TabPane>
+        <SplitPane fx:id="mainSplit" dividerPositions="0.62" orientation="VERTICAL" BorderPane.alignment="CENTER">
+            <items>
+                <VBox spacing="8.0">
+                    <HBox alignment="CENTER_LEFT" spacing="6.0" styleClass="pm-pipeline-timing-chart-toolbar">
+                        <ToggleGroup fx:id="chartViewToggleGroup"/>
+                        <ToggleButton fx:id="trendViewToggle" mnemonicParsing="false" selected="true"
+                                      text="トレンド" toggleGroup="$chartViewToggleGroup"/>
+                        <ToggleButton fx:id="distributionViewToggle" mnemonicParsing="false"
+                                      text="分布（ヒストグラム）" toggleGroup="$chartViewToggleGroup"/>
+                    </HBox>
+                    <StackPane fx:id="chartStack" VBox.vgrow="ALWAYS">
+                        <LineChart fx:id="trendChart" animated="false" createSymbols="true" legendVisible="true"
+                                   minHeight="220.0" prefHeight="320.0">
+                            <xAxis>
+                                <NumberAxis animated="false" autoRanging="true" label="実行回（古→新）" minorTickVisible="false"/>
+                            </xAxis>
+                            <yAxis>
+                                <NumberAxis animated="false" autoRanging="true" label="秒" minorTickVisible="false"/>
+                            </yAxis>
+                        </LineChart>
+                        <BarChart fx:id="distributionChart" animated="false" legendVisible="false"
+                                  minHeight="220.0" prefHeight="320.0" visible="false" managed="false">
+                            <xAxis>
+                                <CategoryAxis animated="false" label="所要時間の区間"/>
+                            </xAxis>
+                            <yAxis>
+                                <NumberAxis animated="false" autoRanging="true" label="件数" minorTickVisible="false"/>
+                            </yAxis>
+                        </BarChart>
+                    </StackPane>
+                </VBox>
+                <VBox spacing="6.0">
+                    <Label styleClass="pm-section-title" text="直近の計測"/>
+                    <TableView fx:id="historyTable" minHeight="120.0" prefHeight="200.0" VBox.vgrow="ALWAYS">
+                        <columns>
+                            <TableColumn fx:id="historyTimeColumn" prefWidth="168.0" text="日時"/>
+                            <TableColumn fx:id="historyKindColumn" prefWidth="140.0" text="処理"/>
+                            <TableColumn fx:id="historyDurationColumn" prefWidth="120.0" text="所要時間"/>
+                            <TableColumn fx:id="historyWriterColumn" prefWidth="200.0" text="記録端末（IP）"/>
+                        </columns>
+                    </TableView>
+                </VBox>
+            </items>
+        </SplitPane>
     </center>
-    <bottom>
-        <VBox spacing="6.0" BorderPane.alignment="CENTER">
-            <BorderPane.margin>
-                <Insets top="12.0"/>
-            </BorderPane.margin>
-            <Label styleClass="pm-section-title" text="直近の計測"/>
-            <TableView fx:id="historyTable" prefHeight="180.0" VBox.vgrow="SOMETIMES">
-                <columns>
-                    <TableColumn fx:id="historyTimeColumn" prefWidth="168.0" text="日時"/>
-                    <TableColumn fx:id="historyKindColumn" prefWidth="140.0" text="処理"/>
-                    <TableColumn fx:id="historyDurationColumn" prefWidth="120.0" text="所要時間"/>
-                    <TableColumn fx:id="historyWriterColumn" prefWidth="180.0" text="記録端末（IP）"/>
-                </columns>
-            </TableView>
-        </VBox>
-    </bottom>
 </BorderPane>
