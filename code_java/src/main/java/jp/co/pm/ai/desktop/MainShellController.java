@@ -3429,6 +3429,27 @@ public final class MainShellController {
                                 + java.nio.file.Files.isRegularFile(corePy)
                                 + " path="
                                 + corePy.toAbsolutePath().normalize());
+                try {
+                    if (java.nio.file.Files.isRegularFile(corePy)) {
+                        String coreText =
+                                java.nio.file.Files.readString(
+                                        corePy, java.nio.charset.StandardCharsets.UTF_8);
+                        boolean newMaterialTableAppend =
+                                coreText.contains("材料テーブルへ追記し製品厚みは空欄で出力")
+                                        || coreText.contains("_STAGE1_MATERIAL_TABLE_APPEND_BUILD");
+                        appendLog(
+                                "[stage1] planning_core 材料テーブル追記仕様="
+                                        + (newMaterialTableAppend ? "新（空欄追記・行は残す）" : "旧（要 code/python 更新）"));
+                        if (!newMaterialTableAppend) {
+                            appendLog(
+                                    "[stage1] 警告: 同梱 pm-ai-data 等の古い _core.py です。"
+                                            + "英字開始の製品名は plan_input_tasks から除外され、材料テーブルにも追記されません。"
+                                            + "環境変数 PM_AI_CODE_PYTHON_DIR をリポジトリの code\\python に設定し、JavaFX を再ビルドしてください。");
+                        }
+                    }
+                } catch (IOException ioEx) {
+                    appendLog("[stage1] planning_core/_core.py 読取失敗: " + ioEx.getMessage());
+                }
             }
             appendStageChildResolvedEnvForRun(script, childEnv);
             if (STAGE1.equals(script)) {
@@ -3483,6 +3504,15 @@ public final class MainShellController {
                                     IpcStdoutTap.handleLine(payload, this::appendLog);
                                 } else {
                                     appendLog(line);
+                                    if (STAGE1.equals(script)
+                                            && line.contains("製品厚みを決定できずスキップ")) {
+                                        appendLog(
+                                                "[stage1] 古い planning_core を実行中: 英字開始製品はタスク行ごとスキップされます。"
+                                                        + " PM_AI_CODE_PYTHON_DIR="
+                                                        + childEnv.getOrDefault(
+                                                                AppPaths.KEY_PM_AI_CODE_PYTHON_DIR,
+                                                                "（未設定）"));
+                                    }
                                 }
                             },
                             ex -> appendLog("[error] " + ex.getMessage()),
