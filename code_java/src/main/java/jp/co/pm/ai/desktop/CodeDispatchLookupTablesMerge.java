@@ -181,10 +181,7 @@ public final class CodeDispatchLookupTablesMerge {
                     continue;
                 }
                 double t = Stage2RollUnitLengthTables.parseFloatSafe(cell(row, iPt), 0.0);
-                if (!(t > 1e-12)) {
-                    continue;
-                }
-                m.put(prod.strip(), formatNum(t));
+                m.put(prod.strip(), t > 1e-12 ? formatNum(t) : "");
                 apT++;
             }
             if (apT > 0) {

@@ -1343,7 +1343,7 @@ PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME = "製品名,製品長.txt"
 PRODUCT_LENGTH_TABLE_PATH_ENV = "PRODUCT_LENGTH_TABLE_PATH"
 # 製品厚み（mm 想定）。段階1のみ算出。製品名が英字開始のときはテーブル「製品名,製品厚み.txt」から取得。
 # 英字開始でないときは「製品名の先頭5文字」の末尾3桁を厚みコードとして code/10 を採用（例: 040→4.0, 100→10.0）。
-# テーブルにも無く解析もできない行は段階1でスキップ（警告ログ）。テーブル照合キーは _normalize_mm_table_lookup_key（NFKC＋空白除去）。
+# テーブルにも無く解析もできない行は段階1で製品厚みを空欄のまま出力し、材料テーブルへキーのみ追記（値は空欄可）。テーブル照合キーは _normalize_mm_table_lookup_key（NFKC＋空白除去）。
 PLAN_COL_PRODUCT_THICKNESS = "製品厚み"
 PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME = "製品名,製品厚み.txt"
 PRODUCT_THICKNESS_TABLE_PATH_ENV = "PRODUCT_THICKNESS_TABLE_PATH"
@@ -16365,6 +16365,11 @@ def _product_thickness_table_search_paths() -> list[str]:
             )
         )
     paths.append(os.path.join(os.getcwd(), PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME))
+    repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
+    if repo:
+        paths.append(
+            os.path.join(repo, "code", PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME)
+        )
     paths.append(os.path.join(os.getcwd(), "code", PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME))
     # リポジトリ同梱（細川/GoogleAIStudio/配下）を直接参照したいケース向け
     try:
@@ -16404,10 +16409,22 @@ def _parse_float_mm_thickness_cell(val) -> float:
     return float(x)
 
 
-def _load_product_thickness_mm_table() -> dict[str, float]:
+def _resolve_product_thickness_table_path_for_write() -> str:
+    """製品厚みテーブルの追記先パス（既存ファイルがあればそれ、無ければ code/ 配下を新規作成）。"""
+    for p in _product_thickness_table_search_paths():
+        if os.path.isfile(p):
+            return p
+    repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
+    if repo:
+        return os.path.join(repo, "code", PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME)
+    return os.path.join(os.getcwd(), "code", PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME)
+
+
+def _load_product_thickness_mm_table() -> tuple[dict[str, float], set[str], str]:
     """
     製品厚みテーブル（製品名→製品厚み）を読み込む。ファイル必須。同一キーで数値が食い違うときは例外。
     製品名キーは _normalize_mm_table_lookup_key で正規化（NFKC・空白除去）して dict に格納する。
+    値が空欄の行は dict には載せず known_keys のみに含める（段階1追記分など）。
     """
     path_found = ""
     for p in _product_thickness_table_search_paths():
@@ -16421,6 +16438,7 @@ def _load_product_thickness_mm_table() -> dict[str, float]:
             f"環境変数 {PRODUCT_THICKNESS_TABLE_PATH_ENV} で CSV のフルパスを指定してください。探索: {hint}"
         )
     out: dict[str, float] = {}
+    known_keys: set[str] = set()
     with open(path_found, encoding="utf-8-sig", newline="") as f:
         rows = list(csv.reader(f))
     if not rows:
@@ -16444,12 +16462,11 @@ def _load_product_thickness_mm_table() -> dict[str, float]:
         key = _normalize_mm_table_lookup_key(raw_k)
         if not key:
             continue
+        known_keys.add(key)
         try:
             w = _parse_float_mm_thickness_cell(raw_w)
-        except ValueError as ex:
-            raise PlanningValidationError(
-                f"製品厚みテーブルの数値が不正です: キー={key!r} 値={raw_w!r} ({path_found}) ({ex})"
-            ) from ex
+        except ValueError:
+            continue
         prev = out.get(key)
         if prev is not None and abs(float(prev) - float(w)) > 1e-9:
             raise PlanningValidationError(
@@ -16457,7 +16474,51 @@ def _load_product_thickness_mm_table() -> dict[str, float]:
             )
         out[key] = float(w)
     logging.info("製品厚みテーブルを読み込みました: %s (%s 件)", path_found, len(out))
-    return out
+    return out, known_keys, path_found
+
+
+def _append_product_thickness_table_row_if_missing(
+    raw_product_name,
+    normalized_key: str,
+    *,
+    table_path: str,
+    known_keys: set[str],
+    appended: set[str],
+) -> bool:
+    """段階1: 製品厚みテーブルに未登録キーを空欄値で追記する。"""
+    if not normalized_key or normalized_key in known_keys or normalized_key in appended:
+        return False
+    display = str(raw_product_name or "").strip()
+    if not display:
+        display = normalized_key
+    path = (table_path or "").strip() or _resolve_product_thickness_table_path_for_write()
+    line = f"{display},\n"
+    try:
+        parent = os.path.dirname(os.path.abspath(path))
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        if not os.path.isfile(path):
+            with open(path, "w", encoding="utf-8", newline="") as f:
+                f.write(f"製品名,製品厚み\n{line}")
+        else:
+            with open(path, "a", encoding="utf-8", newline="") as f:
+                f.write(line)
+        known_keys.add(normalized_key)
+        appended.add(normalized_key)
+        logging.info(
+            "製品厚みテーブルに未登録キーを追記しました（値は空欄）: %r → %s",
+            display,
+            path,
+        )
+        return True
+    except OSError as ex:
+        logging.warning(
+            "製品厚みテーブルへの追記に失敗: キー=%r パス=%s (%s)",
+            display,
+            path,
+            ex,
+        )
+        return False
 
 
 def _infer_product_thickness_mm_from_product_name_prefix(product_name) -> float | None:
@@ -16486,20 +16547,39 @@ def _infer_product_thickness_mm_from_product_name_prefix(product_name) -> float 
 
 
 def _resolve_product_thickness_mm_for_stage1_row(
-    row: "pd.Series", table: dict[str, float]
+    row: "pd.Series",
+    table: dict[str, float],
+    *,
+    table_path: str = "",
+    known_keys: set[str] | None = None,
+    appended: set[str] | None = None,
 ) -> float | None:
     """
     英字開始の製品名はテーブル必須。それ以外は先頭5文字パターンを優先し、失敗時はテーブル。
-    テーブルにも無く先頭5文字からも解析できない場合は None（段階1では当該行をスキップ）。
+    テーブルにも無く先頭5文字からも解析できない場合は None（段階1では製品厚みを空欄で出力し、材料テーブルへ追記）。
     """
     tid = planning_task_id_str_from_scalar(row.get(TASK_COL_TASK_ID))
     pn_raw = row.get(TASK_COL_PRODUCT)
     pn = _normalize_mm_table_lookup_key(pn_raw)
+    keys = known_keys if known_keys is not None else set(table.keys())
+    pending = appended if appended is not None else set()
+
+    def _ensure_table_row() -> None:
+        if pn:
+            _append_product_thickness_table_row_if_missing(
+                pn_raw,
+                pn,
+                table_path=table_path,
+                known_keys=keys,
+                appended=pending,
+            )
+
     if pn and pn[0].isalpha():
         if pn in table:
             return float(table[pn])
+        _ensure_table_row()
         logging.warning(
-            "製品厚みを決定できずスキップ（英字開始・テーブル未登録）。依頼NO=%s 製品名=%r",
+            "製品厚み未登録（英字開始・テーブル未登録）。材料テーブルへ追記し製品厚みは空欄で出力。依頼NO=%s 製品名=%r",
             tid,
             pn,
         )
@@ -16509,8 +16589,9 @@ def _resolve_product_thickness_mm_for_stage1_row(
         return float(inferred)
     if pn and pn in table:
         return float(table[pn])
+    _ensure_table_row()
     logging.warning(
-        "製品厚みを決定できずスキップ（先頭5文字から解析不可・テーブル未登録）。依頼NO=%s 製品名=%r",
+        "製品厚み未登録（先頭5文字から解析不可・テーブル未登録）。材料テーブルへ追記し製品厚みは空欄で出力。依頼NO=%s 製品名=%r",
         tid,
         pn,
     )
@@ -16651,7 +16732,8 @@ def run_stage1_extract():
     rw_table = _load_raw_fabric_width_mm_table()
     pw_table = _load_product_width_mm_table()
     pl_table = _load_product_length_mm_table()
-    pt_table = _load_product_thickness_mm_table()
+    pt_table, pt_known_keys, pt_table_path = _load_product_thickness_mm_table()
+    pt_appended_keys: set[str] = set()
     records = []
     for _, row in df_src.iterrows():
         if row_has_completion_keyword(row):
@@ -16674,10 +16756,14 @@ def run_stage1_extract():
         rec[PLAN_COL_PRODUCT_LENGTH] = _resolve_product_length_mm_for_stage1_row(
             row, pl_table
         )
-        _th_mm = _resolve_product_thickness_mm_for_stage1_row(row, pt_table)
-        if _th_mm is None:
-            continue
-        rec[PLAN_COL_PRODUCT_THICKNESS] = _th_mm
+        _th_mm = _resolve_product_thickness_mm_for_stage1_row(
+            row,
+            pt_table,
+            table_path=pt_table_path,
+            known_keys=pt_known_keys,
+            appended=pt_appended_keys,
+        )
+        rec[PLAN_COL_PRODUCT_THICKNESS] = _th_mm if _th_mm is not None else ""
         rec[PLAN_COL_RAW_FABRIC_WIDTH] = _resolve_raw_fabric_width_mm_for_stage1_row(
             row, rw_table
         )

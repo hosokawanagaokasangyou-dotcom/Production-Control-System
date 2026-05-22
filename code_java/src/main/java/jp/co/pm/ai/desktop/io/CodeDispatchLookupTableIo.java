@@ -51,11 +51,11 @@ public final class CodeDispatchLookupTableIo {
                 continue;
             }
             int c = t.lastIndexOf(',');
-            if (c <= 0 || c >= t.length() - 1) {
+            if (c <= 0) {
                 continue;
             }
             String k = t.substring(0, c).strip();
-            String v = t.substring(c + 1).strip();
+            String v = c < t.length() - 1 ? t.substring(c + 1).strip() : "";
             if (k.isEmpty()) {
                 continue;
             }
