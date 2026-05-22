@@ -1,15 +1,25 @@
 package jp.co.pm.ai.desktop;
 
+import java.nio.file.Path;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
+import javafx.animation.FadeTransition;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -17,21 +27,23 @@ import javafx.stage.StageStyle;
 import javafx.stage.WindowEvent;
 import javafx.util.Duration;
 
+import jp.co.pm.ai.desktop.config.AppVersionInfo;
+
 /**
- * Simple splash until main window FXML is loaded and initialized.
+ * Premium startup splash until main window FXML is loaded and initialized.
  *
- * <p>Japanese labels use Unicode code point escapes in string literals so this source file is pure
- * ASCII. That
- * avoids Windows builds failing with "cannot map to UTF-8" when a copy of this file is saved in
- * Shift_JIS (CP932) by an editor, while {@code javac} is invoked with {@code -encoding UTF-8}.
+ * <p>Visual assets: {@code css/startup-splash.css}, {@code images/splash-background.png}.
  */
 final class StartupSplashStage {
 
     /** スプラッシュが表示されたとみなしてから、本体ロード等の後続処理を始めるまでの待ち（ナノ秒）。 */
     private static final long SPLASH_NEXT_LOGIC_DELAY_NANOS = 3_000_000_000L;
 
-    private static final String SPLASH_FONT_STACK =
-            "\"Yu Gothic UI\", \"Meiryo UI\", Meiryo, \"Segoe UI\", \"Noto Sans CJK JP\", sans-serif";
+    private static final String SPLASH_CSS =
+            StartupSplashStage.class.getResource("css/startup-splash.css").toExternalForm();
+
+    private static final String SPLASH_BACKGROUND =
+            StartupSplashStage.class.getResource("images/splash-background.png").toExternalForm();
 
     private StartupSplashStage() {}
 
@@ -52,44 +64,83 @@ final class StartupSplashStage {
     static Stage createAndShow(
             AtomicLong outVisibleSinceNanos, Consumer<Stage> afterSplashFullyDisplayed) {
         Stage stage = new Stage();
-        stage.initStyle(StageStyle.UNDECORATED);
+        stage.initStyle(StageStyle.TRANSPARENT);
         stage.initModality(Modality.APPLICATION_MODAL);
         stage.setAlwaysOnTop(true);
-        // Japanese UI strings below: ASCII source via Unicode escapes (see class Javadoc).
-        stage.setTitle("\u8d77\u52d5\u4e2d");
+        stage.setTitle("起動中");
 
-        Label title = new Label("\u5de5\u7a0b\u7ba1\u7406 AI \u914d\u53f0");
-        title.setStyle(
-                "-fx-font-family: "
-                        + SPLASH_FONT_STACK
-                        + "; -fx-font-size: 18px; -fx-font-weight: bold;");
+        ImageView background = new ImageView(new Image(SPLASH_BACKGROUND, true));
+        background.setPreserveRatio(false);
+        background.setSmooth(true);
+        background.getStyleClass().add("splash-background-image");
 
-        Label sub = new Label("\u8d77\u52d5\u3057\u3066\u3044\u307e\u3059...");
-        sub.setStyle(
-                "-fx-font-family: "
-                        + SPLASH_FONT_STACK
-                        + "; -fx-font-size: 13px;");
+        Region overlay = new Region();
+        overlay.getStyleClass().add("splash-overlay");
+
+        Region accentBar = new Region();
+        accentBar.getStyleClass().add("splash-accent-bar");
+
+        Label title = new Label("工程管理 AI 配台");
+        title.getStyleClass().add("splash-title");
+
+        Label subtitleEn = new Label("PRODUCTION DISPATCH CONTROL");
+        subtitleEn.getStyleClass().add("splash-subtitle-en");
+
+        VBox titleBlock = new VBox(2, title, subtitleEn);
+
+        HBox brandRow = new HBox(12, accentBar, titleBlock);
+        brandRow.getStyleClass().add("splash-brand-row");
+        brandRow.setAlignment(Pos.CENTER_LEFT);
+
+        Label status = new Label("起動しています…");
+        status.getStyleClass().add("splash-status");
 
         ProgressIndicator busy = new ProgressIndicator();
-        busy.setPrefSize(48, 48);
-        busy.setMaxSize(48, 48);
+        busy.setPrefSize(42, 42);
+        busy.setMaxSize(42, 42);
+        busy.getStyleClass().add("splash-progress");
 
-        VBox root = new VBox(20, title, busy, sub);
-        root.setAlignment(Pos.CENTER);
-        root.setStyle(
-                "-fx-font-family: "
-                        + SPLASH_FONT_STACK
-                        + ";"
-                        + " -fx-background-color: linear-gradient(to bottom, #f7f7f7, #e6e6e6);"
-                        + " -fx-padding: 32px 48px;"
-                        + " -fx-background-radius: 8px;");
-        root.setPrefWidth(420);
-        root.setPrefHeight(240);
+        String versionText =
+                "v"
+                        + AppVersionInfo.resolveDisplayedVersion(
+                                Path.of(System.getProperty("user.dir", ".")), Map.of());
+        Label version = new Label(versionText);
+        version.getStyleClass().add("splash-version");
+
+        Region footerSpacer = new Region();
+        HBox.setHgrow(footerSpacer, Priority.ALWAYS);
+
+        HBox footer = new HBox(footerSpacer, version);
+        footer.getStyleClass().add("splash-footer");
+        footer.setAlignment(Pos.CENTER_RIGHT);
+
+        VBox content = new VBox(18, brandRow, status, busy, footer);
+        content.getStyleClass().add("splash-content");
+        content.setAlignment(Pos.CENTER_LEFT);
+        VBox.setMargin(busy, new Insets(4, 0, 0, 0));
+
+        StackPane root = new StackPane(background, overlay, content);
+        root.getStyleClass().add("splash-root");
+        root.setPrefSize(520, 320);
+        root.setMinSize(520, 320);
+        root.setMaxSize(520, 320);
 
         Scene scene = new Scene(root);
+        scene.setFill(null);
+        scene.getStylesheets().add(SPLASH_CSS);
+
+        background.fitWidthProperty().bind(root.widthProperty());
+        background.fitHeightProperty().bind(root.heightProperty());
+
         stage.setScene(scene);
         stage.setResizable(false);
         stage.centerOnScreen();
+
+        root.setOpacity(0.0);
+        FadeTransition fadeIn = new FadeTransition(Duration.millis(420), root);
+        fadeIn.setFromValue(0.0);
+        fadeIn.setToValue(1.0);
+
         if (outVisibleSinceNanos != null) {
             stage.addEventHandler(
                     WindowEvent.WINDOW_SHOWN,
@@ -130,6 +181,7 @@ final class StartupSplashStage {
                             Platform.runLater(
                                     () -> Platform.runLater(startNextLogic)));
         }
+        stage.setOnShown(e -> fadeIn.play());
         stage.show();
         raiseToFront(stage);
         if (outVisibleSinceNanos != null) {

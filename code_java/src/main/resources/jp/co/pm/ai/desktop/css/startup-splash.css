@@ -1,0 +1,87 @@
+/* Startup splash — deep navy industrial theme (standalone, no app theme dependency) */
+
+.splash-root {
+    -fx-background-color: #0f172a;
+    -fx-background-radius: 12px;
+    -fx-border-color: rgba(56, 189, 248, 0.35);
+    -fx-border-width: 1px;
+    -fx-border-radius: 12px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.55), 28, 0.32, 0, 8);
+}
+
+.splash-background-image {
+    -fx-opacity: 0.92;
+}
+
+.splash-overlay {
+    -fx-background-color: linear-gradient(
+        to bottom,
+        rgba(15, 23, 42, 0.55) 0%,
+        rgba(15, 23, 42, 0.72) 55%,
+        rgba(15, 23, 42, 0.88) 100%
+    );
+}
+
+.splash-content {
+    -fx-padding: 36px 44px 32px 44px;
+    -fx-spacing: 14px;
+}
+
+.splash-brand-row {
+    -fx-spacing: 10px;
+    -fx-alignment: center-left;
+}
+
+.splash-accent-bar {
+    -fx-pref-width: 4px;
+    -fx-min-width: 4px;
+    -fx-max-width: 4px;
+    -fx-pref-height: 44px;
+    -fx-background-color: linear-gradient(to bottom, #38bdf8, #0ea5e9);
+    -fx-background-radius: 2px;
+}
+
+.splash-title {
+    -fx-font-family: "Yu Gothic UI", "Meiryo UI", Meiryo, "Segoe UI", "Noto Sans CJK JP", sans-serif;
+    -fx-font-size: 26px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #f8fafc;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 6, 0.35, 0, 1);
+}
+
+.splash-subtitle-en {
+    -fx-font-family: "Segoe UI", "Yu Gothic UI", sans-serif;
+    -fx-font-size: 11px;
+    -fx-font-weight: normal;
+    -fx-text-fill: rgba(148, 163, 184, 0.95);
+    -fx-letter-spacing: 0.08em;
+}
+
+.splash-status {
+    -fx-font-family: "Yu Gothic UI", "Meiryo UI", Meiryo, "Segoe UI", "Noto Sans CJK JP", sans-serif;
+    -fx-font-size: 13px;
+    -fx-text-fill: #cbd5e1;
+}
+
+.splash-version {
+    -fx-font-family: "Segoe UI", "Yu Gothic UI", "Noto Sans CJK JP", sans-serif;
+    -fx-font-size: 11px;
+    -fx-text-fill: rgba(148, 163, 184, 0.85);
+}
+
+.splash-progress {
+    -fx-accent: #38bdf8;
+    -fx-progress-color: #38bdf8;
+}
+
+.splash-progress .indicator {
+    -fx-background-color: transparent;
+}
+
+.splash-progress .percentage {
+    -fx-fill: transparent;
+}
+
+.splash-footer {
+    -fx-padding: 0 8px 0 0;
+}
