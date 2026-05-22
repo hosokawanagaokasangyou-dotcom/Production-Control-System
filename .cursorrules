@@ -4,7 +4,9 @@
 
 ## Git（コミット運用・メッセージ）
 
-正本: **`.cursor/rules/git-commit-push-after-code-changes.mdc`**（変更後の `add` → `commit` → `push`、メッセージ規約、`*.xlsm` 取り扱い）／**`.cursor/rules/pm-ai-cache-network-source-tracking.mdc`**（`.pm-ai-cache/` 追跡）／**`.cursor/rules/version-txt-bump-on-commit.mdc`**（`version.txt` +0.01 自動バンプ、`scripts/git-hooks/pre-commit`）。
+正本: **`.cursor/rules/git-commit-push-after-code-changes.mdc`**（変更後の `add` → `commit` → `push`、メッセージ規約、`*.xlsm` 取り扱い）／**`.cursor/rules/git-commit-hooks-persistence.mdc`**（**`.cursor/hooks.json`** で sessionStart / postToolUse / afterFileEdit にフック済み）／**`.cursor/rules/pm-ai-cache-network-source-tracking.mdc`**（`.pm-ai-cache/` 追跡）／**`.cursor/rules/version-txt-bump-on-commit.mdc`**（`version.txt` +0.01 自動バンプ、`scripts/git-hooks/pre-commit`）。
+
+**作業完了時（変更後）**: そのターンで変更・追加した版管理対象は **漏れなく `git add` → `commit` → `push`**。依頼外の差分が混在する場合はコミットを分ける、応答で `git status` の要約を報告。
 
 要点（Generate 用 = AI コミットメッセージ生成）:
 - **日本語のみ**。英語だけの件名は出さない。

@@ -13,11 +13,18 @@
       {
         "command": "python3 .cursor/hooks/agent_debug_post_edit_guard.py",
         "matcher": "Write|StrReplace"
+      },
+      {
+        "command": "python3 .cursor/hooks/git_commit_post_edit_reminder.py",
+        "matcher": "Write|StrReplace"
       }
     ],
     "afterFileEdit": [
       {
         "command": "python3 .cursor/hooks/agent_debug_post_edit_guard.py"
+      },
+      {
+        "command": "python3 .cursor/hooks/git_commit_post_edit_reminder.py"
       }
     ]
   }
