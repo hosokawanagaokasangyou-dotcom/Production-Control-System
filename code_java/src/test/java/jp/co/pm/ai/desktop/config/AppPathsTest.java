@@ -352,6 +352,19 @@ class AppPathsTest {
     }
 
     @Test
+    void equipmentGanttPdfPath_usesSummaryWorkbookParent(@TempDir Path tmp) {
+        Path custom = tmp.resolve("shared").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, custom.toString());
+        Path expected =
+                custom.getParent()
+                        .resolve(AppPaths.EQUIPMENT_GANTT_PDF)
+                        .toAbsolutePath()
+                        .normalize();
+        assertEquals(expected, AppPaths.equipmentGanttPdfPath(ui));
+    }
+
+    @Test
     void pipelineExecutionTimingHistoryPath_usesSummaryWorkbookParent(@TempDir Path tmp) throws Exception {
         Path custom = tmp.resolve("shared").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
         Map<String, String> ui =

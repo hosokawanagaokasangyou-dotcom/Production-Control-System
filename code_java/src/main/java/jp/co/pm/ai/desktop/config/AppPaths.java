@@ -948,6 +948,9 @@ public final class AppPaths {
                 .normalize();
     }
 
+    /** 設備ガント PDF（{@link #summaryAiDispatchXlsxPath} と同一フォルダ）。VBA スナップショット名に合わせる。 */
+    public static final String EQUIPMENT_GANTT_PDF = "結果_設備ガント.pdf";
+
     /** 実行時間分析タブの履歴 JSON（{@link #summaryAiDispatchXlsxPath} と同一フォルダ）。 */
     public static final String PIPELINE_EXECUTION_TIMING_HISTORY_JSON =
             "pipeline-execution-timing-history.json";
@@ -956,16 +959,23 @@ public final class AppPaths {
      * 実行時間履歴 JSON の絶対パス。親フォルダは {@link #summaryAiDispatchXlsxPath(Map)} と同一。
      */
     public static Path pipelineExecutionTimingHistoryPath(Map<String, String> ui) {
+        return siblingOfSummaryAiDispatchWorkbook(ui, PIPELINE_EXECUTION_TIMING_HISTORY_JSON);
+    }
+
+    /**
+     * 設備ガント PDF の絶対パス。親フォルダは {@link #summaryAiDispatchXlsxPath(Map)} と同一。
+     */
+    public static Path equipmentGanttPdfPath(Map<String, String> ui) {
+        return siblingOfSummaryAiDispatchWorkbook(ui, EQUIPMENT_GANTT_PDF);
+    }
+
+    private static Path siblingOfSummaryAiDispatchWorkbook(Map<String, String> ui, String fileName) {
         Path summary = summaryAiDispatchXlsxPath(ui);
         Path parent = summary.getParent();
         if (parent == null) {
-            return resolveRepoRoot(ui)
-                    .resolve("code")
-                    .resolve(PIPELINE_EXECUTION_TIMING_HISTORY_JSON)
-                    .toAbsolutePath()
-                    .normalize();
+            return resolveRepoRoot(ui).resolve("code").resolve(fileName).toAbsolutePath().normalize();
         }
-        return parent.resolve(PIPELINE_EXECUTION_TIMING_HISTORY_JSON).toAbsolutePath().normalize();
+        return parent.resolve(fileName).toAbsolutePath().normalize();
     }
 
     /** @deprecated {@link #summaryAiDispatchXlsxPath(Map)} を使用 */

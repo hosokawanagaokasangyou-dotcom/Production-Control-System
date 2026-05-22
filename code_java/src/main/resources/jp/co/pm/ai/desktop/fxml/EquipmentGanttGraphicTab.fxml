@@ -56,8 +56,11 @@
                                     text="印刷（A3 横・1日／ページ）"
                                     onAction="#onPrintGanttAction"/>
                             <Button fx:id="exportGanttPdfButton" mnemonicParsing="false"
-                                    text="PDFへ…"
+                                    text="PDF作成"
                                     onAction="#onExportGanttPdfAction"/>
+                            <Button fx:id="openGanttPdfButton" disable="true" mnemonicParsing="false"
+                                    text="PDFを開く"
+                                    onAction="#onOpenGanttPdfAction"/>
                             <Label styleClass="pm-plan-result-viewer-hint-inline"
                                    text="計画*.json の設備ガント系シートを表示"/>
                         </HBox>

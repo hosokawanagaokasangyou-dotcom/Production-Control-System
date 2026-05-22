@@ -25,8 +25,6 @@ import javafx.print.PageOrientation;
 import javafx.print.Paper;
 import javafx.print.Printer;
 import javafx.print.PrinterJob;
-import javafx.scene.control.Alert;
-import javafx.scene.control.Alert.AlertType;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.control.Accordion;
 import javafx.scene.control.Button;
@@ -60,6 +58,7 @@ import jp.co.pm.ai.desktop.config.EquipmentGanttBadgeDragDelta;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
+import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttContractSheetTableBuilder;
 import jp.co.pm.ai.desktop.io.gantt.EquipmentGanttSheetBundle;
@@ -70,6 +69,7 @@ import jp.co.pm.ai.desktop.print.EquipmentGanttPrintCompositor;
 import jp.co.pm.ai.desktop.print.EquipmentGanttPrintDaySlices;
 import jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec;
 import jp.co.pm.ai.desktop.print.EquipmentGanttPrintTableData;
+import jp.co.pm.ai.desktop.print.EquipmentGanttPdfExporter;
 import jp.co.pm.ai.desktop.print.EquipmentGanttPrintTimelineColumnDensifier;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.EquipmentGraphicGanttPane;
@@ -120,6 +120,12 @@ public final class EquipmentGanttGraphicTabController {
 
     @FXML
     private Button exportGanttPdfButton;
+
+    @FXML
+    private Button openGanttPdfButton;
+
+    /** 直近に作成した設備ガント PDF（サマリ Excel と同一フォルダ）。 */
+    private Path lastExportedGanttPdfPath;
 
     @FXML
     private RadioButton printTimeModeRegularRadio;
@@ -1134,7 +1140,27 @@ public final class EquipmentGanttGraphicTabController {
     void bindShell(MainShellController shell) {
         this.shell = shell;
         this.ownerStage = shell.getPrimaryStage();
+        refreshExistingGanttPdfPathFromEnv();
         Platform.runLater(() -> reloadFromFields(false));
+    }
+
+    private void refreshExistingGanttPdfPathFromEnv() {
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        Path existing = AppPaths.equipmentGanttPdfPath(ui);
+        if (Files.isRegularFile(existing)) {
+            lastExportedGanttPdfPath = existing;
+        }
+        refreshOpenGanttPdfButtonState();
+    }
+
+    private void refreshOpenGanttPdfButtonState() {
+        if (openGanttPdfButton == null) {
+            return;
+        }
+        boolean ok =
+                lastExportedGanttPdfPath != null
+                        && Files.isRegularFile(lastExportedGanttPdfPath);
+        openGanttPdfButton.setDisable(!ok);
     }
 
     /**
@@ -1636,24 +1662,53 @@ public final class EquipmentGanttGraphicTabController {
 
     @FXML
     private void onPrintGanttAction() {
-        runEquipmentGanttPrintJob(false);
+        runEquipmentGanttPrintJob();
     }
 
     @FXML
     private void onExportGanttPdfAction() {
-        runEquipmentGanttPrintJob(true);
+        runEquipmentGanttPdfExport();
     }
 
-    private void runEquipmentGanttPrintJob(boolean preselectPdfPrinter) {
+    @FXML
+    private void onOpenGanttPdfAction() {
+        if (lastExportedGanttPdfPath == null || !Files.isRegularFile(lastExportedGanttPdfPath)) {
+            if (statusLabel != null) {
+                statusLabel.setText("PDF が未作成です。先に PDF を作成してください。");
+            }
+            refreshOpenGanttPdfButtonState();
+            return;
+        }
+        try {
+            DesktopFileOpener.openFile(lastExportedGanttPdfPath);
+            if (statusLabel != null) {
+                statusLabel.setText("PDF を開きました: " + lastExportedGanttPdfPath);
+            }
+        } catch (IOException ex) {
+            String msg = ex.getMessage() != null ? ex.getMessage() : ex.toString();
+            if (statusLabel != null) {
+                statusLabel.setText("PDF を開けません: " + msg);
+            }
+            if (shell != null) {
+                shell.appendLog("[equipment-gantt-graphic] open pdf: " + msg);
+            }
+        }
+    }
+
+    private record PreparedGanttPrintJob(
+            List<String> printCols,
+            ObservableList<ObservableList<String>> printRows,
+            EquipmentGanttPrintTableData printTable,
+            List<List<Integer>> groups,
+            int slotCols,
+            ResolvedPrintTimeRange printRange) {}
+
+    private PreparedGanttPrintJob prepareGanttPrintJob() {
         if (lastGraphicSheet == null) {
             if (statusLabel != null) {
                 statusLabel.setText("先に JSON を読み込んでください。");
             }
-            return;
-        }
-        Stage stage = ownerStage != null ? ownerStage : (shell != null ? shell.getPrimaryStage() : null);
-        if (stage == null) {
-            return;
+            return null;
         }
         ResolvedPrintTimeRange printRange = resolvePrintTimeRangeForJob();
         if (printRange == null) {
@@ -1666,7 +1721,7 @@ public final class EquipmentGanttGraphicTabController {
                             "定常時刻が契約 JSON に無いか不正です。範囲指定に切り替えるか、段階2を再実行してください。");
                 }
             }
-            return;
+            return null;
         }
         ObservableList<ObservableList<String>> fullRows = toObservableRows(lastGraphicSheet);
         List<String> cols = lastGraphicSheet.columns();
@@ -1685,7 +1740,7 @@ public final class EquipmentGanttGraphicTabController {
             if (statusLabel != null) {
                 statusLabel.setText("印刷する行がありません。");
             }
-            return;
+            return null;
         }
         int slotCols = EquipmentGraphicGanttPane.countTimeSlotHeadersInColumns(printCols);
         if (slotCols <= 0) {
@@ -1697,30 +1752,49 @@ public final class EquipmentGanttGraphicTabController {
                                 + formatHm(printRange.endExclusive())
                                 + "）に該当する時刻列がありません。");
             }
+            return null;
+        }
+        return new PreparedGanttPrintJob(
+                printCols, printRows, printTable, groups, slotCols, printRange);
+    }
+
+    private List<Parent> composeGanttPrintPages(PreparedGanttPrintJob prepared, PageLayout layout) {
+        List<Parent> pages = new ArrayList<>(prepared.groups().size());
+        for (List<Integer> idxGroup : prepared.groups()) {
+            ObservableList<ObservableList<String>> slice =
+                    EquipmentGanttPrintDaySlices.sliceRowsByIndices(
+                            prepared.printRows(), idxGroup);
+            List<List<String>> badgeSlice =
+                    EquipmentGanttPrintDaySlices.sliceBadgeRowsAligned(
+                            prepared.printTable().badgeSlotRows(),
+                            idxGroup,
+                            prepared.slotCols());
+            EquipmentGanttPrintPageSpec printSpec =
+                    equipmentGanttPrintPageSpec(
+                            prepared.printCols(),
+                            slice,
+                            badgeSlice,
+                            prepared.printRange());
+            pages.add(EquipmentGanttPrintCompositor.composePage(printSpec, layout));
+        }
+        return pages;
+    }
+
+    private void runEquipmentGanttPrintJob() {
+        PreparedGanttPrintJob prepared = prepareGanttPrintJob();
+        if (prepared == null) {
             return;
         }
-
+        Stage stage = ownerStage != null ? ownerStage : (shell != null ? shell.getPrimaryStage() : null);
+        if (stage == null) {
+            return;
+        }
         PrinterJob job = PrinterJob.createPrinterJob();
         if (job == null) {
             if (statusLabel != null) {
                 statusLabel.setText("印刷ジョブを作成できませんでした。");
             }
             return;
-        }
-        if (preselectPdfPrinter) {
-            Printer pdf = findLikelyPdfPrinter();
-            if (pdf != null) {
-                job.setPrinter(pdf);
-            } else {
-                Alert info = new Alert(AlertType.INFORMATION);
-                info.setTitle("PDF へ出力");
-                info.setHeaderText(null);
-                info.setContentText(
-                        "一覧から「Microsoft Print to PDF」など PDF 用プリンターを選んでください。\n"
-                                + "（環境によっては名前が異なります）");
-                info.initOwner(stage);
-                info.showAndWait();
-            }
         }
         applyDefaultEquipmentGanttPrintPageLayout(job);
         if (!job.showPrintDialog(stage)) {
@@ -1741,18 +1815,10 @@ public final class EquipmentGanttGraphicTabController {
             layout = defaultEquipmentGanttPrintPageLayout(printer);
             job.getJobSettings().setPageLayout(layout);
         }
+        List<Parent> pages = composeGanttPrintPages(prepared, layout);
         int okPages = 0;
         try {
-            for (List<Integer> idxGroup : groups) {
-                ObservableList<ObservableList<String>> slice =
-                        EquipmentGanttPrintDaySlices.sliceRowsByIndices(printRows, idxGroup);
-                List<List<String>> badgeSlice =
-                        EquipmentGanttPrintDaySlices.sliceBadgeRowsAligned(
-                                printTable.badgeSlotRows(), idxGroup, slotCols);
-                EquipmentGanttPrintPageSpec printSpec =
-                        equipmentGanttPrintPageSpec(
-                                printCols, slice, badgeSlice, printRange);
-                Parent printRoot = EquipmentGanttPrintCompositor.composePage(printSpec, layout);
+            for (Parent printRoot : pages) {
                 if (!job.printPage(layout, printRoot)) {
                     if (shell != null) {
                         shell.appendLog(
@@ -1789,10 +1855,75 @@ public final class EquipmentGanttGraphicTabController {
                     "印刷ジョブを送信しました（"
                             + okPages
                             + " ページ・時刻 "
-                            + formatHm(printRange.startInclusive())
+                            + formatHm(prepared.printRange().startInclusive())
                             + "～"
-                            + formatHm(printRange.endExclusive())
+                            + formatHm(prepared.printRange().endExclusive())
                             + "・A3 横）。");
+        }
+    }
+
+    private void runEquipmentGanttPdfExport() {
+        PreparedGanttPrintJob prepared = prepareGanttPrintJob();
+        if (prepared == null) {
+            return;
+        }
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        Path outputPath = EquipmentGanttPdfExporter.resolveOutputPath(ui);
+        PageLayout layout;
+        try {
+            layout = EquipmentGanttPdfExporter.defaultPageLayout();
+        } catch (IOException ex) {
+            String msg = ex.getMessage() != null ? ex.getMessage() : ex.toString();
+            if (statusLabel != null) {
+                statusLabel.setText("PDF ページサイズの決定に失敗: " + msg);
+            }
+            if (shell != null) {
+                shell.appendLog("[equipment-gantt-graphic] pdf layout: " + msg);
+            }
+            return;
+        }
+        List<Parent> pages = composeGanttPrintPages(prepared, layout);
+        try {
+            EquipmentGanttPdfExporter.export(outputPath, layout, pages);
+        } catch (Exception ex) {
+            String msg = ex.getMessage() != null ? ex.getMessage() : ex.toString();
+            if (statusLabel != null) {
+                statusLabel.setText("PDF 出力エラー: " + msg);
+            }
+            if (shell != null) {
+                shell.appendLog("[equipment-gantt-graphic] pdf export: " + msg);
+            }
+            return;
+        }
+        lastExportedGanttPdfPath = outputPath;
+        refreshOpenGanttPdfButtonState();
+        try {
+            DesktopFileOpener.openFile(outputPath);
+        } catch (IOException ex) {
+            String msg = ex.getMessage() != null ? ex.getMessage() : ex.toString();
+            if (statusLabel != null) {
+                statusLabel.setText(
+                        "PDF を出力しましたが自動で開けません: "
+                                + msg
+                                + " （"
+                                + outputPath
+                                + "）");
+            }
+            if (shell != null) {
+                shell.appendLog("[equipment-gantt-graphic] pdf auto-open: " + msg);
+            }
+            return;
+        }
+        if (statusLabel != null) {
+            statusLabel.setText(
+                    "PDF を出力しました（"
+                            + pages.size()
+                            + " ページ・"
+                            + outputPath.getFileName()
+                            + "）。自動で開きました。");
+        }
+        if (shell != null) {
+            shell.appendLog("[equipment-gantt-graphic] pdf: " + outputPath);
         }
     }
 
@@ -1854,29 +1985,6 @@ public final class EquipmentGanttGraphicTabController {
                 snapshotEquipmentGanttPrepTimeLabelsEnabled(),
                 printRange != null ? printRange.startInclusive() : null,
                 printRange != null ? printRange.endExclusive() : null);
-    }
-
-    private static Printer findLikelyPdfPrinter() {
-        Printer fallback = null;
-        for (Printer p : Printer.getAllPrinters()) {
-            if (p == null) {
-                continue;
-            }
-            String n = p.getName();
-            if (n == null) {
-                continue;
-            }
-            String low = n.toLowerCase(Locale.ROOT);
-            if (low.contains("pdf") || low.contains("pdfwriter")) {
-                if (low.contains("microsoft") || low.contains("windows")) {
-                    return p;
-                }
-                if (fallback == null) {
-                    fallback = p;
-                }
-            }
-        }
-        return fallback;
     }
 
     private void installGraphicWheelZoomIfNeeded() {

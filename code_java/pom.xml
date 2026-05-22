@@ -20,6 +20,7 @@
     <controlsfx.version>11.2.3</controlsfx.version>
     <poi.version>5.5.1</poi.version>
     <jfreechart.version>1.5.4</jfreechart.version>
+    <pdfbox.version>3.0.5</pdfbox.version>
     <jackson.version>2.21.3</jackson.version>
     <junit.version>5.12.2</junit.version>
     <!-- poi-ooxml が運ぶ log4j-api と同一に揃える（log4j-core 無しだと API がプロバイダ不足になり ERROR になる） -->
@@ -62,6 +63,11 @@
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
       <version>${jackson.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.pdfbox</groupId>
+      <artifactId>pdfbox</artifactId>
+      <version>${pdfbox.version}</version>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
