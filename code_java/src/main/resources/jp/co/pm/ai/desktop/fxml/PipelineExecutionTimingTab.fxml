@@ -75,6 +75,7 @@
                     <TableColumn fx:id="historyTimeColumn" prefWidth="168.0" text="日時"/>
                     <TableColumn fx:id="historyKindColumn" prefWidth="140.0" text="処理"/>
                     <TableColumn fx:id="historyDurationColumn" prefWidth="120.0" text="所要時間"/>
+                    <TableColumn fx:id="historyWriterColumn" prefWidth="180.0" text="記録端末（IP）"/>
                 </columns>
             </TableView>
         </VBox>

@@ -83,6 +83,9 @@ public final class PipelineExecutionTimingTabController {
     @FXML
     private TableColumn<HistoryRow, String> historyDurationColumn;
 
+    @FXML
+    private TableColumn<HistoryRow, String> historyWriterColumn;
+
     private final Map<PipelineExecutionTimingKind, XYChart.Series<Number, Number>> trendSeriesByKind =
             new EnumMap<>(PipelineExecutionTimingKind.class);
 
@@ -110,6 +113,8 @@ public final class PipelineExecutionTimingTabController {
                 cd -> new ReadOnlyStringWrapper(cd.getValue().kindLabel()));
         historyDurationColumn.setCellValueFactory(
                 cd -> new ReadOnlyStringWrapper(cd.getValue().durationText()));
+        historyWriterColumn.setCellValueFactory(
+                cd -> new ReadOnlyStringWrapper(cd.getValue().writerText()));
 
         for (PipelineExecutionTimingKind kind : PipelineExecutionTimingKind.values()) {
             XYChart.Series<Number, Number> series = new XYChart.Series<>();
@@ -166,12 +171,26 @@ public final class PipelineExecutionTimingTabController {
             return;
         }
         if (hintLabel != null) {
+            PipelineExecutionTimingHistoryStore store = shell.pipelineExecutionTimingHistory();
+            String lockHint =
+                    store.isPersistLocked()
+                            ? store.readPersistLockInfo()
+                                    .map(
+                                            info ->
+                                                    " 他端末が保存中: "
+                                                            + info.displayHost()
+                                                            + " / "
+                                                            + info.displayIp())
+                                    .orElse(" 他端末が保存中")
+                            : "";
             hintLabel.setText(
                     "段階1～3・サマリ Excel・納期管理ビューの実行時間を記録します。"
                             + " 履歴ファイルはサマリ Excel（"
                             + AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK
-                            + "）と同一フォルダに保存されます: "
-                            + shell.pipelineExecutionTimingHistory().storagePath());
+                            + "）と同一フォルダに保存されます（保存前に .save.lock で排他）。"
+                            + lockHint
+                            + " ファイル: "
+                            + store.storagePath());
         }
         PipelineExecutionTimingHistoryStore store = shell.pipelineExecutionTimingHistory();
         int limit = sampleLimitSpinner.getValue() != null ? sampleLimitSpinner.getValue() : 100;
@@ -208,7 +227,8 @@ public final class PipelineExecutionTimingTabController {
                     new HistoryRow(
                             FINISHED_AT.format(Instant.ofEpochMilli(s.finishedAtEpochMs())),
                             s.kind().label(),
-                            MainRunTabController.formatPipelineExecutionDuration(s.durationMs())));
+                            MainRunTabController.formatPipelineExecutionDuration(s.durationMs()),
+                            s.writerEndpointLabel()));
         }
         historyTable.setItems(FXCollections.observableArrayList(rows));
     }
@@ -287,5 +307,6 @@ public final class PipelineExecutionTimingTabController {
         statsLabel.setText(PipelineExecutionTimingHistoryStore.computeStats(samples).summaryJa());
     }
 
-    private record HistoryRow(String finishedAtText, String kindLabel, String durationText) {}
+    private record HistoryRow(
+            String finishedAtText, String kindLabel, String durationText, String writerText) {}
 }

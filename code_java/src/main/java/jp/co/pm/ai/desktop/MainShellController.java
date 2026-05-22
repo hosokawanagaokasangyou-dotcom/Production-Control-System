@@ -516,6 +516,7 @@ public final class MainShellController {
             Map<String, String> ui0 = collectUiEnv();
 
             pipelineExecutionTimingHistory.configureFromUi(ui0);
+            pipelineExecutionTimingHistory.setPersistLog(this::appendLog);
 
             mainRunTabController.bindShell(this);
             envTabController.bindShell(this);

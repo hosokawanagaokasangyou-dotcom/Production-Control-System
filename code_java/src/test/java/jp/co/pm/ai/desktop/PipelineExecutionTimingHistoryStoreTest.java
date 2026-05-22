@@ -33,16 +33,35 @@ class PipelineExecutionTimingHistoryStoreTest {
         List<PipelineExecutionTimingSample> samples =
                 List.of(
                         new PipelineExecutionTimingSample(
-                                PipelineExecutionTimingKind.STAGE2, 1L, 1_000L),
+                                PipelineExecutionTimingKind.STAGE2, 1L, 1_000L, "pc-a", "10.0.0.1"),
                         new PipelineExecutionTimingSample(
-                                PipelineExecutionTimingKind.STAGE2, 2L, 2_000L),
+                                PipelineExecutionTimingKind.STAGE2, 2L, 2_000L, "pc-a", "10.0.0.1"),
                         new PipelineExecutionTimingSample(
-                                PipelineExecutionTimingKind.STAGE2, 3L, 9_000L));
+                                PipelineExecutionTimingKind.STAGE2, 3L, 9_000L, "pc-b", "10.0.0.2"));
         List<PipelineExecutionTimingHistoryStore.HistogramBin> bins =
                 PipelineExecutionTimingHistoryStore.computeHistogram(samples, 3);
         assertEquals(3, bins.size());
         int total = bins.stream().mapToInt(PipelineExecutionTimingHistoryStore.HistogramBin::count).sum();
         assertEquals(3, total);
         assertTrue(bins.stream().allMatch(b -> b.count() >= 0));
+    }
+
+    @Test
+    void mergeSamplesUnionsDiskAndMemoryWithoutDuplicates() {
+        List<PipelineExecutionTimingSample> disk =
+                List.of(
+                        new PipelineExecutionTimingSample(
+                                PipelineExecutionTimingKind.STAGE1, 100L, 5_000L, "remote", "192.168.0.2"));
+        List<PipelineExecutionTimingSample> memory =
+                List.of(
+                        new PipelineExecutionTimingSample(
+                                PipelineExecutionTimingKind.STAGE1, 200L, 6_000L, "local", "192.168.0.1"),
+                        new PipelineExecutionTimingSample(
+                                PipelineExecutionTimingKind.STAGE1, 100L, 5_000L, "remote", "192.168.0.2"));
+        List<PipelineExecutionTimingSample> merged =
+                PipelineExecutionTimingHistoryStore.mergeSamples(disk, memory);
+        assertEquals(2, merged.size());
+        assertEquals(100L, merged.get(0).finishedAtEpochMs());
+        assertEquals(200L, merged.get(1).finishedAtEpochMs());
     }
 }

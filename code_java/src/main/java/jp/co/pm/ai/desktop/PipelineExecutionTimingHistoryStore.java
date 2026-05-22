@@ -8,11 +8,15 @@ import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,10 +24,14 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.io.PipelineExecutionTimingHistoryLock;
+import jp.co.pm.ai.desktop.io.PipelineExecutionTimingHistoryLock.AcquiredLock;
+import jp.co.pm.ai.desktop.io.PipelineExecutionTimingHistoryLock.LockInfo;
 
 /**
  * 段階1～3・サマリ Excel・納期管理ビューの実行時間履歴。永続化先は
  * {@link AppPaths#pipelineExecutionTimingHistoryPath}（サマリ Excel と同一フォルダ）。
+ * 保存前に {@link PipelineExecutionTimingHistoryLock} を取得し、他 PC 更新時はマージして排他保存する。
  */
 public final class PipelineExecutionTimingHistoryStore {
 
@@ -36,6 +44,8 @@ public final class PipelineExecutionTimingHistoryStore {
                     AppPaths.PIPELINE_EXECUTION_TIMING_HISTORY_JSON);
 
     private static final int DEFAULT_MAX_SAMPLES_PER_KIND = 300;
+    private static final int PERSIST_MAX_ATTEMPTS = 12;
+    private static final long PERSIST_RETRY_MS = 300L;
 
     public record Stats(
             long count,
@@ -70,14 +80,21 @@ public final class PipelineExecutionTimingHistoryStore {
             new EnumMap<>(PipelineExecutionTimingKind.class);
     private final CopyOnWriteArrayList<Runnable> changeListeners = new CopyOnWriteArrayList<>();
 
+    private volatile Consumer<String> persistLog;
+
     private Path storePath = AppPaths.pipelineExecutionTimingHistoryPath(Map.of());
     private int maxSamplesPerKind = DEFAULT_MAX_SAMPLES_PER_KIND;
     private boolean configured;
+
+    public void setPersistLog(Consumer<String> persistLog) {
+        this.persistLog = persistLog;
+    }
 
     /** {@link AppPaths#summaryAiDispatchXlsxPath} と同じフォルダへ履歴パスを解決して読み込む。 */
     public synchronized void configureFromUi(Map<String, String> ui) {
         Path next = AppPaths.pipelineExecutionTimingHistoryPath(ui);
         if (configured && next.equals(storePath)) {
+            reloadMergedFromDiskIfUnlocked();
             return;
         }
         load(next);
@@ -92,43 +109,20 @@ public final class PipelineExecutionTimingHistoryStore {
         samples.clear();
         lastDurationMs.clear();
         migrateLegacyStoreIfNeeded(storePath);
-        if (!Files.isRegularFile(storePath)) {
-            notifyListeners();
-            return;
-        }
-        try {
-            JsonNode root = JSON.readTree(storePath.toFile());
-            JsonNode arr = root.get("samples");
-            if (arr == null || !arr.isArray()) {
-                return;
-            }
-            for (JsonNode el : arr) {
-                if (el == null || !el.isObject()) {
-                    continue;
-                }
-                String kindName = text(el, "kind");
-                PipelineExecutionTimingKind kind = parseKind(kindName);
-                if (kind == null) {
-                    continue;
-                }
-                long finishedAt = el.path("finishedAtEpochMs").asLong(0L);
-                long durationMs = el.path("durationMs").asLong(-1L);
-                if (durationMs < 0L) {
-                    continue;
-                }
-                samples.add(new PipelineExecutionTimingSample(kind, finishedAt, durationMs));
-                lastDurationMs.put(kind, durationMs);
-            }
-            trimAllKinds();
-        } catch (IOException ignored) {
-            samples.clear();
-            lastDurationMs.clear();
-        }
+        mergeDiskIntoMemory(storePath);
         notifyListeners();
     }
 
     public synchronized Path storagePath() {
         return storePath;
+    }
+
+    public boolean isPersistLocked() {
+        return PipelineExecutionTimingHistoryLock.isLocked(storePath);
+    }
+
+    public Optional<LockInfo> readPersistLockInfo() {
+        return PipelineExecutionTimingHistoryLock.readLockInfo(storePath);
     }
 
     public void addChangeListener(Runnable listener) {
@@ -162,7 +156,11 @@ public final class PipelineExecutionTimingHistoryStore {
         lastDurationMs.put(kind, durationMs);
         samples.add(
                 new PipelineExecutionTimingSample(
-                        kind, Instant.now().toEpochMilli(), durationMs));
+                        kind,
+                        Instant.now().toEpochMilli(),
+                        durationMs,
+                        PipelineExecutionTimingHistoryLock.localHostName(),
+                        PipelineExecutionTimingHistoryLock.localHostIp()));
         trimKind(kind);
         persistAsync();
         notifyListeners();
@@ -216,6 +214,24 @@ public final class PipelineExecutionTimingHistoryStore {
         startNanos.remove(kind);
         persistAsync();
         notifyListeners();
+    }
+
+    static List<PipelineExecutionTimingSample> mergeSamples(
+            List<PipelineExecutionTimingSample> disk, List<PipelineExecutionTimingSample> memory) {
+        LinkedHashMap<String, PipelineExecutionTimingSample> merged = new LinkedHashMap<>();
+        if (disk != null) {
+            for (PipelineExecutionTimingSample s : disk) {
+                merged.put(sampleKey(s), s);
+            }
+        }
+        if (memory != null) {
+            for (PipelineExecutionTimingSample s : memory) {
+                merged.put(sampleKey(s), s);
+            }
+        }
+        List<PipelineExecutionTimingSample> out = new ArrayList<>(merged.values());
+        out.sort(Comparator.comparingLong(PipelineExecutionTimingSample::finishedAtEpochMs));
+        return List.copyOf(out);
     }
 
     public static Stats computeStats(List<PipelineExecutionTimingSample> list) {
@@ -290,6 +306,52 @@ public final class PipelineExecutionTimingHistoryStore {
         return List.copyOf(out);
     }
 
+    private synchronized void reloadMergedFromDiskIfUnlocked() {
+        if (PipelineExecutionTimingHistoryLock.isLocked(storePath)) {
+            return;
+        }
+        mergeDiskIntoMemory(storePath);
+        notifyListeners();
+    }
+
+    private synchronized void mergeDiskIntoMemory(Path target) {
+        List<PipelineExecutionTimingSample> disk = readSamplesFromFile(target);
+        List<PipelineExecutionTimingSample> merged = mergeSamples(disk, snapshotSamples());
+        replaceSamples(merged);
+    }
+
+    private synchronized List<PipelineExecutionTimingSample> snapshotSamples() {
+        return List.copyOf(samples);
+    }
+
+    private synchronized void replaceSamples(List<PipelineExecutionTimingSample> merged) {
+        samples.clear();
+        lastDurationMs.clear();
+        samples.addAll(merged);
+        for (PipelineExecutionTimingKind kind : PipelineExecutionTimingKind.values()) {
+            trimKind(kind);
+        }
+        for (PipelineExecutionTimingSample s : samples) {
+            lastDurationMs.put(s.kind(), s.durationMs());
+        }
+    }
+
+    private static String sampleKey(PipelineExecutionTimingSample s) {
+        return s.kind().name()
+                + '|'
+                + s.finishedAtEpochMs()
+                + '|'
+                + s.durationMs()
+                + '|'
+                + nz(s.writerHost())
+                + '|'
+                + nz(s.writerIp());
+    }
+
+    private static String nz(String v) {
+        return v != null ? v : "";
+    }
+
     private static String formatBinLabel(double startSec, double endSec) {
         if (startSec >= 60d || endSec >= 60d) {
             return String.format(Locale.ROOT, "%.1f–%.1f分", startSec / 60d, endSec / 60d);
@@ -309,21 +371,23 @@ public final class PipelineExecutionTimingHistoryStore {
         }
     }
 
-    private void trimAllKinds() {
-        for (PipelineExecutionTimingKind kind : PipelineExecutionTimingKind.values()) {
-            trimKind(kind);
-        }
-    }
-
     private void persistAsync() {
         Path target = storePath;
+        List<PipelineExecutionTimingSample> memorySnap;
+        synchronized (this) {
+            memorySnap = snapshotSamples();
+        }
         Thread t =
                 new Thread(
                         () -> {
                             try {
-                                persistNow(target);
-                            } catch (IOException ignored) {
-                                // 履歴保存失敗は UI 動作を止めない
+                                persistNow(target, memorySnap);
+                            } catch (IOException ex) {
+                                logPersist(
+                                        "[pipeline-timing] 履歴保存失敗: "
+                                                + (ex.getMessage() != null
+                                                        ? ex.getMessage()
+                                                        : ex.toString()));
                             }
                         },
                         "pipeline-timing-history-save");
@@ -331,21 +395,128 @@ public final class PipelineExecutionTimingHistoryStore {
         t.start();
     }
 
-    private synchronized void persistNow(Path target) throws IOException {
-        ObjectNode root = JSON.createObjectNode();
-        ArrayNode arr = root.putArray("samples");
-        synchronized (samples) {
-            for (PipelineExecutionTimingSample s : samples) {
-                ObjectNode o = arr.addObject();
-                o.put("kind", s.kind().name());
-                o.put("finishedAtEpochMs", s.finishedAtEpochMs());
-                o.put("durationMs", s.durationMs());
+    private void persistNow(Path target, List<PipelineExecutionTimingSample> memorySnap)
+            throws IOException {
+        boolean loggedWait = false;
+        for (int attempt = 0; attempt < PERSIST_MAX_ATTEMPTS; attempt++) {
+            if (attempt > 0) {
+                try {
+                    Thread.sleep(PERSIST_RETRY_MS);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+            Optional<LockInfo> holder = PipelineExecutionTimingHistoryLock.readLockInfo(target);
+            if (holder.isPresent() && !loggedWait) {
+                LockInfo info = holder.get();
+                logPersist(
+                        "[pipeline-timing] 履歴保存: 他端末の更新待ち（"
+                                + info.displayHost()
+                                + " / "
+                                + info.displayIp()
+                                + "）");
+                loggedWait = true;
+            }
+            Optional<AcquiredLock> lock = PipelineExecutionTimingHistoryLock.tryAcquire(target);
+            if (lock.isEmpty()) {
+                continue;
+            }
+            try (AcquiredLock acquired = lock.get()) {
+                List<PipelineExecutionTimingSample> disk = readSamplesFromFile(target);
+                List<PipelineExecutionTimingSample> merged = mergeSamples(disk, memorySnap);
+                synchronized (this) {
+                    replaceSamples(merged);
+                }
+                writeSamplesToFile(target, merged);
+                logPersist(
+                        "[pipeline-timing] 履歴保存: "
+                                + target
+                                + " （"
+                                + merged.size()
+                                + " 件, 記録端末 "
+                                + PipelineExecutionTimingHistoryLock.localHostIp()
+                                + "）");
+                notifyListeners();
+                return;
             }
         }
-        Files.createDirectories(target.getParent());
+        logPersist("[pipeline-timing] 履歴保存失敗: ロック取得タイムアウト（" + target + "）");
+    }
+
+    private static List<PipelineExecutionTimingSample> readSamplesFromFile(Path target) {
+        if (!Files.isRegularFile(target)) {
+            return List.of();
+        }
+        try {
+            JsonNode root = JSON.readTree(target.toFile());
+            JsonNode arr = root.get("samples");
+            if (arr == null || !arr.isArray()) {
+                return List.of();
+            }
+            List<PipelineExecutionTimingSample> out = new ArrayList<>();
+            for (JsonNode el : arr) {
+                PipelineExecutionTimingSample s = parseSample(el);
+                if (s != null) {
+                    out.add(s);
+                }
+            }
+            return out;
+        } catch (IOException ex) {
+            return List.of();
+        }
+    }
+
+    private static PipelineExecutionTimingSample parseSample(JsonNode el) {
+        if (el == null || !el.isObject()) {
+            return null;
+        }
+        PipelineExecutionTimingKind kind = parseKind(text(el, "kind"));
+        if (kind == null) {
+            return null;
+        }
+        long finishedAt = el.path("finishedAtEpochMs").asLong(0L);
+        long durationMs = el.path("durationMs").asLong(-1L);
+        if (durationMs < 0L) {
+            return null;
+        }
+        return new PipelineExecutionTimingSample(
+                kind,
+                finishedAt,
+                durationMs,
+                text(el, "writerHost"),
+                text(el, "writerIp"));
+    }
+
+    private static void writeSamplesToFile(
+            Path target, List<PipelineExecutionTimingSample> merged) throws IOException {
+        ObjectNode root = JSON.createObjectNode();
+        ArrayNode arr = root.putArray("samples");
+        for (PipelineExecutionTimingSample s : merged) {
+            ObjectNode o = arr.addObject();
+            o.put("kind", s.kind().name());
+            o.put("finishedAtEpochMs", s.finishedAtEpochMs());
+            o.put("durationMs", s.durationMs());
+            o.put("writerHost", nz(s.writerHost()));
+            o.put("writerIp", nz(s.writerIp()));
+        }
+        if (target.getParent() != null) {
+            Files.createDirectories(target.getParent());
+        }
         Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
         JSON.writerWithDefaultPrettyPrinter().writeValue(tmp.toFile(), root);
         Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+    }
+
+    private void logPersist(String line) {
+        Consumer<String> log = persistLog;
+        if (log != null) {
+            try {
+                log.accept(line);
+            } catch (RuntimeException ignored) {
+                // ログ出力失敗で計測本体を止めない
+            }
+        }
     }
 
     private void notifyListeners() {
