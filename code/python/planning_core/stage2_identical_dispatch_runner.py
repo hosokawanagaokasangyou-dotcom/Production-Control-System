@@ -4,6 +4,7 @@
 
 - 段階2の正本: ``master`` の工場時間コンテキストのうえで ``_generate_plan_impl()`` を
   オーバーライド無しで実行する（従来 ``generate_plan()`` が担っていた処理）。
+  配台失敗ポリシーは段階3（段階2同一パリティ）と同一（前提未満足のみ致命・他は後ろ倒し）。
 - 段階3の正本: 結果_配台表 JSON の ``rows`` / ``columns`` を読み、タスク DataFrame に
   マージしたうえで ``PM_AI_INTERACTIVE_TRIAL_STAGE2_PARITY=1`` を付与し、
   配台エンジン条件を段階2と同一にした ``_generate_plan_impl`` を実行する。

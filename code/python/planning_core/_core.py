@@ -92,7 +92,7 @@ _STAGE2_MACHINE_CALENDAR_CACHE: dict | None = None
 # - 指定数量は結果タイムラインと突き合わせ、依頼NO×機械の合計が一致しないとき PlanningValidationError。
 # - 工場枠は master A12/B12 開始・同日 23:59 まで拡張可、暦日跨ぎ加工は中止。
 # - 配台試行時はチーム終業上限を同日 23:59 まで緩め、機械空きが退勤より遅い場合でも同日フォーム探索する。
-# - 人不足は op_shortage / as_shortage に記録（段階3・段階2同一パリティでは記録しない＝後ろ倒し）。
+# - 人不足は op_shortage / as_shortage に記録（段階2標準・段階3同一パリティでは記録しない＝後ろ倒し）。
 _INTERACTIVE_TRIAL_OP_SHORTAGE: list[dict] = []
 _INTERACTIVE_TRIAL_AS_SHORTAGE: list[dict] = []
 # 試行終了時の _interactive_trial_meters_done のコピー（targets との突合用）
@@ -19677,7 +19677,9 @@ def _stage2_truthy_env(name: str) -> bool:
 
 
 # 勤怠に載っている最終日までで割付は終ゝらないとし」最終日とともにシフト型で日付を延長れる（オプション）。
-# False のとき段階2はマスタ勤怠の日付範囲のみで割付し、残りは配台残・配台試行のままとれる。
+# 段階2標準・段階3（段階2同一パリティ）は _stage2_extend_attendance_calendar_enabled() が既定 True。
+# 無効化: 環境変数 PM_AI_STAGE2_EXTEND_ATTENDANCE_CALENDAR=0（JavaFX 環境タブからも可）。
+# 下記定数はインタラクティブ配台試行（非パリティ）など後方互換用。
 STAGE2_EXTEND_ATTENDANCE_CALENDAR = False
 SCHEDULE_EXTEND_MAX_EXTRA_DAYS = 366
 
@@ -25855,24 +25857,49 @@ def _interactive_validate_timeline_midnight_if_interactive(
                 )
 
 
+def _dispatch_postpone_only_policy_active() -> bool:
+    """
+    段階2標準・段階3（段階2同一パリティ）の配台失敗ポリシー。
+    配台「できない」は master 上で機械カレンダー・勤怠が未作成のときのみ（ループ前に検証）。
+    それ以外は後ろ倒し（配台残）。インタラクティブ試行の従来モード（非パリティ）では False。
+    """
+    if not _interactive_dispatch_trial_env_active():
+        return True
+    return _interactive_stage2_parity_active()
+
+
+def _stage2_extend_attendance_calendar_enabled() -> bool:
+    """段階2標準・段階3パリティ: 勤怠があれば残量は後ろ倒しで割付するため、計画日を自動拡張する。"""
+    if _dispatch_postpone_only_policy_active():
+        if _stage2_truthy_env("PM_AI_STAGE2_EXTEND_ATTENDANCE_CALENDAR"):
+            return True
+        v = (os.environ.get("PM_AI_STAGE2_EXTEND_ATTENDANCE_CALENDAR") or "").strip().lower()
+        if v in ("0", "false", "no", "off", "none", "いいえ"):
+            return False
+        return True
+    return STAGE2_EXTEND_ATTENDANCE_CALENDAR
+
+
 def _stage3_extend_attendance_calendar_enabled() -> bool:
-    """段階3（段階2同一パリティ）: 勤怠があれば残量は後ろ倒しで割付するため、計画日を自動拡張する。"""
-    return _interactive_dispatch_trial_env_active() and _interactive_stage2_parity_active()
+    """後方互換。段階3パリティと同一判定。"""
+    return _stage2_extend_attendance_calendar_enabled()
 
 
-def _validate_stage3_master_prerequisites(
+def _validate_master_dispatch_prerequisites(
     master_path: str,
     members: list,
     equipment_list: list | None,
+    *,
+    context_label: str = "配台計画",
 ) -> None:
     """
-    段階3（段階2同一パリティ）の前提。
+    段階2標準・段階3（段階2同一パリティ）の master 前提。
     配台「できない」唯一の理由は master 上で機械カレンダー・人の勤怠が未作成であることのみ。
     """
     xls = _cached_master_pd_excel_file(master_path)
     if xls is None:
         raise PlanningValidationError(
-            "段階3配台試行: master.xlsm を開けません。パスとファイルの存在を確認してください。"
+            f"{context_label}: master.xlsm を開けません。パスとファイルの存在を確認してください。"
         )
 
     att_sheet_count = 0
@@ -25898,25 +25925,25 @@ def _validate_stage3_master_prerequisites(
             continue
     if att_sheet_count == 0 or att_date_rows == 0:
         raise PlanningValidationError(
-            "段階3配台試行: 人の勤怠が作成されていません。"
-            " master.xlsm で各メンバーの勤怠シートを作成し、日付行を入力してから試行してください。"
+            f"{context_label}: 人の勤怠が作成されていません。"
+            " master.xlsm で各メンバーの勤怠シートを作成し、日付行を入力してから実行してください。"
         )
 
     if SHEET_MACHINE_CALENDAR not in xls.sheet_names:
         raise PlanningValidationError(
-            "段階3配台試行: 機械カレンダーが作成されていません。"
-            " master.xlsm で VBA「機械カレンダーを作成」を実行してから試行してください。"
+            f"{context_label}: 機械カレンダーが作成されていません。"
+            " master.xlsm で VBA「機械カレンダーを作成」を実行してから実行してください。"
         )
     try:
         raw = pd.read_excel(xls, sheet_name=SHEET_MACHINE_CALENDAR, header=None)
     except Exception as e:
         raise PlanningValidationError(
-            "段階3配台試行: 機械カレンダーが読み込めません。"
+            f"{context_label}: 機械カレンダーが読み込めません。"
             f" ({e})"
         ) from e
     if raw.shape[0] < 3 or raw.shape[1] < 3:
         raise PlanningValidationError(
-            "段階3配台試行: 機械カレンダーが作成されていません（シートが空または未構成）。"
+            f"{context_label}: 機械カレンダーが作成されていません（シートが空または未構成）。"
             " VBA「機械カレンダーを作成」を実行してください。"
         )
     slot_rows = 0
@@ -25935,7 +25962,7 @@ def _validate_stage3_master_prerequisites(
             header_pairs += 1
     if slot_rows == 0 or header_pairs == 0:
         raise PlanningValidationError(
-            "段階3配台試行: 機械カレンダーが作成されていません"
+            f"{context_label}: 機械カレンダーが作成されていません"
             "（日時スロット行または設備列がありません）。"
             " VBA「機械カレンダーを作成」を実行してください。"
         )
@@ -25947,9 +25974,21 @@ def _validate_stage3_master_prerequisites(
         )
         if not blocks and slot_rows > 0 and header_pairs > 0:
             logging.info(
-                "段階3: 機械カレンダーは存在しますが、skills の設備列と一致する列がありません。"
-                " 占有ブロックは空として続行します。"
+                "%s: 機械カレンダーは存在しますが、skills の設備列と一致する列がありません。"
+                " 占有ブロックは空として続行します。",
+                context_label,
             )
+
+
+def _validate_stage3_master_prerequisites(
+    master_path: str,
+    members: list,
+    equipment_list: list | None,
+) -> None:
+    """段階3（段階2同一パリティ）向けラッパ。"""
+    _validate_master_dispatch_prerequisites(
+        master_path, members, equipment_list, context_label="段階3配台試行"
+    )
 
 
 def _interactive_append_team_shortage_op_as(
@@ -25962,8 +26001,8 @@ def _interactive_append_team_shortage_op_as(
 ) -> None:
     if not _interactive_dispatch_trial_env_active():
         return
-    # 段階3（段階2同一）: 同日の人員不足は後ろ倒しで解消するため、配台不可理由として記録しない。
-    if _interactive_stage2_parity_active():
+    # 段階2標準・段階3同一: 同日の人員不足は後ろ倒しで解消するため、配台不可理由として記録しない。
+    if _dispatch_postpone_only_policy_active():
         return
     _cap_n = len(capable_members or [])
     _req_n = int(req_num)
@@ -26019,11 +26058,11 @@ def _interactive_append_machining_end_after_member_shift_shortages(
     """
     インタラクティブ配台試行: 加工セグメント終了が、割り当てメンバーの勤務 end_dt を超えるとき
     as_shortage に記録する（JavaFX の dispatch_trial_shortages.json 連携）。
-    段階3（段階2同一）では記録しない（後ろ倒し前提）。
+    段階2標準・段階3同一では記録しない（後ろ倒し前提）。
     """
     if not _interactive_dispatch_trial_env_active():
         return
-    if _interactive_stage2_parity_active():
+    if _dispatch_postpone_only_policy_active():
         return
     if not timeline_events or not attendance_data:
         return
@@ -26229,13 +26268,13 @@ def compute_interactive_trial_dispatch_qty_shortfall(
     interactive_dispatch_targets（目標メートル）と meters_done を突き合わせ、
     目標を満たせない暦日キーを一覧化する（JavaFX 未達ハイライト用）。
 
-    段階3（段階2同一）では、配台できない理由は機械カレンダー・勤怠未作成のみとし、
+    段階2標準・段階3同一では、配台できない理由は機械カレンダー・勤怠未作成のみとし、
     暦日単位のメートル未達は後ろ倒しの途中経過として UI に出さない。
 
     同一 (依頼NO, 工程名, 機械名) に複数配台日があるとき、行ごとの不足があっても
     タイムライン総実績が総目標に達していれば未達行は出さない（再集計ズレの誤検知抑止）。
     """
-    if _interactive_stage2_parity_active():
+    if _dispatch_postpone_only_policy_active():
         return []
     out: list[dict] = []
     if not targets:
@@ -33198,13 +33237,23 @@ def _generate_plan_impl(
             os.getcwd(),
         )
         return
-    if _interactive_dispatch_trial_env_active() and _interactive_stage2_parity_active():
-        _mp_stage3 = _master_workbook_path_resolved()
-        _validate_stage3_master_prerequisites(_mp_stage3, members, equipment_list)
-        _LAST_INTERACTIVE_STAGE3_META["dispatch_failure_policy"] = (
-            "machine_calendar_or_attendance_missing_only"
+    if _dispatch_postpone_only_policy_active():
+        _mp_prereq = _master_workbook_path_resolved()
+        _ctx = (
+            "段階3配台試行"
+            if _interactive_dispatch_trial_env_active()
+            else "段階2"
         )
-        _LAST_INTERACTIVE_STAGE3_META["extend_attendance_calendar"] = True
+        _validate_master_dispatch_prerequisites(
+            _mp_prereq, members, equipment_list, context_label=_ctx
+        )
+        if _interactive_dispatch_trial_env_active() and _interactive_stage2_parity_active():
+            _LAST_INTERACTIVE_STAGE3_META["dispatch_failure_policy"] = (
+                "machine_calendar_or_attendance_missing_only"
+            )
+            _LAST_INTERACTIVE_STAGE3_META["extend_attendance_calendar"] = (
+                _stage2_extend_attendance_calendar_enabled()
+            )
     global _MACHINE_CALENDAR_BLOCKS_BY_DATE
     global _MACHINE_CALENDAR_INTERACTIVE_DEFINED_SLOTS_BY_DATE
     global _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE
@@ -33674,8 +33723,7 @@ def _generate_plan_impl(
 
         _plan_day_iter = (
             _iter_plan_dates_extending(sorted_dates, attendance_data, task_queue)
-            if STAGE2_EXTEND_ATTENDANCE_CALENDAR
-            or _stage3_extend_attendance_calendar_enabled()
+            if _stage2_extend_attendance_calendar_enabled()
             else sorted_dates
         )
         _full_calendar_without_deadline_restart = True
@@ -35367,7 +35415,8 @@ def _generate_plan_impl(
         return "／".join(parts) if parts else "割当なし"
 
     task_results = []
-    # ステータス（配台の状態・残）：完了相当=配台済、未割当=配台不可、一部のみ=配台残
+    # ステータス（配台の状態・残）：完了相当=配台済。
+    # 段階2標準・段階3同一: 未割当=配台残(計画期間内未割当)、一部=配台残（配台不可は master 前提失敗時のみ・ループ前）。
     # 計画基準+1 の再試行は依頼NOごとの上限に達した依頼の未完了行には（納期見直し必須）を付与する。
     sorted_tasks_for_result = sorted(task_queue, key=_result_task_sheet_sort_key)
     _interactive_hist_override: dict[tuple[str, str], list[dict]] = {}
@@ -35426,12 +35475,12 @@ def _generate_plan_impl(
         if rem_u <= 1e-9 and (rem_u >= 0 or _rem_abs_m <= _noise_tol_m):
             status = "配台済"
         elif hist and t.get("_partial_retry_calendar_blocked"):
-            if _interactive_stage2_parity_active():
+            if _dispatch_postpone_only_policy_active():
                 status = "配台残(勤怠カレンダー不足)"
             else:
                 status = "配台残(勤務カレンダー不足)"
         elif not hist and rem_u > 1e-9:
-            if _interactive_stage2_parity_active():
+            if _dispatch_postpone_only_policy_active():
                 status = "配台残(計画期間内未割当)"
             else:
                 status = "配台不可"

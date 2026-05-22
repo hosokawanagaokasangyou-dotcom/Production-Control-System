@@ -104,7 +104,7 @@ public final class DispatchTrialUnassignedWizard {
                         "配台試行の結果、計画上「配台不可」のタスクが "
                                 + rows.size()
                                 + " 件あります。"
-                                + " 段階3（段階2同一）では通常は「配台残」となり、"
+                                + " 段階2・段階3（段階2同一）では通常は「配台残」となり、"
                                 + " 本一覧は master の機械カレンダー・勤怠未作成などの致命時に限られます。"
                                 + " 一覧を確認し、次のステップで対応を選んでください。");
         intro.setWrapText(true);

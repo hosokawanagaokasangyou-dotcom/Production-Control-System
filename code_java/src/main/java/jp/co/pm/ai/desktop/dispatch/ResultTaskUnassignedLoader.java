@@ -12,6 +12,7 @@ import jp.co.pm.ai.desktop.io.JsonTableIo;
 
 /**
  * 結果_タスク一覧 JSON から「ステータス=配台不可」の行を抽出する。
+ * 段階2標準では未割当は {@code 配台残(計画期間内未割当)} 等となり、本ローダーは通常ヒットしない。
  *
  * <p>パス解決は {@code plan_workbook_sidecar.result_task_sidecar_path} と同じ規則（
  * production_plan のベース名 + {@code _結果_タスク一覧.json}）。{@code PM_AI_PLAN_RESULT_TASK_JSON_PATH}
