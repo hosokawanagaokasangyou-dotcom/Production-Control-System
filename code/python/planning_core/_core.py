@@ -1362,7 +1362,7 @@ DEBUG_DISPATCH_ONLY_TASK_IDS: frozenset[str] = frozenset()
 DISPATCH_TRACE_OUTER_ROUND: int = 0
 
 # 段階1 材料テーブル追記デバッグ（session d2735c）
-_STAGE1_MATERIAL_TABLE_APPEND_BUILD = "20260522d2735c-code-dir"
+_STAGE1_MATERIAL_TABLE_APPEND_BUILD = "20260522d2735c-write-canonical"
 
 
 def _agent_debug_exclude_rules_log(
@@ -16317,6 +16317,14 @@ def _append_code_dispatch_lookup_table_row_if_missing(
     )
     # #endregion
     if not normalized_key or normalized_key in known_keys or normalized_key in appended:
+        if skip_reason:
+            logging.info(
+                "%sテーブル追記スキップ（%s）: %r path=%s",
+                log_table_label,
+                skip_reason,
+                normalized_key,
+                table_path,
+            )
         return False
     display = str(raw_key_display or "").strip()
     if not display:
@@ -16545,8 +16553,7 @@ def _resolve_raw_fabric_width_mm_for_stage1_row(
         _append_code_dispatch_lookup_table_row_if_missing(
             display,
             nk,
-            table_path=table_path
-            or _resolve_code_lookup_table_path_for_write(
+            table_path=_resolve_code_lookup_table_path_for_write(
                 _raw_fabric_width_table_search_paths(),
                 RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME,
             ),
@@ -16649,8 +16656,7 @@ def _resolve_product_length_mm_for_stage1_row(
         _append_code_dispatch_lookup_table_row_if_missing(
             display,
             nk,
-            table_path=table_path
-            or _resolve_code_lookup_table_path_for_write(
+            table_path=_resolve_code_lookup_table_path_for_write(
                 _product_length_table_search_paths(),
                 PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME,
             ),
@@ -16715,8 +16721,7 @@ def _resolve_product_width_mm_for_stage1_row(
         _append_code_dispatch_lookup_table_row_if_missing(
             display,
             nk,
-            table_path=table_path
-            or _resolve_code_lookup_table_path_for_write(
+            table_path=_resolve_code_lookup_table_path_for_write(
                 _product_width_table_search_paths(),
                 PRODUCT_WIDTH_TABLE_DEFAULT_FILENAME,
             ),
@@ -16845,10 +16850,11 @@ def _append_product_thickness_table_row_if_missing(
     appended: set[str],
 ) -> bool:
     """段階1: 製品厚みテーブルに未登録キーを空欄値で追記する。"""
+    write_path = _resolve_product_thickness_table_path_for_write()
     return _append_code_dispatch_lookup_table_row_if_missing(
         raw_product_name,
         normalized_key,
-        table_path=table_path or _resolve_product_thickness_table_path_for_write(),
+        table_path=write_path,
         header_line="製品名,製品厚み",
         known_keys=known_keys,
         appended=appended,
@@ -17109,7 +17115,13 @@ def run_stage1_extract():
     pl_table, pl_known_keys, pl_table_path = _load_product_length_mm_table()
     pl_appended_keys: set[str] = set()
     pt_table, pt_known_keys, pt_table_path = _load_product_thickness_mm_table()
+    pt_write_path = _resolve_product_thickness_table_path_for_write()
     pt_appended_keys: set[str] = set()
+    logging.info(
+        "段階1: 製品厚みテーブル 読込=%s 追記先(正本)=%s",
+        pt_table_path,
+        pt_write_path,
+    )
     # #region agent log
     _agent_debug_stage1_material_log(
         "H2",
@@ -17117,7 +17129,7 @@ def run_stage1_extract():
         "thickness_table_paths",
         {
             "loadPath": pt_table_path,
-            "writePathDefault": _resolve_product_thickness_table_path_for_write(),
+            "writePathDefault": pt_write_path,
             "planningCodeDir": _resolve_planning_code_dir(),
             "knownKeyCount": len(pt_known_keys),
             "valueCount": len(pt_table),
@@ -17164,7 +17176,7 @@ def run_stage1_extract():
         _th_mm = _resolve_product_thickness_mm_for_stage1_row(
             row,
             pt_table,
-            table_path=pt_table_path,
+            table_path=pt_write_path,
             known_keys=pt_known_keys,
             appended=pt_appended_keys,
         )
