@@ -83,7 +83,8 @@ public final class CodeDispatchLookupTablesTabController {
     private void initialize() {
         hintLabel.setText(
                 "リポジトリ直下の code/ にある材料・製品種類に関するテーブルを編集します（UTF-8）。"
-                        + " 段階1が正常終了したとき、plan_input_tasks の製品名・使用原反で不足キーのみ自動追記します。");
+                        + " 段階1が正常終了したとき、plan_input_tasks の製品名・使用原反で不足キーのみ自動追記します。"
+                        + " 値が空欄の行があると段階2・段階3は実行できません。");
         for (FileSpec spec : FILES) {
             Tab tab = new Tab(spec.tabLabel());
             FilePanel panel = new FilePanel(spec);

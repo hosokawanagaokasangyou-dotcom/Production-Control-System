@@ -49,8 +49,10 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Labeled;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ProgressIndicator;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.TreeItem;
 import javafx.scene.layout.HBox;
@@ -3307,6 +3309,9 @@ public final class MainShellController {
         if (STAGE2.equals(script) && blockIfSummaryAiDispatchExportLocked("段階2")) {
             return;
         }
+        if (STAGE2.equals(script) && blockIfMaterialLookupTablesHaveBlankValues("段階2")) {
+            return;
+        }
         if (!runLock.compareAndSet(false, true)) {
             appendLog("[busy] already running (single flight).");
             return;
@@ -3738,8 +3743,37 @@ public final class MainShellController {
             body.append(detailMessage.trim()).append('\n');
         }
         body.append("\n詳細は「実行・ログ」タブのログを確認してください。");
-        alert.setContentText(body.toString());
+        applyScrollableAlertBody(alert, body.toString());
         alert.showAndWait();
+    }
+
+    /**
+     * 長文 Alert で OK ボタンが画面外に押し出されないよう、本文を ScrollPane 内に収める。
+     */
+    private void applyScrollableAlertBody(Alert alert, String bodyText) {
+        TextArea area = new TextArea(bodyText != null ? bodyText : "");
+        area.setEditable(false);
+        area.setWrapText(true);
+        area.setPrefRowCount(10);
+        ScrollPane scroll = new ScrollPane(area);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        double maxViewport = alertScrollMaxViewportHeight();
+        scroll.setPrefViewportHeight(Math.min(320, maxViewport));
+        scroll.setMaxHeight(maxViewport);
+        alert.getDialogPane().setContent(scroll);
+        alert.setResizable(true);
+        alert.getDialogPane().setPrefWidth(680);
+    }
+
+    /** ダイアログのタイトル・ボタン行分を除いた ScrollPane 高さ上限。 */
+    private static double alertScrollMaxViewportHeight() {
+        Rectangle2D bounds =
+                Screen.getPrimary() != null
+                        ? Screen.getPrimary().getVisualBounds()
+                        : new Rectangle2D(0, 0, 1280, 800);
+        return Math.max(200, bounds.getHeight() * 0.42);
     }
 
     /**
@@ -3832,7 +3866,7 @@ public final class MainShellController {
                 body.append(ln).append('\n');
             }
         }
-        alert.setContentText(body.toString());
+        applyScrollableAlertBody(alert, body.toString());
         alert.showAndWait();
     }
 
@@ -4414,6 +4448,9 @@ public final class MainShellController {
         if (blockIfSummaryAiDispatchExportLocked("段階2")) {
             return;
         }
+        if (blockIfMaterialLookupTablesHaveBlankValues("段階2")) {
+            return;
+        }
         if (dispatchInteractiveTabController != null
                 && dispatchInteractiveTabController.isDispatchDocDirtySinceSave()) {
             appendLog(
@@ -4573,6 +4610,47 @@ public final class MainShellController {
                         + "完了後に再試行するか、実行・ログタブの「ロック解除」を使用してください。");
         refreshSummaryWorkbookLockUi();
         return true;
+    }
+
+    /**
+     * 材料・製品種類情報（{@code code/}）に値が空欄の行があればログと警告を出し true（呼び出し側は処理を中止）。
+     *
+     * @param operationLabelJa ユーザー向けの処理名（例: 段階2、配台試行（段階3））
+     */
+    boolean blockIfMaterialLookupTablesHaveBlankValues(String operationLabelJa) {
+        try {
+            CodeDispatchLookupTablesValidator.ValidationResult vr =
+                    CodeDispatchLookupTablesValidator.validateNoBlankValues(collectUiEnv());
+            if (vr.ok()) {
+                return false;
+            }
+            appendLog(
+                    "[材料テーブル] "
+                            + operationLabelJa
+                            + " を中止（材料・製品種類情報に値が空欄の行があります）");
+            for (String line : vr.logLines()) {
+                appendLog(line);
+            }
+            showWarningDialog(
+                    "材料テーブル未入力",
+                    operationLabelJa
+                            + " は実行できません。\n\n"
+                            + vr.messageJa(12));
+            return true;
+        } catch (IOException ex) {
+            appendLog(
+                    "[材料テーブル] "
+                            + operationLabelJa
+                            + " を中止（材料テーブルの検証に失敗: "
+                            + ex.getMessage()
+                            + "）");
+            showErrorDialog(
+                    "材料テーブル検証失敗",
+                    operationLabelJa
+                            + " は実行できません。\n材料・製品種類情報（code/）の読み込みに失敗しました。\n"
+                            + ex.getMessage());
+            return true;
+        }
     }
 
     /** 実行・ログタブのサマリ「開く」ボタンと、段階2／段階3／納期再読込の実行可否を更新する。 */

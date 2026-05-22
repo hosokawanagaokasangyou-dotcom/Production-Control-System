@@ -843,6 +843,9 @@ public final class DispatchInteractiveTabController {
         if (shell.blockIfSummaryAiDispatchExportLocked("配台試行（段階3）")) {
             return;
         }
+        if (shell.blockIfMaterialLookupTablesHaveBlankValues("配台試行（段階3）")) {
+            return;
+        }
         if (reloadInteractionDisabled || dispatchDocDirtySinceSave) {
             return;
         }
