@@ -16,7 +16,6 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -107,14 +106,6 @@ final class StartupSplashStage {
         brandRow.getStyleClass().add("splash-brand-row");
         brandRow.setAlignment(Pos.CENTER_LEFT);
 
-        FlowPane processRow = new FlowPane(6, 4);
-        processRow.getStyleClass().add("splash-process-row");
-        for (String process : new String[] {"ロール", "スライス", "スリット", "梱包"}) {
-            Label chip = new Label(process);
-            chip.getStyleClass().add("splash-process-chip");
-            processRow.getChildren().add(chip);
-        }
-
         Label status = new Label("発泡樹脂のロール加工・配台システムを起動しています…");
         status.getStyleClass().add("splash-status");
 
@@ -137,7 +128,7 @@ final class StartupSplashStage {
         footer.getStyleClass().add("splash-footer");
         footer.setAlignment(Pos.CENTER_RIGHT);
 
-        VBox content = new VBox(10, brandRow, processRow, status, busy, footer);
+        VBox content = new VBox(10, brandRow, status, busy, footer);
         content.getStyleClass().add("splash-content");
         content.setAlignment(Pos.CENTER_LEFT);
         VBox.setMargin(busy, new Insets(2, 0, 0, 17));

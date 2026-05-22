@@ -122,25 +122,6 @@
     -fx-letter-spacing: 0.1em;
 }
 
-.splash-process-row {
-    -fx-spacing: 6px;
-    -fx-alignment: center-left;
-    -fx-padding: 2 0 0 17;
-}
-
-.splash-process-chip {
-    -fx-font-family: "Segoe UI", "Yu Gothic UI", "Noto Sans CJK JP", sans-serif;
-    -fx-font-size: 10px;
-    -fx-font-weight: bold;
-    -fx-text-fill: #e2e8f0;
-    -fx-background-color: rgba(248, 250, 252, 0.08);
-    -fx-border-color: rgba(148, 163, 184, 0.35);
-    -fx-border-width: 1px;
-    -fx-border-radius: 3px;
-    -fx-background-radius: 3px;
-    -fx-padding: 2px 8px;
-}
-
 .splash-status {
     -fx-font-family: "Yu Gothic UI", "Meiryo UI", Meiryo, "Segoe UI", "Noto Sans CJK JP", sans-serif;
     -fx-font-size: 13px;
