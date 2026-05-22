@@ -41,8 +41,6 @@
                 <StackPane fx:id="stage1NetworkCacheBadgeHost" alignment="CENTER_LEFT" managed="false" styleClass="pm-stage1-network-cache-badge-host" visible="false" />
                 <Button fx:id="stage1RunButton" mnemonicParsing="false" onAction="#onStage1RunButtonAction" styleClass="pm-stage-run-button,pm-stage-run-1" text="段階1 実行" />
                 <CheckBox fx:id="stage1ClearCacheAndRunCheckBox" mnemonicParsing="false" text="キャッシュをクリアして実行" />
-                <Label text="段階2 Excel フォント" />
-                <ComboBox fx:id="stage2ResultBookFontCombo" editable="true" prefWidth="220.0" />
             </HBox>
             <HBox alignment="CENTER_LEFT" spacing="8.0" styleClass="pm-run-log-toolbar">
                 <Label text="種別" />
@@ -74,6 +72,10 @@
                         <content>
                             <VBox fillWidth="true" spacing="12.0" styleClass="pm-run-secondary-panel">
                                 <Label styleClass="pm-section-title" text="段階2 成果物" />
+                                <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                    <Label text="段階2 Excel フォント" />
+                                    <ComboBox fx:id="stage2ResultBookFontCombo" editable="true" prefWidth="220.0" />
+                                </HBox>
                                 <GridPane hgap="10.0" styleClass="pm-run-actions-grid" vgap="10.0">
                                     <Label text="production_plan（最新）" GridPane.columnIndex="0" GridPane.rowIndex="0" />
                                     <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="0">
