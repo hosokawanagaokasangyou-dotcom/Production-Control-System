@@ -106,6 +106,7 @@ import jp.co.pm.ai.desktop.config.EnvVarDocs;
 import jp.co.pm.ai.desktop.config.InitSettingPersistence;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
+import jp.co.pm.ai.desktop.ui.Stage1NewMaterialLookupDialog;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
@@ -3636,8 +3637,9 @@ public final class MainShellController {
                     appendLog("[stage1] 材料・製品種類情報(code/) 自動追記失敗: " + ex.getMessage());
                 }
                 if (codeDispatchLookupTablesTabController != null) {
-                    Platform.runLater(() -> codeDispatchLookupTablesTabController.reloadAllFromDisk());
+                    codeDispatchLookupTablesTabController.reloadAllFromDisk();
                 }
+                promptStage1NewMaterialLookupsAfterMerge();
                 if (reloadAfterStage1Preview != null) {
                     reloadAfterStage1Preview.run();
                 }
@@ -3648,7 +3650,8 @@ public final class MainShellController {
                 refreshEquipmentGanttGraphicAfterPipelineRun();
                 MacroCompleteChime.playIfAvailable(collectUiEnv());
                 selectMainShellTab(MainShellTabId.PLAN_INPUT);
-                showStageCompletionDialog("段階1 完了", "段階1 の処理が正常終了しました。");
+                String completionMsg = buildStage1CompletionMessage();
+                showStageCompletionDialog("段階1 完了", completionMsg);
             }
             if (STAGE2.equals(script)) {
                 if (c == 0) {
@@ -4728,6 +4731,74 @@ public final class MainShellController {
                         + "完了後に再試行するか、実行・ログタブの「ロック解除」を使用してください。");
         refreshSummaryWorkbookLockUi();
         return true;
+    }
+
+    /**
+     * 段階1マージ後: 新規追記された空欄キーがあれば入力ダイアログを出し、OK 時に {@code code/} へ書き戻す。
+     */
+    private void promptStage1NewMaterialLookupsAfterMerge() {
+        try {
+            CodeDispatchLookupTablesValidator.ValidationResult vr =
+                    CodeDispatchLookupTablesValidator.validateNoBlankValues(collectUiEnv());
+            if (vr.ok()) {
+                return;
+            }
+            CodeDispatchLookupTablesBlankPrompt.PromptBundle bundle =
+                    CodeDispatchLookupTablesBlankPrompt.collectPrompt(collectUiEnv(), vr);
+            if (bundle.empty()) {
+                return;
+            }
+            appendLog(
+                    "[stage1] 新規材料・製品種類 "
+                            + (bundle.products() != null ? bundle.products().size() : 0)
+                            + " 製品 / "
+                            + (bundle.usedRaws() != null ? bundle.usedRaws().size() : 0)
+                            + " 原反 — 入力ダイアログを表示します。");
+            Optional<Stage1NewMaterialLookupDialog.Result> entered =
+                    Stage1NewMaterialLookupDialog.prompt(primaryStageForDialogs(), bundle);
+            if (entered.isEmpty()) {
+                appendLog(
+                        "[stage1] 新規材料・製品種類の入力ダイアログをキャンセルしました（空欄のまま）。"
+                                + " 段階2・段階3実行前に「材料・製品種類情報」タブで入力してください。");
+                return;
+            }
+            CodeDispatchLookupTablesBlankPrompt.ApplySummary applied =
+                    CodeDispatchLookupTablesBlankPrompt.applyInputs(
+                            collectUiEnv(),
+                            entered.get().products(),
+                            entered.get().usedRaws());
+            appendLog(
+                    "[stage1] 新規材料・製品種類をダイアログ入力で登録しました（"
+                            + applied.updatedFields()
+                            + " フィールド更新）。");
+            if (codeDispatchLookupTablesTabController != null) {
+                codeDispatchLookupTablesTabController.reloadAllFromDisk();
+            }
+        } catch (IOException ex) {
+            appendLog(
+                    "[stage1] 新規材料・製品種類ダイアログ失敗: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+            showWarningDialog(
+                    "材料テーブル入力",
+                    "新規材料・製品種類の入力ダイアログを表示できませんでした。\n"
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString())
+                            + "\n\n「材料・製品種類情報」タブで手動入力してください。");
+        }
+    }
+
+    private String buildStage1CompletionMessage() {
+        try {
+            CodeDispatchLookupTablesValidator.ValidationResult vr =
+                    CodeDispatchLookupTablesValidator.validateNoBlankValues(collectUiEnv());
+            if (vr.ok()) {
+                return "段階1 の処理が正常終了しました。";
+            }
+            return "段階1 の処理が正常終了しました。\n\n"
+                    + "材料・製品種類情報（code/）に値が空欄の行が残っています。"
+                    + " 段階2・段階3の前に「材料・製品種類情報」タブで入力してください。";
+        } catch (IOException ex) {
+            return "段階1 の処理が正常終了しました。";
+        }
     }
 
     /**
