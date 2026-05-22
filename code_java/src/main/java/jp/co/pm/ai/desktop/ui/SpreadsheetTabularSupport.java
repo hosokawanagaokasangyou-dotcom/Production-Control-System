@@ -40,6 +40,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetCellType;
 import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
+import jp.co.pm.ai.planning.stage2.core.Stage2PlanRowDispatchQtyMetrics;
 import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
 
 /**
@@ -299,6 +300,23 @@ public final class SpreadsheetTabularSupport {
         view.requestLayout();
     }
 
+    /**
+     * グリッド差し替え後の行表示整備。列フィルタの許容値は維持し、非表示行・行ソート・固定行だけ整えてから
+     * {@link SpreadsheetMultiColumnFilterCoordinator#recomputeHiddenRows} で非表示行を再計算する。
+     *
+     * <p>配台手動修正の DnD やセル編集後の {@code rebuildGrids} 向け。再読込でフィルタを消すときは
+     * {@link #finalizeSpreadsheetPresentationAfterGridRebuild} を使う。
+     */
+    public static void finalizeSpreadsheetPresentationPreservingColumnFilters(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        clearSpreadsheetRowPresentationArtifacts(view);
+        pinSpreadsheetFilterRow(view);
+        SpreadsheetMultiColumnFilterCoordinator.recomputeHiddenRows(view);
+        view.requestLayout();
+    }
+
     /** 旧グリッド由来の固定行インデックスが残ると、行ヘッダに帯状の隙間が出ることがある。 */
     private static void clearFixedRowsExceptFilterRow(SpreadsheetView view) {
         javafx.collections.ObservableList<Integer> fixed = view.getFixedRows();
@@ -385,6 +403,8 @@ public final class SpreadsheetTabularSupport {
         clearSpreadsheetRowPresentationArtifacts(view);
         applyFixedLeadingColumns(view, headerColumnCount);
         pinSpreadsheetFilterRow(view);
+        // 非表示行だけクリアするため、列フィルタ／行検索の許容状態は維持したまま hidden rows を再計算する。
+        SpreadsheetMultiColumnFilterCoordinator.recomputeHiddenRows(view);
         applyUnconstrainedColumnResizePolicyAfterSkinSettles(view);
     }
 
@@ -718,7 +738,48 @@ public final class SpreadsheetTabularSupport {
         return Stage2RollUnitLengthTables.inferFromProductDimensions(usedRaw, fb);
     }
 
+    private static Map<String, String> planInputRowMapFromCells(
+            List<String> headersRef, ObservableList<String> src) {
+        LinkedHashMap<String, String> row = new LinkedHashMap<>();
+        if (headersRef == null || src == null) {
+            return row;
+        }
+        int n = Math.min(headersRef.size(), src.size());
+        for (int i = 0; i < n; i++) {
+            row.put(headersRef.get(i), planInputCellAt(src, i));
+        }
+        return row;
+    }
+
+    /**
+     * 単体テスト用。{@link #buildPlanInputGrid} と同じ黄判定。
+     */
+    static boolean planInputRawRollUnitCellYellowHighlightForTest(
+            List<String> headersRef,
+            List<String> cells,
+            Stage2RollUnitLengthTables tablesOrNull) {
+        ObservableList<String> src = FXCollections.observableArrayList(cells);
+        int idxConv = headersRef.indexOf(PLAN_INPUT_COL_QTY_CONV);
+        int idxUnp = headersRef.indexOf(PLAN_INPUT_COL_UNPROCESSED);
+        int idxAct = headersRef.indexOf(PLAN_INPUT_COL_ACTUAL);
+        int idxUsed = headersRef.indexOf(PLAN_INPUT_COL_USED_RAW);
+        String rawRoll =
+                headersRef.contains(PLAN_INPUT_COL_RAW_ROLL_UNIT_M)
+                        ? cells.get(headersRef.indexOf(PLAN_INPUT_COL_RAW_ROLL_UNIT_M))
+                        : cells.get(headersRef.indexOf(PLAN_INPUT_COL_RAW_ROLL_UNIT_M_ALT));
+        return planInputRollUnitLengthCellIsYellowHighlight(
+                headersRef,
+                src,
+                idxConv,
+                idxUnp,
+                idxAct,
+                idxUsed,
+                rawRoll,
+                tablesOrNull);
+    }
+
     private static boolean planInputRollUnitLengthCellIsYellowHighlight(
+            List<String> headersRef,
             ObservableList<String> src,
             int idxConv,
             int idxUnp,
@@ -728,6 +789,15 @@ public final class SpreadsheetTabularSupport {
             Stage2RollUnitLengthTables tablesOrNull) {
         double uDisp = Stage2RollUnitLengthTables.parseFloatSafe(rawRollUnitCell, 0.0);
         if (!(uDisp > 1e-12)) {
+            return false;
+        }
+        Map<String, String> row = planInputRowMapFromCells(headersRef, src);
+        /*
+         * 段階2は「配台使用残数量」「配台ロール数」が揃えば unit_m=残量/本数（実効ロール化しない）。
+         * 列が空でも段階1式で補完できる行は黄にしない（旧: 換算数量÷表示ロール長の端数だけで黄にしていた）。
+         */
+        if (Stage2PlanRowDispatchQtyMetrics.stage2SimulatorUsesDispatchRollCountColumns(
+                row, tablesOrNull)) {
             return false;
         }
         double q = planInputQtyMForDispatchSimulatorApprox(src, idxConv, idxUnp, idxAct);
@@ -754,7 +824,8 @@ public final class SpreadsheetTabularSupport {
 
     /**
      * 配台計画タスク入力の編集可能グリッド。先頭固定列は白地、それ以外は既定で白地とし、「未加工」列のみ正の数値で薄緑、
-     * 「(原反)ロール単位長さ」は実効ロール化が想定されるセルを黄で示す（Excel 側の実効ロール着色と整合）。
+     * 「(原反)ロール単位長さ」は、配台ロール数列が使えない行だけ実効ロール化の対象として黄で示す（段階2の
+     * {@code build_task_queue_from_planning_df} および Excel の実効ロール着色と整合）。
      *
      * @param leadingColumnCount 先頭から固定する属性列の本数
      * @param rollUnitLengthTablesOrNull 使用原反テーブル（黄の「上書き後セル」判定に使用）。{@code null}
@@ -813,6 +884,7 @@ public final class SpreadsheetTabularSupport {
                 } else if ((PLAN_INPUT_COL_RAW_ROLL_UNIT_M.equals(headerTitle)
                                 || PLAN_INPUT_COL_RAW_ROLL_UNIT_M_ALT.equals(headerTitle))
                         && planInputRollUnitLengthCellIsYellowHighlight(
+                                headersRef,
                                 src,
                                 idxConv,
                                 idxUnp,
@@ -1044,9 +1116,10 @@ public final class SpreadsheetTabularSupport {
                             SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, item);
                     cell.setEditable(false);
                     cell.setWrapText(true);
-                    cell.setCellGraphic(true);
+                    cell.setCellGraphic(false);
                     Node g = deliveryCalendarTripleGraphic(t, hideStage3PlanLine);
                     cell.setGraphic(g);
+                    setSpreadsheetCellDisplayValue(cell, "");
                     cell.setStyle(
                             isDateColumn
                                     ? (visibleLines.isEmpty() ? DC_STYLE_DATA_WHITE : DC_STYLE_DATA_GREEN)
@@ -1116,6 +1189,12 @@ public final class SpreadsheetTabularSupport {
         for (DeliveryCalendarTripleSlot slot : deliveryCalendarTripleFixedSlots(t, hideStage3PlanLine)) {
             Label lbl = new Label(slot.visible() ? slot.text() : "\u00a0");
             lbl.getStyleClass().add("delivery-calendar-triple-slot");
+            if (slot.visible() && slot.text().startsWith(DC_TRIPLE_PREFIX_STAGE3_AFTER)) {
+                lbl.getStyleClass().add("dispatch-stage3-after-line");
+                lbl.setStyle("-fx-font-weight: bold; -fx-text-fill: #111111;");
+            } else if (slot.visible()) {
+                lbl.setStyle("-fx-text-fill: #111111;");
+            }
             if (!slot.visible()) {
                 lbl.getStyleClass().add("delivery-calendar-triple-slot-empty");
             }

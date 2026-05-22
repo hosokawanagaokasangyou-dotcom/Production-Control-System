@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -37,6 +38,8 @@ import javafx.geometry.Rectangle2D;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.text.Font;
+import javafx.scene.text.Text;
+import javafx.scene.text.TextFlow;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
@@ -85,10 +88,13 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
+import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.DispatchInteractiveRollUnitSupport;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialConsistency;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialShortages;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialShortages.DispatchQtyShortfallRow;
+import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck;
+import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck.TaskKey;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveGridModel;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchJsonIo;
@@ -115,7 +121,6 @@ import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
  * process+machine-by-day).
  */
 public final class DispatchInteractiveTabController {
-
 
     /** 起動直後は「実行・ログ」タブが選択されるため、初回 JSON 読込は配台タブ初回表示まで遅延する。 */
     private final AtomicBoolean pendingInitialDispatchReload = new AtomicBoolean(false);
@@ -167,14 +172,61 @@ public final class DispatchInteractiveTabController {
     private static final String DISPATCH_DATE_QTY_MULTILINE_CELL_STYLE_CLASS =
             "dispatch-date-qty-multiline";
 
+    /** 日付セル内の (段階3後) 行（{@link #LABEL_STAGE3_ACTUAL} で始まる行）用。 */
+    private static final String DISPATCH_STAGE3_AFTER_LINE_STYLE_CLASS = "dispatch-stage3-after-line";
+
+    /** 段階3試行後に当日配台数量を手動変更したセルの (段階3改) 行用。 */
+    private static final String DISPATCH_STAGE3_REVISED_LINE_STYLE_CLASS = "dispatch-stage3-revised-line";
+
+    /**
+     * 段階3ラベル付き Graphic 表示時。内側 TextField の素文字列が手前に重なり CSS が効かないのを防ぐ。
+     */
+    private static final String DISPATCH_DATE_QTY_GRAPHIC_ONLY_STYLE_CLASS =
+            "dispatch-date-qty-graphic-only";
+
+    /** ControlsFX の loadStyle 上書き対策で Label にも直接指定（(段階3改) 青・太字）。 */
+    private static final String STAGE3_REVISED_LINE_INLINE_STYLE =
+            "-fx-font-weight: bold; -fx-text-fill: #1565C0;";
+
+    private static final String STAGE3_AFTER_LINE_INLINE_STYLE =
+            "-fx-font-weight: bold; -fx-text-fill: #111111;";
+
+    /** (アラ計画)/(段階3前) 等の通常行。行選択時の白字化を防ぐ。 */
+    private static final String STAGE3_QTY_DEFAULT_LINE_INLINE_STYLE = "-fx-text-fill: #111111;";
+
+    private static final String STAGE3_QTY_DEFAULT_TEXT_INLINE_STYLE = "-fx-fill: #111111;";
+
+    /** 日付セル表示: 段階3試行後の手動改定（当日配台数量）。 */
+    static final String LABEL_STAGE3_REVISED = "(\u6bb5\u968e3\u6539)";
+
     /** 2行ラベル付き数量セルの行高（px）。 */
     private static final double DISPATCH_STAGE3_MULTILINE_ROW_HEIGHT_PX = 44.0;
 
+    /** (アラ計画)＋(段階3前)＋(段階3後/改) の3行固定表示用行高（px）。 */
+    private static final double DISPATCH_ALADDIN_STAGE3_MULTILINE_ROW_HEIGHT_PX = 66.0;
+
+    /** 段階3日付セル: 1行目=(アラ計画)、2行目=(段階3前)、3行目=(段階3後)または(段階3改)。 */
+    private static final int STAGE3_QTY_FIXED_LINE_COUNT = 3;
+
+    /**
+     * 段階3数量セルの固定行スロット。{@link #visible} が false の行は {@code \u00a0} で行位置だけ確保する。
+     */
+    record Stage3QtyLineSlot(String lineText, boolean visible) {}
+
+    private static final DateTimeFormatter ALADDIN_PLAN_DATE_FMT =
+            DateTimeFormatter.ofPattern("yyyy/MM/dd");
+
+    /** 日付セル表示: アラジン加工計画の計画数量（納期管理ビューと同じ {@code (アラ計画)} 表記）。 */
+    static final String LABEL_ALADDIN_PLAN = "(\u30a2\u30e9\u8a08\u753b)";
+
+    /** 日付セル表示: 段階2成果の配台数量（段階3試行前・当日配台数量）。 */
+    static final String LABEL_STAGE2_PLAN = "(\u6bb5\u968e2\u5f8c)";
+
     /** 日付セル表示: 段階3試行前の編集対象（当日配台数量）。 */
-    static final String LABEL_STAGE3_PLAN = "\uff08\u6bb5\u968e3\u524d\uff09";
+    static final String LABEL_STAGE3_PLAN = "(\u6bb5\u968e3\u524d)";
 
     /** 日付セル表示: 段階3試行後の実績（実配台数量・DnD/編集では変更しない）。 */
-    static final String LABEL_STAGE3_ACTUAL = "\uff08\u6bb5\u968e3\u5f8c\uff09";
+    static final String LABEL_STAGE3_ACTUAL = "(\u6bb5\u968e3\u5f8c)";
 
     /** 段階3試行後の実配台数量（日付セルの括弧内）を行単位で合算する列。 */
     private static final String COL_STAGE3_DISPATCH_QTY_TOTAL = "段階3配台数";
@@ -228,6 +280,9 @@ public final class DispatchInteractiveTabController {
      * {@link #rebuildGrids} や空表示クリアのたびに増やし、遅延した列同期・可視化ジョブが古いグリッドに触れないようにする。
      */
     private final AtomicInteger dispatchSpreadsheetLayoutGeneration = new AtomicInteger(0);
+
+    /** shaped アラジン JSON 由来の計画数量ルックアップ（{@link #buildFullGridRebuild} で更新）。 */
+    private Map<String, Map<String, Map<String, Map<String, Double>>>> aladdinPlanLookup = Map.of();
 
     @FXML
     private ProgressIndicator busyIndicator;
@@ -288,6 +343,14 @@ public final class DispatchInteractiveTabController {
     private ResultDispatchDocument doc = ResultDispatchDocument.empty();
 
     private List<LocalDate> dateAxis = new ArrayList<>();
+
+    /**
+     * 配台試行直後の {@link ResultDispatchSchema#COL_DISPATCH_QTY} 合計（プロファイル×配台日）。
+     * 手動移動・編集でずれたセルは (段階3改) 表示に切り替える。
+     */
+    private final Map<String, Double> stage3TrialPlanQtySnapshot = new HashMap<>();
+
+    private boolean pendingStage3TrialSnapshotCapture;
 
     /**
      * 日付列のユーザー希望順（両グリッド共通）。{@code null} のときは {@link #computeDateAxisList()} の自然順を使う。
@@ -376,7 +439,7 @@ public final class DispatchInteractiveTabController {
             resetTableDisplayBeforeReload("起動時読込中");
             // タブ実体化直後の同一パルスで setGrid すると Parent.layout IOOBE になりやすい
             Platform.runLater(
-                    () -> Platform.runLater(() -> reloadFromDiskQuiet(null, false, false)));
+                    () -> Platform.runLater(() -> reloadFromDiskQuiet(null, false, false, false)));
             return;
         }
         flushPendingGridRebuildAfterTabAttach();
@@ -622,7 +685,7 @@ public final class DispatchInteractiveTabController {
         }
                 resetTableDisplayBeforeReload("再読込中（表示をクリア）");
         // 同一パルスで即 reload すると、空グリッドのレイアウト前に onSucceeded が走り「クリアされない」ように見える
-        Platform.runLater(() -> reloadFromDiskQuiet(null, false, true));
+        Platform.runLater(() -> reloadFromDiskQuiet(null, false, true, false));
     }
 
     @FXML
@@ -1132,7 +1195,7 @@ public final class DispatchInteractiveTabController {
     }
 
     private void reloadFromDiskQuiet() {
-        reloadFromDiskQuiet(null, false, false);
+        reloadFromDiskQuiet(null, false, false, false);
     }
 
     /**
@@ -1142,7 +1205,7 @@ public final class DispatchInteractiveTabController {
      */
     private void reloadFromDiskQuietAfterDispatchTrial(Runnable afterSuccessOnFxThread) {
         resetTableDisplayBeforeReload("配台試行後（再読込中）");
-        Platform.runLater(() -> reloadFromDiskQuiet(afterSuccessOnFxThread, true, false));
+        Platform.runLater(() -> reloadFromDiskQuiet(afterSuccessOnFxThread, true, false, false));
     }
 
     /** 子タブが遅延プレースホルダのとき実 Spreadsheet をシーンに戻す。 */
@@ -1163,11 +1226,13 @@ public final class DispatchInteractiveTabController {
      *     直後）。false のときは未達表・セル赤表示用キーをクリアする（再読み・外部更新後など、メイン JSON と不足 JSON
      *     の生成タイミングがずれていると誤表示になるため）。
      * @param userCompletionDialog ユーザーが「再読み」ボタンを押したときのみ true（自動再同期ではダイアログを出さない）。
+     * @param validatePlanInputCoverage 段階2直後など、タスク入力と手動修正表の整合を検証して漏れがあればエラーダイアログを出す。
      */
     private void reloadFromDiskQuiet(
             Runnable afterSuccessOnFxThread,
             boolean applyDispatchTrialShortfallJson,
-            boolean userCompletionDialog) {
+            boolean userCompletionDialog,
+            boolean validatePlanInputCoverage) {
         if (shell == null) {
             return;
         }
@@ -1180,6 +1245,9 @@ public final class DispatchInteractiveTabController {
             clearDispatchShortfallUi();
             rebuildGrids(this::hideReloadProgress);
             clearDispatchDocDirty();
+            if (validatePlanInputCoverage) {
+                showPlanInputCoverageGapErrorIfNeeded(p);
+            }
             if (userCompletionDialog) {
                 shell.showWarningDialog("再読み", "結果_配台表.json が見つかりません。\n" + p);
             }
@@ -1201,6 +1269,9 @@ public final class DispatchInteractiveTabController {
                 ev -> {
                     ReloadBundle b = task.getValue();
                     doc = b.doc();
+                    if (validatePlanInputCoverage) {
+                        showPlanInputCoverageGapErrorIfNeeded(jsonPath);
+                    }
                     boolean stage2ColsFilled =
                             ResultDispatchStage2ColumnSupport.ensureStage2RequiredColumns(doc);
                     if (stage2ColsFilled) {
@@ -1212,8 +1283,15 @@ public final class DispatchInteractiveTabController {
                     }
                     if (applyDispatchTrialShortfallJson) {
                         applyDispatchShortfallFromDisk(jsonPath);
+                        scheduleStage3TrialPlanQtySnapshotCapture();
                     } else {
                         clearDispatchShortfallUi();
+                        if (docHasActualDispatchQtyColumn()) {
+                            // 再起動・再読込後も手動移動で (段階3改) を出す（メモリ上の試行直後スナップショットは失われる）
+                            scheduleStage3TrialPlanQtySnapshotCapture();
+                        } else {
+                            clearStage3TrialPlanQtySnapshot();
+                        }
                     }
                     clearDispatchDocDirty();
                     if (shell != null) {
@@ -1282,7 +1360,7 @@ public final class DispatchInteractiveTabController {
      * 段階2 正常終了直後: 表を JSON から再構築し、成功後に {@code afterSuccessOnFxThread} を FX スレッドで実行する。
      */
     void reloadTableFromDiskAfterStage2Success(Runnable afterSuccessOnFxThread) {
-        reloadFromDiskQuiet(afterSuccessOnFxThread, false, false);
+        reloadFromDiskQuiet(afterSuccessOnFxThread, false, false, true);
     }
 
     /** 再読込や段階2開始の直前に、メモリ上の表を空表示へ戻す（JSON パスラベルは維持）。 */
@@ -1324,7 +1402,7 @@ public final class DispatchInteractiveTabController {
      * 外部で {@code 結果_配台表.json} が更新されたあと、当タブの表をディスクから再読込する（段階2終了後の再同期やワークスペース復元後など）。
      */
     void reloadTableFromDiskAfterExternalUpdate() {
-        reloadFromDiskQuiet(null, false, false);
+        reloadFromDiskQuiet(null, false, false, false);
     }
 
     /** 配台ワークスペース用スナップショット: メモリ上の配台表ドキュメントのコピー（UI スレッド）。 */
@@ -1534,10 +1612,19 @@ public final class DispatchInteractiveTabController {
 
     private FullGridRebuild buildFullGridRebuild() {
         ResultDispatchInteractiveGridModel.applyWideMergeAndNormalize(doc);
+        aladdinPlanLookup = loadAladdinPlanLookupForDisplay();
         List<LocalDate> axis = axisForRebuild();
         WideGridBundle wide = buildWideGridModel(axis);
         ByDayGridBundle byDay = buildByDayGridModel(axis);
         return new FullGridRebuild(axis, wide, byDay);
+    }
+
+    private Map<String, Map<String, Map<String, Map<String, Double>>>> loadAladdinPlanLookupForDisplay() {
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        AladdinShapedPlanQtyLookup.ShapedTable shaped =
+                AladdinShapedPlanQtyLookup.loadShapedTable(
+                        AppPaths.resolveShapedAladdinPlanJsonPath(ui));
+        return AladdinShapedPlanQtyLookup.buildLookup(shaped.headers(), shaped.rows());
     }
 
     /** データに存在する日付集合は維持しつつ、保存済み／ユーザー設定の列順を日付軸に反映する。 */
@@ -1722,6 +1809,10 @@ public final class DispatchInteractiveTabController {
                 Comparator.comparing(DispatchInteractiveTabController::parseTrialOrderKey)
                         .thenComparing(p -> ResultDispatchNormalizer.staticGroupKey(cols, p)));
         assignSequentialTrialOrdersForProfiles(profiles);
+        if (pendingStage3TrialSnapshotCapture) {
+            captureStage3TrialPlanQtySnapshot(profiles, axis);
+            pendingStage3TrialSnapshotCapture = false;
+        }
 
         int staticCols = WIDE_STATIC_HEADERS.size();
         int dayCount = axis.size();
@@ -1866,7 +1957,7 @@ public final class DispatchInteractiveTabController {
                 int col = staticCols + di * DAY_SLOT_COLUMNS;
                 SpreadsheetCell cell =
                         SpreadsheetCellType.STRING.createCell(gridRow, col, 1, 1, "");
-                applyByDayDispatchQtyCellDisplay(cell, br, di);
+                applyByDayDispatchQtyCellDisplay(cell, br, di, axis);
                 applyByDayCellStyle(br, di, cell);
                 cell.setEditable(false);
                 line.add(cell);
@@ -1963,6 +2054,49 @@ public final class DispatchInteractiveTabController {
         } finally {
             Platform.runLater(() -> suppressDispatchGridDirty.set(false));
         }
+    }
+
+    /**
+     * 段階2直後: タスク入力（配台不要オフ）の (依頼NO, 工程, 機械) が手動修正 JSON に無ければエラー表示。
+     */
+    private void showPlanInputCoverageGapErrorIfNeeded(Path resultDispatchJsonPath) {
+        if (shell == null) {
+            return;
+        }
+        PlanInputTabController planInput = shell.planInputTabControllerForDispatchRollUnit();
+        if (planInput == null) {
+            return;
+        }
+        List<TaskKey> expected = planInput.collectEligibleTaskKeysForDispatchCoverage();
+        if (expected.isEmpty()) {
+            return;
+        }
+        List<TaskKey> missing =
+                DispatchPlanInputInteractiveCoverageCheck.findMissingInDispatchTable(
+                        expected, doc != null ? doc.rows() : List.of());
+        if (missing.isEmpty()) {
+            return;
+        }
+        String pathStr = resultDispatchJsonPath != null ? resultDispatchJsonPath.toString() : "";
+        String message =
+                DispatchPlanInputInteractiveCoverageCheck.formatMissingTasksDialogMessage(
+                        missing, pathStr);
+        shell.appendLog(
+                "[配台整合] タスク入力 "
+                        + expected.size()
+                        + " 件のうち手動修正表に無い行が "
+                        + missing.size()
+                        + " 件あります。");
+        int logLines = 0;
+        for (TaskKey key : missing) {
+            if (logLines >= 15) {
+                shell.appendLog("[配台整合] … 他 " + (missing.size() - 15) + " 件");
+                break;
+            }
+            shell.appendLog("[配台整合] 未反映: " + key.displayLine());
+            logLines++;
+        }
+        shell.showErrorDialog("手動修正表への反映漏れ", message);
     }
 
     private Runnable buildReloadSuccessAfterLayoutsRunnable(
@@ -2679,6 +2813,7 @@ public final class DispatchInteractiveTabController {
         final double eps = 1e-3;
         double planAmt = wr.getAmount(dateIdx);
         double actualAmt = wr.getActualAmount(dateIdx);
+        double aladdinAmt = aladdinPlanQtyForWideRow(wr, axis.get(dateIdx));
         if (isWideDispatchShortfall(wr, dateIdx)) {
             LocalDate dCell = axis.get(dateIdx);
             String tid = wr.getStatic("依頼NO");
@@ -2688,35 +2823,154 @@ public final class DispatchInteractiveTabController {
             if (sf != null) {
                 String targetFmt = ResultDispatchNormalizer.formatQty(sf.targetM());
                 String doneFmt = ResultDispatchNormalizer.formatQty(sf.doneM());
-                SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(
+                String aladdinFmt =
+                        aladdinAmt > eps ? ResultDispatchNormalizer.formatQty(aladdinAmt) : "";
+                setDispatchQtyCellDisplay(
                         cell,
                         formatDispatchPlanActualQtyText(
-                                targetFmt, doneFmt, stage3PlanActualSingleLineDisplay()));
-                clearDispatchQtyCellGraphic(cell);
-                tagDispatchDateQtyShortfallCell(cell, dispatchStage3QtyMultilineCell());
+                                aladdinFmt,
+                                targetFmt,
+                                doneFmt,
+                                stage3PlanActualSingleLineDisplay(),
+                                DispatchPlanQtyLineLabel.STAGE3),
+                        stage3PlanActualSingleLineDisplay());
+                tagDispatchDateQtyShortfallCell(cell, dispatchDateQtyMultilineCell());
                 return;
             }
         }
-        applyDispatchPlanActualQtyCellDisplay(
-                cell, planAmt, actualAmt, docHasActualDispatchQtyColumn(), eps, stage3PlanActualSingleLineDisplay());
-        tagDispatchDateQtyCell(cell, dispatchStage3QtyMultilineCell());
-    }
-
-    private void applyByDayDispatchQtyCellDisplay(SpreadsheetCell cell, ByDayRow br, int dateIdx) {
+        boolean stage3Revised =
+                isStage3QtyRevisedAfterTrial(
+                        wr.profileMap(), axis.get(dateIdx), planAmt, actualAmt, eps);
         applyDispatchPlanActualQtyCellDisplay(
                 cell,
-                br.getAmount(dateIdx),
-                br.getActualAmount(dateIdx),
+                aladdinAmt,
+                planAmt,
+                actualAmt,
                 docHasActualDispatchQtyColumn(),
-                1e-3,
-                stage3PlanActualSingleLineDisplay());
-        tagDispatchDateQtyCell(cell, dispatchStage3QtyMultilineCell());
+                eps,
+                stage3PlanActualSingleLineDisplay(),
+                stage3Revised);
+        tagDispatchDateQtyCell(cell, dispatchDateQtyMultilineCell());
     }
 
-    private boolean dispatchStage3QtyMultilineCell() {
-        return docHasActualDispatchQtyColumn() && !stage3PlanActualSingleLineDisplay();
+    private void applyByDayDispatchQtyCellDisplay(
+            SpreadsheetCell cell, ByDayRow br, int dateIdx, List<LocalDate> axis) {
+        double aladdinAmt = aladdinPlanQtyForByDayRow(br, axis.get(dateIdx));
+        double planAmt = br.getAmount(dateIdx);
+        double actualAmt = br.getActualAmount(dateIdx);
+        double eps = 1e-3;
+        boolean stage3Revised =
+                docHasActualDispatchQtyColumn() && Math.abs(planAmt - actualAmt) > eps;
+        applyDispatchPlanActualQtyCellDisplay(
+                cell,
+                aladdinAmt,
+                planAmt,
+                actualAmt,
+                docHasActualDispatchQtyColumn(),
+                eps,
+                stage3PlanActualSingleLineDisplay(),
+                stage3Revised);
+        tagDispatchDateQtyCell(cell, dispatchDateQtyMultilineCell());
     }
 
+    private void scheduleStage3TrialPlanQtySnapshotCapture() {
+        pendingStage3TrialSnapshotCapture = true;
+    }
+
+    private void clearStage3TrialPlanQtySnapshot() {
+        stage3TrialPlanQtySnapshot.clear();
+        pendingStage3TrialSnapshotCapture = false;
+    }
+
+    private void captureStage3TrialPlanQtySnapshot(
+            List<Map<String, String>> profiles, List<LocalDate> axis) {
+        stage3TrialPlanQtySnapshot.clear();
+        if (!docHasActualDispatchQtyColumn() || doc == null || profiles == null || axis == null) {
+            return;
+        }
+        for (Map<String, String> profile : profiles) {
+            for (LocalDate day : axis) {
+                double plan =
+                        ResultDispatchPivot.sumQuantityForProfileAndDateForWideMerge(
+                                doc.rows(),
+                                profile,
+                                day,
+                                ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+                String key =
+                        DispatchTrialShortages.wideShortfallKey(
+                                profile.get("依頼NO"),
+                                profile.get(ResultDispatchSchema.COL_MACHINE),
+                                day.toString());
+                stage3TrialPlanQtySnapshot.put(key, plan);
+            }
+        }
+    }
+
+    private boolean isStage3QtyRevisedAfterTrial(
+            Map<String, String> profile,
+            LocalDate day,
+            double planAmt,
+            double actualAmt,
+            double eps) {
+        if (!docHasActualDispatchQtyColumn() || profile == null || day == null) {
+            return false;
+        }
+        String key =
+                DispatchTrialShortages.wideShortfallKey(
+                        profile.get("依頼NO"),
+                        profile.get(ResultDispatchSchema.COL_MACHINE),
+                        day.toString());
+        Double snap = stage3TrialPlanQtySnapshot.get(key);
+        if (snap != null) {
+            return Math.abs(planAmt - snap) > eps;
+        }
+        return Math.abs(planAmt - actualAmt) > eps;
+    }
+
+    private double aladdinPlanQtyForWideRow(WideRow wr, LocalDate day) {
+        if (aladdinPlanLookup.isEmpty() || day == null) {
+            return 0.0;
+        }
+        return AladdinShapedPlanQtyLookup.lookup(
+                aladdinPlanLookup,
+                wr.getStatic(ResultDispatchSchema.COL_MACHINE),
+                wr.getStatic("依頼NO"),
+                day.format(ALADDIN_PLAN_DATE_FMT),
+                wr.getStatic(ResultDispatchSchema.COL_PROCESS));
+    }
+
+    private double aladdinPlanQtyForByDayRow(ByDayRow br, LocalDate day) {
+        if (aladdinPlanLookup.isEmpty() || day == null || doc == null) {
+            return 0.0;
+        }
+        String dateStr = day.format(ALADDIN_PLAN_DATE_FMT);
+        String process = br.process();
+        String machine = br.machine();
+        List<String> cols = doc.columns();
+        double sum = 0.0;
+        Set<String> seenTids = new HashSet<>();
+        for (Map<String, String> row : doc.rows()) {
+            if (!Objects.equals(process, row.get(ResultDispatchSchema.COL_PROCESS))
+                    || !Objects.equals(machine, row.get(ResultDispatchSchema.COL_MACHINE))) {
+                continue;
+            }
+            String tid = row.getOrDefault("依頼NO", "").strip();
+            if (tid.isEmpty() || !seenTids.add(tid)) {
+                continue;
+            }
+            sum +=
+                    AladdinShapedPlanQtyLookup.lookup(
+                            aladdinPlanLookup, machine, tid, dateStr, process);
+        }
+        return sum;
+    }
+
+    private boolean dispatchDateQtyMultilineCell() {
+        if (stage3PlanActualSingleLineDisplay()) {
+            return false;
+        }
+        return docHasActualDispatchQtyColumn() || !aladdinPlanLookup.isEmpty();
+    }
     /**
      * 段階3の2行表示: 固定行高＋{@code \\n}（{@code -fx-wrap-text} は使わない）。単行表示時は既定行高。
      */
@@ -2724,62 +2978,334 @@ public final class DispatchInteractiveTabController {
         if (grid == null) {
             return;
         }
-        if (dispatchStage3QtyMultilineCell()) {
+        if (dispatchDateQtyMultilineCell()) {
+            double rowHeightPx =
+                    docHasActualDispatchQtyColumn()
+                            ? DISPATCH_ALADDIN_STAGE3_MULTILINE_ROW_HEIGHT_PX
+                            : DISPATCH_STAGE3_MULTILINE_ROW_HEIGHT_PX;
             SpreadsheetTabularSupport.applySpreadsheetGridRowHeightsAndWrap(
                     grid,
                     false,
                     100.0,
                     24.0,
-                    DISPATCH_STAGE3_MULTILINE_ROW_HEIGHT_PX);
+                    rowHeightPx);
         } else {
             SpreadsheetTabularSupport.applySpreadsheetGridRowHeightsAndWrap(grid, false, 100.0);
         }
     }
 
     /**
-     * 段階3試行後: 編集目標（当日配台数量）を {@link #LABEL_STAGE3_PLAN}、実績（実配台数量）を
-     * {@link #LABEL_STAGE3_ACTUAL} の2行で表示する。DnD・ダブルクリック編集は目標のみ更新する。
+     * 段階3試行後: (アラ計画)・編集目標（当日配台数量）・実績（実配台数量）を同一セルに表示する。
+     * DnD・ダブルクリック編集は目標のみ更新する。
      */
     private static void applyDispatchPlanActualQtyCellDisplay(
             SpreadsheetCell cell,
+            double aladdinPlanAmt,
             double planAmt,
             double actualAmt,
             boolean hasActualColumn,
             double eps,
-            boolean singleLineDisplay) {
+            boolean singleLineDisplay,
+            boolean stage3RevisedAfterTrial) {
+        if (hasActualColumn && !singleLineDisplay) {
+            setDispatchQtyCellDisplay(
+                    cell,
+                    buildStage3QtyFixedLineSlots(
+                            aladdinPlanAmt, planAmt, actualAmt, stage3RevisedAfterTrial, eps),
+                    false);
+            return;
+        }
         String qtxt =
                 formatDispatchPlanActualQtyDisplay(
-                        planAmt, actualAmt, hasActualColumn, eps, singleLineDisplay);
-        SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(cell, qtxt);
-        clearDispatchQtyCellGraphic(cell);
+                        aladdinPlanAmt,
+                        planAmt,
+                        actualAmt,
+                        hasActualColumn,
+                        eps,
+                        singleLineDisplay,
+                        stage3RevisedAfterTrial);
+        setDispatchQtyCellDisplay(cell, qtxt, singleLineDisplay);
     }
 
-    /** 目標 m（段階3前）と実績 m（段階3後）を2行ラベル付きで表示する。 */
+    /** 段階3: 1=(アラ計画)、2=(段階3前)、3=(段階3後)または(段階3改)。 */
+    private static void setDispatchQtyCellDisplay(
+            SpreadsheetCell cell, List<Stage3QtyLineSlot> slots, boolean singleLineDisplay) {
+        if (slots == null || slots.stream().noneMatch(Stage3QtyLineSlot::visible)) {
+            clearDispatchQtyCellGraphic(cell);
+            SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(cell, "");
+            return;
+        }
+        if (singleLineDisplay) {
+            setDispatchQtyCellDisplay(
+                    cell, formatStage3FixedSlotsAsText(slots, true), true);
+            return;
+        }
+        cell.setCellGraphic(false);
+        Node graphic = buildStage3QtyFixedLineGraphic(slots);
+        cell.setGraphic(graphic);
+        if (!cell.getStyleClass().contains(DISPATCH_DATE_QTY_GRAPHIC_ONLY_STYLE_CLASS)) {
+            cell.getStyleClass().add(DISPATCH_DATE_QTY_GRAPHIC_ONLY_STYLE_CLASS);
+        }
+        SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(cell, "");
+        Tooltip.install(graphic, new Tooltip(formatStage3FixedSlotsAsText(slots, false)));
+    }
+
+    /**
+     * 日付セル表示。(段階3後) 行は {@link #DISPATCH_STAGE3_AFTER_LINE_STYLE_CLASS} で太字にする。
+     */
+    private static void setDispatchQtyCellDisplay(
+            SpreadsheetCell cell, String qtxt, boolean singleLineDisplay) {
+        boolean useStyledGraphic =
+                qtxt != null
+                        && !qtxt.isBlank()
+                        && (qtxt.contains(LABEL_STAGE3_REVISED)
+                                || qtxt.contains(LABEL_STAGE3_ACTUAL));
+        if (useStyledGraphic) {
+            // isCellGraphic(true) は WebView 用経路になり CellGraphicFactory 未設定時は Graphic が出ない
+            cell.setCellGraphic(false);
+            Node graphic = buildDispatchPlanActualQtyGraphic(qtxt, singleLineDisplay);
+            cell.setGraphic(graphic);
+            if (!cell.getStyleClass().contains(DISPATCH_DATE_QTY_GRAPHIC_ONLY_STYLE_CLASS)) {
+                cell.getStyleClass().add(DISPATCH_DATE_QTY_GRAPHIC_ONLY_STYLE_CLASS);
+            }
+            SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(cell, "");
+            Tooltip.install(graphic, new Tooltip(qtxt));
+        } else {
+            clearDispatchQtyCellGraphic(cell);
+            SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(cell, qtxt != null ? qtxt : "");
+        }
+    }
+
+    static List<Stage3QtyLineSlot> buildStage3QtyFixedLineSlots(
+            double aladdinPlanAmt,
+            double planAmt,
+            double actualAmt,
+            boolean stage3RevisedAfterTrial,
+            double eps) {
+        List<Stage3QtyLineSlot> slots = new ArrayList<>(STAGE3_QTY_FIXED_LINE_COUNT);
+        slots.add(stage3QtyLineSlot(LABEL_ALADDIN_PLAN, aladdinPlanAmt, eps));
+        if (stage3RevisedAfterTrial) {
+            slots.add(stage3QtyEmptyLineSlot());
+            slots.add(stage3QtyLineSlot(LABEL_STAGE3_REVISED, planAmt, eps));
+        } else {
+            slots.add(stage3QtyLineSlot(LABEL_STAGE3_PLAN, planAmt, eps));
+            slots.add(stage3QtyLineSlot(LABEL_STAGE3_ACTUAL, actualAmt, eps));
+        }
+        return slots;
+    }
+
+    private static Stage3QtyLineSlot stage3QtyLineSlot(String label, double amt, double eps) {
+        if (amt <= eps) {
+            return stage3QtyEmptyLineSlot();
+        }
+        return new Stage3QtyLineSlot(label + ResultDispatchNormalizer.formatQty(amt), true);
+    }
+
+    private static Stage3QtyLineSlot stage3QtyEmptyLineSlot() {
+        return new Stage3QtyLineSlot("", false);
+    }
+
+    static String formatStage3FixedSlotsAsText(List<Stage3QtyLineSlot> slots, boolean singleLineDisplay) {
+        if (slots == null || slots.stream().noneMatch(Stage3QtyLineSlot::visible)) {
+            return "";
+        }
+        if (singleLineDisplay) {
+            StringBuilder sb = new StringBuilder();
+            for (Stage3QtyLineSlot slot : slots) {
+                if (!slot.visible()) {
+                    continue;
+                }
+                if (!sb.isEmpty()) {
+                    sb.append(' ');
+                }
+                sb.append(slot.lineText());
+            }
+            return sb.toString();
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < slots.size(); i++) {
+            if (i > 0) {
+                sb.append('\n');
+            }
+            Stage3QtyLineSlot slot = slots.get(i);
+            sb.append(slot.visible() ? slot.lineText() : "");
+        }
+        return sb.toString();
+    }
+
+    private static Node buildStage3QtyFixedLineGraphic(List<Stage3QtyLineSlot> slots) {
+        VBox box = new VBox(0);
+        box.setPadding(new Insets(2, 4, 2, 4));
+        box.setFillWidth(true);
+        for (Stage3QtyLineSlot slot : slots) {
+            Label lbl = new Label(slot.visible() ? slot.lineText() : "\u00a0");
+            lbl.getStyleClass().add("delivery-calendar-triple-slot");
+            if (slot.visible()) {
+                applyDispatchStage3QtyLineLabelStyle(lbl, slot.lineText());
+            } else {
+                lbl.getStyleClass().add("delivery-calendar-triple-slot-empty");
+            }
+            lbl.setWrapText(false);
+            lbl.setMaxWidth(Double.MAX_VALUE);
+            box.getChildren().add(lbl);
+        }
+        return box;
+    }
+
+    private static Node buildDispatchPlanActualQtyGraphic(String text, boolean singleLineDisplay) {
+        if (singleLineDisplay) {
+            return buildDispatchPlanActualQtySingleLineGraphic(text);
+        }
+        VBox box = new VBox(0);
+        box.setPadding(new Insets(2, 4, 2, 4));
+        box.setFillWidth(true);
+        for (String line : text.split("\n", -1)) {
+            if (line.isEmpty()) {
+                continue;
+            }
+            Label lbl = new Label(line);
+            lbl.getStyleClass().add("delivery-calendar-triple-slot");
+            applyDispatchStage3QtyLineLabelStyle(lbl, line);
+            lbl.setWrapText(false);
+            lbl.setMaxWidth(Double.MAX_VALUE);
+            box.getChildren().add(lbl);
+        }
+        return box;
+    }
+
+    private static Node buildDispatchPlanActualQtySingleLineGraphic(String text) {
+        TextFlow flow = new TextFlow();
+        flow.setPadding(new Insets(2, 4, 2, 4));
+        int idx = 0;
+        while (idx < text.length()) {
+            int revised = text.indexOf(LABEL_STAGE3_REVISED, idx);
+            int s3Actual = text.indexOf(LABEL_STAGE3_ACTUAL, idx);
+            int next = nextStyledSegmentIndex(text, idx, revised, s3Actual);
+            if (next < 0) {
+                Text tail = new Text(text.substring(idx));
+                tail.setStyle(STAGE3_QTY_DEFAULT_TEXT_INLINE_STYLE);
+                flow.getChildren().add(tail);
+                break;
+            }
+            if (next > idx) {
+                Text plain = new Text(text.substring(idx, next));
+                plain.setStyle(STAGE3_QTY_DEFAULT_TEXT_INLINE_STYLE);
+                flow.getChildren().add(plain);
+            }
+            if (next == revised) {
+                int end = segmentEndIndex(text, next + LABEL_STAGE3_REVISED.length());
+                Text styled = new Text(text.substring(next, end));
+                styled.setStyle("-fx-font-weight: bold; -fx-fill: #1565C0;");
+                flow.getChildren().add(styled);
+                idx = end;
+            } else {
+                int end = segmentEndIndex(text, next + LABEL_STAGE3_ACTUAL.length());
+                Text bold = new Text(text.substring(next, end));
+                bold.setStyle("-fx-font-weight: bold; -fx-fill: #111111;");
+                flow.getChildren().add(bold);
+                idx = end;
+            }
+        }
+        return flow;
+    }
+
+    private static int nextStyledSegmentIndex(String text, int from, int revised, int s3Actual) {
+        int next = -1;
+        if (revised >= from) {
+            next = revised;
+        }
+        if (s3Actual >= from && (next < 0 || s3Actual < next)) {
+            next = s3Actual;
+        }
+        return next;
+    }
+
+    private static int segmentEndIndex(String text, int qtyStart) {
+        int nextOpen = text.indexOf(" (", qtyStart);
+        return nextOpen >= 0 ? nextOpen : text.length();
+    }
+
+    /** (アラ計画)・目標 m（段階3前）・実績 m（段階3後）をラベル付きで表示する。 */
     static String formatDispatchPlanActualQtyDisplay(
+            double aladdinPlanAmt,
             double planAmt,
             double actualAmt,
             boolean hasActualColumn,
             double eps,
             boolean singleLineDisplay) {
+        return formatDispatchPlanActualQtyDisplay(
+                aladdinPlanAmt,
+                planAmt,
+                actualAmt,
+                hasActualColumn,
+                eps,
+                singleLineDisplay,
+                false);
+    }
+
+    static String formatDispatchPlanActualQtyDisplay(
+            double aladdinPlanAmt,
+            double planAmt,
+            double actualAmt,
+            boolean hasActualColumn,
+            double eps,
+            boolean singleLineDisplay,
+            boolean stage3RevisedAfterTrial) {
+        boolean hasAladdin = aladdinPlanAmt > eps;
         boolean hasPlan = planAmt > eps;
-        boolean hasActual = hasActualColumn && actualAmt > eps;
-        if (!hasPlan && !hasActual) {
+        if (hasActualColumn) {
+            return formatStage3FixedSlotsAsText(
+                    buildStage3QtyFixedLineSlots(
+                            aladdinPlanAmt,
+                            planAmt,
+                            actualAmt,
+                            stage3RevisedAfterTrial,
+                            eps),
+                    singleLineDisplay);
+        }
+        if (!hasAladdin && !hasPlan) {
             return "";
         }
-        if (!hasActualColumn) {
-            return hasPlan ? ResultDispatchNormalizer.formatQty(planAmt) : "";
+        String aladdinFmt = hasAladdin ? ResultDispatchNormalizer.formatQty(aladdinPlanAmt) : "";
+        if (hasPlan) {
+            return formatDispatchPlanActualQtyText(
+                    aladdinFmt,
+                    ResultDispatchNormalizer.formatQty(planAmt),
+                    "",
+                    singleLineDisplay,
+                    DispatchPlanQtyLineLabel.STAGE2);
         }
-        return formatDispatchPlanActualQtyText(
-                hasPlan ? ResultDispatchNormalizer.formatQty(planAmt) : "",
-                hasActual ? ResultDispatchNormalizer.formatQty(actualAmt) : "",
-                singleLineDisplay);
+        return LABEL_ALADDIN_PLAN + aladdinFmt;
+    }
+
+    /** 配台数量行の括弧ラベル（段階2後／段階3前／なし）。 */
+    enum DispatchPlanQtyLineLabel {
+        PLAIN,
+        STAGE2,
+        STAGE3
     }
 
     static String formatDispatchPlanActualQtyText(
-            String planFmt, String actualFmt, boolean singleLineDisplay) {
+            String aladdinFmt, String planFmt, String actualFmt, boolean singleLineDisplay) {
+        return formatDispatchPlanActualQtyText(
+                aladdinFmt, planFmt, actualFmt, singleLineDisplay, DispatchPlanQtyLineLabel.STAGE3);
+    }
+
+    static String formatDispatchPlanActualQtyText(
+            String aladdinFmt,
+            String planFmt,
+            String actualFmt,
+            boolean singleLineDisplay,
+            DispatchPlanQtyLineLabel planLabel) {
         StringBuilder sb = new StringBuilder();
+        if (aladdinFmt != null && !aladdinFmt.isBlank()) {
+            sb.append(LABEL_ALADDIN_PLAN).append(aladdinFmt);
+        }
         if (planFmt != null && !planFmt.isBlank()) {
-            sb.append(LABEL_STAGE3_PLAN).append(planFmt);
+            if (!sb.isEmpty()) {
+                sb.append(singleLineDisplay ? ' ' : '\n');
+            }
+            sb.append(planQtyLinePrefix(planLabel)).append(planFmt);
         }
         if (actualFmt != null && !actualFmt.isBlank()) {
             if (!sb.isEmpty()) {
@@ -2790,9 +3316,33 @@ public final class DispatchInteractiveTabController {
         return sb.toString();
     }
 
+    private static String planQtyLinePrefix(DispatchPlanQtyLineLabel planLabel) {
+        if (planLabel == null) {
+            return "";
+        }
+        return switch (planLabel) {
+            case STAGE2 -> LABEL_STAGE2_PLAN;
+            case STAGE3 -> LABEL_STAGE3_PLAN;
+            case PLAIN -> "";
+        };
+    }
+
+    private static void applyDispatchStage3QtyLineLabelStyle(Label lbl, String line) {
+        if (line.startsWith(LABEL_STAGE3_REVISED)) {
+            lbl.getStyleClass().add(DISPATCH_STAGE3_REVISED_LINE_STYLE_CLASS);
+            lbl.setStyle(STAGE3_REVISED_LINE_INLINE_STYLE);
+        } else if (line.startsWith(LABEL_STAGE3_ACTUAL)) {
+            lbl.getStyleClass().add(DISPATCH_STAGE3_AFTER_LINE_STYLE_CLASS);
+            lbl.setStyle(STAGE3_AFTER_LINE_INLINE_STYLE);
+        } else {
+            lbl.setStyle(STAGE3_QTY_DEFAULT_LINE_INLINE_STYLE);
+        }
+    }
+
     private static void clearDispatchQtyCellGraphic(SpreadsheetCell cell) {
         cell.setCellGraphic(false);
         cell.setGraphic(null);
+        cell.getStyleClass().remove(DISPATCH_DATE_QTY_GRAPHIC_ONLY_STYLE_CLASS);
     }
 
     private static void tagDispatchDateQtyCell(SpreadsheetCell cell, boolean multiline) {

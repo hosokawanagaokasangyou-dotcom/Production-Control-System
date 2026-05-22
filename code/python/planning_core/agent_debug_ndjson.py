@@ -115,32 +115,3 @@ def append_structured(
             f.write(json.dumps(line, ensure_ascii=False) + "\n")
     except OSError:
         pass
-
-
-def y5_21_json_row_sample(rows: list | None, limit: int = 12) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    for r in rows or []:
-        if not isinstance(r, dict):
-            continue
-        blob = json.dumps(r, ensure_ascii=False)
-        if "Y5-21" not in blob:
-            continue
-        slim = {k: r.get(k) for k in list(r.keys())[:24]}
-        out.append(slim)
-        if len(out) >= limit:
-            break
-    return out
-
-
-def y5_21_targets_sample(targets: dict | None, limit: int = 24) -> dict[str, float]:
-    out: dict[str, float] = {}
-    for k, v in (targets or {}).items():
-        if "Y5-21" not in str(k):
-            continue
-        try:
-            out[str(k)] = float(v)
-        except (TypeError, ValueError):
-            out[str(k)] = float("nan")
-        if len(out) >= limit:
-            break
-    return out

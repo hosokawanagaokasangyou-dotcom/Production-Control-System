@@ -85,22 +85,6 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
         merged_df, targets = pc.merge_interactive_result_dispatch_json_into_tasks_df(
             tasks_df, rows
         )
-        try:
-            from planning_core import agent_debug_ndjson as _adn
-
-            _adn.append_structured(
-                "H1",
-                "stage2_identical_dispatch_runner",
-                "merge_interactive_result_dispatch_json_into_tasks_df done",
-                {
-                    "source_json": str(path),
-                    "y5_json_rows": _adn.y5_21_json_row_sample(rows),
-                    "y5_targets": _adn.y5_21_targets_sample(dict(targets) if targets else None),
-                    "n_targets": len(targets or {}),
-                },
-            )
-        except Exception:
-            pass
         print("[dispatch trial] 段階2同一条件で配台を実行中…（時間がかかる場合があります）", flush=True)
         master_abs = pc._master_workbook_path_resolved()
         with pc._override_default_factory_hours_from_master(master_abs):
@@ -142,48 +126,10 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
             encoding="utf-8",
         )
         print("[dispatch trial] 不足情報JSONを書き出しました。", flush=True)
-        try:
-            from planning_core import agent_debug_ndjson as _adn2
-
-            def _y5_touching(seq):
-                if not seq:
-                    return []
-                out = []
-                for x in seq:
-                    if "Y5-21" in json.dumps(x, default=str, ensure_ascii=False):
-                        out.append(x)
-                    if len(out) >= 20:
-                        break
-                return out
-
-            _adn2.append_structured(
-                "H4",
-                "stage2_identical_dispatch_runner",
-                "trial success shortages snapshot",
-                {
-                    "shortage_path": str(shortage_path),
-                    "y5_dispatch_qty_shortfall": _y5_touching(dispatch_qty_shortfall),
-                    "y5_op_shortage": _y5_touching(snap.get("op_shortage")),
-                    "y5_as_shortage": _y5_touching(snap.get("as_shortage")),
-                },
-            )
-        except Exception:
-            pass
         return 0, shortage_path
     except Exception as e:
         if type(e).__name__ == "PlanningValidationError":
             msg = str(e).strip() or "PlanningValidationError"
-            try:
-                from planning_core import agent_debug_ndjson as _adn_e
-
-                _adn_e.append_structured(
-                    "H2",
-                    "stage2_identical_dispatch_runner",
-                    "PlanningValidationError",
-                    {"error": msg, "y5_json_rows": _adn_e.y5_21_json_row_sample(rows)},
-                )
-            except Exception:
-                pass
             print(msg, flush=True)
             try:
                 pc._write_stage2_blocking_message(msg)
