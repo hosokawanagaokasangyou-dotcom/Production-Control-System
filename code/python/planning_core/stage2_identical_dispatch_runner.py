@@ -115,8 +115,8 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
             "source_json": str(path),
             "note": (
                 "段階3配台試行（段階2同一条件）。"
-                "配台できない理由は機械カレンダー未作成・勤怠未作成のみ。"
-                "それ以外の未達は後ろ倒し（配台残）として扱う。"
+                "致命: 機械カレンダー未作成・勤怠未作成・勤怠最終日までに割り切れない残タスク。"
+                "勤怠日付の自動拡張は行わない。"
             ),
             "op_shortage": snap["op_shortage"],
             "as_shortage": snap["as_shortage"],

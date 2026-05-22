@@ -19676,9 +19676,9 @@ def _stage2_truthy_env(name: str) -> bool:
     return v in ("1", "true", "yes", "on", "はい")
 
 
-# 勤怠に載っている最終日までで割付は終ゝらないとし」最終日とともにシフト型で日付を延長れる（オプション）。
-# 段階2標準・段階3（段階2同一パリティ）は _stage2_extend_attendance_calendar_enabled() が既定 True。
-# 無効化: 環境変数 PM_AI_STAGE2_EXTEND_ATTENDANCE_CALENDAR=0（JavaFX 環境タブからも可）。
+# 勤怠に載っている最終日までで割付は終わらないとき、シフト型で日付を延長してループ継続（オプション）。
+# 段階2標準・段階3（段階2同一パリティ）では自動拡張は使わず、残タスクがあれば PlanningValidationError で停止する。
+# 有効化（従来モードのみ）: 環境変数 PM_AI_STAGE2_EXTEND_ATTENDANCE_CALENDAR=1
 # 下記定数はインタラクティブ配台試行（非パリティ）など後方互換用。
 STAGE2_EXTEND_ATTENDANCE_CALENDAR = False
 SCHEDULE_EXTEND_MAX_EXTRA_DAYS = 366
@@ -25860,8 +25860,8 @@ def _interactive_validate_timeline_midnight_if_interactive(
 def _dispatch_postpone_only_policy_active() -> bool:
     """
     段階2標準・段階3（段階2同一パリティ）の配台失敗ポリシー。
-    配台「できない」は master 上で機械カレンダー・勤怠が未作成のときのみ（ループ前に検証）。
-    それ以外は後ろ倒し（配台残）。インタラクティブ試行の従来モード（非パリティ）では False。
+    配台「できない」は master 上で機械カレンダー・勤怠未作成、または勤怠最終日までに割り切れないとき（致命）。
+    勤怠日付の自動拡張は行わない。インタラクティブ試行の従来モード（非パリティ）では False。
     """
     if not _interactive_dispatch_trial_env_active():
         return True
@@ -25869,15 +25869,54 @@ def _dispatch_postpone_only_policy_active() -> bool:
 
 
 def _stage2_extend_attendance_calendar_enabled() -> bool:
-    """段階2標準・段階3パリティ: 勤怠があれば残量は後ろ倒しで割付するため、計画日を自動拡張する。"""
+    """段階2標準・段階3パリティでは False（勤怠不足は致命エラー）。従来インタラクティブ試行のみ定数・環境変数を参照。"""
     if _dispatch_postpone_only_policy_active():
-        if _stage2_truthy_env("PM_AI_STAGE2_EXTEND_ATTENDANCE_CALENDAR"):
-            return True
-        v = (os.environ.get("PM_AI_STAGE2_EXTEND_ATTENDANCE_CALENDAR") or "").strip().lower()
-        if v in ("0", "false", "no", "off", "none", "いいえ"):
-            return False
+        return False
+    if _stage2_truthy_env("PM_AI_STAGE2_EXTEND_ATTENDANCE_CALENDAR"):
         return True
     return STAGE2_EXTEND_ATTENDANCE_CALENDAR
+
+
+def _raise_if_remaining_tasks_exceed_attendance_calendar(
+    task_queue: list,
+    calendar_last_plan_day: date | None,
+    *,
+    context_label: str = "段階2",
+) -> None:
+    """
+    段階2標準・段階3パリティ: master 勤怠の計画日を使い切っても残タスクがあれば試行を致命エラーで止める。
+    """
+    if not _dispatch_postpone_only_policy_active():
+        return
+    pending: list[dict] = []
+    for t in task_queue:
+        try:
+            rem = float(t.get("remaining_units") or 0)
+        except (TypeError, ValueError):
+            rem = 0.0
+        if rem > 1e-12:
+            pending.append(t)
+    if not pending:
+        return
+    last_iso = (
+        calendar_last_plan_day.isoformat()
+        if isinstance(calendar_last_plan_day, date)
+        else "—"
+    )
+    samples: list[str] = []
+    for t in pending[:8]:
+        tid = str(t.get("task_id") or "").strip()
+        mach = str(t.get("machine") or "").strip()
+        if tid or mach:
+            samples.append(f"{tid}/{mach}" if tid and mach else (tid or mach))
+    sample_s = "、".join(samples) if samples else "（依頼NO不明）"
+    if len(pending) > 8:
+        sample_s += f" 他{len(pending) - 8}件"
+    raise PlanningValidationError(
+        f"{context_label}: 勤怠カレンダーの最終日（{last_iso}）までに配台しきれません"
+        f"（残タスク {len(pending)} 件）。"
+        f" master.xlsm の勤怠日付を延長してから再実行してください。例: {sample_s}"
+    )
 
 
 def _stage3_extend_attendance_calendar_enabled() -> bool:
@@ -33649,7 +33688,7 @@ def _generate_plan_impl(
 
     # ---------------------------------------------------------
     # 日毎のスケジューリングループ
-    # STAGE2_EXTEND_ATTENDANCE_CALENDAR は True のときのみ」残タスクはあれみ勤怠を日付複製で拡張。
+    # 勤怠自動拡張は _stage2_extend_attendance_calendar_enabled() が True のときのみ（段階2標準・段階3パリティは False）。
     # STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING は True のときのみ: 紝期基準を靎ねでも残はある依頼についで
     # due_basis +1・当該依頼の割当戻し・先頭から再実行。坄再試行剝に勤怠拡張分はマスタ日付へ巻し戻れ。
     # 既定 False のため、通常は 1 パス（カレンダー通し 1 回）のみ。
@@ -35190,6 +35229,17 @@ def _generate_plan_impl(
                     "§B-2/§B-3 リワインド: EC 完走後に検査＝巻返しのみ日付先頭から再配台しました（timeline_events を占有テーブルとして利用）。"
                 )
             break
+
+    _ctx_after_dispatch = (
+        "段階3配台試行"
+        if _interactive_dispatch_trial_env_active()
+        else "段階2"
+    )
+    _raise_if_remaining_tasks_exceed_attendance_calendar(
+        task_queue,
+        _calendar_last_plan_day,
+        context_label=_ctx_after_dispatch,
+    )
 
     if interactive_dispatch_targets is not None:
         _LAST_INTERACTIVE_STAGE3_META = {"mode": "single_phase"}
