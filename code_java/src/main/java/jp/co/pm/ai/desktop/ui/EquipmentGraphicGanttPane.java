@@ -1713,14 +1713,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static final double PRINT_SECTION_H = 22;
     private static final double PRINT_MIN_ROW_H = 14;
     private static final double PRINT_MAX_ROW_H = 40;
-    /** 印刷日付列の最小幅（縦書き -90° の字形高さ＋余白）。旧 30px 固定は長い日付が欠ける。 */
-    private static final double PRINT_DATE_COL_MIN = 36;
-    private static final double PRINT_DATE_COL_MAX = 56;
     private static final double PRINT_MIN_MACHINE_W = 48;
     private static final double PRINT_MAX_MACHINE_W = 72;
     private static final double PRINT_MIN_PROCESS_W = 40;
     private static final double PRINT_MAX_PROCESS_W = 64;
-    /** 日付＋機械名＋工程名が占めてよい可印刷幅の上限比（残りはタイムライン）。 */
+    /** 機械名＋工程名が占めてよい可印刷幅の上限比（残りはタイムライン）。 */
     private static final double PRINT_MAX_LEFT_COLS_SHARE = 0.18;
     private static final int PRINT_PROGRESS_CELL_W = 40;
     private static final double PRINT_SIDE_LABEL_MAX_FONT = 9;
@@ -1731,7 +1728,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double sectionH,
             double rowBodyH,
             double outerPad,
-            double dateW,
             double machW,
             double procW,
             double timelineW,
@@ -1762,16 +1758,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 computeMachineColumnPlans(repaired.effCols(), parsed.displayRows());
         MeasuredLeftWidths auto =
                 measureAutoLeftWidths(repaired.effCols(), parsed, machPlans, probe);
-        double dateBodyFontPx = probe.rowLabelFontSize * 0.9;
-        double measuredDateW =
-                Math.max(
-                        auto.dateW(),
-                        measurePrintDateColumnWidth(parsed.displayRows(), dateBodyFontPx));
-        double dateW =
-                clampPrintCol(
-                        effectiveLeftColWidth(measuredDateW, spec.dateColWidthOverridePx()),
-                        PRINT_DATE_COL_MIN,
-                        PRINT_DATE_COL_MAX);
         double machW =
                 clampPrintCol(
                         effectiveLeftColWidth(auto.machW(), spec.machineColWidthOverridePx()),
@@ -1789,12 +1775,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         + Math.max(0, progressCount - 1) * progressGap;
         double contentW = paperW - 2 * PRINT_SHEET_PAD;
         double[] machProc =
-                shrinkPrintMachineAndProcessWidths(
-                        machW, procW, dateW, progressTotal, contentW);
+                shrinkPrintMachineAndProcessWidths(machW, procW, progressTotal, contentW);
         machW = machProc[0];
         procW = machProc[1];
         int slotCount = Math.max(1, parsed.slotColumnIndices().size());
-        double timelineW = Math.max(1.0, contentW - dateW - machW - procW - progressTotal);
+        double timelineW = Math.max(1.0, contentW - machW - procW - progressTotal);
         double slotWidth = timelineW / slotCount;
 
         int sectionRows = 0;
@@ -1836,7 +1821,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 PRINT_SECTION_H,
                 rowBodyH,
                 outerPad,
-                dateW,
                 machW,
                 procW,
                 timelineW,
@@ -1865,11 +1849,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static double[] shrinkPrintMachineAndProcessWidths(
             double machW,
             double procW,
-            double dateW,
             double progressTotal,
             double contentW) {
         double maxLeft = contentW * PRINT_MAX_LEFT_COLS_SHARE;
-        double leftOther = dateW + progressTotal;
+        double leftOther = progressTotal;
         double maxMachProc =
                 Math.max(
                         PRINT_MIN_MACHINE_W + PRINT_MIN_PROCESS_W,
@@ -1913,9 +1896,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         y += dims.headerH();
 
         List<MachineColumnPlan> machPlans = computeMachineColumnPlans(effCols, parsed.displayRows());
-        String pageDateTitle = resolvePrintSheetDateTitle(parsed);
-        List<DateColumnPlan> datePlans =
-                computeDateColumnPlans(effCols, parsed.displayRows(), pageDateTitle);
         int machineColorSeq = -1;
         double printRowScale =
                 Math.clamp(spec.rowHeightPercent(), 50, 200) / 100.0;
@@ -1945,41 +1925,20 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 machineColorSeq++;
             }
             int machineGroupIndex = Math.max(0, machineColorSeq);
-            DateColumnPlan dplan = datePlans.get(ri);
-            if (dplan == null) {
-                dplan = new DateColumnPlan(false, "", 1);
-            }
-            int dateSpan = Math.max(1, dplan.rowSpan());
-            boolean dateAsOverlay = !dplan.continuation() && dateSpan > 1;
             HBox row =
                     buildDedicatedPrintDataRow(
                             dr,
                             mplan,
-                            dplan,
                             machineGroupIndex,
                             dims,
                             parsed,
                             spec,
                             cellBodyH,
                             timelineDrawOuterPad,
-                            timelineBandHeight,
-                            dateAsOverlay || dplan.continuation());
+                            timelineBandHeight);
             row.setLayoutX(dims.pad());
             row.setLayoutY(y);
             sheet.getChildren().add(row);
-            if (dateAsOverlay) {
-                StackPane datePane =
-                        buildDedicatedPrintDateCell(
-                                dplan.dateText(),
-                                dims.dateW(),
-                                dateSpan * cellBodyH,
-                                dims,
-                                machineGroupIndex);
-                datePane.setLayoutX(dims.pad());
-                datePane.setLayoutY(y);
-                sheet.getChildren().add(datePane);
-                datePane.toFront();
-            }
             y += cellBodyH;
         }
 
@@ -1993,15 +1952,12 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
     private static HBox buildDedicatedPrintHeader(
             List<String> effCols, ParseResult parsed, PrintSheetDims dims) {
-        Label hDate = new Label("");
-        hDate.setWrapText(false);
         Label hMach = new Label("機械名");
         Label hProc = new Label("工程名");
-        applyDedicatedPrintHeaderLabel(hDate, dims.dateW(), dims);
         applyDedicatedPrintHeaderLabel(hMach, dims.machW(), dims);
         applyDedicatedPrintHeaderLabel(hProc, dims.procW(), dims);
         Pane timeAxis = buildDedicatedPrintTimeAxis(effCols, parsed, dims);
-        HBox header = new HBox(0, hDate, hMach, hProc, timeAxis);
+        HBox header = new HBox(0, hMach, hProc, timeAxis);
         if (dims.progressCount() > 0) {
             for (int i = 0; i < dims.progressCount(); i++) {
                 Label ph = new Label(i == 0 ? "進捗" : "");
@@ -2174,27 +2130,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static HBox buildDedicatedPrintDataRow(
             DisplayRow dr,
             MachineColumnPlan mplan,
-            DateColumnPlan dplan,
             int machineGroupIndex,
             PrintSheetDims dims,
             ParseResult parsed,
             jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec spec,
             double cellBodyH,
             double timelineDrawOuterPad,
-            double timelineBandHeight,
-            boolean dateSpacerInRow) {
+            double timelineBandHeight) {
         List<Node> parts = new ArrayList<>();
-        if (dateSpacerInRow) {
-            parts.add(buildDedicatedPrintDateOverlaySpacer(dims.dateW(), cellBodyH));
-        } else {
-            parts.add(
-                    buildDedicatedPrintDateCell(
-                            dplan.dateText(),
-                            dims.dateW(),
-                            cellBodyH,
-                            dims,
-                            machineGroupIndex));
-        }
         if (!mplan.continuation()) {
             parts.add(
                     buildDedicatedPrintMachineCell(
@@ -2255,7 +2198,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     /**
-     * 日付・機械名の縦結合における「続き行」用。背景と右・下罫線をデータセルと揃え、機械名列の縦線が途切れないようにする。
+     * 機械名の縦結合における「続き行」用。背景と右・下罫線をデータセルと揃え、機械名列の縦線が途切れないようにする。
      */
     private static Region buildDedicatedPrintSideSpacer(
             double w, double h, GanttPalette palette, int machineGroupIndex) {
@@ -2265,91 +2208,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         r.setMaxSize(w, h);
         r.setStyle(palette.machineSideCellCss(machineGroupIndex));
         return r;
-    }
-
-    /** 縦結合日付のオーバーレイ下に置く透明プレースホルダ（罫線用スペーサで日付を隠さない）。 */
-    private static Region buildDedicatedPrintDateOverlaySpacer(double w, double h) {
-        Region r = new Region();
-        r.setMinSize(w, h);
-        r.setPrefSize(w, h);
-        r.setMaxSize(w, h);
-        r.setMouseTransparent(true);
-        return r;
-    }
-
-    private static StackPane buildDedicatedPrintDateCell(
-            String dateText,
-            double cellW,
-            double cellH,
-            PrintSheetDims dims,
-            int machineGroupIndex) {
-        StackPane wrap = new StackPane();
-        wrap.setMinSize(cellW, cellH);
-        wrap.setPrefSize(cellW, cellH);
-        wrap.setMaxSize(cellW, cellH);
-        wrap.setAlignment(Pos.CENTER);
-        wrap.setStyle(dims.palette().machineSideCellCss(machineGroupIndex));
-
-        String t = printSideDateColumnLabel(dateText);
-        if (t.isEmpty()) {
-            return wrap;
-        }
-        double fontPx = dims.layout().rowLabelFontSize * 0.9;
-        Label dt = new Label(t);
-        dt.setTextFill(Color.web(dims.palette().machineSideTextFill()));
-        dt.setWrapText(false);
-        fitRotatedDateLabel(dt, cellW, cellH, fontPx);
-        StackPane.setAlignment(dt, Pos.CENTER);
-        wrap.getChildren().add(dt);
-        return wrap;
-    }
-
-    /**
-     * 縦書き（-90°）でセルに収める。列幅は字形の高さ、行高は文字列の横方向幅が必要。
-     */
-    private static void fitRotatedDateLabel(Label lb, double cellW, double cellH, double baseFontPx) {
-        double fontPx = Math.max(6, baseFontPx);
-        lb.setRotate(0);
-        for (int i = 0; i < 14; i++) {
-            lb.setFont(Font.font(fontPx));
-            MEASURE_ROOT.getChildren().setAll(lb);
-            lb.applyCss();
-            lb.layout();
-            Bounds b = lb.getBoundsInParent();
-            double unrotW = Math.max(1, b.getWidth());
-            double unrotH = Math.max(1, b.getHeight());
-            if (unrotH <= cellW - 4 && unrotW <= cellH - 4) {
-                lb.setRotate(-90);
-                return;
-            }
-            fontPx = Math.max(6, fontPx * 0.88);
-        }
-        lb.setRotate(-90);
-    }
-
-    /** 印刷日付列幅: 縦書き時に列方向へ必要な幅（未回転テキストの高さ）の最大。 */
-    private static double measurePrintDateColumnWidth(
-            List<DisplayRow> displayRows, double fontPx) {
-        double max = PRINT_DATE_COL_MIN;
-        if (displayRows == null) {
-            return max;
-        }
-        for (DisplayRow dr : displayRows) {
-            if (dr.sectionBanner() != null) {
-                continue;
-            }
-            String d = printSideDateColumnLabel(dr.dateCompact());
-            if (d.isEmpty()) {
-                continue;
-            }
-            Text probe = new Text(d);
-            probe.setFont(Font.font(fontPx));
-            MEASURE_ROOT.getChildren().setAll(probe);
-            probe.applyCss();
-            Bounds b = probe.getLayoutBounds();
-            max = Math.max(max, Math.ceil(b.getHeight()) + 10);
-        }
-        return Math.min(PRINT_DATE_COL_MAX, max);
     }
 
     private static Label buildDedicatedPrintMachineCell(
@@ -6008,21 +5866,6 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             s = s.replaceFirst("\\s*\\([^)]*\\)\\s*$", "").strip();
             s = s.replaceFirst("\\s*（[^）]*）\\s*$", "").strip();
         } while (!s.equals(prev));
-        return s;
-    }
-
-    /**
-     * 印刷左「日付」列用。1 ページ 1 暦日のため年はタイムライン見出しに載せ、列内は {@code 5月25日(月)} に短縮する。
-     */
-    private static String printSideDateColumnLabel(String fullCompactDate) {
-        if (fullCompactDate == null || fullCompactDate.isBlank()) {
-            return "";
-        }
-        String s = fullCompactDate.strip();
-        Matcher m = COMPACT_JP_DATE.matcher(s);
-        if (m.matches()) {
-            return m.group(2);
-        }
         return s;
     }
 
