@@ -148,6 +148,9 @@ public final class MainShellController {
                     AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON,
                     AppPaths.KEY_PM_AI_OUTPUT_DIR,
                     AppPaths.KEY_PM_AI_REPO_ROOT,
+                    AppPaths.KEY_PM_AI_CODE_PYTHON_DIR,
+                    AppPaths.KEY_PM_AI_CODE_DIR,
+                    "PM_AI_AGENT_DEBUG_SESSION",
                     "PM_AI_DEBUG_LOG",
                     AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH);
 
@@ -3413,12 +3416,49 @@ public final class MainShellController {
                                 : "キャッシュ");
             }
             Path py = resolveStagePythonExecutablePath(uiRun);
-            Path dir =
-                    Path.of(
-                            firstNonBlank(
-                                    uiRun.get(AppPaths.KEY_PM_AI_CODE_PYTHON_DIR),
-                                    mainRunTabController.getScriptDirField().getText().trim()));
+            Path dir = AppPaths.resolvePythonScriptDir(uiRun);
+            Path codeDir = AppPaths.resolveCodeDir(uiRun);
+            childEnv.put(AppPaths.KEY_PM_AI_CODE_PYTHON_DIR, dir.toAbsolutePath().normalize().toString());
+            childEnv.put(AppPaths.KEY_PM_AI_CODE_DIR, codeDir.toAbsolutePath().normalize().toString());
+            if (STAGE1.equals(script)) {
+                appendLog("[stage1] Python script dir (resolved): " + dir.toAbsolutePath().normalize());
+                appendLog("[stage1] code dir (material tables): " + codeDir.toAbsolutePath().normalize());
+                Path corePy = dir.resolve("planning_core").resolve("_core.py");
+                appendLog(
+                        "[stage1] planning_core/_core.py exists="
+                                + java.nio.file.Files.isRegularFile(corePy)
+                                + " path="
+                                + corePy.toAbsolutePath().normalize());
+            }
             appendStageChildResolvedEnvForRun(script, childEnv);
+            if (STAGE1.equals(script)) {
+                // #region agent log
+                String dbgSid = AgentDebugLog.resolveDispatchTrialSessionId(childEnv);
+                java.nio.file.Path dbgPath = AgentDebugLog.resolveNdjsonPath(childEnv, dbgSid);
+                Map<String, Object> dbgData = new LinkedHashMap<>();
+                dbgData.put("sessionId", dbgSid);
+                dbgData.put(
+                        "ndjsonPath",
+                        dbgPath != null ? dbgPath.toAbsolutePath().normalize().toString() : "");
+                dbgData.put(
+                        "excludeRulesJson",
+                        childEnv.getOrDefault(AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON, ""));
+                dbgData.put(
+                        "pmAiDebugLog", childEnv.getOrDefault("PM_AI_DEBUG_LOG", ""));
+                AgentDebugLog.appendStructured(
+                        childEnv,
+                        dbgSid,
+                        "H0",
+                        "MainShellController:runStage:stage1",
+                        "stage1_child_debug_env",
+                        dbgData);
+                appendLog(
+                        "[stage1-debug] NDJSON session="
+                                + dbgSid
+                                + " log="
+                                + (dbgPath != null ? dbgPath.toAbsolutePath().normalize() : "(未解決)"));
+                // #endregion
+            }
             RunRequest req = new RunRequest(py, dir, script, wb, childEnv);
             mainRunTabController.getStatusLabel().setText("実行中…");
             if (STAGE1.equals(script)) {
@@ -3514,6 +3554,47 @@ public final class MainShellController {
                     if (ms.totalAdded() > 0) {
                         appendLog("[stage1] 材料・製品種類情報(code/) 自動追記: " + ms.summaryJa());
                     }
+                    // #region agent log
+                    Path codeDirAfter = AppPaths.resolveCodeDir(collectUiEnv());
+                    Path thickPath =
+                            codeDirAfter.resolve(CodeDispatchLookupTablesMerge.FILE_PRODUCT_THICK);
+                    boolean c4300Present = false;
+                    try {
+                        if (java.nio.file.Files.isRegularFile(thickPath)) {
+                            for (String line :
+                                    java.nio.file.Files.readAllLines(
+                                            thickPath, java.nio.charset.StandardCharsets.UTF_8)) {
+                                if (line != null
+                                        && line.contains("C4300-1056-820x114YA")) {
+                                    c4300Present = true;
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (IOException ignored) {
+                        // debug only
+                    }
+                    Map<String, String> uiAfter = collectUiEnv();
+                    String dbgSidAfter = AgentDebugLog.resolveDispatchTrialSessionId(uiAfter);
+                    Map<String, Object> mergeDbg = new LinkedHashMap<>();
+                    mergeDbg.put(
+                            "ndjsonPath",
+                            AgentDebugLog.resolveNdjsonPath(uiAfter, dbgSidAfter)
+                                    .toAbsolutePath()
+                                    .normalize()
+                                    .toString());
+                    mergeDbg.put("codeDir", codeDirAfter.toString());
+                    mergeDbg.put("thicknessPath", thickPath.toString());
+                    mergeDbg.put("mergeSummary", ms.summaryJa());
+                    mergeDbg.put("c4300Present", c4300Present);
+                    AgentDebugLog.appendStructured(
+                            uiAfter,
+                            dbgSidAfter,
+                            "H6",
+                            "MainShellController:stage1Merge",
+                            "material_table_post_merge",
+                            mergeDbg);
+                    // #endregion
                 } catch (Exception ex) {
                     appendLog("[stage1] 材料・製品種類情報(code/) 自動追記失敗: " + ex.getMessage());
                 }
@@ -5727,7 +5808,7 @@ public final class MainShellController {
         if (k == null || k.isBlank()) {
             return "";
         }
-        Path codeDir = AppPaths.resolveRepoRoot(u).resolve("code");
+        Path codeDir = AppPaths.resolveCodeDir(u);
         return switch (k) {
             case AppPaths.KEY_MASTER_WORKBOOK_FILE -> "master.xlsm";
             case PlanInputTabController.ENV_TASK_PLAN_SHEET ->

@@ -1361,6 +1361,42 @@ DEBUG_DISPATCH_ONLY_TASK_IDS: frozenset[str] = frozenset()
 # 紝期超靎リトライの外側ラウンド（0=初回カレンダー通し、以降は while 先頭で更新）。配台トレース出力のファイル名・接頭辞に使用。
 DISPATCH_TRACE_OUTER_ROUND: int = 0
 
+# 段階1 材料テーブル追記デバッグ（session d2735c）
+_STAGE1_MATERIAL_TABLE_APPEND_BUILD = "20260522d2735c-code-dir"
+
+
+def _agent_debug_exclude_rules_log(
+    hypothesis_id: str, location: str, message: str, data: dict | None = None
+) -> None:
+    # #region agent log
+    try:
+        from planning_core import agent_debug_ndjson as _adb
+
+        payload = dict(data or {})
+        payload["ndjsonPath"] = _adb.resolve_ndjson_path() or ""
+        payload["debugSessionId"] = _adb.session_id()
+        _adb.append_structured(hypothesis_id, location, message, payload)
+    except Exception:
+        pass
+    # #endregion
+
+
+def _agent_debug_stage1_material_log(
+    hypothesis_id: str, location: str, message: str, data: dict | None = None
+) -> None:
+    # #region agent log
+    try:
+        from planning_core import agent_debug_ndjson as _adb
+
+        payload = dict(data or {})
+        payload["ndjsonPath"] = _adb.resolve_ndjson_path() or ""
+        payload["debugSessionId"] = _adb.session_id()
+        payload["materialTableBuild"] = _STAGE1_MATERIAL_TABLE_APPEND_BUILD
+        _adb.append_structured(hypothesis_id, location, message, payload)
+    except Exception:
+        pass
+    # #endregion
+
 
 def _trace_schedule_task_enabled(task_id) -> bool:
     if not TRACE_SCHEDULE_TASK_IDS:
@@ -15944,6 +15980,32 @@ def apply_exclude_rules_config_to_plan_df(
     if TASK_COL_MACHINE not in df.columns or PLAN_COL_EXCLUDE_FROM_ASSIGNMENT not in df.columns:
         return df
     rules = _load_exclude_rules_from_workbook(wb_path)
+    # #region agent log
+    _export_yusyutsu_rules = [
+        {
+            "proc": ru.get("proc"),
+            "mach": ru.get("mach"),
+            "cYes": _exclude_rule_c_column_is_yes(ru.get("c_val")),
+            "hasParsed": bool(ru.get("parsed")),
+        }
+        for ru in rules
+        if _normalize_process_name_for_rule_match(ru.get("proc"))
+        == _normalize_process_name_for_rule_match("輸出梱包")
+    ]
+    _agent_debug_exclude_rules_log(
+        "H1",
+        "apply_exclude_rules_config_to_plan_df:rules_loaded",
+        "exclude_rules_load",
+        {
+            "logPrefix": log_prefix,
+            "wbPath": wb_path,
+            "jsonEnv": (os.environ.get(ENV_EXCLUDE_RULES_JSON) or "").strip(),
+            "ruleCount": len(rules),
+            "yusyutsuKonpoRuleCount": len(_export_yusyutsu_rules),
+            "yusyutsuKonpoRules": _export_yusyutsu_rules[:20],
+        },
+    )
+    # #endregion
     if not rules:
         return df
     df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = df[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT].astype(object)
@@ -15971,19 +16033,77 @@ def apply_exclude_rules_config_to_plan_df(
                 df, by_tid_idx.get(tid_norm, [])
             )
         bunkatsu_block_cfg = is_bunkatsu and bool(tid_norm) and not dup_ge2_for_tid
+        _is_yusyutsu_row = (
+            _normalize_process_name_for_rule_match(tp)
+            == _normalize_process_name_for_rule_match("輸出梱包")
+        )
+        _exclude_before = (
+            str(row.get(PLAN_COL_EXCLUDE_FROM_ASSIGNMENT, "") or "").strip()
+            if _is_yusyutsu_row
+            else ""
+        )
+        _matched_rule = None
+        _match_block_reason = None
         for ru in rules:
             if not _task_row_matches_exclude_rule_target(tp, tm, ru["proc"], ru["mach"]):
                 continue
             if bunkatsu_block_cfg:
+                _match_block_reason = "bunkatsu_block_cfg"
                 continue
             if _exclude_rule_c_column_is_yes(ru["c_val"]):
                 df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
                 n += 1
+                _matched_rule = {
+                    "proc": ru.get("proc"),
+                    "mach": ru.get("mach"),
+                    "via": "c_yes",
+                }
                 break
             if ru.get("parsed") and evaluate_exclude_rule_json_for_row(ru["parsed"], row):
                 df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = "yes"
                 n += 1
+                _matched_rule = {
+                    "proc": ru.get("proc"),
+                    "mach": ru.get("mach"),
+                    "via": "e_json",
+                }
                 break
+        # #region agent log
+        if _is_yusyutsu_row:
+            _yusyutsu_proc_match_rules = [
+                {
+                    "ruleProc": ru.get("proc"),
+                    "ruleMach": ru.get("mach"),
+                    "targetMatch": True,
+                    "cYes": _exclude_rule_c_column_is_yes(ru.get("c_val")),
+                }
+                for ru in rules
+                if _task_row_matches_exclude_rule_target(
+                    tp, tm, ru["proc"], ru["mach"]
+                )
+            ]
+            _agent_debug_exclude_rules_log(
+                "H2",
+                "apply_exclude_rules_config_to_plan_df:yusyutsu_row",
+                "yusyutsu_konpo_apply",
+                {
+                    "taskId": str(row.get(TASK_COL_TASK_ID, "") or "").strip(),
+                    "proc": tp,
+                    "mach": tm,
+                    "procNorm": _normalize_process_name_for_rule_match(tp),
+                    "machNorm": _normalize_equipment_match_key(tm),
+                    "excludeBefore": _exclude_before,
+                    "excludeAfter": str(
+                        df.at[i, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] or ""
+                    ).strip(),
+                    "bunkatsuBlock": bunkatsu_block_cfg,
+                    "matchBlockReason": _match_block_reason,
+                    "matchedRule": _matched_rule,
+                    "procMatchRuleCount": len(_yusyutsu_proc_match_rules),
+                    "procMatchRules": _yusyutsu_proc_match_rules[:10],
+                },
+            )
+        # #endregion
     if n:
         logging.info("%s: 設定「%s」により配台不要=yes を %s 行に設定しました。", log_prefix, EXCLUDE_RULES_SHEET_NAME, n)
     return df
@@ -16019,25 +16139,97 @@ def _sort_stage1_plan_df_by_dispatch_trial_order_asc(plan_df: "pd.DataFrame") ->
 
 def _raw_fabric_width_table_search_paths() -> list[str]:
     """原反幅テーブル CSV の探索順（先に見つかったパスを採用）。"""
+    return _material_mm_table_search_paths(
+        RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME, RAW_FABRIC_WIDTH_TABLE_PATH_ENV
+    )
+
+
+def _planning_code_dir_candidates() -> list[str]:
+    """Java {@code PM_AI_CODE_DIR} / python 隣接 code / repo/code の候補（順序付き・重複除去前）。"""
+    out: list[str] = []
+    code_dir = (os.environ.get("PM_AI_CODE_DIR") or "").strip()
+    if code_dir:
+        out.append(code_dir)
+    py_dir = (os.environ.get("PM_AI_CODE_PYTHON_DIR") or "").strip()
+    if py_dir:
+        parent = os.path.abspath(os.path.join(py_dir, os.pardir))
+        if parent:
+            out.append(parent)
+    repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
+    if repo:
+        out.append(os.path.join(repo, "code"))
+    try:
+        pkg_code = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if os.path.basename(pkg_code).lower() == "code":
+            out.append(pkg_code)
+    except OSError:
+        pass
+    return out
+
+
+def _resolve_planning_code_dir() -> str:
+    for candidate in _planning_code_dir_candidates():
+        if candidate and os.path.isdir(candidate):
+            return os.path.abspath(candidate)
+    return ""
+
+
+def _is_under_system_temp(path: str) -> bool:
+    """OS 一時ディレクトリ配下（Excel 展開の /tmp 等）か。材料テーブル正本の取りこぼし防止。"""
+    if not path:
+        return False
+    try:
+        abs_p = os.path.abspath(path)
+        parts = abs_p.replace("\\", "/").split("/")
+        if "tmp" in parts or "temp" in parts:
+            return True
+        import tempfile
+
+        temp_root = os.path.abspath(tempfile.gettempdir())
+        common = os.path.commonpath([abs_p, temp_root])
+        return common == temp_root
+    except (OSError, ValueError):
+        return False
+
+
+def _canonical_material_table_path(default_filename: str) -> str:
+    code_dir = _resolve_planning_code_dir()
+    if code_dir:
+        return os.path.join(code_dir, default_filename)
+    return ""
+
+
+def _pick_material_table_path_for_read(
+    search_paths: list[str], default_filename: str
+) -> str:
+    """読込: 正本 code/ を OS 一時フォルダ内の同名 CSV より優先する。"""
+    canonical = _canonical_material_table_path(default_filename)
+    if canonical and os.path.isfile(canonical):
+        return canonical
+    for p in search_paths:
+        if not os.path.isfile(p):
+            continue
+        if canonical and _is_under_system_temp(p):
+            continue
+        return p
+    return ""
+
+
+def _material_mm_table_search_paths(default_filename: str, path_env_var: str) -> list[str]:
+    """mm 系材料テーブル CSV の探索順。正本 code/ を cwd より先にする。"""
     paths: list[str] = []
-    env = (os.environ.get(RAW_FABRIC_WIDTH_TABLE_PATH_ENV) or "").strip()
+    env = (os.environ.get(path_env_var) or "").strip()
     if env:
         paths.append(env)
+    for code_dir in _planning_code_dir_candidates():
+        paths.append(os.path.join(code_dir, default_filename))
     wb = (_excel_plan_input_wb() or "").strip()
     if wb:
         paths.append(
-            os.path.join(
-                os.path.dirname(os.path.abspath(wb)),
-                RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME,
-            )
+            os.path.join(os.path.dirname(os.path.abspath(wb)), default_filename)
         )
-    paths.append(os.path.join(os.getcwd(), RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME))
-    repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
-    if repo:
-        paths.append(
-            os.path.join(repo, "code", RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME)
-        )
-    paths.append(os.path.join(os.getcwd(), "code", RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME))
+    paths.append(os.path.join(os.getcwd(), default_filename))
+    paths.append(os.path.join(os.getcwd(), "code", default_filename))
     out: list[str] = []
     seen: set[str] = set()
     for p in paths:
@@ -16063,9 +16255,12 @@ def _normalize_mm_table_lookup_key(val) -> str:
 def _resolve_code_lookup_table_path_for_write(
     search_paths: list[str], default_filename: str
 ) -> str:
-    """材料テーブル CSV の追記先（既存ファイルがあればそれ、無ければ code/ 配下を新規作成）。"""
+    """材料テーブル CSV の追記先。正本 code/ が解決できれば常にそこ（/tmp 側の同名ファイルは無視）。"""
+    canonical = _canonical_material_table_path(default_filename)
+    if canonical:
+        return canonical
     for p in search_paths:
-        if os.path.isfile(p):
+        if os.path.isfile(p) and not _is_under_system_temp(p):
             return p
     repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
     if repo:
@@ -16098,6 +16293,29 @@ def _append_code_dispatch_lookup_table_row_if_missing(
     log_table_label: str,
 ) -> bool:
     """段階1: 材料テーブルに未登録キーを空欄値で追記する。"""
+    # #region agent log
+    skip_reason = ""
+    if not normalized_key:
+        skip_reason = "empty_key"
+    elif normalized_key in known_keys:
+        skip_reason = "in_known_keys"
+    elif normalized_key in appended:
+        skip_reason = "in_appended"
+    elif not (table_path or "").strip():
+        skip_reason = "empty_table_path"
+    _agent_debug_stage1_material_log(
+        "H3",
+        "_append_code_dispatch_lookup_table_row_if_missing:entry",
+        "append_attempt",
+        {
+            "tableLabel": log_table_label,
+            "normalizedKey": normalized_key,
+            "tablePath": table_path,
+            "skipReason": skip_reason or None,
+            "knownKeysHas": normalized_key in known_keys if normalized_key else False,
+        },
+    )
+    # #endregion
     if not normalized_key or normalized_key in known_keys or normalized_key in appended:
         return False
     display = str(raw_key_display or "").strip()
@@ -16125,6 +16343,19 @@ def _append_code_dispatch_lookup_table_row_if_missing(
             display,
             path,
         )
+        # #region agent log
+        _agent_debug_stage1_material_log(
+            "H4",
+            "_append_code_dispatch_lookup_table_row_if_missing:ok",
+            "append_ok",
+            {
+                "tableLabel": log_table_label,
+                "displayKey": display,
+                "path": path,
+                "fileExistsAfter": os.path.isfile(path),
+            },
+        )
+        # #endregion
         return True
     except OSError as ex:
         logging.warning(
@@ -16134,6 +16365,14 @@ def _append_code_dispatch_lookup_table_row_if_missing(
             path,
             ex,
         )
+        # #region agent log
+        _agent_debug_stage1_material_log(
+            "H4",
+            "_append_code_dispatch_lookup_table_row_if_missing:error",
+            "append_oserror",
+            {"tableLabel": log_table_label, "path": path, "error": str(ex)},
+        )
+        # #endregion
         return False
 
 
@@ -16147,11 +16386,7 @@ def _load_int_mm_lookup_table(
     value_header: str,
 ) -> tuple[dict[str, int], set[str], str]:
     """mm 整数の材料テーブルを読み込む。値が空欄の行は known_keys のみ（dict には載せない）。"""
-    path_found = ""
-    for p in search_paths:
-        if os.path.isfile(p):
-            path_found = p
-            break
+    path_found = _pick_material_table_path_for_read(search_paths, default_filename)
     if not path_found:
         hint = " / ".join(search_paths[:4])
         raise PlanningValidationError(
@@ -16330,33 +16565,9 @@ def _resolve_raw_fabric_width_mm_for_stage1_row(
 
 def _product_width_table_search_paths() -> list[str]:
     """製品幅テーブル CSV の探索順（先に見つかったパスを採用）。"""
-    paths: list[str] = []
-    env = (os.environ.get(PRODUCT_WIDTH_TABLE_PATH_ENV) or "").strip()
-    if env:
-        paths.append(env)
-    wb = (_excel_plan_input_wb() or "").strip()
-    if wb:
-        paths.append(
-            os.path.join(
-                os.path.dirname(os.path.abspath(wb)),
-                PRODUCT_WIDTH_TABLE_DEFAULT_FILENAME,
-            )
-        )
-    paths.append(os.path.join(os.getcwd(), PRODUCT_WIDTH_TABLE_DEFAULT_FILENAME))
-    repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
-    if repo:
-        paths.append(
-            os.path.join(repo, "code", PRODUCT_WIDTH_TABLE_DEFAULT_FILENAME)
-        )
-    paths.append(os.path.join(os.getcwd(), "code", PRODUCT_WIDTH_TABLE_DEFAULT_FILENAME))
-    out: list[str] = []
-    seen: set[str] = set()
-    for p in paths:
-        key = os.path.normcase(os.path.abspath(p))
-        if key not in seen:
-            seen.add(key)
-            out.append(p)
-    return out
+    return _material_mm_table_search_paths(
+        PRODUCT_WIDTH_TABLE_DEFAULT_FILENAME, PRODUCT_WIDTH_TABLE_PATH_ENV
+    )
 
 
 def _load_product_width_mm_table() -> tuple[dict[str, int], set[str], str]:
@@ -16373,33 +16584,9 @@ def _load_product_width_mm_table() -> tuple[dict[str, int], set[str], str]:
 
 def _product_length_table_search_paths() -> list[str]:
     """製品長テーブル CSV の探索順（先に見つかったパスを採用）。"""
-    paths: list[str] = []
-    env = (os.environ.get(PRODUCT_LENGTH_TABLE_PATH_ENV) or "").strip()
-    if env:
-        paths.append(env)
-    wb = (_excel_plan_input_wb() or "").strip()
-    if wb:
-        paths.append(
-            os.path.join(
-                os.path.dirname(os.path.abspath(wb)),
-                PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME,
-            )
-        )
-    paths.append(os.path.join(os.getcwd(), PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME))
-    repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
-    if repo:
-        paths.append(
-            os.path.join(repo, "code", PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME)
-        )
-    paths.append(os.path.join(os.getcwd(), "code", PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME))
-    out: list[str] = []
-    seen: set[str] = set()
-    for p in paths:
-        key = os.path.normcase(os.path.abspath(p))
-        if key not in seen:
-            seen.add(key)
-            out.append(p)
-    return out
+    return _material_mm_table_search_paths(
+        PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME, PRODUCT_LENGTH_TABLE_PATH_ENV
+    )
 
 
 def _load_product_length_mm_table() -> tuple[dict[str, int], set[str], str]:
@@ -16548,41 +16735,21 @@ def _resolve_product_width_mm_for_stage1_row(
 
 def _product_thickness_table_search_paths() -> list[str]:
     """製品厚みテーブル CSV の探索順（先に見つかったパスを採用）。"""
-    paths: list[str] = []
-    env = (os.environ.get(PRODUCT_THICKNESS_TABLE_PATH_ENV) or "").strip()
-    if env:
-        paths.append(env)
-    wb = (_excel_plan_input_wb() or "").strip()
-    if wb:
-        paths.append(
-            os.path.join(
-                os.path.dirname(os.path.abspath(wb)),
-                PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME,
-            )
-        )
-    paths.append(os.path.join(os.getcwd(), PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME))
-    repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
-    if repo:
-        paths.append(
-            os.path.join(repo, "code", PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME)
-        )
-    paths.append(os.path.join(os.getcwd(), "code", PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME))
+    paths = _material_mm_table_search_paths(
+        PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME, PRODUCT_THICKNESS_TABLE_PATH_ENV
+    )
     # リポジトリ同梱（細川/GoogleAIStudio/配下）を直接参照したいケース向け
     try:
         _ga_dir = os.path.dirname(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         )
-        paths.append(os.path.join(_ga_dir, PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME))
+        extra = os.path.join(_ga_dir, PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME)
+        key = os.path.normcase(os.path.abspath(extra))
+        if key not in {os.path.normcase(os.path.abspath(p)) for p in paths}:
+            paths.append(extra)
     except Exception:
         pass
-    out: list[str] = []
-    seen: set[str] = set()
-    for p in paths:
-        key = os.path.normcase(os.path.abspath(p))
-        if key not in seen:
-            seen.add(key)
-            out.append(p)
-    return out
+    return paths
 
 
 def _parse_float_mm_thickness_cell(val) -> float:
@@ -16619,11 +16786,10 @@ def _load_product_thickness_mm_table() -> tuple[dict[str, float], set[str], str]
     製品名キーは _normalize_mm_table_lookup_key で正規化（NFKC・空白除去）して dict に格納する。
     値が空欄の行は dict には載せず known_keys のみに含める（段階1追記分など）。
     """
-    path_found = ""
-    for p in _product_thickness_table_search_paths():
-        if os.path.isfile(p):
-            path_found = p
-            break
+    path_found = _pick_material_table_path_for_read(
+        _product_thickness_table_search_paths(),
+        PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME,
+    )
     if not path_found:
         hint = " / ".join(_product_thickness_table_search_paths()[:4])
         raise PlanningValidationError(
@@ -16747,6 +16913,21 @@ def _resolve_product_thickness_mm_for_stage1_row(
         if pn in table:
             return float(table[pn])
         _ensure_table_row()
+        # #region agent log
+        _agent_debug_stage1_material_log(
+            "H5",
+            "_resolve_product_thickness_mm_for_stage1_row:alpha",
+            "thickness_alpha_missing",
+            {
+                "taskId": tid,
+                "productKey": pn,
+                "tablePath": table_path,
+                "inKnownKeys": pn in keys,
+                "inTableValues": pn in table,
+                "build": _STAGE1_MATERIAL_TABLE_APPEND_BUILD,
+            },
+        )
+        # #endregion
         logging.warning(
             "製品厚み未登録（英字開始・テーブル未登録）。材料テーブルへ追記し製品厚みは空欄で出力。依頼NO=%s 製品名=%r",
             tid,
@@ -16893,6 +17074,29 @@ def run_stage1_extract():
         )
         return False
     reset_gemini_usage_tracker()
+    logging.info(
+        "段階1: material_table_append_build=%s _core=%s cwd=%s",
+        _STAGE1_MATERIAL_TABLE_APPEND_BUILD,
+        __file__,
+        os.getcwd(),
+    )
+    # #region agent log
+    _agent_debug_stage1_material_log(
+        "H1",
+        "run_stage1_extract:start",
+        "stage1_material_table_debug",
+        {
+            "build": _STAGE1_MATERIAL_TABLE_APPEND_BUILD,
+            "coreFile": __file__,
+            "cwd": os.getcwd(),
+            "repoRoot": (os.environ.get("PM_AI_REPO_ROOT") or "").strip(),
+            "pythonDir": (os.environ.get("PM_AI_CODE_PYTHON_DIR") or "").strip(),
+            "thicknessTablePathEnv": (
+                os.environ.get(PRODUCT_THICKNESS_TABLE_PATH_ENV) or ""
+            ).strip(),
+        },
+    )
+    # #endregion
     df_src = load_tasks_df()
     try:
         _write_stage1_task_input_preview_xlsx(df_src, output_dir)
@@ -16906,6 +17110,21 @@ def run_stage1_extract():
     pl_appended_keys: set[str] = set()
     pt_table, pt_known_keys, pt_table_path = _load_product_thickness_mm_table()
     pt_appended_keys: set[str] = set()
+    # #region agent log
+    _agent_debug_stage1_material_log(
+        "H2",
+        "run_stage1_extract:thickness_table_loaded",
+        "thickness_table_paths",
+        {
+            "loadPath": pt_table_path,
+            "writePathDefault": _resolve_product_thickness_table_path_for_write(),
+            "planningCodeDir": _resolve_planning_code_dir(),
+            "knownKeyCount": len(pt_known_keys),
+            "valueCount": len(pt_table),
+            "c4300InKnown": "C4300-1056-820x114YA" in pt_known_keys,
+        },
+    )
+    # #endregion
     _ur_roll_table, ur_roll_known_keys, ur_roll_table_path = (
         _load_used_raw_roll_length_table_stage1()
     )
@@ -17080,6 +17299,45 @@ def run_stage1_extract():
     except Exception:
         logging.exception("段階1: 配台不要ルールの JSON 書き出しで例外（続行）")
     try:
+        # #region agent log
+        _yusyutsu_plan_rows = []
+        _konpo_related_rows = []
+        if TASK_COL_MACHINE in out_df.columns:
+            for _yi, _yr in out_df.iterrows():
+                _yp = str(_yr.get(TASK_COL_MACHINE, "") or "").strip()
+                _ym = str(_yr.get(TASK_COL_MACHINE_NAME, "") or "").strip()
+                _row_rec = {
+                    "taskId": str(_yr.get(TASK_COL_TASK_ID, "") or "").strip(),
+                    "proc": _yp,
+                    "mach": _ym,
+                    "machNorm": _normalize_equipment_match_key(
+                        _yr.get(TASK_COL_MACHINE_NAME, "")
+                    ),
+                    "excludeBeforeApply": str(
+                        _yr.get(PLAN_COL_EXCLUDE_FROM_ASSIGNMENT, "") or ""
+                    ).strip(),
+                }
+                if "梱包" in _normalize_process_name_for_rule_match(_yp):
+                    _konpo_related_rows.append(_row_rec)
+                if (
+                    _normalize_process_name_for_rule_match(_yp)
+                    == _normalize_process_name_for_rule_match("輸出梱包")
+                ):
+                    _yusyutsu_plan_rows.append(_row_rec)
+        _agent_debug_exclude_rules_log(
+            "H3",
+            "run_stage1_extract:before_apply_exclude",
+            "yusyutsu_plan_rows_before_exclude",
+            {
+                "jsonEnv": (os.environ.get(ENV_EXCLUDE_RULES_JSON) or "").strip(),
+                "jsonSupersedesExcel": _exclude_rules_json_env_supersedes_excel_sheet(),
+                "yusyutsuRowCount": len(_yusyutsu_plan_rows),
+                "yusyutsuRows": _yusyutsu_plan_rows[:30],
+                "konpoRelatedRowCount": len(_konpo_related_rows),
+                "konpoRelatedRows": _konpo_related_rows[:20],
+            },
+        )
+        # #endregion
         out_df = apply_exclude_rules_config_to_plan_df(out_df, _master_er_wb, "段階1")
     except Exception as ex:
         logging.warning("段階1: 設定シートによる配台試行適用で例外（続行）: %s", ex)

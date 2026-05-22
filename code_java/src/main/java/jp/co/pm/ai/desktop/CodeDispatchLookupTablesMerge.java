@@ -95,7 +95,7 @@ public final class CodeDispatchLookupTablesMerge {
         if (headers == null || headers.isEmpty()) {
             return new MergeSummary(0, 0, 0, 0, 0, 0);
         }
-        Path codeDir = AppPaths.resolveRepoRoot(u).resolve("code");
+        Path codeDir = AppPaths.resolveCodeDir(u);
 
         int apRoll = 0;
         int apW = 0;

@@ -96,7 +96,7 @@ public final class CodeDispatchLookupTablesValidator {
 
     public static ValidationResult validateNoBlankValues(Map<String, String> ui) throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
-        Path codeDir = AppPaths.resolveRepoRoot(u).resolve("code");
+        Path codeDir = AppPaths.resolveCodeDir(u);
         List<BlankValueIssue> issues = new ArrayList<>();
         for (TableSpec spec : TABLES) {
             Path path = codeDir.resolve(spec.relativePath());

@@ -26,6 +26,12 @@ public final class AppPaths {
 
     public static final String KEY_PM_AI_PYTHON = "PM_AI_PYTHON";
     public static final String KEY_PM_AI_CODE_PYTHON_DIR = "PM_AI_CODE_PYTHON_DIR";
+
+    /**
+     * 材料テーブル等 {@code code/} 配下 CSV の正本ディレクトリ。段階1子プロセスへ明示渡しし、Python と Java UI の読み書き先を揃える。
+     */
+    public static final String KEY_PM_AI_CODE_DIR = "PM_AI_CODE_DIR";
+
     public static final String KEY_PM_AI_REPO_ROOT = "PM_AI_REPO_ROOT";
     public static final String KEY_PM_AI_WORKSPACE = "PM_AI_WORKSPACE";
 
@@ -490,30 +496,38 @@ public final class AppPaths {
 
     /**
      * {@code ui} from the env tab; {@code null} or empty map uses directory walk only (no overrides).
+     * {@code PM_AI_CODE_PYTHON_DIR} が pm-ai-data 配下を指していても、{@code PM_AI_REPO_ROOT/code/python}
+     * が有効なら開発ツリー側を優先する（同梱 pm-ai-data が古いときの取りこぼし防止）。
      */
     public static Path resolvePythonScriptDir(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
+        Path repoPython = resolveRepoCodePythonDir(u);
         String override = trim(u.get(KEY_PM_AI_CODE_PYTHON_DIR));
         if (!override.isEmpty()) {
             Path p = Path.of(override).toAbsolutePath().normalize();
             if (Files.isDirectory(p)) {
+                if (repoPython != null && isUnderPmAiDataCodePython(p)) {
+                    try {
+                        if (!Files.isSameFile(p, repoPython)) {
+                            return repoPython;
+                        }
+                    } catch (IOException ignored) {
+                        return repoPython;
+                    }
+                }
                 return p;
             }
+        }
+        if (repoPython != null) {
+            return repoPython;
         }
         String repo = trim(u.get(KEY_PM_AI_REPO_ROOT));
         if (!repo.isEmpty()) {
             Path base = Path.of(repo).toAbsolutePath().normalize();
-            Path underRepo = base.resolve("code").resolve("python");
-            Path underNested = base.resolve("Production-Control-System").resolve("code").resolve("python");
-            for (Path p : new Path[] {underRepo, underNested}) {
-                if (Files.isDirectory(p) && Files.isRegularFile(p.resolve("task_extract_stage1.py"))) {
-                    return p;
-                }
-            }
-            for (Path p : new Path[] {underRepo, underNested}) {
-                if (Files.isDirectory(p)) {
-                    return p;
-                }
+            Path underNested =
+                    base.resolve("Production-Control-System").resolve("code").resolve("python");
+            if (Files.isDirectory(underNested)) {
+                return underNested;
             }
         }
         Path start = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
@@ -526,6 +540,68 @@ public final class AppPaths {
             return sibling;
         }
         return sibling;
+    }
+
+    /**
+     * 材料テーブル CSV の正本 {@code code/} ディレクトリ。{@link #KEY_PM_AI_CODE_DIR} → {@link #resolvePythonScriptDir} の親
+     * （{@code code}）→ {@link #resolveRepoRoot} の {@code code/} の順。
+     */
+    public static Path resolveCodeDir(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_CODE_DIR));
+        if (!override.isEmpty()) {
+            Path p = Path.of(override).toAbsolutePath().normalize();
+            if (Files.isDirectory(p)) {
+                return p;
+            }
+        }
+        Path py = resolvePythonScriptDir(u);
+        Path parent = py.getParent();
+        if (parent != null
+                && "code".equals(parent.getFileName() != null ? parent.getFileName().toString() : "")
+                && Files.isDirectory(parent)) {
+            return parent.toAbsolutePath().normalize();
+        }
+        return resolveRepoRoot(u).resolve("code").toAbsolutePath().normalize();
+    }
+
+    /** {@code PM_AI_REPO_ROOT/code/python} が段階1スクリプトを含むときそのパス、無ければ {@code null}。 */
+    static Path resolveRepoCodePythonDir(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String repo = trim(u.get(KEY_PM_AI_REPO_ROOT));
+        if (repo.isEmpty()) {
+            return null;
+        }
+        Path base = Path.of(repo).toAbsolutePath().normalize();
+        Path underRepo = base.resolve("code").resolve("python");
+        if (Files.isDirectory(underRepo)
+                && Files.isRegularFile(underRepo.resolve("task_extract_stage1.py"))) {
+            return underRepo;
+        }
+        Path underNested = base.resolve("Production-Control-System").resolve("code").resolve("python");
+        if (Files.isDirectory(underNested)
+                && Files.isRegularFile(underNested.resolve("task_extract_stage1.py"))) {
+            return underNested;
+        }
+        return null;
+    }
+
+    static boolean isUnderPmAiDataCodePython(Path p) {
+        if (p == null) {
+            return false;
+        }
+        Path norm = p.toAbsolutePath().normalize();
+        if (!"python".equals(norm.getFileName() != null ? norm.getFileName().toString() : "")) {
+            return false;
+        }
+        Path code = norm.getParent();
+        if (code == null || !"code".equals(code.getFileName() != null ? code.getFileName().toString() : "")) {
+            return false;
+        }
+        Path pmAiData = code.getParent();
+        return pmAiData != null
+                && "pm-ai-data".equalsIgnoreCase(
+                        pmAiData.getFileName() != null ? pmAiData.getFileName().toString() : "");
     }
 
     /** PQ-A task-input folder; optional {@code PM_AI_TASK_INPUT_SOURCE_DIR} in {@code ui}. */

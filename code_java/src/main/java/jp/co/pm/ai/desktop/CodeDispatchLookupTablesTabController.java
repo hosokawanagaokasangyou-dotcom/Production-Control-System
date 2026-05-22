@@ -335,7 +335,7 @@ public final class CodeDispatchLookupTablesTabController {
         }
 
         private Path resolvePath() {
-            Path code = AppPaths.resolveRepoRoot(uiEnv()).resolve("code");
+            Path code = AppPaths.resolveCodeDir(uiEnv());
             return code.resolve(spec.relativePath()).toAbsolutePath().normalize();
         }
 
