@@ -38,6 +38,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.geometry.VPos;
 import javafx.scene.input.MouseButton;
@@ -84,6 +85,10 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
     private static final Pattern LOOSE_YMD =
             Pattern.compile("(\\d{4})[/\\-.](\\d{1,2})[/\\-.](\\d{1,2})");
+
+    /** {@link #compactDateLine} の出力（例 {@code 2026年5月25日(月)}）。 */
+    private static final Pattern COMPACT_JP_DATE =
+            Pattern.compile("^(\\d{4})年(\\d{1,2}月\\d{1,2}日\\([^)]+\\))$");
 
     private static final double BASE_LABEL_MIN_WIDTH = 220;
     private static final double BASE_LABEL_MAX_WIDTH = 360;
@@ -1703,7 +1708,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     }
 
     private static final double PRINT_SHEET_PAD = 8;
-    private static final double PRINT_HEADER_H = 34;
+    /** タイムライン見出しに暦日（年月日）を載せるためやや高め。 */
+    private static final double PRINT_HEADER_H = 40;
     private static final double PRINT_SECTION_H = 22;
     private static final double PRINT_MIN_ROW_H = 14;
     private static final double PRINT_MAX_ROW_H = 40;
@@ -1987,9 +1993,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
     private static HBox buildDedicatedPrintHeader(
             List<String> effCols, ParseResult parsed, PrintSheetDims dims) {
-        String pageDate = resolvePrintSheetDateTitle(parsed);
-        Label hDate = new Label(pageDate);
-        hDate.setWrapText(true);
+        Label hDate = new Label("");
+        hDate.setWrapText(false);
         Label hMach = new Label("機械名");
         Label hProc = new Label("工程名");
         applyDedicatedPrintHeaderLabel(hDate, dims.dateW(), dims);
@@ -2046,7 +2051,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         Color grid = dims.palette().grid();
         String dateTitle = resolvePrintSheetDateTitle(parsed);
         double dateBandH =
-                dateTitle.isEmpty() ? 0.0 : Math.clamp(headerH * 0.42, 12.0, headerH - 10.0);
+                dateTitle.isEmpty() ? 0.0 : Math.clamp(headerH * 0.52, 16.0, headerH - 8.0);
         double timeBandTop = dateBandH;
         double timeBandH = Math.max(8.0, headerH - timeBandTop);
         if (!dateTitle.isEmpty()) {
@@ -2055,15 +2060,15 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             dateSep.setStrokeWidth(0.4);
             pane.getChildren().add(dateSep);
             Text dateTxt = new Text(dateTitle);
-            dateTxt.setFill(dims.palette().axisLabel());
-            double dateFont = Math.min(12, Math.max(9, dateBandH * 0.72));
-            dateTxt.setFont(Font.font(dateFont));
+            dateTxt.setFill(Color.web("#0f172a"));
+            double dateFont = Math.min(15, Math.max(11, dateBandH * 0.62));
+            dateTxt.setFont(Font.font(null, FontWeight.BOLD, dateFont));
             MEASURE_ROOT.getChildren().setAll(dateTxt);
             dateTxt.applyCss();
             Bounds db = dateTxt.getLayoutBounds();
             double dw = db.getWidth();
             dateTxt.setLayoutX(Math.max(4, (timelineW - dw) * 0.5));
-            dateTxt.setLayoutY(Math.max(2, dateBandH * 0.5 - db.getHeight() * 0.35));
+            dateTxt.setLayoutY(Math.max(2, dateBandH * 0.55 - db.getHeight() * 0.4));
             pane.getChildren().add(dateTxt);
         }
         double slotW = dims.slotWidth();
@@ -2285,7 +2290,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         wrap.setAlignment(Pos.CENTER);
         wrap.setStyle(dims.palette().machineSideCellCss(machineGroupIndex));
 
-        String t = dateText != null ? dateText.strip() : "";
+        String t = printSideDateColumnLabel(dateText);
         if (t.isEmpty()) {
             return wrap;
         }
@@ -2333,11 +2338,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             if (dr.sectionBanner() != null) {
                 continue;
             }
-            String d = dr.dateCompact();
-            if (d == null || d.isBlank()) {
+            String d = printSideDateColumnLabel(dr.dateCompact());
+            if (d.isEmpty()) {
                 continue;
             }
-            Text probe = new Text(d.strip());
+            Text probe = new Text(d);
             probe.setFont(Font.font(fontPx));
             MEASURE_ROOT.getChildren().setAll(probe);
             probe.applyCss();
@@ -6003,6 +6008,21 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             s = s.replaceFirst("\\s*\\([^)]*\\)\\s*$", "").strip();
             s = s.replaceFirst("\\s*（[^）]*）\\s*$", "").strip();
         } while (!s.equals(prev));
+        return s;
+    }
+
+    /**
+     * 印刷左「日付」列用。1 ページ 1 暦日のため年はタイムライン見出しに載せ、列内は {@code 5月25日(月)} に短縮する。
+     */
+    private static String printSideDateColumnLabel(String fullCompactDate) {
+        if (fullCompactDate == null || fullCompactDate.isBlank()) {
+            return "";
+        }
+        String s = fullCompactDate.strip();
+        Matcher m = COMPACT_JP_DATE.matcher(s);
+        if (m.matches()) {
+            return m.group(2);
+        }
         return s;
     }
 
