@@ -85,10 +85,13 @@ def resolve_ndjson_path() -> str | None:
 
     for c in candidates:
         parent_dir = os.path.dirname(c)
-        if parent_dir and os.path.isdir(parent_dir):
+        if not parent_dir:
+            continue
+        try:
+            os.makedirs(parent_dir, exist_ok=True)
             return c
-    if candidates:
-        return candidates[0]
+        except OSError:
+            continue
     return None
 
 

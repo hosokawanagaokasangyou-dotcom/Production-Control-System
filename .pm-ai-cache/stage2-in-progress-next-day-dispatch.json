@@ -1,29 +1,34 @@
 {
   "version" : 1,
   "entries" : [ {
-    "task_id" : "W5-18",
-    "process" : "スリット",
-    "machine_name" : "スリット機1　湖南",
-    "next_day_dispatch_m" : 250.0
+    "task_id" : "V5-21",
+    "process" : "スライス",
+    "machine_name" : "スライス機1",
+    "next_day_dispatch_m" : 10660.0
   }, {
-    "task_id" : "W5-6",
-    "process" : "検査",
-    "machine_name" : "熱融着機　湖南",
+    "task_id" : "Y5-60",
+    "process" : "スライス",
+    "machine_name" : "スライス機3",
+    "next_day_dispatch_m" : 2400.0
+  }, {
+    "task_id" : "Y5-60",
+    "process" : "スリット",
+    "machine_name" : "スリット機4",
+    "next_day_dispatch_m" : 10200.0
+  }, {
+    "task_id" : "W5-25",
+    "process" : "スリット",
+    "machine_name" : "スリット機2",
     "next_day_dispatch_m" : 600.0
   }, {
-    "task_id" : "Y5-27",
-    "process" : "SEC",
-    "machine_name" : "SEC機　湖南",
-    "next_day_dispatch_m" : 6000.0
-  }, {
-    "task_id" : "Y5-16",
-    "process" : "スライス",
-    "machine_name" : "スライス機1　湖南",
+    "task_id" : "Y5-135",
+    "process" : "LAC",
+    "machine_name" : "LAC/EC機",
     "next_day_dispatch_m" : 2600.0
   }, {
-    "task_id" : "W5-13",
-    "process" : "EC",
-    "machine_name" : "EC機　湖南",
-    "next_day_dispatch_m" : 5700.0
+    "task_id" : "Y5-145",
+    "process" : "融着",
+    "machine_name" : "融着機",
+    "next_day_dispatch_m" : 105.0
   } ]
 }

@@ -148,24 +148,71 @@ class AppPathsTest {
     }
 
     @Test
-    void resolveDefaultExcludeRulesJsonPath_prefersPrimaryThenStage1(@TempDir Path fakeRepo) throws Exception {
+    void resolveDefaultExcludeRulesJsonPath_copiesBundledToSummarySibling(@TempDir Path fakeRepo)
+            throws Exception {
         Path code = fakeRepo.resolve("code");
         Files.createDirectories(code.resolve("python"));
         Files.createFile(code.resolve("python").resolve("task_extract_stage1.py"));
         Path jsonDir = code.resolve("json");
         Files.createDirectories(jsonDir);
-        Path stage1 = jsonDir.resolve(AppPaths.STAGE1_EXCLUDE_RULES_JSON_FILENAME);
-        Files.createFile(stage1);
-        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
-        assertEquals(
-                stage1.toAbsolutePath().normalize(),
-                AppPaths.resolveDefaultExcludeRulesJsonPath(ui).get());
+        Path bundled = jsonDir.resolve(AppPaths.STAGE1_EXCLUDE_RULES_JSON_FILENAME);
+        Files.writeString(bundled, "{\"rules\":[]}");
+        Path summaryDir = fakeRepo.resolve("shared");
+        Files.createDirectories(summaryDir);
+        Path summary = summaryDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summary);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        fakeRepo.toString(),
+                        AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                        summary.toString());
+        Path expected =
+                summaryDir
+                        .resolve(AppPaths.STAGE1_EXCLUDE_RULES_JSON_FILENAME)
+                        .toAbsolutePath()
+                        .normalize();
+        assertEquals(expected, AppPaths.resolveDefaultExcludeRulesJsonPath(ui).get());
+        assertTrue(Files.isRegularFile(expected));
+    }
 
-        Path primary = code.resolve("exclude_rules.json");
-        Files.createFile(primary);
-        assertEquals(
-                primary.toAbsolutePath().normalize(),
-                AppPaths.resolveDefaultExcludeRulesJsonPath(ui).get());
+    @Test
+    void stage1ExcludeRulesJsonPath_usesSummaryWorkbookParent(@TempDir Path tmp) {
+        Path custom = tmp.resolve("shared").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, custom.toString());
+        Path expected =
+                custom.getParent()
+                        .resolve(AppPaths.STAGE1_EXCLUDE_RULES_JSON_FILENAME)
+                        .toAbsolutePath()
+                        .normalize();
+        assertEquals(expected, AppPaths.stage1ExcludeRulesJsonPath(ui));
+    }
+
+    @Test
+    void ensureStage1ExcludeRulesJsonFromRepoIfMissing_copiesWhenAbsent(@TempDir Path fakeRepo)
+            throws Exception {
+        Path code = fakeRepo.resolve("code");
+        Files.createDirectories(code.resolve("python"));
+        Files.createFile(code.resolve("python").resolve("task_extract_stage1.py"));
+        Path jsonDir = code.resolve("json");
+        Files.createDirectories(jsonDir);
+        Path bundled = jsonDir.resolve(AppPaths.STAGE1_EXCLUDE_RULES_JSON_FILENAME);
+        Files.writeString(bundled, "{\"rules\":[]}");
+        Path summaryDir = fakeRepo.resolve("work");
+        Files.createDirectories(summaryDir);
+        Path summary = summaryDir.resolve("custom_summary.xlsx");
+        Files.createFile(summary);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        fakeRepo.toString(),
+                        AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                        summary.toString());
+        Path target = AppPaths.stage1ExcludeRulesJsonPath(ui);
+        assertFalse(Files.isRegularFile(target));
+        assertTrue(AppPaths.ensureStage1ExcludeRulesJsonFromRepoIfMissing(ui));
+        assertTrue(Files.isRegularFile(target));
     }
 
     @Test

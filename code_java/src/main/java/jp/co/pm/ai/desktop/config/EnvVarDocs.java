@@ -60,7 +60,7 @@ public final class EnvVarDocs {
                         + "この変数に設定（dispatch_workspace.resolve_processing_plan_path_from_env）。"
                         + "run_stage1_extract はこのパス（または SOURCE_DIR"
                         + "解決の実在ファイル）が必要。"
-                        + "配台不要は master.xlsm から json/stage1_exclude_rules.json に書き出し。"
+                        + "配台不要は master.xlsm から PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK 同フォルダの stage1_exclude_rules.json に書き出し。"
                         + " 正式な列構成は plan/01_加工計画DATA_単一ファイル.m"
                         + " と同等の Power Query 成形後の加工計画DATA相当。"
                         + "生の問合せ xlsx を直接指定する場合は Python"
@@ -241,13 +241,15 @@ public final class EnvVarDocs {
         put(
                 "PM_AI_EXCLUDE_RULES_JSON",
                 "段階1（run_stage1_extract）で master.xlsm 「設定_配台不要工程」"
-                        + "を json/stage1_exclude_rules.json へ書き出し、本変数を"
+                        + "を PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK と同一フォルダの"
+                        + " stage1_exclude_rules.json へ書き出し、本変数を"
                         + " その絶対パスに自動設定（子プロセス内）。"
                         + " 手動でも UTF-8 JSON（list または {\"rules\":[...]}、"
                         + " 列構造は設定シートと同槗。"
                         + " 有効ファイルがあれば read_excel 経路を省略可。"
-                        + " JavaFX 環境変数タブの既定は"
-                        + " code/exclude_rules.json（実在時）、無ければ code/json/stage1_exclude_rules.json（実在時）。"
+                        + " JavaFX 環境変数タブの既定はサマリ Excel 同フォルダの"
+                        + " stage1_exclude_rules.json（無ければ code/exclude_rules.json または"
+                        + " code/json/stage1_exclude_rules.json から初回コピー）。"
                         + " JavaFX は「ファイル...」で選択可。");
         put(
                 "PM_AI_PLAN_RESULT_TASK_JSON",

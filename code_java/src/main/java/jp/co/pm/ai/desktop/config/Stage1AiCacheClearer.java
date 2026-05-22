@@ -91,12 +91,10 @@ public final class Stage1AiCacheClearer {
     public static Map<String, Path> roleToActivePathMap(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
         Map<String, Path> map = new LinkedHashMap<>();
-        Path codeJsonDir = AppPaths.stage1ExcludeRulesJsonPath(u).getParent();
-        if (codeJsonDir != null) {
-            map.put(
-                    "ai_remarks_code_json",
-                    codeJsonDir.resolve(AI_REMARKS_CACHE_FILENAME).toAbsolutePath().normalize());
-        }
+        Path codeJsonDir = AppPaths.resolveCodeDir(u).resolve("json");
+        map.put(
+                "ai_remarks_code_json",
+                codeJsonDir.resolve(AI_REMARKS_CACHE_FILENAME).toAbsolutePath().normalize());
         Path pyJsonDir = AppPaths.resolvePythonScriptDir(u).resolve("json");
         map.put(
                 "ai_remarks_python_json",

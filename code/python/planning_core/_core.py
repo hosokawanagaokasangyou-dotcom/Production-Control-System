@@ -121,8 +121,10 @@ ai_cache_path = _ai_cache_new
 exclude_rules_sheet_debug_log_path = os.path.join(log_dir, "exclude_rules_sheet_debug.txt")
 # 保存失敗時に E 列（ロジック式）の値を退避し、次回 run_exclude_rules_sheet_maintenance で自動適用する（json フォルダ）
 EXCLUDE_RULES_E_SIDECAR_FILENAME = "exclude_rules_e_column_pending.json"
-# 段階1が「設定_配台不要工程」を書き出す UTF-8 JSON（{"rules": [...]}）。json_data_dir 直下。
+# 段階1が「設定_配台不要工程」を書き出す UTF-8 JSON（{"rules": [...]}）。サマリ Excel と同一フォルダ。
 STAGE1_EXCLUDE_RULES_JSON_FILENAME = "stage1_exclude_rules.json"
+SUMMARY_AI_DISPATCH_XLSX = "サマリ_AI配台.xlsx"
+ENV_SUMMARY_AI_DISPATCH_WORKBOOK = "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK"
 # openpyxl 保存失敗時に VBA は E 列へ書き込むための UTF-8 TSV（Base64）。
 EXCLUDE_RULES_E_VBA_TSV_FILENAME = "exclude_rules_e_column_vba.tsv"
 # openpyxl 保存失敗時に VBA は A〜E を一括反映する UTF-8 TSV（行ごとに 5 セル分 Base64）。
@@ -15832,6 +15834,72 @@ def _exclude_rules_json_env_supersedes_excel_sheet() -> bool:
     return _get_exclude_rules_from_json_env() is not None
 
 
+def _resolve_summary_ai_dispatch_workbook_path() -> str:
+    """Java AppPaths.summaryAiDispatchXlsxPath と同じ解決（PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK）。"""
+    override = (os.environ.get(ENV_SUMMARY_AI_DISPATCH_WORKBOOK) or "").strip()
+    if override:
+        if os.path.isabs(override):
+            return os.path.normpath(os.path.abspath(override))
+        repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
+        if repo:
+            return os.path.normpath(os.path.join(repo, "code", override))
+        return os.path.normpath(os.path.join(os.getcwd(), "code", override))
+    repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
+    if repo:
+        return os.path.normpath(os.path.join(repo, "code", SUMMARY_AI_DISPATCH_XLSX))
+    return os.path.normpath(os.path.join(os.getcwd(), "code", SUMMARY_AI_DISPATCH_XLSX))
+
+
+def _resolve_stage1_exclude_rules_json_work_path() -> str:
+    """サマリ Excel と同一フォルダの stage1_exclude_rules.json 絶対パス。"""
+    summary = _resolve_summary_ai_dispatch_workbook_path()
+    parent = os.path.dirname(summary)
+    if not parent:
+        repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
+        parent = os.path.join(repo or os.getcwd(), "code")
+    return os.path.normpath(os.path.join(parent, STAGE1_EXCLUDE_RULES_JSON_FILENAME))
+
+
+def _copy_exclude_rules_json_if_missing(target: str, source: str) -> bool:
+    if os.path.isfile(target):
+        return True
+    if not source or not os.path.isfile(source):
+        return False
+    parent = os.path.dirname(target)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    try:
+        shutil.copy2(source, target)
+    except OSError:
+        return False
+    return os.path.isfile(target)
+
+
+def _ensure_stage1_exclude_rules_json_at_work_path() -> str | None:
+    """作業先（サマリ Excel 同フォルダ）に JSON が無ければリポジトリ同梱または
+    （code/exclude_rules.json → code/json/stage1_exclude_rules.json）または旧 cwd/json からコピー。"""
+    target = _resolve_stage1_exclude_rules_json_work_path()
+    if os.path.isfile(target):
+        return target
+    bundled = _resolve_default_exclude_rules_json_path_for_env()
+    if bundled and _copy_exclude_rules_json_if_missing(target, bundled):
+        logging.info(
+            "配台不要ルール JSON をリポジトリ同梱から作業先へコピーしました（%s → %s）。",
+            bundled,
+            target,
+        )
+        return target
+    legacy = os.path.join(json_data_dir, STAGE1_EXCLUDE_RULES_JSON_FILENAME)
+    if legacy != target and _copy_exclude_rules_json_if_missing(target, legacy):
+        logging.info(
+            "配台不要ルール JSON を旧配置から作業先へコピーしました（%s → %s）。",
+            legacy,
+            target,
+        )
+        return target
+    return None
+
+
 def _resolve_repo_root_exclude_rules_json_path() -> str | None:
     """リポジトリの ``code/exclude_rules.json``（配台不要ルールの既定・JavaFX と同じ）があれば絶対パス。"""
     repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
@@ -15859,7 +15927,7 @@ def _resolve_repo_root_exclude_rules_json_path() -> str | None:
 
 
 def _resolve_default_exclude_rules_json_path_for_env() -> str | None:
-    """実在する既定 JSON: ``code/exclude_rules.json`` を優先し、無ければ ``code/json/stage1_exclude_rules.json``。"""
+    """リポジトリ同梱テンプレート: ``code/exclude_rules.json`` を優先し、無ければ ``code/json/stage1_exclude_rules.json``。"""
     primary = _resolve_repo_root_exclude_rules_json_path()
     if primary:
         return primary
@@ -15887,19 +15955,19 @@ def _resolve_default_exclude_rules_json_path_for_env() -> str | None:
 
 
 def _ensure_stage1_exclude_rules_json_env_from_repo_default() -> None:
-    """``PM_AI_EXCLUDE_RULES_JSON`` が未設定のとき、既定 JSON（exclude_rules または stage1 サイドカー）を正本として載せる。"""
+    """``PM_AI_EXCLUDE_RULES_JSON`` が未設定または実在しないとき、サマリ Excel 同フォルダの作業 JSON を正本として載せる。"""
     cur = (os.environ.get(ENV_EXCLUDE_RULES_JSON) or "").strip()
     if cur and os.path.isfile(cur):
         _reset_exclude_rules_json_env_memo()
         return
-    bundled = _resolve_default_exclude_rules_json_path_for_env()
-    if not bundled:
+    work = _ensure_stage1_exclude_rules_json_at_work_path()
+    if not work:
         return
-    os.environ[ENV_EXCLUDE_RULES_JSON] = bundled
+    os.environ[ENV_EXCLUDE_RULES_JSON] = work
     _reset_exclude_rules_json_env_memo()
     logging.info(
         "段階1: 配台不要ルールの正本として JSON を使用します（%s）。Excel「%s」は参照しません。",
-        bundled,
+        work,
         EXCLUDE_RULES_SHEET_NAME,
     )
 
@@ -17041,11 +17109,13 @@ def run_stage1_extract():
     設定シートの行同期および D 列→E 列（ロジック式）の AI 補完は、計画 DataFrame 確定後かつ
     「配台試行順番」の付与より前に行う。
 
-    配台不要ルールの**正本**は UTF-8 JSON（list または ``{"rules":[...]}``）。既定でリポジトリの
-    ``code/exclude_rules.json`` が実在すれば ``PM_AI_EXCLUDE_RULES_JSON`` に載せ、無ければ
-    ``code/json/stage1_exclude_rules.json`` が実在すれば同様に載せ、Excel の
+    配台不要ルールの**正本**は UTF-8 JSON（list または ``{"rules":[...]}``）。作業先は
+    ``PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK`` と同一フォルダの
+    ``stage1_exclude_rules.json``（無ければリポジトリ同梱
+    ``code/exclude_rules.json`` / ``code/json/stage1_exclude_rules.json`` から初回コピー）。
+    有効な ``PM_AI_EXCLUDE_RULES_JSON`` があれば Excel の
     「設定_配台不要工程」は読まない。どちらも無い場合のみ master.xlsm の当該シートから
-    ``json/stage1_exclude_rules.json`` へ書き出して同変数を設定する。
+    作業先へ書き出して同変数を設定する。
 
     ``PM_AI_EXCLUDE_RULES_JSON`` が有効なときは、上記 JSON に
     ``_merge_exclude_rules_json_with_plan_pairs`` で工程+機械の行同期（追記）を行う。
@@ -17296,7 +17366,7 @@ def run_stage1_extract():
                 STAGE1_EXCLUDE_RULES_JSON_FILENAME,
             )
         else:
-            _s1_er_json = os.path.join(json_data_dir, STAGE1_EXCLUDE_RULES_JSON_FILENAME)
+            _s1_er_json = _resolve_stage1_exclude_rules_json_work_path()
             _written_er = _write_stage1_exclude_rules_json_sidecar(
                 _master_er_wb, _s1_er_json, use_effective_read_path=False
             )

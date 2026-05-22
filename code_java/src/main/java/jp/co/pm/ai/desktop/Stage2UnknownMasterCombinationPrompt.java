@@ -127,6 +127,7 @@ public final class Stage2UnknownMasterCombinationPrompt {
                 return Optional.of(p.toAbsolutePath().normalize());
             }
         }
+        AppPaths.ensureStage1ExcludeRulesJsonFromRepoIfMissing(u);
         return AppPaths.resolveDefaultExcludeRulesJsonPath(u).map(Path::toAbsolutePath).map(Path::normalize);
     }
 

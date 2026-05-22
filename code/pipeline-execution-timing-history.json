@@ -191,5 +191,95 @@
     "durationMs" : 25902,
     "writerHost" : "20250401-02",
     "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779455301261,
+    "durationMs" : 13189,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779455806495,
+    "durationMs" : 45351,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779457399487,
+    "durationMs" : 6366,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779457432437,
+    "durationMs" : 25775,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779460015014,
+    "durationMs" : 5182,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779461293959,
+    "durationMs" : 6161,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779461642850,
+    "durationMs" : 5807,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779462063602,
+    "durationMs" : 5404,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779462380733,
+    "durationMs" : 5287,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779486168817,
+    "durationMs" : 16446,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779486894688,
+    "durationMs" : 5464,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779486962016,
+    "durationMs" : 6634,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779487311949,
+    "durationMs" : 5853,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779488899712,
+    "durationMs" : 6475,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779488951751,
+    "durationMs" : 6064,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
   } ]
 }

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1079,24 +1080,29 @@ public final class AppPaths {
     public static final String STAGE1_TASK_INPUT_PREVIEW_SHEET = "タスク入力整形";
 
     /**
-     * Written by {@code run_stage1_extract} beside {@code json_data_dir} ({@code planning_core} /
-     * {@code STAGE1_EXCLUDE_RULES_JSON_FILENAME}).
+     * Written by {@code run_stage1_extract} beside {@link #summaryAiDispatchXlsxPath} ({@code
+     * STAGE1_EXCLUDE_RULES_JSON_FILENAME}).
      */
     public static final String STAGE1_EXCLUDE_RULES_JSON_FILENAME = "stage1_exclude_rules.json";
 
     /**
-     * Path to the stage-1 exclude-rules sidecar JSON (same as Python {@code planning_core.bootstrap}
-     * {@code json_data_dir}: {@code <effective cwd>/json/}, typically beside {@code output/} under {@code code/}).
+     * Path: {@link #summaryAiDispatchXlsxPath(Map)} と同一フォルダの段階1配台不要ルール JSON。
      */
     public static Path stage1ExcludeRulesJsonPath(Map<String, String> ui) {
+        return siblingOfSummaryAiDispatchWorkbook(ui, STAGE1_EXCLUDE_RULES_JSON_FILENAME);
+    }
+
+    /**
+     * リポジトリ同梱の {@code code/json/stage1_exclude_rules.json}（作業コピー元・読込フォールバック）。
+     */
+    public static Path stage1ExcludeRulesJsonPathLegacyUnderCodeJson(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
-        Path pyDir = resolvePythonScriptDir(u);
-        Path codeDir = pyDir.getParent();
-        Path underCodeJson =
-                codeDir != null
-                        ? codeDir.resolve("json").resolve(STAGE1_EXCLUDE_RULES_JSON_FILENAME)
-                        : pyDir.resolve("json").resolve(STAGE1_EXCLUDE_RULES_JSON_FILENAME);
-        return underCodeJson.toAbsolutePath().normalize();
+        return resolveRepoRoot(u)
+                .resolve("code")
+                .resolve("json")
+                .resolve(STAGE1_EXCLUDE_RULES_JSON_FILENAME)
+                .toAbsolutePath()
+                .normalize();
     }
 
     /**
@@ -1113,18 +1119,69 @@ public final class AppPaths {
     }
 
     /**
-     * Default for {@link #KEY_PM_AI_EXCLUDE_RULES_JSON}: {@code code/exclude_rules.json} when present, else
-     * {@code code/json/stage1_exclude_rules.json} when present (repository typically ships the latter).
+     * リポジトリ内の配台不要ルール JSON テンプレート（{@code code/exclude_rules.json} を優先、無ければ
+     * {@code code/json/stage1_exclude_rules.json}）。
      */
-    public static Optional<Path> resolveDefaultExcludeRulesJsonPath(Map<String, String> ui) {
+    public static Optional<Path> resolveBundledExcludeRulesJsonSourceInRepo(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
         Path primary = resolveRepoRoot(u).resolve("code").resolve("exclude_rules.json");
         if (Files.isRegularFile(primary)) {
             return Optional.of(primary.toAbsolutePath().normalize());
         }
-        Path stage1 = stage1ExcludeRulesJsonPath(u);
+        Path stage1 = stage1ExcludeRulesJsonPathLegacyUnderCodeJson(u);
         if (Files.isRegularFile(stage1)) {
             return Optional.of(stage1.toAbsolutePath().normalize());
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * 作業先（サマリ Excel と同一フォルダ）に {@link #STAGE1_EXCLUDE_RULES_JSON_FILENAME} が無ければ、
+     * リポジトリ同梱または旧配置からコピーする。
+     *
+     * @return 作業先ファイルが実在するとき {@code true}
+     */
+    public static boolean ensureStage1ExcludeRulesJsonFromRepoIfMissing(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path target = stage1ExcludeRulesJsonPath(u);
+        if (Files.isRegularFile(target)) {
+            return true;
+        }
+        Optional<Path> source = resolveBundledExcludeRulesJsonSourceInRepo(u);
+        if (source.isEmpty()) {
+            Path legacyCodeJson = stage1ExcludeRulesJsonPathLegacyUnderCodeJson(u);
+            if (Files.isRegularFile(legacyCodeJson) && !legacyCodeJson.equals(target)) {
+                source = Optional.of(legacyCodeJson);
+            } else {
+                Path legacyPythonJson = stage1ExcludeRulesJsonPathLegacyUnderPython(u);
+                if (Files.isRegularFile(legacyPythonJson) && !legacyPythonJson.equals(target)) {
+                    source = Optional.of(legacyPythonJson);
+                }
+            }
+        }
+        if (source.isEmpty()) {
+            return false;
+        }
+        try {
+            if (target.getParent() != null) {
+                Files.createDirectories(target.getParent());
+            }
+            Files.copy(source.get(), target, StandardCopyOption.REPLACE_EXISTING);
+            return Files.isRegularFile(target);
+        } catch (IOException ex) {
+            return false;
+        }
+    }
+
+    /**
+     * Default for {@link #KEY_PM_AI_EXCLUDE_RULES_JSON}: {@link #summaryAiDispatchXlsxPath(Map)} と同一フォルダの
+     * {@link #STAGE1_EXCLUDE_RULES_JSON_FILENAME}。無ければ {@link #ensureStage1ExcludeRulesJsonFromRepoIfMissing} で
+     * リポジトリ同梱からコピーしてから返す。
+     */
+    public static Optional<Path> resolveDefaultExcludeRulesJsonPath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        if (ensureStage1ExcludeRulesJsonFromRepoIfMissing(u)) {
+            return Optional.of(stage1ExcludeRulesJsonPath(u));
         }
         return Optional.empty();
     }

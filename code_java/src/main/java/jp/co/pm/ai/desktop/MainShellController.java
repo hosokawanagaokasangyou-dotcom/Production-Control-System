@@ -3270,7 +3270,7 @@ public final class MainShellController {
     }
 
     /**
-     * After stage 1 writes {@code json/stage1_exclude_rules.json}, mirror the path into the env tab so
+     * After stage 1 writes {@code stage1_exclude_rules.json} beside the summary workbook, mirror the path into the env tab so
      * {@code PM_AI_EXCLUDE_RULES_JSON} matches the next child-process run.
      */
     private void applyStage1ExcludeRulesJsonToEnvTab() {
@@ -3279,11 +3279,17 @@ public final class MainShellController {
         }
         try {
             Map<String, String> ui = collectUiEnv();
+            AppPaths.ensureStage1ExcludeRulesJsonFromRepoIfMissing(ui);
             Path p = AppPaths.stage1ExcludeRulesJsonPath(ui);
             if (!Files.isRegularFile(p)) {
-                Path legacy = AppPaths.stage1ExcludeRulesJsonPathLegacyUnderPython(ui);
-                if (Files.isRegularFile(legacy)) {
-                    p = legacy;
+                Path legacyCode = AppPaths.stage1ExcludeRulesJsonPathLegacyUnderCodeJson(ui);
+                if (Files.isRegularFile(legacyCode)) {
+                    p = legacyCode;
+                } else {
+                    Path legacy = AppPaths.stage1ExcludeRulesJsonPathLegacyUnderPython(ui);
+                    if (Files.isRegularFile(legacy)) {
+                        p = legacy;
+                    }
                 }
             }
             if (!Files.isRegularFile(p)) {
@@ -3291,7 +3297,7 @@ public final class MainShellController {
                         "[env] PM_AI_EXCLUDE_RULES_JSON: "
                                 + p
                                 + " が無いため、環境変数タブの値は未更新のままです。"
-                                + " 段階1が配台除外ルール JSON を生成しているか、cwd/json の場所が一致しているか確認してください。");
+                                + " 段階1が配台除外ルール JSON を生成しているか、サマリ Excel と同一フォルダの場所が一致しているか確認してください。");
                 return;
             }
             String pathStr = p.toString();
@@ -3337,6 +3343,7 @@ public final class MainShellController {
         }
         try {
             Map<String, String> uiRun = collectUiEnv();
+            overlayWorkingExcludeRulesJsonPathForStageRun(uiRun);
             if (STAGE1.equals(script)) {
                 uiRun.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
             }
@@ -4806,6 +4813,22 @@ public final class MainShellController {
         if (planInputTabController != null) {
             planInputTabController.reloadQuietlyFromDisk();
         }
+    }
+
+    /**
+     * 段階1／2 実行前: サマリ Excel と同一フォルダの {@code stage1_exclude_rules.json} を確保し、
+     * 子プロセスへ渡す {@code PM_AI_EXCLUDE_RULES_JSON} を揃える。
+     */
+    private void overlayWorkingExcludeRulesJsonPathForStageRun(Map<String, String> uiRun) {
+        if (uiRun == null) {
+            return;
+        }
+        AppPaths.resolveDefaultExcludeRulesJsonPath(uiRun)
+                .ifPresent(
+                        p -> {
+                            uiRun.put(AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON, p.toString());
+                            syncExcludeRulesJsonPathToEnvTab(p.toString());
+                        });
     }
 
     private void syncExcludeRulesJsonPathToEnvTab(String pathStr) {

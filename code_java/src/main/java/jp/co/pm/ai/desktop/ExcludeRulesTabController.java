@@ -480,6 +480,7 @@ public final class ExcludeRulesTabController {
      */
     private Optional<Path> resolveExistingExcludeRulesJsonPath(String requested) {
         Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        AppPaths.ensureStage1ExcludeRulesJsonFromRepoIfMissing(ui);
         List<Path> candidates = new ArrayList<>();
         if (requested != null && !requested.isBlank()) {
             candidates.add(Path.of(requested.trim()));
@@ -492,8 +493,9 @@ public final class ExcludeRulesTabController {
             }
         }
         Path repo = AppPaths.resolveRepoRoot(ui);
-        candidates.add(repo.resolve("code").resolve("json").resolve(fileName));
         candidates.add(AppPaths.stage1ExcludeRulesJsonPath(ui));
+        candidates.add(repo.resolve("code").resolve("json").resolve(fileName));
+        candidates.add(AppPaths.stage1ExcludeRulesJsonPathLegacyUnderCodeJson(ui));
         candidates.add(AppPaths.stage1ExcludeRulesJsonPathLegacyUnderPython(ui));
         Path parent = repo.getParent();
         if (parent != null) {
