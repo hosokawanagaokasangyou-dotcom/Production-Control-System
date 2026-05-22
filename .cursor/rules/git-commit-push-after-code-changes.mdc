@@ -44,6 +44,6 @@ alwaysApply: true
 
 ## 関連ルール
 
-- `.cursor/rules/git-commit-hooks-persistence.mdc` … Cursor フックによる永続化（`.cursor/hooks.json`）。
+- `.cursor/rules/git-commit-hooks-persistence.mdc` … Cursor フックのマニフェスト（`.cursor/hooks.json`。手順の重複記載はしない）。
 - `.cursor/rules/pm-ai-cache-network-source-tracking.mdc` … `.pm-ai-cache/` の追跡ポリシー。
 - `.cursor/rules/version-txt-bump-on-commit.mdc` … `version.txt` 自動バンプ。

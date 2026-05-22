@@ -1,60 +1,100 @@
 **Java**・**JavaFX**・**Python** を第一に扱う。コード・説明・レビューでは各エコシステムの公式表記と現代的なベストプラクティスに従う。
 
+**ルールの正本**は `.cursor/rules/*.mdc`。本ファイルは索引と Generate 用の要点のみ（詳細の二重記載はしない）。
+
 ---
 
-## Git（コミット運用・メッセージ）
+## ルール索引
 
-正本: **`.cursor/rules/git-commit-push-after-code-changes.mdc`**（変更後の `add` → `commit` → `push`、メッセージ規約、`*.xlsm` 取り扱い）／**`.cursor/rules/git-commit-hooks-persistence.mdc`**（**`.cursor/hooks.json`** で sessionStart / postToolUse / afterFileEdit にフック済み）／**`.cursor/rules/pm-ai-cache-network-source-tracking.mdc`**（`.pm-ai-cache/` 追跡）／**`.cursor/rules/version-txt-bump-on-commit.mdc`**（`version.txt` +0.01 自動バンプ、`scripts/git-hooks/pre-commit`）。
+### Git・版管理
 
-**作業完了時（変更後）**: そのターンで変更・追加した版管理対象は **漏れなく `git add` → `commit` → `push`**。依頼外の差分が混在する場合はコミットを分ける、応答で `git status` の要約を報告。
+| 正本 | 要点 |
+|------|------|
+| `git-commit-push-after-code-changes.mdc` | 変更後 `add` → `commit` → `push`、日本語メッセージ、`*.xlsm` |
+| `git-commit-hooks-persistence.mdc` | **フック** `.cursor/hooks.json` の Git マニフェスト（手順は上記正本） |
+| `pm-ai-cache-network-source-tracking.mdc` | `.pm-ai-cache/` は追跡・コミット対象 |
+| `version-txt-bump-on-commit.mdc` | 各 `commit` で `version.txt` +0.01（`core.hooksPath=scripts/git-hooks`） |
 
-要点（Generate 用 = AI コミットメッセージ生成）:
-- **日本語のみ**。英語だけの件名は出さない。
-- 1 行目は短い要約。必要なら先頭に `feat:` / `fix:` / `chore:` / `docs:` / `refactor:` 等を付けてもよいが、その後の説明は日本語。
-- 詳細は空行のあとに箇条書き可。
+### Cursor デバッグ NDJSON
 
+| 正本 | 要点 |
+|------|------|
+| `agent-debug-ndjson-logging.mdc` | `AgentDebugLog` / `agent_debug_ndjson`、パス解決、禁止事項 |
+| `agent-debug-wsl-windows-mirror.mdc` | Windows JVM → WSL ワークスペースへのログミラー |
+| `agent-debug-hooks-persistence.mdc` | **フック** `.cursor/hooks.json` の NDJSON マニフェスト（手順は上記正本） |
 
+### ソース・UI
+
+| 正本 | 要点 |
+|------|------|
+| `source-encoding-utf8-except-bas.mdc` | UTF-8（`*.bas` 除く）、CP932 禁止 |
+| `java-utf8-string-literals.mdc` | `*.java` の日本語は `\uXXXX` 禁止（globs） |
+| `main-shell-tab-management.mdc` | `MainShellTabId` / `MainShellTabLayoutDefaults` / `MainShellInnerTabCatalog` |
+
+### 配台・計画
+
+| 正本 | 要点 |
+|------|------|
+| `dispatch-docs-sync.mdc` | 配台変更時は `配台ルール.md` 等と同期 |
+| `dispatch-min-processing-length-vs-roll-unit.mdc` | 加工最小長さ ≥ ロール単位 |
+| `processing-plan-data-full-unprocessed.mdc` | 換算>0・実加工=0・未加工=0 → 全数未加工 |
+| `planning-core-huge-file.mdc` | `_core.py` は `_core_FILE_MAP.txt` + 局所 read |
+
+### ドキュメント・その他
+
+| 正本 | 要点 |
+|------|------|
+| `markdown-html-edit-only-when-requested.mdc` | `*.md` / `*.html` は依頼時のみ編集 |
+| `md-paired-html-sync.mdc` | 依頼で `.md` 編集したとき対応 `.html` を同期 |
+| `strict-senior-review-tone.mdc` | レビューは厳格・簡潔 |
+| `vba-compile-verify.mdc` | VBA 変更後は VBE コンパイル確認 |
+| `excel-vba-environment-freeze-panes.mdc` | Excel 環境・ウィンドウ固定（globs） |
+| `env-vars-managed-by-sheet-and-tsv.mdc` | 環境変数タブ正本・TSV 補助 |
+
+### Cursor フック（`.cursor/hooks.json`）
+
+| イベント | スクリプト |
+|----------|------------|
+| `sessionStart` | `git_rules_session_context.py` / `agent_debug_session_context.py` |
+| `postToolUse`（`Write`/`StrReplace`） | `git_commit_post_edit_reminder.py` / `agent_debug_post_edit_guard.py` |
+| `afterFileEdit` | 上記リマインド・ガードと同じ |
+
+マニフェスト正本: `git-commit-hooks-persistence.mdc` / `agent-debug-hooks-persistence.mdc`
+
+---
+
+## Git（Generate 用要点）
+
+作業完了時: 依頼で触った版管理対象は **漏れなく `git add` → `commit` → `push`**。依頼外差分はコミットを分けるか確認し、`git status` を応答に要約。
+
+- **日本語のみ**（英語だけの件名は不可）。1 行目は短い要約。`feat:` 等 + 日本語可。詳細は空行後に箇条書き可。
 
 ---
 
 ## ソースの文字エンコーディング（UTF-8）
 
-正本: **`.cursor/rules/source-encoding-utf8-except-bas.mdc`**
-
-要点: **`.bas` / `.BAS` を除くソース・テキスト系ファイルは UTF-8 で作成・保存する**。VBA テキストのみ例外。**CP932（Shift-JIS）でコード・FXML・設定を書き込むことは禁止。** **`*.md` は Shift-JIS での新規作成・保存を禁止**（`pre-commit` が UTF-8 検証）。
+正本: `source-encoding-utf8-except-bas.mdc` — `.bas` 除き UTF-8。CP932 禁止。`*.md` は pre-commit で UTF-8 検証。
 
 ---
 
 ## Java（文字列・コメント）
 
-正本: **`.cursor/rules/java-utf8-string-literals.mdc`**
-
-要点: **`*.java` では日本語を `\uXXXX` にしない**。UTF-8 のまま文字列リテラル・コメント・Javadoc に書く。
-
-
+正本: `java-utf8-string-literals.mdc` — `*.java` で日本語を `\uXXXX` にしない。
 
 ---
 
-## メインシェルタブ（既定順・タブ整理・子タブ）
+## メインシェルタブ
 
-正本: **`.cursor/rules/main-shell-tab-management.mdc`**
-
-要点: **新規 `MainShellTabId` はトップレベル末尾（タブ整理の直前）に相当するよう `MainShellTabLayoutDefaults` を更新**。**子タブは `MainShellInnerTabCatalog` に載せる**。
-
-## レビュー・指摘のトーン（厳格シニア）
-
-正本: **`.cursor/rules/strict-senior-review-tone.mdc`**
-
-要点: **誤り・バグの可能性・非効率は忖度や長い前置きなく単刀直入に指摘**。**修正案はベストプラクティスに基づき簡潔にのみ**。
+正本: `main-shell-tab-management.mdc` — 新規タブは `MainShellTabLayoutDefaults`、子タブは `MainShellInnerTabCatalog`。
 
 ---
 
-## Cursor デバッグ NDJSON（計測・ログ取得）
+## レビュー・指摘のトーン
 
-正本: **`.cursor/rules/agent-debug-ndjson-logging.mdc`**／**`.cursor/rules/agent-debug-wsl-windows-mirror.mdc`**／**`.cursor/rules/agent-debug-hooks-persistence.mdc`**（**`.cursor/hooks.json`** で sessionStart / postToolUse / afterFileEdit にフック済み）
+正本: `strict-senior-review-tone.mdc` — 問題は単刀直入。修正案は簡潔に。
 
-要点: **Java は `AgentDebugLog.appendStructured`、Python は `planning_core.agent_debug_ndjson.append_structured` のみ**。**`/mnt/c/...` 等の OS 固定ログパス直書き禁止**。WSL ワークスペースでは Java 側ミラー規約を参照。修正確証後は `#region agent log` ブロックのみ削除。
+---
 
+## Cursor デバッグ NDJSON（要点）
 
-
-
+正本: `agent-debug-ndjson-logging.mdc` / `agent-debug-wsl-windows-mirror.mdc`。Java=`AgentDebugLog.appendStructured`、Python=`agent_debug_ndjson.append_structured`。OS 固定ログパス直書き禁止。確証後は `#region agent log` のみ削除。

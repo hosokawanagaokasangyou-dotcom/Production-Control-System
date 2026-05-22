@@ -1,37 +1,32 @@
 ---
-description: Cursor フックによる Git 変更後 commit / push 運用の永続化（取りこぼし防止）
-alwaysApply: true
+description: Cursor フック（Git）のマニフェスト。手順の正本は git-commit-push-after-code-changes.mdc
+alwaysApply: false
 ---
 
-# Git commit / push：フック永続化
+# Git commit / push：Cursor フック
 
 ## 目的
 
-エージェントが版管理対象を変更したあと **commit / push を取りこぼす**のを防ぐため、**Cursor フック**と **正本ルール**で運用を固定する。
+版管理対象の変更後に **commit / push を取りこぼさない**よう、`.cursor/hooks.json` でセッション注入と編集後リマインドを固定する。
 
-## 関連ルール（詳細）
+## 正本（手順・規約はここ）
 
-- **手順・メッセージ規約・`*.xlsm`**: `.cursor/rules/git-commit-push-after-code-changes.mdc`
-- **`.pm-ai-cache/` 追跡**: `.cursor/rules/pm-ai-cache-network-source-tracking.mdc`
-- **`version.txt` 自動バンプ**: `.cursor/rules/version-txt-bump-on-commit.mdc`
+| 内容 | ファイル |
+|------|----------|
+| **エージェント手順・メッセージ・`*.xlsm`** | `.cursor/rules/git-commit-push-after-code-changes.mdc` |
+| `.pm-ai-cache/` 追跡 | `.cursor/rules/pm-ai-cache-network-source-tracking.mdc` |
+| `version.txt` +0.01（pre-commit） | `.cursor/rules/version-txt-bump-on-commit.mdc` |
 
 ## 永続フック（`.cursor/hooks.json`）
 
 | イベント | スクリプト | 役割 |
 |----------|------------|------|
-| `sessionStart` | `.cursor/hooks/git_rules_session_context.py` | セッション開始時に Git 運用要約を `additional_context` 注入 |
-| `postToolUse` | `.cursor/hooks/git_commit_post_edit_reminder.py` | `Write` / `StrReplace` 後、版管理対象の編集なら commit / push 忘れを注意 |
-| `afterFileEdit` | 同上 | エディタ直編集後も同リマインド（ペイロード差異はスクリプト内で吸収） |
+| `sessionStart` | `.cursor/hooks/git_rules_session_context.py` | Git 運用要約を `additional_context` 注入 |
+| `postToolUse` | `.cursor/hooks/git_commit_post_edit_reminder.py` | `Write` / `StrReplace` 後、版管理対象なら commit / push 忘れを注意 |
+| `afterFileEdit` | 同上 | エディタ直編集後も同リマインド |
 
-フックを無効化しない。コード変更を含む依頼では **先に本ルールと正本 `.mdc` を読む**。
-
-## エージェント作業手順
-
-1. 依頼で版管理対象（ソース・設定・`.xlsm`・`.pm-ai-cache/` 等）を変更したら、**応答を終える前**に `git status` → `git add`（依頼分）→ `git commit`（日本語メッセージ）→ `git push`。
-2. 依頼外の差分が混在する場合は **コミットを分ける**かユーザーに確認。応答本文で **コミットに含めたパス**と **未コミットの残り**を要約する。
-3. ユーザーが明示的に「コミットしない」「push しない」と言った場合のみ例外。
-4. push 失敗時は実施内容・エラー・対処を報告する。
+フックを無効化しない。
 
 ## 変更時
 
-フックや正本ルールを変えたら **同じ変更単位で** 本ファイルと `.cursor/hooks.json` を更新する。
+フックまたは上記正本を変えたら **同じ変更単位で** 本ファイルと `.cursor/hooks.json` を更新する。`.cursorrules` の Git 節にフックがあることは維持する。

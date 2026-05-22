@@ -1,3 +1,8 @@
+---
+description: リポジトリ直下 version.txt を git commit ごとに +0.01（scripts/git-hooks/pre-commit）
+alwaysApply: false
+---
+
 # version.txt は git commit のたびに +0.01
 
 ## ルール（永続）
