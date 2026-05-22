@@ -21,6 +21,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.shape.Rectangle;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
@@ -131,6 +132,13 @@ final class StartupSplashStage {
 
         background.fitWidthProperty().bind(root.widthProperty());
         background.fitHeightProperty().bind(root.heightProperty());
+
+        Rectangle clip = new Rectangle();
+        clip.widthProperty().bind(root.widthProperty());
+        clip.heightProperty().bind(root.heightProperty());
+        clip.setArcWidth(24);
+        clip.setArcHeight(24);
+        root.setClip(clip);
 
         stage.setScene(scene);
         stage.setResizable(false);
