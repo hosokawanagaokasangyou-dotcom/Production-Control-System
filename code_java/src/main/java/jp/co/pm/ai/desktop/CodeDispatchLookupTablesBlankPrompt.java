@@ -280,6 +280,52 @@ public final class CodeDispatchLookupTablesBlankPrompt {
         return "";
     }
 
+    /** ダイアログ等: 製品名からロール長 (m) を推定。 */
+    public static String inferRollLengthFromName(String name) {
+        return inferRollFromName(name);
+    }
+
+    /** ダイアログ等: 製品名／使用原反から製品幅・原反幅 (mm) を推定。 */
+    public static String inferWidthMmFromName(String name) {
+        return inferWidthFromName(name);
+    }
+
+    /** ダイアログ等: 製品名から製品長 (mm) を推定（寸法パターンの右辺）。 */
+    public static String inferProductLengthMmFromName(String name) {
+        return inferRollFromName(name);
+    }
+
+    /**
+     * ダイアログ等: 製品名先頭5文字末尾3桁から厚み (mm) を推定（Python
+     * {@code _infer_product_thickness_mm_from_product_name_prefix} 相当）。英字開始は空。
+     */
+    public static String inferThicknessMmFromName(String name) {
+        if (name == null || name.isBlank()) {
+            return "";
+        }
+        String s = Stage2RollUnitLengthTables.normalizeKey(name);
+        if (s.isEmpty() || Character.isLetter(s.charAt(0))) {
+            return "";
+        }
+        if (s.length() < 5) {
+            return "";
+        }
+        String head5 = s.substring(0, 5);
+        String code3 = head5.substring(head5.length() - 3);
+        if (!code3.matches("\\d{3}")) {
+            return "";
+        }
+        try {
+            int v = Integer.parseInt(code3);
+            if (v <= 0) {
+                return "";
+            }
+            return formatNum(v / 10.0);
+        } catch (NumberFormatException ex) {
+            return "";
+        }
+    }
+
     private static String inferRollFromName(String name) {
         double v = Stage2RollUnitLengthTables.inferFromProductDimensions(name, 0.0);
         return v > 1e-12 ? formatNum(v) : "";

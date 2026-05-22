@@ -22,11 +22,15 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.cell.CheckBoxTableCell;
 import javafx.scene.control.cell.TextFieldTableCell;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Window;
+import javafx.util.converter.DefaultStringConverter;
 
+import jp.co.pm.ai.desktop.CodeDispatchLookupTablesBlankPrompt;
 import jp.co.pm.ai.desktop.CodeDispatchLookupTablesBlankPrompt.ProductInput;
 import jp.co.pm.ai.desktop.CodeDispatchLookupTablesBlankPrompt.ProductPromptRow;
 import jp.co.pm.ai.desktop.CodeDispatchLookupTablesBlankPrompt.PromptBundle;
@@ -37,6 +41,12 @@ import jp.co.pm.ai.desktop.CodeDispatchLookupTablesBlankPrompt.UsedRawPromptRow;
  * 段階1完了後: 新規の製品名・使用原反について材料テーブル値を入力し、行ごとに確認チェックを付けて OK する。
  */
 public final class Stage1NewMaterialLookupDialog {
+
+    private static final String EMPTY_NEEDED_STYLE =
+            "-fx-background-color: rgba(255, 196, 64, 0.28);"
+                    + "-fx-background-insets: 0;"
+                    + "-fx-background-radius: 2;";
+    private static final String INACTIVE_STYLE = "-fx-opacity: 0.5;";
 
     private Stage1NewMaterialLookupDialog() {}
 
@@ -60,10 +70,23 @@ public final class Stage1NewMaterialLookupDialog {
             this.needWidth = src.needWidth();
             this.needThickness = src.needThickness();
             this.needLength = src.needLength();
-            rollLength.set(src.suggestedRollLength());
-            productWidth.set(src.suggestedWidth());
-            thickness.set(src.suggestedThickness());
-            productLength.set(src.suggestedLength());
+            String name = src.productName();
+            rollLength.set(
+                    coalesceNonBlank(
+                            src.suggestedRollLength(),
+                            CodeDispatchLookupTablesBlankPrompt.inferRollLengthFromName(name)));
+            productWidth.set(
+                    coalesceNonBlank(
+                            src.suggestedWidth(),
+                            CodeDispatchLookupTablesBlankPrompt.inferWidthMmFromName(name)));
+            thickness.set(
+                    coalesceNonBlank(
+                            src.suggestedThickness(),
+                            CodeDispatchLookupTablesBlankPrompt.inferThicknessMmFromName(name)));
+            productLength.set(
+                    coalesceNonBlank(
+                            src.suggestedLength(),
+                            CodeDispatchLookupTablesBlankPrompt.inferProductLengthMmFromName(name)));
         }
 
         public String productName() {
@@ -128,8 +151,15 @@ public final class Stage1NewMaterialLookupDialog {
             this.usedRaw = src.usedRaw();
             this.needRollLength = src.needRollLength();
             this.needRawWidth = src.needRawWidth();
-            rollLength.set(src.suggestedRollLength());
-            rawWidth.set(src.suggestedRawWidth());
+            String name = src.usedRaw();
+            rollLength.set(
+                    coalesceNonBlank(
+                            src.suggestedRollLength(),
+                            CodeDispatchLookupTablesBlankPrompt.inferRollLengthFromName(name)));
+            rawWidth.set(
+                    coalesceNonBlank(
+                            src.suggestedRawWidth(),
+                            CodeDispatchLookupTablesBlankPrompt.inferWidthMmFromName(name)));
         }
 
         public String usedRaw() {
@@ -193,7 +223,8 @@ public final class Stage1NewMaterialLookupDialog {
         Label hint =
                 new Label(
                         "空欄のまま段階2・段階3は実行できません。"
-                                + " 推定値が入っている列は必要に応じて修正してください。");
+                                + " 名称から推定できた値は自動入力済みです（黄色背景は未入力の必須セル）。"
+                                + " ダブルクリックまたは F2 で編集できます。");
         hint.setWrapText(true);
         hint.setStyle("-fx-font-size: 11px; -fx-text-fill: derive(-fx-text-inner-color, 22%);");
 
@@ -220,6 +251,7 @@ public final class Stage1NewMaterialLookupDialog {
         dialog.getDialogPane().setContent(root);
         dialog.getDialogPane().setPrefWidth(920);
         dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
+        suppressEscapeClose(dialog);
         dialog.getDialogPane()
                 .lookupButton(ButtonType.OK)
                 .addEventFilter(
@@ -248,6 +280,17 @@ public final class Stage1NewMaterialLookupDialog {
         return Optional.of(new Result(products, usedRaws));
     }
 
+    private static void suppressEscapeClose(Dialog<?> dialog) {
+        dialog.getDialogPane()
+                .addEventFilter(
+                        KeyEvent.KEY_PRESSED,
+                        ev -> {
+                            if (ev.getCode() == KeyCode.ESCAPE) {
+                                ev.consume();
+                            }
+                        });
+    }
+
     private static TableView<ProductRow> buildProductTable(List<ProductRow> rows) {
         TableView<ProductRow> table = new TableView<>(FXCollections.observableArrayList(rows));
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
@@ -259,17 +302,15 @@ public final class Stage1NewMaterialLookupDialog {
         cName.setEditable(false);
         cName.setPrefWidth(220);
 
-        TableColumn<ProductRow, String> cRoll = productNumColumn("ロール長(m)", ProductRow::rollLengthProperty);
-        cRoll.setCellFactory(col -> conditionalProductTextCell(ProductRow::needRollLength));
-
-        TableColumn<ProductRow, String> cWidth = productNumColumn("製品幅(mm)", ProductRow::productWidthProperty);
-        cWidth.setCellFactory(col -> conditionalProductTextCell(ProductRow::needWidth));
-
-        TableColumn<ProductRow, String> cThick = productNumColumn("厚み(mm)", ProductRow::thicknessProperty);
-        cThick.setCellFactory(col -> conditionalProductTextCell(ProductRow::needThickness));
-
-        TableColumn<ProductRow, String> cLen = productNumColumn("製品長(mm)", ProductRow::productLengthProperty);
-        cLen.setCellFactory(col -> conditionalProductTextCell(ProductRow::needLength));
+        TableColumn<ProductRow, String> cRoll =
+                productNumColumn(table, "ロール長(m)", ProductRow::rollLengthProperty, r -> r.needRollLength());
+        TableColumn<ProductRow, String> cWidth =
+                productNumColumn(table, "製品幅(mm)", ProductRow::productWidthProperty, r -> r.needWidth());
+        TableColumn<ProductRow, String> cThick =
+                productNumColumn(table, "厚み(mm)", ProductRow::thicknessProperty, r -> r.needThickness());
+        TableColumn<ProductRow, String> cLen =
+                productNumColumn(
+                        table, "製品長(mm)", ProductRow::productLengthProperty, r -> r.needLength());
 
         TableColumn<ProductRow, Boolean> cConfirm = new TableColumn<>("確認");
         cConfirm.setCellValueFactory(cd -> cd.getValue().confirmedProperty());
@@ -292,11 +333,10 @@ public final class Stage1NewMaterialLookupDialog {
         cName.setEditable(false);
         cName.setPrefWidth(260);
 
-        TableColumn<UsedRawRow, String> cRoll = usedRawNumColumn("ロール長(m)", UsedRawRow::rollLengthProperty);
-        cRoll.setCellFactory(col -> conditionalUsedRawTextCell(UsedRawRow::needRollLength));
-
-        TableColumn<UsedRawRow, String> cWidth = usedRawNumColumn("原反幅(mm)", UsedRawRow::rawWidthProperty);
-        cWidth.setCellFactory(col -> conditionalUsedRawTextCell(UsedRawRow::needRawWidth));
+        TableColumn<UsedRawRow, String> cRoll =
+                usedRawNumColumn(table, "ロール長(m)", UsedRawRow::rollLengthProperty, r -> r.needRollLength());
+        TableColumn<UsedRawRow, String> cWidth =
+                usedRawNumColumn(table, "原反幅(mm)", UsedRawRow::rawWidthProperty, r -> r.needRawWidth());
 
         TableColumn<UsedRawRow, Boolean> cConfirm = new TableColumn<>("確認");
         cConfirm.setCellValueFactory(cd -> cd.getValue().confirmedProperty());
@@ -324,68 +364,140 @@ public final class Stage1NewMaterialLookupDialog {
         boolean test(UsedRawRow row);
     }
 
-    private static TableColumn<ProductRow, String> productNumColumn(String title, ProductField field) {
+    private static TableColumn<ProductRow, String> productNumColumn(
+            TableView<ProductRow> table,
+            String title,
+            ProductField field,
+            ProductNeed required) {
         TableColumn<ProductRow, String> col = new TableColumn<>(title);
         col.setCellValueFactory(cd -> field.get(cd.getValue()));
-        col.setCellFactory(TextFieldTableCell.forTableColumn());
+        col.setCellFactory(
+                ignore ->
+                        new TextFieldTableCell<ProductRow, String>(new DefaultStringConverter()) {
+                            private ProductRow row() {
+                                return getTableRow() != null ? getTableRow().getItem() : null;
+                            }
+
+                            @Override
+                            public void startEdit() {
+                                ProductRow row = row();
+                                if (row == null || !required.test(row)) {
+                                    return;
+                                }
+                                super.startEdit();
+                                if (getGraphic() instanceof TextField editor) {
+                                    editor.selectAll();
+                                }
+                            }
+
+                            @Override
+                            public void commitEdit(String newValue) {
+                                super.commitEdit(newValue);
+                                table.refresh();
+                            }
+
+                            @Override
+                            public void cancelEdit() {
+                                super.cancelEdit();
+                                table.refresh();
+                            }
+
+                            @Override
+                            public void updateItem(String item, boolean empty) {
+                                super.updateItem(item, empty);
+                                ProductRow row = row();
+                                if (empty || row == null) {
+                                    setStyle("");
+                                    return;
+                                }
+                                if (!required.test(row)) {
+                                    setStyle(INACTIVE_STYLE);
+                                    return;
+                                }
+                                if (!isEditing() && isBlank(item)) {
+                                    setStyle(EMPTY_NEEDED_STYLE);
+                                } else {
+                                    setStyle("");
+                                }
+                            }
+                        });
         col.setOnEditCommit(
                 ev -> {
                     if (ev.getNewValue() != null) {
                         field.get(ev.getRowValue()).set(ev.getNewValue());
                     }
+                    table.refresh();
                 });
         col.setEditable(true);
         return col;
     }
 
-    private static TableColumn<UsedRawRow, String> usedRawNumColumn(String title, UsedRawField field) {
+    private static TableColumn<UsedRawRow, String> usedRawNumColumn(
+            TableView<UsedRawRow> table,
+            String title,
+            UsedRawField field,
+            UsedRawNeed required) {
         TableColumn<UsedRawRow, String> col = new TableColumn<>(title);
         col.setCellValueFactory(cd -> field.get(cd.getValue()));
-        col.setCellFactory(TextFieldTableCell.forTableColumn());
+        col.setCellFactory(
+                ignore ->
+                        new TextFieldTableCell<UsedRawRow, String>(new DefaultStringConverter()) {
+                            private UsedRawRow row() {
+                                return getTableRow() != null ? getTableRow().getItem() : null;
+                            }
+
+                            @Override
+                            public void startEdit() {
+                                UsedRawRow row = row();
+                                if (row == null || !required.test(row)) {
+                                    return;
+                                }
+                                super.startEdit();
+                                if (getGraphic() instanceof TextField editor) {
+                                    editor.selectAll();
+                                }
+                            }
+
+                            @Override
+                            public void commitEdit(String newValue) {
+                                super.commitEdit(newValue);
+                                table.refresh();
+                            }
+
+                            @Override
+                            public void cancelEdit() {
+                                super.cancelEdit();
+                                table.refresh();
+                            }
+
+                            @Override
+                            public void updateItem(String item, boolean empty) {
+                                super.updateItem(item, empty);
+                                UsedRawRow row = row();
+                                if (empty || row == null) {
+                                    setStyle("");
+                                    return;
+                                }
+                                if (!required.test(row)) {
+                                    setStyle(INACTIVE_STYLE);
+                                    return;
+                                }
+                                if (!isEditing() && isBlank(item)) {
+                                    setStyle(EMPTY_NEEDED_STYLE);
+                                } else {
+                                    setStyle("");
+                                }
+                            }
+                        });
         col.setOnEditCommit(
                 ev -> {
                     if (ev.getNewValue() != null) {
                         field.get(ev.getRowValue()).set(ev.getNewValue());
                     }
+                    table.refresh();
                 });
         col.setEditable(true);
         return col;
-    }
-
-    private static TextFieldTableCell<ProductRow, String> conditionalProductTextCell(ProductNeed needed) {
-        return new TextFieldTableCell<>() {
-            @Override
-            public void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty || getTableRow() == null || getTableRow().getItem() == null) {
-                    setDisable(true);
-                    setStyle("");
-                    return;
-                }
-                ProductRow row = getTableRow().getItem();
-                boolean active = needed.test(row);
-                setDisable(!active);
-                setStyle(active ? "" : "-fx-opacity: 0.45;");
-            }
-        };
-    }
-
-    private static TextFieldTableCell<UsedRawRow, String> conditionalUsedRawTextCell(UsedRawNeed needed) {
-        return new TextFieldTableCell<>() {
-            @Override
-            public void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty || getTableRow() == null || getTableRow().getItem() == null) {
-                    setDisable(true);
-                    setStyle("");
-                    return;
-                }
-                UsedRawRow row = getTableRow().getItem();
-                boolean active = needed.test(row);
-                setDisable(!active);
-                setStyle(active ? "" : "-fx-opacity: 0.45;");
-            }
-        };
     }
 
     private static void commitPendingEdits(VBox content) {
@@ -428,6 +540,22 @@ public final class Stage1NewMaterialLookupDialog {
         return Optional.empty();
     }
 
+    private static boolean isBlank(String raw) {
+        return raw == null || raw.isBlank();
+    }
+
+    private static String coalesceNonBlank(String... parts) {
+        if (parts == null) {
+            return "";
+        }
+        for (String p : parts) {
+            if (p != null && !p.isBlank()) {
+                return p.strip();
+            }
+        }
+        return "";
+    }
+
     private static boolean isPositiveNumber(String raw) {
         if (raw == null || raw.isBlank()) {
             return false;
@@ -447,6 +575,7 @@ public final class Stage1NewMaterialLookupDialog {
         err.setHeaderText("材料・製品種類の入力を確認してください");
         err.setContentText(message);
         err.getDialogPane().getButtonTypes().setAll(ButtonType.OK);
+        suppressEscapeClose(err);
         err.showAndWait();
     }
 }
