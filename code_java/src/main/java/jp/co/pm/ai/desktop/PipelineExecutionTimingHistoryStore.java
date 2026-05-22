@@ -19,19 +19,21 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import jp.co.pm.ai.desktop.config.AppPaths;
+
 /**
  * 段階1～3・サマリ Excel・納期管理ビューの実行時間履歴。永続化先は
- * {@code ~/.pm-ai-desktop/pipeline-execution-timing-history.json}。
+ * {@link AppPaths#pipelineExecutionTimingHistoryPath}（サマリ Excel と同一フォルダ）。
  */
 public final class PipelineExecutionTimingHistoryStore {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    private static final Path DEFAULT_STORE =
+    private static final Path LEGACY_STORE =
             Paths.get(
                     System.getProperty("user.home"),
                     ".pm-ai-desktop",
-                    "pipeline-execution-timing-history.json");
+                    AppPaths.PIPELINE_EXECUTION_TIMING_HISTORY_JSON);
 
     private static final int DEFAULT_MAX_SAMPLES_PER_KIND = 300;
 
@@ -68,18 +70,30 @@ public final class PipelineExecutionTimingHistoryStore {
             new EnumMap<>(PipelineExecutionTimingKind.class);
     private final CopyOnWriteArrayList<Runnable> changeListeners = new CopyOnWriteArrayList<>();
 
-    private Path storePath = DEFAULT_STORE;
+    private Path storePath = AppPaths.pipelineExecutionTimingHistoryPath(Map.of());
     private int maxSamplesPerKind = DEFAULT_MAX_SAMPLES_PER_KIND;
+    private boolean configured;
 
-    public void loadFromDefaultPath() {
-        load(storePath);
+    /** {@link AppPaths#summaryAiDispatchXlsxPath} と同じフォルダへ履歴パスを解決して読み込む。 */
+    public synchronized void configureFromUi(Map<String, String> ui) {
+        Path next = AppPaths.pipelineExecutionTimingHistoryPath(ui);
+        if (configured && next.equals(storePath)) {
+            return;
+        }
+        load(next);
+        configured = true;
     }
 
     public synchronized void load(Path path) {
-        storePath = path != null ? path : DEFAULT_STORE;
+        storePath =
+                path != null
+                        ? path
+                        : AppPaths.pipelineExecutionTimingHistoryPath(Map.of());
         samples.clear();
         lastDurationMs.clear();
+        migrateLegacyStoreIfNeeded(storePath);
         if (!Files.isRegularFile(storePath)) {
+            notifyListeners();
             return;
         }
         try {
@@ -110,6 +124,11 @@ public final class PipelineExecutionTimingHistoryStore {
             samples.clear();
             lastDurationMs.clear();
         }
+        notifyListeners();
+    }
+
+    public synchronized Path storagePath() {
+        return storePath;
     }
 
     public void addChangeListener(Runnable listener) {
@@ -347,6 +366,20 @@ public final class PipelineExecutionTimingHistoryStore {
             return PipelineExecutionTimingKind.valueOf(name.trim());
         } catch (IllegalArgumentException ex) {
             return null;
+        }
+    }
+
+    private static void migrateLegacyStoreIfNeeded(Path target) {
+        if (Files.isRegularFile(target) || !Files.isRegularFile(LEGACY_STORE)) {
+            return;
+        }
+        try {
+            if (target.getParent() != null) {
+                Files.createDirectories(target.getParent());
+            }
+            Files.copy(LEGACY_STORE, target, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException ignored) {
+            // 旧 ~/.pm-ai-desktop からの移行に失敗しても新規作成で続行
         }
     }
 

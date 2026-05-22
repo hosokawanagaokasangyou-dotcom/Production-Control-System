@@ -515,7 +515,7 @@ public final class MainShellController {
             applyBundledPortableDefaultsIfPresent();
             Map<String, String> ui0 = collectUiEnv();
 
-            pipelineExecutionTimingHistory.loadFromDefaultPath();
+            pipelineExecutionTimingHistory.configureFromUi(ui0);
 
             mainRunTabController.bindShell(this);
             envTabController.bindShell(this);
@@ -3089,6 +3089,7 @@ public final class MainShellController {
                     if (mainRunTabController != null) {
                         mainRunTabController.refreshOpenWorkbookHintLabels();
                     }
+                    pipelineExecutionTimingHistory.configureFromUi(collectUiEnv());
                 });
         Runnable schedule = () -> uiEnvSaveDebounce.playFromStart();
         this.uiEnvPersistSchedule = schedule;

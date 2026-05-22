@@ -26,7 +26,7 @@
         <VBox fillWidth="true" spacing="8.0">
             <Label styleClass="pm-section-title" text="実行時間のトレンドと分布"/>
             <Label fx:id="hintLabel" styleClass="pm-pipeline-timing-hint" wrapText="true"
-                   text="段階1～3・サマリ Excel・納期管理ビューの実行時間を記録します。履歴はユーザープロファイル（~/.pm-ai-desktop/）に保存されます。"/>
+                   text="段階1～3・サマリ Excel・納期管理ビューの実行時間を記録します。"/>
             <HBox alignment="CENTER_LEFT" spacing="12.0">
                 <Label text="対象"/>
                 <ComboBox fx:id="kindFilterCombo" prefWidth="200.0"/>

@@ -352,6 +352,19 @@ class AppPathsTest {
     }
 
     @Test
+    void pipelineExecutionTimingHistoryPath_usesSummaryWorkbookParent(@TempDir Path tmp) throws Exception {
+        Path custom = tmp.resolve("shared").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, custom.toString());
+        Path expected =
+                custom.getParent()
+                        .resolve(AppPaths.PIPELINE_EXECUTION_TIMING_HISTORY_JSON)
+                        .toAbsolutePath()
+                        .normalize();
+        assertEquals(expected, AppPaths.pipelineExecutionTimingHistoryPath(ui));
+    }
+
+    @Test
     void resolveMasterWorkbookPathResolved_relativeUsesCodeFolder(@TempDir Path tmp) throws Exception {
         Path code = tmp.resolve("code");
         Path py = code.resolve("python");

@@ -197,10 +197,17 @@ public final class AppPaths {
     public static final String KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH = "PM_AI_STAGE2_SKIP_TODAY_DISPATCH";
 
     /**
-     * 1 のとき実加工数が正の行（加工途中相当）を配台キューに載せない（当日完了と想定、段階2）。UI は実行・ログタブのチェックで上書き。
+     * 1 のとき実加工数が正の行（加工途中相当）を配台キューに載せない（当日完了と想定、段階2）。JavaFX 段階2 では常に 0（翌日配台量はタスク入力タブ）。
      */
     public static final String KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH =
             "PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH";
+
+    /**
+     * 段階2: 加工途中行の翌日配台量 (m) を載せた UTF-8 JSON の絶対パス。JavaFX が段階2直前に書き、{@code build_task_queue_from_planning_df}
+     * が実加工数&gt;0 の行の配台量を上書きする。無効・未設定時はシートの配台使用残数量を用いる。
+     */
+    public static final String KEY_PM_AI_STAGE2_IN_PROGRESS_NEXT_DAY_DISPATCH_JSON =
+            "PM_AI_STAGE2_IN_PROGRESS_NEXT_DAY_DISPATCH_JSON";
 
     /**
      * 段階2の実行エンジン（互換用キー）。JavaFX 実行タブから段階2を起動するときは常に Python 子プロセス（{@code
@@ -939,6 +946,26 @@ public final class AppPaths {
                 .resolve(SUMMARY_AI_DISPATCH_XLSX)
                 .toAbsolutePath()
                 .normalize();
+    }
+
+    /** 実行時間分析タブの履歴 JSON（{@link #summaryAiDispatchXlsxPath} と同一フォルダ）。 */
+    public static final String PIPELINE_EXECUTION_TIMING_HISTORY_JSON =
+            "pipeline-execution-timing-history.json";
+
+    /**
+     * 実行時間履歴 JSON の絶対パス。親フォルダは {@link #summaryAiDispatchXlsxPath(Map)} と同一。
+     */
+    public static Path pipelineExecutionTimingHistoryPath(Map<String, String> ui) {
+        Path summary = summaryAiDispatchXlsxPath(ui);
+        Path parent = summary.getParent();
+        if (parent == null) {
+            return resolveRepoRoot(ui)
+                    .resolve("code")
+                    .resolve(PIPELINE_EXECUTION_TIMING_HISTORY_JSON)
+                    .toAbsolutePath()
+                    .normalize();
+        }
+        return parent.resolve(PIPELINE_EXECUTION_TIMING_HISTORY_JSON).toAbsolutePath().normalize();
     }
 
     /** @deprecated {@link #summaryAiDispatchXlsxPath(Map)} を使用 */

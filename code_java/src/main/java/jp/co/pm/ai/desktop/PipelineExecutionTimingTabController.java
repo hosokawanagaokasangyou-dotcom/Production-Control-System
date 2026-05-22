@@ -27,6 +27,8 @@ import javafx.scene.control.TabPane;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 
+import jp.co.pm.ai.desktop.config.AppPaths;
+
 /**
  * パイプライン実行時間のトレンド・分布（ヒストグラム）を表示するメインシェルタブ。
  */
@@ -162,6 +164,14 @@ public final class PipelineExecutionTimingTabController {
     void refreshFromStore() {
         if (shell == null) {
             return;
+        }
+        if (hintLabel != null) {
+            hintLabel.setText(
+                    "段階1～3・サマリ Excel・納期管理ビューの実行時間を記録します。"
+                            + " 履歴ファイルはサマリ Excel（"
+                            + AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK
+                            + "）と同一フォルダに保存されます: "
+                            + shell.pipelineExecutionTimingHistory().storagePath());
         }
         PipelineExecutionTimingHistoryStore store = shell.pipelineExecutionTimingHistory();
         int limit = sampleLimitSpinner.getValue() != null ? sampleLimitSpinner.getValue() : 100;
