@@ -81,6 +81,16 @@
     -fx-background-color: #451a03;
 }
 
+.list-view.pm-log-view .text.pm-log-search-hit {
+    -fx-fill: #1d4ed8;
+    -fx-font-weight: bold;
+    -fx-underline: true;
+}
+
+.list-view.pm-log-view .list-cell.log-dark .text.pm-log-search-hit {
+    -fx-fill: #93c5fd;
+}
+
 /* Run tab: section titles, default buttons, log list chrome */
 
 .border-pane.pm-run-tab {
@@ -156,6 +166,10 @@
     -fx-font-weight: bold;
     -fx-text-fill: -fx-mid-text-color;
     -fx-padding: 12 0 4 0;
+}
+
+.pm-run-tab .pm-run-stage1-row {
+    -fx-padding: 4 0 0 0;
 }
 
 .pm-run-tab .button:not(.pm-stage-run-button) {

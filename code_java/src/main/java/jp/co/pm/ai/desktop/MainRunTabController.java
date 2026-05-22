@@ -6,6 +6,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -45,6 +46,8 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
+import javafx.scene.text.Text;
+import javafx.scene.text.TextFlow;
 import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
@@ -80,6 +83,9 @@ public final class MainRunTabController {
 
     @FXML
     private ComboBox<LogViewFilter> logFilterCombo;
+
+    @FXML
+    private TextField logSearchField;
 
     @FXML
     private ComboBox<String> logFontFamilyCombo;
@@ -213,14 +219,23 @@ public final class MainRunTabController {
                 .valueProperty()
                 .addListener(
                         (o, a, b) -> {
-                            if (b != null) {
-                                logLinesVisible.setPredicate(b::test);
-                            }
+                            refreshLogLinesVisiblePredicate();
                             if (shell != null
                                     && !suppressRunLogSessionPersistence.get()) {
                                 shell.scheduleDesktopSessionSave();
                             }
                         });
+        if (logSearchField != null) {
+            logSearchField
+                    .textProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                refreshLogLinesVisiblePredicate();
+                                if (logListView != null) {
+                                    logListView.refresh();
+                                }
+                            });
+        }
 
         List<String> families = new ArrayList<>();
         families.add(DEFAULT_FONT_FAMILY_LABEL);
@@ -267,6 +282,7 @@ public final class MainRunTabController {
         logFontSizeCombo.valueProperty().addListener((o, a, b) -> onFontUiChange.run());
 
         setupLogListView();
+        refreshLogLinesVisiblePredicate();
         if (copyAllLogButton != null) {
             copyAllLogButton.disableProperty().bind(Bindings.isEmpty(logLinesAll));
         }
@@ -330,10 +346,10 @@ public final class MainRunTabController {
                                     setGraphic(null);
                                     return;
                                 }
-                                setText(item);
+                                setText(null);
+                                setGraphic(buildLogLineGraphic(item));
                                 setWrapText(false);
                                 setTextOverrun(OverrunStyle.CLIP);
-                                setFont(appliedLogFont);
                                 double w = logListView.getWidth() - 28;
                                 if (w > 0) {
                                     setMaxWidth(w);
@@ -464,6 +480,65 @@ public final class MainRunTabController {
         if (logListView != null) {
             logListView.refresh();
         }
+    }
+
+    private void refreshLogLinesVisiblePredicate() {
+        LogViewFilter kindFilter =
+                logFilterCombo != null && logFilterCombo.getValue() != null
+                        ? logFilterCombo.getValue()
+                        : LogViewFilter.ALL;
+        String search = snapshotLogSearchText();
+        if (search.isEmpty()) {
+            logLinesVisible.setPredicate(kindFilter::test);
+            return;
+        }
+        String searchLower = search.toLowerCase(Locale.ROOT);
+        logLinesVisible.setPredicate(
+                line ->
+                        line != null
+                                && kindFilter.test(line)
+                                && line.toLowerCase(Locale.ROOT).contains(searchLower));
+    }
+
+    private String snapshotLogSearchText() {
+        if (logSearchField == null || logSearchField.getText() == null) {
+            return "";
+        }
+        return logSearchField.getText().trim();
+    }
+
+    private TextFlow buildLogLineGraphic(String item) {
+        TextFlow flow = new TextFlow();
+        String search = snapshotLogSearchText();
+        if (search.isEmpty()) {
+            Text text = new Text(item);
+            text.setFont(appliedLogFont);
+            flow.getChildren().add(text);
+            return flow;
+        }
+        String lowerItem = item.toLowerCase(Locale.ROOT);
+        String searchLower = search.toLowerCase(Locale.ROOT);
+        int from = 0;
+        while (from < item.length()) {
+            int idx = lowerItem.indexOf(searchLower, from);
+            if (idx < 0) {
+                Text tail = new Text(item.substring(from));
+                tail.setFont(appliedLogFont);
+                flow.getChildren().add(tail);
+                break;
+            }
+            if (idx > from) {
+                Text prefix = new Text(item.substring(from, idx));
+                prefix.setFont(appliedLogFont);
+                flow.getChildren().add(prefix);
+            }
+            Text hit = new Text(item.substring(idx, idx + search.length()));
+            hit.setFont(appliedLogFont);
+            hit.getStyleClass().add("pm-log-search-hit");
+            flow.getChildren().add(hit);
+            from = idx + search.length();
+        }
+        return flow;
     }
 
     void bindShell(MainShellController shell) {
@@ -866,6 +941,9 @@ public final class MainRunTabController {
                     if (logFilterCombo != null) {
                         logFilterCombo.setValue(LogViewFilter.ALL);
                     }
+                    if (logSearchField != null) {
+                        logSearchField.clear();
+                    }
                 };
         if (Platform.isFxApplicationThread()) {
             prep.run();
@@ -1137,6 +1215,7 @@ public final class MainRunTabController {
                 logLinesAll.clear();
             }
             logFilterCombo.setValue(LogViewFilter.fromStoredName(filterName));
+            refreshLogLinesVisiblePredicate();
         } finally {
             suppressRunLogSessionPersistence.set(false);
         }
