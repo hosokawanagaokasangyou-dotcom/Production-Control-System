@@ -478,6 +478,14 @@ public final class MainRunTabController {
     /** Reapply row styles when UI theme (dark/light) changes. */
     void refreshLogThemeCells() {
         if (logListView != null) {
+            boolean dark = shell != null && shell.currentDesktopTheme().isDarkUi();
+            if (dark) {
+                if (!logListView.getStyleClass().contains("log-dark-surface")) {
+                    logListView.getStyleClass().add("log-dark-surface");
+                }
+            } else {
+                logListView.getStyleClass().remove("log-dark-surface");
+            }
             logListView.refresh();
         }
     }
@@ -509,10 +517,13 @@ public final class MainRunTabController {
 
     private TextFlow buildLogLineGraphic(String item) {
         TextFlow flow = new TextFlow();
+        LogLineKind kind = LogLineKind.classify(item);
+        Color baseFill = resolveLogTextFill(kind);
         String search = snapshotLogSearchText();
         if (search.isEmpty()) {
             Text text = new Text(item);
             text.setFont(appliedLogFont);
+            text.setFill(baseFill);
             flow.getChildren().add(text);
             return flow;
         }
@@ -524,21 +535,33 @@ public final class MainRunTabController {
             if (idx < 0) {
                 Text tail = new Text(item.substring(from));
                 tail.setFont(appliedLogFont);
+                tail.setFill(baseFill);
                 flow.getChildren().add(tail);
                 break;
             }
             if (idx > from) {
                 Text prefix = new Text(item.substring(from, idx));
                 prefix.setFont(appliedLogFont);
+                prefix.setFill(baseFill);
                 flow.getChildren().add(prefix);
             }
             Text hit = new Text(item.substring(idx, idx + search.length()));
             hit.setFont(appliedLogFont);
+            hit.setFill(baseFill);
             hit.getStyleClass().add("pm-log-search-hit");
             flow.getChildren().add(hit);
             from = idx + search.length();
         }
         return flow;
+    }
+
+    private Color resolveLogTextFill(LogLineKind kind) {
+        boolean dark = shell != null && shell.currentDesktopTheme().isDarkUi();
+        return switch (kind) {
+            case ERROR -> dark ? Color.web("#fecaca") : Color.web("#991b1b");
+            case WARN -> dark ? Color.web("#fde68a") : Color.web("#b45309");
+            case NORMAL -> dark ? Color.web("#e2e8f0") : Color.web("#1e293b");
+        };
     }
 
     void bindShell(MainShellController shell) {
@@ -556,6 +579,7 @@ public final class MainRunTabController {
             shell.pipelineExecutionTimingHistory().addChangeListener(pipelineTimingHistoryListener);
             refreshPipelineExecutionTimingLabels();
         }
+        refreshLogThemeCells();
     }
 
     private void startSummaryExportLockPolling() {

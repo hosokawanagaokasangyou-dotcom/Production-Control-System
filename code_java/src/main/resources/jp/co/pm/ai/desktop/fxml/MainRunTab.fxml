@@ -21,117 +21,41 @@
 
 <BorderPane styleClass="pm-run-tab" xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1" fx:controller="jp.co.pm.ai.desktop.MainRunTabController">
     <padding>
-        <Insets bottom="16.0" left="16.0" right="16.0" />
+        <Insets bottom="12.0" left="16.0" right="16.0" top="12.0" />
     </padding>
     <top>
         <VBox fillWidth="true" spacing="10.0">
-            <HBox alignment="CENTER_LEFT" spacing="8.0" styleClass="pm-run-stage1-row">
+            <HBox alignment="CENTER_LEFT" spacing="10.0" styleClass="pm-run-header-bar">
+                <StackPane fx:id="factoryLogoHost" alignment="CENTER" maxHeight="40.0" minHeight="36.0" minWidth="140.0" prefHeight="36.0" prefWidth="140.0" styleClass="pm-run-factory-logo-host">
+                    <ImageView fx:id="factoryLogoImageView" fitHeight="30.0" fitWidth="126.0" mouseTransparent="true" preserveRatio="true" />
+                    <Label fx:id="factoryLogoCaptionLabel" alignment="CENTER" contentDisplay="CENTER" maxWidth="132.0" mouseTransparent="true" styleClass="pm-run-factory-logo-caption" text="" textAlignment="CENTER" wrapText="false" />
+                </StackPane>
+                <Region HBox.hgrow="ALWAYS" />
+                <HBox alignment="CENTER_RIGHT" spacing="8.0">
+                    <Button mnemonicParsing="false" onAction="#onOpenDispatchUsageGuideDocxAction" text="配台の使い方" />
+                    <Button mnemonicParsing="false" onAction="#onOpenManualAction" text="マニュアルを開く" />
+                    <Label fx:id="appVersionLabel" styleClass="pm-app-version-label" text="" />
+                </HBox>
+            </HBox>
+            <HBox alignment="CENTER_LEFT" spacing="12.0" styleClass="pm-run-primary-bar">
                 <StackPane fx:id="stage1NetworkCacheBadgeHost" alignment="CENTER_LEFT" managed="false" styleClass="pm-stage1-network-cache-badge-host" visible="false" />
                 <Button fx:id="stage1RunButton" mnemonicParsing="false" onAction="#onStage1RunButtonAction" styleClass="pm-stage-run-button,pm-stage-run-1" text="段階1 実行" />
+                <CheckBox fx:id="stage1ClearCacheAndRunCheckBox" mnemonicParsing="false" text="キャッシュをクリアして実行" />
+                <Label text="段階2 Excel フォント" />
+                <ComboBox fx:id="stage2ResultBookFontCombo" editable="true" prefWidth="220.0" />
             </HBox>
-            <Accordion maxWidth="Infinity" VBox.vgrow="NEVER">
-                <panes>
-                    <TitledPane animated="true" expanded="false" text="ヘッダ・資料">
-                        <content>
-                            <VBox fillWidth="true" spacing="8.0">
-                                <HBox alignment="CENTER_LEFT" spacing="8.0">
-                                    <StackPane fx:id="factoryLogoHost" alignment="CENTER" maxHeight="40.0" minHeight="36.0" minWidth="140.0" prefHeight="36.0" prefWidth="140.0" styleClass="pm-run-factory-logo-host">
-                                        <ImageView fx:id="factoryLogoImageView" fitHeight="30.0" fitWidth="126.0" mouseTransparent="true" preserveRatio="true" />
-                                        <Label fx:id="factoryLogoCaptionLabel" alignment="CENTER" contentDisplay="CENTER" maxWidth="132.0" mouseTransparent="true" styleClass="pm-run-factory-logo-caption" text="" textAlignment="CENTER" wrapText="false" />
-                                    </StackPane>
-                                    <Region HBox.hgrow="ALWAYS" />
-                                    <HBox alignment="CENTER_RIGHT" spacing="8.0">
-                                        <Button mnemonicParsing="false" onAction="#onOpenDispatchUsageGuideDocxAction" text="配台の使い方" />
-                                        <Button mnemonicParsing="false" onAction="#onOpenManualAction" text="マニュアルを開く" />
-                                        <Label fx:id="appVersionLabel" styleClass="pm-app-version-label" text="" />
-                                    </HBox>
-                                </HBox>
-                            </VBox>
-                        </content>
-                    </TitledPane>
-                    <TitledPane animated="true" expanded="false" text="段階1・2 設定">
-                        <content>
-                            <HBox alignment="CENTER_LEFT" spacing="20.0">
-                                <CheckBox fx:id="stage1ClearCacheAndRunCheckBox" mnemonicParsing="false" text="キャッシュをクリアして実行" />
-                                <Label text="段階2結果 Excel フォント" />
-                                <ComboBox fx:id="stage2ResultBookFontCombo" editable="true" prefWidth="240.0" />
-                            </HBox>
-                        </content>
-                    </TitledPane>
-                    <TitledPane animated="true" expanded="false" text="段階2 成果物">
-                        <content>
-                            <GridPane hgap="10.0" styleClass="pm-run-actions-grid" vgap="10.0">
-                                <Label text="段階2 production_plan（最新）" GridPane.columnIndex="0" GridPane.rowIndex="0" />
-                                <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="0">
-                                    <TextField fx:id="stage2ProductionPlanField" editable="false" maxWidth="Infinity" HBox.hgrow="ALWAYS" />
-                                    <Button mnemonicParsing="false" onAction="#onOpenStage2ProductionPlanAction" text="エクセルを開く" />
-                                </HBox>
-                                <Label text="段階2 member_schedule（最新）" GridPane.columnIndex="0" GridPane.rowIndex="1" />
-                                <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="1">
-                                    <TextField fx:id="stage2MemberScheduleField" editable="false" maxWidth="Infinity" HBox.hgrow="ALWAYS" />
-                                    <Button mnemonicParsing="false" onAction="#onOpenStage2MemberScheduleAction" text="エクセルを開く" />
-                                </HBox>
-                                <columnConstraints>
-                                    <ColumnConstraints />
-                                    <ColumnConstraints hgrow="ALWAYS" />
-                                </columnConstraints>
-                                <rowConstraints>
-                                    <RowConstraints />
-                                    <RowConstraints />
-                                </rowConstraints>
-                            </GridPane>
-                        </content>
-                    </TitledPane>
-                    <TitledPane animated="true" expanded="false" text="ブックを開く">
-                        <content>
-                            <HBox spacing="8.0">
-                                <Label fx:id="masterWorkbookOpenHintLabel" text="master.xlsm" />
-                                <Button mnemonicParsing="false" onAction="#onOpenMasterWorkbookAction" text="エクセルを開く" />
-                                <Label fx:id="summaryWorkbookOpenHintLabel" text="サマリ_AI配台.xlsx" />
-                                <Button fx:id="openSummaryAiDispatchButton" mnemonicParsing="false" onAction="#onOpenSummaryAiDispatchAction" text="エクセルを開く" />
-                                <Button fx:id="forceUnlockSummaryAiDispatchButton" disable="true" mnemonicParsing="false" onAction="#onForceUnlockSummaryExportLockAction" text="ロック解除" />
-                            </HBox>
-                        </content>
-                    </TitledPane>
-                    <TitledPane animated="true" expanded="true" text="ログ表示">
-                        <content>
-                            <VBox fillWidth="true" spacing="8.0">
-                                <HBox alignment="CENTER_LEFT" spacing="8.0">
-                                    <Label text="種別フィルタ" />
-                                    <ComboBox fx:id="logFilterCombo" prefHeight="25.0" prefWidth="102.0" />
-                                    <Label text="ログ検索" />
-                                    <TextField fx:id="logSearchField" maxWidth="Infinity" prefWidth="280.0" promptText="ログ行に含まれる文字列（部分一致）。空欄ですべて表示" HBox.hgrow="ALWAYS" />
-                                </HBox>
-                                <HBox alignment="CENTER_LEFT" spacing="8.0">
-                                    <Label text="フォント" />
-                                    <ComboBox fx:id="logFontFamilyCombo" prefHeight="25.0" prefWidth="108.0" />
-                                    <Label text="サイズ" />
-                                    <ComboBox fx:id="logFontSizeCombo" prefWidth="88.0" />
-                                    <Button fx:id="copyAllLogButton" mnemonicParsing="false" onAction="#onCopyAllLogButtonAction" text="全ログをコピー" />
-                                    <Button fx:id="clearLogButton" mnemonicParsing="false" onAction="#onClearLogButtonAction" text="ログをクリア" />
-                                    <Label fx:id="prismPipelineLabel" styleClass="pm-prism-pipeline-label" text="JavaFX Prism: …" />
-                                </HBox>
-                            </VBox>
-                        </content>
-                    </TitledPane>
-                    <TitledPane animated="true" expanded="false" text="最新の実行時間">
-                        <content>
-                            <GridPane hgap="16.0" styleClass="pm-run-execution-timings" vgap="4.0">
-                                <Label text="段階1" GridPane.columnIndex="0" GridPane.rowIndex="0" />
-                                <Label fx:id="pipelineTimingStage1Label" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="1" GridPane.rowIndex="0" />
-                                <Label text="段階2" GridPane.columnIndex="2" GridPane.rowIndex="0" />
-                                <Label fx:id="pipelineTimingStage2Label" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="3" GridPane.rowIndex="0" />
-                                <Label text="段階3" GridPane.columnIndex="4" GridPane.rowIndex="0" />
-                                <Label fx:id="pipelineTimingStage3Label" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="5" GridPane.rowIndex="0" />
-                                <Label text="サマリ Excel" GridPane.columnIndex="0" GridPane.rowIndex="1" />
-                                <Label fx:id="pipelineTimingSummaryExcelLabel" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="1" GridPane.rowIndex="1" />
-                                <Label text="納期管理ビュー" GridPane.columnIndex="2" GridPane.rowIndex="1" />
-                                <Label fx:id="pipelineTimingDeliveryCalendarLabel" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="3" GridPane.rowIndex="1" GridPane.columnSpan="3" />
-                            </GridPane>
-                        </content>
-                    </TitledPane>
-                </panes>
-            </Accordion>
+            <HBox alignment="CENTER_LEFT" spacing="8.0" styleClass="pm-run-log-toolbar">
+                <Label text="種別" />
+                <ComboBox fx:id="logFilterCombo" prefHeight="25.0" prefWidth="102.0" />
+                <Label text="検索" />
+                <TextField fx:id="logSearchField" maxWidth="Infinity" prefWidth="280.0" promptText="ログ行を部分一致で絞り込み（空欄ですべて表示）" HBox.hgrow="ALWAYS" />
+                <Label text="フォント" />
+                <ComboBox fx:id="logFontFamilyCombo" prefHeight="25.0" prefWidth="108.0" />
+                <Label text="サイズ" />
+                <ComboBox fx:id="logFontSizeCombo" prefWidth="88.0" />
+                <Button fx:id="copyAllLogButton" mnemonicParsing="false" onAction="#onCopyAllLogButtonAction" text="全ログをコピー" />
+                <Button fx:id="clearLogButton" mnemonicParsing="false" onAction="#onClearLogButtonAction" text="ログをクリア" />
+            </HBox>
             <!-- workbookField / scriptDirField: セッション用。画面非表示。Python は環境変数 PM_AI_PYTHON のみ。 -->
             <HBox managed="false" spacing="0.0" visible="false">
                 <TextField fx:id="workbookField" prefWidth="1.0" />
@@ -140,13 +64,67 @@
         </VBox>
     </top>
     <center>
-        <ListView fx:id="logListView" minHeight="160.0" prefHeight="240.0" styleClass="pm-log-view" />
+        <ListView fx:id="logListView" minHeight="200.0" styleClass="pm-log-view" BorderPane.vgrow="ALWAYS" />
     </center>
     <bottom>
-        <Label fx:id="statusLabel" text="exit: n/a — 0=OK / 1=error / 2=fatal / 3=PlanningValidationError / 9=cancel">
-            <BorderPane.margin>
-                <Insets top="8.0" />
-            </BorderPane.margin>
-        </Label>
+        <VBox fillWidth="true" spacing="8.0">
+            <Accordion maxWidth="Infinity">
+                <panes>
+                    <TitledPane animated="true" expanded="false" text="その他（段階2・ブック・実行時間）">
+                        <content>
+                            <VBox fillWidth="true" spacing="12.0" styleClass="pm-run-secondary-panel">
+                                <Label styleClass="pm-section-title" text="段階2 成果物" />
+                                <GridPane hgap="10.0" styleClass="pm-run-actions-grid" vgap="10.0">
+                                    <Label text="production_plan（最新）" GridPane.columnIndex="0" GridPane.rowIndex="0" />
+                                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="0">
+                                        <TextField fx:id="stage2ProductionPlanField" editable="false" maxWidth="Infinity" HBox.hgrow="ALWAYS" />
+                                        <Button mnemonicParsing="false" onAction="#onOpenStage2ProductionPlanAction" text="エクセルを開く" />
+                                    </HBox>
+                                    <Label text="member_schedule（最新）" GridPane.columnIndex="0" GridPane.rowIndex="1" />
+                                    <HBox spacing="8.0" GridPane.columnIndex="1" GridPane.columnSpan="2" GridPane.rowIndex="1">
+                                        <TextField fx:id="stage2MemberScheduleField" editable="false" maxWidth="Infinity" HBox.hgrow="ALWAYS" />
+                                        <Button mnemonicParsing="false" onAction="#onOpenStage2MemberScheduleAction" text="エクセルを開く" />
+                                    </HBox>
+                                    <columnConstraints>
+                                        <ColumnConstraints />
+                                        <ColumnConstraints hgrow="ALWAYS" />
+                                    </columnConstraints>
+                                    <rowConstraints>
+                                        <RowConstraints />
+                                        <RowConstraints />
+                                    </rowConstraints>
+                                </GridPane>
+                                <Label styleClass="pm-section-title" text="ブックを開く" />
+                                <HBox spacing="8.0">
+                                    <Label fx:id="masterWorkbookOpenHintLabel" text="master.xlsm" />
+                                    <Button mnemonicParsing="false" onAction="#onOpenMasterWorkbookAction" text="エクセルを開く" />
+                                    <Label fx:id="summaryWorkbookOpenHintLabel" text="サマリ_AI配台.xlsx" />
+                                    <Button fx:id="openSummaryAiDispatchButton" mnemonicParsing="false" onAction="#onOpenSummaryAiDispatchAction" text="エクセルを開く" />
+                                    <Button fx:id="forceUnlockSummaryAiDispatchButton" disable="true" mnemonicParsing="false" onAction="#onForceUnlockSummaryExportLockAction" text="ロック解除" />
+                                </HBox>
+                                <Label styleClass="pm-section-title" text="最新の実行時間" />
+                                <GridPane hgap="16.0" styleClass="pm-run-execution-timings" vgap="4.0">
+                                    <Label text="段階1" GridPane.columnIndex="0" GridPane.rowIndex="0" />
+                                    <Label fx:id="pipelineTimingStage1Label" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="1" GridPane.rowIndex="0" />
+                                    <Label text="段階2" GridPane.columnIndex="2" GridPane.rowIndex="0" />
+                                    <Label fx:id="pipelineTimingStage2Label" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="3" GridPane.rowIndex="0" />
+                                    <Label text="段階3" GridPane.columnIndex="4" GridPane.rowIndex="0" />
+                                    <Label fx:id="pipelineTimingStage3Label" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="5" GridPane.rowIndex="0" />
+                                    <Label text="サマリ Excel" GridPane.columnIndex="0" GridPane.rowIndex="1" />
+                                    <Label fx:id="pipelineTimingSummaryExcelLabel" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="1" GridPane.rowIndex="1" />
+                                    <Label text="納期管理ビュー" GridPane.columnIndex="2" GridPane.rowIndex="1" />
+                                    <Label fx:id="pipelineTimingDeliveryCalendarLabel" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="3" GridPane.rowIndex="1" GridPane.columnSpan="3" />
+                                </GridPane>
+                            </VBox>
+                        </content>
+                    </TitledPane>
+                </panes>
+            </Accordion>
+            <HBox alignment="CENTER_LEFT" spacing="12.0">
+                <Label fx:id="statusLabel" text="exit: n/a — 0=OK / 1=error / 2=fatal / 3=PlanningValidationError / 9=cancel" />
+                <Region HBox.hgrow="ALWAYS" />
+                <Label fx:id="prismPipelineLabel" styleClass="pm-prism-pipeline-label" text="JavaFX Prism: …" />
+            </HBox>
+        </VBox>
     </bottom>
 </BorderPane>

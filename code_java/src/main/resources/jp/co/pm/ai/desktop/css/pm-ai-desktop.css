@@ -52,13 +52,21 @@
 }
 
 .list-view.pm-log-view .list-cell.log-cell {
-    -fx-text-fill: -fx-text-inner-color;
+    -fx-text-fill: #1e293b;
     -fx-background-color: transparent;
 }
 
+.list-view.pm-log-view .list-cell.log-cell .text {
+    -fx-fill: #1e293b;
+}
+
 .list-view.pm-log-view .list-cell.log-cell.log-dark {
-    -fx-text-fill: -fx-dark-text-color;
+    -fx-text-fill: #e2e8f0;
     -fx-background-color: transparent;
+}
+
+.list-view.pm-log-view .list-cell.log-cell.log-dark .text {
+    -fx-fill: #e2e8f0;
 }
 
 .list-view.pm-log-view .list-cell.log-cell.log-kind-error {
@@ -66,9 +74,17 @@
     -fx-background-color: #fef2f2;
 }
 
+.list-view.pm-log-view .list-cell.log-cell.log-kind-error .text {
+    -fx-fill: #991b1b;
+}
+
 .list-view.pm-log-view .list-cell.log-cell.log-kind-warn {
     -fx-text-fill: #b45309;
     -fx-background-color: #fffbeb;
+}
+
+.list-view.pm-log-view .list-cell.log-cell.log-kind-warn .text {
+    -fx-fill: #b45309;
 }
 
 .list-view.pm-log-view .list-cell.log-cell.log-kind-error.log-dark {
@@ -76,9 +92,17 @@
     -fx-background-color: #450a0a;
 }
 
+.list-view.pm-log-view .list-cell.log-cell.log-kind-error.log-dark .text {
+    -fx-fill: #fecaca;
+}
+
 .list-view.pm-log-view .list-cell.log-cell.log-kind-warn.log-dark {
     -fx-text-fill: #fde68a;
     -fx-background-color: #451a03;
+}
+
+.list-view.pm-log-view .list-cell.log-cell.log-kind-warn.log-dark .text {
+    -fx-fill: #fde68a;
 }
 
 .list-view.pm-log-view .text.pm-log-search-hit {
@@ -95,6 +119,26 @@
 
 .border-pane.pm-run-tab {
     -fx-background-color: transparent;
+}
+
+.pm-run-tab .pm-run-header-bar {
+    -fx-padding: 0 0 2 0;
+}
+
+.pm-run-tab .pm-run-primary-bar {
+    -fx-padding: 2 0 0 0;
+}
+
+.pm-run-tab .pm-run-log-toolbar {
+    -fx-padding: 4 0 0 0;
+}
+
+.pm-run-tab .pm-run-secondary-panel {
+    -fx-padding: 4 0 8 0;
+}
+
+.pm-run-tab .titled-pane > .title {
+    -fx-font-weight: bold;
 }
 
 .pm-run-factory-logo-host {
@@ -172,6 +216,10 @@
     -fx-padding: 4 0 0 0;
 }
 
+.pm-run-tab .pm-run-primary-bar .button.pm-stage-run-button {
+    -fx-min-width: 180;
+}
+
 .pm-run-tab .button:not(.pm-stage-run-button) {
     -fx-cursor: hand;
     -fx-background-color: -fx-control-inner-background;
@@ -201,7 +249,21 @@
     -fx-border-color: derive(-fx-text-box-border, 12%);
     -fx-border-radius: 8;
     -fx-border-width: 1;
-    -fx-padding: 2;
+    -fx-padding: 4;
+}
+
+.list-view.pm-log-view.log-dark-surface {
+    -fx-background-color: #0f172a;
+    -fx-control-inner-background: #0f172a;
+    -fx-border-color: #334155;
+}
+
+.list-view.pm-log-view.log-dark-surface .list-cell:filled:hover {
+    -fx-background-color: rgba(148, 163, 184, 0.08);
+}
+
+.list-view.pm-log-view.log-dark-surface .list-cell:filled:selected {
+    -fx-background-color: rgba(56, 189, 248, 0.22);
 }
 
 .pm-stage1-network-cache-badge-host {
