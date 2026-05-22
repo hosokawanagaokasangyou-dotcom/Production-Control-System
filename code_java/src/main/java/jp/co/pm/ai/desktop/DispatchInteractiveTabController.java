@@ -2765,7 +2765,7 @@ public final class DispatchInteractiveTabController {
 
     private String wideStaticCellText(WideRow wr, String title) {
         if (COL_STAGE3_DISPATCH_QTY_TOTAL.equals(title)) {
-            return formatStage3DispatchQtyTotal(wr.sumActualAmounts());
+            return formatStage3DispatchQtyTotal(stage3DispatchQtyTotalForWideRow(wr));
         }
         if (Stage3DispatchQtyBalanceCheck.COL_TITLE.equals(title)) {
             return formatStage3DispatchQtyBalanceCheck(wr);
@@ -2778,12 +2778,34 @@ public final class DispatchInteractiveTabController {
         double actualDone = ResultDispatchNormalizer.parseDouble(wr.getStatic("実加工数"));
         double rollUnitM = resolveRollUnitForWideRow(wr).unitM();
         return Stage3DispatchQtyBalanceCheck.formatCheck(
-                qtyConv, actualDone, wr.sumActualAmounts(), docHasActualDispatchQtyColumn(), rollUnitM);
+                qtyConv,
+                actualDone,
+                stage3DispatchQtyTotalForWideRow(wr),
+                docHasActualDispatchQtyColumn(),
+                rollUnitM);
+    }
+
+    /**
+     * 段階3配台数・照合の合計。手動移動は {@link ResultDispatchSchema#COL_DISPATCH_QTY} のみ更新するため、
+     * 試行後は当日配台数量の日別合計を使う（未試行時は実配台合計にフォールバック）。
+     */
+    private double stage3DispatchQtyTotalForWideRow(WideRow wr) {
+        if (docHasActualDispatchQtyColumn()) {
+            return wr.sumPlanAmounts();
+        }
+        return wr.sumActualAmounts();
+    }
+
+    private double stage3DispatchQtyTotalForByDayRow(ByDayRow br) {
+        if (docHasActualDispatchQtyColumn()) {
+            return br.sumPlanAmounts();
+        }
+        return br.sumActualAmounts();
     }
 
     private String byDayStaticCellText(ByDayRow br, String title) {
         if (COL_STAGE3_DISPATCH_QTY_TOTAL.equals(title)) {
-            return formatStage3DispatchQtyTotal(br.sumActualAmounts());
+            return formatStage3DispatchQtyTotal(stage3DispatchQtyTotalForByDayRow(br));
         }
         if (ResultDispatchSchema.COL_PROCESS.equals(title)) {
             return br.process();
@@ -4129,6 +4151,14 @@ public final class DispatchInteractiveTabController {
             actualAmounts[di] = v;
         }
 
+        double sumPlanAmounts() {
+            double sum = 0;
+            for (double v : amounts) {
+                sum += v;
+            }
+            return sum;
+        }
+
         double sumActualAmounts() {
             double sum = 0;
             for (double v : actualAmounts) {
@@ -4158,6 +4188,14 @@ public final class DispatchInteractiveTabController {
 
         void setActualAmount(int i, double v) {
             actualAmounts[i] = v;
+        }
+
+        double sumPlanAmounts() {
+            double sum = 0;
+            for (double v : amounts) {
+                sum += v;
+            }
+            return sum;
         }
 
         double sumActualAmounts() {
