@@ -761,6 +761,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      * @param personBadgeWireMaxLengthPxOrZero バッジ中心とバーアンカー間のワイヤー長（px）。{@code 0}
      *     または非正は無制限（横並び初期配置・ドラッグ時の距離クランプなし）。正の値では円環配置の半径かつドラッグ時の距離上限
      * @param showPersonBadgeWires 担当バッジとチャートバーをワイヤーで結ぶ（{@code showPersonBadges} が false のとき無効）
+     * @param showPrepTimeBarLabels 準備時間系バーラベル（日次始業準備／依頼切替準備／休憩再開準備）を描画する
      */
     public static BorderPane build(
             List<String> columns,
@@ -816,6 +817,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 personBadgeWireDashStyleKeyOrEmpty,
                 personBadgeWireMaxLengthPxOrZero,
                 showPersonBadgeWires,
+                false,
                 false);
     }
 
@@ -849,6 +851,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             String personBadgeWireDashStyleKeyOrEmpty,
             double personBadgeWireMaxLengthPxOrZero,
             boolean showPersonBadgeWires,
+            boolean showPrepTimeBarLabels,
             boolean highQualityPrint) {
         BorderPane root = new BorderPane();
         root.setCache(false);
@@ -881,6 +884,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         barFontPercent,
                         headerHeightPercent);
         final boolean vectorPrint = highQualityPrint;
+        final boolean showPrepTimeBarLabelsEff = showPrepTimeBarLabels;
         GanttPalette palette =
                 GanttPalette.forTheme(highQualityPrint ? DesktopTheme.LIGHT : theme);
         EquipmentGanttPersonBadgeWireDashStyle wireDashResolved =
@@ -1212,7 +1216,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 layout,
                                 palette,
                                 barFont,
-                                false);
+                                false,
+                                showPrepTimeBarLabelsEff);
             } else {
                 Region timelinePlaceholder = null;
                 Canvas rowCanvas = null;
@@ -1535,7 +1540,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                                 vr[1],
                                 s.outerPad,
                                 s.timelineBandHeight,
-                                s.rowH);
+                                s.rowH,
+                                showPrepTimeBarLabelsEff);
                     }
                     if (Boolean.getBoolean(PROFILE_PROP)) {
                         long elapsedMs = (System.nanoTime() - t0Ns) / 1_000_000L;
@@ -2209,7 +2215,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         dims.layout(),
                         dims.palette(),
                         dims.barFont(),
-                        true);
+                        true,
+                        spec.showPrepTimeBarLabels());
         parts.add(timeline);
         if (dims.progressCount() > 0) {
             int gap = dims.progressGap();
@@ -3107,7 +3114,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             LayoutMetrics layout,
             GanttPalette palette,
             Font barFont,
-            boolean dedicatedPrintLayout) {
+            boolean dedicatedPrintLayout,
+            boolean showPrepTimeBarLabels) {
         Pane pane = new Pane();
         pane.setPrefSize(timelineWidth, paneHeight);
         pane.setMinSize(timelineWidth, paneHeight);
@@ -3147,7 +3155,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 outerPad,
                 timelineBandHeight,
                 paneHeight,
-                dedicatedPrintLayout);
+                !showPrepTimeBarLabels);
         return pane;
     }
 
@@ -4710,7 +4718,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             int slotVisibleToIncl,
             double outerPad,
             double timelineBandHeight,
-            double canvasHeight) {
+            double canvasHeight,
+            boolean showPrepTimeBarLabels) {
         int n = Math.max(0, slotCount);
         int vf = Math.max(0, slotVisibleFrom);
         int vt = Math.min(n - 1, slotVisibleToIncl);
@@ -4751,7 +4760,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                 vt,
                 outerPad,
                 timelineBandHeight,
-                canvasHeight);
+                canvasHeight,
+                !showPrepTimeBarLabels);
     }
 
     private static List<BarRun> collectBarRuns(List<String> slotTexts) {
@@ -5018,7 +5028,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             int slotVisibleToIncl,
             double outerPad,
             double timelineBandHeight,
-            double canvasHeight) {
+            double canvasHeight,
+            boolean omitPrepHatchedBarLabels) {
         List<BarRun> sorted = new ArrayList<>();
         for (BarRun run : runs) {
             if (run.toSlot() < slotVisibleFrom || run.fromSlot() > slotVisibleToIncl) {
@@ -5038,7 +5049,14 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         double minY = fh + 2;
         for (PlannedBarOutsideLabel planned :
                 planBarOutsideLabelsThreeTiers(
-                        sorted, layout, palette, barFont, barTop, barH, canvasH)) {
+                        sorted,
+                        layout,
+                        palette,
+                        barFont,
+                        barTop,
+                        barH,
+                        canvasH,
+                        omitPrepHatchedBarLabels)) {
             double y = Math.clamp(planned.y(), minY, canvasH - 2);
             gc.setFill(planned.color());
             gc.fillText(planned.text(), planned.x(), y);

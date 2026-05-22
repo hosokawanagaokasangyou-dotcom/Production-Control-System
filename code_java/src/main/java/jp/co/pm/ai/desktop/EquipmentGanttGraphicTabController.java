@@ -204,6 +204,9 @@ public final class EquipmentGanttGraphicTabController {
     private CheckBox personBadgeWireShowCheckBox;
 
     @FXML
+    private CheckBox prepTimeLabelsShowCheckBox;
+
+    @FXML
     private Slider graphicZoomSlider;
 
     @FXML
@@ -481,6 +484,15 @@ public final class EquipmentGanttGraphicTabController {
         }
         if (personBadgeWireShowCheckBox != null) {
             personBadgeWireShowCheckBox
+                    .selectedProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                flushGraphicRebuildNow();
+                                scheduleEquipmentGraphicPersist();
+                            });
+        }
+        if (prepTimeLabelsShowCheckBox != null) {
+            prepTimeLabelsShowCheckBox
                     .selectedProperty()
                     .addListener(
                             (o, a, b) -> {
@@ -818,6 +830,9 @@ public final class EquipmentGanttGraphicTabController {
         if (personBadgeWireShowCheckBox != null) {
             personBadgeWireShowCheckBox.setSelected(s.equipmentGanttPersonBadgeWireEnabled());
         }
+        if (prepTimeLabelsShowCheckBox != null) {
+            prepTimeLabelsShowCheckBox.setSelected(s.equipmentGanttPrepTimeLabelsEnabled());
+        }
         String wireHex = s.equipmentGanttPersonBadgeWireStrokeHex();
         boolean wireTheme = wireHex == null || wireHex.isBlank();
         if (graphicPersonBadgeWireThemeColorCheckBox != null) {
@@ -1001,6 +1016,10 @@ public final class EquipmentGanttGraphicTabController {
     boolean snapshotEquipmentGanttPersonBadgeWireEnabled() {
         return personBadgeWireShowCheckBox == null
                 || personBadgeWireShowCheckBox.isSelected();
+    }
+
+    boolean snapshotEquipmentGanttPrepTimeLabelsEnabled() {
+        return prepTimeLabelsShowCheckBox != null && prepTimeLabelsShowCheckBox.isSelected();
     }
 
     String snapshotEquipmentGanttPersonBadgeWireStrokeHex() {
@@ -1611,6 +1630,7 @@ public final class EquipmentGanttGraphicTabController {
                 snapshotEquipmentGanttPersonBadgeWireDashStyleKey(),
                 snapshotEquipmentGanttPersonBadgeWireMaxLengthPx(),
                 snapshotEquipmentGanttPersonBadgeWireEnabled(),
+                snapshotEquipmentGanttPrepTimeLabelsEnabled(),
                 highQualityPrint);
     }
 
@@ -1831,6 +1851,7 @@ public final class EquipmentGanttGraphicTabController {
                 snapshotEquipmentGanttPersonBadgeWireDashStyleKey(),
                 snapshotEquipmentGanttPersonBadgeWireMaxLengthPx(),
                 snapshotEquipmentGanttPersonBadgeWireEnabled(),
+                snapshotEquipmentGanttPrepTimeLabelsEnabled(),
                 printRange != null ? printRange.startInclusive() : null,
                 printRange != null ? printRange.endExclusive() : null);
     }
@@ -1954,6 +1975,7 @@ public final class EquipmentGanttGraphicTabController {
         sb.append(snapshotEquipmentGanttPersonBadgeWireWidthPx()).append('\u0001');
         sb.append(snapshotEquipmentGanttPersonBadgeWireDashStyleKey()).append('\u0001');
         sb.append(snapshotEquipmentGanttPersonBadgeWireMaxLengthPx()).append('\u0001');
+        sb.append(snapshotEquipmentGanttPrepTimeLabelsEnabled()).append('\u0001');
         sb.append(columns != null ? columns.size() : 0).append('\u0001');
         sb.append(rows != null ? rows.size() : 0);
         if (effectivePersonBadgeDragAdjustEnabled() && !equipmentGanttBadgeDragDeltas.isEmpty()) {

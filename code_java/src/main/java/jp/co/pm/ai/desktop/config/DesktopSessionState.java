@@ -48,6 +48,7 @@ import java.util.Map;
  * @param equipmentGanttHeaderHeightPercent 見出し行（日付・機械名・工程名・時刻軸）の高さ（50〜200、0 は未保存として既定 100）
  * @param equipmentGanttSlotWidthPercent 時刻スロット列幅の調整（50〜500、0 は未保存として既定 100）
  * @param equipmentGanttShiftWheelHScrollPercent Shift+ホイール横スクロールの感度（50〜1000、100＝従来相当、0 は未保存として既定 200）
+ * @param equipmentGanttPrepTimeLabelsEnabled 設備ガント・準備時間系バーラベル（日次始業準備／依頼切替準備／休憩再開準備）の表示
  * @param equipmentGanttPersonBadgeGapPx 担当バッジの横方向の固定間隔（px、隣接ピル左端同士の追加距離、0〜48 程度を想定）
  * @param equipmentGanttPersonBadgeBandVerticalOffsetPx 担当バッジブロックをタスク帯に対して縦方向へずらす量（px、正で下方向）
  * @param equipmentGanttGraphicDataFingerprint 設備ガント表示データの内容フィンガープリント（SHA-256 16 進）。JSON 等が変わると無効化される
@@ -121,6 +122,7 @@ public record DesktopSessionState(
         double equipmentGanttHeaderHeightPercent,
         double equipmentGanttSlotWidthPercent,
         double equipmentGanttShiftWheelHScrollPercent,
+        boolean equipmentGanttPrepTimeLabelsEnabled,
         double equipmentGanttPersonBadgeGapPx,
         double equipmentGanttPersonBadgeBandVerticalOffsetPx,
         String equipmentGanttGraphicDataFingerprint,
@@ -168,6 +170,9 @@ public record DesktopSessionState(
     public static final double MIN_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX = -48.0;
 
     public static final double MAX_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX = 48.0;
+
+    /** 設備ガント・準備時間系バーラベル表示の既定（既定 OFF）。 */
+    public static final boolean DEFAULT_EQUIPMENT_GANTT_PREP_TIME_LABELS_ENABLED = false;
 
     /** 設備ガント・バッジワイヤー表示の既定（視認性向上のため既定 ON）。 */
     public static final boolean DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_ENABLED = true;
@@ -339,6 +344,7 @@ public record DesktopSessionState(
                 0d,
                 0d,
                 0d,
+                DEFAULT_EQUIPMENT_GANTT_PREP_TIME_LABELS_ENABLED,
                 DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX,
                 DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX,
                 "",
@@ -418,6 +424,7 @@ public record DesktopSessionState(
                 equipmentGanttHeaderHeightPercent(),
                 equipmentGanttSlotWidthPercent(),
                 equipmentGanttShiftWheelHScrollPercent(),
+                equipmentGanttPrepTimeLabelsEnabled(),
                 equipmentGanttPersonBadgeGapPx(),
                 equipmentGanttPersonBadgeBandVerticalOffsetPx(),
                 equipmentGanttGraphicDataFingerprint(),

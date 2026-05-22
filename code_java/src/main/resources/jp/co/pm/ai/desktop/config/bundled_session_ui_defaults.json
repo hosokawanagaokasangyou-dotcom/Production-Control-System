@@ -32,6 +32,7 @@
   "equipmentGanttHeaderHeightPercent": 100,
   "equipmentGanttSlotWidthPercent": 100,
   "equipmentGanttShiftWheelHScrollPercent": 200,
+  "equipmentGanttPrepTimeLabelsEnabled": false,
   "equipmentGanttPersonBadgeGapPx": 4,
   "equipmentGanttPersonBadgeBandVerticalOffsetPx": 0,
   "equipmentGanttPersonBadgeDragAdjustEnabled": false,

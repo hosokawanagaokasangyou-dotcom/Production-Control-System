@@ -36,6 +36,8 @@ public record EquipmentGanttPrintPageSpec(
         String personBadgeWireDashStyleKey,
         double personBadgeWireMaxLengthPx,
         boolean showPersonBadgeWires,
+        /** 準備時間系バーラベル（日次始業準備／依頼切替準備／休憩再開準備）を描画する。 */
+        boolean showPrepTimeBarLabels,
         /** 印刷タイムライン列の半開区間開始（{@code null} は全スロット列）。 */
         LocalTime printTimeRangeStartInclusive,
         /** 印刷タイムライン列の半開区間終了（{@code null} は全スロット列）。 */

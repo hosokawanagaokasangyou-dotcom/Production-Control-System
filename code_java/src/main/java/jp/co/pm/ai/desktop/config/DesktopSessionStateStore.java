@@ -337,6 +337,10 @@ public final class DesktopSessionStateStore {
                 optionalDouble(root, "equipmentGanttHeaderHeightPercent", 0d),
                 optionalDouble(root, "equipmentGanttSlotWidthPercent", 0d),
                 optionalDouble(root, "equipmentGanttShiftWheelHScrollPercent", 0d),
+                optionalBoolean(
+                        root,
+                        "equipmentGanttPrepTimeLabelsEnabled",
+                        DesktopSessionState.DEFAULT_EQUIPMENT_GANTT_PREP_TIME_LABELS_ENABLED),
                 loadEquipmentGanttPersonBadgeGapPx(root),
                 loadEquipmentGanttPersonBadgeBandVerticalOffsetPx(root),
                 text(root, "equipmentGanttGraphicDataFingerprint"),
@@ -804,6 +808,9 @@ public final class DesktopSessionStateStore {
         if (Double.isFinite(sh) && sh >= 50 && sh <= 1000) {
             root.put("equipmentGanttShiftWheelHScrollPercent", sh);
         }
+        root.put(
+                "equipmentGanttPrepTimeLabelsEnabled",
+                state.equipmentGanttPrepTimeLabelsEnabled());
         double bgap = state.equipmentGanttPersonBadgeGapPx();
         if (Double.isFinite(bgap) && bgap >= 0) {
             root.put("equipmentGanttPersonBadgeGapPx", bgap);
