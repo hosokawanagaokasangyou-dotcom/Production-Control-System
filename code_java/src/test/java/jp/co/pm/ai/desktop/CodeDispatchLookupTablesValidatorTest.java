@@ -23,13 +23,21 @@ class CodeDispatchLookupTablesValidatorTest {
     void okWhenAllValuesPresent() throws IOException {
         Path code = tmp.resolve("code");
         Files.createDirectories(code);
+        Path summaryDir = tmp.resolve("shared");
+        Files.createDirectories(summaryDir);
+        Path summary = summaryDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summary);
         Files.writeString(
-                code.resolve(CodeDispatchLookupTablesMerge.FILE_PRODUCT_THICK),
+                summaryDir.resolve(CodeDispatchLookupTablesMerge.FILE_PRODUCT_THICK),
                 "製品名,製品厚み\nA-001,2.0\n",
                 StandardCharsets.UTF_8);
         var vr =
                 CodeDispatchLookupTablesValidator.validateNoBlankValues(
-                        Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, tmp.toString()));
+                        Map.of(
+                                AppPaths.KEY_PM_AI_REPO_ROOT,
+                                tmp.toString(),
+                                AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                                summary.toString()));
         assertTrue(vr.ok());
     }
 
@@ -37,13 +45,21 @@ class CodeDispatchLookupTablesValidatorTest {
     void detectsBlankThicknessValue() throws IOException {
         Path code = tmp.resolve("code");
         Files.createDirectories(code);
+        Path summaryDir = tmp.resolve("shared");
+        Files.createDirectories(summaryDir);
+        Path summary = summaryDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summary);
         Files.writeString(
-                code.resolve(CodeDispatchLookupTablesMerge.FILE_PRODUCT_THICK),
+                summaryDir.resolve(CodeDispatchLookupTablesMerge.FILE_PRODUCT_THICK),
                 "製品名,製品厚み\nC4300-1056-820x114YA,\nFILLED,3.0\n",
                 StandardCharsets.UTF_8);
         var vr =
                 CodeDispatchLookupTablesValidator.validateNoBlankValues(
-                        Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, tmp.toString()));
+                        Map.of(
+                                AppPaths.KEY_PM_AI_REPO_ROOT,
+                                tmp.toString(),
+                                AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                                summary.toString()));
         assertFalse(vr.ok());
         assertEquals(1, vr.issues().size());
         assertEquals("C4300-1056-820x114YA", vr.issues().getFirst().key());
@@ -54,9 +70,19 @@ class CodeDispatchLookupTablesValidatorTest {
     void skipsMissingTableFiles() throws IOException {
         Path code = tmp.resolve("code");
         Files.createDirectories(code);
+        Path summaryDir = tmp.resolve("shared");
+        Files.createDirectories(summaryDir);
+        Path summary = summaryDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summary);
         var vr =
                 CodeDispatchLookupTablesValidator.validateNoBlankValues(
-                        Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, tmp.toString()));
+                        Map.of(
+                                AppPaths.KEY_PM_AI_REPO_ROOT,
+                                tmp.toString(),
+                                AppPaths.KEY_PM_AI_CODE_DIR,
+                                code.toString(),
+                                AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                                summary.toString()));
         assertTrue(vr.ok());
     }
 }

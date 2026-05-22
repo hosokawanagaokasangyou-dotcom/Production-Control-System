@@ -4050,8 +4050,7 @@ public final class DispatchInteractiveTabController {
                         return Stage2RollUnitLengthTables.empty();
                     }
                     try {
-                        return Stage2RollUnitLengthTables.load(
-                                AppPaths.resolveRepoRoot(shell.snapshotUiEnv()));
+                        return Stage2RollUnitLengthTables.load(shell.snapshotUiEnv());
                     } catch (Exception ignored) {
                         return Stage2RollUnitLengthTables.empty();
                     }

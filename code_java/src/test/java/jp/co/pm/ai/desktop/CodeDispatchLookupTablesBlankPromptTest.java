@@ -24,16 +24,27 @@ class CodeDispatchLookupTablesBlankPromptTest {
     void collectGroupsBlankIssuesByProductAndUsedRaw() throws IOException {
         Path code = tmp.resolve("code");
         Files.createDirectories(code);
+        Path summaryDir = tmp.resolve("shared");
+        Files.createDirectories(summaryDir);
+        Path summary = summaryDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summary);
         Files.writeString(
-                code.resolve(CodeDispatchLookupTablesMerge.FILE_PRODUCT_THICK),
+                summaryDir.resolve(CodeDispatchLookupTablesMerge.FILE_PRODUCT_THICK),
                 "製品名,製品厚み\nNEW-PROD,\n",
                 StandardCharsets.UTF_8);
         Files.writeString(
-                code.resolve(CodeDispatchLookupTablesMerge.FILE_USED_RAW_WIDTH),
+                summaryDir.resolve(CodeDispatchLookupTablesMerge.FILE_USED_RAW_WIDTH),
                 "使用原反,原反幅\nNEW-RAW,\n",
                 StandardCharsets.UTF_8);
 
-        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_CODE_DIR, code.toString());
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        tmp.toString(),
+                        AppPaths.KEY_PM_AI_CODE_DIR,
+                        code.toString(),
+                        AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                        summary.toString());
 
         var vr = CodeDispatchLookupTablesValidator.validateNoBlankValues(ui);
         assertFalse(vr.ok());
@@ -51,16 +62,27 @@ class CodeDispatchLookupTablesBlankPromptTest {
     void applyInputsWritesValuesToTables() throws IOException {
         Path code = tmp.resolve("code");
         Files.createDirectories(code);
+        Path summaryDir = tmp.resolve("shared");
+        Files.createDirectories(summaryDir);
+        Path summary = summaryDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summary);
         Files.writeString(
-                code.resolve(CodeDispatchLookupTablesMerge.FILE_PRODUCT_THICK),
+                summaryDir.resolve(CodeDispatchLookupTablesMerge.FILE_PRODUCT_THICK),
                 "製品名,製品厚み\nNEW-PROD,\n",
                 StandardCharsets.UTF_8);
         Files.writeString(
-                code.resolve(CodeDispatchLookupTablesMerge.FILE_USED_RAW_WIDTH),
+                summaryDir.resolve(CodeDispatchLookupTablesMerge.FILE_USED_RAW_WIDTH),
                 "使用原反,原反幅\nNEW-RAW,\n",
                 StandardCharsets.UTF_8);
 
-        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_CODE_DIR, code.toString());
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        tmp.toString(),
+                        AppPaths.KEY_PM_AI_CODE_DIR,
+                        code.toString(),
+                        AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                        summary.toString());
         var applied =
                 CodeDispatchLookupTablesBlankPrompt.applyInputs(
                         ui,
@@ -78,7 +100,7 @@ class CodeDispatchLookupTablesBlankPromptTest {
 
         String thick =
                 Files.readString(
-                        code.resolve(CodeDispatchLookupTablesMerge.FILE_PRODUCT_THICK),
+                        summaryDir.resolve(CodeDispatchLookupTablesMerge.FILE_PRODUCT_THICK),
                         StandardCharsets.UTF_8);
         assertTrue(thick.contains("NEW-PROD,3.3"));
     }

@@ -42,7 +42,7 @@ public final class DispatchInteractiveRollUnitSupport {
         Stage2RollUnitLengthTables tables = tablesOrNull;
         if (tables == null) {
             try {
-                tables = Stage2RollUnitLengthTables.load(AppPaths.resolveRepoRoot(uiEnv));
+                tables = Stage2RollUnitLengthTables.load(uiEnv);
             } catch (Exception ignored) {
                 tables = Stage2RollUnitLengthTables.empty();
             }

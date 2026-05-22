@@ -1186,6 +1186,93 @@ public final class AppPaths {
         return Optional.empty();
     }
 
+    /** 材料・製品種類ルックアップ表（サマリ Excel と同一フォルダに配置）。 */
+    public static final String DISPATCH_LOOKUP_USED_RAW_ROLL = "使用原反,ロール単位の長さ.txt";
+
+    public static final String DISPATCH_LOOKUP_PRODUCT_ROLL = "製品名,ロール単位の長さ.txt";
+    public static final String DISPATCH_LOOKUP_PRODUCT_WIDTH = "製品名, 製品幅.txt";
+    public static final String DISPATCH_LOOKUP_PRODUCT_THICK = "製品名,製品厚み.txt";
+    public static final String DISPATCH_LOOKUP_PRODUCT_LENGTH = "製品名,製品長.txt";
+    public static final String DISPATCH_LOOKUP_USED_RAW_WIDTH = "使用原反, 加工幅.txt";
+
+    private static final List<String> DISPATCH_LOOKUP_TABLE_FILENAMES =
+            List.of(
+                    DISPATCH_LOOKUP_USED_RAW_ROLL,
+                    DISPATCH_LOOKUP_PRODUCT_ROLL,
+                    DISPATCH_LOOKUP_PRODUCT_WIDTH,
+                    DISPATCH_LOOKUP_PRODUCT_THICK,
+                    DISPATCH_LOOKUP_PRODUCT_LENGTH,
+                    DISPATCH_LOOKUP_USED_RAW_WIDTH);
+
+    /**
+     * 材料・製品種類ルックアップ表の絶対パス（{@link #summaryAiDispatchXlsxPath(Map)} と同一フォルダ）。
+     */
+    public static Path dispatchLookupTablePath(Map<String, String> ui, String filename) {
+        return siblingOfSummaryAiDispatchWorkbook(ui, filename);
+    }
+
+    /** リポジトリ {@code code/} 配下の同梱テーブル（コピー元）。 */
+    public static Path dispatchLookupTablePathLegacyUnderCode(Map<String, String> ui, String filename) {
+        return resolveCodeDir(ui != null ? ui : Map.of())
+                .resolve(filename)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    public static Optional<Path> resolveBundledDispatchLookupTableSourceInRepo(
+            Map<String, String> ui, String filename) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path underCode = dispatchLookupTablePathLegacyUnderCode(u, filename);
+        if (Files.isRegularFile(underCode)) {
+            return Optional.of(underCode);
+        }
+        Path atRepo = resolveRepoRoot(u).resolve("code").resolve(filename);
+        if (Files.isRegularFile(atRepo)) {
+            return Optional.of(atRepo.toAbsolutePath().normalize());
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * 作業先（サマリ Excel 同フォルダ）にテーブルが無ければリポジトリ {@code code/} からコピーする。
+     *
+     * @return 作業先ファイルが実在するとき {@code true}
+     */
+    public static boolean ensureDispatchLookupTableFromRepoIfMissing(
+            Map<String, String> ui, String filename) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path target = dispatchLookupTablePath(u, filename);
+        if (Files.isRegularFile(target)) {
+            return true;
+        }
+        Optional<Path> source = resolveBundledDispatchLookupTableSourceInRepo(u, filename);
+        if (source.isEmpty()) {
+            Path legacy = dispatchLookupTablePathLegacyUnderCode(u, filename);
+            if (Files.isRegularFile(legacy) && !legacy.equals(target)) {
+                source = Optional.of(legacy);
+            }
+        }
+        if (source.isEmpty()) {
+            return false;
+        }
+        try {
+            if (target.getParent() != null) {
+                Files.createDirectories(target.getParent());
+            }
+            Files.copy(source.get(), target, StandardCopyOption.REPLACE_EXISTING);
+            return Files.isRegularFile(target);
+        } catch (IOException ex) {
+            return false;
+        }
+    }
+
+    /** {@link #DISPATCH_LOOKUP_TABLE_FILENAMES} をすべて作業先へ確保する。 */
+    public static void ensureAllDispatchLookupTablesFromRepoIfMissing(Map<String, String> ui) {
+        for (String filename : DISPATCH_LOOKUP_TABLE_FILENAMES) {
+            ensureDispatchLookupTableFromRepoIfMissing(ui, filename);
+        }
+    }
+
     /**
      * Default path to stage-1 Excel output.
      *

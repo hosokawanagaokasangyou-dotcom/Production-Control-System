@@ -445,7 +445,7 @@ public final class PlanInputTabController {
         Stage2RollUnitLengthTables tables = cachedRollUnitHighlightTables.get();
         if (tables == null && shell != null) {
             try {
-                tables = Stage2RollUnitLengthTables.load(AppPaths.resolveRepoRoot(shell.snapshotUiEnv()));
+                tables = Stage2RollUnitLengthTables.load(shell.snapshotUiEnv());
                 cachedRollUnitHighlightTables.set(tables);
             } catch (Exception ignored) {
                 tables = Stage2RollUnitLengthTables.empty();
@@ -863,8 +863,7 @@ public final class PlanInputTabController {
                         return Stage2RollUnitLengthTables.empty();
                     }
                     try {
-                        return Stage2RollUnitLengthTables.load(
-                                AppPaths.resolveRepoRoot(shell.snapshotUiEnv()));
+                        return Stage2RollUnitLengthTables.load(shell.snapshotUiEnv());
                     } catch (Exception e) {
                         return Stage2RollUnitLengthTables.empty();
                     }

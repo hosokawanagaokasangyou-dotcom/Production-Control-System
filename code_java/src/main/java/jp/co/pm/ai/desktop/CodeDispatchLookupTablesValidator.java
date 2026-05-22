@@ -63,7 +63,7 @@ public final class CodeDispatchLookupTablesValidator {
             int cap = maxLines > 0 ? maxLines : 8;
             StringBuilder sb =
                     new StringBuilder(
-                            "材料・製品種類情報（code/）に値が空欄の行があります。"
+                            "材料・製品種類情報（サマリ Excel 同フォルダ）に値が空欄の行があります。"
                                     + "「材料・製品種類情報」タブで入力してから再実行してください。\n\n");
             int n = Math.min(issues.size(), cap);
             for (int i = 0; i < n; i++) {
@@ -96,10 +96,10 @@ public final class CodeDispatchLookupTablesValidator {
 
     public static ValidationResult validateNoBlankValues(Map<String, String> ui) throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
-        Path codeDir = AppPaths.resolveCodeDir(u);
+        AppPaths.ensureAllDispatchLookupTablesFromRepoIfMissing(u);
         List<BlankValueIssue> issues = new ArrayList<>();
         for (TableSpec spec : TABLES) {
-            Path path = codeDir.resolve(spec.relativePath());
+            Path path = AppPaths.dispatchLookupTablePath(u, spec.relativePath());
             if (!Files.isRegularFile(path)) {
                 continue;
             }

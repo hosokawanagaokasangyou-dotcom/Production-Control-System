@@ -82,7 +82,7 @@ public final class CodeDispatchLookupTablesTabController {
     @FXML
     private void initialize() {
         hintLabel.setText(
-                "リポジトリ直下の code/ にある材料・製品種類に関するテーブルを編集します（UTF-8）。"
+                "サマリ Excel（PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK）と同一フォルダの材料・製品種類テーブルを編集します（UTF-8）。"
                         + " 段階1が正常終了したとき、plan_input_tasks の製品名・使用原反で不足キーのみ自動追記します。"
                         + " 値が空欄の行があると段階2・段階3は実行できません。");
         for (FileSpec spec : FILES) {
@@ -335,8 +335,9 @@ public final class CodeDispatchLookupTablesTabController {
         }
 
         private Path resolvePath() {
-            Path code = AppPaths.resolveCodeDir(uiEnv());
-            return code.resolve(spec.relativePath()).toAbsolutePath().normalize();
+            Map<String, String> ui = uiEnv();
+            AppPaths.ensureDispatchLookupTableFromRepoIfMissing(ui, spec.relativePath());
+            return AppPaths.dispatchLookupTablePath(ui, spec.relativePath());
         }
 
         private void applySearchPredicate() {

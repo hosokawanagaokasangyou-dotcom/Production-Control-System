@@ -356,10 +356,10 @@ public final class EnvVarDocs {
                 "工程間 WIP: EC前〜検査までのロール上限。");
         put(
                 "RAW_FABRIC_WIDTH_TABLE_PATH",
-                "原反幅 CSV（planning_core の外部表参照）。");
+                "原反幅 CSV。既定は PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK 同フォルダ（無ければ code/ から初回コピー）。");
         put(
                 "PRODUCT_WIDTH_TABLE_PATH",
-                "製品幅 CSV。空だとマクロブック階層で探索。");
+                "製品幅 CSV。既定はサマリ Excel 同フォルダ（無ければ code/ から初回コピー）。");
         put(
                 "COMPARE_GANTT_SNAPSHOT_DIR",
                 "plan_compare_gantt_from_snapshot.py: 比較元の日時フォルダ"

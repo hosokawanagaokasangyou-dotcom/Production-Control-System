@@ -216,6 +216,43 @@ class AppPathsTest {
     }
 
     @Test
+    void dispatchLookupTablePath_usesSummaryWorkbookParent(@TempDir Path tmp) {
+        Path custom = tmp.resolve("shared").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, custom.toString());
+        Path expected =
+                custom.getParent()
+                        .resolve(AppPaths.DISPATCH_LOOKUP_PRODUCT_THICK)
+                        .toAbsolutePath()
+                        .normalize();
+        assertEquals(expected, AppPaths.dispatchLookupTablePath(ui, AppPaths.DISPATCH_LOOKUP_PRODUCT_THICK));
+    }
+
+    @Test
+    void ensureDispatchLookupTableFromRepoIfMissing_copiesWhenAbsent(@TempDir Path fakeRepo)
+            throws Exception {
+        Path code = fakeRepo.resolve("code");
+        Files.createDirectories(code);
+        Files.writeString(code.resolve(AppPaths.DISPATCH_LOOKUP_PRODUCT_THICK), "製品名,製品厚み\n");
+        Path summaryDir = fakeRepo.resolve("work");
+        Files.createDirectories(summaryDir);
+        Path summary = summaryDir.resolve("custom_summary.xlsx");
+        Files.createFile(summary);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        fakeRepo.toString(),
+                        AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                        summary.toString());
+        Path target = AppPaths.dispatchLookupTablePath(ui, AppPaths.DISPATCH_LOOKUP_PRODUCT_THICK);
+        assertFalse(Files.isRegularFile(target));
+        assertTrue(
+                AppPaths.ensureDispatchLookupTableFromRepoIfMissing(
+                        ui, AppPaths.DISPATCH_LOOKUP_PRODUCT_THICK));
+        assertTrue(Files.isRegularFile(target));
+    }
+
+    @Test
     void resolveDefaultOutputDir_defaultsToRepoOutput(@TempDir Path fakeRepo) throws Exception {
         Path code = fakeRepo.resolve("code").resolve("python");
         Files.createDirectories(code);

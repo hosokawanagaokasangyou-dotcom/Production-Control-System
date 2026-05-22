@@ -3344,6 +3344,7 @@ public final class MainShellController {
         try {
             Map<String, String> uiRun = collectUiEnv();
             overlayWorkingExcludeRulesJsonPathForStageRun(uiRun);
+            overlayDispatchLookupTablePathsForStageRun(uiRun);
             if (STAGE1.equals(script)) {
                 uiRun.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
             }
@@ -4816,6 +4817,57 @@ public final class MainShellController {
     }
 
     /**
+     * 段階1／2 実行前: 材料・製品種類ルックアップ表をサマリ Excel 同フォルダへ確保し、
+     * 子プロセス向け環境変数を揃える。
+     */
+    private void overlayDispatchLookupTablePathsForStageRun(Map<String, String> uiRun) {
+        if (uiRun == null) {
+            return;
+        }
+        AppPaths.ensureAllDispatchLookupTablesFromRepoIfMissing(uiRun);
+        putDispatchLookupTableEnvIfPresent(
+                uiRun, "RAW_FABRIC_WIDTH_TABLE_PATH", AppPaths.DISPATCH_LOOKUP_USED_RAW_WIDTH);
+        putDispatchLookupTableEnvIfPresent(
+                uiRun, "ROLL_UNIT_BY_USED_RAW_TABLE_PATH", AppPaths.DISPATCH_LOOKUP_USED_RAW_ROLL);
+        putDispatchLookupTableEnvIfPresent(
+                uiRun, "PRODUCT_WIDTH_TABLE_PATH", AppPaths.DISPATCH_LOOKUP_PRODUCT_WIDTH);
+        putDispatchLookupTableEnvIfPresent(
+                uiRun, "PRODUCT_LENGTH_TABLE_PATH", AppPaths.DISPATCH_LOOKUP_PRODUCT_LENGTH);
+        putDispatchLookupTableEnvIfPresent(
+                uiRun, "PRODUCT_THICKNESS_TABLE_PATH", AppPaths.DISPATCH_LOOKUP_PRODUCT_THICK);
+        putDispatchLookupTableEnvIfPresent(
+                uiRun, "ROLL_UNIT_LENGTH_TABLE_PATH", AppPaths.DISPATCH_LOOKUP_PRODUCT_ROLL);
+    }
+
+    private void putDispatchLookupTableEnvIfPresent(
+            Map<String, String> uiRun, String envKey, String filename) {
+        Path p = AppPaths.dispatchLookupTablePath(uiRun, filename);
+        if (!Files.isRegularFile(p)) {
+            return;
+        }
+        uiRun.put(envKey, p.toString());
+        syncEnvTabValue(envKey, p.toString());
+    }
+
+    private void syncEnvTabValue(String envKey, String pathStr) {
+        if (envRows == null || envKey == null || envKey.isBlank() || pathStr == null || pathStr.isBlank()) {
+            return;
+        }
+        try {
+            for (EnvVarRow row : envRows) {
+                String k = row.getName() != null ? row.getName().trim() : "";
+                if (envKey.equals(k)) {
+                    row.setValue(pathStr);
+                    appendLog("[env] " + envKey + "=" + pathStr);
+                    return;
+                }
+            }
+        } catch (Exception ex) {
+            appendLog("[env] " + envKey + " 更新に失敗: " + ex.getMessage());
+        }
+    }
+
+    /**
      * 段階1／2 実行前: サマリ Excel と同一フォルダの {@code stage1_exclude_rules.json} を確保し、
      * 子プロセスへ渡す {@code PM_AI_EXCLUDE_RULES_JSON} を揃える。
      */
@@ -4827,26 +4879,12 @@ public final class MainShellController {
                 .ifPresent(
                         p -> {
                             uiRun.put(AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON, p.toString());
-                            syncExcludeRulesJsonPathToEnvTab(p.toString());
+                            syncEnvTabValue(AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON, p.toString());
                         });
     }
 
     private void syncExcludeRulesJsonPathToEnvTab(String pathStr) {
-        if (pathStr == null || pathStr.isBlank()) {
-            return;
-        }
-        try {
-            for (EnvVarRow row : envRows) {
-                String k = row.getName() != null ? row.getName().trim() : "";
-                if (AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON.equals(k)) {
-                    row.setValue(pathStr);
-                    appendLog("[env] PM_AI_EXCLUDE_RULES_JSON=" + pathStr);
-                    return;
-                }
-            }
-        } catch (Exception ex) {
-            appendLog("[env] PM_AI_EXCLUDE_RULES_JSON 更新に失敗: " + ex.getMessage());
-        }
+        syncEnvTabValue(AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON, pathStr);
     }
 
     private void showStage2FailureWithUnknownMasterComboRetry(Integer code, List<String> tailSnap) {
@@ -6086,7 +6124,7 @@ public final class MainShellController {
         if (k == null || k.isBlank()) {
             return "";
         }
-        Path codeDir = AppPaths.resolveCodeDir(u);
+        AppPaths.ensureAllDispatchLookupTablesFromRepoIfMissing(u);
         return switch (k) {
             case AppPaths.KEY_MASTER_WORKBOOK_FILE -> "master.xlsm";
             case PlanInputTabController.ENV_TASK_PLAN_SHEET ->
@@ -6096,37 +6134,37 @@ public final class MainShellController {
             case AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK ->
                     AppPaths.summaryAiDispatchXlsxPath(u).toString();
             case "RAW_FABRIC_WIDTH_TABLE_PATH" -> {
-                Path p = codeDir.resolve("使用原反, 加工幅.txt");
+                Path p = AppPaths.dispatchLookupTablePath(u, AppPaths.DISPATCH_LOOKUP_USED_RAW_WIDTH);
                 yield Files.isRegularFile(p)
                         ? p.toAbsolutePath().normalize().toString()
                         : "";
             }
             case "ROLL_UNIT_BY_USED_RAW_TABLE_PATH" -> {
-                String out = "";
-                for (String fn :
-                        List.of("使用原反,ロール単位の長さ.txt", "使用原反, ロール単位の長さ.txt")) {
-                    Path p = codeDir.resolve(fn);
-                    if (Files.isRegularFile(p)) {
-                        out = p.toAbsolutePath().normalize().toString();
-                        break;
-                    }
-                }
-                yield out;
+                Path p = AppPaths.dispatchLookupTablePath(u, AppPaths.DISPATCH_LOOKUP_USED_RAW_ROLL);
+                yield Files.isRegularFile(p)
+                        ? p.toAbsolutePath().normalize().toString()
+                        : "";
             }
             case "PRODUCT_WIDTH_TABLE_PATH" -> {
-                Path p = codeDir.resolve("製品名, 製品幅.txt");
+                Path p = AppPaths.dispatchLookupTablePath(u, AppPaths.DISPATCH_LOOKUP_PRODUCT_WIDTH);
                 yield Files.isRegularFile(p)
                         ? p.toAbsolutePath().normalize().toString()
                         : "";
             }
             case "PRODUCT_LENGTH_TABLE_PATH" -> {
-                Path p = codeDir.resolve("製品名,製品長.txt");
+                Path p = AppPaths.dispatchLookupTablePath(u, AppPaths.DISPATCH_LOOKUP_PRODUCT_LENGTH);
                 yield Files.isRegularFile(p)
                         ? p.toAbsolutePath().normalize().toString()
                         : "";
             }
             case "PRODUCT_THICKNESS_TABLE_PATH" -> {
-                Path p = codeDir.resolve("製品名,製品厚み.txt");
+                Path p = AppPaths.dispatchLookupTablePath(u, AppPaths.DISPATCH_LOOKUP_PRODUCT_THICK);
+                yield Files.isRegularFile(p)
+                        ? p.toAbsolutePath().normalize().toString()
+                        : "";
+            }
+            case "ROLL_UNIT_LENGTH_TABLE_PATH" -> {
+                Path p = AppPaths.dispatchLookupTablePath(u, AppPaths.DISPATCH_LOOKUP_PRODUCT_ROLL);
                 yield Files.isRegularFile(p)
                         ? p.toAbsolutePath().normalize().toString()
                         : "";

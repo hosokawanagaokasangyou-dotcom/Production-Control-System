@@ -167,7 +167,7 @@ public final class CodeDispatchLookupTablesBlankPrompt {
             Map<String, String> ui, List<ProductInput> products, List<UsedRawInput> usedRaws)
             throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
-        Path codeDir = AppPaths.resolveCodeDir(u);
+        AppPaths.ensureAllDispatchLookupTablesFromRepoIfMissing(u);
         int updated = 0;
 
         if (products != null) {
@@ -179,7 +179,7 @@ public final class CodeDispatchLookupTablesBlankPrompt {
                 if (in.rollLength() != null && !in.rollLength().isBlank()) {
                     updated +=
                             updateTableValue(
-                                    codeDir.resolve(CodeDispatchLookupTablesMerge.FILE_PRODUCT_ROLL),
+                                    AppPaths.dispatchLookupTablePath(u, CodeDispatchLookupTablesMerge.FILE_PRODUCT_ROLL),
                                     CodeDispatchLookupTablesMerge.FILE_PRODUCT_ROLL.replace(".txt", ""),
                                     key,
                                     in.rollLength().strip());
@@ -187,7 +187,7 @@ public final class CodeDispatchLookupTablesBlankPrompt {
                 if (in.productWidth() != null && !in.productWidth().isBlank()) {
                     updated +=
                             updateTableValue(
-                                    codeDir.resolve(CodeDispatchLookupTablesMerge.FILE_PRODUCT_WIDTH),
+                                    AppPaths.dispatchLookupTablePath(u, CodeDispatchLookupTablesMerge.FILE_PRODUCT_WIDTH),
                                     "製品名,製品幅",
                                     key,
                                     in.productWidth().strip());
@@ -195,7 +195,7 @@ public final class CodeDispatchLookupTablesBlankPrompt {
                 if (in.thickness() != null && !in.thickness().isBlank()) {
                     updated +=
                             updateTableValue(
-                                    codeDir.resolve(CodeDispatchLookupTablesMerge.FILE_PRODUCT_THICK),
+                                    AppPaths.dispatchLookupTablePath(u, CodeDispatchLookupTablesMerge.FILE_PRODUCT_THICK),
                                     "製品名,製品厚み",
                                     key,
                                     in.thickness().strip());
@@ -203,7 +203,7 @@ public final class CodeDispatchLookupTablesBlankPrompt {
                 if (in.productLength() != null && !in.productLength().isBlank()) {
                     updated +=
                             updateTableValue(
-                                    codeDir.resolve(CodeDispatchLookupTablesMerge.FILE_PRODUCT_LENGTH),
+                                    AppPaths.dispatchLookupTablePath(u, CodeDispatchLookupTablesMerge.FILE_PRODUCT_LENGTH),
                                     "製品名,製品長",
                                     key,
                                     in.productLength().strip());
@@ -219,7 +219,7 @@ public final class CodeDispatchLookupTablesBlankPrompt {
                 if (in.rollLength() != null && !in.rollLength().isBlank()) {
                     updated +=
                             updateTableValue(
-                                    codeDir.resolve(CodeDispatchLookupTablesMerge.FILE_USED_RAW_ROLL),
+                                    AppPaths.dispatchLookupTablePath(u, CodeDispatchLookupTablesMerge.FILE_USED_RAW_ROLL),
                                     CodeDispatchLookupTablesMerge.FILE_USED_RAW_ROLL.replace(".txt", ""),
                                     key,
                                     in.rollLength().strip());
@@ -227,7 +227,7 @@ public final class CodeDispatchLookupTablesBlankPrompt {
                 if (in.rawWidth() != null && !in.rawWidth().isBlank()) {
                     updated +=
                             updateTableValue(
-                                    codeDir.resolve(CodeDispatchLookupTablesMerge.FILE_USED_RAW_WIDTH),
+                                    AppPaths.dispatchLookupTablePath(u, CodeDispatchLookupTablesMerge.FILE_USED_RAW_WIDTH),
                                     "使用原反,原反幅",
                                     key,
                                     in.rawWidth().strip());

@@ -4896,6 +4896,38 @@ ROLL_UNIT_BY_USED_RAW_TABLE_PATH_ENV = "ROLL_UNIT_BY_USED_RAW_TABLE_PATH"
 _ROLL_UNIT_BY_USED_RAW_TABLE_CACHE: dict[str, float] | None = None
 _ROLL_UNIT_BY_USED_RAW_TABLE_PATH_USED: str | None = None
 
+_DISPATCH_LOOKUP_TABLE_FILENAMES: tuple[str, ...] = (
+    ROLL_UNIT_BY_USED_RAW_TABLE_DEFAULT_FILENAME,
+    ROLL_UNIT_LENGTH_TABLE_DEFAULT_FILENAME,
+    PRODUCT_WIDTH_TABLE_DEFAULT_FILENAME,
+    PRODUCT_THICKNESS_TABLE_DEFAULT_FILENAME,
+    PRODUCT_LENGTH_TABLE_DEFAULT_FILENAME,
+    RAW_FABRIC_WIDTH_TABLE_DEFAULT_FILENAME,
+)
+
+
+def _resolve_bundled_dispatch_lookup_table_in_repo(filename: str) -> str | None:
+    for code_dir in _planning_code_dir_candidates():
+        cand = os.path.join(code_dir, filename)
+        if os.path.isfile(cand):
+            return os.path.normpath(os.path.abspath(cand))
+    return None
+
+
+def _ensure_dispatch_lookup_tables_at_work_path() -> None:
+    """サマリ Excel 同フォルダに材料テーブルが無ければ code/ 同梱からコピーする。"""
+    for filename in _DISPATCH_LOOKUP_TABLE_FILENAMES:
+        target = _summary_ai_dispatch_workbook_sibling_path(filename)
+        if not target or os.path.isfile(target):
+            continue
+        bundled = _resolve_bundled_dispatch_lookup_table_in_repo(filename)
+        if bundled and _copy_exclude_rules_json_if_missing(target, bundled):
+            logging.info(
+                "材料テーブルをリポジトリ同梱から作業先へコピーしました（%s → %s）。",
+                bundled,
+                target,
+            )
+
 
 def _normalize_roll_unit_length_table_key(val) -> str:
     """
@@ -4916,6 +4948,11 @@ def _roll_unit_length_table_search_paths() -> list[str]:
     env = (os.environ.get(ROLL_UNIT_LENGTH_TABLE_PATH_ENV) or "").strip()
     if env:
         paths.append(env)
+    sibling = _summary_ai_dispatch_workbook_sibling_path(
+        ROLL_UNIT_LENGTH_TABLE_DEFAULT_FILENAME
+    )
+    if sibling:
+        paths.append(sibling)
     wb = (_excel_plan_input_wb() or "").strip()
     if wb:
         paths.append(
@@ -4942,6 +4979,13 @@ def _roll_unit_by_used_raw_table_search_paths() -> list[str]:
     env = (os.environ.get(ROLL_UNIT_BY_USED_RAW_TABLE_PATH_ENV) or "").strip()
     if env:
         paths.append(env)
+    sibling_dir = os.path.dirname(_resolve_summary_ai_dispatch_workbook_path())
+    if sibling_dir:
+        for fn in (
+            ROLL_UNIT_BY_USED_RAW_TABLE_DEFAULT_FILENAME,
+            ROLL_UNIT_BY_USED_RAW_TABLE_ALT_FILENAME,
+        ):
+            paths.append(os.path.join(sibling_dir, fn))
     wb = (_excel_plan_input_wb() or "").strip()
     if wb:
         bd = os.path.dirname(os.path.abspath(wb))
@@ -16212,6 +16256,13 @@ def _raw_fabric_width_table_search_paths() -> list[str]:
     )
 
 
+def _summary_ai_dispatch_workbook_sibling_path(filename: str) -> str:
+    parent = os.path.dirname(_resolve_summary_ai_dispatch_workbook_path())
+    if not parent:
+        return ""
+    return os.path.normpath(os.path.join(parent, filename))
+
+
 def _planning_code_dir_candidates() -> list[str]:
     """Java {@code PM_AI_CODE_DIR} / python 隣接 code / repo/code の候補（順序付き・重複除去前）。"""
     out: list[str] = []
@@ -16261,6 +16312,9 @@ def _is_under_system_temp(path: str) -> bool:
 
 
 def _canonical_material_table_path(default_filename: str) -> str:
+    sibling = _summary_ai_dispatch_workbook_sibling_path(default_filename)
+    if sibling:
+        return sibling
     code_dir = _resolve_planning_code_dir()
     if code_dir:
         return os.path.join(code_dir, default_filename)
@@ -16284,11 +16338,14 @@ def _pick_material_table_path_for_read(
 
 
 def _material_mm_table_search_paths(default_filename: str, path_env_var: str) -> list[str]:
-    """mm 系材料テーブル CSV の探索順。正本 code/ を cwd より先にする。"""
+    """mm 系材料テーブル CSV の探索順。作業先（サマリ Excel 同フォルダ）を code/ より先にする。"""
     paths: list[str] = []
     env = (os.environ.get(path_env_var) or "").strip()
     if env:
         paths.append(env)
+    sibling = _summary_ai_dispatch_workbook_sibling_path(default_filename)
+    if sibling:
+        paths.append(sibling)
     for code_dir in _planning_code_dir_candidates():
         paths.append(os.path.join(code_dir, default_filename))
     wb = (_excel_plan_input_wb() or "").strip()
@@ -17336,6 +17393,7 @@ def run_stage1_extract():
         _apply_auto_exclude_bunkatsu_duplicate_machine(out_df, log_prefix="段階1")
     except Exception as ex:
         logging.exception("段階1: 分割行の配台不要自動設定で例外（出力は続行）: %s", ex)
+    _ensure_dispatch_lookup_tables_at_work_path()
     _ensure_stage1_exclude_rules_json_env_from_repo_default()
     # 計画行確定後・試行順より前: JSON 正本なら JSON への行同期、それ以外は計画ブックの「設定_配台不要工程」（D→E 含む）。
     try:

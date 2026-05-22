@@ -10,16 +10,20 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Map;
 import java.util.Optional;
 
+import jp.co.pm.ai.desktop.config.AppPaths;
+
 /**
- * Python {@code planning_core._core} のロール単位長さテーブル（{@code code/使用原反,ロール単位の長さ.txt} /
- * {@code code/製品名,ロール単位の長さ.txt}）を読み、照会キーを正規化して引く。
+ * Python {@code planning_core._core} のロール単位長さテーブル（サマリ Excel 同フォルダの
+ * {@link AppPaths#DISPATCH_LOOKUP_USED_RAW_ROLL} /
+ * {@link AppPaths#DISPATCH_LOOKUP_PRODUCT_ROLL}）を読み、照会キーを正規化して引く。
  */
 public final class Stage2RollUnitLengthTables {
 
-    private static final String USED_RAW_FILENAME = "使用原反,ロール単位の長さ.txt";
-    private static final String PRODUCT_FILENAME = "製品名,ロール単位の長さ.txt";
+    private static final String USED_RAW_FILENAME = AppPaths.DISPATCH_LOOKUP_USED_RAW_ROLL;
+    private static final String PRODUCT_FILENAME = AppPaths.DISPATCH_LOOKUP_PRODUCT_ROLL;
 
     private final Map<String, Double> byUsedRaw;
     private final Map<String, Double> byProduct;
@@ -33,6 +37,16 @@ public final class Stage2RollUnitLengthTables {
         return new Stage2RollUnitLengthTables(Map.of(), Map.of());
     }
 
+    public static Stage2RollUnitLengthTables load(Map<String, String> ui) throws IOException {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        AppPaths.ensureAllDispatchLookupTablesFromRepoIfMissing(u);
+        return new Stage2RollUnitLengthTables(
+                readTable(AppPaths.dispatchLookupTablePath(u, USED_RAW_FILENAME)),
+                readTable(AppPaths.dispatchLookupTablePath(u, PRODUCT_FILENAME)));
+    }
+
+    /** @deprecated テスト向け。{@link #load(Map)} を使用すること。 */
+    @Deprecated
     public static Stage2RollUnitLengthTables load(Path repoRoot) throws IOException {
         if (repoRoot == null || !Files.isDirectory(repoRoot)) {
             return empty();

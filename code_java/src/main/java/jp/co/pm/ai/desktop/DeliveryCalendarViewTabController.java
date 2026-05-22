@@ -2009,7 +2009,7 @@ public final class DeliveryCalendarViewTabController {
             Map<String, String> ui, List<String> disHeaders, List<List<String>> disRows) {
         Stage2RollUnitLengthTables rollTables = Stage2RollUnitLengthTables.empty();
         try {
-            rollTables = Stage2RollUnitLengthTables.load(AppPaths.resolveRepoRoot(ui));
+            rollTables = Stage2RollUnitLengthTables.load(ui);
         } catch (IOException ignored) {
             // テーブル無し時は使用原反寸法パースのみ
         }

@@ -15,16 +15,16 @@ import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
 
 /**
- * 段階1出力 {@code plan_input_tasks.xlsx} に現れた製品名・使用原反を、{@code code/} 配下の材料・製品種類テーブルへ不足分のみ追記する。
+ * 段階1出力 {@code plan_input_tasks.xlsx} に現れた製品名・使用原反を、サマリ Excel 同フォルダの材料・製品種類テーブルへ不足分のみ追記する。
  */
 public final class CodeDispatchLookupTablesMerge {
 
-    public static final String FILE_USED_RAW_ROLL = "使用原反,ロール単位の長さ.txt";
-    public static final String FILE_PRODUCT_ROLL = "製品名,ロール単位の長さ.txt";
-    public static final String FILE_PRODUCT_WIDTH = "製品名, 製品幅.txt";
-    public static final String FILE_PRODUCT_THICK = "製品名,製品厚み.txt";
-    public static final String FILE_PRODUCT_LENGTH = "製品名,製品長.txt";
-    public static final String FILE_USED_RAW_WIDTH = "使用原反, 加工幅.txt";
+    public static final String FILE_USED_RAW_ROLL = AppPaths.DISPATCH_LOOKUP_USED_RAW_ROLL;
+    public static final String FILE_PRODUCT_ROLL = AppPaths.DISPATCH_LOOKUP_PRODUCT_ROLL;
+    public static final String FILE_PRODUCT_WIDTH = AppPaths.DISPATCH_LOOKUP_PRODUCT_WIDTH;
+    public static final String FILE_PRODUCT_THICK = AppPaths.DISPATCH_LOOKUP_PRODUCT_THICK;
+    public static final String FILE_PRODUCT_LENGTH = AppPaths.DISPATCH_LOOKUP_PRODUCT_LENGTH;
+    public static final String FILE_USED_RAW_WIDTH = AppPaths.DISPATCH_LOOKUP_USED_RAW_WIDTH;
 
     private static final String HDR_USED_RAW_ROLL = "使用原反,ロール単位の長さ";
     private static final String HDR_PRODUCT_ROLL = "製品名,ロール単位の長さ";
@@ -95,7 +95,7 @@ public final class CodeDispatchLookupTablesMerge {
         if (headers == null || headers.isEmpty()) {
             return new MergeSummary(0, 0, 0, 0, 0, 0);
         }
-        Path codeDir = AppPaths.resolveCodeDir(u);
+        AppPaths.ensureAllDispatchLookupTablesFromRepoIfMissing(u);
 
         int apRoll = 0;
         int apW = 0;
@@ -120,7 +120,7 @@ public final class CodeDispatchLookupTablesMerge {
         int iRawW = headers.indexOf(COL_RAW_WIDTH);
 
         if (iProd >= 0) {
-            Path p = codeDir.resolve(FILE_PRODUCT_ROLL);
+            Path p = AppPaths.dispatchLookupTablePath(u, FILE_PRODUCT_ROLL);
             KeyValTable cur = CodeDispatchLookupTableIo.readOrEmpty(p, HDR_PRODUCT_ROLL);
             LinkedHashMap<String, String> m = new LinkedHashMap<>(cur.rows());
             for (List<String> row : rows) {
@@ -146,7 +146,7 @@ public final class CodeDispatchLookupTablesMerge {
             }
         }
         if (iProd >= 0 && iPw >= 0) {
-            Path p = codeDir.resolve(FILE_PRODUCT_WIDTH);
+            Path p = AppPaths.dispatchLookupTablePath(u, FILE_PRODUCT_WIDTH);
             KeyValTable cur = CodeDispatchLookupTableIo.readOrEmpty(p, HDR_PRODUCT_WIDTH);
             LinkedHashMap<String, String> m = new LinkedHashMap<>(cur.rows());
             for (List<String> row : rows) {
@@ -166,7 +166,7 @@ public final class CodeDispatchLookupTablesMerge {
             }
         }
         if (iProd >= 0 && iPt >= 0) {
-            Path p = codeDir.resolve(FILE_PRODUCT_THICK);
+            Path p = AppPaths.dispatchLookupTablePath(u, FILE_PRODUCT_THICK);
             KeyValTable cur = CodeDispatchLookupTableIo.readOrEmpty(p, HDR_PRODUCT_THICK);
             LinkedHashMap<String, String> m = new LinkedHashMap<>(cur.rows());
             for (List<String> row : rows) {
@@ -186,7 +186,7 @@ public final class CodeDispatchLookupTablesMerge {
             }
         }
         if (iProd >= 0 && iPl >= 0) {
-            Path p = codeDir.resolve(FILE_PRODUCT_LENGTH);
+            Path p = AppPaths.dispatchLookupTablePath(u, FILE_PRODUCT_LENGTH);
             KeyValTable cur = CodeDispatchLookupTableIo.readOrEmpty(p, HDR_PRODUCT_LENGTH);
             LinkedHashMap<String, String> m = new LinkedHashMap<>(cur.rows());
             for (List<String> row : rows) {
@@ -206,7 +206,7 @@ public final class CodeDispatchLookupTablesMerge {
             }
         }
         if (iUsed >= 0) {
-            Path p = codeDir.resolve(FILE_USED_RAW_ROLL);
+            Path p = AppPaths.dispatchLookupTablePath(u, FILE_USED_RAW_ROLL);
             KeyValTable cur = CodeDispatchLookupTableIo.readOrEmpty(p, HDR_USED_RAW_ROLL);
             LinkedHashMap<String, String> m = new LinkedHashMap<>(cur.rows());
             for (List<String> row : rows) {
@@ -227,7 +227,7 @@ public final class CodeDispatchLookupTablesMerge {
             }
         }
         if (iUsed >= 0 && iRawW >= 0) {
-            Path p = codeDir.resolve(FILE_USED_RAW_WIDTH);
+            Path p = AppPaths.dispatchLookupTablePath(u, FILE_USED_RAW_WIDTH);
             KeyValTable cur = CodeDispatchLookupTableIo.readOrEmpty(p, HDR_USED_RAW_WIDTH);
             LinkedHashMap<String, String> m = new LinkedHashMap<>(cur.rows());
             for (List<String> row : rows) {
