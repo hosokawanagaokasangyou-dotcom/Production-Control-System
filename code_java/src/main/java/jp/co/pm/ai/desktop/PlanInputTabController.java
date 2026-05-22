@@ -754,6 +754,12 @@ public final class PlanInputTabController {
         loadFromCurrentPath(true);
     }
 
+    /** 段階2前後の外部更新後に表をディスクから再読込（完了ダイアログなし）。 */
+    void reloadQuietlyFromDisk() {
+        syncFromEnv();
+        loadFromCurrentPath(false);
+    }
+
     @FXML
     private void onSaveButtonAction() {
         if (pathField.getText().isBlank()) {

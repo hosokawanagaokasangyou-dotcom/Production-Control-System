@@ -107,6 +107,7 @@ import jp.co.pm.ai.desktop.config.InitSettingPersistence;
 import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
 import jp.co.pm.ai.desktop.ui.Stage1NewMaterialLookupDialog;
+import jp.co.pm.ai.desktop.ui.Stage2UnknownMasterCombinationDialog;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
@@ -3316,6 +3317,9 @@ public final class MainShellController {
         if (STAGE2.equals(script) && blockIfMaterialLookupTablesHaveBlankValues("段階2")) {
             return;
         }
+        if (STAGE2.equals(script) && !confirmStage2UnknownMasterCombinationsBeforeRun()) {
+            return;
+        }
         if (!runLock.compareAndSet(false, true)) {
             appendLog("[busy] already running (single flight).");
             return;
@@ -3689,7 +3693,11 @@ public final class MainShellController {
         if (stage12 && failed) {
             appendLog("[ui] 段階処理が異常終了しました。エラーダイアログを表示します。");
             selectMainShellTab(MainShellTabId.RUN);
-            showStageFailureDialog(script, err != null ? null : code, err, tailSnap);
+            if (STAGE2.equals(script) && err == null && code != null && code.intValue() == 3) {
+                showStage2FailureWithUnknownMasterComboRetry(code, tailSnap);
+            } else {
+                showStageFailureDialog(script, err != null ? null : code, err, tailSnap);
+            }
         }
         if (STAGE1.equals(script)) {
             mainRunTabController.resetStage1ClearCacheAndRunCheckbox();
@@ -4731,6 +4739,145 @@ public final class MainShellController {
                         + "完了後に再試行するか、実行・ログタブの「ロック解除」を使用してください。");
         refreshSummaryWorkbookLockUi();
         return true;
+    }
+
+    /**
+     * 段階2実行前: master「組み合わせ表」に無い工程+機械があればダイアログで配台不要を確認する。
+     *
+     * @return {@code false} のとき段階2実行を中止（キャンセル）
+     */
+    private boolean confirmStage2UnknownMasterCombinationsBeforeRun() {
+        try {
+            Stage2UnknownMasterCombinationPrompt.PromptBundle bundle =
+                    Stage2UnknownMasterCombinationPrompt.collectUnknownPairs(collectUiEnv());
+            if (bundle.empty()) {
+                return true;
+            }
+            appendLog(
+                    "[stage2] 組み合わせ表に無い工程+機械 "
+                            + bundle.pairs().size()
+                            + " 件 — 配台不要確認ダイアログを表示します。");
+            Optional<Stage2UnknownMasterCombinationDialog.Result> entered =
+                    Stage2UnknownMasterCombinationDialog.prompt(primaryStageForDialogs(), bundle);
+            if (entered.isEmpty()) {
+                appendLog("[stage2] マスタ未登録工程+機械の確認をキャンセルしたため段階2を中止します。");
+                showWarningDialog(
+                        "段階2 中止",
+                        "マスタ未登録の工程+機械の確認をキャンセルしたため、段階2は実行しませんでした。");
+                return false;
+            }
+            applyStage2UnknownMasterCombinationSelections(entered.get());
+            return true;
+        } catch (IOException ex) {
+            appendLog(
+                    "[stage2] マスタ未登録工程+機械の確認に失敗: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+            showWarningDialog(
+                    "段階2 確認失敗",
+                    "マスタ未登録の工程+機械を確認できませんでした。\n"
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString())
+                            + "\n\n段階2を続行します。");
+            return true;
+        }
+    }
+
+    private void applyStage2UnknownMasterCombinationSelections(
+            Stage2UnknownMasterCombinationDialog.Result result) throws IOException {
+        if (result == null || result.markExclude() == null || result.markExclude().isEmpty()) {
+            appendLog("[stage2] マスタ未登録工程+機械: 配台不要への更新はありません。");
+            return;
+        }
+        Stage2UnknownMasterCombinationPrompt.ApplySummary applied =
+                Stage2UnknownMasterCombinationPrompt.applyExcludeSelections(
+                        collectUiEnv(), result.markExclude());
+        appendLog(
+                "[stage2] マスタ未登録工程+機械を配台不要へ反映しました（JSON "
+                        + applied.excludeRulesUpdated()
+                        + " 件、計画行 "
+                        + applied.planRowsUpdated()
+                        + " 行）。");
+        syncExcludeRulesJsonPathToEnvTab(
+                Stage2UnknownMasterCombinationPrompt.resolveExcludeRulesJsonPath(collectUiEnv())
+                        .map(Path::toString)
+                        .orElse(null));
+        if (excludeRulesTabController != null) {
+            excludeRulesTabController.tryStartupLoadFromPathField();
+        }
+        if (planInputTabController != null) {
+            planInputTabController.reloadQuietlyFromDisk();
+        }
+    }
+
+    private void syncExcludeRulesJsonPathToEnvTab(String pathStr) {
+        if (pathStr == null || pathStr.isBlank()) {
+            return;
+        }
+        try {
+            for (EnvVarRow row : envRows) {
+                String k = row.getName() != null ? row.getName().trim() : "";
+                if (AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON.equals(k)) {
+                    row.setValue(pathStr);
+                    appendLog("[env] PM_AI_EXCLUDE_RULES_JSON=" + pathStr);
+                    return;
+                }
+            }
+        } catch (Exception ex) {
+            appendLog("[env] PM_AI_EXCLUDE_RULES_JSON 更新に失敗: " + ex.getMessage());
+        }
+    }
+
+    private void showStage2FailureWithUnknownMasterComboRetry(Integer code, List<String> tailSnap) {
+        try {
+            Stage2UnknownMasterCombinationPrompt.PromptBundle bundle =
+                    Stage2UnknownMasterCombinationPrompt.collectUnknownPairs(collectUiEnv());
+            if (!bundle.empty()) {
+                Alert alert = new Alert(AlertType.ERROR);
+                alert.initOwner(primaryStage);
+                applyAlertStylesheetsFromOwner(alert);
+                alert.setTitle("段階2 失敗");
+                alert.setHeaderText("計画データの検証エラーです。マスタ未登録の工程+機械が残っています。");
+                StringBuilder body = new StringBuilder();
+                body.append(exitCodeLegend(code != null ? code : -1)).append('\n');
+                body.append(exitHintJa(code != null ? code : -1)).append("\n\n");
+                body.append("組み合わせ表に無い工程+機械: ").append(bundle.pairs().size()).append(" 件\n");
+                body.append("「配台不要を設定して再実行」で確認ダイアログを開き、段階2を再実行できます。");
+                appendTailLinesToFailureBody(body, tailSnap);
+                applyScrollableAlertBody(alert, body.toString());
+                ButtonType retry = new ButtonType("配台不要を設定して再実行");
+                alert.getButtonTypes().setAll(retry, ButtonType.OK);
+                Optional<ButtonType> ans = alert.showAndWait();
+                if (ans.isPresent() && ans.get() == retry) {
+                    Optional<Stage2UnknownMasterCombinationDialog.Result> entered =
+                            Stage2UnknownMasterCombinationDialog.prompt(
+                                    primaryStageForDialogs(), bundle);
+                    if (entered.isPresent()) {
+                        applyStage2UnknownMasterCombinationSelections(entered.get());
+                        Platform.runLater(() -> runStage(STAGE2));
+                    }
+                }
+                return;
+            }
+        } catch (IOException ex) {
+            appendLog(
+                    "[stage2] 失敗後のマスタ未登録確認に失敗: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+        }
+        showStageFailureDialog(STAGE2, code, null, tailSnap);
+    }
+
+    private void appendTailLinesToFailureBody(StringBuilder body, List<String> tailLines) {
+        body.append("\n\n詳細は「実行・ログ」タブのログを確認してください。");
+        if (tailLines != null && !tailLines.isEmpty()) {
+            body.append("\n\n【直近の子プロセス出力】\n");
+            int start = Math.max(0, tailLines.size() - 14);
+            for (int i = start; i < tailLines.size(); i++) {
+                String ln = tailLines.get(i);
+                if (ln.length() > 220) {
+                    ln = ln.substring(0, 217) + "...";
+                }
+                body.append(ln).append('\n');
+            }
+        }
     }
 
     /**
