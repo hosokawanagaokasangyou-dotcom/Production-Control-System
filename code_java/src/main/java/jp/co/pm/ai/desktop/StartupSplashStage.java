@@ -1,7 +1,13 @@
 package jp.co.pm.ai.desktop;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.net.URL;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -42,13 +48,86 @@ final class StartupSplashStage {
     /** スプラッシュが表示されたとみなしてから、本体ロード等の後続処理を始めるまでの待ち（ナノ秒）。 */
     private static final long SPLASH_NEXT_LOGIC_DELAY_NANOS = 3_000_000_000L;
 
-    private static final String SPLASH_CSS =
-            StartupSplashStage.class.getResource("css/startup-splash.css").toExternalForm();
-
-    private static final String SPLASH_BACKGROUND =
-            StartupSplashStage.class.getResource("images/splash-background.png").toExternalForm();
+    private static final String SPLASH_CSS_RESOURCE = "/jp/co/pm/ai/desktop/css/startup-splash.css";
+    private static final String SPLASH_BACKGROUND_RESOURCE =
+            "/jp/co/pm/ai/desktop/images/splash-background.png";
 
     private StartupSplashStage() {}
+
+    private static URL resolveClasspathResource(String absoluteResourcePath) {
+        for (Class<?> anchor : new Class<?>[] {StartupSplashStage.class, PmAiFxApp.class}) {
+            URL url = anchor.getResource(absoluteResourcePath);
+            if (url != null) {
+                return url;
+            }
+        }
+        String relative =
+                absoluteResourcePath.startsWith("/")
+                        ? absoluteResourcePath.substring(1)
+                        : absoluteResourcePath;
+        ClassLoader context = Thread.currentThread().getContextClassLoader();
+        if (context != null) {
+            URL url = context.getResource(relative);
+            if (url != null) {
+                return url;
+            }
+        }
+        return ClassLoader.getSystemResource(relative);
+    }
+
+    private static String requireClasspathResourceUrl(String absoluteResourcePath) {
+        return Objects.requireNonNull(
+                        resolveClasspathResource(absoluteResourcePath),
+                        () ->
+                                "classpath resource missing: "
+                                        + absoluteResourcePath
+                                        + " (run mvn compile; check target/classes"
+                                        + absoluteResourcePath
+                                        + ")")
+                .toExternalForm();
+    }
+
+    private static Image loadSplashBackgroundImage() {
+        for (Class<?> anchor : new Class<?>[] {StartupSplashStage.class, PmAiFxApp.class}) {
+            try (InputStream in = anchor.getResourceAsStream(SPLASH_BACKGROUND_RESOURCE)) {
+                if (in != null) {
+                    byte[] bytes = in.readAllBytes();
+                    return new Image(new ByteArrayInputStream(bytes), true);
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException(
+                        "failed to read splash background: " + SPLASH_BACKGROUND_RESOURCE, e);
+            }
+        }
+        String relative = SPLASH_BACKGROUND_RESOURCE.substring(1);
+        ClassLoader context = Thread.currentThread().getContextClassLoader();
+        if (context != null) {
+            try (InputStream in = context.getResourceAsStream(relative)) {
+                if (in != null) {
+                    byte[] bytes = in.readAllBytes();
+                    return new Image(new ByteArrayInputStream(bytes), true);
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException(
+                        "failed to read splash background: " + SPLASH_BACKGROUND_RESOURCE, e);
+            }
+        }
+        try (InputStream in = ClassLoader.getSystemResourceAsStream(relative)) {
+            if (in != null) {
+                byte[] bytes = in.readAllBytes();
+                return new Image(new ByteArrayInputStream(bytes), true);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(
+                    "failed to read splash background: " + SPLASH_BACKGROUND_RESOURCE, e);
+        }
+        throw new IllegalStateException(
+                "classpath resource missing: "
+                        + SPLASH_BACKGROUND_RESOURCE
+                        + " (run mvn compile; check target/classes"
+                        + SPLASH_BACKGROUND_RESOURCE
+                        + ")");
+    }
 
     /**
      * Creates and shows the splash. Must run on the JavaFX application thread.
@@ -74,7 +153,7 @@ final class StartupSplashStage {
         stage.setAlwaysOnTop(true);
         stage.setTitle("起動中");
 
-        ImageView background = new ImageView(new Image(SPLASH_BACKGROUND, true));
+        ImageView background = new ImageView(loadSplashBackgroundImage());
         background.setPreserveRatio(false);
         background.setSmooth(true);
         background.getStyleClass().add("splash-background-image");
@@ -142,7 +221,7 @@ final class StartupSplashStage {
 
         Scene scene = new Scene(root);
         scene.setFill(null);
-        scene.getStylesheets().add(SPLASH_CSS);
+        scene.getStylesheets().add(requireClasspathResourceUrl(SPLASH_CSS_RESOURCE));
 
         background.fitWidthProperty().bind(root.widthProperty());
         background.fitHeightProperty().bind(root.heightProperty());
