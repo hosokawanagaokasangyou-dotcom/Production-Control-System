@@ -64,7 +64,7 @@
         </VBox>
     </top>
     <center>
-        <ListView fx:id="logListView" minHeight="200.0" styleClass="pm-log-view" BorderPane.vgrow="ALWAYS" />
+        <ListView fx:id="logListView" minHeight="200.0" styleClass="pm-log-view" />
     </center>
     <bottom>
         <VBox fillWidth="true" spacing="8.0">
