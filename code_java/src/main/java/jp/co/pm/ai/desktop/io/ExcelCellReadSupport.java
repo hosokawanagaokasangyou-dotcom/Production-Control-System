@@ -30,7 +30,9 @@ public final class ExcelCellReadSupport {
             switch (t) {
                 case NUMERIC:
                     if (DateUtil.isCellDateFormatted(cell)) {
-                        return normalizeCommaDigitArtifacts(CELL_FORMAT.formatCellValue(cell));
+                        return stripMidnightDateTimeSuffix(
+                                normalizeCommaDigitArtifacts(
+                                        CELL_FORMAT.formatCellValue(cell)));
                     }
                     double d = cell.getNumericCellValue();
                     if (!Double.isFinite(d)) {
@@ -137,5 +139,61 @@ public final class ExcelCellReadSupport {
         }
         String digits = sb.toString();
         return neg ? "-" + digits : digits;
+    }
+
+    /**
+     * Excel {@link DataFormatter} が日付セルに付ける {@code yyyy-MM-dd 00:00:00} 等の深夜時刻を除き、日付部分だけ返す。
+     * 非深夜の時刻はそのまま残す。
+     */
+    public static String stripMidnightDateTimeSuffix(String s) {
+        if (s == null || s.isEmpty()) {
+            return s == null ? "" : s;
+        }
+        String t = s.strip();
+        if (t.length() < 16) {
+            return s;
+        }
+        char sep = t.charAt(10);
+        if (sep != ' ' && sep != 'T') {
+            return s;
+        }
+        if (!looksLikeYmdDatePrefix(t)) {
+            return s;
+        }
+        String timePart = t.substring(11).strip();
+        if (!isMidnightTimePart(timePart)) {
+            return s;
+        }
+        return t.substring(0, 10);
+    }
+
+    private static boolean looksLikeYmdDatePrefix(String t) {
+        if (t.length() < 10) {
+            return false;
+        }
+        char sep1 = t.charAt(4);
+        char sep2 = t.charAt(7);
+        if (sep1 != sep2 || (sep1 != '-' && sep1 != '/' && sep1 != '.')) {
+            return false;
+        }
+        for (int i = 0; i < 10; i++) {
+            if (i == 4 || i == 7) {
+                continue;
+            }
+            if (!Character.isDigit(t.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isMidnightTimePart(String timePart) {
+        if (timePart.isEmpty()) {
+            return false;
+        }
+        if ("00:00:00".equals(timePart) || "00:00".equals(timePart) || "0:00:00".equals(timePart)) {
+            return true;
+        }
+        return timePart.startsWith("00:00:00.");
     }
 }

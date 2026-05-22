@@ -40,7 +40,7 @@ class EquipmentGanttContractSheetTableBuilderTest {
                         "units_done": 1.0
                       }
                     ],
-                    "equipment_list": ["巻返し\\nEC機　湖南"],
+                    "equipment_list": ["EC機　湖南"],
                     "sorted_dates": [{"__t": "date", "v": "2026-05-14"}]
                   }
                 }
@@ -60,7 +60,7 @@ class EquipmentGanttContractSheetTableBuilderTest {
 
         Map<String, String> dataRow =
                 table.rows().stream()
-                        .filter(r -> "EC機　湖南".equals(r.get("機械名")))
+                        .filter(r -> r.getOrDefault("機械名", "").contains("EC機　湖南"))
                         .findFirst()
                         .orElseThrow();
 
@@ -69,6 +69,113 @@ class EquipmentGanttContractSheetTableBuilderTest {
                 "8:00 slot should show short machining");
         assertEquals("", dataRow.getOrDefault("8:10", "").strip(), "8:10 slot should be empty");
         assertEquals("", dataRow.getOrDefault("8:20", "").strip(), "8:20 slot should be empty");
+    }
+
+    @Test
+    void overlappingPrepAndMachining_prefersMachiningInSlot(@TempDir Path tmp) throws Exception {
+        Path contract = tmp.resolve("prepVsMach.json");
+        String json =
+                """
+                {
+                  "schema_version": 1,
+                  "kind": "equipment_gantt",
+                  "fn": "_write_results_equipment_gantt_sheet",
+                  "kwargs_packed": {
+                    "timeline_events": [
+                      {
+                        "date": {"__t": "date", "v": "2026-05-25"},
+                        "machine": "SEC機　湖南",
+                        "task_id": "",
+                        "event_kind": "request_switch_prep",
+                        "start_dt": {"__t": "datetime", "v": "2026-05-25T14:55:00"},
+                        "end_dt": {"__t": "datetime", "v": "2026-05-25T15:35:00"}
+                      },
+                      {
+                        "date": {"__t": "date", "v": "2026-05-25"},
+                        "machine": "SEC機　湖南",
+                        "task_id": "Y5-27",
+                        "event_kind": "machining",
+                        "start_dt": {"__t": "datetime", "v": "2026-05-25T15:00:00"},
+                        "end_dt": {"__t": "datetime", "v": "2026-05-25T15:12:00"},
+                        "unit_m": 100.0,
+                        "units_done": 1.0
+                      }
+                    ],
+                    "equipment_list": ["SEC機　湖南"],
+                    "sorted_dates": [{"__t": "date", "v": "2026-05-25"}]
+                  }
+                }
+                """;
+        Files.writeString(contract, json, StandardCharsets.UTF_8);
+
+        EquipmentGanttSheetBundle bundle =
+                EquipmentGanttContractSheetTableBuilder.buildBundleFromContractPath(contract);
+        Map<String, String> dataRow =
+                bundle.table().rows().stream()
+                        .filter(r -> r.getOrDefault("機械名", "").contains("SEC機"))
+                        .findFirst()
+                        .orElseThrow();
+
+        assertTrue(
+                dataRow.getOrDefault("15:00", "").contains("Y5-27"),
+                "15:00 slot should show machining, not request_switch_prep");
+        assertTrue(
+                !dataRow.getOrDefault("15:00", "").contains("依頼切替準備"),
+                "15:00 slot must not be prep-only label");
+    }
+
+    @Test
+    void overlappingBreakResumePrepAndMachining_prefersBreakResumeInSlot(@TempDir Path tmp)
+            throws Exception {
+        Path contract = tmp.resolve("breakResumeVsMach.json");
+        String json =
+                """
+                {
+                  "schema_version": 1,
+                  "kind": "equipment_gantt",
+                  "fn": "_write_results_equipment_gantt_sheet",
+                  "kwargs_packed": {
+                    "timeline_events": [
+                      {
+                        "date": {"__t": "date", "v": "2026-05-25"},
+                        "machine": "SEC機　湖南",
+                        "task_id": "",
+                        "event_kind": "break_resume_prep",
+                        "start_dt": {"__t": "datetime", "v": "2026-05-25T12:45:00"},
+                        "end_dt": {"__t": "datetime", "v": "2026-05-25T13:05:00"}
+                      },
+                      {
+                        "date": {"__t": "date", "v": "2026-05-25"},
+                        "machine": "SEC機　湖南",
+                        "task_id": "Y5-27",
+                        "event_kind": "machining",
+                        "start_dt": {"__t": "datetime", "v": "2026-05-25T13:05:00"},
+                        "end_dt": {"__t": "datetime", "v": "2026-05-25T14:35:00"},
+                        "unit_m": 100.0,
+                        "units_done": 1.0
+                      }
+                    ],
+                    "equipment_list": ["SEC機　湖南"],
+                    "sorted_dates": [{"__t": "date", "v": "2026-05-25"}]
+                  }
+                }
+                """;
+        Files.writeString(contract, json, StandardCharsets.UTF_8);
+
+        EquipmentGanttSheetBundle bundle =
+                EquipmentGanttContractSheetTableBuilder.buildBundleFromContractPath(contract);
+        Map<String, String> dataRow =
+                bundle.table().rows().stream()
+                        .filter(r -> r.getOrDefault("機械名", "").contains("SEC機"))
+                        .findFirst()
+                        .orElseThrow();
+
+        assertTrue(
+                dataRow.getOrDefault("13:00", "").contains("休憩再開準備"),
+                "13:00 slot should show break_resume_prep, not machining that starts at 13:05");
+        assertTrue(
+                dataRow.getOrDefault("12:50", "").contains("休憩再開準備"),
+                "12:50 slot should show break_resume_prep");
     }
 
     @Test

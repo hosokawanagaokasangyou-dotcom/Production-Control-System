@@ -54,6 +54,7 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinSystemDispatchDisplayQty;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support;
@@ -1553,6 +1554,14 @@ public final class DeliveryCalendarViewTabController {
     }
 
     private void applyStage3DispatchOnlyReload(Runnable afterUiUpdated) {
+        if (mainHeadersRef.isEmpty() || mainRows.isEmpty()) {
+            if (shell != null) {
+                shell.appendLog(
+                        "[delivery-calendar] 段階3後: メイン表未読込のため通常の再読み込みを開始");
+            }
+            runDeliveryCalendarDataReload(false, false, true);
+            return;
+        }
         if (shell != null) {
             shell.beginPipelineExecutionTiming(PipelineExecutionTimingKind.DELIVERY_CALENDAR_VIEW);
         }
@@ -1566,18 +1575,15 @@ public final class DeliveryCalendarViewTabController {
                 deliveryCalendarResultDispatchTableTabController.reloadResultDispatchTableFromDisk();
             }
             refreshPlanningStageBadgeFromDispatchJson();
-            if (!mainHeadersRef.isEmpty() && !mainRows.isEmpty()) {
-                // 成形 JSON キャッシュから (アラ計画)/(実績) も再合成し、(段階3前)/(段階3後) は配台表 JSON で更新する
-                overlayChildTabValues();
-                rebuildMainSpreadsheet();
-            }
+            overlayDispatchValuesOnly();
+            rebuildMainSpreadsheet();
             clearPipelineStaleOverlayAfterSuccessfulReload();
             statusLabel.setText("反映完了（段階3・配台のみ）");
             if (afterUiUpdated != null) {
-                Platform.runLater(afterUiUpdated);
+                afterUiUpdated.run();
             }
             if (shell != null) {
-                Platform.runLater(() -> shell.refreshEquipmentGanttGraphicAfterPipelineRun());
+                shell.refreshEquipmentGanttGraphicAfterPipelineRun();
             }
         } catch (Throwable t) {
             statusLabel.setText("error: " + t.getMessage());
@@ -1672,10 +1678,6 @@ public final class DeliveryCalendarViewTabController {
     private static final java.util.regex.Pattern CAL_DATE_HDR =
             java.util.regex.Pattern.compile("(\\d{4})\u5e74(\\d{1,2})\u6708(\\d{1,2})\u65e5\\([\u6708\u706b\u6c34\u6728\u91d1\u571f\u65e5]\\)");
 
-    /** Pattern for Aladdin date column headers: {@code yyyy/MM/dd}. */
-    private static final java.util.regex.Pattern ALADDIN_DATE_COL =
-            java.util.regex.Pattern.compile("\\d{4}/\\d{2}/\\d{2}");
-
     private static final String COL_MK_NAME = "\u6a5f\u68b0\u540d"; // ???
     private static final String COL_TID     = "\u4f9d\u983cNO";     // ??NO
     private static final String COL_KAKOU_DATE = "\u52a0\u5de5\u65e5"; // ???
@@ -1762,7 +1764,7 @@ public final class DeliveryCalendarViewTabController {
         refreshCompareStageFlagsFromDispatch(dispatchSnap);
 
         Map<String, Map<String, Map<String, Map<String, Double>>>> planLookup =
-                buildAladdinPlanLookup(planHeaders, planRows);
+                AladdinShapedPlanQtyLookup.buildLookup(planHeaders, planRows);
         Map<String, Map<String, Map<String, Double>>> actualLookup =
                 buildActualLookup(actHeaders, actRows);
         Map<String, Map<String, Map<String, Double>>> dispatchLookup =
@@ -1809,7 +1811,7 @@ public final class DeliveryCalendarViewTabController {
                     continue;
                 }
                 String dateStr = e.getValue();
-                double p = lookupQtyAladdinPlan(planLookup, mk, tid, dateStr, procRawForPlan);
+                double p = AladdinShapedPlanQtyLookup.lookup(planLookup, mk, tid, dateStr, procRawForPlan);
                 double a = lookupQty(actualLookup, mk, tid, dateStr);
                 double dRaw = lookupQty(dispatchLookup, mk, tid, dateStr);
                 double d = dRaw;
@@ -2029,50 +2031,6 @@ public final class DeliveryCalendarViewTabController {
         return q != null ? q : 0.0;
     }
 
-    /** Mirrors Python {@code _normalize_process_name_for_rule_match} (NFKC + remove spaces). */
-    private static String normalizeProcessNameForRuleMatch(String raw) {
-        if (raw == null) {
-            return "";
-        }
-        String t =
-                java.text.Normalizer.normalize(raw.strip(), java.text.Normalizer.Form.NFKC);
-        return t.replaceAll("[\\s　]+", "");
-    }
-
-    /**
-     * Aladdin plan lookup: {@code mk -> tid -> date -> processKey -> qty}. When shaped data has no
-     * 工程名 column, all quantities use process key {@code ""} (legacy single-bucket behaviour).
-     */
-    private static double lookupQtyAladdinPlan(
-            Map<String, Map<String, Map<String, Map<String, Double>>>> lookup,
-            String mk,
-            String tid,
-            String dateStr,
-            String processRaw) {
-        Map<String, Map<String, Map<String, Double>>> byTid = lookup.get(mk);
-        if (byTid == null) {
-            return 0.0;
-        }
-        Map<String, Map<String, Double>> byDate = byTid.get(tid);
-        if (byDate == null) {
-            return 0.0;
-        }
-        Map<String, Double> byProc = byDate.get(dateStr);
-        if (byProc == null) {
-            return 0.0;
-        }
-        if (byProc.size() == 1 && byProc.containsKey("")) {
-            Double v = byProc.get("");
-            return v != null ? v : 0.0;
-        }
-        String pk = normalizeProcessNameForRuleMatch(processRaw);
-        if (pk.isEmpty()) {
-            return 0.0;
-        }
-        Double v = byProc.get(pk);
-        return v != null ? v : 0.0;
-    }
-
     /**
      * Parses a calendar column-header string like {@code 2026?4?21?(?)} to {@code "2026/04/21"};
      * returns {@code null} if the string does not match the pattern.
@@ -2180,59 +2138,6 @@ public final class DeliveryCalendarViewTabController {
             }
         } catch (NumberFormatException ignored) { /* fall through */ }
         return null;
-    }
-
-    /**
-     * Builds plan qty lookup from Aladdin shaped data.
-     * Key: {@code normalizedMk -> tid -> yyyy/MM/dd -> processKey -> qty}. {@code processKey} is
-     * {@link #normalizeProcessNameForRuleMatch} of 工程名 when that column exists; otherwise {@code ""}
-     * (legacy merge). Disambiguates same 依頼NO on the same calendar row (e.g. SEC vs スリット).
-     */
-    private static Map<String, Map<String, Map<String, Map<String, Double>>>> buildAladdinPlanLookup(
-            List<String> headers, List<List<String>> rows) {
-        int mkIdx = colIdx(headers, COL_MK_NAME);
-        int tidIdx = colIdx(headers, COL_TID);
-        int procIdx = colIdx(headers, "\u5de5\u7a0b\u540d");
-        if (mkIdx < 0 || tidIdx < 0) {
-            return Map.of();
-        }
-        Map<Integer, String> dateCols = new LinkedHashMap<>();
-        for (int i = 0; i < headers.size(); i++) {
-            String h = headers.get(i);
-            if (h != null && ALADDIN_DATE_COL.matcher(h).matches()) {
-                dateCols.put(i, h);
-            }
-        }
-        if (dateCols.isEmpty()) {
-            return Map.of();
-        }
-        Map<String, Map<String, Map<String, Map<String, Double>>>> result = new LinkedHashMap<>();
-        for (List<String> row : rows) {
-            String mk = normalizeEquipmentMatchKey(cellAt(row, mkIdx));
-            String tid = cellAt(row, tidIdx).strip();
-            if (mk.isEmpty() || tid.isEmpty()) {
-                continue;
-            }
-            String procKey = "";
-            if (procIdx >= 0) {
-                procKey = normalizeProcessNameForRuleMatch(cellAt(row, procIdx));
-            }
-            for (Map.Entry<Integer, String> e : dateCols.entrySet()) {
-                String dsRaw = e.getValue();
-                String dsKey = normaliseDateStr(dsRaw);
-                if (dsKey == null) {
-                    dsKey = dsRaw;
-                }
-                double qty = parseCellDouble(cellAt(row, e.getKey()));
-                if (Math.abs(qty) > 1e-12) {
-                    result.computeIfAbsent(mk, k -> new LinkedHashMap<>())
-                            .computeIfAbsent(tid, k -> new LinkedHashMap<>())
-                            .computeIfAbsent(dsKey, k -> new LinkedHashMap<>())
-                            .merge(procKey, qty, Double::sum);
-                }
-            }
-        }
-        return result;
     }
 
     /**

@@ -130,6 +130,74 @@ public final class TableColumnOrderPersistence {
         }
     }
 
+    /**
+     * 配台計画手動修正タブの日付セル内数量行フィルタ（(アラ計画)/(段階3前)/(段階3後) および (段階3改)）。
+     */
+    public record DispatchInteractiveDateQtyLineFilterPrefs(
+            boolean showAladdinPlan, boolean showStage3Plan, boolean showStage3After) {
+        public static DispatchInteractiveDateQtyLineFilterPrefs defaults() {
+            return new DispatchInteractiveDateQtyLineFilterPrefs(true, true, true);
+        }
+    }
+
+    private static final String KEY_DISPATCH_INTERACTIVE_SHOW_ALADDIN_PLAN_QTY_LINE =
+            "dispatchInteractive_ui_showAladdinPlanQtyLine";
+
+    private static final String KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_PLAN_QTY_LINE =
+            "dispatchInteractive_ui_showStage3PlanQtyLine";
+
+    private static final String KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_AFTER_QTY_LINE =
+            "dispatchInteractive_ui_showStage3AfterQtyLine";
+
+    /** 配台計画手動修正タブの日付セル数量行フィルタを読み込む。 */
+    public static DispatchInteractiveDateQtyLineFilterPrefs
+            loadDispatchInteractiveDateQtyLineFilterPrefs() {
+        try {
+            if (!Files.isRegularFile(STORE)) {
+                return DispatchInteractiveDateQtyLineFilterPrefs.defaults();
+            }
+            JsonNode root = JSON.readTree(STORE.toFile());
+            if (root == null || !root.isObject()) {
+                return DispatchInteractiveDateQtyLineFilterPrefs.defaults();
+            }
+            boolean aladdin =
+                    root.path(KEY_DISPATCH_INTERACTIVE_SHOW_ALADDIN_PLAN_QTY_LINE).asBoolean(true);
+            boolean plan =
+                    root.path(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_PLAN_QTY_LINE).asBoolean(true);
+            boolean after =
+                    root.path(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_AFTER_QTY_LINE).asBoolean(true);
+            return new DispatchInteractiveDateQtyLineFilterPrefs(aladdin, plan, after);
+        } catch (IOException e) {
+            return DispatchInteractiveDateQtyLineFilterPrefs.defaults();
+        }
+    }
+
+    /** {@link #loadDispatchInteractiveDateQtyLineFilterPrefs()} を {@link #STORE} に保存する。 */
+    public static void saveDispatchInteractiveDateQtyLineFilterPrefs(
+            DispatchInteractiveDateQtyLineFilterPrefs prefs) {
+        if (prefs == null) {
+            return;
+        }
+        try {
+            Files.createDirectories(STORE.getParent());
+            ObjectNode root;
+            if (Files.isRegularFile(STORE)) {
+                JsonNode tree = JSON.readTree(STORE.toFile());
+                root =
+                        tree != null && tree.isObject()
+                                ? (ObjectNode) tree.deepCopy()
+                                : JSON.createObjectNode();
+            } else {
+                root = JSON.createObjectNode();
+            }
+            root.put(KEY_DISPATCH_INTERACTIVE_SHOW_ALADDIN_PLAN_QTY_LINE, prefs.showAladdinPlan());
+            root.put(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_PLAN_QTY_LINE, prefs.showStage3Plan());
+            root.put(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_AFTER_QTY_LINE, prefs.showStage3After());
+            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
+        } catch (IOException ignored) {
+        }
+    }
+
     private static String spreadsheetTabRowHeightKey(TableId id) {
         return id.jsonKey() + "_ui_rowHeightPercent";
     }

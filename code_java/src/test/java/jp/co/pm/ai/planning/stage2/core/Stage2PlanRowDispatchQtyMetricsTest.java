@@ -21,7 +21,7 @@ class Stage2PlanRowDispatchQtyMetricsTest {
         row.put("換算数量", "100");
         row.put("未加工", "40");
         row.put("配台使用残数量", "40");
-        Optional<Stage2PlanRowDispatchQtyMetrics.Metrics> m =
+        Optional<Stage2PlanRowDispatchQtyMetricsResult> m =
                 Stage2PlanRowDispatchQtyMetrics.compute(row, Stage2RollUnitLengthTables.empty());
         assertTrue(m.isPresent());
         assertEquals(40.0, m.get().remainingM(), 1e-9);
@@ -36,7 +36,7 @@ class Stage2PlanRowDispatchQtyMetricsTest {
         row.put("未加工", "0");
         row.put("実加工数", "0");
         row.put("配台使用残数量", "100");
-        Optional<Stage2PlanRowDispatchQtyMetrics.Metrics> m =
+        Optional<Stage2PlanRowDispatchQtyMetricsResult> m =
                 Stage2PlanRowDispatchQtyMetrics.compute(row, Stage2RollUnitLengthTables.empty());
         assertTrue(m.isPresent());
         assertEquals(100.0, m.get().remainingM(), 1e-9);
@@ -50,7 +50,7 @@ class Stage2PlanRowDispatchQtyMetricsTest {
         row.put("未加工", "6090");
         row.put("実加工数", "0");
         row.put("配台使用残数量", "6090");
-        Optional<Stage2PlanRowDispatchQtyMetrics.Metrics> m =
+        Optional<Stage2PlanRowDispatchQtyMetricsResult> m =
                 Stage2PlanRowDispatchQtyMetrics.compute(row, Stage2RollUnitLengthTables.empty());
         assertTrue(m.isPresent());
         assertEquals(6090.0, m.get().remainingM(), 1e-9);
@@ -86,7 +86,7 @@ class Stage2PlanRowDispatchQtyMetricsTest {
         row.put("使用原反", "MY-RAW-KEY");
         row.put("配台使用残数量", "250");
         row.put("配台ロール数", "1");
-        Optional<Stage2PlanRowDispatchQtyMetrics.Metrics> m = Stage2PlanRowDispatchQtyMetrics.compute(row, tables);
+        Optional<Stage2PlanRowDispatchQtyMetricsResult> m = Stage2PlanRowDispatchQtyMetrics.compute(row, tables);
         assertTrue(m.isPresent());
         assertEquals(250.0, m.get().remainingM(), 1e-9);
         assertEquals(0.0, m.get().doneM(), 1e-9);
@@ -99,7 +99,7 @@ class Stage2PlanRowDispatchQtyMetricsTest {
         row.put("換算数量", "100");
         row.put("未加工", "40");
         row.put("配台使用残数量", "60");
-        Optional<Stage2PlanRowDispatchQtyMetrics.Metrics> m =
+        Optional<Stage2PlanRowDispatchQtyMetricsResult> m =
                 Stage2PlanRowDispatchQtyMetrics.compute(row, Stage2RollUnitLengthTables.empty());
         assertTrue(m.isPresent());
         assertEquals(60.0, m.get().remainingM(), 1e-9);

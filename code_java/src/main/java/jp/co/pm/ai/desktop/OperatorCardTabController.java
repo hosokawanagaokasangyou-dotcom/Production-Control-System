@@ -340,6 +340,21 @@ public final class OperatorCardTabController {
         printCards();
     }
 
+    /**
+     * 段階2／段階3 完了後: 正規 {@code 結果_配台表.json} を反映し、既存 member パスからキャッシュを再読込する。
+     */
+    void syncAfterPipelineArtifactRefresh() {
+        if (shell == null) {
+            return;
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        Path disp = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        if (dispatchJsonField != null && Files.isRegularFile(disp)) {
+            dispatchJsonField.setText(disp.toString());
+        }
+        reloadMemberCachesAndOperators();
+    }
+
     /** Mirrors stage-2 artifact refresh: fill {@code member_schedule*.json} sibling path when possible. */
     void tryAutofillMemberJsonFromStage2(String memberSchedulePath) {
         if (memberJsonField == null) {
@@ -376,9 +391,9 @@ public final class OperatorCardTabController {
     }
 
     private void reloadMemberCachesAndOperators() {
-        cachedMemberSheets = Map.of();
         String mp = memberJsonField != null ? memberJsonField.getText().strip() : "";
         if (mp.isEmpty()) {
+            cachedMemberSheets = Map.of();
             if (operatorCombo != null) {
                 operatorCombo.getItems().clear();
             }
@@ -390,7 +405,9 @@ public final class OperatorCardTabController {
             return;
         }
         try {
-            cachedMemberSheets = JsonTableIo.loadSheetsWorkbook(p);
+            Map<String, SheetTable> loaded = JsonTableIo.loadSheetsWorkbook(p);
+            cachedMemberSheets = loaded;
+            applyInferredStartDateIfNeeded();
             List<String> ops = JsonTableIo.memberOperatorNames(cachedMemberSheets);
             if (operatorCombo != null) {
                 String prev = operatorCombo.getValue();
@@ -405,7 +422,50 @@ public final class OperatorCardTabController {
                     "読み込み: オペレーター " + ops.size() + " 名");
         } catch (Exception ex) {
             statusLabel.setText(ex.getMessage() != null ? ex.getMessage() : ex.toString());
-            cachedMemberSheets = Map.of();
+        }
+    }
+
+    private SheetTable sampleMemberSheetForDateColumns() {
+        if (cachedMemberSheets.isEmpty()) {
+            return null;
+        }
+        String op = operatorCombo != null ? operatorCombo.getValue() : null;
+        if (op != null && cachedMemberSheets.containsKey(op)) {
+            return cachedMemberSheets.get(op);
+        }
+        for (SheetTable st : cachedMemberSheets.values()) {
+            if (st.columns().contains("時間帯")) {
+                return st;
+            }
+        }
+        return cachedMemberSheets.values().iterator().next();
+    }
+
+    private void applyInferredStartDateIfNeeded() {
+        if (startDatePicker == null || cachedMemberSheets.isEmpty()) {
+            return;
+        }
+        SheetTable sample = sampleMemberSheetForDateColumns();
+        if (sample == null) {
+            return;
+        }
+        LocalDate current =
+                startDatePicker.getValue() != null ? startDatePicker.getValue() : LocalDate.now();
+        int days = selectedDayCount();
+        if (OperatorCardDocumentBuilder.canResolveDayColumns(sample.columns(), current, days)) {
+            return;
+        }
+        LocalDate inferred =
+                OperatorCardDocumentBuilder.inferScheduleStartDate(cachedMemberSheets, current);
+        if (!Objects.equals(inferred, current)) {
+            startDatePicker.setValue(inferred);
+        }
+    }
+
+    private void ensureMemberCacheLoaded() {
+        String mp = memberJsonField != null ? memberJsonField.getText().strip() : "";
+        if (cachedMemberSheets.isEmpty() && !mp.isEmpty()) {
+            reloadMemberCachesAndOperators();
         }
     }
 
@@ -413,6 +473,8 @@ public final class OperatorCardTabController {
         if (previewHost == null) {
             return;
         }
+        ensureMemberCacheLoaded();
+        applyInferredStartDateIfNeeded();
         try {
             OperatorCardPage page = buildSelectedPage();
             String font = fontCombo != null ? fontCombo.getValue() : "SansSerif";
@@ -431,6 +493,8 @@ public final class OperatorCardTabController {
     }
 
     private OperatorCardPage buildSelectedPage() throws IOException, OperatorCardBuildException {
+        ensureMemberCacheLoaded();
+        applyInferredStartDateIfNeeded();
         List<Map<String, String>> dispatchRows = loadDispatchRows();
         LocalDate start = startDatePicker != null ? startDatePicker.getValue() : LocalDate.now();
         if (start == null) {

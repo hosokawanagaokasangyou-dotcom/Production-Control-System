@@ -927,54 +927,57 @@ public final class PlanResultViewerTabController {
                             sv, gridState.headerColumnCount.get());
                     SpreadsheetTabularSupport.pinSpreadsheetFilterRow(sv);
                     SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(sv);
-                });
-        applyPlanResultPresentation(sv);
-        gridState.suppressPersistence.set(true);
-        try {
-            for (TableColumnOrderPersistence.PlanResultViewerColumnFilterSpec f :
-                    TableColumnOrderPersistence.loadPlanResultViewerColumnFiltersForScope(
-                            gridState.scopeKey)) {
-                int idx = gridState.headersRef.indexOf(f.title());
-                if (idx >= 0) {
-                    SpreadsheetMultiColumnFilterCoordinator.commitColumnSelection(
-                            sv, idx, new HashSet<>(f.values()));
-                }
-            }
-        } finally {
-            gridState.suppressPersistence.set(false);
-        }
-        SpreadsheetMultiColumnFilterCoordinator.setColumnFilterCommitHook(
-                sv,
-                () -> {
-                    if (gridState.suppressPersistence.get()) {
-                        return;
+                    applyPlanResultPresentation(sv);
+                    gridState.suppressPersistence.set(true);
+                    try {
+                        for (TableColumnOrderPersistence.PlanResultViewerColumnFilterSpec f :
+                                TableColumnOrderPersistence.loadPlanResultViewerColumnFiltersForScope(
+                                        gridState.scopeKey)) {
+                            int idx = gridState.headersRef.indexOf(f.title());
+                            if (idx >= 0) {
+                                SpreadsheetMultiColumnFilterCoordinator.commitColumnSelection(
+                                        sv, idx, new HashSet<>(f.values()));
+                            }
+                        }
+                    } finally {
+                        gridState.suppressPersistence.set(false);
                     }
-                    Runnable save = planResultFilterSaveActionByView.get(sv);
-                    if (save != null) {
-                        save.run();
+                    SpreadsheetMultiColumnFilterCoordinator.setColumnFilterCommitHook(
+                            sv,
+                            () -> {
+                                if (gridState.suppressPersistence.get()) {
+                                    return;
+                                }
+                                Runnable save = planResultFilterSaveActionByView.get(sv);
+                                if (save != null) {
+                                    save.run();
+                                }
+                            });
+                    if (layoutWatcherInstalled.compareAndSet(false, true)) {
+                        TableColumnOrderPersistence.installSpreadsheetColumnLayoutWatcherForScope(
+                                sv,
+                                gridState.scopeKey,
+                                gridState.suppressPersistence::get,
+                                () -> new ArrayList<>(gridState.headersRef));
                     }
+                    if (onHeaderDragColumnOrder != null) {
+                        SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
+                                sv,
+                                gridState.suppressPersistence::get,
+                                () -> new ArrayList<>(gridState.headersRef),
+                                gridState.headerColumnCount.get(),
+                                onHeaderDragColumnOrder);
+                    }
+                    ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
+                            sv,
+                            () -> new ArrayList<>(gridState.headersRef),
+                            () ->
+                                    TableColumnOrderPersistence.loadColumnVisibilityForScope(
+                                            gridState.scopeKey, gridState.headersRef.size()),
+                            () ->
+                                    SpreadsheetTabularSupport.reapplySpreadsheetColumnChrome(
+                                            sv, gridState.headerColumnCount.get()));
                 });
-        if (layoutWatcherInstalled.compareAndSet(false, true)) {
-            TableColumnOrderPersistence.installSpreadsheetColumnLayoutWatcherForScope(
-                    sv,
-                    gridState.scopeKey,
-                    gridState.suppressPersistence::get,
-                    () -> new ArrayList<>(gridState.headersRef));
-        }
-        if (onHeaderDragColumnOrder != null) {
-            SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
-                    sv,
-                    gridState.suppressPersistence::get,
-                    () -> new ArrayList<>(gridState.headersRef),
-                    gridState.headerColumnCount.get(),
-                    onHeaderDragColumnOrder);
-        }
-        ColumnVisibilitySupport.applyColumnVisibilityToSpreadsheetWhenReady(
-                sv,
-                () -> new ArrayList<>(gridState.headersRef),
-                () ->
-                        TableColumnOrderPersistence.loadColumnVisibilityForScope(
-                                gridState.scopeKey, gridState.headersRef.size()));
     }
 
     private static final class SheetGridState {

@@ -23,9 +23,8 @@ public final class Stage2PlanRowDispatchQtyMetrics {
 
     private Stage2PlanRowDispatchQtyMetrics() {}
 
-    public record Metrics(double remainingM, double doneM, double qtyTotalForDispatchM) {}
-
-    public static Optional<Metrics> compute(Map<String, String> row, Stage2RollUnitLengthTables tables) {
+    public static Optional<Stage2PlanRowDispatchQtyMetricsResult> compute(
+            Map<String, String> row, Stage2RollUnitLengthTables tables) {
         if (row == null || !row.containsKey("未加工")) {
             return Optional.empty();
         }
@@ -36,7 +35,8 @@ public final class Stage2PlanRowDispatchQtyMetrics {
         double remainingM = planDispatchRemainingM(row, tables);
         double doneM = Math.max(0.0, qtyConvRaw - remainingM);
         double qtyTotalForDispatchM = remainingM + doneM;
-        return Optional.of(new Metrics(remainingM, doneM, qtyTotalForDispatchM));
+        return Optional.of(
+                new Stage2PlanRowDispatchQtyMetricsResult(remainingM, doneM, qtyTotalForDispatchM));
     }
 
     /** 段階1/2: 列「配台使用残数量」を正とする残量(m)。欠損時は段階1式で補完。 */
@@ -127,7 +127,8 @@ public final class Stage2PlanRowDispatchQtyMetrics {
     }
 
     /** 残加工量・累計加工量・完了率(実行時点) を結果シート用の文字列で返す。 */
-    public static Optional<ResultTaskQtyStrings> toResultSheetStrings(Metrics m) {
+    public static Optional<ResultTaskQtyStrings> toResultSheetStrings(
+            Stage2PlanRowDispatchQtyMetricsResult m) {
         if (m == null) {
             return Optional.empty();
         }

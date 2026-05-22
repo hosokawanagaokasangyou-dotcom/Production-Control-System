@@ -170,21 +170,11 @@ public final class EquipmentGanttContractSheetTableBuilder {
                     LocalDateTime winEnd = winStart.plusMinutes(SLOT_MINUTES);
                     String cell = "";
                     String badgeCell = "";
-                    for (TimelineEvent ev : columnEvents) {
-                        if (!eventTouchesCalendarDay(ev, day)) {
-                            continue;
-                        }
-                        SlotOverlapRange overlap = slotOverlapRangeForDisplay(ev);
-                        if (!rangesOverlap(
-                                overlap.start(), overlap.end(), winStart, winEnd)) {
-                            continue;
-                        }
-                        if (ev.isInBreaks(winStart, winEnd)) {
-                            continue;
-                        }
-                        cell = ev.timelineCellLabel();
-                        badgeCell = ev.badgeSlotFragment();
-                        break;
+                    TimelineEvent chosen =
+                            bestOverlappingEventForSlot(columnEvents, day, winStart, winEnd);
+                    if (chosen != null) {
+                        cell = chosen.timelineCellLabel();
+                        badgeCell = chosen.badgeSlotFragment();
                     }
                     row.put(col, cell);
                     badgeSlots.add(badgeCell);
@@ -446,6 +436,74 @@ public final class EquipmentGanttContractSheetTableBuilder {
     static boolean rangesOverlap(
             LocalDateTime a0, LocalDateTime a1, LocalDateTime b0, LocalDateTime b1) {
         return a0.isBefore(b1) && a1.isAfter(b0);
+    }
+
+    /**
+     * 10 分枠と重なるイベントのうち表示に用いる 1 件を選ぶ。
+     *
+     * <p>依頼切替準備（{@code request_switch_prep}）と加工が重なるときだけ加工を優先する
+     * （加工 tail が準備に隠れる不具合対策）。休憩再開準備（{@code break_resume_prep}）は
+     * 加工再開直前の枠として開始が早いイベントを採用し、従来どおり表示する。
+     */
+    static TimelineEvent bestOverlappingEventForSlot(
+            List<TimelineEvent> columnEvents,
+            LocalDate day,
+            LocalDateTime winStart,
+            LocalDateTime winEnd) {
+        TimelineEvent bestMachining = null;
+        TimelineEvent bestRequestSwitchPrep = null;
+        TimelineEvent bestOther = null;
+        for (TimelineEvent ev : columnEvents) {
+            if (!eventTouchesCalendarDay(ev, day)) {
+                continue;
+            }
+            SlotOverlapRange overlap = slotOverlapRangeForDisplay(ev);
+            if (!rangesOverlap(overlap.start(), overlap.end(), winStart, winEnd)) {
+                continue;
+            }
+            if (ev.isInBreaks(winStart, winEnd)) {
+                continue;
+            }
+            if (TimelineEvent.isMachiningDispatch(ev)) {
+                bestMachining = minByStartThenTaskId(bestMachining, ev);
+            } else if ("request_switch_prep".equals(ev.eventKind)) {
+                bestRequestSwitchPrep = minByStartThenTaskId(bestRequestSwitchPrep, ev);
+            } else {
+                bestOther = minByStartThenTaskId(bestOther, ev);
+            }
+        }
+        if (bestMachining != null && bestRequestSwitchPrep != null) {
+            return bestMachining;
+        }
+        TimelineEvent best = null;
+        if (bestMachining != null) {
+            best = minByStartThenTaskId(best, bestMachining);
+        }
+        if (bestRequestSwitchPrep != null) {
+            best = minByStartThenTaskId(best, bestRequestSwitchPrep);
+        }
+        if (bestOther != null) {
+            best = minByStartThenTaskId(best, bestOther);
+        }
+        return best;
+    }
+
+    private static TimelineEvent minByStartThenTaskId(TimelineEvent current, TimelineEvent candidate) {
+        if (current == null) {
+            return candidate;
+        }
+        LocalDateTime cStart = candidate.start != null ? candidate.start : LocalDateTime.MIN;
+        LocalDateTime curStart = current.start != null ? current.start : LocalDateTime.MIN;
+        int cmp = cStart.compareTo(curStart);
+        if (cmp < 0) {
+            return candidate;
+        }
+        if (cmp > 0) {
+            return current;
+        }
+        String cTid = candidate.taskId != null ? candidate.taskId : "";
+        String curTid = current.taskId != null ? current.taskId : "";
+        return cTid.compareTo(curTid) < 0 ? candidate : current;
     }
 
     /**

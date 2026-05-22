@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -16,6 +17,30 @@ def _reset_stage2_prep_globals() -> None:
     core._STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE = {}
     core._STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE = {("スライス", "スライス機1"): 5}
     core._STAGE2_BREAK_RESUME_PREP_BY_MACHINE = {}
+
+
+def test_load_request_switch_prep_settings_new_column_names(tmp_path: Path):
+    pd = pytest.importorskip("pandas")
+
+    master = tmp_path / "master.xlsm"
+    df = pd.DataFrame(
+        [
+            {
+                "工程名": "スライス",
+                "機械名": "スライス機1",
+                "依頼切替準備時間": 15,
+                "休憩後再開準備時間": 5,
+            }
+        ]
+    )
+    with pd.ExcelWriter(master, engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name=core.SHEET_REQUEST_SWITCH_PREP, index=False)
+
+    sp, sm, rp, rm = core.load_request_switch_prep_settings(str(master))
+    assert sp[("スライス", "スライス機1")] == 15
+    assert rp[("スライス", "スライス機1")] == 5
+    assert not sm
+    assert not rm
 
 
 def test_lookup_request_switch_prep_by_proc_machine():

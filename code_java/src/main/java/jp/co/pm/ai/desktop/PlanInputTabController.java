@@ -42,6 +42,9 @@ import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck;
+import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck.TaskKey;
+import jp.co.pm.ai.desktop.io.ExcelCellReadSupport;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
@@ -69,6 +72,10 @@ public final class PlanInputTabController {
 
     /** planning_core の {@code RESULT_TASK_COL_DISPATCH_TRIAL_ORDER} 相当（段階1タスク入力の並び順）。 */
     private static final String COL_DISPATCH_TRIAL_ORDER = "配台試行順番";
+
+    /** 表示は日付のみ（Excel/CSV の {@code 00:00:00} 付きを除く）。 */
+    private static final Set<String> PLAN_INPUT_DATE_ONLY_COLUMNS =
+            Set.of("回答納期", "指定納期", "原反投入日");
 
     public static final String ENV_PM_AI_PLAN_INPUT_PATH = AppPaths.KEY_PM_AI_PLAN_INPUT_PATH;
     public static final String ENV_TASK_PLAN_SHEET = "TASK_PLAN_SHEET";
@@ -480,6 +487,39 @@ public final class PlanInputTabController {
         return out;
     }
 
+    /**
+     * 段階2後の整合確認用: 配台不要オフ（かつ配台計画除外・完了でない）行の (依頼NO, 工程名, 機械名)。
+     */
+    List<TaskKey> collectEligibleTaskKeysForDispatchCoverage() {
+        Map<String, String> rowMap = new LinkedHashMap<>();
+        int colTask = headersRef.indexOf("依頼NO");
+        int colProcess = headersRef.indexOf("工程名");
+        int colMachine = headersRef.indexOf("機械名");
+        LinkedHashMap<String, TaskKey> deduped = new LinkedHashMap<>();
+        for (ObservableList<String> cells : rows) {
+            rowMap.clear();
+            for (int c = 0; c < headersRef.size(); c++) {
+                String h = headersRef.get(c);
+                String v = c < cells.size() && cells.get(c) != null ? cells.get(c) : "";
+                rowMap.put(h, v);
+            }
+            if (!DispatchPlanInputInteractiveCoverageCheck.isEligiblePlanInputRow(rowMap)) {
+                continue;
+            }
+            String taskId = colTask >= 0 ? cellAt(cells, colTask) : rowMap.getOrDefault("依頼NO", "");
+            String process =
+                    colProcess >= 0 ? cellAt(cells, colProcess) : rowMap.getOrDefault("工程名", "");
+            String machine =
+                    colMachine >= 0 ? cellAt(cells, colMachine) : rowMap.getOrDefault("機械名", "");
+            TaskKey key = new TaskKey(taskId, process, machine);
+            if (!key.isComplete()) {
+                continue;
+            }
+            deduped.putIfAbsent(key.identityToken(), key);
+        }
+        return List.copyOf(deduped.values());
+    }
+
     private static String cellAt(ObservableList<String> cells, int col) {
         if (col < 0 || col >= cells.size()) {
             return "";
@@ -522,18 +562,7 @@ public final class PlanInputTabController {
     }
 
     private static boolean isPlanRowExcludedFromStage2Queue(Map<String, String> row) {
-        String ex = row.getOrDefault("配台不要", "");
-        if (ex.contains("配台計画除外")) {
-            return true;
-        }
-        String status = row.getOrDefault("ステータス", "");
-        if (status != null) {
-            String s = status.strip();
-            if (s.contains("完了") || s.equalsIgnoreCase("done") || s.equalsIgnoreCase("complete")) {
-                return true;
-            }
-        }
-        return false;
+        return DispatchPlanInputInteractiveCoverageCheck.isExcludedFromDispatchCoverage(row);
     }
 
     @FXML
@@ -999,6 +1028,7 @@ public final class PlanInputTabController {
                 }
                 rows.add(r);
             }
+            normalizePlanInputDateOnlyColumns();
             List<TableColumnOrderPersistence.ColumnSpec> lay =
                     TableColumnOrderPersistence.loadLayout(TableColumnOrderPersistence.TableId.PLAN_INPUT);
             persistedLayout.set(lay);
@@ -1045,6 +1075,32 @@ public final class PlanInputTabController {
 
     private static String trim(String s) {
         return s != null ? s.trim() : "";
+    }
+
+    /** {@link #PLAN_INPUT_DATE_ONLY_COLUMNS} のセルから深夜時刻サフィックスを除く。 */
+    private void normalizePlanInputDateOnlyColumns() {
+        if (headersRef.isEmpty() || rows == null || rows.isEmpty()) {
+            return;
+        }
+        List<Integer> colIdx = new ArrayList<>();
+        for (int c = 0; c < headersRef.size(); c++) {
+            if (PLAN_INPUT_DATE_ONLY_COLUMNS.contains(headersRef.get(c))) {
+                colIdx.add(c);
+            }
+        }
+        if (colIdx.isEmpty()) {
+            return;
+        }
+        for (ObservableList<String> row : rows) {
+            for (int c : colIdx) {
+                if (c < row.size()) {
+                    String v = row.get(c);
+                    if (v != null && !v.isEmpty()) {
+                        row.set(c, ExcelCellReadSupport.stripMidnightDateTimeSuffix(v));
+                    }
+                }
+            }
+        }
     }
 
     String snapshotPlanInputPath() {

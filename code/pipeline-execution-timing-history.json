@@ -1,0 +1,195 @@
+{
+  "samples" : [ {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779409089940,
+    "durationMs" : 3644,
+    "writerHost" : "20250401-02",
+    "writerIp" : "172.16.0.40"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779409196822,
+    "durationMs" : 42102,
+    "writerHost" : "20250401-02",
+    "writerIp" : "172.16.0.40"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779413647615,
+    "durationMs" : 42559,
+    "writerHost" : "20250401-02",
+    "writerIp" : "172.16.0.40"
+  }, {
+    "kind" : "STAGE3",
+    "finishedAtEpochMs" : 1779414958139,
+    "durationMs" : 35060,
+    "writerHost" : "20250401-02",
+    "writerIp" : "172.16.0.40"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779426178464,
+    "durationMs" : 7017,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.63"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779426267457,
+    "durationMs" : 26364,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.63"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779426862104,
+    "durationMs" : 5678,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.63"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779426945942,
+    "durationMs" : 25749,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.63"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779427410463,
+    "durationMs" : 5506,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.63"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779427440764,
+    "durationMs" : 24034,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.63"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779427790165,
+    "durationMs" : 26694,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.63"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779428371437,
+    "durationMs" : 26280,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.63"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779429419632,
+    "durationMs" : 48111,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.63"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779431640238,
+    "durationMs" : 6635,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.63"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779431736991,
+    "durationMs" : 3461,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.63"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779432297441,
+    "durationMs" : 9653,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779432328724,
+    "durationMs" : 23857,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779432869807,
+    "durationMs" : 26037,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779433606435,
+    "durationMs" : 26786,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779434038279,
+    "durationMs" : 46865,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779434974440,
+    "durationMs" : 38053,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE3",
+    "finishedAtEpochMs" : 1779435704112,
+    "durationMs" : 28570,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE3",
+    "finishedAtEpochMs" : 1779436273830,
+    "durationMs" : 28545,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "DELIVERY_CALENDAR_VIEW",
+    "finishedAtEpochMs" : 1779436274478,
+    "durationMs" : 25,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE3",
+    "finishedAtEpochMs" : 1779436513024,
+    "durationMs" : 33904,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "DELIVERY_CALENDAR_VIEW",
+    "finishedAtEpochMs" : 1779436513813,
+    "durationMs" : 35,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779437940021,
+    "durationMs" : 45960,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE3",
+    "finishedAtEpochMs" : 1779439782875,
+    "durationMs" : 31688,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779441962889,
+    "durationMs" : 18038,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779442149765,
+    "durationMs" : 115134,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779442431789,
+    "durationMs" : 21858,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779442469978,
+    "durationMs" : 25902,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  } ]
+}

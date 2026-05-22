@@ -2,6 +2,7 @@
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ProgressBar?>
 <?import javafx.scene.control.ProgressIndicator?>
@@ -30,6 +31,25 @@
                 onAction="#onColumnReorderAction"/>
         <Button mnemonicParsing="false" text="列の表示"
                 onAction="#onColumnVisibilityAction"/>
+        <Label text="数量表示:"/>
+        <CheckBox fx:id="showAladdinPlanQtyLineCheck" mnemonicParsing="false" selected="true"
+                  text="(アラ計画)">
+            <tooltip>
+                <Tooltip text="日付セル内の (アラ計画) 行の表示/非表示"/>
+            </tooltip>
+        </CheckBox>
+        <CheckBox fx:id="showStage3PlanQtyLineCheck" mnemonicParsing="false" selected="true"
+                  text="(段階3前)">
+            <tooltip>
+                <Tooltip text="日付セル内の (段階3前) 行の表示/非表示"/>
+            </tooltip>
+        </CheckBox>
+        <CheckBox fx:id="showStage3AfterQtyLineCheck" mnemonicParsing="false" selected="true"
+                  text="(段階3後)">
+            <tooltip>
+                <Tooltip text="日付セル内の (段階3後)/(段階3改) 行の表示/非表示"/>
+            </tooltip>
+        </CheckBox>
         <Button mnemonicParsing="false" text="段階2必須列チェック"
                 onAction="#onEnsureStage2RequiredColumnsAction"/>
         <Button fx:id="saveButton" mnemonicParsing="false" text="保存 (JSON+xlsx)"

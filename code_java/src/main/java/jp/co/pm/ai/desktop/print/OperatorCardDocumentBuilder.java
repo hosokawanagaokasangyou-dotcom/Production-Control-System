@@ -133,6 +133,45 @@ public final class OperatorCardDocumentBuilder {
     }
 
     /**
+     * member_schedule 列見出し（{@code MM/dd (ddd)}）から最も早い日付を推定する。見出しが無いときは
+     * {@code anchorFallback} を返す。
+     */
+    public static LocalDate inferScheduleStartDate(
+            Map<String, SheetTable> memberSheetsByOperator, LocalDate anchorFallback) {
+        LocalDate anchor = anchorFallback != null ? anchorFallback : LocalDate.now();
+        LocalDate earliest = null;
+        if (memberSheetsByOperator != null) {
+            for (SheetTable st : memberSheetsByOperator.values()) {
+                if (st == null) {
+                    continue;
+                }
+                for (String col : st.columns()) {
+                    if (COL_TIME.equals(col)) {
+                        continue;
+                    }
+                    LocalDate d = parseColumnDate(col, anchor.getYear());
+                    if (d == null) {
+                        d = parseColumnDate(col, anchor.getYear() + 1);
+                    }
+                    if (d != null && (earliest == null || d.isBefore(earliest))) {
+                        earliest = d;
+                    }
+                }
+            }
+        }
+        return earliest != null ? earliest : anchor;
+    }
+
+    /** {@link #resolveDayColumns(List, LocalDate, int)} がすべて非 null なら true。 */
+    public static boolean canResolveDayColumns(
+            List<String> columns, LocalDate startDate, int dayCount) {
+        if (columns == null || startDate == null) {
+            return false;
+        }
+        return resolveDayColumns(columns, startDate, dayCount).stream().noneMatch(Objects::isNull);
+    }
+
+    /**
      * Finds header strings matching MM/dd for {@code startDate} and the following {@code dayCount - 1} days (same
      * calendar year as {@code startDate}, with rollover handled only when {@code startDate} month is December).
      */

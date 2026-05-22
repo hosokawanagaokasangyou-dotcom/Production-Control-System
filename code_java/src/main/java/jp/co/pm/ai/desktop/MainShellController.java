@@ -4675,6 +4675,7 @@ public final class MainShellController {
             planResultViewerTabController.tryAutofillJsonFromStage2Xlsx(planStr, memStr);
             equipmentGanttGraphicTabController.tryAutofillJsonFromStage2Xlsx(planStr, memStr);
             operatorCardTabController.tryAutofillMemberJsonFromStage2(memStr);
+            operatorCardTabController.syncAfterPipelineArtifactRefresh();
             if (!planStr.isEmpty() || !memStr.isEmpty()) {
                 appendLog(
                         "[stage2-ui] "

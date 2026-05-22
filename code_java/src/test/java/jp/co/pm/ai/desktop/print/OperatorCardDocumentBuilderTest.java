@@ -9,6 +9,8 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import jp.co.pm.ai.desktop.io.JsonTableIo;
+
 class OperatorCardDocumentBuilderTest {
 
     @Test
@@ -66,6 +68,22 @@ class OperatorCardDocumentBuilderTest {
                 OperatorCardDocumentBuilder.parseColumnDate("05/08 (Fri)", 2026);
         assertNotNull(d);
         assertEquals(LocalDate.of(2026, 5, 8), d);
+    }
+
+    @Test
+    void inferScheduleStartDate_uses_earliest_column_header() {
+        Map<String, JsonTableIo.SheetTable> sheets =
+                Map.of(
+                        "A",
+                        new JsonTableIo.SheetTable(
+                                List.of("時間帯", "05/08 (Fri)", "05/09 (Sat)"), List.of()),
+                        "B",
+                        new JsonTableIo.SheetTable(
+                                List.of("時間帯", "05/07 (Thu)", "05/10 (Sun)"), List.of()));
+        assertEquals(
+                LocalDate.of(2026, 5, 7),
+                OperatorCardDocumentBuilder.inferScheduleStartDate(
+                        sheets, LocalDate.of(2026, 5, 22)));
     }
 
     @Test
