@@ -3553,12 +3553,15 @@ public final class MainShellController {
                             CodeDispatchLookupTablesMerge.mergeAfterStage1(collectUiEnv());
                     if (ms.totalAdded() > 0) {
                         appendLog("[stage1] 材料・製品種類情報(code/) 自動追記: " + ms.summaryJa());
+                    } else {
+                        appendLog("[stage1] 材料・製品種類情報(code/) 自動追記: 追記なし");
                     }
-                    // #region agent log
                     Path codeDirAfter = AppPaths.resolveCodeDir(collectUiEnv());
                     Path thickPath =
                             codeDirAfter.resolve(CodeDispatchLookupTablesMerge.FILE_PRODUCT_THICK);
+                    appendLog("[stage1] 製品厚みテーブル(正本): " + thickPath.toAbsolutePath().normalize());
                     boolean c4300Present = false;
+                    // #region agent log
                     try {
                         if (java.nio.file.Files.isRegularFile(thickPath)) {
                             for (String line :
@@ -3594,6 +3597,10 @@ public final class MainShellController {
                             "MainShellController:stage1Merge",
                             "material_table_post_merge",
                             mergeDbg);
+                    appendLog(
+                            "[stage1] 製品厚み: C4300-1056-820x114YA 行="
+                                    + (c4300Present ? "あり" : "なし")
+                                    + "（なしのときは加工計画DATAに当該行が無いか段階1で抽出スキップ）");
                     // #endregion
                 } catch (Exception ex) {
                     appendLog("[stage1] 材料・製品種類情報(code/) 自動追記失敗: " + ex.getMessage());

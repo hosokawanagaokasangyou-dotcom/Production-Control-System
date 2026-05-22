@@ -17378,6 +17378,30 @@ def run_stage1_extract():
     _apply_plan_input_visual_format(out_path, STAGE1_PLAN_OUTPUT_SHEET)
     logging.info(f"段階1完了: '{out_path}' を出力しました。マクロで '{PLAN_INPUT_SHEET_NAME}' に坖り込んでしてさい。")
     _try_write_main_sheet_gemini_usage_summary("段階1")
+    logging.info(
+        "段階1: 製品厚みテーブル追記サマリ build=%s 追記先=%s 追記キー数=%s",
+        _STAGE1_MATERIAL_TABLE_APPEND_BUILD,
+        pt_write_path,
+        len(pt_appended_keys),
+    )
+    if pt_appended_keys:
+        logging.info(
+            "段階1: 製品厚みテーブルへ追記したキー: %s",
+            ", ".join(sorted(pt_appended_keys)[:50]),
+        )
+    # #region agent log
+    _agent_debug_stage1_material_log(
+        "H7",
+        "run_stage1_extract:thickness_append_summary",
+        "thickness_append_summary",
+        {
+            "build": _STAGE1_MATERIAL_TABLE_APPEND_BUILD,
+            "writePath": pt_write_path,
+            "appendedCount": len(pt_appended_keys),
+            "appendedKeys": sorted(pt_appended_keys)[:30],
+        },
+    )
+    # #endregion
     return True
 
 
