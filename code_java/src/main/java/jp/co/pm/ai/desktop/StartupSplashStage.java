@@ -95,10 +95,10 @@ final class StartupSplashStage {
         Label title = new Label("工程管理 AI 配台");
         title.getStyleClass().add("splash-title");
 
-        Label subtitleJa = new Label("ペフ加工ライン · 生産配台管理");
+        Label subtitleJa = new Label("発泡樹脂（ペフ）· ロール加工 · 配台管理");
         subtitleJa.getStyleClass().add("splash-subtitle-ja");
 
-        Label subtitleEn = new Label("PEF PROCESSING · DISPATCH CONTROL");
+        Label subtitleEn = new Label("PEF FOAM · ROLL SLICE SLIT PACK");
         subtitleEn.getStyleClass().add("splash-subtitle-en");
 
         VBox titleBlock = new VBox(4, company, factoryBadge, title, subtitleJa, subtitleEn);
@@ -109,13 +109,13 @@ final class StartupSplashStage {
 
         FlowPane processRow = new FlowPane(6, 4);
         processRow.getStyleClass().add("splash-process-row");
-        for (String process : new String[] {"EC", "分割", "融着", "SEC", "スリット"}) {
+        for (String process : new String[] {"ロール", "スライス", "スリット", "梱包"}) {
             Label chip = new Label(process);
             chip.getStyleClass().add("splash-process-chip");
             processRow.getChildren().add(chip);
         }
 
-        Label status = new Label("ペフ加工配台システムを起動しています…");
+        Label status = new Label("発泡樹脂のロール加工・配台システムを起動しています…");
         status.getStyleClass().add("splash-status");
 
         ProgressIndicator busy = new ProgressIndicator();
