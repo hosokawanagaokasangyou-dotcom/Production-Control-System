@@ -4,3 +4,6 @@
 # Git hooks must be LF-terminated (otherwise '/usr/bin/env: bash\r' on POSIX).
 scripts/git-hooks/** text eol=lf
 *.sh text eol=lf
+
+# Windows CMD batch must use CRLF (LF-only breaks setlocal/if parsing).
+*.cmd text eol=crlf
