@@ -1087,6 +1087,25 @@ public final class AppPaths {
     public static final String STAGE1_EXCLUDE_RULES_JSON_FILENAME = "stage1_exclude_rules.json";
 
     /**
+     * Gemini List Models から抽出した Flash-Lite 系（無料枠向け）のキャッシュ JSON（{@code code/json/} 配下）。
+     */
+    public static final String GEMINI_FREE_TIER_FLASH_LITE_MODELS_JSON_FILENAME =
+            "gemini_free_tier_flash_lite_models.json";
+
+    /**
+     * {@link #GEMINI_FREE_TIER_FLASH_LITE_MODELS_JSON_FILENAME} の絶対パス（日次バックグラウンド更新の永続先）。
+     */
+    public static Path geminiFreeTierFlashLiteModelsCachePath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        return resolveRepoRoot(u)
+                .resolve("code")
+                .resolve("json")
+                .resolve(GEMINI_FREE_TIER_FLASH_LITE_MODELS_JSON_FILENAME)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /**
      * Path: {@link #summaryAiDispatchXlsxPath(Map)} と同一フォルダの段階1配台不要ルール JSON。
      */
     public static Path stage1ExcludeRulesJsonPath(Map<String, String> ui) {

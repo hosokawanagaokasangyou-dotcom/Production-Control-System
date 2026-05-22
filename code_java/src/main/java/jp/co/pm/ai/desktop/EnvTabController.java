@@ -51,6 +51,8 @@ import org.controlsfx.control.table.TableFilter;
 import jp.co.pm.ai.desktop.benchmark.GeminiGenerateContentRestClient;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
+import jp.co.pm.ai.desktop.gemini.GeminiFreeTierModelsCache;
+import jp.co.pm.ai.desktop.gemini.GeminiFreeTierModelsRefreshService;
 import jp.co.pm.ai.desktop.crypto.GeminiCredentialsV2Crypto;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.FileChooserForEnvKey;
@@ -122,6 +124,12 @@ public final class EnvTabController {
 
     @FXML
     private Label dispatchGeminiPinnedWarning;
+
+    @FXML
+    private Label dispatchGeminiFreeTierStatusLabel;
+
+    @FXML
+    private Button dispatchGeminiForceRefreshFreeTierButton;
 
     @FXML
     private ListView<String> dispatchGeminiModelListView;
@@ -219,6 +227,7 @@ public final class EnvTabController {
         wireDispatchGeminiModelEditorOnce();
         reloadDispatchGeminiModelsFromEnv();
         refreshDispatchGeminiPinnedWarning();
+        refreshDispatchGeminiFreeTierStatusFromCache();
     }
 
     @FXML
@@ -554,8 +563,12 @@ public final class EnvTabController {
         if (dispatchGeminiHelpLabel != null) {
             dispatchGeminiHelpLabel.setText(
                     "配台（planning_core）は GEMINI_MODEL が空のとき、環境変数 GEMINI_MODEL_TRY_ORDER を上から順に試行します。"
+                            + " Flash-Lite 無料枠候補は 1 日 1 回 models.list で自動更新し、GEMINI_MODEL 未設定時は試行列へ反映します。"
                             + " 一覧を空にして「環境変数へ書き込み」するとコード既定の順（Python と同じ既定列）が使われます。"
                             + " 環境変数一覧で GEMINI_MODEL_TRY_ORDER を直接編集した場合も、この子タブ表示中は自動で再読込します。");
+        }
+        if (dispatchGeminiForceRefreshFreeTierButton != null) {
+            dispatchGeminiForceRefreshFreeTierButton.setText("無料枠モデルを強制更新");
         }
         if (dispatchGeminiModelListView != null) {
             dispatchGeminiModelListView.setItems(dispatchGeminiModelItems);
@@ -569,8 +582,73 @@ public final class EnvTabController {
                             if (sel == dispatchGeminiModelsTab) {
                                 reloadDispatchGeminiModelsFromEnv();
                                 refreshDispatchGeminiPinnedWarning();
+                                refreshDispatchGeminiFreeTierStatusFromCache();
                             }
                         });
+    }
+
+    void onGeminiFreeTierRefreshCompleted(GeminiFreeTierModelsRefreshService.RefreshResult result) {
+        if (dispatchGeminiForceRefreshFreeTierButton != null) {
+            dispatchGeminiForceRefreshFreeTierButton.setDisable(false);
+        }
+        if (result != null && result.success() && !result.modelIds().isEmpty()) {
+            dispatchGeminiModelItems.setAll(result.modelIds());
+            if (dispatchGeminiModelListView != null && !dispatchGeminiModelItems.isEmpty()) {
+                dispatchGeminiModelListView.getSelectionModel().selectFirst();
+            }
+        }
+        refreshDispatchGeminiFreeTierStatusFromCache();
+        refreshDispatchGeminiPinnedWarning();
+    }
+
+    private void refreshDispatchGeminiFreeTierStatusFromCache() {
+        if (dispatchGeminiFreeTierStatusLabel == null || shell == null) {
+            return;
+        }
+        Path cache = GeminiFreeTierModelsCache.resolvePath(shell.snapshotUiEnv());
+        String line =
+                GeminiFreeTierModelsCache.read(cache)
+                        .map(
+                                s -> {
+                                    String when =
+                                            s.refreshedAtEpochMillis() > 0
+                                                    ? java.time.Instant.ofEpochMilli(
+                                                                    s.refreshedAtEpochMillis())
+                                                            .atZone(
+                                                                    java.time.ZoneId
+                                                                            .systemDefault())
+                                                            .format(
+                                                                    java.time.format
+                                                                            .DateTimeFormatter
+                                                                            .ofPattern(
+                                                                                    "yyyy-MM-dd HH:mm"))
+                                                    : "未更新";
+                                    String err =
+                                            s.lastError() != null && !s.lastError().isBlank()
+                                                    ? " 直近エラー: " + s.lastError()
+                                                    : "";
+                                    return "無料枠 Flash-Lite キャッシュ: "
+                                            + s.modelIds().size()
+                                            + " 件・最終 "
+                                            + when
+                                            + err;
+                                })
+                        .orElse("無料枠 Flash-Lite キャッシュ: 未取得（起動後に自動更新されます）");
+        dispatchGeminiFreeTierStatusLabel.setText(line);
+    }
+
+    @FXML
+    private void onDispatchGeminiForceRefreshFreeTierAction() {
+        if (shell == null || ownerStage == null) {
+            return;
+        }
+        if (dispatchGeminiForceRefreshFreeTierButton != null) {
+            dispatchGeminiForceRefreshFreeTierButton.setDisable(true);
+        }
+        if (dispatchGeminiFreeTierStatusLabel != null) {
+            dispatchGeminiFreeTierStatusLabel.setText("無料枠モデルを更新中…");
+        }
+        shell.requestGeminiFreeTierModelsForceRefresh();
     }
 
     private void reloadDispatchGeminiModelsFromEnv() {
@@ -723,7 +801,21 @@ public final class EnvTabController {
 
     @FXML
     private void onDispatchGeminiLoadDefaultsAction() {
-        dispatchGeminiModelItems.setAll(GeminiDispatchModelTryOrderDefaults.PLANNING_CORE_FALLBACK_TRY_ORDER);
+        List<String> fromCache =
+                shell != null
+                        ? GeminiFreeTierModelsCache.read(
+                                        GeminiFreeTierModelsCache.resolvePath(
+                                                shell.snapshotUiEnv()))
+                                .filter(GeminiFreeTierModelsCache.Snapshot::hasModels)
+                                .map(GeminiFreeTierModelsCache.Snapshot::modelIds)
+                                .orElse(List.of())
+                        : List.of();
+        if (!fromCache.isEmpty()) {
+            dispatchGeminiModelItems.setAll(fromCache);
+        } else {
+            dispatchGeminiModelItems.setAll(
+                    GeminiDispatchModelTryOrderDefaults.PLANNING_CORE_FALLBACK_TRY_ORDER);
+        }
         if (dispatchGeminiModelListView != null && !dispatchGeminiModelItems.isEmpty()) {
             dispatchGeminiModelListView.getSelectionModel().selectFirst();
         }

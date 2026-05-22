@@ -64,6 +64,12 @@
                             <Label fx:id="dispatchGeminiHelpLabel" wrapText="true" maxWidth="Infinity"/>
                             <Label fx:id="dispatchGeminiPinnedWarning" wrapText="true" maxWidth="Infinity"
                                    style="-fx-text-fill: -fx-accent" managed="false" visible="false"/>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label fx:id="dispatchGeminiFreeTierStatusLabel" wrapText="true" maxWidth="Infinity"
+                                       HBox.hgrow="ALWAYS" style="-fx-text-fill: -fx-mid-text-color"/>
+                                <Button fx:id="dispatchGeminiForceRefreshFreeTierButton" mnemonicParsing="false"
+                                        onAction="#onDispatchGeminiForceRefreshFreeTierAction"/>
+                            </HBox>
                             <ListView fx:id="dispatchGeminiModelListView" prefHeight="280.0" VBox.vgrow="ALWAYS"/>
                             <HBox alignment="CENTER_LEFT" spacing="8.0">
                                 <Label text="追加するモデル ID"/>

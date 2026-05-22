@@ -92,6 +92,7 @@ import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PushButtonCssEmitter;
 import jp.co.pm.ai.desktop.config.PushButtonDesignPrefs;
 import jp.co.pm.ai.desktop.config.NetworkSourceDirResolver;
+import jp.co.pm.ai.desktop.gemini.GeminiFreeTierModelsRefreshService;
 import jp.co.pm.ai.desktop.config.PortableBundleBuildManifest;
 import jp.co.pm.ai.desktop.config.PortableBundlePendingUpdate;
 import jp.co.pm.ai.desktop.config.PortableBundleSelfUpdater;
@@ -446,6 +447,9 @@ public final class MainShellController {
 
     private final AtomicBoolean suppressEnvSessionPersistence = new AtomicBoolean(false);
 
+    /** Gemini 無料枠 Flash-Lite モデル一覧の日次 {@code models.list} 更新。 */
+    private GeminiFreeTierModelsRefreshService geminiFreeTierModelsRefreshService;
+
     /** 納期管理ビュー再読み込み中のタブ差し戻しで {@link TabPane} の選択リスナーを再入しない。 */
     private final AtomicBoolean suppressDeliveryCalendarReloadTabGuard = new AtomicBoolean(false);
 
@@ -618,6 +622,11 @@ public final class MainShellController {
 
         installUiEnvAutoSave();
 
+        geminiFreeTierModelsRefreshService =
+                new GeminiFreeTierModelsRefreshService(
+                        this::snapshotUiEnv, this::onGeminiFreeTierModelsRefreshFinished);
+        geminiFreeTierModelsRefreshService.start();
+
         applyRepoFolderPathNormalization();
         maybePortableFirstLaunchEnvInit();
 
@@ -625,6 +634,9 @@ public final class MainShellController {
 
         primaryStage.setOnCloseRequest(
                 e -> {
+                    if (geminiFreeTierModelsRefreshService != null) {
+                        geminiFreeTierModelsRefreshService.shutdown();
+                    }
                     memorySettingsTabController.shutdown();
                     JvmMemoryLogStore.persistSnapshot(
                             MemoryJvmRingLog.getMaxLines(), MemoryJvmRingLog.snapshotLines());
@@ -4513,6 +4525,66 @@ public final class MainShellController {
 
     Map<String, String> snapshotUiEnv() {
         return collectUiEnv();
+    }
+
+    /** 環境変数タブ「配台 Gemini モデル優先」から無料枠 Flash-Lite 一覧を即時再取得する。 */
+    public void requestGeminiFreeTierModelsForceRefresh() {
+        if (geminiFreeTierModelsRefreshService != null) {
+            geminiFreeTierModelsRefreshService.refreshNow(true);
+        }
+    }
+
+    private void onGeminiFreeTierModelsRefreshFinished(
+            GeminiFreeTierModelsRefreshService.RefreshResult result) {
+        javafx.application.Platform.runLater(
+                () -> {
+                    if (result != null && result.success() && !result.modelIds().isEmpty()) {
+                        applyGeminiFreeTierModelsToTryOrderEnvIfUnpinned(result.modelIds());
+                    }
+                    if (result != null && result.message() != null && !result.message().isBlank()) {
+                        appendLog("[gemini-free-tier] " + result.message());
+                    }
+                    if (envTabController != null && result != null) {
+                        envTabController.onGeminiFreeTierRefreshCompleted(result);
+                    }
+                });
+    }
+
+    /**
+     * {@code GEMINI_MODEL} 未設定時のみ、日次／手動更新で得た試行列を環境変数表へ反映する。
+     */
+    private void applyGeminiFreeTierModelsToTryOrderEnvIfUnpinned(List<String> modelIds) {
+        if (envRows == null || modelIds == null || modelIds.isEmpty()) {
+            return;
+        }
+        boolean pinned = false;
+        for (EnvVarRow r : envRows) {
+            String n = r.getName() != null ? r.getName().strip() : "";
+            if ("GEMINI_MODEL".equals(n)) {
+                String v = r.getValue();
+                pinned = v != null && !v.isBlank();
+                break;
+            }
+        }
+        if (pinned) {
+            return;
+        }
+        EnvVarRow tryRow = null;
+        for (EnvVarRow r : envRows) {
+            String n = r.getName() != null ? r.getName().strip() : "";
+            if ("GEMINI_MODEL_TRY_ORDER".equals(n)) {
+                tryRow = r;
+                break;
+            }
+        }
+        if (tryRow == null) {
+            tryRow = new EnvVarRow();
+            tryRow.setName("GEMINI_MODEL_TRY_ORDER");
+            tryRow.setDescription(
+                    "カンマ区切りで試行順。GEMINI_MODEL 未設定時のみ有効。日次更新で Flash-Lite 無料枠候補を自動反映。");
+            envRows.add(tryRow);
+        }
+        tryRow.setValue(String.join(",", modelIds));
     }
 
     /** 実行タブに表示中の段階2計画ブックパス（設備ガントの兄弟 JSON オートフィル用）。 */
