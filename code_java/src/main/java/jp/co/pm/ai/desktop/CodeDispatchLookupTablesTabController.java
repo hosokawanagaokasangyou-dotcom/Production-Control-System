@@ -1,11 +1,13 @@
 package jp.co.pm.ai.desktop;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -17,7 +19,10 @@ import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Tab;
@@ -30,6 +35,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.AppPaths.DispatchLookupTableOverwriteResult;
 import jp.co.pm.ai.desktop.io.CodeDispatchLookupTableIo;
 import jp.co.pm.ai.desktop.io.CodeDispatchLookupTableIo.KeyValTable;
 
@@ -76,6 +82,9 @@ public final class CodeDispatchLookupTablesTabController {
     private TabPane fileTabPane;
 
     private final Map<Tab, FilePanel> panelByTab = new ConcurrentHashMap<>();
+    private final Map<String, FilePanel> panelByFilename = new LinkedHashMap<>();
+
+    private RepoRestorePanel repoRestorePanel;
 
     private final AtomicBoolean planInputRollUnitNotifyPending = new AtomicBoolean(false);
 
@@ -90,8 +99,13 @@ public final class CodeDispatchLookupTablesTabController {
             FilePanel panel = new FilePanel(spec);
             tab.setContent(panel.root());
             panelByTab.put(tab, panel);
+            panelByFilename.put(spec.relativePath(), panel);
             fileTabPane.getTabs().add(tab);
         }
+        repoRestorePanel = new RepoRestorePanel();
+        Tab restoreTab = new Tab("リポジトリから上書き");
+        restoreTab.setContent(repoRestorePanel.root());
+        fileTabPane.getTabs().add(restoreTab);
         fileTabPane
                 .getSelectionModel()
                 .selectedItemProperty()
@@ -101,6 +115,8 @@ public final class CodeDispatchLookupTablesTabController {
                                 FilePanel p = panelByTab.get(sel);
                                 if (p != null) {
                                     p.ensureLoaded();
+                                } else if (repoRestorePanel != null && sel.getContent() == repoRestorePanel.root()) {
+                                    repoRestorePanel.refreshStatus();
                                 }
                             }
                         });
@@ -369,6 +385,156 @@ public final class CodeDispatchLookupTablesTabController {
             }
             Runnable ping = () -> Platform.runLater(this::applySearchPredicate);
             r.addListener((ListChangeListener<String>) c -> ping.run());
+        }
+    }
+
+    /** リポジトリ {@code code/} 同梱から作業先へ上書き復元するサブタブ。 */
+    private final class RepoRestorePanel {
+
+        private record RestoreRow(String tabLabel, String filename, String workStatus, String repoStatus) {}
+
+        private final VBox root;
+        private final Label workDirLabel = new Label();
+        private final TableView<RestoreRow> table = new TableView<>();
+        private final ObservableList<RestoreRow> rows = FXCollections.observableArrayList();
+
+        RepoRestorePanel() {
+            workDirLabel.setWrapText(true);
+            Label intro =
+                    new Label(
+                            "サマリ Excel と同一フォルダの材料・製品種類テーブルを、リポジトリ code/ 同梱の内容で上書きします。"
+                                    + " 編集中の未保存変更は失われます。");
+            intro.setWrapText(true);
+
+            TableColumn<RestoreRow, String> colLabel = new TableColumn<>("編集タブ");
+            colLabel.setPrefWidth(180);
+            colLabel.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(cd.getValue().tabLabel()));
+
+            TableColumn<RestoreRow, String> colFile = new TableColumn<>("ファイル名");
+            colFile.setPrefWidth(240);
+            colFile.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(cd.getValue().filename()));
+
+            TableColumn<RestoreRow, String> colWork = new TableColumn<>("作業先");
+            colWork.setPrefWidth(80);
+            colWork.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(cd.getValue().workStatus()));
+
+            TableColumn<RestoreRow, String> colRepo = new TableColumn<>("リポジトリ源");
+            colRepo.setPrefWidth(100);
+            colRepo.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(cd.getValue().repoStatus()));
+
+            table.getColumns().addAll(List.of(colLabel, colFile, colWork, colRepo));
+            table.setItems(rows);
+            table.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+            table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+
+            Button refresh = new Button("状態更新");
+            refresh.setOnAction(e -> refreshStatus());
+            Button overwriteSel = new Button("選択を上書き");
+            overwriteSel.setOnAction(e -> overwriteSelected());
+            Button overwriteAll = new Button("すべて上書き");
+            overwriteAll.setOnAction(e -> overwriteAll());
+            HBox bar = new HBox(8, refresh, overwriteSel, overwriteAll);
+            bar.setAlignment(Pos.CENTER_LEFT);
+
+            root = new VBox(8, intro, workDirLabel, bar, table);
+            VBox.setVgrow(table, Priority.ALWAYS);
+            root.setPadding(new Insets(0, 0, 4, 0));
+        }
+
+        VBox root() {
+            return root;
+        }
+
+        void refreshStatus() {
+            Map<String, String> ui = uiEnv();
+            Path workDir =
+                    AppPaths.dispatchLookupTablePath(ui, AppPaths.DISPATCH_LOOKUP_PRODUCT_THICK)
+                            .getParent();
+            workDirLabel.setText("作業先フォルダ: " + (workDir != null ? workDir : "（未設定）"));
+            rows.clear();
+            for (FileSpec spec : FILES) {
+                Path target = AppPaths.dispatchLookupTablePath(ui, spec.relativePath());
+                Optional<Path> source =
+                        AppPaths.resolveBundledDispatchLookupTableSourceInRepo(ui, spec.relativePath());
+                String workStatus = Files.isRegularFile(target) ? "あり" : "なし";
+                String repoStatus = source.isPresent() ? "あり" : "なし";
+                rows.add(new RestoreRow(spec.tabLabel(), spec.relativePath(), workStatus, repoStatus));
+            }
+            table.refresh();
+        }
+
+        private void overwriteSelected() {
+            var sel = table.getSelectionModel().getSelectedItems();
+            if (sel == null || sel.isEmpty()) {
+                if (shell != null) {
+                    shell.showErrorDialog("上書き", "上書きするファイルを選択してください。");
+                }
+                return;
+            }
+            if (!confirmOverwrite(sel.size() == 1 ? sel.getFirst().filename() : sel.size() + " 件")) {
+                return;
+            }
+            applyOverwrite(sel.stream().map(RestoreRow::filename).toList());
+        }
+
+        private void overwriteAll() {
+            if (!confirmOverwrite("すべて（6 件）")) {
+                return;
+            }
+            applyOverwrite(AppPaths.dispatchLookupTableFilenames());
+        }
+
+        private boolean confirmOverwrite(String targetDescription) {
+            Alert confirm = new Alert(AlertType.CONFIRMATION);
+            confirm.setTitle("上書きの確認");
+            confirm.setHeaderText(null);
+            confirm.setContentText(
+                    targetDescription
+                            + " をリポジトリ同梱の内容で上書きします。\n"
+                            + "作業先の未保存変更は失われます。続行しますか？");
+            if (shell != null && shell.primaryStageForDialogs() != null) {
+                confirm.initOwner(shell.primaryStageForDialogs());
+            }
+            Optional<ButtonType> ans = confirm.showAndWait();
+            return ans.isPresent() && ans.get() == ButtonType.OK;
+        }
+
+        private void applyOverwrite(List<String> filenames) {
+            Map<String, String> ui = uiEnv();
+            int ok = 0;
+            int ng = 0;
+            for (String filename : filenames) {
+                DispatchLookupTableOverwriteResult r =
+                        AppPaths.overwriteDispatchLookupTableFromRepo(ui, filename);
+                if (r.success()) {
+                    ok++;
+                    logLine(
+                            "[code-lookup-restore] 上書き: "
+                                    + r.targetPath()
+                                    + " ← "
+                                    + r.sourcePath());
+                    FilePanel panel = panelByFilename.get(filename);
+                    if (panel != null) {
+                        panel.reloadFromDisk();
+                    }
+                } else {
+                    ng++;
+                    logLine(
+                            "[code-lookup-restore] 失敗: "
+                                    + filename
+                                    + " → "
+                                    + r.message());
+                }
+            }
+            refreshStatus();
+            scheduleInvalidatePlanInputRollUnitHighlightCache();
+            if (ng > 0 && shell != null) {
+                shell.showErrorDialog(
+                        "上書き",
+                        "成功 " + ok + " 件、失敗 " + ng + " 件。詳細は実行ログを確認してください。");
+            } else if (ok > 0) {
+                logLine("[code-lookup-restore] 完了: " + ok + " 件を上書きしました。");
+            }
         }
     }
 }

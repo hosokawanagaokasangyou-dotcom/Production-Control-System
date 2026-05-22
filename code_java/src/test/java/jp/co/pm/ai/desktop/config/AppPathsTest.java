@@ -253,6 +253,36 @@ class AppPathsTest {
     }
 
     @Test
+    void overwriteDispatchLookupTableFromRepo_replacesExisting(@TempDir Path fakeRepo) throws Exception {
+        Path code = fakeRepo.resolve("code");
+        Files.createDirectories(code);
+        Files.writeString(code.resolve(AppPaths.DISPATCH_LOOKUP_PRODUCT_THICK), "製品名,製品厚み\nrepo\n");
+        Path summaryDir = fakeRepo.resolve("work");
+        Files.createDirectories(summaryDir);
+        Path summary = summaryDir.resolve("custom_summary.xlsx");
+        Files.createFile(summary);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        fakeRepo.toString(),
+                        AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                        summary.toString(),
+                        AppPaths.KEY_PM_AI_CODE_DIR,
+                        code.toString());
+        Path target = AppPaths.dispatchLookupTablePath(ui, AppPaths.DISPATCH_LOOKUP_PRODUCT_THICK);
+        Files.writeString(target, "製品名,製品厚み\nlocal\n");
+        AppPaths.DispatchLookupTableOverwriteResult r =
+                AppPaths.overwriteDispatchLookupTableFromRepo(ui, AppPaths.DISPATCH_LOOKUP_PRODUCT_THICK);
+        assertTrue(r.success());
+        assertEquals("製品名,製品厚み\nrepo\n", Files.readString(target));
+    }
+
+    @Test
+    void dispatchLookupTableFilenames_listsSixTables() {
+        assertEquals(6, AppPaths.dispatchLookupTableFilenames().size());
+    }
+
+    @Test
     void resolveDefaultOutputDir_defaultsToRepoOutput(@TempDir Path fakeRepo) throws Exception {
         Path code = fakeRepo.resolve("code").resolve("python");
         Files.createDirectories(code);

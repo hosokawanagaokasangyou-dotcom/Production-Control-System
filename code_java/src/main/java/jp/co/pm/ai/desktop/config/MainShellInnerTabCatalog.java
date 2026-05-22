@@ -46,7 +46,8 @@ public final class MainShellInnerTabCatalog {
                             "製品名→製品幅(mm)",
                             "製品名→厚み(mm)",
                             "製品名→製品長(mm)",
-                            "使用原反→原反幅(mm)");
+                            "使用原反→原反幅(mm)",
+                            "リポジトリから上書き");
             case DELIVERY_CALENDAR_VIEW ->
                     List.of(
                             "\u30a2\u30e9\u30fb\u5b9f\u7e3e\u30fb\u30b7\u30b9\u6bd4\u8f03",

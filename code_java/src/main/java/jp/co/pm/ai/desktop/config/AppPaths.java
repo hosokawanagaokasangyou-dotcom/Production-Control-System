@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1271,6 +1272,60 @@ public final class AppPaths {
         for (String filename : DISPATCH_LOOKUP_TABLE_FILENAMES) {
             ensureDispatchLookupTableFromRepoIfMissing(ui, filename);
         }
+    }
+
+    /** 材料・製品種類ルックアップ表のファイル名一覧（作業先・リポジトリ同梱の対象）。 */
+    public static List<String> dispatchLookupTableFilenames() {
+        return DISPATCH_LOOKUP_TABLE_FILENAMES;
+    }
+
+    /** リポジトリ同梱から作業先へ上書きコピーした結果。 */
+    public record DispatchLookupTableOverwriteResult(
+            String filename,
+            boolean success,
+            String message,
+            Path sourcePath,
+            Path targetPath) {}
+
+    /**
+     * リポジトリ {@code code/} 同梱のルックアップ表で作業先（サマリ Excel 同フォルダ）を上書きする。
+     *
+     * <p>作業先が既にあっても {@link StandardCopyOption#REPLACE_EXISTING} で置き換える。
+     */
+    public static DispatchLookupTableOverwriteResult overwriteDispatchLookupTableFromRepo(
+            Map<String, String> ui, String filename) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path target = dispatchLookupTablePath(u, filename);
+        Optional<Path> source = resolveBundledDispatchLookupTableSourceInRepo(u, filename);
+        if (source.isEmpty()) {
+            return new DispatchLookupTableOverwriteResult(
+                    filename,
+                    false,
+                    "リポジトリに同梱ファイルがありません",
+                    null,
+                    target);
+        }
+        try {
+            if (target.getParent() != null) {
+                Files.createDirectories(target.getParent());
+            }
+            Files.copy(source.get(), target, StandardCopyOption.REPLACE_EXISTING);
+            return new DispatchLookupTableOverwriteResult(
+                    filename, true, "上書きしました", source.get(), target);
+        } catch (IOException ex) {
+            return new DispatchLookupTableOverwriteResult(
+                    filename, false, ex.getMessage(), source.get(), target);
+        }
+    }
+
+    /** {@link #dispatchLookupTableFilenames()} をすべて作業先へ上書きコピーする。 */
+    public static List<DispatchLookupTableOverwriteResult> overwriteAllDispatchLookupTablesFromRepo(
+            Map<String, String> ui) {
+        List<DispatchLookupTableOverwriteResult> out = new ArrayList<>();
+        for (String filename : DISPATCH_LOOKUP_TABLE_FILENAMES) {
+            out.add(overwriteDispatchLookupTableFromRepo(ui, filename));
+        }
+        return out;
     }
 
     /**
