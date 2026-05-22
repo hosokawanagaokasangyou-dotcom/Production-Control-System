@@ -150,7 +150,8 @@ exec_maven() {
   _pm_ai_mvn_args=""
   for _pm_ai_arg in "$@"; do
     if [ "$_pm_ai_arg" = "javafx:run" ]; then
-      _pm_ai_mvn_args="$_pm_ai_mvn_args exec:exec@pm-ai-desktop"
+      # validate の build-classpath と target/classes を揃えるため compile を先行
+      _pm_ai_mvn_args="$_pm_ai_mvn_args compile exec:exec@pm-ai-desktop"
     else
       _pm_ai_mvn_args="$_pm_ai_mvn_args $_pm_ai_arg"
     fi

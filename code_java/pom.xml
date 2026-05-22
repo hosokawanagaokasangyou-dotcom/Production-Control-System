@@ -231,9 +231,9 @@
       </plugin>
       <!-- ========================================================= -->
 
-      <!-- 開発時の推奨起動: mvnw compile exec:exec@pm-ai-desktop または run-pm-ai-desktop.ps1。
-           mvnw javafx:run は pm-ai-mvn-route 経由で exec:exec@pm-ai-desktop に転送される
-           （javafx-maven-plugin 単体は Windows で target/classes 欠落 ClassNotFound になるため不使用）。 -->
+      <!-- 開発時の推奨起動: mvnw javafx:run / run-pm-ai-desktop.ps1（いずれも compile 後に exec）。
+           mvnw javafx:run は pm-ai-mvn-route 経由で compile exec:exec@pm-ai-desktop に転送される
+           （exec 単体では validate が走らず module-path が空になる。javafx-maven-plugin 単体は不使用）。 -->
 
       <!-- jpackage 用 exec 起動 -->
       <plugin>

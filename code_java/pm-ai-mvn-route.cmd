@@ -6,7 +6,8 @@ set "ARGS="
 :loop
 if "%~1"=="" goto run
 if /I "%~1"=="javafx:run" (
-  set "ARGS=!ARGS! exec:exec@pm-ai-desktop"
+  rem validate の build-classpath と target/classes を揃えるため compile を先行
+  set "ARGS=!ARGS! compile exec:exec@pm-ai-desktop"
 ) else (
   set "ARGS=!ARGS! %~1"
 )
