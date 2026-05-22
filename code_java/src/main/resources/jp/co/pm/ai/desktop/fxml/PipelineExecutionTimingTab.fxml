@@ -63,7 +63,9 @@
             <items>
                 <VBox spacing="8.0">
                     <HBox alignment="CENTER_LEFT" spacing="6.0" styleClass="pm-pipeline-timing-chart-toolbar">
-                        <ToggleGroup fx:id="chartViewToggleGroup"/>
+                        <fx:define>
+                            <ToggleGroup fx:id="chartViewToggleGroup"/>
+                        </fx:define>
                         <ToggleButton fx:id="trendViewToggle" mnemonicParsing="false" selected="true"
                                       text="トレンド" toggleGroup="$chartViewToggleGroup"/>
                         <ToggleButton fx:id="distributionViewToggle" mnemonicParsing="false"
