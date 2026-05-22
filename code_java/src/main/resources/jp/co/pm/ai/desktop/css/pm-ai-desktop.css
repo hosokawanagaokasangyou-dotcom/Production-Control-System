@@ -126,6 +126,26 @@
     -fx-padding: 0 0 4 0;
 }
 
+.border-pane.pm-pipeline-timing-tab {
+    -fx-background-color: transparent;
+}
+
+.pm-pipeline-timing-tab .label.pm-section-title {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-mid-text-color;
+    -fx-padding: 0 0 4 0;
+}
+
+.pm-pipeline-timing-tab .label.pm-pipeline-timing-hint {
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-pipeline-timing-tab .label.pm-pipeline-timing-stats {
+    -fx-font-family: "Consolas", "Cascadia Mono", monospace;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
 .pm-run-tab .label.pm-run-timing-value {
     -fx-font-family: "Consolas", "Cascadia Mono", monospace;
     -fx-text-fill: -fx-mid-text-color;

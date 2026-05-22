@@ -5,7 +5,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -164,11 +163,7 @@ public final class MainRunTabController {
     @FXML
     private Label pipelineTimingDeliveryCalendarLabel;
 
-    private final Map<PipelineExecutionTimingKind, Long> pipelineTimingStartNanos =
-            new EnumMap<>(PipelineExecutionTimingKind.class);
-
-    private final Map<PipelineExecutionTimingKind, Long> pipelineTimingLastDurationMs =
-            new EnumMap<>(PipelineExecutionTimingKind.class);
+    private Runnable pipelineTimingHistoryListener;
 
     private final ObservableList<String> logLinesAll = FXCollections.observableArrayList();
     private final FilteredList<String> logLinesVisible =
@@ -472,12 +467,20 @@ public final class MainRunTabController {
     }
 
     void bindShell(MainShellController shell) {
+        if (this.shell != null && pipelineTimingHistoryListener != null) {
+            this.shell.pipelineExecutionTimingHistory().removeChangeListener(pipelineTimingHistoryListener);
+        }
         this.shell = shell;
         refreshAppVersionLabel();
         refreshOpenWorkbookHintLabels();
         refreshFactorySiteLogo();
         startSummaryExportLockPolling();
         refreshSummaryWorkbookOpenLockState();
+        pipelineTimingHistoryListener = () -> Platform.runLater(this::refreshPipelineExecutionTimingLabels);
+        if (shell != null) {
+            shell.pipelineExecutionTimingHistory().addChangeListener(pipelineTimingHistoryListener);
+            refreshPipelineExecutionTimingLabels();
+        }
     }
 
     private void startSummaryExportLockPolling() {
@@ -937,30 +940,14 @@ public final class MainRunTabController {
         return statusLabel;
     }
 
-    /** パイプライン処理の wall-clock 計測を開始する（子プロセス／バックグラウンド処理の直前）。 */
-    void beginPipelineExecutionTiming(PipelineExecutionTimingKind kind) {
-        if (kind == null) {
+    /** 履歴ストアの最新値で実行・ログタブのラベルを更新する。 */
+    void refreshPipelineExecutionTimingLabels() {
+        if (shell == null) {
             return;
         }
-        pipelineTimingStartNanos.put(kind, System.nanoTime());
-    }
-
-    /** 計測を終了し、実行・ログタブの「最新の実行時間」を更新する。 */
-    void endPipelineExecutionTiming(PipelineExecutionTimingKind kind) {
-        if (kind == null) {
-            return;
-        }
-        Long start = pipelineTimingStartNanos.remove(kind);
-        if (start == null) {
-            return;
-        }
-        long durationMs = Math.max(0L, (System.nanoTime() - start) / 1_000_000L);
-        pipelineTimingLastDurationMs.put(kind, durationMs);
-        Runnable update = () -> applyPipelineExecutionTimingLabel(kind, durationMs);
-        if (Platform.isFxApplicationThread()) {
-            update.run();
-        } else {
-            Platform.runLater(update);
+        PipelineExecutionTimingHistoryStore store = shell.pipelineExecutionTimingHistory();
+        for (PipelineExecutionTimingKind kind : PipelineExecutionTimingKind.values()) {
+            applyPipelineExecutionTimingLabel(kind, store.lastDurationMs(kind));
         }
     }
 
@@ -986,7 +973,10 @@ public final class MainRunTabController {
                     case DELIVERY_CALENDAR_VIEW -> pipelineTimingDeliveryCalendarLabel;
                 };
         if (target != null) {
-            target.setText(formatPipelineExecutionDuration(durationMs));
+            target.setText(
+                    durationMs >= 0L
+                            ? formatPipelineExecutionDuration(durationMs)
+                            : "—");
         }
     }
 

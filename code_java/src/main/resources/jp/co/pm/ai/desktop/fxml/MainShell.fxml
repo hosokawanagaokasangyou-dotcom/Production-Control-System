@@ -43,6 +43,11 @@
                         <fx:include fx:id="mainRunTab" source="MainRunTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabPipelineExecutionTiming" closable="false" text="実行時間分析">
+                    <content>
+                        <fx:include fx:id="pipelineExecutionTimingTab" source="PipelineExecutionTimingTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabUiBadgeDesign" closable="false" text="UIバッジ">
                     <content>
                         <fx:include fx:id="uiBadgeDesignTab" source="UiBadgeDesignTab.fxml"/>

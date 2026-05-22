@@ -317,10 +317,16 @@ public final class MainShellController {
     private ApiModelBenchmarkTabController apiModelBenchmarkTabController;
 
     @FXML
+    private PipelineExecutionTimingTabController pipelineExecutionTimingTabController;
+
+    @FXML
     private CodeDispatchLookupTablesTabController codeDispatchLookupTablesTabController;
 
     @FXML
     private Tab mainShellTabRun;
+
+    @FXML
+    private Tab mainShellTabPipelineExecutionTiming;
 
     @FXML
     private Tab mainShellTabUiBadgeDesign;
@@ -409,6 +415,9 @@ public final class MainShellController {
     private ObservableList<EnvVarRow> envRows;
 
     private final AtomicBoolean runLock = new AtomicBoolean(false);
+
+    private final PipelineExecutionTimingHistoryStore pipelineExecutionTimingHistory =
+            new PipelineExecutionTimingHistoryStore();
 
     /** Non-null while a stage script is running; equals {@link #STAGE1} or {@link #STAGE2}. */
     private volatile String activeRunStageScript;
@@ -506,6 +515,8 @@ public final class MainShellController {
             applyBundledPortableDefaultsIfPresent();
             Map<String, String> ui0 = collectUiEnv();
 
+            pipelineExecutionTimingHistory.loadFromDefaultPath();
+
             mainRunTabController.bindShell(this);
             envTabController.bindShell(this);
             memorySettingsTabController.bindShell(this);
@@ -570,6 +581,9 @@ public final class MainShellController {
         }
         if (apiModelBenchmarkTabController != null) {
             apiModelBenchmarkTabController.bindShell(this);
+        }
+        if (pipelineExecutionTimingTabController != null) {
+            pipelineExecutionTimingTabController.bindShell(this);
         }
         applySummaryExportRunGating();
 
@@ -677,6 +691,10 @@ public final class MainShellController {
                             if (newTab == mainShellTabApiModelBenchmark
                                     && apiModelBenchmarkTabController != null) {
                                 apiModelBenchmarkTabController.refreshShellDerivedLabels();
+                            }
+                            if (newTab == mainShellTabPipelineExecutionTiming
+                                    && pipelineExecutionTimingTabController != null) {
+                                pipelineExecutionTimingTabController.refreshFromStore();
                             }
                             if (newTab == mainShellTabDispatchInteractive
                                     && dispatchInteractiveTabController != null) {
@@ -1398,6 +1416,9 @@ public final class MainShellController {
         if (t == mainShellTabRun) {
             return MainShellTabId.RUN;
         }
+        if (t == mainShellTabPipelineExecutionTiming) {
+            return MainShellTabId.PIPELINE_EXECUTION_TIMING;
+        }
         if (t == mainShellTabUiBadgeDesign) {
             return MainShellTabId.UI_BADGE_DESIGN;
         }
@@ -1482,6 +1503,7 @@ public final class MainShellController {
         }
         return switch (id) {
             case RUN -> mainShellTabRun;
+            case PIPELINE_EXECUTION_TIMING -> mainShellTabPipelineExecutionTiming;
             case UI_BADGE_DESIGN -> mainShellTabUiBadgeDesign;
             case PUSH_BUTTON_DESIGN -> mainShellTabPushButtonDesign;
             case ENV -> mainShellTabEnv;
@@ -3392,9 +3414,9 @@ public final class MainShellController {
             RunRequest req = new RunRequest(py, dir, script, wb, childEnv);
             mainRunTabController.getStatusLabel().setText("実行中…");
             if (STAGE1.equals(script)) {
-                mainRunTabController.beginPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE1);
+                beginPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE1);
             } else if (STAGE2.equals(script)) {
-                mainRunTabController.beginPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE2);
+                beginPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE2);
             }
 
             ArrayDeque<String> recentChildLines = new ArrayDeque<>(STAGE_CHILD_LOG_TAIL_MAX + 4);
@@ -3455,9 +3477,9 @@ public final class MainShellController {
 
     private void completeStageRunOnFx(String script, Integer code, Throwable err, List<String> tailSnap) {
         if (STAGE1.equals(script)) {
-            mainRunTabController.endPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE1);
+            endPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE1);
         } else if (STAGE2.equals(script)) {
-            mainRunTabController.endPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE2);
+            endPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE2);
         }
         applyRunTabGating();
         if (err != null) {
@@ -4269,15 +4291,15 @@ public final class MainShellController {
     }
 
     void beginPipelineExecutionTiming(PipelineExecutionTimingKind kind) {
-        if (mainRunTabController != null) {
-            mainRunTabController.beginPipelineExecutionTiming(kind);
-        }
+        pipelineExecutionTimingHistory.begin(kind);
     }
 
     void endPipelineExecutionTiming(PipelineExecutionTimingKind kind) {
-        if (mainRunTabController != null) {
-            mainRunTabController.endPipelineExecutionTiming(kind);
-        }
+        pipelineExecutionTimingHistory.end(kind);
+    }
+
+    PipelineExecutionTimingHistoryStore pipelineExecutionTimingHistory() {
+        return pipelineExecutionTimingHistory;
     }
 
     /** グローバル設定の工場切替などで実行・ログタブ上部ロゴを更新する。 */

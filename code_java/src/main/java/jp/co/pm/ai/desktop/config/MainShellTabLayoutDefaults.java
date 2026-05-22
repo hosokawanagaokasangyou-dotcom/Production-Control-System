@@ -24,6 +24,7 @@ public final class MainShellTabLayoutDefaults {
     public static final List<String> DEFAULT_FLAT_TAB_KEY_ORDER =
             List.of(
                     MainShellTabId.RUN.key(),
+                    MainShellTabId.PIPELINE_EXECUTION_TIMING.key(),
                     MainShellTabId.PLAN_INPUT.key(),
                     MainShellTabId.DISPATCH_INTERACTIVE.key(),
                     MainShellTabId.EQUIPMENT_GANTT_GRAPHIC.key(),
@@ -67,6 +68,7 @@ public final class MainShellTabLayoutDefaults {
     public static List<MainShellTabLayoutNode> groupedLayout() {
         List<MainShellTabLayoutNode> top = new ArrayList<>();
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.RUN.key(), ""));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PIPELINE_EXECUTION_TIMING.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_INPUT.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.DISPATCH_INTERACTIVE.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.EQUIPMENT_GANTT_GRAPHIC.key(), ""));
