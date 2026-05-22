@@ -1,66 +1,142 @@
-/* Startup splash — deep navy industrial theme (standalone, no app theme dependency) */
+/* Startup splash — PEF processing factory theme (standalone, no app theme dependency) */
 
 .splash-root {
-    -fx-background-color: #0f172a;
+    -fx-background-color: #1a2332;
     -fx-background-radius: 12px;
-    -fx-border-color: rgba(56, 189, 248, 0.35);
+    -fx-border-color: rgba(251, 191, 36, 0.28);
     -fx-border-width: 1px;
     -fx-border-radius: 12px;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.55), 28, 0.32, 0, 8);
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.62), 32, 0.34, 0, 10);
+}
+
+.splash-root.splash-factory-konan {
+    -fx-border-color: rgba(90, 142, 200, 0.42);
+}
+
+.splash-root.splash-factory-kokubu {
+    -fx-border-color: rgba(94, 196, 138, 0.42);
 }
 
 .splash-background-image {
-    -fx-opacity: 0.92;
+    -fx-opacity: 0.88;
 }
 
 .splash-overlay {
     -fx-background-color: linear-gradient(
-        to bottom,
-        rgba(15, 23, 42, 0.55) 0%,
-        rgba(15, 23, 42, 0.72) 55%,
-        rgba(15, 23, 42, 0.88) 100%
+        to right,
+        rgba(15, 23, 42, 0.92) 0%,
+        rgba(15, 23, 42, 0.78) 42%,
+        rgba(15, 23, 42, 0.45) 100%
     );
 }
 
 .splash-content {
-    -fx-padding: 36px 44px 32px 44px;
-    -fx-spacing: 14px;
+    -fx-padding: 34px 42px 30px 42px;
+    -fx-spacing: 12px;
 }
 
 .splash-brand-row {
-    -fx-spacing: 10px;
+    -fx-spacing: 12px;
     -fx-alignment: center-left;
 }
 
 .splash-accent-bar {
-    -fx-pref-width: 4px;
-    -fx-min-width: 4px;
-    -fx-max-width: 4px;
-    -fx-pref-height: 44px;
-    -fx-background-color: linear-gradient(to bottom, #38bdf8, #0ea5e9);
-    -fx-background-radius: 2px;
+    -fx-pref-width: 5px;
+    -fx-min-width: 5px;
+    -fx-max-width: 5px;
+    -fx-pref-height: 56px;
+    -fx-background-color: linear-gradient(to bottom, #fbbf24, #d97706);
+    -fx-background-radius: 3px;
+}
+
+.splash-root.splash-factory-konan .splash-accent-bar {
+    -fx-background-color: linear-gradient(to bottom, #60a5fa, #2563eb);
+}
+
+.splash-root.splash-factory-kokubu .splash-accent-bar {
+    -fx-background-color: linear-gradient(to bottom, #4ade80, #16a34a);
+}
+
+.splash-factory-badge {
+    -fx-font-family: "Yu Gothic UI", "Meiryo UI", Meiryo, "Segoe UI", "Noto Sans CJK JP", sans-serif;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #fef3c7;
+    -fx-background-color: rgba(251, 191, 36, 0.16);
+    -fx-border-color: rgba(251, 191, 36, 0.45);
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+    -fx-padding: 3px 10px;
+}
+
+.splash-root.splash-factory-konan .splash-factory-badge {
+    -fx-text-fill: #dbeafe;
+    -fx-background-color: rgba(37, 99, 235, 0.18);
+    -fx-border-color: rgba(96, 165, 250, 0.5);
+}
+
+.splash-root.splash-factory-kokubu .splash-factory-badge {
+    -fx-text-fill: #dcfce7;
+    -fx-background-color: rgba(22, 163, 74, 0.18);
+    -fx-border-color: rgba(74, 222, 128, 0.5);
 }
 
 .splash-title {
     -fx-font-family: "Yu Gothic UI", "Meiryo UI", Meiryo, "Segoe UI", "Noto Sans CJK JP", sans-serif;
-    -fx-font-size: 26px;
+    -fx-font-size: 27px;
     -fx-font-weight: bold;
     -fx-text-fill: #f8fafc;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 6, 0.35, 0, 1);
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 8, 0.35, 0, 1);
+}
+
+.splash-subtitle-ja {
+    -fx-font-family: "Yu Gothic UI", "Meiryo UI", Meiryo, "Segoe UI", "Noto Sans CJK JP", sans-serif;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #fde68a;
+}
+
+.splash-root.splash-factory-konan .splash-subtitle-ja {
+    -fx-text-fill: #bfdbfe;
+}
+
+.splash-root.splash-factory-kokubu .splash-subtitle-ja {
+    -fx-text-fill: #bbf7d0;
 }
 
 .splash-subtitle-en {
     -fx-font-family: "Segoe UI", "Yu Gothic UI", sans-serif;
-    -fx-font-size: 11px;
+    -fx-font-size: 10px;
     -fx-font-weight: normal;
     -fx-text-fill: rgba(148, 163, 184, 0.95);
-    -fx-letter-spacing: 0.08em;
+    -fx-letter-spacing: 0.1em;
+}
+
+.splash-process-row {
+    -fx-spacing: 6px;
+    -fx-alignment: center-left;
+    -fx-padding: 2 0 0 17;
+}
+
+.splash-process-chip {
+    -fx-font-family: "Segoe UI", "Yu Gothic UI", "Noto Sans CJK JP", sans-serif;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #e2e8f0;
+    -fx-background-color: rgba(248, 250, 252, 0.08);
+    -fx-border-color: rgba(148, 163, 184, 0.35);
+    -fx-border-width: 1px;
+    -fx-border-radius: 3px;
+    -fx-background-radius: 3px;
+    -fx-padding: 2px 8px;
 }
 
 .splash-status {
     -fx-font-family: "Yu Gothic UI", "Meiryo UI", Meiryo, "Segoe UI", "Noto Sans CJK JP", sans-serif;
     -fx-font-size: 13px;
     -fx-text-fill: #cbd5e1;
+    -fx-padding: 6 0 0 17;
 }
 
 .splash-version {
@@ -70,8 +146,18 @@
 }
 
 .splash-progress {
-    -fx-accent: #38bdf8;
-    -fx-progress-color: #38bdf8;
+    -fx-accent: #fbbf24;
+    -fx-progress-color: #fbbf24;
+}
+
+.splash-root.splash-factory-konan .splash-progress {
+    -fx-accent: #60a5fa;
+    -fx-progress-color: #60a5fa;
+}
+
+.splash-root.splash-factory-kokubu .splash-progress {
+    -fx-accent: #4ade80;
+    -fx-progress-color: #4ade80;
 }
 
 .splash-progress .indicator {
@@ -83,5 +169,5 @@
 }
 
 .splash-footer {
-    -fx-padding: 0 8px 0 0;
+    -fx-padding: 0 8px 0 17;
 }

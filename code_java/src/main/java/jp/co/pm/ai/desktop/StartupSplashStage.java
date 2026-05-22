@@ -16,6 +16,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -29,6 +30,8 @@ import javafx.stage.WindowEvent;
 import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.AppVersionInfo;
+import jp.co.pm.ai.desktop.config.FactorySite;
+import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 
 /**
  * Premium startup splash until main window FXML is loaded and initialized.
@@ -64,6 +67,8 @@ final class StartupSplashStage {
      */
     static Stage createAndShow(
             AtomicLong outVisibleSinceNanos, Consumer<Stage> afterSplashFullyDisplayed) {
+        FactorySite factorySite = GlobalInitSettingTarget.load();
+
         Stage stage = new Stage();
         stage.initStyle(StageStyle.TRANSPARENT);
         stage.initModality(Modality.APPLICATION_MODAL);
@@ -81,19 +86,33 @@ final class StartupSplashStage {
         Region accentBar = new Region();
         accentBar.getStyleClass().add("splash-accent-bar");
 
+        Label factoryBadge = new Label(factorySite.displayLabelJa());
+        factoryBadge.getStyleClass().add("splash-factory-badge");
+
         Label title = new Label("工程管理 AI 配台");
         title.getStyleClass().add("splash-title");
 
-        Label subtitleEn = new Label("PRODUCTION DISPATCH CONTROL");
+        Label subtitleJa = new Label("ペフ加工ライン · 生産配台管理");
+        subtitleJa.getStyleClass().add("splash-subtitle-ja");
+
+        Label subtitleEn = new Label("PEF PROCESSING · DISPATCH CONTROL");
         subtitleEn.getStyleClass().add("splash-subtitle-en");
 
-        VBox titleBlock = new VBox(2, title, subtitleEn);
+        VBox titleBlock = new VBox(4, factoryBadge, title, subtitleJa, subtitleEn);
 
         HBox brandRow = new HBox(12, accentBar, titleBlock);
         brandRow.getStyleClass().add("splash-brand-row");
         brandRow.setAlignment(Pos.CENTER_LEFT);
 
-        Label status = new Label("起動しています…");
+        FlowPane processRow = new FlowPane(6, 4);
+        processRow.getStyleClass().add("splash-process-row");
+        for (String process : new String[] {"EC", "分割", "融着", "SEC", "スリット"}) {
+            Label chip = new Label(process);
+            chip.getStyleClass().add("splash-process-chip");
+            processRow.getChildren().add(chip);
+        }
+
+        Label status = new Label("ペフ加工配台システムを起動しています…");
         status.getStyleClass().add("splash-status");
 
         ProgressIndicator busy = new ProgressIndicator();
@@ -115,13 +134,14 @@ final class StartupSplashStage {
         footer.getStyleClass().add("splash-footer");
         footer.setAlignment(Pos.CENTER_RIGHT);
 
-        VBox content = new VBox(18, brandRow, status, busy, footer);
+        VBox content = new VBox(10, brandRow, processRow, status, busy, footer);
         content.getStyleClass().add("splash-content");
         content.setAlignment(Pos.CENTER_LEFT);
-        VBox.setMargin(busy, new Insets(4, 0, 0, 0));
+        VBox.setMargin(busy, new Insets(2, 0, 0, 17));
 
         StackPane root = new StackPane(background, overlay, content);
         root.getStyleClass().add("splash-root");
+        root.getStyleClass().add(factoryStyleClass(factorySite));
         root.setPrefSize(520, 320);
         root.setMinSize(520, 320);
         root.setMaxSize(520, 320);
@@ -199,6 +219,13 @@ final class StartupSplashStage {
             Platform.runLater(() -> Platform.runLater(startNextLogic));
         }
         return stage;
+    }
+
+    private static String factoryStyleClass(FactorySite site) {
+        if (site == FactorySite.KOKUBU) {
+            return "splash-factory-kokubu";
+        }
+        return "splash-factory-konan";
     }
 
     /** Moves splash forward after OS focus steal or other Stage creation. */
