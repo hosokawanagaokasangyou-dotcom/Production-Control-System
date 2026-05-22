@@ -341,7 +341,7 @@ public final class OperatorCardTabController {
     }
 
     /**
-     * 段階2／段階3 完了後: 正規 {@code 結果_配台表.json} を反映し、既存 member パスからキャッシュを再読込する。
+     * 段階2／段階3 完了後: 正規 {@code 結果_配台表.json} を反映し、member キャッシュを再読込してプレビューを更新する。
      */
     void syncAfterPipelineArtifactRefresh() {
         if (shell == null) {
@@ -353,6 +353,7 @@ public final class OperatorCardTabController {
             dispatchJsonField.setText(disp.toString());
         }
         reloadMemberCachesAndOperators();
+        rebuildPreview();
     }
 
     /** Mirrors stage-2 artifact refresh: fill {@code member_schedule*.json} sibling path when possible. */

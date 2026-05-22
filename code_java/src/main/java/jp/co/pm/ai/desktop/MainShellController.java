@@ -3533,6 +3533,7 @@ public final class MainShellController {
                     Platform.runLater(
                             () -> {
                                 refreshEquipmentGanttGraphicAfterPipelineRun();
+                                refreshOperatorCardAfterPipelineRun();
                                 Runnable afterDispatchReload =
                                         () -> {
                                             MacroCompleteChime.playIfAvailable(collectUiEnv());
@@ -3717,6 +3718,7 @@ public final class MainShellController {
     /** 配台試行（段階3）正常終了後: 完了音・配台タブへ切替・完了ダイアログ（段階2と同趣旨）。 */
     void notifyStage3DispatchTrialSuccess() {
         appendLog("[end] 段階3（配台試行）正常終了");
+        refreshOperatorCardAfterPipelineRun();
         MacroCompleteChime.playIfAvailable(collectUiEnv());
         selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
         showStageCompletionDialog("段階3 完了", "段階3（配台試行）の処理が正常終了しました。");
@@ -4676,6 +4678,28 @@ public final class MainShellController {
         }
     }
 
+    /**
+     * 段階2／段階3 完了後: 最新 member_schedule と結果_配台表 JSON でオペレーターカードを再読込・プレビュー更新する。
+     */
+    void refreshOperatorCardAfterPipelineRun() {
+        if (operatorCardTabController == null) {
+            return;
+        }
+        try {
+            Map<String, String> ui = collectUiEnv();
+            Path dir = AppPaths.defaultPlanningOutputDir(ui);
+            Path newestMember = Stage2OutputNaming.newestPrimaryMemberXlsx(dir);
+            if (newestMember == null) {
+                newestMember = Stage2OutputNaming.newestPrimaryMemberJson(dir);
+            }
+            String memStr = newestMember != null ? newestMember.toString() : "";
+            operatorCardTabController.tryAutofillMemberJsonFromStage2(memStr);
+            operatorCardTabController.syncAfterPipelineArtifactRefresh();
+        } catch (Exception ex) {
+            appendLog("[operator-card] 更新エラー: " + ex.getMessage());
+        }
+    }
+
     private void refreshStage2OutputArtifacts() {
         try {
             Map<String, String> ui = collectUiEnv();
@@ -4701,8 +4725,7 @@ public final class MainShellController {
             mainRunTabController.setStage2ArtifactPaths(planStr, memStr);
             planResultViewerTabController.tryAutofillJsonFromStage2Xlsx(planStr, memStr);
             equipmentGanttGraphicTabController.tryAutofillJsonFromStage2Xlsx(planStr, memStr);
-            operatorCardTabController.tryAutofillMemberJsonFromStage2(memStr);
-            operatorCardTabController.syncAfterPipelineArtifactRefresh();
+            refreshOperatorCardAfterPipelineRun();
             if (!planStr.isEmpty() || !memStr.isEmpty()) {
                 appendLog(
                         "[stage2-ui] "
