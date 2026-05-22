@@ -112,7 +112,11 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
         shortage_payload: dict = {
             "format_version": 3,
             "source_json": str(path),
-            "note": "interactive trial via stage2_identical_dispatch_runner",
+            "note": (
+                "段階3配台試行（段階2同一条件）。"
+                "配台できない理由は機械カレンダー未作成・勤怠未作成のみ。"
+                "それ以外の未達は後ろ倒し（配台残）として扱う。"
+            ),
             "op_shortage": snap["op_shortage"],
             "as_shortage": snap["as_shortage"],
             "dispatch_qty_shortfall": dispatch_qty_shortfall,

@@ -43,6 +43,7 @@ import javafx.scene.text.TextFlow;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
@@ -113,6 +114,7 @@ import jp.co.pm.ai.desktop.ui.SpreadsheetMultiColumnFilterCoordinator;
 import jp.co.pm.ai.desktop.ui.SpreadsheetRowReorderDragGhost;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
+import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence.DispatchInteractiveDateQtyLineFilterPrefs;
 import jp.co.pm.ai.planning.stage2.core.Stage2PlanRowDispatchQtyMetrics;
 import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
 
@@ -308,6 +310,15 @@ public final class DispatchInteractiveTabController {
     private Button wideRowDownButton;
 
     @FXML
+    private CheckBox showAladdinPlanQtyLineCheck;
+
+    @FXML
+    private CheckBox showStage3PlanQtyLineCheck;
+
+    @FXML
+    private CheckBox showStage3AfterQtyLineCheck;
+
+    @FXML
     private Label statusLabel;
 
     @FXML
@@ -377,6 +388,11 @@ public final class DispatchInteractiveTabController {
     private final AtomicReference<Stage2RollUnitLengthTables> cachedRollUnitTables =
             new AtomicReference<>();
 
+    private DispatchInteractiveDateQtyLineFilterPrefs dateQtyLineFilter =
+            DispatchInteractiveDateQtyLineFilterPrefs.defaults();
+
+    private final AtomicBoolean suppressDateQtyLineFilterUi = new AtomicBoolean(false);
+
     @FXML
     private void initialize() {
         StackPane.setAlignment(wideSpreadsheet, Pos.TOP_LEFT);
@@ -417,6 +433,53 @@ public final class DispatchInteractiveTabController {
                     TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
             wireDispatchShortfallSelectionToWideGrid();
         }
+        wireDateQtyLineFilterControls();
+    }
+
+    private void wireDateQtyLineFilterControls() {
+        dateQtyLineFilter = TableColumnOrderPersistence.loadDispatchInteractiveDateQtyLineFilterPrefs();
+        suppressDateQtyLineFilterUi.set(true);
+        try {
+            if (showAladdinPlanQtyLineCheck != null) {
+                showAladdinPlanQtyLineCheck.setSelected(dateQtyLineFilter.showAladdinPlan());
+            }
+            if (showStage3PlanQtyLineCheck != null) {
+                showStage3PlanQtyLineCheck.setSelected(dateQtyLineFilter.showStage3Plan());
+            }
+            if (showStage3AfterQtyLineCheck != null) {
+                showStage3AfterQtyLineCheck.setSelected(dateQtyLineFilter.showStage3After());
+            }
+        } finally {
+            suppressDateQtyLineFilterUi.set(false);
+        }
+        Runnable onFilterChanged =
+                () -> {
+                    if (suppressDateQtyLineFilterUi.get()) {
+                        return;
+                    }
+                    dateQtyLineFilter = snapshotDateQtyLineFilterPrefs();
+                    TableColumnOrderPersistence.saveDispatchInteractiveDateQtyLineFilterPrefs(
+                            dateQtyLineFilter);
+                    if (doc != null && !dateAxis.isEmpty()) {
+                        rebuildGrids();
+                    }
+                };
+        if (showAladdinPlanQtyLineCheck != null) {
+            showAladdinPlanQtyLineCheck.selectedProperty().addListener((o, a, b) -> onFilterChanged.run());
+        }
+        if (showStage3PlanQtyLineCheck != null) {
+            showStage3PlanQtyLineCheck.selectedProperty().addListener((o, a, b) -> onFilterChanged.run());
+        }
+        if (showStage3AfterQtyLineCheck != null) {
+            showStage3AfterQtyLineCheck.selectedProperty().addListener((o, a, b) -> onFilterChanged.run());
+        }
+    }
+
+    private DispatchInteractiveDateQtyLineFilterPrefs snapshotDateQtyLineFilterPrefs() {
+        return new DispatchInteractiveDateQtyLineFilterPrefs(
+                showAladdinPlanQtyLineCheck == null || showAladdinPlanQtyLineCheck.isSelected(),
+                showStage3PlanQtyLineCheck == null || showStage3PlanQtyLineCheck.isSelected(),
+                showStage3AfterQtyLineCheck == null || showStage3AfterQtyLineCheck.isSelected());
     }
 
     void bindShell(MainShellController shell) {
@@ -1055,8 +1118,6 @@ public final class DispatchInteractiveTabController {
                         String shortagesPath = task.getValue();
                         statusLabel.setText("配台試行完了");
                         shell.refreshRunTabStage2ArtifactLinks();
-                        shell.reloadDeliveryCalendarInBackgroundAfterDispatchTrialSuccess();
-                        shell.refreshEquipmentGanttGraphicAfterPipelineRun();
                         shell.appendLog("[dispatch-editor] trial: " + shortagesPath);
                         logLines.add("");
                         logLines.add("[配台試行] 正常終了しました。");
@@ -1064,6 +1125,7 @@ public final class DispatchInteractiveTabController {
                         logList.scrollTo(logLines.size() - 1);
                         reloadFromDiskQuietAfterDispatchTrial(
                                 () -> {
+                                    shell.reloadDeliveryCalendarInBackgroundAfterDispatchTrialSuccess();
                                     try {
                                         showDispatchQtyShortfallDialogIfNeeded(owner);
                                         showDispatchShortageHintsDialogIfNeeded(owner);
@@ -2849,12 +2911,15 @@ public final class DispatchInteractiveTabController {
                         aladdinAmt > eps ? ResultDispatchNormalizer.formatQty(aladdinAmt) : "";
                 setDispatchQtyCellDisplay(
                         cell,
-                        formatDispatchPlanActualQtyText(
-                                aladdinFmt,
-                                targetFmt,
-                                doneFmt,
-                                stage3PlanActualSingleLineDisplay(),
-                                DispatchPlanQtyLineLabel.STAGE3),
+                        filterDispatchQtyDisplayText(
+                                formatDispatchPlanActualQtyText(
+                                        aladdinFmt,
+                                        targetFmt,
+                                        doneFmt,
+                                        stage3PlanActualSingleLineDisplay(),
+                                        DispatchPlanQtyLineLabel.STAGE3),
+                                dateQtyLineFilter,
+                                stage3PlanActualSingleLineDisplay()),
                         stage3PlanActualSingleLineDisplay());
                 tagDispatchDateQtyShortfallCell(cell, dispatchDateQtyMultilineCell());
                 return;
@@ -2871,7 +2936,8 @@ public final class DispatchInteractiveTabController {
                 docHasActualDispatchQtyColumn(),
                 eps,
                 stage3PlanActualSingleLineDisplay(),
-                stage3Revised);
+                stage3Revised,
+                dateQtyLineFilter);
         tagDispatchDateQtyCell(cell, dispatchDateQtyMultilineCell());
     }
 
@@ -2891,7 +2957,8 @@ public final class DispatchInteractiveTabController {
                 docHasActualDispatchQtyColumn(),
                 eps,
                 stage3PlanActualSingleLineDisplay(),
-                stage3Revised);
+                stage3Revised,
+                dateQtyLineFilter);
         tagDispatchDateQtyCell(cell, dispatchDateQtyMultilineCell());
     }
 
@@ -3029,23 +3096,53 @@ public final class DispatchInteractiveTabController {
             double eps,
             boolean singleLineDisplay,
             boolean stage3RevisedAfterTrial) {
+        applyDispatchPlanActualQtyCellDisplay(
+                cell,
+                aladdinPlanAmt,
+                planAmt,
+                actualAmt,
+                hasActualColumn,
+                eps,
+                singleLineDisplay,
+                stage3RevisedAfterTrial,
+                DispatchInteractiveDateQtyLineFilterPrefs.defaults());
+    }
+
+    private static void applyDispatchPlanActualQtyCellDisplay(
+            SpreadsheetCell cell,
+            double aladdinPlanAmt,
+            double planAmt,
+            double actualAmt,
+            boolean hasActualColumn,
+            double eps,
+            boolean singleLineDisplay,
+            boolean stage3RevisedAfterTrial,
+            DispatchInteractiveDateQtyLineFilterPrefs lineFilter) {
         if (hasActualColumn && !singleLineDisplay) {
-            setDispatchQtyCellDisplay(
-                    cell,
-                    buildStage3QtyFixedLineSlots(
-                            aladdinPlanAmt, planAmt, actualAmt, stage3RevisedAfterTrial, eps),
-                    false);
+            List<Stage3QtyLineSlot> slots =
+                    applyDateQtyLineFilterToSlots(
+                            buildStage3QtyFixedLineSlots(
+                                    aladdinPlanAmt,
+                                    planAmt,
+                                    actualAmt,
+                                    stage3RevisedAfterTrial,
+                                    eps),
+                            lineFilter);
+            setDispatchQtyCellDisplay(cell, slots, false);
             return;
         }
         String qtxt =
-                formatDispatchPlanActualQtyDisplay(
-                        aladdinPlanAmt,
-                        planAmt,
-                        actualAmt,
-                        hasActualColumn,
-                        eps,
-                        singleLineDisplay,
-                        stage3RevisedAfterTrial);
+                filterDispatchQtyDisplayText(
+                        formatDispatchPlanActualQtyDisplay(
+                                aladdinPlanAmt,
+                                planAmt,
+                                actualAmt,
+                                hasActualColumn,
+                                eps,
+                                singleLineDisplay,
+                                stage3RevisedAfterTrial),
+                        lineFilter,
+                        singleLineDisplay);
         setDispatchQtyCellDisplay(cell, qtxt, singleLineDisplay);
     }
 
@@ -3114,6 +3211,85 @@ public final class DispatchInteractiveTabController {
             slots.add(stage3QtyLineSlot(LABEL_STAGE3_ACTUAL, actualAmt, eps));
         }
         return slots;
+    }
+
+    static List<Stage3QtyLineSlot> applyDateQtyLineFilterToSlots(
+            List<Stage3QtyLineSlot> slots, DispatchInteractiveDateQtyLineFilterPrefs filter) {
+        if (slots == null || slots.isEmpty()) {
+            return slots;
+        }
+        if (filter == null
+                || (filter.showAladdinPlan() && filter.showStage3Plan() && filter.showStage3After())) {
+            return slots;
+        }
+        List<Stage3QtyLineSlot> out = new ArrayList<>(slots.size());
+        for (Stage3QtyLineSlot slot : slots) {
+            if (!slot.visible()) {
+                out.add(slot);
+                continue;
+            }
+            String line = slot.lineText();
+            if (line.startsWith(LABEL_ALADDIN_PLAN)) {
+                out.add(filter.showAladdinPlan() ? slot : stage3QtyEmptyLineSlot());
+            } else if (line.startsWith(LABEL_STAGE3_PLAN)) {
+                out.add(filter.showStage3Plan() ? slot : stage3QtyEmptyLineSlot());
+            } else if (line.startsWith(LABEL_STAGE3_ACTUAL) || line.startsWith(LABEL_STAGE3_REVISED)) {
+                out.add(filter.showStage3After() ? slot : stage3QtyEmptyLineSlot());
+            } else {
+                out.add(slot);
+            }
+        }
+        return out;
+    }
+
+    static String filterDispatchQtyDisplayText(
+            String text,
+            DispatchInteractiveDateQtyLineFilterPrefs filter,
+            boolean singleLineDisplay) {
+        if (text == null
+                || text.isBlank()
+                || filter == null
+                || (filter.showAladdinPlan() && filter.showStage3Plan() && filter.showStage3After())) {
+            return text != null ? text : "";
+        }
+        if (singleLineDisplay) {
+            StringBuilder sb = new StringBuilder();
+            for (String part : text.split(" ", -1)) {
+                if (part.isEmpty() || !dispatchQtyLineVisible(part, filter)) {
+                    continue;
+                }
+                if (!sb.isEmpty()) {
+                    sb.append(' ');
+                }
+                sb.append(part);
+            }
+            return sb.toString();
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String line : text.split("\n", -1)) {
+            if (line.isEmpty() || !dispatchQtyLineVisible(line, filter)) {
+                continue;
+            }
+            if (!sb.isEmpty()) {
+                sb.append('\n');
+            }
+            sb.append(line);
+        }
+        return sb.toString();
+    }
+
+    private static boolean dispatchQtyLineVisible(
+            String line, DispatchInteractiveDateQtyLineFilterPrefs filter) {
+        if (line.startsWith(LABEL_ALADDIN_PLAN)) {
+            return filter.showAladdinPlan();
+        }
+        if (line.startsWith(LABEL_STAGE3_PLAN)) {
+            return filter.showStage3Plan();
+        }
+        if (line.startsWith(LABEL_STAGE3_ACTUAL) || line.startsWith(LABEL_STAGE3_REVISED)) {
+            return filter.showStage3After();
+        }
+        return true;
     }
 
     private static Stage3QtyLineSlot stage3QtyLineSlot(String label, double amt, double eps) {
@@ -3522,7 +3698,9 @@ public final class DispatchInteractiveTabController {
         Label head =
                 new Label(
                         "次の暦日で、タイムライン上の割付が目標メートルに届きませんでした。"
-                                + " 機械カレンダー・人員・その他ブロックでその日に追加できなかった可能性があります。");
+                                + " 段階3（段階2同一）では同日未達は後ろ倒しの途中経過であり、"
+                                + " 配台できない理由は master の機械カレンダー未作成・勤怠未作成のみです。"
+                                + " 本一覧は従来モード等での参考表示です。");
         head.setWrapText(true);
         head.setStyle("-fx-font-size: 13px;");
         BorderPane root = new BorderPane();
@@ -3584,8 +3762,9 @@ public final class DispatchInteractiveTabController {
 
         Label head =
                 new Label(
-                        "フォーム候補不足（op_shortage）または人数は足りるが割当不可（as_shortage）として記録された件です。"
-                                + " メートル目標未達とは別に検出されます。");
+                        "フォーム候補不足（op_shortage）または割当不可（as_shortage）として記録された件です。"
+                                + " 段階3（段階2同一）の試行ではこの種別は出ません（後ろ倒しで解消する前提）。"
+                                + " 配台できないのは機械カレンダー・勤怠が master に無い場合のみです。");
         head.setWrapText(true);
         head.setStyle("-fx-font-size: 13px;");
         BorderPane root = new BorderPane();
