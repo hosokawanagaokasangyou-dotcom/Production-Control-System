@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop;
 
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -36,18 +37,17 @@ import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 /**
  * Premium startup splash until main window FXML is loaded and initialized.
  *
- * <p>Visual assets: {@code css/startup-splash.css}, {@code images/splash-background.png}.
+ * <p>Visual assets: {@code css/startup-splash.css}, {@code images/splash-bg-01.png} … {@code splash-bg-10.png}.
  */
 final class StartupSplashStage {
 
     /** スプラッシュが表示されたとみなしてから、本体ロード等の後続処理を始めるまでの待ち（ナノ秒）。 */
     private static final long SPLASH_NEXT_LOGIC_DELAY_NANOS = 3_000_000_000L;
 
+    private static final int SPLASH_BACKGROUND_COUNT = 10;
+
     private static final String SPLASH_CSS =
             StartupSplashStage.class.getResource("css/startup-splash.css").toExternalForm();
-
-    private static final String SPLASH_BACKGROUND =
-            StartupSplashStage.class.getResource("images/splash-background.png").toExternalForm();
 
     private StartupSplashStage() {}
 
@@ -75,7 +75,7 @@ final class StartupSplashStage {
         stage.setAlwaysOnTop(true);
         stage.setTitle("起動中");
 
-        ImageView background = new ImageView(new Image(SPLASH_BACKGROUND, true));
+        ImageView background = new ImageView(new Image(pickRandomBackgroundUrl(), true));
         background.setPreserveRatio(false);
         background.setSmooth(true);
         background.getStyleClass().add("splash-background-image");
@@ -85,6 +85,9 @@ final class StartupSplashStage {
 
         Region accentBar = new Region();
         accentBar.getStyleClass().add("splash-accent-bar");
+
+        Label company = new Label("NAGAOKA SANGYOU");
+        company.getStyleClass().add("splash-company-name");
 
         Label factoryBadge = new Label(factorySite.displayLabelJa());
         factoryBadge.getStyleClass().add("splash-factory-badge");
@@ -98,7 +101,7 @@ final class StartupSplashStage {
         Label subtitleEn = new Label("PEF PROCESSING · DISPATCH CONTROL");
         subtitleEn.getStyleClass().add("splash-subtitle-en");
 
-        VBox titleBlock = new VBox(4, factoryBadge, title, subtitleJa, subtitleEn);
+        VBox titleBlock = new VBox(4, company, factoryBadge, title, subtitleJa, subtitleEn);
 
         HBox brandRow = new HBox(12, accentBar, titleBlock);
         brandRow.getStyleClass().add("splash-brand-row");
@@ -226,6 +229,21 @@ final class StartupSplashStage {
             return "splash-factory-kokubu";
         }
         return "splash-factory-konan";
+    }
+
+    /** 起動のたびに {@code splash-bg-01.png} … {@code splash-bg-10.png} から 1 枚を選ぶ。 */
+    private static String pickRandomBackgroundUrl() {
+        int index = ThreadLocalRandom.current().nextInt(SPLASH_BACKGROUND_COUNT) + 1;
+        String path = String.format("images/splash-bg-%02d.png", index);
+        java.net.URL url = StartupSplashStage.class.getResource(path);
+        if (url != null) {
+            return url.toExternalForm();
+        }
+        java.net.URL fallback = StartupSplashStage.class.getResource("images/splash-bg-01.png");
+        if (fallback != null) {
+            return fallback.toExternalForm();
+        }
+        throw new IllegalStateException("スプラッシュ背景画像が見つかりません: " + path);
     }
 
     /** Moves splash forward after OS focus steal or other Stage creation. */
