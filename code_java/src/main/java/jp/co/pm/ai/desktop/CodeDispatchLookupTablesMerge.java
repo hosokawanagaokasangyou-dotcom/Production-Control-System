@@ -158,10 +158,7 @@ public final class CodeDispatchLookupTablesMerge {
                     continue;
                 }
                 double w = Stage2RollUnitLengthTables.parseFloatSafe(cell(row, iPw), 0.0);
-                if (!(w > 1e-12)) {
-                    continue;
-                }
-                m.put(prod.strip(), formatNum(w));
+                m.put(prod.strip(), w > 1e-12 ? formatNum(w) : "");
                 apW++;
             }
             if (apW > 0) {
@@ -201,10 +198,7 @@ public final class CodeDispatchLookupTablesMerge {
                     continue;
                 }
                 double len = Stage2RollUnitLengthTables.parseFloatSafe(cell(row, iPl), 0.0);
-                if (!(len > 1e-12)) {
-                    continue;
-                }
-                m.put(prod.strip(), formatNum(len));
+                m.put(prod.strip(), len > 1e-12 ? formatNum(len) : "");
                 apL++;
             }
             if (apL > 0) {
@@ -225,10 +219,7 @@ public final class CodeDispatchLookupTablesMerge {
                 }
                 double rawRoll =
                         iRawRoll >= 0 ? Stage2RollUnitLengthTables.parseFloatSafe(cell(row, iRawRoll), 0.0) : 0.0;
-                if (!(rawRoll > 1e-12)) {
-                    continue;
-                }
-                m.put(ur.strip(), formatNum(rawRoll));
+                m.put(ur.strip(), rawRoll > 1e-12 ? formatNum(rawRoll) : "");
                 auRoll++;
             }
             if (auRoll > 0) {
@@ -248,10 +239,7 @@ public final class CodeDispatchLookupTablesMerge {
                     continue;
                 }
                 double rw = Stage2RollUnitLengthTables.parseFloatSafe(cell(row, iRawW), 0.0);
-                if (!(rw > 1e-12)) {
-                    continue;
-                }
-                m.put(ur.strip(), formatNum(rw));
+                m.put(ur.strip(), rw > 1e-12 ? formatNum(rw) : "");
                 auW++;
             }
             if (auW > 0) {
