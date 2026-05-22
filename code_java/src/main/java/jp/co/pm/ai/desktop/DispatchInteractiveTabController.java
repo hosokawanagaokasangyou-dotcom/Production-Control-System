@@ -34,7 +34,6 @@ import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.geometry.Rectangle2D;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.text.Font;
@@ -87,8 +86,6 @@ import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
-import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
-import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore.DispatchTrialLogUiSnapshot;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.DispatchInteractiveRollUnitSupport;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialConsistency;
@@ -837,6 +834,7 @@ public final class DispatchInteractiveTabController {
 
     /**
      * 配台試行: {@link ResultDispatchTrialPython} および不足 JSON 連携（段階2と同一エンジン・数量上限は JSON）。
+     * ログは「実行・ログ」タブへ出力する。
      */
     private void startDispatchTrial() {
         if (shell == null) {
@@ -856,218 +854,13 @@ public final class DispatchInteractiveTabController {
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
         final Path trialPythonExe = resolvePythonExe();
 
-        Stage owner = shell.getPrimaryStage();
-        Stage logStage = new Stage();
-        logStage.initOwner(owner);
-        logStage.initModality(Modality.APPLICATION_MODAL);
-        logStage.setTitle("配台試行ログ");
-        logStage.setMinWidth(560);
-        logStage.setMinHeight(360);
-
-        DispatchTrialLogUiSnapshot savedUi = DispatchTrialLogUiStore.load();
-        Rectangle2D visual = Screen.getPrimary().getVisualBounds();
-        double sceneW = savedUi.width() > 0 ? savedUi.width() : 720;
-        double sceneH = savedUi.height() > 0 ? savedUi.height() : 480;
-        sceneW = Math.max(560, Math.min(sceneW, visual.getWidth()));
-        sceneH = Math.max(360, Math.min(sceneH, visual.getHeight()));
-
-        AtomicBoolean finished = new AtomicBoolean(false);
-        AtomicBoolean trialLogWindowReady = new AtomicBoolean(false);
-
-        ObservableList<String> logLines = FXCollections.observableArrayList();
-        logLines.add("[配台試行] 処理を開始しました。");
-        logLines.add("[配台試行] Python 実行ファイル: " + trialPythonExe.toAbsolutePath().normalize());
-
-        Button copyLogBtn = new Button("ログをコピー");
-        copyLogBtn.setTooltip(new Tooltip("ログ一覧の全文をクリップボードにコピーします"));
-        copyLogBtn.setOnAction(
-                ev -> {
-                    String joined = String.join("\n", logLines);
-                    ClipboardContent cc = new ClipboardContent();
-                    cc.putString(joined);
-                    Clipboard.getSystemClipboard().setContent(cc);
-                });
-
-        Button closeBtn = new Button("閉じる");
-        closeBtn.setDisable(true);
-        closeBtn.setOnAction(ev -> logStage.close());
-
-        Runnable releaseTrialModal =
-                () -> {
-                    finished.set(true);
-                    try {
-                        closeBtn.setDisable(false);
-                    } catch (Throwable ignored) {
-                    }
-                    try {
-                        closeBtn.requestFocus();
-                    } catch (Throwable ignored) {
-                    }
-                    try {
-                        Platform.runLater(this::applyDispatchTrialButtonEnabledState);
-                    } catch (Throwable ignored) {
-                    }
-                };
-
-        ListView<String> logList = new ListView<>(logLines);
-        logList.setEditable(false);
-
-        ObservableList<String> fontFamilies = FXCollections.observableArrayList(Font.getFamilies());
-        ComboBox<String> fontFamilyCombo = new ComboBox<>(fontFamilies);
-        fontFamilyCombo.setPrefWidth(240);
-        fontFamilyCombo.setMaxWidth(Double.MAX_VALUE);
-        HBox.setHgrow(fontFamilyCombo, Priority.ALWAYS);
-        String defaultLogFontFamily =
-                fontFamilies.stream()
-                        .filter(f -> "Consolas".equalsIgnoreCase(f))
-                        .findFirst()
-                        .orElseGet(
-                                () ->
-                                        fontFamilies.stream()
-                                                .filter(
-                                                        f ->
-                                                                f.contains("ゴシック")
-                                                                        || f.toLowerCase()
-                                                                                .contains("gothic"))
-                                                .findFirst()
-                                                .orElse(
-                                                        fontFamilies.isEmpty()
-                                                                ? Font.getDefault().getFamily()
-                                                                : fontFamilies.get(0)));
-        String savedFamily = savedUi.fontFamily();
-        if (savedFamily != null && !savedFamily.isBlank()) {
-            if (!fontFamilies.contains(savedFamily)) {
-                fontFamilies.add(0, savedFamily);
-            }
-            fontFamilyCombo.setValue(savedFamily);
-        } else {
-            fontFamilyCombo.setValue(defaultLogFontFamily);
-        }
-
-        double savedSizePt = savedUi.fontSize();
-        double initialSpinner =
-                (Double.isFinite(savedSizePt) && savedSizePt >= 6.0 && savedSizePt <= 48.0)
-                        ? savedSizePt
-                        : 12.0;
-        Spinner<Double> fontSizeSpinner =
-                new Spinner<>(
-                        new SpinnerValueFactory.DoubleSpinnerValueFactory(6.0, 48.0, initialSpinner, 1.0));
-        fontSizeSpinner.setEditable(true);
-        fontSizeSpinner.setPrefWidth(96);
-
-        ObjectProperty<Font> logFontProp = new SimpleObjectProperty<>(Font.getDefault());
-
-        Runnable syncLogFont =
-                () -> {
-                    String fam = fontFamilyCombo.getValue();
-                    if (fam == null || fam.isBlank()) {
-                        fam = Font.getDefault().getFamily();
-                    }
-                    Double sz = fontSizeSpinner.getValue();
-                    if (sz == null || sz < 4.0) {
-                        sz = 12.0;
-                    }
-                    logFontProp.set(Font.font(fam, sz));
-                };
-        Runnable saveTrialLogUiSnapshot =
-                () -> {
-                    double w = logStage.getWidth();
-                    double h = logStage.getHeight();
-                    if (!Double.isFinite(w) || w < 1.0) {
-                        w = 720;
-                    }
-                    if (!Double.isFinite(h) || h < 1.0) {
-                        h = 480;
-                    }
-                    String fam = fontFamilyCombo.getValue();
-                    if (fam == null) {
-                        fam = "";
-                    }
-                    Double szObj = fontSizeSpinner.getValue();
-                    double sz = (szObj != null && Double.isFinite(szObj)) ? szObj : 12.0;
-                    DispatchTrialLogUiStore.save(new DispatchTrialLogUiSnapshot(w, h, fam, sz));
-                };
-        Runnable persistDispatchTrialLogUi =
-                () -> {
-                    if (!trialLogWindowReady.get()) {
-                        return;
-                    }
-                    saveTrialLogUiSnapshot.run();
-                };
-        fontFamilyCombo
-                .valueProperty()
-                .addListener(
-                        (o, a, b) -> {
-                            syncLogFont.run();
-                            persistDispatchTrialLogUi.run();
-                        });
-        fontSizeSpinner
-                .valueProperty()
-                .addListener(
-                        (o, a, b) -> {
-                            syncLogFont.run();
-                            persistDispatchTrialLogUi.run();
-                        });
-        syncLogFont.run();
-
-        logList.setCellFactory(
-                lv ->
-                        new ListCell<>() {
-                            private final Label lineLabel = new Label();
-
-                            {
-                                lineLabel.setWrapText(true);
-                                lineLabel.fontProperty().bind(logFontProp);
-                                lineLabel
-                                        .prefWidthProperty()
-                                        .bind(logList.widthProperty().subtract(40));
-                            }
-
-                            @Override
-                            protected void updateItem(String item, boolean empty) {
-                                super.updateItem(item, empty);
-                                if (empty || item == null) {
-                                    setGraphic(null);
-                                    setText(null);
-                                } else {
-                                    lineLabel.setText(item);
-                                    setGraphic(lineLabel);
-                                }
-                            }
-                        });
-
-        Label fontCap = new Label("フォント");
-        Label sizeCap = new Label("サイズ");
-        HBox toolBar = new HBox(8, fontCap, fontFamilyCombo, sizeCap, fontSizeSpinner);
-        toolBar.setPadding(new Insets(8, 8, 0, 8));
-        toolBar.setAlignment(Pos.CENTER_LEFT);
-
-        BorderPane root = new BorderPane();
-        root.setTop(toolBar);
-        root.setCenter(logList);
-        HBox bottom = new HBox(8);
-        bottom.setPadding(new Insets(8));
-        bottom.setAlignment(Pos.CENTER_RIGHT);
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        bottom.getChildren().addAll(spacer, copyLogBtn, closeBtn);
-        root.setBottom(bottom);
-
-        Scene scene = new Scene(root, sceneW, sceneH);
-        shell.registerThemeTrackedScene(scene);
-        logStage.setScene(scene);
-        logStage.setOnShown(ev -> trialLogWindowReady.set(true));
-        logStage.setOnHidden(
-                ev -> {
-                    shell.unregisterThemeTrackedScene(scene);
-                    saveTrialLogUiSnapshot.run();
-                });
-        logStage.show();
+        shell.selectMainShellTab(MainShellTabId.RUN);
+        shell.appendLog("--- start: 段階3（配台試行） ---");
+        shell.appendLog("[配台試行] 処理を開始しました。");
+        shell.appendLog("[配台試行] Python 実行ファイル: " + trialPythonExe.toAbsolutePath().normalize());
 
         final ResultDispatchDocument trialInputSnapshot = doc.copy();
-
-        @SuppressWarnings("unchecked")
-        final Task<String>[] trialTaskHolder = new Task[] {null};
+        Stage owner = shell.getPrimaryStage();
 
         Task<String> task =
                 new Task<>() {
@@ -1076,11 +869,9 @@ public final class DispatchInteractiveTabController {
                         shell.beginPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE3);
                         try {
                             ResultDispatchJsonIo.write(jsonPath, doc.copy());
-                            if (shell != null) {
-                                shell.appendLog(
-                                        "[dispatch-editor] trial: 試行前にメモリ上の表を JSON に同期 "
-                                                + jsonPath.toAbsolutePath().normalize());
-                            }
+                            shell.appendLog(
+                                    "[dispatch-editor] trial: 試行前にメモリ上の表を JSON に同期 "
+                                            + jsonPath.toAbsolutePath().normalize());
                             Path pyExe = trialPythonExe;
                             Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
                             Map<String, String> pyEnv = shell.snapshotDispatchTrialPythonEnv();
@@ -1089,28 +880,12 @@ public final class DispatchInteractiveTabController {
                                     pyExe,
                                     pyDir,
                                     pyEnv,
-                                    line ->
-                                            Platform.runLater(
-                                                    () -> {
-                                                        logLines.add(line);
-                                                        int last = logLines.size() - 1;
-                                                        logList.scrollTo(last);
-                                                    }));
+                                    shell::appendLog);
                         } finally {
                             shell.endPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE3);
                         }
                     }
                 };
-        trialTaskHolder[0] = task;
-
-        logStage.setOnCloseRequest(
-                ev -> {
-                    Task<String> t = trialTaskHolder[0];
-                    boolean workerStillRunning = t != null && !t.isDone();
-                    if (!finished.get() && workerStillRunning) {
-                        ev.consume();
-                    }
-                });
 
         task.setOnSucceeded(
                 e -> {
@@ -1119,10 +894,8 @@ public final class DispatchInteractiveTabController {
                         statusLabel.setText("配台試行完了");
                         shell.refreshRunTabStage2ArtifactLinks();
                         shell.appendLog("[dispatch-editor] trial: " + shortagesPath);
-                        logLines.add("");
-                        logLines.add("[配台試行] 正常終了しました。");
-                        logLines.add("不足情報JSON: " + shortagesPath);
-                        logList.scrollTo(logLines.size() - 1);
+                        shell.appendLog("[配台試行] 正常終了しました。");
+                        shell.appendLog("不足情報JSON: " + shortagesPath);
                         reloadFromDiskQuietAfterDispatchTrial(
                                 () -> {
                                     shell.reloadDeliveryCalendarInBackgroundAfterDispatchTrialSuccess();
@@ -1133,18 +906,16 @@ public final class DispatchInteractiveTabController {
                                                 DispatchTrialConsistency.compareDocuments(
                                                         trialInputSnapshot, doc);
                                         if (cr.consistent()) {
-                                            logLines.add("");
-                                            logLines.add(
+                                            shell.appendLog(
                                                     "[整合性] 保存済み表と試行後の成果物（結果_配台表.json）は、"
                                                             + "依頼NO×機械名の当日配台数量合計および配台試行順番（工程別最小値）の観点で一致しました。");
                                             shell.appendLog(
                                                     "[dispatch-editor] trial: 整合性OK（保存表と再読込JSONの数量・試行順）");
                                         } else {
-                                            logLines.add("");
-                                            logLines.add(
+                                            shell.appendLog(
                                                     "[整合性] 保存済み表と試行後の成果物に差異があります（詳細は下記）:");
                                             for (String dl : cr.detailLines()) {
-                                                logLines.add(dl);
+                                                shell.appendLog(dl);
                                             }
                                             Alert warn = new Alert(AlertType.WARNING);
                                             warn.setTitle("配台試行: 整合性確認");
@@ -1157,21 +928,18 @@ public final class DispatchInteractiveTabController {
                                                             + cr.detailLines().size()
                                                             + " 件）— ログ・ダイアログ参照");
                                         }
-                                        int last = logLines.size() - 1;
-                                        if (last >= 0) {
-                                            logList.scrollTo(last);
-                                        }
                                         DispatchTrialUnassignedWizard.showIfNeeded(
                                                 owner, shell, Path.of(shortagesPath));
+                                        shell.notifyStage3DispatchTrialSuccess();
                                     } catch (Throwable upex) {
                                         String em =
                                                 upex.getMessage() != null
                                                         ? upex.getMessage()
                                                         : upex.getClass().getSimpleName();
-                                        logLines.add("");
-                                        logLines.add("[配台試行] 試行後処理で例外: " + em);
+                                        shell.appendLog("[配台試行] 試行後処理で例外: " + em);
                                         shell.appendLog(
                                                 "[dispatch-editor] trial post-run: " + em);
+                                        shell.notifyStage3DispatchTrialFailure(em);
                                     }
                                 });
                     } catch (Throwable sucEx) {
@@ -1179,11 +947,11 @@ public final class DispatchInteractiveTabController {
                                 sucEx.getMessage() != null
                                         ? sucEx.getMessage()
                                         : sucEx.getClass().getSimpleName();
-                        logLines.add("");
-                        logLines.add("[配台試行] 成功ハンドラ内例外: " + em);
+                        shell.appendLog("[配台試行] 成功ハンドラ内例外: " + em);
                         shell.appendLog("[dispatch-editor] trial onSucceeded: " + em);
+                        shell.notifyStage3DispatchTrialFailure(em);
                     } finally {
-                        releaseTrialModal.run();
+                        Platform.runLater(this::applyDispatchTrialButtonEnabledState);
                     }
                 });
         task.setOnFailed(
@@ -1193,9 +961,8 @@ public final class DispatchInteractiveTabController {
                         statusLabel.setText("配台試行エラー");
                         String msg = ex != null ? ex.getMessage() : "(不明)";
                         shell.appendLog("[dispatch-editor] trial failed: " + msg);
-                        logLines.add("");
-                        logLines.add("[配台試行] エラーで終了しました。");
-                        logLines.add(msg);
+                        shell.appendLog("[配台試行] エラーで終了しました。");
+                        shell.appendLog(msg);
                         if (ex != null) {
                             java.io.StringWriter sw = new java.io.StringWriter();
                             ex.printStackTrace(new java.io.PrintWriter(sw));
@@ -1204,26 +971,28 @@ public final class DispatchInteractiveTabController {
                             if (stack.length() > max) {
                                 stack = stack.substring(0, max) + "\n... (truncated)";
                             }
-                            logLines.add(stack);
+                            for (String ln : stack.split("\n")) {
+                                if (!ln.isEmpty()) {
+                                    shell.appendLog(ln);
+                                }
+                            }
                         }
-                        logList.scrollTo(logLines.size() - 1);
+                        shell.notifyStage3DispatchTrialFailure(msg);
                     } catch (Throwable handlerEx) {
                         shell.appendLog(
                                 "[dispatch-editor] trial onFailed handler: "
                                         + handlerEx.getMessage());
                     } finally {
-                        releaseTrialModal.run();
+                        Platform.runLater(this::applyDispatchTrialButtonEnabledState);
                     }
                 });
         task.setOnCancelled(
                 e -> {
                     try {
                         statusLabel.setText("配台試行キャンセル");
-                        logLines.add("");
-                        logLines.add("[配台試行] キャンセルされました。");
-                        logList.scrollTo(logLines.size() - 1);
+                        shell.appendLog("[配台試行] キャンセルされました。");
                     } finally {
-                        releaseTrialModal.run();
+                        Platform.runLater(this::applyDispatchTrialButtonEnabledState);
                     }
                 });
         new Thread(task, "dispatch-trial").start();

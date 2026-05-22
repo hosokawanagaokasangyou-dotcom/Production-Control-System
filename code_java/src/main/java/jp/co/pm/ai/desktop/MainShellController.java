@@ -3714,6 +3714,32 @@ public final class MainShellController {
         alert.showAndWait();
     }
 
+    /** 配台試行（段階3）正常終了後: 完了音・配台タブへ切替・完了ダイアログ（段階2と同趣旨）。 */
+    void notifyStage3DispatchTrialSuccess() {
+        appendLog("[end] 段階3（配台試行）正常終了");
+        MacroCompleteChime.playIfAvailable(collectUiEnv());
+        selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
+        showStageCompletionDialog("段階3 完了", "段階3（配台試行）の処理が正常終了しました。");
+    }
+
+    /** 配台試行（段階3）異常終了後: 実行・ログタブへ切替・失敗ダイアログ（段階1/2と同趣旨）。 */
+    void notifyStage3DispatchTrialFailure(String detailMessage) {
+        selectMainShellTab(MainShellTabId.RUN);
+        Alert alert = new Alert(AlertType.ERROR);
+        alert.initOwner(primaryStage);
+        applyAlertStylesheetsFromOwner(alert);
+        alert.setTitle("段階3 失敗");
+        alert.setHeaderText(null);
+        StringBuilder body = new StringBuilder();
+        body.append("配台試行（段階3）が異常終了しました。\n");
+        if (detailMessage != null && !detailMessage.isBlank()) {
+            body.append(detailMessage.trim()).append('\n');
+        }
+        body.append("\n詳細は「実行・ログ」タブのログを確認してください。");
+        alert.setContentText(body.toString());
+        alert.showAndWait();
+    }
+
     /**
      * 段階1／段階2の子プロセスに渡す直前に、入力解決に効く環境変数をログへ列挙する（ネットワーク解決ログの直後）。
      */
