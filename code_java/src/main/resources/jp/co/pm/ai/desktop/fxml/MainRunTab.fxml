@@ -7,6 +7,7 @@
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.image.ImageView?>
@@ -70,7 +71,9 @@
                 <panes>
                     <TitledPane animated="true" expanded="false" text="その他（段階2・ブック・実行時間）">
                         <content>
-                            <VBox fillWidth="true" spacing="12.0" styleClass="pm-run-secondary-panel">
+                            <ScrollPane fitToWidth="true" hbarPolicy="NEVER" maxHeight="320.0" minViewportHeight="120.0"
+                                        prefViewportHeight="240.0" style="-fx-background-color: transparent;">
+                                <VBox fillWidth="true" spacing="12.0" styleClass="pm-run-secondary-panel">
                                 <Label styleClass="pm-section-title" text="段階2 成果物" />
                                 <HBox alignment="CENTER_LEFT" spacing="8.0">
                                     <Label text="段階2 Excel フォント" />
@@ -126,7 +129,8 @@
                                     <Label text="納期管理ビュー" GridPane.columnIndex="2" GridPane.rowIndex="1" />
                                     <Label fx:id="pipelineTimingDeliveryCalendarLabel" styleClass="pm-run-timing-value" text="—" GridPane.columnIndex="3" GridPane.rowIndex="1" GridPane.columnSpan="3" />
                                 </GridPane>
-                            </VBox>
+                                </VBox>
+                            </ScrollPane>
                         </content>
                     </TitledPane>
                 </panes>
