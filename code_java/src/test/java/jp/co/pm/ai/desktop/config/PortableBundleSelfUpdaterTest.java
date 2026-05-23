@@ -220,6 +220,14 @@ class PortableBundleSelfUpdaterTest {
     }
 
     @Test
+    void shouldLogEveryNthFile() {
+        assertTrue(PortableBundleSelfUpdater.shouldLogEveryNthFile(1, 100));
+        assertTrue(PortableBundleSelfUpdater.shouldLogEveryNthFile(32, 100));
+        assertTrue(PortableBundleSelfUpdater.shouldLogEveryNthFile(100, 100));
+        assertFalse(PortableBundleSelfUpdater.shouldLogEveryNthFile(2, 100));
+    }
+
+    @Test
     void copyOuterVersionTxtToLocal_writesPmAiDataAndCwd(@TempDir Path tmp) throws IOException {
         Path zip = tmp.resolve(PortableBundleSelfUpdater.PORTABLE_UPGRADE_ZIP_NAME);
         Files.writeString(zip, "PK", StandardCharsets.UTF_8);

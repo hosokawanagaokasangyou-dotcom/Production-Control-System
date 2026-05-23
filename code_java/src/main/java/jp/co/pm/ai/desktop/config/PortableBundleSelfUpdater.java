@@ -281,7 +281,7 @@ public final class PortableBundleSelfUpdater {
                         Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
                     }
                     extractedFiles[0]++;
-                    if (log != null) {
+                    if (log != null && shouldLogEveryNthFile(extractedFiles[0], fileEntries)) {
                         log.accept(PORTABLE_SYNC_LOG_PREFIX + "展開: " + name);
                     }
                     if (progress != null) {
@@ -411,7 +411,7 @@ public final class PortableBundleSelfUpdater {
                         Files.createDirectories(target.getParent());
                         Files.copy(file, target, COPY_OPTIONS);
                         copied[0]++;
-                        if (log != null) {
+                        if (log != null && shouldLogEveryNthFile(copied[0], totalFiles)) {
                             log.accept(PORTABLE_SYNC_LOG_PREFIX + "同期: " + relUnix);
                         }
                         if (progress != null) {
@@ -492,6 +492,14 @@ public final class PortableBundleSelfUpdater {
         if (done == total || done == 1 || done % PROGRESS_LOG_EVERY_FILES == 0) {
             progress.onProgress(phase, done, total, detail);
         }
+    }
+
+    /** 展開・同期ログは先頭・末尾と N 件ごとに抑え、ログ/UI の誤警告とスクロール速度を改善する。 */
+    static boolean shouldLogEveryNthFile(int done, int total) {
+        if (done <= 0) {
+            return false;
+        }
+        return done == 1 || done >= total || done % PROGRESS_LOG_EVERY_FILES == 0;
     }
 
     private static void reportByteProgress(
@@ -790,7 +798,7 @@ public final class PortableBundleSelfUpdater {
             int copied,
             int totalFiles,
             String relUnix) {
-        if (log != null) {
+        if (log != null && shouldLogEveryNthFile(copied, totalFiles)) {
             log.accept(PORTABLE_SYNC_LOG_PREFIX + "本体同期: " + relUnix);
         }
         if (progress != null) {

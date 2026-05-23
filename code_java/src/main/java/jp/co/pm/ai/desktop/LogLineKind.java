@@ -12,6 +12,9 @@ enum LogLineKind {
         if (line == null || line.isEmpty()) {
             return NORMAL;
         }
+        if (isPortableSyncRoutineLine(line)) {
+            return NORMAL;
+        }
         String s = line.toLowerCase(Locale.ROOT);
         if (matchesError(s)) {
             return ERROR;
@@ -20,6 +23,20 @@ enum LogLineKind {
             return WARN;
         }
         return NORMAL;
+    }
+
+    /**
+     * バージョンアップのファイル列挙行。パス中の {@code exception} / {@code error} / {@code warning} で誤判定しない。
+     */
+    private static boolean isPortableSyncRoutineLine(String line) {
+        if (!line.contains("[portable-sync]")) {
+            return false;
+        }
+        return line.contains("展開: ")
+                || line.contains("同期: ")
+                || line.contains("本体同期: ")
+                || line.contains("ZIP 取得")
+                || line.contains("ZIP 展開");
     }
 
     private static boolean matchesError(String s) {
