@@ -12,9 +12,9 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.ColorPicker;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.Slider;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
+import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -32,26 +32,26 @@ public final class EquipmentStatusDashboardAppearancePanel {
     private EquipmentStatusDashboardAppearancePrefs prefs;
 
     private Spinner<Integer> columnSpinner;
-    private Slider cardWidthSlider;
-    private Slider fullscreenScaleSlider;
-    private Slider paddingSlider;
-    private Slider gapHSlider;
-    private Slider gapVSlider;
-    private Slider radiusSlider;
+    private Spinner<Integer> cardWidthSpinner;
+    private Spinner<Integer> fullscreenScaleSpinner;
+    private Spinner<Integer> paddingSpinner;
+    private Spinner<Integer> gapHSpinner;
+    private Spinner<Integer> gapVSpinner;
+    private Spinner<Integer> radiusSpinner;
     private ComboBox<String> shadowCombo;
     private ComboBox<String> fontCombo;
-    private Slider machineFontSlider;
-    private Slider metaFontSlider;
-    private Slider planFontSlider;
-    private Slider pctFontSlider;
-    private Slider chartSizeSlider;
+    private Spinner<Integer> machineFontSpinner;
+    private Spinner<Integer> metaFontSpinner;
+    private Spinner<Integer> planFontSpinner;
+    private Spinner<Integer> pctFontSpinner;
+    private Spinner<Integer> chartSizeSpinner;
     private ColorPicker doneColorPicker;
     private ColorPicker remainColorPicker;
     private ComboBox<String> chartStyleCombo;
     private ComboBox<String> fullscreenThemeCombo;
     private CheckBox chartShadowCheckBox;
-    private Label cardWidthValue;
-    private Label chartSizeValue;
+
+    private final List<Spinner<Integer>> numericSpinners = new ArrayList<>();
 
     private boolean suppress;
 
@@ -64,45 +64,57 @@ public final class EquipmentStatusDashboardAppearancePanel {
 
     public VBox buildRoot() {
         GridPane grid = new GridPane();
-        grid.setHgap(12);
-        grid.setVgap(8);
+        grid.setHgap(10);
+        grid.setVgap(6);
         grid.setPadding(new Insets(4, 0, 4, 0));
-        int row = 0;
+        ColumnConstraints labelCol = new ColumnConstraints();
+        labelCol.setMinWidth(Region.USE_PREF_SIZE);
+        ColumnConstraints fieldCol = new ColumnConstraints();
+        fieldCol.setMinWidth(96);
+        fieldCol.setMaxWidth(120);
+        ColumnConstraints hintCol = new ColumnConstraints();
+        hintCol.setHgrow(Priority.ALWAYS);
+        grid.getColumnConstraints().addAll(labelCol, fieldCol, hintCol);
 
-        columnSpinner = new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 12, prefs.columnCount()));
-        columnSpinner.setEditable(true);
-        columnSpinner.setPrefWidth(80);
+        int row = 0;
+        row = addSection(grid, row, "レイアウト");
+
+        columnSpinner = intSpinner(0, 12, prefs.columnCount(), 1);
         addRow(grid, row++, "表示列数", columnSpinner, "0=自動");
 
-        cardWidthSlider = slider(160, 520, prefs.cardWidth(), 10);
-        cardWidthValue = valueLabel();
-        addRow(grid, row++, "カード幅 (px)", labeledSlider(cardWidthSlider, cardWidthValue), null);
+        cardWidthSpinner = intSpinner(160, 520, (int) prefs.cardWidth(), 10);
+        addRow(grid, row++, "カード幅 (px)", cardWidthSpinner, null);
 
-        fullscreenScaleSlider = slider(80, 200, prefs.fullscreenCardWidthPercent(), 1);
-        addRow(grid, row++, "全画面カード幅 (%)", labeledSlider(fullscreenScaleSlider, valueLabel()), null);
+        fullscreenScaleSpinner = intSpinner(80, 200, (int) prefs.fullscreenCardWidthPercent(), 1);
+        addRow(grid, row++, "全画面幅 (%)", fullscreenScaleSpinner, null);
 
-        fullscreenThemeCombo = new ComboBox<>();
-        fullscreenThemeCombo.getItems().addAll("ダーク", "ライト", "壁面（高コントラスト）");
-        fullscreenThemeCombo.setValue(fullscreenThemeLabel(prefs.fullscreenTheme()));
-        fullscreenThemeCombo.setMaxWidth(Double.MAX_VALUE);
-        addRow(grid, row++, "全画面テーマ", fullscreenThemeCombo, null);
+        paddingSpinner = intSpinner(4, 32, (int) prefs.cardPadding(), 1);
+        addRow(grid, row++, "内余白 (px)", paddingSpinner, null);
 
-        paddingSlider = slider(4, 32, prefs.cardPadding(), 1);
-        addRow(grid, row++, "カード内余白 (px)", slider(paddingSlider), null);
+        gapHSpinner = intSpinner(0, 48, (int) prefs.cardGapH(), 1);
+        addRow(grid, row++, "横間隔 (px)", gapHSpinner, null);
 
-        gapHSlider = slider(0, 48, prefs.cardGapH(), 1);
-        gapVSlider = slider(0, 48, prefs.cardGapV(), 1);
-        addRow(grid, row++, "横間隔 (px)", slider(gapHSlider), null);
-        addRow(grid, row++, "縦間隔 (px)", slider(gapVSlider), null);
+        gapVSpinner = intSpinner(0, 48, (int) prefs.cardGapV(), 1);
+        addRow(grid, row++, "縦間隔 (px)", gapVSpinner, null);
 
-        radiusSlider = slider(0, 32, prefs.cardBorderRadius(), 1);
-        addRow(grid, row++, "角丸 (px)", slider(radiusSlider), null);
+        radiusSpinner = intSpinner(0, 32, (int) prefs.cardBorderRadius(), 1);
+        addRow(grid, row++, "角丸 (px)", radiusSpinner, null);
 
         shadowCombo = new ComboBox<>();
         shadowCombo.getItems().addAll("なし", "弱", "中", "強");
         shadowCombo.setValue(shadowLabel(prefs.cardShadowStyle()));
-        shadowCombo.setMaxWidth(Double.MAX_VALUE);
+        shadowCombo.setMaxWidth(120);
         addRow(grid, row++, "カードの影", shadowCombo, null);
+
+        row = addSection(grid, row, "全画面");
+
+        fullscreenThemeCombo = new ComboBox<>();
+        fullscreenThemeCombo.getItems().addAll("ダーク", "ライト", "壁面（高コントラスト）");
+        fullscreenThemeCombo.setValue(fullscreenThemeLabel(prefs.fullscreenTheme()));
+        fullscreenThemeCombo.setMaxWidth(200);
+        addRow(grid, row++, "テーマ", fullscreenThemeCombo, null);
+
+        row = addSection(grid, row, "フォント");
 
         fontCombo = new ComboBox<>();
         List<String> families = new ArrayList<>();
@@ -114,27 +126,31 @@ public final class EquipmentStatusDashboardAppearancePanel {
         } else {
             fontCombo.setValue(prefs.fontFamily());
         }
-        fontCombo.setMaxWidth(Double.MAX_VALUE);
-        addRow(grid, row++, "フォント", fontCombo, null);
+        fontCombo.setMaxWidth(200);
+        addRow(grid, row++, "種類", fontCombo, null);
 
-        machineFontSlider = slider(9, 28, prefs.machineFontPx(), 1);
-        metaFontSlider = slider(8, 20, prefs.metaFontPx(), 1);
-        planFontSlider = slider(8, 18, prefs.planFontPx(), 1);
-        pctFontSlider = slider(10, 32, prefs.pctFontPx(), 1);
-        addRow(grid, row++, "機械名 (px)", slider(machineFontSlider), null);
-        addRow(grid, row++, "依頼・工程 (px)", slider(metaFontSlider), null);
-        addRow(grid, row++, "予定行 (px)", slider(planFontSlider), null);
-        addRow(grid, row++, "完了率 (px)", slider(pctFontSlider), null);
+        machineFontSpinner = intSpinner(9, 28, (int) prefs.machineFontPx(), 1);
+        addRow(grid, row++, "機械名 (px)", machineFontSpinner, null);
 
-        chartSizeSlider = slider(40, 240, prefs.chartSizePx(), 4);
-        chartSizeValue = valueLabel();
-        addRow(grid, row++, "円グラフ (px)", labeledSlider(chartSizeSlider, chartSizeValue), null);
+        metaFontSpinner = intSpinner(8, 20, (int) prefs.metaFontPx(), 1);
+        addRow(grid, row++, "依頼・工程 (px)", metaFontSpinner, null);
+
+        planFontSpinner = intSpinner(8, 18, (int) prefs.planFontPx(), 1);
+        addRow(grid, row++, "予定行 (px)", planFontSpinner, null);
+
+        pctFontSpinner = intSpinner(10, 32, (int) prefs.pctFontPx(), 1);
+        addRow(grid, row++, "完了率 (px)", pctFontSpinner, null);
+
+        row = addSection(grid, row, "円グラフ");
+
+        chartSizeSpinner = intSpinner(40, 240, (int) prefs.chartSizePx(), 4);
+        addRow(grid, row++, "サイズ (px)", chartSizeSpinner, null);
 
         doneColorPicker = colorPicker(prefs.chartDoneColorHex());
         remainColorPicker = colorPicker(prefs.chartRemainColorHex());
         HBox colors = new HBox(8, new Label("完了"), doneColorPicker, new Label("残"), remainColorPicker);
         colors.setAlignment(Pos.CENTER_LEFT);
-        addRow(grid, row++, "円グラフ色", colors, null);
+        addRow(grid, row++, "色", colors, null);
 
         chartStyleCombo = new ComboBox<>();
         chartStyleCombo.getItems().addAll("平面", "立体風");
@@ -142,10 +158,10 @@ public final class EquipmentStatusDashboardAppearancePanel {
                 EquipmentStatusDashboardAppearancePrefs.CHART_DEPTH.equals(prefs.chartStyle())
                         ? "立体風"
                         : "平面");
-        chartStyleCombo.setMaxWidth(Double.MAX_VALUE);
-        addRow(grid, row++, "円グラフ", chartStyleCombo, null);
+        chartStyleCombo.setMaxWidth(120);
+        addRow(grid, row++, "スタイル", chartStyleCombo, null);
 
-        chartShadowCheckBox = new CheckBox("円グラフに影");
+        chartShadowCheckBox = new CheckBox("影を付ける");
         chartShadowCheckBox.setSelected(prefs.chartShadowEnabled());
         addRow(grid, row++, "", chartShadowCheckBox, null);
 
@@ -154,7 +170,6 @@ public final class EquipmentStatusDashboardAppearancePanel {
 
         VBox root = new VBox(8, grid, reset);
         wireListeners();
-        updateValueLabels();
         return root;
     }
 
@@ -171,24 +186,24 @@ public final class EquipmentStatusDashboardAppearancePanel {
         suppress = true;
         try {
             columnSpinner.getValueFactory().setValue(p.columnCount());
-            cardWidthSlider.setValue(p.cardWidth());
-            fullscreenScaleSlider.setValue(p.fullscreenCardWidthPercent());
-            fullscreenThemeCombo.setValue(fullscreenThemeLabel(p.fullscreenTheme()));
-            paddingSlider.setValue(p.cardPadding());
-            gapHSlider.setValue(p.cardGapH());
-            gapVSlider.setValue(p.cardGapV());
-            radiusSlider.setValue(p.cardBorderRadius());
+            cardWidthSpinner.getValueFactory().setValue((int) p.cardWidth());
+            fullscreenScaleSpinner.getValueFactory().setValue((int) p.fullscreenCardWidthPercent());
+            paddingSpinner.getValueFactory().setValue((int) p.cardPadding());
+            gapHSpinner.getValueFactory().setValue((int) p.cardGapH());
+            gapVSpinner.getValueFactory().setValue((int) p.cardGapV());
+            radiusSpinner.getValueFactory().setValue((int) p.cardBorderRadius());
             shadowCombo.setValue(shadowLabel(p.cardShadowStyle()));
+            fullscreenThemeCombo.setValue(fullscreenThemeLabel(p.fullscreenTheme()));
             if (p.fontFamily().isBlank()) {
                 fontCombo.setValue("（システム既定）");
             } else {
                 fontCombo.setValue(p.fontFamily());
             }
-            machineFontSlider.setValue(p.machineFontPx());
-            metaFontSlider.setValue(p.metaFontPx());
-            planFontSlider.setValue(p.planFontPx());
-            pctFontSlider.setValue(p.pctFontPx());
-            chartSizeSlider.setValue(p.chartSizePx());
+            machineFontSpinner.getValueFactory().setValue((int) p.machineFontPx());
+            metaFontSpinner.getValueFactory().setValue((int) p.metaFontPx());
+            planFontSpinner.getValueFactory().setValue((int) p.planFontPx());
+            pctFontSpinner.getValueFactory().setValue((int) p.pctFontPx());
+            chartSizeSpinner.getValueFactory().setValue((int) p.chartSizePx());
             doneColorPicker.setValue(Color.web(p.chartDoneColorHex()));
             remainColorPicker.setValue(Color.web(p.chartRemainColorHex()));
             chartStyleCombo.setValue(
@@ -196,7 +211,6 @@ public final class EquipmentStatusDashboardAppearancePanel {
                             ? "立体風"
                             : "平面");
             chartShadowCheckBox.setSelected(p.chartShadowEnabled());
-            updateValueLabels();
         } finally {
             suppress = false;
         }
@@ -210,23 +224,9 @@ public final class EquipmentStatusDashboardAppearancePanel {
                         return;
                     }
                     prefs = readFromControls();
-                    updateValueLabels();
                     onChange.accept(prefs);
                 };
-        columnSpinner.valueProperty().addListener((o, a, b) -> fire.run());
-        for (Slider s :
-                List.of(
-                        cardWidthSlider,
-                        fullscreenScaleSlider,
-                        paddingSlider,
-                        gapHSlider,
-                        gapVSlider,
-                        radiusSlider,
-                        machineFontSlider,
-                        metaFontSlider,
-                        planFontSlider,
-                        pctFontSlider,
-                        chartSizeSlider)) {
+        for (Spinner<Integer> s : numericSpinners) {
             s.valueProperty().addListener((o, a, b) -> fire.run());
         }
         shadowCombo.valueProperty().addListener((o, a, b) -> fire.run());
@@ -244,20 +244,20 @@ public final class EquipmentStatusDashboardAppearancePanel {
                         ? ""
                         : fontCombo.getValue().strip();
         return new EquipmentStatusDashboardAppearancePrefs(
-                columnSpinner.getValue() != null ? columnSpinner.getValue() : 0,
-                cardWidthSlider.getValue(),
-                fullscreenScaleSlider.getValue(),
-                paddingSlider.getValue(),
-                gapHSlider.getValue(),
-                gapVSlider.getValue(),
-                radiusSlider.getValue(),
+                spinnerIntValue(columnSpinner),
+                spinnerInt(cardWidthSpinner),
+                spinnerInt(fullscreenScaleSpinner),
+                spinnerInt(paddingSpinner),
+                spinnerInt(gapHSpinner),
+                spinnerInt(gapVSpinner),
+                spinnerInt(radiusSpinner),
                 shadowKey(shadowCombo.getValue()),
                 font,
-                machineFontSlider.getValue(),
-                metaFontSlider.getValue(),
-                planFontSlider.getValue(),
-                pctFontSlider.getValue(),
-                chartSizeSlider.getValue(),
+                spinnerInt(machineFontSpinner),
+                spinnerInt(metaFontSpinner),
+                spinnerInt(planFontSpinner),
+                spinnerInt(pctFontSpinner),
+                spinnerInt(chartSizeSpinner),
                 toHex(doneColorPicker.getValue()),
                 toHex(remainColorPicker.getValue()),
                 "立体風".equals(chartStyleCombo.getValue())
@@ -267,40 +267,30 @@ public final class EquipmentStatusDashboardAppearancePanel {
                 fullscreenThemeKey(fullscreenThemeCombo.getValue()));
     }
 
-    private void updateValueLabels() {
-        if (cardWidthValue != null) {
-            cardWidthValue.setText(String.format(Locale.ROOT, "%.0f", cardWidthSlider.getValue()));
-        }
-        if (chartSizeValue != null) {
-            chartSizeValue.setText(String.format(Locale.ROOT, "%.0f", chartSizeSlider.getValue()));
-        }
-    }
-
-    private static Slider slider(double min, double max, double val, double block) {
-        Slider s = new Slider(min, max, val);
-        s.setBlockIncrement(block);
-        s.setMajorTickUnit(block * 5);
-        s.setShowTickMarks(false);
-        s.setMaxWidth(Double.MAX_VALUE);
+    private Spinner<Integer> intSpinner(int min, int max, int value, int step) {
+        Spinner<Integer> s =
+                new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(min, max, value, step));
+        s.setEditable(true);
+        s.setPrefWidth(96);
+        numericSpinners.add(s);
         return s;
     }
 
-    private static HBox labeledSlider(Slider slider, Label value) {
-        HBox box = new HBox(8, slider, value);
-        HBox.setHgrow(slider, Priority.ALWAYS);
-        slider.valueProperty().addListener((o, a, b) -> value.setText(String.format(Locale.ROOT, "%.0f", b.doubleValue())));
-        return box;
+    private static double spinnerInt(Spinner<Integer> s) {
+        return spinnerIntValue(s);
     }
 
-    private static Slider slider(Slider s) {
-        HBox.setHgrow(s, Priority.ALWAYS);
-        return s;
+    private static int spinnerIntValue(Spinner<Integer> s) {
+        Integer v = s != null ? s.getValue() : null;
+        return v != null ? v : 0;
     }
 
-    private static Label valueLabel() {
-        Label l = new Label();
-        l.setMinWidth(36);
-        return l;
+    private static int addSection(GridPane grid, int row, String title) {
+        Label head = new Label(title);
+        head.getStyleClass().add("pm-equipment-status-appearance-section");
+        GridPane.setColumnSpan(head, 3);
+        grid.add(head, 0, row);
+        return row + 1;
     }
 
     private static ColorPicker colorPicker(String hex) {
@@ -316,9 +306,6 @@ public final class EquipmentStatusDashboardAppearancePanel {
     private static void addRow(GridPane grid, int row, String label, javafx.scene.Node control, String hint) {
         Label l = new Label(label);
         grid.add(l, 0, row);
-        if (control instanceof Region r) {
-            GridPane.setHgrow(r, Priority.ALWAYS);
-        }
         grid.add(control, 1, row);
         if (hint != null) {
             Label h = new Label(hint);

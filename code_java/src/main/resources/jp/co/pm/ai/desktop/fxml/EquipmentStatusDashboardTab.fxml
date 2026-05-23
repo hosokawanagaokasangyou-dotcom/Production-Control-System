@@ -52,8 +52,8 @@
                 <Label fx:id="sourceSummaryLabel" styleClass="pm-equipment-status-source" text=""/>
             </HBox>
             <TitledPane fx:id="appearancePane" animated="true" collapsible="true" expanded="false"
-                        maxHeight="240.0" text="見た目設定">
-                <ScrollPane fitToWidth="true" maxHeight="220.0" styleClass="pm-equipment-status-appearance-scroll">
+                        maxHeight="420.0" text="見た目設定">
+                <ScrollPane fitToWidth="true" maxHeight="400.0" styleClass="pm-equipment-status-appearance-scroll">
                     <VBox fx:id="appearanceControlsHost" spacing="4.0">
                         <padding>
                             <Insets bottom="4.0" left="4.0" right="8.0" top="4.0"/>

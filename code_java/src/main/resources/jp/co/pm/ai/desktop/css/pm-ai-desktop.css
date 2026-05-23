@@ -1098,8 +1098,19 @@
     -fx-text-fill: -fx-mid-text-color;
 }
 
+.label.pm-equipment-status-appearance-section {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-text-inner-color;
+    -fx-padding: 6 0 2 0;
+}
+
 .pm-equipment-status-appearance-scroll {
     -fx-background-color: transparent;
+}
+
+.pm-equipment-status-appearance-scroll .spinner {
+    -fx-pref-width: 96;
 }
 
 .label.pm-equipment-status-machine {
