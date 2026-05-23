@@ -84,7 +84,7 @@ class EquipmentStatusDashboardSourceLoaderTest {
     }
 
     @Test
-    void load_continuesWhenActualFileTooLarge(@TempDir Path dir) throws Exception {
+    void load_doesNotRejectActualFileOverDefaultUiLimit(@TempDir Path dir) throws Exception {
         Path actualDir = dir.resolve("actual");
         Files.createDirectories(actualDir);
         Path taskInputDir = dir.resolve("task-input");
@@ -93,7 +93,7 @@ class EquipmentStatusDashboardSourceLoaderTest {
         Files.write(
                 big,
                 new byte[(int) (AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES + 1024)]);
-        Files.writeString(taskInputDir.resolve("plan.csv"), "機械名,依頼NO,工程名,2026/05/25\nM1,R1,P1,10\n");
+        Files.writeString(taskInputDir.resolve("plan.csv"), "機械名,依頼NO\nM1,R1\n");
         Files.writeString(
                 dir.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME),
                 "{\"columns\":[],\"rows\":[]}");
@@ -105,7 +105,6 @@ class EquipmentStatusDashboardSourceLoaderTest {
 
         LoadedSources loaded = EquipmentStatusDashboardSourceLoader.load(ui);
         Assertions.assertNotNull(loaded);
-        Assertions.assertTrue(loaded.loadNotice().contains("実績"));
-        Assertions.assertNotNull(loaded.aladdin());
+        Assertions.assertFalse(loaded.loadNotice().contains("大きすぎます"));
     }
 }

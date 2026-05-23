@@ -253,7 +253,7 @@ public final class EquipmentStatusDashboardSourceLoader {
         if (cached.isPresent()) {
             return EquipmentStatusDashboardBuilder.actualsFrom(cached.get().toTabularSheet());
         }
-        AppPaths.ensureActualDetailRawFileWithinLimit(file, ui);
+        // ダッシュボードはバックグラウンド読込のため、加工実績タブ向けの生ファイルサイズ上限は適用しない。
         String low = file.getFileName().toString().toLowerCase(Locale.ROOT);
         if (low.endsWith(".pq") || low.endsWith(".parquet")) {
             return new ActualsSnapshot(List.of(), List.of());
