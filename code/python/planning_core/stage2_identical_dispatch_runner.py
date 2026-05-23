@@ -134,6 +134,7 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
         _ot_sim = (os.environ.get(pc.ENV_OVERTIME_SIMULATION_JSON) or "").strip()
         _note_base = (
             "段階3配台試行（段階2同一条件）。"
+            "配台ループのブロック条件は段階2と同一（JSON 暦日数量は配台中の上限にしない）。"
             "致命: 機械カレンダー未作成・勤怠未作成・勤怠最終日までに割り切れない残タスク。"
             "計画暦日未達は dispatch_qty_shortfall に載せる。"
             "勤怠日付の自動拡張は行わない。"

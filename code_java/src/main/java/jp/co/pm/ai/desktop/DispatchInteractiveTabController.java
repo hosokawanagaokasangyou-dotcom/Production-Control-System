@@ -1170,7 +1170,8 @@ public final class DispatchInteractiveTabController {
     }
 
     /**
-     * 配台試行: {@link ResultDispatchTrialPython} および不足 JSON 連携（段階2と同一エンジン・数量上限は JSON）。
+     * 配台試行: {@link ResultDispatchTrialPython} および不足 JSON 連携（段階2同一エンジン。
+     * JSON 暦日数量は配台後の未達照合・配台日スライド用。配台ループ中の上限にはしない）。
      * ログは「実行・ログ」タブへ出力する。
      */
     private void startDispatchTrialInternal(
