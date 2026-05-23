@@ -42,6 +42,7 @@ import javafx.scene.text.TextFlow;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
@@ -86,6 +87,8 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
+import jp.co.pm.ai.desktop.dispatch.AladdinSystemDispatchDisplayQty;
+import jp.co.pm.ai.desktop.dispatch.DispatchAladdinPlanAligner;
 import jp.co.pm.ai.desktop.dispatch.DispatchInteractiveRollUnitSupport;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialConsistency;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialShortages;
@@ -327,6 +330,9 @@ public final class DispatchInteractiveTabController {
 
     @FXML
     private CheckBox showStage3AfterQtyLineCheck;
+
+    @FXML
+    private Button alignToAladdinPlanButton;
 
     @FXML
     private Label statusLabel;
@@ -879,6 +885,156 @@ public final class DispatchInteractiveTabController {
         } else if (statusLabel != null) {
             statusLabel.setText("段階2必須列は揃っています");
         }
+    }
+
+    @FXML
+    private void onAlignToAladdinPlanAction() {
+        if (reloadInteractionDisabled || doc == null || docHasActualDispatchQtyColumn()) {
+            return;
+        }
+        if (wideProfiles.isEmpty() || dateAxis.isEmpty()) {
+            if (statusLabel != null) {
+                statusLabel.setText("整列対象の行がありません");
+            }
+            return;
+        }
+        aladdinPlanLookup = loadAladdinPlanLookupForDisplay();
+        if (aladdinPlanLookup.isEmpty()) {
+            Alert a = new Alert(AlertType.WARNING);
+            if (shell != null) {
+                a.initOwner(shell.primaryStageForDialogs());
+            }
+            a.setTitle("アラジン計画に合わせる");
+            a.setHeaderText("アラジン計画データがありません");
+            a.setContentText(
+                    "shaped_aladdin_plan.json が読み込めません。"
+                            + "段階1成形結果またはアラジン計画の出力を確認してください。");
+            a.showAndWait();
+            return;
+        }
+
+        Alert confirm = new Alert(AlertType.CONFIRMATION);
+        if (shell != null) {
+            confirm.initOwner(shell.primaryStageForDialogs());
+        }
+        confirm.setTitle("アラジン計画に合わせる");
+        confirm.setHeaderText("段階3前の数量をアラジン計画に沿って再配分します");
+        confirm.setContentText(
+                "各タスク行の合計数量は維持し、ロール単位で日付間に移動します。"
+                        + "\n換算数量が原反ロール長より小さい行は、表示上 20 m 等でも 1 ロール単位で移動します。");
+        if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
+            return;
+        }
+
+        List<String> cols = doc.columns();
+        int changedRows = 0;
+        int rollMoves = 0;
+        int skippedRows = 0;
+        for (int rowIdx = 0; rowIdx < wideProfiles.size(); rowIdx++) {
+            Map<String, String> profile = wideProfiles.get(rowIdx);
+            WideRow wr = rowIdx < wideRowItems.size() ? wideRowItems.get(rowIdx) : null;
+            Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM unitInfo =
+                    resolveRollUnitForWideRow(
+                            wr != null ? wr : new WideRow(profile, dateAxis.size()));
+            double unitM = unitInfo.unitM();
+
+            double[] current = new double[dateAxis.size()];
+            double[] aladdin = new double[dateAxis.size()];
+            for (int j = 0; j < dateAxis.size(); j++) {
+                LocalDate day = dateAxis.get(j);
+                current[j] =
+                        wr != null
+                                ? wr.getAmount(j)
+                                : ResultDispatchPivot.sumQuantityForProfileAndDateForWideMerge(
+                                        doc.rows(),
+                                        profile,
+                                        day,
+                                        ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+                aladdin[j] =
+                        wr != null
+                                ? aladdinPlanQtyForWideRow(wr, day)
+                                : AladdinShapedPlanQtyLookup.lookup(
+                                        aladdinPlanLookup,
+                                        profile.get(ResultDispatchSchema.COL_MACHINE),
+                                        profile.get("依頼NO"),
+                                        day.format(ALADDIN_PLAN_DATE_FMT),
+                                        profile.get(ResultDispatchSchema.COL_PROCESS));
+            }
+
+            AladdinSystemDispatchDisplayQty.TaskQtyContext qtyCtx =
+                    taskQtyContextForWideProfile(profile);
+            DispatchAladdinPlanAligner.RowResult aligned =
+                    DispatchAladdinPlanAligner.alignRow(
+                            new DispatchAladdinPlanAligner.RowInput(
+                                    current,
+                                    aladdin,
+                                    unitM,
+                                    qtyCtx.usesConvertedQtyForAladdinDisplay()));
+            if (!aligned.changed()) {
+                if (unitM <= 1e-9
+                        || !Stage2PlanRowDispatchQtyMetrics.isQtyAlignedToRollUnit(
+                                sumArray(current), unitM)) {
+                    skippedRows++;
+                }
+                continue;
+            }
+            changedRows++;
+            rollMoves += aligned.rollMoves();
+            for (int j = 0; j < dateAxis.size(); j++) {
+                ResultDispatchPivot.upsertAllocationForWideMerge(
+                        cols,
+                        doc.rows(),
+                        profile,
+                        dateAxis.get(j),
+                        aligned.newByDayIndex()[j],
+                        ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+            }
+        }
+        ResultDispatchNormalizer.normalizeInPlace(cols, doc.rows());
+        rebuildGrids();
+        markDispatchDocDirty();
+        if (statusLabel != null) {
+            if (changedRows <= 0) {
+                statusLabel.setText(
+                        skippedRows > 0
+                                ? "アラジン計画に合わせる対象がありませんでした（"
+                                        + skippedRows
+                                        + " 行スキップ）"
+                                : "変更はありませんでした");
+            } else {
+                statusLabel.setText(
+                        "アラジン計画に合わせました: "
+                                + changedRows
+                                + " 行・約 "
+                                + rollMoves
+                                + " ロール移動");
+            }
+        }
+    }
+
+    private static double sumArray(double[] values) {
+        double sum = 0.0;
+        if (values == null) {
+            return sum;
+        }
+        for (double v : values) {
+            sum += v;
+        }
+        return sum;
+    }
+
+    private AladdinSystemDispatchDisplayQty.TaskQtyContext taskQtyContextForWideProfile(
+            Map<String, String> profile) {
+        if (doc == null || profile == null) {
+            return new AladdinSystemDispatchDisplayQty.TaskQtyContext(0.0, 0.0);
+        }
+        List<String> cols = doc.columns();
+        List<String> row = new ArrayList<>(cols.size());
+        for (String col : cols) {
+            row.add(profile.getOrDefault(col, ""));
+        }
+        return AladdinSystemDispatchDisplayQty.contextFromDispatchRow(
+                cols, row, rollUnitTablesCached());
     }
 
     @FXML
@@ -1547,6 +1703,7 @@ public final class DispatchInteractiveTabController {
         if (wideRowDownButton != null) {
             wideRowDownButton.setDisable(disabled);
         }
+        applyAlignToAladdinPlanButtonEnabledState();
     }
 
     private void markDispatchDocDirty() {
@@ -1633,6 +1790,28 @@ public final class DispatchInteractiveTabController {
             } else {
                 overtimeSimulationButton.setText(OVERTIME_SIM_BUTTON_TEXT_DEFAULT);
             }
+        }
+        applyAlignToAladdinPlanButtonEnabledState();
+    }
+
+    private void applyAlignToAladdinPlanButtonEnabledState() {
+        if (alignToAladdinPlanButton == null) {
+            return;
+        }
+        boolean disabled =
+                reloadInteractionDisabled
+                        || doc == null
+                        || docHasActualDispatchQtyColumn()
+                        || wideProfiles.isEmpty()
+                        || dateAxis.isEmpty();
+        alignToAladdinPlanButton.setDisable(disabled);
+        if (docHasActualDispatchQtyColumn()) {
+            alignToAladdinPlanButton.setTooltip(
+                    new Tooltip("段階3試行後は (段階3前) 数量の自動整列はできません"));
+        } else {
+            alignToAladdinPlanButton.setTooltip(
+                    new Tooltip(
+                            "段階3前: タスク×日付の (段階3前) 数量を (アラ計画) に沿うようロール単位で再配分する"));
         }
     }
 
@@ -2112,6 +2291,7 @@ public final class DispatchInteractiveTabController {
             wideProfiles.addAll(bundle.wide().profiles());
             wideRowItems.clear();
             wideRowItems.addAll(bundle.wide().rowItems());
+            applyAlignToAladdinPlanButtonEnabledState();
 
             WideGridBundle w = bundle.wide();
             w.grid().addEventHandler(GridChange.GRID_CHANGE_EVENT, this::onWideGridChange);
