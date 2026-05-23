@@ -21,6 +21,8 @@ import org.junit.jupiter.api.io.TempDir;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.SummaryAiDispatchExportPrefs;
 import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCell;
+import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCellPlainText;
+import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCellTripleQty;
 
 class SummaryAiDispatchWorkbookExporterTest {
 
@@ -46,9 +48,9 @@ class SummaryAiDispatchWorkbookExporterTest {
                         List.of("依頼NO", "2026年5月17日(土)", "2026年5月18日(日)"),
                         List.of(
                                 List.of(
-                                        new DeliveryCalendarMainCell.PlainText("Y5-1"),
-                                        new DeliveryCalendarMainCell.TripleQty("", "", "40", ""),
-                                        new DeliveryCalendarMainCell.TripleQty("", "", "60", ""))));
+                                        new DeliveryCalendarMainCellPlainText("Y5-1"),
+                                        new DeliveryCalendarMainCellTripleQty("", "", "40", ""),
+                                        new DeliveryCalendarMainCellTripleQty("", "", "60", ""))));
         assertEquals(
                 List.of(
                         "依頼NO",
@@ -116,8 +118,8 @@ class SummaryAiDispatchWorkbookExporterTest {
                         List.of("機械名", "2026年5月17日(土)"),
                         List.of(
                                 List.of(
-                                        new DeliveryCalendarMainCell.PlainText("M1"),
-                                        new DeliveryCalendarMainCell.TripleQty(
+                                        new DeliveryCalendarMainCellPlainText("M1"),
+                                        new DeliveryCalendarMainCellTripleQty(
                                                 "10", "", "", "3300"))));
         Path out =
                 SummaryAiDispatchWorkbookExporter.writeOverwrite(
@@ -181,9 +183,9 @@ class SummaryAiDispatchWorkbookExporterTest {
                         List.of("機械名", "2026年5月17日(土)", "2026年5月18日(日)"),
                         List.of(
                                 List.of(
-                                        new DeliveryCalendarMainCell.PlainText("M1"),
-                                        new DeliveryCalendarMainCell.TripleQty("10", "", "100", ""),
-                                        new DeliveryCalendarMainCell.TripleQty("10", "", "50", ""))));
+                                        new DeliveryCalendarMainCellPlainText("M1"),
+                                        new DeliveryCalendarMainCellTripleQty("10", "", "100", ""),
+                                        new DeliveryCalendarMainCellTripleQty("10", "", "50", ""))));
         PlanInputTabularIo.TabularSheet dispatch =
                 new PlanInputTabularIo.TabularSheet(
                         List.of("依頼NO"), List.of(List.of("A001")));

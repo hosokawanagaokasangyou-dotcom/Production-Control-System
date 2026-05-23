@@ -8,16 +8,16 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCell.TripleQty;
+import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCellTripleQty;
 
 class SpreadsheetTabularSupportDeliveryCalendarTripleAlignTest {
 
     @Test
     void stage3Mode_keepsStage3AfterOnSameSlotWhenPlanMissing() {
-        TripleQty withPlan =
-                new TripleQty("4400", "", "", "3000");
-        TripleQty stage3Only =
-                new TripleQty("", "", "", "1400");
+        DeliveryCalendarMainCellTripleQty withPlan =
+                new DeliveryCalendarMainCellTripleQty("4400", "", "", "3000");
+        DeliveryCalendarMainCellTripleQty stage3Only =
+                new DeliveryCalendarMainCellTripleQty("", "", "", "1400");
 
         List<Boolean> planVis =
                 SpreadsheetTabularSupport.deliveryCalendarTripleAlignedSlotVisibleForTest(
@@ -38,7 +38,7 @@ class SpreadsheetTabularSupportDeliveryCalendarTripleAlignTest {
 
     @Test
     void stage3Mode_includesDispatchSlotWhenPlanLineVisible() {
-        TripleQty t = new TripleQty("10", "20", "30", "40");
+        DeliveryCalendarMainCellTripleQty t = new DeliveryCalendarMainCellTripleQty("10", "20", "30", "40");
         List<String> texts =
                 SpreadsheetTabularSupport.deliveryCalendarTripleAlignedSlotTextsForTest(t, false);
         assertEquals(4, texts.size());

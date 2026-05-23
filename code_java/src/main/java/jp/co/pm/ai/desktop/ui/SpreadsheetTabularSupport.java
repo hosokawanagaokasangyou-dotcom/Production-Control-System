@@ -1106,9 +1106,9 @@ public final class SpreadsheetTabularSupport {
             ObservableList<SpreadsheetCell> rowCells = FXCollections.observableArrayList();
             for (int c = 0; c < cols; c++) {
                 DeliveryCalendarMainCell mc =
-                        c < src.size() && src.get(c) != null ? src.get(c) : new DeliveryCalendarMainCell.PlainText("");
+                        c < src.size() && src.get(c) != null ? src.get(c) : new DeliveryCalendarMainCellPlainText("");
                 boolean isDateColumn = c >= leading;
-                if (mc instanceof DeliveryCalendarMainCell.TripleQty t) {
+                if (mc instanceof DeliveryCalendarMainCellTripleQty t) {
                     List<String> visibleLines =
                             deliveryCalendarTripleVisibleFormattedLines(t, hideStage3PlanLine);
                     String item = String.join("\n", visibleLines);
@@ -1134,7 +1134,7 @@ public final class SpreadsheetTabularSupport {
                     rowCells.add(cell);
                 } else {
                     String raw =
-                            mc instanceof DeliveryCalendarMainCell.PlainText pt ? pt.text() : "";
+                            mc instanceof DeliveryCalendarMainCellPlainText pt ? pt.text() : "";
                     SpreadsheetCell cell =
                             SpreadsheetCellType.STRING.createCell(gridRow, c, 1, 1, raw);
                     cell.setEditable(false);
@@ -1182,7 +1182,7 @@ public final class SpreadsheetTabularSupport {
     }
 
     private static Node deliveryCalendarTripleGraphic(
-            DeliveryCalendarMainCell.TripleQty t, boolean hideStage3PlanLine) {
+            DeliveryCalendarMainCellTripleQty t, boolean hideStage3PlanLine) {
         VBox box = new VBox(0);
         box.setPadding(new Insets(2, 4, 2, 4));
         box.setFillWidth(true);
@@ -1211,7 +1211,7 @@ public final class SpreadsheetTabularSupport {
      * 比較タブ日付セル: (アラ計画)/(実績)/(段階3前)/(段階3後) を常に同じ行位置に載せる（非表示は空行で占有）。
      */
     private static List<DeliveryCalendarTripleSlot> deliveryCalendarTripleFixedSlots(
-            DeliveryCalendarMainCell.TripleQty t, boolean hideStage3PlanLine) {
+            DeliveryCalendarMainCellTripleQty t, boolean hideStage3PlanLine) {
         List<DeliveryCalendarTripleSlot> slots = new ArrayList<>(4);
         slots.add(deliveryCalendarTripleSlot(DC_TRIPLE_PREFIX_PLAN, t.plan()));
         slots.add(deliveryCalendarTripleSlot(DC_TRIPLE_PREFIX_ACTUAL, t.actual()));
@@ -1235,12 +1235,12 @@ public final class SpreadsheetTabularSupport {
      * @see #formatDeliveryCalendarTripleLine(String, String) used for inspector APIs without filtering
      */
     private static List<String> deliveryCalendarTripleVisibleFormattedLines(
-            DeliveryCalendarMainCell.TripleQty t) {
+            DeliveryCalendarMainCellTripleQty t) {
         return deliveryCalendarTripleVisibleFormattedLines(t, false);
     }
 
     private static List<String> deliveryCalendarTripleVisibleFormattedLines(
-            DeliveryCalendarMainCell.TripleQty t, boolean hideStage3PlanLine) {
+            DeliveryCalendarMainCellTripleQty t, boolean hideStage3PlanLine) {
         List<String> lines = new ArrayList<>(4);
         for (DeliveryCalendarTripleSlot slot : deliveryCalendarTripleFixedSlots(t, hideStage3PlanLine)) {
             if (slot.visible()) {
@@ -1252,7 +1252,7 @@ public final class SpreadsheetTabularSupport {
 
     /** テスト用: 固定スロット行（非表示は空文字）。 */
     static List<String> deliveryCalendarTripleAlignedSlotTextsForTest(
-            DeliveryCalendarMainCell.TripleQty t, boolean hideStage3PlanLine) {
+            DeliveryCalendarMainCellTripleQty t, boolean hideStage3PlanLine) {
         return deliveryCalendarTripleFixedSlots(t, hideStage3PlanLine).stream()
                 .map(DeliveryCalendarTripleSlot::text)
                 .toList();
@@ -1260,7 +1260,7 @@ public final class SpreadsheetTabularSupport {
 
     /** テスト用: スロット行の表示有無（段階3後のみ等の行位置検証）。 */
     static List<Boolean> deliveryCalendarTripleAlignedSlotVisibleForTest(
-            DeliveryCalendarMainCell.TripleQty t, boolean hideStage3PlanLine) {
+            DeliveryCalendarMainCellTripleQty t, boolean hideStage3PlanLine) {
         return deliveryCalendarTripleFixedSlots(t, hideStage3PlanLine).stream()
                 .map(DeliveryCalendarTripleSlot::visible)
                 .toList();

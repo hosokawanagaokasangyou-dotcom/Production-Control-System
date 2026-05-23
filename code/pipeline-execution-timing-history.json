@@ -287,5 +287,23 @@
     "durationMs" : 551693,
     "writerHost" : "20250401-02",
     "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779495939357,
+    "durationMs" : 16924,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE1",
+    "finishedAtEpochMs" : 1779497916669,
+    "durationMs" : 7630,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779499409954,
+    "durationMs" : 89365,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
   } ]
 }

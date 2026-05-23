@@ -37,6 +37,8 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.SummaryAiDispatchExportPrefs;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCell;
+import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCellPlainText;
+import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCellTripleQty;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 
 /**
@@ -393,7 +395,7 @@ public final class SummaryAiDispatchWorkbookExporter {
         double sum = 0;
         for (int c : dateColIndices) {
             DeliveryCalendarMainCell cell = row != null && c < row.size() ? row.get(c) : null;
-            if (cell instanceof DeliveryCalendarMainCell.TripleQty t
+            if (cell instanceof DeliveryCalendarMainCellTripleQty t
                     && !tripleQtyHidden(t.dispatch())) {
                 sum += ResultDispatchNormalizer.parseDouble(t.dispatch());
             }
@@ -421,16 +423,16 @@ public final class SummaryAiDispatchWorkbookExporter {
         if (cell == null) {
             return "";
         }
-        if (cell instanceof DeliveryCalendarMainCell.PlainText p) {
+        if (cell instanceof DeliveryCalendarMainCellPlainText p) {
             return p.text() != null ? p.text() : "";
         }
-        if (cell instanceof DeliveryCalendarMainCell.TripleQty t) {
+        if (cell instanceof DeliveryCalendarMainCellTripleQty t) {
             return formatTripleForExcel(t);
         }
         return "";
     }
 
-    private static String formatTripleForExcel(DeliveryCalendarMainCell.TripleQty t) {
+    private static String formatTripleForExcel(DeliveryCalendarMainCellTripleQty t) {
         List<String> lines = new ArrayList<>(4);
         if (!tripleQtyHidden(t.plan())) {
             lines.add(SpreadsheetTabularSupport.deliveryCalendarPlanLineForInspector(t.plan()));

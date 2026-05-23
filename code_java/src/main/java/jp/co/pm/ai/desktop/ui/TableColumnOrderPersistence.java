@@ -749,7 +749,7 @@ public final class TableColumnOrderPersistence {
         for (int oldIdx : perm) {
             headersRef.add(fileHeaders.get(oldIdx));
         }
-        DeliveryCalendarMainCell emptyCell = new DeliveryCalendarMainCell.PlainText("");
+        DeliveryCalendarMainCell emptyCell = new DeliveryCalendarMainCellPlainText("");
         for (ObservableList<DeliveryCalendarMainCell> row : rows) {
             List<DeliveryCalendarMainCell> old = new ArrayList<>(row);
             row.clear();

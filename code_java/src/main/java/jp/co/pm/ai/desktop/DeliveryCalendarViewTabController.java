@@ -64,6 +64,8 @@ import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.SummaryAiDispatchWorkbookExporter;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCell;
+import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCellPlainText;
+import jp.co.pm.ai.desktop.ui.DeliveryCalendarMainCellTripleQty;
 import jp.co.pm.ai.desktop.ui.SliderCommittedChangeSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetThemeBridge;
@@ -358,7 +360,7 @@ public final class DeliveryCalendarViewTabController {
 
     /**
      * メイン表 {@link SpreadsheetView} にフォントを適用する。空文字は既定（CSS／システム継承）に戻す。
-     * セル内グラフィック（{@link DeliveryCalendarMainCell.TripleQty} の VBox/Label）にも継承される。
+     * セル内グラフィック（{@link DeliveryCalendarMainCellTripleQty} の VBox/Label）にも継承される。
      */
     private void applyMainFontFamily(String family) {
         if (mainSpreadsheet == null) {
@@ -1424,6 +1426,18 @@ public final class DeliveryCalendarViewTabController {
                         try {
                             applyMainCalendar(root);
                             exportSummaryAiDispatchWorkbookAfterReload();
+                        } catch (Throwable t) {
+                            if (shell != null) {
+                                shell.appendLog("[delivery-calendar] メイン表反映 " + t.getMessage());
+                                if (pendingUserDeliveryRefreshCompletionDialog) {
+                                    pendingUserDeliveryRefreshCompletionDialog = false;
+                                    shell.showErrorDialog(
+                                            "再読み込みエラー",
+                                            "メイン表の反映中に失敗しました。\n"
+                                                    + (t.getMessage() != null ? t.getMessage() : t.toString()));
+                                }
+                            }
+                            statusLabel.setText("error: " + t.getMessage());
                         } finally {
                             if (shell != null && pendingUserDeliveryRefreshCompletionDialog) {
                                 pendingUserDeliveryRefreshCompletionDialog = false;
@@ -1795,7 +1809,7 @@ public final class DeliveryCalendarViewTabController {
             String procRawForPlan = "";
             if (procIdxMain >= 0 && procIdxMain < row.size()) {
                 DeliveryCalendarMainCell pc = row.get(procIdxMain);
-                if (pc instanceof DeliveryCalendarMainCell.PlainText ptxt) {
+                if (pc instanceof DeliveryCalendarMainCellPlainText ptxt) {
                     procRawForPlan = ptxt.text();
                 }
             }
@@ -1841,7 +1855,7 @@ public final class DeliveryCalendarViewTabController {
      */
     static DeliveryCalendarMainCell overlayTripleQty(
             String planQty, String actualQty, String dispatchQty, String stage3AfterQty) {
-        return new DeliveryCalendarMainCell.TripleQty(
+        return new DeliveryCalendarMainCellTripleQty(
                 planQty != null ? planQty : "",
                 actualQty != null ? actualQty : "",
                 dispatchQty != null ? dispatchQty : "",
@@ -1961,10 +1975,10 @@ public final class DeliveryCalendarViewTabController {
             DeliveryCalendarMainCell existing, String dispatchQty, String stage3AfterQty) {
         String d = dispatchQty != null ? dispatchQty : "";
         String s3 = stage3AfterQty != null ? stage3AfterQty : "";
-        if (existing instanceof DeliveryCalendarMainCell.TripleQty t) {
-            return new DeliveryCalendarMainCell.TripleQty(t.plan(), t.actual(), d, s3);
+        if (existing instanceof DeliveryCalendarMainCellTripleQty t) {
+            return new DeliveryCalendarMainCellTripleQty(t.plan(), t.actual(), d, s3);
         }
-        return new DeliveryCalendarMainCell.TripleQty("", "", d, s3);
+        return new DeliveryCalendarMainCellTripleQty("", "", d, s3);
     }
 
     /** @deprecated {@link #mergeTripleDispatchAndStage3Qty} を使用（段階3後は空で維持）。 */
@@ -1972,7 +1986,7 @@ public final class DeliveryCalendarViewTabController {
     static DeliveryCalendarMainCell mergeTripleDispatchQty(
             DeliveryCalendarMainCell existing, String dispatchQty) {
         String s3 =
-                existing instanceof DeliveryCalendarMainCell.TripleQty t ? t.stage3After() : "";
+                existing instanceof DeliveryCalendarMainCellTripleQty t ? t.stage3After() : "";
         return mergeTripleDispatchAndStage3Qty(existing, dispatchQty, s3);
     }
 
@@ -2216,16 +2230,16 @@ public final class DeliveryCalendarViewTabController {
 
     private static DeliveryCalendarMainCell parseDeliveryCalendarMainCell(JsonNode cell) {
         if (cell == null || cell.isNull() || cell.isMissingNode()) {
-            return new DeliveryCalendarMainCell.PlainText("");
+            return new DeliveryCalendarMainCellPlainText("");
         }
         if (cell.isObject() && cell.has("triple")) {
             JsonNode t = cell.get("triple");
-            return new DeliveryCalendarMainCell.TripleQty(
+            return new DeliveryCalendarMainCellTripleQty(
                     t.path("p").asText(""),
                     t.path("a").asText(""),
                     t.path("d").asText(""),
                     t.path("s3").asText(""));
         }
-        return new DeliveryCalendarMainCell.PlainText(cell.asText(""));
+        return new DeliveryCalendarMainCellPlainText(cell.asText(""));
     }
 }
