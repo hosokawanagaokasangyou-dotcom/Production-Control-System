@@ -17392,7 +17392,7 @@ def run_stage1_extract():
             need_combo_col_index_stage1,
         ) = load_skills_and_needs()
     except PlanningValidationError:
-        logging.error("段階1を中断: マスタ skills の検証エラー（優先度の数値重複など）。")
+        logging.error("段階1を中断: マスタ skills / 勤怠シートの検証エラー。")
         raise
     out_df = _merge_plan_sheet_user_overrides(out_df)
     _apply_master_speed_sheet_to_plan_df(out_df, log_prefix="段階1")
@@ -18359,6 +18359,60 @@ def _validate_skills_op_as_priority_numbers_unique(
         raise PlanningValidationError(msg)
 
 
+def _master_member_attendance_sheet_names(master_path: str) -> set[str]:
+    """master 上のメンバー勤怠シート名（skills / need / tasks / カレンダー系を除く）。"""
+    xls = _cached_master_pd_excel_file(master_path)
+    if xls is None:
+        return set()
+    skip_lower = {"skills", "need", "tasks"}
+    out: set[str] = set()
+    for sheet_name in xls.sheet_names:
+        if "カレンダー" in sheet_name:
+            continue
+        sn = str(sheet_name).strip()
+        if not sn or sn.lower() in skip_lower:
+            continue
+        out.add(sn)
+    return out
+
+
+def _validate_skills_members_have_attendance_sheets(
+    members: list,
+    master_path: str | None = None,
+    *,
+    context_label: str | None = None,
+) -> None:
+    """
+    skills に名前があるメンバー全員について、同名の勤怠シートが master にあることを検証する。
+    欠落時は PlanningValidationError。
+    """
+    mem_list = [str(m).strip() for m in (members or []) if m and str(m).strip()]
+    if not mem_list:
+        return
+    mp = (master_path or _master_workbook_path_resolved()).strip()
+    xls = _cached_master_pd_excel_file(mp)
+    if xls is None:
+        raise PlanningValidationError(
+            (f"{context_label}: " if context_label else "")
+            + "master.xlsm を開けません。パスとファイルの存在を確認してください。"
+        )
+    attendance_names = _master_member_attendance_sheet_names(mp)
+    missing = [m for m in mem_list if m not in attendance_names]
+    if not missing:
+        return
+    cap = 50
+    shown = missing[:cap]
+    prefix = f"{context_label}: " if context_label else ""
+    msg = (
+        f"{prefix}マスタ「skills」に登録されているメンバーに勤怠シートがありません。"
+        " master.xlsm で各メンバー名と同名の勤怠シートを作成してください。\n"
+        + "\n".join(f" ・{n}" for n in shown)
+    )
+    if len(missing) > cap:
+        msg += f"\n…他 {len(missing) - cap} 名"
+    raise PlanningValidationError(msg)
+
+
 def build_member_assignment_priority_reference(
     skills_dict: dict,
     members: list | None,
@@ -18766,6 +18820,7 @@ def load_skills_and_needs():
     skills 交差セルは OP/AS の後に優先度整数（例 OP1, AS3）。数値は尝さいろど当該工程への割当で優先。
     数字省略の OP/AS は優先度 1。
     同一列（同一工程×機械）では優先度の数値はメンバー間で重複試行（重複時は PlanningValidationError）。
+    skills メンバー全員に同名の勤怠シートが無い場合も PlanningValidationError。
     """
     mp = _require_master_workbook_path_exists()
     try:
@@ -18910,6 +18965,7 @@ def load_skills_and_needs():
                 _validate_skills_op_as_priority_numbers_unique(
                     skills_dict, equipment_list
                 )
+                _validate_skills_members_have_attendance_sheets(members, mp)
 
             # need は header=None で読み」先頭の複数行を“見出し行”として解釈
             needs_raw = pd.read_excel(
@@ -26685,6 +26741,10 @@ def _validate_master_dispatch_prerequisites(
         raise PlanningValidationError(
             f"{context_label}: master.xlsm を開けません。パスとファイルの存在を確認してください。"
         )
+
+    _validate_skills_members_have_attendance_sheets(
+        members, master_path, context_label=context_label
+    )
 
     att_sheet_count = 0
     att_date_rows = 0
