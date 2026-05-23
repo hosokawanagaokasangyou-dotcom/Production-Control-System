@@ -105,6 +105,32 @@ class EquipmentStatusDashboardSourceLoaderTest {
 
         LoadedSources loaded = EquipmentStatusDashboardSourceLoader.load(ui);
         Assertions.assertNotNull(loaded);
-        Assertions.assertFalse(loaded.loadNotice().contains("大きすぎます"));
+        Assertions.assertTrue(loaded.loadNotice().contains("大きい"));
+        Assertions.assertTrue(loaded.actuals().rows().isEmpty());
+    }
+
+    @Test
+    void load_prefersShapedActualsJsonWhenPresent(@TempDir Path dir) throws Exception {
+        Path actualDir = dir.resolve("actual");
+        Files.createDirectories(actualDir);
+        Path big = actualDir.resolve("actual.xlsx");
+        Files.write(
+                big,
+                new byte[(int) (AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES + 1024)]);
+        Files.writeString(
+                dir.resolve(AppPaths.SHAPED_PROCESSING_ACTUALS_JSON_BASENAME),
+                "{\"columns\":[\"機械名\",\"依頼NO\",\"工程名\",\"加工日\"],"
+                        + "\"rows\":[[\"M1\",\"R1\",\"P1\",\"2026/05/25\"]]}");
+        Files.writeString(
+                dir.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME),
+                "{\"columns\":[],\"rows\":[]}");
+
+        Map<String, String> ui = new HashMap<>();
+        ui.put(AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR, dir.toString());
+        ui.put(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR, actualDir.toString());
+
+        LoadedSources loaded = EquipmentStatusDashboardSourceLoader.load(ui);
+        Assertions.assertEquals(1, loaded.actuals().rows().size());
+        Assertions.assertTrue(loaded.loadNotice().isBlank());
     }
 }

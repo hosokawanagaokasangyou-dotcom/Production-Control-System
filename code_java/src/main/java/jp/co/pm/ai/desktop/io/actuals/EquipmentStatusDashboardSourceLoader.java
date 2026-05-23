@@ -144,16 +144,63 @@ public final class EquipmentStatusDashboardSourceLoader {
 
     private static ActualsSnapshot loadActualsResilient(Map<String, String> ui, StringBuilder notice) {
         NetworkSourceDirResolver.Result r = NetworkSourceDirResolver.resolve(ui);
-        if (r.actualDetailPath().isEmpty()) {
-            return loadActualsFromShapedJson(ui)
-                    .orElse(new ActualsSnapshot(List.of(), List.of()));
+        Optional<Path> resolved = r.actualDetailPath();
+        if (resolved.isPresent()) {
+            Path file = resolved.get().toAbsolutePath().normalize();
+            Optional<NetworkSourceFileReloadCache.Snapshot> mem =
+                    NetworkSourceFileReloadCache.matchActuals(file);
+            if (mem.isPresent()) {
+                return EquipmentStatusDashboardBuilder.actualsFrom(mem.get().toTabularSheet());
+            }
+            Optional<ActualsSnapshot> shaped = loadActualsFromShapedJson(ui);
+            long poiMax = dashboardActualsPoiMaxBytes(ui);
+            long size = fileSize(file);
+            if (shaped.isPresent() && (size > poiMax || isShapedActualsJsonFresh(file, ui))) {
+                return shaped.get();
+            }
+            if (size > poiMax) {
+                appendNotice(
+                        notice,
+                        "実績: ファイルが大きいため Excel 直読込を省略（"
+                                + size
+                                + " バイト）。加工実績DATAタブで一度読込し shaped_processing_actuals.json を生成してください");
+                return shaped.orElse(new ActualsSnapshot(List.of(), List.of()));
+            }
+            try {
+                return loadActualsFromResolvedFile(ui);
+            } catch (Throwable ex) {
+                appendNotice(notice, "実績: " + shortError(ex));
+                return shaped.orElse(new ActualsSnapshot(List.of(), List.of()));
+            }
         }
+        return loadActualsFromShapedJson(ui).orElse(new ActualsSnapshot(List.of(), List.of()));
+    }
+
+    /** ダッシュボードで POI 直読込する実績の上限（加工実績タブ上限が 0 のときも既定 20MiB）。 */
+    private static long dashboardActualsPoiMaxBytes(Map<String, String> ui) {
+        long max = AppPaths.resolveActualDetailRawMaxBytes(ui);
+        return max > 0 ? max : AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES;
+    }
+
+    private static boolean isShapedActualsJsonFresh(Path sourceFile, Map<String, String> ui) {
         try {
-            return loadActualsFromResolvedFile(ui);
-        } catch (Exception ex) {
-            appendNotice(notice, "実績: " + shortError(ex));
-            return loadActualsFromShapedJson(ui)
-                    .orElse(new ActualsSnapshot(List.of(), List.of()));
+            Path shaped = AppPaths.resolveShapedProcessingActualsJsonPath(ui);
+            if (!Files.isRegularFile(shaped) || !Files.isRegularFile(sourceFile)) {
+                return false;
+            }
+            long srcMod = Files.getLastModifiedTime(sourceFile).toMillis();
+            long jsonMod = Files.getLastModifiedTime(shaped).toMillis();
+            return jsonMod >= srcMod - 60_000L;
+        } catch (IOException ex) {
+            return false;
+        }
+    }
+
+    private static long fileSize(Path file) {
+        try {
+            return Files.isRegularFile(file) ? Files.size(file) : 0L;
+        } catch (IOException ex) {
+            return 0L;
         }
     }
 
@@ -163,7 +210,7 @@ public final class EquipmentStatusDashboardSourceLoader {
         if (resolved.isPresent()) {
             try {
                 return loadAladdinFromFile(resolved.get());
-            } catch (Exception ex) {
+            } catch (Throwable ex) {
                 appendNotice(notice, "アラジン: " + shortError(ex));
             }
         }
@@ -180,7 +227,10 @@ public final class EquipmentStatusDashboardSourceLoader {
         notice.append(line.strip());
     }
 
-    private static String shortError(Exception ex) {
+    private static String shortError(Throwable ex) {
+        if (ex instanceof OutOfMemoryError) {
+            return "メモリ不足（heap space）。メモリ設定タブで JVM ヒープを増やすか、shaped JSON を利用してください";
+        }
         String msg = ex.getMessage();
         if (msg == null || msg.isBlank()) {
             return ex.getClass().getSimpleName();
@@ -248,12 +298,7 @@ public final class EquipmentStatusDashboardSourceLoader {
             return new ActualsSnapshot(List.of(), List.of());
         }
         Path file = resolved.get().toAbsolutePath().normalize();
-        Optional<NetworkSourceFileReloadCache.Snapshot> cached =
-                NetworkSourceFileReloadCache.matchActuals(file);
-        if (cached.isPresent()) {
-            return EquipmentStatusDashboardBuilder.actualsFrom(cached.get().toTabularSheet());
-        }
-        // ダッシュボードはバックグラウンド読込のため、加工実績タブ向けの生ファイルサイズ上限は適用しない。
+        // matchActuals は loadActualsResilient 側で先に試す
         String low = file.getFileName().toString().toLowerCase(Locale.ROOT);
         if (low.endsWith(".pq") || low.endsWith(".parquet")) {
             return new ActualsSnapshot(List.of(), List.of());
