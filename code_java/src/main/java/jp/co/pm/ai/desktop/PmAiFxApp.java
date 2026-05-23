@@ -17,6 +17,7 @@ import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
 import javafx.util.Duration;
 
+import jp.co.pm.ai.desktop.audio.UiClickSound;
 import jp.co.pm.ai.desktop.config.StartupCrashLog;
 import jp.co.pm.ai.desktop.runtime.JvmMemoryMonitor;
 import jp.co.pm.ai.desktop.runtime.WindowsLauncherUserDir;
@@ -303,6 +304,7 @@ public class PmAiFxApp extends Application {
                     "main: after configurePrism prism.order="
                             + System.getProperty("prism.order", ""));
             JvmMemoryMonitor.startFromMain();
+            UiClickSound.warmUpAsync();
             launch(args);
         } catch (Throwable t) {
             StartupCrashLog.appendThrowable("main: launch failed", t);

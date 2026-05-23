@@ -283,7 +283,30 @@
 }
 
 .pm-run-tab .button:not(.pm-stage-run-button):pressed {
-    -fx-background-color: derive(-fx-control-inner-background, -10%);
+    -fx-background-color: derive(-fx-control-inner-background, -14%);
+    -fx-translate-y: 1;
+    -fx-border-color: derive(-fx-accent, 20%);
+    -fx-border-width: 2;
+}
+
+/* 押下直後のプログラム付与フラッシュ（ButtonPressFeedback） */
+.button.pm-button-press-flash {
+    -fx-translate-y: 2;
+    -fx-scale-x: 0.98;
+    -fx-scale-y: 0.98;
+    -fx-opacity: 0.92;
+    -fx-border-width: 2;
+    -fx-border-color: rgba(255, 255, 255, 0.72);
+}
+
+.button.pm-stage-run-button.pm-button-press-flash {
+    -fx-translate-y: 3;
+    -fx-scale-x: 0.97;
+    -fx-scale-y: 0.97;
+    -fx-opacity: 0.94;
+    -fx-border-width: 2;
+    -fx-border-color: rgba(255, 255, 255, 0.85);
+    -fx-effect: innershadow(gaussian, rgba(0, 0, 0, 0.35), 8, 0.45, 0, 2);
 }
 
 .pm-run-tab .text-field {

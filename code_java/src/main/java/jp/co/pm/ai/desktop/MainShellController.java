@@ -72,6 +72,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import jp.co.pm.ai.desktop.runtime.FxJvmMemoryStatusBar;
 
 import jp.co.pm.ai.desktop.audio.MacroCompleteChime;
+import jp.co.pm.ai.desktop.audio.UiClickSound;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.bridge.Stage2PythonChildEnv;
@@ -109,7 +110,7 @@ import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
 import jp.co.pm.ai.desktop.ui.Stage1NewMaterialLookupDialog;
 import jp.co.pm.ai.desktop.ui.Stage2UnknownMasterCombinationDialog;
-import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
+import jp.co.pm.ai.desktop.ui.ButtonPressFeedback;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
@@ -741,6 +742,8 @@ public final class MainShellController {
      */
     public void finishStartup(Scene scene) {
         this.primaryScene = scene;
+        ButtonPressFeedback.installOnScene(scene);
+        UiClickSound.warmUp(collectUiEnv());
         if (themeCombo == null) {
             if (pushButtonDesignTabController != null) {
                 pushButtonDesignTabController.installStylesheetWhenSceneReady();
@@ -805,6 +808,7 @@ public final class MainShellController {
         if (!themeTrackedSecondaryScenes.contains(scene)) {
             themeTrackedSecondaryScenes.add(scene);
         }
+        ButtonPressFeedback.installOnScene(scene);
     }
 
     public void unregisterThemeTrackedScene(Scene scene) {
