@@ -1048,6 +1048,32 @@
 
 /* Equipment status dashboard */
 
+.label.pm-equipment-status-loading-status {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-accent;
+    -fx-font-weight: bold;
+}
+
+.pm-equipment-status-loading-overlay {
+    -fx-background-color: rgba(0, 0, 0, 0.06);
+}
+
+.pm-equipment-status-loading-box {
+    -fx-alignment: center;
+    -fx-padding: 28 36 28 36;
+    -fx-background-color: derive(-fx-base, 10%);
+    -fx-background-radius: 12;
+    -fx-border-color: derive(-fx-base, -20%);
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.12), 8, 0, 0, 2);
+}
+
+.pm-equipment-status-loading-box .label {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
 .pm-equipment-status-tab-root {
     -fx-background-color: derive(-fx-base, 4%);
 }

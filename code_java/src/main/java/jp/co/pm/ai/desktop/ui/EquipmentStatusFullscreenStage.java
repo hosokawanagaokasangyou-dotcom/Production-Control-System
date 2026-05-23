@@ -8,6 +8,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.BorderPane;
@@ -33,6 +34,7 @@ public final class EquipmentStatusFullscreenStage {
     private final FlowPane cardPane = new FlowPane();
     private final ScrollPane scrollPane = new ScrollPane();
     private final VBox emptyStateHost = new VBox();
+    private final VBox loadingHost = new VBox(12.0);
     private final Label metaLabel = new Label();
     private Runnable onClose;
     private boolean ownerInitialized;
@@ -70,7 +72,17 @@ public final class EquipmentStatusFullscreenStage {
         emptyStateHost.setVisible(false);
         emptyStateHost.setManaged(false);
 
-        StackPane center = new StackPane(scrollPane, emptyStateHost);
+        loadingHost.setAlignment(Pos.CENTER);
+        loadingHost.getStyleClass().add("pm-equipment-status-loading-overlay");
+        loadingHost.setVisible(false);
+        loadingHost.setManaged(false);
+        ProgressIndicator busy = new ProgressIndicator();
+        busy.setPrefSize(56, 56);
+        Label loadingLbl = new Label("データ読込中…");
+        loadingLbl.getStyleClass().add("pm-equipment-status-fullscreen-meta");
+        loadingHost.getChildren().addAll(busy, loadingLbl);
+
+        StackPane center = new StackPane(scrollPane, emptyStateHost, loadingHost);
 
         root.setTop(top);
         root.setCenter(center);
@@ -169,6 +181,19 @@ public final class EquipmentStatusFullscreenStage {
                     .add(
                             EquipmentStatusCardFactory.createCard(
                                     s, opts, appearance, badgeStyleResolver, true));
+        }
+    }
+
+    public void setMetaText(String text) {
+        metaLabel.setText(text != null ? text : "");
+    }
+
+    public void setLoadingVisible(boolean on) {
+        loadingHost.setVisible(on);
+        loadingHost.setManaged(on);
+        scrollPane.setOpacity(on ? 0.45 : 1.0);
+        if (on) {
+            metaLabel.setText("データ読込中…");
         }
     }
 

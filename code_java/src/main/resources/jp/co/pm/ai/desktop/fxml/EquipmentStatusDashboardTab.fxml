@@ -4,7 +4,7 @@
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.DatePicker?>
-<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.TitledPane?>
@@ -22,7 +22,7 @@
     <top>
         <VBox spacing="4.0">
             <ToolBar>
-                <Button mnemonicParsing="false" onAction="#onReloadAction" text="再読込"/>
+                <Button fx:id="reloadButton" mnemonicParsing="false" onAction="#onReloadAction" text="再読込"/>
                 <ToggleButton fx:id="fullscreenToggle" mnemonicParsing="false" onAction="#onFullscreenToggleAction" text="全画面"/>
                 <CheckBox fx:id="autoRefreshCheckBox" selected="true" text="自動更新"/>
                 <Separator orientation="VERTICAL"/>
@@ -39,6 +39,10 @@
                     <Insets bottom="4.0" left="8.0" right="8.0" top="0.0"/>
                 </padding>
                 <Label fx:id="lastUpdatedLabel" text="最終更新: —"/>
+                <ProgressIndicator fx:id="loadingIndicator" managed="false" prefHeight="18.0" prefWidth="18.0"
+                                   visible="false"/>
+                <Label fx:id="loadingStatusLabel" managed="false" styleClass="pm-equipment-status-loading-status"
+                       text="データ読込中…" visible="false"/>
                 <CheckBox fx:id="showAladdinCheckBox" selected="true" text="アラジン予定"/>
                 <CheckBox fx:id="showDispatchCheckBox" selected="true" text="配台予定"/>
                 <Label fx:id="planDateSummaryLabel" text="予定日: —"/>
@@ -69,6 +73,13 @@
             </ScrollPane>
             <VBox fx:id="emptyStatePane" alignment="CENTER" managed="false" visible="false"
                   styleClass="pm-equipment-status-empty-host"/>
+            <VBox fx:id="loadingOverlayPane" alignment="CENTER" managed="false" mouseTransparent="true"
+                  styleClass="pm-equipment-status-loading-overlay" visible="false">
+                <VBox alignment="CENTER" spacing="12.0" styleClass="pm-equipment-status-loading-box">
+                    <ProgressIndicator prefHeight="48.0" prefWidth="48.0"/>
+                    <Label text="データ読込中…"/>
+                </VBox>
+            </VBox>
         </StackPane>
     </center>
 </BorderPane>

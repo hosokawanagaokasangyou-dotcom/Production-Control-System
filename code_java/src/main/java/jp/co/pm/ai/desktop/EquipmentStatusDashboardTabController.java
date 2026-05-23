@@ -15,6 +15,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TitledPane;
 import javafx.scene.control.ToggleButton;
@@ -43,11 +44,14 @@ public final class EquipmentStatusDashboardTabController {
 
     private MainShellController shell;
 
+    @FXML private Button reloadButton;
     @FXML private ToggleButton fullscreenToggle;
     @FXML private CheckBox autoRefreshCheckBox;
     @FXML private DatePicker actualDatePicker;
     @FXML private DatePicker planDatePicker;
     @FXML private Label lastUpdatedLabel;
+    @FXML private ProgressIndicator loadingIndicator;
+    @FXML private Label loadingStatusLabel;
     @FXML private CheckBox showAladdinCheckBox;
     @FXML private CheckBox showDispatchCheckBox;
     @FXML private Label planDateSummaryLabel;
@@ -59,6 +63,7 @@ public final class EquipmentStatusDashboardTabController {
     @FXML private ScrollPane cardScrollPane;
     @FXML private FlowPane cardFlowPane;
     @FXML private VBox emptyStatePane;
+    @FXML private VBox loadingOverlayPane;
 
     private final EquipmentStatusFullscreenStage fullscreenStage = new EquipmentStatusFullscreenStage();
 
@@ -66,6 +71,7 @@ public final class EquipmentStatusDashboardTabController {
     private Task<LoadedSources> activeReloadTask;
     private final AtomicBoolean tabActive = new AtomicBoolean(false);
     private final AtomicBoolean suppressUiEvents = new AtomicBoolean(false);
+    private final AtomicBoolean loading = new AtomicBoolean(false);
 
     private LoadedSources cachedSources;
     private List<EquipmentMachineStatus> currentStatuses = List.of();
@@ -327,6 +333,7 @@ public final class EquipmentStatusDashboardTabController {
         if (activeReloadTask != null && activeReloadTask.isRunning()) {
             return;
         }
+        setLoading(true);
         activeReloadTask =
                 new Task<>() {
                     @Override
@@ -336,12 +343,20 @@ public final class EquipmentStatusDashboardTabController {
                 };
         activeReloadTask.setOnSucceeded(
                 e -> {
+                    setLoading(false);
                     cachedSources = activeReloadTask.getValue();
                     rebuildFromCache();
                     updateLastUpdatedLabel();
                 });
         activeReloadTask.setOnFailed(
                 e -> {
+                    setLoading(false);
+                    if (machineCountLabel != null) {
+                        machineCountLabel.setText("読込エラー");
+                    }
+                    if (sourceSummaryLabel != null) {
+                        sourceSummaryLabel.setText("［再読込］でやり直してください");
+                    }
                     if (shell != null && activeReloadTask.getException() != null) {
                         shell.appendLog(
                                 "[dashboard] reload failed: "
@@ -351,6 +366,40 @@ public final class EquipmentStatusDashboardTabController {
         Thread t = new Thread(activeReloadTask, "equipment-status-dashboard-reload");
         t.setDaemon(true);
         t.start();
+    }
+
+    private void setLoading(boolean on) {
+        loading.set(on);
+        if (reloadButton != null) {
+            reloadButton.setDisable(on);
+        }
+        if (loadingIndicator != null) {
+            loadingIndicator.setVisible(on);
+            loadingIndicator.setManaged(on);
+        }
+        if (loadingStatusLabel != null) {
+            loadingStatusLabel.setVisible(on);
+            loadingStatusLabel.setManaged(on);
+        }
+        if (loadingOverlayPane != null) {
+            boolean showOverlay = on && (cachedSources == null || currentStatuses.isEmpty());
+            loadingOverlayPane.setVisible(showOverlay);
+            loadingOverlayPane.setManaged(showOverlay);
+        }
+        if (cardScrollPane != null) {
+            cardScrollPane.setOpacity(on && cachedSources != null ? 0.5 : 1.0);
+        }
+        if (on) {
+            if (machineCountLabel != null) {
+                machineCountLabel.setText("読込中…");
+            }
+            if (sourceSummaryLabel != null) {
+                sourceSummaryLabel.setText("実績・アラジン・配台を読み込んでいます");
+            }
+        } else if (fullscreenStage.isShowing()) {
+            fullscreenStage.setMetaText(buildMetaSummary());
+        }
+        fullscreenStage.setLoadingVisible(on);
     }
 
     private void rebuildFromCache() {
@@ -380,6 +429,7 @@ public final class EquipmentStatusDashboardTabController {
                     opts.actualDateLabel(),
                     opts.planDateLabel(),
                     cachedSources != null);
+            fullscreenStage.setMetaText(buildMetaSummary());
         }
     }
 
@@ -404,9 +454,10 @@ public final class EquipmentStatusDashboardTabController {
         boolean empty = currentStatuses == null || currentStatuses.isEmpty();
         if (emptyStatePane != null) {
             emptyStatePane.getChildren().clear();
-            emptyStatePane.setVisible(empty);
-            emptyStatePane.setManaged(empty);
-            if (empty) {
+            boolean showEmpty = empty && !loading.get();
+            emptyStatePane.setVisible(showEmpty);
+            emptyStatePane.setManaged(showEmpty);
+            if (showEmpty) {
                 emptyStatePane
                         .getChildren()
                         .add(
@@ -472,6 +523,9 @@ public final class EquipmentStatusDashboardTabController {
     }
 
     private String buildMetaSummary() {
+        if (loading.get()) {
+            return "データ読込中…";
+        }
         return (machineCountLabel != null ? machineCountLabel.getText() : "")
                 + "  "
                 + (lastUpdatedLabel != null ? lastUpdatedLabel.getText() : "");
