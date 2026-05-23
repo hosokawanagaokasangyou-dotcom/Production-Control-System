@@ -55,4 +55,22 @@ class EquipmentStatusDashboardSourceLoaderTest {
         SourceFingerprint fp2 = EquipmentStatusDashboardSourceLoader.fingerprint(ui);
         Assertions.assertNotEquals(fp1, fp2);
     }
+
+    @Test
+    void fingerprint_usesTaskInputWhenShapedAladdinEmpty(@TempDir Path dir) throws Exception {
+        Files.createDirectories(dir.resolve("actual-empty"));
+        Path taskInputDir = dir.resolve("task-input");
+        Files.createDirectories(taskInputDir);
+        Files.writeString(
+                dir.resolve(AppPaths.SHAPED_ALADDIN_PLAN_JSON_BASENAME),
+                "{\"columns\":[],\"rows\":[]}");
+        Path planCsv = taskInputDir.resolve("plan.csv");
+        Files.writeString(planCsv, "機械名,依頼NO\nM1,R1\n");
+
+        Map<String, String> ui = uiForDir(dir);
+        ui.put(AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR, taskInputDir.toString());
+
+        SourceFingerprint fp = EquipmentStatusDashboardSourceLoader.fingerprint(ui);
+        Assertions.assertTrue(fp.aladdinKey().contains("plan.csv"));
+    }
 }

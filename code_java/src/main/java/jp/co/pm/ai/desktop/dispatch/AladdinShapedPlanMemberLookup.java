@@ -18,7 +18,7 @@ public final class AladdinShapedPlanMemberLookup {
 
     /** Python {@code PLAN_COL_PREFERRED_OP} および配台表の表記揺れ。 */
     private static final String[] MEMBER_COLUMNS = {
-        "担当OP_指定", "担当OP指定", "メンバー名"
+        "担当OP_指定", "担当OP指定", "担当OP", "必須OP(上書)", "メンバー名", "担当者名"
     };
 
     private AladdinShapedPlanMemberLookup() {}
@@ -35,6 +35,22 @@ public final class AladdinShapedPlanMemberLookup {
             String requestNo,
             String processRaw,
             String dateStr) {
+        String strict =
+                lookupPass(headers, rows, machine, requestNo, processRaw, dateStr, true);
+        if (!strict.isEmpty()) {
+            return strict;
+        }
+        return lookupPass(headers, rows, machine, requestNo, processRaw, dateStr, false);
+    }
+
+    private static String lookupPass(
+            List<String> headers,
+            List<List<String>> rows,
+            String machine,
+            String requestNo,
+            String processRaw,
+            String dateStr,
+            boolean requireProcessMatch) {
         if (headers == null || rows == null || rows.isEmpty()) {
             return "";
         }
@@ -52,14 +68,82 @@ public final class AladdinShapedPlanMemberLookup {
         String procKey = AladdinShapedPlanQtyLookup.normalizeProcessNameForRuleMatch(processRaw);
         Integer dateColIdx = dateColumnIndex(headers, dateStr);
 
-        String loose = "";
+        if (requireProcessMatch) {
+            for (List<String> row : rows) {
+                String member =
+                        memberFromRowIfKeysMatch(
+                                row,
+                                headers,
+                                mkIdx,
+                                tidIdx,
+                                procIdx,
+                                mkNorm,
+                                tid,
+                                procKey,
+                                dateColIdx,
+                                true);
+                if (!member.isEmpty()) {
+                    return member;
+                }
+            }
+            return "";
+        }
+
         for (List<String> row : rows) {
-            if (!mkNorm.equals(normalizeEquipmentMatchKey(cellAt(row, mkIdx)))) {
-                continue;
+            String member =
+                    memberFromRowIfKeysMatch(
+                            row,
+                            headers,
+                            mkIdx,
+                            tidIdx,
+                            procIdx,
+                            mkNorm,
+                            tid,
+                            procKey,
+                            dateColIdx,
+                            true);
+            if (!member.isEmpty()) {
+                return member;
             }
-            if (!tid.equals(cellAt(row, tidIdx).strip())) {
-                continue;
+        }
+        for (List<String> row : rows) {
+            String member =
+                    memberFromRowIfKeysMatch(
+                            row,
+                            headers,
+                            mkIdx,
+                            tidIdx,
+                            procIdx,
+                            mkNorm,
+                            tid,
+                            procKey,
+                            dateColIdx,
+                            false);
+            if (!member.isEmpty()) {
+                return member;
             }
+        }
+        return "";
+    }
+
+    private static String memberFromRowIfKeysMatch(
+            List<String> row,
+            List<String> headers,
+            int mkIdx,
+            int tidIdx,
+            int procIdx,
+            String mkNorm,
+            String tid,
+            String procKey,
+            Integer dateColIdx,
+            boolean requireProcessMatch) {
+        if (!mkNorm.equals(normalizeEquipmentMatchKey(cellAt(row, mkIdx)))) {
+            return "";
+        }
+        if (!tid.equals(cellAt(row, tidIdx).strip())) {
+            return "";
+        }
+        if (requireProcessMatch) {
             String rowProcKey =
                     procIdx >= 0
                             ? AladdinShapedPlanQtyLookup.normalizeProcessNameForRuleMatch(
@@ -70,23 +154,20 @@ public final class AladdinShapedPlanMemberLookup {
                             || rowProcKey.isEmpty()
                             || procKey.equals(rowProcKey);
             if (!processExact) {
-                continue;
-            }
-            String fromStatic = firstNonBlankMemberColumn(headers, row);
-            if (!fromStatic.isEmpty()) {
-                return fromStatic;
-            }
-            if (dateColIdx != null) {
-                String cell = cellAt(row, dateColIdx).strip();
-                if (!cell.isEmpty() && !looksLikeNumericQty(cell)) {
-                    return cell;
-                }
-            }
-            if (loose.isEmpty()) {
-                loose = firstNonBlankMemberColumn(headers, row);
+                return "";
             }
         }
-        return loose;
+        String fromStatic = firstNonBlankMemberColumn(headers, row);
+        if (!fromStatic.isEmpty()) {
+            return fromStatic;
+        }
+        if (dateColIdx != null) {
+            String cell = cellAt(row, dateColIdx).strip();
+            if (!cell.isEmpty() && !looksLikeNumericQty(cell)) {
+                return cell;
+            }
+        }
+        return "";
     }
 
     private static String firstNonBlankMemberColumn(List<String> headers, List<String> row) {
@@ -150,7 +231,8 @@ public final class AladdinShapedPlanMemberLookup {
 
     private static int colIdx(List<String> headers, String title) {
         for (int i = 0; i < headers.size(); i++) {
-            if (title.equals(headers.get(i))) {
+            String h = headers.get(i);
+            if (h != null && title.equals(h.strip())) {
                 return i;
             }
         }

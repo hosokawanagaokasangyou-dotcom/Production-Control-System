@@ -85,10 +85,7 @@ public final class EquipmentStatusCardFactory {
                     .ifPresent(
                             task -> {
                                 Label meta =
-                                        new Label(
-                                                task.requestNo()
-                                                        + " · "
-                                                        + task.processName());
+                                        new Label(metaLine(task));
                                 meta.getStyleClass().add("pm-equipment-status-meta");
                                 EquipmentStatusDashboardAppearanceApplier.applyLabelFont(
                                         meta, ap, ap.metaFontPx());
@@ -251,6 +248,14 @@ public final class EquipmentStatusCardFactory {
 
         box.getChildren().addAll(title, detail, hint);
         return box;
+    }
+
+    private static String metaLine(EquipmentMachineStatus.ActualTaskRow task) {
+        String line = task.requestNo() + " · " + task.processName();
+        if (task.memberRaw() != null && !task.memberRaw().isBlank()) {
+            line += " · " + task.memberRaw().strip();
+        }
+        return line;
     }
 
     private static String nz(String s) {

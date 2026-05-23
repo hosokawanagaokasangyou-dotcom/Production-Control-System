@@ -82,8 +82,32 @@ public final class EquipmentStatusDashboardSourceLoader {
                 fileKey(r.actualDetailPath().orElse(null), sheet.isEmpty() ? "0" : sheet);
         return new SourceFingerprint(
                 actualKey,
-                fileKey(AppPaths.resolveShapedAladdinPlanJsonPath(env), ""),
+                aladdinFingerprintKey(env),
                 fileKey(AppPaths.resolveResultDispatchTableJsonPath(env), ""));
+    }
+
+    private static String aladdinFingerprintKey(Map<String, String> env) {
+        Path shaped = AppPaths.resolveShapedAladdinPlanJsonPath(env);
+        if (Files.isRegularFile(shaped) && shapedHasRows(shaped)) {
+            return fileKey(shaped, "shaped");
+        }
+        Path dir = AppPaths.resolveTaskInputSourceDir(env);
+        if (dir != null && Files.isDirectory(dir)) {
+            Optional<Path> newest = NetworkSourceDirResolver.newestTaskInputFileInDirectory(dir);
+            if (newest.isPresent()) {
+                return fileKey(newest.get(), "task-input|0");
+            }
+        }
+        return fileKey(shaped, "missing");
+    }
+
+    private static boolean shapedHasRows(Path shaped) {
+        try {
+            JsonTableIo.ArrayTable t = JsonTableIo.loadArrayTable(shaped);
+            return !t.columns().isEmpty() || !t.rows().isEmpty();
+        } catch (Exception ex) {
+            return false;
+        }
     }
 
     private static LoadedSources loadSources(Map<String, String> env) throws IOException {
@@ -154,17 +178,45 @@ public final class EquipmentStatusDashboardSourceLoader {
         return EquipmentStatusDashboardBuilder.actualsFrom(shaped);
     }
 
-    private static AladdinSnapshot loadAladdin(Map<String, String> ui) {
-        Path path = AppPaths.resolveShapedAladdinPlanJsonPath(ui);
-        if (!Files.isRegularFile(path)) {
+    private static AladdinSnapshot loadAladdin(Map<String, String> ui) throws IOException {
+        Path shapedPath = AppPaths.resolveShapedAladdinPlanJsonPath(ui);
+        if (Files.isRegularFile(shapedPath)) {
+            try {
+                JsonTableIo.ArrayTable t = JsonTableIo.loadArrayTable(shapedPath);
+                if (!t.columns().isEmpty() || !t.rows().isEmpty()) {
+                    return new AladdinSnapshot(t.columns(), t.rows());
+                }
+            } catch (Exception ex) {
+                // shaped JSON が壊れているときはタスク入力へフォールバック
+            }
+        }
+        return loadAladdinFromTaskInputSource(ui);
+    }
+
+    private static AladdinSnapshot loadAladdinFromTaskInputSource(Map<String, String> ui)
+            throws IOException {
+        Path dir = AppPaths.resolveTaskInputSourceDir(ui);
+        if (dir == null || !Files.isDirectory(dir)) {
             return new AladdinSnapshot(List.of(), List.of());
         }
-        try {
-            JsonTableIo.ArrayTable t = JsonTableIo.loadArrayTable(path);
-            return new AladdinSnapshot(t.columns(), t.rows());
-        } catch (Exception ex) {
+        Optional<Path> newest = NetworkSourceDirResolver.newestTaskInputFileInDirectory(dir);
+        if (newest.isEmpty()) {
             return new AladdinSnapshot(List.of(), List.of());
         }
+        Path file = newest.get().toAbsolutePath().normalize();
+        Optional<NetworkSourceFileReloadCache.Snapshot> cached =
+                NetworkSourceFileReloadCache.matchAladdin(file);
+        if (cached.isPresent()) {
+            return EquipmentStatusDashboardBuilder.aladdinFrom(cached.get().toTabularSheet());
+        }
+        String low = file.getFileName().toString().toLowerCase(Locale.ROOT);
+        if (low.endsWith(".pq") || low.endsWith(".parquet")) {
+            return new AladdinSnapshot(List.of(), List.of());
+        }
+        PlanInputTabularIo.TabularSheet raw = TaskInputSourceRawGridIo.readRaw(file, 0, null);
+        PlanInputTabularIo.TabularSheet shaped =
+                TaskInputSourceRawGridIo.applyAladdinProcessingPlanDisplaySteps(raw);
+        return EquipmentStatusDashboardBuilder.aladdinFrom(shaped);
     }
 
     private static DispatchSnapshot loadDispatch(Map<String, String> ui) {
@@ -186,8 +238,17 @@ public final class EquipmentStatusDashboardSourceLoader {
     }
 
     private static String aladdinLabel(Map<String, String> ui) {
-        Path p = AppPaths.resolveShapedAladdinPlanJsonPath(ui);
-        return Files.isRegularFile(p) ? p.getFileName().toString() : "(なし)";
+        Path shaped = AppPaths.resolveShapedAladdinPlanJsonPath(ui);
+        if (Files.isRegularFile(shaped) && shapedHasRows(shaped)) {
+            return shaped.getFileName().toString();
+        }
+        Path dir = AppPaths.resolveTaskInputSourceDir(ui);
+        if (dir != null && Files.isDirectory(dir)) {
+            return NetworkSourceDirResolver.newestTaskInputFileInDirectory(dir)
+                    .map(p -> p.getFileName().toString() + " (タスク入力)")
+                    .orElse("(なし)");
+        }
+        return "(なし)";
     }
 
     private static String dispatchLabel(Map<String, String> ui) {

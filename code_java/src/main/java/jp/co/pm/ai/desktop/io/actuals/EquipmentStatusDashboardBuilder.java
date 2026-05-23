@@ -42,6 +42,11 @@ public final class EquipmentStatusDashboardBuilder {
     private static final String COL_CUM_PCT = "累積完了率";
     private static final String COL_MEMBER = "メンバー名";
 
+    /** 実績明細で担当者を探す列（表記揺れ）。 */
+    private static final String[] ACTUAL_MEMBER_COLUMNS = {
+        "メンバー名", "担当OP_指定", "担当OP指定", "担当OP", "担当者名", "OP名"
+    };
+
     private static final Pattern PCT_SUFFIX = Pattern.compile("%\\s*$");
     private static final DateTimeFormatter DT_OUT =
             DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
@@ -110,7 +115,8 @@ public final class EquipmentStatusDashboardBuilder {
                                         disHeaders,
                                         disRows,
                                         machine,
-                                        actualDateKey));
+                                        actualDateKey,
+                                        planDateKey));
                 task =
                         applyDayCompletionPct(
                                 task,
@@ -352,20 +358,23 @@ public final class EquipmentStatusDashboardBuilder {
             List<String> disHeaders,
             List<List<String>> disRows,
             String machine,
-            String actualDateKey) {
+            String actualDateKey,
+            String planDateKey) {
         if (task.memberRaw() != null && !task.memberRaw().isBlank()) {
             return task;
         }
-        String member =
-                AladdinShapedPlanMemberLookup.lookup(
-                        alHeaders,
-                        alRows,
-                        machine,
-                        task.requestNo(),
-                        task.processName(),
-                        actualDateKey);
+        String member = lookupMemberFromAladdin(alHeaders, alRows, machine, task, actualDateKey);
+        if (member.isBlank() && !actualDateKey.equals(planDateKey)) {
+            member = lookupMemberFromAladdin(alHeaders, alRows, machine, task, planDateKey);
+        }
         if (member.isBlank()) {
             member = lookupDispatchMember(disHeaders, disRows, machine, task, actualDateKey);
+        }
+        if (member.isBlank() && !actualDateKey.equals(planDateKey)) {
+            member = lookupDispatchMember(disHeaders, disRows, machine, task, planDateKey);
+        }
+        if (member.isBlank()) {
+            member = lookupDispatchMember(disHeaders, disRows, machine, task, null);
         }
         if (member.isBlank()) {
             return task;
@@ -378,6 +387,21 @@ public final class EquipmentStatusDashboardBuilder {
                 member,
                 task.startDateTime(),
                 task.endDateTime());
+    }
+
+    private static String lookupMemberFromAladdin(
+            List<String> alHeaders,
+            List<List<String>> alRows,
+            String machine,
+            EquipmentMachineStatus.ActualTaskRow task,
+            String dateKey) {
+        return AladdinShapedPlanMemberLookup.lookup(
+                alHeaders,
+                alRows,
+                machine,
+                task.requestNo(),
+                task.processName(),
+                dateKey);
     }
 
     private static String lookupDispatchMember(
@@ -455,7 +479,6 @@ public final class EquipmentStatusDashboardBuilder {
         int iConv = colIdx(headers, COL_QTY_CONV);
         int iStart = colIdx(headers, COL_START_DT);
         int iEnd = colIdx(headers, COL_END_DT);
-        int iMember = colIdx(headers, COL_MEMBER);
         double pct = parseCompletionPct(headers, best);
         return Optional.of(
                 new EquipmentMachineStatus.ActualTaskRow(
@@ -463,9 +486,22 @@ public final class EquipmentStatusDashboardBuilder {
                         cellAt(best, iProc).strip(),
                         parseDouble(cellAt(best, iConv)),
                         pct,
-                        cellAt(best, iMember).strip(),
+                        readMemberFromRow(headers, best),
                         cellAt(best, iStart).strip(),
                         cellAt(best, iEnd).strip()));
+    }
+
+    private static String readMemberFromRow(List<String> headers, List<String> row) {
+        for (String col : ACTUAL_MEMBER_COLUMNS) {
+            int idx = colIdx(headers, col);
+            if (idx >= 0) {
+                String v = cellAt(row, idx).strip();
+                if (!v.isEmpty()) {
+                    return v;
+                }
+            }
+        }
+        return "";
     }
 
     private static Map<String, List<List<String>>> groupActualRowsByMachine(
