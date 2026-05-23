@@ -44,7 +44,7 @@ public final class EquipmentStatusCardFactory {
                 appearance != null
                         ? appearance
                         : EquipmentStatusDashboardAppearancePrefs.defaults();
-        double width = ap.effectiveCardWidth(fullscreen);
+        double width = EquipmentStatusDashboardAppearanceApplier.snappedCardWidth(ap, fullscreen);
         VBox card = new VBox(8.0);
         card.getStyleClass().add("pm-equipment-status-card");
         EquipmentStatusDashboardAppearanceApplier.applyCardShell(card, ap, fullscreen);
@@ -132,14 +132,6 @@ public final class EquipmentStatusCardFactory {
                 opts != null ? opts.planDateLabel() : "",
                 width,
                 ap);
-
-        if (opts != null && !opts.actualDateLabel().isBlank()) {
-            Label actualLbl = new Label("実績: " + opts.actualDateLabel());
-            actualLbl.getStyleClass().add("pm-equipment-status-date-foot");
-            EquipmentStatusDashboardAppearanceApplier.applyLabelFont(
-                    actualLbl, ap, ap.planFontPx());
-            card.getChildren().add(actualLbl);
-        }
 
         return card;
     }

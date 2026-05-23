@@ -1194,6 +1194,19 @@
     -fx-text-fill: -fx-mid-text-color;
 }
 
+.label.pm-equipment-status-fullscreen-date {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.pm-equipment-status-fullscreen-top {
+    -fx-background-color: transparent;
+}
+
+.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-fullscreen-date {
+    -fx-text-fill: #f1f5f9;
+}
+
 .pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-fullscreen-title {
     -fx-text-fill: #e2e8f0;
 }
@@ -1231,6 +1244,18 @@
     -fx-text-fill: #64748b;
 }
 
+.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-chip-running {
+    -fx-text-fill: #86efac;
+}
+
+.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-chip-completed {
+    -fx-text-fill: #cbd5e1;
+}
+
+.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-chip-stopped {
+    -fx-text-fill: #94a3b8;
+}
+
 .pm-equipment-status-fullscreen-theme-dark .pm-equipment-status-loading-overlay {
     -fx-background-color: rgba(0, 0, 0, 0.35);
 }
@@ -1241,7 +1266,8 @@
 }
 
 .pm-equipment-status-fullscreen-theme-light .label.pm-equipment-status-fullscreen-title,
-.pm-equipment-status-fullscreen-theme-light .label.pm-equipment-status-fullscreen-meta {
+.pm-equipment-status-fullscreen-theme-light .label.pm-equipment-status-fullscreen-meta,
+.pm-equipment-status-fullscreen-theme-light .label.pm-equipment-status-fullscreen-date {
     -fx-text-fill: -fx-text-inner-color;
 }
 
@@ -1266,6 +1292,11 @@
 
 .pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-fullscreen-meta {
     -fx-text-fill: #e2e8f0;
+}
+
+.pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-fullscreen-date {
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 16px;
 }
 
 .pm-equipment-status-fullscreen-theme-wall .pm-equipment-status-card {

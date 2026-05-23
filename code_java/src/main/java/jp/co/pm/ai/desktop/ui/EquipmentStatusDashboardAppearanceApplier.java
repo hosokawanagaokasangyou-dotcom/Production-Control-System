@@ -63,15 +63,30 @@ public final class EquipmentStatusDashboardAppearanceApplier {
         return false;
     }
 
+    /** 固定列数時は ScrollPane の fitToWidth を無効にし、列幅がビューポートに潰されないようにする。 */
+    public static boolean scrollShouldFitToWidth(EquipmentStatusDashboardAppearancePrefs prefs) {
+        return usesAutoColumnLayout(prefs);
+    }
+
+    /** レイアウト用に切り上げたカード幅（FlowPane 折返しとカード shell の幅を揃える）。 */
+    public static double snappedCardWidth(
+            EquipmentStatusDashboardAppearancePrefs prefs, boolean fullscreen) {
+        if (prefs == null) {
+            return EquipmentStatusDashboardAppearancePrefs.defaults().effectiveCardWidth(fullscreen);
+        }
+        return Math.ceil(prefs.effectiveCardWidth(fullscreen));
+    }
+
     /** 固定列数時の FlowPane 内側（padding 除く）折返し幅。自動列のときは {@code -1}。 */
     public static double fixedColumnWrapInnerWidth(
             EquipmentStatusDashboardAppearancePrefs prefs, boolean fullscreen) {
         if (prefs == null || usesAutoColumnLayout(prefs)) {
             return -1;
         }
-        double cardW = prefs.effectiveCardWidth(fullscreen);
+        double cardW = snappedCardWidth(prefs, fullscreen);
         int cols = prefs.columnCount();
-        return cols * cardW + Math.max(0, cols - 1) * prefs.cardGapH();
+        double gap = Math.ceil(prefs.cardGapH());
+        return cols * cardW + Math.max(0, cols - 1) * gap;
     }
 
     public static boolean usesAutoColumnLayout(EquipmentStatusDashboardAppearancePrefs prefs) {
@@ -105,7 +120,7 @@ public final class EquipmentStatusDashboardAppearanceApplier {
         if (card == null || prefs == null) {
             return;
         }
-        double width = prefs.effectiveCardWidth(fullscreen);
+        double width = snappedCardWidth(prefs, fullscreen);
         card.setPadding(new Insets(prefs.cardPadding()));
         card.setPrefWidth(width);
         card.setMinWidth(width);

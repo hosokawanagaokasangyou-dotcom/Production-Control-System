@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.ui;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Function;
 
 import javafx.geometry.Insets;
@@ -13,7 +14,6 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -34,6 +34,13 @@ public final class EquipmentStatusFullscreenStage {
     private static final String FULLSCREEN_THEME_CLASS_PREFIX =
             "pm-equipment-status-fullscreen-theme-";
 
+    private static final String DESKTOP_CSS =
+            Objects.requireNonNull(
+                            EquipmentStatusFullscreenStage.class.getResource(
+                                    "/jp/co/pm/ai/desktop/css/pm-ai-desktop.css"),
+                            "pm-ai-desktop.css")
+                    .toExternalForm();
+
     private final Stage stage = new Stage(StageStyle.UNDECORATED);
     private final BorderPane root = new BorderPane();
     private final HBox cardHost = new HBox();
@@ -41,6 +48,8 @@ public final class EquipmentStatusFullscreenStage {
     private final ScrollPane scrollPane = new ScrollPane();
     private final VBox emptyStateHost = new VBox();
     private final VBox loadingHost = new VBox(12.0);
+    private final Label actualDateLabel = new Label();
+    private final Label planDateLabel = new Label();
     private final Label metaLabel = new Label();
     private Runnable onClose;
     private boolean ownerInitialized;
@@ -51,22 +60,25 @@ public final class EquipmentStatusFullscreenStage {
         root.getStyleClass().add("pm-equipment-status-fullscreen-root");
         applyFullscreenTheme(EquipmentStatusDashboardAppearancePrefs.defaults());
 
-        HBox top = new HBox(12.0);
+        HBox top = new HBox(16.0);
         top.setAlignment(Pos.CENTER_LEFT);
         top.setPadding(new Insets(8, 12, 8, 12));
+        top.getStyleClass().add("pm-equipment-status-fullscreen-top");
         Label title = new Label("ダッシュボード");
         title.getStyleClass().add("pm-equipment-status-fullscreen-title");
+        actualDateLabel.getStyleClass().add("pm-equipment-status-fullscreen-date");
+        planDateLabel.getStyleClass().add("pm-equipment-status-fullscreen-date");
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         metaLabel.getStyleClass().add("pm-equipment-status-fullscreen-meta");
         Button close = new Button("閉じる");
         close.setOnAction(e -> hide());
-        top.getChildren().addAll(title, spacer, metaLabel, close);
+        top.getChildren()
+                .addAll(title, actualDateLabel, planDateLabel, spacer, metaLabel, close);
 
         cardPane.getStyleClass().add("pm-equipment-status-card-flow");
         cardHost.getChildren().add(cardPane);
         scrollPane.setContent(cardHost);
-        scrollPane.setFitToWidth(true);
         scrollPane.getStyleClass().add("pm-equipment-status-scroll");
         scrollPane.viewportBoundsProperty()
                 .addListener(
@@ -94,6 +106,9 @@ public final class EquipmentStatusFullscreenStage {
         root.setCenter(center);
 
         Scene scene = new Scene(root);
+        if (!scene.getStylesheets().contains(DESKTOP_CSS)) {
+            scene.getStylesheets().add(DESKTOP_CSS);
+        }
         stage.setScene(scene);
         stage.initModality(Modality.NONE);
         scene.setOnKeyPressed(
@@ -124,22 +139,23 @@ public final class EquipmentStatusFullscreenStage {
             EquipmentStatusDashboardAppearancePrefs appearancePrefs,
             Function<String, PersonBadgeStyle> badgeStyleResolver,
             String metaText,
-            String actualDateLabel,
-            String planDateLabel,
+            String actualDateLabelText,
+            String planDateLabelText,
             boolean sourcesLoaded) {
         if (!ownerInitialized && owner != null) {
             stage.initOwner(owner);
             ownerInitialized = true;
         }
         applyAppearance(appearancePrefs);
+        setHeaderDates(actualDateLabelText, planDateLabelText);
         metaLabel.setText(metaText != null ? metaText : "");
         rebuildCards(
                 statuses,
                 opts,
                 appearancePrefs,
                 badgeStyleResolver,
-                actualDateLabel,
-                planDateLabel,
+                actualDateLabelText,
+                planDateLabelText,
                 sourcesLoaded);
         stage.setFullScreen(true);
         if (!stage.isFullScreen()) {
@@ -147,6 +163,8 @@ public final class EquipmentStatusFullscreenStage {
         }
         stage.show();
         stage.toFront();
+        javafx.application.Platform.runLater(
+                () -> applyFlowLayout(scrollPane.getViewportBounds().getWidth()));
     }
 
     public void applyAppearance(EquipmentStatusDashboardAppearancePrefs appearancePrefs) {
@@ -162,8 +180,8 @@ public final class EquipmentStatusFullscreenStage {
             EquipmentStatusCardFactory.DisplayOptions opts,
             EquipmentStatusDashboardAppearancePrefs appearancePrefs,
             Function<String, PersonBadgeStyle> badgeStyleResolver,
-            String actualDateLabel,
-            String planDateLabel,
+            String actualDateLabelText,
+            String planDateLabelText,
             boolean sourcesLoaded) {
         applyAppearance(appearancePrefs);
         applyFlowLayout(scrollPane.getViewportBounds().getWidth());
@@ -177,7 +195,7 @@ public final class EquipmentStatusFullscreenStage {
                     .getChildren()
                     .add(
                             EquipmentStatusCardFactory.createEmptyState(
-                                    actualDateLabel, planDateLabel, sourcesLoaded, true));
+                                    actualDateLabelText, planDateLabelText, sourcesLoaded, true));
             return;
         }
         for (EquipmentMachineStatus s : statuses) {
@@ -186,6 +204,11 @@ public final class EquipmentStatusFullscreenStage {
                             EquipmentStatusCardFactory.createCard(
                                     s, opts, appearance, badgeStyleResolver, true));
         }
+    }
+
+    public void setHeaderDates(String actualDateLabelText, String planDateLabelText) {
+        actualDateLabel.setText(formatHeaderDate("実績", actualDateLabelText));
+        planDateLabel.setText(formatHeaderDate("予定", planDateLabelText));
     }
 
     public void setMetaText(String text) {
@@ -206,6 +229,8 @@ public final class EquipmentStatusFullscreenStage {
                 EquipmentStatusDashboardAppearanceApplier.configureFlowPane(
                         cardPane, appearance, true, viewportWidth);
         EquipmentStatusDashboardAppearanceApplier.applyFlowHostLayout(cardHost, cardPane, fillViewport);
+        scrollPane.setFitToWidth(
+                EquipmentStatusDashboardAppearanceApplier.scrollShouldFitToWidth(appearance));
     }
 
     public void hide() {
@@ -219,5 +244,12 @@ public final class EquipmentStatusFullscreenStage {
         root.getStyleClass()
                 .removeIf(c -> c.startsWith(FULLSCREEN_THEME_CLASS_PREFIX));
         root.getStyleClass().add(prefs.fullscreenThemeStyleClass());
+    }
+
+    private static String formatHeaderDate(String prefix, String dateLabel) {
+        if (dateLabel == null || dateLabel.isBlank()) {
+            return prefix + " —";
+        }
+        return prefix + " " + dateLabel.strip();
     }
 }

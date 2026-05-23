@@ -32,6 +32,14 @@ class EquipmentStatusDashboardAppearanceApplierTest {
                         EquipmentStatusDashboardAppearancePrefs.FULLSCREEN_THEME_DARK);
         Assertions.assertEquals(620, EquipmentStatusDashboardAppearanceApplier.fixedColumnWrapInnerWidth(prefs, false), 0.01);
         Assertions.assertEquals(620, EquipmentStatusDashboardAppearanceApplier.fixedColumnWrapInnerWidth(prefs, true), 0.01);
+        Assertions.assertFalse(EquipmentStatusDashboardAppearanceApplier.scrollShouldFitToWidth(prefs));
+    }
+
+    @Test
+    void scrollShouldFitToWidth_isTrueForAutoColumns() {
+        Assertions.assertTrue(
+                EquipmentStatusDashboardAppearanceApplier.scrollShouldFitToWidth(
+                        EquipmentStatusDashboardAppearancePrefs.defaults()));
     }
 
     @Test

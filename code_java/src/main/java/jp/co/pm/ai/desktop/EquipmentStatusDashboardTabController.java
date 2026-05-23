@@ -43,7 +43,7 @@ import jp.co.pm.ai.desktop.ui.EquipmentStatusFullscreenStage;
 public final class EquipmentStatusDashboardTabController {
 
     private static final int AUTO_REFRESH_SEC = 60;
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy/M/d");
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy/MM/dd");
 
     private MainShellController shell;
 
@@ -283,6 +283,7 @@ public final class EquipmentStatusDashboardTabController {
         if (fullscreenStage.isShowing()) {
             DisplayOptions opts = currentDisplayOptions();
             fullscreenStage.applyAppearance(appearancePrefs);
+            fullscreenStage.setHeaderDates(opts.actualDateLabel(), opts.planDateLabel());
             fullscreenStage.rebuildCards(
                     currentStatuses,
                     opts,
@@ -439,6 +440,7 @@ public final class EquipmentStatusDashboardTabController {
         renderCards();
         if (fullscreenStage.isShowing()) {
             DisplayOptions opts = currentDisplayOptions();
+            fullscreenStage.setHeaderDates(opts.actualDateLabel(), opts.planDateLabel());
             fullscreenStage.rebuildCards(
                     currentStatuses,
                     opts,
@@ -467,6 +469,10 @@ public final class EquipmentStatusDashboardTabController {
         if (cardFlowHost != null) {
             EquipmentStatusDashboardAppearanceApplier.applyFlowHostLayout(
                     cardFlowHost, cardFlowPane, fillViewport);
+        }
+        if (cardScrollPane != null) {
+            cardScrollPane.setFitToWidth(
+                    EquipmentStatusDashboardAppearanceApplier.scrollShouldFitToWidth(appearancePrefs));
         }
     }
 
@@ -524,10 +530,10 @@ public final class EquipmentStatusDashboardTabController {
 
     private void updateSummaryLabels(LocalDate actual, LocalDate plan) {
         if (actualDateSummaryLabel != null) {
-            actualDateSummaryLabel.setText("実績日:" + actual.format(DATE_FMT));
+            actualDateSummaryLabel.setText("実績 " + actual.format(DATE_FMT));
         }
         if (planDateSummaryLabel != null) {
-            planDateSummaryLabel.setText("予定日:" + plan.format(DATE_FMT));
+            planDateSummaryLabel.setText("予定 " + plan.format(DATE_FMT));
         }
         if (machineCountLabel != null) {
             if (cachedSources == null) {
