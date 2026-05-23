@@ -4589,6 +4589,13 @@ public final class MainShellController {
         }
     }
 
+    /** 環境変数の GEMINI_MODEL / TRY_ORDER 変更を API モデルベンチマークタブへ反映する。 */
+    void refreshApiModelBenchmarkDerivedLabels() {
+        if (apiModelBenchmarkTabController != null) {
+            apiModelBenchmarkTabController.refreshShellDerivedLabels();
+        }
+    }
+
     private void onGeminiFreeTierModelsRefreshFinished(
             GeminiFreeTierModelsRefreshService.RefreshResult result) {
         javafx.application.Platform.runLater(

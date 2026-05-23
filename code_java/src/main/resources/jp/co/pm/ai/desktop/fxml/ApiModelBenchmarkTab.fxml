@@ -37,7 +37,7 @@
                 <ComboBox fx:id="modelCombo" editable="true" prefWidth="360.0"/>
             </HBox>
             <Label style="-fx-text-fill: -fx-mid-text-color" wrapText="true"
-                   text="「全モデル一括」は ComboBox のドロップダウン一覧に並ぶモデル ID を上から順に実行します（候補の編集・追加・削除で対象が変わります）。中断は進行中の HTTP 応答が返るまで待ちます。"/>
+                   text="「全モデル一括」は ComboBox のドロップダウン一覧（環境変数 GEMINI_MODEL_TRY_ORDER と同期）を上から順に実行します。単体実行は ComboBox で選ぶか、直接モデル ID を入力できます。"/>
             <HBox alignment="CENTER_LEFT" spacing="8.0">
                 <Label text="試行回数"/>
                 <Spinner fx:id="runsSpinner" editable="true" prefWidth="100.0"/>

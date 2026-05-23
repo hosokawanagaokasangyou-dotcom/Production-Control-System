@@ -300,6 +300,7 @@ public final class ApiModelBenchmarkTabController {
     public void refreshShellDerivedLabels() {
         refreshCredentialsPathLabel();
         refreshModelPriorityLabel();
+        refreshModelComboFromEnv();
     }
 
     private void refreshCredentialsPathLabel() {
@@ -354,7 +355,44 @@ public final class ApiModelBenchmarkTabController {
                         + "\n"
                         + sourceLine
                         + "\n"
-                        + "※ 本タブの「全モデル一括」は ComboBox 一覧の順であり、上記とは別です。");
+                        + "※ 上記と同じ順序が下の「モデル」ComboBox に反映されます（タブ表示時に再読込）。");
+    }
+
+    private void refreshModelComboFromEnv() {
+        if (modelCombo == null) {
+            return;
+        }
+        String priorSelection = modelCombo.getSelectionModel().getSelectedItem();
+        String priorEditor =
+                modelCombo.getEditor() != null ? modelCombo.getEditor().getText() : null;
+        List<String> models =
+                shell != null
+                        ? GeminiDispatchModelTryOrderDefaults.resolveEffectiveModelTryOrder(
+                                shell.snapshotUiEnv())
+                        : List.copyOf(DEFAULT_MODELS);
+        modelCombo.setItems(FXCollections.observableArrayList(models));
+        String restore = firstNonBlankModelId(priorSelection, priorEditor);
+        if (restore != null && models.contains(restore)) {
+            modelCombo.getSelectionModel().select(restore);
+        } else if (!models.isEmpty()) {
+            modelCombo.getSelectionModel().selectFirst();
+        }
+    }
+
+    private static String firstNonBlankModelId(String... candidates) {
+        if (candidates == null) {
+            return null;
+        }
+        for (String c : candidates) {
+            if (c == null || c.isBlank()) {
+                continue;
+            }
+            String norm = GeminiGenerateContentRestClient.normalizeModelId(c);
+            if (!norm.isEmpty()) {
+                return norm;
+            }
+        }
+        return null;
     }
 
     private static String firstNonBlankEnv(Map<String, String> env, String key) {

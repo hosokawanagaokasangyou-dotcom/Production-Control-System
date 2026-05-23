@@ -657,7 +657,8 @@ public final class EnvTabController {
         }
         EnvVarRow row = findEnvRowByExactKey(KEY_GEMINI_MODEL_TRY_ORDER);
         String raw = row != null ? row.getValue() : "";
-        dispatchGeminiModelItems.setAll(parseTryOrderCsv(raw));
+        dispatchGeminiModelItems.setAll(
+                GeminiDispatchModelTryOrderDefaults.parseTryOrderCsv(raw));
     }
 
     private void refreshDispatchGeminiPinnedWarning() {
@@ -704,25 +705,7 @@ public final class EnvTabController {
     }
 
     private static List<String> parseTryOrderCsv(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return List.of();
-        }
-        LinkedHashSet<String> seen = new LinkedHashSet<>();
-        List<String> out = new ArrayList<>();
-        for (String p : raw.split(",")) {
-            if (p == null) {
-                continue;
-            }
-            String t = p.strip();
-            if (t.isEmpty()) {
-                continue;
-            }
-            String norm = GeminiGenerateContentRestClient.normalizeModelId(t);
-            if (seen.add(norm)) {
-                out.add(norm);
-            }
-        }
-        return out;
+        return GeminiDispatchModelTryOrderDefaults.parseTryOrderCsv(raw);
     }
 
     private void applyDispatchModelsToTryOrderEnvRow() {
@@ -828,6 +811,9 @@ public final class EnvTabController {
         }
         applyDispatchModelsToTryOrderEnvRow();
         alertFolderOpen(ownerStage, AlertType.INFORMATION, "GEMINI_MODEL_TRY_ORDER を環境変数表に書き込みました。");
+        if (shell != null) {
+            shell.refreshApiModelBenchmarkDerivedLabels();
+        }
     }
 
     private void hookEnvRowForSearchFilter(EnvVarRow r) {
@@ -859,6 +845,9 @@ public final class EnvTabController {
                                     == dispatchGeminiModelsTab) {
                         reloadDispatchGeminiModelsFromEnv();
                         refreshDispatchGeminiPinnedWarning();
+                    }
+                    if (shell != null) {
+                        shell.refreshApiModelBenchmarkDerivedLabels();
                     }
                 });
     }
