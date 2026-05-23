@@ -2,7 +2,6 @@ package jp.co.pm.ai.desktop.ui;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 
 import javafx.beans.property.BooleanProperty;

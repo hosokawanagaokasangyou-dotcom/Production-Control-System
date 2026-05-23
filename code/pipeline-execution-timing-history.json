@@ -281,5 +281,11 @@
     "durationMs" : 6064,
     "writerHost" : "20250401-02",
     "writerIp" : "192.168.30.65"
+  }, {
+    "kind" : "STAGE2",
+    "finishedAtEpochMs" : 1779493999924,
+    "durationMs" : 551693,
+    "writerHost" : "20250401-02",
+    "writerIp" : "192.168.30.65"
   } ]
 }
