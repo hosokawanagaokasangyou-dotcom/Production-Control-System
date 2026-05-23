@@ -29,6 +29,7 @@ import javax.xml.parsers.ParserConfigurationException;
 
 import org.apache.poi.openxml4j.exceptions.OpenXML4JException;
 import org.apache.poi.openxml4j.opc.OPCPackage;
+import org.apache.poi.openxml4j.opc.PackageAccess;
 import org.apache.poi.ooxml.util.SAXHelper;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.util.CellReference;
@@ -96,7 +97,7 @@ public final class TaskInputSourceRawGridIo {
                 || low.endsWith(".xltm"))) {
             return List.of();
         }
-        try (OPCPackage pkg = OPCPackage.open(path.toFile())) {
+        try (OPCPackage pkg = OPCPackage.open(path.toFile(), PackageAccess.READ)) {
             XSSFReader reader = new XSSFReader(pkg);
             XSSFReader.SheetIterator sheets = reader.getSheetIterator();
             List<String> names = new ArrayList<>();
@@ -189,7 +190,10 @@ public final class TaskInputSourceRawGridIo {
 
     private static PlanInputTabularIo.TabularSheet readExcelSheetRaw(
             Path path, int sheetIndex, DoubleConsumer progress) throws IOException {
-        try (OPCPackage pkg = OPCPackage.open(path.toFile())) {
+        // PackageAccess.READ で開く。既定（READ_WRITE）だと close() で sharedStrings.xml 等を
+        // 書き戻そうとし、外部プロセスが書き換え中の xlsx で
+        // 「Unexpected end of ZLIB input stream」を踏みやすい。
+        try (OPCPackage pkg = OPCPackage.open(path.toFile(), PackageAccess.READ)) {
             XSSFReader reader = new XSSFReader(pkg);
             ReadOnlySharedStringsTable strings = new ReadOnlySharedStringsTable(pkg);
             StylesTable styles = reader.getStylesTable();
