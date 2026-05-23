@@ -195,6 +195,7 @@ public record PlanWorkspaceSessionFragment(
                 base.planInputStage2InProgressNextDayPrompt(),
                 base.mainRunStage2ResultBookFont(),
                 base.mainRunSkipGeminiApi(),
+                base.mainRunStage1MarkAllExcludeAfterRun(),
                 base.uiEnvRows(),
                 base.mainShellTabOrder(),
                 base.mainShellTabLayout(),

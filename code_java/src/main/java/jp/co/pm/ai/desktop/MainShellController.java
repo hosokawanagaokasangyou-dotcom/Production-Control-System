@@ -866,6 +866,8 @@ public final class MainShellController {
                 s.planInputStage2InProgressNextDayPrompt());
         mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
         mainRunTabController.applySkipGeminiApiFromSession(s.mainRunSkipGeminiApi());
+        mainRunTabController.applyStage1MarkAllExcludeAfterRunFromSession(
+                s.mainRunStage1MarkAllExcludeAfterRun());
         /*
          * 設備ガントの apply は末尾で Canvas を再構築し personBadgeStyleResolverForGantt を参照する。
          * 担当バッジのセッション（グロー等）を先に適用しないと、起動直後の帯は既定スタイルで描かれる。
@@ -962,6 +964,7 @@ public final class MainShellController {
                 planInputTabController.snapshotStage2InProgressNextDayPrompt(),
                 mainRunTabController.snapshotStage2ResultBookFont(),
                 mainRunTabController.snapshotSkipGeminiApi(),
+                mainRunTabController.snapshotStage1MarkAllExcludeAfterRun(),
                 snapshotUiEnvRows(),
                 snapshotMainShellTabOrder(),
                 snapshotMainShellTabLayout(),
@@ -3330,6 +3333,30 @@ public final class MainShellController {
         }
     }
 
+    /** 開発用: 段階1正常終了後、配台計画_タスク入力の全行「配台不要」を yes にする。 */
+    private void applyStage1DevMarkAllExcludeAfterRunIfEnabled() {
+        if (mainRunTabController == null
+                || !mainRunTabController.snapshotStage1MarkAllExcludeAfterRun()) {
+            return;
+        }
+        try {
+            Stage1DevMarkAllExcludeAfterRun.ApplySummary summary =
+                    Stage1DevMarkAllExcludeAfterRun.applyToPlanInput(collectUiEnv());
+            appendLog(
+                    "[dev] 段階1後: 配台計画_タスク入力の全行を配台不要 yes に更新しました（"
+                            + summary.updatedRows()
+                            + "/"
+                            + summary.totalRows()
+                            + " 行変更、"
+                            + summary.planPath()
+                            + "）。");
+        } catch (Exception ex) {
+            appendLog(
+                    "[dev] 段階1後: 全行配台不要への更新に失敗: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+        }
+    }
+
     private void runStage(String script) {
         if (STAGE2.equals(script) && blockIfSummaryAiDispatchExportLocked("段階2")) {
             return;
@@ -3382,6 +3409,11 @@ public final class MainShellController {
             if (mainRunTabController.snapshotSkipGeminiApi()) {
                 appendLog(
                         "[dev] PM_AI_SKIP_GEMINI_API=1 — Gemini API 呼び出しをスキップします（開発用）。");
+            }
+            if (STAGE1.equals(script)
+                    && mainRunTabController.snapshotStage1MarkAllExcludeAfterRun()) {
+                appendLog(
+                        "[dev] 段階1正常終了後、配台計画_タスク入力の全行を配台不要 yes に更新します（開発用）。");
             }
             if (STAGE1.equals(script)) {
                 if (mainRunTabController.snapshotStage1ClearCacheAndRun()) {
@@ -3674,6 +3706,7 @@ public final class MainShellController {
                 if (reloadAfterStage1Preview != null) {
                     reloadAfterStage1Preview.run();
                 }
+                applyStage1DevMarkAllExcludeAfterRunIfEnabled();
                 if (reloadAfterStage1PlanInput != null) {
                     reloadAfterStage1PlanInput.run();
                 }

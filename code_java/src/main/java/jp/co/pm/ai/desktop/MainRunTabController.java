@@ -118,6 +118,9 @@ public final class MainRunTabController {
     private CheckBox skipGeminiApiCheckBox;
 
     @FXML
+    private CheckBox stage1MarkAllExcludeAfterRunCheckBox;
+
+    @FXML
     private Button copyAllLogButton;
 
     @FXML
@@ -185,6 +188,8 @@ public final class MainRunTabController {
     private final AtomicBoolean suppressStage2ResultFontEvents = new AtomicBoolean(false);
 
     private final AtomicBoolean suppressSkipGeminiApiEvents = new AtomicBoolean(false);
+
+    private final AtomicBoolean suppressStage1MarkAllExcludeAfterRunEvents = new AtomicBoolean(false);
 
     private final AtomicBoolean suppressRunLogSessionPersistence = new AtomicBoolean(false);
 
@@ -321,6 +326,17 @@ public final class MainRunTabController {
                     .addListener(
                             (o, a, b) -> {
                                 if (!suppressSkipGeminiApiEvents.get() && shell != null) {
+                                    shell.scheduleDesktopSessionSave();
+                                }
+                            });
+        }
+        if (stage1MarkAllExcludeAfterRunCheckBox != null) {
+            stage1MarkAllExcludeAfterRunCheckBox
+                    .selectedProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (!suppressStage1MarkAllExcludeAfterRunEvents.get()
+                                        && shell != null) {
                                     shell.scheduleDesktopSessionSave();
                                 }
                             });
@@ -1228,6 +1244,24 @@ public final class MainRunTabController {
             skipGeminiApiCheckBox.setSelected(skip);
         } finally {
             suppressSkipGeminiApiEvents.set(false);
+        }
+    }
+
+    /** 段階1正常終了後に全依頼を配台不要 yes にする（開発用チェック）。 */
+    boolean snapshotStage1MarkAllExcludeAfterRun() {
+        return stage1MarkAllExcludeAfterRunCheckBox != null
+                && stage1MarkAllExcludeAfterRunCheckBox.isSelected();
+    }
+
+    void applyStage1MarkAllExcludeAfterRunFromSession(boolean enabled) {
+        if (stage1MarkAllExcludeAfterRunCheckBox == null) {
+            return;
+        }
+        suppressStage1MarkAllExcludeAfterRunEvents.set(true);
+        try {
+            stage1MarkAllExcludeAfterRunCheckBox.setSelected(enabled);
+        } finally {
+            suppressStage1MarkAllExcludeAfterRunEvents.set(false);
         }
     }
 

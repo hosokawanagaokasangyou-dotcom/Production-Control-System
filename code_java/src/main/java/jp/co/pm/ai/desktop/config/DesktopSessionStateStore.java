@@ -188,6 +188,7 @@ public final class DesktopSessionStateStore {
                 state.planInputStage2InProgressNextDayPrompt());
         put(root, "mainRunStage2ResultBookFont", state.mainRunStage2ResultBookFont());
         root.put("mainRunSkipGeminiApi", state.mainRunSkipGeminiApi());
+        root.put("mainRunStage1MarkAllExcludeAfterRun", state.mainRunStage1MarkAllExcludeAfterRun());
         putUiEnvRows(root, state.uiEnvRows());
         putMainShellTabOrder(root, state.mainShellTabOrder());
         putMainShellTabLayout(root, state.mainShellTabLayout());
@@ -324,6 +325,7 @@ public final class DesktopSessionStateStore {
                 optionalBoolean(root, "planInputStage2InProgressNextDayPrompt", true),
                 text(root, "mainRunStage2ResultBookFont"),
                 optionalBoolean(root, "mainRunSkipGeminiApi", false),
+                optionalBoolean(root, "mainRunStage1MarkAllExcludeAfterRun", false),
                 loadUiEnvRows(root),
                 loadStringList(root, "mainShellTabOrder"),
                 loadMainShellTabLayout(root),
