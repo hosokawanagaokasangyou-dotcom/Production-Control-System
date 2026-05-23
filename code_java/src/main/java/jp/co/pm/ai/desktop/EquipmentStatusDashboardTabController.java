@@ -17,6 +17,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
@@ -34,7 +35,7 @@ public final class EquipmentStatusDashboardTabController {
 
     private static final int AUTO_REFRESH_SEC = 60;
     private static final int MAX_PLAN_DAY_OFFSET = 14;
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("M/d");
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy/M/d");
 
     private MainShellController shell;
 
@@ -56,6 +57,7 @@ public final class EquipmentStatusDashboardTabController {
     @FXML private Label machineCountLabel;
     @FXML private Label sourceSummaryLabel;
     @FXML private FlowPane cardFlowPane;
+    @FXML private VBox emptyStatePane;
 
     private final EquipmentStatusFullscreenStage fullscreenStage = new EquipmentStatusFullscreenStage();
 
@@ -213,12 +215,16 @@ public final class EquipmentStatusDashboardTabController {
             return;
         }
         if (fullscreenToggle != null && fullscreenToggle.isSelected()) {
+            DisplayOptions opts = currentDisplayOptions();
             fullscreenStage.show(
                     shell.getPrimaryStage(),
                     currentStatuses,
-                    currentDisplayOptions(),
+                    opts,
                     badgeStyleResolver(),
-                    buildMetaSummary());
+                    buildMetaSummary(),
+                    opts.actualDateLabel(),
+                    opts.planDateLabel(),
+                    cachedSources != null);
             updateAutoRefreshTimer();
         } else {
             fullscreenStage.hide();
@@ -284,8 +290,14 @@ public final class EquipmentStatusDashboardTabController {
         updateSummaryLabels(actualDate, planDate);
         renderCards();
         if (fullscreenStage.isShowing()) {
+            DisplayOptions opts = currentDisplayOptions();
             fullscreenStage.rebuildCards(
-                    currentStatuses, currentDisplayOptions(), badgeStyleResolver());
+                    currentStatuses,
+                    opts,
+                    badgeStyleResolver(),
+                    opts.actualDateLabel(),
+                    opts.planDateLabel(),
+                    cachedSources != null);
         }
     }
 
@@ -295,6 +307,26 @@ public final class EquipmentStatusDashboardTabController {
         }
         cardFlowPane.getChildren().clear();
         DisplayOptions opts = currentDisplayOptions();
+        boolean sourcesLoaded = cachedSources != null;
+        boolean empty = currentStatuses == null || currentStatuses.isEmpty();
+        if (emptyStatePane != null) {
+            emptyStatePane.getChildren().clear();
+            emptyStatePane.setVisible(empty);
+            emptyStatePane.setManaged(empty);
+            if (empty) {
+                emptyStatePane
+                        .getChildren()
+                        .add(
+                                EquipmentStatusCardFactory.createEmptyState(
+                                        opts.actualDateLabel(),
+                                        opts.planDateLabel(),
+                                        sourcesLoaded,
+                                        false));
+            }
+        }
+        if (empty) {
+            return;
+        }
         Function<String, PersonBadgeStyle> resolver = badgeStyleResolver();
         for (EquipmentMachineStatus s : currentStatuses) {
             cardFlowPane
@@ -320,13 +352,19 @@ public final class EquipmentStatusDashboardTabController {
 
     private void updateSummaryLabels(LocalDate actualDate, LocalDate planDate) {
         if (actualDateSummaryLabel != null) {
-            actualDateSummaryLabel.setText("実績:" + actualDate.format(DATE_FMT));
+            actualDateSummaryLabel.setText("実績日:" + actualDate.format(DATE_FMT));
         }
         if (planDateSummaryLabel != null) {
-            planDateSummaryLabel.setText("予定:" + planDate.format(DATE_FMT));
+            planDateSummaryLabel.setText("予定日:" + planDate.format(DATE_FMT));
         }
         if (machineCountLabel != null) {
-            machineCountLabel.setText(currentStatuses.size() + "台");
+            if (cachedSources == null) {
+                machineCountLabel.setText("—");
+            } else if (currentStatuses.isEmpty()) {
+                machineCountLabel.setText("該当なし（非稼働日の可能性）");
+            } else {
+                machineCountLabel.setText(currentStatuses.size() + "台");
+            }
         }
         if (sourceSummaryLabel != null && cachedSources != null) {
             sourceSummaryLabel.setText(

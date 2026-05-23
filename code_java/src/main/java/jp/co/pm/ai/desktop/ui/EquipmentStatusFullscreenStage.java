@@ -15,6 +15,8 @@ import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
@@ -28,6 +30,7 @@ public final class EquipmentStatusFullscreenStage {
 
     private final Stage stage = new Stage(StageStyle.UNDECORATED);
     private final FlowPane cardPane = new FlowPane(12.0, 12.0);
+    private final VBox emptyStateHost = new VBox();
     private final Label metaLabel = new Label();
     private Runnable onClose;
     private boolean ownerInitialized;
@@ -54,8 +57,15 @@ public final class EquipmentStatusFullscreenStage {
         scroll.setFitToWidth(true);
         scroll.getStyleClass().add("pm-equipment-status-scroll");
 
+        emptyStateHost.setAlignment(Pos.CENTER);
+        emptyStateHost.getStyleClass().add("pm-equipment-status-empty-host");
+        emptyStateHost.setVisible(false);
+        emptyStateHost.setManaged(false);
+
+        StackPane center = new StackPane(scroll, emptyStateHost);
+
         root.setTop(top);
-        root.setCenter(scroll);
+        root.setCenter(center);
 
         Scene scene = new Scene(root);
         stage.setScene(scene);
@@ -86,13 +96,17 @@ public final class EquipmentStatusFullscreenStage {
             List<EquipmentMachineStatus> statuses,
             EquipmentStatusCardFactory.DisplayOptions opts,
             Function<String, PersonBadgeStyle> badgeStyleResolver,
-            String metaText) {
+            String metaText,
+            String actualDateLabel,
+            String planDateLabel,
+            boolean sourcesLoaded) {
         if (!ownerInitialized && owner != null) {
             stage.initOwner(owner);
             ownerInitialized = true;
         }
         metaLabel.setText(metaText != null ? metaText : "");
-        rebuildCards(statuses, opts, badgeStyleResolver);
+        rebuildCards(
+                statuses, opts, badgeStyleResolver, actualDateLabel, planDateLabel, sourcesLoaded);
         stage.setFullScreen(true);
         if (!stage.isFullScreen()) {
             stage.setMaximized(true);
@@ -104,15 +118,28 @@ public final class EquipmentStatusFullscreenStage {
     public void rebuildCards(
             List<EquipmentMachineStatus> statuses,
             EquipmentStatusCardFactory.DisplayOptions opts,
-            Function<String, PersonBadgeStyle> badgeStyleResolver) {
+            Function<String, PersonBadgeStyle> badgeStyleResolver,
+            String actualDateLabel,
+            String planDateLabel,
+            boolean sourcesLoaded) {
         cardPane.getChildren().clear();
-        if (statuses != null) {
-            for (EquipmentMachineStatus s : statuses) {
-                cardPane.getChildren()
-                        .add(
-                                EquipmentStatusCardFactory.createCard(
-                                        s, opts, badgeStyleResolver, true));
-            }
+        boolean empty = statuses == null || statuses.isEmpty();
+        emptyStateHost.getChildren().clear();
+        emptyStateHost.setVisible(empty);
+        emptyStateHost.setManaged(empty);
+        if (empty) {
+            emptyStateHost
+                    .getChildren()
+                    .add(
+                            EquipmentStatusCardFactory.createEmptyState(
+                                    actualDateLabel, planDateLabel, sourcesLoaded, true));
+            return;
+        }
+        for (EquipmentMachineStatus s : statuses) {
+            cardPane.getChildren()
+                    .add(
+                            EquipmentStatusCardFactory.createCard(
+                                    s, opts, badgeStyleResolver, true));
         }
     }
 

@@ -1158,3 +1158,39 @@
 .pm-equipment-status-fullscreen-root .label.pm-equipment-status-plan-line {
     -fx-text-fill: #e2e8f0;
 }
+
+.pm-equipment-status-empty-host {
+    -fx-background-color: transparent;
+}
+
+.pm-equipment-status-empty {
+    -fx-alignment: center;
+}
+
+.label.pm-equipment-status-empty-title {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-text-inner-color;
+}
+
+.label.pm-equipment-status-empty-detail {
+    -fx-font-size: 14px;
+    -fx-text-fill: -fx-text-inner-color;
+}
+
+.label.pm-equipment-status-empty-hint {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-equipment-status-fullscreen-root .label.pm-equipment-status-empty-title {
+    -fx-text-fill: #e2e8f0;
+}
+
+.pm-equipment-status-fullscreen-root .label.pm-equipment-status-empty-detail {
+    -fx-text-fill: #cbd5e1;
+}
+
+.pm-equipment-status-fullscreen-root .label.pm-equipment-status-empty-hint {
+    -fx-text-fill: #94a3b8;
+}

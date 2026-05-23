@@ -207,4 +207,57 @@ public final class EquipmentStatusCardFactory {
             case COMPLETED -> "pm-equipment-status-chip-completed";
         };
     }
+
+    /**
+     * 選択日に実績・予定が1件も無いときの説明パネル（工場非稼働日など）。
+     *
+     * @param sourcesLoaded {@code true} なら読込済みだが該当0件、{@code false} なら未読込
+     */
+    public static VBox createEmptyState(
+            String actualDateLabel, String planDateLabel, boolean sourcesLoaded, boolean fullscreen) {
+        VBox box = new VBox(10.0);
+        box.setAlignment(Pos.CENTER);
+        box.setPadding(new Insets(32, 24, 32, 24));
+        box.setMaxWidth(fullscreen ? 640 : 560);
+        box.getStyleClass().add("pm-equipment-status-empty");
+
+        Label title = new Label("表示する機械がありません");
+        title.getStyleClass().add("pm-equipment-status-empty-title");
+
+        String detailText;
+        String hintText;
+        if (sourcesLoaded) {
+            detailText =
+                    "実績 "
+                            + nz(actualDateLabel)
+                            + "・予定 "
+                            + nz(planDateLabel)
+                            + " のいずれかにデータがある機械が0件です。";
+            hintText =
+                    "工場が休業・非稼働の日は、加工実績もアラジン／配台予定も無いことがあります。"
+                            + "実績［前日］や予定［当日］など、日付ボタンを変えて確認してください。";
+        } else {
+            detailText = "ソースを読み込んでいません。";
+            hintText = "［再読込］を押すか、タブを開き直してください。";
+        }
+
+        Label detail = new Label(detailText);
+        detail.getStyleClass().add("pm-equipment-status-empty-detail");
+        detail.setWrapText(true);
+        detail.setMaxWidth(fullscreen ? 600 : 520);
+        detail.setAlignment(Pos.CENTER);
+
+        Label hint = new Label(hintText);
+        hint.getStyleClass().add("pm-equipment-status-empty-hint");
+        hint.setWrapText(true);
+        hint.setMaxWidth(fullscreen ? 600 : 520);
+        hint.setAlignment(Pos.CENTER);
+
+        box.getChildren().addAll(title, detail, hint);
+        return box;
+    }
+
+    private static String nz(String s) {
+        return s != null && !s.isBlank() ? s.strip() : "—";
+    }
 }

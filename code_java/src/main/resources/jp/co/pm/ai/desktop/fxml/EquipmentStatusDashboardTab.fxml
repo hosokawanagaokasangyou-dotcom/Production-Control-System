@@ -11,6 +11,7 @@
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
 <BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
@@ -42,20 +43,24 @@
                 <Label fx:id="lastUpdatedLabel" text="最終更新: —"/>
                 <CheckBox fx:id="showAladdinCheckBox" selected="true" text="アラジン予定"/>
                 <CheckBox fx:id="showDispatchCheckBox" selected="true" text="配台予定"/>
-                <Label fx:id="planDateSummaryLabel" text="予定: —"/>
-                <Label fx:id="actualDateSummaryLabel" text="実績: —"/>
-                <Label fx:id="machineCountLabel" text="0台"/>
+                <Label fx:id="planDateSummaryLabel" text="予定日: —"/>
+                <Label fx:id="actualDateSummaryLabel" text="実績日: —"/>
+                <Label fx:id="machineCountLabel" text="—"/>
                 <Label fx:id="sourceSummaryLabel" styleClass="pm-equipment-status-source" text=""/>
             </HBox>
         </VBox>
     </top>
     <center>
-        <ScrollPane fitToWidth="true" styleClass="pm-equipment-status-scroll">
-            <FlowPane fx:id="cardFlowPane" hgap="12.0" vgap="12.0" styleClass="pm-equipment-status-card-flow">
-                <padding>
-                    <Insets bottom="12.0" left="12.0" right="12.0" top="8.0"/>
-                </padding>
-            </FlowPane>
-        </ScrollPane>
+        <StackPane>
+            <ScrollPane fitToWidth="true" styleClass="pm-equipment-status-scroll">
+                <FlowPane fx:id="cardFlowPane" hgap="12.0" vgap="12.0" styleClass="pm-equipment-status-card-flow">
+                    <padding>
+                        <Insets bottom="12.0" left="12.0" right="12.0" top="8.0"/>
+                    </padding>
+                </FlowPane>
+            </ScrollPane>
+            <VBox fx:id="emptyStatePane" alignment="CENTER" managed="false" visible="false"
+                  styleClass="pm-equipment-status-empty-host"/>
+        </StackPane>
     </center>
 </BorderPane>
