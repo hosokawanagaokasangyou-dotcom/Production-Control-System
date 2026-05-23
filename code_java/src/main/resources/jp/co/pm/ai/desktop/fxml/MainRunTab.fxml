@@ -67,9 +67,17 @@
     </center>
     <bottom>
         <VBox fillWidth="true" spacing="8.0">
+            <Label styleClass="pm-section-title" text="ブックを開く" />
+            <HBox spacing="8.0">
+                <Label fx:id="masterWorkbookOpenHintLabel" text="master.xlsm" />
+                <Button mnemonicParsing="false" onAction="#onOpenMasterWorkbookAction" text="エクセルを開く" />
+                <Label fx:id="summaryWorkbookOpenHintLabel" text="サマリ_AI配台.xlsx" />
+                <Button fx:id="openSummaryAiDispatchButton" mnemonicParsing="false" onAction="#onOpenSummaryAiDispatchAction" text="エクセルを開く" />
+                <Button fx:id="forceUnlockSummaryAiDispatchButton" disable="true" mnemonicParsing="false" onAction="#onForceUnlockSummaryExportLockAction" text="ロック解除" />
+            </HBox>
             <Accordion maxWidth="Infinity">
                 <panes>
-                    <TitledPane animated="true" expanded="false" text="その他（段階2・ブック・実行時間）">
+                    <TitledPane animated="true" expanded="false" text="その他（段階2・実行時間）">
                         <content>
                             <ScrollPane fitToWidth="true" hbarPolicy="NEVER" maxHeight="320.0" minViewportHeight="120.0"
                                         prefViewportHeight="240.0" style="-fx-background-color: transparent;">
@@ -99,14 +107,6 @@
                                         <RowConstraints />
                                     </rowConstraints>
                                 </GridPane>
-                                <Label styleClass="pm-section-title" text="ブックを開く" />
-                                <HBox spacing="8.0">
-                                    <Label fx:id="masterWorkbookOpenHintLabel" text="master.xlsm" />
-                                    <Button mnemonicParsing="false" onAction="#onOpenMasterWorkbookAction" text="エクセルを開く" />
-                                    <Label fx:id="summaryWorkbookOpenHintLabel" text="サマリ_AI配台.xlsx" />
-                                    <Button fx:id="openSummaryAiDispatchButton" mnemonicParsing="false" onAction="#onOpenSummaryAiDispatchAction" text="エクセルを開く" />
-                                    <Button fx:id="forceUnlockSummaryAiDispatchButton" disable="true" mnemonicParsing="false" onAction="#onForceUnlockSummaryExportLockAction" text="ロック解除" />
-                                </HBox>
                                 <Label styleClass="pm-section-title" text="開発用" />
                                 <VBox spacing="4.0">
                                     <CheckBox fx:id="skipGeminiApiCheckBox" mnemonicParsing="false" text="AI API 呼び出しをスキップ（開発用）" />
