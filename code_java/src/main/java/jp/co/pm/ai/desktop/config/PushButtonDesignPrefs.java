@@ -36,6 +36,16 @@ public record PushButtonDesignPrefs(
         String stage3BorderHex,
         String stage3HoverBgHex,
         String stage3PressedBgHex,
+        boolean customizeAlignAladdinPlanButton,
+        double alignAladdinBorderRadius,
+        double alignAladdinPaddingV,
+        double alignAladdinPaddingH,
+        double alignAladdinFontPx,
+        String alignAladdinBgHex,
+        String alignAladdinBorderHex,
+        String alignAladdinTextHex,
+        String alignAladdinHoverBgHex,
+        String alignAladdinPressedBgHex,
         boolean customizeDialogButtons,
         double dialogPrimaryBorderRadius,
         double dialogPrimaryPaddingV,
@@ -89,6 +99,16 @@ public record PushButtonDesignPrefs(
                 b.stage3BorderHex,
                 b.stage3HoverBgHex,
                 b.stage3PressedBgHex,
+                false,
+                b.alignAladdinBorderRadius,
+                b.alignAladdinPaddingV,
+                b.alignAladdinPaddingH,
+                b.alignAladdinFontPx,
+                b.alignAladdinBgHex,
+                b.alignAladdinBorderHex,
+                b.alignAladdinTextHex,
+                b.alignAladdinHoverBgHex,
+                b.alignAladdinPressedBgHex,
                 false,
                 b.dialogPrimaryBorderRadius,
                 b.dialogPrimaryPaddingV,
@@ -144,6 +164,16 @@ public record PushButtonDesignPrefs(
                 b.stage3HoverBgHex,
                 b.stage3PressedBgHex,
                 true,
+                b.alignAladdinBorderRadius,
+                b.alignAladdinPaddingV,
+                b.alignAladdinPaddingH,
+                b.alignAladdinFontPx,
+                b.alignAladdinBgHex,
+                b.alignAladdinBorderHex,
+                b.alignAladdinTextHex,
+                b.alignAladdinHoverBgHex,
+                b.alignAladdinPressedBgHex,
+                true,
                 b.dialogPrimaryBorderRadius,
                 b.dialogPrimaryPaddingV,
                 b.dialogPrimaryPaddingH,
@@ -165,7 +195,10 @@ public record PushButtonDesignPrefs(
     }
 
     public boolean anyCustomizationEnabled() {
-        return customizeGeneralRunTab || customizeStageRunButtons || customizeDialogButtons;
+        return customizeGeneralRunTab
+                || customizeStageRunButtons
+                || customizeAlignAladdinPlanButton
+                || customizeDialogButtons;
     }
 
     private static final class BuiltIn {
@@ -202,6 +235,16 @@ public record PushButtonDesignPrefs(
         final String stage3BorderHex = "#166534";
         final String stage3HoverBgHex = "#16a34a";
         final String stage3PressedBgHex = "#14532d";
+
+        final double alignAladdinBorderRadius = 6;
+        final double alignAladdinPaddingV = 8;
+        final double alignAladdinPaddingH = 14;
+        final double alignAladdinFontPx = 12;
+        final String alignAladdinBgHex = "#4338ca";
+        final String alignAladdinBorderHex = "#3730a3";
+        final String alignAladdinTextHex = "#ffffff";
+        final String alignAladdinHoverBgHex = "#4f46e5";
+        final String alignAladdinPressedBgHex = "#312e81";
 
         /** OK・既定（:default）向け。 */
         final double dialogPrimaryBorderRadius = 6;

@@ -51,6 +51,7 @@
             </tooltip>
         </CheckBox>
         <Button fx:id="alignToAladdinPlanButton" mnemonicParsing="false" text="アラジン計画に合わせる"
+                styleClass="pm-align-aladdin-plan-button"
                 onAction="#onAlignToAladdinPlanAction">
             <tooltip>
                 <Tooltip text="段階3前: タスク×日付の (段階3前) 数量を (アラ計画) に沿うようロール単位で再配分する"/>

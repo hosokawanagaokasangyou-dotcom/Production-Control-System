@@ -145,6 +145,48 @@ public final class PushButtonDesignTabController {
     private ColorPicker stage3PressedPicker;
 
     @FXML
+    private CheckBox customAlignAladdinCheck;
+
+    @FXML
+    private Slider alignAladdinRadiusSlider;
+
+    @FXML
+    private Label alignAladdinRadiusLabel;
+
+    @FXML
+    private Slider alignAladdinPadVSlider;
+
+    @FXML
+    private Label alignAladdinPadVLabel;
+
+    @FXML
+    private Slider alignAladdinPadHSlider;
+
+    @FXML
+    private Label alignAladdinPadHLabel;
+
+    @FXML
+    private Slider alignAladdinFontSlider;
+
+    @FXML
+    private Label alignAladdinFontLabel;
+
+    @FXML
+    private ColorPicker alignAladdinBgPicker;
+
+    @FXML
+    private ColorPicker alignAladdinBorderPicker;
+
+    @FXML
+    private ColorPicker alignAladdinTextPicker;
+
+    @FXML
+    private ColorPicker alignAladdinHoverPicker;
+
+    @FXML
+    private ColorPicker alignAladdinPressedPicker;
+
+    @FXML
     private CheckBox customDialogCheck;
 
     @FXML
@@ -250,6 +292,9 @@ public final class PushButtonDesignTabController {
             if (customStageCheck != null) {
                 customStageCheck.setSelected(false);
             }
+            if (customAlignAladdinCheck != null) {
+                customAlignAladdinCheck.setSelected(false);
+            }
             if (customDialogCheck != null) {
                 customDialogCheck.setSelected(false);
             }
@@ -287,6 +332,7 @@ public final class PushButtonDesignTabController {
         PushButtonDesignPrefs d = PushButtonDesignPrefs.builtInSnapshot();
         boolean g = customGeneralCheck != null && customGeneralCheck.isSelected();
         boolean st = customStageCheck != null && customStageCheck.isSelected();
+        boolean al = customAlignAladdinCheck != null && customAlignAladdinCheck.isSelected();
         boolean dlg = customDialogCheck != null && customDialogCheck.isSelected();
         return new PushButtonDesignPrefs(
                 g,
@@ -318,6 +364,16 @@ public final class PushButtonDesignTabController {
                 colorToHex(stage3BorderPicker, d.stage3BorderHex()),
                 colorToHex(stage3HoverPicker, d.stage3HoverBgHex()),
                 colorToHex(stage3PressedPicker, d.stage3PressedBgHex()),
+                al,
+                alignAladdinRadiusSlider != null ? alignAladdinRadiusSlider.getValue() : d.alignAladdinBorderRadius(),
+                alignAladdinPadVSlider != null ? alignAladdinPadVSlider.getValue() : d.alignAladdinPaddingV(),
+                alignAladdinPadHSlider != null ? alignAladdinPadHSlider.getValue() : d.alignAladdinPaddingH(),
+                alignAladdinFontSlider != null ? alignAladdinFontSlider.getValue() : d.alignAladdinFontPx(),
+                colorToHex(alignAladdinBgPicker, d.alignAladdinBgHex()),
+                colorToHex(alignAladdinBorderPicker, d.alignAladdinBorderHex()),
+                colorToHex(alignAladdinTextPicker, d.alignAladdinTextHex()),
+                colorToHex(alignAladdinHoverPicker, d.alignAladdinHoverBgHex()),
+                colorToHex(alignAladdinPressedPicker, d.alignAladdinPressedBgHex()),
                 dlg,
                 dialogPrimaryRadiusSlider != null ? dialogPrimaryRadiusSlider.getValue() : d.dialogPrimaryBorderRadius(),
                 dialogPrimaryPadVSlider != null ? dialogPrimaryPadVSlider.getValue() : d.dialogPrimaryPaddingV(),
@@ -355,6 +411,9 @@ public final class PushButtonDesignTabController {
             if (customStageCheck != null) {
                 customStageCheck.setSelected(true);
             }
+            if (customAlignAladdinCheck != null) {
+                customAlignAladdinCheck.setSelected(true);
+            }
             if (customDialogCheck != null) {
                 customDialogCheck.setSelected(true);
             }
@@ -373,6 +432,9 @@ public final class PushButtonDesignTabController {
         }
         if (customStageCheck != null) {
             customStageCheck.setSelected(x.customizeStageRunButtons());
+        }
+        if (customAlignAladdinCheck != null) {
+            customAlignAladdinCheck.setSelected(x.customizeAlignAladdinPlanButton());
         }
         if (customDialogCheck != null) {
             customDialogCheck.setSelected(x.customizeDialogButtons());
@@ -425,6 +487,24 @@ public final class PushButtonDesignTabController {
         setPicker(stage3BorderPicker, x.stage3BorderHex());
         setPicker(stage3HoverPicker, x.stage3HoverBgHex());
         setPicker(stage3PressedPicker, x.stage3PressedBgHex());
+
+        if (alignAladdinRadiusSlider != null) {
+            alignAladdinRadiusSlider.setValue(Math.clamp(x.alignAladdinBorderRadius(), 0, 24));
+        }
+        if (alignAladdinPadVSlider != null) {
+            alignAladdinPadVSlider.setValue(Math.clamp(x.alignAladdinPaddingV(), 0, 32));
+        }
+        if (alignAladdinPadHSlider != null) {
+            alignAladdinPadHSlider.setValue(Math.clamp(x.alignAladdinPaddingH(), 0, 40));
+        }
+        if (alignAladdinFontSlider != null) {
+            alignAladdinFontSlider.setValue(Math.clamp(x.alignAladdinFontPx(), 9, 24));
+        }
+        setPicker(alignAladdinBgPicker, x.alignAladdinBgHex());
+        setPicker(alignAladdinBorderPicker, x.alignAladdinBorderHex());
+        setPicker(alignAladdinTextPicker, x.alignAladdinTextHex());
+        setPicker(alignAladdinHoverPicker, x.alignAladdinHoverBgHex());
+        setPicker(alignAladdinPressedPicker, x.alignAladdinPressedBgHex());
 
         if (dialogPrimaryRadiusSlider != null) {
             dialogPrimaryRadiusSlider.setValue(Math.clamp(x.dialogPrimaryBorderRadius(), 0, 24));
@@ -493,6 +573,12 @@ public final class PushButtonDesignTabController {
                     refreshStylesheetOnShell();
                     schedulePersist();
                 };
+        Runnable onAlignAladdinEdit =
+                () -> {
+                    touchCustomizeAlignAladdin();
+                    refreshStylesheetOnShell();
+                    schedulePersist();
+                };
         Runnable onDialogEdit =
                 () -> {
                     touchCustomizeDialog();
@@ -504,6 +590,9 @@ public final class PushButtonDesignTabController {
         }
         if (customStageCheck != null) {
             customStageCheck.selectedProperty().addListener((o, a, b) -> onCheckboxToggle.run());
+        }
+        if (customAlignAladdinCheck != null) {
+            customAlignAladdinCheck.selectedProperty().addListener((o, a, b) -> onCheckboxToggle.run());
         }
         if (customDialogCheck != null) {
             customDialogCheck.selectedProperty().addListener((o, a, b) -> onCheckboxToggle.run());
@@ -520,6 +609,11 @@ public final class PushButtonDesignTabController {
         wireSlider(stagePadVSlider, stagePadVLabel, "%.0f", onStageEdit);
         wireSlider(stagePadHSlider, stagePadHLabel, "%.0f", onStageEdit);
         wireSlider(stageRadiusSlider, stageRadiusLabel, "%.0f", onStageEdit);
+
+        wireSlider(alignAladdinRadiusSlider, alignAladdinRadiusLabel, "%.0f", onAlignAladdinEdit);
+        wireSlider(alignAladdinPadVSlider, alignAladdinPadVLabel, "%.0f", onAlignAladdinEdit);
+        wireSlider(alignAladdinPadHSlider, alignAladdinPadHLabel, "%.0f", onAlignAladdinEdit);
+        wireSlider(alignAladdinFontSlider, alignAladdinFontLabel, "%.0f", onAlignAladdinEdit);
 
         addPicker(generalBgPicker, onGeneralEdit);
         addPicker(generalBorderPicker, onGeneralEdit);
@@ -538,6 +632,11 @@ public final class PushButtonDesignTabController {
         addPicker(stage3BorderPicker, onStageEdit);
         addPicker(stage3HoverPicker, onStageEdit);
         addPicker(stage3PressedPicker, onStageEdit);
+        addPicker(alignAladdinBgPicker, onAlignAladdinEdit);
+        addPicker(alignAladdinBorderPicker, onAlignAladdinEdit);
+        addPicker(alignAladdinTextPicker, onAlignAladdinEdit);
+        addPicker(alignAladdinHoverPicker, onAlignAladdinEdit);
+        addPicker(alignAladdinPressedPicker, onAlignAladdinEdit);
 
         wireSlider(dialogPrimaryRadiusSlider, dialogPrimaryRadiusLabel, "%.0f", onDialogEdit);
         wireSlider(dialogPrimaryPadVSlider, dialogPrimaryPadVLabel, "%.0f", onDialogEdit);
@@ -576,6 +675,15 @@ public final class PushButtonDesignTabController {
         }
         if (!customStageCheck.isSelected()) {
             customStageCheck.setSelected(true);
+        }
+    }
+
+    private void touchCustomizeAlignAladdin() {
+        if (suppress || customAlignAladdinCheck == null) {
+            return;
+        }
+        if (!customAlignAladdinCheck.isSelected()) {
+            customAlignAladdinCheck.setSelected(true);
         }
     }
 
@@ -638,6 +746,18 @@ public final class PushButtonDesignTabController {
         }
         if (stageRadiusSlider != null && stageRadiusLabel != null) {
             stageRadiusLabel.setText(String.format("%.0f", stageRadiusSlider.getValue()));
+        }
+        if (alignAladdinRadiusSlider != null && alignAladdinRadiusLabel != null) {
+            alignAladdinRadiusLabel.setText(String.format("%.0f", alignAladdinRadiusSlider.getValue()));
+        }
+        if (alignAladdinPadVSlider != null && alignAladdinPadVLabel != null) {
+            alignAladdinPadVLabel.setText(String.format("%.0f", alignAladdinPadVSlider.getValue()));
+        }
+        if (alignAladdinPadHSlider != null && alignAladdinPadHLabel != null) {
+            alignAladdinPadHLabel.setText(String.format("%.0f", alignAladdinPadHSlider.getValue()));
+        }
+        if (alignAladdinFontSlider != null && alignAladdinFontLabel != null) {
+            alignAladdinFontLabel.setText(String.format("%.0f", alignAladdinFontSlider.getValue()));
         }
         if (dialogPrimaryRadiusSlider != null && dialogPrimaryRadiusLabel != null) {
             dialogPrimaryRadiusLabel.setText(String.format("%.0f", dialogPrimaryRadiusSlider.getValue()));

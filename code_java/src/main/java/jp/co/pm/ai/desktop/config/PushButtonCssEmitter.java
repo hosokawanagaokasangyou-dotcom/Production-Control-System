@@ -76,6 +76,9 @@ public final class PushButtonCssEmitter {
             sb.append("    -fx-opacity: 0.5;\n");
             sb.append("}\n");
         }
+        if (p.customizeAlignAladdinPlanButton()) {
+            appendAlignAladdinPlanButton(sb, p);
+        }
         if (p.customizeDialogButtons()) {
             appendDialogButtons(sb, p);
         }
@@ -220,6 +223,29 @@ public final class PushButtonCssEmitter {
         sb.append("    -fx-background-color: ")
                 .append(hexOrFallback(p.generalPressedBgHex(), "#dedede"))
                 .append(";\n");
+        sb.append("}\n");
+    }
+
+    private static void appendAlignAladdinPlanButton(StringBuilder sb, PushButtonDesignPrefs p) {
+        String selector = ".button.pm-align-aladdin-plan-button";
+        appendDialogVariant(
+                sb,
+                selector,
+                p.alignAladdinBorderRadius(),
+                p.alignAladdinPaddingV(),
+                p.alignAladdinPaddingH(),
+                p.alignAladdinFontPx(),
+                p.alignAladdinBgHex(),
+                p.alignAladdinBorderHex(),
+                p.alignAladdinTextHex(),
+                p.alignAladdinHoverBgHex(),
+                p.alignAladdinPressedBgHex());
+        sb.append(selector).append(":disabled {\n");
+        sb.append("    -fx-opacity: 0.5;\n");
+        sb.append("}\n");
+        sb.append(selector).append(":focused {\n");
+        sb.append("    -fx-focus-color: transparent;\n");
+        sb.append("    -fx-faint-focus-color: transparent;\n");
         sb.append("}\n");
     }
 

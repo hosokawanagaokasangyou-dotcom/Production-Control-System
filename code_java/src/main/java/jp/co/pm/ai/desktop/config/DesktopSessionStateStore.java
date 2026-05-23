@@ -1150,6 +1150,16 @@ public final class DesktopSessionStateStore {
         String s3bo = nzFallback(text(n, "stage3BorderHex"), d.stage3BorderHex());
         String s3h = nzFallback(text(n, "stage3HoverBgHex"), d.stage3HoverBgHex());
         String s3p = nzFallback(text(n, "stage3PressedBgHex"), d.stage3PressedBgHex());
+        boolean ca = optionalBoolean(n, "customizeAlignAladdinPlanButton", false);
+        double aar = optionalDouble(n, "alignAladdinBorderRadius", d.alignAladdinBorderRadius());
+        double aapv = optionalDouble(n, "alignAladdinPaddingV", d.alignAladdinPaddingV());
+        double aaph = optionalDouble(n, "alignAladdinPaddingH", d.alignAladdinPaddingH());
+        double aaf = optionalDouble(n, "alignAladdinFontPx", d.alignAladdinFontPx());
+        String aabg = nzFallback(text(n, "alignAladdinBgHex"), d.alignAladdinBgHex());
+        String aabo = nzFallback(text(n, "alignAladdinBorderHex"), d.alignAladdinBorderHex());
+        String aat = nzFallback(text(n, "alignAladdinTextHex"), d.alignAladdinTextHex());
+        String aah = nzFallback(text(n, "alignAladdinHoverBgHex"), d.alignAladdinHoverBgHex());
+        String aap = nzFallback(text(n, "alignAladdinPressedBgHex"), d.alignAladdinPressedBgHex());
         boolean cd = optionalBoolean(n, "customizeDialogButtons", false);
         double dpr = optionalDouble(n, "dialogPrimaryBorderRadius", d.dialogPrimaryBorderRadius());
         double dpv = optionalDouble(n, "dialogPrimaryPaddingV", d.dialogPrimaryPaddingV());
@@ -1199,6 +1209,16 @@ public final class DesktopSessionStateStore {
                 s3bo,
                 s3h,
                 s3p,
+                ca,
+                aar,
+                aapv,
+                aaph,
+                aaf,
+                aabg,
+                aabo,
+                aat,
+                aah,
+                aap,
                 cd,
                 dpr,
                 dpv,
@@ -1259,6 +1279,16 @@ public final class DesktopSessionStateStore {
         o.put("stage3BorderHex", p.stage3BorderHex());
         o.put("stage3HoverBgHex", p.stage3HoverBgHex());
         o.put("stage3PressedBgHex", p.stage3PressedBgHex());
+        o.put("customizeAlignAladdinPlanButton", p.customizeAlignAladdinPlanButton());
+        o.put("alignAladdinBorderRadius", p.alignAladdinBorderRadius());
+        o.put("alignAladdinPaddingV", p.alignAladdinPaddingV());
+        o.put("alignAladdinPaddingH", p.alignAladdinPaddingH());
+        o.put("alignAladdinFontPx", p.alignAladdinFontPx());
+        o.put("alignAladdinBgHex", p.alignAladdinBgHex());
+        o.put("alignAladdinBorderHex", p.alignAladdinBorderHex());
+        o.put("alignAladdinTextHex", p.alignAladdinTextHex());
+        o.put("alignAladdinHoverBgHex", p.alignAladdinHoverBgHex());
+        o.put("alignAladdinPressedBgHex", p.alignAladdinPressedBgHex());
         o.put("customizeDialogButtons", p.customizeDialogButtons());
         o.put("dialogPrimaryBorderRadius", p.dialogPrimaryBorderRadius());
         o.put("dialogPrimaryPaddingV", p.dialogPrimaryPaddingV());

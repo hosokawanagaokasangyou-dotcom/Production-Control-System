@@ -442,6 +442,36 @@
     -fx-opacity: 0.5;
 }
 
+.button.pm-align-aladdin-plan-button {
+    -fx-cursor: hand;
+    -fx-background-color: #4338ca;
+    -fx-border-color: #3730a3;
+    -fx-border-width: 1;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 8 14;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #ffffff;
+}
+
+.button.pm-align-aladdin-plan-button:hover {
+    -fx-background-color: #4f46e5;
+}
+
+.button.pm-align-aladdin-plan-button:pressed {
+    -fx-background-color: #312e81;
+}
+
+.button.pm-align-aladdin-plan-button:disabled {
+    -fx-opacity: 0.5;
+}
+
+.button.pm-align-aladdin-plan-button:focused {
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
 /* Plan result viewer (JSON): accordion source strip + side tab panes for vertical space */
 
 .pm-plan-result-viewer .label.pm-plan-result-viewer-hint-inline {

@@ -20,7 +20,7 @@
         <Insets bottom="8.0" left="12.0" right="12.0" top="8.0"/>
     </padding>
     <Label styleClass="pm-plan-result-viewer-hint-inline"
-           text="スライダーや色を変更すると、そのグループのカスタムが自動でオンになり、アプリに反映されます。チェックを外すと組み込み見た目に戻します。実行タブ／段階ボタンに加え、確認ダイアログおよびメインシェル「タブの並び」画面フッター（構成を適用 等）も、下のアコーディオン「ダイアログ・アラート」で編集できます。"/>
+           text="スライダーや色を変更すると、そのグループのカスタムが自動でオンになり、アプリに反映されます。チェックを外すと組み込み見た目に戻します。実行タブ／段階ボタンに加え、配台計画手動修正の「アラジン計画に合わせる」、確認ダイアログおよびメインシェル「タブの並び」画面フッター（構成を適用 等）も編集できます。"/>
     <BorderPane fx:id="previewRunPane" styleClass="pm-run-tab">
         <padding>
             <Insets bottom="8.0" left="8.0" right="8.0" top="8.0"/>
@@ -32,6 +32,7 @@
                 <Button mnemonicParsing="false" styleClass="pm-stage-run-button,pm-stage-run-1" text="段階1"/>
                 <Button mnemonicParsing="false" styleClass="pm-stage-run-button,pm-stage-run-2" text="段階2"/>
                 <Button mnemonicParsing="false" styleClass="pm-stage-run-button,pm-stage-run-3" text="段階3"/>
+                <Button mnemonicParsing="false" styleClass="pm-align-aladdin-plan-button" text="アラジン計画に合わせる"/>
             </HBox>
         </center>
     </BorderPane>
@@ -206,6 +207,60 @@
                             <HBox alignment="CENTER_LEFT" spacing="8.0">
                                 <Label prefWidth="140.0" text="押下"/>
                                 <ColorPicker fx:id="stage3PressedPicker"/>
+                            </HBox>
+                        </VBox>
+                    </content>
+                </TitledPane>
+                <TitledPane animated="true" text="アラジン計画に合わせる（配台計画手動修正）" expanded="false">
+                    <content>
+                        <VBox spacing="8.0">
+                            <padding>
+                                <Insets bottom="8.0" left="8.0" right="8.0" top="8.0"/>
+                            </padding>
+                            <CheckBox fx:id="customAlignAladdinCheck" text="このグループをカスタムする"/>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="角丸"/>
+                                <Slider fx:id="alignAladdinRadiusSlider" blockIncrement="0.5" max="24.0" min="0.0"
+                                        prefWidth="160.0" value="6.0"/>
+                                <Label fx:id="alignAladdinRadiusLabel" text="6"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="縦パディング"/>
+                                <Slider fx:id="alignAladdinPadVSlider" blockIncrement="0.5" max="32.0" min="0.0"
+                                        prefWidth="160.0" value="8.0"/>
+                                <Label fx:id="alignAladdinPadVLabel" text="8"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="横パディング"/>
+                                <Slider fx:id="alignAladdinPadHSlider" blockIncrement="0.5" max="40.0" min="0.0"
+                                        prefWidth="160.0" value="14.0"/>
+                                <Label fx:id="alignAladdinPadHLabel" text="14"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="フォント(px)"/>
+                                <Slider fx:id="alignAladdinFontSlider" blockIncrement="0.5" max="24.0" min="9.0"
+                                        prefWidth="160.0" value="12.0"/>
+                                <Label fx:id="alignAladdinFontLabel" text="12"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="背景"/>
+                                <ColorPicker fx:id="alignAladdinBgPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="枠"/>
+                                <ColorPicker fx:id="alignAladdinBorderPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="文字色"/>
+                                <ColorPicker fx:id="alignAladdinTextPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="ホバー背景"/>
+                                <ColorPicker fx:id="alignAladdinHoverPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="8.0">
+                                <Label prefWidth="140.0" text="押下背景"/>
+                                <ColorPicker fx:id="alignAladdinPressedPicker"/>
                             </HBox>
                         </VBox>
                     </content>
