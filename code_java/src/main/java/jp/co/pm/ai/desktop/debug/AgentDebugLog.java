@@ -90,15 +90,37 @@ public final class AgentDebugLog {
         }
 
         Path repo = AppPaths.resolveRepoRoot(u);
-        /*
-         * Nested clone: repo leaf is Production-Control-System → workspace .cursor is parent(repo)/.cursor
-         * (see agent-debug-ndjson-logging.mdc). Flat repo: repo/.cursor (parent would be drive root — wrong).
-         */
-        Path parent = repo.getParent();
-        if (parent != null && isProductionControlSystemRepoLeaf(repo)) {
-            return parent.resolve(".cursor").resolve(fileName).toAbsolutePath().normalize();
+        return resolveCursorDebugDirectoryRoot(u).resolve(".cursor").resolve(fileName).toAbsolutePath().normalize();
+    }
+
+    /**
+     * Cursor デバッグ NDJSON の {@code .cursor/} 親ディレクトリ。
+     * {@code PM_AI_WORKSPACE} を優先し、リポジトリ根が {@code code_java} または
+     * {@code Production-Control-System} のときはその親（モノレポ／ワークスペース根）を使う。
+     */
+    static Path resolveCursorDebugDirectoryRoot(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String ws = trim(u.get(AppPaths.KEY_PM_AI_WORKSPACE));
+        if (!ws.isEmpty()) {
+            try {
+                Path wp = Path.of(ws).toAbsolutePath().normalize();
+                if (Files.isDirectory(wp)) {
+                    return wp;
+                }
+            } catch (Throwable ignored) {
+                // fall through
+            }
         }
-        return repo.resolve(".cursor").resolve(fileName).toAbsolutePath().normalize();
+        Path repo = AppPaths.resolveRepoRoot(u);
+        Path parent = repo.getParent();
+        Path leaf = repo.getFileName();
+        if (parent != null && leaf != null) {
+            String name = leaf.toString();
+            if (isProductionControlSystemRepoLeaf(repo) || "code_java".equalsIgnoreCase(name)) {
+                return parent.toAbsolutePath().normalize();
+            }
+        }
+        return repo.toAbsolutePath().normalize();
     }
 
     private static boolean isProductionControlSystemRepoLeaf(Path repo) {
@@ -122,6 +144,15 @@ public final class AgentDebugLog {
         if (writeUtf8Append(primary, line)) {
             appendMirrors(primary, line, ui);
             return primary;
+        }
+        for (Path mirror : resolveMirrorTargets(primary, ui)) {
+            if (mirror == null) {
+                continue;
+            }
+            if (writeUtf8Append(mirror, line)) {
+                appendMirrors(mirror, line, ui);
+                return mirror;
+            }
         }
         String id =
                 sessionId == null || sessionId.isBlank()
@@ -399,7 +430,12 @@ public final class AgentDebugLog {
 
     /**
      * Python 子プロセス（段階2・配台試行）向けに {@code PM_AI_AGENT_DEBUG_SESSION} と
-     * {@code PM_AI_DEBUG_LOG} を解決して {@code env} に書き込む。環境変数タブで既に非空なら上書きしない。
+     * {@code PM_AI_DEBUG_LOG}（および WSL ミラー {@link AppPaths#KEY_PM_AI_DEBUG_LOG_MIRROR}）を
+     * 解決して {@code env} に書き込む。
+     *
+     * <p>環境変数タブの {@link AppPaths#KEY_PM_AI_CURSOR_DEBUG_LOG} が非空ならそれを正とする。
+     * それ以外は sessionId ごとの {@code .cursor/debug-&lt;session&gt;.log} を毎回再解決する（
+     * {@code childEnvForPython} の先行 overlay で別 session のパスが残る不具合を防ぐ）。
      *
      * <p>正本: {@code .cursor/rules/agent-debug-ndjson-logging.mdc}
      */
@@ -409,14 +445,50 @@ public final class AgentDebugLog {
         }
         String sid = resolveDispatchTrialSessionId(env);
         env.put("PM_AI_AGENT_DEBUG_SESSION", sid);
-        String dbg = trim(env.get("PM_AI_DEBUG_LOG"));
-        if (dbg.isEmpty()) {
-            dbg = trim(env.get(AppPaths.KEY_PM_AI_CURSOR_DEBUG_LOG));
+        Path resolved = resolveEffectiveNdjsonPathForChildEnv(env, sid);
+        env.put("PM_AI_DEBUG_LOG", resolved.toString());
+        overlayMirrorEnvForPython(env, resolved);
+    }
+
+    /**
+     * 子プロセス env 向けの NDJSON パス。{@code PM_AI_DEBUG_LOG} が map に残っていても
+     * （先行 overlay 由来）session に合わせて再解決する。{@link AppPaths#KEY_PM_AI_CURSOR_DEBUG_LOG}
+     * が非空ならそちらを優先。
+     */
+    static Path resolveEffectiveNdjsonPathForChildEnv(Map<String, String> env, String sessionId) {
+        String userCursorLog = trim(env.get(AppPaths.KEY_PM_AI_CURSOR_DEBUG_LOG));
+        if (!userCursorLog.isEmpty()) {
+            return Path.of(userCursorLog).toAbsolutePath().normalize();
         }
-        if (dbg.isEmpty()) {
-            env.put(
-                    "PM_AI_DEBUG_LOG",
-                    resolveNdjsonPath(env, sid).toAbsolutePath().toString());
+        Map<String, String> forResolve = new LinkedHashMap<>(env != null ? env : Map.of());
+        forResolve.remove("PM_AI_DEBUG_LOG");
+        return resolveNdjsonPath(forResolve, sessionId).toAbsolutePath().normalize();
+    }
+
+    /** Windows JVM から WSL ワークスペースへミラーする UNC パス（{@code \\wsl$\...}）。 */
+    static Path resolveWslUncMirrorPath(Path primaryWindowsPath) {
+        if (!isWindowsOs() || !wslUncMirrorEnabled() || primaryWindowsPath == null) {
+            return null;
+        }
+        String distro = resolveWslDistroName();
+        if (distro == null) {
+            return null;
+        }
+        String unc = buildWslUncPathString(primaryWindowsPath.normalize().toString(), distro);
+        return unc != null && !unc.isBlank() ? Path.of(unc) : null;
+    }
+
+    private static void overlayMirrorEnvForPython(Map<String, String> env, Path primary) {
+        if (env == null || primary == null) {
+            return;
+        }
+        String existing = trim(env.get(AppPaths.KEY_PM_AI_DEBUG_LOG_MIRROR));
+        if (!existing.isEmpty()) {
+            return;
+        }
+        Path unc = resolveWslUncMirrorPath(primary);
+        if (unc != null) {
+            env.put(AppPaths.KEY_PM_AI_DEBUG_LOG_MIRROR, unc.toString());
         }
     }
 }

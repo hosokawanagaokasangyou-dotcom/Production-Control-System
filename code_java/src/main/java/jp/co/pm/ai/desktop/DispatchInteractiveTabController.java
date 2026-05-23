@@ -93,6 +93,7 @@ import jp.co.pm.ai.desktop.dispatch.DispatchInteractiveRollUnitSupport;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialConsistency;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialShortages;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialShortages.DispatchQtyShortfallRow;
+import jp.co.pm.ai.desktop.dispatch.DispatchTimelineMetaMissShortfalls;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck.TaskKey;
 import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreview;
@@ -108,6 +109,8 @@ import jp.co.pm.ai.desktop.dispatch.Stage3DispatchQtyBalanceCheck;
 import jp.co.pm.ai.desktop.ui.TabularCellHighlight;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage2ColumnSupport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
+import jp.co.pm.ai.desktop.dispatch.ResultTaskUnassignedLoader;
+import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
@@ -1187,6 +1190,8 @@ public final class DispatchInteractiveTabController {
         shell.appendLog("[配台試行] Python 実行ファイル: " + trialPythonExe.toAbsolutePath().normalize());
 
         final ResultDispatchDocument trialInputSnapshot = doc.copy();
+        captureStage3TrialPlanQtySnapshotFromDocument(
+                trialInputSnapshot, snapshotDateAxisForTrialPlanQtyCapture(trialInputSnapshot));
         Stage owner = shell.getPrimaryStage();
         final Path simJson = overtimeSimulationJson;
 
@@ -1532,7 +1537,9 @@ public final class DispatchInteractiveTabController {
                     }
                     if (applyDispatchTrialShortfallJson) {
                         applyDispatchShortfallFromDisk(jsonPath);
-                        scheduleStage3TrialPlanQtySnapshotCapture();
+                        if (stage3TrialPlanQtySnapshot.isEmpty()) {
+                            scheduleStage3TrialPlanQtySnapshotCapture();
+                        }
                     } else {
                         clearDispatchShortfallUi();
                         if (docHasActualDispatchQtyColumn()) {
@@ -3180,6 +3187,30 @@ public final class DispatchInteractiveTabController {
                 return;
             }
         }
+        double snapPlan = stage3TrialSnapPlanForCell(wr.profileMap(), axis.get(dateIdx));
+        boolean planSlidAway = snapPlan > eps && planAmt <= eps && actualAmt <= eps;
+        boolean planMovedToDate =
+                snapPlan <= eps && (planAmt > eps || actualAmt > eps) && docHasActualDispatchQtyColumn();
+        if (planSlidAway || planMovedToDate) {
+            boolean stage3Revised =
+                    !planSlidAway
+                            && isStage3QtyRevisedAfterTrial(
+                                    wr.profileMap(), axis.get(dateIdx), planAmt, actualAmt, eps);
+            applyDispatchPlanActualQtyCellDisplayWithPlanSlide(
+                    cell,
+                    aladdinAmt,
+                    snapPlan,
+                    planAmt,
+                    actualAmt,
+                    eps,
+                    stage3PlanActualSingleLineDisplay(),
+                    stage3Revised,
+                    planSlidAway,
+                    planMovedToDate,
+                    dateQtyLineFilter);
+            tagDispatchDateQtyCell(cell, dispatchDateQtyMultilineCell());
+            return;
+        }
         boolean stage3Revised =
                 isStage3QtyRevisedAfterTrial(
                         wr.profileMap(), axis.get(dateIdx), planAmt, actualAmt, eps);
@@ -3228,15 +3259,40 @@ public final class DispatchInteractiveTabController {
 
     private void captureStage3TrialPlanQtySnapshot(
             List<Map<String, String>> profiles, List<LocalDate> axis) {
+        if (doc == null) {
+            return;
+        }
+        captureStage3TrialPlanQtySnapshotFromDocument(doc, profiles, axis);
+    }
+
+    /** 配台試行開始前の doc から段階2後（当日配台）スナップショットを取る。 */
+    private void captureStage3TrialPlanQtySnapshotFromDocument(
+            ResultDispatchDocument sourceDoc, List<LocalDate> axis) {
+        if (sourceDoc == null || axis == null || axis.isEmpty()) {
+            return;
+        }
+        List<Map<String, String>> profiles =
+                ResultDispatchPivot.distinctWideTaskProfiles(
+                        sourceDoc.columns(),
+                        sourceDoc.rows(),
+                        ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+        captureStage3TrialPlanQtySnapshotFromDocument(sourceDoc, profiles, axis);
+    }
+
+    private void captureStage3TrialPlanQtySnapshotFromDocument(
+            ResultDispatchDocument sourceDoc,
+            List<Map<String, String>> profiles,
+            List<LocalDate> axis) {
         stage3TrialPlanQtySnapshot.clear();
-        if (!docHasActualDispatchQtyColumn() || doc == null || profiles == null || axis == null) {
+        pendingStage3TrialSnapshotCapture = false;
+        if (sourceDoc == null || profiles == null || axis == null) {
             return;
         }
         for (Map<String, String> profile : profiles) {
             for (LocalDate day : axis) {
                 double plan =
                         ResultDispatchPivot.sumQuantityForProfileAndDateForWideMerge(
-                                doc.rows(),
+                                sourceDoc.rows(),
                                 profile,
                                 day,
                                 ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
@@ -3248,6 +3304,32 @@ public final class DispatchInteractiveTabController {
                 stage3TrialPlanQtySnapshot.put(key, plan);
             }
         }
+    }
+
+    private List<LocalDate> snapshotDateAxisForTrialPlanQtyCapture(ResultDispatchDocument snapshotDoc) {
+        if (!dateAxis.isEmpty()) {
+            return new ArrayList<>(dateAxis);
+        }
+        if (snapshotDoc != null) {
+            List<LocalDate> distinct = ResultDispatchPivot.distinctDates(snapshotDoc.rows());
+            if (!distinct.isEmpty()) {
+                return ResultDispatchPivot.dateRangeInclusive(distinct);
+            }
+        }
+        return computeDateAxisList();
+    }
+
+    private double stage3TrialSnapPlanForCell(Map<String, String> profile, LocalDate day) {
+        if (profile == null || day == null) {
+            return 0.0;
+        }
+        String key =
+                DispatchTrialShortages.wideShortfallKey(
+                        profile.get("依頼NO"),
+                        profile.get(ResultDispatchSchema.COL_MACHINE),
+                        day.toString());
+        Double snap = stage3TrialPlanQtySnapshot.get(key);
+        return snap != null ? snap : 0.0;
     }
 
     private boolean isStage3QtyRevisedAfterTrial(
@@ -3468,6 +3550,86 @@ public final class DispatchInteractiveTabController {
         return slots;
     }
 
+    /**
+     * 配台日スライド後: 旧日付は (段階2後)、新日付は (段階3後) のみ（(段階3前) は出さない）。
+     */
+    static List<Stage3QtyLineSlot> buildStage3QtyFixedLineSlotsWithPlanSlide(
+            double aladdinPlanAmt,
+            double snapPlanAmt,
+            double planAmt,
+            double actualAmt,
+            boolean stage3RevisedAfterTrial,
+            boolean planSlidAway,
+            boolean planMovedToDate,
+            double eps) {
+        List<Stage3QtyLineSlot> slots = new ArrayList<>(STAGE3_QTY_FIXED_LINE_COUNT);
+        slots.add(stage3QtyLineSlot(LABEL_ALADDIN_PLAN, aladdinPlanAmt, eps));
+        if (planSlidAway) {
+            slots.add(stage3QtyLineSlot(LABEL_STAGE2_PLAN, snapPlanAmt, eps));
+            slots.add(stage3QtyEmptyLineSlot());
+            return slots;
+        }
+        if (planMovedToDate) {
+            if (stage3RevisedAfterTrial) {
+                slots.add(stage3QtyEmptyLineSlot());
+                slots.add(stage3QtyLineSlot(LABEL_STAGE3_REVISED, planAmt, eps));
+            } else {
+                slots.add(stage3QtyEmptyLineSlot());
+                double afterAmt = actualAmt > eps ? actualAmt : planAmt;
+                slots.add(stage3QtyLineSlot(LABEL_STAGE3_ACTUAL, afterAmt, eps));
+            }
+            return slots;
+        }
+        return buildStage3QtyFixedLineSlots(
+                aladdinPlanAmt, planAmt, actualAmt, stage3RevisedAfterTrial, eps);
+    }
+
+    private void applyDispatchPlanActualQtyCellDisplayWithPlanSlide(
+            SpreadsheetCell cell,
+            double aladdinPlanAmt,
+            double snapPlanAmt,
+            double planAmt,
+            double actualAmt,
+            double eps,
+            boolean singleLineDisplay,
+            boolean stage3RevisedAfterTrial,
+            boolean planSlidAway,
+            boolean planMovedToDate,
+            DispatchInteractiveDateQtyLineFilterPrefs lineFilter) {
+        if (!singleLineDisplay) {
+            List<Stage3QtyLineSlot> slots =
+                    applyDateQtyLineFilterToSlots(
+                            buildStage3QtyFixedLineSlotsWithPlanSlide(
+                                    aladdinPlanAmt,
+                                    snapPlanAmt,
+                                    planAmt,
+                                    actualAmt,
+                                    stage3RevisedAfterTrial,
+                                    planSlidAway,
+                                    planMovedToDate,
+                                    eps),
+                            lineFilter);
+            setDispatchQtyCellDisplay(cell, slots, false);
+            return;
+        }
+        String qtxt =
+                filterDispatchQtyDisplayText(
+                        formatStage3FixedSlotsAsText(
+                                buildStage3QtyFixedLineSlotsWithPlanSlide(
+                                        aladdinPlanAmt,
+                                        snapPlanAmt,
+                                        planAmt,
+                                        actualAmt,
+                                        stage3RevisedAfterTrial,
+                                        planSlidAway,
+                                        planMovedToDate,
+                                        eps),
+                                true),
+                        lineFilter,
+                        true);
+        setDispatchQtyCellDisplay(cell, qtxt, true);
+    }
+
     static List<Stage3QtyLineSlot> applyDateQtyLineFilterToSlots(
             List<Stage3QtyLineSlot> slots, DispatchInteractiveDateQtyLineFilterPrefs filter) {
         if (slots == null || slots.isEmpty()) {
@@ -3486,6 +3648,8 @@ public final class DispatchInteractiveTabController {
             String line = slot.lineText();
             if (line.startsWith(LABEL_ALADDIN_PLAN)) {
                 out.add(filter.showAladdinPlan() ? slot : stage3QtyEmptyLineSlot());
+            } else if (line.startsWith(LABEL_STAGE2_PLAN)) {
+                out.add(filter.showStage3Plan() ? slot : stage3QtyEmptyLineSlot());
             } else if (line.startsWith(LABEL_STAGE3_PLAN)) {
                 out.add(filter.showStage3Plan() ? slot : stage3QtyEmptyLineSlot());
             } else if (line.startsWith(LABEL_STAGE3_ACTUAL) || line.startsWith(LABEL_STAGE3_REVISED)) {
@@ -3537,6 +3701,9 @@ public final class DispatchInteractiveTabController {
             String line, DispatchInteractiveDateQtyLineFilterPrefs filter) {
         if (line.startsWith(LABEL_ALADDIN_PLAN)) {
             return filter.showAladdinPlan();
+        }
+        if (line.startsWith(LABEL_STAGE2_PLAN)) {
+            return filter.showStage3Plan();
         }
         if (line.startsWith(LABEL_STAGE3_PLAN)) {
             return filter.showStage3Plan();
@@ -3880,23 +4047,47 @@ public final class DispatchInteractiveTabController {
 
     /** {@code 結果_配台表.json} と同じフォルダの {@code dispatch_trial_shortages.json} から未達行を読み UI に反映する。 */
     private void applyDispatchShortfallFromDisk(Path resultDispatchJson) {
-        if (resultDispatchJson == null) {
-            clearDispatchShortfallUi();
-            return;
+        List<DispatchQtyShortfallRow> rows = List.of();
+        lastDispatchShortageHints = List.of();
+        if (resultDispatchJson != null) {
+            Path shortagePath = resultDispatchJson.resolveSibling("dispatch_trial_shortages.json");
+            if (Files.isRegularFile(shortagePath)) {
+                try {
+                    DispatchTrialShortages.FullBundle fb =
+                            DispatchTrialShortages.readFull(shortagePath);
+                    rows = fb.dispatchQtyShortfall();
+                    lastDispatchShortageHints = List.copyOf(fb.shortageHints());
+                } catch (IOException e) {
+                    rows = List.of();
+                    lastDispatchShortageHints = List.of();
+                }
+            }
         }
-        Path shortagePath = resultDispatchJson.resolveSibling("dispatch_trial_shortages.json");
-        if (!Files.isRegularFile(shortagePath)) {
-            clearDispatchShortfallUi();
-            return;
+        rows = mergeDispatchQtyShortfallRowsUnique(
+                rows, DispatchTimelineMetaMissShortfalls.detectFromDocument(doc));
+        applyDispatchShortfallRows(rows);
+    }
+
+    private static List<DispatchQtyShortfallRow> mergeDispatchQtyShortfallRowsUnique(
+            List<DispatchQtyShortfallRow> primary, List<DispatchQtyShortfallRow> extra) {
+        Map<String, DispatchQtyShortfallRow> byKey = new LinkedHashMap<>();
+        if (primary != null) {
+            for (DispatchQtyShortfallRow r : primary) {
+                byKey.put(
+                        DispatchTrialShortages.wideShortfallKey(
+                                r.taskId(), r.machineName(), r.dispatchDateIso()),
+                        r);
+            }
         }
-        try {
-            DispatchTrialShortages.FullBundle fb = DispatchTrialShortages.readFull(shortagePath);
-            List<DispatchQtyShortfallRow> rows = fb.dispatchQtyShortfall();
-            lastDispatchShortageHints = List.copyOf(fb.shortageHints());
-            applyDispatchShortfallRows(rows);
-        } catch (IOException e) {
-            clearDispatchShortfallUi();
+        if (extra != null) {
+            for (DispatchQtyShortfallRow r : extra) {
+                byKey.putIfAbsent(
+                        DispatchTrialShortages.wideShortfallKey(
+                                r.taskId(), r.machineName(), r.dispatchDateIso()),
+                        r);
+            }
         }
+        return List.copyOf(byKey.values());
     }
 
     private void applyDispatchShortfallRows(List<DispatchQtyShortfallRow> rows) {
@@ -3952,10 +4143,9 @@ public final class DispatchInteractiveTabController {
 
         Label head =
                 new Label(
-                        "次の暦日で、タイムライン上の割付が目標メートルに届きませんでした。"
-                                + " 段階3（段階2同一）では同日未達は後ろ倒しの途中経過であり、"
-                                + " 配台できない理由は master の機械カレンダー未作成・勤怠未作成のみです。"
-                                + " 本一覧は従来モード等での参考表示です。");
+                        "次の暦日で、手動修正表の配台目標（当日配台数量）に対しタイムライン実績が不足しています。"
+                                + " 段階3では後日への後ろ倒し・カレンダー制約等で計画日未達になる場合があります。"
+                                + " 該当セルは赤表示され、本一覧と同一内容です。");
         head.setWrapText(true);
         head.setStyle("-fx-font-size: 13px;");
         BorderPane root = new BorderPane();

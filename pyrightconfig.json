@@ -1,0 +1,33 @@
+{
+  "include": [
+    "code/python",
+    "scripts",
+    ".cursor/hooks",
+    "tools"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/node_modules",
+    "manual/_vendor",
+    "code_java",
+    ".pm-ai-cache"
+  ],
+  "extraPaths": [
+    "code/python"
+  ],
+  "executionEnvironments": [
+    {
+      "root": "code/python"
+    },
+    {
+      "root": "scripts",
+      "extraPaths": ["../code/python"]
+    }
+  ],
+  "pythonVersion": "3.14",
+  "pythonPlatform": "Windows",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false,
+  "useLibraryCodeForTypes": true
+}

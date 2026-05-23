@@ -101,10 +101,31 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
             )
         snap = pc.interactive_trial_shortages_snapshot()
         md_snap = pc.interactive_trial_meters_done_snapshot()
+        plan_targets = pc.interactive_trial_plan_targets_snapshot()
+        shortfall_targets = plan_targets if plan_targets else (targets if targets else None)
         dispatch_qty_shortfall = pc.compute_interactive_trial_dispatch_qty_shortfall(
-            targets if targets else None,
+            shortfall_targets,
             md_snap if md_snap else None,
         )
+        _meta_miss = pc.interactive_trial_meta_miss_shortfall_snapshot()
+        if _meta_miss:
+            _seen_sf = {
+                (
+                    str(r.get("task_id") or ""),
+                    str(r.get("machine_name") or ""),
+                    str(r.get("dispatch_date") or ""),
+                )
+                for r in dispatch_qty_shortfall
+            }
+            for _row in _meta_miss:
+                _k = (
+                    str(_row.get("task_id") or ""),
+                    str(_row.get("machine_name") or ""),
+                    str(_row.get("dispatch_date") or ""),
+                )
+                if _k not in _seen_sf:
+                    dispatch_qty_shortfall.append(_row)
+                    _seen_sf.add(_k)
         s3_meta = {}
         try:
             s3_meta = pc.interactive_stage3_last_run_meta_snapshot()
@@ -114,6 +135,7 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
         _note_base = (
             "段階3配台試行（段階2同一条件）。"
             "致命: 機械カレンダー未作成・勤怠未作成・勤怠最終日までに割り切れない残タスク。"
+            "計画暦日未達は dispatch_qty_shortfall に載せる。"
             "勤怠日付の自動拡張は行わない。"
         )
         if _ot_sim:
