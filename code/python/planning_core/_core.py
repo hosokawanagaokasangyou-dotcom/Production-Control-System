@@ -101,6 +101,9 @@ _LAST_INTERACTIVE_TRIAL_PLAN_TARGETS_SNAPSHOT: dict[tuple[str, str, str, date], 
 _LAST_INTERACTIVE_TRIAL_META_MISS_SHORTFALL: list[dict] = []
 # 直近の配台試行メタ（不足 JSON の stage3 ブロック等へ載せる。単一フェーズ運用）
 _LAST_INTERACTIVE_STAGE3_META: dict = {}
+# _generate_plan_impl 実行中のみ: 段階3の day_start_floor が参照する targets / meters_done
+_PLAN_IMPL_INTERACTIVE_DISPATCH_TARGETS: dict | None = None
+_PLAN_IMPL_INTERACTIVE_TRIAL_METERS_DONE: dict | None = None
 
 
 def interactive_stage3_last_run_meta_snapshot() -> dict:
@@ -26732,6 +26735,16 @@ def _interactive_row_needs_dispatch_date_slide(
     if plan_qty <= eps:
         return False
     if not _interactive_row_has_timeline_meta(row):
+        if meters_done:
+            plan_key = (tid, proc, mach, plan_dd)
+            try:
+                done_plan = float(meters_done.get(plan_key, 0.0) or 0.0)
+            except (TypeError, ValueError):
+                done_plan = 0.0
+            if done_plan + eps >= plan_qty:
+                return False
+            if done_plan > eps:
+                return False
         return True
     st_day_s = _iso_date_from_dispatch_table_datetime_cell(row.get("加工開始日時"))
     if st_day_s:
@@ -27659,9 +27672,6 @@ def compute_interactive_trial_dispatch_qty_shortfall(
             )
     filtered: list[dict] = []
     for row in out:
-        if postpone_only:
-            filtered.append(row)
-            continue
         t3 = (
             _interactive_norm_cell(row.get("task_id")),
             _interactive_norm_cell(row.get("process")),
@@ -30393,8 +30403,32 @@ def _trial_order_flow_day_start_floor(
     ):
         if isinstance(est, time):
             floor = max(floor, datetime.combine(current_date, est))
-    if current_date == macro_run_date and floor < macro_now_dt:
+    skip_macro_now = _interactive_stage3_skip_macro_now_start_floor(task, current_date)
+    if current_date == macro_run_date and floor < macro_now_dt and not skip_macro_now:
         floor = macro_now_dt
+    # #region agent log
+    if (
+        _interactive_norm_cell(str(task.get("task_id") or "")) == "Y5-20"
+        and isinstance(current_date, date)
+        and current_date.isoformat() == "2026-05-27"
+    ):
+        try:
+            from planning_core import agent_debug_ndjson as _adn
+
+            _adn.append_structured(
+                "F",
+                "_core.py:_trial_order_flow_day_start_floor",
+                "Y5-20 day_start_floor on 2026-05-27",
+                {
+                    "floor": floor.isoformat(sep=" "),
+                    "macro_now_dt": macro_now_dt.isoformat(sep=" "),
+                    "macro_run_date": str(macro_run_date),
+                    "skip_macro_now": skip_macro_now,
+                },
+            )
+        except Exception:
+            pass
+    # #endregion
     return floor
 
 
@@ -32210,6 +32244,31 @@ def _interactive_stage3_unmet_cap_m_on_date(
     return max(0.0, cap_m - done_m)
 
 
+def _interactive_stage3_skip_macro_now_start_floor(
+    task: dict,
+    current_date: date,
+) -> bool:
+    """
+    段階3: JSON 暦日キャップが未達の依頼は、data_extract 由来の macro_now_dt で
+    当日開始下限を切り上げない（計画暦日どおり配台試行する）。
+    """
+    targets = _PLAN_IMPL_INTERACTIVE_DISPATCH_TARGETS
+    meters_done = _PLAN_IMPL_INTERACTIVE_TRIAL_METERS_DONE
+    if not (_interactive_dispatch_trial_env_active() and targets):
+        return False
+    if (
+        _interactive_stage3_unmet_cap_m_on_date(
+            task,
+            current_date,
+            interactive_dispatch_targets=targets,
+            interactive_trial_meters_done=meters_done,
+        )
+        > 1e-9
+    ):
+        return True
+    return False
+
+
 def _interactive_trial_meters_done_by_timeline_calendar_date(
     timeline_events: list,
     task_queue: list,
@@ -32280,6 +32339,8 @@ def _trial_order_first_schedule_pass(
     interactive_dispatch_targets: dict | None = None,
     interactive_trial_pair_dates: dict | None = None,
     interactive_trial_meters_done: dict | None = None,
+    *,
+    cap_drain_only: bool = False,
 ) -> bool:
     """
     ①当日候補を配台試行順の昇順に並きる（1 パス分）。
@@ -32357,7 +32418,18 @@ def _trial_order_first_schedule_pass(
         interactive_trial_pair_dates=interactive_trial_pair_dates,
     )
     if not eligible:
-        return False
+        if (
+            cap_drain_only
+            and _interactive_dispatch_trial_env_active()
+            and interactive_dispatch_targets
+        ):
+            eligible = [
+                t
+                for t in tasks_today
+                if float(t.get("remaining_units") or 0) > 1e-12
+            ]
+        if not eligible:
+            return False
     eligible_sorted = sorted(
         eligible,
         key=lambda t: (
@@ -32889,14 +32961,23 @@ def _trial_order_first_schedule_pass(
         )
 
     pass_made = False
-    if (
+    if cap_drain_only and (
         _interactive_dispatch_trial_env_active()
         and interactive_dispatch_targets
     ):
+        _cap_drain_source = (
+            [
+                t
+                for t in tasks_today
+                if float(t.get("remaining_units") or 0) > 1e-12
+            ]
+            if cap_drain_only
+            else list(phase1_tasks)
+        )
         _cap_drain_tasks = sorted(
             [
                 t
-                for t in list(phase1_tasks)
+                for t in _cap_drain_source
                 if _interactive_stage3_unmet_cap_m_on_date(
                     t,
                     current_date,
@@ -32909,6 +32990,29 @@ def _trial_order_first_schedule_pass(
         )
         _cap_drain_ids = {id(t) for t in _cap_drain_tasks}
         for _ct in _cap_drain_tasks:
+            # #region agent log
+            if _interactive_norm_cell(str(_ct.get("task_id") or "")) == "Y5-20":
+                try:
+                    from planning_core import agent_debug_ndjson as _adn
+
+                    _adn.append_structured(
+                        "G",
+                        "_core.py:_trial_order_first_schedule_pass:cap_drain",
+                        "Y5-20 cap_drain order",
+                        {
+                            "current_date": str(current_date),
+                            "unmet_m": _interactive_stage3_unmet_cap_m_on_date(
+                                _ct,
+                                current_date,
+                                interactive_dispatch_targets=interactive_dispatch_targets,
+                                interactive_trial_meters_done=interactive_trial_meters_done,
+                            ),
+                            "cap_drain_task_count": len(_cap_drain_tasks),
+                        },
+                    )
+                except Exception:
+                    pass
+            # #endregion
             if _drain_rolls_for_task(_ct):
                 pass_made = True
         if _cap_drain_ids:
@@ -32917,7 +33021,19 @@ def _trial_order_first_schedule_pass(
             ]
             phase1_rest = [t for t in phase1_rest if id(t) not in _cap_drain_ids]
             phase1_tasks = [t for t in phase1_tasks if id(t) not in _cap_drain_ids]
+        return pass_made
     if phase2_tasks:
+        if (
+            _interactive_dispatch_trial_env_active()
+            and interactive_dispatch_targets
+            and phase1_rest
+        ):
+            # 段階3: B2 ラウンドロビン（1ロールずつ）だと同一機械で未達大の依頼と交替し
+            # 開始が遅れる。phase1_rest は暦日キャップ優先で一括ドレインする。
+            for task in sorted(phase1_rest, key=_phase1_sort_key):
+                if _drain_rolls_for_task(task):
+                    pass_made = True
+            phase1_rest = []
         merged_b2 = sorted(
             phase1_interleave + phase2_tasks,
             key=_phase1_sort_key,
@@ -35100,6 +35216,8 @@ def _generate_plan_impl(
     global _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT, _LAST_INTERACTIVE_STAGE3_META
     global _LAST_INTERACTIVE_TRIAL_META_MISS_SHORTFALL
     global _LAST_INTERACTIVE_TRIAL_PLAN_TARGETS_SNAPSHOT
+    global _PLAN_IMPL_INTERACTIVE_DISPATCH_TARGETS, _PLAN_IMPL_INTERACTIVE_TRIAL_METERS_DONE
+    global _PLAN_IMPL_INTERACTIVE_DISPATCH_TARGETS, _PLAN_IMPL_INTERACTIVE_TRIAL_METERS_DONE
     if interactive_relax_intraday or interactive_dispatch_targets is not None:
         _INTERACTIVE_TRIAL_OP_SHORTAGE.clear()
         _INTERACTIVE_TRIAL_AS_SHORTAGE.clear()
@@ -35657,6 +35775,12 @@ def _generate_plan_impl(
     _due_shift_cap_warned_tids: set[str] = set()
     _interactive_trial_pair_dates = None
     _interactive_trial_meters_done: dict[tuple[str, str, str, date], float] = {}
+    _PLAN_IMPL_INTERACTIVE_DISPATCH_TARGETS = (
+        interactive_dispatch_targets
+        if _interactive_dispatch_trial_env_active()
+        else None
+    )
+    _PLAN_IMPL_INTERACTIVE_TRIAL_METERS_DONE = _interactive_trial_meters_done
     if (
         _interactive_dispatch_trial_env_active()
         and not _interactive_stage2_parity_active()
@@ -35795,6 +35919,35 @@ def _generate_plan_impl(
                     )
             
             _sched_max_passes = max(96, max(1, len(tasks_today)) * 15)
+            if (
+                _interactive_dispatch_trial_env_active()
+                and interactive_dispatch_targets
+                and STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST
+            ):
+                _trial_order_first_schedule_pass(
+                    current_date,
+                    tasks_today,
+                    task_queue,
+                    daily_status,
+                    machine_avail_dt,
+                    avail_dt,
+                    timeline_events,
+                    skills_dict,
+                    members,
+                    req_map,
+                    need_rules,
+                    surplus_map,
+                    global_priority_override,
+                    macro_run_date,
+                    macro_now_dt,
+                    _need_headcount_logged_orders,
+                    team_combo_presets,
+                    dispatch_interval_mirror=_dispatch_interval_mirror,
+                    interactive_dispatch_targets=interactive_dispatch_targets,
+                    interactive_trial_pair_dates=_interactive_trial_pair_dates,
+                    interactive_trial_meters_done=_interactive_trial_meters_done,
+                    cap_drain_only=True,
+                )
             _sched_pi = 0
             while _sched_pi < _sched_max_passes:
                 _sched_pi += 1
@@ -38618,5 +38771,9 @@ def _generate_plan_impl(
         }
         if member_schedule_json_path:
             out_paths["member_schedule_json"] = os.path.abspath(member_schedule_json_path)
+        _PLAN_IMPL_INTERACTIVE_DISPATCH_TARGETS = None
+        _PLAN_IMPL_INTERACTIVE_TRIAL_METERS_DONE = None
         return out_paths
+    _PLAN_IMPL_INTERACTIVE_DISPATCH_TARGETS = None
+    _PLAN_IMPL_INTERACTIVE_TRIAL_METERS_DONE = None
     return None

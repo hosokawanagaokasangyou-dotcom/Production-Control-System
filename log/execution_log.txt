@@ -1561,3 +1561,1060 @@
 2026-05-23 23:58:15,617 - INFO - 『master.xlsm」からスキルと設備覝件(need)を読み込みました。
 2026-05-23 23:58:15,630 - INFO - 段階2 計測: load_skills_and_needs 0.46秒
 2026-05-23 23:58:15,657 - INFO - 組み合わせ表: 工程+機械キー 15 種類・編集行 117 を配台プリセットとして読み込みました。
+2026-05-24 06:45:39,440 - WARNING - Gemini: マクロブック同階層の「gemini_credentials.encrypted.json」は見つかりません。
+2026-05-24 06:45:39,457 - WARNING - Gemini API キーは未設定です。GEMINI_CREDENTIALS_JSON で証明書ファイルを指定するか、マクロ実行ブックと同一フォルダ、または PM_AI_WORKSPACE に「gemini_credentials.encrypted.json」を配置してください。 備考の AI 解析等はスキップされした。 参考型: gemini_credentials.example.json / 参照用/python/encrypt_gemini_credentials.py（暗号化）。
+2026-05-24 06:45:39,616 - INFO - Excel: xl/sharedStrings.xml を追加するため '/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx' を openpyxl で再保存しました。
+2026-05-24 06:45:39,733 - INFO - 配台試行ルール: JSON '/mnt/c/工程管理AIプロジェクト_JAVA/code/json/stage1_exclude_rules.json' から 44 件（Excel の「設定_配台不要工程」read_excel はスキップ）。
+2026-05-24 06:45:39,892 - INFO - master.xlsm speed: シート 'speed' から 16 件の (工程名, 機械名) 速度を読み込みました。
+2026-05-24 06:45:39,906 - INFO - 配台シート読込: master.xlsm「speed」の速度を 61 行に適用（マスタ未該当 5 行は加工速度セルを変更しませんでした）。
+2026-05-24 06:45:39,926 - INFO - 計画タスク入力: PM_AI_PLAN_INPUT_PATH='/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx' を読み込みました。
+2026-05-24 06:45:39,939 - WARNING - PM_AI_TASK_INPUT_SOURCE_DIR is not a directory: '\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ'
+2026-05-24 06:45:40,918 - INFO - 工場稼働枠: master.xlsm メイン A12/B12 を採用 → 08:00 ～ 19:00（結果_* の日内グリッド・配台枠）
+2026-05-24 06:45:40,955 - INFO - 設定シート「設定」A3:A26: トレース用依頼NOは無し（空またはシート無し）
+2026-05-24 06:45:40,965 - INFO - 配台トレース: 対象なし（[配台トレース …] ログは出ません）
+2026-05-24 06:45:41,102 - INFO - skillsシート: 2段ヘッダ形式で読み込みました（工程+機械=16列, メンバー=7人）。
+2026-05-24 06:45:41,126 - INFO - need シート: 配台時追加人数行を検出（Excel行≈5）。列ととの上限を読み込みました。
+2026-05-24 06:45:41,139 - INFO - need人数マスタ: /mnt/c/工程管理AIプロジェクト_JAVA/code/master.xlsm の need シートを読み込み（skills と同一 ExcelFile で開いた直後。need 専用ディスクキャッシュは無し・AI json とは無関係）。
+2026-05-24 06:45:41,149 - INFO - need列サマリ combo='EC+EC機\u3000湖南' 基本必須人数=2 配台時追加人数上限=0
+2026-05-24 06:45:41,161 - INFO - need列サマリ combo='EC+SEC機\u3000湖南' 基本必須人数=3 配台時追加人数上限=0
+2026-05-24 06:45:41,173 - INFO - need列サマリ combo='SEC+SEC機\u3000湖南' 基本必須人数=3 配台時追加人数上限=0
+2026-05-24 06:45:41,183 - INFO - need列サマリ combo='スリット+スリット機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:45:41,192 - INFO - need列サマリ combo='スライス+スライス機1\u3000湖南' 基本必須人数=2 配台時追加人数上限=0
+2026-05-24 06:45:41,204 - INFO - need列サマリ combo='エンボス+エンボス\u3000湖南' 基本必須人数=2 配台時追加人数上限=0
+2026-05-24 06:45:41,213 - INFO - need列サマリ combo='接続+熱融着機\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:45:41,226 - INFO - need列サマリ combo='熱融着+熱融着機\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:45:41,236 - INFO - need列サマリ combo='検査+熱融着機\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:45:41,251 - INFO - need列サマリ combo='接続+スリット機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:45:41,264 - INFO - need列サマリ combo='接続+スライス機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:45:41,273 - INFO - need列サマリ combo='分割+スライス機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:45:41,286 - INFO - need列サマリ combo='分割+エンボス\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:45:41,298 - INFO - need列サマリ combo='分割+スリット機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:45:41,309 - INFO - need列サマリ combo='分割+EC機\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:45:41,325 - INFO - need列サマリ combo='巻返し+スリット機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:45:41,345 - INFO - need 特別指定ルール: 2 件（工程名+機械名キー）。
+2026-05-24 06:45:41,360 - INFO - 『master.xlsm」からスキルと設備覝件(need)を読み込みました。
+2026-05-24 06:45:41,370 - INFO - 段階2 計測: load_skills_and_needs 0.38秒
+2026-05-24 06:45:41,398 - INFO - 組み合わせ表: 工程+機械キー 15 種類・編集行 117 を配台プリセットとして読み込みました。
+2026-05-24 06:45:44,170 - INFO - 段階3配台試行: 機械カレンダーは存在しますが、skills の設備列と一致する列がありません。 占有ブロックは空として続行します。
+2026-05-24 06:45:44,191 - INFO - 段階2 計測: load_team_combination_presets 2.82秒
+2026-05-24 06:45:44,212 - INFO - マスタ「設定_機械_日次始業準備」: 機械 12 件の日次始業準備（分）を読み込みました（必要人数指定 12 件）。
+2026-05-24 06:45:44,232 - INFO - マスタ「設定_依頼切替前後時間」: 依頼切替準備 12 件・休憩再開準備 15 件・後始末 12 件・依頼間余裕 15 件（工程+機械 / 機械のみの内訳はログのみ）。
+2026-05-24 06:45:44,579 - INFO - マスタ「設定_依頼切替前後時間」: 依頼切替準備 26 件・休憩再開準備 26 件・後始末 26 件・依頼間余裕 0 件（工程+機械 / 機械のみの内訳はログのみ）。
+2026-05-24 06:45:44,596 - INFO - マスタ「設定_依頼切替前後時間」: 同フォルダの国分master.xlsm から不足分 78 件を補完しました。
+2026-05-24 06:45:44,612 - INFO - 段階2 計測: load_machine_calendar_and_master_settings 0.42秒
+2026-05-24 06:45:46,492 - INFO - 定常枠: master メイン A15=08:25（結果シートの定常外着色・出勤簿生成の参照）
+2026-05-24 06:45:46,513 - INFO - need配台時追加人数: メイン割付は基本必須人数のみ。余力は全シミュレーション後」未割当かつスキル保有社をサブに追記しました。（メインで増員探索れる従来挙動: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1）
+2026-05-24 06:45:46,761 - INFO - 段階2: PM_AI_STAGE2_SKIP_TODAY_DISPATCH により当日は配台せず、計画開始日を 2026-05-25 にずらしました。
+2026-05-24 06:45:46,776 - INFO - 計画基準日時: 2026/05/24 06:45:46（現在時刻フォールバック）
+2026-05-24 06:45:46,786 - INFO - 段階2 計測: extract_data_extraction_datetime 2.17秒
+2026-05-24 06:45:46,850 - INFO - 「master.xlsm」の各メンバーの勤怠シートを読み込みました。
+2026-05-24 06:45:46,864 - INFO - 勤怠列: AI 入力は「備考」のみ。備考は空の日は「休暇区分」（公休・後休・他拠点勤務など）を reason に反映しました。
+2026-05-24 06:45:46,875 - INFO - 勤怠列: 任意「残業(分)」は退勤上限の時刻、または定時退勤からの延長分（1〜720 の整数＝分）を指定できます（全日休み行では無視）。
+2026-05-24 06:45:46,908 - INFO - Gemini API キーが未設定のため備考AI解析をスキップしました。
+2026-05-24 06:45:46,957 - INFO - 段階2 計測: load_attendance_and_analyze 0.17秒
+2026-05-24 06:45:47,026 - INFO - 段階2 計測: analyze_global_priority_and_task_remarks 0.07秒
+2026-05-24 06:45:47,047 - INFO - task_queue 構築完了: total=58（配台試行によりスキップ 8 行）
+2026-05-24 06:45:47,114 - INFO - 段階2: OOXML に sharedStrings.xml が無いブックのため、配台シート一括書込（openpyxl）をスキップ（専用UI等の xlsx）
+2026-05-24 06:45:47,127 - INFO - 配台試行順番: 「配台試行順番」列の値をしのまま使用しました（全 58 行）。
+2026-05-24 06:45:47,160 - INFO - DEBUG[task=Y5-20] queue基準: start_date_req=2026-05-27 due_basis=2026-05-29 answer_due=2026-05-29 specified_due=2026-05-29 specified_due_ov=None due_source=answer_due priority=999 in_progress=False remark=False
+2026-05-24 06:45:47,175 - INFO - 段階2 計測: build_task_queue_and_prepare_dispatch 0.15秒
+2026-05-24 06:45:47,187 - INFO - DISPATCH_INTERVAL_MIRROR_ENFORCE: 設備・人の占有を区間ミラーで追跡しした（無効化は 設定_環境変数 等で DISPATCH_INTERVAL_MIRROR_ENFORCE=0）。
+2026-05-24 06:45:47,201 - INFO - 依頼NO直列配台: 無効。start_date を満たれ全行は当日候補になり」配台試行順・設備ルールで順庝付けしした。
+2026-05-24 06:45:47,215 - INFO - need人数(試行順優先フロー) order=3 task=Y5-27 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:47,230 - INFO - need人数(試行順優先フロー) order=3 task=Y5-27 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:47,250 - INFO - need人数(試行順優先フロー) order=25 task=C5-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:47,269 - INFO - need人数(試行順優先フロー) order=25 task=C5-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:47,286 - INFO - need人数(試行順優先フロー) order=26 task=W5-16 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:47,302 - INFO - need人数(試行順優先フロー) order=26 task=W5-16 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:47,314 - INFO - need人数(試行順優先フロー) order=28 task=W5-21 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:47,325 - INFO - need人数(試行順優先フロー) order=28 task=W5-21 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:47,342 - INFO - need人数(試行順優先フロー) order=30 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:47,353 - INFO - need人数(試行順優先フロー) order=30 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:47,372 - INFO - need人数(試行順優先フロー) order=2 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:47,387 - INFO - need人数(試行順優先フロー) order=2 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:47,403 - INFO - need人数(試行順優先フロー) order=4 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:47,418 - INFO - need人数(試行順優先フロー) order=4 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:47,434 - INFO - need人数(試行順優先フロー) order=7 task=E5-4 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:47,450 - INFO - need人数(試行順優先フロー) order=7 task=E5-4 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:47,466 - INFO - need人数(試行順優先フロー) order=9 task=W5-20 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:47,480 - INFO - need人数(試行順優先フロー) order=9 task=W5-20 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:47,496 - INFO - need人数(試行順優先フロー) order=10 task=E5-4 工程/機械=巻返し/スリット機1　湖南 req_num=1 [req_map['巻返し+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['巻返し+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:47,511 - INFO - need人数(試行順優先フロー) order=10 task=E5-4 工程/機械=巻返し/スリット機1　湖南 req_num=1 [req_map['巻返し+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['巻返し+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:47,525 - INFO - DEBUG[day=2026-05-27] avail_members=5 tasks_today=9 (task=Y5-20 含む=True)
+2026-05-24 06:45:47,538 - INFO - need人数(試行順優先フロー) order=1 task=W5-18 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:45:47,554 - INFO - need人数(試行順優先フロー) order=1 task=W5-18 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:45:47,566 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:45:47,580 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:45:47,595 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=3人
+2026-05-24 06:45:47,610 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=3人
+2026-05-24 06:45:47,629 - INFO - need人数(試行順優先フロー) order=8 task=W5-18 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:45:47,644 - INFO - need人数(試行順優先フロー) order=8 task=W5-18 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:45:47,659 - INFO - need人数(試行順優先フロー) order=11 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=5人
+2026-05-24 06:45:47,670 - INFO - need人数(試行順優先フロー) order=11 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=5人
+2026-05-24 06:45:47,687 - INFO - need人数(試行順優先フロー) order=13 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=5人
+2026-05-24 06:45:47,701 - INFO - need人数(試行順優先フロー) order=15 task=V5-9 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:45:47,716 - INFO - need人数(試行順優先フロー) order=15 task=V5-9 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:45:47,728 - INFO - need人数(試行順優先フロー) order=13 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=5人
+2026-05-24 06:45:47,743 - INFO - need人数(試行順優先フロー) order=13 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=5人
+2026-05-24 06:45:47,757 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:45:47,773 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:45:47,985 - INFO - need人数(試行順優先フロー) order=13 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=5人
+2026-05-24 06:45:48,007 - INFO - DEBUG[day=2026-05-28] avail_members=6 tasks_today=9 (task=Y5-20 含む=True)
+2026-05-24 06:45:48,022 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:45:48,046 - INFO - need人数(試行順優先フロー) order=11 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:48,077 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:48,097 - INFO - need人数(試行順優先フロー) order=13 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:48,112 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:48,133 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:48,153 - INFO - need人数(試行順優先フロー) order=14 task=Y5-17 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:48,172 - INFO - need人数(試行順優先フロー) order=14 task=Y5-17 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:48,200 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:48,220 - INFO - need人数(試行順優先フロー) order=16 task=C5-1 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:48,236 - INFO - need人数(試行順優先フロー) order=16 task=C5-1 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:48,256 - WARNING - 段階2: 依頼NO=C5-1 日付=2026-05-28 工程/機械=EC/EC機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 3 人いしたは」設備の加工開始下限=2026-05-28 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-28 17:00 占有キー=EC機 湖南
+2026-05-24 06:45:48,273 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:48,287 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:48,306 - INFO - DEBUG[day=2026-05-29] avail_members=6 tasks_today=7 (task=Y5-20 含む=True)
+2026-05-24 06:45:48,324 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:45:48,346 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:48,369 - INFO - need人数(試行順優先フロー) order=16 task=C5-1 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:48,388 - INFO - need人数(試行順優先フロー) order=17 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:48,408 - INFO - need人数(試行順優先フロー) order=18 task=W5-16 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:48,422 - INFO - need人数(試行順優先フロー) order=17 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:48,436 - INFO - need人数(試行順優先フロー) order=17 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:48,449 - INFO - need人数(試行順優先フロー) order=18 task=W5-16 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:48,467 - INFO - need人数(試行順優先フロー) order=17 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:48,487 - INFO - need人数(試行順優先フロー) order=20 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:48,501 - INFO - need人数(試行順優先フロー) order=20 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:48,522 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:48,538 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:48,553 - INFO - DEBUG[day=2026-05-30] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:45:48,565 - INFO - DEBUG[day=2026-05-31] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:45:48,578 - INFO - DEBUG[day=2026-06-01] avail_members=6 tasks_today=6 (task=Y5-20 含む=True)
+2026-05-24 06:45:48,592 - INFO - need人数(試行順優先フロー) order=20 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:48,616 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:48,630 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:48,652 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:48,669 - INFO - need人数(試行順優先フロー) order=31 task=W5-17 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:48,684 - INFO - need人数(試行順優先フロー) order=31 task=W5-17 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:48,701 - INFO - need人数(試行順優先フロー) order=19 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:48,719 - INFO - need人数(試行順優先フロー) order=19 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:48,736 - INFO - need人数(試行順優先フロー) order=19 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:48,750 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:48,771 - INFO - need人数(試行順優先フロー) order=22 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:48,794 - INFO - need人数(試行順優先フロー) order=22 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:48,815 - INFO - need人数(試行順優先フロー) order=23 task=Y5-38 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:48,834 - INFO - need人数(試行順優先フロー) order=23 task=Y5-38 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:48,850 - INFO - need人数(試行順優先フロー) order=39 task=A6-1 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:48,864 - INFO - need人数(試行順優先フロー) order=39 task=A6-1 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:48,879 - INFO - need人数(試行順優先フロー) order=40 task=Y6-1 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:48,894 - INFO - need人数(試行順優先フロー) order=40 task=Y6-1 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:48,914 - INFO - need人数(試行順優先フロー) order=24 task=JR260503 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:48,931 - INFO - need人数(試行順優先フロー) order=24 task=JR260503 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:48,990 - INFO - need人数(試行順優先フロー) order=29 task=JR260503 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:49,009 - INFO - need人数(試行順優先フロー) order=29 task=JR260503 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:49,033 - INFO - need人数(試行順優先フロー) order=32 task=PN06-01 工程/機械=EC/SEC機　湖南 req_num=2 [need特別指定2 [機械名'SEC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,052 - INFO - need人数(試行順優先フロー) order=32 task=PN06-01 工程/機械=EC/SEC機　湖南 req_num=2 [need特別指定2 [機械名'SEC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,108 - INFO - need人数(試行順優先フロー) order=33 task=JR260601 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,129 - INFO - need人数(試行順優先フロー) order=33 task=JR260601 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,169 - INFO - need人数(試行順優先フロー) order=34 task=JR260601 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:49,184 - INFO - need人数(試行順優先フロー) order=34 task=JR260601 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:49,202 - INFO - need人数(試行順優先フロー) order=37 task=JR260602 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,222 - INFO - need人数(試行順優先フロー) order=37 task=JR260602 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,334 - INFO - need人数(試行順優先フロー) order=38 task=JR260602 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:49,354 - INFO - need人数(試行順優先フロー) order=38 task=JR260602 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:49,399 - INFO - need人数(試行順優先フロー) order=41 task=Y5-39 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,416 - INFO - need人数(試行順優先フロー) order=41 task=Y5-39 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,430 - INFO - need人数(試行順優先フロー) order=42 task=Y5-40 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,443 - INFO - need人数(試行順優先フロー) order=43 task=Y5-41 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,459 - INFO - need人数(試行順優先フロー) order=42 task=Y5-40 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,473 - INFO - need人数(試行順優先フロー) order=42 task=Y5-40 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,490 - INFO - need人数(試行順優先フロー) order=43 task=Y5-41 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,508 - INFO - need人数(試行順優先フロー) order=42 task=Y5-40 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,528 - INFO - need人数(試行順優先フロー) order=45 task=Y6-2 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,546 - INFO - need人数(試行順優先フロー) order=45 task=Y6-2 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,561 - INFO - need人数(試行順優先フロー) order=46 task=Y5-37 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,580 - INFO - need人数(試行順優先フロー) order=46 task=Y5-37 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,600 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:49,615 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:45:49,634 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:45:49,648 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:45:49,667 - INFO - need人数(試行順優先フロー) order=46 task=Y5-37 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:49,685 - INFO - DEBUG[day=2026-06-06] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:45:49,699 - INFO - DEBUG[day=2026-06-07] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:45:49,714 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:45:49,738 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:45:49,760 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:45:49,785 - INFO - need人数(試行順優先フロー) order=48 task=Y6-6 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:49,805 - INFO - need人数(試行順優先フロー) order=48 task=Y6-6 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:49,821 - INFO - need人数(試行順優先フロー) order=49 task=Y6-7 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:49,842 - INFO - need人数(試行順優先フロー) order=49 task=Y6-7 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:49,874 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:45:49,892 - INFO - need人数(試行順優先フロー) order=44 task=A6-1 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:49,909 - INFO - need人数(試行順優先フロー) order=44 task=A6-1 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:49,931 - INFO - need人数(試行順優先フロー) order=47 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:49,949 - INFO - need人数(試行順優先フロー) order=47 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:49,965 - INFO - need人数(試行順優先フロー) order=50 task=Y6-8 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:49,988 - INFO - need人数(試行順優先フロー) order=50 task=Y6-8 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:50,007 - INFO - need人数(試行順優先フロー) order=51 task=Y6-3 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:50,024 - INFO - need人数(試行順優先フロー) order=51 task=Y6-3 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:50,042 - WARNING - 段階2: 依頼NO=Y6-3 日付=2026-06-10 工程/機械=接続/熱融着機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 6 人いしたは」設備の加工開始下限=2026-06-10 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-06-10 17:00 占有キー=熱融着機 湖南
+2026-05-24 06:45:50,057 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:50,073 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:50,098 - INFO - need人数(試行順優先フロー) order=58 task=Y5-42 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:50,113 - INFO - need人数(試行順優先フロー) order=58 task=Y5-42 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:45:50,129 - INFO - need人数(試行順優先フロー) order=51 task=Y6-3 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:50,151 - INFO - need人数(試行順優先フロー) order=52 task=Y6-3 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:50,174 - INFO - need人数(試行順優先フロー) order=52 task=Y6-3 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:50,200 - INFO - need人数(試行順優先フロー) order=53 task=Y6-4 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:50,212 - INFO - need人数(試行順優先フロー) order=53 task=Y6-4 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:50,227 - INFO - need人数(試行順優先フロー) order=54 task=Y6-4 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:50,250 - INFO - need人数(試行順優先フロー) order=54 task=Y6-4 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:50,274 - INFO - need人数(試行順優先フロー) order=55 task=Y6-5 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:50,293 - INFO - need人数(試行順優先フロー) order=55 task=Y6-5 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:50,312 - INFO - need人数(試行順優先フロー) order=56 task=Y6-5 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:50,334 - INFO - need人数(試行順優先フロー) order=56 task=Y6-5 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:45:50,355 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:50,402 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:50,446 - INFO - DEBUG[day=2026-06-13] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:45:50,461 - INFO - DEBUG[day=2026-06-14] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:45:50,476 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:45:50,504 - INFO - DEBUG[day=2026-06-16] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:45:50,519 - INFO - DEBUG[day=2026-06-17] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:45:50,530 - INFO - DEBUG[day=2026-06-18] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:45:50,543 - INFO - DEBUG[day=2026-06-19] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:45:50,552 - INFO - DEBUG[day=2026-06-20] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:45:50,561 - INFO - DEBUG[day=2026-06-21] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:45:50,573 - INFO - DEBUG[day=2026-06-22] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:45:50,588 - INFO - DEBUG[day=2026-06-23] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:45:50,605 - INFO - DEBUG[day=2026-06-24] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:45:50,620 - INFO - DEBUG[day=2026-06-25] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:45:50,632 - INFO - DEBUG[day=2026-06-26] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:45:50,646 - INFO - DEBUG[day=2026-06-27] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:45:50,657 - INFO - DEBUG[day=2026-06-28] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:45:50,671 - INFO - DEBUG[day=2026-06-29] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:45:50,685 - INFO - DEBUG[day=2026-06-30] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:45:50,715 - INFO - 日次始業準備: 当日先頭の加工から離れていた帯を 13 件、先頭加工または直前休憩の直前に寄せました。
+2026-05-24 06:45:50,805 - INFO - 段階2出力の整理: 計画*・人員*（および旧 production_plan_multi_day_* / member_schedule_*）の .xlsx/.json を 8 件削除しました。
+2026-05-24 06:45:52,399 - INFO - 定常枠: master メイン A15/B15 → 08:25 ～ 17:00（結果の定常外「日時帯」着色）
+2026-05-24 06:45:52,412 - INFO - 段階2: 結果ブックを作成しした → 計画2605240645468136.xlsx
+2026-05-24 06:45:52,428 - INFO - 段階2: Excel 出力を抑制（PM_AI_STAGE2_WRITE_EXCEL）のため、設備ガント（計画・加工実績明細）の準備・生成を省略します。
+2026-05-24 06:45:52,497 - INFO - 結果_タスク一覧の列順ソース: 既定（40 列）
+2026-05-24 06:45:52,510 - INFO - 列順・表示のカスタマイズ: マクロ実行ブックにシート「列設定_結果_タスク一覧」を追加。 見出し「列名」「表示」… 表示は FALSE の列は結果シートで非表示。 1行「履歴」で履歴1～n を挿入。VBA の「列設定_結果_タスク一覧_チェックボックスを配置」でチェックボックスを表示列に連動可能。
+2026-05-24 06:45:52,554 - WARNING - PM_AI_TASK_INPUT_SOURCE_DIR is not a directory: '\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ'
+2026-05-24 06:45:52,565 - WARNING - 結果_配台表: 加工計画DATA 読込に失敗したため空欄補完をスキップ: タスク入力が必要です。PM_AI_PROCESSING_PLAN_PATH に表形式ファイル（CSV/Parquet/xlsx）の実在パスを設定するか、PM_AI_TASK_INPUT_SOURCE_DIR にフォルダを指定してその中の最新ファイルを使ってください（TASK_INPUT_WORKBOOK は使用しません）。
+2026-05-24 06:45:52,845 - INFO - インタラクティブ配台試行: 実配台数量をタイムライン再集計（配台日キー解決）で 64 キー分反映しました。
+2026-05-24 06:45:53,045 - INFO - インタラクティブ配台試行: 計画暦日未割付 34 行の配台日をスライドしました。
+2026-05-24 06:45:53,339 - INFO - インタラクティブ配台試行: 配台日スライド後 plan キーで meters_done を 64 件再集計しました。
+2026-05-24 06:45:53,353 - INFO - インタラクティブ配台試行: 結果_配台表は入力 JSON rows を採用しました（58 行）。
+2026-05-24 06:45:53,633 - INFO - 段階2: 表シート正本 JSON（Excel より先）を '/mnt/c/工程管理AIプロジェクト_JAVA/output/計画2605240645468136表.json' に出力しました（same_dir_as_output）。
+2026-05-24 06:45:56,319 - INFO - 段階2: 結果_タスク一覧 JSON サイドカーを '/mnt/c/工程管理AIプロジェクト_JAVA/output/計画2605240645468136一覧.json' に出力しました。
+2026-05-24 06:45:57,202 - INFO - 列設定シート図形コピー: Excel COM を廃止したためスキップしました（手動コピーまたはマクロで代替してください）。
+2026-05-24 06:45:57,784 - INFO - plan_workbook_sidecar: 同名 JSON を出力しました path=/mnt/c/工程管理AIプロジェクト_JAVA/output/計画2605240645468136.json (same_dir_as_output)
+2026-05-24 06:45:57,797 - INFO - 段階2: 計画ブック（全シート）の JSON を '/mnt/c/工程管理AIプロジェクト_JAVA/output/計画2605240645468136.json' に出力しました。
+2026-05-24 06:45:57,825 - INFO - 段階3(配台試行): 計画ブック 論理ビュー JSON の出力を省略します。
+2026-05-24 06:45:57,844 - INFO - 段階2: 計画ブック xlsx は出力しませんでした（PM_AI_STAGE2_WRITE_EXCEL）。 JSON のみ: /mnt/c/工程管理AIプロジェクト_JAVA/output/計画2605240645468136.json
+2026-05-24 06:45:57,871 - INFO - 段階3(配台試行): メンバー別スケジュール出力を省略します。
+2026-05-24 06:45:57,922 - INFO - 段階2: OOXML に xl/sharedStrings.xml が無いブックのため、メイン AI サマリ（openpyxl）をスキップしました。Excel で対象ブックを開いて通常保存すると解消することがあります。
+2026-05-24 06:45:57,951 - INFO - 段階2: Gemini 未使用: サマリを空で /mnt/c/工程管理AIプロジェクト_JAVA/log/gemini_usage_summary_for_main.txt に出力。
+2026-05-24 06:48:27,155 - WARNING - Gemini: マクロブック同階層の「gemini_credentials.encrypted.json」は見つかりません。
+2026-05-24 06:48:27,174 - WARNING - Gemini API キーは未設定です。GEMINI_CREDENTIALS_JSON で証明書ファイルを指定するか、マクロ実行ブックと同一フォルダ、または PM_AI_WORKSPACE に「gemini_credentials.encrypted.json」を配置してください。 備考の AI 解析等はスキップされした。 参考型: gemini_credentials.example.json / 参照用/python/encrypt_gemini_credentials.py（暗号化）。
+2026-05-24 06:48:27,397 - INFO - Excel: xl/sharedStrings.xml を追加するため '/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx' を openpyxl で再保存しました。
+2026-05-24 06:48:27,501 - INFO - 配台試行ルール: JSON '/mnt/c/工程管理AIプロジェクト_JAVA/code/json/stage1_exclude_rules.json' から 44 件（Excel の「設定_配台不要工程」read_excel はスキップ）。
+2026-05-24 06:48:27,668 - INFO - master.xlsm speed: シート 'speed' から 16 件の (工程名, 機械名) 速度を読み込みました。
+2026-05-24 06:48:27,682 - INFO - 配台シート読込: master.xlsm「speed」の速度を 61 行に適用（マスタ未該当 5 行は加工速度セルを変更しませんでした）。
+2026-05-24 06:48:27,703 - INFO - 計画タスク入力: PM_AI_PLAN_INPUT_PATH='/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx' を読み込みました。
+2026-05-24 06:48:27,720 - WARNING - PM_AI_TASK_INPUT_SOURCE_DIR is not a directory: '\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ'
+2026-05-24 06:48:28,762 - INFO - 工場稼働枠: master.xlsm メイン A12/B12 を採用 → 08:00 ～ 19:00（結果_* の日内グリッド・配台枠）
+2026-05-24 06:48:28,788 - INFO - 設定シート「設定」A3:A26: トレース用依頼NOは無し（空またはシート無し）
+2026-05-24 06:48:28,793 - INFO - 配台トレース: 対象なし（[配台トレース …] ログは出ません）
+2026-05-24 06:48:28,952 - INFO - skillsシート: 2段ヘッダ形式で読み込みました（工程+機械=16列, メンバー=7人）。
+2026-05-24 06:48:28,977 - INFO - need シート: 配台時追加人数行を検出（Excel行≈5）。列ととの上限を読み込みました。
+2026-05-24 06:48:28,991 - INFO - need人数マスタ: /mnt/c/工程管理AIプロジェクト_JAVA/code/master.xlsm の need シートを読み込み（skills と同一 ExcelFile で開いた直後。need 専用ディスクキャッシュは無し・AI json とは無関係）。
+2026-05-24 06:48:29,002 - INFO - need列サマリ combo='EC+EC機\u3000湖南' 基本必須人数=2 配台時追加人数上限=0
+2026-05-24 06:48:29,017 - INFO - need列サマリ combo='EC+SEC機\u3000湖南' 基本必須人数=3 配台時追加人数上限=0
+2026-05-24 06:48:29,026 - INFO - need列サマリ combo='SEC+SEC機\u3000湖南' 基本必須人数=3 配台時追加人数上限=0
+2026-05-24 06:48:29,037 - INFO - need列サマリ combo='スリット+スリット機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:48:29,049 - INFO - need列サマリ combo='スライス+スライス機1\u3000湖南' 基本必須人数=2 配台時追加人数上限=0
+2026-05-24 06:48:29,059 - INFO - need列サマリ combo='エンボス+エンボス\u3000湖南' 基本必須人数=2 配台時追加人数上限=0
+2026-05-24 06:48:29,071 - INFO - need列サマリ combo='接続+熱融着機\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:48:29,084 - INFO - need列サマリ combo='熱融着+熱融着機\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:48:29,096 - INFO - need列サマリ combo='検査+熱融着機\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:48:29,106 - INFO - need列サマリ combo='接続+スリット機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:48:29,118 - INFO - need列サマリ combo='接続+スライス機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:48:29,129 - INFO - need列サマリ combo='分割+スライス機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:48:29,136 - INFO - need列サマリ combo='分割+エンボス\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:48:29,147 - INFO - need列サマリ combo='分割+スリット機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:48:29,157 - INFO - need列サマリ combo='分割+EC機\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:48:29,165 - INFO - need列サマリ combo='巻返し+スリット機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:48:29,188 - INFO - need 特別指定ルール: 2 件（工程名+機械名キー）。
+2026-05-24 06:48:29,199 - INFO - 『master.xlsm」からスキルと設備覝件(need)を読み込みました。
+2026-05-24 06:48:29,208 - INFO - 段階2 計測: load_skills_and_needs 0.39秒
+2026-05-24 06:48:29,231 - INFO - 組み合わせ表: 工程+機械キー 15 種類・編集行 117 を配台プリセットとして読み込みました。
+2026-05-24 06:48:32,138 - INFO - 段階3配台試行: 機械カレンダーは存在しますが、skills の設備列と一致する列がありません。 占有ブロックは空として続行します。
+2026-05-24 06:48:32,151 - INFO - 段階2 計測: load_team_combination_presets 2.94秒
+2026-05-24 06:48:32,169 - INFO - マスタ「設定_機械_日次始業準備」: 機械 12 件の日次始業準備（分）を読み込みました（必要人数指定 12 件）。
+2026-05-24 06:48:32,184 - INFO - マスタ「設定_依頼切替前後時間」: 依頼切替準備 12 件・休憩再開準備 15 件・後始末 12 件・依頼間余裕 15 件（工程+機械 / 機械のみの内訳はログのみ）。
+2026-05-24 06:48:32,342 - INFO - マスタ「設定_依頼切替前後時間」: 依頼切替準備 26 件・休憩再開準備 26 件・後始末 26 件・依頼間余裕 0 件（工程+機械 / 機械のみの内訳はログのみ）。
+2026-05-24 06:48:32,353 - INFO - マスタ「設定_依頼切替前後時間」: 同フォルダの国分master.xlsm から不足分 78 件を補完しました。
+2026-05-24 06:48:32,359 - INFO - 段階2 計測: load_machine_calendar_and_master_settings 0.21秒
+2026-05-24 06:48:34,454 - INFO - 定常枠: master メイン A15=08:25（結果シートの定常外着色・出勤簿生成の参照）
+2026-05-24 06:48:34,476 - INFO - need配台時追加人数: メイン割付は基本必須人数のみ。余力は全シミュレーション後」未割当かつスキル保有社をサブに追記しました。（メインで増員探索れる従来挙動: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1）
+2026-05-24 06:48:34,526 - INFO - 段階2: PM_AI_STAGE2_SKIP_TODAY_DISPATCH により当日は配台せず、計画開始日を 2026-05-25 にずらしました。
+2026-05-24 06:48:34,536 - INFO - 計画基準日時: 2026/05/24 06:48:34（現在時刻フォールバック）
+2026-05-24 06:48:34,547 - INFO - 段階2 計測: extract_data_extraction_datetime 2.19秒
+2026-05-24 06:48:34,605 - INFO - 「master.xlsm」の各メンバーの勤怠シートを読み込みました。
+2026-05-24 06:48:34,617 - INFO - 勤怠列: AI 入力は「備考」のみ。備考は空の日は「休暇区分」（公休・後休・他拠点勤務など）を reason に反映しました。
+2026-05-24 06:48:34,627 - INFO - 勤怠列: 任意「残業(分)」は退勤上限の時刻、または定時退勤からの延長分（1〜720 の整数＝分）を指定できます（全日休み行では無視）。
+2026-05-24 06:48:34,656 - INFO - Gemini API キーが未設定のため備考AI解析をスキップしました。
+2026-05-24 06:48:34,709 - INFO - 段階2 計測: load_attendance_and_analyze 0.16秒
+2026-05-24 06:48:34,785 - INFO - 段階2 計測: analyze_global_priority_and_task_remarks 0.08秒
+2026-05-24 06:48:34,810 - INFO - task_queue 構築完了: total=58（配台試行によりスキップ 8 行）
+2026-05-24 06:48:34,859 - INFO - 段階2: OOXML に sharedStrings.xml が無いブックのため、配台シート一括書込（openpyxl）をスキップ（専用UI等の xlsx）
+2026-05-24 06:48:34,869 - INFO - 配台試行順番: 「配台試行順番」列の値をしのまま使用しました（全 58 行）。
+2026-05-24 06:48:34,901 - INFO - DEBUG[task=Y5-20] queue基準: start_date_req=2026-05-27 due_basis=2026-05-29 answer_due=2026-05-29 specified_due=2026-05-29 specified_due_ov=None due_source=answer_due priority=999 in_progress=False remark=False
+2026-05-24 06:48:34,914 - INFO - 段階2 計測: build_task_queue_and_prepare_dispatch 0.13秒
+2026-05-24 06:48:34,926 - INFO - DISPATCH_INTERVAL_MIRROR_ENFORCE: 設備・人の占有を区間ミラーで追跡しした（無効化は 設定_環境変数 等で DISPATCH_INTERVAL_MIRROR_ENFORCE=0）。
+2026-05-24 06:48:34,932 - INFO - 依頼NO直列配台: 無効。start_date を満たれ全行は当日候補になり」配台試行順・設備ルールで順庝付けしした。
+2026-05-24 06:48:34,942 - INFO - need人数(試行順優先フロー) order=3 task=Y5-27 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:34,952 - INFO - need人数(試行順優先フロー) order=3 task=Y5-27 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:34,968 - INFO - need人数(試行順優先フロー) order=25 task=C5-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:34,979 - INFO - need人数(試行順優先フロー) order=25 task=C5-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:34,992 - INFO - need人数(試行順優先フロー) order=26 task=W5-16 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:35,006 - INFO - need人数(試行順優先フロー) order=26 task=W5-16 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:35,020 - INFO - need人数(試行順優先フロー) order=28 task=W5-21 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:35,033 - INFO - need人数(試行順優先フロー) order=28 task=W5-21 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:35,048 - INFO - need人数(試行順優先フロー) order=30 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:35,059 - INFO - need人数(試行順優先フロー) order=30 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:35,072 - INFO - need人数(試行順優先フロー) order=2 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:35,085 - INFO - need人数(試行順優先フロー) order=2 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:35,099 - INFO - need人数(試行順優先フロー) order=2 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:35,112 - INFO - need人数(試行順優先フロー) order=4 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:35,125 - INFO - need人数(試行順優先フロー) order=4 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:35,141 - INFO - need人数(試行順優先フロー) order=7 task=E5-4 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:35,151 - INFO - need人数(試行順優先フロー) order=7 task=E5-4 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:35,165 - INFO - need人数(試行順優先フロー) order=9 task=W5-20 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:35,179 - INFO - need人数(試行順優先フロー) order=9 task=W5-20 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:35,192 - INFO - need人数(試行順優先フロー) order=10 task=E5-4 工程/機械=巻返し/スリット機1　湖南 req_num=1 [req_map['巻返し+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['巻返し+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:35,203 - INFO - need人数(試行順優先フロー) order=10 task=E5-4 工程/機械=巻返し/スリット機1　湖南 req_num=1 [req_map['巻返し+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['巻返し+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:35,217 - INFO - DEBUG[day=2026-05-27] avail_members=5 tasks_today=9 (task=Y5-20 含む=True)
+2026-05-24 06:48:35,229 - INFO - need人数(試行順優先フロー) order=1 task=W5-18 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:48:35,244 - INFO - need人数(試行順優先フロー) order=1 task=W5-18 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:48:35,257 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:48:35,266 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:48:35,280 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=3人
+2026-05-24 06:48:35,291 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=3人
+2026-05-24 06:48:35,306 - INFO - need人数(試行順優先フロー) order=8 task=W5-18 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:48:35,318 - INFO - need人数(試行順優先フロー) order=8 task=W5-18 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:48:35,331 - INFO - need人数(試行順優先フロー) order=11 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=5人
+2026-05-24 06:48:35,346 - INFO - need人数(試行順優先フロー) order=11 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=5人
+2026-05-24 06:48:35,358 - INFO - need人数(試行順優先フロー) order=13 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=5人
+2026-05-24 06:48:35,371 - INFO - need人数(試行順優先フロー) order=15 task=V5-9 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:48:35,387 - INFO - need人数(試行順優先フロー) order=15 task=V5-9 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:48:35,400 - INFO - need人数(試行順優先フロー) order=13 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=5人
+2026-05-24 06:48:35,414 - INFO - need人数(試行順優先フロー) order=13 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=5人
+2026-05-24 06:48:35,427 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:48:35,516 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:48:35,798 - INFO - need人数(試行順優先フロー) order=13 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=5人
+2026-05-24 06:48:35,823 - INFO - DEBUG[day=2026-05-28] avail_members=6 tasks_today=9 (task=Y5-20 含む=True)
+2026-05-24 06:48:35,835 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:48:35,853 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:48:35,874 - INFO - need人数(試行順優先フロー) order=11 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:35,898 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:35,916 - INFO - need人数(試行順優先フロー) order=13 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:35,931 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:35,951 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:35,966 - INFO - need人数(試行順優先フロー) order=14 task=Y5-17 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:35,980 - INFO - need人数(試行順優先フロー) order=14 task=Y5-17 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:36,002 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:36,017 - INFO - need人数(試行順優先フロー) order=16 task=C5-1 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:36,030 - INFO - need人数(試行順優先フロー) order=16 task=C5-1 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:36,042 - WARNING - 段階2: 依頼NO=C5-1 日付=2026-05-28 工程/機械=EC/EC機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 3 人いしたは」設備の加工開始下限=2026-05-28 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-28 17:00 占有キー=EC機 湖南
+2026-05-24 06:48:36,057 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:36,070 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:36,084 - INFO - DEBUG[day=2026-05-29] avail_members=6 tasks_today=7 (task=Y5-20 含む=True)
+2026-05-24 06:48:36,098 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:48:36,113 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:48:36,134 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:36,155 - INFO - need人数(試行順優先フロー) order=16 task=C5-1 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:36,170 - INFO - need人数(試行順優先フロー) order=17 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:36,183 - INFO - need人数(試行順優先フロー) order=18 task=W5-16 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:36,196 - INFO - need人数(試行順優先フロー) order=17 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:36,205 - INFO - need人数(試行順優先フロー) order=17 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:36,216 - INFO - need人数(試行順優先フロー) order=18 task=W5-16 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:36,228 - INFO - need人数(試行順優先フロー) order=17 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:36,241 - INFO - need人数(試行順優先フロー) order=20 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:36,261 - INFO - need人数(試行順優先フロー) order=20 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:36,285 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:36,303 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:36,318 - INFO - DEBUG[day=2026-05-30] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:48:36,330 - INFO - DEBUG[day=2026-05-31] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:48:36,343 - INFO - DEBUG[day=2026-06-01] avail_members=6 tasks_today=6 (task=Y5-20 含む=True)
+2026-05-24 06:48:36,358 - INFO - need人数(試行順優先フロー) order=20 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:36,376 - INFO - need人数(試行順優先フロー) order=20 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:36,398 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:36,416 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:36,439 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:36,453 - INFO - need人数(試行順優先フロー) order=31 task=W5-17 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:36,465 - INFO - need人数(試行順優先フロー) order=31 task=W5-17 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:36,476 - INFO - need人数(試行順優先フロー) order=19 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:36,490 - INFO - need人数(試行順優先フロー) order=19 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:36,504 - INFO - need人数(試行順優先フロー) order=19 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:36,515 - INFO - need人数(試行順優先フロー) order=19 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:36,528 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:36,547 - INFO - need人数(試行順優先フロー) order=22 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:36,562 - INFO - need人数(試行順優先フロー) order=22 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:36,581 - INFO - need人数(試行順優先フロー) order=23 task=Y5-38 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:36,600 - INFO - need人数(試行順優先フロー) order=23 task=Y5-38 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:36,617 - INFO - need人数(試行順優先フロー) order=39 task=A6-1 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:36,631 - INFO - need人数(試行順優先フロー) order=39 task=A6-1 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:36,647 - INFO - need人数(試行順優先フロー) order=40 task=Y6-1 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:36,665 - INFO - need人数(試行順優先フロー) order=40 task=Y6-1 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:36,683 - INFO - need人数(試行順優先フロー) order=24 task=JR260503 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:36,702 - INFO - need人数(試行順優先フロー) order=24 task=JR260503 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:36,718 - INFO - need人数(試行順優先フロー) order=24 task=JR260503 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:36,772 - INFO - need人数(試行順優先フロー) order=29 task=JR260503 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:36,793 - INFO - need人数(試行順優先フロー) order=29 task=JR260503 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:36,823 - INFO - need人数(試行順優先フロー) order=32 task=PN06-01 工程/機械=EC/SEC機　湖南 req_num=2 [need特別指定2 [機械名'SEC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:36,837 - INFO - need人数(試行順優先フロー) order=32 task=PN06-01 工程/機械=EC/SEC機　湖南 req_num=2 [need特別指定2 [機械名'SEC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:36,896 - INFO - need人数(試行順優先フロー) order=33 task=JR260601 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:36,917 - INFO - need人数(試行順優先フロー) order=33 task=JR260601 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:36,957 - INFO - need人数(試行順優先フロー) order=34 task=JR260601 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:36,972 - INFO - need人数(試行順優先フロー) order=34 task=JR260601 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:36,987 - INFO - need人数(試行順優先フロー) order=37 task=JR260602 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,004 - INFO - need人数(試行順優先フロー) order=37 task=JR260602 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,020 - INFO - need人数(試行順優先フロー) order=37 task=JR260602 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,135 - INFO - need人数(試行順優先フロー) order=38 task=JR260602 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:37,149 - INFO - need人数(試行順優先フロー) order=38 task=JR260602 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:37,196 - INFO - need人数(試行順優先フロー) order=41 task=Y5-39 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,209 - INFO - need人数(試行順優先フロー) order=41 task=Y5-39 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,225 - INFO - need人数(試行順優先フロー) order=42 task=Y5-40 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,235 - INFO - need人数(試行順優先フロー) order=43 task=Y5-41 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,251 - INFO - need人数(試行順優先フロー) order=42 task=Y5-40 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,262 - INFO - need人数(試行順優先フロー) order=42 task=Y5-40 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,273 - INFO - need人数(試行順優先フロー) order=43 task=Y5-41 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,292 - INFO - need人数(試行順優先フロー) order=42 task=Y5-40 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,313 - INFO - need人数(試行順優先フロー) order=45 task=Y6-2 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,331 - INFO - need人数(試行順優先フロー) order=45 task=Y6-2 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,350 - INFO - need人数(試行順優先フロー) order=46 task=Y5-37 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,365 - INFO - need人数(試行順優先フロー) order=46 task=Y5-37 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,383 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:37,397 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:48:37,417 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:48:37,435 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:48:37,453 - INFO - need人数(試行順優先フロー) order=46 task=Y5-37 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,471 - INFO - DEBUG[day=2026-06-06] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:48:37,481 - INFO - DEBUG[day=2026-06-07] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:48:37,496 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:48:37,510 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:48:37,525 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:48:37,552 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:48:37,569 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:48:37,591 - INFO - need人数(試行順優先フロー) order=48 task=Y6-6 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:37,609 - INFO - need人数(試行順優先フロー) order=48 task=Y6-6 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:37,628 - INFO - need人数(試行順優先フロー) order=49 task=Y6-7 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:37,643 - INFO - need人数(試行順優先フロー) order=49 task=Y6-7 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:37,672 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:48:37,691 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:48:37,708 - INFO - need人数(試行順優先フロー) order=44 task=A6-1 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:37,725 - INFO - need人数(試行順優先フロー) order=44 task=A6-1 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:37,743 - INFO - need人数(試行順優先フロー) order=47 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:37,756 - INFO - need人数(試行順優先フロー) order=47 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:37,767 - INFO - need人数(試行順優先フロー) order=50 task=Y6-8 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:37,784 - INFO - need人数(試行順優先フロー) order=50 task=Y6-8 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:37,801 - INFO - need人数(試行順優先フロー) order=51 task=Y6-3 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:37,816 - INFO - need人数(試行順優先フロー) order=51 task=Y6-3 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:37,831 - WARNING - 段階2: 依頼NO=Y6-3 日付=2026-06-10 工程/機械=接続/熱融着機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 6 人いしたは」設備の加工開始下限=2026-06-10 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-06-10 17:00 占有キー=熱融着機 湖南
+2026-05-24 06:48:37,847 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:37,858 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:37,885 - INFO - need人数(試行順優先フロー) order=58 task=Y5-42 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,899 - INFO - need人数(試行順優先フロー) order=58 task=Y5-42 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:48:37,917 - INFO - need人数(試行順優先フロー) order=51 task=Y6-3 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:37,928 - INFO - need人数(試行順優先フロー) order=51 task=Y6-3 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:37,943 - INFO - need人数(試行順優先フロー) order=52 task=Y6-3 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:37,957 - INFO - need人数(試行順優先フロー) order=52 task=Y6-3 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:37,985 - INFO - need人数(試行順優先フロー) order=53 task=Y6-4 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:37,999 - INFO - need人数(試行順優先フロー) order=53 task=Y6-4 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:38,014 - INFO - need人数(試行順優先フロー) order=54 task=Y6-4 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:38,031 - INFO - need人数(試行順優先フロー) order=54 task=Y6-4 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:38,055 - INFO - need人数(試行順優先フロー) order=55 task=Y6-5 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:38,067 - INFO - need人数(試行順優先フロー) order=55 task=Y6-5 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:38,080 - INFO - need人数(試行順優先フロー) order=56 task=Y6-5 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:38,098 - INFO - need人数(試行順優先フロー) order=56 task=Y6-5 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:48:38,114 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:38,157 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:38,172 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:38,219 - INFO - DEBUG[day=2026-06-13] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:48:38,231 - INFO - DEBUG[day=2026-06-14] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:48:38,244 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:38,259 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:48:38,281 - INFO - DEBUG[day=2026-06-16] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:48:38,292 - INFO - DEBUG[day=2026-06-17] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:48:38,306 - INFO - DEBUG[day=2026-06-18] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:48:38,317 - INFO - DEBUG[day=2026-06-19] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:48:38,329 - INFO - DEBUG[day=2026-06-20] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:48:38,340 - INFO - DEBUG[day=2026-06-21] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:48:38,353 - INFO - DEBUG[day=2026-06-22] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:48:38,368 - INFO - DEBUG[day=2026-06-23] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:48:38,383 - INFO - DEBUG[day=2026-06-24] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:48:38,395 - INFO - DEBUG[day=2026-06-25] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:48:38,411 - INFO - DEBUG[day=2026-06-26] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:48:38,423 - INFO - DEBUG[day=2026-06-27] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:48:38,435 - INFO - DEBUG[day=2026-06-28] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:48:38,447 - INFO - DEBUG[day=2026-06-29] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:48:38,459 - INFO - DEBUG[day=2026-06-30] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:48:38,495 - INFO - 日次始業準備: 当日先頭の加工から離れていた帯を 13 件、先頭加工または直前休憩の直前に寄せました。
+2026-05-24 06:48:38,546 - INFO - 段階2出力の整理: 計画*・人員*（および旧 production_plan_multi_day_* / member_schedule_*）の .xlsx/.json を 3 件削除しました。
+2026-05-24 06:48:40,227 - INFO - 定常枠: master メイン A15/B15 → 08:25 ～ 17:00（結果の定常外「日時帯」着色）
+2026-05-24 06:48:40,242 - INFO - 段階2: 結果ブックを作成しした → 計画2605240648348719.xlsx
+2026-05-24 06:48:40,254 - INFO - 段階2: Excel 出力を抑制（PM_AI_STAGE2_WRITE_EXCEL）のため、設備ガント（計画・加工実績明細）の準備・生成を省略します。
+2026-05-24 06:48:40,319 - INFO - 結果_タスク一覧の列順ソース: 既定（40 列）
+2026-05-24 06:48:40,332 - INFO - 列順・表示のカスタマイズ: マクロ実行ブックにシート「列設定_結果_タスク一覧」を追加。 見出し「列名」「表示」… 表示は FALSE の列は結果シートで非表示。 1行「履歴」で履歴1～n を挿入。VBA の「列設定_結果_タスク一覧_チェックボックスを配置」でチェックボックスを表示列に連動可能。
+2026-05-24 06:48:40,392 - WARNING - PM_AI_TASK_INPUT_SOURCE_DIR is not a directory: '\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ'
+2026-05-24 06:48:40,403 - WARNING - 結果_配台表: 加工計画DATA 読込に失敗したため空欄補完をスキップ: タスク入力が必要です。PM_AI_PROCESSING_PLAN_PATH に表形式ファイル（CSV/Parquet/xlsx）の実在パスを設定するか、PM_AI_TASK_INPUT_SOURCE_DIR にフォルダを指定してその中の最新ファイルを使ってください（TASK_INPUT_WORKBOOK は使用しません）。
+2026-05-24 06:48:40,686 - INFO - インタラクティブ配台試行: 実配台数量をタイムライン再集計（配台日キー解決）で 64 キー分反映しました。
+2026-05-24 06:48:40,891 - INFO - インタラクティブ配台試行: 計画暦日未割付 33 行の配台日をスライドしました。
+2026-05-24 06:48:41,210 - INFO - インタラクティブ配台試行: 配台日スライド後 plan キーで meters_done を 64 件再集計しました。
+2026-05-24 06:48:41,222 - INFO - インタラクティブ配台試行: 結果_配台表は入力 JSON rows を採用しました（58 行）。
+2026-05-24 06:48:41,516 - INFO - 段階2: 表シート正本 JSON（Excel より先）を '/mnt/c/工程管理AIプロジェクト_JAVA/output/計画2605240648348719表.json' に出力しました（same_dir_as_output）。
+2026-05-24 06:48:44,259 - INFO - 段階2: 結果_タスク一覧 JSON サイドカーを '/mnt/c/工程管理AIプロジェクト_JAVA/output/計画2605240648348719一覧.json' に出力しました。
+2026-05-24 06:48:45,286 - INFO - 列設定シート図形コピー: Excel COM を廃止したためスキップしました（手動コピーまたはマクロで代替してください）。
+2026-05-24 06:48:45,845 - INFO - plan_workbook_sidecar: 同名 JSON を出力しました path=/mnt/c/工程管理AIプロジェクト_JAVA/output/計画2605240648348719.json (same_dir_as_output)
+2026-05-24 06:48:45,860 - INFO - 段階2: 計画ブック（全シート）の JSON を '/mnt/c/工程管理AIプロジェクト_JAVA/output/計画2605240648348719.json' に出力しました。
+2026-05-24 06:48:45,945 - INFO - 段階3(配台試行): 計画ブック 論理ビュー JSON の出力を省略します。
+2026-05-24 06:48:45,968 - INFO - 段階2: 計画ブック xlsx は出力しませんでした（PM_AI_STAGE2_WRITE_EXCEL）。 JSON のみ: /mnt/c/工程管理AIプロジェクト_JAVA/output/計画2605240648348719.json
+2026-05-24 06:48:46,005 - INFO - 段階3(配台試行): メンバー別スケジュール出力を省略します。
+2026-05-24 06:48:46,075 - INFO - 段階2: OOXML に xl/sharedStrings.xml が無いブックのため、メイン AI サマリ（openpyxl）をスキップしました。Excel で対象ブックを開いて通常保存すると解消することがあります。
+2026-05-24 06:48:46,113 - INFO - 段階2: Gemini 未使用: サマリを空で /mnt/c/工程管理AIプロジェクト_JAVA/log/gemini_usage_summary_for_main.txt に出力。
+2026-05-24 06:49:25,774 - WARNING - Gemini: マクロブック同階層の「gemini_credentials.encrypted.json」は見つかりません。
+2026-05-24 06:49:25,798 - WARNING - Gemini API キーは未設定です。GEMINI_CREDENTIALS_JSON で証明書ファイルを指定するか、マクロ実行ブックと同一フォルダ、または PM_AI_WORKSPACE に「gemini_credentials.encrypted.json」を配置してください。 備考の AI 解析等はスキップされした。 参考型: gemini_credentials.example.json / 参照用/python/encrypt_gemini_credentials.py（暗号化）。
+2026-05-24 06:49:25,980 - INFO - Excel: xl/sharedStrings.xml を追加するため '/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx' を openpyxl で再保存しました。
+2026-05-24 06:49:26,073 - INFO - 配台試行ルール: JSON '/mnt/c/工程管理AIプロジェクト_JAVA/code/json/stage1_exclude_rules.json' から 44 件（Excel の「設定_配台不要工程」read_excel はスキップ）。
+2026-05-24 06:49:26,228 - INFO - master.xlsm speed: シート 'speed' から 16 件の (工程名, 機械名) 速度を読み込みました。
+2026-05-24 06:49:26,241 - INFO - 配台シート読込: master.xlsm「speed」の速度を 61 行に適用（マスタ未該当 5 行は加工速度セルを変更しませんでした）。
+2026-05-24 06:49:26,262 - INFO - 計画タスク入力: PM_AI_PLAN_INPUT_PATH='/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx' を読み込みました。
+2026-05-24 06:49:26,278 - WARNING - PM_AI_TASK_INPUT_SOURCE_DIR is not a directory: '\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ'
+2026-05-24 06:49:27,226 - INFO - 工場稼働枠: master.xlsm メイン A12/B12 を採用 → 08:00 ～ 19:00（結果_* の日内グリッド・配台枠）
+2026-05-24 06:49:27,268 - INFO - 設定シート「設定」A3:A26: トレース用依頼NOは無し（空またはシート無し）
+2026-05-24 06:49:27,282 - INFO - 配台トレース: 対象なし（[配台トレース …] ログは出ません）
+2026-05-24 06:49:27,469 - INFO - skillsシート: 2段ヘッダ形式で読み込みました（工程+機械=16列, メンバー=7人）。
+2026-05-24 06:49:27,496 - INFO - need シート: 配台時追加人数行を検出（Excel行≈5）。列ととの上限を読み込みました。
+2026-05-24 06:49:27,509 - INFO - need人数マスタ: /mnt/c/工程管理AIプロジェクト_JAVA/code/master.xlsm の need シートを読み込み（skills と同一 ExcelFile で開いた直後。need 専用ディスクキャッシュは無し・AI json とは無関係）。
+2026-05-24 06:49:27,523 - INFO - need列サマリ combo='EC+EC機\u3000湖南' 基本必須人数=2 配台時追加人数上限=0
+2026-05-24 06:49:27,534 - INFO - need列サマリ combo='EC+SEC機\u3000湖南' 基本必須人数=3 配台時追加人数上限=0
+2026-05-24 06:49:27,548 - INFO - need列サマリ combo='SEC+SEC機\u3000湖南' 基本必須人数=3 配台時追加人数上限=0
+2026-05-24 06:49:27,560 - INFO - need列サマリ combo='スリット+スリット機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:49:27,569 - INFO - need列サマリ combo='スライス+スライス機1\u3000湖南' 基本必須人数=2 配台時追加人数上限=0
+2026-05-24 06:49:27,581 - INFO - need列サマリ combo='エンボス+エンボス\u3000湖南' 基本必須人数=2 配台時追加人数上限=0
+2026-05-24 06:49:27,591 - INFO - need列サマリ combo='接続+熱融着機\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:49:27,602 - INFO - need列サマリ combo='熱融着+熱融着機\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:49:27,614 - INFO - need列サマリ combo='検査+熱融着機\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:49:27,624 - INFO - need列サマリ combo='接続+スリット機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:49:27,637 - INFO - need列サマリ combo='接続+スライス機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:49:27,651 - INFO - need列サマリ combo='分割+スライス機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:49:27,664 - INFO - need列サマリ combo='分割+エンボス\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:49:27,678 - INFO - need列サマリ combo='分割+スリット機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:49:27,689 - INFO - need列サマリ combo='分割+EC機\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:49:27,702 - INFO - need列サマリ combo='巻返し+スリット機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:49:27,726 - INFO - need 特別指定ルール: 2 件（工程名+機械名キー）。
+2026-05-24 06:49:27,740 - INFO - 『master.xlsm」からスキルと設備覝件(need)を読み込みました。
+2026-05-24 06:49:27,751 - INFO - 段階2 計測: load_skills_and_needs 0.43秒
+2026-05-24 06:49:27,775 - INFO - 組み合わせ表: 工程+機械キー 15 種類・編集行 117 を配台プリセットとして読み込みました。
+2026-05-24 06:49:30,549 - INFO - 段階3配台試行: 機械カレンダーは存在しますが、skills の設備列と一致する列がありません。 占有ブロックは空として続行します。
+2026-05-24 06:49:30,567 - INFO - 段階2 計測: load_team_combination_presets 2.82秒
+2026-05-24 06:49:30,587 - INFO - マスタ「設定_機械_日次始業準備」: 機械 12 件の日次始業準備（分）を読み込みました（必要人数指定 12 件）。
+2026-05-24 06:49:30,605 - INFO - マスタ「設定_依頼切替前後時間」: 依頼切替準備 12 件・休憩再開準備 15 件・後始末 12 件・依頼間余裕 15 件（工程+機械 / 機械のみの内訳はログのみ）。
+2026-05-24 06:49:30,801 - INFO - マスタ「設定_依頼切替前後時間」: 依頼切替準備 26 件・休憩再開準備 26 件・後始末 26 件・依頼間余裕 0 件（工程+機械 / 機械のみの内訳はログのみ）。
+2026-05-24 06:49:30,817 - INFO - マスタ「設定_依頼切替前後時間」: 同フォルダの国分master.xlsm から不足分 78 件を補完しました。
+2026-05-24 06:49:30,831 - INFO - 段階2 計測: load_machine_calendar_and_master_settings 0.26秒
+2026-05-24 06:49:32,941 - INFO - 定常枠: master メイン A15=08:25（結果シートの定常外着色・出勤簿生成の参照）
+2026-05-24 06:49:32,960 - INFO - need配台時追加人数: メイン割付は基本必須人数のみ。余力は全シミュレーション後」未割当かつスキル保有社をサブに追記しました。（メインで増員探索れる従来挙動: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1）
+2026-05-24 06:49:33,004 - INFO - 段階2: PM_AI_STAGE2_SKIP_TODAY_DISPATCH により当日は配台せず、計画開始日を 2026-05-25 にずらしました。
+2026-05-24 06:49:33,015 - INFO - 計画基準日時: 2026/05/24 06:49:33（現在時刻フォールバック）
+2026-05-24 06:49:33,025 - INFO - 段階2 計測: extract_data_extraction_datetime 2.19秒
+2026-05-24 06:49:33,086 - INFO - 「master.xlsm」の各メンバーの勤怠シートを読み込みました。
+2026-05-24 06:49:33,102 - INFO - 勤怠列: AI 入力は「備考」のみ。備考は空の日は「休暇区分」（公休・後休・他拠点勤務など）を reason に反映しました。
+2026-05-24 06:49:33,111 - INFO - 勤怠列: 任意「残業(分)」は退勤上限の時刻、または定時退勤からの延長分（1〜720 の整数＝分）を指定できます（全日休み行では無視）。
+2026-05-24 06:49:33,143 - INFO - Gemini API キーが未設定のため備考AI解析をスキップしました。
+2026-05-24 06:49:33,197 - INFO - 段階2 計測: load_attendance_and_analyze 0.17秒
+2026-05-24 06:49:33,276 - INFO - 段階2 計測: analyze_global_priority_and_task_remarks 0.08秒
+2026-05-24 06:49:33,302 - INFO - task_queue 構築完了: total=58（配台試行によりスキップ 8 行）
+2026-05-24 06:49:33,366 - INFO - 段階2: OOXML に sharedStrings.xml が無いブックのため、配台シート一括書込（openpyxl）をスキップ（専用UI等の xlsx）
+2026-05-24 06:49:33,377 - INFO - 配台試行順番: 「配台試行順番」列の値をしのまま使用しました（全 58 行）。
+2026-05-24 06:49:33,410 - INFO - DEBUG[task=Y5-20] queue基準: start_date_req=2026-05-27 due_basis=2026-05-29 answer_due=2026-05-29 specified_due=2026-05-29 specified_due_ov=None due_source=answer_due priority=999 in_progress=False remark=False
+2026-05-24 06:49:33,423 - INFO - 段階2 計測: build_task_queue_and_prepare_dispatch 0.15秒
+2026-05-24 06:49:33,436 - INFO - DISPATCH_INTERVAL_MIRROR_ENFORCE: 設備・人の占有を区間ミラーで追跡しした（無効化は 設定_環境変数 等で DISPATCH_INTERVAL_MIRROR_ENFORCE=0）。
+2026-05-24 06:49:33,449 - INFO - 依頼NO直列配台: 無効。start_date を満たれ全行は当日候補になり」配台試行順・設備ルールで順庝付けしした。
+2026-05-24 06:49:33,463 - INFO - need人数(試行順優先フロー) order=3 task=Y5-27 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:33,478 - INFO - need人数(試行順優先フロー) order=3 task=Y5-27 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:33,499 - INFO - need人数(試行順優先フロー) order=25 task=C5-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:33,516 - INFO - need人数(試行順優先フロー) order=25 task=C5-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:33,533 - INFO - need人数(試行順優先フロー) order=26 task=W5-16 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:33,551 - INFO - need人数(試行順優先フロー) order=26 task=W5-16 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:33,566 - INFO - need人数(試行順優先フロー) order=28 task=W5-21 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:33,584 - INFO - need人数(試行順優先フロー) order=28 task=W5-21 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:33,601 - INFO - need人数(試行順優先フロー) order=30 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:33,608 - INFO - need人数(試行順優先フロー) order=30 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:33,621 - INFO - need人数(試行順優先フロー) order=2 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:33,634 - INFO - need人数(試行順優先フロー) order=2 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:33,645 - INFO - need人数(試行順優先フロー) order=2 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:33,658 - INFO - need人数(試行順優先フロー) order=4 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:33,668 - INFO - need人数(試行順優先フロー) order=4 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:33,682 - INFO - need人数(試行順優先フロー) order=7 task=E5-4 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:33,694 - INFO - need人数(試行順優先フロー) order=7 task=E5-4 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:33,707 - INFO - need人数(試行順優先フロー) order=9 task=W5-20 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:33,721 - INFO - need人数(試行順優先フロー) order=9 task=W5-20 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:33,736 - INFO - need人数(試行順優先フロー) order=10 task=E5-4 工程/機械=巻返し/スリット機1　湖南 req_num=1 [req_map['巻返し+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['巻返し+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:33,749 - INFO - need人数(試行順優先フロー) order=10 task=E5-4 工程/機械=巻返し/スリット機1　湖南 req_num=1 [req_map['巻返し+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['巻返し+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:33,760 - INFO - DEBUG[day=2026-05-27] avail_members=5 tasks_today=9 (task=Y5-20 含む=True)
+2026-05-24 06:49:33,772 - INFO - need人数(試行順優先フロー) order=1 task=W5-18 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:49:33,783 - INFO - need人数(試行順優先フロー) order=1 task=W5-18 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:49:33,791 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:49:33,800 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:49:33,814 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=3人
+2026-05-24 06:49:33,824 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=3人
+2026-05-24 06:49:33,841 - INFO - need人数(試行順優先フロー) order=8 task=W5-18 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:49:33,852 - INFO - need人数(試行順優先フロー) order=8 task=W5-18 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:49:33,865 - INFO - need人数(試行順優先フロー) order=11 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=5人
+2026-05-24 06:49:33,875 - INFO - need人数(試行順優先フロー) order=11 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=5人
+2026-05-24 06:49:33,889 - INFO - need人数(試行順優先フロー) order=13 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=5人
+2026-05-24 06:49:33,902 - INFO - need人数(試行順優先フロー) order=15 task=V5-9 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:49:33,917 - INFO - need人数(試行順優先フロー) order=15 task=V5-9 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:49:33,929 - INFO - need人数(試行順優先フロー) order=13 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=5人
+2026-05-24 06:49:33,942 - INFO - need人数(試行順優先フロー) order=13 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=5人
+2026-05-24 06:49:33,956 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:49:34,053 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:49:34,358 - INFO - need人数(試行順優先フロー) order=13 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=5人
+2026-05-24 06:49:34,376 - INFO - DEBUG[day=2026-05-28] avail_members=6 tasks_today=9 (task=Y5-20 含む=True)
+2026-05-24 06:49:34,390 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:49:34,408 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:49:34,430 - INFO - need人数(試行順優先フロー) order=11 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:34,454 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:34,475 - INFO - need人数(試行順優先フロー) order=13 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:34,495 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:34,512 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:34,530 - INFO - need人数(試行順優先フロー) order=14 task=Y5-17 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:34,546 - INFO - need人数(試行順優先フロー) order=14 task=Y5-17 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:34,564 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:34,578 - INFO - need人数(試行順優先フロー) order=16 task=C5-1 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:34,591 - INFO - need人数(試行順優先フロー) order=16 task=C5-1 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:34,604 - WARNING - 段階2: 依頼NO=C5-1 日付=2026-05-28 工程/機械=EC/EC機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 3 人いしたは」設備の加工開始下限=2026-05-28 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-28 17:00 占有キー=EC機 湖南
+2026-05-24 06:49:34,615 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:34,631 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:34,649 - INFO - DEBUG[day=2026-05-29] avail_members=6 tasks_today=7 (task=Y5-20 含む=True)
+2026-05-24 06:49:34,663 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:49:34,680 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:49:34,698 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:34,723 - INFO - need人数(試行順優先フロー) order=16 task=C5-1 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:34,740 - INFO - need人数(試行順優先フロー) order=17 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:34,756 - INFO - need人数(試行順優先フロー) order=18 task=W5-16 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:34,775 - INFO - need人数(試行順優先フロー) order=17 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:34,790 - INFO - need人数(試行順優先フロー) order=17 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:34,805 - INFO - need人数(試行順優先フロー) order=18 task=W5-16 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:34,820 - INFO - need人数(試行順優先フロー) order=17 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:34,835 - INFO - need人数(試行順優先フロー) order=20 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:34,853 - INFO - need人数(試行順優先フロー) order=20 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:34,873 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:34,894 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:34,914 - INFO - DEBUG[day=2026-05-30] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:49:34,926 - INFO - DEBUG[day=2026-05-31] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:49:34,940 - INFO - DEBUG[day=2026-06-01] avail_members=6 tasks_today=6 (task=Y5-20 含む=True)
+2026-05-24 06:49:34,954 - INFO - need人数(試行順優先フロー) order=20 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:34,971 - INFO - need人数(試行順優先フロー) order=20 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:34,992 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:35,012 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:35,033 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:35,053 - INFO - need人数(試行順優先フロー) order=31 task=W5-17 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:35,067 - INFO - need人数(試行順優先フロー) order=31 task=W5-17 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:35,085 - INFO - need人数(試行順優先フロー) order=19 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:35,093 - INFO - need人数(試行順優先フロー) order=19 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:35,102 - INFO - need人数(試行順優先フロー) order=19 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:35,114 - INFO - need人数(試行順優先フロー) order=19 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:35,135 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:35,160 - INFO - need人数(試行順優先フロー) order=22 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:35,183 - INFO - need人数(試行順優先フロー) order=22 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:35,203 - INFO - need人数(試行順優先フロー) order=23 task=Y5-38 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:35,219 - INFO - need人数(試行順優先フロー) order=23 task=Y5-38 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:35,238 - INFO - need人数(試行順優先フロー) order=39 task=A6-1 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,256 - INFO - need人数(試行順優先フロー) order=39 task=A6-1 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,274 - INFO - need人数(試行順優先フロー) order=40 task=Y6-1 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,289 - INFO - need人数(試行順優先フロー) order=40 task=Y6-1 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,308 - INFO - need人数(試行順優先フロー) order=24 task=JR260503 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,328 - INFO - need人数(試行順優先フロー) order=24 task=JR260503 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,346 - INFO - need人数(試行順優先フロー) order=24 task=JR260503 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,405 - INFO - need人数(試行順優先フロー) order=29 task=JR260503 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:35,422 - INFO - need人数(試行順優先フロー) order=29 task=JR260503 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:35,445 - INFO - need人数(試行順優先フロー) order=32 task=PN06-01 工程/機械=EC/SEC機　湖南 req_num=2 [need特別指定2 [機械名'SEC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,462 - INFO - need人数(試行順優先フロー) order=32 task=PN06-01 工程/機械=EC/SEC機　湖南 req_num=2 [need特別指定2 [機械名'SEC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,521 - INFO - need人数(試行順優先フロー) order=33 task=JR260601 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,545 - INFO - need人数(試行順優先フロー) order=33 task=JR260601 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,589 - INFO - need人数(試行順優先フロー) order=34 task=JR260601 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:35,611 - INFO - need人数(試行順優先フロー) order=34 task=JR260601 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:35,632 - INFO - need人数(試行順優先フロー) order=37 task=JR260602 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,648 - INFO - need人数(試行順優先フロー) order=37 task=JR260602 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,665 - INFO - need人数(試行順優先フロー) order=37 task=JR260602 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,779 - INFO - need人数(試行順優先フロー) order=38 task=JR260602 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:35,800 - INFO - need人数(試行順優先フロー) order=38 task=JR260602 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:35,849 - INFO - need人数(試行順優先フロー) order=41 task=Y5-39 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,864 - INFO - need人数(試行順優先フロー) order=41 task=Y5-39 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,875 - INFO - need人数(試行順優先フロー) order=42 task=Y5-40 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,891 - INFO - need人数(試行順優先フロー) order=43 task=Y5-41 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,907 - INFO - need人数(試行順優先フロー) order=42 task=Y5-40 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,924 - INFO - need人数(試行順優先フロー) order=42 task=Y5-40 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,940 - INFO - need人数(試行順優先フロー) order=43 task=Y5-41 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,958 - INFO - need人数(試行順優先フロー) order=42 task=Y5-40 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,977 - INFO - need人数(試行順優先フロー) order=45 task=Y6-2 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:35,992 - INFO - need人数(試行順優先フロー) order=45 task=Y6-2 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:36,011 - INFO - need人数(試行順優先フロー) order=46 task=Y5-37 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:36,026 - INFO - need人数(試行順優先フロー) order=46 task=Y5-37 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:36,046 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:36,063 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:49:36,077 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:49:36,090 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:49:36,105 - INFO - need人数(試行順優先フロー) order=46 task=Y5-37 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:36,122 - INFO - DEBUG[day=2026-06-06] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:49:36,138 - INFO - DEBUG[day=2026-06-07] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:49:36,155 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:49:36,174 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:49:36,196 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:49:36,219 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:49:36,239 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:49:36,267 - INFO - need人数(試行順優先フロー) order=48 task=Y6-6 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:36,283 - INFO - need人数(試行順優先フロー) order=48 task=Y6-6 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:36,303 - INFO - need人数(試行順優先フロー) order=49 task=Y6-7 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:36,326 - INFO - need人数(試行順優先フロー) order=49 task=Y6-7 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:36,355 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:49:36,377 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:49:36,396 - INFO - need人数(試行順優先フロー) order=44 task=A6-1 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:36,410 - INFO - need人数(試行順優先フロー) order=44 task=A6-1 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:36,432 - INFO - need人数(試行順優先フロー) order=47 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:36,454 - INFO - need人数(試行順優先フロー) order=47 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:36,470 - INFO - need人数(試行順優先フロー) order=50 task=Y6-8 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:36,490 - INFO - need人数(試行順優先フロー) order=50 task=Y6-8 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:36,515 - INFO - need人数(試行順優先フロー) order=51 task=Y6-3 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:36,532 - INFO - need人数(試行順優先フロー) order=51 task=Y6-3 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:36,551 - WARNING - 段階2: 依頼NO=Y6-3 日付=2026-06-10 工程/機械=接続/熱融着機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 6 人いしたは」設備の加工開始下限=2026-06-10 17:00 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-06-10 17:00 占有キー=熱融着機 湖南
+2026-05-24 06:49:36,563 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:36,580 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:36,608 - INFO - need人数(試行順優先フロー) order=58 task=Y5-42 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:36,625 - INFO - need人数(試行順優先フロー) order=58 task=Y5-42 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:49:36,643 - INFO - need人数(試行順優先フロー) order=51 task=Y6-3 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:36,659 - INFO - need人数(試行順優先フロー) order=51 task=Y6-3 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:36,672 - INFO - need人数(試行順優先フロー) order=52 task=Y6-3 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:36,687 - INFO - need人数(試行順優先フロー) order=52 task=Y6-3 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:36,719 - INFO - need人数(試行順優先フロー) order=53 task=Y6-4 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:36,739 - INFO - need人数(試行順優先フロー) order=53 task=Y6-4 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:36,759 - INFO - need人数(試行順優先フロー) order=54 task=Y6-4 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:36,779 - INFO - need人数(試行順優先フロー) order=54 task=Y6-4 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:36,805 - INFO - need人数(試行順優先フロー) order=55 task=Y6-5 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:36,823 - INFO - need人数(試行順優先フロー) order=55 task=Y6-5 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:36,842 - INFO - need人数(試行順優先フロー) order=56 task=Y6-5 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:36,861 - INFO - need人数(試行順優先フロー) order=56 task=Y6-5 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:49:36,882 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:36,931 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:36,949 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:36,995 - INFO - DEBUG[day=2026-06-13] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:49:37,008 - INFO - DEBUG[day=2026-06-14] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:49:37,023 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:37,037 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:49:37,066 - INFO - DEBUG[day=2026-06-16] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:49:37,081 - INFO - DEBUG[day=2026-06-17] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:49:37,098 - INFO - DEBUG[day=2026-06-18] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:49:37,115 - INFO - DEBUG[day=2026-06-19] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:49:37,131 - INFO - DEBUG[day=2026-06-20] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:49:37,146 - INFO - DEBUG[day=2026-06-21] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:49:37,158 - INFO - DEBUG[day=2026-06-22] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:49:37,173 - INFO - DEBUG[day=2026-06-23] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:49:37,189 - INFO - DEBUG[day=2026-06-24] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:49:37,208 - INFO - DEBUG[day=2026-06-25] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:49:37,224 - INFO - DEBUG[day=2026-06-26] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:49:37,241 - INFO - DEBUG[day=2026-06-27] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:49:37,254 - INFO - DEBUG[day=2026-06-28] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:49:37,269 - INFO - DEBUG[day=2026-06-29] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:49:37,286 - INFO - DEBUG[day=2026-06-30] 割付対象タスク0件 pending_total=0 earliest_start_date_req=None
+2026-05-24 06:49:37,316 - INFO - 日次始業準備: 当日先頭の加工から離れていた帯を 13 件、先頭加工または直前休憩の直前に寄せました。
+2026-05-24 06:49:37,378 - INFO - 段階2出力の整理: 計画*・人員*（および旧 production_plan_multi_day_* / member_schedule_*）の .xlsx/.json を 3 件削除しました。
+2026-05-24 06:49:39,078 - INFO - 定常枠: master メイン A15/B15 → 08:25 ～ 17:00（結果の定常外「日時帯」着色）
+2026-05-24 06:49:39,089 - INFO - 段階2: 結果ブックを作成しした → 計画2605240649335719.xlsx
+2026-05-24 06:49:39,101 - INFO - 段階2: Excel 出力を抑制（PM_AI_STAGE2_WRITE_EXCEL）のため、設備ガント（計画・加工実績明細）の準備・生成を省略します。
+2026-05-24 06:49:39,167 - INFO - 結果_タスク一覧の列順ソース: 既定（40 列）
+2026-05-24 06:49:39,183 - INFO - 列順・表示のカスタマイズ: マクロ実行ブックにシート「列設定_結果_タスク一覧」を追加。 見出し「列名」「表示」… 表示は FALSE の列は結果シートで非表示。 1行「履歴」で履歴1～n を挿入。VBA の「列設定_結果_タスク一覧_チェックボックスを配置」でチェックボックスを表示列に連動可能。
+2026-05-24 06:49:39,275 - WARNING - PM_AI_TASK_INPUT_SOURCE_DIR is not a directory: '\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ'
+2026-05-24 06:49:39,289 - WARNING - 結果_配台表: 加工計画DATA 読込に失敗したため空欄補完をスキップ: タスク入力が必要です。PM_AI_PROCESSING_PLAN_PATH に表形式ファイル（CSV/Parquet/xlsx）の実在パスを設定するか、PM_AI_TASK_INPUT_SOURCE_DIR にフォルダを指定してその中の最新ファイルを使ってください（TASK_INPUT_WORKBOOK は使用しません）。
+2026-05-24 06:49:39,570 - INFO - インタラクティブ配台試行: 実配台数量をタイムライン再集計（配台日キー解決）で 64 キー分反映しました。
+2026-05-24 06:49:39,779 - INFO - インタラクティブ配台試行: 計画暦日未割付 33 行の配台日をスライドしました。
+2026-05-24 06:49:40,085 - INFO - インタラクティブ配台試行: 配台日スライド後 plan キーで meters_done を 64 件再集計しました。
+2026-05-24 06:49:40,097 - INFO - インタラクティブ配台試行: 結果_配台表は入力 JSON rows を採用しました（58 行）。
+2026-05-24 06:49:40,392 - INFO - 段階2: 表シート正本 JSON（Excel より先）を '/mnt/c/工程管理AIプロジェクト_JAVA/output/計画2605240649335719表.json' に出力しました（same_dir_as_output）。
+2026-05-24 06:49:43,067 - INFO - 段階2: 結果_タスク一覧 JSON サイドカーを '/mnt/c/工程管理AIプロジェクト_JAVA/output/計画2605240649335719一覧.json' に出力しました。
+2026-05-24 06:49:44,038 - INFO - 列設定シート図形コピー: Excel COM を廃止したためスキップしました（手動コピーまたはマクロで代替してください）。
+2026-05-24 06:49:44,600 - INFO - plan_workbook_sidecar: 同名 JSON を出力しました path=/mnt/c/工程管理AIプロジェクト_JAVA/output/計画2605240649335719.json (same_dir_as_output)
+2026-05-24 06:49:44,613 - INFO - 段階2: 計画ブック（全シート）の JSON を '/mnt/c/工程管理AIプロジェクト_JAVA/output/計画2605240649335719.json' に出力しました。
+2026-05-24 06:49:44,693 - INFO - 段階3(配台試行): 計画ブック 論理ビュー JSON の出力を省略します。
+2026-05-24 06:49:44,715 - INFO - 段階2: 計画ブック xlsx は出力しませんでした（PM_AI_STAGE2_WRITE_EXCEL）。 JSON のみ: /mnt/c/工程管理AIプロジェクト_JAVA/output/計画2605240649335719.json
+2026-05-24 06:49:44,748 - INFO - 段階3(配台試行): メンバー別スケジュール出力を省略します。
+2026-05-24 06:49:44,807 - INFO - 段階2: OOXML に xl/sharedStrings.xml が無いブックのため、メイン AI サマリ（openpyxl）をスキップしました。Excel で対象ブックを開いて通常保存すると解消することがあります。
+2026-05-24 06:49:44,842 - INFO - 段階2: Gemini 未使用: サマリを空で /mnt/c/工程管理AIプロジェクト_JAVA/log/gemini_usage_summary_for_main.txt に出力。
+2026-05-24 06:50:50,192 - WARNING - Gemini: マクロブック同階層の「gemini_credentials.encrypted.json」は見つかりません。
+2026-05-24 06:50:50,211 - WARNING - Gemini API キーは未設定です。GEMINI_CREDENTIALS_JSON で証明書ファイルを指定するか、マクロ実行ブックと同一フォルダ、または PM_AI_WORKSPACE に「gemini_credentials.encrypted.json」を配置してください。 備考の AI 解析等はスキップされした。 参考型: gemini_credentials.example.json / 参照用/python/encrypt_gemini_credentials.py（暗号化）。
+2026-05-24 06:50:50,373 - INFO - Excel: xl/sharedStrings.xml を追加するため '/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx' を openpyxl で再保存しました。
+2026-05-24 06:50:50,452 - INFO - 配台試行ルール: JSON '/mnt/c/工程管理AIプロジェクト_JAVA/code/json/stage1_exclude_rules.json' から 44 件（Excel の「設定_配台不要工程」read_excel はスキップ）。
+2026-05-24 06:50:50,658 - INFO - master.xlsm speed: シート 'speed' から 16 件の (工程名, 機械名) 速度を読み込みました。
+2026-05-24 06:50:50,670 - INFO - 配台シート読込: master.xlsm「speed」の速度を 61 行に適用（マスタ未該当 5 行は加工速度セルを変更しませんでした）。
+2026-05-24 06:50:50,697 - INFO - 計画タスク入力: PM_AI_PLAN_INPUT_PATH='/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx' を読み込みました。
+2026-05-24 06:50:50,708 - WARNING - PM_AI_TASK_INPUT_SOURCE_DIR is not a directory: '\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ'
+2026-05-24 06:50:51,698 - INFO - 工場稼働枠: master.xlsm メイン A12/B12 を採用 → 08:00 ～ 19:00（結果_* の日内グリッド・配台枠）
+2026-05-24 06:50:51,742 - INFO - 設定シート「設定」A3:A26: トレース用依頼NOは無し（空またはシート無し）
+2026-05-24 06:50:51,755 - INFO - 配台トレース: 対象なし（[配台トレース …] ログは出ません）
+2026-05-24 06:50:51,926 - INFO - skillsシート: 2段ヘッダ形式で読み込みました（工程+機械=16列, メンバー=7人）。
+2026-05-24 06:50:51,948 - INFO - need シート: 配台時追加人数行を検出（Excel行≈5）。列ととの上限を読み込みました。
+2026-05-24 06:50:51,963 - INFO - need人数マスタ: /mnt/c/工程管理AIプロジェクト_JAVA/code/master.xlsm の need シートを読み込み（skills と同一 ExcelFile で開いた直後。need 専用ディスクキャッシュは無し・AI json とは無関係）。
+2026-05-24 06:50:51,974 - INFO - need列サマリ combo='EC+EC機\u3000湖南' 基本必須人数=2 配台時追加人数上限=0
+2026-05-24 06:50:51,989 - INFO - need列サマリ combo='EC+SEC機\u3000湖南' 基本必須人数=3 配台時追加人数上限=0
+2026-05-24 06:50:52,000 - INFO - need列サマリ combo='SEC+SEC機\u3000湖南' 基本必須人数=3 配台時追加人数上限=0
+2026-05-24 06:50:52,012 - INFO - need列サマリ combo='スリット+スリット機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:50:52,024 - INFO - need列サマリ combo='スライス+スライス機1\u3000湖南' 基本必須人数=2 配台時追加人数上限=0
+2026-05-24 06:50:52,036 - INFO - need列サマリ combo='エンボス+エンボス\u3000湖南' 基本必須人数=2 配台時追加人数上限=0
+2026-05-24 06:50:52,048 - INFO - need列サマリ combo='接続+熱融着機\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:50:52,059 - INFO - need列サマリ combo='熱融着+熱融着機\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:50:52,071 - INFO - need列サマリ combo='検査+熱融着機\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:50:52,087 - INFO - need列サマリ combo='接続+スリット機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:50:52,099 - INFO - need列サマリ combo='接続+スライス機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:50:52,111 - INFO - need列サマリ combo='分割+スライス機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:50:52,124 - INFO - need列サマリ combo='分割+エンボス\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:50:52,137 - INFO - need列サマリ combo='分割+スリット機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:50:52,151 - INFO - need列サマリ combo='分割+EC機\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:50:52,165 - INFO - need列サマリ combo='巻返し+スリット機1\u3000湖南' 基本必須人数=1 配台時追加人数上限=0
+2026-05-24 06:50:52,197 - INFO - need 特別指定ルール: 2 件（工程名+機械名キー）。
+2026-05-24 06:50:52,215 - INFO - 『master.xlsm」からスキルと設備覝件(need)を読み込みました。
+2026-05-24 06:50:52,228 - INFO - 段階2 計測: load_skills_and_needs 0.44秒
+2026-05-24 06:50:52,256 - INFO - 組み合わせ表: 工程+機械キー 15 種類・編集行 117 を配台プリセットとして読み込みました。
+2026-05-24 06:50:55,003 - INFO - 段階3配台試行: 機械カレンダーは存在しますが、skills の設備列と一致する列がありません。 占有ブロックは空として続行します。
+2026-05-24 06:50:55,027 - INFO - 段階2 計測: load_team_combination_presets 2.80秒
+2026-05-24 06:50:55,045 - INFO - マスタ「設定_機械_日次始業準備」: 機械 12 件の日次始業準備（分）を読み込みました（必要人数指定 12 件）。
+2026-05-24 06:50:55,062 - INFO - マスタ「設定_依頼切替前後時間」: 依頼切替準備 12 件・休憩再開準備 15 件・後始末 12 件・依頼間余裕 15 件（工程+機械 / 機械のみの内訳はログのみ）。
+2026-05-24 06:50:55,253 - INFO - マスタ「設定_依頼切替前後時間」: 依頼切替準備 26 件・休憩再開準備 26 件・後始末 26 件・依頼間余裕 0 件（工程+機械 / 機械のみの内訳はログのみ）。
+2026-05-24 06:50:55,263 - INFO - マスタ「設定_依頼切替前後時間」: 同フォルダの国分master.xlsm から不足分 78 件を補完しました。
+2026-05-24 06:50:55,274 - INFO - 段階2 計測: load_machine_calendar_and_master_settings 0.25秒
+2026-05-24 06:50:57,233 - INFO - 定常枠: master メイン A15=08:25（結果シートの定常外着色・出勤簿生成の参照）
+2026-05-24 06:50:57,254 - INFO - need配台時追加人数: メイン割付は基本必須人数のみ。余力は全シミュレーション後」未割当かつスキル保有社をサブに追記しました。（メインで増員探索れる従来挙動: TEAM_ASSIGN_USE_NEED_SURPLUS_IN_MAIN_PASS=1）
+2026-05-24 06:50:57,306 - INFO - 段階2: PM_AI_STAGE2_SKIP_TODAY_DISPATCH により当日は配台せず、計画開始日を 2026-05-25 にずらしました。
+2026-05-24 06:50:57,316 - INFO - 計画基準日時: 2026/05/24 06:50:57（現在時刻フォールバック）
+2026-05-24 06:50:57,325 - INFO - 段階2 計測: extract_data_extraction_datetime 2.05秒
+2026-05-24 06:50:57,382 - INFO - 「master.xlsm」の各メンバーの勤怠シートを読み込みました。
+2026-05-24 06:50:57,397 - INFO - 勤怠列: AI 入力は「備考」のみ。備考は空の日は「休暇区分」（公休・後休・他拠点勤務など）を reason に反映しました。
+2026-05-24 06:50:57,409 - INFO - 勤怠列: 任意「残業(分)」は退勤上限の時刻、または定時退勤からの延長分（1〜720 の整数＝分）を指定できます（全日休み行では無視）。
+2026-05-24 06:50:57,439 - INFO - Gemini API キーが未設定のため備考AI解析をスキップしました。
+2026-05-24 06:50:57,488 - INFO - 段階2 計測: load_attendance_and_analyze 0.16秒
+2026-05-24 06:50:57,564 - INFO - 段階2 計測: analyze_global_priority_and_task_remarks 0.08秒
+2026-05-24 06:50:57,586 - INFO - task_queue 構築完了: total=58（配台試行によりスキップ 8 行）
+2026-05-24 06:50:57,649 - INFO - 段階2: OOXML に sharedStrings.xml が無いブックのため、配台シート一括書込（openpyxl）をスキップ（専用UI等の xlsx）
+2026-05-24 06:50:57,663 - INFO - 配台試行順番: 「配台試行順番」列の値をしのまま使用しました（全 58 行）。
+2026-05-24 06:50:57,702 - INFO - DEBUG[task=Y5-20] queue基準: start_date_req=2026-05-27 due_basis=2026-05-29 answer_due=2026-05-29 specified_due=2026-05-29 specified_due_ov=None due_source=answer_due priority=999 in_progress=False remark=False
+2026-05-24 06:50:57,720 - INFO - 段階2 計測: build_task_queue_and_prepare_dispatch 0.16秒
+2026-05-24 06:50:57,728 - INFO - DISPATCH_INTERVAL_MIRROR_ENFORCE: 設備・人の占有を区間ミラーで追跡しした（無効化は 設定_環境変数 等で DISPATCH_INTERVAL_MIRROR_ENFORCE=0）。
+2026-05-24 06:50:57,742 - INFO - 依頼NO直列配台: 無効。start_date を満たれ全行は当日候補になり」配台試行順・設備ルールで順庝付けしした。
+2026-05-24 06:50:57,758 - INFO - need人数(試行順優先フロー) order=3 task=Y5-27 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:50:57,776 - INFO - need人数(試行順優先フロー) order=3 task=Y5-27 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:50:57,796 - INFO - need人数(試行順優先フロー) order=28 task=W5-21 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:57,814 - INFO - need人数(試行順優先フロー) order=25 task=C5-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:57,828 - INFO - need人数(試行順優先フロー) order=26 task=W5-16 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:57,839 - WARNING - 段階2: 依頼NO=W5-16 日付=2026-05-25 工程/機械=スリット/スリット機1　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 6 人いしたは」設備の加工開始下限=2026-05-25 17:15 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-25 16:40 占有キー=スリット機1 湖南
+2026-05-24 06:50:57,850 - INFO - need人数(試行順優先フロー) order=30 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:57,865 - WARNING - 段階2: 依頼NO=W5-14 日付=2026-05-25 工程/機械=分割/スリット機1　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 6 人いしたは」設備の加工開始下限=2026-05-25 17:10 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-05-25 16:40 占有キー=スリット機1 湖南
+2026-05-24 06:50:57,882 - INFO - need人数(試行順優先フロー) order=2 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:57,896 - INFO - need人数(試行順優先フロー) order=4 task=Y5-16 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:57,913 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:57,928 - INFO - need人数(試行順優先フロー) order=2 task=W5-6 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:57,942 - INFO - need人数(試行順優先フロー) order=8 task=W5-18 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:57,954 - INFO - need人数(試行順優先フロー) order=9 task=W5-20 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:57,966 - INFO - need人数(試行順優先フロー) order=7 task=E5-4 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:57,979 - INFO - need人数(試行順優先フロー) order=10 task=E5-4 工程/機械=巻返し/スリット機1　湖南 req_num=1 [req_map['巻返し+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['巻返し+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:57,996 - INFO - need人数(試行順優先フロー) order=26 task=W5-16 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:58,014 - INFO - need人数(試行順優先フロー) order=30 task=W5-14 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:58,028 - INFO - DEBUG[day=2026-05-27] avail_members=5 tasks_today=8 (task=Y5-20 含む=True)
+2026-05-24 06:50:58,039 - INFO - need人数(試行順優先フロー) order=1 task=W5-18 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:50:58,055 - INFO - need人数(試行順優先フロー) order=11 task=Y5-24 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=5人
+2026-05-24 06:50:58,075 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:50:58,131 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:50:58,565 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=5人
+2026-05-24 06:50:58,576 - INFO - need人数(試行順優先フロー) order=15 task=V5-9 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:50:58,585 - INFO - need人数(試行順優先フロー) order=1 task=W5-18 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:50:58,592 - INFO - need人数(試行順優先フロー) order=13 task=V5-7 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=5人
+2026-05-24 06:50:58,604 - INFO - need人数(試行順優先フロー) order=1 task=W5-18 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:50:58,615 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=3人
+2026-05-24 06:50:58,624 - INFO - need人数(試行順優先フロー) order=15 task=V5-9 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:50:58,634 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:50:58,661 - INFO - need人数(試行順優先フロー) order=1 task=W5-18 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:50:58,672 - INFO - need人数(試行順優先フロー) order=1 task=W5-18 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:50:58,681 - INFO - need人数(試行順優先フロー) order=15 task=V5-9 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=5人
+2026-05-24 06:50:58,690 - INFO - DEBUG[day=2026-05-28] avail_members=6 tasks_today=10 (task=Y5-20 含む=True)
+2026-05-24 06:50:58,704 - INFO - need人数(試行順優先フロー) order=1 task=W5-18 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:58,719 - INFO - need人数(試行順優先フロー) order=14 task=Y5-17 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:58,735 - INFO - need人数(試行順優先フロー) order=16 task=C5-1 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:58,745 - INFO - need人数(試行順優先フロー) order=18 task=W5-16 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:58,757 - INFO - need人数(試行順優先フロー) order=17 task=W5-14 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:58,769 - INFO - need人数(試行順優先フロー) order=1 task=W5-18 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:58,783 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:58,802 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=3人
+2026-05-24 06:50:58,820 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:50:58,835 - INFO - need人数(試行順優先フロー) order=15 task=V5-9 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:58,853 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:50:58,868 - INFO - need人数(試行順優先フロー) order=27 task=Y5-20 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:58,883 - INFO - DEBUG[day=2026-05-29] avail_members=6 tasks_today=5 (task=Y5-20 含む=True)
+2026-05-24 06:50:58,898 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:58,911 - INFO - need人数(試行順優先フロー) order=20 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:50:58,949 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:58,966 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=3人
+2026-05-24 06:50:58,986 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:59,000 - INFO - DEBUG[day=2026-05-30] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:50:59,011 - INFO - DEBUG[day=2026-05-31] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:50:59,027 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:59,043 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:50:59,072 - INFO - need人数(試行順優先フロー) order=22 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:50:59,088 - WARNING - 段階2: 依頼NO=Y5-35 日付=2026-06-01 工程/機械=SEC/SEC機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 6 人いしたは」設備の加工開始下限=2026-06-01 17:47 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-06-01 16:57 占有キー=SEC機 湖南
+2026-05-24 06:50:59,100 - INFO - need人数(試行順優先フロー) order=19 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:59,111 - INFO - need人数(試行順優先フロー) order=31 task=W5-17 工程/機械=分割/スリット機1　湖南 req_num=1 [req_map['分割+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['分割+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:59,125 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:59,134 - INFO - need人数(試行順優先フロー) order=19 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:59,148 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:59,164 - INFO - need人数(試行順優先フロー) order=40 task=Y6-1 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:59,184 - INFO - need人数(試行順優先フロー) order=23 task=Y5-38 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:50:59,198 - INFO - need人数(試行順優先フロー) order=24 task=JR260503 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:59,253 - INFO - need人数(試行順優先フロー) order=29 task=JR260503 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:59,267 - INFO - need人数(試行順優先フロー) order=32 task=PN06-01 工程/機械=EC/SEC機　湖南 req_num=2 [need特別指定2 [機械名'SEC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:59,273 - WARNING - 段階2: 依頼NO=PN06-01 日付=2026-06-02 工程/機械=EC/SEC機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 6 人いしたは」設備の加工開始下限=2026-06-02 17:50 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-06-02 16:55 占有キー=SEC機 湖南
+2026-05-24 06:50:59,280 - INFO - need人数(試行順優先フロー) order=39 task=A6-1 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:59,291 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:59,301 - INFO - need人数(試行順優先フロー) order=19 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:59,317 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:59,327 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:59,337 - INFO - need人数(試行順優先フロー) order=37 task=JR260602 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:59,440 - INFO - need人数(試行順優先フロー) order=38 task=JR260602 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:59,490 - INFO - need人数(試行順優先フロー) order=33 task=JR260601 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:59,503 - WARNING - 段階2: 依頼NO=JR260601 日付=2026-06-03 工程/機械=SEC/SEC機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 6 人いしたは」設備の加工開始下限=2026-06-03 17:03 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-06-03 16:13 占有キー=SEC機 湖南
+2026-05-24 06:50:59,514 - INFO - need人数(試行順優先フロー) order=34 task=JR260601 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:59,537 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:59,558 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=3人
+2026-05-24 06:50:59,577 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:59,592 - INFO - need人数(試行順優先フロー) order=45 task=Y6-2 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:59,610 - INFO - need人数(試行順優先フロー) order=46 task=Y5-37 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:59,625 - INFO - need人数(試行順優先フロー) order=42 task=Y5-40 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:59,636 - INFO - need人数(試行順優先フロー) order=41 task=Y5-39 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:59,651 - INFO - need人数(試行順優先フロー) order=43 task=Y5-41 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:59,667 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:59,686 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=3人
+2026-05-24 06:50:59,702 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:50:59,716 - INFO - need人数(試行順優先フロー) order=20 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:50:59,730 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:50:59,741 - INFO - need人数(試行順優先フロー) order=22 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:50:59,754 - INFO - need人数(試行順優先フロー) order=32 task=PN06-01 工程/機械=EC/SEC機　湖南 req_num=2 [need特別指定2 [機械名'SEC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:59,770 - INFO - need人数(試行順優先フロー) order=33 task=JR260601 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:59,784 - INFO - need人数(試行順優先フロー) order=43 task=Y5-41 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:59,810 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:59,828 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:50:59,848 - INFO - need人数(試行順優先フロー) order=44 task=A6-1 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:50:59,871 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=3人
+2026-05-24 06:50:59,896 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:50:59,917 - INFO - need人数(試行順優先フロー) order=43 task=Y5-41 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:59,933 - INFO - need人数(試行順優先フロー) order=46 task=Y5-37 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:59,952 - INFO - need人数(試行順優先フロー) order=43 task=Y5-41 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:50:59,974 - INFO - DEBUG[day=2026-06-06] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:50:59,990 - INFO - DEBUG[day=2026-06-07] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:51:00,005 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:51:00,026 - INFO - need人数(試行順優先フロー) order=51 task=Y6-3 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:51:00,049 - INFO - need人数(試行順優先フロー) order=47 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:51:00,067 - INFO - need人数(試行順優先フロー) order=5 task=W5-13 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:51:00,089 - INFO - need人数(試行順優先フロー) order=12 task=Y5-34 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,110 - INFO - need人数(試行順優先フロー) order=19 task=W5-17 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:51:00,124 - INFO - need人数(試行順優先フロー) order=20 task=Y5-26 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,151 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,182 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:51:00,197 - INFO - need人数(試行順優先フロー) order=43 task=Y5-41 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:00,215 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:51:00,228 - INFO - need人数(試行順優先フロー) order=46 task=Y5-37 工程/機械=スライス/スライス機1　湖南 req_num=2 [req_map['スライス+スライス機1\u3000湖南']=2] extra_max=0 [surplus_map['スライス+スライス機1\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:00,246 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:51:00,265 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=3人
+2026-05-24 06:51:00,278 - INFO - need人数(試行順優先フロー) order=49 task=Y6-7 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,300 - INFO - need人数(試行順優先フロー) order=53 task=Y6-4 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:51:00,314 - INFO - need人数(試行順優先フロー) order=55 task=Y6-5 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:51:00,326 - INFO - need人数(試行順優先フロー) order=48 task=Y6-6 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,340 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,354 - INFO - need人数(試行順優先フロー) order=22 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,368 - INFO - need人数(試行順優先フロー) order=32 task=PN06-01 工程/機械=EC/SEC機　湖南 req_num=2 [need特別指定2 [機械名'SEC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:00,382 - INFO - need人数(試行順優先フロー) order=33 task=JR260601 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:00,400 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:51:00,418 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,434 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,446 - INFO - need人数(試行順優先フロー) order=22 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,463 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,480 - INFO - need人数(試行順優先フロー) order=22 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,497 - INFO - need人数(試行順優先フロー) order=32 task=PN06-01 工程/機械=EC/SEC機　湖南 req_num=2 [need特別指定2 [機械名'SEC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:00,524 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,542 - INFO - need人数(試行順優先フロー) order=22 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,556 - INFO - need人数(試行順優先フロー) order=32 task=PN06-01 工程/機械=EC/SEC機　湖南 req_num=2 [need特別指定2 [機械名'SEC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:00,569 - INFO - need人数(試行順優先フロー) order=33 task=JR260601 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:00,585 - INFO - need人数(試行順優先フロー) order=48 task=Y6-6 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,602 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=3人
+2026-05-24 06:51:00,618 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:51:00,646 - INFO - need人数(試行順優先フロー) order=52 task=Y6-3 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,668 - INFO - need人数(試行順優先フロー) order=54 task=Y6-4 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,688 - INFO - need人数(試行順優先フロー) order=58 task=Y5-42 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:00,699 - INFO - need人数(試行順優先フロー) order=50 task=Y6-8 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,710 - WARNING - 段階2: 依頼NO=Y6-8 日付=2026-06-10 工程/機械=SEC/SEC機　湖南 でフォーム候補は0件。スキル革坈(OP/AS)は 6 人いしたは」設備の加工開始下限=2026-06-10 17:49 は当日の担当候補の退勤(17:00)以降のため、この日は割当でしません。master「機械カレンダー」で当該日・当該機械列に試行な記入はないか」または剝工程の占有で設備下限は終業まで繰り上はっていないか確認してください（配台ルール 3.2.1 機械カレンダー・トラブルシュート）。参考: changeover剝の設備空し下限=2026-06-10 16:59 占有キー=SEC機 湖南
+2026-05-24 06:51:00,724 - INFO - need人数(試行順優先フロー) order=6 task=W5-13 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=3人
+2026-05-24 06:51:00,745 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:51:00,765 - INFO - need人数(試行順優先フロー) order=58 task=Y5-42 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:00,786 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,810 - INFO - need人数(試行順優先フロー) order=56 task=Y6-5 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,833 - INFO - need人数(試行順優先フロー) order=21 task=Y5-28 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,858 - INFO - need人数(試行順優先フロー) order=22 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,874 - INFO - need人数(試行順優先フロー) order=32 task=PN06-01 工程/機械=EC/SEC機　湖南 req_num=2 [need特別指定2 [機械名'SEC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:00,889 - INFO - need人数(試行順優先フロー) order=33 task=JR260601 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:00,907 - INFO - need人数(試行順優先フロー) order=22 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,927 - INFO - need人数(試行順優先フロー) order=22 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:00,946 - INFO - need人数(試行順優先フロー) order=32 task=PN06-01 工程/機械=EC/SEC機　湖南 req_num=2 [need特別指定2 [機械名'SEC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:00,982 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:51:01,004 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:51:01,020 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:51:01,041 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:51:01,057 - INFO - need人数(試行順優先フロー) order=58 task=Y5-42 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:01,081 - INFO - need人数(試行順優先フロー) order=22 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:01,102 - INFO - need人数(試行順優先フロー) order=22 task=Y5-35 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:01,124 - INFO - need人数(試行順優先フロー) order=32 task=PN06-01 工程/機械=EC/SEC機　湖南 req_num=2 [need特別指定2 [機械名'SEC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:01,143 - INFO - need人数(試行順優先フロー) order=33 task=JR260601 工程/機械=SEC/SEC機　湖南 req_num=2 [need特別指定1 ['SEC+SEC機\u3000湖南']=2] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:01,160 - INFO - need人数(試行順優先フロー) order=32 task=PN06-01 工程/機械=EC/SEC機　湖南 req_num=2 [need特別指定2 [機械名'SEC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:01,197 - INFO - need人数(試行順優先フロー) order=32 task=PN06-01 工程/機械=EC/SEC機　湖南 req_num=2 [need特別指定2 [機械名'SEC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+SEC機\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:01,273 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=3人
+2026-05-24 06:51:01,291 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:51:01,310 - INFO - need人数(試行順優先フロー) order=48 task=Y6-6 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:01,322 - INFO - need人数(試行順優先フロー) order=50 task=Y6-8 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:01,338 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:51:01,353 - INFO - need人数(試行順優先フロー) order=48 task=Y6-6 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:01,373 - INFO - need人数(試行順優先フロー) order=48 task=Y6-6 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:01,387 - INFO - need人数(試行順優先フロー) order=50 task=Y6-8 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:01,404 - INFO - need人数(試行順優先フロー) order=58 task=Y5-42 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:01,419 - INFO - need人数(試行順優先フロー) order=48 task=Y6-6 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:01,435 - INFO - need人数(試行順優先フロー) order=48 task=Y6-6 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:01,450 - INFO - need人数(試行順優先フロー) order=50 task=Y6-8 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:01,468 - INFO - DEBUG[day=2026-06-13] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:51:01,481 - INFO - DEBUG[day=2026-06-14] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:51:01,499 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:51:01,517 - INFO - need人数(試行順優先フロー) order=35 task=W5-8 工程/機械=EC/EC機　湖南 req_num=2 [req_map['EC+EC機\u3000湖南']=2] extra_max=0 [surplus_map['EC+EC機\u3000湖南']=0] max_team候補=2 capable=2人
+2026-05-24 06:51:01,538 - INFO - need人数(試行順優先フロー) order=36 task=W5-8 工程/機械=検査/熱融着機　湖南 req_num=1 [req_map['検査+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['検査+熱融着機\u3000湖南']=0] max_team候補=1 capable=4人
+2026-05-24 06:51:01,560 - INFO - need人数(試行順優先フロー) order=47 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:51:01,577 - INFO - need人数(試行順優先フロー) order=48 task=Y6-6 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:01,600 - INFO - need人数(試行順優先フロー) order=47 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:51:01,617 - INFO - need人数(試行順優先フロー) order=50 task=Y6-8 工程/機械=SEC/SEC機　湖南 req_num=3 [req_map['SEC+SEC機\u3000湖南']=3] extra_max=0 [surplus_map['SEC+SEC機\u3000湖南']=0] max_team候補=3 capable=6人
+2026-05-24 06:51:01,651 - INFO - need人数(試行順優先フロー) order=47 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:51:01,671 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:51:01,712 - INFO - need人数(試行順優先フロー) order=47 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:51:01,732 - INFO - need人数(試行順優先フロー) order=58 task=Y5-42 工程/機械=エンボス/エンボス　湖南 req_num=2 [req_map['エンボス+エンボス\u3000湖南']=2] extra_max=0 [surplus_map['エンボス+エンボス\u3000湖南']=0] max_team候補=2 capable=6人
+2026-05-24 06:51:01,751 - INFO - need人数(試行順優先フロー) order=47 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:51:01,769 - INFO - need人数(試行順優先フロー) order=47 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:51:01,783 - INFO - need人数(試行順優先フロー) order=47 task=V5-8 工程/機械=接続/熱融着機　湖南 req_num=1 [req_map['接続+熱融着機\u3000湖南']=1] extra_max=0 [surplus_map['接続+熱融着機\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:51:01,803 - INFO - need人数(試行順優先フロー) order=57 task=E6-1 工程/機械=スリット/スリット機1　湖南 req_num=1 [req_map['スリット+スリット機1\u3000湖南']=1] extra_max=0 [surplus_map['スリット+スリット機1\u3000湖南']=0] max_team候補=1 capable=6人
+2026-05-24 06:51:01,835 - INFO - DEBUG[day=2026-06-20] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:51:01,849 - INFO - DEBUG[day=2026-06-21] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:51:01,875 - INFO - DEBUG[day=2026-06-27] 稼働メンバー0のため、割付スキップ
+2026-05-24 06:51:01,891 - INFO - DEBUG[day=2026-06-28] 稼働メンバー0のため、割付スキップ
