@@ -26633,9 +26633,33 @@ def _raise_if_remaining_tasks_exceed_attendance_calendar(
     sample_s = "、".join(samples) if samples else "（依頼NO不明）"
     if len(pending) > 8:
         sample_s += f" 他{len(pending) - 8}件"
+    no_op_blocked = [
+        t for t in pending if t.get("_dispatch_block_no_op_on_working_days")
+    ]
+    no_op_hint = ""
+    if no_op_blocked:
+        no_op_samples: list[str] = []
+        for t in no_op_blocked[:3]:
+            tid = str(t.get("task_id") or "").strip()
+            mach = str(t.get("machine") or "").strip()
+            mname = str(t.get("machine_name") or "").strip()
+            if tid and mach and mname:
+                no_op_samples.append(f"{tid}/{mach}/{mname}")
+            elif tid and mach:
+                no_op_samples.append(f"{tid}/{mach}")
+            elif tid:
+                no_op_samples.append(tid)
+        no_op_hint = (
+            f" うち {len(no_op_blocked)} 件は稼働日に OP スキル保有者がおらず、"
+            f"AS のみの候補では必須人数を満たせません"
+            f"（例: {'、'.join(no_op_samples) if no_op_samples else sample_s}）。"
+            f" master「skills」で当該工程×機械に OP を設定するか、"
+            f" OP 担当の勤怠（休暇・公休等）を確認してください。"
+        )
     raise PlanningValidationError(
         f"{context_label}: 勤怠カレンダーの最終日（{last_iso}）までに配台しきれません"
         f"（残タスク {len(pending)} 件）。"
+        f"{no_op_hint}"
         f" master.xlsm の勤怠日付を延長してから再実行してください。例: {sample_s}"
     )
 
@@ -30820,6 +30844,30 @@ def _assign_one_roll_trial_order_flow(
                     _prev_mach_before_co.strftime("%Y-%m-%d %H:%M"),
                     machine_occ_key,
                 )
+            elif (
+                len(capable_members) >= int(req_num or 1)
+                and not op_today
+            ):
+                task["_dispatch_block_no_op_on_working_days"] = True
+                if not task.get("_dispatch_no_op_warned"):
+                    task["_dispatch_no_op_warned"] = True
+                    _as_only = [
+                        m
+                        for m in capable_members
+                        if skill_role_priority(m)[0] == "AS"
+                    ]
+                    logging.warning(
+                        "段階2: 依頼NO=%s 工程/機械=%s/%s — 当日稼働のスキル候補 %s 人いるが "
+                        "OP が 0 人のため 2 人以上編成できません（AS のみ: %s）。"
+                        " master「skills」で当該工程×機械に OP を設定するか、"
+                        " OP 担当の勤怠（休暇・公休等）を確認してください。",
+                        task.get("task_id"),
+                        machine,
+                        machine_name,
+                        len(capable_members),
+                        "、".join(_as_only[:8])
+                        + (f" 他{len(_as_only) - 8}人" if len(_as_only) > 8 else ""),
+                    )
             _interactive_append_team_shortage_op_as(
                 task,
                 current_date,
