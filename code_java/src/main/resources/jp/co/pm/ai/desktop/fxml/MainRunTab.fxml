@@ -42,17 +42,14 @@
                 <StackPane fx:id="stage1NetworkCacheBadgeHost" alignment="CENTER_LEFT" managed="false" styleClass="pm-stage1-network-cache-badge-host" visible="false" />
                 <Button fx:id="stage1RunButton" mnemonicParsing="false" onAction="#onStage1RunButtonAction" styleClass="pm-stage-run-button,pm-stage-run-1" text="段階1 実行" />
                 <CheckBox fx:id="stage1ClearCacheAndRunCheckBox" mnemonicParsing="false" text="キャッシュをクリアして実行" />
-            </HBox>
-            <VBox fillWidth="true" spacing="4.0" styleClass="pm-run-book-open-panel">
-                <Label styleClass="pm-section-title" text="ブックを開く" />
-                <HBox spacing="8.0">
+                <HBox alignment="CENTER_LEFT" spacing="8.0" styleClass="pm-run-book-open-inline">
                     <Label fx:id="masterWorkbookOpenHintLabel" text="master.xlsm" />
                     <Button mnemonicParsing="false" onAction="#onOpenMasterWorkbookAction" text="エクセルを開く" />
                     <Label fx:id="summaryWorkbookOpenHintLabel" text="サマリ_AI配台.xlsx" />
                     <Button fx:id="openSummaryAiDispatchButton" mnemonicParsing="false" onAction="#onOpenSummaryAiDispatchAction" text="エクセルを開く" />
                     <Button fx:id="forceUnlockSummaryAiDispatchButton" disable="true" mnemonicParsing="false" onAction="#onForceUnlockSummaryExportLockAction" text="ロック解除" />
                 </HBox>
-            </VBox>
+            </HBox>
             <HBox alignment="CENTER_LEFT" spacing="8.0" styleClass="pm-run-log-toolbar">
                 <Label text="種別" />
                 <ComboBox fx:id="logFilterCombo" prefHeight="25.0" prefWidth="102.0" />
