@@ -417,16 +417,6 @@
     -fx-background-color: #cbd5e1;
 }
 
-.overtime-simulation-grid-panel .overtime-simulation-grid-fixed {
-    -fx-border-color: derive(-fx-box-border, 30%);
-    -fx-border-width: 0 1 0 0;
-}
-
-.overtime-simulation-grid-fixed .column-header-background,
-.overtime-simulation-grid-dates .column-header-background {
-    -fx-background-color: derive(-fx-control-inner-background, -8%);
-}
-
 .button.pm-stage-run-button:disabled {
     -fx-opacity: 0.5;
 }
@@ -1033,4 +1023,117 @@
 .label.pm-planning-stage-badge-stage3 {
     -fx-background-color: #c6efce;
     -fx-text-fill: #1b5e20;
+}
+
+/* Equipment status dashboard */
+
+.pm-equipment-status-tab-root {
+    -fx-background-color: derive(-fx-base, 4%);
+}
+
+.pm-equipment-status-subbar {
+    -fx-alignment: CENTER_LEFT;
+}
+
+.label.pm-equipment-status-source {
+    -fx-font-size: 11px;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-equipment-status-card {
+    -fx-background-color: derive(-fx-base, 8%);
+    -fx-background-radius: 8;
+    -fx-border-color: derive(-fx-base, -18%);
+    -fx-border-radius: 8;
+    -fx-border-width: 1;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.12), 6, 0, 0, 2);
+}
+
+.label.pm-equipment-status-machine {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.label.pm-equipment-status-chip {
+    -fx-padding: 2 8 2 8;
+    -fx-background-radius: 10;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+
+.label.pm-equipment-status-chip-running {
+    -fx-background-color: #0d9488;
+    -fx-text-fill: white;
+}
+
+.label.pm-equipment-status-chip-completed {
+    -fx-background-color: #94a3b8;
+    -fx-text-fill: white;
+}
+
+.label.pm-equipment-status-chip-stopped {
+    -fx-background-color: #fecaca;
+    -fx-text-fill: #7f1d1d;
+}
+
+.label.pm-equipment-status-meta {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-text-inner-color;
+}
+
+.label.pm-equipment-status-pct-label {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+}
+
+.pm-equipment-status-stopped-pane {
+    -fx-min-height: 120;
+    -fx-alignment: center;
+}
+
+.label.pm-equipment-status-stopped-label {
+    -fx-font-size: 28px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #94a3b8;
+}
+
+.label.pm-equipment-status-plan-head {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.label.pm-equipment-status-plan-line {
+    -fx-font-size: 11px;
+    -fx-text-fill: -fx-text-inner-color;
+}
+
+.label.pm-equipment-status-date-foot {
+    -fx-font-size: 10px;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-equipment-status-fullscreen-root {
+    -fx-background-color: #0f172a;
+}
+
+.label.pm-equipment-status-fullscreen-title {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #e2e8f0;
+}
+
+.label.pm-equipment-status-fullscreen-meta {
+    -fx-text-fill: #cbd5e1;
+}
+
+.pm-equipment-status-fullscreen-root .pm-equipment-status-card {
+    -fx-background-color: #1e293b;
+    -fx-border-color: #334155;
+}
+
+.pm-equipment-status-fullscreen-root .label.pm-equipment-status-machine,
+.pm-equipment-status-fullscreen-root .label.pm-equipment-status-meta,
+.pm-equipment-status-fullscreen-root .label.pm-equipment-status-plan-line {
+    -fx-text-fill: #e2e8f0;
 }

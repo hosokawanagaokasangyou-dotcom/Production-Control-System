@@ -16,7 +16,6 @@ import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
@@ -173,7 +172,7 @@ public final class OvertimeSimulationWizard {
         root.setBottom(buttons);
         BorderPane.setMargin(buttons, new Insets(8, 12, 12, 12));
 
-        Scene scene = new Scene(root, 960, 560);
+        Scene scene = new Scene(root, 1024, 560);
         if (shell != null) {
             shell.registerThemeTrackedScene(scene);
             stage.setOnHidden(ev -> shell.unregisterThemeTrackedScene(scene));
@@ -183,46 +182,27 @@ public final class OvertimeSimulationWizard {
     }
 
     private static Node buildGridPanel(OvertimeSimulationEditState state) {
-        List<GridRow> rows = new ArrayList<>();
         List<String> members = state.members();
+        List<GridRow> rows = new ArrayList<>();
         for (String m : members) {
             rows.add(new GridRow(m, RowKind.ATTENDANCE));
             rows.add(new GridRow(m, RowKind.OVERTIME));
         }
 
-        ObservableList<GridRow> items = FXCollections.observableArrayList(rows);
-
-        TableView<GridRow> fixedTable = new TableView<>(items);
-        fixedTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        fixedTable.getStyleClass().add("overtime-simulation-grid");
-        fixedTable.getStyleClass().add("overtime-simulation-grid-fixed");
-        fixedTable.setPrefWidth(220);
-        fixedTable.setMinWidth(220);
-        fixedTable.setMaxWidth(220);
-        fixedTable.getColumns().add(buildNameColumn());
-        fixedTable.getColumns().add(buildKindColumn());
-
-        TableView<GridRow> dateTable = new TableView<>(items);
-        dateTable.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
-        dateTable.getStyleClass().add("overtime-simulation-grid");
-        dateTable.getStyleClass().add("overtime-simulation-grid-dates");
-        for (TableColumn<GridRow, String> dc : buildDateColumns(state, members)) {
-            dateTable.getColumns().add(dc);
+        TableView<GridRow> table = new TableView<>(FXCollections.observableArrayList(rows));
+        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
+        table.getStyleClass().add("overtime-simulation-grid");
+        table.getColumns().add(buildNameColumn());
+        table.getColumns().add(buildKindColumn());
+        for (TableColumn<GridRow, String> dc : buildDateColumns(state)) {
+            table.getColumns().add(dc);
         }
 
         double rowHeight = 28.0;
-        fixedTable.setFixedCellSize(rowHeight);
-        dateTable.setFixedCellSize(rowHeight);
-        fixedTable.setPrefHeight(Math.min(420, items.size() * rowHeight + 32));
-        dateTable.prefHeightProperty().bind(fixedTable.heightProperty());
-
-        ScrollPane dateScroll = new ScrollPane(dateTable);
-        dateScroll.setFitToHeight(true);
-        HBox.setHgrow(dateScroll, Priority.ALWAYS);
-
-        HBox panel = new HBox(0, fixedTable, dateScroll);
-        panel.getStyleClass().add("overtime-simulation-grid-panel");
-        return panel;
+        table.setFixedCellSize(rowHeight);
+        table.setPrefHeight(Math.min(420, rows.size() * rowHeight + 32));
+        VBox.setVgrow(table, Priority.ALWAYS);
+        return table;
     }
 
     private static TableColumn<GridRow, String> buildNameColumn() {
@@ -267,16 +247,16 @@ public final class OvertimeSimulationWizard {
     }
 
     private static List<TableColumn<GridRow, String>> buildDateColumns(
-            OvertimeSimulationEditState state, List<String> members) {
+            OvertimeSimulationEditState state) {
         List<TableColumn<GridRow, String>> cols = new ArrayList<>();
         for (LocalDate d : state.dates()) {
-            cols.add(buildDateColumn(state, members, d));
+            cols.add(buildDateColumn(state, d));
         }
         return cols;
     }
 
     private static TableColumn<GridRow, String> buildDateColumn(
-            OvertimeSimulationEditState state, List<String> members, LocalDate date) {
+            OvertimeSimulationEditState state, LocalDate date) {
         TableColumn<GridRow, String> dateCol =
                 new TableColumn<>(AttendanceOvertimePreview.formatDateHeader(date));
         dateCol.setPrefWidth(88);
@@ -300,14 +280,13 @@ public final class OvertimeSimulationWizard {
                                             if (row == null || row.kind() != RowKind.ATTENDANCE) {
                                                 return;
                                             }
-                                            String member = memberForRow(getIndex(), members);
+                                            String member = row.member();
                                             if (member == null || member.isBlank()) {
                                                 return;
                                             }
                                             state.toggleWorking(date, member);
                                             refresh();
                                             getTableView().refresh();
-                                            fixedTableRefreshSibling(getTableView());
                                         });
                                 overtimeField.setPrefWidth(64);
                                 overtimeField.setMaxWidth(Double.MAX_VALUE);
@@ -323,8 +302,7 @@ public final class OvertimeSimulationWizard {
                                                             || row.kind() != RowKind.OVERTIME) {
                                                         return;
                                                     }
-                                                    String member =
-                                                            memberForRow(getIndex(), members);
+                                                    String member = row.member();
                                                     if (member == null || member.isBlank()) {
                                                         return;
                                                     }
@@ -355,7 +333,7 @@ public final class OvertimeSimulationWizard {
                                     setGraphic(null);
                                     return;
                                 }
-                                String member = memberForRow(getIndex(), members);
+                                String member = row.member();
                                 if (member == null || member.isBlank()) {
                                     setGraphic(null);
                                     return;
@@ -409,7 +387,7 @@ public final class OvertimeSimulationWizard {
                                 if (row == null || row.kind() != RowKind.ATTENDANCE) {
                                     return;
                                 }
-                                String member = memberForRow(getIndex(), members);
+                                String member = row.member();
                                 if (member == null) {
                                     return;
                                 }
@@ -427,35 +405,5 @@ public final class OvertimeSimulationWizard {
                             }
                         });
         return dateCol;
-    }
-
-    /** 日付側テーブル更新時に固定列側も再描画する。 */
-    private static void fixedTableRefreshSibling(TableView<GridRow> dateTable) {
-        Node p = dateTable.getParent();
-        while (p != null) {
-            if (p instanceof HBox hb) {
-                for (Node c : hb.getChildren()) {
-                    if (c instanceof TableView<?> ft && ft != dateTable) {
-                        @SuppressWarnings("unchecked")
-                        TableView<GridRow> fixed = (TableView<GridRow>) ft;
-                        fixed.refresh();
-                        return;
-                    }
-                }
-            }
-            p = p.getParent();
-        }
-    }
-
-    /** 2行ブロックのうち行 index からメンバー名を得る。 */
-    private static String memberForRow(int rowIndex, List<String> members) {
-        if (rowIndex < 0 || members == null || members.isEmpty()) {
-            return null;
-        }
-        int memberIndex = rowIndex / 2;
-        if (memberIndex >= members.size()) {
-            return null;
-        }
-        return members.get(memberIndex);
     }
 }
