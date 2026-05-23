@@ -104,6 +104,11 @@
                                     <Button fx:id="openSummaryAiDispatchButton" mnemonicParsing="false" onAction="#onOpenSummaryAiDispatchAction" text="エクセルを開く" />
                                     <Button fx:id="forceUnlockSummaryAiDispatchButton" disable="true" mnemonicParsing="false" onAction="#onForceUnlockSummaryExportLockAction" text="ロック解除" />
                                 </HBox>
+                                <Label styleClass="pm-section-title" text="開発用" />
+                                <VBox spacing="4.0">
+                                    <CheckBox fx:id="skipGeminiApiCheckBox" mnemonicParsing="false" text="AI API 呼び出しをスキップ（開発用）" />
+                                    <Label wrapText="true" text="ON のとき Gemini への HTTP 呼び出しを行いません（段階1/2・配台不要ロジック等）。本番運用では必ず OFF にしてください。" />
+                                </VBox>
                                 <Label styleClass="pm-section-title" text="最新の実行時間" />
                                 <GridPane hgap="16.0" styleClass="pm-run-execution-timings" vgap="4.0">
                                     <Label text="段階1" GridPane.columnIndex="0" GridPane.rowIndex="0" />

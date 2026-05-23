@@ -279,6 +279,11 @@ public final class EnvVarDocs {
                 "1/true/yes/on のとき、実加工数が正の行（加工途中相当）を配台キューに入れない（当日完了と想定、段階2）。"
                         + " JavaFX 段階2 起動時は常に無効（0）。加工途中は「配台計画_タスク入力」タブの翌日配台量ダイアログで指定。");
         put(
+                "PM_AI_SKIP_GEMINI_API",
+                "1/true/yes/on のとき Gemini generateContent を呼ばない（開発用）。"
+                        + " JavaFX 実行・ログタブ「その他」内のチェックが子プロセス起動時に上書きする。"
+                        + " 本番運用では 0 または未設定を推奨。");
+        put(
                 "PM_AI_STAGE2_IN_PROGRESS_NEXT_DAY_DISPATCH_JSON",
                 "段階2直前に JavaFX が書く UTF-8 JSON（加工途中行の翌日配台量 m）。"
                         + " build_task_queue_from_planning_df が実加工数>0 の行の配台量を上書きする。"

@@ -115,6 +115,9 @@ public final class MainRunTabController {
     private ComboBox<String> stage2ResultBookFontCombo;
 
     @FXML
+    private CheckBox skipGeminiApiCheckBox;
+
+    @FXML
     private Button copyAllLogButton;
 
     @FXML
@@ -180,6 +183,8 @@ public final class MainRunTabController {
     private final AtomicBoolean suppressLogFontEvents = new AtomicBoolean(false);
 
     private final AtomicBoolean suppressStage2ResultFontEvents = new AtomicBoolean(false);
+
+    private final AtomicBoolean suppressSkipGeminiApiEvents = new AtomicBoolean(false);
 
     private final AtomicBoolean suppressRunLogSessionPersistence = new AtomicBoolean(false);
 
@@ -306,6 +311,16 @@ public final class MainRunTabController {
                             (o, a, b) -> {
                                 if (!suppressStage2ResultFontEvents.get()
                                         && shell != null) {
+                                    shell.scheduleDesktopSessionSave();
+                                }
+                            });
+        }
+        if (skipGeminiApiCheckBox != null) {
+            skipGeminiApiCheckBox
+                    .selectedProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (!suppressSkipGeminiApiEvents.get() && shell != null) {
                                     shell.scheduleDesktopSessionSave();
                                 }
                             });
@@ -1196,6 +1211,23 @@ public final class MainRunTabController {
             }
         } finally {
             suppressStage2ResultFontEvents.set(false);
+        }
+    }
+
+    /** 子プロセスへ渡す {@code PM_AI_SKIP_GEMINI_API}（チェックは本タブ「その他」アコーディオン）。 */
+    boolean snapshotSkipGeminiApi() {
+        return skipGeminiApiCheckBox != null && skipGeminiApiCheckBox.isSelected();
+    }
+
+    void applySkipGeminiApiFromSession(boolean skip) {
+        if (skipGeminiApiCheckBox == null) {
+            return;
+        }
+        suppressSkipGeminiApiEvents.set(true);
+        try {
+            skipGeminiApiCheckBox.setSelected(skip);
+        } finally {
+            suppressSkipGeminiApiEvents.set(false);
         }
     }
 

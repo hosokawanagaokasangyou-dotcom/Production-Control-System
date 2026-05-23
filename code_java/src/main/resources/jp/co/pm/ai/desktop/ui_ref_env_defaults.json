@@ -54,6 +54,10 @@
     "value" : "1",
     "description" : "1/true 等で workbook_env_bootstrap がマクロ「設定_環境変数」シートを読まず、JavaFX タブの値のみ子プロセスへ渡す。空のときランチャーは子へ 1 を付与。"
   }, {
+    "key" : "PM_AI_SKIP_GEMINI_API",
+    "value" : "0",
+    "description" : "1/true/yes/on のとき Gemini generateContent を呼ばない（開発用）。JavaFX 実行・ログタブ「その他」内のチェックが子プロセス起動時に上書きする。"
+  }, {
     "key" : "MASTER_WORKBOOK_FILE",
     "value" : "",
     "description" : "マスタブックのファイル名（空なら master.xlsm）。マクロブック所在フォルダ基準の相対可（basename のみ推奨）。planning_core と VBA のマスタ参照で共通。PM_AI_MASTER_WORKBOOK 未指定時の解決に使う。マスタ読込サマリタブの表示と一致確認に利用。"

@@ -231,6 +231,12 @@ public final class AppPaths {
     public static final String KEY_PM_AI_RESULT_BOOK_FONT = "PM_AI_RESULT_BOOK_FONT";
 
     /**
+     * 1/true/yes/on のとき planning_core / JavaFX から Gemini {@code generateContent} を呼ばない（開発用）。
+     * JavaFX 実行・ログタブのチェックが子プロセス起動時に上書きする。
+     */
+    public static final String KEY_PM_AI_SKIP_GEMINI_API = "PM_AI_SKIP_GEMINI_API";
+
+    /**
      * 段階2の Excel 生成デバッグ: 1 件の依頼NO（例 {@code Y5-14}）を追跡し NDJSON を planning_core から出力。JavaFX
      * {@code 環境変数} タブに設定。空で無効。
      */

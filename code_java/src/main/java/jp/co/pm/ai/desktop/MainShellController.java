@@ -865,6 +865,7 @@ public final class MainShellController {
         planInputTabController.applyStage2InProgressNextDayPromptFromSession(
                 s.planInputStage2InProgressNextDayPrompt());
         mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
+        mainRunTabController.applySkipGeminiApiFromSession(s.mainRunSkipGeminiApi());
         /*
          * 設備ガントの apply は末尾で Canvas を再構築し personBadgeStyleResolverForGantt を参照する。
          * 担当バッジのセッション（グロー等）を先に適用しないと、起動直後の帯は既定スタイルで描かれる。
@@ -960,6 +961,7 @@ public final class MainShellController {
                 planInputTabController.snapshotStage2SkipTodayDispatch(),
                 planInputTabController.snapshotStage2InProgressNextDayPrompt(),
                 mainRunTabController.snapshotStage2ResultBookFont(),
+                mainRunTabController.snapshotSkipGeminiApi(),
                 snapshotUiEnvRows(),
                 snapshotMainShellTabOrder(),
                 snapshotMainShellTabLayout(),
@@ -3357,6 +3359,7 @@ public final class MainShellController {
             Map<String, String> uiRun = collectUiEnv();
             overlayWorkingExcludeRulesJsonPathForStageRun(uiRun);
             overlayDispatchLookupTablePathsForStageRun(uiRun);
+            overlayMainRunSkipGeminiApiEnv(uiRun);
             if (STAGE1.equals(script)) {
                 uiRun.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
             }
@@ -3376,6 +3379,10 @@ public final class MainShellController {
             }
             String wb = effectiveTaskInputWorkbookPath();
             appendLog("--- start: " + script + " ---");
+            if (mainRunTabController.snapshotSkipGeminiApi()) {
+                appendLog(
+                        "[dev] PM_AI_SKIP_GEMINI_API=1 — Gemini API 呼び出しをスキップします（開発用）。");
+            }
             if (STAGE1.equals(script)) {
                 if (mainRunTabController.snapshotStage1ClearCacheAndRun()) {
                     appendLog("[stage1] キャッシュをクリアして実行します。");
@@ -4120,6 +4127,16 @@ public final class MainShellController {
         return new RunRequest(py, dir, "pm_ai_delivery_calendar_view.py", wb, childEnvForPython(uiRun));
     }
 
+    /** 実行・ログタブ「その他」の開発用チェックを子プロセス環境へ反映する。 */
+    private void overlayMainRunSkipGeminiApiEnv(Map<String, String> ui) {
+        if (mainRunTabController == null) {
+            return;
+        }
+        ui.put(
+                AppPaths.KEY_PM_AI_SKIP_GEMINI_API,
+                mainRunTabController.snapshotSkipGeminiApi() ? "1" : "0");
+    }
+
     /**
      * Env tab keys passed to Python; strips legacy workbook keys（{@link
      * jp.co.pm.ai.desktop.bridge.Stage2PythonChildEnv#LEGACY_WORKBOOK_KEYS_STRIPPED_FOR_PYTHON_CHILD}）。
@@ -4601,7 +4618,9 @@ public final class MainShellController {
      * {@code PM_AI_*} inheritance rules, UTF-8 stdio.
      */
     public Map<String, String> snapshotPythonChildEnv() {
-        return childEnvForPython(collectUiEnv());
+        Map<String, String> ui = new HashMap<>(collectUiEnv());
+        overlayMainRunSkipGeminiApiEnv(ui);
+        return childEnvForPython(ui);
     }
 
     /**
@@ -4618,6 +4637,7 @@ public final class MainShellController {
                 planInputTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
         ui.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
         applyStage2InProgressNextDayDispatchEnv(ui);
+        overlayMainRunSkipGeminiApiEnv(ui);
         String resultFont = mainRunTabController.snapshotStage2ResultBookFont();
         if (resultFont != null && !resultFont.isBlank()) {
             ui.put(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT, resultFont.trim());
@@ -4625,6 +4645,11 @@ public final class MainShellController {
             ui.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
         }
         return childEnvForPython(ui);
+    }
+
+    /** 実行・ログタブ「その他」の Gemini スキップチェック状態（配台不要ルールタブの Java 側 AI 用）。 */
+    public boolean mainRunSkipGeminiApi() {
+        return mainRunTabController != null && mainRunTabController.snapshotSkipGeminiApi();
     }
 
     void acceptReloadAfterStage1PlanInput(Runnable r) {

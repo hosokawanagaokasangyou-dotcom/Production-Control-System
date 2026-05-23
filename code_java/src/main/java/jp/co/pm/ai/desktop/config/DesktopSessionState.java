@@ -31,6 +31,7 @@ import java.util.Map;
  *     (配台計画_タスク入力 tab; default on)
  * @param mainRunStage2ResultBookFont stage-2 result Excel font family; empty with system default in UI means Python
  *     built-in default
+ * @param mainRunSkipGeminiApi when true, skip Gemini generateContent calls (development; run tab checkbox)
  * @param uiEnvRows persisted 環境変数 tab rows (empty uses bootstrap defaults only)
  * @param mainShellTabOrder ordered {@link jp.co.pm.ai.desktop.MainShellTabId#key()} values for the main window
  *     tab strip; empty restores default FXML order（{@link #mainShellTabLayout()} が空のときのみ有効）
@@ -107,6 +108,7 @@ public record DesktopSessionState(
         boolean mainRunStage2SkipTodayDispatch,
         boolean planInputStage2InProgressNextDayPrompt,
         String mainRunStage2ResultBookFont,
+        boolean mainRunSkipGeminiApi,
         List<UiEnvRowSnapshot> uiEnvRows,
         List<String> mainShellTabOrder,
         List<MainShellTabLayoutNode> mainShellTabLayout,
@@ -329,6 +331,7 @@ public record DesktopSessionState(
                 false,
                 true,
                 "",
+                false,
                 List.of(),
                 List.of(),
                 List.of(),
@@ -409,6 +412,7 @@ public record DesktopSessionState(
                 bootstrap.mainRunStage2SkipTodayDispatch(),
                 bootstrap.planInputStage2InProgressNextDayPrompt(),
                 bootstrap.mainRunStage2ResultBookFont(),
+                bootstrap.mainRunSkipGeminiApi(),
                 bootstrap.uiEnvRows(),
                 mainShellTabOrder(),
                 mainShellTabLayout(),

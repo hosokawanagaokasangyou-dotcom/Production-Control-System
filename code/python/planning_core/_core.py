@@ -4708,6 +4708,10 @@ def _gemini_heartbeat_loop(
         _gemini_flush_log_handlers()
 
 
+class GeminiApiSkippedError(RuntimeError):
+    """PM_AI_SKIP_GEMINI_API により generate_content を意図的にスキップ（開発用）。"""
+
+
 def _gemini_generate_content_with_retry(
     client: genai.Client,
     *,
@@ -4736,6 +4740,12 @@ def _gemini_generate_content_with_retry(
         n = 1
     base = max(0.1, float(_GEMINI_RETRY_BACKOFF_BASE))
     prefix = f"{log_label}: " if log_label else ""
+    if _stage2_truthy_env("PM_AI_SKIP_GEMINI_API"):
+        logging.warning(
+            "%sGemini API 呼び出しをスキップしました（PM_AI_SKIP_GEMINI_API=1・開発用）。",
+            prefix,
+        )
+        raise GeminiApiSkippedError("PM_AI_SKIP_GEMINI_API")
     hb_interval = _gemini_progress_log_interval_sec()
     last_raise: BaseException | None = None
     for mi, mid in enumerate(chain):
