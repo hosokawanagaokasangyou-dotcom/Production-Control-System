@@ -252,6 +252,7 @@ public record PlanWorkspaceSessionFragment(
                 base.equipmentStatusDashboardPlanDayOffset(),
                 base.equipmentStatusDashboardAutoRefreshEnabled(),
                 base.equipmentStatusDashboardShowAladdinPlans(),
-                base.equipmentStatusDashboardShowDispatchPlans());
+                base.equipmentStatusDashboardShowDispatchPlans(),
+                base.equipmentStatusDashboardAppearance());
     }
 }

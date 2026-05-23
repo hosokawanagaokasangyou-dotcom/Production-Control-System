@@ -22,6 +22,7 @@ import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.stage.Window;
 
+import jp.co.pm.ai.desktop.config.EquipmentStatusDashboardAppearancePrefs;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentMachineStatus;
 
@@ -29,11 +30,14 @@ import jp.co.pm.ai.desktop.io.actuals.EquipmentMachineStatus;
 public final class EquipmentStatusFullscreenStage {
 
     private final Stage stage = new Stage(StageStyle.UNDECORATED);
-    private final FlowPane cardPane = new FlowPane(12.0, 12.0);
+    private final FlowPane cardPane = new FlowPane();
+    private final ScrollPane scrollPane = new ScrollPane();
     private final VBox emptyStateHost = new VBox();
     private final Label metaLabel = new Label();
     private Runnable onClose;
     private boolean ownerInitialized;
+    private EquipmentStatusDashboardAppearancePrefs appearance =
+            EquipmentStatusDashboardAppearancePrefs.defaults();
 
     public EquipmentStatusFullscreenStage() {
         BorderPane root = new BorderPane();
@@ -51,18 +55,22 @@ public final class EquipmentStatusFullscreenStage {
         close.setOnAction(e -> hide());
         top.getChildren().addAll(title, spacer, metaLabel, close);
 
-        cardPane.setPadding(new Insets(12.0));
         cardPane.getStyleClass().add("pm-equipment-status-card-flow");
-        ScrollPane scroll = new ScrollPane(cardPane);
-        scroll.setFitToWidth(true);
-        scroll.getStyleClass().add("pm-equipment-status-scroll");
+        scrollPane.setContent(cardPane);
+        scrollPane.setFitToWidth(true);
+        scrollPane.getStyleClass().add("pm-equipment-status-scroll");
+        scrollPane.viewportBoundsProperty()
+                .addListener(
+                        (o, a, b) ->
+                                EquipmentStatusDashboardAppearanceApplier.configureFlowPane(
+                                        cardPane, appearance, true, b.getWidth()));
 
         emptyStateHost.setAlignment(Pos.CENTER);
         emptyStateHost.getStyleClass().add("pm-equipment-status-empty-host");
         emptyStateHost.setVisible(false);
         emptyStateHost.setManaged(false);
 
-        StackPane center = new StackPane(scroll, emptyStateHost);
+        StackPane center = new StackPane(scrollPane, emptyStateHost);
 
         root.setTop(top);
         root.setCenter(center);
@@ -95,6 +103,7 @@ public final class EquipmentStatusFullscreenStage {
             Window owner,
             List<EquipmentMachineStatus> statuses,
             EquipmentStatusCardFactory.DisplayOptions opts,
+            EquipmentStatusDashboardAppearancePrefs appearancePrefs,
             Function<String, PersonBadgeStyle> badgeStyleResolver,
             String metaText,
             String actualDateLabel,
@@ -104,9 +113,19 @@ public final class EquipmentStatusFullscreenStage {
             stage.initOwner(owner);
             ownerInitialized = true;
         }
+        this.appearance =
+                appearancePrefs != null
+                        ? appearancePrefs
+                        : EquipmentStatusDashboardAppearancePrefs.defaults();
         metaLabel.setText(metaText != null ? metaText : "");
         rebuildCards(
-                statuses, opts, badgeStyleResolver, actualDateLabel, planDateLabel, sourcesLoaded);
+                statuses,
+                opts,
+                appearancePrefs,
+                badgeStyleResolver,
+                actualDateLabel,
+                planDateLabel,
+                sourcesLoaded);
         stage.setFullScreen(true);
         if (!stage.isFullScreen()) {
             stage.setMaximized(true);
@@ -118,10 +137,20 @@ public final class EquipmentStatusFullscreenStage {
     public void rebuildCards(
             List<EquipmentMachineStatus> statuses,
             EquipmentStatusCardFactory.DisplayOptions opts,
+            EquipmentStatusDashboardAppearancePrefs appearancePrefs,
             Function<String, PersonBadgeStyle> badgeStyleResolver,
             String actualDateLabel,
             String planDateLabel,
             boolean sourcesLoaded) {
+        this.appearance =
+                appearancePrefs != null
+                        ? appearancePrefs
+                        : EquipmentStatusDashboardAppearancePrefs.defaults();
+        EquipmentStatusDashboardAppearanceApplier.configureFlowPane(
+                cardPane,
+                appearance,
+                true,
+                scrollPane.getViewportBounds().getWidth());
         cardPane.getChildren().clear();
         boolean empty = statuses == null || statuses.isEmpty();
         emptyStateHost.getChildren().clear();
@@ -139,7 +168,7 @@ public final class EquipmentStatusFullscreenStage {
             cardPane.getChildren()
                     .add(
                             EquipmentStatusCardFactory.createCard(
-                                    s, opts, badgeStyleResolver, true));
+                                    s, opts, appearance, badgeStyleResolver, true));
         }
     }
 

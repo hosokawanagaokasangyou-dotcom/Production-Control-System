@@ -15,12 +15,15 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.TitledPane;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
+import jp.co.pm.ai.desktop.config.EquipmentStatusDashboardAppearancePrefs;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentMachineStatus;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardBuilder;
@@ -28,6 +31,8 @@ import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.LoadedSources;
 import jp.co.pm.ai.desktop.ui.EquipmentStatusCardFactory;
 import jp.co.pm.ai.desktop.ui.EquipmentStatusCardFactory.DisplayOptions;
+import jp.co.pm.ai.desktop.ui.EquipmentStatusDashboardAppearanceApplier;
+import jp.co.pm.ai.desktop.ui.EquipmentStatusDashboardAppearancePanel;
 import jp.co.pm.ai.desktop.ui.EquipmentStatusFullscreenStage;
 
 /** メインシェル「ダッシュボード」タブ。 */
@@ -49,6 +54,9 @@ public final class EquipmentStatusDashboardTabController {
     @FXML private Label actualDateSummaryLabel;
     @FXML private Label machineCountLabel;
     @FXML private Label sourceSummaryLabel;
+    @FXML private TitledPane appearancePane;
+    @FXML private VBox appearanceControlsHost;
+    @FXML private ScrollPane cardScrollPane;
     @FXML private FlowPane cardFlowPane;
     @FXML private VBox emptyStatePane;
 
@@ -64,6 +72,9 @@ public final class EquipmentStatusDashboardTabController {
 
     private LocalDate actualDate = LocalDate.now();
     private LocalDate planDate = LocalDate.now();
+    private EquipmentStatusDashboardAppearancePrefs appearancePrefs =
+            EquipmentStatusDashboardAppearancePrefs.defaults();
+    private EquipmentStatusDashboardAppearancePanel appearancePanel;
 
     @FXML
     private void initialize() {
@@ -95,6 +106,24 @@ public final class EquipmentStatusDashboardTabController {
                                 planDate = cur;
                                 rebuildFromCache();
                             });
+        }
+
+        appearancePanel =
+                new EquipmentStatusDashboardAppearancePanel(
+                        appearancePrefs, p -> onAppearanceChanged(p));
+        if (appearanceControlsHost != null) {
+            appearanceControlsHost.getChildren().setAll(appearancePanel.buildRoot());
+        }
+
+        if (cardScrollPane != null && cardFlowPane != null) {
+            cardScrollPane.viewportBoundsProperty()
+                    .addListener(
+                            (o, a, b) ->
+                                    EquipmentStatusDashboardAppearanceApplier.configureFlowPane(
+                                            cardFlowPane,
+                                            appearancePrefs,
+                                            false,
+                                            b.getWidth()));
         }
 
         fullscreenStage.setOnClose(
@@ -149,6 +178,10 @@ public final class EquipmentStatusDashboardTabController {
             if (showDispatchCheckBox != null) {
                 showDispatchCheckBox.setSelected(s.equipmentStatusDashboardShowDispatchPlans());
             }
+            appearancePrefs = s.equipmentStatusDashboardAppearance();
+            if (appearancePanel != null) {
+                appearancePanel.applyPrefs(appearancePrefs);
+            }
         } finally {
             suppressUiEvents.set(false);
         }
@@ -172,6 +205,15 @@ public final class EquipmentStatusDashboardTabController {
 
     public boolean snapshotShowDispatchPlans() {
         return showDispatchCheckBox == null || showDispatchCheckBox.isSelected();
+    }
+
+    public EquipmentStatusDashboardAppearancePrefs snapshotAppearancePrefs() {
+        if (appearancePanel != null) {
+            appearancePrefs = appearancePanel.snapshot();
+        }
+        return appearancePrefs != null
+                ? appearancePrefs
+                : EquipmentStatusDashboardAppearancePrefs.defaults();
     }
 
     public void onMainShellTabSelected() {
@@ -207,10 +249,12 @@ public final class EquipmentStatusDashboardTabController {
         }
         if (fullscreenToggle != null && fullscreenToggle.isSelected()) {
             DisplayOptions opts = currentDisplayOptions();
+            EquipmentStatusDashboardAppearancePrefs ap = snapshotAppearancePrefs();
             fullscreenStage.show(
                     shell.getPrimaryStage(),
                     currentStatuses,
                     opts,
+                    ap,
                     badgeStyleResolver(),
                     buildMetaSummary(),
                     opts.actualDateLabel(),
@@ -220,6 +264,27 @@ public final class EquipmentStatusDashboardTabController {
         } else {
             fullscreenStage.hide();
             updateAutoRefreshTimer();
+        }
+    }
+
+    private void onAppearanceChanged(EquipmentStatusDashboardAppearancePrefs prefs) {
+        appearancePrefs =
+                prefs != null ? prefs : EquipmentStatusDashboardAppearancePrefs.defaults();
+        applyFlowLayout();
+        renderCards();
+        if (fullscreenStage.isShowing()) {
+            DisplayOptions opts = currentDisplayOptions();
+            fullscreenStage.rebuildCards(
+                    currentStatuses,
+                    opts,
+                    appearancePrefs,
+                    badgeStyleResolver(),
+                    opts.actualDateLabel(),
+                    opts.planDateLabel(),
+                    cachedSources != null);
+        }
+        if (shell != null) {
+            shell.persistDesktopSessionNow();
         }
     }
 
@@ -303,17 +368,29 @@ public final class EquipmentStatusDashboardTabController {
             currentStatuses = List.of();
         }
         updateSummaryLabels(actual, plan);
+        applyFlowLayout();
         renderCards();
         if (fullscreenStage.isShowing()) {
             DisplayOptions opts = currentDisplayOptions();
             fullscreenStage.rebuildCards(
                     currentStatuses,
                     opts,
+                    snapshotAppearancePrefs(),
                     badgeStyleResolver(),
                     opts.actualDateLabel(),
                     opts.planDateLabel(),
                     cachedSources != null);
         }
+    }
+
+    private void applyFlowLayout() {
+        if (cardFlowPane == null) {
+            return;
+        }
+        double viewport =
+                cardScrollPane != null ? cardScrollPane.getViewportBounds().getWidth() : 0;
+        EquipmentStatusDashboardAppearanceApplier.configureFlowPane(
+                cardFlowPane, appearancePrefs, false, viewport);
     }
 
     private void renderCards() {
@@ -322,6 +399,7 @@ public final class EquipmentStatusDashboardTabController {
         }
         cardFlowPane.getChildren().clear();
         DisplayOptions opts = currentDisplayOptions();
+        EquipmentStatusDashboardAppearancePrefs ap = snapshotAppearancePrefs();
         boolean sourcesLoaded = cachedSources != null;
         boolean empty = currentStatuses == null || currentStatuses.isEmpty();
         if (emptyStatePane != null) {
@@ -346,7 +424,7 @@ public final class EquipmentStatusDashboardTabController {
         for (EquipmentMachineStatus s : currentStatuses) {
             cardFlowPane
                     .getChildren()
-                    .add(EquipmentStatusCardFactory.createCard(s, opts, resolver, false));
+                    .add(EquipmentStatusCardFactory.createCard(s, opts, ap, resolver, false));
         }
     }
 

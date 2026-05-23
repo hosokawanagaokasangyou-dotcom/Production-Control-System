@@ -93,6 +93,7 @@ import java.util.Map;
  * @param equipmentStatusDashboardAutoRefreshEnabled ダッシュボード自動更新（既定 ON）
  * @param equipmentStatusDashboardShowAladdinPlans ダッシュボードでアラジン予定を表示
  * @param equipmentStatusDashboardShowDispatchPlans ダッシュボードで配台予定を表示
+ * @param equipmentStatusDashboardAppearance ダッシュボードカードの見た目設定
  */
 public record DesktopSessionState(
         String planInputPath,
@@ -175,7 +176,8 @@ public record DesktopSessionState(
         int equipmentStatusDashboardPlanDayOffset,
         boolean equipmentStatusDashboardAutoRefreshEnabled,
         boolean equipmentStatusDashboardShowAladdinPlans,
-        boolean equipmentStatusDashboardShowDispatchPlans) {
+        boolean equipmentStatusDashboardShowDispatchPlans,
+        EquipmentStatusDashboardAppearancePrefs equipmentStatusDashboardAppearance) {
 
     /** 設備ガント・担当バッジ横方向固定間隔（px）の既定、およびスライダー上限の目安。 */
     public static final double DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX = 4.0;
@@ -234,6 +236,10 @@ public record DesktopSessionState(
                                 || equipmentGanttPersonBadgeStylesByMemberKey.isEmpty()
                         ? Map.of()
                         : Map.copyOf(equipmentGanttPersonBadgeStylesByMemberKey);
+        equipmentStatusDashboardAppearance =
+                equipmentStatusDashboardAppearance != null
+                        ? equipmentStatusDashboardAppearance
+                        : EquipmentStatusDashboardAppearancePrefs.defaults();
         mainShellTabLayout =
                 mainShellTabLayout == null || mainShellTabLayout.isEmpty()
                         ? List.of()
@@ -449,7 +455,8 @@ public record DesktopSessionState(
                 0,
                 true,
                 true,
-                true);
+                true,
+                EquipmentStatusDashboardAppearancePrefs.defaults());
     }
 
     /**
@@ -538,6 +545,7 @@ public record DesktopSessionState(
                 equipmentStatusDashboardPlanDayOffset(),
                 equipmentStatusDashboardAutoRefreshEnabled(),
                 equipmentStatusDashboardShowAladdinPlans(),
-                equipmentStatusDashboardShowDispatchPlans());
+                equipmentStatusDashboardShowDispatchPlans(),
+                equipmentStatusDashboardAppearance());
     }
 }

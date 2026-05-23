@@ -392,7 +392,8 @@ public final class DesktopSessionStateStore {
                 optionalIntClamped(root, "equipmentStatusDashboardPlanDayOffset", 0, -366, 366),
                 optionalBoolean(root, "equipmentStatusDashboardAutoRefreshEnabled", true),
                 optionalBoolean(root, "equipmentStatusDashboardShowAladdinPlans", true),
-                optionalBoolean(root, "equipmentStatusDashboardShowDispatchPlans", true));
+                optionalBoolean(root, "equipmentStatusDashboardShowDispatchPlans", true),
+                loadEquipmentStatusDashboardAppearancePrefs(root));
     }
 
     public static void save(DesktopSessionState state) {
@@ -474,6 +475,63 @@ public final class DesktopSessionStateStore {
         root.put("equipmentStatusDashboardAutoRefreshEnabled", state.equipmentStatusDashboardAutoRefreshEnabled());
         root.put("equipmentStatusDashboardShowAladdinPlans", state.equipmentStatusDashboardShowAladdinPlans());
         root.put("equipmentStatusDashboardShowDispatchPlans", state.equipmentStatusDashboardShowDispatchPlans());
+        putEquipmentStatusDashboardAppearancePrefs(root, state.equipmentStatusDashboardAppearance());
+    }
+
+    private static EquipmentStatusDashboardAppearancePrefs loadEquipmentStatusDashboardAppearancePrefs(
+            JsonNode root) {
+        EquipmentStatusDashboardAppearancePrefs d = EquipmentStatusDashboardAppearancePrefs.defaults();
+        JsonNode n = root.get("equipmentStatusDashboardAppearance");
+        if (n == null || !n.isObject()) {
+            return d;
+        }
+        return new EquipmentStatusDashboardAppearancePrefs(
+                optionalIntClamped(n, "columnCount", d.columnCount(), 0, 12),
+                optionalDouble(n, "cardWidth", d.cardWidth()),
+                optionalDouble(n, "fullscreenCardWidthPercent", d.fullscreenCardWidthPercent()),
+                optionalDouble(n, "cardPadding", d.cardPadding()),
+                optionalDouble(n, "cardGapH", d.cardGapH()),
+                optionalDouble(n, "cardGapV", d.cardGapV()),
+                optionalDouble(n, "cardBorderRadius", d.cardBorderRadius()),
+                nzFallback(text(n, "cardShadowStyle"), d.cardShadowStyle()),
+                text(n, "fontFamily"),
+                optionalDouble(n, "machineFontPx", d.machineFontPx()),
+                optionalDouble(n, "metaFontPx", d.metaFontPx()),
+                optionalDouble(n, "planFontPx", d.planFontPx()),
+                optionalDouble(n, "pctFontPx", d.pctFontPx()),
+                optionalDouble(n, "chartSizePx", d.chartSizePx()),
+                nzFallback(text(n, "chartDoneColorHex"), d.chartDoneColorHex()),
+                nzFallback(text(n, "chartRemainColorHex"), d.chartRemainColorHex()),
+                nzFallback(text(n, "chartStyle"), d.chartStyle()),
+                optionalBoolean(n, "chartShadowEnabled", d.chartShadowEnabled()));
+    }
+
+    private static void putEquipmentStatusDashboardAppearancePrefs(
+            ObjectNode root, EquipmentStatusDashboardAppearancePrefs prefs) {
+        EquipmentStatusDashboardAppearancePrefs p =
+                prefs != null ? prefs : EquipmentStatusDashboardAppearancePrefs.defaults();
+        if (p.equals(EquipmentStatusDashboardAppearancePrefs.defaults())) {
+            return;
+        }
+        ObjectNode o = root.putObject("equipmentStatusDashboardAppearance");
+        o.put("columnCount", p.columnCount());
+        o.put("cardWidth", p.cardWidth());
+        o.put("fullscreenCardWidthPercent", p.fullscreenCardWidthPercent());
+        o.put("cardPadding", p.cardPadding());
+        o.put("cardGapH", p.cardGapH());
+        o.put("cardGapV", p.cardGapV());
+        o.put("cardBorderRadius", p.cardBorderRadius());
+        o.put("cardShadowStyle", p.cardShadowStyle());
+        put(o, "fontFamily", p.fontFamily());
+        o.put("machineFontPx", p.machineFontPx());
+        o.put("metaFontPx", p.metaFontPx());
+        o.put("planFontPx", p.planFontPx());
+        o.put("pctFontPx", p.pctFontPx());
+        o.put("chartSizePx", p.chartSizePx());
+        o.put("chartDoneColorHex", p.chartDoneColorHex());
+        o.put("chartRemainColorHex", p.chartRemainColorHex());
+        o.put("chartStyle", p.chartStyle());
+        o.put("chartShadowEnabled", p.chartShadowEnabled());
     }
 
     private static boolean optionalBoolean(JsonNode root, String key, boolean defaultValue) {

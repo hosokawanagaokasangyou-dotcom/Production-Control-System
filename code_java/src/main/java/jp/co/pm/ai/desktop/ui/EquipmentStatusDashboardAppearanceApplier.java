@@ -1,0 +1,197 @@
+package jp.co.pm.ai.desktop.ui;
+
+import java.util.Locale;
+
+import javafx.geometry.Insets;
+import javafx.scene.chart.PieChart;
+import javafx.scene.control.Label;
+import javafx.scene.effect.DropShadow;
+import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontPosture;
+import javafx.scene.text.FontWeight;
+
+import jp.co.pm.ai.desktop.config.EquipmentStatusDashboardAppearancePrefs;
+
+/** {@link EquipmentStatusDashboardAppearancePrefs} を FlowPane / カード Node へ反映する。 */
+public final class EquipmentStatusDashboardAppearanceApplier {
+
+    private EquipmentStatusDashboardAppearanceApplier() {}
+
+    public static void configureFlowPane(
+            FlowPane pane,
+            EquipmentStatusDashboardAppearancePrefs prefs,
+            boolean fullscreen,
+            double viewportWidth) {
+        if (pane == null || prefs == null) {
+            return;
+        }
+        pane.setHgap(prefs.cardGapH());
+        pane.setVgap(prefs.cardGapV());
+        double cardW = prefs.effectiveCardWidth(fullscreen);
+        int cols = prefs.columnCount();
+        if (cols > 0) {
+            double wrap = cols * cardW + Math.max(0, cols - 1) * prefs.cardGapH() + 2;
+            pane.setPrefWrapLength(wrap);
+        } else if (viewportWidth > 1) {
+            pane.setPrefWrapLength(Math.max(cardW, viewportWidth - 24));
+        } else {
+            pane.setPrefWrapLength(RegionFallback.COMPUTED);
+        }
+    }
+
+    public static void applyCardShell(
+            VBox card,
+            EquipmentStatusDashboardAppearancePrefs prefs,
+            boolean fullscreen) {
+        if (card == null || prefs == null) {
+            return;
+        }
+        double width = prefs.effectiveCardWidth(fullscreen);
+        card.setPadding(new Insets(prefs.cardPadding()));
+        card.setPrefWidth(width);
+        card.setMinWidth(width);
+        card.setMaxWidth(width);
+        card.setStyle(
+                String.format(
+                        Locale.ROOT,
+                        "-fx-background-radius: %spx; -fx-border-radius: %spx;",
+                        prefs.cardBorderRadius(),
+                        prefs.cardBorderRadius()));
+        card.setEffect(cardShadow(prefs.cardShadowStyle()));
+    }
+
+    public static void applyLabelFont(Label label, EquipmentStatusDashboardAppearancePrefs prefs, double sizePx) {
+        if (label == null || prefs == null) {
+            return;
+        }
+        if (prefs.fontFamily().isBlank()) {
+            label.setStyle(String.format(Locale.ROOT, "-fx-font-size: %spx;", sizePx));
+        } else {
+            label.setFont(Font.font(prefs.fontFamily(), FontWeight.NORMAL, sizePx));
+        }
+    }
+
+    public static void applyMachineLabel(Label label, EquipmentStatusDashboardAppearancePrefs prefs) {
+        if (label == null || prefs == null) {
+            return;
+        }
+        if (prefs.fontFamily().isBlank()) {
+            label.setStyle(
+                    String.format(
+                            Locale.ROOT,
+                            "-fx-font-size: %spx; -fx-font-weight: bold;",
+                            prefs.machineFontPx()));
+        } else {
+            label.setFont(
+                    Font.font(
+                            prefs.fontFamily(),
+                            FontWeight.BOLD,
+                            FontPosture.REGULAR,
+                            prefs.machineFontPx()));
+        }
+    }
+
+    public static StackPane buildPieChart(
+            double completionPct, EquipmentStatusDashboardAppearancePrefs prefs) {
+        double done = Math.max(0.0, Math.min(100.0, completionPct));
+        double remain = 100.0 - done;
+        PieChart chart =
+                new PieChart(
+                        javafx.collections.FXCollections.observableArrayList(
+                                new PieChart.Data("完了", done),
+                                new PieChart.Data("残り", remain > 0 ? remain : 0.01)));
+        chart.setAnimated(false);
+        chart.setLegendVisible(false);
+        chart.setLabelsVisible(false);
+        double sz = prefs != null ? prefs.chartSizePx() : 96;
+        chart.setPrefSize(sz, sz);
+        chart.setMinSize(sz, sz);
+        chart.setMaxSize(sz, sz);
+        chart.getStyleClass().add("pm-equipment-status-pie");
+
+        Label pct = new Label(String.format(Locale.ROOT, "%.0f%%", done));
+        pct.getStyleClass().add("pm-equipment-status-pct-label");
+        if (prefs != null) {
+            applyLabelFont(pct, prefs, prefs.pctFontPx());
+        }
+
+        StackPane pane = new StackPane(chart, pct);
+        pane.setAlignment(javafx.geometry.Pos.CENTER);
+        if (prefs != null) {
+            stylePieChart(chart, prefs);
+            if (prefs.chartShadowEnabled()) {
+                DropShadow ds = new DropShadow(8, 0, 2, Color.color(0, 0, 0, 0.25));
+                chart.setEffect(ds);
+            }
+        }
+        return pane;
+    }
+
+    private static void stylePieChart(PieChart chart, EquipmentStatusDashboardAppearancePrefs prefs) {
+        Runnable apply =
+                () -> {
+                    for (PieChart.Data d : chart.getData()) {
+                        if (d.getNode() == null) {
+                            continue;
+                        }
+                        String color =
+                                "完了".equals(d.getName())
+                                        ? prefs.chartDoneColorHex()
+                                        : prefs.chartRemainColorHex();
+                        if (EquipmentStatusDashboardAppearancePrefs.CHART_DEPTH.equals(prefs.chartStyle())) {
+                            String lighter = lightenHex(color, 0.18);
+                            d.getNode()
+                                    .setStyle(
+                                            String.format(
+                                                    Locale.ROOT,
+                                                    "-fx-pie-color: linear-gradient(to bottom, %s, %s);",
+                                                    lighter,
+                                                    color));
+                        } else {
+                            d.getNode()
+                                    .setStyle(
+                                            String.format(
+                                                    Locale.ROOT, "-fx-pie-color: %s;", color));
+                        }
+                    }
+                };
+        chart.getData().forEach(d -> d.nodeProperty().addListener((o, a, n) -> apply.run()));
+        javafx.application.Platform.runLater(apply);
+    }
+
+    private static DropShadow cardShadow(String style) {
+        return switch (style != null ? style : EquipmentStatusDashboardAppearancePrefs.SHADOW_SUBTLE) {
+            case EquipmentStatusDashboardAppearancePrefs.SHADOW_NONE -> null;
+            case EquipmentStatusDashboardAppearancePrefs.SHADOW_MEDIUM ->
+                    new DropShadow(10, 0, 3, Color.color(0, 0, 0, 0.22));
+            case EquipmentStatusDashboardAppearancePrefs.SHADOW_STRONG ->
+                    new DropShadow(16, 0, 5, Color.color(0, 0, 0, 0.32));
+            default -> new DropShadow(6, 0, 2, Color.color(0, 0, 0, 0.12));
+        };
+    }
+
+    private static String lightenHex(String hex, double amount) {
+        try {
+            Color c = Color.web(hex);
+            return String.format(
+                    Locale.ROOT,
+                    "#%02x%02x%02x",
+                    (int) Math.min(255, c.getRed() * 255 + 255 * amount),
+                    (int) Math.min(255, c.getGreen() * 255 + 255 * amount),
+                    (int) Math.min(255, c.getBlue() * 255 + 255 * amount));
+        } catch (Exception ex) {
+            return hex;
+        }
+    }
+
+    /** {@code FlowPane#setPrefWrapLength} 用（自動列）。 */
+    private static final class RegionFallback {
+        static final double COMPUTED = javafx.scene.layout.Region.USE_COMPUTED_SIZE;
+
+        private RegionFallback() {}
+    }
+}

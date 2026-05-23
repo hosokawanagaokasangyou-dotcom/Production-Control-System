@@ -83,6 +83,7 @@ import jp.co.pm.ai.desktop.config.WorkspaceCacheArchiveStore;
 import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
+import jp.co.pm.ai.desktop.config.EquipmentStatusDashboardAppearancePrefs;
 import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.JvmMemoryLogStore;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutDefaults;
@@ -1061,7 +1062,10 @@ public final class MainShellController {
                 equipmentStatusDashboardTabController == null
                         || equipmentStatusDashboardTabController.snapshotShowAladdinPlans(),
                 equipmentStatusDashboardTabController == null
-                        || equipmentStatusDashboardTabController.snapshotShowDispatchPlans());
+                        || equipmentStatusDashboardTabController.snapshotShowDispatchPlans(),
+                equipmentStatusDashboardTabController != null
+                        ? equipmentStatusDashboardTabController.snapshotAppearancePrefs()
+                        : EquipmentStatusDashboardAppearancePrefs.defaults());
     }
 
     /** 設備ガントのプレビュー用に、バッジ「既定」スタイルを返す。 */

@@ -1,14 +1,10 @@
 package jp.co.pm.ai.desktop.ui;
 
-import java.util.Locale;
 import java.util.List;
 import java.util.function.Function;
 
-import javafx.collections.FXCollections;
-
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.chart.PieChart;
 import javafx.scene.control.Label;
 import javafx.scene.control.OverrunStyle;
 import javafx.scene.layout.HBox;
@@ -17,6 +13,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
+import jp.co.pm.ai.desktop.config.EquipmentStatusDashboardAppearancePrefs;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentMachineStatus;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
@@ -35,35 +32,35 @@ public final class EquipmentStatusCardFactory {
         }
     }
 
-    private static final double CARD_WIDTH = 280.0;
-    private static final double CARD_WIDTH_FULLSCREEN = 340.0;
-    private static final double CHART_SIZE = 96.0;
-
     private EquipmentStatusCardFactory() {}
 
     public static VBox createCard(
             EquipmentMachineStatus status,
             DisplayOptions opts,
+            EquipmentStatusDashboardAppearancePrefs appearance,
             Function<String, PersonBadgeStyle> badgeStyleResolver,
             boolean fullscreen) {
-        double width = fullscreen ? CARD_WIDTH_FULLSCREEN : CARD_WIDTH;
+        EquipmentStatusDashboardAppearancePrefs ap =
+                appearance != null
+                        ? appearance
+                        : EquipmentStatusDashboardAppearancePrefs.defaults();
+        double width = ap.effectiveCardWidth(fullscreen);
         VBox card = new VBox(8.0);
         card.getStyleClass().add("pm-equipment-status-card");
-        card.setPrefWidth(width);
-        card.setMinWidth(width);
-        card.setMaxWidth(width);
-        card.setPadding(new Insets(12.0));
+        EquipmentStatusDashboardAppearanceApplier.applyCardShell(card, ap, fullscreen);
 
         HBox header = new HBox(8.0);
         header.setAlignment(Pos.CENTER_LEFT);
         Label machine = new Label(status.machineName());
         machine.getStyleClass().add("pm-equipment-status-machine");
+        EquipmentStatusDashboardAppearanceApplier.applyMachineLabel(machine, ap);
         machine.setMaxWidth(width - 100);
         machine.setTextOverrun(OverrunStyle.ELLIPSIS);
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         Label chip = new Label(statusLabel(status.status()));
         chip.getStyleClass().addAll("pm-equipment-status-chip", chipStyleClass(status.status()));
+        EquipmentStatusDashboardAppearanceApplier.applyLabelFont(chip, ap, ap.planFontPx());
         header.getChildren().addAll(machine, spacer, chip);
 
         card.getChildren().add(header);
@@ -71,9 +68,11 @@ public final class EquipmentStatusCardFactory {
         if (status.status() == EquipmentMachineStatus.Status.STOPPED) {
             StackPane stoppedPane = new StackPane();
             stoppedPane.getStyleClass().add("pm-equipment-status-stopped-pane");
-            stoppedPane.setMinHeight(120);
+            stoppedPane.setMinHeight(Math.max(80, ap.chartSizePx() * 1.1));
             Label stopped = new Label("停機");
             stopped.getStyleClass().add("pm-equipment-status-stopped-label");
+            EquipmentStatusDashboardAppearanceApplier.applyLabelFont(
+                    stopped, ap, ap.machineFontPx() * 1.75);
             stoppedPane.getChildren().add(stopped);
             card.getChildren().add(stoppedPane);
         } else {
@@ -86,11 +85,15 @@ public final class EquipmentStatusCardFactory {
                                                         + " · "
                                                         + task.processName());
                                 meta.getStyleClass().add("pm-equipment-status-meta");
+                                EquipmentStatusDashboardAppearanceApplier.applyLabelFont(
+                                        meta, ap, ap.metaFontPx());
                                 meta.setWrapText(true);
-                                meta.setMaxWidth(width - 24);
+                                meta.setMaxWidth(width - ap.cardPadding() * 2);
                                 card.getChildren().add(meta);
 
-                                StackPane chartPane = buildPieChart(task.completionPct());
+                                StackPane chartPane =
+                                        EquipmentStatusDashboardAppearanceApplier.buildPieChart(
+                                                task.completionPct(), ap);
                                 card.getChildren().add(chartPane);
 
                                 String badgeText =
@@ -105,7 +108,10 @@ public final class EquipmentStatusCardFactory {
                                     card.getChildren()
                                             .add(
                                                     PersonBadgeNodeFactory.createBadge(
-                                                            badgeText, st, 1.0, 12.0));
+                                                            badgeText,
+                                                            st,
+                                                            1.0,
+                                                            Math.max(10, ap.metaFontPx())));
                                 }
                             });
         }
@@ -116,18 +122,22 @@ public final class EquipmentStatusCardFactory {
                 opts != null && opts.showAladdinPlans(),
                 status.aladdinPlans(),
                 opts != null ? opts.planDateLabel() : "",
-                width);
+                width,
+                ap);
         appendPlanSection(
                 card,
                 "配台予定",
                 opts != null && opts.showDispatchPlans(),
                 status.dispatchPlans(),
                 opts != null ? opts.planDateLabel() : "",
-                width);
+                width,
+                ap);
 
         if (opts != null && !opts.actualDateLabel().isBlank()) {
             Label actualLbl = new Label("実績: " + opts.actualDateLabel());
             actualLbl.getStyleClass().add("pm-equipment-status-date-foot");
+            EquipmentStatusDashboardAppearanceApplier.applyLabelFont(
+                    actualLbl, ap, ap.planFontPx());
             card.getChildren().add(actualLbl);
         }
 
@@ -140,16 +150,19 @@ public final class EquipmentStatusCardFactory {
             boolean visible,
             List<EquipmentMachineStatus.PlanLine> lines,
             String dateLabel,
-            double width) {
+            double width,
+            EquipmentStatusDashboardAppearancePrefs ap) {
         if (!visible) {
             return;
         }
         Label head = new Label(title + (dateLabel.isBlank() ? "" : " (" + dateLabel + ")"));
         head.getStyleClass().add("pm-equipment-status-plan-head");
+        EquipmentStatusDashboardAppearanceApplier.applyLabelFont(head, ap, ap.planFontPx());
         card.getChildren().add(head);
         if (lines == null || lines.isEmpty()) {
             Label empty = new Label("—");
             empty.getStyleClass().add("pm-equipment-status-plan-line");
+            EquipmentStatusDashboardAppearanceApplier.applyLabelFont(empty, ap, ap.planFontPx());
             card.getChildren().add(empty);
             return;
         }
@@ -163,33 +176,11 @@ public final class EquipmentStatusCardFactory {
                                     + line.qtyM()
                                     + "m");
             row.getStyleClass().add("pm-equipment-status-plan-line");
+            EquipmentStatusDashboardAppearanceApplier.applyLabelFont(row, ap, ap.planFontPx());
             row.setWrapText(true);
-            row.setMaxWidth(width - 24);
+            row.setMaxWidth(width - ap.cardPadding() * 2);
             card.getChildren().add(row);
         }
-    }
-
-    private static StackPane buildPieChart(double completionPct) {
-        double done = Math.max(0.0, Math.min(100.0, completionPct));
-        double remain = 100.0 - done;
-        PieChart chart =
-                new PieChart(
-                        FXCollections.observableArrayList(
-                                new PieChart.Data("完了", done),
-                                new PieChart.Data("残り", remain > 0 ? remain : 0.01)));
-        chart.setAnimated(false);
-        chart.setLegendVisible(false);
-        chart.setLabelsVisible(false);
-        chart.setPrefSize(CHART_SIZE, CHART_SIZE);
-        chart.setMinSize(CHART_SIZE, CHART_SIZE);
-        chart.setMaxSize(CHART_SIZE, CHART_SIZE);
-        chart.getStyleClass().add("pm-equipment-status-pie");
-
-        Label pct = new Label(String.format("%.0f%%", done));
-        pct.getStyleClass().add("pm-equipment-status-pct-label");
-        StackPane pane = new StackPane(chart, pct);
-        pane.setAlignment(Pos.CENTER);
-        return pane;
     }
 
     private static String statusLabel(EquipmentMachineStatus.Status status) {

@@ -1063,11 +1063,17 @@
 
 .pm-equipment-status-card {
     -fx-background-color: derive(-fx-base, 8%);
-    -fx-background-radius: 8;
     -fx-border-color: derive(-fx-base, -18%);
-    -fx-border-radius: 8;
     -fx-border-width: 1;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.12), 6, 0, 0, 2);
+}
+
+.label.pm-equipment-status-appearance-hint {
+    -fx-font-size: 11px;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-equipment-status-appearance-scroll {
+    -fx-background-color: transparent;
 }
 
 .label.pm-equipment-status-machine {
