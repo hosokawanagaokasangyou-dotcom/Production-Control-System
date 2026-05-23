@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.LoadedSources;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.ReloadDecision;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.SourceFingerprint;
 
@@ -80,5 +81,31 @@ class EquipmentStatusDashboardSourceLoaderTest {
         SourceFingerprint fp = EquipmentStatusDashboardSourceLoader.fingerprint(ui);
         Assertions.assertTrue(fp.aladdinKey().contains("plan.csv"));
         Assertions.assertFalse(fp.aladdinKey().contains("shaped"));
+    }
+
+    @Test
+    void load_continuesWhenActualFileTooLarge(@TempDir Path dir) throws Exception {
+        Path actualDir = dir.resolve("actual");
+        Files.createDirectories(actualDir);
+        Path taskInputDir = dir.resolve("task-input");
+        Files.createDirectories(taskInputDir);
+        Path big = actualDir.resolve("actual.xlsx");
+        Files.write(
+                big,
+                new byte[(int) (AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES + 1024)]);
+        Files.writeString(taskInputDir.resolve("plan.csv"), "機械名,依頼NO,工程名,2026/05/25\nM1,R1,P1,10\n");
+        Files.writeString(
+                dir.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME),
+                "{\"columns\":[],\"rows\":[]}");
+
+        Map<String, String> ui = new HashMap<>();
+        ui.put(AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR, dir.toString());
+        ui.put(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR, actualDir.toString());
+        ui.put(AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR, taskInputDir.toString());
+
+        LoadedSources loaded = EquipmentStatusDashboardSourceLoader.load(ui);
+        Assertions.assertNotNull(loaded);
+        Assertions.assertTrue(loaded.loadNotice().contains("実績"));
+        Assertions.assertNotNull(loaded.aladdin());
     }
 }

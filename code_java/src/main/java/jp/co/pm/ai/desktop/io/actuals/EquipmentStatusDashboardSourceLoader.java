@@ -48,11 +48,31 @@ public final class EquipmentStatusDashboardSourceLoader {
             DispatchSnapshot dispatch,
             String actualSourceLabel,
             String aladdinSourceLabel,
-            String dispatchSourceLabel) {}
+            String dispatchSourceLabel,
+            /** 読込時の警告（フォールバック・部分失敗など）。空なら問題なし。 */
+            String loadNotice) {
+
+        public LoadedSources(
+                ActualsSnapshot actuals,
+                AladdinSnapshot aladdin,
+                DispatchSnapshot dispatch,
+                String actualSourceLabel,
+                String aladdinSourceLabel,
+                String dispatchSourceLabel) {
+            this(
+                    actuals,
+                    aladdin,
+                    dispatch,
+                    actualSourceLabel,
+                    aladdinSourceLabel,
+                    dispatchSourceLabel,
+                    "");
+        }
+    }
 
     private EquipmentStatusDashboardSourceLoader() {}
 
-    public static LoadedSources load(Map<String, String> ui) throws IOException {
+    public static LoadedSources load(Map<String, String> ui) {
         ReloadDecision d = loadIfChanged(ui, null, false);
         return d.sources();
     }
@@ -64,8 +84,7 @@ public final class EquipmentStatusDashboardSourceLoader {
      * @param haveCachedData {@code true} のときのみ省略判定（メモリ上に表示用データがある）
      */
     public static ReloadDecision loadIfChanged(
-            Map<String, String> ui, SourceFingerprint previous, boolean haveCachedData)
-            throws IOException {
+            Map<String, String> ui, SourceFingerprint previous, boolean haveCachedData) {
         SourceFingerprint fp = fingerprint(ui);
         if (haveCachedData && previous != null && previous.equals(fp)) {
             return ReloadDecision.skip();
@@ -108,9 +127,10 @@ public final class EquipmentStatusDashboardSourceLoader {
         }
     }
 
-    private static LoadedSources loadSources(Map<String, String> env) throws IOException {
-        ActualsSnapshot actuals = loadActuals(env);
-        AladdinSnapshot aladdin = loadAladdin(env);
+    private static LoadedSources loadSources(Map<String, String> env) {
+        StringBuilder notice = new StringBuilder();
+        ActualsSnapshot actuals = loadActualsResilient(env, notice);
+        AladdinSnapshot aladdin = loadAladdinResilient(env, notice);
         DispatchSnapshot dispatch = loadDispatch(env);
         return new LoadedSources(
                 actuals,
@@ -118,7 +138,86 @@ public final class EquipmentStatusDashboardSourceLoader {
                 dispatch,
                 actualsLabel(env),
                 aladdinLabel(env),
-                dispatchLabel(env));
+                dispatchLabel(env),
+                notice.toString().strip());
+    }
+
+    private static ActualsSnapshot loadActualsResilient(Map<String, String> ui, StringBuilder notice) {
+        NetworkSourceDirResolver.Result r = NetworkSourceDirResolver.resolve(ui);
+        if (r.actualDetailPath().isEmpty()) {
+            return loadActualsFromShapedJson(ui)
+                    .orElse(new ActualsSnapshot(List.of(), List.of()));
+        }
+        try {
+            return loadActualsFromResolvedFile(ui);
+        } catch (Exception ex) {
+            appendNotice(notice, "実績: " + shortError(ex));
+            return loadActualsFromShapedJson(ui)
+                    .orElse(new ActualsSnapshot(List.of(), List.of()));
+        }
+    }
+
+    private static AladdinSnapshot loadAladdinResilient(Map<String, String> ui, StringBuilder notice) {
+        NetworkSourceDirResolver.Result r = NetworkSourceDirResolver.resolve(ui);
+        Optional<Path> resolved = r.taskInputPath();
+        if (resolved.isPresent()) {
+            try {
+                return loadAladdinFromFile(resolved.get());
+            } catch (Exception ex) {
+                appendNotice(notice, "アラジン: " + shortError(ex));
+            }
+        }
+        return loadAladdinFromShapedJson(ui).orElse(new AladdinSnapshot(List.of(), List.of()));
+    }
+
+    private static void appendNotice(StringBuilder notice, String line) {
+        if (line == null || line.isBlank()) {
+            return;
+        }
+        if (!notice.isEmpty()) {
+            notice.append(' ');
+        }
+        notice.append(line.strip());
+    }
+
+    private static String shortError(Exception ex) {
+        String msg = ex.getMessage();
+        if (msg == null || msg.isBlank()) {
+            return ex.getClass().getSimpleName();
+        }
+        return msg.length() > 120 ? msg.substring(0, 120) + "…" : msg;
+    }
+
+    private static Optional<ActualsSnapshot> loadActualsFromShapedJson(Map<String, String> ui) {
+        Path path = AppPaths.resolveShapedProcessingActualsJsonPath(ui);
+        if (!Files.isRegularFile(path)) {
+            return Optional.empty();
+        }
+        try {
+            JsonTableIo.ArrayTable t = JsonTableIo.loadArrayTable(path);
+            if (t.columns().isEmpty() && t.rows().isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(new ActualsSnapshot(t.columns(), t.rows()));
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    private static Optional<AladdinSnapshot> loadAladdinFromShapedJson(Map<String, String> ui) {
+        Path path = AppPaths.resolveShapedAladdinPlanJsonPath(ui);
+        if (!Files.isRegularFile(path)) {
+            return Optional.empty();
+        }
+        try {
+            JsonTableIo.ArrayTable t = JsonTableIo.loadArrayTable(path);
+            if (t.columns().isEmpty() && t.rows().isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(new AladdinSnapshot(t.columns(), t.rows()));
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
     }
 
     private static String fileKey(Path path, String suffix) {
@@ -142,7 +241,7 @@ public final class EquipmentStatusDashboardSourceLoader {
         return s != null ? s : "";
     }
 
-    private static ActualsSnapshot loadActuals(Map<String, String> ui) throws IOException {
+    private static ActualsSnapshot loadActualsFromResolvedFile(Map<String, String> ui) throws IOException {
         NetworkSourceDirResolver.Result r = NetworkSourceDirResolver.resolve(ui);
         Optional<Path> resolved = r.actualDetailPath();
         if (resolved.isEmpty()) {
@@ -174,26 +273,6 @@ public final class EquipmentStatusDashboardSourceLoader {
         PlanInputTabularIo.TabularSheet shaped =
                 TaskInputSourceRawGridIo.applyProcessingActualsDateTimeColumns(stepped);
         return EquipmentStatusDashboardBuilder.actualsFrom(shaped);
-    }
-
-    private static AladdinSnapshot loadAladdin(Map<String, String> ui) throws IOException {
-        NetworkSourceDirResolver.Result r = NetworkSourceDirResolver.resolve(ui);
-        Optional<Path> resolved = r.taskInputPath();
-        if (resolved.isPresent()) {
-            return loadAladdinFromFile(resolved.get());
-        }
-        Path shapedPath = AppPaths.resolveShapedAladdinPlanJsonPath(ui);
-        if (Files.isRegularFile(shapedPath)) {
-            try {
-                JsonTableIo.ArrayTable t = JsonTableIo.loadArrayTable(shapedPath);
-                if (!t.columns().isEmpty() || !t.rows().isEmpty()) {
-                    return new AladdinSnapshot(t.columns(), t.rows());
-                }
-            } catch (Exception ex) {
-                // ignore
-            }
-        }
-        return new AladdinSnapshot(List.of(), List.of());
     }
 
     private static AladdinSnapshot loadAladdinFromFile(Path file) throws IOException {

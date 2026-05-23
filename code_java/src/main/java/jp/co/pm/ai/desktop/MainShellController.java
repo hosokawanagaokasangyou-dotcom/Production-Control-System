@@ -676,6 +676,7 @@ public final class MainShellController {
                                     Platform.runLater(
                                             () -> {
                                                 refreshMainShellTabHeaderChromeFromStoredColors();
+                                                scheduleEquipmentStatusDashboardInitialReloadIfSelected();
                                                 if (dispatchInteractiveTabController != null) {
                                                     dispatchInteractiveTabController
                                                             .scheduleInitialReloadAfterMainWindowShown();
@@ -2126,6 +2127,17 @@ public final class MainShellController {
         Object detached = tab.getProperties().remove(PM_DEFERRED_TAB_CONTENT);
         if (detached instanceof Node node) {
             tab.setContent(node);
+        }
+    }
+
+    private void scheduleEquipmentStatusDashboardInitialReloadIfSelected() {
+        if (tabPane == null
+                || mainShellTabEquipmentStatusDashboard == null
+                || equipmentStatusDashboardTabController == null) {
+            return;
+        }
+        if (tabPane.getSelectionModel().getSelectedItem() == mainShellTabEquipmentStatusDashboard) {
+            equipmentStatusDashboardTabController.onMainShellTabSelected();
         }
     }
 

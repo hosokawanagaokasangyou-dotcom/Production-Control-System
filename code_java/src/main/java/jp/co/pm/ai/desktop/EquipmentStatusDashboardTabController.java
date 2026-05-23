@@ -345,26 +345,25 @@ public final class EquipmentStatusDashboardTabController {
         if (activeReloadTask != null && activeReloadTask.isRunning()) {
             return;
         }
+        setLoading(true);
         final SourceFingerprint previousFingerprint = loadedFingerprint;
         final boolean haveCache = cachedSources != null;
         activeReloadTask =
                 new Task<>() {
                     @Override
-                    protected ReloadDecision call() throws Exception {
-                        ReloadDecision decision =
-                                EquipmentStatusDashboardSourceLoader.loadIfChanged(
-                                        shell.snapshotUiEnv(), previousFingerprint, haveCache);
-                        if (!decision.sourcesUnchanged()) {
-                            Platform.runLater(() -> setLoading(true));
-                        }
-                        return decision;
+                    protected ReloadDecision call() {
+                        return EquipmentStatusDashboardSourceLoader.loadIfChanged(
+                                shell.snapshotUiEnv(), previousFingerprint, haveCache);
                     }
                 };
         activeReloadTask.setOnSucceeded(
                 e -> {
                     ReloadDecision decision = activeReloadTask.getValue();
                     if (decision == null || decision.sourcesUnchanged()) {
-                        if (shell != null) {
+                        setLoading(false);
+                        if (shell != null
+                                && decision != null
+                                && decision.sourcesUnchanged()) {
                             shell.appendLog("[dashboard] ソース未変更のため読込を省略");
                         }
                         return;
@@ -555,13 +554,17 @@ public final class EquipmentStatusDashboardTabController {
             }
         }
         if (sourceSummaryLabel != null && cachedSources != null) {
-            sourceSummaryLabel.setText(
+            String summary =
                     "実績="
                             + cachedSources.actualSourceLabel()
                             + "  アラジン="
                             + cachedSources.aladdinSourceLabel()
                             + "  配台="
-                            + cachedSources.dispatchSourceLabel());
+                            + cachedSources.dispatchSourceLabel();
+            if (cachedSources.loadNotice() != null && !cachedSources.loadNotice().isBlank()) {
+                summary += "  ※ " + cachedSources.loadNotice();
+            }
+            sourceSummaryLabel.setText(summary);
         }
     }
 
