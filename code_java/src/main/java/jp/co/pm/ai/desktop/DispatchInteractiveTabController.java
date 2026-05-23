@@ -983,14 +983,37 @@ public final class DispatchInteractiveTabController {
             }
             changedRows++;
             rollMoves += aligned.rollMoves();
+            // 該当 profile に identity マッチする行を「全日付」一括削除してから target で再追加する。
+            // upsertAllocationForWideMerge は「同日付 かつ identity マッチ」両方が必要なため、
+            // 配台日カラムの表記揺れ（"2026-05-26" / "2026/05/26" / "2026-5-26" 等）が混在すると
+            // 移動元の行（aladdin が 0 の日）が sameDate=false で削除されず、
+            // (段階2後) として旧数値が残ってしまう。
+            final Map<String, String> profileForRemoval = profile;
+            doc.rows()
+                    .removeIf(
+                            row ->
+                                    ResultDispatchPivot.matchesWideMergeIdentity(
+                                            profileForRemoval,
+                                            row,
+                                            ResultDispatchPivot
+                                                    .DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS));
             for (int j = 0; j < dateAxis.size(); j++) {
-                ResultDispatchPivot.upsertAllocationForWideMerge(
-                        cols,
-                        doc.rows(),
-                        profile,
-                        dateAxis.get(j),
-                        aligned.newByDayIndex()[j],
-                        ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+                double q = aligned.newByDayIndex()[j];
+                if (q <= 1e-9) {
+                    continue;
+                }
+                LinkedHashMap<String, String> neo = new LinkedHashMap<>();
+                String dateStr = dateAxis.get(j).toString();
+                for (String col : cols) {
+                    if (col.equals(ResultDispatchSchema.COL_DISPATCH_DATE)) {
+                        neo.put(col, dateStr);
+                    } else if (col.equals(ResultDispatchSchema.COL_DISPATCH_QTY)) {
+                        neo.put(col, ResultDispatchNormalizer.formatQty(q));
+                    } else {
+                        neo.put(col, profile.getOrDefault(col, ""));
+                    }
+                }
+                doc.rows().add(neo);
             }
         }
         ResultDispatchNormalizer.normalizeInPlace(cols, doc.rows());
