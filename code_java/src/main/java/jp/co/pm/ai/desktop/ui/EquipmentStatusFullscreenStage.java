@@ -3,6 +3,7 @@ package jp.co.pm.ai.desktop.ui;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
+import java.util.function.IntConsumer;
 
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -12,6 +13,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
@@ -52,6 +54,7 @@ public final class EquipmentStatusFullscreenStage {
     private final Label planDateLabel = new Label();
     private final Label metaLabel = new Label();
     private Runnable onClose;
+    private IntConsumer onAdjustActualDateDays;
     private boolean ownerInitialized;
     private EquipmentStatusDashboardAppearancePrefs appearance =
             EquipmentStatusDashboardAppearancePrefs.defaults();
@@ -102,6 +105,7 @@ public final class EquipmentStatusFullscreenStage {
 
         StackPane center = new StackPane(scrollPane, emptyStateHost, loadingHost);
 
+        root.setFocusTraversable(true);
         root.setTop(top);
         root.setCenter(center);
 
@@ -109,14 +113,9 @@ public final class EquipmentStatusFullscreenStage {
         if (!scene.getStylesheets().contains(DESKTOP_CSS)) {
             scene.getStylesheets().add(DESKTOP_CSS);
         }
+        scene.addEventFilter(KeyEvent.KEY_PRESSED, this::onSceneKeyPressed);
         stage.setScene(scene);
         stage.initModality(Modality.NONE);
-        scene.setOnKeyPressed(
-                e -> {
-                    if (e.getCode() == KeyCode.ESCAPE) {
-                        hide();
-                    }
-                });
         stage.setOnHidden(e -> {
             if (onClose != null) {
                 onClose.run();
@@ -124,8 +123,34 @@ public final class EquipmentStatusFullscreenStage {
         });
     }
 
+    private void onSceneKeyPressed(KeyEvent e) {
+        if (e.getCode() == KeyCode.ESCAPE) {
+            hide();
+            e.consume();
+            return;
+        }
+        if (onAdjustActualDateDays == null) {
+            return;
+        }
+        int shift =
+                switch (e.getCode()) {
+                    case LEFT -> -1;
+                    case RIGHT -> 1;
+                    default -> 0;
+                };
+        if (shift != 0) {
+            onAdjustActualDateDays.accept(shift);
+            e.consume();
+        }
+    }
+
     public void setOnClose(Runnable onClose) {
         this.onClose = onClose;
+    }
+
+    /** 全画面表示中に ← / → で実績日を前後させる（日数: 負=前日、正=翌日）。 */
+    public void setOnAdjustActualDateDays(IntConsumer onAdjustActualDateDays) {
+        this.onAdjustActualDateDays = onAdjustActualDateDays;
     }
 
     public boolean isShowing() {
@@ -164,7 +189,10 @@ public final class EquipmentStatusFullscreenStage {
         stage.show();
         stage.toFront();
         javafx.application.Platform.runLater(
-                () -> applyFlowLayout(scrollPane.getViewportBounds().getWidth()));
+                () -> {
+                    root.requestFocus();
+                    applyFlowLayout(scrollPane.getViewportBounds().getWidth());
+                });
     }
 
     public void applyAppearance(EquipmentStatusDashboardAppearancePrefs appearancePrefs) {

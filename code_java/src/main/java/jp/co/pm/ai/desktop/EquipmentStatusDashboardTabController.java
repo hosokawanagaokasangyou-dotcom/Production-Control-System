@@ -143,6 +143,14 @@ public final class EquipmentStatusDashboardTabController {
                                     }
                                     updateAutoRefreshTimer();
                                 }));
+        fullscreenStage.setOnAdjustActualDateDays(
+                days -> {
+                    if (days == 0) {
+                        return;
+                    }
+                    LocalDate base = actualDate != null ? actualDate : LocalDate.now();
+                    setActualDate(base.plusDays(days));
+                });
 
         Runnable displayRefresh = this::rebuildFromCache;
         if (showAladdinCheckBox != null) {
