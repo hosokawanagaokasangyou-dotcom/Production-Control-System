@@ -69,7 +69,6 @@ import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -368,6 +367,11 @@ public final class DispatchInteractiveTabController {
     /** 列ドラッグ並べ替え起因の {@link #rebuildGrids()} 中はヘッダ変更コールバックを無視する。 */
     private final AtomicBoolean suppressColumnReorderPersistence = new AtomicBoolean(false);
 
+    /** グリッド再構築時の列幅復元中は {@link TableColumnOrderPersistence} への保存を抑止する。 */
+    private final AtomicBoolean suppressDispatchColumnLayoutPersistence = new AtomicBoolean(false);
+
+    private boolean dispatchColumnLayoutWatchersInstalled;
+
     private final List<Map<String, String>> wideProfiles = new ArrayList<>();
 
     /** Parallel to {@link #wideProfiles} rows in the wide grid. */
@@ -396,14 +400,12 @@ public final class DispatchInteractiveTabController {
         wideSpreadsheetHost.getChildren().setAll(wideSpreadsheet);
         VBox.setVgrow(wideSpreadsheetHost, javafx.scene.layout.Priority.ALWAYS);
         wideSpreadsheet.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
-        wideSpreadsheet.prefWidthProperty().bind(wideSpreadsheetHost.widthProperty());
         wideSpreadsheet.prefHeightProperty().bind(wideSpreadsheetHost.heightProperty());
 
         StackPane.setAlignment(byDaySpreadsheet, Pos.TOP_LEFT);
         byDaySpreadsheetHost.getChildren().setAll(byDaySpreadsheet);
         VBox.setVgrow(byDaySpreadsheetHost, javafx.scene.layout.Priority.ALWAYS);
         byDaySpreadsheet.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
-        byDaySpreadsheet.prefWidthProperty().bind(byDaySpreadsheetHost.widthProperty());
         byDaySpreadsheet.prefHeightProperty().bind(byDaySpreadsheetHost.heightProperty());
 
         // 固定配色（薄緑日付列・黒字）。ThemeBridge は -fx-text-inner-color で日付セルが白抜けするため入れない。
@@ -423,6 +425,7 @@ public final class DispatchInteractiveTabController {
         installWideDnDHandlers();
         installWideDoubleClickHandler();
         installByDayDoubleClickHandler();
+        ensureDispatchColumnLayoutWatchersInstalled();
 
         if (dispatchShortfallTable != null) {
             installDispatchShortfallColumns(dispatchShortfallTable);
@@ -525,6 +528,41 @@ public final class DispatchInteractiveTabController {
                     pendingGridRebuildAfterTabAttach.set(false);
                     rebuildGrids(this::hideReloadProgress);
                 });
+    }
+
+    private void ensureDispatchColumnLayoutWatchersInstalled() {
+        if (dispatchColumnLayoutWatchersInstalled) {
+            return;
+        }
+        dispatchColumnLayoutWatchersInstalled = true;
+        TableColumnOrderPersistence.installSpreadsheetColumnLayoutWatcher(
+                wideSpreadsheet,
+                TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_WIDE,
+                () ->
+                        suppressColumnReorderPersistence.get()
+                                || suppressDispatchColumnLayoutPersistence.get(),
+                () -> new ArrayList<>(buildWideColumnLabelsForAxis(dateAxis)));
+        TableColumnOrderPersistence.installSpreadsheetColumnLayoutWatcher(
+                byDaySpreadsheet,
+                TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_BY_DAY,
+                () ->
+                        suppressColumnReorderPersistence.get()
+                                || suppressDispatchColumnLayoutPersistence.get(),
+                () -> new ArrayList<>(buildByDayColumnLabelsForAxis(dateAxis)));
+    }
+
+    private void applyPersistedDispatchColumnWidths(
+            SpreadsheetView view,
+            List<String> headers,
+            TableColumnOrderPersistence.TableId tableId) {
+        if (view == null || headers == null || headers.isEmpty()) {
+            return;
+        }
+        List<TableColumnOrderPersistence.ColumnSpec> lay =
+                TableColumnOrderPersistence.loadLayout(tableId);
+        List<Double> widths =
+                TableColumnOrderPersistence.resolveWidthsForHeaders(headers, lay, 112);
+        SpreadsheetTabularSupport.applyColumnWidths(view, widths, 112);
     }
 
     private void ensureInnerTabPersistenceWired() {
@@ -1969,12 +2007,12 @@ public final class DispatchInteractiveTabController {
         }
     }
 
-    /** グリッド再構築後: 列フィルタは維持し、非表示行・固定行だけ整える（DnD・セル編集向け）。 */
+    /** グリッド再構築後: 列フィルタは維持し、固定列・UNCONSTRAINED 列幅ポリシーを再適用する。 */
     private void finalizeDispatchSpreadsheetPresentation() {
-        SpreadsheetTabularSupport.finalizeSpreadsheetPresentationPreservingColumnFilters(
-                wideSpreadsheet);
-        SpreadsheetTabularSupport.finalizeSpreadsheetPresentationPreservingColumnFilters(
-                byDaySpreadsheet);
+        SpreadsheetTabularSupport.reapplySpreadsheetColumnChrome(
+                wideSpreadsheet, WIDE_STATIC_HEADERS.size());
+        SpreadsheetTabularSupport.reapplySpreadsheetColumnChrome(
+                byDaySpreadsheet, BY_DAY_STATIC_HEADERS.size());
     }
 
     private void refreshDispatchSpreadsheetForView(SpreadsheetView view) {
@@ -2022,16 +2060,28 @@ public final class DispatchInteractiveTabController {
                                         wideSpreadsheet);
                                 SpreadsheetMultiColumnFilterCoordinator.restoreColumnAllowedSnapshot(
                                         wideSpreadsheet, columnFilterSnapshot);
+                                suppressDispatchColumnLayoutPersistence.set(true);
+                                try {
+                                    applyPersistedDispatchColumnWidths(
+                                            wideSpreadsheet,
+                                            buildWideColumnLabelsForAxis(dateAxis),
+                                            TableColumnOrderPersistence.TableId
+                                                    .DISPATCH_INTERACTIVE_WIDE);
+                                    applyDateColumnWidthsForBlockedDays(
+                                            wideSpreadsheet,
+                                            w.staticCols(),
+                                            w.dayCount(),
+                                            sanitizeFullyBlockedFlagsForColumnWidth(
+                                                    w.blockedCols()));
+                                } finally {
+                                    suppressDispatchColumnLayoutPersistence.set(false);
+                                }
                                 SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                         wideSpreadsheet, WIDE_STATIC_HEADERS.size());
                                 SpreadsheetTabularSupport.pinSpreadsheetFilterRow(wideSpreadsheet);
-                                SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(
-                                        wideSpreadsheet);
-                                applyDateColumnWidthsForBlockedDays(
-                                        wideSpreadsheet,
-                                        w.staticCols(),
-                                        w.dayCount(),
-                                        sanitizeFullyBlockedFlagsForColumnWidth(w.blockedCols()));
+                                SpreadsheetTabularSupport
+                                        .applyUnconstrainedColumnResizePolicyAfterSkinSettles(
+                                                wideSpreadsheet);
                                 SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
                                         wideSpreadsheet,
                                         suppressColumnReorderPersistence::get,
@@ -2062,9 +2112,8 @@ public final class DispatchInteractiveTabController {
                     if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
                         return;
                     }
-                                        SpreadsheetTabularSupport
-                                                .finalizeSpreadsheetPresentationPreservingColumnFilters(
-                                                        wideSpreadsheet);
+                    SpreadsheetTabularSupport.reapplySpreadsheetColumnChrome(
+                            wideSpreadsheet, WIDE_STATIC_HEADERS.size());
                     if (onComplete != null) {
                         onComplete.run();
                     } else {
@@ -2102,16 +2151,28 @@ public final class DispatchInteractiveTabController {
                                         byDaySpreadsheet);
                                 SpreadsheetMultiColumnFilterCoordinator.restoreColumnAllowedSnapshot(
                                         byDaySpreadsheet, columnFilterSnapshot);
+                                suppressDispatchColumnLayoutPersistence.set(true);
+                                try {
+                                    applyPersistedDispatchColumnWidths(
+                                            byDaySpreadsheet,
+                                            buildByDayColumnLabelsForAxis(dateAxis),
+                                            TableColumnOrderPersistence.TableId
+                                                    .DISPATCH_INTERACTIVE_BY_DAY);
+                                    applyDateColumnWidthsForBlockedDays(
+                                            byDaySpreadsheet,
+                                            b.staticCols(),
+                                            b.dayCount(),
+                                            sanitizeFullyBlockedFlagsForColumnWidth(
+                                                    b.blockedCols()));
+                                } finally {
+                                    suppressDispatchColumnLayoutPersistence.set(false);
+                                }
                                 SpreadsheetTabularSupport.applyFixedLeadingColumns(
                                         byDaySpreadsheet, BY_DAY_STATIC_HEADERS.size());
                                 SpreadsheetTabularSupport.pinSpreadsheetFilterRow(byDaySpreadsheet);
-                                SpreadsheetTabularSupport.applyUnconstrainedColumnResizePolicy(
-                                        byDaySpreadsheet);
-                                applyDateColumnWidthsForBlockedDays(
-                                        byDaySpreadsheet,
-                                        b.staticCols(),
-                                        b.dayCount(),
-                                        sanitizeFullyBlockedFlagsForColumnWidth(b.blockedCols()));
+                                SpreadsheetTabularSupport
+                                        .applyUnconstrainedColumnResizePolicyAfterSkinSettles(
+                                                byDaySpreadsheet);
                                 SpreadsheetColumnDragReorderSupport.refreshAfterGridReady(
                                         byDaySpreadsheet,
                                         suppressColumnReorderPersistence::get,
@@ -2142,8 +2203,8 @@ public final class DispatchInteractiveTabController {
                     if (isDispatchSpreadsheetLayoutStale(layoutGen)) {
                         return;
                     }
-                    SpreadsheetTabularSupport.finalizeSpreadsheetPresentationPreservingColumnFilters(
-                            byDaySpreadsheet);
+                    SpreadsheetTabularSupport.reapplySpreadsheetColumnChrome(
+                            byDaySpreadsheet, BY_DAY_STATIC_HEADERS.size());
                     if (onComplete != null) {
                         onComplete.run();
                     } else {
@@ -2234,7 +2295,6 @@ public final class DispatchInteractiveTabController {
                 sc.setMaxWidth(narrow);
             } else {
                 sc.setMinWidth(MIN_DATE_COLUMN_WIDTH_PX);
-                sc.setPrefWidth(Region.USE_COMPUTED_SIZE);
                 sc.setMaxWidth(Double.MAX_VALUE);
             }
         }
