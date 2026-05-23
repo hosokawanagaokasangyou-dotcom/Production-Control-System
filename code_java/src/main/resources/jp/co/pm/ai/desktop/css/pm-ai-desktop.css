@@ -413,6 +413,16 @@
     -fx-background-color: #cbd5e1;
 }
 
+.overtime-simulation-grid-panel .overtime-simulation-grid-fixed {
+    -fx-border-color: derive(-fx-box-border, 30%);
+    -fx-border-width: 0 1 0 0;
+}
+
+.overtime-simulation-grid-fixed .column-header-background,
+.overtime-simulation-grid-dates .column-header-background {
+    -fx-background-color: derive(-fx-control-inner-background, -8%);
+}
+
 .button.pm-stage-run-button:disabled {
     -fx-opacity: 0.5;
 }
