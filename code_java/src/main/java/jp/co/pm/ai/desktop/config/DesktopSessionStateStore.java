@@ -202,6 +202,7 @@ public final class DesktopSessionStateStore {
                 state.mainShellTabOrganizerHeaderGlowStrength());
         putPushButtonDesignPrefs(root, state);
         putMemorySettingsPrefs(root, state);
+        putEquipmentStatusDashboardPrefs(root, state);
         putWindowGeometry(root, state);
         return root;
     }
@@ -384,7 +385,17 @@ public final class DesktopSessionStateStore {
                 loadPushButtonDesignPrefs(root),
                 optionalBoolean(root, "memoryMonitorEnabled", false),
                 optionalLongClamped(root, "memoryMonitorIntervalSec", 5L, 1L, 3600L),
-                optionalNonNegativeLong(root, "nextLaunchHeapMaxMiB", 0L));
+                optionalNonNegativeLong(root, "nextLaunchHeapMaxMiB", 0L),
+                optionalIntClamped(root, "equipmentStatusDashboardActualDayOffset", 0, -1, 0),
+                optionalIntClamped(
+                        root,
+                        "equipmentStatusDashboardPlanDayOffset",
+                        0,
+                        0,
+                        DesktopSessionState.MAX_EQUIPMENT_STATUS_DASHBOARD_PLAN_DAY_OFFSET),
+                optionalBoolean(root, "equipmentStatusDashboardAutoRefreshEnabled", true),
+                optionalBoolean(root, "equipmentStatusDashboardShowAladdinPlans", true),
+                optionalBoolean(root, "equipmentStatusDashboardShowDispatchPlans", true));
     }
 
     public static void save(DesktopSessionState state) {
@@ -428,6 +439,16 @@ public final class DesktopSessionStateStore {
         return Math.max(min, Math.min(max, v));
     }
 
+    private static int optionalIntClamped(
+            JsonNode root, String key, int defaultValue, int min, int max) {
+        JsonNode n = root.get(key);
+        if (n == null || n.isNull() || !n.isNumber()) {
+            return defaultValue;
+        }
+        int v = n.asInt();
+        return Math.max(min, Math.min(max, v));
+    }
+
     private static long optionalNonNegativeLong(JsonNode root, String key, long defaultValue) {
         JsonNode n = root.get(key);
         if (n == null || n.isNull() || !n.isNumber()) {
@@ -448,6 +469,14 @@ public final class DesktopSessionStateStore {
         if (nx > 0) {
             root.put("nextLaunchHeapMaxMiB", nx);
         }
+    }
+
+    private static void putEquipmentStatusDashboardPrefs(ObjectNode root, DesktopSessionState state) {
+        root.put("equipmentStatusDashboardActualDayOffset", state.equipmentStatusDashboardActualDayOffset());
+        root.put("equipmentStatusDashboardPlanDayOffset", state.equipmentStatusDashboardPlanDayOffset());
+        root.put("equipmentStatusDashboardAutoRefreshEnabled", state.equipmentStatusDashboardAutoRefreshEnabled());
+        root.put("equipmentStatusDashboardShowAladdinPlans", state.equipmentStatusDashboardShowAladdinPlans());
+        root.put("equipmentStatusDashboardShowDispatchPlans", state.equipmentStatusDashboardShowDispatchPlans());
     }
 
     private static boolean optionalBoolean(JsonNode root, String key, boolean defaultValue) {

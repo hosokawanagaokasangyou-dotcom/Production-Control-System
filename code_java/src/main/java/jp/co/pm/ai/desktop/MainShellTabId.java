@@ -4,6 +4,8 @@ package jp.co.pm.ai.desktop;
  * Stable ids for main-shell tabs (persisted in {@link jp.co.pm.ai.desktop.config.DesktopSessionState}).
  */
 public enum MainShellTabId {
+    /** 加工実績・予定の機械別ダッシュボード（実行・ログの左＝先頭）。 */
+    EQUIPMENT_STATUS_DASHBOARD("equipmentStatusDashboard"),
     RUN("run"),
     UI_BADGE_DESIGN("uiBadgeDesign"),
     PUSH_BUTTON_DESIGN("pushButtonDesign"),

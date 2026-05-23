@@ -331,7 +331,13 @@ public final class MainShellController {
     private PipelineExecutionTimingTabController pipelineExecutionTimingTabController;
 
     @FXML
+    private EquipmentStatusDashboardTabController equipmentStatusDashboardTabController;
+
+    @FXML
     private CodeDispatchLookupTablesTabController codeDispatchLookupTablesTabController;
+
+    @FXML
+    private Tab mainShellTabEquipmentStatusDashboard;
 
     @FXML
     private Tab mainShellTabRun;
@@ -433,6 +439,9 @@ public final class MainShellController {
     /** Non-null while a stage script is running; equals {@link #STAGE1} or {@link #STAGE2}. */
     private volatile String activeRunStageScript;
 
+    /** 配台試行（段階3／段階3.5）実行中の種別。{@link #runLock} と連動。 */
+    private volatile PipelineExecutionTimingKind activeDispatchTrialKind;
+
     /** Python child process while stage 1/2 is running; cleared on completion or interrupt. */
     private final AtomicReference<Process> activeStageChildProcess = new AtomicReference<>();
 
@@ -533,6 +542,9 @@ public final class MainShellController {
             pipelineExecutionTimingHistory.setPersistLog(this::appendLog);
 
             mainRunTabController.bindShell(this);
+            if (equipmentStatusDashboardTabController != null) {
+                equipmentStatusDashboardTabController.bindShell(this);
+            }
             envTabController.bindShell(this);
             memorySettingsTabController.bindShell(this);
             if (globalSettingsTabController != null) {
@@ -701,6 +713,14 @@ public final class MainShellController {
                             /* :selected 由来の -fx-text-fill がインラインより後勝ちになることがあるため再適用 */
                             if (!suppressMainShellTabChromeRefresh.get()) {
                                 refreshMainShellTabHeaderChromeFromStoredColors();
+                            }
+                            if (newTab == mainShellTabEquipmentStatusDashboard
+                                    && equipmentStatusDashboardTabController != null) {
+                                equipmentStatusDashboardTabController.onMainShellTabSelected();
+                            }
+                            if (prevTab == mainShellTabEquipmentStatusDashboard
+                                    && equipmentStatusDashboardTabController != null) {
+                                equipmentStatusDashboardTabController.onMainShellTabDeselected();
                             }
                             if (newTab == mainShellTabEquipmentGanttGraphic
                                     && equipmentGanttGraphicTabController != null) {
@@ -880,6 +900,9 @@ public final class MainShellController {
             ganttPersonBadgeDesignTabController.applyPersonBadgeDesignSession(s);
         }
         equipmentGanttGraphicTabController.applyEquipmentGanttSession(s);
+        if (equipmentStatusDashboardTabController != null) {
+            equipmentStatusDashboardTabController.applyDashboardSession(s);
+        }
         if (uiBadgeDesignTabController != null) {
             uiBadgeDesignTabController.applyUiBadgeSession(s);
         }
@@ -1024,7 +1047,19 @@ public final class MainShellController {
                         : PushButtonDesignPrefs.inactiveDefaults(),
                 memorySettingsTabController.snapshotMemoryMonitorEnabled(),
                 memorySettingsTabController.snapshotMemoryMonitorIntervalSec(),
-                memorySettingsTabController.snapshotNextLaunchHeapMaxMiB());
+                memorySettingsTabController.snapshotNextLaunchHeapMaxMiB(),
+                equipmentStatusDashboardTabController != null
+                        ? equipmentStatusDashboardTabController.snapshotActualDayOffset()
+                        : 0,
+                equipmentStatusDashboardTabController != null
+                        ? equipmentStatusDashboardTabController.snapshotPlanDayOffset()
+                        : 0,
+                equipmentStatusDashboardTabController == null
+                        || equipmentStatusDashboardTabController.snapshotAutoRefreshEnabled(),
+                equipmentStatusDashboardTabController == null
+                        || equipmentStatusDashboardTabController.snapshotShowAladdinPlans(),
+                equipmentStatusDashboardTabController == null
+                        || equipmentStatusDashboardTabController.snapshotShowDispatchPlans());
     }
 
     /** 設備ガントのプレビュー用に、バッジ「既定」スタイルを返す。 */
@@ -1446,6 +1481,9 @@ public final class MainShellController {
         if (t == mainShellTabRun) {
             return MainShellTabId.RUN;
         }
+        if (t == mainShellTabEquipmentStatusDashboard) {
+            return MainShellTabId.EQUIPMENT_STATUS_DASHBOARD;
+        }
         if (t == mainShellTabPipelineExecutionTiming) {
             return MainShellTabId.PIPELINE_EXECUTION_TIMING;
         }
@@ -1532,6 +1570,7 @@ public final class MainShellController {
             return null;
         }
         return switch (id) {
+            case EQUIPMENT_STATUS_DASHBOARD -> mainShellTabEquipmentStatusDashboard;
             case RUN -> mainShellTabRun;
             case PIPELINE_EXECUTION_TIMING -> mainShellTabPipelineExecutionTiming;
             case UI_BADGE_DESIGN -> mainShellTabUiBadgeDesign;
@@ -3819,22 +3858,60 @@ public final class MainShellController {
     }
 
     /**
-     * 段階1／段階2 実行中は「実行・ログ」以外のタブを無効化し、タブ切り替えを禁止する（ツールバーに進捗・中断）。
+     * 配台試行（段階3／段階3.5）開始時に {@link #runLock} を取得し、シェル全体の操作制限をかける。
+     *
+     * @return 他処理が実行中などで開始できないとき {@code false}
+     */
+    boolean tryBeginDispatchTrialGating(PipelineExecutionTimingKind kind) {
+        if (kind != PipelineExecutionTimingKind.STAGE3
+                && kind != PipelineExecutionTimingKind.STAGE3_5) {
+            return true;
+        }
+        if (!runLock.compareAndSet(false, true)) {
+            appendLog("[busy] 他の処理が実行中のため " + kind.label() + " を開始できません。");
+            return false;
+        }
+        activeDispatchTrialKind = kind;
+        applyRunTabGating();
+        return true;
+    }
+
+    /** 配台試行の操作制限を解除する（FX スレッドから呼ぶ想定）。 */
+    void endDispatchTrialGating(PipelineExecutionTimingKind kind) {
+        if (activeDispatchTrialKind == kind) {
+            activeDispatchTrialKind = null;
+        }
+        runLock.set(false);
+        applyRunTabGating();
+    }
+
+    /** 配台試行後の再読込失敗など、種別不明で gating を解除するとき。 */
+    void endActiveDispatchTrialGatingIfAny() {
+        PipelineExecutionTimingKind kind = activeDispatchTrialKind;
+        if (kind != null) {
+            endDispatchTrialGating(kind);
+        }
+    }
+
+    /**
+     * 段階1／段階2／配台試行 実行中は「実行・ログ」以外のタブを無効化し、タブ切り替えを禁止する（ツールバーに進捗・中断）。
      */
     private void applyRunTabGating() {
         String script = activeRunStageScript;
         boolean stage1Running = STAGE1.equals(script);
         boolean stage2Running = STAGE2.equals(script);
+        boolean dispatchTrialBusy = activeDispatchTrialKind != null;
+        boolean pipelineBusy = stage1Running || stage2Running || dispatchTrialBusy;
         if (mainRunTabController != null) {
-            mainRunTabController.setStageRunProgressVisible(stage1Running, stage2Running);
+            mainRunTabController.setStageRunProgressVisible(stage1Running, pipelineBusy);
         }
         if (dispatchInteractiveTabController != null) {
-            dispatchInteractiveTabController.setStageRunProgressVisible(stage1Running, stage2Running);
+            dispatchInteractiveTabController.setStageRunProgressVisible(stage1Running, pipelineBusy);
         }
         if (planInputTabController != null) {
-            planInputTabController.setStageRunProgressVisible(stage1Running, stage2Running);
+            planInputTabController.setStageRunProgressVisible(stage1Running, pipelineBusy);
         }
-        updateShellStageProgressOverlay(stage1Running, stage2Running);
+        updateShellStageProgressOverlay(stage1Running, stage2Running, activeDispatchTrialKind);
         if (tabPane == null) {
             return;
         }
@@ -3842,11 +3919,10 @@ public final class MainShellController {
         if (tabs.isEmpty()) {
             return;
         }
-        boolean stageBusy = stage1Running || stage2Running;
         for (Tab t : tabs) {
-            t.setDisable(stageBusy && t != mainShellTabRun);
+            t.setDisable(pipelineBusy && t != mainShellTabRun);
         }
-        if (stageBusy) {
+        if (pipelineBusy) {
             Tab sel = tabPane.getSelectionModel().getSelectedItem();
             if (sel != mainShellTabRun) {
                 tabPane.getSelectionModel().select(mainShellTabRun);
@@ -3855,15 +3931,20 @@ public final class MainShellController {
     }
 
     /**
-     * メインウィンドウ上部ツールバーに段階1/2 実行中を表示する。
+     * メインウィンドウ上部ツールバーに段階1/2／配台試行 実行中を表示する。
      * プログレスは {@link DispatchInteractiveTabController} の「機械 JSON 再読み」と同じ
      * {@link ProgressIndicator}（22×22）+ {@link ProgressBar}（prefWidth 220・不定）の組み合わせ。
      */
-    private void updateShellStageProgressOverlay(boolean stage1Running, boolean stage2Running) {
+    private void updateShellStageProgressOverlay(
+            boolean stage1Running,
+            boolean stage2Running,
+            PipelineExecutionTimingKind dispatchTrialKind) {
         if (shellStageProgressBox == null) {
             return;
         }
-        boolean show = stage1Running || stage2Running;
+        boolean stageScriptBusy = stage1Running || stage2Running;
+        boolean dispatchTrialBusy = dispatchTrialKind != null;
+        boolean show = stageScriptBusy || dispatchTrialBusy;
         if (show) {
             shellStageProgressBox.setManaged(true);
             shellStageProgressBox.setVisible(true);
@@ -3877,11 +3958,22 @@ public final class MainShellController {
                 shellStageBusyIndicator.setVisible(true);
             }
             if (shellStageProgressLabel != null) {
-                shellStageProgressLabel.setText(stage1Running ? "段階1 実行中…" : "段階2 実行中…");
+                if (stage1Running) {
+                    shellStageProgressLabel.setText("段階1 実行中…");
+                } else if (stage2Running) {
+                    shellStageProgressLabel.setText("段階2 実行中…");
+                } else if (dispatchTrialKind == PipelineExecutionTimingKind.STAGE3_5) {
+                    shellStageProgressLabel.setText("段階3.5 実行中…");
+                } else if (dispatchTrialKind == PipelineExecutionTimingKind.STAGE3) {
+                    shellStageProgressLabel.setText("段階3 実行中…");
+                } else {
+                    shellStageProgressLabel.setText("配台試行 実行中…");
+                }
             }
             if (shellStageCancelButton != null) {
-                shellStageCancelButton.setManaged(true);
-                shellStageCancelButton.setVisible(true);
+                boolean showCancel = stageScriptBusy;
+                shellStageCancelButton.setManaged(showCancel);
+                shellStageCancelButton.setVisible(showCancel);
             }
         } else {
             if (shellStageProgressBar != null) {

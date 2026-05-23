@@ -245,6 +245,11 @@ public record PlanWorkspaceSessionFragment(
                 base.pushButtonDesignPrefs(),
                 base.memoryMonitorEnabled(),
                 base.memoryMonitorIntervalSec(),
-                base.nextLaunchHeapMaxMiB());
+                base.nextLaunchHeapMaxMiB(),
+                base.equipmentStatusDashboardActualDayOffset(),
+                base.equipmentStatusDashboardPlanDayOffset(),
+                base.equipmentStatusDashboardAutoRefreshEnabled(),
+                base.equipmentStatusDashboardShowAladdinPlans(),
+                base.equipmentStatusDashboardShowDispatchPlans());
     }
 }

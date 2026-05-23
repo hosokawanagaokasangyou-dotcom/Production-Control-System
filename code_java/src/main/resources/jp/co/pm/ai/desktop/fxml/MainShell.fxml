@@ -38,6 +38,11 @@
     <center>
         <TabPane fx:id="tabPane" tabClosingPolicy="UNAVAILABLE" tabDragPolicy="REORDER">
             <tabs>
+                <Tab fx:id="mainShellTabEquipmentStatusDashboard" closable="false" text="ダッシュボード">
+                    <content>
+                        <fx:include fx:id="equipmentStatusDashboardTab" source="EquipmentStatusDashboardTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabRun" closable="false" text="実行・ログ">
                     <content>
                         <fx:include fx:id="mainRunTab" source="MainRunTab.fxml"/>

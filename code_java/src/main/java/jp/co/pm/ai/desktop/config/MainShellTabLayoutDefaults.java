@@ -23,6 +23,7 @@ public final class MainShellTabLayoutDefaults {
     /** Flat tab key order (reset-flat button and merge order for missing keys). */
     public static final List<String> DEFAULT_FLAT_TAB_KEY_ORDER =
             List.of(
+                    MainShellTabId.EQUIPMENT_STATUS_DASHBOARD.key(),
                     MainShellTabId.RUN.key(),
                     MainShellTabId.PIPELINE_EXECUTION_TIMING.key(),
                     MainShellTabId.PLAN_INPUT.key(),
@@ -67,6 +68,7 @@ public final class MainShellTabLayoutDefaults {
     /** Default grouped layout when session has no {@code mainShellTabLayout}. */
     public static List<MainShellTabLayoutNode> groupedLayout() {
         List<MainShellTabLayoutNode> top = new ArrayList<>();
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.EQUIPMENT_STATUS_DASHBOARD.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.RUN.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PIPELINE_EXECUTION_TIMING.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_INPUT.key(), ""));

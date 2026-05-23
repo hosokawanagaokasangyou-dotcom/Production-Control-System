@@ -85,6 +85,11 @@ import java.util.Map;
  * @param memoryMonitorEnabled メモリ設定タブのヒープ監視（トレンドグラフ）を有効にするか
  * @param memoryMonitorIntervalSec 監視間隔（秒、1〜3600）
  * @param nextLaunchHeapMaxMiB 次回 JVM 起動時に希望するヒープ上限（MiB、{@code 0} は未設定として UI で現在値を参照）
+ * @param equipmentStatusDashboardActualDayOffset ダッシュボード実績表示日オフセット（{@code 0}=当日、{@code -1}=前日）
+ * @param equipmentStatusDashboardPlanDayOffset ダッシュボード予定表示日オフセット（{@code 0}〜{@code 14}、当日基準）
+ * @param equipmentStatusDashboardAutoRefreshEnabled ダッシュボード自動更新（既定 ON）
+ * @param equipmentStatusDashboardShowAladdinPlans ダッシュボードでアラジン予定を表示
+ * @param equipmentStatusDashboardShowDispatchPlans ダッシュボードで配台予定を表示
  */
 public record DesktopSessionState(
         String planInputPath,
@@ -160,7 +165,12 @@ public record DesktopSessionState(
         PushButtonDesignPrefs pushButtonDesignPrefs,
         boolean memoryMonitorEnabled,
         long memoryMonitorIntervalSec,
-        long nextLaunchHeapMaxMiB) {
+        long nextLaunchHeapMaxMiB,
+        int equipmentStatusDashboardActualDayOffset,
+        int equipmentStatusDashboardPlanDayOffset,
+        boolean equipmentStatusDashboardAutoRefreshEnabled,
+        boolean equipmentStatusDashboardShowAladdinPlans,
+        boolean equipmentStatusDashboardShowDispatchPlans) {
 
     /** 設備ガント・担当バッジ横方向固定間隔（px）の既定、およびスライダー上限の目安。 */
     public static final double DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX = 4.0;
@@ -209,6 +219,9 @@ public record DesktopSessionState(
     /** UI スライダーおよび保存値のワイヤー長上限（px）。 */
     public static final double MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX = 1200d;
 
+    /** ダッシュボード予定日オフセットの上限（当日基準）。 */
+    public static final int MAX_EQUIPMENT_STATUS_DASHBOARD_PLAN_DAY_OFFSET = 14;
+
     public DesktopSessionState {
         equipmentGanttPersonBadgeStylesByLabel =
                 equipmentGanttPersonBadgeStylesByLabel == null || equipmentGanttPersonBadgeStylesByLabel.isEmpty()
@@ -256,6 +269,14 @@ public record DesktopSessionState(
                                 equipmentGanttPersonBadgeWireMaxLengthPx,
                                 MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX)
                         : DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX;
+        equipmentStatusDashboardActualDayOffset =
+                equipmentStatusDashboardActualDayOffset <= -1 ? -1 : 0;
+        equipmentStatusDashboardPlanDayOffset =
+                equipmentStatusDashboardPlanDayOffset < 0
+                        ? 0
+                        : Math.min(
+                                equipmentStatusDashboardPlanDayOffset,
+                                MAX_EQUIPMENT_STATUS_DASHBOARD_PLAN_DAY_OFFSET);
     }
 
     /**
@@ -384,7 +405,12 @@ public record DesktopSessionState(
                 PushButtonDesignPrefs.inactiveDefaults(),
                 false,
                 5L,
-                0L);
+                0L,
+                0,
+                0,
+                true,
+                true,
+                true);
     }
 
     /**
@@ -466,6 +492,11 @@ public record DesktopSessionState(
                 pushButtonDesignPrefs(),
                 memoryMonitorEnabled(),
                 memoryMonitorIntervalSec(),
-                nextLaunchHeapMaxMiB());
+                nextLaunchHeapMaxMiB(),
+                equipmentStatusDashboardActualDayOffset(),
+                equipmentStatusDashboardPlanDayOffset(),
+                equipmentStatusDashboardAutoRefreshEnabled(),
+                equipmentStatusDashboardShowAladdinPlans(),
+                equipmentStatusDashboardShowDispatchPlans());
     }
 }

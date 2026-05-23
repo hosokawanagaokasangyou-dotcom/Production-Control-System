@@ -1,0 +1,567 @@
+package jp.co.pm.ai.desktop.io.actuals;
+
+import java.text.Collator;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
+import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
+
+/**
+ * 加工実績・アラジン予定・配台予定を機械名単位に集約する。
+ */
+public final class EquipmentStatusDashboardBuilder {
+
+    private static final Collator MACHINE_COLLATOR = Collator.getInstance(Locale.JAPAN);
+
+    private static final String COL_MACHINE = "機械名";
+    private static final String COL_REQUEST = "依頼NO";
+    private static final String COL_PROCESS = "工程名";
+    private static final String COL_KAKOU_DATE = "加工日";
+    private static final String COL_START_DT = "加工開始日時";
+    private static final String COL_END_DT = "加工終了日時";
+    private static final String COL_QTY_CONV = "換算数量";
+    private static final String COL_ACTUAL_QTY = "実加工数";
+    private static final String COL_CUM_DONE = "累積実績";
+    private static final String COL_CUM_PCT = "累積完了率";
+    private static final String COL_MEMBER = "メンバー名";
+
+    private static final Pattern PCT_SUFFIX = Pattern.compile("%\\s*$");
+    private static final DateTimeFormatter DT_OUT =
+            DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
+
+    static {
+        MACHINE_COLLATOR.setStrength(Collator.PRIMARY);
+    }
+
+    private EquipmentStatusDashboardBuilder() {}
+
+    public record ActualsSnapshot(List<String> headers, List<List<String>> rows) {}
+
+    public record AladdinSnapshot(List<String> headers, List<List<String>> rows) {}
+
+    public record DispatchSnapshot(List<String> headers, List<List<String>> rows) {}
+
+    public static List<EquipmentMachineStatus> build(
+            ActualsSnapshot actuals,
+            AladdinSnapshot aladdin,
+            DispatchSnapshot dispatch,
+            LocalDate actualDate,
+            LocalDate planDate) {
+        List<String> actHeaders = actuals != null ? actuals.headers() : List.of();
+        List<List<String>> actRows = actuals != null ? actuals.rows() : List.of();
+        List<String> alHeaders = aladdin != null ? aladdin.headers() : List.of();
+        List<List<String>> alRows = aladdin != null ? aladdin.rows() : List.of();
+        List<String> disHeaders = dispatch != null ? dispatch.headers() : List.of();
+        List<List<String>> disRows = dispatch != null ? dispatch.rows() : List.of();
+
+        String actualDateKey = formatDateKey(actualDate);
+        String planDateKey = formatDateKey(planDate);
+
+        Map<String, List<List<String>>> actualByMachine =
+                groupActualRowsByMachine(actHeaders, actRows, actualDateKey);
+        Set<String> machines = new LinkedHashSet<>();
+        machines.addAll(actualByMachine.keySet());
+        machines.addAll(machinesWithAladdinOnDate(alHeaders, alRows, planDateKey));
+        machines.addAll(machinesWithDispatchOnDate(disHeaders, disRows, planDateKey));
+
+        List<String> sorted = new ArrayList<>(machines);
+        sorted.sort(MACHINE_COLLATOR);
+
+        List<EquipmentMachineStatus> out = new ArrayList<>(sorted.size());
+        for (String machine : sorted) {
+            List<List<String>> dayRows = actualByMachine.getOrDefault(machine, List.of());
+            Optional<EquipmentMachineStatus.ActualTaskRow> task =
+                    pickLatestActualTask(actHeaders, dayRows);
+            EquipmentMachineStatus.Status status = deriveStatus(dayRows, task);
+            List<EquipmentMachineStatus.PlanLine> alPlans =
+                    collectAladdinPlans(alHeaders, alRows, machine, planDateKey);
+            List<EquipmentMachineStatus.PlanLine> disPlans =
+                    collectDispatchPlans(disHeaders, disRows, machine, planDateKey);
+            out.add(
+                    new EquipmentMachineStatus(
+                            machine, status, task, alPlans, disPlans));
+        }
+        return List.copyOf(out);
+    }
+
+    /** {@link PlanInputTabularIo.TabularSheet} から実績スナップショットを生成。 */
+    public static ActualsSnapshot actualsFrom(PlanInputTabularIo.TabularSheet sheet) {
+        if (sheet == null) {
+            return new ActualsSnapshot(List.of(), List.of());
+        }
+        return new ActualsSnapshot(
+                copyList(sheet.headers()), copyMatrix(sheet.rows()));
+    }
+
+    public static AladdinSnapshot aladdinFrom(PlanInputTabularIo.TabularSheet sheet) {
+        if (sheet == null) {
+            return new AladdinSnapshot(List.of(), List.of());
+        }
+        return new AladdinSnapshot(
+                copyList(sheet.headers()), copyMatrix(sheet.rows()));
+    }
+
+    public static DispatchSnapshot dispatchFrom(PlanInputTabularIo.TabularSheet sheet) {
+        if (sheet == null) {
+            return new DispatchSnapshot(List.of(), List.of());
+        }
+        return new DispatchSnapshot(
+                copyList(sheet.headers()), copyMatrix(sheet.rows()));
+    }
+
+    static double parseCompletionPct(List<String> headers, List<String> row) {
+        int iCumPct = colIdx(headers, COL_CUM_PCT);
+        if (iCumPct >= 0) {
+            double p = parsePctCell(cellAt(row, iCumPct));
+            if (Double.isFinite(p)) {
+                return clampPct(p);
+            }
+        }
+        int iCum = colIdx(headers, COL_CUM_DONE);
+        int iConv = colIdx(headers, COL_QTY_CONV);
+        if (iCum >= 0 && iConv >= 0) {
+            double cum = parseDouble(cellAt(row, iCum));
+            double conv = parseDouble(cellAt(row, iConv));
+            if (conv > 1e-12) {
+                return clampPct(cum / conv * 100.0);
+            }
+        }
+        int iAct = colIdx(headers, COL_ACTUAL_QTY);
+        if (iAct >= 0 && iConv >= 0) {
+            double act = parseDouble(cellAt(row, iAct));
+            double conv = parseDouble(cellAt(row, iConv));
+            if (conv > 1e-12) {
+                return clampPct(act / conv * 100.0);
+            }
+        }
+        return 0.0;
+    }
+
+    static LocalDate rowActualDate(List<String> headers, List<String> row) {
+        int iStart = colIdx(headers, COL_START_DT);
+        if (iStart >= 0) {
+            LocalDate d = parseDatePrefix(cellAt(row, iStart));
+            if (d != null) {
+                return d;
+            }
+        }
+        int iDate = colIdx(headers, COL_KAKOU_DATE);
+        if (iDate >= 0) {
+            return parseDateKey(cellAt(row, iDate));
+        }
+        return null;
+    }
+
+    private static EquipmentMachineStatus.Status deriveStatus(
+            List<List<String>> dayRows,
+            Optional<EquipmentMachineStatus.ActualTaskRow> task) {
+        if (dayRows == null || dayRows.isEmpty() || task.isEmpty()) {
+            return EquipmentMachineStatus.Status.STOPPED;
+        }
+        double pct = task.get().completionPct();
+        if (pct >= 99.999) {
+            return EquipmentMachineStatus.Status.COMPLETED;
+        }
+        return EquipmentMachineStatus.Status.RUNNING;
+    }
+
+    private static Optional<EquipmentMachineStatus.ActualTaskRow> pickLatestActualTask(
+            List<String> headers, List<List<String>> dayRows) {
+        if (dayRows == null || dayRows.isEmpty()) {
+            return Optional.empty();
+        }
+        List<String> best = null;
+        LocalDateTime bestDt = null;
+        for (List<String> row : dayRows) {
+            LocalDateTime dt = parseDateTime(cellAt(row, colIdx(headers, COL_START_DT)));
+            if (dt == null) {
+                LocalDate d = rowActualDate(headers, row);
+                if (d != null) {
+                    dt = d.atStartOfDay();
+                }
+            }
+            if (best == null || compareDateTime(dt, bestDt) > 0) {
+                best = row;
+                bestDt = dt;
+            }
+        }
+        if (best == null) {
+            return Optional.empty();
+        }
+        int iReq = colIdx(headers, COL_REQUEST);
+        int iProc = colIdx(headers, COL_PROCESS);
+        int iConv = colIdx(headers, COL_QTY_CONV);
+        int iStart = colIdx(headers, COL_START_DT);
+        int iEnd = colIdx(headers, COL_END_DT);
+        int iMember = colIdx(headers, COL_MEMBER);
+        double pct = parseCompletionPct(headers, best);
+        return Optional.of(
+                new EquipmentMachineStatus.ActualTaskRow(
+                        cellAt(best, iReq).strip(),
+                        cellAt(best, iProc).strip(),
+                        parseDouble(cellAt(best, iConv)),
+                        pct,
+                        cellAt(best, iMember).strip(),
+                        cellAt(best, iStart).strip(),
+                        cellAt(best, iEnd).strip()));
+    }
+
+    private static Map<String, List<List<String>>> groupActualRowsByMachine(
+            List<String> headers, List<List<String>> rows, String dateKey) {
+        int iMach = colIdx(headers, COL_MACHINE);
+        if (iMach < 0 || dateKey == null) {
+            return Map.of();
+        }
+        Map<String, List<List<String>>> byMachine = new LinkedHashMap<>();
+        for (List<String> row : rows) {
+            String mk = displayMachineKey(cellAt(row, iMach));
+            if (mk.isEmpty()) {
+                continue;
+            }
+            LocalDate d = rowActualDate(headers, row);
+            if (d == null || !formatDateKey(d).equals(dateKey)) {
+                continue;
+            }
+            byMachine.computeIfAbsent(mk, k -> new ArrayList<>()).add(row);
+        }
+        return byMachine;
+    }
+
+    private static Set<String> machinesWithAladdinOnDate(
+            List<String> headers, List<List<String>> rows, String planDateKey) {
+        int mkIdx = colIdx(headers, COL_MACHINE);
+        if (mkIdx < 0 || planDateKey == null) {
+            return Set.of();
+        }
+        Map<Integer, String> dateCols = dateColumnIndices(headers);
+        String planCol = planDateKey;
+        Integer colIdx = null;
+        for (Map.Entry<Integer, String> e : dateCols.entrySet()) {
+            if (planDateKey.equals(normalizeDateHeader(e.getValue()))) {
+                colIdx = e.getKey();
+                break;
+            }
+        }
+        if (colIdx == null) {
+            return Set.of();
+        }
+        Set<String> out = new LinkedHashSet<>();
+        for (List<String> row : rows) {
+            String mk = displayMachineKey(cellAt(row, mkIdx));
+            if (mk.isEmpty()) {
+                continue;
+            }
+            double qty = parseDouble(cellAt(row, colIdx));
+            if (Math.abs(qty) > 1e-12) {
+                out.add(mk);
+            }
+        }
+        return out;
+    }
+
+    private static Set<String> machinesWithDispatchOnDate(
+            List<String> headers, List<List<String>> rows, String planDateKey) {
+        int mkIdx = colIdx(headers, ResultDispatchSchema.COL_MACHINE);
+        int dateIdx = colIdx(headers, ResultDispatchSchema.COL_DISPATCH_DATE);
+        int qtyIdx = colIdx(headers, ResultDispatchSchema.COL_DISPATCH_QTY);
+        if (mkIdx < 0 || dateIdx < 0 || qtyIdx < 0 || planDateKey == null) {
+            return Set.of();
+        }
+        Set<String> out = new LinkedHashSet<>();
+        for (List<String> row : rows) {
+            String ds = normalizeDateHeader(cellAt(row, dateIdx));
+            if (!planDateKey.equals(ds)) {
+                continue;
+            }
+            double qty = parseDouble(cellAt(row, qtyIdx));
+            if (Math.abs(qty) <= 1e-12) {
+                continue;
+            }
+            String mk = displayMachineKey(cellAt(row, mkIdx));
+            if (!mk.isEmpty()) {
+                out.add(mk);
+            }
+        }
+        return out;
+    }
+
+    private static List<EquipmentMachineStatus.PlanLine> collectAladdinPlans(
+            List<String> headers,
+            List<List<String>> rows,
+            String machine,
+            String planDateKey) {
+        int mkIdx = colIdx(headers, COL_MACHINE);
+        int tidIdx = colIdx(headers, COL_REQUEST);
+        int procIdx = colIdx(headers, COL_PROCESS);
+        if (mkIdx < 0 || tidIdx < 0 || planDateKey == null) {
+            return List.of();
+        }
+        Integer dateCol = null;
+        for (Map.Entry<Integer, String> e : dateColumnIndices(headers).entrySet()) {
+            if (planDateKey.equals(normalizeDateHeader(e.getValue()))) {
+                dateCol = e.getKey();
+                break;
+            }
+        }
+        if (dateCol == null) {
+            return List.of();
+        }
+        String mkNorm = normalizeEquipmentKey(machine);
+        List<EquipmentMachineStatus.PlanLine> out = new ArrayList<>();
+        for (List<String> row : rows) {
+            if (!mkNorm.equals(normalizeEquipmentKey(cellAt(row, mkIdx)))) {
+                continue;
+            }
+            double qty = parseDouble(cellAt(row, dateCol));
+            if (Math.abs(qty) <= 1e-12) {
+                continue;
+            }
+            out.add(
+                    new EquipmentMachineStatus.PlanLine(
+                            cellAt(row, tidIdx).strip(),
+                            procIdx >= 0 ? cellAt(row, procIdx).strip() : "",
+                            ResultDispatchNormalizer.formatQty(qty)));
+        }
+        out.sort(planLineComparator());
+        return List.copyOf(out);
+    }
+
+    private static List<EquipmentMachineStatus.PlanLine> collectDispatchPlans(
+            List<String> headers,
+            List<List<String>> rows,
+            String machine,
+            String planDateKey) {
+        int mkIdx = colIdx(headers, ResultDispatchSchema.COL_MACHINE);
+        int tidIdx = colIdx(headers, COL_REQUEST);
+        int procIdx = colIdx(headers, ResultDispatchSchema.COL_PROCESS);
+        int dateIdx = colIdx(headers, ResultDispatchSchema.COL_DISPATCH_DATE);
+        int qtyIdx = colIdx(headers, ResultDispatchSchema.COL_DISPATCH_QTY);
+        if (mkIdx < 0 || tidIdx < 0 || dateIdx < 0 || qtyIdx < 0 || planDateKey == null) {
+            return List.of();
+        }
+        String mkNorm = normalizeEquipmentKey(machine);
+        List<EquipmentMachineStatus.PlanLine> out = new ArrayList<>();
+        for (List<String> row : rows) {
+            if (!mkNorm.equals(normalizeEquipmentKey(cellAt(row, mkIdx)))) {
+                continue;
+            }
+            if (!planDateKey.equals(normalizeDateHeader(cellAt(row, dateIdx)))) {
+                continue;
+            }
+            double qty = parseDouble(cellAt(row, qtyIdx));
+            if (Math.abs(qty) <= 1e-12) {
+                continue;
+            }
+            out.add(
+                    new EquipmentMachineStatus.PlanLine(
+                            cellAt(row, tidIdx).strip(),
+                            procIdx >= 0 ? cellAt(row, procIdx).strip() : "",
+                            ResultDispatchNormalizer.formatQty(qty)));
+        }
+        out.sort(planLineComparator());
+        return List.copyOf(out);
+    }
+
+    private static Comparator<EquipmentMachineStatus.PlanLine> planLineComparator() {
+        return Comparator.comparing(EquipmentMachineStatus.PlanLine::requestNo, MACHINE_COLLATOR)
+                .thenComparing(EquipmentMachineStatus.PlanLine::processName, MACHINE_COLLATOR);
+    }
+
+    private static Map<Integer, String> dateColumnIndices(List<String> headers) {
+        Map<Integer, String> out = new LinkedHashMap<>();
+        Pattern p = Pattern.compile("\\d{4}/\\d{2}/\\d{2}");
+        for (int i = 0; i < headers.size(); i++) {
+            String h = headers.get(i);
+            if (h != null && p.matcher(h).matches()) {
+                out.put(i, h);
+            }
+        }
+        return out;
+    }
+
+    private static String displayMachineKey(String raw) {
+        String n = normalizeEquipmentKey(raw);
+        return n.isEmpty() ? "" : raw.strip();
+    }
+
+    private static String normalizeEquipmentKey(String val) {
+        if (val == null || val.isBlank()) {
+            return "";
+        }
+        String t = java.text.Normalizer.normalize(val, java.text.Normalizer.Form.NFKC);
+        t = t.replace('\u00a0', ' ').replace('\u3000', ' ');
+        t = t.replaceAll("[\u200b\u200c\u200d\ufeff]", "");
+        return t.replaceAll("\\s+", " ").strip();
+    }
+
+    private static String normalizeDateHeader(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        String s = raw.strip();
+        if (s.length() >= 10 && s.charAt(4) == '-' && s.charAt(7) == '-') {
+            return s.substring(0, 10).replace('-', '/');
+        }
+        if (s.length() == 10 && s.charAt(4) == '/' && s.charAt(7) == '/') {
+            return s;
+        }
+        try {
+            String[] parts = s.split("[/\\-]");
+            if (parts.length == 3) {
+                int y = Integer.parseInt(parts[0].strip());
+                int mo = Integer.parseInt(parts[1].strip());
+                int d = Integer.parseInt(parts[2].strip());
+                return String.format(Locale.ROOT, "%04d/%02d/%02d", y, mo, d);
+            }
+        } catch (NumberFormatException ignored) {
+            // fall through
+        }
+        return "";
+    }
+
+    private static String formatDateKey(LocalDate d) {
+        return d != null ? d.format(DateTimeFormatter.ofPattern("yyyy/MM/dd")) : "";
+    }
+
+    private static LocalDate parseDateKey(String raw) {
+        String n = normalizeDateHeader(raw);
+        if (n.isEmpty()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(n, DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+        } catch (DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    private static LocalDate parseDatePrefix(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String s = raw.strip();
+        if (s.length() >= 10) {
+            return parseDateKey(s.substring(0, 10));
+        }
+        return parseDateKey(s);
+    }
+
+    private static LocalDateTime parseDateTime(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String s = raw.strip();
+        try {
+            if (s.length() >= 16) {
+                return LocalDateTime.parse(s.substring(0, 16), DT_OUT);
+            }
+            LocalDate d = parseDateKey(s);
+            return d != null ? d.atStartOfDay() : null;
+        } catch (DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    private static int compareDateTime(LocalDateTime a, LocalDateTime b) {
+        if (a == null && b == null) {
+            return 0;
+        }
+        if (a == null) {
+            return -1;
+        }
+        if (b == null) {
+            return 1;
+        }
+        return a.compareTo(b);
+    }
+
+    private static double parsePctCell(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return Double.NaN;
+        }
+        String s = raw.strip();
+        Matcher m = PCT_SUFFIX.matcher(s);
+        if (m.find()) {
+            s = s.substring(0, m.start()).strip();
+            double v = parseDouble(s);
+            return Double.isFinite(v) ? v : Double.NaN;
+        }
+        double v = parseDouble(s);
+        if (!Double.isFinite(v)) {
+            return Double.NaN;
+        }
+        if (v >= 0.0 && v <= 1.0) {
+            return v * 100.0;
+        }
+        return v;
+    }
+
+    private static double clampPct(double v) {
+        if (!Double.isFinite(v)) {
+            return 0.0;
+        }
+        return Math.max(0.0, Math.min(100.0, v));
+    }
+
+    private static double parseDouble(String s) {
+        if (s == null || s.isBlank()) {
+            return 0.0;
+        }
+        try {
+            return Double.parseDouble(s.strip().replace(",", ""));
+        } catch (NumberFormatException e) {
+            return 0.0;
+        }
+    }
+
+    private static int colIdx(List<String> headers, String title) {
+        if (headers == null || title == null) {
+            return -1;
+        }
+        for (int i = 0; i < headers.size(); i++) {
+            if (title.equals(headers.get(i))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static String cellAt(List<String> row, int idx) {
+        return (idx >= 0 && row != null && idx < row.size() && row.get(idx) != null)
+                ? row.get(idx)
+                : "";
+    }
+
+    private static List<String> copyList(List<String> in) {
+        return in != null ? List.copyOf(in) : List.of();
+    }
+
+    private static List<List<String>> copyMatrix(List<List<String>> in) {
+        if (in == null) {
+            return List.of();
+        }
+        List<List<String>> out = new ArrayList<>(in.size());
+        for (List<String> row : in) {
+            out.add(row != null ? List.copyOf(row) : List.of());
+        }
+        return List.copyOf(out);
+    }
+}
