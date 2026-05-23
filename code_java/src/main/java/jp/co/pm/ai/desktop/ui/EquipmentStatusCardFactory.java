@@ -25,10 +25,12 @@ public final class EquipmentStatusCardFactory {
             boolean showAladdinPlans,
             boolean showDispatchPlans,
             String actualDateLabel,
-            String planDateLabel) {
+            String planDateLabel,
+            /** 実績日が当日のときのみ {@code true}。「稼働中」チップ表示に使う。 */
+            boolean showRunningStatusChip) {
 
         public static DisplayOptions defaults() {
-            return new DisplayOptions(true, true, "", "");
+            return new DisplayOptions(true, true, "", "", true);
         }
     }
 
@@ -54,14 +56,17 @@ public final class EquipmentStatusCardFactory {
         Label machine = new Label(status.machineName());
         machine.getStyleClass().add("pm-equipment-status-machine");
         EquipmentStatusDashboardAppearanceApplier.applyMachineLabel(machine, ap);
-        machine.setMaxWidth(width - 100);
+        machine.setMaxWidth(shouldShowStatusChip(status, opts) ? width - 100 : width - ap.cardPadding() * 2);
         machine.setTextOverrun(OverrunStyle.ELLIPSIS);
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        Label chip = new Label(statusLabel(status.status()));
-        chip.getStyleClass().addAll("pm-equipment-status-chip", chipStyleClass(status.status()));
-        EquipmentStatusDashboardAppearanceApplier.applyLabelFont(chip, ap, ap.planFontPx());
-        header.getChildren().addAll(machine, spacer, chip);
+        header.getChildren().add(machine);
+        if (shouldShowStatusChip(status, opts)) {
+            Region spacer = new Region();
+            HBox.setHgrow(spacer, Priority.ALWAYS);
+            Label chip = new Label(statusLabel(status.status()));
+            chip.getStyleClass().addAll("pm-equipment-status-chip", chipStyleClass(status.status()));
+            EquipmentStatusDashboardAppearanceApplier.applyLabelFont(chip, ap, ap.planFontPx());
+            header.getChildren().addAll(spacer, chip);
+        }
 
         card.getChildren().add(header);
 
@@ -173,6 +178,14 @@ public final class EquipmentStatusCardFactory {
             row.setMaxWidth(width - ap.cardPadding() * 2);
             card.getChildren().add(row);
         }
+    }
+
+    private static boolean shouldShowStatusChip(
+            EquipmentMachineStatus status, DisplayOptions opts) {
+        if (status.status() == EquipmentMachineStatus.Status.RUNNING) {
+            return opts == null || opts.showRunningStatusChip();
+        }
+        return true;
     }
 
     private static String statusLabel(EquipmentMachineStatus.Status status) {

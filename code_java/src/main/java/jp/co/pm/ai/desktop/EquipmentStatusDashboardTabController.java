@@ -523,11 +523,13 @@ public final class EquipmentStatusDashboardTabController {
     private DisplayOptions currentDisplayOptions() {
         LocalDate actual = actualDate != null ? actualDate : LocalDate.now();
         LocalDate plan = planDate != null ? planDate : LocalDate.now();
+        LocalDate today = LocalDate.now();
         return new DisplayOptions(
                 showAladdinCheckBox == null || showAladdinCheckBox.isSelected(),
                 showDispatchCheckBox == null || showDispatchCheckBox.isSelected(),
                 actual.format(DATE_FMT),
-                plan.format(DATE_FMT));
+                plan.format(DATE_FMT),
+                actual.equals(today));
     }
 
     private Function<String, PersonBadgeStyle> badgeStyleResolver() {
