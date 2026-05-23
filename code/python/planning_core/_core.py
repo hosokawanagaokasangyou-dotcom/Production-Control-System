@@ -89,6 +89,8 @@ _STAGE2_MACHINE_CALENDAR_CACHE: dict | None = None
 # - 配台試行順は入力 JSON を正とする。結果_配台表は timeline の暦日行を基準とし、入力が 1 行に潰れないようマージする。
 # - 機械カレンダー: * / ＊ / ※ のみ占有とみなす。列0にスロット行が無い時刻（工場計画窓内）は配台不可。
 #   空セルはスロット行がある時間帯では配台可（* 以外の文字は無視）。
+# - 段階2同一パリティ（PM_AI_INTERACTIVE_TRIAL_STAGE2_PARITY）: 配台ループのブロック条件は段階2と同一。
+#   JSON の暦日×当日配台数量（interactive_dispatch_targets）は配台後の未達照合・配台日スライドのみ。
 # - 指定数量は結果タイムラインと突き合わせ、依頼NO×機械の合計が一致しないとき PlanningValidationError。
 # - 工場枠は master A12/B12 開始・同日 23:59 まで拡張可、暦日跨ぎ加工は中止。
 # - 配台試行時はチーム終業上限を同日 23:59 まで緩め、機械空きが退勤より遅い場合でも同日フォーム探索する。
@@ -28138,6 +28140,21 @@ def _interactive_stage2_parity_active() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
+def _interactive_dispatch_cap_enforced_in_schedule_loop() -> bool:
+    """
+    段階3配台ループ内で JSON 暦日×数量（interactive_dispatch_targets）を割当上限とするか。
+
+    段階2同一パリティでは False（配台ブロック条件は段階2と同一。
+    targets は配台後の未達照合・配台日スライドのみ）。
+    従来の非パリティ・インタラクティブ試行のみ True。
+    """
+    if not _interactive_dispatch_trial_env_active():
+        return False
+    if _interactive_stage2_parity_active():
+        return False
+    return True
+
+
 def _interactive_trial_calendar_legacy_active() -> bool:
     """
     True のときのみ、従来のインタラクティブ試行専用の機械カレンダー解釈
@@ -32351,8 +32368,11 @@ def _interactive_stage3_unmet_cap_m_on_date(
     """
     段階3: 当該暦日の JSON 目標（interactive_dispatch_targets）に対する未達 m。
     同一機械・同一日で複数依頼があるとき、暦日キャップ未達を大きい順に先に割り当てるための sort 用。
+    段階2同一パリティではループ内キャップを使わないため常に 0。
     """
-    if not (_interactive_dispatch_trial_env_active() and interactive_dispatch_targets):
+    if not _interactive_dispatch_cap_enforced_in_schedule_loop():
+        return 0.0
+    if not interactive_dispatch_targets:
         return 0.0
     tid = _interactive_norm_cell(str(task.get("task_id") or ""))
     proc = _interactive_dispatch_target_process_key(task.get("machine"))
@@ -32550,7 +32570,7 @@ def _trial_order_first_schedule_pass(
     if not eligible:
         if (
             cap_drain_only
-            and _interactive_dispatch_trial_env_active()
+            and _interactive_dispatch_cap_enforced_in_schedule_loop()
             and interactive_dispatch_targets
         ):
             eligible = [
@@ -32684,7 +32704,7 @@ def _trial_order_first_schedule_pass(
             if max_rolls is not None and rolls_done >= max_rolls:
                 break
             _iv_cap = (
-                _interactive_dispatch_trial_env_active()
+                _interactive_dispatch_cap_enforced_in_schedule_loop()
                 and interactive_dispatch_targets is not None
                 and interactive_trial_meters_done is not None
             )
@@ -33020,7 +33040,7 @@ def _trial_order_first_schedule_pass(
 
     pass_made = False
     if cap_drain_only and (
-        _interactive_dispatch_trial_env_active()
+        _interactive_dispatch_cap_enforced_in_schedule_loop()
         and interactive_dispatch_targets
     ):
         _cap_drain_source = (
@@ -33059,11 +33079,11 @@ def _trial_order_first_schedule_pass(
         return pass_made
     if phase2_tasks:
         if (
-            _interactive_dispatch_trial_env_active()
+            _interactive_dispatch_cap_enforced_in_schedule_loop()
             and interactive_dispatch_targets
             and phase1_rest
         ):
-            # 段階3: B2 ラウンドロビン（1ロールずつ）だと同一機械で未達大の依頼と交替し
+            # 段階3（非パリティ）: B2 ラウンドロビン（1ロールずつ）だと同一機械で未達大の依頼と交替し
             # 開始が遅れる。phase1_rest は暦日キャップ優先で一括ドレインする。
             for task in sorted(phase1_rest, key=_phase1_sort_key):
                 if _drain_rolls_for_task(task):
@@ -35712,10 +35732,12 @@ def _generate_plan_impl(
     _apply_dispatch_trial_order_for_generate_plan(
         task_queue, req_map, need_rules, need_combo_col_index
     )
-    # 段階3: 手動修正 JSON で正の「当日配台数量」がある配台日の最奨を start_date_req 下限とする
-    # （原反投入・既定開始より前にはしない: max(既存, 最奨暦日)。非稼働日は直前稼働日へ寄せる）
+    # 段階3（非パリティ）: 手動修正 JSON で正の「当日配台数量」がある配台日の最古を start_date_req 下限とする
+    # （原反投入・既定開始より前にはしない: max(既存, 最古暦日)。非稼働日は直前稼働日へ寄せる）
+    # 段階2同一パリティでは段階2と同じ start_date_req のみ（JSON 配台日で繰り上げない）。
     if (
         _interactive_dispatch_trial_env_active()
+        and not _interactive_stage2_parity_active()
         and isinstance(interactive_result_dispatch_json_rows, list)
         and interactive_result_dispatch_json_rows
     ):
@@ -35955,7 +35977,7 @@ def _generate_plan_impl(
             
             _sched_max_passes = max(96, max(1, len(tasks_today)) * 15)
             if (
-                _interactive_dispatch_trial_env_active()
+                _interactive_dispatch_cap_enforced_in_schedule_loop()
                 and interactive_dispatch_targets
                 and STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST
             ):
