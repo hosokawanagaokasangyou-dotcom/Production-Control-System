@@ -11,7 +11,9 @@ public enum GanttScheduleSlotBarKind {
     BREAK,
     STARTUP,
     REQUEST_SWITCH_PREP,
-    BREAK_RESUME_PREP;
+    BREAK_RESUME_PREP,
+    POST_MACHINING_CLEANUP,
+    REQUEST_INTERVAL_BUFFER;
 
     public static GanttScheduleSlotBarKind fromTimelineCell(String t) {
         if (t == null || t.isEmpty()) {
@@ -22,6 +24,12 @@ public enum GanttScheduleSlotBarKind {
         }
         if (t.contains("依頼切替準備")) {
             return REQUEST_SWITCH_PREP;
+        }
+        if (t.contains("後始末")) {
+            return POST_MACHINING_CLEANUP;
+        }
+        if (t.contains("依頼間余裕")) {
+            return REQUEST_INTERVAL_BUFFER;
         }
         if (t.contains("休憩再開準備")) {
             return BREAK_RESUME_PREP;

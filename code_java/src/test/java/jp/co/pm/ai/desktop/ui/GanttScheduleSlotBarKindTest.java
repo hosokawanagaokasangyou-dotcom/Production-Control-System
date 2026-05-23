@@ -43,4 +43,18 @@ class GanttScheduleSlotBarKindTest {
                 GanttScheduleSlotBarKind.BREAK_RESUME_PREP,
                 GanttScheduleSlotBarKind.fromTimelineCell("休憩再開準備"));
     }
+
+    @Test
+    void post_machining_cleanup_isDedicatedKind() {
+        assertEquals(
+                GanttScheduleSlotBarKind.POST_MACHINING_CLEANUP,
+                GanttScheduleSlotBarKind.fromTimelineCell("後始末"));
+    }
+
+    @Test
+    void request_interval_buffer_isDedicatedKind() {
+        assertEquals(
+                GanttScheduleSlotBarKind.REQUEST_INTERVAL_BUFFER,
+                GanttScheduleSlotBarKind.fromTimelineCell("依頼間余裕"));
+    }
 }

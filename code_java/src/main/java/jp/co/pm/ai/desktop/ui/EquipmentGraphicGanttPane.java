@@ -3041,6 +3041,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     case STARTUP -> palette.barStartup();
                     case REQUEST_SWITCH_PREP -> palette.barRequestSwitchPrep();
                     case BREAK_RESUME_PREP -> palette.barBreakResumePrep();
+                    case POST_MACHINING_CLEANUP -> palette.barRequestSwitchPrep();
+                    case REQUEST_INTERVAL_BUFFER -> palette.barBreakResumePrep();
                     default -> palette.barDefault();
                 };
         double arc = Math.max(2, 3 * layout.zoom);
@@ -3274,6 +3276,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         case STARTUP -> palette.barStartupText();
                         case REQUEST_SWITCH_PREP -> palette.barRequestSwitchPrepText();
                         case BREAK_RESUME_PREP -> palette.barBreakResumePrepText();
+                        case POST_MACHINING_CLEANUP -> palette.barRequestSwitchPrepText();
+                        case REQUEST_INTERVAL_BUFFER -> palette.barBreakResumePrepText();
                         default -> palette.barDefaultText();
                     };
             double lx = run.fromSlot() * layout.slotWidth + inset + 3 * layout.zoom;
@@ -4686,7 +4690,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         if (k == BarKind.BREAK
                 || k == BarKind.STARTUP
                 || k == BarKind.REQUEST_SWITCH_PREP
-                || k == BarKind.BREAK_RESUME_PREP) {
+                || k == BarKind.BREAK_RESUME_PREP
+                || k == BarKind.POST_MACHINING_CLEANUP
+                || k == BarKind.REQUEST_INTERVAL_BUFFER) {
             return k + "\u0001" + t;
         }
         String base = t.replaceFirst("\\s+\\d+(?:\\.\\d+)?m\\s*$", "").strip();
@@ -4751,7 +4757,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     private static boolean isPrepHatchedBar(BarKind kind) {
         return kind == BarKind.STARTUP
                 || kind == BarKind.REQUEST_SWITCH_PREP
-                || kind == BarKind.BREAK_RESUME_PREP;
+                || kind == BarKind.BREAK_RESUME_PREP
+                || kind == BarKind.POST_MACHINING_CLEANUP
+                || kind == BarKind.REQUEST_INTERVAL_BUFFER;
     }
 
     /** 画面 Canvas 向け準備バー斜線ハッチの線幅（px）。 */
@@ -4862,6 +4870,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     case STARTUP -> palette.barStartup();
                     case REQUEST_SWITCH_PREP -> palette.barRequestSwitchPrep();
                     case BREAK_RESUME_PREP -> palette.barBreakResumePrep();
+                    case POST_MACHINING_CLEANUP -> palette.barRequestSwitchPrep();
+                    case REQUEST_INTERVAL_BUFFER -> palette.barBreakResumePrep();
                     default -> palette.barDefault();
                 };
         double arc = Math.max(2, 3 * layout.zoom);
@@ -4959,7 +4969,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         BREAK,
         STARTUP,
         REQUEST_SWITCH_PREP,
-        BREAK_RESUME_PREP
+        BREAK_RESUME_PREP,
+        POST_MACHINING_CLEANUP,
+        REQUEST_INTERVAL_BUFFER
     }
 
     private static BarKind classifyBar(String t) {
@@ -4968,6 +4980,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             case STARTUP -> BarKind.STARTUP;
             case REQUEST_SWITCH_PREP -> BarKind.REQUEST_SWITCH_PREP;
             case BREAK_RESUME_PREP -> BarKind.BREAK_RESUME_PREP;
+            case POST_MACHINING_CLEANUP -> BarKind.POST_MACHINING_CLEANUP;
+            case REQUEST_INTERVAL_BUFFER -> BarKind.REQUEST_INTERVAL_BUFFER;
             default -> BarKind.DEFAULT;
         };
     }

@@ -37,15 +37,33 @@ def main() -> int:
         print(f"ERROR: マスタブックが見つかりません: {master}")
         return 2
 
-    sp, sm, rp, rm = core.load_request_switch_prep_settings(master)
+    (
+        sp,
+        sm,
+        rp,
+        rm,
+        cp,
+        cm,
+        bp,
+        bm,
+    ) = core.load_request_switch_prep_settings(master)
     core._STAGE2_REQUEST_SWITCH_PREP_BY_PROC_MACHINE = sp
     core._STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE = sm
     core._STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE = rp
     core._STAGE2_BREAK_RESUME_PREP_BY_MACHINE = rm
+    core._STAGE2_POST_MACHINING_CLEANUP_BY_PROC_MACHINE = cp
+    core._STAGE2_POST_MACHINING_CLEANUP_BY_MACHINE = cm
+    core._STAGE2_REQUEST_INTERVAL_BUFFER_BY_PROC_MACHINE = bp
+    core._STAGE2_REQUEST_INTERVAL_BUFFER_BY_MACHINE = bm
 
     n_switch = len({k for k in sp if isinstance(k, tuple)}) + len(sm)
     n_resume = len({k for k in rp if isinstance(k, tuple)}) + len(rm)
-    print(f"読込: 依頼切替準備 {n_switch} 件 / 休憩再開準備 {n_resume} 件")
+    n_cleanup = len({k for k in cp if isinstance(k, tuple)}) + len(cm)
+    n_buffer = len({k for k in bp if isinstance(k, tuple)}) + len(bm)
+    print(
+        f"読込: 依頼切替準備 {n_switch} 件 / 休憩再開準備 {n_resume} 件 / "
+        f"後始末 {n_cleanup} 件 / 依頼間余裕 {n_buffer} 件"
+    )
     if n_switch == 0:
         print(
             "WARN: 準備時間が 0 のみ、または列見出し不一致。"
@@ -63,13 +81,21 @@ def main() -> int:
         proc, mn = next(iter(sp.keys()), (proc, mn)) if sp else (proc, mn)
     prep = core._lookup_request_switch_prep_minutes(proc, mn)
     resume = core._lookup_break_resume_prep_minutes(proc, mn)
-    print(f"\nルックアップ: {proc!r} + {mn!r} => 準備 {prep} 分 / 再開 {resume} 分")
+    cleanup = core._lookup_post_machining_cleanup_minutes(proc, mn)
+    buffer_m = core._lookup_request_interval_buffer_minutes(proc, mn)
+    print(
+        f"\nルックアップ: {proc!r} + {mn!r} => "
+        f"準備 {prep} 分 / 再開 {resume} 分 / 後始末 {cleanup} 分 / 余裕 {buffer_m} 分"
+    )
 
     d = date.today()
+    prev_end = datetime.combine(d, datetime.strptime("12:40", "%H:%M").time())
     mh_switch = {
         "last_tid": {"occ1": "A001"},
         "last_machining_date": {"occ1": d},
         "machining_today_occ": {"occ1"},
+        "last_eq": {"occ1": f"{proc}+{mn}"},
+        "last_machining_dt": {"occ1": prev_end},
     }
     t0 = datetime.combine(d, datetime.strptime("12:50", "%H:%M").time())
     ts_sw, segs_sw = core._roll_prep_segments_for_assign(
@@ -83,6 +109,8 @@ def main() -> int:
         machine_name=mn,
         eq_line=f"{proc}+{mn}",
         abolish_limits=False,
+        prev_machining_end=prev_end,
+        prev_eq_line=f"{proc}+{mn}",
     )
     print(f"\n[1] 依頼切替（A001→B002）:")
     print(f"  加工開始: {t0} -> {ts_sw} (+{(ts_sw - t0).total_seconds() / 60:.0f} 分)")
@@ -118,10 +146,8 @@ def main() -> int:
             f"[{s.get('start_dt')}, {s.get('end_dt')})"
         )
 
-    ok_switch = (
-        prep > 0
-        and segs_sw
-        and segs_sw[0].get("event_kind") == core.TIMELINE_EVENT_REQUEST_SWITCH_PREP
+    ok_switch = prep > 0 and segs_sw and any(
+        s.get("event_kind") == core.TIMELINE_EVENT_REQUEST_SWITCH_PREP for s in segs_sw
     )
     ok_resume = (
         resume > 0

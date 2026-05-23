@@ -295,6 +295,10 @@ _STAGE2_REQUEST_SWITCH_PREP_BY_PROC_MACHINE: dict[tuple[str, str], int] = {}
 _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE: dict[str, int] = {}
 _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE: dict[tuple[str, str], int] = {}
 _STAGE2_BREAK_RESUME_PREP_BY_MACHINE: dict[str, int] = {}
+_STAGE2_POST_MACHINING_CLEANUP_BY_PROC_MACHINE: dict[tuple[str, str], int] = {}
+_STAGE2_POST_MACHINING_CLEANUP_BY_MACHINE: dict[str, int] = {}
+_STAGE2_REQUEST_INTERVAL_BUFFER_BY_PROC_MACHINE: dict[tuple[str, str], int] = {}
+_STAGE2_REQUEST_INTERVAL_BUFFER_BY_MACHINE: dict[str, int] = {}
 # master メイン A15（定常開始）。日次始業準備を勤怠 forward ではなく [開始, 開始+N分) のタイムラインに載せる。
 _STAGE2_REGULAR_SHIFT_START: time | None = None
 # 段階2で採用した加工計画DATAのデータ抽出日時（generate_plan / 実績明細ガント更新入口で設定。無いとき None）。
@@ -304,6 +308,8 @@ TIMELINE_EVENT_MACHINING = "machining"
 TIMELINE_EVENT_MACHINE_DAILY_STARTUP = "machine_daily_startup"
 TIMELINE_EVENT_REQUEST_SWITCH_PREP = "request_switch_prep"
 TIMELINE_EVENT_BREAK_RESUME_PREP = "break_resume_prep"
+TIMELINE_EVENT_POST_MACHINING_CLEANUP = "post_machining_cleanup"
+TIMELINE_EVENT_REQUEST_INTERVAL_BUFFER = "request_interval_buffer"
 # VBA「master_組み合わせ表を更新」で作るシート（工程+機械キーとメンバー編集）
 MASTER_SHEET_TEAM_COMBINATIONS = "組み合わせ表"
 # master.xlsm「speed」: 1行目=工程名、2行目=機械名、4行目=基本速度、5行目=実稼働比率（データ列は既定で D 列から）
@@ -2627,6 +2633,8 @@ def _gantt_slot_state_tuple_from_active(active, slot_start, slot_mins, task_fill
         TIMELINE_EVENT_MACHINE_DAILY_STARTUP,
         TIMELINE_EVENT_REQUEST_SWITCH_PREP,
         TIMELINE_EVENT_BREAK_RESUME_PREP,
+        TIMELINE_EVENT_POST_MACHINING_CLEANUP,
+        TIMELINE_EVENT_REQUEST_INTERVAL_BUFFER,
     ):
         return ("daily_startup", _gantt_daily_startup_fill_hex())
     sample_t = _eq_grid_overlap_sample_t(active, slot_start, slot_end, slot_mid)
@@ -3011,6 +3019,10 @@ def _apply_equipment_schedule_prep_cleanup_fill(ws) -> None:
         "依頼切替準備",
         "(休憩再開準備)",
         "休憩再開準備",
+        "(後始末)",
+        "後始末",
+        "(依頼間余裕)",
+        "依頼間余裕",
     )
     col_tb = None
     equip_cols: list[int] = []
@@ -23520,6 +23532,8 @@ def _build_equipment_schedule_dataframe(
                             TIMELINE_EVENT_MACHINE_DAILY_STARTUP: "日次始業準備",
                             TIMELINE_EVENT_REQUEST_SWITCH_PREP: "依頼切替準備",
                             TIMELINE_EVENT_BREAK_RESUME_PREP: "休憩再開準備",
+                            TIMELINE_EVENT_POST_MACHINING_CLEANUP: "後始末",
+                            TIMELINE_EVENT_REQUEST_INTERVAL_BUFFER: "依頼間余裕",
                         }.get(
                             _ek_disp,
                             "セットアップ",
@@ -23532,6 +23546,8 @@ def _build_equipment_schedule_dataframe(
                             TIMELINE_EVENT_MACHINE_DAILY_STARTUP,
                             TIMELINE_EVENT_REQUEST_SWITCH_PREP,
                             TIMELINE_EVENT_BREAK_RESUME_PREP,
+                            TIMELINE_EVENT_POST_MACHINING_CLEANUP,
+                            TIMELINE_EVENT_REQUEST_INTERVAL_BUFFER,
                         ):
                             eq_text = str(_tag)
                         else:
@@ -24856,28 +24872,49 @@ def load_request_switch_prep_settings(
     dict[str, int],
     dict[tuple[str, str], int],
     dict[str, int],
+    dict[tuple[str, str], int],
+    dict[str, int],
+    dict[tuple[str, str], int],
+    dict[str, int],
 ]:
     """
-    master.xlsm「設定_依頼切替前後時間」… 工程名・機械名・依頼切替準備時間・休憩後再開準備時間。
+    master.xlsm「設定_依頼切替前後時間」… 工程名・機械名・依頼切替準備時間・休憩後再開準備時間・
+    後始末時間・加工依頼間の余裕時間。
 
     戻り値: (依頼切替準備 by (工程,機械), 依頼切替準備 by 機械名のみ,
-            休憩再開準備 by (工程,機械), 休憩再開準備 by 機械名のみ)。
+            休憩再開準備 by (工程,機械), 休憩再開準備 by 機械名のみ,
+            後始末 by (工程,機械), 後始末 by 機械名のみ,
+            依頼間余裕 by (工程,機械), 依頼間余裕 by 機械名のみ)。
     """
     switch_pair: dict[tuple[str, str], int] = {}
     switch_machine: dict[str, int] = {}
     resume_pair: dict[tuple[str, str], int] = {}
     resume_machine: dict[str, int] = {}
+    cleanup_pair: dict[tuple[str, str], int] = {}
+    cleanup_machine: dict[str, int] = {}
+    buffer_pair: dict[tuple[str, str], int] = {}
+    buffer_machine: dict[str, int] = {}
+    empty8 = (
+        switch_pair,
+        switch_machine,
+        resume_pair,
+        resume_machine,
+        cleanup_pair,
+        cleanup_machine,
+        buffer_pair,
+        buffer_machine,
+    )
     if not master_path or not os.path.isfile(master_path):
-        return switch_pair, switch_machine, resume_pair, resume_machine
+        return empty8
     try:
         xls = _cached_master_pd_excel_file(master_path)
         if xls is None:
-            return switch_pair, switch_machine, resume_pair, resume_machine
+            return empty8
     except Exception as e:
         logging.warning("依頼切替準備設定: ブックを開きません (%s)", e)
-        return switch_pair, switch_machine, resume_pair, resume_machine
+        return empty8
     if SHEET_REQUEST_SWITCH_PREP not in xls.sheet_names:
-        return switch_pair, switch_machine, resume_pair, resume_machine
+        return empty8
     try:
         df = pd.read_excel(
             xls, sheet_name=SHEET_REQUEST_SWITCH_PREP, header=0
@@ -24929,6 +24966,7 @@ def load_request_switch_prep_settings(
                 c
                 for c in df.columns
                 if "後始末" not in str(c)
+                and "余裕" not in str(c)
                 and "再開" not in str(c)
                 and (
                     "準備時間" in str(c)
@@ -24943,8 +24981,18 @@ def load_request_switch_prep_settings(
             "一時停止後_再開準備時間_分",
             "再開準備_分",
         )
+        cleanup_cols = _col_variants(
+            "後始末時間",
+            "後始末_分",
+            "後始末時間_分",
+        )
+        buffer_cols = _col_variants(
+            "加工依頼間の余裕時間",
+            "依頼間余裕時間",
+            "余裕時間_分",
+        )
         if not mn_cols:
-            return switch_pair, switch_machine, resume_pair, resume_machine
+            return empty8
         for _, row in df.iterrows():
             mn_s = _row_text(row, mn_cols)
             if not mn_s:
@@ -24952,12 +25000,18 @@ def load_request_switch_prep_settings(
             proc_s = _row_text(row, proc_cols)
             prep_m = _row_minutes(row, prep_cols)
             resume_m = _row_minutes(row, resume_cols)
+            cleanup_m = _row_minutes(row, cleanup_cols)
+            buffer_m = _row_minutes(row, buffer_cols)
             nk = _normalize_equipment_match_key(mn_s)
             if proc_s:
                 if prep_m > 0:
                     switch_pair[(proc_s, mn_s)] = prep_m
                 if resume_m > 0:
                     resume_pair[(proc_s, mn_s)] = resume_m
+                if cleanup_m > 0:
+                    cleanup_pair[(proc_s, mn_s)] = cleanup_m
+                if buffer_m > 0:
+                    buffer_pair[(proc_s, mn_s)] = buffer_m
             else:
                 if prep_m > 0:
                     switch_machine[mn_s] = prep_m
@@ -24967,12 +25021,32 @@ def load_request_switch_prep_settings(
                     resume_machine[mn_s] = resume_m
                     if nk:
                         resume_machine[nk] = resume_m
-        if switch_pair or switch_machine or resume_pair or resume_machine:
+                if cleanup_m > 0:
+                    cleanup_machine[mn_s] = cleanup_m
+                    if nk:
+                        cleanup_machine[nk] = cleanup_m
+                if buffer_m > 0:
+                    buffer_machine[mn_s] = buffer_m
+                    if nk:
+                        buffer_machine[nk] = buffer_m
+        if (
+            switch_pair
+            or switch_machine
+            or resume_pair
+            or resume_machine
+            or cleanup_pair
+            or cleanup_machine
+            or buffer_pair
+            or buffer_machine
+        ):
             logging.info(
-                "マスタ「%s」: 依頼切替準備 %s 件・休憩再開準備 %s 件（工程+機械 / 機械のみの内訳はログのみ）。",
+                "マスタ「%s」: 依頼切替準備 %s 件・休憩再開準備 %s 件・"
+                "後始末 %s 件・依頼間余裕 %s 件（工程+機械 / 機械のみの内訳はログのみ）。",
                 SHEET_REQUEST_SWITCH_PREP,
                 len(switch_pair) + len(switch_machine),
                 len(resume_pair) + len(resume_machine),
+                len(cleanup_pair) + len(cleanup_machine),
+                len(buffer_pair) + len(buffer_machine),
             )
     except Exception as e:
         logging.warning(
@@ -24985,6 +25059,10 @@ def load_request_switch_prep_settings(
             switch_machine,
             resume_pair,
             resume_machine,
+            cleanup_pair,
+            cleanup_machine,
+            buffer_pair,
+            buffer_machine,
         )
         if _added > 0:
             logging.info(
@@ -24992,7 +25070,7 @@ def load_request_switch_prep_settings(
                 SHEET_REQUEST_SWITCH_PREP,
                 _added,
             )
-    return switch_pair, switch_machine, resume_pair, resume_machine
+    return empty8
 
 
 def _merge_request_switch_prep_from_sibling_kokubu_master(
@@ -25001,6 +25079,10 @@ def _merge_request_switch_prep_from_sibling_kokubu_master(
     switch_machine: dict[str, int],
     resume_pair: dict[tuple[str, str], int],
     resume_machine: dict[str, int],
+    cleanup_pair: dict[tuple[str, str], int],
+    cleanup_machine: dict[str, int],
+    buffer_pair: dict[tuple[str, str], int],
+    buffer_machine: dict[str, int],
 ) -> int:
     """正本マスタに無い (工程,機械) を同ディレクトリの国分master.xlsm から補完（上書きしない）。"""
     if not primary_path:
@@ -25014,7 +25096,7 @@ def _merge_request_switch_prep_from_sibling_kokubu_master(
             os.path.abspath(primary_path)
         ):
             return 0
-        sp2, sm2, rp2, rm2 = load_request_switch_prep_settings(
+        sp2, sm2, rp2, rm2, cp2, cm2, bp2, bm2 = load_request_switch_prep_settings(
             alt, _allow_kokubu_merge=False
         )
     except Exception as e:
@@ -25026,6 +25108,10 @@ def _merge_request_switch_prep_from_sibling_kokubu_master(
         (sm2, switch_machine),
         (rp2, resume_pair),
         (rm2, resume_machine),
+        (cp2, cleanup_pair),
+        (cm2, cleanup_machine),
+        (bp2, buffer_pair),
+        (bm2, buffer_machine),
     ):
         for k, v in src.items():
             try:
@@ -25160,6 +25246,40 @@ def _lookup_break_resume_prep_minutes(
         mn,
         _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE,
         _STAGE2_BREAK_RESUME_PREP_BY_MACHINE,
+    )
+
+
+def _lookup_post_machining_cleanup_minutes(
+    machine_proc: str,
+    machine_name: str,
+    *,
+    eq_line: str = "",
+) -> int:
+    proc, mn = _normalize_proc_machine_for_prep_lookup(
+        machine_proc, machine_name, eq_line=eq_line
+    )
+    return _lookup_prep_minutes_from_stage2_tables(
+        proc,
+        mn,
+        _STAGE2_POST_MACHINING_CLEANUP_BY_PROC_MACHINE,
+        _STAGE2_POST_MACHINING_CLEANUP_BY_MACHINE,
+    )
+
+
+def _lookup_request_interval_buffer_minutes(
+    machine_proc: str,
+    machine_name: str,
+    *,
+    eq_line: str = "",
+) -> int:
+    proc, mn = _normalize_proc_machine_for_prep_lookup(
+        machine_proc, machine_name, eq_line=eq_line
+    )
+    return _lookup_prep_minutes_from_stage2_tables(
+        proc,
+        mn,
+        _STAGE2_REQUEST_INTERVAL_BUFFER_BY_PROC_MACHINE,
+        _STAGE2_REQUEST_INTERVAL_BUFFER_BY_MACHINE,
     )
 
 
@@ -28386,8 +28506,10 @@ def _lookup_changeover_minutes_for_eq(
     eq_line: str,
     by_dict: object | None,
 ) -> tuple[int, int]:
-    """後始末は廃止。互換のため常に (準備分, 後始末分) = (0, 0)。"""
-    return 0, 0
+    """互換: (依頼切替準備分, 後始末分)。後始末は直前 eq_line の工程+機械で lookup。"""
+    proc, mn = _normalize_proc_machine_for_prep_lookup("", "", eq_line=str(eq_line or ""))
+    cu = _lookup_post_machining_cleanup_minutes(proc, mn, eq_line=str(eq_line or ""))
+    return 0, cu
 
 
 def _needs_request_switch_prep(
@@ -28454,6 +28576,29 @@ def _prep_segments_immediately_before_machining(
     return prep_end, [seg]
 
 
+def _prep_segments_from_anchor(
+    *,
+    anchor: datetime,
+    prep_minutes: int,
+    event_kind: str,
+    eq_line: str,
+    machine_occ_key: str,
+) -> tuple[datetime, list[dict]]:
+    """anchor から [anchor, anchor+分) の壁時計ブロックを置き、終了時刻を返す。"""
+    if prep_minutes <= 0 or not isinstance(anchor, datetime):
+        return anchor, []
+    seg_end = anchor + timedelta(minutes=int(prep_minutes))
+    seg = {
+        "start_dt": anchor,
+        "end_dt": seg_end,
+        "op": "",
+        "event_kind": str(event_kind or "").strip(),
+        "machine": str(eq_line or "").strip(),
+        "machine_occupancy_key": str(machine_occ_key or "").strip(),
+    }
+    return seg_end, [seg]
+
+
 def _roll_prep_segments_for_assign(
     *,
     team_start: datetime,
@@ -28466,6 +28611,8 @@ def _roll_prep_segments_for_assign(
     machine_name: str,
     eq_line: str,
     abolish_limits: bool,
+    prev_machining_end: datetime | None = None,
+    prev_eq_line: str = "",
 ) -> tuple[datetime, list[dict]]:
     if abolish_limits:
         return team_start, []
@@ -28478,9 +28625,41 @@ def _roll_prep_segments_for_assign(
         machine_handoff, machine_occ_key, current_date, task_id
     )
     _post_break = _team_start_is_immediate_post_break_resume(ts, team_breaks)
-    pm = 0
-    rm = 0
     if _need_sw:
+        anchor = (
+            prev_machining_end
+            if isinstance(prev_machining_end, datetime)
+            else ts
+        )
+        _prev_proc, _prev_mn = _normalize_proc_machine_for_prep_lookup(
+            "", "", eq_line=str(prev_eq_line or "").strip()
+        )
+        cu = _lookup_post_machining_cleanup_minutes(
+            _prev_proc, _prev_mn, eq_line=str(prev_eq_line or "").strip()
+        )
+        bf = _lookup_request_interval_buffer_minutes(
+            _proc_lu, _mn_lu, eq_line=eq_line
+        )
+        chain_end = anchor
+        if cu > 0:
+            chain_end, segs = _prep_segments_from_anchor(
+                anchor=chain_end,
+                prep_minutes=cu,
+                event_kind=TIMELINE_EVENT_POST_MACHINING_CLEANUP,
+                eq_line=eq_line,
+                machine_occ_key=machine_occ_key,
+            )
+            segments.extend(segs)
+        if bf > 0:
+            chain_end, segs = _prep_segments_from_anchor(
+                anchor=chain_end,
+                prep_minutes=bf,
+                event_kind=TIMELINE_EVENT_REQUEST_INTERVAL_BUFFER,
+                eq_line=eq_line,
+                machine_occ_key=machine_occ_key,
+            )
+            segments.extend(segs)
+        ts = max(ts, chain_end)
         pm = _lookup_request_switch_prep_minutes(
             _proc_lu, _mn_lu, eq_line=eq_line
         )
@@ -28519,19 +28698,26 @@ def _changeover_need_cleanup_for_next_assign(
     last_eq: str | None,
 ) -> tuple[bool, int, str, str]:
     """
-    依頼切替後始末（廃止・常に不要）。
+    依頼NO切替時の後始末要否（同一依頼NOは不要）。
     """
     mach_occ = str(machine_occ_key or "").strip()
-    machining_today_occ = machine_handoff.get("machining_today_occ") or machine_handoff.get(
-        "started_today", set()
-    )
-    last_tid = (machine_handoff.get("last_tid") or {}).get(mach_occ, "")
-    last_d = (machine_handoff.get("last_machining_date") or {}).get(mach_occ)
-    cur_tid = str(cur_task_id or "").strip()
     last_eq_s = str(last_eq or "").strip() or str(
         (machine_handoff.get("last_eq") or {}).get(mach_occ, "") or ""
     ).strip()
-    return False, 0, "", last_eq_s
+    if not _needs_request_switch_prep(
+        machine_handoff, mach_occ, current_date, cur_task_id
+    ):
+        return False, 0, "", last_eq_s
+    _prev_proc, _prev_mn = _normalize_proc_machine_for_prep_lookup(
+        "", "", eq_line=last_eq_s
+    )
+    cu = _lookup_post_machining_cleanup_minutes(
+        _prev_proc, _prev_mn, eq_line=last_eq_s
+    )
+    last_lead = str(
+        (machine_handoff.get("last_lead_op") or {}).get(mach_occ, "") or ""
+    ).strip()
+    return cu > 0, cu, last_lead, last_eq_s
 
 
 def _avail_dt_reapply_member_max_end_from_timeline(
@@ -29222,13 +29408,28 @@ def _resolve_machine_changeover_floor_segments(
         current_date,
         task_id,
     ):
+        last_eq_s = str(
+            (machine_handoff.get("last_eq") or {}).get(machine_occ_key, "") or ""
+        ).strip()
+        _prev_proc, _prev_mn = _normalize_proc_machine_for_prep_lookup(
+            "", "", eq_line=last_eq_s
+        )
+        _cu = _lookup_post_machining_cleanup_minutes(
+            _prev_proc, _prev_mn, eq_line=last_eq_s
+        )
+        _bf = _lookup_request_interval_buffer_minutes(
+            str(machine_proc or "").strip(),
+            str(machine_name or "").strip(),
+            eq_line=str(eq_line or "").strip(),
+        )
         _sw_prep = _lookup_request_switch_prep_minutes(
             str(machine_proc or "").strip(),
             str(machine_name or "").strip(),
             eq_line=str(eq_line or "").strip(),
         )
-        if _sw_prep > 0:
-            co_lb = co_lb + timedelta(minutes=_sw_prep)
+        _extra = int(_cu or 0) + int(_bf or 0) + int(_sw_prep or 0)
+        if _extra > 0:
+            co_lb = co_lb + timedelta(minutes=_extra)
     if co_lb is None:
         if (
             _pick_skilled_op_for_changeover_interval(
@@ -29296,6 +29497,8 @@ def _changeover_timeline_op_sub_for_event(
         TIMELINE_EVENT_MACHINE_DAILY_STARTUP,
         TIMELINE_EVENT_REQUEST_SWITCH_PREP,
         TIMELINE_EVENT_BREAK_RESUME_PREP,
+        TIMELINE_EVENT_POST_MACHINING_CLEANUP,
+        TIMELINE_EVENT_REQUEST_INTERVAL_BUFFER,
     ):
         if op_s:
             return op_s, str(sub_from_segment or "").strip()
@@ -29369,6 +29572,8 @@ def _append_changeover_segments_to_timeline(
             in (
                 TIMELINE_EVENT_MACHINE_DAILY_STARTUP,
                 TIMELINE_EVENT_REQUEST_SWITCH_PREP,
+                TIMELINE_EVENT_POST_MACHINING_CLEANUP,
+                TIMELINE_EVENT_REQUEST_INTERVAL_BUFFER,
             )
             else str(task_id or "").strip()
         )
@@ -30034,6 +30239,12 @@ def _append_legacy_dispatch_candidate_for_team(
             machine_name=str(task.get("machine_name") or "").strip(),
             eq_line=eq_line,
             abolish_limits=False,
+            prev_machining_end=(
+                (_mh_legacy.get("last_machining_dt") or {}).get(_machine_occ_key)
+            ),
+            prev_eq_line=str(
+                (_mh_legacy.get("last_eq") or {}).get(_machine_occ_key, "") or ""
+            ).strip(),
         )
         team_start = _refloor_legacy_roll(team_start)
     if team_start >= team_end_limit:
@@ -30537,6 +30748,12 @@ def _assign_one_roll_trial_order_flow(
                 machine_name=str(machine_name or "").strip(),
                 eq_line=eq_line,
                 abolish_limits=False,
+                prev_machining_end=(
+                    (_mh.get("last_machining_dt") or {}).get(machine_occ_key)
+                ),
+                prev_eq_line=str(
+                    (_mh.get("last_eq") or {}).get(machine_occ_key, "") or ""
+                ).strip(),
             )
             team_start = _refloor_trial_roll(team_start)
         if team_start >= team_end_limit:
@@ -32761,6 +32978,10 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
         global _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE
         global _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE
         global _STAGE2_BREAK_RESUME_PREP_BY_MACHINE
+        global _STAGE2_POST_MACHINING_CLEANUP_BY_PROC_MACHINE
+        global _STAGE2_POST_MACHINING_CLEANUP_BY_MACHINE
+        global _STAGE2_REQUEST_INTERVAL_BUFFER_BY_PROC_MACHINE
+        global _STAGE2_REQUEST_INTERVAL_BUFFER_BY_MACHINE
         global _STAGE2_REGULAR_SHIFT_START
         global _STAGE2_DATA_EXTRACTION_DATETIME
         (
@@ -32803,6 +33024,10 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
                 _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE,
                 _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE,
                 _STAGE2_BREAK_RESUME_PREP_BY_MACHINE,
+                _STAGE2_POST_MACHINING_CLEANUP_BY_PROC_MACHINE,
+                _STAGE2_POST_MACHINING_CLEANUP_BY_MACHINE,
+                _STAGE2_REQUEST_INTERVAL_BUFFER_BY_PROC_MACHINE,
+                _STAGE2_REQUEST_INTERVAL_BUFFER_BY_MACHINE,
             ) = load_request_switch_prep_settings(master_abs)
         except Exception as e:
             logging.warning(
@@ -32812,6 +33037,10 @@ def refresh_equipment_gantt_actual_detail_only() -> str:
             _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE = {}
             _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE = {}
             _STAGE2_BREAK_RESUME_PREP_BY_MACHINE = {}
+            _STAGE2_POST_MACHINING_CLEANUP_BY_PROC_MACHINE = {}
+            _STAGE2_POST_MACHINING_CLEANUP_BY_MACHINE = {}
+            _STAGE2_REQUEST_INTERVAL_BUFFER_BY_PROC_MACHINE = {}
+            _STAGE2_REQUEST_INTERVAL_BUFFER_BY_MACHINE = {}
         if any(int(v or 0) > 0 for v in _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE.values()):
             _a12r, _a12r2 = _read_master_main_factory_operating_times(master_abs)
             if _a12r is None or _a12r2 is None:
@@ -33718,6 +33947,10 @@ def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
         global _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE
         global _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE
         global _STAGE2_BREAK_RESUME_PREP_BY_MACHINE
+        global _STAGE2_POST_MACHINING_CLEANUP_BY_PROC_MACHINE
+        global _STAGE2_POST_MACHINING_CLEANUP_BY_MACHINE
+        global _STAGE2_REQUEST_INTERVAL_BUFFER_BY_PROC_MACHINE
+        global _STAGE2_REQUEST_INTERVAL_BUFFER_BY_MACHINE
         global _STAGE2_REGULAR_SHIFT_START
         global _STAGE2_DATA_EXTRACTION_DATETIME
         (
@@ -33760,6 +33993,10 @@ def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
                 _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE,
                 _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE,
                 _STAGE2_BREAK_RESUME_PREP_BY_MACHINE,
+                _STAGE2_POST_MACHINING_CLEANUP_BY_PROC_MACHINE,
+                _STAGE2_POST_MACHINING_CLEANUP_BY_MACHINE,
+                _STAGE2_REQUEST_INTERVAL_BUFFER_BY_PROC_MACHINE,
+                _STAGE2_REQUEST_INTERVAL_BUFFER_BY_MACHINE,
             ) = load_request_switch_prep_settings(master_abs)
         except Exception as e:
             logging.warning(
@@ -33769,6 +34006,10 @@ def write_plan_actual_compare_gantt_from_snapshot_dir(snapshot_dir: str) -> str:
             _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE = {}
             _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE = {}
             _STAGE2_BREAK_RESUME_PREP_BY_MACHINE = {}
+            _STAGE2_POST_MACHINING_CLEANUP_BY_PROC_MACHINE = {}
+            _STAGE2_POST_MACHINING_CLEANUP_BY_MACHINE = {}
+            _STAGE2_REQUEST_INTERVAL_BUFFER_BY_PROC_MACHINE = {}
+            _STAGE2_REQUEST_INTERVAL_BUFFER_BY_MACHINE = {}
         if any(
             int(v or 0) > 0
             for v in _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE.values()
@@ -34130,6 +34371,10 @@ def _generate_plan_impl(
     global _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE
     global _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE
     global _STAGE2_BREAK_RESUME_PREP_BY_MACHINE
+    global _STAGE2_POST_MACHINING_CLEANUP_BY_PROC_MACHINE
+    global _STAGE2_POST_MACHINING_CLEANUP_BY_MACHINE
+    global _STAGE2_REQUEST_INTERVAL_BUFFER_BY_PROC_MACHINE
+    global _STAGE2_REQUEST_INTERVAL_BUFFER_BY_MACHINE
     global _STAGE2_REGULAR_SHIFT_START
     global _STAGE2_DATA_EXTRACTION_DATETIME
     global DEFAULT_START_TIME, DEFAULT_END_TIME
@@ -34166,6 +34411,10 @@ def _generate_plan_impl(
             _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE,
             _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE,
             _STAGE2_BREAK_RESUME_PREP_BY_MACHINE,
+            _STAGE2_POST_MACHINING_CLEANUP_BY_PROC_MACHINE,
+            _STAGE2_POST_MACHINING_CLEANUP_BY_MACHINE,
+            _STAGE2_REQUEST_INTERVAL_BUFFER_BY_PROC_MACHINE,
+            _STAGE2_REQUEST_INTERVAL_BUFFER_BY_MACHINE,
         ) = load_request_switch_prep_settings(_master_workbook_path_resolved())
     except Exception as e:
         logging.warning(
@@ -34175,6 +34424,10 @@ def _generate_plan_impl(
         _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE = {}
         _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE = {}
         _STAGE2_BREAK_RESUME_PREP_BY_MACHINE = {}
+        _STAGE2_POST_MACHINING_CLEANUP_BY_PROC_MACHINE = {}
+        _STAGE2_POST_MACHINING_CLEANUP_BY_MACHINE = {}
+        _STAGE2_REQUEST_INTERVAL_BUFFER_BY_PROC_MACHINE = {}
+        _STAGE2_REQUEST_INTERVAL_BUFFER_BY_MACHINE = {}
     _t_ds0 = _log_stage2_phase_timing("load_machine_calendar_and_master_settings", _t_cal0)
     _master_path_stage2 = _master_workbook_path_resolved()
     if any(int(v or 0) > 0 for v in _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE.values()):
@@ -35408,6 +35661,23 @@ def _generate_plan_impl(
                                             ).strip(),
                                             eq_line=eq_line,
                                             abolish_limits=False,
+                                            prev_machining_end=(
+                                                (
+                                                    machine_handoff_legacy.get(
+                                                        "last_machining_dt"
+                                                    )
+                                                    or {}
+                                                ).get(machine_occ_key)
+                                            ),
+                                            prev_eq_line=str(
+                                                (
+                                                    machine_handoff_legacy.get(
+                                                        "last_eq"
+                                                    )
+                                                    or {}
+                                                ).get(machine_occ_key, "")
+                                                or ""
+                                            ).strip(),
                                         )
                                     )
                                     team_start = _refloor_legacy_inline(team_start)

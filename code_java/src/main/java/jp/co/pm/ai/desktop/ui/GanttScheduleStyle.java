@@ -58,6 +58,12 @@ public final class GanttScheduleStyle {
     private static final String XL_PREP_BREAK_RESUME_HATCH_STYLE =
             hatchTimelineCellStyle("#d1fae5", "#047857", "#064e3b");
 
+    private static final String XL_PREP_POST_MACHINING_CLEANUP_HATCH_STYLE =
+            hatchTimelineCellStyle("#ffedd5", "#c2410c", "#7c2d12");
+
+    private static final String XL_PREP_REQUEST_INTERVAL_BUFFER_HATCH_STYLE =
+            hatchTimelineCellStyle("#e0e7ff", "#4338ca", "#312e81");
+
     private static final String SECTION_ROW_STYLE =
             "-fx-background-color: #4472c4; -fx-control-inner-background: #4472c4;"
                     + " -fx-text-fill: #ffffff; -fx-font-weight: bold;";
@@ -173,6 +179,8 @@ public final class GanttScheduleStyle {
             case "日次始業準備" -> XL_PREP_STARTUP_HATCH_STYLE;
             case "依頼切替準備" -> XL_PREP_REQUEST_SWITCH_HATCH_STYLE;
             case "休憩再開準備" -> XL_PREP_BREAK_RESUME_HATCH_STYLE;
+            case "後始末" -> XL_PREP_POST_MACHINING_CLEANUP_HATCH_STYLE;
+            case "依頼間余裕" -> XL_PREP_REQUEST_INTERVAL_BUFFER_HATCH_STYLE;
             default -> null;
         };
     }

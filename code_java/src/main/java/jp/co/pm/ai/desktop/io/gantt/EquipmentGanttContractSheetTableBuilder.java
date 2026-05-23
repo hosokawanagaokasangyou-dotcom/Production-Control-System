@@ -824,6 +824,12 @@ public final class EquipmentGanttContractSheetTableBuilder {
             if ("request_switch_prep".equals(eventKind)) {
                 return "依頼切替準備";
             }
+            if ("post_machining_cleanup".equals(eventKind)) {
+                return "後始末";
+            }
+            if ("request_interval_buffer".equals(eventKind)) {
+                return "依頼間余裕";
+            }
             if ("break_resume_prep".equals(eventKind)) {
                 return "休憩再開準備";
             }
@@ -884,6 +890,8 @@ public final class EquipmentGanttContractSheetTableBuilder {
             boolean startupSplit =
                     "machine_daily_startup".equals(eventKind)
                             || "request_switch_prep".equals(eventKind)
+                            || "post_machining_cleanup".equals(eventKind)
+                            || "request_interval_buffer".equals(eventKind)
                             || "break_resume_prep".equals(eventKind)
                             || "machine_daily_inspection".equals(eventKind)
                             || "daily_inspection".equals(eventKind);
