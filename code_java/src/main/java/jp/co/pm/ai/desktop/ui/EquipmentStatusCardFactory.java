@@ -16,6 +16,7 @@ import javafx.scene.layout.VBox;
 import jp.co.pm.ai.desktop.config.EquipmentStatusDashboardAppearancePrefs;
 import jp.co.pm.ai.desktop.config.PersonBadgeStyle;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentMachineStatus;
+import jp.co.pm.ai.desktop.io.gantt.PersonNameHeuristics;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameBadgeText;
 
 /** 設備現状ダッシュボードの機械カード Node 生成。 */
@@ -100,7 +101,9 @@ public final class EquipmentStatusCardFactory {
 
                                 String badgeText =
                                         PersonNameBadgeText.badgeTwoFromRawName(task.memberRaw());
-                                if (!badgeText.isBlank()) {
+                                if (!badgeText.isBlank()
+                                        && PersonNameHeuristics.looksLikePersonName(
+                                                task.memberRaw())) {
                                     PersonBadgeStyle st =
                                             badgeStyleResolver != null
                                                     ? badgeStyleResolver.apply(
@@ -252,7 +255,8 @@ public final class EquipmentStatusCardFactory {
 
     private static String metaLine(EquipmentMachineStatus.ActualTaskRow task) {
         String line = task.requestNo() + " · " + task.processName();
-        if (task.memberRaw() != null && !task.memberRaw().isBlank()) {
+        if (task.memberRaw() != null
+                && PersonNameHeuristics.looksLikePersonName(task.memberRaw())) {
             line += " · " + task.memberRaw().strip();
         }
         return line;

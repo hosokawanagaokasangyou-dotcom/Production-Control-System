@@ -40,4 +40,14 @@ class AladdinShapedPlanMemberLookupTest {
                 AladdinShapedPlanMemberLookup.lookup(
                         headers, rows, "M1", "R1", "P1", "2026/05/23"));
     }
+
+    @Test
+    void lookup_rejectsMachineCodeInDateColumn() {
+        List<String> headers = List.of("機械名", "依頼NO", "工程名", "2026/05/25");
+        List<List<String>> rows = List.of(List.of("M1", "R1", "P1", "[Y5-135]"));
+        Assertions.assertEquals(
+                "",
+                AladdinShapedPlanMemberLookup.lookup(
+                        headers, rows, "M1", "R1", "P1", "2026/05/25"));
+    }
 }

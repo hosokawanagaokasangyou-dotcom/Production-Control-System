@@ -3,6 +3,8 @@ package jp.co.pm.ai.desktop.dispatch;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import jp.co.pm.ai.desktop.io.gantt.PersonNameHeuristics;
+
 /**
  * アラジン加工計画（shaped JSON / 表）から {@code 機械名×依頼NO×工程} に紐づく担当者名を解決する。
  *
@@ -163,7 +165,7 @@ public final class AladdinShapedPlanMemberLookup {
         }
         if (dateColIdx != null) {
             String cell = cellAt(row, dateColIdx).strip();
-            if (!cell.isEmpty() && !looksLikeNumericQty(cell)) {
+            if (PersonNameHeuristics.looksLikePersonName(cell)) {
                 return cell;
             }
         }
@@ -175,7 +177,7 @@ public final class AladdinShapedPlanMemberLookup {
             int idx = colIdx(headers, col);
             if (idx >= 0) {
                 String v = cellAt(row, idx).strip();
-                if (!v.isEmpty()) {
+                if (PersonNameHeuristics.looksLikePersonName(v)) {
                     return v;
                 }
             }
@@ -205,18 +207,6 @@ public final class AladdinShapedPlanMemberLookup {
             }
         }
         return null;
-    }
-
-    private static boolean looksLikeNumericQty(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return false;
-        }
-        try {
-            Double.parseDouble(raw.strip().replace(",", ""));
-            return true;
-        } catch (NumberFormatException e) {
-            return false;
-        }
     }
 
     private static String normalizeEquipmentMatchKey(String val) {

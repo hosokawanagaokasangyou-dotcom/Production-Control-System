@@ -22,6 +22,7 @@ import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
+import jp.co.pm.ai.desktop.io.gantt.PersonNameHeuristics;
 
 /**
  * 加工実績・アラジン予定・配台予定を機械名単位に集約する。
@@ -360,7 +361,9 @@ public final class EquipmentStatusDashboardBuilder {
             String machine,
             String actualDateKey,
             String planDateKey) {
-        if (task.memberRaw() != null && !task.memberRaw().isBlank()) {
+        if (task.memberRaw() != null
+                && !task.memberRaw().isBlank()
+                && PersonNameHeuristics.looksLikePersonName(task.memberRaw())) {
             return task;
         }
         String member = lookupMemberFromAladdin(alHeaders, alRows, machine, task, actualDateKey);
@@ -444,7 +447,7 @@ public final class EquipmentStatusDashboardBuilder {
                 continue;
             }
             String member = cellAt(row, memberIdx).strip();
-            if (!member.isEmpty()) {
+            if (PersonNameHeuristics.looksLikePersonName(member)) {
                 return member;
             }
         }
@@ -496,7 +499,7 @@ public final class EquipmentStatusDashboardBuilder {
             int idx = colIdx(headers, col);
             if (idx >= 0) {
                 String v = cellAt(row, idx).strip();
-                if (!v.isEmpty()) {
+                if (PersonNameHeuristics.looksLikePersonName(v)) {
                     return v;
                 }
             }
