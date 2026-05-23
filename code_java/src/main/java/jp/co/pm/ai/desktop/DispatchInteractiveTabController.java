@@ -89,6 +89,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinSystemDispatchDisplayQty;
 import jp.co.pm.ai.desktop.dispatch.DispatchAladdinPlanAligner;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.dispatch.DispatchInteractiveRollUnitSupport;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialConsistency;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialShortages;
@@ -1542,12 +1543,8 @@ public final class DispatchInteractiveTabController {
                         }
                     } else {
                         clearDispatchShortfallUi();
-                        if (docHasActualDispatchQtyColumn()) {
-                            // 再起動・再読込後も手動移動で (段階3改) を出す（メモリ上の試行直後スナップショットは失われる）
-                            scheduleStage3TrialPlanQtySnapshotCapture();
-                        } else {
-                            clearStage3TrialPlanQtySnapshot();
-                        }
+                        // 段階2直後も plan スナップショットを取り、日付セル内 (段階2後) 表示の基準にする
+                        scheduleStage3TrialPlanQtySnapshotCapture();
                     }
                     clearDispatchDocDirty();
                     if (shell != null) {
@@ -1911,14 +1908,136 @@ public final class DispatchInteractiveTabController {
         return range;
     }
 
+    private static final String AGENT_DEBUG_SESSION_ID = "553403";
+
     private FullGridRebuild buildFullGridRebuild() {
         ResultDispatchInteractiveGridModel.applyWideMergeAndNormalize(doc);
         aladdinPlanLookup = loadAladdinPlanLookupForDisplay();
         List<LocalDate> axis = axisForRebuild();
         WideGridBundle wide = buildWideGridModel(axis);
         ByDayGridBundle byDay = buildByDayGridModel(axis);
+        // region agent log
+        agentDebugLogInProgressDispatchUiState(axis, wide);
+        // endregion
         return new FullGridRebuild(axis, wide, byDay);
     }
+
+    // region agent log
+    private void agentDebugLogInProgressDispatchUiState(List<LocalDate> axis, WideGridBundle wide) {
+        if (doc == null || axis == null || axis.isEmpty() || wide == null) {
+            return;
+        }
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        List<Map<String, Object>> inProgressRows = new ArrayList<>();
+        for (Map<String, String> row : doc.rows()) {
+            double done = parseQtySafe(row.get("実加工数"));
+            if (done <= 1e-3) {
+                continue;
+            }
+            String start = nz(row.get("加工開始日時"));
+            if (!start.isEmpty()) {
+                continue;
+            }
+            Map<String, Object> rec = new LinkedHashMap<>();
+            rec.put("task_id", nz(row.get("依頼NO")));
+            rec.put("process", nz(row.get(ResultDispatchSchema.COL_PROCESS)));
+            rec.put("machine_name", nz(row.get(ResultDispatchSchema.COL_MACHINE)));
+            rec.put("dispatch_date", nz(row.get(ResultDispatchSchema.COL_DISPATCH_DATE)));
+            rec.put("plan_qty_m", parseQtySafe(row.get(ResultDispatchSchema.COL_DISPATCH_QTY)));
+            rec.put("actual_done_m", done);
+            inProgressRows.add(rec);
+        }
+        List<Map<String, Object>> wideCells = new ArrayList<>();
+        final double eps = 1e-3;
+        for (WideRow wr : wide.rowItems()) {
+            double done = parseQtySafe(wr.getStatic("実加工数"));
+            if (done <= eps) {
+                continue;
+            }
+            String start = nz(wr.getStatic("加工開始日時"));
+            if (!start.isEmpty()) {
+                continue;
+            }
+            List<Map<String, Object>> perDate = new ArrayList<>();
+            for (int di = 0; di < axis.size(); di++) {
+                LocalDate day = axis.get(di);
+                double planAmt = wr.getAmount(di);
+                double actualAmt = wr.getActualAmount(di);
+                double snapPlan = stage3TrialSnapPlanForCell(wr.profileMap(), day);
+                double aladdinAmt = aladdinPlanQtyForWideRow(wr, day);
+                if (planAmt <= eps && actualAmt <= eps && snapPlan <= eps && aladdinAmt <= eps) {
+                    continue;
+                }
+                boolean planSlidAway = snapPlan > eps && planAmt <= eps && actualAmt <= eps;
+                boolean planMovedToDate =
+                        snapPlan <= eps
+                                && (planAmt > eps || actualAmt > eps)
+                                && docHasActualDispatchQtyColumn();
+                Map<String, Object> cell = new LinkedHashMap<>();
+                cell.put("date", day.toString());
+                cell.put("planAmt", planAmt);
+                cell.put("actualAmt", actualAmt);
+                cell.put("snapPlan", snapPlan);
+                cell.put("aladdinPlan", aladdinAmt);
+                cell.put("planSlidAway", planSlidAway);
+                cell.put("planMovedToDate", planMovedToDate);
+                perDate.add(cell);
+            }
+            if (perDate.isEmpty()) {
+                continue;
+            }
+            Map<String, Object> wrRec = new LinkedHashMap<>();
+            wrRec.put("task_id", nz(wr.getStatic("依頼NO")));
+            wrRec.put("process", nz(wr.getStatic(ResultDispatchSchema.COL_PROCESS)));
+            wrRec.put("machine_name", nz(wr.getStatic(ResultDispatchSchema.COL_MACHINE)));
+            wrRec.put("plan_total_m", wr.sumPlanAmounts());
+            wrRec.put("actual_total_m", wr.sumActualAmounts());
+            wrRec.put("date_cells", perDate);
+            wideCells.add(wrRec);
+        }
+        AgentDebugLog.appendStructured(
+                ui,
+                AGENT_DEBUG_SESSION_ID,
+                "D",
+                "DispatchInteractiveTabController.agentDebugLogInProgressDispatchUiState",
+                "dispatch doc rows: in-progress with empty machining start datetime",
+                Map.of(
+                        "runId",
+                        "post-fix",
+                        "raw_row_count",
+                        doc.rows().size(),
+                        "in_progress_empty_start_rows",
+                        inProgressRows));
+        AgentDebugLog.appendStructured(
+                ui,
+                AGENT_DEBUG_SESSION_ID,
+                "E",
+                "DispatchInteractiveTabController.agentDebugLogInProgressDispatchUiState",
+                "wide grid date cells for in-progress tasks (UI contradiction hypothesis)",
+                Map.of(
+                        "runId",
+                        "post-fix",
+                        "stage3_snapshot_size",
+                        stage3TrialPlanQtySnapshot.size(),
+                        "wide_in_progress_profiles",
+                        wideCells));
+    }
+
+    private static double parseQtySafe(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return 0.0;
+        }
+        try {
+            return Double.parseDouble(raw.trim().replace(",", ""));
+        } catch (NumberFormatException ex) {
+            return 0.0;
+        }
+    }
+
+    private static String nz(String v) {
+        return v == null ? "" : v.strip();
+    }
+    // endregion
 
     private Map<String, Map<String, Map<String, Map<String, Double>>>> loadAladdinPlanLookupForDisplay() {
         Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();

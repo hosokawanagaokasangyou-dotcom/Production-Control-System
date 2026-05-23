@@ -25847,6 +25847,144 @@ def _dispatch_table_row_identity_key(row: dict) -> tuple[str, str, str]:
     return (tid, proc, mach)
 
 
+def _aggregate_timeline_dispatch_meta_by_identity_date(
+    timeline_events: list | None,
+    sorted_tasks_for_result: list | None,
+) -> tuple[
+    dict[tuple[str, str, str, date], float],
+    dict[tuple[str, str, str, date], datetime],
+    dict[tuple[str, str, str, date], datetime],
+    dict[tuple[str, str, str, date], list[str]],
+]:
+    """タイムライン加工イベントを (依頼NO, 工程名, 機械名, 暦日) で集約する。"""
+    qty_by: dict[tuple[str, str, str, date], float] = defaultdict(float)
+    bound_min: dict[tuple[str, str, str, date], datetime] = {}
+    bound_max: dict[tuple[str, str, str, date], datetime] = {}
+    member_ops: dict[tuple[str, str, str, date], list[str]] = defaultdict(list)
+    for ev in timeline_events or []:
+        if not _is_machining_timeline_event(ev):
+            continue
+        tid = str(ev.get("task_id") or "").strip()
+        eq = str(ev.get("machine") or "").strip()
+        if not tid or not eq:
+            continue
+        cd = _timeline_event_calendar_date(ev)
+        if cd is None:
+            continue
+        qty = _dispatch_table_event_qty_m(ev)
+        if qty <= 1e-18:
+            continue
+        t = _resolve_task_dict_for_timeline_line(tid, eq, sorted_tasks_for_result)
+        proc = str(t.get("machine") or "").strip() if t else ""
+        mach = str(t.get("machine_name") or "").strip() if t else ""
+        if not proc or not mach:
+            continue
+        key = (tid, proc, mach, cd)
+        qty_by[key] += float(qty)
+        op_raw = " ".join(str(ev.get("op") or "").split()).strip()
+        if op_raw:
+            lst = member_ops[key]
+            if op_raw not in lst:
+                lst.append(op_raw)
+        _ml = ev.get("member_labels")
+        if isinstance(_ml, (list, tuple)):
+            for _raw in _ml:
+                _lab = " ".join(str(_raw or "").split()).strip()
+                if _lab:
+                    _lst = member_ops[key]
+                    if _lab not in _lst:
+                        _lst.append(_lab)
+        st0, ed0 = _timeline_event_start_end_dt(ev)
+        if st0 is not None:
+            prev = bound_min.get(key)
+            if prev is None or st0 < prev:
+                bound_min[key] = st0
+        if ed0 is not None:
+            prev_m = bound_max.get(key)
+            if prev_m is None or ed0 > prev_m:
+                bound_max[key] = ed0
+    return dict(qty_by), bound_min, bound_max, dict(member_ops)
+
+
+def _timeline_identity_planned_m_on_day(
+    qty_by: dict[tuple[str, str, str, date], float],
+    tid: str,
+    proc: str,
+    mach: str,
+    day: date | None,
+) -> float:
+    if day is None:
+        return 0.0
+    try:
+        return float(qty_by.get((tid, proc, mach, day), 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _dispatch_table_fill_row_timeline_meta_from_bounds(
+    row: dict,
+    *,
+    bound_min: dict[tuple[str, str, str, date], datetime],
+    bound_max: dict[tuple[str, str, str, date], datetime],
+    member_ops: dict[tuple[str, str, str, date], list[str]],
+) -> bool:
+    """加工開始日時が空の行へ、同一 (依頼NO, 工程, 機械, 配台日) のタイムライン meta を載せる。"""
+    if _interactive_row_has_timeline_meta(row):
+        return False
+    tid = _interactive_norm_cell(row.get(TASK_COL_TASK_ID))
+    proc = _interactive_norm_cell(row.get(TASK_COL_MACHINE))
+    mach = _interactive_norm_cell(row.get(TASK_COL_MACHINE_NAME))
+    dd = _interactive_parse_dispatch_date_cell(row.get("配台日"))
+    if not tid or not proc or not mach or dd is None:
+        return False
+    key = (tid, proc, mach, dd)
+    st0 = bound_min.get(key)
+    ed0 = bound_max.get(key)
+    ops = member_ops.get(key, [])
+    if st0 is None and ed0 is None and not ops:
+        return False
+    if st0 is not None:
+        row["加工開始日時"] = _fmt_dispatch_table_datetime(st0)
+    if ed0 is not None:
+        row["加工終了日時"] = _fmt_dispatch_table_datetime(ed0)
+    if ops:
+        row["メンバー名"] = "、".join(ops)
+    return True
+
+
+def _apply_dispatch_table_timeline_meta_from_events(
+    df_dispatch: pd.DataFrame,
+    timeline_events: list | None,
+    sorted_tasks_for_result: list | None,
+) -> pd.DataFrame:
+    if df_dispatch is None or getattr(df_dispatch, "empty", True):
+        return df_dispatch
+    _qty_by, bound_min, bound_max, member_ops = (
+        _aggregate_timeline_dispatch_meta_by_identity_date(
+            timeline_events, sorted_tasks_for_result
+        )
+    )
+    if not bound_min and not bound_max and not member_ops:
+        return df_dispatch
+    records = df_dispatch.to_dict(orient="records")
+    patched = 0
+    for r in records:
+        if _dispatch_table_fill_row_timeline_meta_from_bounds(
+            r,
+            bound_min=bound_min,
+            bound_max=bound_max,
+            member_ops=member_ops,
+        ):
+            patched += 1
+    if patched <= 0:
+        return df_dispatch
+    logging.info(
+        "結果_配台表: タイムライン meta を %s 行へ反映しました（加工開始/終了日時・メンバー名）。",
+        patched,
+    )
+    return pd.DataFrame(records, columns=list(df_dispatch.columns))
+
+
 def _resolve_dispatch_table_src_row_for_plan(
     tid: str,
     proc: str,
@@ -25945,6 +26083,9 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
     df_src,
     run_date: date | None,
     working_days: list[date] | None = None,
+    *,
+    timeline_events: list | None = None,
+    sorted_tasks_for_result: list | None = None,
 ) -> pd.DataFrame:
     """
     段階2直前ダイアログ（翌日配台量 JSON）の正の m を結果_配台表へ載せる。
@@ -25990,7 +26131,14 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
     except Exception:
         src_lookup3, src_lookup2 = {}, {}
 
+    tl_qty_by, tl_bound_min, tl_bound_max, tl_member_ops = (
+        _aggregate_timeline_dispatch_meta_by_identity_date(
+            timeline_events, sorted_tasks_for_result
+        )
+    )
+
     added = 0
+    skipped_timeline_covered = 0
     for ov_key, meters in overrides.items():
         try:
             m = _sanitize_dispatch_qty_m(float(meters))
@@ -26009,6 +26157,26 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
         if not tid or not proc or not mach:
             continue
         if (tid, proc, mach, next_day) in filled:
+            continue
+        if _timeline_identity_planned_m_on_day(tl_qty_by, tid, proc, mach, next_day) + 1e-9 >= m:
+            skipped_timeline_covered += 1
+            continue
+        if (
+            run_date is not None
+            and _timeline_identity_planned_m_on_day(tl_qty_by, tid, proc, mach, run_date)
+            + 1e-9
+            >= m
+        ):
+            logging.info(
+                "段階2: 加工途中・翌日追補を省略（run_date=%s にタイムライン配台済 "
+                "依頼NO=%s 工程=%r 機械名=%r → %s m）",
+                run_date.isoformat(),
+                tid,
+                proc,
+                mach,
+                m,
+            )
+            skipped_timeline_covered += 1
             continue
         plan_ref = plan_lookup.get((tid, proc))
         if plan_ref is None:
@@ -26059,17 +26227,29 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
         r["当日配台数量"] = float(m)
         if "実配台数量" in out_cols:
             r["実配台数量"] = 0.0
+        _dispatch_table_fill_row_timeline_meta_from_bounds(
+            r,
+            bound_min=tl_bound_min,
+            bound_max=tl_bound_max,
+            member_ops=tl_member_ops,
+        )
         out_records.append(r)
         filled.add((tid, proc, mach, next_day))
         added += 1
 
-    if added <= 0:
+    if added <= 0 and skipped_timeline_covered <= 0:
         return df_dispatch
-    logging.info(
-        "結果_配台表: 加工途中・翌日配台ダイアログから %s 行を追補しました（配台日=%s）。",
-        added,
-        next_day.isoformat(),
-    )
+    if added > 0:
+        logging.info(
+            "結果_配台表: 加工途中・翌日配台ダイアログから %s 行を追補しました（配台日=%s）。",
+            added,
+            next_day.isoformat(),
+        )
+    if skipped_timeline_covered > 0:
+        logging.info(
+            "結果_配台表: 加工途中・翌日追補を %s 件省略しました（タイムライン配台済）。",
+            skipped_timeline_covered,
+        )
     return pd.DataFrame(out_records, columns=out_cols)
 
 
@@ -26901,6 +27081,165 @@ def _interactive_aggregate_effective_actual_for_validation(
     return dict(out)
 
 
+def _agent_debug_log_in_progress_dispatch_diagnostics(
+    df_dispatch: pd.DataFrame,
+    timeline_events: list | None,
+    tasks_df,
+    sorted_tasks_for_result: list | None = None,
+    *,
+    run_id: str = "pre-fix",
+) -> None:
+    # region agent log
+    """加工途中タスクの配台表・タイムライン整合を NDJSON に記録（debug 553403）。"""
+    try:
+        from planning_core import agent_debug_ndjson as _adn
+    except ImportError:
+        return
+    in_progress_keys: set[tuple[str, str, str]] = set()
+    if tasks_df is not None and not getattr(tasks_df, "empty", True):
+        for _, prow in tasks_df.iterrows():
+            try:
+                done_q = float(_planning_df_cell_scalar(prow, TASK_COL_ACTUAL_DONE) or 0)
+            except (TypeError, ValueError):
+                done_q = 0.0
+            if done_q <= 1e-12:
+                continue
+            tid = planning_task_id_str_from_plan_row(prow)
+            proc = _interactive_norm_cell(
+                _planning_df_cell_scalar(prow, TASK_COL_MACHINE) or ""
+            )
+            mach = _interactive_norm_cell(
+                _planning_df_cell_scalar(prow, TASK_COL_MACHINE_NAME) or ""
+            )
+            if tid and proc and mach:
+                in_progress_keys.add((tid, proc, mach))
+    tl_mach_count = 0
+    tl_by_tid: dict[str, int] = defaultdict(int)
+    tl_keys_with_dt: set[tuple[str, str, str]] = set()
+    for ev in timeline_events or []:
+        if not _is_machining_timeline_event(ev):
+            continue
+        tid_e = str(ev.get("task_id") or "").strip()
+        if not tid_e:
+            continue
+        tl_mach_count += 1
+        tl_by_tid[tid_e] += 1
+        st0, _ed0 = _timeline_event_start_end_dt(ev)
+        if st0 is not None:
+            eq_e = str(ev.get("machine") or "").strip()
+            proc_e = ""
+            tdict = _resolve_task_dict_for_timeline_line(
+                tid_e, eq_e, sorted_tasks_for_result
+            )
+            if tdict:
+                proc_e = str(tdict.get("machine") or "").strip()
+            tl_keys_with_dt.add((tid_e, proc_e, eq_e))
+    dispatch_rows: list[dict] = []
+    meta_miss_rows: list[dict] = []
+    if df_dispatch is not None and not getattr(df_dispatch, "empty", True):
+        for _, drow in df_dispatch.iterrows():
+            tid = _interactive_norm_cell(drow.get(TASK_COL_TASK_ID))
+            proc = _interactive_norm_cell(drow.get(TASK_COL_MACHINE))
+            mach = _interactive_norm_cell(drow.get(TASK_COL_MACHINE_NAME))
+            if (tid, proc, mach) not in in_progress_keys:
+                continue
+            try:
+                plan_q = float(drow.get("当日配台数量") or 0)
+            except (TypeError, ValueError):
+                plan_q = 0.0
+            dd = _interactive_parse_dispatch_date_cell(drow.get("配台日"))
+            has_meta = _interactive_row_has_timeline_meta(drow.to_dict())
+            rec = {
+                "task_id": tid,
+                "process": proc,
+                "machine_name": mach,
+                "dispatch_date": dd.isoformat() if dd else "",
+                "plan_qty_m": plan_q,
+                "has_timeline_meta": has_meta,
+                "machining_start": _interactive_norm_cell(drow.get("加工開始日時")),
+                "machining_end": _interactive_norm_cell(drow.get("加工終了日時")),
+            }
+            dispatch_rows.append(rec)
+            if plan_q > 1e-3 and not has_meta:
+                meta_miss_rows.append(rec)
+    _adn.append_structured(
+        "A",
+        "_core.py:_agent_debug_log_in_progress_dispatch_diagnostics",
+        "stage2 in-progress dispatch table vs timeline",
+        {
+            "runId": run_id,
+            "in_progress_task_count": len(in_progress_keys),
+            "timeline_machining_event_count": tl_mach_count,
+            "timeline_events_by_task_id": dict(tl_by_tid),
+            "dispatch_rows_for_in_progress": dispatch_rows,
+            "meta_miss_in_progress_rows": meta_miss_rows,
+        },
+    )
+    _adn.append_structured(
+        "B",
+        "_core.py:_agent_debug_log_in_progress_dispatch_diagnostics",
+        "in-progress without timeline events hypothesis",
+        {
+            "runId": run_id,
+            "in_progress_keys": [
+                {"task_id": k[0], "process": k[1], "machine_name": k[2]}
+                for k in sorted(in_progress_keys)
+            ],
+            "tasks_with_zero_timeline_events": [
+                k[0]
+                for k in sorted(in_progress_keys)
+                if tl_by_tid.get(k[0], 0) == 0
+            ],
+        },
+    )
+    _adn.append_structured(
+        "C",
+        "_core.py:_agent_debug_log_in_progress_dispatch_diagnostics",
+        "machine line key mismatch hypothesis",
+        {
+            "runId": run_id,
+            "timeline_keys_with_start_dt_sample": [
+                {"task_id": k[0], "process": k[1], "machine_line": k[2]}
+                for k in sorted(tl_keys_with_dt)[:20]
+            ],
+        },
+    )
+    try:
+        import json as _json
+
+        _sid = "553403"
+        _line = (
+            _json.dumps(
+                {
+                    "sessionId": _sid,
+                    "hypothesisId": "A-summary",
+                    "location": "_core.py:_agent_debug_log_in_progress_dispatch_diagnostics",
+                    "message": "in-progress meta_miss count",
+                    "data": {
+                        "runId": run_id,
+                        "meta_miss_count": len(meta_miss_rows),
+                        "in_progress_count": len(in_progress_keys),
+                    },
+                    "timestamp": int(time_module.time() * 1000),
+                },
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+        for _repo in _adn._repo_root_candidates():
+            _p = os.path.join(_repo, ".cursor", f"debug-{_sid}.log")
+            try:
+                os.makedirs(os.path.dirname(_p), exist_ok=True)
+                with open(_p, "a", encoding="utf-8") as _f:
+                    _f.write(_line)
+                break
+            except OSError:
+                continue
+    except Exception:
+        pass
+    # endregion
+
+
 def _interactive_dispatch_timeline_meta_miss_shortfalls(
     df_dispatch: pd.DataFrame,
     *,
@@ -27623,33 +27962,6 @@ def compute_interactive_trial_dispatch_qty_shortfall(
         gap = tgt - done_m
         if gap > eps:
             date_iso = dd.isoformat() if isinstance(dd, date) else str(dd)
-            # #region agent log
-            if _interactive_norm_cell(str(tid or "")) == "Y5-20":
-                try:
-                    from planning_core import agent_debug_ndjson as _adn
-
-                    _agg_t3 = (
-                        _interactive_norm_cell(str(tid or "")),
-                        _interactive_norm_cell(str(proc or "")),
-                        _interactive_norm_cell(str(mach or "")),
-                    )
-                    _adn.append_structured(
-                        "C",
-                        "_core.py:compute_interactive_trial_dispatch_qty_shortfall",
-                        "Y5-20 dispatch_qty_shortfall row",
-                        {
-                            "dispatch_date": date_iso,
-                            "target_m": tgt,
-                            "done_m": done_m,
-                            "shortfall_m": gap,
-                            "agg_target_m": agg_tgt.get(_agg_t3, 0.0),
-                            "agg_done_m": agg_done.get(_agg_t3, 0.0),
-                            "postpone_only": postpone_only,
-                        },
-                    )
-                except Exception:
-                    pass
-            # #endregion
             out.append(
                 {
                     "task_id": str(tid or ""),
@@ -30406,29 +30718,6 @@ def _trial_order_flow_day_start_floor(
     skip_macro_now = _interactive_stage3_skip_macro_now_start_floor(task, current_date)
     if current_date == macro_run_date and floor < macro_now_dt and not skip_macro_now:
         floor = macro_now_dt
-    # #region agent log
-    if (
-        _interactive_norm_cell(str(task.get("task_id") or "")) == "Y5-20"
-        and isinstance(current_date, date)
-        and current_date.isoformat() == "2026-05-27"
-    ):
-        try:
-            from planning_core import agent_debug_ndjson as _adn
-
-            _adn.append_structured(
-                "F",
-                "_core.py:_trial_order_flow_day_start_floor",
-                "Y5-20 day_start_floor on 2026-05-27",
-                {
-                    "floor": floor.isoformat(sep=" "),
-                    "macro_now_dt": macro_now_dt.isoformat(sep=" "),
-                    "macro_run_date": str(macro_run_date),
-                    "skip_macro_now": skip_macro_now,
-                },
-            )
-        except Exception:
-            pass
-    # #endregion
     return floor
 
 
@@ -32614,28 +32903,6 @@ def _trial_order_first_schedule_pass(
                         _rem_task_m = max(0.0, _tot_task - _glob_done_m)
                         _rem_m = min(_rem_key_m, _rem_task_m)
                     if _rem_m + 1e-9 < _um_lim:
-                        # #region agent log
-                        if _tid_iv == "Y5-20":
-                            try:
-                                from planning_core import agent_debug_ndjson as _adn
-
-                                _adn.append_structured(
-                                    "B",
-                                    "_core.py:_drain_rolls_for_task:cap_roll_unit",
-                                    "Y5-20 cap break: remaining m below one roll unit",
-                                    {
-                                        "current_date": str(current_date),
-                                        "cap_key": str(_cap_key),
-                                        "cap_m": _cap_m,
-                                        "done_m": _done_m,
-                                        "rem_m": _rem_m,
-                                        "unit_m": _um_lim,
-                                        "machine": _mach_iv,
-                                    },
-                                )
-                            except Exception:
-                                pass
-                        # #endregion
                         break
             res = _assign_one_roll_trial_order_flow(
                 task,
@@ -32660,33 +32927,6 @@ def _trial_order_first_schedule_pass(
                 timeline_events=timeline_events,
             )
             if res is None:
-                # #region agent log
-                if _tid_iv == "Y5-20":
-                    try:
-                        from planning_core import agent_debug_ndjson as _adn
-
-                        _adn.append_structured(
-                            "A",
-                            "_core.py:_drain_rolls_for_task:assign_none",
-                            "Y5-20 assign_one_roll returned None",
-                            {
-                                "current_date": str(current_date),
-                                "cap_key": str(_cap_key),
-                                "cap_m": float(interactive_dispatch_targets.get(_cap_key, 0.0))
-                                if _iv_cap and _cap_key in interactive_dispatch_targets
-                                else 0.0,
-                                "done_m": float(
-                                    interactive_trial_meters_done.get(_cap_key, 0.0)
-                                )
-                                if _iv_cap and interactive_trial_meters_done is not None
-                                else 0.0,
-                                "remaining_units": float(task.get("remaining_units") or 0),
-                                "machine": _mach_iv,
-                            },
-                        )
-                    except Exception:
-                        pass
-                # #endregion
                 break
             done_units = 1
             if task.get("roll_pipeline_inspection") or task.get(
@@ -32795,29 +33035,6 @@ def _trial_order_first_schedule_pass(
                 interactive_trial_meters_done[_cap_key] = float(
                     interactive_trial_meters_done.get(_cap_key, 0.0)
                 ) + float(done_units) * _um_iv_acc
-                # #region agent log
-                if _tid_iv == "Y5-20" and str(current_date) == "2026-05-27":
-                    try:
-                        from planning_core import agent_debug_ndjson as _adn
-
-                        _adn.append_structured(
-                            "E",
-                            "_core.py:_drain_rolls_for_task:roll_done",
-                            "Y5-20 roll assigned on 2026-05-27",
-                            {
-                                "cap_key": str(_cap_key),
-                                "done_m": float(
-                                    interactive_trial_meters_done.get(_cap_key, 0.0)
-                                ),
-                                "cap_m": float(interactive_dispatch_targets.get(_cap_key, 0.0)),
-                                "start_dt": str(res.get("team_start")),
-                                "end_dt": str(res.get("actual_end_dt")),
-                                "team": list(res.get("team") or []),
-                            },
-                        )
-                    except Exception:
-                        pass
-                # #endregion
             task["remaining_units"] = max(
                 0.0,
                 float(task.get("remaining_units") or 0) - float(done_units),
@@ -32990,29 +33207,6 @@ def _trial_order_first_schedule_pass(
         )
         _cap_drain_ids = {id(t) for t in _cap_drain_tasks}
         for _ct in _cap_drain_tasks:
-            # #region agent log
-            if _interactive_norm_cell(str(_ct.get("task_id") or "")) == "Y5-20":
-                try:
-                    from planning_core import agent_debug_ndjson as _adn
-
-                    _adn.append_structured(
-                        "G",
-                        "_core.py:_trial_order_first_schedule_pass:cap_drain",
-                        "Y5-20 cap_drain order",
-                        {
-                            "current_date": str(current_date),
-                            "unmet_m": _interactive_stage3_unmet_cap_m_on_date(
-                                _ct,
-                                current_date,
-                                interactive_dispatch_targets=interactive_dispatch_targets,
-                                interactive_trial_meters_done=interactive_trial_meters_done,
-                            ),
-                            "cap_drain_task_count": len(_cap_drain_tasks),
-                        },
-                    )
-                except Exception:
-                    pass
-            # #endregion
             if _drain_rolls_for_task(_ct):
                 pass_made = True
         if _cap_drain_ids:
@@ -38076,11 +38270,34 @@ def _generate_plan_impl(
         else None
     )
     df_dispatch = append_in_progress_next_day_dialog_rows_to_dispatch_table(
-        df_dispatch, tasks_df, df_src_for_dispatch, run_date, working_days
+        df_dispatch,
+        tasks_df,
+        df_src_for_dispatch,
+        run_date,
+        working_days,
+        timeline_events=timeline_events,
+        sorted_tasks_for_result=sorted_tasks_for_result,
     )
     df_dispatch = append_plan_input_rows_missing_from_dispatch_table(
         df_dispatch, tasks_df, df_src_for_dispatch
     )
+    df_dispatch = _apply_dispatch_table_timeline_meta_from_events(
+        df_dispatch, timeline_events, sorted_tasks_for_result
+    )
+    # region agent log
+    try:
+        _agent_debug_log_in_progress_dispatch_diagnostics(
+            df_dispatch,
+            timeline_events,
+            tasks_df,
+            sorted_tasks_for_result,
+            run_id="post-fix",
+        )
+    except Exception as _dbg_e:
+        logging.debug(
+            "agent debug: in-progress dispatch diagnostics skipped: %s", _dbg_e
+        )
+    # endregion
     df_dispatch = _interactive_dispatch_trial_use_editor_rows_for_result_table(
         df_dispatch,
         interactive_result_dispatch_json_rows,
