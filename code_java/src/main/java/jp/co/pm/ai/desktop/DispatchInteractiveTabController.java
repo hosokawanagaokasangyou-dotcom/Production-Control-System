@@ -1017,6 +1017,9 @@ public final class DispatchInteractiveTabController {
             }
         }
         ResultDispatchNormalizer.normalizeInPlace(cols, doc.rows());
+        if (changedRows > 0) {
+            captureStage3TrialPlanQtySnapshotFromDocument(doc, dateAxis);
+        }
         rebuildGrids();
         markDispatchDocDirty();
         if (statusLabel != null) {
@@ -3207,7 +3210,12 @@ public final class DispatchInteractiveTabController {
             }
         }
         double snapPlan = stage3TrialSnapPlanForCell(wr.profileMap(), axis.get(dateIdx));
-        boolean planSlidAway = snapPlan > eps && planAmt <= eps && actualAmt <= eps;
+        // 段階3試行後のみ旧配分を (段階2後) 表示。段階2のみのとき古い snapshot で planSlidAway すると幽霊行が出る。
+        boolean planSlidAway =
+                docHasActualDispatchQtyColumn()
+                        && snapPlan > eps
+                        && planAmt <= eps
+                        && actualAmt <= eps;
         boolean planMovedToDate =
                 snapPlan <= eps && (planAmt > eps || actualAmt > eps) && docHasActualDispatchQtyColumn();
         if (planSlidAway || planMovedToDate) {
