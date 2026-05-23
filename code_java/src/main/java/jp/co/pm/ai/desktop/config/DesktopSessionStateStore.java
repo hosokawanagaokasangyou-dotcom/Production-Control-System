@@ -386,13 +386,10 @@ public final class DesktopSessionStateStore {
                 optionalBoolean(root, "memoryMonitorEnabled", false),
                 optionalLongClamped(root, "memoryMonitorIntervalSec", 5L, 1L, 3600L),
                 optionalNonNegativeLong(root, "nextLaunchHeapMaxMiB", 0L),
-                optionalIntClamped(root, "equipmentStatusDashboardActualDayOffset", 0, -1, 0),
-                optionalIntClamped(
-                        root,
-                        "equipmentStatusDashboardPlanDayOffset",
-                        0,
-                        0,
-                        DesktopSessionState.MAX_EQUIPMENT_STATUS_DASHBOARD_PLAN_DAY_OFFSET),
+                text(root, "equipmentStatusDashboardActualDate"),
+                text(root, "equipmentStatusDashboardPlanDate"),
+                optionalIntClamped(root, "equipmentStatusDashboardActualDayOffset", 0, -366, 366),
+                optionalIntClamped(root, "equipmentStatusDashboardPlanDayOffset", 0, -366, 366),
                 optionalBoolean(root, "equipmentStatusDashboardAutoRefreshEnabled", true),
                 optionalBoolean(root, "equipmentStatusDashboardShowAladdinPlans", true),
                 optionalBoolean(root, "equipmentStatusDashboardShowDispatchPlans", true));
@@ -472,8 +469,8 @@ public final class DesktopSessionStateStore {
     }
 
     private static void putEquipmentStatusDashboardPrefs(ObjectNode root, DesktopSessionState state) {
-        root.put("equipmentStatusDashboardActualDayOffset", state.equipmentStatusDashboardActualDayOffset());
-        root.put("equipmentStatusDashboardPlanDayOffset", state.equipmentStatusDashboardPlanDayOffset());
+        put(root, "equipmentStatusDashboardActualDate", state.equipmentStatusDashboardActualDate());
+        put(root, "equipmentStatusDashboardPlanDate", state.equipmentStatusDashboardPlanDate());
         root.put("equipmentStatusDashboardAutoRefreshEnabled", state.equipmentStatusDashboardAutoRefreshEnabled());
         root.put("equipmentStatusDashboardShowAladdinPlans", state.equipmentStatusDashboardShowAladdinPlans());
         root.put("equipmentStatusDashboardShowDispatchPlans", state.equipmentStatusDashboardShowDispatchPlans());

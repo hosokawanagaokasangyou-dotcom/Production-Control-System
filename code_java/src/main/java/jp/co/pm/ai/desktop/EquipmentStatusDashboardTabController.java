@@ -13,9 +13,9 @@ import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ToggleButton;
-import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
@@ -34,21 +34,14 @@ import jp.co.pm.ai.desktop.ui.EquipmentStatusFullscreenStage;
 public final class EquipmentStatusDashboardTabController {
 
     private static final int AUTO_REFRESH_SEC = 60;
-    private static final int MAX_PLAN_DAY_OFFSET = 14;
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy/M/d");
 
     private MainShellController shell;
 
     @FXML private ToggleButton fullscreenToggle;
     @FXML private CheckBox autoRefreshCheckBox;
-    @FXML private ToggleGroup actualDayToggleGroup;
-    @FXML private ToggleButton actualTodayToggle;
-    @FXML private ToggleButton actualYesterdayToggle;
-    @FXML private ToggleGroup planDayToggleGroup;
-    @FXML private ToggleButton planTodayToggle;
-    @FXML private ToggleButton planTomorrowToggle;
-    @FXML private ToggleButton planDayAfterToggle;
-    @FXML private Button planForwardDayButton;
+    @FXML private DatePicker actualDatePicker;
+    @FXML private DatePicker planDatePicker;
     @FXML private Label lastUpdatedLabel;
     @FXML private CheckBox showAladdinCheckBox;
     @FXML private CheckBox showDispatchCheckBox;
@@ -69,11 +62,41 @@ public final class EquipmentStatusDashboardTabController {
     private LoadedSources cachedSources;
     private List<EquipmentMachineStatus> currentStatuses = List.of();
 
-    private int actualDayOffset;
-    private int planDayOffset;
+    private LocalDate actualDate = LocalDate.now();
+    private LocalDate planDate = LocalDate.now();
 
     @FXML
     private void initialize() {
+        LocalDate today = LocalDate.now();
+        actualDate = today;
+        planDate = today;
+        if (actualDatePicker != null) {
+            actualDatePicker.setValue(today);
+            actualDatePicker
+                    .valueProperty()
+                    .addListener(
+                            (obs, prev, cur) -> {
+                                if (suppressUiEvents.get() || cur == null) {
+                                    return;
+                                }
+                                actualDate = cur;
+                                rebuildFromCache();
+                            });
+        }
+        if (planDatePicker != null) {
+            planDatePicker.setValue(today);
+            planDatePicker
+                    .valueProperty()
+                    .addListener(
+                            (obs, prev, cur) -> {
+                                if (suppressUiEvents.get() || cur == null) {
+                                    return;
+                                }
+                                planDate = cur;
+                                rebuildFromCache();
+                            });
+        }
+
         fullscreenStage.setOnClose(
                 () ->
                         Platform.runLater(
@@ -83,53 +106,6 @@ public final class EquipmentStatusDashboardTabController {
                                     }
                                     updateAutoRefreshTimer();
                                 }));
-
-        if (actualTodayToggle != null) {
-            actualTodayToggle.setUserData(0);
-        }
-        if (actualYesterdayToggle != null) {
-            actualYesterdayToggle.setUserData(-1);
-        }
-        if (planTodayToggle != null) {
-            planTodayToggle.setUserData(0);
-        }
-        if (planTomorrowToggle != null) {
-            planTomorrowToggle.setUserData(1);
-        }
-        if (planDayAfterToggle != null) {
-            planDayAfterToggle.setUserData(2);
-        }
-
-        if (actualDayToggleGroup != null) {
-            actualDayToggleGroup
-                    .selectedToggleProperty()
-                    .addListener(
-                            (obs, prev, cur) -> {
-                                if (suppressUiEvents.get() || cur == null) {
-                                    return;
-                                }
-                                Object ud = cur.getUserData();
-                                if (ud instanceof Integer off) {
-                                    actualDayOffset = off;
-                                    rebuildFromCache();
-                                }
-                            });
-        }
-        if (planDayToggleGroup != null) {
-            planDayToggleGroup
-                    .selectedToggleProperty()
-                    .addListener(
-                            (obs, prev, cur) -> {
-                                if (suppressUiEvents.get() || cur == null) {
-                                    return;
-                                }
-                                Object ud = cur.getUserData();
-                                if (ud instanceof Integer off) {
-                                    planDayOffset = off;
-                                    rebuildFromCache();
-                                }
-                            });
-        }
 
         Runnable displayRefresh = this::rebuildFromCache;
         if (showAladdinCheckBox != null) {
@@ -155,10 +131,15 @@ public final class EquipmentStatusDashboardTabController {
         }
         suppressUiEvents.set(true);
         try {
-            actualDayOffset = clampActualOffset(s.equipmentStatusDashboardActualDayOffset());
-            planDayOffset = clampPlanOffset(s.equipmentStatusDashboardPlanDayOffset());
-            selectActualOffsetToggle(actualDayOffset);
-            selectPlanOffsetToggle(planDayOffset);
+            LocalDate today = LocalDate.now();
+            actualDate = s.resolveEquipmentStatusDashboardActualDate(today);
+            planDate = s.resolveEquipmentStatusDashboardPlanDate(today);
+            if (actualDatePicker != null) {
+                actualDatePicker.setValue(actualDate);
+            }
+            if (planDatePicker != null) {
+                planDatePicker.setValue(planDate);
+            }
             if (autoRefreshCheckBox != null) {
                 autoRefreshCheckBox.setSelected(s.equipmentStatusDashboardAutoRefreshEnabled());
             }
@@ -173,12 +154,12 @@ public final class EquipmentStatusDashboardTabController {
         }
     }
 
-    public int snapshotActualDayOffset() {
-        return actualDayOffset;
+    public String snapshotActualDateIso() {
+        return actualDate != null ? actualDate.toString() : "";
     }
 
-    public int snapshotPlanDayOffset() {
-        return planDayOffset;
+    public String snapshotPlanDateIso() {
+        return planDate != null ? planDate.toString() : "";
     }
 
     public boolean snapshotAutoRefreshEnabled() {
@@ -210,6 +191,16 @@ public final class EquipmentStatusDashboardTabController {
     }
 
     @FXML
+    private void onActualTodayAction() {
+        setActualDate(LocalDate.now());
+    }
+
+    @FXML
+    private void onPlanTodayAction() {
+        setPlanDate(LocalDate.now());
+    }
+
+    @FXML
     private void onFullscreenToggleAction() {
         if (shell == null || shell.getPrimaryStage() == null) {
             return;
@@ -232,10 +223,35 @@ public final class EquipmentStatusDashboardTabController {
         }
     }
 
-    @FXML
-    private void onPlanForwardDayAction() {
-        planDayOffset = Math.min(MAX_PLAN_DAY_OFFSET, planDayOffset + 1);
-        selectPlanOffsetToggle(planDayOffset);
+    private void setActualDate(LocalDate date) {
+        if (date == null) {
+            return;
+        }
+        actualDate = date;
+        suppressUiEvents.set(true);
+        try {
+            if (actualDatePicker != null) {
+                actualDatePicker.setValue(date);
+            }
+        } finally {
+            suppressUiEvents.set(false);
+        }
+        rebuildFromCache();
+    }
+
+    private void setPlanDate(LocalDate date) {
+        if (date == null) {
+            return;
+        }
+        planDate = date;
+        suppressUiEvents.set(true);
+        try {
+            if (planDatePicker != null) {
+                planDatePicker.setValue(date);
+            }
+        } finally {
+            suppressUiEvents.set(false);
+        }
         rebuildFromCache();
     }
 
@@ -273,21 +289,20 @@ public final class EquipmentStatusDashboardTabController {
     }
 
     private void rebuildFromCache() {
-        LocalDate anchor = LocalDate.now();
-        LocalDate actualDate = anchor.plusDays(actualDayOffset);
-        LocalDate planDate = anchor.plusDays(planDayOffset);
+        LocalDate actual = actualDate != null ? actualDate : LocalDate.now();
+        LocalDate plan = planDate != null ? planDate : LocalDate.now();
         if (cachedSources != null) {
             currentStatuses =
                     EquipmentStatusDashboardBuilder.build(
                             cachedSources.actuals(),
                             cachedSources.aladdin(),
                             cachedSources.dispatch(),
-                            actualDate,
-                            planDate);
+                            actual,
+                            plan);
         } else {
             currentStatuses = List.of();
         }
-        updateSummaryLabels(actualDate, planDate);
+        updateSummaryLabels(actual, plan);
         renderCards();
         if (fullscreenStage.isShowing()) {
             DisplayOptions opts = currentDisplayOptions();
@@ -336,12 +351,13 @@ public final class EquipmentStatusDashboardTabController {
     }
 
     private DisplayOptions currentDisplayOptions() {
-        LocalDate anchor = LocalDate.now();
+        LocalDate actual = actualDate != null ? actualDate : LocalDate.now();
+        LocalDate plan = planDate != null ? planDate : LocalDate.now();
         return new DisplayOptions(
                 showAladdinCheckBox == null || showAladdinCheckBox.isSelected(),
                 showDispatchCheckBox == null || showDispatchCheckBox.isSelected(),
-                anchor.plusDays(actualDayOffset).format(DATE_FMT),
-                anchor.plusDays(planDayOffset).format(DATE_FMT));
+                actual.format(DATE_FMT),
+                plan.format(DATE_FMT));
     }
 
     private Function<String, PersonBadgeStyle> badgeStyleResolver() {
@@ -350,12 +366,12 @@ public final class EquipmentStatusDashboardTabController {
                 : (String __) -> PersonBadgeStyle.defaultStyle();
     }
 
-    private void updateSummaryLabels(LocalDate actualDate, LocalDate planDate) {
+    private void updateSummaryLabels(LocalDate actual, LocalDate plan) {
         if (actualDateSummaryLabel != null) {
-            actualDateSummaryLabel.setText("実績日:" + actualDate.format(DATE_FMT));
+            actualDateSummaryLabel.setText("実績日:" + actual.format(DATE_FMT));
         }
         if (planDateSummaryLabel != null) {
-            planDateSummaryLabel.setText("予定日:" + planDate.format(DATE_FMT));
+            planDateSummaryLabel.setText("予定日:" + plan.format(DATE_FMT));
         }
         if (machineCountLabel != null) {
             if (cachedSources == null) {
@@ -374,9 +390,6 @@ public final class EquipmentStatusDashboardTabController {
                             + cachedSources.aladdinSourceLabel()
                             + "  配台="
                             + cachedSources.dispatchSourceLabel());
-        }
-        if (planForwardDayButton != null) {
-            planForwardDayButton.setDisable(planDayOffset >= MAX_PLAN_DAY_OFFSET);
         }
     }
 
@@ -405,11 +418,7 @@ public final class EquipmentStatusDashboardTabController {
                         new Timeline(
                                 new KeyFrame(
                                         Duration.seconds(AUTO_REFRESH_SEC),
-                                        e -> {
-                                            actualDayOffset = readActualOffsetFromUi();
-                                            planDayOffset = readPlanOffsetFromUi();
-                                            reloadFromSources();
-                                        }));
+                                        e -> reloadFromSources()));
                 autoRefreshTimeline.setCycleCount(Timeline.INDEFINITE);
             }
             if (autoRefreshTimeline.getStatus() != javafx.animation.Animation.Status.RUNNING) {
@@ -418,70 +427,5 @@ public final class EquipmentStatusDashboardTabController {
         } else if (autoRefreshTimeline != null) {
             autoRefreshTimeline.stop();
         }
-    }
-
-    private int readActualOffsetFromUi() {
-        ToggleButton sel =
-                actualDayToggleGroup != null
-                                && actualDayToggleGroup.getSelectedToggle()
-                                        instanceof ToggleButton tb
-                        ? tb
-                        : null;
-        if (sel != null && sel.getUserData() instanceof Integer off) {
-            return off;
-        }
-        return actualDayOffset;
-    }
-
-    private int readPlanOffsetFromUi() {
-        ToggleButton sel =
-                planDayToggleGroup != null
-                                && planDayToggleGroup.getSelectedToggle()
-                                        instanceof ToggleButton tb
-                        ? tb
-                        : null;
-        if (sel != null && sel.getUserData() instanceof Integer off) {
-            return off;
-        }
-        return planDayOffset;
-    }
-
-    private void selectActualOffsetToggle(int offset) {
-        actualDayOffset = clampActualOffset(offset);
-        ToggleButton target =
-                actualDayOffset == -1 ? actualYesterdayToggle : actualTodayToggle;
-        if (actualDayToggleGroup != null && target != null) {
-            actualDayToggleGroup.selectToggle(target);
-        }
-    }
-
-    private void selectPlanOffsetToggle(int offset) {
-        planDayOffset = clampPlanOffset(offset);
-        ToggleButton target = null;
-        if (planDayOffset == 0) {
-            target = planTodayToggle;
-        } else if (planDayOffset == 1) {
-            target = planTomorrowToggle;
-        } else if (planDayOffset == 2) {
-            target = planDayAfterToggle;
-        }
-        if (planDayToggleGroup != null) {
-            if (target != null) {
-                planDayToggleGroup.selectToggle(target);
-            } else {
-                planDayToggleGroup.selectToggle(null);
-            }
-        }
-    }
-
-    private static int clampActualOffset(int offset) {
-        return offset <= -1 ? -1 : 0;
-    }
-
-    private static int clampPlanOffset(int offset) {
-        if (offset < 0) {
-            return 0;
-        }
-        return Math.min(MAX_PLAN_DAY_OFFSET, offset);
     }
 }

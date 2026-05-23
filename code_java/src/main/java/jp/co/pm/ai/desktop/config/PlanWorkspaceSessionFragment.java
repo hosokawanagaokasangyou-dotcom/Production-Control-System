@@ -246,6 +246,8 @@ public record PlanWorkspaceSessionFragment(
                 base.memoryMonitorEnabled(),
                 base.memoryMonitorIntervalSec(),
                 base.nextLaunchHeapMaxMiB(),
+                base.equipmentStatusDashboardActualDate(),
+                base.equipmentStatusDashboardPlanDate(),
                 base.equipmentStatusDashboardActualDayOffset(),
                 base.equipmentStatusDashboardPlanDayOffset(),
                 base.equipmentStatusDashboardAutoRefreshEnabled(),

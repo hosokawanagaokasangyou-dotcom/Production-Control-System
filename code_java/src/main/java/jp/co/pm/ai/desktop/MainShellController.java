@@ -1049,11 +1049,13 @@ public final class MainShellController {
                 memorySettingsTabController.snapshotMemoryMonitorIntervalSec(),
                 memorySettingsTabController.snapshotNextLaunchHeapMaxMiB(),
                 equipmentStatusDashboardTabController != null
-                        ? equipmentStatusDashboardTabController.snapshotActualDayOffset()
-                        : 0,
+                        ? equipmentStatusDashboardTabController.snapshotActualDateIso()
+                        : "",
                 equipmentStatusDashboardTabController != null
-                        ? equipmentStatusDashboardTabController.snapshotPlanDayOffset()
-                        : 0,
+                        ? equipmentStatusDashboardTabController.snapshotPlanDateIso()
+                        : "",
+                0,
+                0,
                 equipmentStatusDashboardTabController == null
                         || equipmentStatusDashboardTabController.snapshotAutoRefreshEnabled(),
                 equipmentStatusDashboardTabController == null

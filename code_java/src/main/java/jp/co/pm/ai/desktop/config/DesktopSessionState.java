@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop.config;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -85,8 +86,10 @@ import java.util.Map;
  * @param memoryMonitorEnabled メモリ設定タブのヒープ監視（トレンドグラフ）を有効にするか
  * @param memoryMonitorIntervalSec 監視間隔（秒、1〜3600）
  * @param nextLaunchHeapMaxMiB 次回 JVM 起動時に希望するヒープ上限（MiB、{@code 0} は未設定として UI で現在値を参照）
- * @param equipmentStatusDashboardActualDayOffset ダッシュボード実績表示日オフセット（{@code 0}=当日、{@code -1}=前日）
- * @param equipmentStatusDashboardPlanDayOffset ダッシュボード予定表示日オフセット（{@code 0}〜{@code 14}、当日基準）
+ * @param equipmentStatusDashboardActualDate ダッシュボード実績表示日（{@code yyyy-MM-dd}、空は起動時当日）
+ * @param equipmentStatusDashboardPlanDate ダッシュボード予定表示日（{@code yyyy-MM-dd}、空は起動時当日）
+ * @param equipmentStatusDashboardActualDayOffset 旧セッション互換（読込のみ・日付未保存時）
+ * @param equipmentStatusDashboardPlanDayOffset 旧セッション互換（読込のみ・日付未保存時）
  * @param equipmentStatusDashboardAutoRefreshEnabled ダッシュボード自動更新（既定 ON）
  * @param equipmentStatusDashboardShowAladdinPlans ダッシュボードでアラジン予定を表示
  * @param equipmentStatusDashboardShowDispatchPlans ダッシュボードで配台予定を表示
@@ -166,6 +169,8 @@ public record DesktopSessionState(
         boolean memoryMonitorEnabled,
         long memoryMonitorIntervalSec,
         long nextLaunchHeapMaxMiB,
+        String equipmentStatusDashboardActualDate,
+        String equipmentStatusDashboardPlanDate,
         int equipmentStatusDashboardActualDayOffset,
         int equipmentStatusDashboardPlanDayOffset,
         boolean equipmentStatusDashboardAutoRefreshEnabled,
@@ -219,9 +224,6 @@ public record DesktopSessionState(
     /** UI スライダーおよび保存値のワイヤー長上限（px）。 */
     public static final double MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX = 1200d;
 
-    /** ダッシュボード予定日オフセットの上限（当日基準）。 */
-    public static final int MAX_EQUIPMENT_STATUS_DASHBOARD_PLAN_DAY_OFFSET = 14;
-
     public DesktopSessionState {
         equipmentGanttPersonBadgeStylesByLabel =
                 equipmentGanttPersonBadgeStylesByLabel == null || equipmentGanttPersonBadgeStylesByLabel.isEmpty()
@@ -269,14 +271,49 @@ public record DesktopSessionState(
                                 equipmentGanttPersonBadgeWireMaxLengthPx,
                                 MAX_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX)
                         : DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_WIRE_MAX_LENGTH_PX;
-        equipmentStatusDashboardActualDayOffset =
-                equipmentStatusDashboardActualDayOffset <= -1 ? -1 : 0;
-        equipmentStatusDashboardPlanDayOffset =
-                equipmentStatusDashboardPlanDayOffset < 0
-                        ? 0
-                        : Math.min(
-                                equipmentStatusDashboardPlanDayOffset,
-                                MAX_EQUIPMENT_STATUS_DASHBOARD_PLAN_DAY_OFFSET);
+        equipmentStatusDashboardActualDate =
+                equipmentStatusDashboardActualDate != null
+                        ? equipmentStatusDashboardActualDate.strip()
+                        : "";
+        equipmentStatusDashboardPlanDate =
+                equipmentStatusDashboardPlanDate != null
+                        ? equipmentStatusDashboardPlanDate.strip()
+                        : "";
+    }
+
+    /** セッション保存日付（{@code yyyy-MM-dd}）または旧オフセットから実績表示日を復元。 */
+    public LocalDate resolveEquipmentStatusDashboardActualDate(LocalDate anchorToday) {
+        LocalDate parsed = parseIsoLocalDate(equipmentStatusDashboardActualDate);
+        if (parsed != null) {
+            return parsed;
+        }
+        if (anchorToday != null && equipmentStatusDashboardActualDayOffset != 0) {
+            return anchorToday.plusDays(equipmentStatusDashboardActualDayOffset);
+        }
+        return anchorToday != null ? anchorToday : LocalDate.now();
+    }
+
+    /** セッション保存日付（{@code yyyy-MM-dd}）または旧オフセットから予定表示日を復元。 */
+    public LocalDate resolveEquipmentStatusDashboardPlanDate(LocalDate anchorToday) {
+        LocalDate parsed = parseIsoLocalDate(equipmentStatusDashboardPlanDate);
+        if (parsed != null) {
+            return parsed;
+        }
+        if (anchorToday != null && equipmentStatusDashboardPlanDayOffset != 0) {
+            return anchorToday.plusDays(equipmentStatusDashboardPlanDayOffset);
+        }
+        return anchorToday != null ? anchorToday : LocalDate.now();
+    }
+
+    private static LocalDate parseIsoLocalDate(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(raw.strip());
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     /**
@@ -406,6 +443,8 @@ public record DesktopSessionState(
                 false,
                 5L,
                 0L,
+                "",
+                "",
                 0,
                 0,
                 true,
@@ -493,6 +532,8 @@ public record DesktopSessionState(
                 memoryMonitorEnabled(),
                 memoryMonitorIntervalSec(),
                 nextLaunchHeapMaxMiB(),
+                equipmentStatusDashboardActualDate(),
+                equipmentStatusDashboardPlanDate(),
                 equipmentStatusDashboardActualDayOffset(),
                 equipmentStatusDashboardPlanDayOffset(),
                 equipmentStatusDashboardAutoRefreshEnabled(),
