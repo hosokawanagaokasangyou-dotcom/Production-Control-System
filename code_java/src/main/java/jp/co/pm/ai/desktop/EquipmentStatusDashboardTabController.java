@@ -30,6 +30,8 @@ import jp.co.pm.ai.desktop.io.actuals.EquipmentMachineStatus;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardBuilder;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader;
 import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.LoadedSources;
+import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.ReloadDecision;
+import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardSourceLoader.SourceFingerprint;
 import jp.co.pm.ai.desktop.ui.EquipmentStatusCardFactory;
 import jp.co.pm.ai.desktop.ui.EquipmentStatusCardFactory.DisplayOptions;
 import jp.co.pm.ai.desktop.ui.EquipmentStatusDashboardAppearanceApplier;
@@ -68,12 +70,13 @@ public final class EquipmentStatusDashboardTabController {
     private final EquipmentStatusFullscreenStage fullscreenStage = new EquipmentStatusFullscreenStage();
 
     private Timeline autoRefreshTimeline;
-    private Task<LoadedSources> activeReloadTask;
+    private Task<ReloadDecision> activeReloadTask;
     private final AtomicBoolean tabActive = new AtomicBoolean(false);
     private final AtomicBoolean suppressUiEvents = new AtomicBoolean(false);
     private final AtomicBoolean loading = new AtomicBoolean(false);
 
     private LoadedSources cachedSources;
+    private SourceFingerprint loadedFingerprint;
     private List<EquipmentMachineStatus> currentStatuses = List.of();
 
     private LocalDate actualDate = LocalDate.now();
@@ -333,18 +336,33 @@ public final class EquipmentStatusDashboardTabController {
         if (activeReloadTask != null && activeReloadTask.isRunning()) {
             return;
         }
-        setLoading(true);
+        final SourceFingerprint previousFingerprint = loadedFingerprint;
+        final boolean haveCache = cachedSources != null;
         activeReloadTask =
                 new Task<>() {
                     @Override
-                    protected LoadedSources call() throws Exception {
-                        return EquipmentStatusDashboardSourceLoader.load(shell.snapshotUiEnv());
+                    protected ReloadDecision call() throws Exception {
+                        ReloadDecision decision =
+                                EquipmentStatusDashboardSourceLoader.loadIfChanged(
+                                        shell.snapshotUiEnv(), previousFingerprint, haveCache);
+                        if (!decision.sourcesUnchanged()) {
+                            Platform.runLater(() -> setLoading(true));
+                        }
+                        return decision;
                     }
                 };
         activeReloadTask.setOnSucceeded(
                 e -> {
+                    ReloadDecision decision = activeReloadTask.getValue();
+                    if (decision == null || decision.sourcesUnchanged()) {
+                        if (shell != null) {
+                            shell.appendLog("[dashboard] ソース未変更のため読込を省略");
+                        }
+                        return;
+                    }
                     setLoading(false);
-                    cachedSources = activeReloadTask.getValue();
+                    loadedFingerprint = decision.fingerprint();
+                    cachedSources = decision.sources();
                     rebuildFromCache();
                     updateLastUpdatedLabel();
                 });

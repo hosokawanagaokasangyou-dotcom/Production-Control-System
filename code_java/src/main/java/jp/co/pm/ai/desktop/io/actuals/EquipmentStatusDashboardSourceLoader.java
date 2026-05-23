@@ -21,6 +21,27 @@ import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardBuilder.DispatchSn
 /** ダッシュボード用3系統データのディスク読込。 */
 public final class EquipmentStatusDashboardSourceLoader {
 
+    /** 実績・アラジン・配台のソースファイル指紋（変更検知用）。 */
+    public record SourceFingerprint(String actualKey, String aladdinKey, String dispatchKey) {
+
+        public static SourceFingerprint empty() {
+            return new SourceFingerprint("", "", "");
+        }
+    }
+
+    /** {@link #load} の結果。{@code sourcesUnchanged} のとき再読込は行っていない。 */
+    public record ReloadDecision(
+            boolean sourcesUnchanged, LoadedSources sources, SourceFingerprint fingerprint) {
+
+        public static ReloadDecision skip() {
+            return new ReloadDecision(true, null, null);
+        }
+
+        public static ReloadDecision loaded(LoadedSources sources, SourceFingerprint fingerprint) {
+            return new ReloadDecision(false, sources, fingerprint);
+        }
+    }
+
     public record LoadedSources(
             ActualsSnapshot actuals,
             AladdinSnapshot aladdin,
@@ -32,7 +53,40 @@ public final class EquipmentStatusDashboardSourceLoader {
     private EquipmentStatusDashboardSourceLoader() {}
 
     public static LoadedSources load(Map<String, String> ui) throws IOException {
+        ReloadDecision d = loadIfChanged(ui, null, false);
+        return d.sources();
+    }
+
+    /**
+     * 指紋が前回と同一ならディスク読込を省略する。
+     *
+     * @param previous 前回成功時の指紋（初回は {@code null}）
+     * @param haveCachedData {@code true} のときのみ省略判定（メモリ上に表示用データがある）
+     */
+    public static ReloadDecision loadIfChanged(
+            Map<String, String> ui, SourceFingerprint previous, boolean haveCachedData)
+            throws IOException {
+        SourceFingerprint fp = fingerprint(ui);
+        if (haveCachedData && previous != null && previous.equals(fp)) {
+            return ReloadDecision.skip();
+        }
+        return ReloadDecision.loaded(loadSources(ui), fp);
+    }
+
+    /** 3系統のソースファイル指紋（解決パス + {@code lastModified} + サイズ + シート名）。 */
+    public static SourceFingerprint fingerprint(Map<String, String> ui) {
         Map<String, String> env = ui != null ? ui : Map.of();
+        String sheet = env.getOrDefault(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SHEET, "").strip();
+        NetworkSourceDirResolver.Result r = NetworkSourceDirResolver.resolve(env);
+        String actualKey =
+                fileKey(r.actualDetailPath().orElse(null), sheet.isEmpty() ? "0" : sheet);
+        return new SourceFingerprint(
+                actualKey,
+                fileKey(AppPaths.resolveShapedAladdinPlanJsonPath(env), ""),
+                fileKey(AppPaths.resolveResultDispatchTableJsonPath(env), ""));
+    }
+
+    private static LoadedSources loadSources(Map<String, String> env) throws IOException {
         ActualsSnapshot actuals = loadActuals(env);
         AladdinSnapshot aladdin = loadAladdin(env);
         DispatchSnapshot dispatch = loadDispatch(env);
@@ -43,6 +97,27 @@ public final class EquipmentStatusDashboardSourceLoader {
                 actualsLabel(env),
                 aladdinLabel(env),
                 dispatchLabel(env));
+    }
+
+    private static String fileKey(Path path, String suffix) {
+        if (path == null) {
+            return "|missing|" + nz(suffix);
+        }
+        Path abs = path.toAbsolutePath().normalize();
+        if (!Files.isRegularFile(abs)) {
+            return abs + "|missing|" + nz(suffix);
+        }
+        try {
+            long mod = Files.getLastModifiedTime(abs).toMillis();
+            long size = Files.size(abs);
+            return abs + "|" + mod + "|" + size + "|" + nz(suffix);
+        } catch (IOException ex) {
+            return abs + "|error|" + nz(suffix);
+        }
+    }
+
+    private static String nz(String s) {
+        return s != null ? s : "";
     }
 
     private static ActualsSnapshot loadActuals(Map<String, String> ui) throws IOException {
