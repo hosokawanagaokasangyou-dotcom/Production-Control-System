@@ -129,6 +129,10 @@
     -fx-padding: 2 0 0 0;
 }
 
+.pm-run-tab .pm-run-book-open-panel {
+    -fx-padding: 0 0 2 0;
+}
+
 .pm-run-tab .pm-run-log-toolbar {
     -fx-padding: 4 0 0 0;
 }
