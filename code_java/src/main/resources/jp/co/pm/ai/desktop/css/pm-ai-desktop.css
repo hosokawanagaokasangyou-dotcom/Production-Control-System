@@ -413,8 +413,29 @@
     -fx-background-color: #134e4a;
 }
 
+.overtime-simulation-grid {
+    -fx-border-color: #64748b;
+    -fx-border-width: 1;
+}
+
+.overtime-simulation-grid .column-header,
+.overtime-simulation-grid .column-header .label {
+    -fx-border-color: #64748b;
+    -fx-border-width: 0 1 1 0;
+}
+
+.overtime-simulation-grid .table-row-cell .table-cell {
+    -fx-border-color: #64748b;
+    -fx-border-width: 0 1 1 0;
+    -fx-background-insets: 0;
+    -fx-padding: 2 4 2 4;
+}
+
 .overtime-simulation-grid .table-cell.overtime-sim-cell-off {
     -fx-background-color: #cbd5e1;
+    -fx-border-color: #475569;
+    -fx-border-width: 1;
+    -fx-background-insets: 0;
 }
 
 .button.pm-stage-run-button:disabled {
