@@ -1198,6 +1198,26 @@ public final class MainRunTabController {
         }
     }
 
+    /** 開発用チェック（Gemini スキップ・全配台不要）は段階1実行後に毎回オフ。セッションには保存しない。 */
+    void resetDevCheckboxesAfterStage1Run() {
+        suppressSkipGeminiApiEvents.set(true);
+        suppressStage1MarkAllExcludeAfterRunEvents.set(true);
+        try {
+            if (skipGeminiApiCheckBox != null) {
+                skipGeminiApiCheckBox.setSelected(false);
+            }
+            if (stage1MarkAllExcludeAfterRunCheckBox != null) {
+                stage1MarkAllExcludeAfterRunCheckBox.setSelected(false);
+            }
+        } finally {
+            suppressSkipGeminiApiEvents.set(false);
+            suppressStage1MarkAllExcludeAfterRunEvents.set(false);
+        }
+        if (shell != null) {
+            shell.scheduleDesktopSessionSave();
+        }
+    }
+
     String snapshotStage2ResultBookFont() {
         if (stage2ResultBookFontCombo == null) {
             return "";

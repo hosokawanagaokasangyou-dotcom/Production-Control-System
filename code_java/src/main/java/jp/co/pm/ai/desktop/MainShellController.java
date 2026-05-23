@@ -865,9 +865,7 @@ public final class MainShellController {
         planInputTabController.applyStage2InProgressNextDayPromptFromSession(
                 s.planInputStage2InProgressNextDayPrompt());
         mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
-        mainRunTabController.applySkipGeminiApiFromSession(s.mainRunSkipGeminiApi());
-        mainRunTabController.applyStage1MarkAllExcludeAfterRunFromSession(
-                s.mainRunStage1MarkAllExcludeAfterRun());
+        // 開発用チェックは通常 OFF。段階1実行後も OFF に戻し、セッション復元しない。
         /*
          * 設備ガントの apply は末尾で Canvas を再構築し personBadgeStyleResolverForGantt を参照する。
          * 担当バッジのセッション（グロー等）を先に適用しないと、起動直後の帯は既定スタイルで描かれる。
@@ -963,8 +961,8 @@ public final class MainShellController {
                 planInputTabController.snapshotStage2SkipTodayDispatch(),
                 planInputTabController.snapshotStage2InProgressNextDayPrompt(),
                 mainRunTabController.snapshotStage2ResultBookFont(),
-                mainRunTabController.snapshotSkipGeminiApi(),
-                mainRunTabController.snapshotStage1MarkAllExcludeAfterRun(),
+                false,
+                false,
                 snapshotUiEnvRows(),
                 snapshotMainShellTabOrder(),
                 snapshotMainShellTabLayout(),
@@ -3608,6 +3606,7 @@ public final class MainShellController {
                         }
                         if (stage1) {
                             mainRunTabController.resetStage1ClearCacheAndRunCheckbox();
+                            mainRunTabController.resetDevCheckboxesAfterStage1Run();
                         }
                         if (stage1 || stage2) {
                             selectMainShellTab(MainShellTabId.RUN);
@@ -3761,6 +3760,7 @@ public final class MainShellController {
         }
         if (STAGE1.equals(script)) {
             mainRunTabController.resetStage1ClearCacheAndRunCheckbox();
+            mainRunTabController.resetDevCheckboxesAfterStage1Run();
         }
     }
 
