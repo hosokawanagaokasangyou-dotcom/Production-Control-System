@@ -20,6 +20,7 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TitledPane;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 
@@ -64,6 +65,7 @@ public final class EquipmentStatusDashboardTabController {
     @FXML private VBox appearanceControlsHost;
     @FXML private ScrollPane cardScrollPane;
     @FXML private FlowPane cardFlowPane;
+    private HBox cardFlowHost;
     @FXML private VBox emptyStatePane;
     @FXML private VBox loadingOverlayPane;
 
@@ -125,14 +127,11 @@ public final class EquipmentStatusDashboardTabController {
         }
 
         if (cardScrollPane != null && cardFlowPane != null) {
+            cardFlowHost = new HBox(cardFlowPane);
+            cardScrollPane.setContent(cardFlowHost);
             cardScrollPane.viewportBoundsProperty()
                     .addListener(
-                            (o, a, b) ->
-                                    EquipmentStatusDashboardAppearanceApplier.configureFlowPane(
-                                            cardFlowPane,
-                                            appearancePrefs,
-                                            false,
-                                            b.getWidth()));
+                            (o, a, b) -> applyFlowLayout(b.getWidth()));
         }
 
         fullscreenStage.setOnClose(
@@ -453,13 +452,22 @@ public final class EquipmentStatusDashboardTabController {
     }
 
     private void applyFlowLayout() {
+        double viewport =
+                cardScrollPane != null ? cardScrollPane.getViewportBounds().getWidth() : 0;
+        applyFlowLayout(viewport);
+    }
+
+    private void applyFlowLayout(double viewportWidth) {
         if (cardFlowPane == null) {
             return;
         }
-        double viewport =
-                cardScrollPane != null ? cardScrollPane.getViewportBounds().getWidth() : 0;
-        EquipmentStatusDashboardAppearanceApplier.configureFlowPane(
-                cardFlowPane, appearancePrefs, false, viewport);
+        boolean fillViewport =
+                EquipmentStatusDashboardAppearanceApplier.configureFlowPane(
+                        cardFlowPane, appearancePrefs, false, viewportWidth);
+        if (cardFlowHost != null) {
+            EquipmentStatusDashboardAppearanceApplier.applyFlowHostLayout(
+                    cardFlowHost, cardFlowPane, fillViewport);
+        }
     }
 
     private void renderCards() {

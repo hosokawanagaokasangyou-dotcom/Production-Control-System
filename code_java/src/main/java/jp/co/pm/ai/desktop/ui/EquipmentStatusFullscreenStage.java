@@ -14,6 +14,7 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
@@ -35,6 +36,7 @@ public final class EquipmentStatusFullscreenStage {
 
     private final Stage stage = new Stage(StageStyle.UNDECORATED);
     private final BorderPane root = new BorderPane();
+    private final HBox cardHost = new HBox();
     private final FlowPane cardPane = new FlowPane();
     private final ScrollPane scrollPane = new ScrollPane();
     private final VBox emptyStateHost = new VBox();
@@ -62,14 +64,14 @@ public final class EquipmentStatusFullscreenStage {
         top.getChildren().addAll(title, spacer, metaLabel, close);
 
         cardPane.getStyleClass().add("pm-equipment-status-card-flow");
-        scrollPane.setContent(cardPane);
+        cardHost.getChildren().add(cardPane);
+        scrollPane.setContent(cardHost);
         scrollPane.setFitToWidth(true);
         scrollPane.getStyleClass().add("pm-equipment-status-scroll");
         scrollPane.viewportBoundsProperty()
                 .addListener(
                         (o, a, b) ->
-                                EquipmentStatusDashboardAppearanceApplier.configureFlowPane(
-                                        cardPane, appearance, true, b.getWidth()));
+                                applyFlowLayout(b.getWidth()));
 
         emptyStateHost.setAlignment(Pos.CENTER);
         emptyStateHost.getStyleClass().add("pm-equipment-status-empty-host");
@@ -164,11 +166,7 @@ public final class EquipmentStatusFullscreenStage {
             String planDateLabel,
             boolean sourcesLoaded) {
         applyAppearance(appearancePrefs);
-        EquipmentStatusDashboardAppearanceApplier.configureFlowPane(
-                cardPane,
-                appearance,
-                true,
-                scrollPane.getViewportBounds().getWidth());
+        applyFlowLayout(scrollPane.getViewportBounds().getWidth());
         cardPane.getChildren().clear();
         boolean empty = statuses == null || statuses.isEmpty();
         emptyStateHost.getChildren().clear();
@@ -201,6 +199,13 @@ public final class EquipmentStatusFullscreenStage {
         if (on) {
             metaLabel.setText("データ読込中…");
         }
+    }
+
+    private void applyFlowLayout(double viewportWidth) {
+        boolean fillViewport =
+                EquipmentStatusDashboardAppearanceApplier.configureFlowPane(
+                        cardPane, appearance, true, viewportWidth);
+        EquipmentStatusDashboardAppearanceApplier.applyFlowHostLayout(cardHost, cardPane, fillViewport);
     }
 
     public void hide() {

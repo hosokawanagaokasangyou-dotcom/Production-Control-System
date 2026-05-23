@@ -3,10 +3,12 @@ package jp.co.pm.ai.desktop.ui;
 import java.util.Locale;
 
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.chart.PieChart;
 import javafx.scene.control.Label;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -21,26 +23,79 @@ public final class EquipmentStatusDashboardAppearanceApplier {
 
     private EquipmentStatusDashboardAppearanceApplier() {}
 
-    public static void configureFlowPane(
+    /**
+     * FlowPane の折返し・幅制約を更新する。
+     *
+     * @return {@code true} ならビューポート幅いっぱいに FlowPane を伸ばす（自動列）。{@code false} なら固定列幅で中央寄せ。
+     */
+    public static boolean configureFlowPane(
             FlowPane pane,
             EquipmentStatusDashboardAppearancePrefs prefs,
             boolean fullscreen,
             double viewportWidth) {
         if (pane == null || prefs == null) {
-            return;
+            return true;
         }
         pane.setHgap(prefs.cardGapH());
         pane.setVgap(prefs.cardGapV());
+        if (usesAutoColumnLayout(prefs)) {
+            clearFixedColumnWidthConstraints(pane);
+            double cardW = prefs.effectiveCardWidth(fullscreen);
+            if (viewportWidth > 1) {
+                Insets pad = pane.getPadding();
+                double inner =
+                        Math.max(
+                                cardW,
+                                viewportWidth - pad.getLeft() - pad.getRight() - 24);
+                pane.setPrefWrapLength(inner);
+            } else {
+                pane.setPrefWrapLength(RegionFallback.COMPUTED);
+            }
+            return true;
+        }
+        double wrap = fixedColumnWrapInnerWidth(prefs, fullscreen);
+        Insets pad = pane.getPadding();
+        double totalW = wrap + pad.getLeft() + pad.getRight();
+        pane.setPrefWrapLength(wrap);
+        pane.setPrefWidth(totalW);
+        pane.setMinWidth(totalW);
+        pane.setMaxWidth(totalW);
+        return false;
+    }
+
+    /** 固定列数時の FlowPane 内側（padding 除く）折返し幅。自動列のときは {@code -1}。 */
+    public static double fixedColumnWrapInnerWidth(
+            EquipmentStatusDashboardAppearancePrefs prefs, boolean fullscreen) {
+        if (prefs == null || usesAutoColumnLayout(prefs)) {
+            return -1;
+        }
         double cardW = prefs.effectiveCardWidth(fullscreen);
         int cols = prefs.columnCount();
-        if (cols > 0) {
-            double wrap = cols * cardW + Math.max(0, cols - 1) * prefs.cardGapH() + 2;
-            pane.setPrefWrapLength(wrap);
-        } else if (viewportWidth > 1) {
-            pane.setPrefWrapLength(Math.max(cardW, viewportWidth - 24));
-        } else {
-            pane.setPrefWrapLength(RegionFallback.COMPUTED);
+        return cols * cardW + Math.max(0, cols - 1) * prefs.cardGapH();
+    }
+
+    public static boolean usesAutoColumnLayout(EquipmentStatusDashboardAppearancePrefs prefs) {
+        return prefs == null || prefs.columnCount() <= 0;
+    }
+
+    public static void applyFlowHostLayout(
+            javafx.scene.layout.HBox host, FlowPane pane, boolean fillViewportWidth) {
+        if (host == null || pane == null) {
+            return;
         }
+        if (fillViewportWidth) {
+            host.setAlignment(Pos.TOP_LEFT);
+            javafx.scene.layout.HBox.setHgrow(pane, javafx.scene.layout.Priority.ALWAYS);
+        } else {
+            host.setAlignment(Pos.TOP_CENTER);
+            javafx.scene.layout.HBox.setHgrow(pane, javafx.scene.layout.Priority.NEVER);
+        }
+    }
+
+    private static void clearFixedColumnWidthConstraints(FlowPane pane) {
+        pane.setMinWidth(Region.USE_COMPUTED_SIZE);
+        pane.setPrefWidth(Region.USE_COMPUTED_SIZE);
+        pane.setMaxWidth(Double.MAX_VALUE);
     }
 
     public static void applyCardShell(
@@ -190,7 +245,7 @@ public final class EquipmentStatusDashboardAppearanceApplier {
 
     /** {@code FlowPane#setPrefWrapLength} 用（自動列）。 */
     private static final class RegionFallback {
-        static final double COMPUTED = javafx.scene.layout.Region.USE_COMPUTED_SIZE;
+        static final double COMPUTED = Region.USE_COMPUTED_SIZE;
 
         private RegionFallback() {}
     }
