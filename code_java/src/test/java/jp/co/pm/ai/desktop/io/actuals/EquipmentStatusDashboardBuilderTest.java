@@ -153,6 +153,78 @@ class EquipmentStatusDashboardBuilderTest {
     }
 
     @Test
+    void build_memberFromAladdinWhenActualsLackMemberColumn() {
+        List<String> actHeaders =
+                List.of(
+                        "機械名",
+                        "依頼NO",
+                        "工程名",
+                        "加工開始日時",
+                        "換算数量",
+                        "累積完了率");
+        List<List<String>> actRows =
+                List.of(
+                        List.of(
+                                "M1",
+                                "R1",
+                                "スリット",
+                                "2026/05/23 09:00",
+                                "100",
+                                "45%"));
+        List<String> alHeaders =
+                List.of("機械名", "依頼NO", "工程名", "担当OP_指定", "2026/05/23");
+        List<List<String>> alRows =
+                List.of(List.of("M1", "R1", "スリット", "田中一郎", "50"));
+        List<EquipmentMachineStatus> out =
+                EquipmentStatusDashboardBuilder.build(
+                        new ActualsSnapshot(actHeaders, actRows),
+                        new AladdinSnapshot(alHeaders, alRows),
+                        new DispatchSnapshot(List.of(), List.of()),
+                        TODAY,
+                        TODAY);
+        Assertions.assertEquals("田中一郎", out.get(0).actualTask().orElseThrow().memberRaw());
+    }
+
+    @Test
+    void build_memberFromDispatchWhenAladdinEmpty() {
+        List<String> actHeaders =
+                List.of(
+                        "機械名",
+                        "依頼NO",
+                        "工程名",
+                        "加工開始日時",
+                        "換算数量",
+                        "累積完了率");
+        List<List<String>> actRows =
+                List.of(
+                        List.of(
+                                "M1",
+                                "R1",
+                                "P1",
+                                "2026/05/23 10:00",
+                                "100",
+                                "30%"));
+        List<String> disHeaders =
+                List.of(
+                        ResultDispatchSchema.COL_MACHINE,
+                        "依頼NO",
+                        ResultDispatchSchema.COL_PROCESS,
+                        "メンバー名",
+                        ResultDispatchSchema.COL_DISPATCH_DATE,
+                        ResultDispatchSchema.COL_DISPATCH_QTY);
+        List<List<String>> disRows =
+                List.of(List.of("M1", "R1", "P1", "鈴木次郎", "2026/05/23", "80"));
+        List<EquipmentMachineStatus> out =
+                EquipmentStatusDashboardBuilder.build(
+                        new ActualsSnapshot(actHeaders, actRows),
+                        new AladdinSnapshot(List.of(), List.of()),
+                        new DispatchSnapshot(disHeaders, disRows),
+                        TODAY,
+                        TODAY);
+        Assertions.assertEquals("鈴木次郎", out.get(0).actualTask().orElseThrow().memberRaw());
+    }
+
+    @Test
     void parseCompletionPct_fractionAndRatioFallbacks() {
         List<String> headers = List.of("累積完了率", "累積実績", "換算数量", "実加工数");
         Assertions.assertEquals(

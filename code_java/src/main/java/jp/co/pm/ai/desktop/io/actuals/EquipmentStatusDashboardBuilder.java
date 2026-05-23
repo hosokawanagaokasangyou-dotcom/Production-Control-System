@@ -17,9 +17,8 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
+import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanMemberLookup;
+import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
@@ -90,6 +89,18 @@ public final class EquipmentStatusDashboardBuilder {
             List<List<String>> dayRows = actualByMachine.getOrDefault(machine, List.of());
             Optional<EquipmentMachineStatus.ActualTaskRow> task =
                     pickLatestActualTask(actHeaders, dayRows);
+            if (task.isPresent()) {
+                task =
+                        Optional.of(
+                                enrichActualTaskMember(
+                                        task.get(),
+                                        alHeaders,
+                                        alRows,
+                                        disHeaders,
+                                        disRows,
+                                        machine,
+                                        actualDateKey));
+            }
             EquipmentMachineStatus.Status status = deriveStatus(dayRows, task);
             List<EquipmentMachineStatus.PlanLine> alPlans =
                     collectAladdinPlans(alHeaders, alRows, machine, planDateKey);
@@ -181,6 +192,88 @@ public final class EquipmentStatusDashboardBuilder {
             return EquipmentMachineStatus.Status.COMPLETED;
         }
         return EquipmentMachineStatus.Status.RUNNING;
+    }
+
+    private static EquipmentMachineStatus.ActualTaskRow enrichActualTaskMember(
+            EquipmentMachineStatus.ActualTaskRow task,
+            List<String> alHeaders,
+            List<List<String>> alRows,
+            List<String> disHeaders,
+            List<List<String>> disRows,
+            String machine,
+            String actualDateKey) {
+        if (task.memberRaw() != null && !task.memberRaw().isBlank()) {
+            return task;
+        }
+        String member =
+                AladdinShapedPlanMemberLookup.lookup(
+                        alHeaders,
+                        alRows,
+                        machine,
+                        task.requestNo(),
+                        task.processName(),
+                        actualDateKey);
+        if (member.isBlank()) {
+            member = lookupDispatchMember(disHeaders, disRows, machine, task, actualDateKey);
+        }
+        if (member.isBlank()) {
+            return task;
+        }
+        return new EquipmentMachineStatus.ActualTaskRow(
+                task.requestNo(),
+                task.processName(),
+                task.qtyConvM(),
+                task.completionPct(),
+                member,
+                task.startDateTime(),
+                task.endDateTime());
+    }
+
+    private static String lookupDispatchMember(
+            List<String> headers,
+            List<List<String>> rows,
+            String machine,
+            EquipmentMachineStatus.ActualTaskRow task,
+            String dateKey) {
+        int mkIdx = colIdx(headers, ResultDispatchSchema.COL_MACHINE);
+        int tidIdx = colIdx(headers, COL_REQUEST);
+        int procIdx = colIdx(headers, ResultDispatchSchema.COL_PROCESS);
+        int dateIdx = colIdx(headers, ResultDispatchSchema.COL_DISPATCH_DATE);
+        int memberIdx = colIdx(headers, COL_MEMBER);
+        if (mkIdx < 0 || tidIdx < 0 || memberIdx < 0) {
+            return "";
+        }
+        String mkNorm = normalizeEquipmentKey(machine);
+        String tid = task.requestNo() != null ? task.requestNo().strip() : "";
+        String procKey = AladdinShapedPlanQtyLookup.normalizeProcessNameForRuleMatch(task.processName());
+        for (List<String> row : rows) {
+            if (!mkNorm.equals(normalizeEquipmentKey(cellAt(row, mkIdx)))) {
+                continue;
+            }
+            if (!tid.equals(cellAt(row, tidIdx).strip())) {
+                continue;
+            }
+            if (dateIdx >= 0 && dateKey != null && !dateKey.isBlank()) {
+                if (!dateKey.equals(normalizeDateHeader(cellAt(row, dateIdx)))) {
+                    continue;
+                }
+            }
+            String rowProc =
+                    procIdx >= 0
+                            ? AladdinShapedPlanQtyLookup.normalizeProcessNameForRuleMatch(
+                                    cellAt(row, procIdx))
+                            : "";
+            if (!procKey.isEmpty()
+                    && !rowProc.isEmpty()
+                    && !procKey.equals(rowProc)) {
+                continue;
+            }
+            String member = cellAt(row, memberIdx).strip();
+            if (!member.isEmpty()) {
+                return member;
+            }
+        }
+        return "";
     }
 
     private static Optional<EquipmentMachineStatus.ActualTaskRow> pickLatestActualTask(
