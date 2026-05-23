@@ -64,6 +64,17 @@ public final class EquipmentStatusDashboardBuilder {
             DispatchSnapshot dispatch,
             LocalDate actualDate,
             LocalDate planDate) {
+        return build(actuals, aladdin, dispatch, actualDate, planDate, LocalDate.now());
+    }
+
+    /** @param statusToday 稼働中判定の「当日」（テスト用に固定可能）。 */
+    static List<EquipmentMachineStatus> build(
+            ActualsSnapshot actuals,
+            AladdinSnapshot aladdin,
+            DispatchSnapshot dispatch,
+            LocalDate actualDate,
+            LocalDate planDate,
+            LocalDate statusToday) {
         List<String> actHeaders = actuals != null ? actuals.headers() : List.of();
         List<List<String>> actRows = actuals != null ? actuals.rows() : List.of();
         List<String> alHeaders = aladdin != null ? aladdin.headers() : List.of();
@@ -101,7 +112,16 @@ public final class EquipmentStatusDashboardBuilder {
                                         machine,
                                         actualDateKey));
             }
-            EquipmentMachineStatus.Status status = deriveStatus(dayRows, task);
+            EquipmentMachineStatus.Status status =
+                    deriveStatus(
+                            actHeaders,
+                            dayRows,
+                            task,
+                            alHeaders,
+                            alRows,
+                            machine,
+                            actualDate,
+                            statusToday);
             List<EquipmentMachineStatus.PlanLine> alPlans =
                     collectAladdinPlans(alHeaders, alRows, machine, planDateKey);
             List<EquipmentMachineStatus.PlanLine> disPlans =
@@ -182,16 +202,104 @@ public final class EquipmentStatusDashboardBuilder {
     }
 
     private static EquipmentMachineStatus.Status deriveStatus(
+            List<String> actHeaders,
             List<List<String>> dayRows,
-            Optional<EquipmentMachineStatus.ActualTaskRow> task) {
+            Optional<EquipmentMachineStatus.ActualTaskRow> task,
+            List<String> alHeaders,
+            List<List<String>> alRows,
+            String machine,
+            LocalDate actualDate,
+            LocalDate statusToday) {
         if (dayRows == null || dayRows.isEmpty() || task.isEmpty()) {
             return EquipmentMachineStatus.Status.STOPPED;
+        }
+        if (actualDate != null
+                && statusToday != null
+                && actualDate.equals(statusToday)) {
+            double actualQty = sumActualQtyM(actHeaders, dayRows);
+            double aladdinPlan =
+                    sumAladdinPlanQtyM(
+                            alHeaders, alRows, machine, formatDateKey(actualDate));
+            if (actualQty <= 1e-12) {
+                return EquipmentMachineStatus.Status.STOPPED;
+            }
+            if (actualQty + 1e-12 < aladdinPlan) {
+                return EquipmentMachineStatus.Status.RUNNING;
+            }
+            return EquipmentMachineStatus.Status.COMPLETED;
         }
         double pct = task.get().completionPct();
         if (pct >= 99.999) {
             return EquipmentMachineStatus.Status.COMPLETED;
         }
         return EquipmentMachineStatus.Status.RUNNING;
+    }
+
+    /** 実績表示日の機械別実績合計（m）。 */
+    static double sumActualQtyM(List<String> headers, List<List<String>> dayRows) {
+        if (dayRows == null || dayRows.isEmpty()) {
+            return 0.0;
+        }
+        double sum = 0.0;
+        for (List<String> row : dayRows) {
+            sum += rowActualQtyM(headers, row);
+        }
+        return sum;
+    }
+
+    static double rowActualQtyM(List<String> headers, List<String> row) {
+        int iAct = colIdx(headers, COL_ACTUAL_QTY);
+        if (iAct >= 0) {
+            double v = parseDouble(cellAt(row, iAct));
+            if (Math.abs(v) > 1e-12) {
+                return v;
+            }
+        }
+        int iCum = colIdx(headers, COL_CUM_DONE);
+        if (iCum >= 0) {
+            double v = parseDouble(cellAt(row, iCum));
+            if (Math.abs(v) > 1e-12) {
+                return v;
+            }
+        }
+        int iConv = colIdx(headers, COL_QTY_CONV);
+        if (iConv >= 0) {
+            double conv = parseDouble(cellAt(row, iConv));
+            if (conv > 1e-12) {
+                return conv * parseCompletionPct(headers, row) / 100.0;
+            }
+        }
+        return 0.0;
+    }
+
+    static double sumAladdinPlanQtyM(
+            List<String> headers,
+            List<List<String>> rows,
+            String machine,
+            String planDateKey) {
+        int mkIdx = colIdx(headers, COL_MACHINE);
+        if (mkIdx < 0 || planDateKey == null || planDateKey.isBlank()) {
+            return 0.0;
+        }
+        Integer dateCol = null;
+        for (Map.Entry<Integer, String> e : dateColumnIndices(headers).entrySet()) {
+            if (planDateKey.equals(normalizeDateHeader(e.getValue()))) {
+                dateCol = e.getKey();
+                break;
+            }
+        }
+        if (dateCol == null) {
+            return 0.0;
+        }
+        String mkNorm = normalizeEquipmentKey(machine);
+        double sum = 0.0;
+        for (List<String> row : rows) {
+            if (!mkNorm.equals(normalizeEquipmentKey(cellAt(row, mkIdx)))) {
+                continue;
+            }
+            sum += parseDouble(cellAt(row, dateCol));
+        }
+        return sum;
     }
 
     private static EquipmentMachineStatus.ActualTaskRow enrichActualTaskMember(

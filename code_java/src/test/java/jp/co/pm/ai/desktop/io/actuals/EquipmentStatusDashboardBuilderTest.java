@@ -37,6 +37,7 @@ class EquipmentStatusDashboardBuilderTest {
                         new AladdinSnapshot(List.of(), List.of()),
                         new DispatchSnapshot(List.of(), List.of()),
                         TODAY,
+                        TODAY,
                         TODAY);
         Assertions.assertEquals(0, out.size());
     }
@@ -51,6 +52,7 @@ class EquipmentStatusDashboardBuilderTest {
                         new AladdinSnapshot(alHeaders, alRows),
                         new DispatchSnapshot(List.of(), List.of()),
                         TODAY,
+                        TODAY,
                         TODAY);
         Assertions.assertEquals(1, out.size());
         Assertions.assertEquals(EquipmentMachineStatus.Status.STOPPED, out.get(0).status());
@@ -58,7 +60,7 @@ class EquipmentStatusDashboardBuilderTest {
     }
 
     @Test
-    void build_todayRunningAndCompleted() {
+    void build_todayRunningWhenActualBelowAladdinPlan() {
         List<String> headers =
                 List.of(
                         "機械名",
@@ -89,11 +91,17 @@ class EquipmentStatusDashboardBuilderTest {
                                 "200",
                                 "100%",
                                 "佐藤花子"));
+        List<String> alHeaders = List.of("機械名", "依頼NO", "工程名", "2026/05/23");
+        List<List<String>> alRows =
+                List.of(
+                        List.of("M-run", "R1", "P1", "200"),
+                        List.of("M-done", "R2", "P2", "200"));
         List<EquipmentMachineStatus> out =
                 EquipmentStatusDashboardBuilder.build(
                         new ActualsSnapshot(headers, rows),
-                        new AladdinSnapshot(List.of(), List.of()),
+                        new AladdinSnapshot(alHeaders, alRows),
                         new DispatchSnapshot(List.of(), List.of()),
+                        TODAY,
                         TODAY,
                         TODAY);
         EquipmentMachineStatus running =
@@ -103,6 +111,70 @@ class EquipmentStatusDashboardBuilderTest {
         Assertions.assertEquals(EquipmentMachineStatus.Status.RUNNING, running.status());
         Assertions.assertEquals(45.0, running.actualTask().orElseThrow().completionPct(), 0.01);
         Assertions.assertEquals(EquipmentMachineStatus.Status.COMPLETED, done.status());
+    }
+
+    @Test
+    void build_todayNotRunningWhenActualReachesAladdinPlan() {
+        List<String> headers =
+                List.of(
+                        "機械名",
+                        "依頼NO",
+                        "工程名",
+                        "加工開始日時",
+                        "換算数量",
+                        "実加工数",
+                        "累積完了率");
+        List<List<String>> rows =
+                List.of(
+                        List.of(
+                                "M1",
+                                "R1",
+                                "P1",
+                                "2026/05/23 09:00",
+                                "100",
+                                "80",
+                                "80%"));
+        List<String> alHeaders = List.of("機械名", "依頼NO", "工程名", "2026/05/23");
+        List<List<String>> alRows = List.of(List.of("M1", "R1", "P1", "80"));
+        List<EquipmentMachineStatus> out =
+                EquipmentStatusDashboardBuilder.build(
+                        new ActualsSnapshot(headers, rows),
+                        new AladdinSnapshot(alHeaders, alRows),
+                        new DispatchSnapshot(List.of(), List.of()),
+                        TODAY,
+                        TODAY,
+                        TODAY);
+        Assertions.assertEquals(EquipmentMachineStatus.Status.COMPLETED, out.get(0).status());
+    }
+
+    @Test
+    void build_todayNotRunningWhenNoAladdinPlanButHasActual() {
+        List<String> headers =
+                List.of(
+                        "機械名",
+                        "依頼NO",
+                        "工程名",
+                        "加工開始日時",
+                        "換算数量",
+                        "累積完了率");
+        List<List<String>> rows =
+                List.of(
+                        List.of(
+                                "M1",
+                                "R1",
+                                "P1",
+                                "2026/05/23 09:00",
+                                "100",
+                                "45%"));
+        List<EquipmentMachineStatus> out =
+                EquipmentStatusDashboardBuilder.build(
+                        new ActualsSnapshot(headers, rows),
+                        new AladdinSnapshot(List.of(), List.of()),
+                        new DispatchSnapshot(List.of(), List.of()),
+                        TODAY,
+                        TODAY,
+                        TODAY);
+        Assertions.assertEquals(EquipmentMachineStatus.Status.COMPLETED, out.get(0).status());
     }
 
     @Test
@@ -118,6 +190,7 @@ class EquipmentStatusDashboardBuilderTest {
                         new ActualsSnapshot(headers, rows),
                         new AladdinSnapshot(List.of(), List.of()),
                         new DispatchSnapshot(List.of(), List.of()),
+                        TODAY,
                         TODAY,
                         TODAY);
         Assertions.assertEquals("NEW", out.get(0).actualTask().orElseThrow().requestNo());
@@ -143,7 +216,8 @@ class EquipmentStatusDashboardBuilderTest {
                         new AladdinSnapshot(alHeaders, alRows),
                         new DispatchSnapshot(disHeaders, disRows),
                         TODAY,
-                        TOMORROW);
+                        TOMORROW,
+                        TODAY);
         Assertions.assertEquals(1, out.size());
         Assertions.assertEquals(EquipmentMachineStatus.Status.STOPPED, out.get(0).status());
         Assertions.assertEquals(1, out.get(0).aladdinPlans().size());
@@ -181,8 +255,10 @@ class EquipmentStatusDashboardBuilderTest {
                         new AladdinSnapshot(alHeaders, alRows),
                         new DispatchSnapshot(List.of(), List.of()),
                         TODAY,
+                        TODAY,
                         TODAY);
         Assertions.assertEquals("田中一郎", out.get(0).actualTask().orElseThrow().memberRaw());
+        Assertions.assertEquals(EquipmentMachineStatus.Status.RUNNING, out.get(0).status());
     }
 
     @Test
@@ -220,6 +296,7 @@ class EquipmentStatusDashboardBuilderTest {
                         new AladdinSnapshot(List.of(), List.of()),
                         new DispatchSnapshot(disHeaders, disRows),
                         TODAY,
+                        TODAY,
                         TODAY);
         Assertions.assertEquals("鈴木次郎", out.get(0).actualTask().orElseThrow().memberRaw());
     }
@@ -246,7 +323,7 @@ class EquipmentStatusDashboardBuilderTest {
     }
 
     @Test
-    void build_actualDateYesterday() {
+    void build_actualDateYesterday_usesLegacyCompletionRule() {
         List<String> headers =
                 List.of("機械名", "依頼NO", "工程名", "加工開始日時", "換算数量", "累積完了率");
         List<List<String>> rows =
@@ -264,7 +341,31 @@ class EquipmentStatusDashboardBuilderTest {
                         new AladdinSnapshot(List.of(), List.of()),
                         new DispatchSnapshot(List.of(), List.of()),
                         YESTERDAY,
+                        TODAY,
                         TODAY);
         Assertions.assertEquals(EquipmentMachineStatus.Status.RUNNING, out.get(0).status());
+    }
+
+    @Test
+    void sumActualQtyM_and_sumAladdinPlanQtyM() {
+        List<String> actHeaders =
+                List.of("実加工数", "累積実績", "換算数量", "累積完了率");
+        List<List<String>> actRows =
+                List.of(
+                        List.of("30", "", "100", "30%"),
+                        List.of("20", "", "100", "20%"));
+        Assertions.assertEquals(
+                50.0,
+                EquipmentStatusDashboardBuilder.sumActualQtyM(actHeaders, actRows),
+                0.01);
+
+        List<String> alHeaders = List.of("機械名", "2026/05/23");
+        List<List<String>> alRows =
+                List.of(List.of("M1", "100"), List.of("M1", "50"), List.of("M2", "40"));
+        Assertions.assertEquals(
+                150.0,
+                EquipmentStatusDashboardBuilder.sumAladdinPlanQtyM(
+                        alHeaders, alRows, "M1", "2026/05/23"),
+                0.01);
     }
 }
