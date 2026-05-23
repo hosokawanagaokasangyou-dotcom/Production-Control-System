@@ -109,8 +109,9 @@ class EquipmentStatusDashboardBuilderTest {
         EquipmentMachineStatus done =
                 out.stream().filter(s -> "M-done".equals(s.machineName())).findFirst().orElseThrow();
         Assertions.assertEquals(EquipmentMachineStatus.Status.RUNNING, running.status());
-        Assertions.assertEquals(45.0, running.actualTask().orElseThrow().completionPct(), 0.01);
+        Assertions.assertEquals(22.5, running.actualTask().orElseThrow().completionPct(), 0.01);
         Assertions.assertEquals(EquipmentMachineStatus.Status.COMPLETED, done.status());
+        Assertions.assertEquals(100.0, done.actualTask().orElseThrow().completionPct(), 0.01);
     }
 
     @Test
@@ -145,6 +146,23 @@ class EquipmentStatusDashboardBuilderTest {
                         TODAY,
                         TODAY);
         Assertions.assertEquals(EquipmentMachineStatus.Status.COMPLETED, out.get(0).status());
+        Assertions.assertEquals(100.0, out.get(0).actualTask().orElseThrow().completionPct(), 0.01);
+    }
+
+    @Test
+    void completionPctFromActualAndPlan_dividesActualByAladdinPlan() {
+        Assertions.assertEquals(
+                22.5,
+                EquipmentStatusDashboardBuilder.completionPctFromActualAndPlan(45, 200),
+                0.01);
+        Assertions.assertEquals(
+                0.0,
+                EquipmentStatusDashboardBuilder.completionPctFromActualAndPlan(50, 0),
+                0.01);
+        Assertions.assertEquals(
+                100.0,
+                EquipmentStatusDashboardBuilder.completionPctFromActualAndPlan(200, 200),
+                0.01);
     }
 
     @Test
@@ -175,6 +193,7 @@ class EquipmentStatusDashboardBuilderTest {
                         TODAY,
                         TODAY);
         Assertions.assertEquals(EquipmentMachineStatus.Status.COMPLETED, out.get(0).status());
+        Assertions.assertEquals(0.0, out.get(0).actualTask().orElseThrow().completionPct(), 0.01);
     }
 
     @Test
@@ -259,6 +278,7 @@ class EquipmentStatusDashboardBuilderTest {
                         TODAY);
         Assertions.assertEquals("田中一郎", out.get(0).actualTask().orElseThrow().memberRaw());
         Assertions.assertEquals(EquipmentMachineStatus.Status.RUNNING, out.get(0).status());
+        Assertions.assertEquals(90.0, out.get(0).actualTask().orElseThrow().completionPct(), 0.01);
     }
 
     @Test
@@ -299,6 +319,7 @@ class EquipmentStatusDashboardBuilderTest {
                         TODAY,
                         TODAY);
         Assertions.assertEquals("鈴木次郎", out.get(0).actualTask().orElseThrow().memberRaw());
+        Assertions.assertEquals(0.0, out.get(0).actualTask().orElseThrow().completionPct(), 0.01);
     }
 
     @Test
@@ -323,7 +344,7 @@ class EquipmentStatusDashboardBuilderTest {
     }
 
     @Test
-    void build_actualDateYesterday_usesLegacyCompletionRule() {
+    void build_actualDateYesterday_usesActualOverAladdinForCompletionPct() {
         List<String> headers =
                 List.of("機械名", "依頼NO", "工程名", "加工開始日時", "換算数量", "累積完了率");
         List<List<String>> rows =
@@ -335,15 +356,18 @@ class EquipmentStatusDashboardBuilderTest {
                                 "2026/05/22 11:00",
                                 "100",
                                 "80%"));
+        List<String> alHeaders = List.of("機械名", "依頼NO", "工程名", "2026/05/22");
+        List<List<String>> alRows = List.of(List.of("M1", "R1", "P1", "100"));
         List<EquipmentMachineStatus> out =
                 EquipmentStatusDashboardBuilder.build(
                         new ActualsSnapshot(headers, rows),
-                        new AladdinSnapshot(List.of(), List.of()),
+                        new AladdinSnapshot(alHeaders, alRows),
                         new DispatchSnapshot(List.of(), List.of()),
                         YESTERDAY,
                         TODAY,
                         TODAY);
         Assertions.assertEquals(EquipmentMachineStatus.Status.RUNNING, out.get(0).status());
+        Assertions.assertEquals(80.0, out.get(0).actualTask().orElseThrow().completionPct(), 0.01);
     }
 
     @Test

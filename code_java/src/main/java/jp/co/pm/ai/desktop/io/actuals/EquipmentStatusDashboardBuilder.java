@@ -111,6 +111,15 @@ public final class EquipmentStatusDashboardBuilder {
                                         disRows,
                                         machine,
                                         actualDateKey));
+                task =
+                        applyDayCompletionPct(
+                                task,
+                                actHeaders,
+                                dayRows,
+                                alHeaders,
+                                alRows,
+                                machine,
+                                actualDateKey);
             }
             EquipmentMachineStatus.Status status =
                     deriveStatus(
@@ -300,6 +309,40 @@ public final class EquipmentStatusDashboardBuilder {
             sum += parseDouble(cellAt(row, dateCol));
         }
         return sum;
+    }
+
+    /** 完了率（%）= 当日実績(m) / 当日アラジン計画(m) × 100。計画0のときは0%。 */
+    static double completionPctFromActualAndPlan(double actualQtyM, double aladdinPlanM) {
+        if (aladdinPlanM <= 1e-12) {
+            return 0.0;
+        }
+        return clampPct(actualQtyM / aladdinPlanM * 100.0);
+    }
+
+    private static Optional<EquipmentMachineStatus.ActualTaskRow> applyDayCompletionPct(
+            Optional<EquipmentMachineStatus.ActualTaskRow> task,
+            List<String> actHeaders,
+            List<List<String>> dayRows,
+            List<String> alHeaders,
+            List<List<String>> alRows,
+            String machine,
+            String actualDateKey) {
+        if (task.isEmpty()) {
+            return task;
+        }
+        double actualQty = sumActualQtyM(actHeaders, dayRows);
+        double plan = sumAladdinPlanQtyM(alHeaders, alRows, machine, actualDateKey);
+        double pct = completionPctFromActualAndPlan(actualQty, plan);
+        EquipmentMachineStatus.ActualTaskRow t = task.get();
+        return Optional.of(
+                new EquipmentMachineStatus.ActualTaskRow(
+                        t.requestNo(),
+                        t.processName(),
+                        t.qtyConvM(),
+                        pct,
+                        t.memberRaw(),
+                        t.startDateTime(),
+                        t.endDateTime()));
     }
 
     private static EquipmentMachineStatus.ActualTaskRow enrichActualTaskMember(

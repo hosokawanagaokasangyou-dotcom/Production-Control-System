@@ -25,7 +25,7 @@ public record EquipmentMachineStatus(
             String requestNo,
             String processName,
             double qtyConvM,
-            /** 0〜100 */
+        /** 0〜100。当日実績 / 当日アラジン計画 × 100（{@link EquipmentStatusDashboardBuilder} で設定）。 */
             double completionPct,
             String memberRaw,
             String startDateTime,
