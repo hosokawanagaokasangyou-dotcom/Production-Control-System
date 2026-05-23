@@ -30,7 +30,11 @@ import jp.co.pm.ai.desktop.io.actuals.EquipmentMachineStatus;
 /** ダッシュボード全画面表示用 Stage。 */
 public final class EquipmentStatusFullscreenStage {
 
+    private static final String FULLSCREEN_THEME_CLASS_PREFIX =
+            "pm-equipment-status-fullscreen-theme-";
+
     private final Stage stage = new Stage(StageStyle.UNDECORATED);
+    private final BorderPane root = new BorderPane();
     private final FlowPane cardPane = new FlowPane();
     private final ScrollPane scrollPane = new ScrollPane();
     private final VBox emptyStateHost = new VBox();
@@ -42,8 +46,8 @@ public final class EquipmentStatusFullscreenStage {
             EquipmentStatusDashboardAppearancePrefs.defaults();
 
     public EquipmentStatusFullscreenStage() {
-        BorderPane root = new BorderPane();
         root.getStyleClass().add("pm-equipment-status-fullscreen-root");
+        applyFullscreenTheme(EquipmentStatusDashboardAppearancePrefs.defaults());
 
         HBox top = new HBox(12.0);
         top.setAlignment(Pos.CENTER_LEFT);
@@ -125,10 +129,7 @@ public final class EquipmentStatusFullscreenStage {
             stage.initOwner(owner);
             ownerInitialized = true;
         }
-        this.appearance =
-                appearancePrefs != null
-                        ? appearancePrefs
-                        : EquipmentStatusDashboardAppearancePrefs.defaults();
+        applyAppearance(appearancePrefs);
         metaLabel.setText(metaText != null ? metaText : "");
         rebuildCards(
                 statuses,
@@ -146,6 +147,14 @@ public final class EquipmentStatusFullscreenStage {
         stage.toFront();
     }
 
+    public void applyAppearance(EquipmentStatusDashboardAppearancePrefs appearancePrefs) {
+        this.appearance =
+                appearancePrefs != null
+                        ? appearancePrefs
+                        : EquipmentStatusDashboardAppearancePrefs.defaults();
+        applyFullscreenTheme(this.appearance);
+    }
+
     public void rebuildCards(
             List<EquipmentMachineStatus> statuses,
             EquipmentStatusCardFactory.DisplayOptions opts,
@@ -154,10 +163,7 @@ public final class EquipmentStatusFullscreenStage {
             String actualDateLabel,
             String planDateLabel,
             boolean sourcesLoaded) {
-        this.appearance =
-                appearancePrefs != null
-                        ? appearancePrefs
-                        : EquipmentStatusDashboardAppearancePrefs.defaults();
+        applyAppearance(appearancePrefs);
         EquipmentStatusDashboardAppearanceApplier.configureFlowPane(
                 cardPane,
                 appearance,
@@ -202,5 +208,11 @@ public final class EquipmentStatusFullscreenStage {
             stage.setFullScreen(false);
             stage.hide();
         }
+    }
+
+    private void applyFullscreenTheme(EquipmentStatusDashboardAppearancePrefs prefs) {
+        root.getStyleClass()
+                .removeIf(c -> c.startsWith(FULLSCREEN_THEME_CLASS_PREFIX));
+        root.getStyleClass().add(prefs.fullscreenThemeStyleClass());
     }
 }

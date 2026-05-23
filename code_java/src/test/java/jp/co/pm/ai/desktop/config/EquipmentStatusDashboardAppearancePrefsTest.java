@@ -11,6 +11,8 @@ class EquipmentStatusDashboardAppearancePrefsTest {
         Assertions.assertEquals(0, d.columnCount());
         Assertions.assertEquals(280, d.cardWidth(), 0.01);
         Assertions.assertEquals(96, d.chartSizePx(), 0.01);
+        Assertions.assertEquals(
+                EquipmentStatusDashboardAppearancePrefs.FULLSCREEN_THEME_DARK, d.fullscreenTheme());
     }
 
     @Test
@@ -34,13 +36,16 @@ class EquipmentStatusDashboardAppearancePrefsTest {
                         "bad",
                         "",
                         "X",
-                        true);
+                        true,
+                        "BAD");
         Assertions.assertEquals(12, p.columnCount());
         Assertions.assertEquals(160, p.cardWidth(), 0.01);
         Assertions.assertEquals(80, p.fullscreenCardWidthPercent(), 0.01);
         Assertions.assertEquals(EquipmentStatusDashboardAppearancePrefs.SHADOW_SUBTLE, p.cardShadowStyle());
         Assertions.assertEquals(EquipmentStatusDashboardAppearancePrefs.CHART_FLAT, p.chartStyle());
         Assertions.assertEquals("#0d9488", p.chartDoneColorHex());
+        Assertions.assertEquals(
+                EquipmentStatusDashboardAppearancePrefs.FULLSCREEN_THEME_DARK, p.fullscreenTheme());
     }
 
     @Test
@@ -64,8 +69,38 @@ class EquipmentStatusDashboardAppearancePrefsTest {
                         "#0d9488",
                         "#e2e8f0",
                         EquipmentStatusDashboardAppearancePrefs.CHART_FLAT,
-                        false);
+                        false,
+                        EquipmentStatusDashboardAppearancePrefs.FULLSCREEN_THEME_LIGHT);
         Assertions.assertEquals(200, p.effectiveCardWidth(false), 0.01);
         Assertions.assertEquals(300, p.effectiveCardWidth(true), 0.01);
+        Assertions.assertEquals(
+                EquipmentStatusDashboardAppearancePrefs.FULLSCREEN_THEME_LIGHT, p.fullscreenTheme());
+    }
+
+    @Test
+    void fullscreenThemeStyleClass_mapsKeyToCss() {
+        EquipmentStatusDashboardAppearancePrefs wall =
+                new EquipmentStatusDashboardAppearancePrefs(
+                        0,
+                        280,
+                        121,
+                        12,
+                        12,
+                        12,
+                        8,
+                        EquipmentStatusDashboardAppearancePrefs.SHADOW_SUBTLE,
+                        "",
+                        15,
+                        12,
+                        11,
+                        16,
+                        96,
+                        "#0d9488",
+                        "#e2e8f0",
+                        EquipmentStatusDashboardAppearancePrefs.CHART_FLAT,
+                        false,
+                        EquipmentStatusDashboardAppearancePrefs.FULLSCREEN_THEME_WALL);
+        Assertions.assertEquals(
+                "pm-equipment-status-fullscreen-theme-wall", wall.fullscreenThemeStyleClass());
     }
 }

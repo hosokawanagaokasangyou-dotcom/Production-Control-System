@@ -48,6 +48,7 @@ public final class EquipmentStatusDashboardAppearancePanel {
     private ColorPicker doneColorPicker;
     private ColorPicker remainColorPicker;
     private ComboBox<String> chartStyleCombo;
+    private ComboBox<String> fullscreenThemeCombo;
     private CheckBox chartShadowCheckBox;
     private Label cardWidthValue;
     private Label chartSizeValue;
@@ -79,6 +80,12 @@ public final class EquipmentStatusDashboardAppearancePanel {
 
         fullscreenScaleSlider = slider(80, 200, prefs.fullscreenCardWidthPercent(), 1);
         addRow(grid, row++, "全画面カード幅 (%)", labeledSlider(fullscreenScaleSlider, valueLabel()), null);
+
+        fullscreenThemeCombo = new ComboBox<>();
+        fullscreenThemeCombo.getItems().addAll("ダーク", "ライト", "壁面（高コントラスト）");
+        fullscreenThemeCombo.setValue(fullscreenThemeLabel(prefs.fullscreenTheme()));
+        fullscreenThemeCombo.setMaxWidth(Double.MAX_VALUE);
+        addRow(grid, row++, "全画面テーマ", fullscreenThemeCombo, null);
 
         paddingSlider = slider(4, 32, prefs.cardPadding(), 1);
         addRow(grid, row++, "カード内余白 (px)", slider(paddingSlider), null);
@@ -166,6 +173,7 @@ public final class EquipmentStatusDashboardAppearancePanel {
             columnSpinner.getValueFactory().setValue(p.columnCount());
             cardWidthSlider.setValue(p.cardWidth());
             fullscreenScaleSlider.setValue(p.fullscreenCardWidthPercent());
+            fullscreenThemeCombo.setValue(fullscreenThemeLabel(p.fullscreenTheme()));
             paddingSlider.setValue(p.cardPadding());
             gapHSlider.setValue(p.cardGapH());
             gapVSlider.setValue(p.cardGapV());
@@ -226,6 +234,7 @@ public final class EquipmentStatusDashboardAppearancePanel {
         doneColorPicker.valueProperty().addListener((o, a, b) -> fire.run());
         remainColorPicker.valueProperty().addListener((o, a, b) -> fire.run());
         chartStyleCombo.valueProperty().addListener((o, a, b) -> fire.run());
+        fullscreenThemeCombo.valueProperty().addListener((o, a, b) -> fire.run());
         chartShadowCheckBox.selectedProperty().addListener((o, a, b) -> fire.run());
     }
 
@@ -254,7 +263,8 @@ public final class EquipmentStatusDashboardAppearancePanel {
                 "立体風".equals(chartStyleCombo.getValue())
                         ? EquipmentStatusDashboardAppearancePrefs.CHART_DEPTH
                         : EquipmentStatusDashboardAppearancePrefs.CHART_FLAT,
-                chartShadowCheckBox.isSelected());
+                chartShadowCheckBox.isSelected(),
+                fullscreenThemeKey(fullscreenThemeCombo.getValue()));
     }
 
     private void updateValueLabels() {
@@ -315,6 +325,25 @@ public final class EquipmentStatusDashboardAppearancePanel {
             h.getStyleClass().add("pm-equipment-status-appearance-hint");
             grid.add(h, 2, row);
         }
+    }
+
+    private static String fullscreenThemeLabel(String key) {
+        return switch (key != null ? key : EquipmentStatusDashboardAppearancePrefs.FULLSCREEN_THEME_DARK) {
+            case EquipmentStatusDashboardAppearancePrefs.FULLSCREEN_THEME_LIGHT -> "ライト";
+            case EquipmentStatusDashboardAppearancePrefs.FULLSCREEN_THEME_WALL -> "壁面（高コントラスト）";
+            default -> "ダーク";
+        };
+    }
+
+    private static String fullscreenThemeKey(String label) {
+        if (label == null) {
+            return EquipmentStatusDashboardAppearancePrefs.FULLSCREEN_THEME_DARK;
+        }
+        return switch (label) {
+            case "ライト" -> EquipmentStatusDashboardAppearancePrefs.FULLSCREEN_THEME_LIGHT;
+            case "壁面（高コントラスト）" -> EquipmentStatusDashboardAppearancePrefs.FULLSCREEN_THEME_WALL;
+            default -> EquipmentStatusDashboardAppearancePrefs.FULLSCREEN_THEME_DARK;
+        };
     }
 
     private static String shadowLabel(String key) {

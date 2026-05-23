@@ -283,6 +283,7 @@ public final class EquipmentStatusDashboardTabController {
         renderCards();
         if (fullscreenStage.isShowing()) {
             DisplayOptions opts = currentDisplayOptions();
+            fullscreenStage.applyAppearance(appearancePrefs);
             fullscreenStage.rebuildCards(
                     currentStatuses,
                     opts,

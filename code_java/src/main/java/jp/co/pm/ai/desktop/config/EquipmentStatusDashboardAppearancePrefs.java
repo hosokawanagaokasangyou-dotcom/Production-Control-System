@@ -26,7 +26,9 @@ public record EquipmentStatusDashboardAppearancePrefs(
         String chartRemainColorHex,
         /** {@code FLAT}|{@code DEPTH}（立体風＝グラデーション＋影） */
         String chartStyle,
-        boolean chartShadowEnabled) {
+        boolean chartShadowEnabled,
+        /** 全画面表示テーマ: {@code DARK}|{@code LIGHT}|{@code WALL} */
+        String fullscreenTheme) {
 
     public static final String SHADOW_NONE = "NONE";
     public static final String SHADOW_SUBTLE = "SUBTLE";
@@ -35,6 +37,10 @@ public record EquipmentStatusDashboardAppearancePrefs(
 
     public static final String CHART_FLAT = "FLAT";
     public static final String CHART_DEPTH = "DEPTH";
+
+    public static final String FULLSCREEN_THEME_DARK = "DARK";
+    public static final String FULLSCREEN_THEME_LIGHT = "LIGHT";
+    public static final String FULLSCREEN_THEME_WALL = "WALL";
 
     public EquipmentStatusDashboardAppearancePrefs {
         columnCount = clampInt(columnCount, 0, 12);
@@ -54,6 +60,12 @@ public record EquipmentStatusDashboardAppearancePrefs(
         chartDoneColorHex = normalizeHex(chartDoneColorHex, "#0d9488");
         chartRemainColorHex = normalizeHex(chartRemainColorHex, "#e2e8f0");
         chartStyle = normalizeChartStyle(chartStyle);
+        fullscreenTheme = normalizeFullscreenTheme(fullscreenTheme);
+    }
+
+    public String fullscreenThemeStyleClass() {
+        return "pm-equipment-status-fullscreen-theme-"
+                + fullscreenTheme.toLowerCase(java.util.Locale.ROOT);
     }
 
     public static EquipmentStatusDashboardAppearancePrefs defaults() {
@@ -75,7 +87,8 @@ public record EquipmentStatusDashboardAppearancePrefs(
                 "#0d9488",
                 "#e2e8f0",
                 CHART_FLAT,
-                false);
+                false,
+                FULLSCREEN_THEME_DARK);
     }
 
     public double effectiveCardWidth(boolean fullscreen) {
@@ -113,6 +126,17 @@ public record EquipmentStatusDashboardAppearancePrefs(
         return switch (raw.strip().toUpperCase(java.util.Locale.ROOT)) {
             case CHART_FLAT, CHART_DEPTH -> raw.strip().toUpperCase(java.util.Locale.ROOT);
             default -> CHART_FLAT;
+        };
+    }
+
+    private static String normalizeFullscreenTheme(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return FULLSCREEN_THEME_DARK;
+        }
+        return switch (raw.strip().toUpperCase(java.util.Locale.ROOT)) {
+            case FULLSCREEN_THEME_DARK, FULLSCREEN_THEME_LIGHT, FULLSCREEN_THEME_WALL ->
+                    raw.strip().toUpperCase(java.util.Locale.ROOT);
+            default -> FULLSCREEN_THEME_DARK;
         };
     }
 

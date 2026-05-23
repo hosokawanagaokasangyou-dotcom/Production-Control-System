@@ -503,7 +503,8 @@ public final class DesktopSessionStateStore {
                 nzFallback(text(n, "chartDoneColorHex"), d.chartDoneColorHex()),
                 nzFallback(text(n, "chartRemainColorHex"), d.chartRemainColorHex()),
                 nzFallback(text(n, "chartStyle"), d.chartStyle()),
-                optionalBoolean(n, "chartShadowEnabled", d.chartShadowEnabled()));
+                optionalBoolean(n, "chartShadowEnabled", d.chartShadowEnabled()),
+                nzFallback(text(n, "fullscreenTheme"), d.fullscreenTheme()));
     }
 
     private static void putEquipmentStatusDashboardAppearancePrefs(
@@ -532,6 +533,7 @@ public final class DesktopSessionStateStore {
         o.put("chartRemainColorHex", p.chartRemainColorHex());
         o.put("chartStyle", p.chartStyle());
         o.put("chartShadowEnabled", p.chartShadowEnabled());
+        o.put("fullscreenTheme", p.fullscreenTheme());
     }
 
     private static boolean optionalBoolean(JsonNode root, String key, boolean defaultValue) {
