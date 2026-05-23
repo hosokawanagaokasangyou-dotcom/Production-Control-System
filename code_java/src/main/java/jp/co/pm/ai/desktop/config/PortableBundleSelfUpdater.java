@@ -188,6 +188,7 @@ public final class PortableBundleSelfUpdater {
             progress.onPhaseStarted(PortableBundleUpgradeProgress.Phase.DOWNLOAD, size);
         }
         long copied = 0;
+        long[] lastReportedBytes = {0L};
         byte[] buf = new byte[COPY_BUFFER_SIZE];
         try (InputStream in = Files.newInputStream(zip);
                 OutputStream out = Files.newOutputStream(localZip)) {
@@ -201,7 +202,8 @@ public final class PortableBundleSelfUpdater {
                             PortableBundleUpgradeProgress.Phase.DOWNLOAD,
                             copied,
                             size,
-                            null);
+                            null,
+                            lastReportedBytes);
                 }
             }
         } catch (IOException e) {
@@ -497,13 +499,18 @@ public final class PortableBundleSelfUpdater {
             PortableBundleUpgradeProgress.Phase phase,
             long done,
             long total,
-            String detail) {
+            String detail,
+            long[] lastReportedAt) {
         if (progress == null || total <= 0) {
             return;
         }
         long step = Math.max(COPY_BUFFER_SIZE, total / 200);
-        if (done >= total || done <= COPY_BUFFER_SIZE || done % step == 0) {
+        long sinceLast = lastReportedAt != null && lastReportedAt.length > 0 ? lastReportedAt[0] : 0L;
+        if (done >= total || sinceLast <= 0 || done - sinceLast >= step) {
             progress.onProgress(phase, done, total, detail);
+            if (lastReportedAt != null && lastReportedAt.length > 0) {
+                lastReportedAt[0] = done;
+            }
         }
     }
 

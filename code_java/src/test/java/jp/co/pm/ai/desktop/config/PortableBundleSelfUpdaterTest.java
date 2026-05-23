@@ -126,6 +126,38 @@ class PortableBundleSelfUpdaterTest {
     }
 
     @Test
+    void copyUpgradeZipToLocal_reportsIncrementalDownloadProgress(@TempDir Path tmp) throws IOException {
+        int totalSize = 15_000_000;
+        Path src = tmp.resolve("PMD_version_upgrade.zip");
+        byte[] chunk = new byte[8192];
+        try (java.io.OutputStream out = Files.newOutputStream(src)) {
+            int written = 0;
+            while (written < totalSize) {
+                int n = Math.min(chunk.length, totalSize - written);
+                out.write(chunk, 0, n);
+                written += n;
+            }
+        }
+        List<Long> doneUnits = new ArrayList<>();
+        PortableBundleUpgradeProgress.Listener listener =
+                (phase, done, total, detail) -> {
+                    if (phase == PortableBundleUpgradeProgress.Phase.DOWNLOAD) {
+                        doneUnits.add(done);
+                    }
+                };
+        Path local = PortableBundleSelfUpdater.copyUpgradeZipToLocal(src, null, listener);
+        try {
+            assertTrue(
+                    doneUnits.size() >= 10,
+                    "expected incremental progress callbacks, got " + doneUnits.size() + " " + doneUnits);
+            assertEquals(0L, doneUnits.get(0));
+            assertEquals((long) totalSize, doneUnits.get(doneUnits.size() - 1));
+        } finally {
+            Files.deleteIfExists(local);
+        }
+    }
+
+    @Test
     void syncFromCanonical_logsEachCopiedRelativePath(@TempDir Path tmp) throws IOException {
         Path canon = tmp.resolve("canon");
         Files.createDirectories(canon.resolve("code"));
