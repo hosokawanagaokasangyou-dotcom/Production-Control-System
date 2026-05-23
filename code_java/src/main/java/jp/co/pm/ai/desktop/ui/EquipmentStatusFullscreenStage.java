@@ -30,6 +30,7 @@ public final class EquipmentStatusFullscreenStage {
     private final FlowPane cardPane = new FlowPane(12.0, 12.0);
     private final Label metaLabel = new Label();
     private Runnable onClose;
+    private boolean ownerInitialized;
 
     public EquipmentStatusFullscreenStage() {
         BorderPane root = new BorderPane();
@@ -86,7 +87,10 @@ public final class EquipmentStatusFullscreenStage {
             EquipmentStatusCardFactory.DisplayOptions opts,
             Function<String, PersonBadgeStyle> badgeStyleResolver,
             String metaText) {
-        stage.initOwner(owner);
+        if (!ownerInitialized && owner != null) {
+            stage.initOwner(owner);
+            ownerInitialized = true;
+        }
         metaLabel.setText(metaText != null ? metaText : "");
         rebuildCards(statuses, opts, badgeStyleResolver);
         stage.setFullScreen(true);
