@@ -1004,6 +1004,9 @@ public final class DispatchInteractiveTabController {
         if (reloadInteractionDisabled || dispatchDocDirtySinceSave) {
             return;
         }
+        if (!shell.tryBeginDispatchTrialGating(timingKind)) {
+            return;
+        }
         statusLabel.setText(stage35 ? "段階3.5（配台試行中）..." : "配台試行中...");
         if (dispatchTrialButton != null) {
             dispatchTrialButton.setDisable(true);
@@ -1068,56 +1071,60 @@ public final class DispatchInteractiveTabController {
                         shell.appendLog("不足情報JSON: " + shortagesPath);
                         reloadFromDiskQuietAfterDispatchTrial(
                                 () -> {
-                                    shell.reloadDeliveryCalendarInBackgroundAfterDispatchTrialSuccess();
                                     try {
-                                        showDispatchQtyShortfallDialogIfNeeded(owner);
-                                        showDispatchShortageHintsDialogIfNeeded(owner);
-                                        DispatchTrialConsistency.CheckResult cr =
-                                                DispatchTrialConsistency.compareDocuments(
-                                                        trialInputSnapshot, doc);
-                                        if (cr.consistent()) {
-                                            shell.appendLog(
-                                                    "[整合性] 保存済み表と試行後の成果物（結果_配台表.json）は、"
-                                                            + "依頼NO×機械名の当日配台数量合計および配台試行順番（工程別最小値）の観点で一致しました。");
-                                            shell.appendLog(
-                                                    "[dispatch-editor] trial: 整合性OK（保存表と再読込JSONの数量・試行順）");
-                                        } else {
-                                            shell.appendLog(
-                                                    "[整合性] 保存済み表と試行後の成果物に差異があります（詳細は下記）:");
-                                            for (String dl : cr.detailLines()) {
-                                                shell.appendLog(dl);
+                                        shell.reloadDeliveryCalendarInBackgroundAfterDispatchTrialSuccess();
+                                        try {
+                                            showDispatchQtyShortfallDialogIfNeeded(owner);
+                                            showDispatchShortageHintsDialogIfNeeded(owner);
+                                            DispatchTrialConsistency.CheckResult cr =
+                                                    DispatchTrialConsistency.compareDocuments(
+                                                            trialInputSnapshot, doc);
+                                            if (cr.consistent()) {
+                                                shell.appendLog(
+                                                        "[整合性] 保存済み表と試行後の成果物（結果_配台表.json）は、"
+                                                                + "依頼NO×機械名の当日配台数量合計および配台試行順番（工程別最小値）の観点で一致しました。");
+                                                shell.appendLog(
+                                                        "[dispatch-editor] trial: 整合性OK（保存表と再読込JSONの数量・試行順）");
+                                            } else {
+                                                shell.appendLog(
+                                                        "[整合性] 保存済み表と試行後の成果物に差異があります（詳細は下記）:");
+                                                for (String dl : cr.detailLines()) {
+                                                    shell.appendLog(dl);
+                                                }
+                                                Alert warn = new Alert(AlertType.WARNING);
+                                                warn.setTitle("配台試行: 整合性確認");
+                                                warn.setHeaderText(
+                                                        "試行前の保存内容と、試行後に読み込んだ結果_配台表.json に差異があります。");
+                                                warn.setContentText(String.join("\n", cr.detailLines()));
+                                                warn.show();
+                                                shell.appendLog(
+                                                        "[dispatch-editor] trial: 整合性に差異あり（"
+                                                                + cr.detailLines().size()
+                                                                + " 件）— ログ・ダイアログ参照");
                                             }
-                                            Alert warn = new Alert(AlertType.WARNING);
-                                            warn.setTitle("配台試行: 整合性確認");
-                                            warn.setHeaderText(
-                                                    "試行前の保存内容と、試行後に読み込んだ結果_配台表.json に差異があります。");
-                                            warn.setContentText(String.join("\n", cr.detailLines()));
-                                            warn.show();
+                                            DispatchTrialUnassignedWizard.showIfNeeded(
+                                                    owner, shell, Path.of(shortagesPath));
+                                            if (stage35) {
+                                                shell.notifyStage35OvertimeSimulationSuccess();
+                                            } else {
+                                                shell.notifyStage3DispatchTrialSuccess();
+                                            }
+                                        } catch (Throwable upex) {
+                                            String em =
+                                                    upex.getMessage() != null
+                                                            ? upex.getMessage()
+                                                            : upex.getClass().getSimpleName();
+                                            shell.appendLog("[配台試行] 試行後処理で例外: " + em);
                                             shell.appendLog(
-                                                    "[dispatch-editor] trial: 整合性に差異あり（"
-                                                            + cr.detailLines().size()
-                                                            + " 件）— ログ・ダイアログ参照");
+                                                    "[dispatch-editor] trial post-run: " + em);
+                                            if (stage35) {
+                                                shell.notifyStage35OvertimeSimulationFailure(em);
+                                            } else {
+                                                shell.notifyStage3DispatchTrialFailure(em);
+                                            }
                                         }
-                                        DispatchTrialUnassignedWizard.showIfNeeded(
-                                                owner, shell, Path.of(shortagesPath));
-                                        if (stage35) {
-                                            shell.notifyStage35OvertimeSimulationSuccess();
-                                        } else {
-                                            shell.notifyStage3DispatchTrialSuccess();
-                                        }
-                                    } catch (Throwable upex) {
-                                        String em =
-                                                upex.getMessage() != null
-                                                        ? upex.getMessage()
-                                                        : upex.getClass().getSimpleName();
-                                        shell.appendLog("[配台試行] 試行後処理で例外: " + em);
-                                        shell.appendLog(
-                                                "[dispatch-editor] trial post-run: " + em);
-                                        if (stage35) {
-                                            shell.notifyStage35OvertimeSimulationFailure(em);
-                                        } else {
-                                            shell.notifyStage3DispatchTrialFailure(em);
-                                        }
+                                    } finally {
+                                        shell.endDispatchTrialGating(timingKind);
                                     }
                                 });
                     } catch (Throwable sucEx) {
@@ -1132,6 +1139,8 @@ public final class DispatchInteractiveTabController {
                         } else {
                             shell.notifyStage3DispatchTrialFailure(em);
                         }
+                        hideReloadProgress();
+                        shell.endDispatchTrialGating(timingKind);
                     } finally {
                         Platform.runLater(this::applyDispatchTrialButtonEnabledState);
                     }
@@ -1169,6 +1178,8 @@ public final class DispatchInteractiveTabController {
                                 "[dispatch-editor] trial onFailed handler: "
                                         + handlerEx.getMessage());
                     } finally {
+                        hideReloadProgress();
+                        shell.endDispatchTrialGating(timingKind);
                         Platform.runLater(this::applyDispatchTrialButtonEnabledState);
                     }
                 });
@@ -1178,6 +1189,8 @@ public final class DispatchInteractiveTabController {
                         statusLabel.setText(stage35 ? "段階3.5 キャンセル" : "配台試行キャンセル");
                         shell.appendLog("[配台試行] キャンセルされました。");
                     } finally {
+                        hideReloadProgress();
+                        shell.endDispatchTrialGating(timingKind);
                         Platform.runLater(this::applyDispatchTrialButtonEnabledState);
                     }
                 });
@@ -1207,6 +1220,7 @@ public final class DispatchInteractiveTabController {
         if (reloadInteractionDisabled || dispatchDocDirtySinceSave) {
             return;
         }
+        showReloadProgress();
         statusLabel.setText("勤怠プレビュー読込中...");
         final Path pyExe = resolvePythonExe();
         final Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
@@ -1221,6 +1235,7 @@ public final class DispatchInteractiveTabController {
                                                 pyExe, pyDir, pyEnv, shell::appendLog);
                                 Platform.runLater(
                                         () -> {
+                                            hideReloadProgress();
                                             statusLabel.setText("");
                                             OvertimeSimulationWizard.show(
                                                     owner,
@@ -1231,6 +1246,7 @@ public final class DispatchInteractiveTabController {
                             } catch (Exception ex) {
                                 Platform.runLater(
                                         () -> {
+                                            hideReloadProgress();
                                             statusLabel.setText("勤怠プレビュー取得エラー");
                                             shell.showErrorDialog(
                                                     "段階3.5",
@@ -1319,6 +1335,9 @@ public final class DispatchInteractiveTabController {
             clearDispatchShortfallUi();
             rebuildGrids(this::hideReloadProgress);
             clearDispatchDocDirty();
+            if (applyDispatchTrialShortfallJson && shell != null) {
+                shell.endActiveDispatchTrialGatingIfAny();
+            }
             if (validatePlanInputCoverage) {
                 showPlanInputCoverageGapErrorIfNeeded(p);
             }
@@ -1412,6 +1431,9 @@ public final class DispatchInteractiveTabController {
                     clearDispatchShortfallUi();
                     rebuildGrids(this::hideReloadProgress);
                     clearDispatchDocDirty();
+                    if (applyDispatchTrialShortfallJson && shell != null) {
+                        shell.endActiveDispatchTrialGatingIfAny();
+                    }
                     if (userCompletionDialog) {
                         String msg =
                                 loadEx != null
