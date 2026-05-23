@@ -305,6 +305,14 @@ public final class DispatchInteractiveTabController {
     private static final String DISPATCH_TRIAL_BUTTON_TEXT_SUMMARY_LOCKED =
             "段階3（サマリエクセル更新中）";
 
+    private static final String OVERTIME_SIM_BUTTON_SUBTITLE = "(残業/休出シュミ)";
+
+    private static final String OVERTIME_SIM_BUTTON_TEXT_DEFAULT =
+            "段階3.5\n" + OVERTIME_SIM_BUTTON_SUBTITLE;
+
+    private static final String OVERTIME_SIM_BUTTON_TEXT_SUMMARY_LOCKED =
+            "段階3.5（サマリ更新中）\n" + OVERTIME_SIM_BUTTON_SUBTITLE;
+
     @FXML
     private Button wideRowUpButton;
 
@@ -1599,9 +1607,9 @@ public final class DispatchInteractiveTabController {
         }
         if (overtimeSimulationButton != null) {
             if (isSummaryExportLockedByLockFile() && !reloadInteractionDisabled) {
-                overtimeSimulationButton.setText("段階3.5（サマリ更新中）");
+                overtimeSimulationButton.setText(OVERTIME_SIM_BUTTON_TEXT_SUMMARY_LOCKED);
             } else {
-                overtimeSimulationButton.setText("段階3.5");
+                overtimeSimulationButton.setText(OVERTIME_SIM_BUTTON_TEXT_DEFAULT);
             }
         }
     }

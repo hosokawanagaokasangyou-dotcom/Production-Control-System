@@ -399,6 +399,10 @@
 .button.pm-stage-run-button.pm-stage-run-3-5 {
     -fx-background-color: #0f766e;
     -fx-border-color: #115e59;
+    -fx-wrap-text: true;
+    -fx-text-alignment: center;
+    -fx-min-height: 56;
+    -fx-font-size: 14px;
 }
 
 .button.pm-stage-run-button.pm-stage-run-3-5:hover {
