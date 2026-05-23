@@ -396,6 +396,23 @@
     -fx-background-color: #14532d;
 }
 
+.button.pm-stage-run-button.pm-stage-run-3-5 {
+    -fx-background-color: #0f766e;
+    -fx-border-color: #115e59;
+}
+
+.button.pm-stage-run-button.pm-stage-run-3-5:hover {
+    -fx-background-color: #14b8a6;
+}
+
+.button.pm-stage-run-button.pm-stage-run-3-5:pressed {
+    -fx-background-color: #134e4a;
+}
+
+.overtime-simulation-grid .table-cell.overtime-sim-cell-off {
+    -fx-background-color: #cbd5e1;
+}
+
 .button.pm-stage-run-button:disabled {
     -fx-opacity: 0.5;
 }
@@ -453,6 +470,21 @@
 }
 
 /* Operator dispatch A4 card preview */
+
+.pm-operator-card-split {
+    -fx-background-color: transparent;
+}
+
+.pm-operator-card-split > .split-pane-divider {
+    -fx-padding: 0 2 0 2;
+    -fx-background-color: derive(-fx-text-box-border, 18%);
+}
+
+.pm-operator-card-tab .pm-operator-card-split ScrollPane,
+.pm-operator-card-tab .pm-operator-card-split ScrollPane .viewport {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+}
 
 /* Tab chrome (not the A4 paper): use fixed gray so it stays legible in dark themes */
 .pm-operator-card-tab .pm-operator-card-hint {

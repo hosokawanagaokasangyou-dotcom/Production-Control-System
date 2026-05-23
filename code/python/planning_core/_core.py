@@ -158,17 +158,18 @@ GEMINI_USAGE_XLW_CHART_TOKENS_NAME = "_GeminiApiDailyTokens"
 
 # Gemini API のモデルコード（Google AI for Developers のモデルページの Model code に準拠）
 # https://ai.google.dev/gemini-api/docs/models
-# 既定の試行順: Flash-Lite 系のみ（新→旧）。無料枠（レート制限付き）で使いやすい廉価モデルを優先。
+# 既定の試行順: gemini-3.5-flash を最優先とし、続けて Flash-Lite 系（新→旧）。
 # 環境変数 GEMINI_MODEL（単一）／GEMINI_MODEL_TRY_ORDER（カンマ区切り）で上書き可。
 # 利用不可・同一モデルの試行上限消化後は _gemini_generate_content_with_retry が次点へ進む。
 GEMINI_MODEL_IDS_BY_QUALITY: tuple[str, ...] = (
+    "gemini-3.5-flash",
     "gemini-3.1-flash-lite",
     "gemini-3.1-flash-lite-preview",
     "gemini-2.5-flash-lite",
     "gemini-2.0-flash-lite",
 )
 # 既定の Flash 系モデル ID（試行列先頭が Pro になり得るため [0] とは一致させない）
-GEMINI_MODEL_FLASH = "gemini-2.5-flash"
+GEMINI_MODEL_FLASH = "gemini-3.5-flash"
 # 推定料金: USD / 1M tokens（入力, 出力）。公式の最新単価に合わせて更新すること。
 # 環境変数 GEMINI_PRICE_USD_IN_PER_M / GEMINI_PRICE_USD_OUT_PER_M で上書き可（Flash 向け）。
 _GEMINI_FLASH_IN_PER_M = float(
@@ -4735,7 +4736,7 @@ def _gemini_generate_content_with_retry(
     """generate_content を再試行する（Gemini generateContent 共通）。
 
     - モデル列: 環境変数 **GEMINI_MODEL**（単一固定）→ **GEMINI_MODEL_TRY_ORDER**（カンマ区切り）→
-      **GEMINI_MODEL_IDS_BY_QUALITY**（コード既定: Flash-Lite 系を新→旧）。引数 ``model`` を渡したときはその1件のみ。
+      **GEMINI_MODEL_IDS_BY_QUALITY**（コード既定: gemini-3.5-flash 最優先＋Flash-Lite 系を新→旧）。引数 ``model`` を渡したときはその1件のみ。
     - 同一モデルあたり最大 _GEMINI_RETRY_MAX_ATTEMPTS 回（既定 3、GEMINI_RETRY_MAX_ATTEMPTS で変更）。
       そのモデルで試行を使い切ったら、列の次のモデルへ進む（試すモデルがなくなるまで）。
     - モデル未提供（404 等）は直ちに次モデルへ進む。
@@ -20020,17 +20021,298 @@ def load_attendance_and_analyze(members):
         if mid_break_s and mid_break_e: breaks_dt.append((combine_dt(mid_break_s), combine_dt(mid_break_e)))
         
         is_working = not is_holiday
+        ot_minutes = 0
+        if not is_holiday:
+            ot_minutes = _attendance_overtime_minutes_from_raw(
+                row.get(ATT_COL_OT_END),
+                base_end_t=base_end_t,
+                curr_date=curr_date,
+            )
+        base_end_dt = combine_dt(base_end_t)
         attendance_data[curr_date][m] = {
             "is_working": is_working,
             "eligible_for_assignment": is_working and (not exclude_from_line),
             "start_dt": start_dt,
             "end_dt": end_dt,
+            "base_end_dt": base_end_dt,
             "breaks_dt": merge_time_intervals(breaks_dt),
             "efficiency": efficiency,
             "reason": reason,
+            "overtime_minutes": ot_minutes,
         }
 
     return attendance_data, ai_log
+
+
+def _attendance_overtime_minutes_from_raw(
+    raw,
+    *,
+    base_end_t: time,
+    curr_date: date,
+) -> int:
+    """master「残業(分)」セルを延長分（1〜720）に正規化。空・時刻のみは分換算、無効は 0。"""
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return 0
+    if isinstance(raw, bool):
+        return 0
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s:
+            return 0
+        if s.isdigit():
+            try:
+                raw = int(s)
+            except ValueError:
+                return 0
+    if isinstance(raw, (int, float)):
+        x = float(raw)
+        if x == int(x) and 1 <= int(x) <= 720:
+            return int(x)
+    t_clock = _parse_attendance_overtime_end_optional(raw)
+    if t_clock is not None and base_end_t is not None:
+        try:
+            base_dt = datetime.combine(curr_date, base_end_t)
+            end_dt = datetime.combine(curr_date, t_clock)
+            if end_dt > base_dt:
+                return min(720, int((end_dt - base_dt).total_seconds() // 60))
+        except (OverflowError, ValueError):
+            return 0
+    return 0
+
+
+ENV_OVERTIME_SIMULATION_JSON = "PM_AI_OVERTIME_SIMULATION_JSON"
+
+
+def _overtime_simulation_json_path() -> "Path | None":
+    from pathlib import Path
+
+    raw = (os.environ.get(ENV_OVERTIME_SIMULATION_JSON) or "").strip()
+    if not raw:
+        return None
+    p = Path(raw)
+    return p if p.is_file() else None
+
+
+def _pick_member_attendance_template(
+    attendance_data: dict, member: str, target_date: date
+) -> tuple[date | None, dict | None]:
+    """当該メンバーの直近稼働日をテンプレとして返す。"""
+    plan_dates = sorted(attendance_data.keys())
+    for d in reversed([d for d in plan_dates if d <= target_date]):
+        st = attendance_data.get(d, {}).get(member)
+        if st and st.get("is_working"):
+            return d, st
+    for d in plan_dates:
+        st = attendance_data.get(d, {}).get(member)
+        if st and st.get("is_working"):
+            return d, st
+    return None, None
+
+
+def _default_attendance_entry_for_date(d: date) -> dict:
+    start_dt = datetime.combine(d, DEFAULT_START_TIME)
+    end_dt = datetime.combine(d, DEFAULT_END_TIME)
+    breaks_dt = [
+        (datetime.combine(d, bs), datetime.combine(d, be)) for bs, be in DEFAULT_BREAKS
+    ]
+    return {
+        "is_working": True,
+        "eligible_for_assignment": True,
+        "start_dt": start_dt,
+        "end_dt": end_dt,
+        "base_end_dt": end_dt,
+        "breaks_dt": merge_time_intervals(breaks_dt),
+        "efficiency": 1.0,
+        "reason": "残業シミュレーション（休日出勤）",
+        "overtime_minutes": 0,
+    }
+
+
+def build_attendance_overtime_preview_dict() -> dict:
+    """段階3.5 ウィザード向け: load_attendance_and_analyze と同一ロジックの勤怠プレビュー。"""
+    (
+        _skills_dict,
+        members,
+        _equipment_list,
+        _req_map,
+        _need_rules,
+        _surplus_map,
+        _need_combo_col_index,
+    ) = load_skills_and_needs()
+    if not members:
+        return {
+            "format_version": 1,
+            "ok": False,
+            "error": "skills にメンバーが登録されていません",
+            "members": [],
+            "dates": [],
+            "cells": {},
+        }
+    attendance_data, _ai_log = load_attendance_and_analyze(members)
+    sorted_dates = sorted(attendance_data.keys())
+    cells: dict = {}
+    for d in sorted_dates:
+        d_key = d.isoformat()
+        cells[d_key] = {}
+        weekend = d.weekday() >= 5
+        for m in members:
+            st = attendance_data.get(d, {}).get(m)
+            if not st:
+                cells[d_key][m] = {
+                    "is_working": False,
+                    "eligible_for_assignment": False,
+                    "overtime_minutes": 0,
+                    "weekend": weekend,
+                }
+                continue
+            cells[d_key][m] = {
+                "is_working": bool(st.get("is_working")),
+                "eligible_for_assignment": bool(
+                    st.get("eligible_for_assignment", st.get("is_working"))
+                ),
+                "overtime_minutes": int(st.get("overtime_minutes") or 0),
+                "weekend": weekend,
+            }
+    return {
+        "format_version": 1,
+        "ok": True,
+        "members": list(members),
+        "dates": [d.isoformat() for d in sorted_dates],
+        "cells": cells,
+    }
+
+
+def apply_overtime_simulation_overrides(
+    attendance_data: dict, path: "Path | None" = None
+) -> bool:
+    """
+    段階3.5: PM_AI_OVERTIME_SIMULATION_JSON の working_overrides / overtime_minutes を
+    attendance_data にインプレース適用する（master は変更しない）。
+    """
+    from pathlib import Path
+
+    p = path or _overtime_simulation_json_path()
+    if p is None:
+        return False
+    try:
+        payload = json.loads(Path(p).read_text(encoding="utf-8"))
+    except Exception as e:
+        logging.warning("残業シミュレーション JSON 読込失敗: %s", e)
+        return False
+    if not isinstance(payload, dict):
+        return False
+
+    working_overrides = payload.get("working_overrides") or {}
+    overtime_map = payload.get("overtime_minutes") or {}
+    applied = False
+
+    if isinstance(working_overrides, dict):
+        for d_str, mem_map in working_overrides.items():
+            if not isinstance(mem_map, dict):
+                continue
+            d = parse_optional_date(d_str)
+            if d is None:
+                continue
+            if d not in attendance_data:
+                attendance_data[d] = {}
+            for member, flag in mem_map.items():
+                m = str(member).strip()
+                if not m:
+                    continue
+                if flag is True:
+                    tmpl_d, tmpl_st = _pick_member_attendance_template(
+                        attendance_data, m, d
+                    )
+                    if tmpl_st and tmpl_d is not None:
+                        cloned = _clone_attendance_day_shifted(
+                            {m: tmpl_st}, tmpl_d, d
+                        )[m]
+                    else:
+                        cloned = _default_attendance_entry_for_date(d)
+                    cloned["is_working"] = True
+                    cloned["eligible_for_assignment"] = True
+                    cloned["reason"] = "残業シミュレーション（休日出勤）"
+                    attendance_data[d][m] = cloned
+                    applied = True
+                elif flag is False:
+                    ent = attendance_data[d].get(m)
+                    if ent is None:
+                        attendance_data[d][m] = {
+                            "is_working": False,
+                            "eligible_for_assignment": False,
+                            "start_dt": None,
+                            "end_dt": None,
+                            "base_end_dt": None,
+                            "breaks_dt": [],
+                            "efficiency": 1.0,
+                            "reason": "残業シミュレーション（休日扱い）",
+                            "overtime_minutes": 0,
+                        }
+                    else:
+                        ent = dict(ent)
+                        ent["is_working"] = False
+                        ent["eligible_for_assignment"] = False
+                        ent["overtime_minutes"] = 0
+                        attendance_data[d][m] = ent
+                    applied = True
+
+    if isinstance(overtime_map, dict):
+        for d_str, mem_map in overtime_map.items():
+            if not isinstance(mem_map, dict):
+                continue
+            d = parse_optional_date(d_str)
+            if d is None:
+                continue
+            if d not in attendance_data:
+                continue
+            for member, raw_min in mem_map.items():
+                m = str(member).strip()
+                if not m:
+                    continue
+                try:
+                    ot_min = int(raw_min)
+                except (TypeError, ValueError):
+                    continue
+                if ot_min < 0 or ot_min > 720:
+                    continue
+                ent = attendance_data[d].get(m)
+                if not ent or not ent.get("is_working"):
+                    continue
+                ent = dict(ent)
+                base_end_dt = ent.get("base_end_dt") or ent.get("end_dt")
+                if base_end_dt is None:
+                    base_end_dt = datetime.combine(d, DEFAULT_END_TIME)
+                base_end_t = base_end_dt.time()
+                if ot_min <= 0:
+                    ent["end_dt"] = base_end_dt
+                    ent["overtime_minutes"] = 0
+                else:
+                    new_end_t = _resolve_attendance_overtime_end(
+                        ot_min,
+                        base_end_t=base_end_t,
+                        curr_date=d,
+                    )
+                    if new_end_t is not None:
+                        new_end_dt = datetime.combine(d, new_end_t)
+                        start_dt = ent.get("start_dt")
+                        if start_dt and new_end_dt <= start_dt:
+                            ent["end_dt"] = base_end_dt
+                            ent["overtime_minutes"] = 0
+                        else:
+                            ent["end_dt"] = new_end_dt
+                            ent["overtime_minutes"] = ot_min
+                    else:
+                        ent["end_dt"] = base_end_dt
+                        ent["overtime_minutes"] = 0
+                attendance_data[d][m] = ent
+                applied = True
+
+    if applied:
+        logging.info(
+            "残業シミュレーション: %s を attendance_data に適用しました。",
+            p,
+        )
+    return applied
 
 
 # ---------------------------------------------------------------------------
@@ -20527,6 +20809,8 @@ def _clone_attendance_day_shifted(source_day: dict, old_date: date, new_date: da
         ed = st.get("end_dt")
         new_st["start_dt"] = sd + delta if sd else None
         new_st["end_dt"] = ed + delta if ed else None
+        bed = st.get("base_end_dt")
+        new_st["base_end_dt"] = bed + delta if bed else None
         nb = []
         for pair in st.get("breaks_dt") or []:
             if len(pair) >= 2:
@@ -34561,6 +34845,10 @@ def _generate_plan_impl(
         logging.info(
             "メイン・グローバルコメント: 工場休業扱いの日付 → %s",
             ", ".join(str(x) for x in sorted(_factory_closure_dates)),
+        )
+    if apply_overtime_simulation_overrides(attendance_data):
+        ai_log_data["残業シミュレーション"] = (
+            f"PM_AI_OVERTIME_SIMULATION_JSON を適用 ({os.environ.get(ENV_OVERTIME_SIMULATION_JSON, '')})"
         )
     ai_log_data["メイン_グローバル_工場休業日(解析)"] = (
         ", ".join(str(x) for x in sorted(_factory_closure_dates))

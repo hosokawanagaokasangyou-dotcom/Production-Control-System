@@ -88,6 +88,7 @@ import jp.co.pm.ai.desktop.config.JvmMemoryLogStore;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutDefaults;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
 import jp.co.pm.ai.desktop.config.FactorySite;
+import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 import jp.co.pm.ai.desktop.config.DesktopTheme;
 import jp.co.pm.ai.desktop.config.PushButtonCssEmitter;
@@ -4646,7 +4647,11 @@ public final class MainShellController {
                     "カンマ区切りで試行順。GEMINI_MODEL 未設定時のみ有効。日次更新で Flash-Lite 無料枠候補を自動反映。");
             envRows.add(tryRow);
         }
-        tryRow.setValue(String.join(",", modelIds));
+        tryRow.setValue(
+                String.join(
+                        ",",
+                        GeminiDispatchModelTryOrderDefaults.withPlanningCorePriorityFirst(
+                                modelIds)));
     }
 
     /** 実行タブに表示中の段階2計画ブックパス（設備ガントの兄弟 JSON オートフィル用）。 */
@@ -4675,6 +4680,13 @@ public final class MainShellController {
      * {@link AppPaths#KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH} は常に無効（加工途中はタスク入力タブで翌日配台量を設定）。
      */
     public Map<String, String> snapshotDispatchTrialPythonEnv() {
+        return snapshotDispatchTrialPythonEnv(null);
+    }
+
+    /**
+     * {@link #snapshotDispatchTrialPythonEnv()} に加え、段階3.5 残業シミュレーション JSON パスを載せる。
+     */
+    public Map<String, String> snapshotDispatchTrialPythonEnv(java.nio.file.Path overtimeSimulationJson) {
         Map<String, String> ui = new HashMap<>(collectUiEnv());
         ui.put(AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL, "1");
         ui.put(
@@ -4689,7 +4701,36 @@ public final class MainShellController {
         } else {
             ui.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
         }
+        if (overtimeSimulationJson != null) {
+            ui.put(
+                    AppPaths.KEY_PM_AI_OVERTIME_SIMULATION_JSON,
+                    overtimeSimulationJson.toAbsolutePath().normalize().toString());
+        } else {
+            ui.remove(AppPaths.KEY_PM_AI_OVERTIME_SIMULATION_JSON);
+        }
         return childEnvForPython(ui);
+    }
+
+    /** 段階3.5: 残業シミュレーション上書き JSON を結果_配台表と同階層に書く。 */
+    public java.nio.file.Path writeOvertimeSimulationOverridesJson(
+            jp.co.pm.ai.desktop.dispatch.OvertimeSimulationOverridesWriter.OverridesPayload payload)
+            throws Exception {
+        java.nio.file.Path dir = AppPaths.resolveResultDispatchTableDir(collectUiEnv());
+        java.nio.file.Files.createDirectories(dir);
+        java.nio.file.Path target = dir.resolve("overtime_simulation_overrides.json");
+        jp.co.pm.ai.desktop.dispatch.OvertimeSimulationOverridesWriter.write(target, payload);
+        appendLog("[stage3.5] 残業シミュレーション JSON: " + target.toAbsolutePath().normalize());
+        return target;
+    }
+
+    /** 段階3.5 正常終了後: 段階3 完了と同趣旨。 */
+    void notifyStage35OvertimeSimulationSuccess() {
+        notifyStage3DispatchTrialSuccess();
+    }
+
+    /** 段階3.5 異常終了後: 段階3 失敗と同趣旨。 */
+    void notifyStage35OvertimeSimulationFailure(String detailMessage) {
+        notifyStage3DispatchTrialFailure(detailMessage);
     }
 
     /** 実行・ログタブ「その他」の Gemini スキップチェック状態（配台不要ルールタブの Java 側 AI 用）。 */

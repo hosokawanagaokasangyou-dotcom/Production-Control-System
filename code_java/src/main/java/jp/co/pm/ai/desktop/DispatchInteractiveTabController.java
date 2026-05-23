@@ -92,6 +92,8 @@ import jp.co.pm.ai.desktop.dispatch.DispatchTrialShortages;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialShortages.DispatchQtyShortfallRow;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck.TaskKey;
+import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreview;
+import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreviewPython;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveGridModel;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchJsonIo;
@@ -294,6 +296,9 @@ public final class DispatchInteractiveTabController {
 
     @FXML
     private Button dispatchTrialButton;
+
+    @FXML
+    private Button overtimeSimulationButton;
 
     private static final String DISPATCH_TRIAL_BUTTON_TEXT_DEFAULT = "段階3";
 
@@ -962,44 +967,67 @@ public final class DispatchInteractiveTabController {
         alert.showAndWait();
     }
 
+    private void startDispatchTrial() {
+        startDispatchTrialInternal(null, PipelineExecutionTimingKind.STAGE3);
+    }
+
+    private void startDispatchTrialWithOvertimeSimulation(Path overtimeSimulationJson) {
+        startDispatchTrialInternal(
+                overtimeSimulationJson, PipelineExecutionTimingKind.STAGE3_5);
+    }
+
     /**
      * 配台試行: {@link ResultDispatchTrialPython} および不足 JSON 連携（段階2と同一エンジン・数量上限は JSON）。
      * ログは「実行・ログ」タブへ出力する。
      */
-    private void startDispatchTrial() {
+    private void startDispatchTrialInternal(
+            Path overtimeSimulationJson, PipelineExecutionTimingKind timingKind) {
         if (shell == null) {
             return;
         }
-        if (shell.blockIfSummaryAiDispatchExportLocked("配台試行（段階3）")) {
+        boolean stage35 = timingKind == PipelineExecutionTimingKind.STAGE3_5;
+        String blockLabel = stage35 ? "段階3.5（残業シミュ）" : "配台試行（段階3）";
+        if (shell.blockIfSummaryAiDispatchExportLocked(blockLabel)) {
             return;
         }
-        if (shell.blockIfMaterialLookupTablesHaveBlankValues("配台試行（段階3）")) {
+        if (shell.blockIfMaterialLookupTablesHaveBlankValues(blockLabel)) {
             return;
         }
         if (reloadInteractionDisabled || dispatchDocDirtySinceSave) {
             return;
         }
-        statusLabel.setText("配台試行中...");
+        statusLabel.setText(stage35 ? "段階3.5（配台試行中）..." : "配台試行中...");
         if (dispatchTrialButton != null) {
             dispatchTrialButton.setDisable(true);
+        }
+        if (overtimeSimulationButton != null) {
+            overtimeSimulationButton.setDisable(true);
         }
         showReloadProgress();
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
         final Path trialPythonExe = resolvePythonExe();
 
         shell.selectMainShellTab(MainShellTabId.RUN);
-        shell.appendLog("--- start: 段階3（配台試行） ---");
+        if (stage35) {
+            shell.appendLog("--- start: 段階3.5（残業シミュ→段階3） ---");
+            shell.appendLog(
+                    "[stage3.5] 残業シミュレーション適用: "
+                            + overtimeSimulationJson.toAbsolutePath().normalize());
+        } else {
+            shell.appendLog("--- start: 段階3（配台試行） ---");
+        }
         shell.appendLog("[配台試行] 処理を開始しました。");
         shell.appendLog("[配台試行] Python 実行ファイル: " + trialPythonExe.toAbsolutePath().normalize());
 
         final ResultDispatchDocument trialInputSnapshot = doc.copy();
         Stage owner = shell.getPrimaryStage();
+        final Path simJson = overtimeSimulationJson;
 
         Task<String> task =
                 new Task<>() {
                     @Override
                     protected String call() throws Exception {
-                        shell.beginPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE3);
+                        shell.beginPipelineExecutionTiming(timingKind);
                         try {
                             ResultDispatchJsonIo.write(jsonPath, doc.copy());
                             shell.appendLog(
@@ -1007,7 +1035,8 @@ public final class DispatchInteractiveTabController {
                                             + jsonPath.toAbsolutePath().normalize());
                             Path pyExe = trialPythonExe;
                             Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
-                            Map<String, String> pyEnv = shell.snapshotDispatchTrialPythonEnv();
+                            Map<String, String> pyEnv =
+                                    shell.snapshotDispatchTrialPythonEnv(simJson);
                             return ResultDispatchTrialPython.runTrial(
                                     jsonPath,
                                     pyExe,
@@ -1015,7 +1044,7 @@ public final class DispatchInteractiveTabController {
                                     pyEnv,
                                     shell::appendLog);
                         } finally {
-                            shell.endPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE3);
+                            shell.endPipelineExecutionTiming(timingKind);
                         }
                     }
                 };
@@ -1024,7 +1053,7 @@ public final class DispatchInteractiveTabController {
                 e -> {
                     try {
                         String shortagesPath = task.getValue();
-                        statusLabel.setText("配台試行完了");
+                        statusLabel.setText(stage35 ? "段階3.5 完了" : "配台試行完了");
                         shell.refreshRunTabStage2ArtifactLinks();
                         shell.appendLog("[dispatch-editor] trial: " + shortagesPath);
                         shell.appendLog("[配台試行] 正常終了しました。");
@@ -1063,7 +1092,11 @@ public final class DispatchInteractiveTabController {
                                         }
                                         DispatchTrialUnassignedWizard.showIfNeeded(
                                                 owner, shell, Path.of(shortagesPath));
-                                        shell.notifyStage3DispatchTrialSuccess();
+                                        if (stage35) {
+                                            shell.notifyStage35OvertimeSimulationSuccess();
+                                        } else {
+                                            shell.notifyStage3DispatchTrialSuccess();
+                                        }
                                     } catch (Throwable upex) {
                                         String em =
                                                 upex.getMessage() != null
@@ -1072,7 +1105,11 @@ public final class DispatchInteractiveTabController {
                                         shell.appendLog("[配台試行] 試行後処理で例外: " + em);
                                         shell.appendLog(
                                                 "[dispatch-editor] trial post-run: " + em);
-                                        shell.notifyStage3DispatchTrialFailure(em);
+                                        if (stage35) {
+                                            shell.notifyStage35OvertimeSimulationFailure(em);
+                                        } else {
+                                            shell.notifyStage3DispatchTrialFailure(em);
+                                        }
                                     }
                                 });
                     } catch (Throwable sucEx) {
@@ -1082,7 +1119,11 @@ public final class DispatchInteractiveTabController {
                                         : sucEx.getClass().getSimpleName();
                         shell.appendLog("[配台試行] 成功ハンドラ内例外: " + em);
                         shell.appendLog("[dispatch-editor] trial onSucceeded: " + em);
-                        shell.notifyStage3DispatchTrialFailure(em);
+                        if (stage35) {
+                            shell.notifyStage35OvertimeSimulationFailure(em);
+                        } else {
+                            shell.notifyStage3DispatchTrialFailure(em);
+                        }
                     } finally {
                         Platform.runLater(this::applyDispatchTrialButtonEnabledState);
                     }
@@ -1091,7 +1132,7 @@ public final class DispatchInteractiveTabController {
                 e -> {
                     try {
                         Throwable ex = task.getException();
-                        statusLabel.setText("配台試行エラー");
+                        statusLabel.setText(stage35 ? "段階3.5 エラー" : "配台試行エラー");
                         String msg = ex != null ? ex.getMessage() : "(不明)";
                         shell.appendLog("[dispatch-editor] trial failed: " + msg);
                         shell.appendLog("[配台試行] エラーで終了しました。");
@@ -1110,7 +1151,11 @@ public final class DispatchInteractiveTabController {
                                 }
                             }
                         }
-                        shell.notifyStage3DispatchTrialFailure(msg);
+                        if (stage35) {
+                            shell.notifyStage35OvertimeSimulationFailure(msg);
+                        } else {
+                            shell.notifyStage3DispatchTrialFailure(msg);
+                        }
                     } catch (Throwable handlerEx) {
                         shell.appendLog(
                                 "[dispatch-editor] trial onFailed handler: "
@@ -1122,18 +1167,75 @@ public final class DispatchInteractiveTabController {
         task.setOnCancelled(
                 e -> {
                     try {
-                        statusLabel.setText("配台試行キャンセル");
+                        statusLabel.setText(stage35 ? "段階3.5 キャンセル" : "配台試行キャンセル");
                         shell.appendLog("[配台試行] キャンセルされました。");
                     } finally {
                         Platform.runLater(this::applyDispatchTrialButtonEnabledState);
                     }
                 });
-        new Thread(task, "dispatch-trial").start();
+        new Thread(task, stage35 ? "dispatch-trial-stage35" : "dispatch-trial").start();
     }
 
     @FXML
     private void onDispatchTrialAction() {
         startDispatchTrial();
+    }
+
+    @FXML
+    private void onOvertimeSimulationAction() {
+        launchOvertimeSimulationWizard();
+    }
+
+    private void launchOvertimeSimulationWizard() {
+        if (shell == null) {
+            return;
+        }
+        if (shell.blockIfSummaryAiDispatchExportLocked("段階3.5（残業シミュ）")) {
+            return;
+        }
+        if (shell.blockIfMaterialLookupTablesHaveBlankValues("段階3.5（残業シミュ）")) {
+            return;
+        }
+        if (reloadInteractionDisabled || dispatchDocDirtySinceSave) {
+            return;
+        }
+        statusLabel.setText("勤怠プレビュー読込中...");
+        final Path pyExe = resolvePythonExe();
+        final Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
+        final Map<String, String> pyEnv = shell.snapshotDispatchTrialPythonEnv();
+        final Stage owner = shell.getPrimaryStage();
+        Thread worker =
+                new Thread(
+                        () -> {
+                            try {
+                                AttendanceOvertimePreview.Preview preview =
+                                        AttendanceOvertimePreviewPython.load(
+                                                pyExe, pyDir, pyEnv, shell::appendLog);
+                                Platform.runLater(
+                                        () -> {
+                                            statusLabel.setText("");
+                                            OvertimeSimulationWizard.show(
+                                                    owner,
+                                                    shell,
+                                                    preview,
+                                                    this::startDispatchTrialWithOvertimeSimulation);
+                                        });
+                            } catch (Exception ex) {
+                                Platform.runLater(
+                                        () -> {
+                                            statusLabel.setText("勤怠プレビュー取得エラー");
+                                            shell.showErrorDialog(
+                                                    "段階3.5",
+                                                    "勤怠プレビューの取得に失敗しました。\n"
+                                                            + (ex.getMessage() != null
+                                                                    ? ex.getMessage()
+                                                                    : ex));
+                                        });
+                            }
+                        },
+                        "overtime-sim-preview");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     @FXML
@@ -1457,12 +1559,18 @@ public final class DispatchInteractiveTabController {
         if (dispatchTrialButton != null) {
             dispatchTrialButton.setDisable(blockTrial);
         }
+        if (overtimeSimulationButton != null) {
+            overtimeSimulationButton.setDisable(blockTrial);
+        }
         if (isSummaryExportLockedByLockFile() && !reloadInteractionDisabled) {
             Tooltip t =
                     new Tooltip(
                             "サマリ xlsx を作成中です。完了後に配台試行するか、実行・ログタブの「ロック解除」を使用してください。");
             if (dispatchTrialButton != null) {
                 dispatchTrialButton.setTooltip(t);
+            }
+            if (overtimeSimulationButton != null) {
+                overtimeSimulationButton.setTooltip(t);
             }
         } else if (dispatchDocDirtySinceSave && !reloadInteractionDisabled) {
             Tooltip t =
@@ -1471,9 +1579,15 @@ public final class DispatchInteractiveTabController {
             if (dispatchTrialButton != null) {
                 dispatchTrialButton.setTooltip(t);
             }
+            if (overtimeSimulationButton != null) {
+                overtimeSimulationButton.setTooltip(t);
+            }
         } else {
             if (dispatchTrialButton != null) {
                 dispatchTrialButton.setTooltip(null);
+            }
+            if (overtimeSimulationButton != null) {
+                overtimeSimulationButton.setTooltip(null);
             }
         }
         if (dispatchTrialButton != null) {
@@ -1481,6 +1595,13 @@ public final class DispatchInteractiveTabController {
                 dispatchTrialButton.setText(DISPATCH_TRIAL_BUTTON_TEXT_SUMMARY_LOCKED);
             } else {
                 dispatchTrialButton.setText(DISPATCH_TRIAL_BUTTON_TEXT_DEFAULT);
+            }
+        }
+        if (overtimeSimulationButton != null) {
+            if (isSummaryExportLockedByLockFile() && !reloadInteractionDisabled) {
+                overtimeSimulationButton.setText("段階3.5（サマリ更新中）");
+            } else {
+                overtimeSimulationButton.setText("段階3.5");
             }
         }
     }

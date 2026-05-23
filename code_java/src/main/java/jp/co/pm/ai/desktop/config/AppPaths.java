@@ -218,6 +218,13 @@ public final class AppPaths {
             "PM_AI_STAGE2_IN_PROGRESS_NEXT_DAY_DISPATCH_JSON";
 
     /**
+     * 段階3.5 残業シミュレーション: JavaFX が書く UTF-8 JSON（working_overrides / overtime_minutes）。
+     * 段階3 子プロセス起動時のみ載せ、master.xlsm は変更しない。
+     */
+    public static final String KEY_PM_AI_OVERTIME_SIMULATION_JSON =
+            "PM_AI_OVERTIME_SIMULATION_JSON";
+
+    /**
      * 段階2の実行エンジン（互換用キー）。JavaFX 実行タブから段階2を起動するときは常に Python 子プロセス（{@code
      * plan_simulation_stage2.py}）のみ。未設定・空・{@code python}（大小無視）で従来どおり。{@code java} が指定されていても無視され Python
      * が起動する（旧 JVM 段階2は撤去済み）。

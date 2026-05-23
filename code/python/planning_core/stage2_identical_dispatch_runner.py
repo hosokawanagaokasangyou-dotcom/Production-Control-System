@@ -110,14 +110,18 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
             s3_meta = pc.interactive_stage3_last_run_meta_snapshot()
         except Exception:
             s3_meta = {}
+        _ot_sim = (os.environ.get(pc.ENV_OVERTIME_SIMULATION_JSON) or "").strip()
+        _note_base = (
+            "段階3配台試行（段階2同一条件）。"
+            "致命: 機械カレンダー未作成・勤怠未作成・勤怠最終日までに割り切れない残タスク。"
+            "勤怠日付の自動拡張は行わない。"
+        )
+        if _ot_sim:
+            _note_base += f" 残業シミュレーション適用: {_ot_sim}"
         shortage_payload: dict = {
             "format_version": 3,
             "source_json": str(path),
-            "note": (
-                "段階3配台試行（段階2同一条件）。"
-                "致命: 機械カレンダー未作成・勤怠未作成・勤怠最終日までに割り切れない残タスク。"
-                "勤怠日付の自動拡張は行わない。"
-            ),
+            "note": _note_base,
             "op_shortage": snap["op_shortage"],
             "as_shortage": snap["as_shortage"],
             "dispatch_qty_shortfall": dispatch_qty_shortfall,

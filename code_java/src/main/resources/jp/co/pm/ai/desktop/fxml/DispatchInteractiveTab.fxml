@@ -57,6 +57,9 @@
         <Button fx:id="dispatchTrialButton" mnemonicParsing="false" text="段階3"
                 styleClass="pm-stage-run-button,pm-stage-run-3"
                 onAction="#onDispatchTrialAction"/>
+        <Button fx:id="overtimeSimulationButton" mnemonicParsing="false" text="段階3.5"
+                styleClass="pm-stage-run-button,pm-stage-run-3-5"
+                onAction="#onOvertimeSimulationAction"/>
         <Button fx:id="wideRowUpButton" mnemonicParsing="false" text="↑"
                 onAction="#onWideRowUpAction">
             <tooltip>

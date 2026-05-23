@@ -289,6 +289,11 @@ public final class EnvVarDocs {
                         + " build_task_queue_from_planning_df が実加工数>0 の行の配台量を上書きする。"
                         + " 未設定・ファイル無しのときはシートの配台使用残数量を用いる。");
         put(
+                "PM_AI_OVERTIME_SIMULATION_JSON",
+                "段階3.5 残業シミュレーション: ウィザード確定時に JavaFX が書く UTF-8 JSON。"
+                        + " working_overrides（休日出勤○/グレー）と overtime_minutes（分）を段階3 配台試行にのみ適用する。"
+                        + " master.xlsm は変更しない。段階3 単独実行時は未設定。");
+        put(
                 "PM_AI_DEBUG_STAGE3_PLAN_ACTUAL_SINGLE_LINE",
                 "配台計画手動修正タブ: 段階3試行後の日付セル表示。"
                         + " 1/true/yes/on で（段階3前）（段階3後）を1行（スペース区切り）。"
