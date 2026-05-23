@@ -107,6 +107,22 @@ class EquipmentStatusDashboardSourceLoaderTest {
         Assertions.assertNotNull(loaded);
         Assertions.assertTrue(loaded.loadNotice().contains("大きい"));
         Assertions.assertTrue(loaded.actuals().rows().isEmpty());
+        Assertions.assertTrue(loaded.loadStats().totalSourceBytes() > 0L);
+        Assertions.assertTrue(loaded.loadStats().loadDurationMs() >= 0L);
+    }
+
+    @Test
+    void formatLoadStatsSummary_andByteSize() {
+        EquipmentStatusDashboardSourceLoader.LoadStats stats =
+                new EquipmentStatusDashboardSourceLoader.LoadStats(
+                        1_572_864L, 850L, 12034, 560, 89);
+        String summary = EquipmentStatusDashboardSourceLoader.formatLoadStatsSummary(stats);
+        Assertions.assertTrue(summary.contains("1.5 MiB"));
+        Assertions.assertTrue(summary.contains("850 ms"));
+        Assertions.assertTrue(summary.contains("12,034"));
+        Assertions.assertEquals("512 B", EquipmentStatusDashboardSourceLoader.formatByteSize(512L));
+        Assertions.assertEquals("1.0 KiB", EquipmentStatusDashboardSourceLoader.formatByteSize(1024L));
+        Assertions.assertEquals("1.50 s", EquipmentStatusDashboardSourceLoader.formatLoadDuration(1500L));
     }
 
     @Test

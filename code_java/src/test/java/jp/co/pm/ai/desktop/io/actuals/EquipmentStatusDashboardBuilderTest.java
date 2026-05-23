@@ -445,6 +445,50 @@ class EquipmentStatusDashboardBuilderTest {
     }
 
     @Test
+    void build_aladdinZeroQtyOnPlanDate_stillShowsStoppedMachine() {
+        List<String> alHeaders = List.of("機械名", "依頼NO", "工程名", "2026/05/23");
+        List<List<String>> alRows = List.of(List.of("M-idle", "A1", "AP1", "0"));
+        List<EquipmentMachineStatus> out =
+                EquipmentStatusDashboardBuilder.build(
+                        new ActualsSnapshot(List.of(), List.of()),
+                        new AladdinSnapshot(alHeaders, alRows),
+                        new DispatchSnapshot(List.of(), List.of()),
+                        TODAY,
+                        TODAY,
+                        TODAY);
+        Assertions.assertEquals(1, out.size());
+        Assertions.assertEquals("M-idle", out.get(0).machineName());
+        Assertions.assertEquals(EquipmentMachineStatus.Status.STOPPED, out.get(0).status());
+        Assertions.assertTrue(out.get(0).aladdinPlans().isEmpty());
+        Assertions.assertTrue(out.get(0).actualTask().isEmpty());
+    }
+
+    @Test
+    void build_dispatchZeroQtyOnPlanDate_stillShowsStoppedMachine() {
+        List<String> disHeaders =
+                List.of(
+                        ResultDispatchSchema.COL_MACHINE,
+                        "依頼NO",
+                        ResultDispatchSchema.COL_PROCESS,
+                        ResultDispatchSchema.COL_DISPATCH_DATE,
+                        ResultDispatchSchema.COL_DISPATCH_QTY);
+        List<List<String>> disRows =
+                List.of(List.of("M-idle", "D1", "DP1", "2026/05/23", "0"));
+        List<EquipmentMachineStatus> out =
+                EquipmentStatusDashboardBuilder.build(
+                        new ActualsSnapshot(List.of(), List.of()),
+                        new AladdinSnapshot(List.of(), List.of()),
+                        new DispatchSnapshot(disHeaders, disRows),
+                        TODAY,
+                        TODAY,
+                        TODAY);
+        Assertions.assertEquals(1, out.size());
+        Assertions.assertEquals("M-idle", out.get(0).machineName());
+        Assertions.assertEquals(EquipmentMachineStatus.Status.STOPPED, out.get(0).status());
+        Assertions.assertTrue(out.get(0).dispatchPlans().isEmpty());
+    }
+
+    @Test
     void sumActualQtyM_and_sumAladdinPlanQtyM() {
         List<String> actHeaders =
                 List.of("実加工数", "累積実績", "換算数量", "累積完了率");

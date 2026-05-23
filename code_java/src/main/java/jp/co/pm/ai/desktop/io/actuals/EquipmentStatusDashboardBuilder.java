@@ -95,8 +95,8 @@ public final class EquipmentStatusDashboardBuilder {
                 groupActualRowsByMachine(actHeaders, actRows, actualDateKey);
         Set<String> machines = new LinkedHashSet<>();
         machines.addAll(actualByMachine.keySet());
-        machines.addAll(machinesWithAladdinOnDate(alHeaders, alRows, planDateKey));
-        machines.addAll(machinesWithDispatchOnDate(disHeaders, disRows, planDateKey));
+        machines.addAll(allMachinesInTable(alHeaders, alRows, COL_MACHINE));
+        machines.addAll(allMachinesInTable(disHeaders, disRows, ResultDispatchSchema.COL_MACHINE));
 
         List<String> sorted = new ArrayList<>(machines);
         sorted.sort(MACHINE_COLLATOR);
@@ -528,56 +528,14 @@ public final class EquipmentStatusDashboardBuilder {
         return byMachine;
     }
 
-    private static Set<String> machinesWithAladdinOnDate(
-            List<String> headers, List<List<String>> rows, String planDateKey) {
-        int mkIdx = colIdx(headers, COL_MACHINE);
-        if (mkIdx < 0 || planDateKey == null) {
-            return Set.of();
-        }
-        Map<Integer, String> dateCols = dateColumnIndices(headers);
-        String planCol = planDateKey;
-        Integer colIdx = null;
-        for (Map.Entry<Integer, String> e : dateCols.entrySet()) {
-            if (planDateKey.equals(normalizeDateHeader(e.getValue()))) {
-                colIdx = e.getKey();
-                break;
-            }
-        }
-        if (colIdx == null) {
+    private static Set<String> allMachinesInTable(
+            List<String> headers, List<List<String>> rows, String machineColumn) {
+        int mkIdx = colIdx(headers, machineColumn);
+        if (mkIdx < 0 || rows == null || rows.isEmpty()) {
             return Set.of();
         }
         Set<String> out = new LinkedHashSet<>();
         for (List<String> row : rows) {
-            String mk = displayMachineKey(cellAt(row, mkIdx));
-            if (mk.isEmpty()) {
-                continue;
-            }
-            double qty = parseDouble(cellAt(row, colIdx));
-            if (Math.abs(qty) > 1e-12) {
-                out.add(mk);
-            }
-        }
-        return out;
-    }
-
-    private static Set<String> machinesWithDispatchOnDate(
-            List<String> headers, List<List<String>> rows, String planDateKey) {
-        int mkIdx = colIdx(headers, ResultDispatchSchema.COL_MACHINE);
-        int dateIdx = colIdx(headers, ResultDispatchSchema.COL_DISPATCH_DATE);
-        int qtyIdx = colIdx(headers, ResultDispatchSchema.COL_DISPATCH_QTY);
-        if (mkIdx < 0 || dateIdx < 0 || qtyIdx < 0 || planDateKey == null) {
-            return Set.of();
-        }
-        Set<String> out = new LinkedHashSet<>();
-        for (List<String> row : rows) {
-            String ds = normalizeDateHeader(cellAt(row, dateIdx));
-            if (!planDateKey.equals(ds)) {
-                continue;
-            }
-            double qty = parseDouble(cellAt(row, qtyIdx));
-            if (Math.abs(qty) <= 1e-12) {
-                continue;
-            }
             String mk = displayMachineKey(cellAt(row, mkIdx));
             if (!mk.isEmpty()) {
                 out.add(mk);

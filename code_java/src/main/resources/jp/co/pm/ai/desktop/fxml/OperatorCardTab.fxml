@@ -6,8 +6,10 @@
 <?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.DatePicker?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.Spinner?>
+<?import javafx.scene.control.SplitPane?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.StackPane?>
@@ -16,63 +18,86 @@
 <!-- Operator dispatch A4 card tab {@link OperatorCardTabController} -->
 <VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="jp.co.pm.ai.desktop.OperatorCardTabController"
-      fillWidth="true" spacing="8.0" styleClass="pm-operator-card-tab">
+      fillWidth="true" spacing="0.0" styleClass="pm-operator-card-tab">
     <padding>
         <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
     </padding>
 
-    <HBox alignment="CENTER_LEFT" spacing="8.0">
-        <Button fx:id="syncLatestButton" mnemonicParsing="false"
-                text="最新JSONを検索"
-                onAction="#onSyncLatestButtonAction"/>
-        <Button fx:id="refreshPreviewButton" mnemonicParsing="false"
-                text="プレビュー更新"
-                onAction="#onRefreshPreviewButtonAction"/>
-        <Button fx:id="printButton" mnemonicParsing="false"
-                text="印刷..."
-                onAction="#onPrintButtonAction"/>
-        <Label fx:id="statusLabel" wrapText="true"/>
-    </HBox>
+    <SplitPane dividerPositions="0.4" orientation="HORIZONTAL" styleClass="pm-operator-card-split"
+               VBox.vgrow="ALWAYS">
+        <!-- 左 2/5: 操作 UI -->
+        <ScrollPane fitToWidth="true" hbarPolicy="NEVER" minWidth="240.0" vbarPolicy="AS_NEEDED">
+            <VBox spacing="8.0">
+                <padding>
+                    <Insets bottom="4.0" left="4.0" right="8.0" top="4.0"/>
+                </padding>
 
-    <Separator/>
+                <HBox alignment="CENTER_LEFT" spacing="8.0">
+                    <Button fx:id="syncLatestButton" mnemonicParsing="false"
+                            text="最新JSONを検索"
+                            onAction="#onSyncLatestButtonAction"/>
+                    <Button fx:id="refreshPreviewButton" mnemonicParsing="false"
+                            text="プレビュー更新"
+                            onAction="#onRefreshPreviewButtonAction"/>
+                    <Button fx:id="printButton" mnemonicParsing="false"
+                            text="印刷..."
+                            onAction="#onPrintButtonAction"/>
+                </HBox>
 
-    <Label text="member_schedule*.json"/>
-    <HBox alignment="CENTER_LEFT" spacing="8.0">
-        <TextField fx:id="memberJsonField" maxWidth="Infinity" prefWidth="560.0"
-                   promptText="*.json" HBox.hgrow="ALWAYS"/>
-        <Button fx:id="browseMemberButton" mnemonicParsing="false" text="参照..."
-                onAction="#onBrowseMemberJsonAction"/>
-    </HBox>
+                <Label fx:id="statusLabel" wrapText="true"/>
 
-    <Label text="結果_配台表.json"/>
-    <HBox alignment="CENTER_LEFT" spacing="8.0">
-        <TextField fx:id="dispatchJsonField" maxWidth="Infinity" prefWidth="560.0"
-                   promptText="*.json" HBox.hgrow="ALWAYS"/>
-        <Button fx:id="browseDispatchButton" mnemonicParsing="false" text="参照..."
-                onAction="#onBrowseDispatchJsonAction"/>
-    </HBox>
+                <Separator/>
 
-    <HBox alignment="CENTER_LEFT" spacing="16.0">
-        <Label text="開始日"/>
-        <DatePicker fx:id="startDatePicker"/>
-        <Label text="日数"/>
-        <Spinner fx:id="dayCountSpinner" editable="true" prefWidth="72.0"/>
-        <Label text="日分"/>
-        <Label text="オペレーター"/>
-        <ComboBox fx:id="operatorCombo" editable="false" prefWidth="220.0"/>
-        <CheckBox fx:id="printAllOperatorsCheckBox"
-                  mnemonicParsing="false"
-                  text="全員連続印刷"/>
-    </HBox>
+                <Label text="member_schedule*.json"/>
+                <HBox alignment="CENTER_LEFT" spacing="8.0">
+                    <TextField fx:id="memberJsonField" maxWidth="Infinity"
+                               promptText="*.json" HBox.hgrow="ALWAYS"/>
+                    <Button fx:id="browseMemberButton" mnemonicParsing="false" text="参照..."
+                            onAction="#onBrowseMemberJsonAction"/>
+                </HBox>
 
-    <HBox alignment="CENTER_LEFT" spacing="8.0">
-        <Label text="フォント"/>
-        <ComboBox fx:id="fontCombo" editable="false" prefWidth="280.0"/>
-    </HBox>
+                <Label text="結果_配台表.json"/>
+                <HBox alignment="CENTER_LEFT" spacing="8.0">
+                    <TextField fx:id="dispatchJsonField" maxWidth="Infinity"
+                               promptText="*.json" HBox.hgrow="ALWAYS"/>
+                    <Button fx:id="browseDispatchButton" mnemonicParsing="false" text="参照..."
+                            onAction="#onBrowseDispatchJsonAction"/>
+                </HBox>
 
-    <Label styleClass="pm-operator-card-hint"
-           text="プレビューは選択オペレーターの1枚。全員連続印刷は印刷時のみ有効。"
-           wrapText="true"/>
+                <HBox alignment="CENTER_LEFT" spacing="8.0">
+                    <Label minWidth="56.0" text="開始日"/>
+                    <DatePicker fx:id="startDatePicker" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                </HBox>
 
-    <StackPane fx:id="previewHost" alignment="TOP_CENTER" minHeight="320.0" VBox.vgrow="ALWAYS"/>
+                <HBox alignment="CENTER_LEFT" spacing="8.0">
+                    <Label minWidth="56.0" text="日数"/>
+                    <Spinner fx:id="dayCountSpinner" editable="true" prefWidth="72.0"/>
+                    <Label text="日分"/>
+                </HBox>
+
+                <HBox alignment="CENTER_LEFT" spacing="8.0">
+                    <Label minWidth="56.0" text="オペレーター"/>
+                    <ComboBox fx:id="operatorCombo" editable="false" HBox.hgrow="ALWAYS"
+                              maxWidth="Infinity"/>
+                </HBox>
+
+                <CheckBox fx:id="printAllOperatorsCheckBox"
+                          mnemonicParsing="false"
+                          text="全員連続印刷"/>
+
+                <HBox alignment="CENTER_LEFT" spacing="8.0">
+                    <Label minWidth="56.0" text="フォント"/>
+                    <ComboBox fx:id="fontCombo" editable="false" HBox.hgrow="ALWAYS"
+                              maxWidth="Infinity"/>
+                </HBox>
+
+                <Label styleClass="pm-operator-card-hint"
+                       text="プレビューは選択オペレーターの1枚。全員連続印刷は印刷時のみ有効。"
+                       wrapText="true"/>
+            </VBox>
+        </ScrollPane>
+
+        <!-- 右 3/5: カードプレビュー -->
+        <StackPane fx:id="previewHost" alignment="TOP_CENTER" minHeight="320.0" minWidth="360.0"/>
+    </SplitPane>
 </VBox>

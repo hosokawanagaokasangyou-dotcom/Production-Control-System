@@ -19,7 +19,7 @@ class TaskInputSourceRawGridIoProcessingActualsTest {
     private static final String H_OTHER = "その他";
 
     @Test
-    void displaySteps_trimsRowsAboveInspectionNoMarker() {
+    void displaySteps_trimsRowsAboveProcessNameHeaderRow() {
         List<List<String>> data = new ArrayList<>();
         data.add(List.of("倉庫", "520201"));
         data.add(List.of("加工日付", "2026年04月27日"));
@@ -37,19 +37,19 @@ class TaskInputSourceRawGridIoProcessingActualsTest {
     }
 
     @Test
-    void displaySteps_acceptsFullwidthInspectionNoMarker() {
+    void displaySteps_findsProcessNameHeaderWhenNotFirstColumn() {
         List<List<String>> data =
                 List.of(
                         List.of("meta"),
-                        List.of("検査ＮＯ", "工程名"),
-                        List.of("x", "y"));
+                        List.of("依頼NO", "工程名", "機械名"),
+                        List.of("R1", "P1", "M1"));
         PlanInputTabularIo.TabularSheet raw =
                 new PlanInputTabularIo.TabularSheet(List.of("列1"), data);
         PlanInputTabularIo.TabularSheet out =
                 TaskInputSourceRawGridIo.applyProcessingActualsDisplaySteps(raw);
 
-        Assertions.assertEquals(List.of("検査ＮＯ", "工程名"), out.headers());
-        Assertions.assertEquals(List.of("x", "y"), out.rows().get(0));
+        Assertions.assertEquals(List.of("依頼NO", "工程名", "機械名"), out.headers());
+        Assertions.assertEquals(List.of("R1", "P1", "M1"), out.rows().get(0));
     }
 
     @Test

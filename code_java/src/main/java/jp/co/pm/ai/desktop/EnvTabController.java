@@ -108,7 +108,7 @@ public final class EnvTabController {
     private static final String KEY_GEMINI_MODEL = "GEMINI_MODEL";
 
     private static final String GEMINI_TRY_ORDER_ROW_DESCRIPTION =
-            "カンマ区切りで試行順（例: gemini-3.1-flash-lite,gemini-2.5-flash-lite）。GEMINI_MODEL 未設定時のみ有効。両方空ならコード既定（Flash-Lite 系の列）";
+            "カンマ区切りで試行順（例: gemini-3.5-flash,gemini-3.1-flash-lite,gemini-2.5-flash-lite）。GEMINI_MODEL 未設定時のみ有効。両方空ならコード既定（gemini-3.5-flash 最優先＋Flash-Lite 系）";
 
     @FXML
     private TabPane envMainTabPane;
@@ -592,7 +592,9 @@ public final class EnvTabController {
             dispatchGeminiForceRefreshFreeTierButton.setDisable(false);
         }
         if (result != null && result.success() && !result.modelIds().isEmpty()) {
-            dispatchGeminiModelItems.setAll(result.modelIds());
+            dispatchGeminiModelItems.setAll(
+                    GeminiDispatchModelTryOrderDefaults.withPlanningCorePriorityFirst(
+                            result.modelIds()));
             if (dispatchGeminiModelListView != null && !dispatchGeminiModelItems.isEmpty()) {
                 dispatchGeminiModelListView.getSelectionModel().selectFirst();
             }
@@ -794,7 +796,8 @@ public final class EnvTabController {
                                 .orElse(List.of())
                         : List.of();
         if (!fromCache.isEmpty()) {
-            dispatchGeminiModelItems.setAll(fromCache);
+            dispatchGeminiModelItems.setAll(
+                    GeminiDispatchModelTryOrderDefaults.withPlanningCorePriorityFirst(fromCache));
         } else {
             dispatchGeminiModelItems.setAll(
                     GeminiDispatchModelTryOrderDefaults.PLANNING_CORE_FALLBACK_TRY_ORDER);

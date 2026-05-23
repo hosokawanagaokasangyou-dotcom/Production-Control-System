@@ -58,7 +58,7 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
  * Raw spreadsheet for the machining actual-detail workbook, resolved via {@link NetworkSourceDirResolver}
  * ({@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK} / {@link AppPaths#KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR}).
  * Shaped JSON on disk uses {@link #projectShapedForJsonExport}（表示列・先頭見出し列・必須見出し）and optional {@code columns_all}.
- * Display applies {@link TaskInputSourceRawGridIo#applyProcessingActualsDisplaySteps}（検査NO行より前を削除、
+ * Display applies {@link TaskInputSourceRawGridIo#applyProcessingActualsDisplaySteps}（工程名見出し行より前を削除、
  * マーカー欠落時は先頭4行） then
  * {@link TaskInputSourceRawGridIo#applyProcessingActualsDateTimeColumns} ({@link #shapeLoaded} と同一)。
  * その後コントローラ側では（チャット履歴で確定した順）
@@ -98,8 +98,8 @@ public final class ProcessingActualsDataTabController {
                     "\u52a0\u5de5\u7d42\u4e86\u65e5\u6642");
 
     private static final String HINT_TEXT =
-            "シート先頭から、いずれかのセルに「検査NO」または「検査ＮＯ」が含まれる行（列見出し行）の直前までを除去し、その行を列見出しとします。"
-                    + " 当該文字列が見つからない場合は従来どおり先頭4行を除去します。"
+            "シート先頭から、いずれかのセルが「工程名」と一致する行（列見出し行）の直前までを除去し、その行を列見出しとします。"
+                    + " 当該見出しが見つからない場合は従来どおり先頭4行を除去します。"
                     + " \u2462 \u30b3\u30f3\u30dc\u3067\u300c"
                     + HEADER_MANUFACTURING_CONDITION_BREAKDOWN
                     + "\u300d\u306e\u5024\u3092\u9078\u629e\u3057\u3001\u8868\u793a\u884c\u3092\u7d5e\u308a\u8fbc\u307f\u307e\u3059\u3002"
@@ -1118,7 +1118,7 @@ public final class ProcessingActualsDataTabController {
             boolean showErrorsInStatus,
             Runnable runAfterSpreadsheetPresentation) {
         try {
-            // 1) shapeLoaded 済み（検査NO行より前を除去、またはフォールバックで先頭4行除去 → ヘッダ行・日時列）。コンボ／四キー除去は未適用。
+            // 1) shapeLoaded 済み（工程名見出し行より前を除去、またはフォールバックで先頭4行除去 → ヘッダ行・日時列）。コンボ／四キー除去は未適用。
             rememberShapedSnapshot(shaped);
             populateManufacturingConditionFilterChoices(shaped);
             // 2) 製造条件(内訳)コンボ → 3) 工程名・機械名・依頼NO・加工日の四キー重複は先頭行のみ（フィルタ後集合に対して）

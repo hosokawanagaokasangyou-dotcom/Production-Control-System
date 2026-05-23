@@ -3,6 +3,7 @@ package jp.co.pm.ai.desktop.io.actuals;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.NumberFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -42,6 +43,19 @@ public final class EquipmentStatusDashboardSourceLoader {
         }
     }
 
+    /** 読込時間・ソースファイル合計サイズ・行数。 */
+    public record LoadStats(
+            long totalSourceBytes,
+            long loadDurationMs,
+            int actualRowCount,
+            int aladdinRowCount,
+            int dispatchRowCount) {
+
+        public static LoadStats empty() {
+            return new LoadStats(0L, 0L, 0, 0, 0);
+        }
+    }
+
     public record LoadedSources(
             ActualsSnapshot actuals,
             AladdinSnapshot aladdin,
@@ -50,7 +64,8 @@ public final class EquipmentStatusDashboardSourceLoader {
             String aladdinSourceLabel,
             String dispatchSourceLabel,
             /** 読込時の警告（フォールバック・部分失敗など）。空なら問題なし。 */
-            String loadNotice) {
+            String loadNotice,
+            LoadStats loadStats) {
 
         public LoadedSources(
                 ActualsSnapshot actuals,
@@ -66,7 +81,37 @@ public final class EquipmentStatusDashboardSourceLoader {
                     actualSourceLabel,
                     aladdinSourceLabel,
                     dispatchSourceLabel,
-                    "");
+                    "",
+                    LoadStats.empty());
+        }
+
+        public LoadedSources(
+                ActualsSnapshot actuals,
+                AladdinSnapshot aladdin,
+                DispatchSnapshot dispatch,
+                String actualSourceLabel,
+                String aladdinSourceLabel,
+                String dispatchSourceLabel,
+                String loadNotice) {
+            this(
+                    actuals,
+                    aladdin,
+                    dispatch,
+                    actualSourceLabel,
+                    aladdinSourceLabel,
+                    dispatchSourceLabel,
+                    loadNotice,
+                    LoadStats.empty());
+        }
+    }
+
+    private static final class SourceFileSizes {
+        long actualBytes;
+        long aladdinBytes;
+        long dispatchBytes;
+
+        long total() {
+            return actualBytes + aladdinBytes + dispatchBytes;
         }
     }
 
@@ -128,10 +173,20 @@ public final class EquipmentStatusDashboardSourceLoader {
     }
 
     private static LoadedSources loadSources(Map<String, String> env) {
+        long t0 = System.nanoTime();
+        SourceFileSizes sizes = resolveSourceFileSizes(env);
         StringBuilder notice = new StringBuilder();
         ActualsSnapshot actuals = loadActualsResilient(env, notice);
         AladdinSnapshot aladdin = loadAladdinResilient(env, notice);
         DispatchSnapshot dispatch = loadDispatch(env);
+        long loadMs = Math.max(0L, (System.nanoTime() - t0) / 1_000_000L);
+        LoadStats stats =
+                new LoadStats(
+                        sizes.total(),
+                        loadMs,
+                        rowCount(actuals),
+                        rowCount(aladdin),
+                        rowCount(dispatch));
         return new LoadedSources(
                 actuals,
                 aladdin,
@@ -139,7 +194,90 @@ public final class EquipmentStatusDashboardSourceLoader {
                 actualsLabel(env),
                 aladdinLabel(env),
                 dispatchLabel(env),
-                notice.toString().strip());
+                notice.toString().strip(),
+                stats);
+    }
+
+    /** UI 向け: データサイズ・読込時間・行数の要約。 */
+    public static String formatLoadStatsSummary(LoadStats stats) {
+        if (stats == null) {
+            return "";
+        }
+        NumberFormat nf = NumberFormat.getIntegerInstance(Locale.JAPAN);
+        return "データ "
+                + formatByteSize(stats.totalSourceBytes())
+                + "  読込 "
+                + formatLoadDuration(stats.loadDurationMs())
+                + "  (行 実績 "
+                + nf.format(stats.actualRowCount())
+                + " / アラジン "
+                + nf.format(stats.aladdinRowCount())
+                + " / 配台 "
+                + nf.format(stats.dispatchRowCount())
+                + ")";
+    }
+
+    public static String formatByteSize(long bytes) {
+        if (bytes < 0L) {
+            bytes = 0L;
+        }
+        if (bytes < 1024L) {
+            return bytes + " B";
+        }
+        if (bytes < 1024L * 1024L) {
+            return String.format(Locale.ROOT, "%.1f KiB", bytes / 1024.0);
+        }
+        if (bytes < 1024L * 1024L * 1024L) {
+            return String.format(Locale.ROOT, "%.1f MiB", bytes / (1024.0 * 1024.0));
+        }
+        return String.format(Locale.ROOT, "%.2f GiB", bytes / (1024.0 * 1024.0 * 1024.0));
+    }
+
+    public static String formatLoadDuration(long ms) {
+        if (ms < 0L) {
+            ms = 0L;
+        }
+        if (ms < 1000L) {
+            return ms + " ms";
+        }
+        if (ms < 60_000L) {
+            return String.format(Locale.ROOT, "%.2f s", ms / 1000.0);
+        }
+        long min = ms / 60_000L;
+        long sec = (ms % 60_000L) / 1000L;
+        return min + "分" + sec + "秒";
+    }
+
+    private static SourceFileSizes resolveSourceFileSizes(Map<String, String> env) {
+        SourceFileSizes sizes = new SourceFileSizes();
+        NetworkSourceDirResolver.Result r = NetworkSourceDirResolver.resolve(env);
+        r.actualDetailPath().ifPresent(p -> sizes.actualBytes = fileSize(p));
+        Optional<Path> taskInput = r.taskInputPath();
+        if (taskInput.isPresent()) {
+            sizes.aladdinBytes = fileSize(taskInput.get());
+        } else {
+            Path shaped = AppPaths.resolveShapedAladdinPlanJsonPath(env);
+            if (Files.isRegularFile(shaped)) {
+                sizes.aladdinBytes = fileSize(shaped);
+            }
+        }
+        Path dispatch = AppPaths.resolveResultDispatchTableJsonPath(env);
+        if (Files.isRegularFile(dispatch)) {
+            sizes.dispatchBytes = fileSize(dispatch);
+        }
+        return sizes;
+    }
+
+    private static int rowCount(ActualsSnapshot snapshot) {
+        return snapshot != null && snapshot.rows() != null ? snapshot.rows().size() : 0;
+    }
+
+    private static int rowCount(AladdinSnapshot snapshot) {
+        return snapshot != null && snapshot.rows() != null ? snapshot.rows().size() : 0;
+    }
+
+    private static int rowCount(DispatchSnapshot snapshot) {
+        return snapshot != null && snapshot.rows() != null ? snapshot.rows().size() : 0;
     }
 
     private static ActualsSnapshot loadActualsResilient(Map<String, String> ui, StringBuilder notice) {

@@ -91,6 +91,7 @@ import java.util.Map;
  * @param equipmentStatusDashboardActualDayOffset 旧セッション互換（読込のみ・日付未保存時）
  * @param equipmentStatusDashboardPlanDayOffset 旧セッション互換（読込のみ・日付未保存時）
  * @param equipmentStatusDashboardAutoRefreshEnabled ダッシュボード自動更新（既定 ON）
+ * @param equipmentStatusDashboardAutoRefreshIntervalSec ダッシュボード自動更新間隔（秒）
  * @param equipmentStatusDashboardShowAladdinPlans ダッシュボードでアラジン予定を表示
  * @param equipmentStatusDashboardShowDispatchPlans ダッシュボードで配台予定を表示
  * @param equipmentStatusDashboardAppearance ダッシュボードカードの見た目設定
@@ -175,6 +176,7 @@ public record DesktopSessionState(
         int equipmentStatusDashboardActualDayOffset,
         int equipmentStatusDashboardPlanDayOffset,
         boolean equipmentStatusDashboardAutoRefreshEnabled,
+        int equipmentStatusDashboardAutoRefreshIntervalSec,
         boolean equipmentStatusDashboardShowAladdinPlans,
         boolean equipmentStatusDashboardShowDispatchPlans,
         EquipmentStatusDashboardAppearancePrefs equipmentStatusDashboardAppearance) {
@@ -191,6 +193,13 @@ public record DesktopSessionState(
     public static final double MIN_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX = -48.0;
 
     public static final double MAX_EQUIPMENT_GANTT_PERSON_BADGE_BAND_VERTICAL_OFFSET_PX = 48.0;
+
+    /** 設備現状ダッシュボード・自動更新間隔（秒）の既定。 */
+    public static final int DEFAULT_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC = 300;
+
+    public static final int MIN_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC = 5;
+
+    public static final int MAX_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC = 3600;
 
     /** 設備ガント・準備時間系バーラベル表示の既定（既定 OFF）。 */
     public static final boolean DEFAULT_EQUIPMENT_GANTT_PREP_TIME_LABELS_ENABLED = false;
@@ -454,6 +463,7 @@ public record DesktopSessionState(
                 0,
                 0,
                 true,
+                DEFAULT_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC,
                 true,
                 true,
                 EquipmentStatusDashboardAppearancePrefs.defaults());
@@ -544,6 +554,7 @@ public record DesktopSessionState(
                 equipmentStatusDashboardActualDayOffset(),
                 equipmentStatusDashboardPlanDayOffset(),
                 equipmentStatusDashboardAutoRefreshEnabled(),
+                equipmentStatusDashboardAutoRefreshIntervalSec(),
                 equipmentStatusDashboardShowAladdinPlans(),
                 equipmentStatusDashboardShowDispatchPlans(),
                 equipmentStatusDashboardAppearance());

@@ -36,9 +36,30 @@ class GeminiDispatchModelTryOrderDefaultsTest {
     @Test
     void resolveEffectiveModelTryOrder_fallsBackToCodeDefaults() {
         List<String> models = GeminiDispatchModelTryOrderDefaults.resolveEffectiveModelTryOrder(Map.of());
+        assertEquals(
+                GeminiDispatchModelTryOrderDefaults.PLANNING_CORE_TOP_PRIORITY_MODEL,
+                models.getFirst());
         assertTrue(models.contains("gemini-3.1-flash-lite"));
         assertEquals(
                 GeminiDispatchModelTryOrderDefaults.PLANNING_CORE_FALLBACK_TRY_ORDER.size(),
                 models.size());
+    }
+
+    @Test
+    void withPlanningCorePriorityFirst_prependsTopPriorityBeforeFlashLiteCandidates() {
+        List<String> merged =
+                GeminiDispatchModelTryOrderDefaults.withPlanningCorePriorityFirst(
+                        List.of("gemini-3.1-flash-lite", "gemini-2.5-flash-lite"));
+        assertEquals(
+                GeminiDispatchModelTryOrderDefaults.PLANNING_CORE_TOP_PRIORITY_MODEL,
+                merged.getFirst());
+        assertEquals(
+                List.of(
+                        "gemini-3.5-flash",
+                        "gemini-3.1-flash-lite",
+                        "gemini-2.5-flash-lite",
+                        "gemini-3.1-flash-lite-preview",
+                        "gemini-2.0-flash-lite"),
+                merged);
     }
 }

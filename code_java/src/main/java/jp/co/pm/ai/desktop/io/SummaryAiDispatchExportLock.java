@@ -5,6 +5,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.FileTime;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -17,6 +19,9 @@ import java.util.Optional;
 public final class SummaryAiDispatchExportLock {
 
     public static final String LOCK_SUFFIX = ".export.lock";
+
+    /** ロックファイルの最大有効時間。これを超えたロックは無効（残存クラッシュ等）として扱う。 */
+    public static final Duration LOCK_MAX_AGE = Duration.ofMinutes(8);
 
     private static final String KEY_VERSION = "version";
     private static final String KEY_WORKBOOK = "workbook";
@@ -74,15 +79,27 @@ public final class SummaryAiDispatchExportLock {
     }
 
     /**
-     * サマリ更新中かどうかの正本判定。{@code <ブック名>.export.lock} が通常ファイルとして存在するときのみ true。
+     * サマリ更新中かどうかの正本判定。{@code <ブック名>.export.lock} が通常ファイルとして存在し、
+     * {@link #LOCK_MAX_AGE} 以内のときのみ true。期限切れのロックは削除して false を返す。
      */
     public static boolean isLocked(Path summaryWorkbookPath) {
-        return Files.isRegularFile(lockFilePath(summaryWorkbookPath));
+        Path lock = lockFilePath(summaryWorkbookPath);
+        if (!Files.isRegularFile(lock)) {
+            return false;
+        }
+        if (isLockExpired(lock, summaryWorkbookPath)) {
+            deleteIfExistsQuiet(lock);
+            return false;
+        }
+        return true;
     }
 
     public static Optional<LockInfo> readLockInfo(Path summaryWorkbookPath) {
         Path lock = lockFilePath(summaryWorkbookPath);
         if (!Files.isRegularFile(lock)) {
+            return Optional.empty();
+        }
+        if (isLockExpired(lock, summaryWorkbookPath)) {
             return Optional.empty();
         }
         try {
@@ -100,10 +117,14 @@ public final class SummaryAiDispatchExportLock {
     }
 
     /**
-     * ロックを取得する。既に存在する場合は empty（他端末または前回クラッシュの残り）。
+     * ロックを取得する。有効なロックが既に存在する場合は empty。
+     * 期限切れのロックは削除してから再取得を試みる。
      */
     public static Optional<AcquiredLock> tryAcquire(Path summaryWorkbookPath) throws IOException {
         Path lock = lockFilePath(summaryWorkbookPath);
+        if (Files.isRegularFile(lock) && isLockExpired(lock, summaryWorkbookPath)) {
+            deleteIfExistsQuiet(lock);
+        }
         Path parent = lock.getParent();
         if (parent != null) {
             Files.createDirectories(parent);
@@ -132,6 +153,29 @@ public final class SummaryAiDispatchExportLock {
             return Files.deleteIfExists(lock);
         } catch (IOException ignored) {
             return false;
+        }
+    }
+
+    private static boolean isLockExpired(Path lockPath, Path summaryWorkbookPath) {
+        Instant started = resolveLockStartedAt(lockPath, summaryWorkbookPath);
+        return Instant.now().isAfter(started.plus(LOCK_MAX_AGE));
+    }
+
+    private static Instant resolveLockStartedAt(Path lockPath, Path summaryWorkbookPath) {
+        try {
+            String text = Files.readString(lockPath, StandardCharsets.UTF_8);
+            Instant started = parseLockPayload(text, summaryWorkbookPath).startedAt();
+            if (!Instant.EPOCH.equals(started)) {
+                return started;
+            }
+        } catch (Exception ignored) {
+            // fall through to file mtime
+        }
+        try {
+            FileTime mtime = Files.getLastModifiedTime(lockPath);
+            return mtime.toInstant();
+        } catch (IOException ignored) {
+            return Instant.EPOCH;
         }
     }
 

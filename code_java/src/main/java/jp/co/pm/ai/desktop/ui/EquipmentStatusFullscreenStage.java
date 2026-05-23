@@ -12,6 +12,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.BorderPane;
@@ -55,6 +56,7 @@ public final class EquipmentStatusFullscreenStage {
     private final Label metaLabel = new Label();
     private Runnable onClose;
     private IntConsumer onAdjustActualDateDays;
+    private IntConsumer onAdjustPlanDateDays;
     private boolean ownerInitialized;
     private EquipmentStatusDashboardAppearancePrefs appearance =
             EquipmentStatusDashboardAppearancePrefs.defaults();
@@ -108,6 +110,7 @@ public final class EquipmentStatusFullscreenStage {
         root.setFocusTraversable(true);
         root.setTop(top);
         root.setCenter(center);
+        root.setBottom(buildOperationGuide());
 
         Scene scene = new Scene(root);
         if (!scene.getStylesheets().contains(DESKTOP_CSS)) {
@@ -129,7 +132,7 @@ public final class EquipmentStatusFullscreenStage {
             e.consume();
             return;
         }
-        if (onAdjustActualDateDays == null) {
+        if (e.isControlDown() || e.isAltDown() || e.isMetaDown()) {
             return;
         }
         int shift =
@@ -138,7 +141,17 @@ public final class EquipmentStatusFullscreenStage {
                     case RIGHT -> 1;
                     default -> 0;
                 };
-        if (shift != 0) {
+        if (shift == 0) {
+            return;
+        }
+        if (e.isShiftDown()) {
+            if (onAdjustPlanDateDays != null) {
+                onAdjustPlanDateDays.accept(shift);
+                e.consume();
+            }
+            return;
+        }
+        if (onAdjustActualDateDays != null) {
             onAdjustActualDateDays.accept(shift);
             e.consume();
         }
@@ -151,6 +164,11 @@ public final class EquipmentStatusFullscreenStage {
     /** 全画面表示中に ← / → で実績日を前後させる（日数: 負=前日、正=翌日）。 */
     public void setOnAdjustActualDateDays(IntConsumer onAdjustActualDateDays) {
         this.onAdjustActualDateDays = onAdjustActualDateDays;
+    }
+
+    /** 全画面表示中に Shift + ← / → で予定日を前後させる。 */
+    public void setOnAdjustPlanDateDays(IntConsumer onAdjustPlanDateDays) {
+        this.onAdjustPlanDateDays = onAdjustPlanDateDays;
     }
 
     public boolean isShowing() {
@@ -246,7 +264,6 @@ public final class EquipmentStatusFullscreenStage {
     public void setLoadingVisible(boolean on) {
         loadingHost.setVisible(on);
         loadingHost.setManaged(on);
-        scrollPane.setOpacity(on ? 0.45 : 1.0);
         if (on) {
             metaLabel.setText("データ読込中…");
         }
@@ -279,5 +296,101 @@ public final class EquipmentStatusFullscreenStage {
             return prefix + " —";
         }
         return prefix + " " + dateLabel.strip();
+    }
+
+    private HBox buildOperationGuide() {
+        HBox bar = new HBox(24.0);
+        bar.setAlignment(Pos.CENTER);
+        bar.setPadding(new Insets(6, 12, 10, 12));
+        bar.getStyleClass().add("pm-equipment-status-fullscreen-guide");
+
+        Label title = new Label("操作");
+        title.getStyleClass().add("pm-equipment-status-fullscreen-guide-title");
+        bar.getChildren()
+                .addAll(
+                        title,
+                        guideRowActual(),
+                        guideRowPlan(),
+                        guideRowClose());
+        return bar;
+    }
+
+    private HBox guideRowActual() {
+        HBox keysInner = new HBox(2.0);
+        keysInner.setAlignment(Pos.CENTER);
+        keysInner
+                .getChildren()
+                .addAll(
+                        guideButton("←", "実績日を1日前", () -> adjustActual(-1)),
+                        guideSepLabel("/"),
+                        guideButton("→", "実績日を1日後", () -> adjustActual(1)));
+        return wrapGuideItem(keysInner, "実績日を前後");
+    }
+
+    private HBox guideRowPlan() {
+        HBox keysInner = new HBox(2.0);
+        keysInner.setAlignment(Pos.CENTER);
+        keysInner
+                .getChildren()
+                .addAll(
+                        guideModLabel("Shift +"),
+                        guideButton("←", "予定日を1日前", () -> adjustPlan(-1)),
+                        guideSepLabel("/"),
+                        guideButton("→", "予定日を1日後", () -> adjustPlan(1)));
+        return wrapGuideItem(keysInner, "予定日を前後");
+    }
+
+    private HBox guideRowClose() {
+        HBox keysInner = new HBox(guideButton("Esc", "全画面を閉じる", this::hide));
+        keysInner.setAlignment(Pos.CENTER);
+        return wrapGuideItem(keysInner, "全画面を閉じる");
+    }
+
+    private HBox wrapGuideItem(HBox keysInner, String description) {
+        HBox keysBox = new HBox(keysInner);
+        keysBox.setAlignment(Pos.CENTER);
+        keysBox.getStyleClass().add("pm-equipment-status-fullscreen-guide-keys");
+        Label descLabel = new Label(description);
+        descLabel.getStyleClass().add("pm-equipment-status-fullscreen-guide-desc");
+        HBox item = new HBox(8.0, keysBox, descLabel);
+        item.setAlignment(Pos.CENTER_LEFT);
+        return item;
+    }
+
+    private Button guideButton(String text, String tooltipText, Runnable action) {
+        Button button = new Button(text);
+        button.getStyleClass().add("pm-equipment-status-fullscreen-guide-btn");
+        button.setFocusTraversable(false);
+        if (tooltipText != null && !tooltipText.isBlank()) {
+            Tooltip.install(button, new Tooltip(tooltipText));
+        }
+        if (action != null) {
+            button.setOnAction(e -> action.run());
+        }
+        return button;
+    }
+
+    private Label guideSepLabel(String text) {
+        Label label = new Label(text);
+        label.getStyleClass().add("pm-equipment-status-fullscreen-guide-sep");
+        return label;
+    }
+
+    private Label guideModLabel(String text) {
+        Label label = new Label(text);
+        label.getStyleClass().add("pm-equipment-status-fullscreen-guide-mod");
+        return label;
+    }
+
+    private void adjustActual(int days) {
+        if (onAdjustActualDateDays != null) {
+            onAdjustActualDateDays.accept(days);
+        }
+    }
+
+    private void adjustPlan(int days) {
+        if (onAdjustPlanDateDays != null) {
+            onAdjustPlanDateDays.accept(days);
+        }
     }
 }

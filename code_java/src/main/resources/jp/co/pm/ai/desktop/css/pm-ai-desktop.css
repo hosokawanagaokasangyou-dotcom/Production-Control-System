@@ -1079,12 +1079,34 @@
 }
 
 .pm-equipment-status-subbar {
-    -fx-alignment: CENTER_LEFT;
+    -fx-fill-width: true;
+}
+
+.pm-equipment-status-subbar-controls {
+    -fx-alignment: center-left;
+    -fx-min-height: 28px;
+}
+
+.pm-equipment-status-tab-root .tool-bar {
+    -fx-min-height: 36px;
+}
+
+.pm-equipment-status-tab-root .tool-bar .check-box,
+.pm-equipment-status-subbar-controls .check-box {
+    -fx-min-height: 24px;
+    -fx-padding: 3 0 3 0;
 }
 
 .label.pm-equipment-status-source {
     -fx-font-size: 11px;
     -fx-text-fill: -fx-mid-text-color;
+    -fx-wrap-text: true;
+}
+
+.label.pm-equipment-status-load-stats {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-text-fill: derive(-fx-text-base-color, -20%);
 }
 
 .pm-equipment-status-card {
@@ -1201,6 +1223,120 @@
 
 .pm-equipment-status-fullscreen-top {
     -fx-background-color: transparent;
+}
+
+.pm-equipment-status-fullscreen-guide {
+    -fx-alignment: center;
+    -fx-background-color: derive(-fx-base, -6%);
+}
+
+.label.pm-equipment-status-fullscreen-guide-desc {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.label.pm-equipment-status-fullscreen-guide-title {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+
+.pm-equipment-status-fullscreen-guide-keys {
+    -fx-alignment: center;
+    -fx-padding: 3 8 3 8;
+    -fx-background-color: derive(-fx-base, -12%);
+    -fx-background-radius: 6;
+}
+
+.pm-equipment-status-fullscreen-guide-btn {
+    -fx-font-family: "Consolas", "Courier New", monospace;
+    -fx-font-size: 11px;
+    -fx-padding: 1 6 1 6;
+    -fx-background-color: transparent;
+    -fx-background-radius: 4;
+    -fx-border-color: transparent;
+    -fx-cursor: hand;
+    -fx-min-width: 0;
+    -fx-min-height: 0;
+}
+
+.pm-equipment-status-fullscreen-guide-btn:hover {
+    -fx-background-color: derive(-fx-base, -18%);
+}
+
+.pm-equipment-status-fullscreen-guide-btn:pressed {
+    -fx-background-color: derive(-fx-base, -24%);
+}
+
+.label.pm-equipment-status-fullscreen-guide-sep,
+.label.pm-equipment-status-fullscreen-guide-mod {
+    -fx-font-family: "Consolas", "Courier New", monospace;
+    -fx-font-size: 11px;
+    -fx-padding: 0 1 0 1;
+}
+
+.pm-equipment-status-fullscreen-theme-dark .pm-equipment-status-fullscreen-guide {
+    -fx-background-color: rgba(255, 255, 255, 0.06);
+}
+
+.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-fullscreen-guide-title,
+.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-fullscreen-guide-desc {
+    -fx-text-fill: #cbd5e1;
+}
+
+.pm-equipment-status-fullscreen-theme-dark .pm-equipment-status-fullscreen-guide-keys {
+    -fx-background-color: #334155;
+}
+
+.pm-equipment-status-fullscreen-theme-dark .pm-equipment-status-fullscreen-guide-btn {
+    -fx-text-fill: #f1f5f9;
+}
+
+.pm-equipment-status-fullscreen-theme-dark .pm-equipment-status-fullscreen-guide-btn:hover {
+    -fx-background-color: #475569;
+}
+
+.pm-equipment-status-fullscreen-theme-dark .pm-equipment-status-fullscreen-guide-btn:pressed {
+    -fx-background-color: #64748b;
+}
+
+.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-fullscreen-guide-sep,
+.pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-fullscreen-guide-mod {
+    -fx-text-fill: #e2e8f0;
+}
+
+.pm-equipment-status-fullscreen-theme-light .pm-equipment-status-fullscreen-guide {
+    -fx-background-color: derive(-fx-base, -4%);
+}
+
+.pm-equipment-status-fullscreen-theme-light .label.pm-equipment-status-fullscreen-guide-title,
+.pm-equipment-status-fullscreen-theme-light .label.pm-equipment-status-fullscreen-guide-desc {
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-equipment-status-fullscreen-theme-wall .pm-equipment-status-fullscreen-guide {
+    -fx-background-color: rgba(0, 0, 0, 0.35);
+}
+
+.pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-fullscreen-guide-title,
+.pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-fullscreen-guide-desc {
+    -fx-text-fill: #f8fafc;
+}
+
+.pm-equipment-status-fullscreen-theme-wall .pm-equipment-status-fullscreen-guide-keys {
+    -fx-background-color: rgba(0, 0, 0, 0.45);
+}
+
+.pm-equipment-status-fullscreen-theme-wall .pm-equipment-status-fullscreen-guide-btn {
+    -fx-text-fill: #f1f5f9;
+}
+
+.pm-equipment-status-fullscreen-theme-wall .pm-equipment-status-fullscreen-guide-btn:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.12);
+}
+
+.pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-fullscreen-guide-sep,
+.pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-fullscreen-guide-mod {
+    -fx-text-fill: #f1f5f9;
 }
 
 .pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-fullscreen-date {

@@ -476,13 +476,16 @@ public final class PlanInputTabController {
             if (taskId.isBlank()) {
                 continue;
             }
-            double defaultNext =
+            double remaining =
                     Stage2PlanRowDispatchQtyMetrics.compute(rowMap, tables)
                             .map(Stage2PlanRowDispatchQtyMetricsResult::remainingM)
                             .orElse(0.0);
+            Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM unitInfo =
+                    Stage2PlanRowDispatchQtyMetrics.dispatchSimulatorUnitMFromPlanRow(
+                            rowMap, tables);
             out.add(
                     new Stage2InProgressNextDayDispatchDialog.Row(
-                            taskId, process, machine, actual, defaultNext, defaultNext));
+                            taskId, process, machine, actual, remaining, unitInfo));
         }
         return out;
     }

@@ -251,6 +251,7 @@ public record PlanWorkspaceSessionFragment(
                 base.equipmentStatusDashboardActualDayOffset(),
                 base.equipmentStatusDashboardPlanDayOffset(),
                 base.equipmentStatusDashboardAutoRefreshEnabled(),
+                base.equipmentStatusDashboardAutoRefreshIntervalSec(),
                 base.equipmentStatusDashboardShowAladdinPlans(),
                 base.equipmentStatusDashboardShowDispatchPlans(),
                 base.equipmentStatusDashboardAppearance());

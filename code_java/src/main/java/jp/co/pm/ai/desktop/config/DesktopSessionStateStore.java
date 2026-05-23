@@ -391,6 +391,12 @@ public final class DesktopSessionStateStore {
                 optionalIntClamped(root, "equipmentStatusDashboardActualDayOffset", 0, -366, 366),
                 optionalIntClamped(root, "equipmentStatusDashboardPlanDayOffset", 0, -366, 366),
                 optionalBoolean(root, "equipmentStatusDashboardAutoRefreshEnabled", true),
+                optionalIntClamped(
+                        root,
+                        "equipmentStatusDashboardAutoRefreshIntervalSec",
+                        DesktopSessionState.DEFAULT_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC,
+                        DesktopSessionState.MIN_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC,
+                        DesktopSessionState.MAX_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC),
                 optionalBoolean(root, "equipmentStatusDashboardShowAladdinPlans", true),
                 optionalBoolean(root, "equipmentStatusDashboardShowDispatchPlans", true),
                 loadEquipmentStatusDashboardAppearancePrefs(root));
@@ -473,6 +479,16 @@ public final class DesktopSessionStateStore {
         put(root, "equipmentStatusDashboardActualDate", state.equipmentStatusDashboardActualDate());
         put(root, "equipmentStatusDashboardPlanDate", state.equipmentStatusDashboardPlanDate());
         root.put("equipmentStatusDashboardAutoRefreshEnabled", state.equipmentStatusDashboardAutoRefreshEnabled());
+        root.put(
+                "equipmentStatusDashboardAutoRefreshIntervalSec",
+                Math.max(
+                        DesktopSessionState.MIN_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC,
+                        Math.min(
+                                DesktopSessionState.MAX_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC,
+                                state.equipmentStatusDashboardAutoRefreshIntervalSec() <= 0
+                                        ? DesktopSessionState
+                                                .DEFAULT_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC
+                                        : state.equipmentStatusDashboardAutoRefreshIntervalSec())));
         root.put("equipmentStatusDashboardShowAladdinPlans", state.equipmentStatusDashboardShowAladdinPlans());
         root.put("equipmentStatusDashboardShowDispatchPlans", state.equipmentStatusDashboardShowDispatchPlans());
         putEquipmentStatusDashboardAppearancePrefs(root, state.equipmentStatusDashboardAppearance());

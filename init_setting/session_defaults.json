@@ -341,7 +341,7 @@
   }, {
     "name" : "GEMINI_MODEL_TRY_ORDER",
     "value" : "",
-    "description" : "カンマ区切りで試行順（例: gemini-3.1-flash-lite,gemini-2.5-flash-lite）。GEMINI_MODEL 未設定時のみ有効。両方空ならコード既定（Flash-Lite 系の列）"
+    "description" : "カンマ区切りで試行順（例: gemini-3.5-flash,gemini-3.1-flash-lite,gemini-2.5-flash-lite）。GEMINI_MODEL 未設定時のみ有効。両方空ならコード既定（gemini-3.5-flash 最優先＋Flash-Lite 系）"
   }, {
     "name" : "GEMINI_PRE_REQUEST_JITTER_MAX_SEC",
     "value" : "0.75",

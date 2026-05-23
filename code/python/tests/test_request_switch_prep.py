@@ -195,6 +195,60 @@ def test_roll_prep_switch_only_not_resume_after_break():
     assert ts2 == break_end + timedelta(minutes=5)
 
 
+def test_resolve_prev_machining_end_falls_back_to_machine_avail_dt():
+    d = date(2026, 5, 18)
+    prev_end = datetime(2026, 5, 18, 10, 0)
+    mh = {
+        "last_tid": {"occ1": "A001"},
+        "last_machining_date": {"occ1": d},
+        "machining_today_occ": {"occ1"},
+        "last_machining_dt": {},
+    }
+    got = core._resolve_prev_machining_end_for_request_switch(
+        machine_handoff=mh,
+        machine_occ_key="occ1",
+        explicit=None,
+        machine_avail_dt={"occ1": prev_end},
+        machine_day_floor=datetime(2026, 5, 18, 8, 0),
+    )
+    assert got == prev_end
+
+
+def test_roll_prep_cleanup_anchors_prev_end_when_team_start_deferred():
+    """直前加工終了と team_start が離れていても後始末は prev_end に載せる。"""
+    _reset_stage2_prep_globals_with_cleanup_buffer()
+    d = date(2026, 5, 18)
+    prev_end = datetime(2026, 5, 18, 10, 0)
+    team_start = datetime(2026, 5, 18, 11, 0)
+    mh = {
+        "last_tid": {"occ1": "A001"},
+        "last_machining_date": {"occ1": d},
+        "machining_today_occ": {"occ1"},
+        "last_eq": {"occ1": "スライス+スライス機1"},
+        "last_machining_dt": {},
+    }
+    ts, segs = core._roll_prep_segments_for_assign(
+        team_start=team_start,
+        team_breaks=[],
+        machine_handoff=mh,
+        machine_occ_key="occ1",
+        current_date=d,
+        task_id="B002",
+        machine_proc="スライス",
+        machine_name="スライス機1",
+        eq_line="スライス+スライス機1",
+        abolish_limits=False,
+        prev_machining_end=None,
+        prev_eq_line="スライス+スライス機1",
+        machine_avail_dt={"occ1": prev_end},
+        machine_day_floor=datetime(2026, 5, 18, 8, 0),
+    )
+    assert segs[0]["event_kind"] == core.TIMELINE_EVENT_POST_MACHINING_CLEANUP
+    assert segs[0]["start_dt"] == prev_end
+    assert segs[0]["end_dt"] == prev_end + timedelta(minutes=10)
+    assert ts == team_start + timedelta(minutes=15)
+
+
 def test_roll_prep_switch_includes_cleanup_buffer_and_prep():
     _reset_stage2_prep_globals_with_cleanup_buffer()
     d = date(2026, 5, 18)

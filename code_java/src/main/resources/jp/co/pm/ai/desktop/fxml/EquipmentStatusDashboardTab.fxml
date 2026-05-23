@@ -14,10 +14,11 @@
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.control.Spinner?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
-<BorderPane xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+<BorderPane fx:id="tabRoot" xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="jp.co.pm.ai.desktop.EquipmentStatusDashboardTabController"
             styleClass="pm-equipment-status-tab-root">
     <top>
@@ -26,6 +27,8 @@
                 <Button fx:id="reloadButton" mnemonicParsing="false" onAction="#onReloadAction" text="再読込"/>
                 <ToggleButton fx:id="fullscreenToggle" mnemonicParsing="false" onAction="#onFullscreenToggleAction" text="全画面"/>
                 <CheckBox fx:id="autoRefreshCheckBox" selected="true" text="自動更新"/>
+                <Label text="間隔(秒)"/>
+                <Spinner fx:id="autoRefreshIntervalSpinner" editable="true" prefWidth="72.0"/>
                 <Separator orientation="VERTICAL"/>
                 <Label text="実績日"/>
                 <Button mnemonicParsing="false" onAction="#onActualTodayAction" text="当日"/>
@@ -35,22 +38,26 @@
                 <Button mnemonicParsing="false" onAction="#onPlanTodayAction" text="当日"/>
                 <DatePicker fx:id="planDatePicker" prefWidth="148.0"/>
             </ToolBar>
-            <HBox spacing="12.0" styleClass="pm-equipment-status-subbar">
+            <VBox spacing="4.0" styleClass="pm-equipment-status-subbar">
                 <padding>
-                    <Insets bottom="4.0" left="8.0" right="8.0" top="0.0"/>
+                    <Insets bottom="4.0" left="8.0" right="8.0" top="2.0"/>
                 </padding>
-                <Label fx:id="lastUpdatedLabel" text="最終更新: —"/>
-                <ProgressIndicator fx:id="loadingIndicator" managed="false" prefHeight="18.0" prefWidth="18.0"
-                                   visible="false"/>
-                <Label fx:id="loadingStatusLabel" managed="false" styleClass="pm-equipment-status-loading-status"
-                       text="データ読込中…" visible="false"/>
-                <CheckBox fx:id="showAladdinCheckBox" selected="true" text="アラジン予定"/>
-                <CheckBox fx:id="showDispatchCheckBox" selected="true" text="配台予定"/>
-                <Label fx:id="planDateSummaryLabel" text="予定日: —"/>
-                <Label fx:id="actualDateSummaryLabel" text="実績日: —"/>
-                <Label fx:id="machineCountLabel" text="—"/>
-                <Label fx:id="sourceSummaryLabel" styleClass="pm-equipment-status-source" text=""/>
-            </HBox>
+                <HBox spacing="12.0" alignment="CENTER_LEFT" styleClass="pm-equipment-status-subbar-controls">
+                    <Label fx:id="lastUpdatedLabel" text="最終更新: —"/>
+                    <ProgressIndicator fx:id="loadingIndicator" managed="false" prefHeight="20.0" prefWidth="20.0"
+                                       visible="false"/>
+                    <Label fx:id="loadingStatusLabel" managed="false" styleClass="pm-equipment-status-loading-status"
+                           text="データ読込中…" visible="false"/>
+                    <CheckBox fx:id="showAladdinCheckBox" selected="true" text="アラジン予定"/>
+                    <CheckBox fx:id="showDispatchCheckBox" selected="true" text="配台予定"/>
+                    <Label fx:id="planDateSummaryLabel" text="予定日: —"/>
+                    <Label fx:id="actualDateSummaryLabel" text="実績日: —"/>
+                    <Label fx:id="machineCountLabel" text="—"/>
+                </HBox>
+                <Label fx:id="loadStatsLabel" styleClass="pm-equipment-status-load-stats" text=""/>
+                <Label fx:id="sourceSummaryLabel" maxWidth="1.7976931348623157E308" styleClass="pm-equipment-status-source"
+                       text="" wrapText="true"/>
+            </VBox>
             <TitledPane fx:id="appearancePane" animated="true" collapsible="true" expanded="false"
                         maxHeight="420.0" text="見た目設定">
                 <ScrollPane fitToWidth="true" maxHeight="400.0" styleClass="pm-equipment-status-appearance-scroll">
@@ -74,13 +81,6 @@
             </ScrollPane>
             <VBox fx:id="emptyStatePane" alignment="CENTER" managed="false" visible="false"
                   styleClass="pm-equipment-status-empty-host"/>
-            <VBox fx:id="loadingOverlayPane" alignment="CENTER" managed="false" mouseTransparent="true"
-                  styleClass="pm-equipment-status-loading-overlay" visible="false">
-                <VBox alignment="CENTER" spacing="12.0" styleClass="pm-equipment-status-loading-box">
-                    <ProgressIndicator prefHeight="48.0" prefWidth="48.0"/>
-                    <Label text="データ読込中…"/>
-                </VBox>
-            </VBox>
         </StackPane>
     </center>
 </BorderPane>

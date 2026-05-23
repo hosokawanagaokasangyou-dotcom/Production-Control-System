@@ -28883,6 +28883,37 @@ def _prep_segments_from_anchor(
     return seg_end, [seg]
 
 
+def _resolve_prev_machining_end_for_request_switch(
+    *,
+    machine_handoff: dict,
+    machine_occ_key: str,
+    explicit: datetime | None = None,
+    machine_avail_dt: dict | None = None,
+    machine_day_floor: datetime | None = None,
+) -> datetime | None:
+    """
+    依頼NO切替時の後始末アンカー（直前加工終了）。
+    handoff の last_machining_dt が無いときは machine_avail_dt を参照する。
+    """
+    mach_occ = str(machine_occ_key or "").strip()
+    if not mach_occ:
+        return None
+    if isinstance(explicit, datetime):
+        return explicit
+    lm = (machine_handoff.get("last_machining_dt") or {}).get(mach_occ)
+    if isinstance(lm, datetime):
+        return lm
+    machining_today = machine_handoff.get("machining_today_occ") or set()
+    if mach_occ not in machining_today:
+        return None
+    if machine_avail_dt is not None:
+        av = machine_avail_dt.get(mach_occ)
+        if isinstance(av, datetime):
+            if machine_day_floor is None or av > machine_day_floor:
+                return av
+    return None
+
+
 def _roll_prep_segments_for_assign(
     *,
     team_start: datetime,
@@ -28897,6 +28928,8 @@ def _roll_prep_segments_for_assign(
     abolish_limits: bool,
     prev_machining_end: datetime | None = None,
     prev_eq_line: str = "",
+    machine_avail_dt: dict | None = None,
+    machine_day_floor: datetime | None = None,
 ) -> tuple[datetime, list[dict]]:
     if abolish_limits:
         return team_start, []
@@ -28910,11 +28943,14 @@ def _roll_prep_segments_for_assign(
     )
     _post_break = _team_start_is_immediate_post_break_resume(ts, team_breaks)
     if _need_sw:
-        anchor = (
-            prev_machining_end
-            if isinstance(prev_machining_end, datetime)
-            else ts
+        _prev_end = _resolve_prev_machining_end_for_request_switch(
+            machine_handoff=machine_handoff,
+            machine_occ_key=machine_occ_key,
+            explicit=prev_machining_end,
+            machine_avail_dt=machine_avail_dt,
+            machine_day_floor=machine_day_floor,
         )
+        anchor = _prev_end if isinstance(_prev_end, datetime) else ts
         _prev_proc, _prev_mn = _normalize_proc_machine_for_prep_lookup(
             "", "", eq_line=str(prev_eq_line or "").strip()
         )
@@ -30529,6 +30565,8 @@ def _append_legacy_dispatch_candidate_for_team(
             prev_eq_line=str(
                 (_mh_legacy.get("last_eq") or {}).get(_machine_occ_key, "") or ""
             ).strip(),
+            machine_avail_dt=machine_avail_dt,
+            machine_day_floor=_mdf,
         )
         team_start = _refloor_legacy_roll(team_start)
     if team_start >= team_end_limit:
@@ -31038,6 +31076,8 @@ def _assign_one_roll_trial_order_flow(
                 prev_eq_line=str(
                     (_mh.get("last_eq") or {}).get(machine_occ_key, "") or ""
                 ).strip(),
+                machine_avail_dt=machine_avail_dt,
+                machine_day_floor=machine_day_floor,
             )
             team_start = _refloor_trial_roll(team_start)
         if team_start >= team_end_limit:
@@ -35966,6 +36006,8 @@ def _generate_plan_impl(
                                                 ).get(machine_occ_key, "")
                                                 or ""
                                             ).strip(),
+                                            machine_avail_dt=machine_avail_dt,
+                                            machine_day_floor=_machine_day_start,
                                         )
                                     )
                                     team_start = _refloor_legacy_inline(team_start)

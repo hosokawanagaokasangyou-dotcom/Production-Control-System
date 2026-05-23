@@ -619,6 +619,9 @@ public final class MainShellController {
         primaryStage.setMinHeight(480);
 
             applyDesktopSession(DesktopSessionStateStore.load());
+            if (equipmentStatusDashboardTabController != null) {
+                equipmentStatusDashboardTabController.resetDashboardDatesToToday();
+            }
             if (mainShellTabOrganizerPaneController != null) {
                 mainShellTabOrganizerPaneController.bindShell(this);
                 mainShellTabOrganizerPaneController.installTreeCellFactory();
@@ -1060,6 +1063,9 @@ public final class MainShellController {
                 0,
                 equipmentStatusDashboardTabController == null
                         || equipmentStatusDashboardTabController.snapshotAutoRefreshEnabled(),
+                equipmentStatusDashboardTabController != null
+                        ? equipmentStatusDashboardTabController.snapshotAutoRefreshIntervalSec()
+                        : DesktopSessionState.DEFAULT_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC,
                 equipmentStatusDashboardTabController == null
                         || equipmentStatusDashboardTabController.snapshotShowAladdinPlans(),
                 equipmentStatusDashboardTabController == null
@@ -5000,8 +5006,9 @@ public final class MainShellController {
     }
 
     /**
-     * サマリ xlsx 更新中か。判定の正本は共有ロックファイルの存在のみ（{@link
-     * SummaryAiDispatchExportLock#isLocked}）。メモリ上の実行フラグは使わない。
+     * サマリ xlsx 更新中か。判定の正本は共有ロックファイル（{@link
+     * SummaryAiDispatchExportLock#isLocked}）。{@link SummaryAiDispatchExportLock#LOCK_MAX_AGE}
+     * を超えたロックは無効。メモリ上の実行フラグは使わない。
      */
     public boolean isSummaryAiDispatchExportLocked() {
         return SummaryAiDispatchExportLock.isLocked(

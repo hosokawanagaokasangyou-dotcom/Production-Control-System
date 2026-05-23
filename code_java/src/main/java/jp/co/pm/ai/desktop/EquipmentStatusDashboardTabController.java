@@ -17,8 +17,14 @@ import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TitledPane;
 import javafx.scene.control.ToggleButton;
+import javafx.scene.control.TextInputControl;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -42,7 +48,6 @@ import jp.co.pm.ai.desktop.ui.EquipmentStatusFullscreenStage;
 /** メインシェル「ダッシュボード」タブ。 */
 public final class EquipmentStatusDashboardTabController {
 
-    private static final int AUTO_REFRESH_SEC = 60;
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy/MM/dd");
 
     private MainShellController shell;
@@ -50,6 +55,7 @@ public final class EquipmentStatusDashboardTabController {
     @FXML private Button reloadButton;
     @FXML private ToggleButton fullscreenToggle;
     @FXML private CheckBox autoRefreshCheckBox;
+    @FXML private Spinner<Integer> autoRefreshIntervalSpinner;
     @FXML private DatePicker actualDatePicker;
     @FXML private DatePicker planDatePicker;
     @FXML private Label lastUpdatedLabel;
@@ -60,14 +66,15 @@ public final class EquipmentStatusDashboardTabController {
     @FXML private Label planDateSummaryLabel;
     @FXML private Label actualDateSummaryLabel;
     @FXML private Label machineCountLabel;
+    @FXML private Label loadStatsLabel;
     @FXML private Label sourceSummaryLabel;
     @FXML private TitledPane appearancePane;
     @FXML private VBox appearanceControlsHost;
+    @FXML private BorderPane tabRoot;
     @FXML private ScrollPane cardScrollPane;
     @FXML private FlowPane cardFlowPane;
     private HBox cardFlowHost;
     @FXML private VBox emptyStatePane;
-    @FXML private VBox loadingOverlayPane;
 
     private final EquipmentStatusFullscreenStage fullscreenStage = new EquipmentStatusFullscreenStage();
 
@@ -151,6 +158,18 @@ public final class EquipmentStatusDashboardTabController {
                     LocalDate base = actualDate != null ? actualDate : LocalDate.now();
                     setActualDate(base.plusDays(days));
                 });
+        fullscreenStage.setOnAdjustPlanDateDays(
+                days -> {
+                    if (days == 0) {
+                        return;
+                    }
+                    adjustPlanDateByDays(days);
+                });
+
+        if (tabRoot != null) {
+            tabRoot.setFocusTraversable(true);
+            tabRoot.addEventFilter(KeyEvent.KEY_PRESSED, this::onDashboardKeyPressed);
+        }
 
         Runnable displayRefresh = this::rebuildFromCache;
         if (showAladdinCheckBox != null) {
@@ -162,6 +181,16 @@ public final class EquipmentStatusDashboardTabController {
         if (autoRefreshCheckBox != null) {
             autoRefreshCheckBox
                     .selectedProperty()
+                    .addListener((o, a, b) -> updateAutoRefreshTimer());
+        }
+        if (autoRefreshIntervalSpinner != null) {
+            autoRefreshIntervalSpinner.setValueFactory(
+                    new SpinnerValueFactory.IntegerSpinnerValueFactory(
+                            DesktopSessionState.MIN_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC,
+                            DesktopSessionState.MAX_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC,
+                            DesktopSessionState.DEFAULT_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC));
+            autoRefreshIntervalSpinner
+                    .valueProperty()
                     .addListener((o, a, b) -> updateAutoRefreshTimer());
         }
     }
@@ -188,6 +217,15 @@ public final class EquipmentStatusDashboardTabController {
             if (autoRefreshCheckBox != null) {
                 autoRefreshCheckBox.setSelected(s.equipmentStatusDashboardAutoRefreshEnabled());
             }
+            if (autoRefreshIntervalSpinner != null) {
+                int iv =
+                        Math.max(
+                                DesktopSessionState.MIN_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC,
+                                Math.min(
+                                        DesktopSessionState.MAX_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC,
+                                        s.equipmentStatusDashboardAutoRefreshIntervalSec()));
+                autoRefreshIntervalSpinner.getValueFactory().setValue(iv);
+            }
             if (showAladdinCheckBox != null) {
                 showAladdinCheckBox.setSelected(s.equipmentStatusDashboardShowAladdinPlans());
             }
@@ -203,6 +241,13 @@ public final class EquipmentStatusDashboardTabController {
         }
     }
 
+    /** アプリ起動時: 実績日・予定日を当日に揃える（前回セッションの日付は復元しない）。 */
+    public void resetDashboardDatesToToday() {
+        LocalDate today = LocalDate.now();
+        setActualDate(today);
+        setPlanDate(today);
+    }
+
     public String snapshotActualDateIso() {
         return actualDate != null ? actualDate.toString() : "";
     }
@@ -213,6 +258,17 @@ public final class EquipmentStatusDashboardTabController {
 
     public boolean snapshotAutoRefreshEnabled() {
         return autoRefreshCheckBox == null || autoRefreshCheckBox.isSelected();
+    }
+
+    public int snapshotAutoRefreshIntervalSec() {
+        if (autoRefreshIntervalSpinner == null || autoRefreshIntervalSpinner.getValue() == null) {
+            return DesktopSessionState.DEFAULT_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC;
+        }
+        return Math.max(
+                DesktopSessionState.MIN_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC,
+                Math.min(
+                        DesktopSessionState.MAX_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC,
+                        autoRefreshIntervalSpinner.getValue()));
     }
 
     public boolean snapshotShowAladdinPlans() {
@@ -234,6 +290,9 @@ public final class EquipmentStatusDashboardTabController {
 
     public void onMainShellTabSelected() {
         tabActive.set(true);
+        if (tabRoot != null) {
+            tabRoot.requestFocus();
+        }
         reloadFromSources();
         updateAutoRefreshTimer();
     }
@@ -338,6 +397,41 @@ public final class EquipmentStatusDashboardTabController {
         rebuildFromCache();
     }
 
+    private void adjustPlanDateByDays(int days) {
+        if (days == 0) {
+            return;
+        }
+        LocalDate base = planDate != null ? planDate : LocalDate.now();
+        setPlanDate(base.plusDays(days));
+    }
+
+    private void onDashboardKeyPressed(KeyEvent e) {
+        if (!tabActive.get() || fullscreenStage.isShowing()) {
+            return;
+        }
+        if (!e.isShiftDown() || e.isControlDown() || e.isAltDown() || e.isMetaDown()) {
+            return;
+        }
+        int days = arrowDayShift(e.getCode());
+        if (days == 0 || skipDashboardShortcutTarget(e.getTarget())) {
+            return;
+        }
+        adjustPlanDateByDays(days);
+        e.consume();
+    }
+
+    private static int arrowDayShift(KeyCode code) {
+        return switch (code) {
+            case LEFT -> -1;
+            case RIGHT -> 1;
+            default -> 0;
+        };
+    }
+
+    private static boolean skipDashboardShortcutTarget(Object target) {
+        return target instanceof TextInputControl t && t.isEditable();
+    }
+
     private void reloadFromSources() {
         if (shell == null) {
             return;
@@ -406,14 +500,6 @@ public final class EquipmentStatusDashboardTabController {
         if (loadingStatusLabel != null) {
             loadingStatusLabel.setVisible(on);
             loadingStatusLabel.setManaged(on);
-        }
-        if (loadingOverlayPane != null) {
-            boolean showOverlay = on && (cachedSources == null || currentStatuses.isEmpty());
-            loadingOverlayPane.setVisible(showOverlay);
-            loadingOverlayPane.setManaged(showOverlay);
-        }
-        if (cardScrollPane != null) {
-            cardScrollPane.setOpacity(on && cachedSources != null ? 0.5 : 1.0);
         }
         if (on) {
             if (machineCountLabel != null) {
@@ -566,15 +652,43 @@ public final class EquipmentStatusDashboardTabController {
             }
             sourceSummaryLabel.setText(summary);
         }
+        if (loadStatsLabel != null) {
+            if (cachedSources == null) {
+                loadStatsLabel.setText("");
+            } else {
+                loadStatsLabel.setText(
+                        EquipmentStatusDashboardSourceLoader.formatLoadStatsSummary(
+                                cachedSources.loadStats()));
+            }
+        }
     }
 
     private String buildMetaSummary() {
         if (loading.get()) {
             return "データ読込中…";
         }
-        return (machineCountLabel != null ? machineCountLabel.getText() : "")
-                + "  "
-                + (lastUpdatedLabel != null ? lastUpdatedLabel.getText() : "");
+        StringBuilder sb = new StringBuilder();
+        if (machineCountLabel != null) {
+            sb.append(machineCountLabel.getText());
+        }
+        if (lastUpdatedLabel != null) {
+            if (!sb.isEmpty()) {
+                sb.append("  ");
+            }
+            sb.append(lastUpdatedLabel.getText());
+        }
+        if (cachedSources != null && cachedSources.loadStats() != null) {
+            String stats =
+                    EquipmentStatusDashboardSourceLoader.formatLoadStatsSummary(
+                            cachedSources.loadStats());
+            if (!stats.isBlank()) {
+                if (!sb.isEmpty()) {
+                    sb.append("  ");
+                }
+                sb.append(stats);
+            }
+        }
+        return sb.toString();
     }
 
     private void updateLastUpdatedLabel() {
@@ -587,23 +701,22 @@ public final class EquipmentStatusDashboardTabController {
     }
 
     private void updateAutoRefreshTimer() {
+        if (autoRefreshTimeline != null) {
+            autoRefreshTimeline.stop();
+            autoRefreshTimeline = null;
+        }
         boolean want =
                 (tabActive.get() || fullscreenStage.isShowing())
                         && (autoRefreshCheckBox == null || autoRefreshCheckBox.isSelected());
         if (want) {
-            if (autoRefreshTimeline == null) {
-                autoRefreshTimeline =
-                        new Timeline(
-                                new KeyFrame(
-                                        Duration.seconds(AUTO_REFRESH_SEC),
-                                        e -> reloadFromSources()));
-                autoRefreshTimeline.setCycleCount(Timeline.INDEFINITE);
-            }
-            if (autoRefreshTimeline.getStatus() != javafx.animation.Animation.Status.RUNNING) {
-                autoRefreshTimeline.playFromStart();
-            }
-        } else if (autoRefreshTimeline != null) {
-            autoRefreshTimeline.stop();
+            int sec = snapshotAutoRefreshIntervalSec();
+            autoRefreshTimeline =
+                    new Timeline(
+                            new KeyFrame(
+                                    Duration.seconds(sec),
+                                    e -> reloadFromSources()));
+            autoRefreshTimeline.setCycleCount(Timeline.INDEFINITE);
+            autoRefreshTimeline.play();
         }
     }
 }
