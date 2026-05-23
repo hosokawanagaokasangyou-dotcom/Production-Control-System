@@ -64,7 +64,8 @@ public final class DispatchTrialUnassignedWizard {
                                         ResultTaskUnassignedLoader.loadUnassigned(
                                                 uiSnap,
                                                 paths.productionPlan(),
-                                                bundle.shortageHints());
+                                                bundle.shortageHints(),
+                                                true);
                                 if (rows.isEmpty()) {
                                     return;
                                 }
@@ -101,11 +102,10 @@ public final class DispatchTrialUnassignedWizard {
 
         Label intro =
                 new Label(
-                        "配台試行の結果、計画上「配台不可」のタスクが "
+                        "配台試行の結果、計画上「配台不可」または「配台残」のタスクが "
                                 + rows.size()
                                 + " 件あります。"
-                                + " 段階2・段階3（段階2同一）では通常は「配台残」となり、"
-                                + " 本一覧は master の機械カレンダー・勤怠未作成などの致命時に限られます。"
+                                + " 段階3（段階2同一）では未達暦日は不足 JSON の dispatch_qty_shortfall にも載ります。"
                                 + " 一覧を確認し、次のステップで対応を選んでください。");
         intro.setWrapText(true);
 

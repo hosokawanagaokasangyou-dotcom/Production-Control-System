@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 _ENV_DEBUG_LOG_KEYS = ("PM_AI_DEBUG_LOG", "CURSOR_DEBUG_LOG")
+_ENV_MIRROR = "PM_AI_DEBUG_LOG_MIRROR"
 _ENV_SESSION = "PM_AI_AGENT_DEBUG_SESSION"
 _ENV_REPO_ROOT = "PM_AI_REPO_ROOT"
 _ENV_WORKSPACE = "PM_AI_WORKSPACE"
@@ -62,6 +63,24 @@ def _repo_root_candidates() -> list[Path]:
     return dedup
 
 
+def _cursor_debug_directory_root() -> Path | None:
+    """Java ``AgentDebugLog.resolveCursorDebugDirectoryRoot`` と同趣旨。"""
+    ws = (os.environ.get(_ENV_WORKSPACE) or "").strip()
+    if ws:
+        try:
+            p = Path(ws).resolve()
+            if p.is_dir():
+                return p
+        except OSError:
+            pass
+    for repo in _repo_root_candidates():
+        leaf = repo.name.lower()
+        if leaf in ("code_java", "production-control-system") and repo.parent is not None:
+            return repo.parent.resolve()
+        return repo.resolve()
+    return None
+
+
 def resolve_ndjson_path() -> str | None:
     """Java ``AgentDebugLog.resolveNdjsonPath`` と同趣旨のパス（書き込み先候補）。"""
     explicit = _log_path()
@@ -70,17 +89,11 @@ def resolve_ndjson_path() -> str | None:
 
     sid = session_id()
     file_name = f"debug-{sid}.log"
+    cursor_root = _cursor_debug_directory_root()
     candidates: list[str] = []
-
-    ws = (os.environ.get(_ENV_WORKSPACE) or "").strip()
-    if ws:
-        candidates.append(str(Path(ws).resolve() / ".cursor" / file_name))
-
+    if cursor_root is not None:
+        candidates.append(str(cursor_root / ".cursor" / file_name))
     for repo in _repo_root_candidates():
-        if repo.name.lower() == _NESTED_REPO_LEAF:
-            parent = repo.parent
-            if parent is not None:
-                candidates.append(str(parent / ".cursor" / file_name))
         candidates.append(str(repo / ".cursor" / file_name))
 
     for c in candidates:
@@ -95,26 +108,52 @@ def resolve_ndjson_path() -> str | None:
     return None
 
 
+def _write_targets() -> list[str]:
+    """一次パスと WSL ミラー（Java ``overlayPythonChildDebugEnv`` 付与）。"""
+    out: list[str] = []
+    primary = resolve_ndjson_path()
+    if primary:
+        out.append(primary)
+    mirror = (os.environ.get(_ENV_MIRROR) or "").strip()
+    if mirror and mirror not in out:
+        out.append(mirror)
+    return out
+
+
+def _append_line(path: str, json_line: str) -> bool:
+    parent_dir = os.path.dirname(path)
+    if not parent_dir:
+        return False
+    try:
+        os.makedirs(parent_dir, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json_line)
+        return True
+    except OSError:
+        return False
+
+
 def append_structured(
     hypothesis_id: str,
     location: str,
     message: str,
     data: dict[str, Any] | None = None,
 ) -> None:
-    path = resolve_ndjson_path()
-    if not path:
+    targets = _write_targets()
+    if not targets:
         return
-    line = {
+    payload = data or {}
+    if "ndjson_path" not in payload:
+        payload = dict(payload)
+        payload["ndjson_path"] = targets[0]
+    line_obj = {
         "sessionId": session_id(),
         "hypothesisId": hypothesis_id,
         "location": location,
         "message": message,
-        "data": data or {},
+        "data": payload,
         "timestamp": int(time.time() * 1000),
     }
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(line, ensure_ascii=False) + "\n")
-    except OSError:
-        pass
+    json_line = json.dumps(line_obj, ensure_ascii=False) + "\n"
+    for path in targets:
+        _append_line(path, json_line)

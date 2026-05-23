@@ -117,6 +117,26 @@ class DispatchInteractiveStage3QtyDisplayTest {
     }
 
     @Test
+    void planSlide_oldDateShowsStage2_newDateShowsStage3AfterOnly() {
+        List<DispatchInteractiveTabController.Stage3QtyLineSlot> oldDate =
+                DispatchInteractiveTabController.buildStage3QtyFixedLineSlotsWithPlanSlide(
+                        400, 400, 0, 0, false, true, false, 1e-3);
+        assertTrue(oldDate.get(0).lineText().startsWith(DispatchInteractiveTabController.LABEL_ALADDIN_PLAN));
+        assertEquals(
+                DispatchInteractiveTabController.LABEL_STAGE2_PLAN + "400",
+                oldDate.get(1).lineText());
+        assertFalse(oldDate.get(2).visible());
+
+        List<DispatchInteractiveTabController.Stage3QtyLineSlot> newDate =
+                DispatchInteractiveTabController.buildStage3QtyFixedLineSlotsWithPlanSlide(
+                        0, 0, 400, 400, false, false, true, 1e-3);
+        assertFalse(newDate.get(1).visible());
+        assertEquals(
+                DispatchInteractiveTabController.LABEL_STAGE3_ACTUAL + "400",
+                newDate.get(2).lineText());
+    }
+
+    @Test
     void dateQtyLineFilter_textMultiline() {
         String raw =
                 DispatchInteractiveTabController.formatDispatchPlanActualQtyDisplay(

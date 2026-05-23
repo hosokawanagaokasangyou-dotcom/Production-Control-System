@@ -3583,34 +3583,6 @@ public final class MainShellController {
                 }
             }
             appendStageChildResolvedEnvForRun(script, childEnv);
-            if (STAGE1.equals(script)) {
-                // #region agent log
-                String dbgSid = AgentDebugLog.resolveDispatchTrialSessionId(childEnv);
-                java.nio.file.Path dbgPath = AgentDebugLog.resolveNdjsonPath(childEnv, dbgSid);
-                Map<String, Object> dbgData = new LinkedHashMap<>();
-                dbgData.put("sessionId", dbgSid);
-                dbgData.put(
-                        "ndjsonPath",
-                        dbgPath != null ? dbgPath.toAbsolutePath().normalize().toString() : "");
-                dbgData.put(
-                        "excludeRulesJson",
-                        childEnv.getOrDefault(AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON, ""));
-                dbgData.put(
-                        "pmAiDebugLog", childEnv.getOrDefault("PM_AI_DEBUG_LOG", ""));
-                AgentDebugLog.appendStructured(
-                        childEnv,
-                        dbgSid,
-                        "H0",
-                        "MainShellController:runStage:stage1",
-                        "stage1_child_debug_env",
-                        dbgData);
-                appendLog(
-                        "[stage1-debug] NDJSON session="
-                                + dbgSid
-                                + " log="
-                                + (dbgPath != null ? dbgPath.toAbsolutePath().normalize() : "(未解決)"));
-                // #endregion
-            }
             RunRequest req = new RunRequest(py, dir, script, wb, childEnv);
             mainRunTabController.getStatusLabel().setText("実行中…");
             if (STAGE1.equals(script)) {
@@ -3722,48 +3694,6 @@ public final class MainShellController {
                     Path thickPath =
                             codeDirAfter.resolve(CodeDispatchLookupTablesMerge.FILE_PRODUCT_THICK);
                     appendLog("[stage1] 製品厚みテーブル(正本): " + thickPath.toAbsolutePath().normalize());
-                    boolean c4300Present = false;
-                    // #region agent log
-                    try {
-                        if (java.nio.file.Files.isRegularFile(thickPath)) {
-                            for (String line :
-                                    java.nio.file.Files.readAllLines(
-                                            thickPath, java.nio.charset.StandardCharsets.UTF_8)) {
-                                if (line != null
-                                        && line.contains("C4300-1056-820x114YA")) {
-                                    c4300Present = true;
-                                    break;
-                                }
-                            }
-                        }
-                    } catch (IOException ignored) {
-                        // debug only
-                    }
-                    Map<String, String> uiAfter = collectUiEnv();
-                    String dbgSidAfter = AgentDebugLog.resolveDispatchTrialSessionId(uiAfter);
-                    Map<String, Object> mergeDbg = new LinkedHashMap<>();
-                    mergeDbg.put(
-                            "ndjsonPath",
-                            AgentDebugLog.resolveNdjsonPath(uiAfter, dbgSidAfter)
-                                    .toAbsolutePath()
-                                    .normalize()
-                                    .toString());
-                    mergeDbg.put("codeDir", codeDirAfter.toString());
-                    mergeDbg.put("thicknessPath", thickPath.toString());
-                    mergeDbg.put("mergeSummary", ms.summaryJa());
-                    mergeDbg.put("c4300Present", c4300Present);
-                    AgentDebugLog.appendStructured(
-                            uiAfter,
-                            dbgSidAfter,
-                            "H6",
-                            "MainShellController:stage1Merge",
-                            "material_table_post_merge",
-                            mergeDbg);
-                    appendLog(
-                            "[stage1] 製品厚み: C4300-1056-820x114YA 行="
-                                    + (c4300Present ? "あり" : "なし")
-                                    + "（なしのときは加工計画DATAに当該行が無いか段階1で抽出スキップ）");
-                    // #endregion
                 } catch (Exception ex) {
                     appendLog("[stage1] 材料・製品種類情報(code/) 自動追記失敗: " + ex.getMessage());
                 }
