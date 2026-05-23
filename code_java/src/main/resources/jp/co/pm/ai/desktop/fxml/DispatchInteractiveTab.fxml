@@ -85,6 +85,13 @@
             <Tab closable="false" text="タスク×日付">
                 <content>
                     <BorderPane>
+                        <top>
+                            <HBox fx:id="wideColumnStripHost" spacing="0.0">
+                                <padding>
+                                    <Insets bottom="4.0" left="0.0" right="0.0" top="0.0"/>
+                                </padding>
+                            </HBox>
+                        </top>
                         <center>
                             <StackPane fx:id="wideSpreadsheetHost" maxHeight="Infinity" maxWidth="Infinity"
                                        minHeight="200.0"/>
@@ -95,6 +102,13 @@
             <Tab closable="false" text="工程+機械×日">
                 <content>
                     <BorderPane>
+                        <top>
+                            <HBox fx:id="byDayColumnStripHost" spacing="0.0">
+                                <padding>
+                                    <Insets bottom="4.0" left="0.0" right="0.0" top="0.0"/>
+                                </padding>
+                            </HBox>
+                        </top>
                         <center>
                             <StackPane fx:id="byDaySpreadsheetHost" maxHeight="Infinity" maxWidth="Infinity"
                                        minHeight="200.0"/>

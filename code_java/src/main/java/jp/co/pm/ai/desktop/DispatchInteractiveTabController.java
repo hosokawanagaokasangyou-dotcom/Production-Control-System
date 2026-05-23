@@ -106,6 +106,7 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnDragReorderSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
+import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
 import jp.co.pm.ai.desktop.ui.SpreadsheetMultiColumnFilterCoordinator;
 import jp.co.pm.ai.desktop.ui.SpreadsheetRowReorderDragGhost;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
@@ -340,7 +341,13 @@ public final class DispatchInteractiveTabController {
     private StackPane wideSpreadsheetHost;
 
     @FXML
+    private HBox wideColumnStripHost;
+
+    @FXML
     private StackPane byDaySpreadsheetHost;
+
+    @FXML
+    private HBox byDayColumnStripHost;
 
     private final SpreadsheetView wideSpreadsheet = new SpreadsheetView();
     private final SpreadsheetView byDaySpreadsheet = new SpreadsheetView();
@@ -371,6 +378,12 @@ public final class DispatchInteractiveTabController {
     private final AtomicBoolean suppressDispatchColumnLayoutPersistence = new AtomicBoolean(false);
 
     private boolean dispatchColumnLayoutWatchersInstalled;
+
+    /** 横スクロール時に固定する先頭列数（タスク×日付）。 */
+    private final AtomicInteger headerColumnCountWide = new AtomicInteger(0);
+
+    /** 横スクロール時に固定する先頭列数（工程+機械×日）。 */
+    private final AtomicInteger headerColumnCountByDay = new AtomicInteger(0);
 
     private final List<Map<String, String>> wideProfiles = new ArrayList<>();
 
@@ -418,13 +431,14 @@ public final class DispatchInteractiveTabController {
         SpreadsheetTabularSupport.installFullRowDataSelection(byDaySpreadsheet);
 
         SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
-                wideSpreadsheetHost, WIDE_STATIC_HEADERS::size);
+                wideSpreadsheetHost, this::resolvedWideLeadingColumnCount);
         SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
-                byDaySpreadsheetHost, BY_DAY_STATIC_HEADERS::size);
+                byDaySpreadsheetHost, this::resolvedByDayLeadingColumnCount);
 
         installWideDnDHandlers();
         installWideDoubleClickHandler();
         installByDayDoubleClickHandler();
+        ensureDispatchColumnStripsInstalled();
         ensureDispatchColumnLayoutWatchersInstalled();
 
         if (dispatchShortfallTable != null) {
@@ -528,6 +542,84 @@ public final class DispatchInteractiveTabController {
                     pendingGridRebuildAfterTabAttach.set(false);
                     rebuildGrids(this::hideReloadProgress);
                 });
+    }
+
+    private void ensureDispatchColumnStripsInstalled() {
+        if (wideColumnStripHost != null && wideColumnStripHost.getChildren().isEmpty()) {
+            wideColumnStripHost
+                    .getChildren()
+                    .setAll(
+                            SpreadsheetColumnSettingsStrip.create(
+                                    this::resetWideColumnWidths,
+                                    TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_WIDE,
+                                    headerColumnCountWide,
+                                    this::onWideLeadingColumnCountCommitted,
+                                    null,
+                                    null));
+        }
+        if (byDayColumnStripHost != null && byDayColumnStripHost.getChildren().isEmpty()) {
+            byDayColumnStripHost
+                    .getChildren()
+                    .setAll(
+                            SpreadsheetColumnSettingsStrip.create(
+                                    this::resetByDayColumnWidths,
+                                    TableColumnOrderPersistence.TableId.DISPATCH_INTERACTIVE_BY_DAY,
+                                    headerColumnCountByDay,
+                                    this::onByDayLeadingColumnCountCommitted,
+                                    null,
+                                    null));
+        }
+    }
+
+    private int resolvedWideLeadingColumnCount() {
+        return clampLeadingColumnCount(headerColumnCountWide.get(), wideSpreadsheet);
+    }
+
+    private int resolvedByDayLeadingColumnCount() {
+        return clampLeadingColumnCount(headerColumnCountByDay.get(), byDaySpreadsheet);
+    }
+
+    private static int clampLeadingColumnCount(int requested, SpreadsheetView view) {
+        int n = Math.max(0, requested);
+        if (view != null) {
+            int cols = view.getColumns().size();
+            if (cols > 0) {
+                n = Math.min(n, cols);
+            }
+        }
+        return n;
+    }
+
+    private void onWideLeadingColumnCountCommitted(int n) {
+        headerColumnCountWide.set(Math.max(0, n));
+        SpreadsheetTabularSupport.reapplySpreadsheetColumnChrome(
+                wideSpreadsheet, resolvedWideLeadingColumnCount());
+    }
+
+    private void onByDayLeadingColumnCountCommitted(int n) {
+        headerColumnCountByDay.set(Math.max(0, n));
+        SpreadsheetTabularSupport.reapplySpreadsheetColumnChrome(
+                byDaySpreadsheet, resolvedByDayLeadingColumnCount());
+    }
+
+    private void resetWideColumnWidths() {
+        if (wideSpreadsheet == null) {
+            return;
+        }
+        double w = 112;
+        for (var c : wideSpreadsheet.getColumns()) {
+            c.setPrefWidth(w);
+        }
+    }
+
+    private void resetByDayColumnWidths() {
+        if (byDaySpreadsheet == null) {
+            return;
+        }
+        double w = 112;
+        for (var c : byDaySpreadsheet.getColumns()) {
+            c.setPrefWidth(w);
+        }
     }
 
     private void ensureDispatchColumnLayoutWatchersInstalled() {
@@ -2010,9 +2102,9 @@ public final class DispatchInteractiveTabController {
     /** グリッド再構築後: 列フィルタは維持し、固定列・UNCONSTRAINED 列幅ポリシーを再適用する。 */
     private void finalizeDispatchSpreadsheetPresentation() {
         SpreadsheetTabularSupport.reapplySpreadsheetColumnChrome(
-                wideSpreadsheet, WIDE_STATIC_HEADERS.size());
+                wideSpreadsheet, resolvedWideLeadingColumnCount());
         SpreadsheetTabularSupport.reapplySpreadsheetColumnChrome(
-                byDaySpreadsheet, BY_DAY_STATIC_HEADERS.size());
+                byDaySpreadsheet, resolvedByDayLeadingColumnCount());
     }
 
     private void refreshDispatchSpreadsheetForView(SpreadsheetView view) {
@@ -2077,7 +2169,7 @@ public final class DispatchInteractiveTabController {
                                     suppressDispatchColumnLayoutPersistence.set(false);
                                 }
                                 SpreadsheetTabularSupport.applyFixedLeadingColumns(
-                                        wideSpreadsheet, WIDE_STATIC_HEADERS.size());
+                                        wideSpreadsheet, resolvedWideLeadingColumnCount());
                                 SpreadsheetTabularSupport.pinSpreadsheetFilterRow(wideSpreadsheet);
                                 SpreadsheetTabularSupport
                                         .applyUnconstrainedColumnResizePolicyAfterSkinSettles(
@@ -2113,7 +2205,7 @@ public final class DispatchInteractiveTabController {
                         return;
                     }
                     SpreadsheetTabularSupport.reapplySpreadsheetColumnChrome(
-                            wideSpreadsheet, WIDE_STATIC_HEADERS.size());
+                            wideSpreadsheet, resolvedWideLeadingColumnCount());
                     if (onComplete != null) {
                         onComplete.run();
                     } else {
@@ -2168,7 +2260,7 @@ public final class DispatchInteractiveTabController {
                                     suppressDispatchColumnLayoutPersistence.set(false);
                                 }
                                 SpreadsheetTabularSupport.applyFixedLeadingColumns(
-                                        byDaySpreadsheet, BY_DAY_STATIC_HEADERS.size());
+                                        byDaySpreadsheet, resolvedByDayLeadingColumnCount());
                                 SpreadsheetTabularSupport.pinSpreadsheetFilterRow(byDaySpreadsheet);
                                 SpreadsheetTabularSupport
                                         .applyUnconstrainedColumnResizePolicyAfterSkinSettles(
@@ -2204,7 +2296,7 @@ public final class DispatchInteractiveTabController {
                         return;
                     }
                     SpreadsheetTabularSupport.reapplySpreadsheetColumnChrome(
-                            byDaySpreadsheet, BY_DAY_STATIC_HEADERS.size());
+                            byDaySpreadsheet, resolvedByDayLeadingColumnCount());
                     if (onComplete != null) {
                         onComplete.run();
                     } else {
