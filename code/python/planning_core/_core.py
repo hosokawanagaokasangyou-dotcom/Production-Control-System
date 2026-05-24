@@ -27086,14 +27086,44 @@ def _interactive_aggregate_effective_actual_for_validation(
 def _interactive_dispatch_timeline_meta_miss_shortfalls(
     df_dispatch: pd.DataFrame,
     *,
+    meters_done: dict[tuple[str, str, str, date], float] | None = None,
     eps: float = 1e-3,
 ) -> list[dict]:
     """
     計画数量があるのにタイムライン未割付で加工開始日時が空の行（段階3 overlay 後）。
+    依頼×工程×機械の総実績が総計画を満たす場合は未達行に載せない。
     """
     out: list[dict] = []
     if df_dispatch is None or getattr(df_dispatch, "empty", True):
         return out
+    agg_plan: dict[tuple[str, str, str], float] = defaultdict(float)
+    agg_done: dict[tuple[str, str, str], float] = defaultdict(float)
+    for _, row in df_dispatch.iterrows():
+        tid = _interactive_norm_cell(row.get(TASK_COL_TASK_ID))
+        proc = _interactive_dispatch_target_process_key(row.get(TASK_COL_MACHINE))
+        mach = _interactive_norm_cell(row.get(TASK_COL_MACHINE_NAME))
+        if not tid or not mach:
+            continue
+        t3 = (tid, proc, mach)
+        try:
+            plan_q = float(row.get("当日配台数量") or 0)
+        except (TypeError, ValueError):
+            plan_q = 0.0
+        if plan_q > eps:
+            agg_plan[t3] += plan_q
+    if meters_done:
+        for key, qty in meters_done.items():
+            if not isinstance(key, tuple) or len(key) != 4:
+                continue
+            t3 = (
+                _interactive_norm_cell(key[0]),
+                _interactive_norm_cell(key[1]),
+                _interactive_norm_cell(key[2]),
+            )
+            try:
+                agg_done[t3] += float(qty or 0.0)
+            except (TypeError, ValueError):
+                pass
     for _, row in df_dispatch.iterrows():
         try:
             plan_q = float(row.get("当日配台数量") or 0)
@@ -27114,6 +27144,9 @@ def _interactive_dispatch_timeline_meta_miss_shortfalls(
         mach = _interactive_norm_cell(row.get(TASK_COL_MACHINE_NAME))
         dd = _interactive_parse_dispatch_date_cell(row.get("配台日"))
         if not tid or not mach or dd is None:
+            continue
+        t3 = (tid, proc, mach)
+        if agg_done.get(t3, 0.0) + eps >= agg_plan.get(t3, 0.0) and agg_plan.get(t3, 0.0) > eps:
             continue
         date_iso = dd.isoformat()
         out.append(
@@ -28617,7 +28650,7 @@ def _interactive_resolve_slide_target_dispatch_date(
 ) -> date | None:
     """
     計画暦日にタイムライン未割付の行について、配台日スライド先を決める。
-    優先: タイムライン実績暦日 → df_sim 上の割付暦日 → 翌稼働日（無ければ暦日 +1）。
+    優先: タイムライン実績暦日（計画より前後問わず）→ df_sim 上の割付暦日 → 翌稼働日（無ければ暦日 +1）。
     """
     best: date | None = None
     if meters_done:
@@ -28630,7 +28663,6 @@ def _interactive_resolve_slide_target_dispatch_date(
                 or _interactive_norm_cell(str(kp)) != proc
                 or _interactive_norm_cell(str(km)) != mach
                 or not isinstance(kd, date)
-                or kd <= plan_dd
             ):
                 continue
             try:
@@ -32439,14 +32471,17 @@ def _interactive_trial_meters_done_by_timeline_calendar_date(
     _mach_evs.sort(key=_ev_sort_key)
     for ev in _mach_evs:
         tid = _interactive_norm_cell(ev.get("task_id"))
-        tsk = next(
-            (
-                t
-                for t in (task_queue or [])
-                if _interactive_norm_cell(str(t.get("task_id") or "")) == tid
-            ),
-            None,
-        )
+        ev_machine = str(ev.get("machine") or "").strip()
+        tsk = _resolve_task_dict_for_timeline_line(tid, ev_machine, task_queue)
+        if tsk is None:
+            tsk = next(
+                (
+                    t
+                    for t in (task_queue or [])
+                    if _interactive_norm_cell(str(t.get("task_id") or "")) == tid
+                ),
+                None,
+            )
         if tsk is None:
             continue
         proc_n = _interactive_dispatch_target_process_key(tsk.get("machine"))
@@ -32456,7 +32491,7 @@ def _interactive_trial_meters_done_by_timeline_calendar_date(
             continue
         try:
             ud = float(ev.get("units_done") or 0)
-            um = float(tsk.get("unit_m") or 0)
+            um = float(ev.get("unit_m") or tsk.get("unit_m") or 0)
         except (TypeError, ValueError):
             continue
         add_m = ud * um
@@ -38165,7 +38200,10 @@ def _generate_plan_impl(
             df_dispatch, interactive_dispatch_targets
         )
         _LAST_INTERACTIVE_TRIAL_META_MISS_SHORTFALL[:] = (
-            _interactive_dispatch_timeline_meta_miss_shortfalls(df_dispatch)
+            _interactive_dispatch_timeline_meta_miss_shortfalls(
+                df_dispatch,
+                meters_done=_LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT or None,
+            )
         )
         for _mm in _LAST_INTERACTIVE_TRIAL_META_MISS_SHORTFALL:
             _tid = _interactive_norm_cell(_mm.get("task_id"))
