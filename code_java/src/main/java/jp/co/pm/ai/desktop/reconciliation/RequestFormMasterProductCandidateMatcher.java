@@ -180,13 +180,19 @@ final class RequestFormMasterProductCandidateMatcher {
         String pLength = p.getFoamLength() != null ? p.getFoamLength().replaceAll("\\.0$", "") : "";
         String pWidth = p.getFoamWidth() != null ? p.getFoamWidth().replaceAll("\\.0$", "") : "";
         String dims = (pWidth.isEmpty() ? "?" : pWidth) + "×" + (pLength.isEmpty() ? "?" : pLength);
+        String kako = p.getKakoNaiyo();
+        if (kako == null || kako.isBlank()) {
+            kako = "?";
+        }
         return p.getShohinCode()
                 + " | "
                 + p.getFoamPartNo()
                 + " | "
                 + p.getFoamName()
                 + " | "
-                + dims;
+                + dims
+                + " | "
+                + kako;
     }
 
     private record ScoredProduct(int score, ProductInfo product) {}

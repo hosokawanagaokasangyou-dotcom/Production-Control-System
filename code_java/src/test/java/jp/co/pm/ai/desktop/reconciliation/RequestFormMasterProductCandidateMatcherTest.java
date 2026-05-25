@@ -10,6 +10,31 @@ import org.junit.jupiter.api.Test;
 class RequestFormMasterProductCandidateMatcherTest {
 
     @Test
+    void formatCandidateLabel_includesKakoNaiyo() {
+        ProductInfo p =
+                new ProductInfo(
+                        "A2F20AXD0250FN1",
+                        "",
+                        "15020-NP17",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "6783",
+                        "15020",
+                        "1300",
+                        "250",
+                        "",
+                        "",
+                        "EC,梱包");
+
+        String label = RequestFormMasterProductCandidateMatcher.formatCandidateLabel(p);
+
+        assertTrue(label.endsWith(" | EC,梱包"));
+        assertTrue(label.contains("1300×250"));
+    }
+
+    @Test
     void buildRankedCandidateLabels_similarHinmei_doesNotCrossMatch() {
         List<ProductInfo> catalog =
                 List.of(
