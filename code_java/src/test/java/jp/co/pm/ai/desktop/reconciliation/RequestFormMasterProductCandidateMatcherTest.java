@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 class RequestFormMasterProductCandidateMatcherTest {
 
     @Test
-    void buildRankedCandidateLabels_fuzzyHinmei_returnsMultipleOrderedBySimilarity() {
+    void buildRankedCandidateLabels_similarHinmei_doesNotCrossMatch() {
         List<ProductInfo> catalog =
                 List.of(
                         new ProductInfo(
@@ -42,34 +42,18 @@ class RequestFormMasterProductCandidateMatcherTest {
                                 "250",
                                 "",
                                 "",
-                                "EC"),
-                        new ProductInfo(
-                                "CODE-C",
-                                "S3",
-                                "99999-XX",
-                                "",
-                                "",
-                                "",
-                                "",
-                                "1111",
-                                "99999",
-                                "1000",
-                                "100",
-                                "",
-                                "",
-                                ""));
+                                "EC"));
 
         List<String> labels =
                 RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
                         catalog, "CODE-A", "15020", "NP17", "250", "6783", 10);
 
-        assertTrue(labels.size() >= 2, "品名6783と商品CODE-Aで複数候補を出す");
-        assertTrue(labels.get(0).contains("CODE-A"));
-        assertTrue(labels.stream().anyMatch(l -> l.contains("CODE-B")));
+        assertEquals(1, labels.size());
+        assertTrue(labels.get(0).contains("CODE-B"));
     }
 
     @Test
-    void buildRankedCandidateLabels_exactHinmei_ranksExactFoamNameFirst() {
+    void buildRankedCandidateLabels_exactHinmei_returnsOnlyExactFoamName() {
         List<ProductInfo> catalog =
                 List.of(
                         new ProductInfo(
@@ -81,7 +65,7 @@ class RequestFormMasterProductCandidateMatcherTest {
                 RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
                         catalog, "", "", "", "", "6783", 5);
 
-        assertEquals(2, labels.size());
+        assertEquals(1, labels.size());
         assertTrue(labels.get(0).contains("X2"));
     }
 }

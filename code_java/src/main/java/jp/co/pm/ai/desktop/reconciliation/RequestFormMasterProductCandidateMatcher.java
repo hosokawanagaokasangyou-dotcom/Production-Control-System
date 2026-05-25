@@ -7,7 +7,7 @@ import java.util.Locale;
 
 /**
  * アラジン統合マスタから依頼書フォーム用の商品候補を、一致度スコア順に列挙する。
- * 全キーワード AND 一致ではなく、部分一致・数値近似も含めて複数候補を返す。
+ * 品名（フォームの品名＝マスタのフォーム銘 foamName）は正規化後の完全一致のみ。近似一致はしない。
  */
 final class RequestFormMasterProductCandidateMatcher {
 
@@ -44,6 +44,9 @@ final class RequestFormMasterProductCandidateMatcher {
 
         List<ScoredProduct> scored = new ArrayList<>();
         for (ProductInfo product : catalog) {
+            if (!hinmei.isEmpty() && !hinmeiMatchesProduct(hinmei, product)) {
+                continue;
+            }
             int score = scoreProduct(product, item, part, type, length, hinmei);
             if (score >= MIN_SCORE_TO_LIST) {
                 scored.add(new ScoredProduct(score, product));
@@ -104,13 +107,7 @@ final class RequestFormMasterProductCandidateMatcher {
         }
         if (!hinmei.isEmpty()) {
             active++;
-            int s =
-                    bestFieldScore(
-                            hinmei,
-                            p.getFoamName(),
-                            p.getShohinCode(),
-                            p.getSeihinCode(),
-                            p.getFoamPartNo());
+            int s = hinmeiFieldScore(hinmei, p);
             if (s > 0) {
                 matched++;
                 total += s;
@@ -152,83 +149,16 @@ final class RequestFormMasterProductCandidateMatcher {
         if (keyword.length() >= 3 && keyword.contains(k)) {
             return 55;
         }
-        return Math.max(digitSimilarityScore(keyword, k), prefixSimilarityScore(keyword, k));
-    }
-
-    private static int digitSimilarityScore(String keyword, String field) {
-        String kd = digitsOnly(keyword);
-        String fd = digitsOnly(field);
-        if (kd.isEmpty() || fd.isEmpty()) {
-            return 0;
-        }
-        if (fd.equals(kd)) {
-            return 92;
-        }
-        if (fd.contains(kd)) {
-            return 72;
-        }
-        if (kd.contains(fd) && fd.length() >= 3) {
-            return 58;
-        }
-        int dist = levenshtein(kd, fd);
-        int maxLen = Math.max(kd.length(), fd.length());
-        if (maxLen >= 3 && dist <= 2) {
-            return 58 - dist * 14;
-        }
-        if (maxLen >= 4 && dist <= maxLen / 2) {
-            return 40 - dist * 6;
-        }
         return 0;
     }
 
-    private static int prefixSimilarityScore(String keyword, String field) {
-        int common = 0;
-        int n = Math.min(keyword.length(), field.length());
-        for (int i = 0; i < n; i++) {
-            if (keyword.charAt(i) == field.charAt(i)) {
-                common++;
-            } else {
-                break;
-            }
-        }
-        if (common >= 4) {
-            return common * 10;
-        }
-        if (common >= 2) {
-            return common * 6;
-        }
-        return 0;
+    /** 品名は foamName と正規化後完全一致のみ（6783 と 6798 は別候補）。 */
+    private static boolean hinmeiMatchesProduct(String hinmei, ProductInfo product) {
+        return hinmei.equals(normalize(product.getFoamName()));
     }
 
-    private static int levenshtein(String a, String b) {
-        int[][] dp = new int[a.length() + 1][b.length() + 1];
-        for (int i = 0; i <= a.length(); i++) {
-            dp[i][0] = i;
-        }
-        for (int j = 0; j <= b.length(); j++) {
-            dp[0][j] = j;
-        }
-        for (int i = 1; i <= a.length(); i++) {
-            for (int j = 1; j <= b.length(); j++) {
-                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
-                dp[i][j] =
-                        Math.min(
-                                Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1),
-                                dp[i - 1][j - 1] + cost);
-            }
-        }
-        return dp[a.length()][b.length()];
-    }
-
-    private static String digitsOnly(String text) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < text.length(); i++) {
-            char ch = text.charAt(i);
-            if (Character.isDigit(ch)) {
-                sb.append(ch);
-            }
-        }
-        return sb.toString();
+    private static int hinmeiFieldScore(String hinmei, ProductInfo product) {
+        return hinmeiMatchesProduct(hinmei, product) ? 100 : 0;
     }
 
     private static String normalizeLengthKeyword(String val) {
