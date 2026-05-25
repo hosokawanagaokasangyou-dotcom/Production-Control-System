@@ -46,6 +46,13 @@ public final class RequestFormInputTabController {
                                 AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, path);
                     }
                 });
+        reconciliationApp.setJuchuFileChangeHandler(
+                path -> {
+                    if (shell != null) {
+                        shell.updateEnvTabValue(
+                                AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE, path);
+                    }
+                });
         Window host =
                 contentHost.getScene() != null ? contentHost.getScene().getWindow() : null;
         if (host == null && shell != null) {

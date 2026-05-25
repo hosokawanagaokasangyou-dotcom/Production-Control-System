@@ -27,3 +27,7 @@ pm-ai-package-release/
 # JVM heap dumps（コミットしない）
 *.hprof
 *.hprof.*
+*.lock
+execution_log.txt
+stage1_task_input_table.xlsx
+output/plan_input_tasks.xlsx

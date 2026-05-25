@@ -1,6 +1,5 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
-import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -9,10 +8,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicReference;
-
-import javax.imageio.ImageIO;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -27,40 +22,25 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 
-import javafx.application.Platform;
-import javafx.embed.swing.SwingFXUtils;
-import javafx.geometry.Bounds;
-import javafx.geometry.Insets;
-import javafx.geometry.Pos;
-import javafx.scene.Parent;
-import javafx.scene.Scene;
-import javafx.scene.SnapshotParameters;
-import javafx.scene.image.WritableImage;
-import javafx.scene.layout.GridPane;
-import javafx.scene.layout.Pane;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
-import javafx.scene.layout.StackPane;
-
 /**
- * 依頼書 Excel シートを Apache POI で読み、JavaFX 上に描画して PNG プレビューを生成する。
+ * 依頼書 Excel シートを Apache POI で読み、Apache PDFBox で PDF プレビューを生成する。
  * xlwings / Excel COM は使用しない。
  */
 final class RequestFormSheetPreviewRenderer {
 
     /** Excel 1-based プレビュー範囲（依頼書フォーム全体）。 */
-    static final String PREVIEW_RANGE_SPEC = "A1:AN28";
+    static final String PREVIEW_RANGE_SPEC = "A1:AO29";
 
-    /** 描画方式の識別子（変更時は PNG キャッシュを無効化する）。 */
-    static final String PREVIEW_RENDERER_SPEC = "poi-v4-layout-borders";
+    /** 描画方式の識別子（変更時はプレビューキャッシュを無効化する）。 */
+    static final String PREVIEW_RENDERER_SPEC = RequestFormSheetPreviewPdfRenderer.RENDERER_SPEC;
 
-    /** POI 0-based: 行 1～28 → 0～27。 */
+    /** POI 0-based: 行 1～29 → 0～28。 */
     private static final int PREVIEW_FIRST_ROW = 0;
-    private static final int PREVIEW_LAST_ROW = 27;
+    private static final int PREVIEW_LAST_ROW = 28;
 
-    /** POI 0-based: 列 A～AN → 0～39。 */
+    /** POI 0-based: 列 A～AO → 0～40。 */
     private static final int PREVIEW_FIRST_COL = 0;
-    private static final int PREVIEW_LAST_COL = 39;
+    private static final int PREVIEW_LAST_COL = 40;
 
     private static final double DEFAULT_COL_WIDTH_PX = 64.0;
     private static final double DEFAULT_ROW_HEIGHT_PX = 24.0;
@@ -84,25 +64,8 @@ final class RequestFormSheetPreviewRenderer {
             double[] rowHeightsPx,
             List<RequestFormSheetShapeOverlay.OverlayShape> overlayShapes) {}
 
-    static void generatePreviewPng(File excelFile, String sheetName, File outputFile) throws Exception {
-        PreviewData data = loadPreviewData(excelFile, sheetName);
-        CountDownLatch latch = new CountDownLatch(1);
-        AtomicReference<Exception> error = new AtomicReference<>();
-        Platform.runLater(
-                () -> {
-                    try {
-                        Parent root = buildPreviewRoot(data);
-                        writePngSnapshot(root, data, outputFile);
-                    } catch (Exception ex) {
-                        error.set(ex);
-                    } finally {
-                        latch.countDown();
-                    }
-                });
-        latch.await();
-        if (error.get() != null) {
-            throw error.get();
-        }
+    static void generatePreviewPdf(File excelFile, String sheetName, File outputFile) throws Exception {
+        RequestFormSheetPreviewPdfRenderer.generatePreviewPdf(excelFile, sheetName, outputFile);
     }
 
     @SuppressWarnings("unchecked")
@@ -255,145 +218,6 @@ final class RequestFormSheetPreviewRenderer {
                     rowHeightsPx,
                     overlayShapes);
         }
-    }
-
-    static Parent buildPreviewRoot(PreviewData data) {
-        GridPane grid = buildGridPane(data);
-        if (data.overlayShapes() == null || data.overlayShapes().isEmpty()) {
-            return grid;
-        }
-        StackPane root = new StackPane();
-        StackPane.setAlignment(grid, Pos.TOP_LEFT);
-        root.getChildren().add(grid);
-        Pane overlay = RequestFormSheetShapeOverlay.buildPane(data.overlayShapes());
-        root.getChildren().add(overlay);
-        return root;
-    }
-
-    static GridPane buildGridPane(PreviewData data) {
-        GridPane grid = new GridPane();
-        grid.setHgap(0);
-        grid.setVgap(0);
-        grid.setPadding(new Insets(2, 1, 1, 1));
-        grid.setStyle("-fx-background-color: white;");
-
-        for (int c = 0; c < data.colCount(); c++) {
-            double width = data.colWidthsPx()[c];
-            javafx.scene.layout.ColumnConstraints cc = new javafx.scene.layout.ColumnConstraints(width);
-            cc.setMinWidth(width);
-            cc.setPrefWidth(width);
-            cc.setMaxWidth(width);
-            grid.getColumnConstraints().add(cc);
-        }
-        for (int r = 0; r < data.rowCount(); r++) {
-            double height = data.rowHeightsPx()[r];
-            javafx.scene.layout.RowConstraints rc = new javafx.scene.layout.RowConstraints(height);
-            rc.setMinHeight(height);
-            rc.setPrefHeight(height);
-            rc.setMaxHeight(height);
-            grid.getRowConstraints().add(rc);
-        }
-
-        for (int r = 0; r < data.rowCount(); r++) {
-            for (int c = 0; c < data.colCount(); c++) {
-                if (data.skip()[r][c]) {
-                    continue;
-                }
-                double cellW = columnSpanWidth(data, r, c);
-                double cellH = rowSpanHeight(data, r, c);
-                List<RequestFormPreviewTextRun> runs = data.richRuns()[r][c];
-                var node =
-                        RequestFormPreviewNodeFactory.buildCellNode(
-                                data.texts()[r][c],
-                                data.styles()[r][c],
-                                runs,
-                                data.hAligns()[r][c],
-                                cellW,
-                                cellH);
-                GridPane.setFillWidth(node, true);
-                GridPane.setHgrow(node, Priority.ALWAYS);
-                GridPane.setVgrow(node, Priority.ALWAYS);
-                if (data.colSpans()[r][c] > 1) {
-                    GridPane.setColumnSpan(node, data.colSpans()[r][c]);
-                }
-                if (data.rowSpans()[r][c] > 1) {
-                    GridPane.setRowSpan(node, data.rowSpans()[r][c]);
-                }
-                grid.add(node, c, r);
-            }
-        }
-        return grid;
-    }
-
-    static void writePngSnapshot(Parent content, PreviewData data, File outputFile) throws IOException {
-        double totalW = 0.0;
-        for (double w : data.colWidthsPx()) {
-            totalW += w;
-        }
-        double totalH = 0.0;
-        for (double h : data.rowHeightsPx()) {
-            totalH += h;
-        }
-        totalW = Math.max(1.0, totalW + 2);
-        totalH = Math.max(1.0, totalH + 3);
-
-        if (content instanceof Region region) {
-            region.setMinSize(totalW, totalH);
-            region.setPrefSize(totalW, totalH);
-            region.setMaxSize(totalW, totalH);
-        }
-
-        StackPane host = new StackPane(content);
-        StackPane.setAlignment(content, Pos.TOP_LEFT);
-        host.setMinSize(totalW, totalH);
-        host.setPrefSize(totalW, totalH);
-        host.setMaxSize(Region.USE_COMPUTED_SIZE, Region.USE_COMPUTED_SIZE);
-        host.setStyle("-fx-background-color: white;");
-
-        host.applyCss();
-        host.layout();
-        Bounds bounds = content.getLayoutBounds();
-        double snapW = Math.ceil(Math.max(totalW, bounds.getWidth()));
-        double snapH = Math.ceil(Math.max(totalH, bounds.getHeight()));
-        host.setMinSize(snapW, snapH);
-        host.setPrefSize(snapW, snapH);
-
-        Scene scene = new Scene(host, snapW, snapH);
-        scene.getStylesheets().clear();
-        host.applyCss();
-        host.layout();
-        SnapshotParameters params = new SnapshotParameters();
-        WritableImage image = host.snapshot(params, null);
-        if (image == null || image.getWidth() <= 0 || image.getHeight() <= 0) {
-            throw new IOException("プレビュー画像の生成に失敗しました（サイズ 0）");
-        }
-        BufferedImage buffered = SwingFXUtils.fromFXImage(image, null);
-        if (buffered == null) {
-            throw new IOException("プレビュー画像の変換に失敗しました");
-        }
-        File parent = outputFile.getParentFile();
-        if (parent != null && !parent.exists()) {
-            parent.mkdirs();
-        }
-        ImageIO.write(buffered, "PNG", outputFile);
-    }
-
-    private static double columnSpanWidth(PreviewData data, int row, int col) {
-        double width = 0.0;
-        int span = Math.max(1, data.colSpans()[row][col]);
-        for (int c = col; c < col + span && c < data.colCount(); c++) {
-            width += data.colWidthsPx()[c];
-        }
-        return Math.max(1.0, width);
-    }
-
-    private static double rowSpanHeight(PreviewData data, int row, int col) {
-        double height = 0.0;
-        int span = Math.max(1, data.rowSpans()[row][col]);
-        for (int r = row; r < row + span && r < data.rowCount(); r++) {
-            height += data.rowHeightsPx()[r];
-        }
-        return Math.max(1.0, height);
     }
 
     private static double columnWidthPx(Sheet sheet, int col) {

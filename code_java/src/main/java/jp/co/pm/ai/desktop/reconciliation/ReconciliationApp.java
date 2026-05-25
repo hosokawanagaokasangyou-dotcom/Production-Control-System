@@ -47,11 +47,26 @@ public class ReconciliationApp {
     private static final String COL_MASTER_BASE_SHOHIN_RAW = "masterBase商品(原反)";
     /** 受注ﾌｧｲﾙ: ヘッダ行（0-based）。 */
     private static final int JUCHU_SHEET_HEADER_ROW_INDEX = 2;
-    /** 受注ﾌｧｲﾙ: 先頭データ行（0-based）。 */
+    /** 受注ﾌｧｲﾙ: 見出し行直下の先頭データ行（0-based。新規行は常にここへ挿入）。 */
     private static final int JUCHU_SHEET_FIRST_DATA_ROW_INDEX = 3;
+    /** 受注ﾌｧｲﾙ: POI lastRowNum が書式だけで膨らんだときの最大走査行数。 */
+    private static final int JUCHU_SHEET_MAX_SCAN_ROWS = 20_000;
     private static final Path SETTINGS_FILE =
             Path.of(System.getProperty("user.home"), ".pm-ai-desktop", "request-form-reconciliation.properties");
     private static final double SETTINGS_CARD_WIDTH = 300.0;
+    /** 従来 100% 設計からの UI 幅倍率（現状 = 120%）。 */
+    private static final double UI_WIDTH_SCALE = 1.2;
+    /** 左ペイン幅の 100% 設計値（× {@link #UI_WIDTH_SCALE} が実寸）。 */
+    private static final double LEFT_PANE_MIN_WIDTH_BASE = 280.0;
+    private static final double LEFT_PANE_PREF_WIDTH_BASE = 480.0;
+    private static final double LEFT_PANE_MAX_WIDTH_BASE = 1000.0;
+    private static final double LEFT_PANE_MIN_WIDTH = LEFT_PANE_MIN_WIDTH_BASE * UI_WIDTH_SCALE;
+    private static final double LEFT_PANE_PREF_WIDTH = LEFT_PANE_PREF_WIDTH_BASE * UI_WIDTH_SCALE;
+    private static final double LEFT_PANE_MAX_WIDTH = LEFT_PANE_MAX_WIDTH_BASE * UI_WIDTH_SCALE;
+    /** 初回分割位置（左ペイン比率）。120% 表示時は従来 30% × 1.2。 */
+    private static final double SPLIT_LEFT_RATIO = Math.min(0.85, 0.30 * UI_WIDTH_SCALE);
+    /** フォーム項目名ラベル列の最小幅（100% 設計 × {@link #UI_WIDTH_SCALE}）。 */
+    private static final double FORM_LABEL_COLUMN_MIN_WIDTH = 70.0 * UI_WIDTH_SCALE;
     private static final long ORIGINAL_FILE_POLL_INTERVAL_MS = 5L * 60L * 1000L;
     /** {@link #saveLocalForm()} 後・受注ファイル未転記のステータス。 */
     private static final String STATUS_LOCAL_SAVE_PENDING = "手修正済み (未保存)";
@@ -61,12 +76,15 @@ public class ReconciliationApp {
     private Path aladdinMasterDir;
     private Map<String, String> uiEnvSnapshot = Map.of();
     private Consumer<String> originalDirChangeHandler;
+    private Consumer<String> juchuFileChangeHandler;
     private TextField txtJuchuPathDisplay;
     private Button btnTransfer;
     private Button btnBulkTransferPending;
     private String targetFolder = "";
     private String juchuFilePath;
     private boolean isLoadingRecord = false;
+    /** 受注ファイル転記中（UI スレッドをブロックしないようバックグラウンド実行）。 */
+    private volatile boolean juchuTransferInProgress = false;
 
     private ComboBox<OrderRecord> comboRecord;
     private ObservableList<OrderRecord> orderRecords = FXCollections.observableArrayList();
@@ -152,12 +170,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     private ComboBox<String> newCmbInputTanto;       // 入力担当 (header)
     private ComboBox<String> newCmbWariSu;           // 割数 (product row)
 
-    private TextField newTxtFormKakoNaiyo;
     private TextField newTxtFormTokki1;
     private TextField newTxtFormTokki2;
     private TextField newTxtFormTokki3;
     private DatePicker newDpFormDeliv;
     private DatePicker newDpFormAdjustDeliv;
+    private DatePicker newDpFormInputDate;
     private TextField newTxtFormWage;
     private TextField newTxtFormContractNo;
     
@@ -198,6 +216,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     /** フォルダ選択で依頼書原本パスが変わったとき、環境変数タブへ反映するためのコールバック。 */
     public void setOriginalDirChangeHandler(Consumer<String> handler) {
         this.originalDirChangeHandler = handler;
+    }
+
+    /** 受注ファイル選択でパスが変わったとき、環境変数タブへ反映するためのコールバック。 */
+    public void setJuchuFileChangeHandler(Consumer<String> handler) {
+        this.juchuFileChangeHandler = handler;
     }
 
     public void setPreviewBadgeConfigSupplier(Supplier<RequestFormPreviewBadgeConfig> supplier) {
@@ -282,10 +305,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         // 1. LEFT PANE: ScrollPane container for detailed inputs
         ScrollPane leftScroll = new ScrollPane();
         leftScroll.setFitToWidth(true);
+        leftScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         leftScroll.setStyle("-fx-background-color: transparent; -fx-border-color: transparent;");
-        leftScroll.setMinWidth(380);
-        leftScroll.setPrefWidth(480);
-        leftScroll.setMaxWidth(580);
+        leftScroll.setMinWidth(LEFT_PANE_MIN_WIDTH);
+        leftScroll.setPrefWidth(LEFT_PANE_PREF_WIDTH);
+        leftScroll.setMaxWidth(LEFT_PANE_MAX_WIDTH);
         
         VBox leftContainer = new VBox(15);
         leftContainer.getStyleClass().add("pane-container");
@@ -302,7 +326,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         lblSearch.setStyle("-fx-font-weight: bold;");
         TextField txtSearch = new TextField();
         txtSearch.setPromptText("依頼No / ユーザー...");
-        txtSearch.setPrefWidth(160);
+        txtSearch.setPrefWidth(160 * UI_WIDTH_SCALE);
         txtSearch.textProperty().addListener((obs, oldVal, newVal) -> filterTable(newVal));
         filterBox.getChildren().addAll(lblSearch, txtSearch);
         
@@ -394,23 +418,27 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         styleFormLabel(lblContract);
         newTxtFormContractNo = new TextField();
         newTxtFormContractNo.setStyle("-fx-font-size: 11px;");
-        newTxtFormContractNo.setTextFormatter(new TextFormatter<>(change -> {
-            String text = change.getText();
-            if (text.matches("^[\\x20-\\x7E]*$")) {
-                return change;
-            }
-            return null;
-        }));
+        newTxtFormContractNo.setEditable(false);
+        newTxtFormContractNo.setFocusTraversable(false);
         basicGrid.add(lblContract, 2, 2);
         addFormField(basicGrid, newTxtFormContractNo, 3, 2);
+
+        Label lblInputDate = new Label("入力日:");
+        styleFormLabel(lblInputDate);
+        newDpFormInputDate = new DatePicker();
+        newDpFormInputDate.setStyle("-fx-font-size: 11px;");
+        newDpFormInputDate.setEditable(false);
+        newDpFormInputDate.setDisable(true);
+        basicGrid.add(lblInputDate, 0, 3);
+        addFormField(basicGrid, newDpFormInputDate, 1, 3);
         
-        // Row 3
+        // Row 4
         Label lblProcess = new Label("加工内容:");
         styleFormLabel(lblProcess);
         txtProcess = new TextField();
         txtProcess.setStyle("-fx-font-size: 11px;");
-        basicGrid.add(lblProcess, 0, 3);
-        addFormField(basicGrid, txtProcess, 1, 3, 3, 1);
+        basicGrid.add(lblProcess, 2, 3);
+        addFormField(basicGrid, txtProcess, 3, 3);
         
         basicGrid.setMaxWidth(Double.MAX_VALUE);
         
@@ -458,62 +486,56 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         GridPane workGrid = new GridPane();
         workGrid.setHgap(8);
         workGrid.setVgap(6);
-        
-        Label lblKakoNaiyo = new Label("加工内容(詳細):");
-        lblKakoNaiyo.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
-        newTxtFormKakoNaiyo = new TextField();
-        newTxtFormKakoNaiyo.setStyle("-fx-font-size: 11px;");
-        workGrid.add(lblKakoNaiyo, 0, 0);
-        workGrid.add(newTxtFormKakoNaiyo, 1, 0, 3, 1);
-        
-        Label lblTokki1 = new Label("特記事項1:");
-        lblTokki1.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
-        newTxtFormTokki1 = new TextField();
-        newTxtFormTokki1.setStyle("-fx-font-size: 11px;");
-        workGrid.add(lblTokki1, 0, 1);
-        workGrid.add(newTxtFormTokki1, 1, 1, 3, 1);
-        
-        Label lblTokki2 = new Label("特記事項2:");
-        lblTokki2.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
-        newTxtFormTokki2 = new TextField();
-        newTxtFormTokki2.setStyle("-fx-font-size: 11px;");
-        workGrid.add(lblTokki2, 0, 2);
-        workGrid.add(newTxtFormTokki2, 1, 2, 3, 1);
-        
-        Label lblTokki3 = new Label("特記事項3:");
-        lblTokki3.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
-        newTxtFormTokki3 = new TextField();
-        newTxtFormTokki3.setStyle("-fx-font-size: 11px;");
-        workGrid.add(lblTokki3, 0, 3);
-        workGrid.add(newTxtFormTokki3, 1, 3, 3, 1);
-        
-        Label lblYoto = new Label("用途:");
-        lblYoto.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
-        newCmbFormYoto = new ComboBox<>(javafx.collections.FXCollections.observableArrayList(optYoto));
-        newCmbFormYoto.setStyle("-fx-font-size: 11px;");
-        workGrid.add(lblYoto, 0, 4);
-        workGrid.add(newCmbFormYoto, 1, 4);
+        configureTwoColumnFormGrid(workGrid);
         
         Label lblInputKbn = new Label("入力区分:");
-        lblInputKbn.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
+        styleFormLabel(lblInputKbn);
         newCmbFormInputKbn = new ComboBox<>(javafx.collections.FXCollections.observableArrayList(optInputKbn));
         newCmbFormInputKbn.setStyle("-fx-font-size: 11px;");
-        workGrid.add(lblInputKbn, 2, 4);
-        workGrid.add(newCmbFormInputKbn, 3, 4);
+        workGrid.add(lblInputKbn, 0, 0);
+        addFormField(workGrid, newCmbFormInputKbn, 1, 0);
 
         Label lblKakoKbn = new Label("加工区分:");
-        lblKakoKbn.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
+        styleFormLabel(lblKakoKbn);
         newCmbFormKakoKbn = new ComboBox<>(javafx.collections.FXCollections.observableArrayList(optKakoKbn));
         newCmbFormKakoKbn.setStyle("-fx-font-size: 11px;");
-        workGrid.add(lblKakoKbn, 0, 5);
-        workGrid.add(newCmbFormKakoKbn, 1, 5);
-        
+        workGrid.add(lblKakoKbn, 2, 0);
+        addFormField(workGrid, newCmbFormKakoKbn, 3, 0);
+
         Label lblInputTanto = new Label("入力担当:");
-        lblInputTanto.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
+        styleFormLabel(lblInputTanto);
         newCmbFormInputTanto = new ComboBox<>(javafx.collections.FXCollections.observableArrayList(optInputTanto));
         newCmbFormInputTanto.setStyle("-fx-font-size: 11px;");
-        workGrid.add(lblInputTanto, 2, 5);
-        workGrid.add(newCmbFormInputTanto, 3, 5);
+        workGrid.add(lblInputTanto, 0, 1);
+        addFormField(workGrid, newCmbFormInputTanto, 1, 1);
+
+        Label lblYoto = new Label("用途:");
+        styleFormLabel(lblYoto);
+        newCmbFormYoto = new ComboBox<>(javafx.collections.FXCollections.observableArrayList(optYoto));
+        newCmbFormYoto.setStyle("-fx-font-size: 11px;");
+        workGrid.add(lblYoto, 2, 1);
+        addFormField(workGrid, newCmbFormYoto, 3, 1);
+        
+        Label lblTokki1 = new Label("特記事項1:");
+        styleFormLabel(lblTokki1);
+        newTxtFormTokki1 = new TextField();
+        newTxtFormTokki1.setStyle("-fx-font-size: 11px;");
+        workGrid.add(lblTokki1, 0, 2);
+        addFormField(workGrid, newTxtFormTokki1, 1, 2, 3, 1);
+        
+        Label lblTokki2 = new Label("特記事項2:");
+        styleFormLabel(lblTokki2);
+        newTxtFormTokki2 = new TextField();
+        newTxtFormTokki2.setStyle("-fx-font-size: 11px;");
+        workGrid.add(lblTokki2, 0, 3);
+        addFormField(workGrid, newTxtFormTokki2, 1, 3, 3, 1);
+        
+        Label lblTokki3 = new Label("特記事項3:");
+        styleFormLabel(lblTokki3);
+        newTxtFormTokki3 = new TextField();
+        newTxtFormTokki3.setStyle("-fx-font-size: 11px;");
+        workGrid.add(lblTokki3, 0, 4);
+        addFormField(workGrid, newTxtFormTokki3, 1, 4, 3, 1);
         
         leftContainer.getChildren().addAll(lblWorkflowTitle, workGrid);
         
@@ -602,7 +624,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         
         HBox viewerHeaderBox = new HBox(15);
         viewerHeaderBox.setAlignment(Pos.CENTER_LEFT);
-        Label lblViewer = new Label("原本加工依頼書プレビュー (画像キャッシュ)");
+        Label lblViewer = new Label("原本加工依頼書プレビュー (PDFキャッシュ)");
         lblViewer.getStyleClass().add("pane-title-right");
         previewFileNameLabel = new Label();
         previewFileNameLabel.getStyleClass().add("top-status");
@@ -639,7 +661,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         rightPane.getChildren().addAll(viewerHeaderBox, sheetScrollPane, discrepancyLabel);
 
         splitPane.getItems().addAll(leftScroll, rightPane);
-        splitPane.setDividerPositions(0.30); // Left takes 30%, Right takes 70%
+        splitPane.setDividerPositions(SPLIT_LEFT_RATIO);
+        SplitPane.setResizableWithParent(leftScroll, Boolean.TRUE);
+        SplitPane.setResizableWithParent(rightPane, Boolean.TRUE);
 
         // --- DYNAMIC TABS STRUCTURE ---
         TabPane tabPane = new TabPane();
@@ -881,16 +905,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
             File chosenFile = fileChooser.showOpenDialog(hostWindow);
             if (chosenFile != null) {
-                juchuFilePath = chosenFile.getAbsolutePath();
-                txtJuchuPathDisplay.setText(juchuFilePath);
-                File parentDir = chosenFile.getParentFile();
-                if (parentDir != null) {
-                    applySelectedOriginalDir(parentDir.getAbsolutePath());
-                }
+                applySelectedJuchuFile(chosenFile.getAbsolutePath());
                 saveSettings();
-                statusLabel.setText(
-                        "受注ファイルと依頼書原本フォルダを更新しました: "
-                                + juchuFilePath);
+                statusLabel.setText("受注ファイルを更新しました: " + juchuFilePath);
                 updateTransferButtonState();
             }
         });
@@ -1075,14 +1092,17 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         addProductRow(null);
         addRawRow(null);
         
-        newTxtFormKakoNaiyo.setText("スライス");
         newTxtFormTokki1.setText("");
         newTxtFormTokki2.setText("");
         newTxtFormTokki3.setText("");
         if (!optYoto.isEmpty()) newCmbFormYoto.setValue(optYoto.get(0));
         if (!optUser.isEmpty()) newCmbFormUser.setValue(optUser.get(0));
+        if (!optInputKbn.isEmpty()) newCmbFormInputKbn.setValue(optInputKbn.get(0));
+        if (!optKakoKbn.isEmpty()) newCmbFormKakoKbn.setValue(optKakoKbn.get(0));
+        if (!optInputTanto.isEmpty()) newCmbFormInputTanto.setValue(optInputTanto.get(0));
         newDpFormDeliv.setValue(null);
         newDpFormAdjustDeliv.setValue(null);
+        newDpFormInputDate.setValue(null);
         newTxtFormWage.setText("9");
         newTxtFormContractNo.setText("");
         
@@ -1116,6 +1136,17 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             originalDirChangeHandler.accept(absolutePath);
         }
         ensureJuchuPathDefault();
+    }
+
+    private void applySelectedJuchuFile(String absolutePath) {
+        juchuFilePath = absolutePath;
+        refreshJuchuPathDisplay();
+        Map<String, String> next = new HashMap<>(uiEnvSnapshot);
+        next.put(AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE, absolutePath);
+        uiEnvSnapshot = Map.copyOf(next);
+        if (juchuFileChangeHandler != null) {
+            juchuFileChangeHandler.accept(absolutePath);
+        }
     }
 
     private void applyJuchuFilePathFromUiEnv() {
@@ -1205,6 +1236,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 }
             }
         }
+        if (juchuTransferInProgress) {
+            blocked = true;
+            if (blockedTooltip == null) {
+                blockedTooltip = "受注ファイルへの転記処理を実行中です。";
+            }
+        }
         if (btnTransfer != null) {
             btnTransfer.setDisable(blocked);
             btnTransfer.setTooltip(blocked ? new Tooltip(blockedTooltip) : null);
@@ -1278,9 +1315,17 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             return;
         }
         if (choice.get() == transferThenReload) {
-            if (!transferAllPendingLocalSaves(false)) {
-                return;
-            }
+            transferAllPendingLocalSavesAsync(
+                    false,
+                    success -> {
+                        if (success) {
+                            reloadData();
+                            if (afterReload != null) {
+                                afterReload.run();
+                            }
+                        }
+                    });
+            return;
         }
         reloadData();
         if (afterReload != null) {
@@ -1288,14 +1333,29 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
     }
 
-    /** @param showSuccessDialog {@code true} のとき完了ダイアログを表示 */
-    private boolean transferAllPendingLocalSaves(boolean showSuccessDialog) {
+    /**
+     * 一時保存分をバックグラウンドで一括転記する。
+     *
+     * @param showSuccessDialog {@code true} のとき完了ダイアログを表示
+     * @param onComplete 完了時コールバック（FX スレッド）。{@code null} 可
+     */
+    private void transferAllPendingLocalSavesAsync(
+            boolean showSuccessDialog, Consumer<Boolean> onComplete) {
+        if (juchuTransferInProgress) {
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
+            return;
+        }
         List<OrderRecord> pending = collectPendingLocalSaveRecords();
         if (pending.isEmpty()) {
             if (showSuccessDialog) {
                 showAlert("情報", "一時保存済みで未転記のデータはありません。");
             }
-            return true;
+            if (onComplete != null) {
+                onComplete.accept(true);
+            }
+            return;
         }
         if (isJuchuFileLockedForWrite()) {
             File juchuFile = new File(juchuFilePath);
@@ -1310,76 +1370,152 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                             + " Excel で開いている場合は保存して閉じてから再試行してください。"
                             + lockHint);
             updateTransferButtonState();
-            return false;
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
+            return;
         }
 
+        File file = new File(juchuFilePath);
+        if (!file.isFile()) {
+            showAlert("エラー", "受注ファイルが見つかりません。");
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
+            return;
+        }
+
+        List<String> headerWarnings = readJuchuHeaderWarnings(file);
+        if (!headerWarnings.isEmpty()) {
+            statusLabel.setText("列定義警告: " + headerWarnings.size() + " 件（詳細はダイアログ）");
+        }
+        if (!confirmJuchuHeaderWarnings(headerWarnings)) {
+            if (onComplete != null) {
+                onComplete.accept(false);
+            }
+            return;
+        }
+
+        beginJuchuTransfer("一時保存分を受注ファイルへ一括転記しています…\n(1/4) 受注ファイルを開いています…");
         statusLabel.setText("一時保存分を受注ファイルへ一括転記中...");
-        List<String> errors = new ArrayList<>();
-        int transferred = 0;
-        try {
-            File file = new File(juchuFilePath);
-            if (!file.isFile()) {
-                showAlert("エラー", "受注ファイルが見つかりません。");
-                return false;
-            }
+        List<OrderRecord> pendingCopy = new ArrayList<>(pending);
+        Thread transferThread =
+                new Thread(
+                        () -> {
+                            List<String> errors = new ArrayList<>();
+                            int transferred = 0;
+                            Exception fatal = null;
+                            try {
+                                updateLoadingOverlayText(
+                                        "一時保存分を受注ファイルへ一括転記しています…\n(1/4) 受注ファイルを開いています…");
+                                try (FileInputStream fis = new FileInputStream(file);
+                                        Workbook wb = WorkbookFactory.create(fis)) {
+                                    Sheet sheet = wb.getSheet("受注ﾌｧｲﾙ");
+                                    Map<String, Integer> colMap = buildJuchuColumnMap(sheet);
+                                    int total = pendingCopy.size();
+                                    for (int i = 0; i < total; i++) {
+                                        OrderRecord record = pendingCopy.get(i);
+                                        updateLoadingOverlayText(
+                                                String.format(
+                                                        "一時保存分を受注ファイルへ一括転記しています…\n"
+                                                                + "(2/4) 転記中 (%d / %d)\n依頼No: %s",
+                                                        i + 1,
+                                                        total,
+                                                        record.getReqNo()));
+                                        try {
+                                            transferRecordFromDbValues(wb, sheet, colMap, record);
+                                            record.setStatus("一致 (転記完了)");
+                                            record.setDiscrepancy("一致 (受注ファイルへ転記完了)");
+                                            transferred++;
+                                        } catch (Exception ex) {
+                                            errors.add(record.getReqNo() + ": " + ex.getMessage());
+                                        }
+                                    }
+                                    updateLoadingOverlayText(
+                                            "一時保存分を受注ファイルへ一括転記しています…\n(3/4) ファイルを保存しています…");
+                                    try (FileOutputStream fos = new FileOutputStream(file)) {
+                                        wb.write(fos);
+                                    }
+                                }
+                                updateLoadingOverlayText(
+                                        "一時保存分を受注ファイルへ一括転記しています…\n(4/4) 画面を更新しています…");
+                            } catch (Exception ex) {
+                                fatal = ex;
+                            }
 
-            try (FileInputStream fis = new FileInputStream(file);
-                    Workbook wb = WorkbookFactory.create(fis)) {
-                Sheet sheet = wb.getSheet("受注ﾌｧｲﾙ");
-                Map<String, Integer> colMap = buildJuchuColumnMap(sheet);
-                for (OrderRecord record : pending) {
-                    try {
-                        transferRecordFromDbValues(wb, sheet, colMap, record);
-                        record.setStatus("一致 (転記完了)");
-                        record.setDiscrepancy("一致 (受注ファイルへ転記完了)");
-                        transferred++;
-                    } catch (Exception ex) {
-                        errors.add(record.getReqNo() + ": " + ex.getMessage());
-                    }
-                }
-                try (FileOutputStream fos = new FileOutputStream(file)) {
-                    wb.write(fos);
-                }
-            }
+                            final int finalTransferred = transferred;
+                            final List<String> finalErrors = errors;
+                            final Exception finalFatal = fatal;
+                            Platform.runLater(
+                                    () -> {
+                                        try {
+                                            if (finalFatal != null) {
+                                                statusLabel.setText("エラー: " + finalFatal.getMessage());
+                                                showAlert(
+                                                        "エラー",
+                                                        "一括転記中にエラーが発生しました:\n"
+                                                                + finalFatal.getMessage());
+                                                finalFatal.printStackTrace();
+                                                if (onComplete != null) {
+                                                    onComplete.accept(false);
+                                                }
+                                                return;
+                                            }
 
-            refreshComboRecordItems();
-            if (selectedRecord != null && isPendingLocalSave(selectedRecord)) {
-                loadRecordDetails(selectedRecord);
-            } else if (selectedRecord != null) {
-                discrepancyLabel.setText(selectedRecord.getDiscrepancy());
-            }
-            updateTransferButtonState();
+                                            refreshComboRecordItems();
+                                            if (selectedRecord != null && isPendingLocalSave(selectedRecord)) {
+                                                loadRecordDetails(selectedRecord);
+                                            } else if (selectedRecord != null) {
+                                                discrepancyLabel.setText(selectedRecord.getDiscrepancy());
+                                            }
 
-            if (!errors.isEmpty()) {
-                statusLabel.setText(
-                        "一括転記: 成功 " + transferred + " 件 / 失敗 " + errors.size() + " 件");
-                showAlert(
-                        "一括転記（一部失敗）",
-                        "成功: "
-                                + transferred
-                                + " 件\n失敗: "
-                                + errors.size()
-                                + " 件\n\n"
-                                + String.join("\n", errors));
-                return false;
-            }
+                                            if (!finalErrors.isEmpty()) {
+                                                statusLabel.setText(
+                                                        "一括転記: 成功 "
+                                                                + finalTransferred
+                                                                + " 件 / 失敗 "
+                                                                + finalErrors.size()
+                                                                + " 件");
+                                                showAlert(
+                                                        "一括転記（一部失敗）",
+                                                        "成功: "
+                                                                + finalTransferred
+                                                                + " 件\n失敗: "
+                                                                + finalErrors.size()
+                                                                + " 件\n\n"
+                                                                + String.join("\n", finalErrors));
+                                                if (onComplete != null) {
+                                                    onComplete.accept(false);
+                                                }
+                                                return;
+                                            }
 
-            statusLabel.setText("一時保存 " + transferred + " 件の一括転記が完了しました。");
-            if (showSuccessDialog) {
-                showAlert("成功", "一時保存 " + transferred + " 件を受注ファイルへ転記しました。");
-            }
-            return true;
-        } catch (Exception ex) {
-            statusLabel.setText("エラー: " + ex.getMessage());
-            showAlert("エラー", "一括転記中にエラーが発生しました:\n" + ex.getMessage());
-            ex.printStackTrace();
-            updateTransferButtonState();
-            return false;
-        }
+                                            statusLabel.setText(
+                                                    "一時保存 "
+                                                            + finalTransferred
+                                                            + " 件の一括転記が完了しました。");
+                                            if (showSuccessDialog) {
+                                                showAlert(
+                                                        "成功",
+                                                        "一時保存 "
+                                                                + finalTransferred
+                                                                + " 件を受注ファイルへ転記しました。");
+                                            }
+                                            if (onComplete != null) {
+                                                onComplete.accept(true);
+                                            }
+                                        } finally {
+                                            endJuchuTransfer();
+                                        }
+                                    });
+                        },
+                        "request-form-juchu-bulk-transfer");
+        transferThread.setDaemon(true);
+        transferThread.start();
     }
 
     private void transferAllPendingLocalSaves() {
-        transferAllPendingLocalSaves(true);
+        transferAllPendingLocalSavesAsync(true, null);
     }
 
     private static Map<String, Integer> buildJuchuColumnMap(Sheet sheet) {
@@ -1410,100 +1546,75 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
 
         String normKey = normalize_key(reqNo);
+        int lastDataRowIndex = findJuchuSheetLastPopulatedDataRowIndex(sheet);
         Row targetRow = null;
         int targetRowIndex = -1;
-        for (int r = JUCHU_SHEET_FIRST_DATA_ROW_INDEX; r <= sheet.getLastRowNum(); r++) {
-            Row row = sheet.getRow(r);
-            if (row == null) {
-                continue;
-            }
-            Cell c = row.getCell(0);
-            if (c != null && normalize_key(getCellValueAsString(c)).equals(normKey)) {
-                targetRow = row;
-                targetRowIndex = r + 1;
-                break;
-            }
+        int matchedRowIndex = findJuchuDataRowIndexByReqNo(sheet, normKey, lastDataRowIndex);
+        if (matchedRowIndex >= 0) {
+            targetRow = sheet.getRow(matchedRowIndex);
+            targetRowIndex = matchedRowIndex + 1;
         }
 
         boolean isNewRow = targetRow == null;
         if (isNewRow) {
-            targetRowIndex = insertNewJuchuDataRowPreservingFormulas(sheet);
+            targetRowIndex = insertNewJuchuDataRowPreservingFormulas(sheet, lastDataRowIndex, null);
             targetRow = sheet.getRow(JUCHU_SHEET_FIRST_DATA_ROW_INDEX);
-        }
-
-        Cell cellReqNo = targetRow.createCell(0);
-        cellReqNo.setCellValue(reqNo);
-
-        CellStyle yellowStyle = wb.createCellStyle();
-        Row refRow = sheet.getRow(4);
-        if (refRow == null) {
-            refRow = sheet.getRow(3);
-        }
-        if (refRow != null && refRow.getCell(0) != null) {
-            yellowStyle.cloneStyleFrom(refRow.getCell(0).getCellStyle());
-        }
-        yellowStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
-        yellowStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-        cellReqNo.setCellStyle(yellowStyle);
-
-        if (isNewRow) {
-            setJuchuSheetString(targetRow, colMap, "入力区分", "通常入力");
-            setJuchuSheetString(targetRow, colMap, "加工区分", "後加工");
-        }
-        setJuchuSheetString(targetRow, colMap, "入力担当", "自動転記");
-        setJuchuSheetDate(targetRow, colMap, "入力日", new Date());
-
-        setJuchuSheetString(targetRow, colMap, "品名", db.getOrDefault("品名", ""));
-        setJuchuSheetString(targetRow, colMap, "製品", db.getOrDefault("製品", ""));
-        setJuchuSheetString(targetRow, colMap, "梱-等1", db.getOrDefault("梱-等1", ""));
-        setJuchuSheetString(targetRow, colMap, "色1", db.getOrDefault("色1", ""));
-        setJuchuSheetString(targetRow, colMap, "区分1", db.getOrDefault("区分1", ""));
-        setJuchuSheetString(targetRow, colMap, "数量1", db.getOrDefault("数量1", ""));
-        setJuchuSheetString(targetRow, colMap, "枝番", db.getOrDefault("枝番", ""));
-        setJuchuSheetString(targetRow, colMap, "ＥＣ面", db.getOrDefault("ＥＣ面", ""));
-        setJuchuSheetString(targetRow, colMap, "ﾄﾘﾐﾝｸﾞ", db.getOrDefault("ﾄﾘﾐﾝｸﾞ", ""));
-        setJuchuSheetString(targetRow, colMap, "ユーザー", db.getOrDefault("ユーザー", ""));
-
-        setJuchuSheetDateOrStringFromDb(targetRow, colMap, "希望納期", db.getOrDefault("希望納期", ""));
-        setJuchuSheetString(targetRow, colMap, "調整納期", db.getOrDefault("調整納期", ""));
-
-        setJuchuSheetString(targetRow, colMap, "原反", db.getOrDefault("原反", ""));
-        setJuchuSheetString(targetRow, colMap, "品名1", db.getOrDefault("原反品名", ""));
-        setJuchuSheetString(targetRow, colMap, "梱-等", db.getOrDefault("原反梱-等", ""));
-        setJuchuSheetString(targetRow, colMap, "色", db.getOrDefault("原反色", ""));
-        setJuchuSheetString(targetRow, colMap, "区分", db.getOrDefault("原反区分", ""));
-        setJuchuSheetString(targetRow, colMap, "数量", db.getOrDefault("原反数量", ""));
-        setJuchuSheetString(targetRow, colMap, "割数", db.getOrDefault("割数", ""));
-        setJuchuSheetString(targetRow, colMap, "投入場所", db.getOrDefault("投入場所", ""));
-        setJuchuSheetString(targetRow, colMap, "在庫場所", db.getOrDefault("在庫場所", ""));
-
-        setJuchuSheetCellIfPresent(
-                targetRow, colMap, COL_MASTER_BASE_SHOHIN_PRODUCT, db.getOrDefault(COL_MASTER_BASE_SHOHIN_PRODUCT, ""));
-        setJuchuSheetCellIfPresent(
-                targetRow, colMap, COL_MASTER_BASE_SHOHIN_RAW, db.getOrDefault(COL_MASTER_BASE_SHOHIN_RAW, ""));
-
-        setJuchuSheetString(targetRow, colMap, "加工内容", db.getOrDefault("加工内容", ""));
-        setJuchuSheetNumericOrString(targetRow, colMap, "加工賃", db.getOrDefault("加工賃", ""));
-        setJuchuSheetString(targetRow, colMap, "契約Ｎｏ", db.getOrDefault("契約Ｎｏ", ""));
-        setJuchuSheetString(targetRow, colMap, "用途", db.getOrDefault("用途", ""));
-
-        if (isNewRow) {
             applyDefaultJuchuFormulasIfMissing(targetRow, colMap, targetRowIndex);
+        }
+
+        setJuchuSheetReqNo(wb, sheet, targetRow, reqNo);
+
+        Map<String, String> mergedDb = new LinkedHashMap<>(db);
+        if (isNewRow) {
             Map<String, String> raw = record.getRawValues();
             if (raw != null && !raw.isEmpty()) {
-                setJuchuSheetString(targetRow, colMap, "品名1", raw.getOrDefault("原反品名", ""));
-                setJuchuSheetString(targetRow, colMap, "梱-等1", raw.getOrDefault("梱-等1", ""));
-                setJuchuSheetString(targetRow, colMap, "色1", raw.getOrDefault("色1", ""));
-                setJuchuSheetString(targetRow, colMap, "区分1", raw.getOrDefault("区分1", ""));
-                setJuchuSheetString(targetRow, colMap, "梱-等", raw.getOrDefault("原反梱-等", ""));
-                setJuchuSheetString(targetRow, colMap, "色", raw.getOrDefault("原反色", ""));
-                setJuchuSheetString(targetRow, colMap, "区分", raw.getOrDefault("原反区分", ""));
-                setJuchuSheetString(targetRow, colMap, "在庫場所", raw.getOrDefault("在庫場所", ""));
-                setJuchuSheetNumericOrString(targetRow, colMap, "数量", raw.getOrDefault("原反数量", ""));
-                setJuchuSheetNumericOrString(targetRow, colMap, "加工賃", raw.getOrDefault("加工賃", ""));
-                setJuchuSheetNumericOrString(
-                        targetRow, colMap, "原反ロール数", raw.getOrDefault("原反ロール数", ""));
+                mergeJuchuDbFromRawDefaults(mergedDb, raw);
             }
+        }
+
+        writeJuchuRowFromValues(
+                targetRow,
+                mergedDb,
+                isNewRow,
+                db.get("入力区分"),
+                db.get("加工区分"),
+                db.get("入力担当"),
+                db.get("特記事項1"),
+                db.get("特記事項2"),
+                db.get("特記事項3"),
+                isNewRow);
+
+        if (isNewRow) {
+            Map<String, String> raw = record.getRawValues();
+            if (raw != null && !raw.isEmpty()) {
+                setJuchuNumericOrStringByLayout(
+                        targetRow,
+                        JuchuSheetColumnLayout.Col.KAKOCHIN,
+                        firstNonBlank(mergedDb.get("加工賃"), raw.get("加工賃")));
+                setJuchuNumericOrStringByLayout(
+                        targetRow,
+                        JuchuSheetColumnLayout.Col.SURYO,
+                        firstNonBlank(mergedDb.get("原反数量"), raw.get("原反数量")));
+            }
+        }
+    }
+
+    private static void mergeJuchuDbFromRawDefaults(Map<String, String> db, Map<String, String> raw) {
+        for (String key : RequestFormOriginalCellLayout.FORM_EXTRACT_RAW_KEYS) {
+            putIfBlank(db, key, raw.get(key));
+        }
+        if (!db.containsKey("品名1") || db.get("品名1") == null || db.get("品名1").isBlank()) {
+            putIfBlank(db, "品名1", raw.get("原反品名"));
+        }
+    }
+
+    private static void putIfBlank(Map<String, String> db, String key, String value) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        String current = db.get(key);
+        if (current == null || current.isBlank()) {
+            db.put(key, value.trim());
         }
     }
 
@@ -1689,92 +1800,32 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
             
             String normKey = normalize_key(reqNo);
-            for (int r = 3; r <= sheet.getLastRowNum(); r++) {
-                Row row = sheet.getRow(r);
-                if (row == null) continue;
-                Cell c = row.getCell(0);
-                if (c != null && normalize_key(getCellValueAsString(c)).equals(normKey)) {
+            int lastDataRowIndex = findJuchuSheetLastPopulatedDataRowIndex(sheet);
+            if (findJuchuDataRowIndexByReqNo(sheet, normKey, lastDataRowIndex) >= 0) {
                     showAlert("エラー", "この依頼Ｎｏ（" + reqNo + "）は既に存在します。別の番号を指定してください。");
                     wb.close();
                     fis.close();
                     return;
-                }
             }
             
-            int targetRowIndex = insertNewJuchuDataRowPreservingFormulas(sheet);
+            int targetRowIndex = insertNewJuchuDataRowPreservingFormulas(sheet, lastDataRowIndex, null);
             Row targetRow = sheet.getRow(JUCHU_SHEET_FIRST_DATA_ROW_INDEX);
-            
-            String inputKbnVal = newCmbInputKbn.getValue() != null ? newCmbInputKbn.getValue().trim() : "通常入力";
-            String kakoKbnVal  = newCmbKakoKbn.getValue()  != null ? newCmbKakoKbn.getValue().trim()  : "後加工";
-            String inputTanto  = newCmbInputTanto.getValue() != null ? newCmbInputTanto.getValue().trim() : "";
-            String wariSuVal   = newCmbWariSu.getValue() != null ? newCmbWariSu.getValue().trim() : "1";
-
-            Cell cellReqNo = targetRow.createCell(0);
-            cellReqNo.setCellValue(reqNo);
-            
-            // Set yellow background fill to mark as automatically transferred
-            CellStyle yellowStyle = wb.createCellStyle();
-            Row refRow = sheet.getRow(4);
-            if (refRow == null) refRow = sheet.getRow(3);
-            if (refRow != null && refRow.getCell(0) != null) {
-                yellowStyle.cloneStyleFrom(refRow.getCell(0).getCellStyle());
-            }
-            yellowStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
-            yellowStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-            cellReqNo.setCellStyle(yellowStyle);
-            setJuchuSheetString(targetRow, colMap, "入力区分", inputKbnVal);
-            setJuchuSheetString(targetRow, colMap, "加工区分", kakoKbnVal);
-            setJuchuSheetNumericOrString(targetRow, colMap, "割数", wariSuVal);
-            setJuchuSheetString(targetRow, colMap, "入力担当", inputTanto);
-            setJuchuSheetDate(targetRow, colMap, "入力日", new Date());
-            setJuchuSheetString(targetRow, colMap, "品名", newTxtProdItem.getText().trim());
-            String prodSpec = newTxtProdPart.getText().trim() + "-" + newTxtProdType.getText().trim() + "-" + newTxtProdWidth.getText().trim() + "X" + newTxtProdLength.getText().trim();
-            setJuchuSheetString(targetRow, colMap, "製品", prodSpec);
-            setJuchuSheetString(targetRow, colMap, "梱-等1", newTxtProdGrade.getText().trim());
-            setJuchuSheetString(targetRow, colMap, "色1", newTxtProdColor.getText().trim());
-            setJuchuSheetString(targetRow, colMap, "区分1", newTxtProdCategory.getText().trim());
-            setJuchuSheetNumericOrString(targetRow, colMap, "枝番", newTxtProdEdaban.getText().trim());
-            setJuchuSheetNumericOrString(targetRow, colMap, "数量1", newTxtProdQty.getText().trim());
-            String ecSideVal  = newCmbProdEcSide.getValue()   != null ? newCmbProdEcSide.getValue().trim()  : "";
-            String trimmingVal = newCmbProdTrimming.getValue() != null ? newCmbProdTrimming.getValue().trim() : "";
-            setJuchuSheetString(targetRow, colMap, "ＥＣ面", ecSideVal);
-            setJuchuSheetString(targetRow, colMap, "ﾄﾘﾐﾝｸﾞ", trimmingVal);
-            setJuchuSheetString(targetRow, colMap, "品名1", newTxtRawItem.getText().trim());
-            String rawSpec = newTxtRawPart.getText().trim() + "-" + newTxtRawType.getText().trim() + "-" + newTxtRawWidth.getText().trim() + "X" + newTxtRawLength.getText().trim();
-            setJuchuSheetString(targetRow, colMap, "原反", rawSpec);
-            setJuchuSheetString(targetRow, colMap, "梱-等", newTxtRawGrade.getText().trim());
-            setJuchuSheetString(targetRow, colMap, "色", newTxtRawColor.getText().trim());
-            setJuchuSheetString(targetRow, colMap, "区分", newTxtRawCategory.getText().trim());
-            setJuchuSheetNumericOrString(targetRow, colMap, "数量", newTxtRawQty.getText().trim());
-            String storageLoc = newCmbRawStorageLoc.getValue() != null ? newCmbRawStorageLoc.getValue().trim() : "";
-            String feedLoc    = newCmbRawFeedLoc.getValue()    != null ? newCmbRawFeedLoc.getValue().trim()    : "";
-            setJuchuSheetString(targetRow, colMap, "在庫場所", storageLoc);
-            setJuchuSheetString(targetRow, colMap, "投入場所", feedLoc);
-            setJuchuSheetString(targetRow, colMap, "加工内容", newTxtFormKakoNaiyo.getText().trim());
-            setJuchuSheetString(targetRow, colMap, "特記事項1", newTxtFormTokki1.getText().trim());
-            setJuchuSheetString(targetRow, colMap, "特記事項2", newTxtFormTokki2.getText().trim());
-            setJuchuSheetString(targetRow, colMap, "特記事項3", newTxtFormTokki3.getText().trim());
-            String yotoVal = newCmbFormYoto.getValue() != null ? newCmbFormYoto.getValue().trim() : "";
-            String userVal = newCmbFormUser.getValue() != null ? newCmbFormUser.getValue().trim() : "";
-            setJuchuSheetString(targetRow, colMap, "用途", yotoVal);
-            setJuchuSheetString(targetRow, colMap, "ユーザー", userVal);
-            if (newDpFormDeliv.getValue() != null) {
-                try {
-                    Calendar cVal = Calendar.getInstance();
-                    cVal.set(newDpFormDeliv.getValue().getYear(), newDpFormDeliv.getValue().getMonthValue() - 1, newDpFormDeliv.getValue().getDayOfMonth());
-                    setJuchuSheetDate(targetRow, colMap, "希望納期", cVal.getTime());
-                } catch (Exception e) {
-                    // skip
-                }
-            }
-            setJuchuSheetString(
-                    targetRow,
-                    colMap,
-                    "調整納期",
-                    newDpFormAdjustDeliv.getValue() != null ? newDpFormAdjustDeliv.getValue().toString() : "");
-            setJuchuSheetNumericOrString(targetRow, colMap, "加工賃", newTxtFormWage.getText().trim());
-            setJuchuSheetString(targetRow, colMap, "契約Ｎｏ", newTxtFormContractNo.getText().trim());
             applyDefaultJuchuFormulasIfMissing(targetRow, colMap, targetRowIndex);
+
+            setJuchuSheetReqNo(wb, sheet, targetRow, reqNo);
+
+            Map<String, String> db = buildJuchuDbValuesFromForm();
+            writeJuchuRowFromValues(
+                    targetRow,
+                    db,
+                    true,
+                    db.get("入力区分"),
+                    db.get("加工区分"),
+                    db.get("入力担当"),
+                    db.get("特記事項1"),
+                    db.get("特記事項2"),
+                    db.get("特記事項3"),
+                    true);
             
             fis.close();
             FileOutputStream fos = new FileOutputStream(file);
@@ -1803,6 +1854,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             List<OrderRecord> loadedRecords = new ArrayList<>();
             String statusMsg = "";
             boolean success = false;
+            List<String> headerWarningsFinal = List.of();
             
             try {
                 File juchuFile = new File(juchuFilePath);
@@ -1815,19 +1867,14 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 FileInputStream fis = new FileInputStream(juchuFile);
                 Workbook wbJuchu = WorkbookFactory.create(fis);
                 Sheet sJuchu = wbJuchu.getSheet("受注ﾌｧｲﾙ");
-                
-                Row hRow = sJuchu.getRow(2);
-                Map<String, Integer> colMap = new HashMap<>();
-                for (int c = 0; c < hRow.getLastCellNum(); c++) {
-                    Cell cell = hRow.getCell(c);
-                    if (cell != null) {
-                        colMap.put(cell.getStringCellValue().trim(), c);
-                    }
-                }
-                
+                Row hRow = sJuchu.getRow(JUCHU_SHEET_HEADER_ROW_INDEX);
+                List<String> headerWarnings = JuchuSheetColumnLayout.validateHeaders(hRow);
+                headerWarningsFinal = headerWarnings;
+
                 Map<String, Map<String, String>> dbRows = new HashMap<>();
+                int lastDataRowIndex = findJuchuSheetLastPopulatedDataRowIndex(sJuchu);
                 
-                for (int r = 3; r <= sJuchu.getLastRowNum(); r++) {
+                for (int r = JUCHU_SHEET_FIRST_DATA_ROW_INDEX; r <= lastDataRowIndex; r++) {
                     Row row = sJuchu.getRow(r);
                     if (row == null) continue;
                     Cell reqCell = row.getCell(0); 
@@ -1836,11 +1883,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     String reqNo = getCellValueAsString(reqCell).trim();
                     if (reqNo.isEmpty()) continue;
                     
-                    Map<String, String> vals = new HashMap<>();
-                    for (Map.Entry<String, Integer> entry : colMap.entrySet()) {
-                        Cell c = row.getCell(entry.getValue());
-                        vals.put(entry.getKey(), getCellValueAsString(c));
-                    }
+                    Map<String, String> vals = JuchuSheetColumnLayout.readDbValuesFromRow(row);
                     dbRows.put(normalize_key(reqNo), vals);
                 }
                 wbJuchu.close();
@@ -1922,11 +1965,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         if (!r_p.equals(db_p)) {
                             diffs.add("加工内容相違");
                         }
-                        if (!normalize_text(raw.get("契約Ｎｏ")).equals(normalize_text(dbRow.get("契約Ｎｏ")))) {
-                            if (!raw.get("契約Ｎｏ").isEmpty() || !dbRow.get("契約Ｎｏ").isEmpty()) {
-                                diffs.add("契約No相違");
-                            }
-                        }
                         
                         String status = diffs.isEmpty() ? "既存登録 (原本一致)" : "既存登録 (相違あり)";
                         String discrepancy = diffs.isEmpty() ? "原本と完全一致" : "相違詳細: " + String.join(", ", diffs);
@@ -1936,16 +1974,23 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         ));
                     } else {
                         loadedRecords.add(new OrderRecord(
-                            reqNo, "新規自動追加 (未登録)", raw.get("ユーザー"), raw.get("製品"), "受注ファイル未入力のため自動追加", raw, new HashMap<>()
-                        ));
+                            reqNo,
+                            "新規自動追加 (未登録)",
+                            raw.get("ユーザー"),
+                            raw.get("製品"),
+                            "受注ファイル未入力のため自動追加",
+                            raw,
+                            RequestFormOriginalExtractor.buildDbDefaultsFromRaw(raw)));
                     }
                 }
                 
                 for (Map.Entry<String, Map<String, String>> entry : dbRows.entrySet()) {
                     if (!processedKeys.contains(entry.getKey())) {
                         Map<String, String> dbRow = entry.getValue();
+                        String reqNoDisplay =
+                                firstNonBlank(dbRow.get("依頼No"), dbRow.get("依頼Ｎｏ"), entry.getKey());
                         loadedRecords.add(new OrderRecord(
-                            dbRow.get("依頼Ｎｏ"), "既存登録 (原本未確認)", dbRow.get("ユーザー"), dbRow.get("製品"), "原本ファイル未検出（過去データ）", new HashMap<>(), dbRow
+                            reqNoDisplay, "既存登録 (原本未確認)", dbRow.get("ユーザー"), dbRow.get("製品"), "原本ファイル未検出（過去データ）", new HashMap<>(), dbRow
                         ));
                     }
                 }
@@ -1959,6 +2004,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             final boolean finalSuccess = success;
             final List<OrderRecord> finalLoaded = loadedRecords;
             final String finalStatusMsg = statusMsg;
+            final List<String> finalHeaderWarnings = headerWarningsFinal;
             Platform.runLater(() -> {
                 showLoadingOverlay(false, "");
                 if (finalSuccess) {
@@ -1967,6 +2013,14 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     filterTable("");  // ファイルが存在するレコードのみ表示
                     int visibleCount = (int) orderRecords.stream().filter(r -> hasExistingFile(r)).count();
                     statusLabel.setText(String.format("読込完了: 全 %d 件中 %d 件 (依頼書あり)", orderRecords.size(), visibleCount));
+                    if (!finalHeaderWarnings.isEmpty()) {
+                        statusLabel.setText(
+                                statusLabel.getText()
+                                        + " / 列定義警告 "
+                                        + finalHeaderWarnings.size()
+                                        + " 件");
+                        confirmJuchuHeaderWarnings(finalHeaderWarnings);
+                    }
                     
                     syncOriginalFileMonitorAfterReload();
                     enqueueBackgroundCacheTasks();
@@ -1989,97 +2043,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 if (Pattern.matches("^[A-Z]+\\d+-\\d+$", sName)
                         || Pattern.matches("^[A-Z]\\d+-\\d+-\\d+$", sName)) {
                     Sheet rawSheet = wbRaw.getSheetAt(s);
-                    parsed.add(buildRawMapFromSheet(file, sName, rawSheet));
+                    parsed.add(RequestFormOriginalExtractor.buildRawMapFromSheet(file, sName, rawSheet));
                 }
             }
         }
         return parsed;
-    }
-
-    private Map<String, String> buildRawMapFromSheet(File file, String sName, Sheet rawSheet) {
-        String reqNo = getCellValueAsString(rawSheet.getRow(4).getCell(17));
-        if (reqNo.isEmpty()) {
-            reqNo = sName;
-        }
-
-        String itemCode = getCellValueAsString(rawSheet.getRow(9).getCell(1));
-        String partNo = getCellValueAsString(rawSheet.getRow(9).getCell(5));
-        String itemType = getCellValueAsString(rawSheet.getRow(9).getCell(10));
-        String itemWidth = getCellValueAsString(rawSheet.getRow(9).getCell(15));
-        String itemLen = getCellValueAsString(rawSheet.getRow(9).getCell(20));
-        String grade = getCellValueAsString(rawSheet.getRow(9).getCell(23));
-        String color = getCellValueAsString(rawSheet.getRow(9).getCell(26));
-        String category = getCellValueAsString(rawSheet.getRow(9).getCell(28));
-
-        String qty = getCellValueAsString(rawSheet.getRow(9).getCell(30));
-        String ecSide = getCellValueAsString(rawSheet.getRow(9).getCell(35));
-        String trimming = getCellValueAsString(rawSheet.getRow(9).getCell(38));
-
-        String rawItem = getCellValueAsString(rawSheet.getRow(22).getCell(7));
-        String rawPart = getCellValueAsString(rawSheet.getRow(22).getCell(10));
-        String rawType = getCellValueAsString(rawSheet.getRow(22).getCell(13));
-        String rawWidth = getCellValueAsString(rawSheet.getRow(22).getCell(16));
-        String rawLen = getCellValueAsString(rawSheet.getRow(22).getCell(19));
-        String rawGrade = getCellValueAsString(rawSheet.getRow(22).getCell(21));
-        String rawColor = getCellValueAsString(rawSheet.getRow(22).getCell(24));
-        String rawCategory = getCellValueAsString(rawSheet.getRow(22).getCell(26));
-
-        String constructedProd = partNo + "-" + itemType + "-" + itemWidth + "X" + itemLen;
-        String constructedRaw = rawPart + "-" + rawType + "-" + rawWidth + "X" + rawLen;
-
-        List<String> steps = new ArrayList<>();
-        for (int r = 12; r <= 16; r++) {
-            Row rRow = rawSheet.getRow(r);
-            if (rRow != null) {
-                Cell c = rRow.getCell(8);
-                if (c != null && c.getCellType() != CellType.BLANK) {
-                    steps.add(getCellValueAsString(c).trim());
-                }
-            }
-        }
-        String processStr = String.join(", ", steps);
-
-        String useVal = getCellValueAsString(rawSheet.getRow(17).getCell(4));
-        String userVal = getCellValueAsString(rawSheet.getRow(18).getCell(4));
-        String delivery = getCellValueAsString(rawSheet.getRow(19).getCell(8));
-        String contract = getCellValueAsString(rawSheet.getRow(20).getCell(4));
-        String rawQty = getCellValueAsString(rawSheet.getRow(22).getCell(28));
-        String location = getCellValueAsString(rawSheet.getRow(22).getCell(31));
-        String inputDay = getCellValueAsString(rawSheet.getRow(22).getCell(38));
-
-        String issuer = getCellValueAsString(rawSheet.getRow(25).getCell(2));
-        String rawRoll = getCellValueAsString(rawSheet.getRow(19).getCell(26));
-        String charge = getCellValueAsString(rawSheet.getRow(19).getCell(30));
-
-        Map<String, String> rawMap = new HashMap<>();
-        rawMap.put("依頼Ｎｏ", reqNo.trim());
-        rawMap.put("原本ファイル名", file.getName());
-        rawMap.put("原本シート名", sName);
-        rawMap.put("品名", itemCode);
-        rawMap.put("製品", constructedProd);
-        rawMap.put("梱-等1", grade);
-        rawMap.put("色1", color);
-        rawMap.put("区分1", category);
-        rawMap.put("数量1", qty);
-        rawMap.put("ＥＣ面", ecSide);
-        rawMap.put("ﾄﾘﾐﾝｸﾞ", trimming);
-        rawMap.put("加工内容", processStr);
-        rawMap.put("用途", useVal);
-        rawMap.put("ユーザー", userVal);
-        rawMap.put("希望納期", delivery);
-        rawMap.put("契約Ｎｏ", contract);
-        rawMap.put("原反品名", rawItem);
-        rawMap.put("原反", constructedRaw);
-        rawMap.put("原反梱-等", rawGrade);
-        rawMap.put("原反色", rawColor);
-        rawMap.put("原反区分", rawCategory);
-        rawMap.put("原反数量", rawQty);
-        rawMap.put("在庫場所", location);
-        rawMap.put("投入日", inputDay);
-        rawMap.put("発行者", issuer);
-        rawMap.put("原反ロール数", rawRoll);
-        rawMap.put("加工賃", charge);
-        return rawMap;
     }
 
     private void enqueueBackgroundCacheTasks() {
@@ -2094,19 +2062,19 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         File f = new File(targetFolder + "\\" + fName);
                         if (f.exists()) {
                             File cacheRoot = previewCacheDirectory();
-                            File cachedImg =
-                                    RequestFormSourceCache.pngCacheFile(cacheRoot, fName, sName);
-                            if (!RequestFormSourceCache.isPreviewCacheValid(cachedImg, f)) {
-                                RequestFormSourceCache.deletePreviewCache(cachedImg);
+                            File cachedPdf =
+                                    RequestFormSourceCache.pdfCacheFile(cacheRoot, fName, sName);
+                            if (!RequestFormSourceCache.isPreviewCacheValid(cachedPdf, f)) {
+                                RequestFormSourceCache.deletePreviewCache(cachedPdf);
                                 boolean exists = false;
                                 for (CacheTask t : cacheQueue) {
-                                    if (t.outputFile.equals(cachedImg)) {
+                                    if (t.outputFile.equals(cachedPdf)) {
                                         exists = true;
                                         break;
                                     }
                                 }
                                 if (!exists) {
-                                    cacheQueue.add(new CacheTask(f, sName, cachedImg));
+                                    cacheQueue.add(new CacheTask(f, sName, cachedPdf));
                                 }
                             }
                         }
@@ -2152,7 +2120,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 RequestFormSourceCache.deletePreviewCache(task.outputFile);
 
                 try {
-                    RequestFormSheetPreviewRenderer.generatePreviewPng(
+                    RequestFormSheetPreviewRenderer.generatePreviewPdf(
                             task.excelFile, task.sheetName, task.outputFile);
                     RequestFormSourceCache.writePreviewMeta(task.outputFile, task.excelFile);
                     System.out.println("Background cached: " + task.outputFile.getName());
@@ -2221,109 +2189,118 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             lblFormTitle.getStyleClass().add("section-title-form");
         }
         
-        Map<String, String> activeVals = record.getDbValues().isEmpty() ? record.getRawValues() : record.getDbValues();
+        Map<String, String> rawVals = record.getRawValues() != null ? record.getRawValues() : Map.of();
+        Map<String, String> activeVals;
+        if (record.getDbValues() == null || record.getDbValues().isEmpty()) {
+            activeVals =
+                    rawVals.isEmpty()
+                            ? Map.of()
+                            : RequestFormOriginalExtractor.buildDbDefaultsFromRaw(rawVals);
+        } else if (record.getStatus() != null && record.getStatus().contains("未登録")) {
+            activeVals = new LinkedHashMap<>(record.getDbValues());
+            mergeJuchuDbFromRawDefaults(activeVals, rawVals);
+        } else {
+            activeVals = record.getDbValues();
+        }
         
         newCmbFormUser.setValue(activeVals.getOrDefault("ユーザー", ""));
         newDpFormDeliv.setValue(parseLocalDate(activeVals.getOrDefault("希望納期", "")));
         newDpFormAdjustDeliv.setValue(parseLocalDate(activeVals.getOrDefault("調整納期", "")));
+        newDpFormInputDate.setValue(parseLocalDate(activeVals.getOrDefault("入力日", "")));
         txtProcess.setText(activeVals.getOrDefault("加工内容", ""));
         newTxtFormWage.setText(activeVals.getOrDefault("加工賃", ""));
-        newTxtFormContractNo.setText(activeVals.getOrDefault("契約Ｎｏ", ""));
+        newTxtFormContractNo.setText(
+                firstNonBlank(
+                        rawVals.get("契約Ｎｏ"),
+                        activeVals.get("契約Ｎｏ"),
+                        activeVals.get("契約No")));
         newCmbFormYoto.setValue(activeVals.getOrDefault("用途", ""));
+        newCmbFormInputKbn.setValue(activeVals.getOrDefault("入力区分", ""));
+        newCmbFormKakoKbn.setValue(activeVals.getOrDefault("加工区分", ""));
+        newCmbFormInputTanto.setValue(activeVals.getOrDefault("入力担当", ""));
+        newTxtFormTokki1.setText(activeVals.getOrDefault("特記事項1", ""));
+        newTxtFormTokki2.setText(activeVals.getOrDefault("特記事項2", ""));
+        newTxtFormTokki3.setText(activeVals.getOrDefault("特記事項3", ""));
+
+        String[] hinmeiVals = activeVals.getOrDefault("品名", "").split("\\n", -1);
+        String[] masterProdVals =
+                activeVals.getOrDefault(COL_MASTER_BASE_SHOHIN_PRODUCT, "").split("\\n", -1);
+        String[] prodVals = activeVals.getOrDefault("製品", "").split("\\n", -1);
+        String[] qtyVals = activeVals.getOrDefault("数量1", "").split("\\n", -1);
+        String[] gradeVals = activeVals.getOrDefault("梱-等1", "").split("\\n", -1);
+        String[] colorVals = activeVals.getOrDefault("色1", "").split("\\n", -1);
+        String[] catVals = activeVals.getOrDefault("区分1", "").split("\\n", -1);
+        String[] edabanVals = activeVals.getOrDefault("枝番", "").split("\\n", -1);
+        String[] ecVals = activeVals.getOrDefault("ＥＣ面", "").split("\\n", -1);
+        String[] trimVals = activeVals.getOrDefault("ﾄﾘﾐﾝｸﾞ", "").split("\\n", -1);
         
-        // Load dynamic product rows
-        String[] itemVals = activeVals.getOrDefault("品名", "").split("\\n");
-        String[] prodVals = activeVals.getOrDefault("製品", "").split("\\n");
-        String[] qtyVals = activeVals.getOrDefault("数量1", "").split("\\n");
-        String[] gradeVals = activeVals.getOrDefault("梱-等1", "").split("\\n");
-        String[] colorVals = activeVals.getOrDefault("色1", "").split("\\n");
-        String[] catVals = activeVals.getOrDefault("区分1", "").split("\\n");
-        String[] edabanVals = activeVals.getOrDefault("枝番", "").split("\\n");
-        String[] ecVals = activeVals.getOrDefault("ＥＣ面", "").split("\\n");
-        String[] trimVals = activeVals.getOrDefault("ﾄﾘﾐﾝｸﾞ", "").split("\\n");
-        
-        int numProds = Math.max(1, prodVals.length);
+        int numProds = Math.max(1, Math.max(prodVals.length, hinmeiVals.length));
         productRowsContainer.getChildren().clear();
         productRows.clear();
         
         for (int i = 0; i < numProds; i++) {
             ProductRow pRow = addProductRow(null);
-            // Set item code empty as requested by user to allow clean search
-            pRow.txtItem.setText("");
-            if (i < qtyVals.length) pRow.txtQty.setText(qtyVals[i]);
-            if (i < gradeVals.length) pRow.txtGrade.setText(gradeVals[i]);
-            if (i < colorVals.length) pRow.txtColor.setText(colorVals[i]);
-            if (i < catVals.length) pRow.txtCategory.setText(catVals[i]);
-            if (i < edabanVals.length) pRow.txtEdaban.setText(edabanVals[i]);
-            if (i < ecVals.length) pRow.cmbEcSide.setValue(ecVals[i]);
-            if (i < trimVals.length) pRow.cmbTrimming.setValue(trimVals[i]);
+            if (i < hinmeiVals.length) pRow.txtHinmei.setText(hinmeiVals[i].trim());
+            if (i < masterProdVals.length) pRow.txtItem.setText(masterProdVals[i].trim());
+            if (i < qtyVals.length) pRow.txtQty.setText(qtyVals[i].trim());
+            if (i < gradeVals.length) pRow.txtGrade.setText(gradeVals[i].trim());
+            if (i < colorVals.length) pRow.txtColor.setText(colorVals[i].trim());
+            if (i < catVals.length) pRow.txtCategory.setText(catVals[i].trim());
+            if (i < edabanVals.length) pRow.txtEdaban.setText(edabanVals[i].trim());
+            if (i < ecVals.length && !ecVals[i].isBlank()) pRow.cmbEcSide.setValue(ecVals[i].trim());
+            if (i < trimVals.length && !trimVals[i].isBlank()) pRow.cmbTrimming.setValue(trimVals[i].trim());
             
-            if (i < prodVals.length) {
-                String pStr = prodVals[i];
-                String[] parts = pStr.split("-");
-                if (parts.length >= 3) {
-                    pRow.txtPart.setText(parts[0]);
-                    pRow.txtType.setText(parts[1]);
-                    String dims = parts[2];
-                    String[] wL = dims.split("X");
-                    if (wL.length >= 2) {
-                        pRow.txtWidth.setText(wL[0]);
-                        pRow.txtLength.setText(wL[1]);
-                    } else {
-                        pRow.txtWidth.setText(dims);
-                        pRow.txtLength.setText("");
-                    }
-                } else {
-                    pRow.txtPart.setText(pStr);
-                }
+            if (i < prodVals.length && !prodVals[i].isBlank()) {
+                pRow.txtSeihinmei.setText(prodVals[i].trim());
+                String[] parts = JuchuSheetColumnLayout.parseSpecName(prodVals[i]);
+                pRow.txtPart.setText(parts[0]);
+                pRow.txtType.setText(parts[1]);
+                pRow.txtWidth.setText(parts[2]);
+                pRow.txtLength.setText(parts[3]);
+            } else {
+                updateProductRowSpecDisplay(pRow);
             }
         }
         
-        // Load dynamic raw material rows
-        String[] rawItemVals = activeVals.getOrDefault("原反品名", "").split("\\n");
-        String[] rawVals = activeVals.getOrDefault("原反", "").split("\\n");
-        String[] rawQtyVals = activeVals.getOrDefault("原反数量", "").split("\\n");
-        String[] rawGradeVals = activeVals.getOrDefault("原反梱-等", "").split("\\n");
-        String[] rawColorVals = activeVals.getOrDefault("原反色", "").split("\\n");
-        String[] rawCatVals = activeVals.getOrDefault("原反区分", "").split("\\n");
-        String[] wariVals = activeVals.getOrDefault("割数", "").split("\\n");
-        String[] feedVals = activeVals.getOrDefault("投入場所", "").split("\\n");
-        String[] storageVals = activeVals.getOrDefault("在庫場所", "").split("\\n");
+        String rawHinmeiJoined =
+                firstNonBlank(activeVals.get("品名1"), activeVals.get("原反品名"));
+        String[] rawHinmeiVals = rawHinmeiJoined.isBlank() ? new String[0] : rawHinmeiJoined.split("\\n", -1);
+        String[] rawMasterVals =
+                activeVals.getOrDefault(COL_MASTER_BASE_SHOHIN_RAW, "").split("\\n", -1);
+        String[] rawValsArr = activeVals.getOrDefault("原反", "").split("\\n", -1);
+        String[] rawQtyVals = activeVals.getOrDefault("原反数量", "").split("\\n", -1);
+        String[] rawGradeVals = activeVals.getOrDefault("原反梱-等", "").split("\\n", -1);
+        String[] rawColorVals = activeVals.getOrDefault("原反色", "").split("\\n", -1);
+        String[] rawCatVals = activeVals.getOrDefault("原反区分", "").split("\\n", -1);
+        String[] wariVals = activeVals.getOrDefault("割数", "").split("\\n", -1);
+        String[] feedVals = activeVals.getOrDefault("投入場所", "").split("\\n", -1);
+        String[] storageVals = activeVals.getOrDefault("在庫場所", "").split("\\n", -1);
         
-        int numRaws = Math.max(1, rawVals.length);
+        int numRaws = Math.max(1, Math.max(rawValsArr.length, rawHinmeiVals.length));
         rawRowsContainer.getChildren().clear();
         rawRows.clear();
         
         for (int i = 0; i < numRaws; i++) {
             RawMaterialRow rRow = addRawRow(null);
-            // Set raw item empty to allow clean search
-            rRow.txtItem.setText("");
-            if (i < rawQtyVals.length) rRow.txtQty.setText(rawQtyVals[i]);
-            if (i < rawGradeVals.length) rRow.txtGrade.setText(rawGradeVals[i]);
-            if (i < rawColorVals.length) rRow.txtColor.setText(rawColorVals[i]);
-            if (i < rawCatVals.length) rRow.txtCategory.setText(rawCatVals[i]);
-            if (i < wariVals.length) rRow.cmbWariSu.setValue(wariVals[i]);
-            if (i < feedVals.length) rRow.cmbFeedLoc.setValue(feedVals[i]);
-            if (i < storageVals.length) rRow.cmbStorageLoc.setValue(storageVals[i]);
+            if (i < rawHinmeiVals.length) rRow.txtHinmei.setText(rawHinmeiVals[i].trim());
+            if (i < rawMasterVals.length) rRow.txtItem.setText(rawMasterVals[i].trim());
+            if (i < rawQtyVals.length) rRow.txtQty.setText(rawQtyVals[i].trim());
+            if (i < rawGradeVals.length) rRow.txtGrade.setText(rawGradeVals[i].trim());
+            if (i < rawColorVals.length) rRow.txtColor.setText(rawColorVals[i].trim());
+            if (i < rawCatVals.length) rRow.txtCategory.setText(rawCatVals[i].trim());
+            if (i < wariVals.length && !wariVals[i].isBlank()) rRow.cmbWariSu.setValue(wariVals[i].trim());
+            if (i < feedVals.length && !feedVals[i].isBlank()) rRow.cmbFeedLoc.setValue(feedVals[i].trim());
+            if (i < storageVals.length && !storageVals[i].isBlank()) rRow.cmbStorageLoc.setValue(storageVals[i].trim());
             
-            if (i < rawVals.length) {
-                String rStr = rawVals[i];
-                String[] parts = rStr.split("-");
-                if (parts.length >= 3) {
-                    rRow.txtPart.setText(parts[0]);
-                    rRow.txtType.setText(parts[1]);
-                    String dims = parts[2];
-                    String[] wL = dims.split("X");
-                    if (wL.length >= 2) {
-                        rRow.txtWidth.setText(wL[0]);
-                        rRow.txtLength.setText(wL[1]);
-                    } else {
-                        rRow.txtWidth.setText(dims);
-                        rRow.txtLength.setText("");
-                    }
-                } else {
-                    rRow.txtPart.setText(rStr);
-                }
+            if (i < rawValsArr.length && !rawValsArr[i].isBlank()) {
+                rRow.txtGenpanmei.setText(rawValsArr[i].trim());
+                String[] parts = JuchuSheetColumnLayout.parseSpecName(rawValsArr[i]);
+                rRow.txtPart.setText(parts[0]);
+                rRow.txtType.setText(parts[1]);
+                rRow.txtWidth.setText(parts[2]);
+                rRow.txtLength.setText(parts[3]);
+            } else {
+                updateRawRowSpecDisplay(rRow);
             }
         }
         
@@ -2390,42 +2367,49 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         
         // Cache directory
         File cacheRoot = previewCacheDirectory();
-        File cachedImg = RequestFormSourceCache.pngCacheFile(cacheRoot, fName, sName);
+        File cachedPdf = RequestFormSourceCache.pdfCacheFile(cacheRoot, fName, sName);
 
-        if (RequestFormSourceCache.isPreviewCacheValid(cachedImg, f)) {
+        if (RequestFormSourceCache.isPreviewCacheValid(cachedPdf, f)) {
             acknowledgePreviewForCurrentOriginalFile();
-            displayPreviewImage(cachedImg);
+            displayPreviewPdf(cachedPdf);
         } else {
-            RequestFormSourceCache.deletePreviewCache(cachedImg);
-            // Generate async
-            Label lblLoading = new Label("原本の画像を抽出しています... (しばらくお待ちください)");
+            RequestFormSourceCache.deletePreviewCache(cachedPdf);
+            Label lblLoading = new Label("原本の PDF プレビューを生成しています... (しばらくお待ちください)");
             lblLoading.getStyleClass().add("excel-grid-label-info");
             sheetGrid.add(lblLoading, 0, 0);
-            
-            Thread t = new Thread(() -> {
-                try {
-                    RequestFormSheetPreviewRenderer.generatePreviewPng(f, sName, cachedImg);
-                    RequestFormSourceCache.writePreviewMeta(cachedImg, f);
-                    Platform.runLater(() -> {
-                        if (RequestFormSourceCache.isPreviewCacheValid(cachedImg, f)) {
-                            acknowledgePreviewForCurrentOriginalFile();
-                            displayPreviewImage(cachedImg);
-                        } else {
-                            sheetGrid.getChildren().clear();
-                            Label lblErr = new Label("画像の生成に失敗しました。");
-                            lblErr.getStyleClass().add("excel-grid-label-error");
-                            sheetGrid.add(lblErr, 0, 0);
-                        }
-                    });
-                } catch (Exception e) {
-                    Platform.runLater(() -> {
-                        sheetGrid.getChildren().clear();
-                        Label lblErr = new Label("エラーが発生しました: " + e.getMessage());
-                        lblErr.getStyleClass().add("excel-grid-label-error");
-                        sheetGrid.add(lblErr, 0, 0);
-                    });
-                }
-            });
+
+            Thread t =
+                    new Thread(
+                            () -> {
+                                try {
+                                    RequestFormSheetPreviewRenderer.generatePreviewPdf(
+                                            f, sName, cachedPdf);
+                                    RequestFormSourceCache.writePreviewMeta(cachedPdf, f);
+                                    Platform.runLater(
+                                            () -> {
+                                                if (RequestFormSourceCache.isPreviewCacheValid(
+                                                        cachedPdf, f)) {
+                                                    acknowledgePreviewForCurrentOriginalFile();
+                                                    displayPreviewPdf(cachedPdf);
+                                                } else {
+                                                    sheetGrid.getChildren().clear();
+                                                    Label lblErr =
+                                                            new Label("PDF プレビューの生成に失敗しました。");
+                                                    lblErr.getStyleClass().add("excel-grid-label-error");
+                                                    sheetGrid.add(lblErr, 0, 0);
+                                                }
+                                            });
+                                } catch (Exception e) {
+                                    Platform.runLater(
+                                            () -> {
+                                                sheetGrid.getChildren().clear();
+                                                Label lblErr =
+                                                        new Label("エラーが発生しました: " + e.getMessage());
+                                                lblErr.getStyleClass().add("excel-grid-label-error");
+                                                sheetGrid.add(lblErr, 0, 0);
+                                            });
+                                }
+                            });
             t.setDaemon(true);
             t.start();
         }
@@ -2520,28 +2504,24 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                                 && !name.equals("加工依頼書入力.xlsm"));
     }
     
-    private void displayPreviewImage(File imgFile) {
+    private void displayPreviewPdf(File pdfFile) {
         sheetGrid.getChildren().clear();
         try {
-            javafx.scene.image.Image image =
-                    new javafx.scene.image.Image(imgFile.toURI().toString(), false);
-            if (image.isError()) {
-                Throwable ex = image.getException();
-                throw new IllegalStateException(
-                        ex != null ? ex.getMessage() : "画像の読み込みに失敗しました");
-            }
-            if (image.getWidth() <= 0 || image.getHeight() <= 0) {
-                throw new IllegalStateException("画像サイズが 0 です");
+            java.awt.image.BufferedImage buffered =
+                    RequestFormSheetPreviewPdfRenderer.renderFirstPageImage(pdfFile);
+            javafx.scene.image.Image image = javafx.embed.swing.SwingFXUtils.toFXImage(buffered, null);
+            if (image == null || image.getWidth() <= 0 || image.getHeight() <= 0) {
+                throw new IllegalStateException("PDF プレビューのラスタライズに失敗しました");
             }
             InteractiveImageViewer viewer = new InteractiveImageViewer(image);
 
             viewer.prefWidthProperty().bind(sheetScrollPane.widthProperty().subtract(24));
             viewer.maxWidthProperty().bind(sheetScrollPane.widthProperty().subtract(24));
-            
+
             sheetGrid.add(viewer, 0, 0);
             viewer.resetZoomToFit();
         } catch (Exception e) {
-            Label lblErr = new Label("画像の読み込みに失敗しました: " + e.getMessage());
+            Label lblErr = new Label("PDF プレビューの表示に失敗しました: " + e.getMessage());
             lblErr.getStyleClass().add("excel-grid-label-error");
             sheetGrid.add(lblErr, 0, 0);
         }
@@ -2554,96 +2534,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
         
         Map<String, String> db = selectedRecord.getDbValues();
-        
-        // Collect basicGrid fields
-        db.put("ユーザー", newCmbFormUser.getValue() != null ? newCmbFormUser.getValue().trim() : "");
-        
-        if (newDpFormDeliv.getValue() != null) {
-            db.put("希望納期", newDpFormDeliv.getValue().toString());
-        } else {
-            db.put("希望納期", "");
-        }
-        
-        if (newDpFormAdjustDeliv.getValue() != null) {
-            db.put("調整納期", newDpFormAdjustDeliv.getValue().toString());
-        } else {
-            db.put("調整納期", "");
-        }
-        
-        db.put("加工内容", txtProcess.getText().trim());
-        db.put("加工賃", newTxtFormWage.getText().trim());
-        db.put("契約Ｎｏ", newTxtFormContractNo.getText().trim());
-        db.put("用途", newCmbFormYoto.getValue() != null ? newCmbFormYoto.getValue().trim() : "");
-        
-        // Collect dynamic product rows
-        List<String> prodItems = new ArrayList<>();
-        List<String> prodSpecs = new ArrayList<>();
-        List<String> prodGrades = new ArrayList<>();
-        List<String> prodColors = new ArrayList<>();
-        List<String> prodCats = new ArrayList<>();
-        List<String> prodQtys = new ArrayList<>();
-        List<String> prodEdabans = new ArrayList<>();
-        List<String> prodEcs = new ArrayList<>();
-        List<String> prodTrims = new ArrayList<>();
-        
-        for (ProductRow pRow : productRows) {
-            prodItems.add(pRow.txtItem.getText().trim());
-            String spec = pRow.txtPart.getText().trim() + "-" + pRow.txtType.getText().trim() + "-" + pRow.txtWidth.getText().trim() + "X" + pRow.txtLength.getText().trim();
-            prodSpecs.add(spec);
-            prodGrades.add(pRow.txtGrade.getText().trim());
-            prodColors.add(pRow.txtColor.getText().trim());
-            prodCats.add(pRow.txtCategory.getText().trim());
-            prodQtys.add(pRow.txtQty.getText().trim());
-            prodEdabans.add(pRow.txtEdaban.getText().trim());
-            prodEcs.add(pRow.cmbEcSide.getValue() != null ? pRow.cmbEcSide.getValue() : "");
-            prodTrims.add(pRow.cmbTrimming.getValue() != null ? pRow.cmbTrimming.getValue() : "");
-        }
-        
-        db.put("品名", String.join("\n", prodItems));
-        db.put("製品", String.join("\n", prodSpecs));
-        db.put("梱-等1", String.join("\n", prodGrades));
-        db.put("色1", String.join("\n", prodColors));
-        db.put("区分1", String.join("\n", prodCats));
-        db.put("数量1", String.join("\n", prodQtys));
-        db.put("枝番", String.join("\n", prodEdabans));
-        db.put("ＥＣ面", String.join("\n", prodEcs));
-        db.put("ﾄﾘﾐﾝｸﾞ", String.join("\n", prodTrims));
-        db.put(COL_MASTER_BASE_SHOHIN_PRODUCT, joinMasterBaseShohinFromProductRows());
-        
-        // Collect dynamic raw material rows
-        List<String> rawItems = new ArrayList<>();
-        List<String> rawSpecs = new ArrayList<>();
-        List<String> rawGrades = new ArrayList<>();
-        List<String> rawColors = new ArrayList<>();
-        List<String> rawCats = new ArrayList<>();
-        List<String> rawQtys = new ArrayList<>();
-        List<String> wariVals = new ArrayList<>();
-        List<String> feedVals = new ArrayList<>();
-        List<String> storageVals = new ArrayList<>();
-        
-        for (RawMaterialRow rRow : rawRows) {
-            rawItems.add(rRow.txtItem.getText().trim());
-            String spec = rRow.txtPart.getText().trim() + "-" + rRow.txtType.getText().trim() + "-" + rRow.txtWidth.getText().trim() + "X" + rRow.txtLength.getText().trim();
-            rawSpecs.add(spec);
-            rawGrades.add(rRow.txtGrade.getText().trim());
-            rawColors.add(rRow.txtColor.getText().trim());
-            rawCats.add(rRow.txtCategory.getText().trim());
-            rawQtys.add(rRow.txtQty.getText().trim());
-            wariVals.add(rRow.cmbWariSu.getValue() != null ? rRow.cmbWariSu.getValue() : "1");
-            feedVals.add(rRow.cmbFeedLoc.getValue() != null ? rRow.cmbFeedLoc.getValue() : "");
-            storageVals.add(rRow.cmbStorageLoc.getValue() != null ? rRow.cmbStorageLoc.getValue() : "");
-        }
-        
-        db.put("原反品名", String.join("\n", rawItems));
-        db.put("原反", String.join("\n", rawSpecs));
-        db.put("原反梱-等", String.join("\n", rawGrades));
-        db.put("原反色", String.join("\n", rawColors));
-        db.put("原反区分", String.join("\n", rawCats));
-        db.put("原反数量", String.join("\n", rawQtys));
-        db.put("割数", String.join("\n", wariVals));
-        db.put("投入場所", String.join("\n", feedVals));
-        db.put("在庫場所", String.join("\n", storageVals));
-        db.put(COL_MASTER_BASE_SHOHIN_RAW, joinMasterBaseShohinFromRawRows());
+        db.clear();
+        db.putAll(buildJuchuDbValuesFromForm());
         
         selectedRecord.setStatus(STATUS_LOCAL_SAVE_PENDING);
         
@@ -2656,6 +2548,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void transferToExcel() {
+        if (juchuTransferInProgress) {
+            return;
+        }
+
         String reqNo = txtReqNo.getText().trim();
         if (reqNo.isEmpty()) {
             showAlert("エラー", "依頼Ｎｏを入力してください。");
@@ -2677,218 +2573,189 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             updateTransferButtonState();
             return;
         }
-        
+
+        File file = new File(juchuFilePath);
+        if (!file.isFile()) {
+            showAlert("エラー", "受注ファイルが見つかりません。");
+            return;
+        }
+
+        List<String> headerWarnings = readJuchuHeaderWarnings(file);
+        if (!headerWarnings.isEmpty()) {
+            statusLabel.setText("列定義警告: " + headerWarnings.size() + " 件（詳細はダイアログ）");
+        }
+        if (!confirmJuchuHeaderWarnings(headerWarnings)) {
+            return;
+        }
+
+        JuchuTransferFormData formData = captureJuchuTransferFormData(reqNo);
+        OrderRecord recordRef = selectedRecord;
+
+        beginJuchuTransfer(
+                "受注ファイルへ転記しています…\n(1/5) 受注ファイルを開いています…\n依頼No: " + reqNo);
         statusLabel.setText("受注ファイル更新中...");
-        
-        try {
-            File file = new File(juchuFilePath);
-            if (!file.exists()) {
-                showAlert("エラー", "受注ファイルが見つかりません。");
-                return;
-            }
-            
-            FileInputStream fis = new FileInputStream(file);
-            Workbook wb = WorkbookFactory.create(fis);
+
+        Thread transferThread =
+                new Thread(
+                        () -> {
+                            Exception error = null;
+                            try {
+                                performSingleJuchuTransfer(file, formData, this::updateLoadingOverlayText);
+                            } catch (Exception ex) {
+                                error = ex;
+                            }
+
+                            final Exception finalError = error;
+                            Platform.runLater(
+                                    () -> {
+                                        try {
+                                            if (finalError != null) {
+                                                statusLabel.setText("エラー: " + finalError.getMessage());
+                                                showAlert(
+                                                        "エラー",
+                                                        "ファイルの書き込み中にエラーが発生しました:\n"
+                                                                + finalError.getMessage());
+                                                finalError.printStackTrace();
+                                                return;
+                                            }
+
+                                            statusLabel.setText("受注ファイルの更新が完了しました。");
+                                            showAlert("成功", "受注ファイルにデータが一括転記・保存されました！");
+
+                                            if (recordRef != null) {
+                                                recordRef.setStatus("一致 (転記完了)");
+                                                recordRef.setDiscrepancy("一致 (受注ファイルへ転記完了)");
+
+                                                ObservableList<OrderRecord> currentItems =
+                                                        comboRecord.getItems();
+                                                comboRecord.setItems(null);
+                                                comboRecord.setItems(currentItems);
+                                                comboRecord.getSelectionModel().select(recordRef);
+
+                                                discrepancyLabel.setText("一致 (受注ファイルへ転記完了)");
+                                                discrepancyLabel
+                                                        .getStyleClass()
+                                                        .removeAll(
+                                                                "discrepancy-label-info",
+                                                                "discrepancy-label-matched",
+                                                                "discrepancy-label-discrepancy",
+                                                                "discrepancy-label-unregistered");
+                                                discrepancyLabel
+                                                        .getStyleClass()
+                                                        .add("discrepancy-label-matched");
+                                            }
+                                        } finally {
+                                            endJuchuTransfer();
+                                        }
+                                    });
+                        },
+                        "request-form-juchu-transfer");
+        transferThread.setDaemon(true);
+        transferThread.start();
+    }
+
+    /** フォーム入力値のスナップショット（転記はバックグラウンドスレッドで実行）。 */
+    private record JuchuTransferFormData(
+            String reqNo, Map<String, String> dbValues, Map<String, String> rawValuesForNewRow) {}
+
+    private JuchuTransferFormData captureJuchuTransferFormData(String reqNo) {
+        Map<String, String> rawValues =
+                selectedRecord != null
+                        ? new HashMap<>(selectedRecord.getRawValues())
+                        : Map.of();
+        return new JuchuTransferFormData(reqNo, buildJuchuDbValuesFromForm(), rawValues);
+    }
+
+    private List<String> readJuchuHeaderWarnings(File file) {
+        try (FileInputStream fis = new FileInputStream(file);
+                Workbook wb = WorkbookFactory.create(fis)) {
             Sheet sheet = wb.getSheet("受注ﾌｧｲﾙ");
-            
-            Row hRow = sheet.getRow(2);
-            Map<String, Integer> colMap = new HashMap<>();
-            for (int c = 0; c < hRow.getLastCellNum(); c++) {
-                Cell cell = hRow.getCell(c);
-                if (cell != null) {
-                    colMap.put(cell.getStringCellValue().trim(), c);
-                }
+            if (sheet == null) {
+                return List.of("受注ﾌｧｲﾙ シートが見つかりません。");
             }
-            
-            String normKey = normalize_key(reqNo);
+            Row hRow = sheet.getRow(JUCHU_SHEET_HEADER_ROW_INDEX);
+            return JuchuSheetColumnLayout.validateHeaders(hRow);
+        } catch (Exception ex) {
+            return List.of("受注ファイルの見出し検証に失敗: " + ex.getMessage());
+        }
+    }
+
+    private void performSingleJuchuTransfer(
+            File file, JuchuTransferFormData form, Consumer<String> progress) throws Exception {
+        progress.accept(
+                "受注ファイルへ転記しています…\n(1/5) 受注ファイルを開いています…\n依頼No: " + form.reqNo());
+
+        try (FileInputStream fis = new FileInputStream(file);
+                Workbook wb = WorkbookFactory.create(fis)) {
+            wb.setForceFormulaRecalculation(false);
+            Sheet sheet = wb.getSheet("受注ﾌｧｲﾙ");
+
+            Map<String, Integer> colMap = buildJuchuColumnMap(sheet);
+
+            progress.accept(
+                    "受注ファイルへ転記しています…\n(2/5) 依頼No を検索しています…\n依頼No: " + form.reqNo());
+
+            String normKey = normalize_key(form.reqNo());
+            int lastDataRowIndex = findJuchuSheetLastPopulatedDataRowIndex(sheet);
             Row targetRow = null;
             int targetRowIndex = -1;
-            
-            for (int r = 3; r <= sheet.getLastRowNum(); r++) {
-                Row row = sheet.getRow(r);
-                if (row == null) continue;
-                Cell c = row.getCell(0);
-                if (c != null && normalize_key(getCellValueAsString(c)).equals(normKey)) {
-                    targetRow = row;
-                    targetRowIndex = r + 1; 
-                    break;
-                }
+            int matchedRowIndex = findJuchuDataRowIndexByReqNo(sheet, normKey, lastDataRowIndex);
+            if (matchedRowIndex >= 0) {
+                targetRow = sheet.getRow(matchedRowIndex);
+                targetRowIndex = matchedRowIndex + 1;
             }
-            
-            boolean isNewRow = (targetRow == null);
-            
-            if (isNewRow) {
-                targetRowIndex = insertNewJuchuDataRowPreservingFormulas(sheet);
-                targetRow = sheet.getRow(JUCHU_SHEET_FIRST_DATA_ROW_INDEX);
-            }
-            
-            Cell cellReqNo = targetRow.createCell(0);
-            cellReqNo.setCellValue(reqNo);
-            
-            // Set yellow background fill to mark as automatically transferred
-            CellStyle yellowStyle = wb.createCellStyle();
-            Row refRow = sheet.getRow(4);
-            if (refRow == null) refRow = sheet.getRow(3);
-            if (refRow != null && refRow.getCell(0) != null) {
-                yellowStyle.cloneStyleFrom(refRow.getCell(0).getCellStyle());
-            }
-            yellowStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
-            yellowStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-            cellReqNo.setCellStyle(yellowStyle);
-            
-            if (isNewRow) {
-                setJuchuSheetString(targetRow, colMap, "入力区分", "通常入力");
-                setJuchuSheetString(targetRow, colMap, "加工区分", "後加工");
-            }
-            setJuchuSheetString(targetRow, colMap, "入力担当", "自動転記");
-            setJuchuSheetDate(targetRow, colMap, "入力日", new Date());
-            
-            // Gather multiple product and raw material lines
-            List<String> prodItems = new ArrayList<>();
-            List<String> prodSpecs = new ArrayList<>();
-            List<String> prodGrades = new ArrayList<>();
-            List<String> prodColors = new ArrayList<>();
-            List<String> prodCats = new ArrayList<>();
-            List<String> prodQtys = new ArrayList<>();
-            List<String> prodEdabans = new ArrayList<>();
-            List<String> prodEcs = new ArrayList<>();
-            List<String> prodTrims = new ArrayList<>();
-            
-            for (ProductRow pRow : productRows) {
-                prodItems.add(pRow.txtItem.getText().trim());
-                prodSpecs.add(pRow.txtPart.getText().trim() + "-" + pRow.txtType.getText().trim() + "-" + pRow.txtWidth.getText().trim() + "X" + pRow.txtLength.getText().trim());
-                prodGrades.add(pRow.txtGrade.getText().trim());
-                prodColors.add(pRow.txtColor.getText().trim());
-                prodCats.add(pRow.txtCategory.getText().trim());
-                prodQtys.add(pRow.txtQty.getText().trim());
-                prodEdabans.add(pRow.txtEdaban.getText().trim());
-                prodEcs.add(pRow.cmbEcSide.getValue() != null ? pRow.cmbEcSide.getValue() : "");
-                prodTrims.add(pRow.cmbTrimming.getValue() != null ? pRow.cmbTrimming.getValue() : "");
-            }
-            
-            List<String> rawItems = new ArrayList<>();
-            List<String> rawSpecs = new ArrayList<>();
-            List<String> rawGrades = new ArrayList<>();
-            List<String> rawColors = new ArrayList<>();
-            List<String> rawCats = new ArrayList<>();
-            List<String> rawQtys = new ArrayList<>();
-            List<String> wariVals = new ArrayList<>();
-            List<String> feedVals = new ArrayList<>();
-            List<String> storageVals = new ArrayList<>();
-            
-            for (RawMaterialRow rRow : rawRows) {
-                rawItems.add(rRow.txtItem.getText().trim());
-                rawSpecs.add(rRow.txtPart.getText().trim() + "-" + rRow.txtType.getText().trim() + "-" + rRow.txtWidth.getText().trim() + "X" + rRow.txtLength.getText().trim());
-                rawGrades.add(rRow.txtGrade.getText().trim());
-                rawColors.add(rRow.txtColor.getText().trim());
-                rawCats.add(rRow.txtCategory.getText().trim());
-                rawQtys.add(rRow.txtQty.getText().trim());
-                wariVals.add(rRow.cmbWariSu.getValue() != null ? rRow.cmbWariSu.getValue() : "1");
-                feedVals.add(rRow.cmbFeedLoc.getValue() != null ? rRow.cmbFeedLoc.getValue() : "");
-                storageVals.add(rRow.cmbStorageLoc.getValue() != null ? rRow.cmbStorageLoc.getValue() : "");
-            }
-            
-            setJuchuSheetString(targetRow, colMap, "品名", String.join("\n", prodItems));
-            setJuchuSheetString(targetRow, colMap, "製品", String.join("\n", prodSpecs));
-            setJuchuSheetString(targetRow, colMap, "梱-等1", String.join("\n", prodGrades));
-            setJuchuSheetString(targetRow, colMap, "色1", String.join("\n", prodColors));
-            setJuchuSheetString(targetRow, colMap, "区分1", String.join("\n", prodCats));
-            setJuchuSheetString(targetRow, colMap, "数量1", String.join("\n", prodQtys));
-            setJuchuSheetString(targetRow, colMap, "枝番", String.join("\n", prodEdabans));
-            setJuchuSheetString(targetRow, colMap, "ＥＣ面", String.join("\n", prodEcs));
-            setJuchuSheetString(targetRow, colMap, "ﾄﾘﾐﾝｸﾞ", String.join("\n", prodTrims));
-            setJuchuSheetString(
-                    targetRow,
-                    colMap,
-                    "ユーザー",
-                    newCmbFormUser.getValue() != null ? newCmbFormUser.getValue().trim() : "");
-            if (newDpFormDeliv.getValue() != null) {
-                try {
-                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-                    setJuchuSheetDate(targetRow, colMap, "希望納期", sdf.parse(newDpFormDeliv.getValue().toString()));
-                } catch (Exception ex) {
-                    setJuchuSheetString(targetRow, colMap, "希望納期", newDpFormDeliv.getValue().toString());
-                }
-            } else {
-                setJuchuSheetString(targetRow, colMap, "希望納期", "");
-            }
-            setJuchuSheetString(
-                    targetRow,
-                    colMap,
-                    "調整納期",
-                    newDpFormAdjustDeliv.getValue() != null ? newDpFormAdjustDeliv.getValue().toString() : "");
-            setJuchuSheetString(targetRow, colMap, "原反", String.join("\n", rawSpecs));
-            setJuchuSheetString(targetRow, colMap, "品名1", String.join("\n", rawItems));
-            setJuchuSheetString(targetRow, colMap, "梱-等", String.join("\n", rawGrades));
-            setJuchuSheetString(targetRow, colMap, "色", String.join("\n", rawColors));
-            setJuchuSheetString(targetRow, colMap, "区分", String.join("\n", rawCats));
-            setJuchuSheetString(targetRow, colMap, "数量", String.join("\n", rawQtys));
-            setJuchuSheetString(targetRow, colMap, "割数", String.join("\n", wariVals));
-            setJuchuSheetString(targetRow, colMap, "投入場所", String.join("\n", feedVals));
-            setJuchuSheetString(targetRow, colMap, "在庫場所", String.join("\n", storageVals));
 
-            setJuchuSheetCellIfPresent(
-                    targetRow, colMap, COL_MASTER_BASE_SHOHIN_PRODUCT, joinMasterBaseShohinFromProductRows());
-            setJuchuSheetCellIfPresent(
-                    targetRow, colMap, COL_MASTER_BASE_SHOHIN_RAW, joinMasterBaseShohinFromRawRows());
-            
-            setJuchuSheetString(targetRow, colMap, "加工内容", txtProcess.getText().trim());
-            setJuchuSheetNumericOrString(targetRow, colMap, "加工賃", newTxtFormWage.getText().trim());
-            setJuchuSheetString(targetRow, colMap, "契約Ｎｏ", newTxtFormContractNo.getText().trim());
-            setJuchuSheetString(
-                    targetRow,
-                    colMap,
-                    "用途",
-                    newCmbFormYoto.getValue() != null ? newCmbFormYoto.getValue().trim() : "");
+            boolean isNewRow = targetRow == null;
+
             if (isNewRow) {
+                progress.accept(
+                        "受注ファイルへ転記しています…\n(2/5) 見出し直下(先頭)に新規行を挿入しています…\n依頼No: "
+                                + form.reqNo());
+                targetRowIndex = insertNewJuchuDataRowPreservingFormulas(sheet, lastDataRowIndex, progress);
+                targetRow = sheet.getRow(JUCHU_SHEET_FIRST_DATA_ROW_INDEX);
                 applyDefaultJuchuFormulasIfMissing(targetRow, colMap, targetRowIndex);
-                Map<String, String> raw = selectedRecord != null ? selectedRecord.getRawValues() : new HashMap<>();
-                if (!raw.isEmpty()) {
-                    setJuchuSheetString(targetRow, colMap, "品名1", raw.get("原反品名"));
-                    setJuchuSheetString(targetRow, colMap, "梱-等1", raw.get("梱-等1"));
-                    setJuchuSheetString(targetRow, colMap, "色1", raw.get("色1"));
-                    setJuchuSheetString(targetRow, colMap, "区分1", raw.get("区分1"));
-                    setJuchuSheetString(targetRow, colMap, "梱-等", raw.get("原反梱-等"));
-                    setJuchuSheetString(targetRow, colMap, "色", raw.get("原反色"));
-                    setJuchuSheetString(targetRow, colMap, "区分", raw.get("原反区分"));
-                    setJuchuSheetString(targetRow, colMap, "在庫場所", raw.get("在庫場所"));
-                    setJuchuSheetNumericOrString(targetRow, colMap, "数量", raw.get("原反数量"));
-                    setJuchuSheetNumericOrString(targetRow, colMap, "加工賃", raw.get("加工賃"));
-                    setJuchuSheetNumericOrString(targetRow, colMap, "原反ロール数", raw.get("原反ロール数"));
-                }
             }
-            
-            fis.close();
-            FileOutputStream fos = new FileOutputStream(file);
-            wb.write(fos);
-            fos.close();
-            wb.close();
-            
-            statusLabel.setText("受注ファイルの更新が完了しました。");
-            showAlert("成功", "受注ファイルにデータが一括転記・保存されました！");
-            
-            if (selectedRecord != null) {
-                selectedRecord.setStatus("一致 (転記完了)");
-                selectedRecord.setDiscrepancy("一致 (受注ファイルへ転記完了)");
-                
-                // Refresh the comboRecord items display snappily
-                ObservableList<OrderRecord> currentItems = comboRecord.getItems();
-                comboRecord.setItems(null);
-                comboRecord.setItems(currentItems);
-                comboRecord.getSelectionModel().select(selectedRecord);
-                
-                // Update discrepancy label in UI
-                discrepancyLabel.setText("一致 (受注ファイルへ転記完了)");
-                discrepancyLabel.getStyleClass().removeAll("discrepancy-label-info", "discrepancy-label-matched", "discrepancy-label-discrepancy", "discrepancy-label-unregistered");
-                discrepancyLabel.getStyleClass().add("discrepancy-label-matched");
+
+            progress.accept(
+                    "受注ファイルへ転記しています…\n(3/5) セルへ転記しています…\n依頼No: "
+                            + form.reqNo()
+                            + (isNewRow ? "（新規行・先頭）" : "（既存行）"));
+
+            setJuchuSheetReqNo(wb, sheet, targetRow, form.reqNo());
+
+            Map<String, String> mergedDb = new LinkedHashMap<>(form.dbValues());
+            if (isNewRow && form.rawValuesForNewRow() != null && !form.rawValuesForNewRow().isEmpty()) {
+                mergeJuchuDbFromRawDefaults(mergedDb, form.rawValuesForNewRow());
             }
-            updateTransferButtonState();
-            
-        } catch (Exception ex) {
-            statusLabel.setText("エラー: " + ex.getMessage());
-            showAlert("エラー", "ファイルの書き込み中にエラーが発生しました:\n" + ex.getMessage());
-            ex.printStackTrace();
-            updateTransferButtonState();
+
+            writeJuchuRowFromValues(
+                    targetRow,
+                    mergedDb,
+                    isNewRow,
+                    mergedDb.get("入力区分"),
+                    mergedDb.get("加工区分"),
+                    mergedDb.get("入力担当"),
+                    mergedDb.get("特記事項1"),
+                    mergedDb.get("特記事項2"),
+                    mergedDb.get("特記事項3"),
+                    isNewRow);
+
+            if (isNewRow) {
+                progress.accept(
+                        "受注ファイルへ転記しています…\n(4/5) 数式列は保全したまま転記完了…\n依頼No: "
+                                + form.reqNo());
+            } else {
+                progress.accept(
+                        "受注ファイルへ転記しています…\n(4/5) 既存行の更新を確定しています…\n依頼No: "
+                                + form.reqNo());
+            }
+
+            progress.accept(
+                    "受注ファイルへ転記しています…\n(5/5) ファイルを保存しています…\n依頼No: "
+                            + form.reqNo());
+            try (FileOutputStream fos = new FileOutputStream(file)) {
+                wb.write(fos);
+            }
         }
     }
 
@@ -2925,19 +2792,132 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     /**
-     * 受注ﾌｧｲﾙ先頭へ行を挿入し、直下のテンプレート行から数式・書式を複製する（値は複製しない）。
+     * 受注ﾌｧｲﾙの見出し行直下（先頭データ行）へ行を挿入し、テンプレート行から数式・書式を複製する（値は複製しない）。
      *
+     * @param lastPopulatedDataRowIndex {@link #findJuchuSheetLastPopulatedDataRowIndex} の結果（実データ末尾）
+     * @param progress 進捗表示（{@code null} 可）
      * @return Excel 上の 1 始まり行番号（数式の行参照用）
      */
-    private static int insertNewJuchuDataRowPreservingFormulas(Sheet sheet) {
-        int lastRowIdx = sheet.getLastRowNum();
-        if (lastRowIdx >= JUCHU_SHEET_FIRST_DATA_ROW_INDEX) {
-            sheet.shiftRows(JUCHU_SHEET_FIRST_DATA_ROW_INDEX, lastRowIdx, 1, true, true);
+    private int insertNewJuchuDataRowPreservingFormulas(
+            Sheet sheet, int lastPopulatedDataRowIndex, Consumer<String> progress) {
+        final int destRowIdx = JUCHU_SHEET_FIRST_DATA_ROW_INDEX;
+        int templateRowIdx;
+        if (lastPopulatedDataRowIndex >= destRowIdx) {
+            int shiftCount = lastPopulatedDataRowIndex - destRowIdx + 1;
+            if (progress != null) {
+                progress.accept(
+                        String.format(
+                                "受注ファイルへ転記しています…\n(2/5) 見出し直下へ挿入のため既存 %d 行を下へずらしています…\n（行数が多いと 1～2 分かかることがあります）",
+                                shiftCount));
+            }
+            sheet.shiftRows(destRowIdx, lastPopulatedDataRowIndex, 1, true, true);
+            templateRowIdx = destRowIdx + 1;
+        } else {
+            if (progress != null) {
+                progress.accept(
+                        "受注ファイルへ転記しています…\n(2/5) 見出し直下(先頭)に新規行を確保しています…");
+            }
+            templateRowIdx = resolveJuchuFormulaTemplateRowIndex(sheet, destRowIdx);
         }
-        int destRowIdx = JUCHU_SHEET_FIRST_DATA_ROW_INDEX;
-        int templateRowIdx = destRowIdx + 1;
+        if (progress != null) {
+            progress.accept(
+                    "受注ファイルへ転記しています…\n(2/5) テンプレート行から数式・書式を複製しています…");
+        }
+        if (sheet.getRow(destRowIdx) == null) {
+            sheet.createRow(destRowIdx);
+        }
         copyJuchuTemplateRowFormulasAndStyles(sheet, templateRowIdx, destRowIdx);
         return destRowIdx + 1;
+    }
+
+    /** データ行が無いとき、数式セルが最も多い行をテンプレートとして選ぶ（挿入先自身は除外）。 */
+    private static int resolveJuchuFormulaTemplateRowIndex(Sheet sheet, int destRowIdx) {
+        int best = destRowIdx + 1;
+        int bestScore = -1;
+        for (int r = destRowIdx + 1; r <= destRowIdx + 2; r++) {
+            int score = countJuchuFormulaCells(sheet.getRow(r));
+            if (score > bestScore) {
+                bestScore = score;
+                best = r;
+            }
+        }
+        return best;
+    }
+
+    private static int countJuchuFormulaCells(Row row) {
+        if (row == null) {
+            return 0;
+        }
+        int count = 0;
+        for (int c = 0; c < row.getLastCellNum(); c++) {
+            if (isJuchuFormulaCell(row.getCell(c))) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** 受注ﾌｧｲﾙ A 列（依頼No）に実データがある行か（数式の 0 や空文字は除外）。 */
+    private boolean juchuRowHasReqNo(Row row) {
+        if (row == null) {
+            return false;
+        }
+        Cell cell = row.getCell(0);
+        if (cell == null) {
+            return false;
+        }
+        return switch (cell.getCellType()) {
+            case STRING -> !cell.getStringCellValue().strip().isEmpty();
+            case NUMERIC -> true;
+            case FORMULA -> {
+                try {
+                    yield !cell.getStringCellValue().strip().isEmpty();
+                } catch (Exception ex) {
+                    try {
+                        yield cell.getNumericCellValue() != 0.0d;
+                    } catch (Exception ignored) {
+                        yield false;
+                    }
+                }
+            }
+            default -> false;
+        };
+    }
+
+    /**
+     * 受注ﾌｧｲﾙの実データ末尾行（0-based）。後方走査で A 列に依頼No がある最終行を返す。
+     */
+    private int findJuchuSheetLastPopulatedDataRowIndex(Sheet sheet) {
+        int first = JUCHU_SHEET_FIRST_DATA_ROW_INDEX;
+        int poiLast = sheet.getLastRowNum();
+        if (poiLast < first) {
+            return first - 1;
+        }
+        int scanLimit = Math.min(poiLast, first + JUCHU_SHEET_MAX_SCAN_ROWS);
+        for (int r = scanLimit; r >= first; r--) {
+            if (juchuRowHasReqNo(sheet.getRow(r))) {
+                return r;
+            }
+        }
+        return first - 1;
+    }
+
+    /** 依頼No に一致するデータ行 index（0-based）。見つからなければ {@code -1}。 */
+    private int findJuchuDataRowIndexByReqNo(Sheet sheet, String normKey, int lastDataRowIndex) {
+        if (lastDataRowIndex < JUCHU_SHEET_FIRST_DATA_ROW_INDEX) {
+            return -1;
+        }
+        for (int r = JUCHU_SHEET_FIRST_DATA_ROW_INDEX; r <= lastDataRowIndex; r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) {
+                continue;
+            }
+            Cell cell = row.getCell(0);
+            if (cell != null && normalize_key(getCellValueAsString(cell)).equals(normKey)) {
+                return r;
+            }
+        }
+        return -1;
     }
 
     /** テンプレート行の数式（行参照は POI が補正）と書式のみ複製。 */
@@ -2983,6 +2963,29 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
     private static boolean isJuchuFormulaCell(Cell cell) {
         return cell != null && cell.getCellType() == CellType.FORMULA;
+    }
+
+    /** 依頼No（A列）のみ値として書き込む（他列の数式セルは触らない）。 */
+    private static void setJuchuSheetReqNo(Workbook wb, Sheet sheet, Row targetRow, String reqNo) {
+        if (targetRow == null || reqNo == null) {
+            return;
+        }
+        Cell cellReqNo = targetRow.getCell(0);
+        if (cellReqNo == null) {
+            cellReqNo = targetRow.createCell(0);
+        }
+        cellReqNo.setCellValue(reqNo);
+        CellStyle yellowStyle = wb.createCellStyle();
+        Row refRow = sheet.getRow(JUCHU_SHEET_FIRST_DATA_ROW_INDEX + 1);
+        if (refRow == null) {
+            refRow = sheet.getRow(JUCHU_SHEET_FIRST_DATA_ROW_INDEX);
+        }
+        if (refRow != null && refRow.getCell(0) != null) {
+            yellowStyle.cloneStyleFrom(refRow.getCell(0).getCellStyle());
+        }
+        yellowStyle.setFillForegroundColor(IndexedColors.YELLOW.getIndex());
+        yellowStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        cellReqNo.setCellStyle(yellowStyle);
     }
 
     /** 数式セルは上書きしない。 */
@@ -3069,6 +3072,310 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     private static void setJuchuSheetCellIfPresent(
             Row row, Map<String, Integer> colMap, String columnHeader, String value) {
         setJuchuSheetString(row, colMap, columnHeader, value);
+    }
+
+    private static void setJuchuCellByLayout(Row row, JuchuSheetColumnLayout.Col col, String value) {
+        if (row == null || col == null) {
+            return;
+        }
+        Cell cell = writableJuchuCell(row, col.columnIndex());
+        if (cell == null) {
+            return;
+        }
+        cell.setCellValue(value != null ? value : "");
+    }
+
+    private static void setJuchuNumericOrStringByLayout(
+            Row row, JuchuSheetColumnLayout.Col col, String text) {
+        if (row == null || col == null) {
+            return;
+        }
+        if (text == null || text.isBlank()) {
+            setJuchuCellByLayout(row, col, "");
+            return;
+        }
+        try {
+            Cell cell = writableJuchuCell(row, col.columnIndex());
+            if (cell == null) {
+                return;
+            }
+            cell.setCellValue(Double.parseDouble(text.trim()));
+        } catch (Exception e) {
+            setJuchuCellByLayout(row, col, text);
+        }
+    }
+
+    private static void setJuchuDateByLayout(Row row, JuchuSheetColumnLayout.Col col, Date value) {
+        if (row == null || col == null || value == null) {
+            return;
+        }
+        Cell cell = writableJuchuCell(row, col.columnIndex());
+        if (cell == null) {
+            return;
+        }
+        cell.setCellValue(value);
+    }
+
+    private static void setJuchuDateOrStringByLayout(
+            Row row, JuchuSheetColumnLayout.Col col, String rawValue) {
+        if (rawValue == null || rawValue.isBlank()) {
+            setJuchuCellByLayout(row, col, "");
+            return;
+        }
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+            setJuchuDateByLayout(row, col, sdf.parse(rawValue.strip()));
+        } catch (Exception ex) {
+            setJuchuCellByLayout(row, col, rawValue.strip());
+        }
+    }
+
+    private static void updateProductRowSpecDisplay(ProductRow pRow) {
+        if (pRow == null || pRow.txtSeihinmei == null) {
+            return;
+        }
+        pRow.txtSeihinmei.setText(
+                JuchuSheetColumnLayout.buildSpecName(
+                        pRow.txtPart.getText(),
+                        pRow.txtType.getText(),
+                        pRow.txtWidth.getText(),
+                        pRow.txtLength.getText()));
+    }
+
+    private static void updateRawRowSpecDisplay(RawMaterialRow rRow) {
+        if (rRow == null || rRow.txtGenpanmei == null) {
+            return;
+        }
+        rRow.txtGenpanmei.setText(
+                JuchuSheetColumnLayout.buildSpecName(
+                        rRow.txtPart.getText(),
+                        rRow.txtType.getText(),
+                        rRow.txtWidth.getText(),
+                        rRow.txtLength.getText()));
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return "";
+    }
+
+    private static String resolveWorkFieldValue(String formValue, String defaultValue) {
+        if (formValue != null && !formValue.isBlank()) {
+            return formValue.trim();
+        }
+        return defaultValue != null ? defaultValue : "";
+    }
+
+    private boolean confirmJuchuHeaderWarnings(List<String> warnings) {
+        if (warnings == null || warnings.isEmpty()) {
+            return true;
+        }
+        Alert alert = new Alert(Alert.AlertType.WARNING);
+        alert.setTitle("受注シート列定義の警告");
+        alert.setHeaderText("見出し行（行3）と列位置の定義が一致しない列があります。");
+        TextArea area = new TextArea(String.join("\n", warnings));
+        area.setEditable(false);
+        area.setWrapText(true);
+        area.setPrefRowCount(Math.min(12, warnings.size() + 1));
+        alert.getDialogPane().setContent(area);
+        ButtonType proceed = new ButtonType("続行", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancel = new ButtonType("中止", ButtonBar.ButtonData.CANCEL_CLOSE);
+        alert.getButtonTypes().setAll(proceed, cancel);
+        return alert.showAndWait().orElse(cancel) == proceed;
+    }
+
+    private void writeJuchuRowFromValues(
+            Row targetRow,
+            Map<String, String> db,
+            boolean isNewRow,
+            String inputKbn,
+            String kakoKbn,
+            String inputTanto,
+            String tokki1,
+            String tokki2,
+            String tokki3,
+            boolean setInputDateNow) {
+        if (targetRow == null || db == null) {
+            return;
+        }
+        setJuchuCellByLayout(
+                targetRow,
+                JuchuSheetColumnLayout.Col.NYURYOKU_KBN,
+                resolveWorkFieldValue(inputKbn, isNewRow ? "通常入力" : ""));
+        setJuchuCellByLayout(
+                targetRow,
+                JuchuSheetColumnLayout.Col.KAKO_KBN,
+                resolveWorkFieldValue(kakoKbn, isNewRow ? "後加工" : ""));
+        setJuchuCellByLayout(
+                targetRow,
+                JuchuSheetColumnLayout.Col.NYURYOKU_TANTO,
+                resolveWorkFieldValue(inputTanto, isNewRow ? "自動転記" : ""));
+        if (setInputDateNow) {
+            setJuchuDateByLayout(targetRow, JuchuSheetColumnLayout.Col.NYURYOKU_BI, new Date());
+        }
+
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.HINMEI, db.getOrDefault("品名", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.SEIHIN, db.getOrDefault("製品", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.KON_TO_1, db.getOrDefault("梱-等1", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.IRO_1, db.getOrDefault("色1", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.KUBUN_1, db.getOrDefault("区分1", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.EDABAN, db.getOrDefault("枝番", ""));
+        setJuchuNumericOrStringByLayout(targetRow, JuchuSheetColumnLayout.Col.SURYO_1, db.getOrDefault("数量1", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.EC_MEN, db.getOrDefault("ＥＣ面", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.TRIMMING, db.getOrDefault("ﾄﾘﾐﾝｸﾞ", ""));
+
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.WARISU, db.getOrDefault("割数", ""));
+        setJuchuCellByLayout(
+                targetRow,
+                JuchuSheetColumnLayout.Col.HINMEI_1,
+                firstNonBlank(db.get("品名1"), db.get("原反品名")));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.GENPAN, db.getOrDefault("原反", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.KON_TO, db.getOrDefault("原反梱-等", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.IRO, db.getOrDefault("原反色", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.KUBUN, db.getOrDefault("原反区分", ""));
+        setJuchuNumericOrStringByLayout(targetRow, JuchuSheetColumnLayout.Col.SURYO, db.getOrDefault("原反数量", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.ZAIKO_BASHO, db.getOrDefault("在庫場所", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.TONYU_BASHO, db.getOrDefault("投入場所", ""));
+
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.KAKO_NAIYO, db.getOrDefault("加工内容", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.TOKKI_1, tokki1 != null ? tokki1 : db.getOrDefault("特記事項1", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.TOKKI_2, tokki2 != null ? tokki2 : db.getOrDefault("特記事項2", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.TOKKI_3, tokki3 != null ? tokki3 : db.getOrDefault("特記事項3", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.YOTO, db.getOrDefault("用途", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.USER, db.getOrDefault("ユーザー", ""));
+        setJuchuDateOrStringByLayout(targetRow, JuchuSheetColumnLayout.Col.KIBO_NOKI, db.getOrDefault("希望納期", ""));
+        setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.CHOSEI_NOKI, db.getOrDefault("調整納期", ""));
+        setJuchuNumericOrStringByLayout(targetRow, JuchuSheetColumnLayout.Col.KAKOCHIN, db.getOrDefault("加工賃", ""));
+
+        setJuchuCellByLayout(
+                targetRow,
+                JuchuSheetColumnLayout.Col.MASTER_BASE_SHOHIN_PRODUCT,
+                db.getOrDefault(COL_MASTER_BASE_SHOHIN_PRODUCT, ""));
+        setJuchuCellByLayout(
+                targetRow,
+                JuchuSheetColumnLayout.Col.MASTER_BASE_SHOHIN_RAW,
+                db.getOrDefault(COL_MASTER_BASE_SHOHIN_RAW, ""));
+    }
+
+    private Map<String, String> buildJuchuDbValuesFromForm() {
+        Map<String, String> db = new LinkedHashMap<>();
+        db.put("ユーザー", newCmbFormUser.getValue() != null ? newCmbFormUser.getValue().trim() : "");
+        if (newDpFormDeliv.getValue() != null) {
+            db.put("希望納期", newDpFormDeliv.getValue().toString());
+        } else {
+            db.put("希望納期", "");
+        }
+        if (newDpFormAdjustDeliv.getValue() != null) {
+            db.put("調整納期", newDpFormAdjustDeliv.getValue().toString());
+        } else {
+            db.put("調整納期", "");
+        }
+        db.put("加工内容", txtProcess.getText().trim());
+        db.put("加工賃", newTxtFormWage.getText().trim());
+        db.put("用途", newCmbFormYoto.getValue() != null ? newCmbFormYoto.getValue().trim() : "");
+        db.put(
+                "入力区分",
+                newCmbFormInputKbn.getValue() != null ? newCmbFormInputKbn.getValue().trim() : "");
+        db.put(
+                "加工区分",
+                newCmbFormKakoKbn.getValue() != null ? newCmbFormKakoKbn.getValue().trim() : "");
+        db.put(
+                "入力担当",
+                newCmbFormInputTanto.getValue() != null ? newCmbFormInputTanto.getValue().trim() : "");
+        db.put("特記事項1", newTxtFormTokki1.getText().trim());
+        db.put("特記事項2", newTxtFormTokki2.getText().trim());
+        db.put("特記事項3", newTxtFormTokki3.getText().trim());
+
+        List<String> prodHinmeis = new ArrayList<>();
+        List<String> prodSpecs = new ArrayList<>();
+        List<String> prodGrades = new ArrayList<>();
+        List<String> prodColors = new ArrayList<>();
+        List<String> prodCats = new ArrayList<>();
+        List<String> prodQtys = new ArrayList<>();
+        List<String> prodEdabans = new ArrayList<>();
+        List<String> prodEcs = new ArrayList<>();
+        List<String> prodTrims = new ArrayList<>();
+        List<String> prodMaster = new ArrayList<>();
+
+        for (ProductRow pRow : productRows) {
+            prodHinmeis.add(pRow.txtHinmei.getText().trim());
+            prodSpecs.add(
+                    firstNonBlank(
+                            pRow.txtSeihinmei.getText(),
+                            JuchuSheetColumnLayout.buildSpecName(
+                                    pRow.txtPart.getText(),
+                                    pRow.txtType.getText(),
+                                    pRow.txtWidth.getText(),
+                                    pRow.txtLength.getText())));
+            prodMaster.add(pRow.txtItem.getText().trim());
+            prodGrades.add(pRow.txtGrade.getText().trim());
+            prodColors.add(pRow.txtColor.getText().trim());
+            prodCats.add(pRow.txtCategory.getText().trim());
+            prodQtys.add(pRow.txtQty.getText().trim());
+            prodEdabans.add(pRow.txtEdaban.getText().trim());
+            prodEcs.add(pRow.cmbEcSide.getValue() != null ? pRow.cmbEcSide.getValue() : "");
+            prodTrims.add(pRow.cmbTrimming.getValue() != null ? pRow.cmbTrimming.getValue() : "");
+        }
+
+        db.put("品名", String.join("\n", prodHinmeis));
+        db.put("製品", String.join("\n", prodSpecs));
+        db.put(COL_MASTER_BASE_SHOHIN_PRODUCT, String.join("\n", prodMaster));
+        db.put("梱-等1", String.join("\n", prodGrades));
+        db.put("色1", String.join("\n", prodColors));
+        db.put("区分1", String.join("\n", prodCats));
+        db.put("数量1", String.join("\n", prodQtys));
+        db.put("枝番", String.join("\n", prodEdabans));
+        db.put("ＥＣ面", String.join("\n", prodEcs));
+        db.put("ﾄﾘﾐﾝｸﾞ", String.join("\n", prodTrims));
+
+        List<String> rawHinmeis = new ArrayList<>();
+        List<String> rawSpecs = new ArrayList<>();
+        List<String> rawGrades = new ArrayList<>();
+        List<String> rawColors = new ArrayList<>();
+        List<String> rawCats = new ArrayList<>();
+        List<String> rawQtys = new ArrayList<>();
+        List<String> wariVals = new ArrayList<>();
+        List<String> feedVals = new ArrayList<>();
+        List<String> storageVals = new ArrayList<>();
+        List<String> rawMaster = new ArrayList<>();
+
+        for (RawMaterialRow rRow : rawRows) {
+            rawHinmeis.add(rRow.txtHinmei.getText().trim());
+            rawSpecs.add(
+                    firstNonBlank(
+                            rRow.txtGenpanmei.getText(),
+                            JuchuSheetColumnLayout.buildSpecName(
+                                    rRow.txtPart.getText(),
+                                    rRow.txtType.getText(),
+                                    rRow.txtWidth.getText(),
+                                    rRow.txtLength.getText())));
+            rawMaster.add(rRow.txtItem.getText().trim());
+            rawGrades.add(rRow.txtGrade.getText().trim());
+            rawColors.add(rRow.txtColor.getText().trim());
+            rawCats.add(rRow.txtCategory.getText().trim());
+            rawQtys.add(rRow.txtQty.getText().trim());
+            wariVals.add(rRow.cmbWariSu.getValue() != null ? rRow.cmbWariSu.getValue() : "1");
+            feedVals.add(rRow.cmbFeedLoc.getValue() != null ? rRow.cmbFeedLoc.getValue() : "");
+            storageVals.add(rRow.cmbStorageLoc.getValue() != null ? rRow.cmbStorageLoc.getValue() : "");
+        }
+
+        String rawHinmeiJoined = String.join("\n", rawHinmeis);
+        db.put("品名1", rawHinmeiJoined);
+        db.put("原反品名", rawHinmeiJoined);
+        db.put("原反", String.join("\n", rawSpecs));
+        db.put(COL_MASTER_BASE_SHOHIN_RAW, String.join("\n", rawMaster));
+        db.put("原反梱-等", String.join("\n", rawGrades));
+        db.put("原反色", String.join("\n", rawColors));
+        db.put("原反区分", String.join("\n", rawCats));
+        db.put("原反数量", String.join("\n", rawQtys));
+        db.put("割数", String.join("\n", wariVals));
+        db.put("投入場所", String.join("\n", feedVals));
+        db.put("在庫場所", String.join("\n", storageVals));
+        return db;
     }
 
     private void showAlert(String title, String content) {
@@ -3406,6 +3713,18 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
     }
 
+    private void beginJuchuTransfer(String overlayText) {
+        juchuTransferInProgress = true;
+        showLoadingOverlay(true, overlayText);
+        updateTransferButtonState();
+    }
+
+    private void endJuchuTransfer() {
+        juchuTransferInProgress = false;
+        showLoadingOverlay(false, "");
+        updateTransferButtonState();
+    }
+
     private void updateLoadingOverlayText(String text) {
         if (loadingOverlayLabel != null) {
             Platform.runLater(() -> {
@@ -3431,17 +3750,18 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
         grid.getColumnConstraints()
                 .addAll(
-                        compactFormLabelColumn(),
+                        formLabelColumn(),
                         expandingFormFieldColumn(),
-                        compactFormLabelColumn(),
+                        formLabelColumn(),
                         expandingFormFieldColumn());
     }
 
-    private static ColumnConstraints compactFormLabelColumn() {
+    private static ColumnConstraints formLabelColumn() {
         ColumnConstraints cc = new ColumnConstraints();
-        cc.setMinWidth(Region.USE_COMPUTED_SIZE);
-        cc.setPrefWidth(Region.USE_COMPUTED_SIZE);
+        cc.setMinWidth(FORM_LABEL_COLUMN_MIN_WIDTH);
+        cc.setPrefWidth(FORM_LABEL_COLUMN_MIN_WIDTH);
         cc.setMaxWidth(Region.USE_PREF_SIZE);
+        cc.setHgrow(Priority.NEVER);
         cc.setHalignment(javafx.geometry.HPos.RIGHT);
         return cc;
     }
@@ -3449,14 +3769,18 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     private static ColumnConstraints expandingFormFieldColumn() {
         ColumnConstraints cc = new ColumnConstraints();
         cc.setHgrow(Priority.ALWAYS);
-        cc.setMinWidth(72);
+        cc.setMinWidth(48);
         cc.setFillWidth(true);
         return cc;
     }
 
     private static void styleFormLabel(Label label) {
         label.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
+        label.getStyleClass().add("request-form-field-label");
+        label.setWrapText(true);
+        label.setTextOverrun(javafx.scene.control.OverrunStyle.CLIP);
         GridPane.setHalignment(label, javafx.geometry.HPos.RIGHT);
+        GridPane.setFillWidth(label, true);
     }
 
     private static void addFormField(GridPane grid, Node field, int col, int row) {
@@ -3480,6 +3804,53 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         primary.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(secondary, Priority.SOMETIMES);
         secondary.setMaxWidth(Double.MAX_VALUE);
+    }
+
+    /** 製品行の「商品」欄とマスタ候補から自動転記された関連欄をクリアする。 */
+    private void clearProductRowShohin(ProductRow pRow) {
+        isLoadingRecord = true;
+        try {
+            pRow.txtItem.clear();
+            pRow.txtPart.clear();
+            pRow.txtType.clear();
+            pRow.txtWidth.clear();
+            pRow.txtLength.clear();
+            pRow.cmbSearch.getSelectionModel().clearSelection();
+            pRow.cmbSearch.setValue(null);
+            pRow.cmbSearch.setItems(FXCollections.emptyObservableList());
+            pRow.cmbSearch.hide();
+        } finally {
+            isLoadingRecord = false;
+        }
+    }
+
+    /** 原反行の「商品」欄とマスタ候補から自動転記された関連欄をクリアする。 */
+    private void clearRawMaterialRowShohin(RawMaterialRow rRow) {
+        isLoadingRecord = true;
+        try {
+            rRow.txtItem.clear();
+            rRow.txtPart.clear();
+            rRow.txtType.clear();
+            rRow.txtWidth.clear();
+            rRow.txtLength.clear();
+            rRow.cmbSearch.getSelectionModel().clearSelection();
+            rRow.cmbSearch.setValue(null);
+            rRow.cmbSearch.setItems(FXCollections.emptyObservableList());
+            rRow.cmbSearch.hide();
+        } finally {
+            isLoadingRecord = false;
+        }
+    }
+
+    private static Button createShohinFieldButton(String text, String styleClass, String tooltip, Runnable action) {
+        Button btn = new Button(text);
+        btn.setStyle("-fx-font-size: 11px; -fx-padding: 2px 6px; -fx-cursor: hand;");
+        btn.getStyleClass().add(styleClass);
+        if (tooltip != null && !tooltip.isEmpty()) {
+            btn.setTooltip(new Tooltip(tooltip));
+        }
+        btn.setOnAction(evt -> action.run());
+        return btn;
     }
 
     private void parseAndSetProductFields(String productStr) {
@@ -3543,6 +3914,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     // --- STYLISH DYNAMIC MULTIPLE ROWS HELPERS & CLASSES ---
     
     public static class ProductRow {
+        public TextField txtHinmei;
+        public TextField txtSeihinmei;
         public TextField txtItem;
         public TextField txtPart;
         public ComboBox<String> cmbSearch;
@@ -3561,6 +3934,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
     
     public static class RawMaterialRow {
+        public TextField txtHinmei;
+        public TextField txtGenpanmei;
         public TextField txtItem;
         public TextField txtPart;
         public ComboBox<String> cmbSearch;
@@ -3609,18 +3984,41 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         pRow.grid.getStyleClass().add("request-form-prod-row");
         configureTwoColumnFormGrid(pRow.grid);
 
+        Label lblHinmei = new Label("品名:");
+        styleFormLabel(lblHinmei);
+        pRow.txtHinmei = new TextField();
+        pRow.txtHinmei.setStyle("-fx-font-size: 11px;");
+        pRow.txtHinmei.setEditable(false);
+        pRow.txtHinmei.setFocusTraversable(false);
+        pRow.grid.add(lblHinmei, 0, 0);
+        addFormField(pRow.grid, pRow.txtHinmei, 1, 0);
+
+        Label lblSeihinmei = new Label("製品名:");
+        styleFormLabel(lblSeihinmei);
+        pRow.txtSeihinmei = new TextField();
+        pRow.txtSeihinmei.setStyle("-fx-font-size: 11px;");
+        pRow.txtSeihinmei.setEditable(false);
+        pRow.txtSeihinmei.setFocusTraversable(false);
+        pRow.grid.add(lblSeihinmei, 2, 0);
+        addFormField(pRow.grid, pRow.txtSeihinmei, 3, 0);
+
         Label lblItem = new Label("商品:");
         styleFormLabel(lblItem);
         pRow.txtItem = new TextField();
         pRow.txtItem.setStyle("-fx-font-size: 11px;");
+        Button btnClear =
+                createShohinFieldButton("✕", "btn-clear", "商品をクリア", () -> clearProductRowShohin(pRow));
         Button btnCopy = new Button("📋");
         btnCopy.setStyle("-fx-font-size: 11px; -fx-padding: 2px 6px; -fx-cursor: hand;");
         btnCopy.getStyleClass().add("btn-copy");
+        btnCopy.setTooltip(new Tooltip("商品をコピー"));
         btnCopy.setOnAction(evt -> copyToClipboard(pRow.txtItem.getText(), btnCopy));
-        HBox itemBox = new HBox(5, pRow.txtItem, btnCopy);
-        configureSplitFieldRow(itemBox, pRow.txtItem, btnCopy);
-        pRow.grid.add(lblItem, 0, 0);
-        addFormField(pRow.grid, itemBox, 1, 0);
+        HBox itemActions = new HBox(3, btnClear, btnCopy);
+        HBox.setHgrow(itemActions, Priority.NEVER);
+        HBox itemBox = new HBox(5, pRow.txtItem, itemActions);
+        configureSplitFieldRow(itemBox, pRow.txtItem, itemActions);
+        pRow.grid.add(lblItem, 0, 1);
+        addFormField(pRow.grid, itemBox, 1, 1, 3, 1);
 
         Label lblPart = new Label("品番:");
         styleFormLabel(lblPart);
@@ -3634,79 +4032,79 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         wireCandidateComboBox(pRow.cmbSearch, () -> updateRowProdCandidates(pRow, true));
         HBox partBox = new HBox(5, pRow.txtPart, pRow.cmbSearch);
         configureSplitFieldRow(partBox, pRow.txtPart, pRow.cmbSearch);
-        pRow.grid.add(lblPart, 2, 0);
-        addFormField(pRow.grid, partBox, 3, 0);
+        pRow.grid.add(lblPart, 0, 2);
+        addFormField(pRow.grid, partBox, 1, 2, 3, 1);
 
         Label lblType = new Label("タイプ:");
         styleFormLabel(lblType);
         pRow.txtType = new TextField();
         pRow.txtType.setStyle("-fx-font-size: 11px;");
-        pRow.grid.add(lblType, 0, 1);
-        addFormField(pRow.grid, pRow.txtType, 1, 1);
+        pRow.grid.add(lblType, 0, 3);
+        addFormField(pRow.grid, pRow.txtType, 1, 3);
 
         Label lblWidth = new Label("幅(mm):");
         styleFormLabel(lblWidth);
         pRow.txtWidth = new TextField();
         pRow.txtWidth.setStyle("-fx-font-size: 11px;");
-        pRow.grid.add(lblWidth, 2, 1);
-        addFormField(pRow.grid, pRow.txtWidth, 3, 1);
+        pRow.grid.add(lblWidth, 2, 3);
+        addFormField(pRow.grid, pRow.txtWidth, 3, 3);
 
         Label lblLength = new Label("長さ(m):");
         styleFormLabel(lblLength);
         pRow.txtLength = new TextField();
         pRow.txtLength.setStyle("-fx-font-size: 11px;");
-        pRow.grid.add(lblLength, 0, 2);
-        addFormField(pRow.grid, pRow.txtLength, 1, 2);
+        pRow.grid.add(lblLength, 0, 4);
+        addFormField(pRow.grid, pRow.txtLength, 1, 4);
 
         Label lblQty = new Label("数量:");
         styleFormLabel(lblQty);
         pRow.txtQty = new TextField();
         pRow.txtQty.setStyle("-fx-font-size: 11px;");
-        pRow.grid.add(lblQty, 2, 2);
-        addFormField(pRow.grid, pRow.txtQty, 3, 2);
+        pRow.grid.add(lblQty, 2, 4);
+        addFormField(pRow.grid, pRow.txtQty, 3, 4);
 
         Label lblGrade = new Label("梱-等:");
         styleFormLabel(lblGrade);
         pRow.txtGrade = new TextField();
         pRow.txtGrade.setStyle("-fx-font-size: 11px;");
-        pRow.grid.add(lblGrade, 0, 3);
-        addFormField(pRow.grid, pRow.txtGrade, 1, 3);
+        pRow.grid.add(lblGrade, 0, 5);
+        addFormField(pRow.grid, pRow.txtGrade, 1, 5);
 
         Label lblColor = new Label("色:");
         styleFormLabel(lblColor);
         pRow.txtColor = new TextField();
         pRow.txtColor.setStyle("-fx-font-size: 11px;");
-        pRow.grid.add(lblColor, 2, 3);
-        addFormField(pRow.grid, pRow.txtColor, 3, 3);
+        pRow.grid.add(lblColor, 2, 5);
+        addFormField(pRow.grid, pRow.txtColor, 3, 5);
 
         Label lblCategory = new Label("区分:");
         styleFormLabel(lblCategory);
         pRow.txtCategory = new TextField();
         pRow.txtCategory.setStyle("-fx-font-size: 11px;");
-        pRow.grid.add(lblCategory, 0, 4);
-        addFormField(pRow.grid, pRow.txtCategory, 1, 4);
+        pRow.grid.add(lblCategory, 0, 6);
+        addFormField(pRow.grid, pRow.txtCategory, 1, 6);
 
         Label lblEdaban = new Label("枝番:");
         styleFormLabel(lblEdaban);
         pRow.txtEdaban = new TextField();
         pRow.txtEdaban.setStyle("-fx-font-size: 11px;");
         pRow.txtEdaban.getStyleClass().add("paper-edaban-input");
-        pRow.grid.add(lblEdaban, 2, 4);
-        addFormField(pRow.grid, pRow.txtEdaban, 3, 4);
+        pRow.grid.add(lblEdaban, 2, 6);
+        addFormField(pRow.grid, pRow.txtEdaban, 3, 6);
 
         Label lblEc = new Label("EC面:");
         styleFormLabel(lblEc);
         pRow.cmbEcSide = new ComboBox<>(FXCollections.observableArrayList(optEcSide));
         pRow.cmbEcSide.setStyle("-fx-font-size: 11px;");
-        pRow.grid.add(lblEc, 0, 5);
-        addFormField(pRow.grid, pRow.cmbEcSide, 1, 5);
+        pRow.grid.add(lblEc, 0, 7);
+        addFormField(pRow.grid, pRow.cmbEcSide, 1, 7);
 
         Label lblTrimming = new Label("トリミング:");
         styleFormLabel(lblTrimming);
         pRow.cmbTrimming = new ComboBox<>(FXCollections.observableArrayList(optTrimming));
         pRow.cmbTrimming.setStyle("-fx-font-size: 11px;");
-        pRow.grid.add(lblTrimming, 2, 5);
-        addFormField(pRow.grid, pRow.cmbTrimming, 3, 5);
+        pRow.grid.add(lblTrimming, 2, 7);
+        addFormField(pRow.grid, pRow.cmbTrimming, 3, 7);
 
         Button btnDelete = new Button("削除");
         btnDelete.getStyleClass().add("btn-settings-del");
@@ -3729,13 +4127,24 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 newCmbProdTrimming = productRows.get(0).cmbTrimming;
             }
         });
-        pRow.grid.add(btnDelete, 3, 6);
+        pRow.grid.add(btnDelete, 3, 8);
         GridPane.setHalignment(btnDelete, javafx.geometry.HPos.RIGHT);
 
-        pRow.txtPart.textProperty().addListener((obs, oldV, newV) -> updateRowProdCandidates(pRow, false));
+        Runnable updateSpec = () -> updateProductRowSpecDisplay(pRow);
+        pRow.txtPart.textProperty().addListener((obs, oldV, newV) -> {
+            updateRowProdCandidates(pRow, false);
+            updateSpec.run();
+        });
         pRow.txtItem.textProperty().addListener((obs, oldV, newV) -> updateRowProdCandidates(pRow, false));
-        pRow.txtType.textProperty().addListener((obs, oldV, newV) -> updateRowProdCandidates(pRow, false));
-        pRow.txtLength.textProperty().addListener((obs, oldV, newV) -> updateRowProdCandidates(pRow, false));
+        pRow.txtType.textProperty().addListener((obs, oldV, newV) -> {
+            updateRowProdCandidates(pRow, false);
+            updateSpec.run();
+        });
+        pRow.txtWidth.textProperty().addListener((obs, oldV, newV) -> updateSpec.run());
+        pRow.txtLength.textProperty().addListener((obs, oldV, newV) -> {
+            updateRowProdCandidates(pRow, false);
+            updateSpec.run();
+        });
         
         pRow.cmbSearch.setOnAction(evt -> {
             String sel = pRow.cmbSearch.getValue();
@@ -3751,7 +4160,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                             if (nameParts.length >= 2) pRow.txtType.setText(nameParts[1]);
                             pRow.txtWidth.setText(p.getFoamWidth());
                             pRow.txtLength.setText(p.getFoamLength());
-                            newTxtFormKakoNaiyo.setText(p.getKakoNaiyo());
+                            updateProductRowSpecDisplay(pRow);
                         } finally {
                             isLoadingRecord = false;
                         }
@@ -3816,7 +4225,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
             filtered = buildMasterProductCandidateLabels(null, null, null, null, 50);
         } else {
-            filtered = buildMasterProductCandidateLabels(kwItem, kwPart, kwType, kwLength, 50);
+            filtered = buildMasterProductCandidateLabelsRelaxed(kwItem, kwPart, kwType, kwLength, 50);
         }
         pRow.cmbSearch.setItems(javafx.collections.FXCollections.observableArrayList(filtered));
         if (!fromDropdownOpen && !filtered.isEmpty() && !pRow.cmbSearch.isShowing()) {
@@ -3841,12 +4250,68 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
             filtered = buildMasterProductCandidateLabels(null, null, null, null, 50);
         } else {
-            filtered = buildMasterProductCandidateLabels(kwItem, kwPart, kwType, kwLength, 50);
+            filtered = buildMasterProductCandidateLabelsRelaxed(kwItem, kwPart, kwType, kwLength, 50);
         }
         rRow.cmbSearch.setItems(javafx.collections.FXCollections.observableArrayList(filtered));
         if (!fromDropdownOpen && !filtered.isEmpty() && !rRow.cmbSearch.isShowing()) {
             rRow.cmbSearch.show();
         }
+    }
+
+    /**
+     * 候補が0件のとき、長さ→タイプ→品番→品名の順でフィルタを外し、1件以上になるまで再検索する。
+     */
+    private java.util.List<String> buildMasterProductCandidateLabelsRelaxed(
+            String kwItem, String kwPart, String kwType, String kwLength, int limit) {
+        String item = emptyMasterCandidateKeyword(kwItem);
+        String part = emptyMasterCandidateKeyword(kwPart);
+        String type = emptyMasterCandidateKeyword(kwType);
+        String length = emptyMasterCandidateKeyword(kwLength);
+
+        String activeItem = item;
+        String activePart = part;
+        String activeType = type;
+        String activeLength = length;
+
+        java.util.List<String> result =
+                buildMasterProductCandidateLabels(activeItem, activePart, activeType, activeLength, limit);
+        if (!result.isEmpty()) {
+            return result;
+        }
+        if (length != null) {
+            activeLength = null;
+            result =
+                    buildMasterProductCandidateLabels(activeItem, activePart, activeType, activeLength, limit);
+            if (!result.isEmpty()) {
+                return result;
+            }
+        }
+        if (type != null) {
+            activeType = null;
+            result =
+                    buildMasterProductCandidateLabels(activeItem, activePart, activeType, activeLength, limit);
+            if (!result.isEmpty()) {
+                return result;
+            }
+        }
+        if (part != null) {
+            activePart = null;
+            result =
+                    buildMasterProductCandidateLabels(activeItem, activePart, activeType, activeLength, limit);
+            if (!result.isEmpty()) {
+                return result;
+            }
+        }
+        if (item != null) {
+            activeItem = null;
+            result =
+                    buildMasterProductCandidateLabels(activeItem, activePart, activeType, activeLength, limit);
+        }
+        return result;
+    }
+
+    private static String emptyMasterCandidateKeyword(String kw) {
+        return kw == null || kw.isEmpty() ? null : kw;
     }
 
     private java.util.List<String> buildMasterProductCandidateLabels(
@@ -3920,18 +4385,41 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         rRow.grid.getStyleClass().add("request-form-prod-row");
         configureTwoColumnFormGrid(rRow.grid);
 
+        Label lblHinmei = new Label("品名:");
+        styleFormLabel(lblHinmei);
+        rRow.txtHinmei = new TextField();
+        rRow.txtHinmei.setStyle("-fx-font-size: 11px;");
+        rRow.txtHinmei.setEditable(false);
+        rRow.txtHinmei.setFocusTraversable(false);
+        rRow.grid.add(lblHinmei, 0, 0);
+        addFormField(rRow.grid, rRow.txtHinmei, 1, 0);
+
+        Label lblGenpanmei = new Label("原反名:");
+        styleFormLabel(lblGenpanmei);
+        rRow.txtGenpanmei = new TextField();
+        rRow.txtGenpanmei.setStyle("-fx-font-size: 11px;");
+        rRow.txtGenpanmei.setEditable(false);
+        rRow.txtGenpanmei.setFocusTraversable(false);
+        rRow.grid.add(lblGenpanmei, 2, 0);
+        addFormField(rRow.grid, rRow.txtGenpanmei, 3, 0);
+
         Label lblItem = new Label("商品:");
         styleFormLabel(lblItem);
         rRow.txtItem = new TextField();
         rRow.txtItem.setStyle("-fx-font-size: 11px;");
+        Button btnClear =
+                createShohinFieldButton("✕", "btn-clear", "商品をクリア", () -> clearRawMaterialRowShohin(rRow));
         Button btnCopy = new Button("📋");
         btnCopy.setStyle("-fx-font-size: 11px; -fx-padding: 2px 6px; -fx-cursor: hand;");
         btnCopy.getStyleClass().add("btn-copy");
+        btnCopy.setTooltip(new Tooltip("商品をコピー"));
         btnCopy.setOnAction(evt -> copyToClipboard(rRow.txtItem.getText(), btnCopy));
-        HBox itemBox = new HBox(5, rRow.txtItem, btnCopy);
-        configureSplitFieldRow(itemBox, rRow.txtItem, btnCopy);
-        rRow.grid.add(lblItem, 0, 0);
-        addFormField(rRow.grid, itemBox, 1, 0);
+        HBox itemActions = new HBox(3, btnClear, btnCopy);
+        HBox.setHgrow(itemActions, Priority.NEVER);
+        HBox itemBox = new HBox(5, rRow.txtItem, itemActions);
+        configureSplitFieldRow(itemBox, rRow.txtItem, itemActions);
+        rRow.grid.add(lblItem, 0, 1);
+        addFormField(rRow.grid, itemBox, 1, 1, 3, 1);
 
         Label lblPart = new Label("品番:");
         styleFormLabel(lblPart);
@@ -3945,78 +4433,78 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         wireCandidateComboBox(rRow.cmbSearch, () -> updateRowRawCandidates(rRow, true));
         HBox partBox = new HBox(5, rRow.txtPart, rRow.cmbSearch);
         configureSplitFieldRow(partBox, rRow.txtPart, rRow.cmbSearch);
-        rRow.grid.add(lblPart, 2, 0);
-        addFormField(rRow.grid, partBox, 3, 0);
+        rRow.grid.add(lblPart, 0, 2);
+        addFormField(rRow.grid, partBox, 1, 2, 3, 1);
 
         Label lblType = new Label("タイプ:");
         styleFormLabel(lblType);
         rRow.txtType = new TextField();
         rRow.txtType.setStyle("-fx-font-size: 11px;");
-        rRow.grid.add(lblType, 0, 1);
-        addFormField(rRow.grid, rRow.txtType, 1, 1);
+        rRow.grid.add(lblType, 0, 3);
+        addFormField(rRow.grid, rRow.txtType, 1, 3);
 
         Label lblWidth = new Label("幅(mm):");
         styleFormLabel(lblWidth);
         rRow.txtWidth = new TextField();
         rRow.txtWidth.setStyle("-fx-font-size: 11px;");
-        rRow.grid.add(lblWidth, 2, 1);
-        addFormField(rRow.grid, rRow.txtWidth, 3, 1);
+        rRow.grid.add(lblWidth, 2, 3);
+        addFormField(rRow.grid, rRow.txtWidth, 3, 3);
 
         Label lblLength = new Label("長さ(m):");
         styleFormLabel(lblLength);
         rRow.txtLength = new TextField();
         rRow.txtLength.setStyle("-fx-font-size: 11px;");
-        rRow.grid.add(lblLength, 0, 2);
-        addFormField(rRow.grid, rRow.txtLength, 1, 2);
+        rRow.grid.add(lblLength, 0, 4);
+        addFormField(rRow.grid, rRow.txtLength, 1, 4);
 
         Label lblQty = new Label("数量:");
         styleFormLabel(lblQty);
         rRow.txtQty = new TextField();
         rRow.txtQty.setStyle("-fx-font-size: 11px;");
-        rRow.grid.add(lblQty, 2, 2);
-        addFormField(rRow.grid, rRow.txtQty, 3, 2);
+        rRow.grid.add(lblQty, 2, 4);
+        addFormField(rRow.grid, rRow.txtQty, 3, 4);
 
         Label lblGrade = new Label("梱-等:");
         styleFormLabel(lblGrade);
         rRow.txtGrade = new TextField();
         rRow.txtGrade.setStyle("-fx-font-size: 11px;");
-        rRow.grid.add(lblGrade, 0, 3);
-        addFormField(rRow.grid, rRow.txtGrade, 1, 3);
+        rRow.grid.add(lblGrade, 0, 5);
+        addFormField(rRow.grid, rRow.txtGrade, 1, 5);
 
         Label lblColor = new Label("色:");
         styleFormLabel(lblColor);
         rRow.txtColor = new TextField();
         rRow.txtColor.setStyle("-fx-font-size: 11px;");
-        rRow.grid.add(lblColor, 2, 3);
-        addFormField(rRow.grid, rRow.txtColor, 3, 3);
+        rRow.grid.add(lblColor, 2, 5);
+        addFormField(rRow.grid, rRow.txtColor, 3, 5);
 
         Label lblCategory = new Label("区分:");
         styleFormLabel(lblCategory);
         rRow.txtCategory = new TextField();
         rRow.txtCategory.setStyle("-fx-font-size: 11px;");
-        rRow.grid.add(lblCategory, 0, 4);
-        addFormField(rRow.grid, rRow.txtCategory, 1, 4);
+        rRow.grid.add(lblCategory, 0, 6);
+        addFormField(rRow.grid, rRow.txtCategory, 1, 6);
 
         Label lblWariSu = new Label("割数:");
         styleFormLabel(lblWariSu);
         rRow.cmbWariSu = new ComboBox<>(FXCollections.observableArrayList(optWariSu));
         rRow.cmbWariSu.setStyle("-fx-font-size: 11px;");
-        rRow.grid.add(lblWariSu, 2, 4);
-        addFormField(rRow.grid, rRow.cmbWariSu, 3, 4);
+        rRow.grid.add(lblWariSu, 2, 6);
+        addFormField(rRow.grid, rRow.cmbWariSu, 3, 6);
 
         Label lblFeed = new Label("投入場所:");
         styleFormLabel(lblFeed);
         rRow.cmbFeedLoc = new ComboBox<>(FXCollections.observableArrayList(optFeedLoc));
         rRow.cmbFeedLoc.setStyle("-fx-font-size: 11px;");
-        rRow.grid.add(lblFeed, 0, 5);
-        addFormField(rRow.grid, rRow.cmbFeedLoc, 1, 5);
+        rRow.grid.add(lblFeed, 0, 7);
+        addFormField(rRow.grid, rRow.cmbFeedLoc, 1, 7);
 
         Label lblStorage = new Label("在庫場所:");
         styleFormLabel(lblStorage);
         rRow.cmbStorageLoc = new ComboBox<>(FXCollections.observableArrayList(optStorageLoc));
         rRow.cmbStorageLoc.setStyle("-fx-font-size: 11px;");
-        rRow.grid.add(lblStorage, 2, 5);
-        addFormField(rRow.grid, rRow.cmbStorageLoc, 3, 5);
+        rRow.grid.add(lblStorage, 2, 7);
+        addFormField(rRow.grid, rRow.cmbStorageLoc, 3, 7);
 
         Button btnDelete = new Button("削除");
         btnDelete.getStyleClass().add("btn-settings-del");
@@ -4039,13 +4527,24 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 newCmbRawStorageLoc = rawRows.get(0).cmbStorageLoc;
             }
         });
-        rRow.grid.add(btnDelete, 3, 6);
+        rRow.grid.add(btnDelete, 3, 8);
         GridPane.setHalignment(btnDelete, javafx.geometry.HPos.RIGHT);
 
-        rRow.txtPart.textProperty().addListener((obs, oldV, newV) -> updateRowRawCandidates(rRow, false));
+        Runnable updateSpec = () -> updateRawRowSpecDisplay(rRow);
+        rRow.txtPart.textProperty().addListener((obs, oldV, newV) -> {
+            updateRowRawCandidates(rRow, false);
+            updateSpec.run();
+        });
         rRow.txtItem.textProperty().addListener((obs, oldV, newV) -> updateRowRawCandidates(rRow, false));
-        rRow.txtType.textProperty().addListener((obs, oldV, newV) -> updateRowRawCandidates(rRow, false));
-        rRow.txtLength.textProperty().addListener((obs, oldV, newV) -> updateRowRawCandidates(rRow, false));
+        rRow.txtType.textProperty().addListener((obs, oldV, newV) -> {
+            updateRowRawCandidates(rRow, false);
+            updateSpec.run();
+        });
+        rRow.txtWidth.textProperty().addListener((obs, oldV, newV) -> updateSpec.run());
+        rRow.txtLength.textProperty().addListener((obs, oldV, newV) -> {
+            updateRowRawCandidates(rRow, false);
+            updateSpec.run();
+        });
         
         rRow.cmbSearch.setOnAction(evt -> {
             String sel = rRow.cmbSearch.getValue();
@@ -4061,6 +4560,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                             if (nameParts.length >= 2) rRow.txtType.setText(nameParts[1]);
                             rRow.txtWidth.setText(p.getFoamWidth());
                             rRow.txtLength.setText(p.getFoamLength());
+                            updateRawRowSpecDisplay(rRow);
                         } finally {
                             isLoadingRecord = false;
                         }
