@@ -68,6 +68,28 @@ public final class AppPaths {
     public static final String KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR = "PM_AI_ACTUAL_DETAIL_SOURCE_DIR";
 
     /**
+     * 依頼書入力（アラジンマスタ）フォルダ。後加工商品／加工内容／工程マスタおよび
+     * {@code マスタリレーション統合結果.xlsx} を置くディレクトリ（フルパス）。
+     */
+    public static final String KEY_PM_AI_ALADDIN_MASTER_DIR = "PM_AI_ALADDIN_MASTER_DIR";
+
+    /** {@link #KEY_PM_AI_ALADDIN_MASTER_DIR} 未設定時、{@link #resolveRepoRoot(Map)} 直下のサブフォルダ名。 */
+    public static final String ALADDIN_MASTER_DIR_LEAF_NAME = "アラジンマスタ";
+
+    /**
+     * 依頼書入力の受注データベース Excel（受注ﾌｧｲﾙ シートを含むブック）のフルパス。
+     */
+    public static final String KEY_PM_AI_REQUEST_FORM_JUCHU_FILE = "PM_AI_REQUEST_FORM_JUCHU_FILE";
+
+    /**
+     * 依頼書入力がスキャンする依頼書原本フォルダ（{@code *加工依頼書*.xlsm} 等を含むディレクトリ）。
+     */
+    public static final String KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR = "PM_AI_REQUEST_FORM_ORIGINAL_DIR";
+
+    /** {@link #KEY_PM_AI_REQUEST_FORM_JUCHU_FILE} 未設定時のファイル名（作業フォルダ直下）。 */
+    public static final String DEFAULT_REQUEST_FORM_JUCHU_FILE_NAME = "加工依頼書入力.xlsm";
+
+    /**
      * Output directory for the standalone result dispatch table xlsx (Power Query {@code _q} + file name;
      * named range folder path in Excel). Default: {@code resolveRepoRoot(ui)/code}.
      */
@@ -329,6 +351,8 @@ public final class AppPaths {
             KEY_PM_AI_WORKSPACE,
             KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
             KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
+            KEY_PM_AI_ALADDIN_MASTER_DIR,
+            KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
             KEY_PM_AI_OUTPUT_DIR,
             KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
             KEY_COMPARE_GANTT_SNAPSHOT_DIR);
@@ -344,6 +368,8 @@ public final class AppPaths {
                     KEY_PM_AI_REPO_ROOT,
                     KEY_PM_AI_CODE_PYTHON_DIR,
                     KEY_PM_AI_WORKSPACE,
+                    KEY_PM_AI_ALADDIN_MASTER_DIR,
+                    KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
                     KEY_PM_AI_OUTPUT_DIR,
                     KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
                     KEY_COMPARE_GANTT_SNAPSHOT_DIR);
@@ -363,6 +389,7 @@ public final class AppPaths {
         s.add(KEY_PM_AI_PLAN_INPUT_PATH);
         s.add(KEY_PM_AI_PROCESSING_PLAN_PATH);
         s.add(KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK);
+        s.add(KEY_PM_AI_REQUEST_FORM_JUCHU_FILE);
         s.add(KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH);
         s.add(KEY_PM_AI_CURSOR_DEBUG_LOG);
         s.add(KEY_PM_AI_DEBUG_LOG_MIRROR);
@@ -426,7 +453,8 @@ public final class AppPaths {
                 || KEY_PM_AI_COLUMN_CONFIG_WORKBOOK.equals(k)
                 || KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK.equals(k)
                 || KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK.equals(k)
-                || KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK.equals(k);
+                || KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK.equals(k)
+                || KEY_PM_AI_REQUEST_FORM_JUCHU_FILE.equals(k);
     }
 
     /** {@link #KEY_PM_AI_PLAN_INPUT_PATH} (CSV / Parquet / Excel plan input). */
@@ -637,6 +665,69 @@ public final class AppPaths {
             return Path.of(override).toAbsolutePath().normalize();
         }
         return Path.of(DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR);
+    }
+
+    /**
+     * 依頼書入力向けアラジンマスタフォルダ。{@link #KEY_PM_AI_ALADDIN_MASTER_DIR} が空のときは
+     * {@link GlobalInitSettingTarget#load()} の工場に応じた UNC（湖南／国分）。
+     */
+    public static Path resolveAladdinMasterDir(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_ALADDIN_MASTER_DIR));
+        if (!override.isEmpty()) {
+            return Path.of(override).toAbsolutePath().normalize();
+        }
+        return Path.of(defaultAladdinMasterDirForFactory(GlobalInitSettingTarget.load()));
+    }
+
+    /** {@link FactorySite} 別の {@link #KEY_PM_AI_ALADDIN_MASTER_DIR} 既定 UNC。 */
+    public static String defaultAladdinMasterDirForFactory(FactorySite site) {
+        if (site == FactorySite.KOKUBU) {
+            return DEFAULT_PM_AI_ALADDIN_MASTER_DIR_KOKUBU;
+        }
+        return DEFAULT_PM_AI_ALADDIN_MASTER_DIR_KONAN;
+    }
+
+    /**
+     * 依頼書入力の受注ファイル Excel。{@link #KEY_PM_AI_REQUEST_FORM_JUCHU_FILE} が空のときは
+     * {@link GlobalInitSettingTarget#load()} の工場に応じた UNC 既定。
+     */
+    public static Optional<Path> resolveRequestFormJuchuFile(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_REQUEST_FORM_JUCHU_FILE));
+        if (!override.isEmpty()) {
+            return Optional.of(Path.of(override).toAbsolutePath().normalize());
+        }
+        return Optional.of(Path.of(defaultRequestFormJuchuFileForFactory(GlobalInitSettingTarget.load())));
+    }
+
+    /** {@link FactorySite} 別の {@link #KEY_PM_AI_REQUEST_FORM_JUCHU_FILE} 既定 UNC。 */
+    public static String defaultRequestFormJuchuFileForFactory(FactorySite site) {
+        if (site == FactorySite.KOKUBU) {
+            return DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KOKUBU;
+        }
+        return DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KONAN;
+    }
+
+    /**
+     * 依頼書原本フォルダ。{@link #KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR} が空のときは
+     * {@link GlobalInitSettingTarget#load()} の工場に応じ、受注ファイル既定の親ディレクトリ。
+     */
+    public static Path resolveRequestFormOriginalDir(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR));
+        if (!override.isEmpty()) {
+            return Path.of(override).toAbsolutePath().normalize();
+        }
+        return Path.of(defaultRequestFormOriginalDirForFactory(GlobalInitSettingTarget.load()))
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /** {@link FactorySite} 別の {@link #KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR} 既定（受注ファイルの親フォルダ）。 */
+    public static String defaultRequestFormOriginalDirForFactory(FactorySite site) {
+        Path parent = Path.of(defaultRequestFormJuchuFileForFactory(site)).getParent();
+        return parent != null ? parent.toAbsolutePath().normalize().toString() : "";
     }
 
     /**
@@ -1010,6 +1101,28 @@ public final class AppPaths {
     /** {@link FactorySite#KOKUBU} の {@link #KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 既定（UNC）。 */
     public static final String DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KOKUBU =
             DEFAULT_KOKUBU_DATA_DIR + "\\" + SUMMARY_AI_DISPATCH_XLSX;
+
+    /** {@link FactorySite#KONAN} の {@link #KEY_PM_AI_ALADDIN_MASTER_DIR} 既定（UNC）。 */
+    public static final String DEFAULT_PM_AI_ALADDIN_MASTER_DIR_KONAN =
+            DEFAULT_KONAN_SHARED_DATA_DIR + "\\" + ALADDIN_MASTER_DIR_LEAF_NAME;
+
+    /** {@link FactorySite#KOKUBU} の {@link #KEY_PM_AI_ALADDIN_MASTER_DIR} 既定（UNC）。 */
+    public static final String DEFAULT_PM_AI_ALADDIN_MASTER_DIR_KOKUBU =
+            DEFAULT_KOKUBU_DATA_DIR + "\\" + ALADDIN_MASTER_DIR_LEAF_NAME;
+
+    /** {@link FactorySite#KONAN} の {@link #KEY_PM_AI_REQUEST_FORM_JUCHU_FILE} 既定（UNC）。 */
+    public static final String DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KONAN =
+            "\\\\192.168.0.101\\"
+                    + "共有フォルダ\\"
+                    + "湖南工場\\"
+                    + "湖南共有\\"
+                    + "生産管理システム\\"
+                    + "管理システム\\"
+                    + DEFAULT_REQUEST_FORM_JUCHU_FILE_NAME;
+
+    /** {@link FactorySite#KOKUBU} の {@link #KEY_PM_AI_REQUEST_FORM_JUCHU_FILE} 既定（UNC）。 */
+    public static final String DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KOKUBU =
+            DEFAULT_KOKUBU_DATA_DIR + "\\" + DEFAULT_REQUEST_FORM_JUCHU_FILE_NAME;
 
     /**
      * @deprecated 国分プリセットのサマリ既定は {@link #DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KOKUBU}

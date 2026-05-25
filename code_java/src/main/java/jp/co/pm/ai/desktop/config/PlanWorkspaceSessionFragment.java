@@ -240,6 +240,8 @@ public record PlanWorkspaceSessionFragment(
                 equipmentGanttPlanJsonPath != null ? equipmentGanttPlanJsonPath : "",
                 base.stage1NetworkCacheBadgeLabel(),
                 base.stage1NetworkCacheBadgeStyle(),
+                base.requestFormPreviewUpdateBadgeLabel(),
+                base.requestFormPreviewUpdateBadgeStyle(),
                 base.mainShellTabOrganizerHeaderGlow(),
                 base.mainShellTabOrganizerHeaderGlowStrength(),
                 base.pushButtonDesignPrefs(),

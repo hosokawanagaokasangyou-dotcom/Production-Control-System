@@ -90,7 +90,7 @@ _STAGE2_MACHINE_CALENDAR_CACHE: dict | None = None
 # - 機械カレンダー: * / ＊ / ※ のみ占有とみなす。列0にスロット行が無い時刻（工場計画窓内）は配台不可。
 #   空セルはスロット行がある時間帯では配台可（* 以外の文字は無視）。
 # - 段階2同一パリティ（PM_AI_INTERACTIVE_TRIAL_STAGE2_PARITY）: 配台ループのブロック条件は段階2と同一。
-#   JSON の暦日×当日配台数量（interactive_dispatch_targets）は配台後の未達照合・配台日スライドのみ。
+#   JSON 暦日×当日配台数量（interactive_dispatch_targets）がある手動修正試行では、ループ内キャップも有効。
 # - 指定数量は結果タイムラインと突き合わせ、依頼NO×機械の合計が一致しないとき PlanningValidationError。
 # - 工場枠は master A12/B12 開始・同日 23:59 まで拡張可、暦日跨ぎ加工は中止。
 # - 配台試行時はチーム終業上限を同日 23:59 まで緩め、機械空きが退勤より遅い場合でも同日フォーム探索する。
@@ -101,6 +101,8 @@ _INTERACTIVE_TRIAL_AS_SHORTAGE: list[dict] = []
 _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT: dict[tuple[str, str, str, date], float] = {}
 _LAST_INTERACTIVE_TRIAL_PLAN_TARGETS_SNAPSHOT: dict[tuple[str, str, str, date], float] = {}
 _LAST_INTERACTIVE_TRIAL_META_MISS_SHORTFALL: list[dict] = []
+# 勤怠最終日時点で remaining_units > 0 のタスク（段階3手動修正試行の soft-fail 用）
+_LAST_INTERACTIVE_REMAINING_TASKS_AT_CALENDAR_END: list[dict] = []
 # 直近の配台試行メタ（不足 JSON の stage3 ブロック等へ載せる。単一フェーズ運用）
 _LAST_INTERACTIVE_STAGE3_META: dict = {}
 # _generate_plan_impl 実行中のみ: 段階3の day_start_floor が参照する targets / meters_done
@@ -121,6 +123,11 @@ def interactive_trial_meta_miss_shortfall_snapshot() -> list[dict]:
 def interactive_trial_plan_targets_snapshot() -> dict[tuple[str, str, str, date], float]:
     """直近試行の配台日スライド後 plan（当日配台数量）キー。未設定時は空 dict。"""
     return dict(_LAST_INTERACTIVE_TRIAL_PLAN_TARGETS_SNAPSHOT or {})
+
+
+def interactive_trial_remaining_tasks_at_calendar_end_snapshot() -> list[dict]:
+    """直近試行終了時、勤怠最終日までに割り切れなかったタスク行。"""
+    return list(_LAST_INTERACTIVE_REMAINING_TASKS_AT_CALENDAR_END or [])
 
 PLAN_DUE_DAY_COMPLETION_TIME = time(16, 0)
 
@@ -1003,6 +1010,7 @@ def _effective_result_book_font_name() -> str:
 
 # タスク列名（マクロ実行ブック「加工計画DATA」）
 TASK_COL_TASK_ID = "依頼NO"
+TASK_COL_ORDER_NO = "受注NO"
 TASK_COL_MACHINE = "工程名"
 TASK_COL_MACHINE_NAME = "機械名"
 TASK_COL_QTY = "換算数量"
@@ -1580,6 +1588,7 @@ _exclude_rules_snapshot_wb: str | None = None
 EXCLUDE_RULE_ALLOWED_COLUMNS = frozenset(
     {
         TASK_COL_TASK_ID,
+        TASK_COL_ORDER_NO,
         TASK_COL_MACHINE,
         TASK_COL_MACHINE_NAME,
         TASK_COL_QTY,
@@ -1770,6 +1779,7 @@ RESULT_TASK_DATE_STYLE_HEADERS = frozenset(
 
 SOURCE_BASE_COLUMNS = [
     TASK_COL_TASK_ID,
+    TASK_COL_ORDER_NO,
     TASK_COL_MACHINE,
     TASK_COL_MACHINE_NAME,
     TASK_COL_QTY,
@@ -4388,7 +4398,11 @@ def _fill_plan_dispatch_remaining_qty_column(plan_df: pd.DataFrame) -> None:
         rem = _dispatch_remaining_qty_m_from_row(row)
         plan_df.at[i, PLAN_COL_DISPATCH_REMAINING_QTY] = rem
         if fill_roll_count:
-            plan_df.at[i, PLAN_COL_DISPATCH_ROLL_COUNT] = _dispatch_roll_count_from_row(row, rem)
+            rc = _dispatch_roll_count_from_row(row, rem)
+            if rc == "":
+                plan_df.at[i, PLAN_COL_DISPATCH_ROLL_COUNT] = 0.0
+            else:
+                plan_df.at[i, PLAN_COL_DISPATCH_ROLL_COUNT] = float(rc)
 
 
 def parse_optional_int(val):
@@ -20333,6 +20347,108 @@ def _b61_threshold_unreachable(task_queue: list, task_id: str) -> bool:
     return cap + 1e-9 < thr
 
 
+def _b6_connection_has_remaining_units(task_queue: list, task_id: str) -> bool:
+    """当該依頼の接続（熱融着機　湖南）行に未割当ロールが残るか。"""
+    tid = (task_id or "").strip()
+    if not tid:
+        return False
+    _conn_proc = _normalize_process_name_for_rule_match(
+        SPECIAL_WIP_CONNECTION_PROCESS
+    )
+    _conn_mach = _normalize_equipment_match_key(SPECIAL_WIP_CONNECTION_MACHINE)
+    for _t in task_queue:
+        if str(_t.get("task_id") or "").strip() != tid:
+            continue
+        proc = _normalize_process_name_for_rule_match(_t.get("machine"))
+        mach = _normalize_equipment_match_key(_t.get("machine_name"))
+        if proc == _conn_proc and mach == _conn_mach:
+            return float(_t.get("remaining_units") or 0) > 1e-12
+    return False
+
+
+def _l10_slit_has_remaining_units(task_queue: list, task_id: str) -> bool:
+    """当該依頼のスリット（スリット機1　湖南）行に未割当ロールが残るか。"""
+    tid = (task_id or "").strip()
+    if not tid:
+        return False
+    _slit_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
+    _slit_mach = _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
+    for _t in task_queue:
+        if str(_t.get("task_id") or "").strip() != tid:
+            continue
+        proc = _normalize_process_name_for_rule_match(_t.get("machine"))
+        mach = _normalize_equipment_match_key(_t.get("machine_name"))
+        if proc == _slit_proc and mach == _slit_mach:
+            return float(_t.get("remaining_units") or 0) > 1e-12
+    return False
+
+
+def _b61_sec_blocked_by_connection_min_rolls(task: dict, task_queue: list) -> bool:
+    """
+    B-6.1: 接続→SEC の SEC を候補から外すか。
+    接続行に残ロールが無い（接続完走後）はゲートしない（SEC 残ロールを完走できる）。
+    """
+    tid = str(task.get("task_id") or "").strip()
+    if not tid or _b61_threshold_unreachable(task_queue, tid):
+        return False
+    if not _b6_connection_has_remaining_units(task_queue, tid):
+        return False
+    if (
+        _b6_connection_done_minus_sec_done_for_task_id(task_queue, tid)
+        >= float(CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS) - 1e-9
+    ):
+        return False
+    proc = _normalize_process_name_for_rule_match(task.get("machine"))
+    mach = _normalize_equipment_match_key(task.get("machine_name"))
+    if proc != _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS):
+        return False
+    if mach != _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE):
+        return False
+    toks = task.get("process_content_tokens") or []
+    _norm = [_normalize_process_name_for_rule_match(x) for x in toks]
+    _cp = _normalize_process_name_for_rule_match(SPECIAL_WIP_CONNECTION_PROCESS)
+    _sc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+    if not (
+        _cp in _norm
+        and _sc in _norm
+        and _norm.index(_cp) < _norm.index(_sc)
+    ):
+        return False
+    if not _b6_task_queue_has_special_connection_row_for_tid(task_queue, tid):
+        return False
+    return True
+
+
+def _l10_b41_sec_blocked_by_slit_min_rolls(task: dict, task_queue: list) -> bool:
+    """B-4.1: スリット→SEC の SEC を候補から外すか（スリット完走後はゲートしない）。"""
+    tid = str(task.get("task_id") or "").strip()
+    if not tid or _l10_b41_threshold_unreachable(task_queue, tid):
+        return False
+    if not _l10_slit_has_remaining_units(task_queue, tid):
+        return False
+    if (
+        _l10_slit_done_minus_sec_done_for_task_id(task_queue, tid)
+        >= float(SLIT_BEFORE_SEC_MIN_SLIT_ROLLS) - 1e-9
+    ):
+        return False
+    proc = _normalize_process_name_for_rule_match(task.get("machine"))
+    mach = _normalize_equipment_match_key(task.get("machine_name"))
+    if proc != _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS):
+        return False
+    if mach != _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE):
+        return False
+    toks = task.get("process_content_tokens") or []
+    _norm = [_normalize_process_name_for_rule_match(x) for x in toks]
+    if not (
+        _normalize_process_name_for_rule_match("スリット") in _norm
+        and _normalize_process_name_for_rule_match("SEC") in _norm
+        and _norm.index(_normalize_process_name_for_rule_match("スリット"))
+        < _norm.index(_normalize_process_name_for_rule_match("SEC"))
+    ):
+        return False
+    return _l10_task_queue_has_special_slit_row_for_tid(task_queue, tid)
+
+
 def _l10_sec_start_floor_from_slit_timeline(
     task: dict,
     timeline_events: list | None,
@@ -20366,6 +20482,8 @@ def _l10_sec_start_floor_from_slit_timeline(
     if not tid:
         return None
     if _l10_b41_threshold_unreachable(task_queue, tid):
+        return None
+    if not _l10_slit_has_remaining_units(task_queue, tid):
         return None
     slit_row: dict | None = None
     slit_eq: str = ""
@@ -20447,6 +20565,8 @@ def _b6_sec_start_floor_from_connection_timeline(
     if not tid:
         return None
     if _b61_threshold_unreachable(task_queue, tid):
+        return None
+    if not _b6_connection_has_remaining_units(task_queue, tid):
         return None
     conn_row: dict | None = None
     conn_eq: str = ""
@@ -26916,53 +27036,29 @@ def _interactive_row_needs_dispatch_date_slide(
     """
     if plan_qty <= eps:
         return False
-    if not _interactive_row_has_timeline_meta(row):
-        if meters_done:
-            plan_key = (tid, proc, mach, plan_dd)
+    if _interactive_row_has_timeline_meta(row):
+        st_day_s = _iso_date_from_dispatch_table_datetime_cell(row.get("加工開始日時"))
+        if st_day_s:
             try:
-                done_plan = float(meters_done.get(plan_key, 0.0) or 0.0)
-            except (TypeError, ValueError):
-                done_plan = 0.0
-            if done_plan + eps >= plan_qty:
-                return False
-            if done_plan > eps:
-                return False
-        return True
-    st_day_s = _iso_date_from_dispatch_table_datetime_cell(row.get("加工開始日時"))
-    if st_day_s:
-        try:
-            if date.fromisoformat(st_day_s) != plan_dd:
+                st_d = date.fromisoformat(st_day_s)
+                if st_d == plan_dd:
+                    # 計画暦日にタイムライン割付済み。plan>md の未達はスライド理由にしない。
+                    return False
                 return True
-        except (TypeError, ValueError):
-            return True
-    if not meters_done:
+            except (TypeError, ValueError):
+                return True
         return False
-    plan_key = (tid, proc, mach, plan_dd)
-    try:
-        done_plan = float(meters_done.get(plan_key, 0.0) or 0.0)
-    except (TypeError, ValueError):
-        done_plan = 0.0
-    if done_plan + eps >= plan_qty:
-        return False
-    for key, qty in meters_done.items():
-        if not isinstance(key, tuple) or len(key) != 4:
-            continue
-        kt, kp, km, kd = key[0], key[1], key[2], key[3]
-        if (
-            _interactive_norm_cell(str(kt)) != tid
-            or _interactive_norm_cell(str(kp)) != proc
-            or _interactive_norm_cell(str(km)) != mach
-            or not isinstance(kd, date)
-            or kd <= plan_dd
-        ):
-            continue
+    if meters_done:
+        plan_key = (tid, proc, mach, plan_dd)
         try:
-            qv = float(qty or 0.0)
+            done_plan = float(meters_done.get(plan_key, 0.0) or 0.0)
         except (TypeError, ValueError):
-            qv = 0.0
-        if qv > eps:
-            return True
-    return False
+            done_plan = 0.0
+        if done_plan + eps >= plan_qty:
+            return False
+        if done_plan > eps:
+            return False
+    return True
 
 
 def _interactive_zero_actual_qty_without_timeline_meta(df: pd.DataFrame) -> pd.DataFrame:
@@ -27325,6 +27421,40 @@ def _stage2_extend_attendance_calendar_enabled() -> bool:
     return STAGE2_EXTEND_ATTENDANCE_CALENDAR
 
 
+def _pending_tasks_with_remaining_units(task_queue: list) -> list[dict]:
+    pending: list[dict] = []
+    for t in task_queue or []:
+        try:
+            rem = float(t.get("remaining_units") or 0)
+        except (TypeError, ValueError):
+            rem = 0.0
+        if rem <= 1e-12:
+            continue
+        try:
+            init = float(t.get("initial_remaining_units") or 0)
+        except (TypeError, ValueError):
+            init = 0.0
+        try:
+            unit_m = float(t.get("unit_m") or 0)
+        except (TypeError, ValueError):
+            unit_m = 0.0
+        pending.append(
+            {
+                "task_id": str(t.get("task_id") or "").strip(),
+                "process": str(t.get("machine") or "").strip(),
+                "machine_name": str(t.get("machine_name") or "").strip(),
+                "remaining_units": rem,
+                "initial_remaining_units": init,
+                "unit_m": unit_m,
+                "remaining_m": rem * unit_m if unit_m > 1e-12 else 0.0,
+                "_dispatch_block_no_op_on_working_days": bool(
+                    t.get("_dispatch_block_no_op_on_working_days")
+                ),
+            }
+        )
+    return pending
+
+
 def _raise_if_remaining_tasks_exceed_attendance_calendar(
     task_queue: list,
     calendar_last_plan_day: date | None,
@@ -27333,28 +27463,49 @@ def _raise_if_remaining_tasks_exceed_attendance_calendar(
 ) -> None:
     """
     段階2標準・段階3パリティ: master 勤怠の計画日を使い切っても残タスクがあれば試行を致命エラーで止める。
+    段階3手動修正試行（interactive_dispatch_targets あり）のみ: 致命にせずスナップショットへ記録して続行。
     """
     if not _dispatch_postpone_only_policy_active():
         return
-    pending: list[dict] = []
-    for t in task_queue:
-        try:
-            rem = float(t.get("remaining_units") or 0)
-        except (TypeError, ValueError):
-            rem = 0.0
-        if rem > 1e-12:
-            pending.append(t)
+    pending = _pending_tasks_with_remaining_units(task_queue)
     if not pending:
+        global _LAST_INTERACTIVE_REMAINING_TASKS_AT_CALENDAR_END
+        _LAST_INTERACTIVE_REMAINING_TASKS_AT_CALENDAR_END = []
         return
     last_iso = (
         calendar_last_plan_day.isoformat()
         if isinstance(calendar_last_plan_day, date)
         else "—"
     )
+    if (
+        _interactive_dispatch_trial_env_active()
+        and _PLAN_IMPL_INTERACTIVE_DISPATCH_TARGETS
+    ):
+        _LAST_INTERACTIVE_REMAINING_TASKS_AT_CALENDAR_END = list(pending)
+        samples: list[str] = []
+        for t in pending[:8]:
+            tid = str(t.get("task_id") or "").strip()
+            mach = str(t.get("process") or "").strip()
+            if tid or mach:
+                samples.append(f"{tid}/{mach}" if tid and mach else (tid or mach))
+        sample_s = "、".join(samples) if samples else "（依頼NO不明）"
+        logging.warning(
+            "%s: 勤怠カレンダーの最終日（%s）までに配台しきれないタスクが %s 件あります。"
+            " 手動修正試行は結果を書き出して続行します（例: %s）。"
+            " master.xlsm の勤怠日付延長または計画日の見直しを検討してください。",
+            context_label,
+            last_iso,
+            len(pending),
+            sample_s,
+        )
+        if isinstance(_LAST_INTERACTIVE_STAGE3_META, dict):
+            _LAST_INTERACTIVE_STAGE3_META["remaining_tasks_at_calendar_end"] = len(pending)
+            _LAST_INTERACTIVE_STAGE3_META["remaining_tasks_soft_fail"] = True
+        return
     samples: list[str] = []
     for t in pending[:8]:
         tid = str(t.get("task_id") or "").strip()
-        mach = str(t.get("machine") or "").strip()
+        mach = str(t.get("process") or "").strip()
         if tid or mach:
             samples.append(f"{tid}/{mach}" if tid and mach else (tid or mach))
     sample_s = "、".join(samples) if samples else "（依頼NO不明）"
@@ -27368,7 +27519,7 @@ def _raise_if_remaining_tasks_exceed_attendance_calendar(
         no_op_samples: list[str] = []
         for t in no_op_blocked[:3]:
             tid = str(t.get("task_id") or "").strip()
-            mach = str(t.get("machine") or "").strip()
+            mach = str(t.get("process") or "").strip()
             mname = str(t.get("machine_name") or "").strip()
             if tid and mach and mname:
                 no_op_samples.append(f"{tid}/{mach}/{mname}")
@@ -28177,12 +28328,14 @@ def _interactive_dispatch_cap_enforced_in_schedule_loop() -> bool:
     """
     段階3配台ループ内で JSON 暦日×数量（interactive_dispatch_targets）を割当上限とするか。
 
-    段階2同一パリティでは False（配台ブロック条件は段階2と同一。
-    targets は配台後の未達照合・配台日スライドのみ）。
-    従来の非パリティ・インタラクティブ試行のみ True。
+    手動修正タブ由来の targets があるときは **段階2同一パリティでも True**（暦日4200m等の
+    計画を守り、早期暦日への過剰割付で後日 plan が空振りになるのを防ぐ）。
+    targets が無い従来試行のみ、パリティ時は False（段階2ブロック条件と同一）。
     """
     if not _interactive_dispatch_trial_env_active():
         return False
+    if _PLAN_IMPL_INTERACTIVE_DISPATCH_TARGETS:
+        return True
     if _interactive_stage2_parity_active():
         return False
     return True
@@ -28503,7 +28656,12 @@ def _overlay_timeline_meta_onto_interactive_dispatch_df(
             except Exception:
                 dd_st = None
         if dd_out is not None and dd_st is not None and dd_st != dd_out:
-            _clear_meta_at_pos(pos)
+            try:
+                ci_dd = out.columns.get_loc("配台日")
+                if not isinstance(ci_dd, slice):
+                    out.iloc[pos, ci_dd] = _norm_ymd(dd_st)
+            except Exception:
+                _clear_meta_at_pos(pos)
     return out
 
 
@@ -28606,29 +28764,119 @@ def _interactive_apply_recomputed_actual_qty_to_dispatch_df(
     df_out: pd.DataFrame,
     meters_done: dict[tuple[str, str, str, date], float],
 ) -> pd.DataFrame:
-    """段階3: タイムライン再集計 m を JSON 行の (依頼NO, 工程, 機械, 配台日) キーへ実配台数量に反映する。"""
+    """段階3: タイムライン再集計 m を JSON 行の (依頼NO, 工程, 機械, 配台日) キーへ実配台数量に反映する。
+
+    同一キーの行が複数あるときは当日配台数量比で按分し、タイムライン m の二重計上を防ぐ。
+    """
     if df_out is None or getattr(df_out, "empty", True) or not meters_done:
         return df_out
     actual_col = INTERACTIVE_DISPATCH_ACTUAL_QTY_COL
+    plan_col = "当日配台数量"
     if actual_col not in df_out.columns:
         df_out[actual_col] = 0.0
+    key_rows: dict[tuple, list[int]] = defaultdict(list)
+    key_plan_sum: dict[tuple, float] = defaultdict(float)
     for pos in range(len(df_out)):
         row = df_out.iloc[pos]
         tid = _interactive_norm_cell(row.get(TASK_COL_TASK_ID))
         proc = _interactive_dispatch_target_process_key(row.get(TASK_COL_MACHINE))
         mach = _interactive_norm_cell(row.get(TASK_COL_MACHINE_NAME))
         dd = _interactive_parse_dispatch_date_cell(row.get("配台日"))
-        if not tid or not proc or not mach or dd is None:
+        st_day_s = _iso_date_from_dispatch_table_datetime_cell(row.get("加工開始日時"))
+        lookup_dd = dd
+        if st_day_s and _interactive_row_has_timeline_meta(row):
+            try:
+                lookup_dd = date.fromisoformat(st_day_s)
+            except (TypeError, ValueError):
+                lookup_dd = dd
+        if not tid or not proc or not mach or lookup_dd is None:
             continue
-        key = (tid, proc, mach, dd)
+        kk = (tid, proc, mach, lookup_dd)
+        key_rows[kk].append(pos)
         try:
-            qv = float(meters_done.get(key, 0.0))
+            key_plan_sum[kk] += float(row.get(plan_col) or 0.0)
         except (TypeError, ValueError):
-            qv = 0.0
+            pass
+    for kk, positions in key_rows.items():
         try:
-            df_out.at[df_out.index[pos], actual_col] = qv
+            total_md = float(meters_done.get(kk, 0.0))
+        except (TypeError, ValueError):
+            total_md = 0.0
+        total_plan = float(key_plan_sum.get(kk, 0.0))
+        if len(positions) == 1:
+            try:
+                df_out.at[df_out.index[positions[0]], actual_col] = total_md
+            except Exception:
+                pass
+            continue
+        allocated = 0.0
+        for i, pos in enumerate(positions):
+            try:
+                plan_q = float(df_out.iloc[pos].get(plan_col) or 0.0)
+            except (TypeError, ValueError):
+                plan_q = 0.0
+            if i == len(positions) - 1:
+                qv = max(0.0, total_md - allocated)
+            elif total_plan > 1e-9 and plan_q > 1e-9:
+                qv = total_md * (plan_q / total_plan)
+                allocated += qv
+            else:
+                qv = 0.0
+            try:
+                df_out.at[df_out.index[pos], actual_col] = qv
+            except Exception:
+                pass
+    try:
+        df_out[actual_col] = (
+            pd.to_numeric(df_out[actual_col], errors="coerce").fillna(0.0).astype(float)
+        )
+    except Exception:
+        pass
+    # 単一計画ブロック（正の当日配台数量が1行のみ）: 翌暦日へはみ出したタイムライン m を
+    # その計画行の実配台数量へ集約する。
+    eps = 1e-9
+    by_profile: dict[tuple[str, str, str], list[tuple[int, float]]] = defaultdict(list)
+    for pos in range(len(df_out)):
+        row = df_out.iloc[pos]
+        tid = _interactive_norm_cell(row.get(TASK_COL_TASK_ID))
+        proc = _interactive_dispatch_target_process_key(row.get(TASK_COL_MACHINE))
+        mach = _interactive_norm_cell(row.get(TASK_COL_MACHINE_NAME))
+        if not tid or not proc or not mach:
+            continue
+        try:
+            plan_q = float(row.get(plan_col) or 0.0)
+        except (TypeError, ValueError):
+            plan_q = 0.0
+        by_profile[(tid, proc, mach)].append((pos, plan_q))
+    for (tid, proc, mach), entries in by_profile.items():
+        plan_positions = [p for p, pq in entries if pq > eps]
+        if len(plan_positions) != 1:
+            continue
+        plan_pos = plan_positions[0]
+        total_md = 0.0
+        for k, v in meters_done.items():
+            if (
+                isinstance(k, tuple)
+                and len(k) == 4
+                and k[0] == tid
+                and k[1] == proc
+                and k[2] == mach
+            ):
+                try:
+                    total_md += float(v)
+                except (TypeError, ValueError):
+                    pass
+        try:
+            df_out.at[df_out.index[plan_pos], actual_col] = total_md
         except Exception:
             pass
+        for pos, plan_q in entries:
+            if pos == plan_pos or plan_q > eps:
+                continue
+            try:
+                df_out.at[df_out.index[pos], actual_col] = 0.0
+            except Exception:
+                pass
     try:
         df_out[actual_col] = (
             pd.to_numeric(df_out[actual_col], errors="coerce").fillna(0.0).astype(float)
@@ -28636,6 +28884,68 @@ def _interactive_apply_recomputed_actual_qty_to_dispatch_df(
     except Exception:
         pass
     return df_out
+
+
+def _interactive_consolidate_duplicate_plan_dispatch_rows(
+    df_out: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    同一 (依頼NO, 工程, 機械, 配台日) の暦日行を1行に集約する。
+    当日配台数量は合算。タイムライン meta がある行を残す。
+    """
+    if df_out is None or getattr(df_out, "empty", True):
+        return df_out
+    plan_col = "当日配台数量"
+    if plan_col not in df_out.columns:
+        return df_out
+    groups: dict[tuple, list[int]] = defaultdict(list)
+    for pos in range(len(df_out)):
+        row = df_out.iloc[pos]
+        tid = _interactive_norm_cell(row.get(TASK_COL_TASK_ID))
+        proc = _interactive_dispatch_target_process_key(row.get(TASK_COL_MACHINE))
+        mach = _interactive_norm_cell(row.get(TASK_COL_MACHINE_NAME))
+        dd = _interactive_parse_dispatch_date_cell(row.get("配台日"))
+        st_day = _iso_date_from_dispatch_table_datetime_cell(row.get("加工開始日時")) or ""
+        if tid and proc and mach and dd is not None:
+            groups[(tid, proc, mach, dd, st_day)].append(pos)
+    drop: set[int] = set()
+    for _k, positions in groups.items():
+        if len(positions) <= 1:
+            continue
+        keeper = positions[0]
+        for p in positions:
+            if _interactive_row_has_timeline_meta(df_out.iloc[p].to_dict()):
+                keeper = p
+                break
+        total_plan = 0.0
+        total_actual = 0.0
+        actual_col = INTERACTIVE_DISPATCH_ACTUAL_QTY_COL
+        for p in positions:
+            try:
+                total_plan += float(df_out.iloc[p].get(plan_col) or 0.0)
+            except (TypeError, ValueError):
+                pass
+            if actual_col in df_out.columns:
+                try:
+                    total_actual += float(df_out.iloc[p].get(actual_col) or 0.0)
+                except (TypeError, ValueError):
+                    pass
+        try:
+            df_out.at[df_out.index[keeper], plan_col] = total_plan
+        except Exception:
+            pass
+        if actual_col in df_out.columns and total_actual > 1e-9:
+            try:
+                df_out.at[df_out.index[keeper], actual_col] = total_actual
+            except Exception:
+                pass
+        for p in positions:
+            if p != keeper:
+                drop.add(p)
+    if not drop:
+        return df_out
+    keep_idx = [i for i in range(len(df_out)) if i not in drop]
+    return df_out.iloc[keep_idx].reset_index(drop=True)
 
 
 def _interactive_resolve_slide_target_dispatch_date(
@@ -28650,29 +28960,10 @@ def _interactive_resolve_slide_target_dispatch_date(
 ) -> date | None:
     """
     計画暦日にタイムライン未割付の行について、配台日スライド先を決める。
-    優先: タイムライン実績暦日（計画より前後問わず）→ df_sim 上の割付暦日 → 翌稼働日（無ければ暦日 +1）。
+    優先: df_sim 上の割付暦日（計画日より後）→ 翌稼働日。前倒し不可。
+    タイムライン上の最古実績日へ一括寄せはしない（複数暦日が同一日に潰れるのを防ぐ）。
     """
     best: date | None = None
-    if meters_done:
-        for key, qty in meters_done.items():
-            if not isinstance(key, tuple) or len(key) != 4:
-                continue
-            kt, kp, km, kd = key[0], key[1], key[2], key[3]
-            if (
-                _interactive_norm_cell(str(kt)) != tid
-                or _interactive_norm_cell(str(kp)) != proc
-                or _interactive_norm_cell(str(km)) != mach
-                or not isinstance(kd, date)
-            ):
-                continue
-            try:
-                qv = float(qty or 0.0)
-            except (TypeError, ValueError):
-                qv = 0.0
-            if qv <= 1e-9:
-                continue
-            if best is None or kd < best:
-                best = kd
     if df_sim is not None and not getattr(df_sim, "empty", True):
         for _, simr in df_sim.iterrows():
             stid = _interactive_norm_cell(simr.get(TASK_COL_TASK_ID))
@@ -28727,7 +29018,6 @@ def _interactive_slide_unassigned_plan_dispatch_dates(
             continue
         row_index[(tid, mach, dd.isoformat())] = pos
     slides: list[dict] = []
-    meta_cols = ("加工開始日時", "加工終了日時", "メンバー名")
     for pos in range(len(out)):
         row = out.iloc[pos].to_dict()
         tid = _interactive_norm_cell(row.get(TASK_COL_TASK_ID))
@@ -28762,27 +29052,13 @@ def _interactive_slide_unassigned_plan_dispatch_dates(
         )
         if slide_dd is None or slide_dd <= plan_dd:
             continue
-        slide_key = (tid, mach, slide_dd.isoformat())
-        tgt_pos = row_index.get(slide_key)
-        if tgt_pos is not None and tgt_pos != pos:
-            try:
-                cur_plan = float(out.iloc[tgt_pos].get(plan_col) or 0.0)
-            except (TypeError, ValueError):
-                cur_plan = 0.0
-            try:
-                out.at[out.index[tgt_pos], plan_col] = cur_plan + plan_qty
-                out.at[out.index[pos], plan_col] = 0.0
-                for c in meta_cols:
-                    if c in out.columns:
-                        out.at[out.index[pos], c] = ""
-            except Exception:
-                continue
-        else:
-            try:
-                out.at[out.index[pos], "配台日"] = _norm_ymd(slide_dd)
-                row_index[slide_key] = pos
-            except Exception:
-                continue
+        # 後ろ倒し: 当該行の配台日を移動する（既存行へ plan m を合算しない）。
+        # 合算すると複数暦日の計画が 23700 等に潰れ、別日の未割付 meta_miss が残る。
+        try:
+            out.at[out.index[pos], "配台日"] = _norm_ymd(slide_dd)
+            row_index[(tid, mach, slide_dd.isoformat())] = pos
+        except Exception:
+            continue
         slides.append(
             {
                 "task_id": tid,
@@ -28804,10 +29080,12 @@ def _interactive_prune_orphan_zero_plan_dispatch_rows(df_out: pd.DataFrame) -> p
     """
     同一 (依頼NO, 機械名) に正の当日配台数量があるとき、目標 0 の暦日行を除去する。
     配台日スライド後に残る旧計画暦日の幽霊行を JSON から落とす。
+    タイムライン実配台（実配台数量>0）の翌暦日行は残す。
     """
     if df_out is None or getattr(df_out, "empty", True):
         return df_out
     plan_col = "当日配台数量"
+    actual_col = INTERACTIVE_DISPATCH_ACTUAL_QTY_COL
     if plan_col not in df_out.columns:
         return df_out
     eps = 1e-9
@@ -28836,6 +29114,13 @@ def _interactive_prune_orphan_zero_plan_dispatch_rows(df_out: pd.DataFrame) -> p
             keep.append(pos)
             continue
         if tid and mach and (tid, mach) in has_positive:
+            if actual_col in df_out.columns:
+                try:
+                    act_q = float(row.get(actual_col) or 0.0)
+                except (TypeError, ValueError):
+                    act_q = 0.0
+                if act_q > eps:
+                    keep.append(pos)
             continue
         keep.append(pos)
     if len(keep) == len(df_out):
@@ -28891,8 +29176,15 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
     )
     df_out = _overlay_timeline_meta_onto_interactive_dispatch_df(df_out, df_sim)
     df_out = _interactive_merge_actual_dispatch_qty_from_timeline_table(
-        df_out, df_sim, append_missing_timeline_days=False
+        df_out, df_sim, append_missing_timeline_days=True
     )
+    _before_cons = len(df_out)
+    df_out = _interactive_consolidate_duplicate_plan_dispatch_rows(df_out)
+    if len(df_out) != _before_cons:
+        logging.info(
+            "インタラクティブ配台試行: 同一暦日キーの重複行を %s 行に集約しました。",
+            _before_cons - len(df_out),
+        )
     if _md_reco is not None:
         df_out = _interactive_apply_recomputed_actual_qty_to_dispatch_df(df_out, _md_reco)
     df_out = _interactive_zero_actual_qty_without_timeline_meta(df_out)
@@ -30763,62 +31055,12 @@ def _trial_order_flow_eligible_tasks(
                 continue
 
         # L10 B-4.1: 加工内容が「スリット,SEC」の依頼では、**当該依頼**でスリットが SLIT_BEFORE_SEC_MIN_SLIT_ROLLS ロール以上終わるまで SEC を開始しない
-        _l10_tid = str(task.get("task_id") or "").strip()
-        _l10_pair_gap = _l10_slit_done_minus_sec_done_for_task_id(task_queue, _l10_tid)
-        if (
-            SLIT_BEFORE_SEC_MIN_SLIT_ROLLS > 0
-            and _l10_pair_gap < float(SLIT_BEFORE_SEC_MIN_SLIT_ROLLS) - 1e-9
-            and not _l10_b41_threshold_unreachable(task_queue, _l10_tid)
-        ):
-            proc = _normalize_process_name_for_rule_match(task.get("machine"))
-            mach = _normalize_equipment_match_key(task.get("machine_name"))
-            if (
-                proc == _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
-                and mach == _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
-            ):
-                toks = task.get("process_content_tokens") or []
-                _norm = [_normalize_process_name_for_rule_match(x) for x in toks]
-                if (
-                    _normalize_process_name_for_rule_match("スリット") in _norm
-                    and _normalize_process_name_for_rule_match("SEC") in _norm
-                    and _norm.index(_normalize_process_name_for_rule_match("スリット"))
-                    < _norm.index(_normalize_process_name_for_rule_match("SEC"))
-                ):
-                    if _l10_task_queue_has_special_slit_row_for_tid(
-                        task_queue, _l10_tid
-                    ):
-                        continue
+        if _l10_b41_sec_blocked_by_slit_min_rolls(task, task_queue):
+            continue
         # B-6.1: 加工内容が「接続→SEC」の依頼では、当該依頼で接続が
         # CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS ロール以上終わるまで SEC を開始しない
-        _b6_tid = str(task.get("task_id") or "").strip()
-        _b6_pair_gap = _b6_connection_done_minus_sec_done_for_task_id(
-            task_queue, _b6_tid
-        )
-        if (
-            CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS > 0
-            and _b6_pair_gap
-            < float(CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS) - 1e-9
-            and not _b61_threshold_unreachable(task_queue, _b6_tid)
-        ):
-            proc = _normalize_process_name_for_rule_match(task.get("machine"))
-            mach = _normalize_equipment_match_key(task.get("machine_name"))
-            if (
-                proc == _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
-                and mach == _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
-            ):
-                toks = task.get("process_content_tokens") or []
-                _norm = [_normalize_process_name_for_rule_match(x) for x in toks]
-                _cp = _normalize_process_name_for_rule_match(SPECIAL_WIP_CONNECTION_PROCESS)
-                _sc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
-                if (
-                    _cp in _norm
-                    and _sc in _norm
-                    and _norm.index(_cp) < _norm.index(_sc)
-                ):
-                    if _b6_task_queue_has_special_connection_row_for_tid(
-                        task_queue, _b6_tid
-                    ):
-                        continue
+        if _b61_sec_blocked_by_connection_min_rolls(task, task_queue):
+            continue
         if _task_blocked_by_same_request_dependency(task, task_queue):
             continue
         if _task_blocked_by_global_dispatch_trial_order(
@@ -32181,54 +32423,10 @@ def _trial_order_hard_precheck_blocks_assign_probe(task: dict, task_queue: list)
             == _normalize_equipment_match_key(SPECIAL_WIP_CONNECTION_MACHINE)
         ):
             return True
-    _l10_tid_p = str(task.get("task_id") or "").strip()
-    _l10_gap_p = _l10_slit_done_minus_sec_done_for_task_id(task_queue, _l10_tid_p)
-    if (
-        SLIT_BEFORE_SEC_MIN_SLIT_ROLLS > 0
-        and _l10_gap_p < float(SLIT_BEFORE_SEC_MIN_SLIT_ROLLS) - 1e-9
-        and not _l10_b41_threshold_unreachable(task_queue, _l10_tid_p)
-    ):
-        proc = _normalize_process_name_for_rule_match(task.get("machine"))
-        mach = _normalize_equipment_match_key(task.get("machine_name"))
-        if (
-            proc == _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
-            and mach == _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
-        ):
-            toks = task.get("process_content_tokens") or []
-            _norm = [_normalize_process_name_for_rule_match(x) for x in toks]
-            if (
-                _normalize_process_name_for_rule_match("スリット") in _norm
-                and _normalize_process_name_for_rule_match("SEC") in _norm
-                and _norm.index(_normalize_process_name_for_rule_match("スリット"))
-                < _norm.index(_normalize_process_name_for_rule_match("SEC"))
-            ):
-                return True
-    _b6_tid_p = str(task.get("task_id") or "").strip()
-    _b6_gap_p = _b6_connection_done_minus_sec_done_for_task_id(task_queue, _b6_tid_p)
-    if (
-        CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS > 0
-        and _b6_gap_p < float(CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS) - 1e-9
-        and not _b61_threshold_unreachable(task_queue, _b6_tid_p)
-    ):
-        proc = _normalize_process_name_for_rule_match(task.get("machine"))
-        mach = _normalize_equipment_match_key(task.get("machine_name"))
-        if (
-            proc == _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
-            and mach == _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
-        ):
-            toks = task.get("process_content_tokens") or []
-            _norm = [_normalize_process_name_for_rule_match(x) for x in toks]
-            _cp = _normalize_process_name_for_rule_match(SPECIAL_WIP_CONNECTION_PROCESS)
-            _sc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
-            if (
-                _cp in _norm
-                and _sc in _norm
-                and _norm.index(_cp) < _norm.index(_sc)
-            ):
-                if _b6_task_queue_has_special_connection_row_for_tid(
-                    task_queue, _b6_tid_p
-                ):
-                    return True
+    if _l10_b41_sec_blocked_by_slit_min_rolls(task, task_queue):
+        return True
+    if _b61_sec_blocked_by_connection_min_rolls(task, task_queue):
+        return True
     if _task_blocked_by_same_request_dependency(task, task_queue):
         return True
     if (
@@ -35306,6 +35504,7 @@ def _generate_plan_impl(
     global _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT, _LAST_INTERACTIVE_STAGE3_META
     global _LAST_INTERACTIVE_TRIAL_META_MISS_SHORTFALL
     global _LAST_INTERACTIVE_TRIAL_PLAN_TARGETS_SNAPSHOT
+    global _LAST_INTERACTIVE_REMAINING_TASKS_AT_CALENDAR_END
     global _PLAN_IMPL_INTERACTIVE_DISPATCH_TARGETS, _PLAN_IMPL_INTERACTIVE_TRIAL_METERS_DONE
     global _PLAN_IMPL_INTERACTIVE_DISPATCH_TARGETS, _PLAN_IMPL_INTERACTIVE_TRIAL_METERS_DONE
     if interactive_relax_intraday or interactive_dispatch_targets is not None:
@@ -35313,6 +35512,7 @@ def _generate_plan_impl(
         _INTERACTIVE_TRIAL_AS_SHORTAGE.clear()
         _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT.clear()
         _LAST_INTERACTIVE_TRIAL_META_MISS_SHORTFALL.clear()
+        _LAST_INTERACTIVE_REMAINING_TASKS_AT_CALENDAR_END.clear()
         _LAST_INTERACTIVE_STAGE3_META.clear()
     _wb_trace = _excel_plan_input_wb()
     _ids_from_sheet = _read_trace_schedule_task_ids_from_config_sheet(_wb_trace)
@@ -35767,14 +35967,17 @@ def _generate_plan_impl(
     _apply_dispatch_trial_order_for_generate_plan(
         task_queue, req_map, need_rules, need_combo_col_index
     )
-    # 段階3（非パリティ）: 手動修正 JSON で正の「当日配台数量」がある配台日の最古を start_date_req 下限とする
+    # 段階3: 手動修正 JSON で正の「当日配台数量」がある配台日の最古を start_date_req 下限とする
     # （原反投入・既定開始より前にはしない: max(既存, 最古暦日)。非稼働日は直前稼働日へ寄せる）
-    # 段階2同一パリティでは段階2と同じ start_date_req のみ（JSON 配台日で繰り上げない）。
+    # 段階2同一パリティでも interactive_dispatch_targets がある段階3試行では JSON 配台日で前倒し禁止。
     if (
         _interactive_dispatch_trial_env_active()
-        and not _interactive_stage2_parity_active()
         and isinstance(interactive_result_dispatch_json_rows, list)
         and interactive_result_dispatch_json_rows
+        and (
+            not _interactive_stage2_parity_active()
+            or interactive_dispatch_targets
+        )
     ):
         for _t_iv in task_queue:
             _min_j = _interactive_min_positive_dispatch_date_from_json_rows(
@@ -37438,7 +37641,9 @@ def _generate_plan_impl(
     )
 
     if interactive_dispatch_targets is not None:
-        _LAST_INTERACTIVE_STAGE3_META = {"mode": "single_phase"}
+        _meta = dict(_LAST_INTERACTIVE_STAGE3_META or {})
+        _meta.setdefault("mode", "single_phase")
+        _LAST_INTERACTIVE_STAGE3_META = _meta
     else:
         _LAST_INTERACTIVE_STAGE3_META = {}
 

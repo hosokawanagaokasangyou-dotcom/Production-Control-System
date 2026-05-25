@@ -8,6 +8,7 @@ manual/.venv-docx/
 **/~$*
 
 # Build / cache（ステージングしない）
+/preview_cache/
 code_java/target/
 code_java/build_cache/
 code_java/package_input/

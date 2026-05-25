@@ -67,4 +67,21 @@ public record PersonBadgeStyle(
                 0.22,
                 1.0);
     }
+
+    /** 依頼書プレビュー上部・原本更新バッジの初期配色。 */
+    public static PersonBadgeStyle requestFormPreviewUpdateBadgeDefault() {
+        return new PersonBadgeStyle(
+                "",
+                92,
+                "#dc2626",
+                "#fffbeb",
+                "#b91c1c",
+                1.2,
+                8.0,
+                false,
+                "#fca5a5",
+                10.0,
+                0.2,
+                1.0);
+    }
 }

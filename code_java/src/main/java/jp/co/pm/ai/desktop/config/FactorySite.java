@@ -121,6 +121,21 @@ public enum FactorySite {
         return "";
     }
 
+    /** {@link AppPaths#KEY_PM_AI_ALADDIN_MASTER_DIR} 環境タブへ書く既定（UNC）。 */
+    public String aladdinMasterDir() {
+        return AppPaths.defaultAladdinMasterDirForFactory(this);
+    }
+
+    /** {@link AppPaths#KEY_PM_AI_REQUEST_FORM_JUCHU_FILE} 環境タブへ書く既定（UNC）。 */
+    public String requestFormJuchuFile() {
+        return AppPaths.defaultRequestFormJuchuFileForFactory(this);
+    }
+
+    /** {@link AppPaths#KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR} 環境タブへ書く既定（UNC）。 */
+    public String requestFormOriginalDir() {
+        return AppPaths.defaultRequestFormOriginalDirForFactory(this);
+    }
+
     /**
      * ポータブル同梱の {@code pm-ai-data/init_setting/session_defaults.json} から工場を推定する。
      *

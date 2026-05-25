@@ -19,6 +19,7 @@ import jp.co.pm.ai.desktop.io.NetworkSourceFileReloadCache;
  *   <li>AI 備考: {@value #AI_REMARKS_CACHE_FILENAME}（Excel マクロの AI 解析キャッシュ削除と同趣旨）
  *   <li>配台・納期: {@link AppPaths#RESULT_DISPATCH_TABLE_JSON_BASENAME}、{@link
  *       AppPaths#SHAPED_ALADDIN_PLAN_JSON_BASENAME}、{@link AppPaths#SHAPED_PROCESSING_ACTUALS_JSON_BASENAME}
+ *   <li>タスク入力: {@link AppPaths#STAGE1_PLAN_TASKS_FILENAME}（段階1出力 xlsx）
  *   <li>メモリ: {@link NetworkSourceFileReloadCache}（アラジン計画／実績明細の同一ファイル名再読込省略）
  * </ul>
  */
@@ -63,7 +64,7 @@ public final class Stage1AiCacheClearer {
 
     public static boolean hasExistingWorkspaceShapedCache(Map<String, String> ui) {
         for (Map.Entry<String, Path> e : roleToActivePathMap(ui).entrySet()) {
-            if (e.getKey().startsWith("ai_remarks_")) {
+            if (e.getKey().startsWith("ai_remarks_") || "plan_input_tasks".equals(e.getKey())) {
                 continue;
             }
             if (Files.isRegularFile(e.getValue())) {
@@ -71,6 +72,11 @@ public final class Stage1AiCacheClearer {
             }
         }
         return false;
+    }
+
+    public static boolean hasExistingPlanInputTasksFile(Map<String, String> ui) {
+        Path path = AppPaths.defaultStage1PlanTasksPath(ui);
+        return Files.isRegularFile(path);
     }
 
     /** 「キャッシュを使用します」用: 存在するキャッシュ種別の短い説明（空ならディスクキャッシュ無し）。 */
@@ -81,6 +87,9 @@ public final class Stage1AiCacheClearer {
         }
         if (hasExistingWorkspaceShapedCache(ui)) {
             kinds.add("配台表・納期ビュー・アラジン計画");
+        }
+        if (hasExistingPlanInputTasksFile(ui)) {
+            kinds.add("タスク入力（plan_input_tasks）");
         }
         return kinds;
     }
@@ -110,6 +119,7 @@ public final class Stage1AiCacheClearer {
         map.put(
                 "shaped_processing_actuals",
                 AppPaths.resolveShapedProcessingActualsJsonPath(u));
+        map.put("plan_input_tasks", AppPaths.defaultStage1PlanTasksPath(u));
         return Map.copyOf(map);
     }
 

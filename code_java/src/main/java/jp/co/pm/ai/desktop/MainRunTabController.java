@@ -108,6 +108,11 @@ public final class MainRunTabController {
     @FXML
     private Button stage1RunButton;
 
+    private static final String STAGE1_RUN_BUTTON_TEXT_DEFAULT = "段階1 実行";
+
+    private static final String STAGE1_RUN_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD =
+            "段階1（納期管理ビュー更新中）";
+
     @FXML
     private CheckBox stage1ClearCacheAndRunCheckBox;
 
@@ -151,6 +156,12 @@ public final class MainRunTabController {
 
     /** {@link #refreshSummaryWorkbookOpenLockState()} の前回ポーリング結果（変化時のみ段階2等 UI を同期）。 */
     private Boolean lastPolledSummaryExportLocked;
+
+    /** 段階1／段階2 の Python 実行中（メインシェルから同期）。 */
+    private boolean stage1RunPipelineBusy;
+
+    /** 納期管理ビュー再読み込み中（メインシェルから同期）。 */
+    private boolean deliveryCalendarReloadBlocking;
 
     private Tooltip summaryOpenButtonTooltip;
 
@@ -1118,9 +1129,24 @@ public final class MainRunTabController {
      * {@link PlanInputTabController} 側。
      */
     void setStageRunProgressVisible(boolean stage1Running, boolean stage2Running) {
-        boolean busy = stage1Running || stage2Running;
-        if (stage1RunButton != null) {
-            stage1RunButton.setDisable(busy);
+        stage1RunPipelineBusy = stage1Running || stage2Running;
+        applyStage1RunButtonEnabledState();
+    }
+
+    void setDeliveryCalendarReloadBlocking(boolean blocking) {
+        deliveryCalendarReloadBlocking = blocking;
+        applyStage1RunButtonEnabledState();
+    }
+
+    private void applyStage1RunButtonEnabledState() {
+        if (stage1RunButton == null) {
+            return;
+        }
+        stage1RunButton.setDisable(stage1RunPipelineBusy || deliveryCalendarReloadBlocking);
+        if (deliveryCalendarReloadBlocking && !stage1RunPipelineBusy) {
+            stage1RunButton.setText(STAGE1_RUN_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD);
+        } else {
+            stage1RunButton.setText(STAGE1_RUN_BUTTON_TEXT_DEFAULT);
         }
     }
 

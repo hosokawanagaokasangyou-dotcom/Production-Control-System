@@ -1,0 +1,35 @@
+---
+description: PM_AI_REQUEST_FORM_ORIGINAL_DIR（依頼書原本フォルダ）は読み取り専用
+alwaysApply: true
+---
+
+# 依頼書原本フォルダ（PM_AI_REQUEST_FORM_ORIGINAL_DIR）— 読み取り専用
+
+## 対象パス
+
+- 環境変数 **`PM_AI_REQUEST_FORM_ORIGINAL_DIR`**（`AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR`）が指すディレクトリ
+- 未設定時は **`AppPaths.resolveRequestFormOriginalDir(ui)`** が返す工場既定（受注ファイル既定の親フォルダ）
+
+## 原則（必須）
+
+このフォルダは **読み取り専用** とする。アプリ・エージェント・手動操作のいずれも、当該ディレクトリ **配下** に対して次を **行わない**：
+
+- 新規フォルダの作成
+- ファイルの新規作成
+- ファイルの変更（上書き・追記・リネーム含む）
+- ファイルの削除
+- フォルダの削除・移動
+
+**読み取り**（一覧・スキャン・Excel 読込・プレビュー・照合）のみ許可。
+
+## 実装・設計
+
+- 原本の **書込・キャッシュ・出力** は別パス（例: リポジトリ `.pm-ai-cache/`、ユーザー指定の作業フォルダ、受注ファイル等）へ。**原本フォルダへ書き戻さない。**
+- 新機能・リファクタで `resolveRequestFormOriginalDir` を使うときは **read-only** 前提でレビューする。
+- テスト用の一時ディレクトリ（`@TempDir` 等）は本ルールの対象外。
+
+## 関連
+
+- `AppPaths.resolveRequestFormOriginalDir` — パス解決
+- `EnvVarDocs` / `ui_ref_env_defaults.json` — 環境変数の説明
+- `.cursor/rules/env-vars-managed-by-sheet-and-tsv.mdc` — 環境変数タブ正本

@@ -117,6 +117,26 @@ class DispatchInteractiveStage3QtyDisplayTest {
     }
 
     @Test
+    void planSlide_newDateShortfallShowsStage3ActualNotRevisedPlan() {
+        List<DispatchInteractiveTabController.Stage3QtyLineSlot> slidDate =
+                DispatchInteractiveTabController.buildStage3QtyFixedLineSlotsWithPlanSlide(
+                        0, 0, 4000, 3200, false, false, true, 1e-3);
+        assertEquals(
+                DispatchInteractiveTabController.LABEL_STAGE3_ACTUAL + "3200",
+                slidDate.get(2).lineText());
+    }
+
+    @Test
+    void planSlide_manualEditOnExistingDateShowsRevised() {
+        List<DispatchInteractiveTabController.Stage3QtyLineSlot> revised =
+                DispatchInteractiveTabController.buildStage3QtyFixedLineSlotsWithPlanSlide(
+                        4000, 5000, 4500, 3000, true, false, false, 1e-3);
+        assertEquals(
+                DispatchInteractiveTabController.LABEL_STAGE3_REVISED + "4500",
+                revised.get(2).lineText());
+    }
+
+    @Test
     void planSlide_oldDateShowsStage2_newDateShowsStage3AfterOnly() {
         List<DispatchInteractiveTabController.Stage3QtyLineSlot> oldDate =
                 DispatchInteractiveTabController.buildStage3QtyFixedLineSlotsWithPlanSlide(

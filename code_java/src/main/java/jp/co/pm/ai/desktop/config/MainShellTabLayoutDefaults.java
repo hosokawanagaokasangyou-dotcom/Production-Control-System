@@ -27,6 +27,7 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.RUN.key(),
                     MainShellTabId.PIPELINE_EXECUTION_TIMING.key(),
                     MainShellTabId.PLAN_INPUT.key(),
+                    MainShellTabId.REQUEST_FORM_INPUT.key(),
                     MainShellTabId.DISPATCH_INTERACTIVE.key(),
                     MainShellTabId.EQUIPMENT_GANTT_GRAPHIC.key(),
                     MainShellTabId.DELIVERY_CALENDAR_VIEW.key(),
@@ -34,6 +35,7 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.UI_BADGE_DESIGN.key(),
                     MainShellTabId.PUSH_BUTTON_DESIGN.key(),
                     MainShellTabId.GANTT_PERSON_BADGE_DESIGN.key(),
+                    MainShellTabId.REQUEST_FORM_PREVIEW_BADGE_DESIGN.key(),
                     MainShellTabId.ENV.key(),
                     MainShellTabId.MEMORY_SETTINGS.key(),
                     MainShellTabId.GLOBAL_SETTINGS.key(),
@@ -72,6 +74,7 @@ public final class MainShellTabLayoutDefaults {
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.RUN.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PIPELINE_EXECUTION_TIMING.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_INPUT.key(), ""));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.REQUEST_FORM_INPUT.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.DISPATCH_INTERACTIVE.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.EQUIPMENT_GANTT_GRAPHIC.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.DELIVERY_CALENDAR_VIEW.key(), ""));
@@ -87,7 +90,9 @@ public final class MainShellTabLayoutDefaults {
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.UI_BADGE_DESIGN.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.PUSH_BUTTON_DESIGN.key(), ""),
                                 MainShellTabLayoutNode.tabNode(
-                                        MainShellTabId.GANTT_PERSON_BADGE_DESIGN.key(), ""))));
+                                        MainShellTabId.GANTT_PERSON_BADGE_DESIGN.key(), ""),
+                                MainShellTabLayoutNode.tabNode(
+                                        MainShellTabId.REQUEST_FORM_PREVIEW_BADGE_DESIGN.key(), ""))));
 
         top.add(
                 MainShellTabLayoutNode.groupNode(

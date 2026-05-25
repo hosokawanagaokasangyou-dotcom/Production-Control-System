@@ -14,7 +14,8 @@ import javafx.collections.ObservableList;
  * 設備ガント（グラフィック）の印刷用に、1 ページあたりの行インデックス束を求める。
  *
  * <p>契約 JSON 由来の表では暦日ごとに「日付」列に {@code 【yyyy/M/d】} 形式のバナー行が挿入される。
- * Excel 由来で ■ 等のセクション行がある場合も境界とする。境界ごとに 1 塊＝A3 横 1 ページ。
+ * Excel 由来で ■ 等のセクション行がある場合も境界とする。境界ごとに 1 塊＝A3 横 1 暦日。
+ * 1 暦日の工程行が縦に収まらない場合は {@link EquipmentGanttPrintVerticalPagination} で複数ページに分割する。
  * 境界行が無いときは「日付」列の繰り上がり（暦日キー変化）で塊に分ける。いずれも無ければ表全体を 1 塊。
  */
 public final class EquipmentGanttPrintDaySlices {

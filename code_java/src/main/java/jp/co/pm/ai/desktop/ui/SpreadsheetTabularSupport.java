@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop.ui;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
@@ -23,7 +24,17 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.Parent;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
+import javafx.scene.control.MenuItem;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.ContextMenuEvent;
+import javafx.scene.input.DataFormat;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.input.KeyCombination;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TablePosition;
@@ -122,6 +133,7 @@ public final class SpreadsheetTabularSupport {
         if (!view.getStylesheets().contains(url)) {
             view.getStylesheets().add(url);
         }
+        installEnhancedSpreadsheetClipboard(view);
     }
 
     /**
@@ -140,6 +152,178 @@ public final class SpreadsheetTabularSupport {
         if (!wasEditable) {
             cell.setEditable(false);
         }
+    }
+
+    private static final String SPREADSHEET_CLIPBOARD_HOOK = "pmAiSpreadsheetClipboardHook";
+    private static final Object SPREADSHEET_COPY_MENU_PATCHED = new Object();
+    private static final KeyCombination SPREADSHEET_COPY_SHORTCUT =
+            new KeyCodeCombination(KeyCode.C, KeyCombination.SHORTCUT_DOWN);
+
+    /**
+     * ControlsFX {@link SpreadsheetView#copyClipboard()} は独自 DataFormat のみで、Graphic 表示セルは item が空のままのことがある。
+     * Ctrl+C とコンテキストメニュー Copy から、スプレッドシート形式に加えてプレーンテキスト（TSV）も載せる。
+     */
+    public static void installEnhancedSpreadsheetClipboard(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        if (view.getProperties().putIfAbsent(SPREADSHEET_CLIPBOARD_HOOK, Boolean.TRUE) != null) {
+            return;
+        }
+        view.addEventFilter(
+                KeyEvent.KEY_PRESSED,
+                e -> {
+                    if (!SPREADSHEET_COPY_SHORTCUT.match(e)) {
+                        return;
+                    }
+                    if (view.getSelectionModel().getSelectedCells().isEmpty()) {
+                        return;
+                    }
+                    e.consume();
+                    copySpreadsheetSelectionToClipboard(view);
+                });
+        view.addEventFilter(
+                ContextMenuEvent.CONTEXT_MENU_REQUESTED,
+                e -> Platform.runLater(() -> patchSpreadsheetContextMenuCopy(view)));
+        view.contextMenuProperty()
+                .addListener(
+                        (obs, oldMenu, newMenu) -> {
+                            if (newMenu != null) {
+                                Platform.runLater(() -> patchSpreadsheetContextMenuCopy(view));
+                            }
+                        });
+    }
+
+    /** 選択範囲を ControlsFX 形式 + プレーンテキストでクリップボードへ。 */
+    public static void copySpreadsheetSelectionToClipboard(SpreadsheetView view) {
+        if (view == null || view.getGrid() == null) {
+            return;
+        }
+        if (view.getSelectionModel().getSelectedCells().isEmpty()) {
+            return;
+        }
+        view.copyClipboard();
+        ClipboardContent content = new ClipboardContent();
+        DataFormat nativeFormat = spreadsheetNativeDataFormat(view);
+        Clipboard system = Clipboard.getSystemClipboard();
+        if (nativeFormat != null) {
+            Object nativePayload = system.getContent(nativeFormat);
+            if (nativePayload != null) {
+                content.put(nativeFormat, nativePayload);
+            }
+        }
+        String plain = buildPlainTextFromSpreadsheetSelection(view);
+        if (plain != null && !plain.isEmpty()) {
+            content.putString(plain);
+        }
+        if (!content.isEmpty()) {
+            system.setContent(content);
+        }
+    }
+
+    private static void patchSpreadsheetContextMenuCopy(SpreadsheetView view) {
+        ContextMenu menu = view.getContextMenu();
+        if (menu == null) {
+            return;
+        }
+        for (MenuItem item : menu.getItems()) {
+            if (item == null || item.getUserData() == SPREADSHEET_COPY_MENU_PATCHED) {
+                continue;
+            }
+            if (!isSpreadsheetCopyMenuItem(item)) {
+                continue;
+            }
+            item.setOnAction(ev -> copySpreadsheetSelectionToClipboard(view));
+            item.setUserData(SPREADSHEET_COPY_MENU_PATCHED);
+            return;
+        }
+    }
+
+    private static boolean isSpreadsheetCopyMenuItem(MenuItem item) {
+        KeyCombination acc = item.getAccelerator();
+        if (acc != null && acc.equals(SPREADSHEET_COPY_SHORTCUT)) {
+            return true;
+        }
+        String text = item.getText();
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        return "Copy".equalsIgnoreCase(text) || text.contains("コピー");
+    }
+
+    private static DataFormat spreadsheetNativeDataFormat(SpreadsheetView view) {
+        try {
+            Field fmtField = SpreadsheetView.class.getDeclaredField("fmt");
+            fmtField.setAccessible(true);
+            return (DataFormat) fmtField.get(view);
+        } catch (ReflectiveOperationException ex) {
+            return null;
+        }
+    }
+
+    private static String buildPlainTextFromSpreadsheetSelection(SpreadsheetView view) {
+        List<TablePosition> selected = new ArrayList<>(view.getSelectionModel().getSelectedCells());
+        if (selected.isEmpty()) {
+            return "";
+        }
+        selected.sort(
+                (a, b) -> {
+                    int rowCmp = Integer.compare(a.getRow(), b.getRow());
+                    return rowCmp != 0 ? rowCmp : Integer.compare(a.getColumn(), b.getColumn());
+                });
+        int firstData = spreadsheetFirstDataRowIndex();
+        StringBuilder sb = new StringBuilder();
+        int prevRow = Integer.MIN_VALUE;
+        for (TablePosition pos : selected) {
+            int row = pos.getRow();
+            if (row < firstData) {
+                continue;
+            }
+            if (prevRow != Integer.MIN_VALUE) {
+                if (row != prevRow) {
+                    sb.append('\n');
+                } else {
+                    sb.append('\t');
+                }
+            }
+            sb.append(spreadsheetCellPlainText(view, row, pos.getColumn()));
+            prevRow = row;
+        }
+        return sb.toString();
+    }
+
+    private static String spreadsheetCellPlainText(SpreadsheetView view, int viewRow, int viewCol) {
+        Grid grid = view.getGrid();
+        if (grid == null) {
+            return "";
+        }
+        int modelRow = view.getModelRow(viewRow);
+        int modelCol = view.getModelColumn(viewCol);
+        ObservableList<ObservableList<SpreadsheetCell>> rows = grid.getRows();
+        if (modelRow < 0 || modelRow >= rows.size()) {
+            return "";
+        }
+        ObservableList<SpreadsheetCell> line = rows.get(modelRow);
+        if (modelCol < 0 || modelCol >= line.size()) {
+            return "";
+        }
+        SpreadsheetCell cell = line.get(modelCol);
+        Object item = cell.getItem();
+        if (item == null) {
+            return "";
+        }
+        String text = cell.getCellType().toString(item);
+        if (text == null) {
+            text = item.toString();
+        }
+        return sanitizeSpreadsheetClipboardCell(text);
+    }
+
+    private static String sanitizeSpreadsheetClipboardCell(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+        return text.replace('\r', ' ').replace('\t', ' ');
     }
 
     /** @deprecated {@link #installPmAiReadableSpreadsheetChrome(SpreadsheetView)} を使用。 */

@@ -26,6 +26,7 @@ public final class ResultDispatchPivot {
                     ResultDispatchSchema.COL_PROCESS,
                     ResultDispatchSchema.COL_MACHINE,
                     "加工内容",
+                    ResultDispatchSchema.COL_ORDER_NO,
                     "依頼NO",
                     "換算数量",
                     "実加工数",

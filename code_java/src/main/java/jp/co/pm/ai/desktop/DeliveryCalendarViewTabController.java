@@ -959,7 +959,11 @@ public final class DeliveryCalendarViewTabController {
                 && shell.blockIfSummaryAiDispatchExportLocked("段階3後の納期管理反映")) {
             return;
         }
-        Platform.runLater(() -> applyStage3DispatchOnlyReload(afterUiUpdated));
+        if (Platform.isFxApplicationThread()) {
+            applyStage3DispatchOnlyReload(afterUiUpdated);
+        } else {
+            Platform.runLater(() -> applyStage3DispatchOnlyReload(afterUiUpdated));
+        }
     }
 
     /** 納期管理メイン表のエクスポート用スナップショット（ヘッダ未読込時は空表）。 */
@@ -1015,6 +1019,7 @@ public final class DeliveryCalendarViewTabController {
         deliveryCalendarDataReloadInProgress.set(true);
         deliveryCalendarReloadTimingActive = true;
         if (shell != null) {
+            shell.setDeliveryCalendarReloadBlockingStageRuns(true);
             shell.beginPipelineExecutionTiming(PipelineExecutionTimingKind.DELIVERY_CALENDAR_VIEW);
         }
         applyRefreshButtonEnabledState();
@@ -1116,6 +1121,7 @@ public final class DeliveryCalendarViewTabController {
         deliveryCalendarDataReloadInProgress.set(false);
         applyRefreshButtonEnabledState();
         if (shell != null) {
+            shell.setDeliveryCalendarReloadBlockingStageRuns(false);
             shell.setDeliveryCalendarReloadGreyOutOtherMainTabs(false);
         }
         if (deliveryReloadProgressContainer == null) {
