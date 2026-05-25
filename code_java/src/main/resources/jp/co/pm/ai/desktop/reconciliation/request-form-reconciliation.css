@@ -124,6 +124,24 @@
     -fx-font-weight: bold;
 }
 
+.pm-request-form-reconciliation-root .request-form-master-candidate-selected {
+    -fx-background-color: derive(-fx-control-inner-background, -12%);
+    -fx-background-radius: 4px;
+    -fx-border-color: derive(-fx-accent, 60%);
+    -fx-border-radius: 4px;
+    -fx-border-width: 1px;
+    -fx-padding: 4px 6px;
+}
+
+.pm-request-form-reconciliation-root .request-form-master-candidate-selected .text.request-form-master-candidate-plain {
+    -fx-fill: #EFF6FF;
+}
+
+.pm-request-form-reconciliation-root .request-form-master-candidate-selected .text.request-form-master-candidate-highlight {
+    -fx-fill: #FFEB3B;
+    -fx-font-weight: bold;
+}
+
 .pm-request-form-reconciliation-root .text-field:focused,
 .pm-request-form-reconciliation-root .combo-box-base:focused,
 .pm-request-form-reconciliation-root .date-picker:focused,
@@ -208,6 +226,17 @@
 
 .pm-request-form-reconciliation-root .btn-undo-transfer:hover {
     -fx-background-color: #92400e;
+}
+
+.pm-request-form-reconciliation-root .request-form-poll-status {
+    -fx-font-size: 11px;
+    -fx-text-fill: #94a3b8;
+    -fx-padding: 0 8px 0 0;
+}
+
+.pm-request-form-reconciliation-root .request-form-poll-status.request-form-poll-active {
+    -fx-text-fill: #86efac;
+    -fx-font-weight: bold;
 }
 
 .pm-request-form-reconciliation-root .transfer-blocked-reason {

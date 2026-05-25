@@ -18,6 +18,8 @@ public final class RequestFormReconciliationStandalone extends Application {
         Scene scene = new Scene(root, 1560, 700);
         primaryStage.setScene(scene);
         primaryStage.show();
+        app.onEmbeddedTabActivated(Map.of());
+        primaryStage.setOnCloseRequest(e -> app.onEmbeddedTabDeactivated());
     }
 
     public static void main(String[] args) {
