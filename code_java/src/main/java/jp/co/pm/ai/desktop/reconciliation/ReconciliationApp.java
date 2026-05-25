@@ -80,6 +80,7 @@ public class ReconciliationApp {
     private TextField txtJuchuPathDisplay;
     private Button btnTransfer;
     private Button btnBulkTransferPending;
+    private Label transferBlockedReasonLabel;
     private String targetFolder = "";
     private String juchuFilePath;
     private boolean isLoadingRecord = false;
@@ -614,8 +615,29 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         HBox.setHgrow(btnTransfer, Priority.ALWAYS);
         HBox.setHgrow(btnBulkTransferPending, Priority.ALWAYS);
         HBox.setHgrow(btnOpenJuchu, Priority.ALWAYS);
+
+        Tooltip transferButtonsTooltip = new Tooltip();
+        sideBtns.addEventFilter(
+                javafx.scene.input.MouseEvent.MOUSE_ENTERED,
+                e -> {
+                    String reason = resolveTransferBlockedReason();
+                    if (reason != null && btnTransfer != null && btnTransfer.isDisabled()) {
+                        transferButtonsTooltip.setText(reason);
+                        Tooltip.install(sideBtns, transferButtonsTooltip);
+                    }
+                });
+        sideBtns.addEventFilter(
+                javafx.scene.input.MouseEvent.MOUSE_EXITED,
+                e -> Tooltip.uninstall(sideBtns, transferButtonsTooltip));
+
+        transferBlockedReasonLabel = new Label();
+        transferBlockedReasonLabel.getStyleClass().add("transfer-blocked-reason");
+        transferBlockedReasonLabel.setWrapText(true);
+        transferBlockedReasonLabel.setMaxWidth(Double.MAX_VALUE);
+        transferBlockedReasonLabel.setManaged(false);
+        transferBlockedReasonLabel.setVisible(false);
         
-        btnContainer.getChildren().addAll(btnNewRecord, sideBtns);
+        btnContainer.getChildren().addAll(btnNewRecord, sideBtns, transferBlockedReasonLabel);
         leftContainer.getChildren().add(btnContainer);
         
         // 2. RIGHT PANE: Visual Sheet Viewer & Discrepancies
@@ -1214,44 +1236,50 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         return lockFile != null && lockFile.isFile();
     }
 
-    private void updateTransferButtonState() {
-        boolean blocked = false;
-        String blockedTooltip = null;
-        if (juchuFilePath == null || juchuFilePath.isBlank()) {
-            blocked = true;
-            blockedTooltip = "受注ファイルが未設定のため転記できません。";
-        } else {
-            File juchuFile = new File(juchuFilePath);
-            if (!juchuFile.isFile()) {
-                blocked = true;
-                blockedTooltip = "受注ファイルが見つからないため転記できません。";
-            } else {
-                File lockFile = excelLockFileFor(juchuFile);
-                if (lockFile != null && lockFile.isFile()) {
-                    blocked = true;
-                    blockedTooltip =
-                            "受注ファイルが Excel で使用中（読み取り専用）のため転記できません。"
-                                    + " ロックファイル: "
-                                    + lockFile.getName();
-                }
-            }
-        }
+    /**
+     * 自動転記ボタンを無効化する理由。転記可能なら {@code null}。
+     * JavaFX では disable 中のボタンに Tooltip が表示されないため、{@link #updateTransferButtonState()} でラベルにも出す。
+     */
+    private String resolveTransferBlockedReason() {
         if (juchuTransferInProgress) {
-            blocked = true;
-            if (blockedTooltip == null) {
-                blockedTooltip = "受注ファイルへの転記処理を実行中です。";
-            }
+            return "受注ファイルへの転記処理を実行中です。完了までお待ちください。";
         }
+        if (juchuFilePath == null || juchuFilePath.isBlank()) {
+            return "受注ファイルが未設定です。設定タブまたは環境変数 PM_AI_REQUEST_FORM_JUCHU_FILE を指定してください。";
+        }
+        File juchuFile = new File(juchuFilePath);
+        if (!juchuFile.isFile()) {
+            return "受注ファイルが見つかりません: " + juchuFilePath;
+        }
+        File lockFile = excelLockFileFor(juchuFile);
+        if (lockFile != null && lockFile.isFile()) {
+            return "受注ファイルが Excel で使用中（読み取り専用）です。保存して閉じてから再試行してください。"
+                    + " ロック: "
+                    + lockFile.getName();
+        }
+        return null;
+    }
+
+    private void updateTransferButtonState() {
+        String blockedReason = resolveTransferBlockedReason();
+        boolean blocked = blockedReason != null;
         if (btnTransfer != null) {
             btnTransfer.setDisable(blocked);
-            btnTransfer.setTooltip(blocked ? new Tooltip(blockedTooltip) : null);
+            btnTransfer.setTooltip(
+                    blocked ? new Tooltip(blockedReason) : new Tooltip("現在のフォーム内容を受注ファイルへ転記します。"));
         }
         if (btnBulkTransferPending != null) {
             btnBulkTransferPending.setDisable(blocked);
             btnBulkTransferPending.setTooltip(
                     blocked
-                            ? new Tooltip(blockedTooltip)
+                            ? new Tooltip(blockedReason)
                             : new Tooltip("一時保存済みで未転記の全レコードを受注ファイルへ書き込みます。"));
+        }
+        if (transferBlockedReasonLabel != null) {
+            transferBlockedReasonLabel.setText(
+                    blocked ? "自動転記不可: " + blockedReason : "");
+            transferBlockedReasonLabel.setManaged(blocked);
+            transferBlockedReasonLabel.setVisible(blocked);
         }
     }
 
