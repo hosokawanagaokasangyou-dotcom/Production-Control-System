@@ -4265,6 +4265,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
     }
 
+    private static final String MASTER_CANDIDATE_FILTER_KEYWORDS_PROP = "filterKeywords";
+
     private static void wireCandidateComboBox(ComboBox<String> combo, Runnable refreshOnOpen) {
         combo.setOnShowing(
                 e -> {
@@ -4272,6 +4274,53 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         refreshOnOpen.run();
                     }
                 });
+        combo.setCellFactory(
+                lv ->
+                        new ListCell<>() {
+                            @Override
+                            protected void updateItem(String item, boolean empty) {
+                                super.updateItem(item, empty);
+                                if (empty || item == null) {
+                                    setText(null);
+                                    setGraphic(null);
+                                    return;
+                                }
+                                setText(null);
+                                setGraphic(
+                                        RequestFormMasterCandidateLabelHighlighter.buildGraphic(
+                                                item, masterCandidateFilterKeywords(combo)));
+                            }
+                        });
+    }
+
+    private static void setMasterCandidateFilterKeywords(
+            ComboBox<String> combo, String kwItem, String kwPart, String kwType, String kwLength, String kwHinmei) {
+        java.util.List<String> keywords = new java.util.ArrayList<>(5);
+        if (kwItem != null && !kwItem.isEmpty()) {
+            keywords.add(kwItem);
+        }
+        if (kwPart != null && !kwPart.isEmpty()) {
+            keywords.add(kwPart);
+        }
+        if (kwType != null && !kwType.isEmpty()) {
+            keywords.add(kwType);
+        }
+        if (kwLength != null && !kwLength.isEmpty()) {
+            keywords.add(kwLength);
+        }
+        if (kwHinmei != null && !kwHinmei.isEmpty()) {
+            keywords.add(kwHinmei);
+        }
+        combo.getProperties().put(MASTER_CANDIDATE_FILTER_KEYWORDS_PROP, keywords);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static java.util.List<String> masterCandidateFilterKeywords(ComboBox<String> combo) {
+        Object value = combo.getProperties().get(MASTER_CANDIDATE_FILTER_KEYWORDS_PROP);
+        if (value instanceof java.util.List<?> list) {
+            return (java.util.List<String>) list;
+        }
+        return java.util.List.of();
     }
 
     private static String shohinCodeFromMasterCandidateLabel(String candidateLabel) {
@@ -4330,6 +4379,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         String kwType = normalize_text(pRow.txtType.getText());
         String kwLength = normalize_text(pRow.txtLength.getText());
         String kwHinmei = normalize_text(pRow.txtHinmei.getText());
+        setMasterCandidateFilterKeywords(pRow.cmbSearch, kwItem, kwPart, kwType, kwLength, kwHinmei);
 
         java.util.List<String> filtered;
         if (kwItem.isEmpty()
@@ -4364,6 +4414,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         String kwType = normalize_text(rRow.txtType.getText());
         String kwLength = normalize_text(rRow.txtLength.getText());
         String kwHinmei = normalize_text(rRow.txtHinmei.getText());
+        setMasterCandidateFilterKeywords(rRow.cmbSearch, kwItem, kwPart, kwType, kwLength, kwHinmei);
 
         java.util.List<String> filtered;
         if (kwItem.isEmpty()
