@@ -1,15 +1,24 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
-import javafx.scene.paint.Color;
-
 import org.junit.jupiter.api.Test;
 
 class RequestFormMasterCandidateLabelHighlighterTest {
+
+    @Test
+    void labelTextFill_matchesFormHeadingColor() {
+        assertEquals("#EFF6FF", RequestFormMasterCandidateLabelHighlighter.LABEL_TEXT_FILL_HEX);
+    }
+
+    @Test
+    void highlightTextFill_isYellow() {
+        assertEquals("#FFEB3B", RequestFormMasterCandidateLabelHighlighter.HIGHLIGHT_TEXT_FILL_HEX);
+    }
 
     @Test
     void highlightMask_marksFilterSubstrings() {
@@ -22,14 +31,6 @@ class RequestFormMasterCandidateLabelHighlighterTest {
         assertTrue(mask[label.indexOf("6783")]);
         assertTrue(mask[label.indexOf("EC")]);
         assertFalse(mask[0]);
-    }
-
-    @Test
-    void complementaryContrastText_onDarkBlueBackground_isLight() {
-        Color fill =
-                RequestFormMasterCandidateLabelHighlighter.complementaryContrastText(
-                        Color.web("#1E3A5F"));
-        assertTrue(fill.getBrightness() > 0.55);
     }
 
     @Test

@@ -7,37 +7,40 @@ import java.util.Locale;
 
 import javafx.geometry.Insets;
 import javafx.scene.Node;
-import javafx.scene.Scene;
-import javafx.scene.layout.Region;
 import javafx.scene.paint.Color;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
 
-/** マスタ候補コンボ表示文字列で、フィルタ語と一致する部分を黄色で強調する。 */
+/**
+ * マスタ候補コンボ表示文字列の着色。
+ * <ul>
+ *   <li>フィルタ不一致 … フォーム見出し（.label）と同系の明色
+ *   <li>フィルタ一致 … 黄色（#FFEB3B）
+ * </ul>
+ */
 final class RequestFormMasterCandidateLabelHighlighter {
 
-    /** midnight-blue 既定の -fx-control-inner-background */
-    private static final Color DEFAULT_LIST_BACKGROUND = Color.web("#1E3A5F");
+    /** フォーム見出し .label と同系（midnight-blue の -fx-dark-text-color 相当）。 */
+    static final String LABEL_TEXT_FILL_HEX = "#EFF6FF";
 
-    private static final Color HIGHLIGHT_BACKGROUND = Color.web("#FFEB3B");
+    /** フィルタ一致部分の文字色（黄色）。 */
+    static final String HIGHLIGHT_TEXT_FILL_HEX = "#FFEB3B";
+
+    private static final Color PLAIN_FILL = Color.web(LABEL_TEXT_FILL_HEX);
+    private static final Color HIGHLIGHT_FILL = Color.web(HIGHLIGHT_TEXT_FILL_HEX);
+    private static final Font CANDIDATE_FONT = Font.font(11);
 
     private RequestFormMasterCandidateLabelHighlighter() {}
 
-    static Node buildGraphic(String label, Collection<String> filterKeywords, Node styleAnchor) {
+    static Node buildGraphic(String label, Collection<String> filterKeywords) {
         if (label == null || label.isEmpty()) {
             return new Text("");
         }
-        Color listBg = resolveListBackground(styleAnchor);
-        String plainStyle = textFillStyle(complementaryContrastText(listBg));
-        String highlightStyle =
-                textFillStyle(complementaryContrastText(HIGHLIGHT_BACKGROUND))
-                        + " -fx-background-color: #FFEB3B;";
-
         List<String> keywords = nonEmptyKeywords(filterKeywords);
         if (keywords.isEmpty()) {
-            Text plain = new Text(label);
-            plain.setStyle(plainStyle);
-            return plain;
+            return plainText(label);
         }
         boolean[] highlight = highlightMask(label, keywords);
         TextFlow flow = new TextFlow();
@@ -50,64 +53,27 @@ final class RequestFormMasterCandidateLabelHighlighter {
             while (j < label.length() && highlight[j] == on) {
                 j++;
             }
-            Text segment = new Text(label.substring(i, j));
-            segment.setStyle(on ? highlightStyle : plainStyle);
-            segment.getStyleClass().add(on ? "request-form-master-candidate-highlight" : "request-form-master-candidate-plain");
-            flow.getChildren().add(segment);
+            flow.getChildren().add(styledText(label.substring(i, j), on));
             i = j;
         }
         return flow;
     }
 
-    /** 背景色の補色（色相 +180°）をベースに、明度で読みやすい文字色を返す。 */
-    static Color complementaryContrastText(Color background) {
-        if (background.getSaturation() < 0.12) {
-            double lum =
-                    0.2126 * background.getRed()
-                            + 0.7152 * background.getGreen()
-                            + 0.0722 * background.getBlue();
-            return lum > 0.62 ? Color.color(0.28, 0.28, 0.28) : Color.color(0.92, 0.92, 0.92);
-        }
-        double h = (background.getHue() + 180.0) % 360.0;
-        double s = Math.min(1.0, Math.max(0.45, background.getSaturation() * 0.75 + 0.2));
-        double lum =
-                0.2126 * background.getRed()
-                        + 0.7152 * background.getGreen()
-                        + 0.0722 * background.getBlue();
-        double bri = lum > 0.58 ? 0.28 : 0.9;
-        return Color.hsb(h, s, bri);
+    private static Text plainText(String text) {
+        Text node = new Text(text);
+        node.setFont(CANDIDATE_FONT);
+        node.setFill(PLAIN_FILL);
+        node.getStyleClass().add("request-form-master-candidate-plain");
+        return node;
     }
 
-    private static Color resolveListBackground(Node styleAnchor) {
-        if (styleAnchor == null) {
-            return DEFAULT_LIST_BACKGROUND;
-        }
-        Scene scene = styleAnchor.getScene();
-        if (scene != null) {
-            Node popupList = styleAnchor.lookup(".combo-box-popup .list-view");
-            if (popupList instanceof Region region
-                    && region.getBackground() != null
-                    && !region.getBackground().getFills().isEmpty()) {
-                javafx.scene.paint.Paint paint = region.getBackground().getFills().getFirst().getFill();
-                if (paint instanceof Color c) {
-                    return c;
-                }
-            }
-        }
-        return DEFAULT_LIST_BACKGROUND;
-    }
-
-    private static String textFillStyle(Color fill) {
-        return "-fx-font-size: 11px; -fx-fill: " + toCssHex(fill) + ";";
-    }
-
-    private static String toCssHex(Color color) {
-        return String.format(
-                Locale.ROOT,
-                "#%02X%02X%02X",
-                (int) Math.round(color.getRed() * 255),
-                (int) Math.round(color.getGreen() * 255),
-                (int) Math.round(color.getBlue() * 255));
+    private static Text styledText(String text, boolean highlighted) {
+        Text node = new Text(text);
+        node.setFont(highlighted ? Font.font(CANDIDATE_FONT.getFamily(), FontWeight.BOLD, 11) : CANDIDATE_FONT);
+        node.setFill(highlighted ? HIGHLIGHT_FILL : PLAIN_FILL);
+        node.getStyleClass().add(
+                highlighted ? "request-form-master-candidate-highlight" : "request-form-master-candidate-plain");
+        return node;
     }
 
     static boolean[] highlightMask(String label, Collection<String> filterKeywords) {

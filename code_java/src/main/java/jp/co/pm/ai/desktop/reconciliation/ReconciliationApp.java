@@ -2215,6 +2215,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     // --- LOGIC: RENDER ORIGINAL SHEET VIEW AND FILL FORM ---
     private void loadRecordDetails(OrderRecord record) {
         this.selectedRecord = record;
+        hideAllMasterCandidateCombos();
         isLoadingRecord = true;
         try {
         txtReqNo.setText(record.getReqNo());
@@ -4113,6 +4114,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         pRow.txtPart = new TextField();
         pRow.txtPart.setStyle("-fx-font-size: 11px;");
         pRow.cmbSearch = new ComboBox<>();
+        pRow.cmbSearch.getStyleClass().add("request-form-master-candidate-combo");
         pRow.cmbSearch.setStyle("-fx-font-size: 11px;");
         pRow.cmbSearch.setPromptText("候補");
         pRow.cmbSearch.setMinWidth(96);
@@ -4258,10 +4260,23 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
     private void refreshAllRowCandidates() {
         for (ProductRow pRow : productRows) {
-            updateRowProdCandidates(pRow, false);
+            updateRowProdCandidates(pRow, false, false);
         }
         for (RawMaterialRow rRow : rawRows) {
-            updateRowRawCandidates(rRow, false);
+            updateRowRawCandidates(rRow, false, false);
+        }
+    }
+
+    private void hideAllMasterCandidateCombos() {
+        for (ProductRow pRow : productRows) {
+            if (pRow.cmbSearch != null) {
+                pRow.cmbSearch.hide();
+            }
+        }
+        for (RawMaterialRow rRow : rawRows) {
+            if (rRow.cmbSearch != null) {
+                rRow.cmbSearch.hide();
+            }
         }
     }
 
@@ -4288,7 +4303,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                                 setText(null);
                                 setGraphic(
                                         RequestFormMasterCandidateLabelHighlighter.buildGraphic(
-                                                item, masterCandidateFilterKeywords(combo), combo));
+                                                item, masterCandidateFilterKeywords(combo)));
                             }
                         });
     }
@@ -4371,6 +4386,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void updateRowProdCandidates(ProductRow pRow, boolean fromDropdownOpen) {
+        updateRowProdCandidates(pRow, fromDropdownOpen, true);
+    }
+
+    private void updateRowProdCandidates(ProductRow pRow, boolean fromDropdownOpen, boolean autoOpenPopup) {
         if (isLoadingRecord && !fromDropdownOpen) {
             return;
         }
@@ -4400,12 +4419,16 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                             masterProductList, kwItem, kwPart, kwType, kwLength, kwHinmei, 50);
         }
         pRow.cmbSearch.setItems(javafx.collections.FXCollections.observableArrayList(filtered));
-        if (!fromDropdownOpen && !filtered.isEmpty() && !pRow.cmbSearch.isShowing()) {
+        if (autoOpenPopup && !fromDropdownOpen && !filtered.isEmpty() && !pRow.cmbSearch.isShowing()) {
             pRow.cmbSearch.show();
         }
     }
 
     private void updateRowRawCandidates(RawMaterialRow rRow, boolean fromDropdownOpen) {
+        updateRowRawCandidates(rRow, fromDropdownOpen, true);
+    }
+
+    private void updateRowRawCandidates(RawMaterialRow rRow, boolean fromDropdownOpen, boolean autoOpenPopup) {
         if (isLoadingRecord && !fromDropdownOpen) {
             return;
         }
@@ -4435,7 +4458,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                             masterProductList, kwItem, kwPart, kwType, kwLength, kwHinmei, 50);
         }
         rRow.cmbSearch.setItems(javafx.collections.FXCollections.observableArrayList(filtered));
-        if (!fromDropdownOpen && !filtered.isEmpty() && !rRow.cmbSearch.isShowing()) {
+        if (autoOpenPopup && !fromDropdownOpen && !filtered.isEmpty() && !rRow.cmbSearch.isShowing()) {
             rRow.cmbSearch.show();
         }
     }
@@ -4489,6 +4512,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         rRow.txtPart = new TextField();
         rRow.txtPart.setStyle("-fx-font-size: 11px;");
         rRow.cmbSearch = new ComboBox<>();
+        rRow.cmbSearch.getStyleClass().add("request-form-master-candidate-combo");
         rRow.cmbSearch.setStyle("-fx-font-size: 11px;");
         rRow.cmbSearch.setPromptText("候補");
         rRow.cmbSearch.setMinWidth(96);

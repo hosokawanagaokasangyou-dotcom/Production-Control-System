@@ -83,18 +83,32 @@
     -fx-background-color: transparent;
 }
 
-/* マスタ候補コンボ: ポップアップ背景はテーマ内側色、TextFlow は Java 側で補色を指定 */
+/* コンボポップアップ（タスク選択・マスタ候補共通） */
 .pm-request-form-reconciliation-root .combo-box-popup .list-view {
     -fx-background-color: -fx-control-inner-background;
 }
 
 .pm-request-form-reconciliation-root .combo-box-popup .list-view .list-cell {
     -fx-background-color: -fx-control-inner-background;
-    -fx-text-fill: transparent;
+    -fx-text-fill: -fx-text-background-color;
 }
 
 .pm-request-form-reconciliation-root .combo-box-popup .list-view .list-cell:hover {
     -fx-background-color: derive(-fx-control-inner-background, 12%);
+}
+
+/* マスタ候補のみ TextFlow 表示のためセル既定文字は透明（色は Text ノード側） */
+.pm-request-form-reconciliation-root .request-form-master-candidate-combo .combo-box-popup .list-view .list-cell {
+    -fx-text-fill: transparent;
+}
+
+.pm-request-form-reconciliation-root .request-form-master-candidate-combo .combo-box-popup .list-view .list-cell .text.request-form-master-candidate-plain {
+    -fx-fill: -fx-text-background-color;
+}
+
+.pm-request-form-reconciliation-root .request-form-master-candidate-combo .combo-box-popup .list-view .list-cell .text.request-form-master-candidate-highlight {
+    -fx-fill: #FFEB3B;
+    -fx-font-weight: bold;
 }
 
 .pm-request-form-reconciliation-root .text-field:focused,
