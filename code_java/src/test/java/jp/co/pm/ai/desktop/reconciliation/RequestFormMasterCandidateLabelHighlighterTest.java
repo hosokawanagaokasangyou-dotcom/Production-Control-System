@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
+import javafx.scene.paint.Color;
+
 import org.junit.jupiter.api.Test;
 
 class RequestFormMasterCandidateLabelHighlighterTest {
@@ -20,6 +22,14 @@ class RequestFormMasterCandidateLabelHighlighterTest {
         assertTrue(mask[label.indexOf("6783")]);
         assertTrue(mask[label.indexOf("EC")]);
         assertFalse(mask[0]);
+    }
+
+    @Test
+    void complementaryContrastText_onDarkBlueBackground_isLight() {
+        Color fill =
+                RequestFormMasterCandidateLabelHighlighter.complementaryContrastText(
+                        Color.web("#1E3A5F"));
+        assertTrue(fill.getBrightness() > 0.55);
     }
 
     @Test

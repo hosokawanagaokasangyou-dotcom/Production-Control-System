@@ -4288,7 +4288,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                                 setText(null);
                                 setGraphic(
                                         RequestFormMasterCandidateLabelHighlighter.buildGraphic(
-                                                item, masterCandidateFilterKeywords(combo)));
+                                                item, masterCandidateFilterKeywords(combo), combo));
                             }
                         });
     }

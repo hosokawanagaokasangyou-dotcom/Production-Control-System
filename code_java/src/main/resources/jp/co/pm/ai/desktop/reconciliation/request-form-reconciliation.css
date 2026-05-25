@@ -83,6 +83,20 @@
     -fx-background-color: transparent;
 }
 
+/* マスタ候補コンボ: ポップアップ背景はテーマ内側色、TextFlow は Java 側で補色を指定 */
+.pm-request-form-reconciliation-root .combo-box-popup .list-view {
+    -fx-background-color: -fx-control-inner-background;
+}
+
+.pm-request-form-reconciliation-root .combo-box-popup .list-view .list-cell {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-text-fill: transparent;
+}
+
+.pm-request-form-reconciliation-root .combo-box-popup .list-view .list-cell:hover {
+    -fx-background-color: derive(-fx-control-inner-background, 12%);
+}
+
 .pm-request-form-reconciliation-root .text-field:focused,
 .pm-request-form-reconciliation-root .combo-box-base:focused,
 .pm-request-form-reconciliation-root .date-picker:focused,
