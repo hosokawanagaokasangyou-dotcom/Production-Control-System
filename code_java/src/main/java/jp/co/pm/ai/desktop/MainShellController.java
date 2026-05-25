@@ -1,5 +1,6 @@
 package jp.co.pm.ai.desktop;
 
+import java.io.File;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -61,6 +62,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Text;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.Modality;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
@@ -3416,7 +3418,88 @@ public final class MainShellController {
      * スプラッシュ表示中に {@link Alert#showAndWait()} すると確認ダイアログが背面に隠れて見えないことがある。
      */
     void schedulePortableBundleSelfUpdateAfterSplash() {
-        Platform.runLater(this::maybePortableBundleSelfUpdate);
+        Platform.runLater(
+                () -> {
+                    maybePortableBundleSelfUpdate();
+                    maybePromptRequestFormOriginalDirAtStartup();
+                });
+    }
+
+    /**
+     * {@link AppPaths#KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR} が空のとき、起動直後に BOX ドライブ上の依頼書原本フォルダを選ばせる。
+     * キャンセルや未選択では先に進めない。
+     */
+    private void maybePromptRequestFormOriginalDirAtStartup() {
+        if (primaryStage == null || envRows == null) {
+            return;
+        }
+        if (!envTabValueTrimmed(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR).isEmpty()) {
+            return;
+        }
+        boolean firstPrompt = true;
+        while (envTabValueTrimmed(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR).isEmpty()) {
+            if (firstPrompt) {
+                Alert intro = new Alert(AlertType.INFORMATION);
+                intro.initOwner(primaryStage);
+                applyAlertStylesheetsFromOwner(intro);
+                intro.setTitle("依頼書原本フォルダ");
+                intro.setHeaderText(null);
+                intro.setContentText(
+                        AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
+                                + " が未設定です。\n"
+                                + "BOX ドライブ上の依頼書原本フォルダ（*加工依頼書*.xlsm 等を含むフォルダ）を選択してください。\n"
+                                + "この設定は必須です。選択するまで他の操作はできません。");
+                intro.showAndWait();
+                firstPrompt = false;
+            }
+
+            DirectoryChooser dc = new DirectoryChooser();
+            dc.setTitle("BOX ドライブの依頼書原本フォルダを選択（必須）");
+            resolveBoxDriveInitialDirectory()
+                    .filter(Files::isDirectory)
+                    .ifPresent(p -> dc.setInitialDirectory(p.toFile()));
+            File selected = dc.showDialog(primaryStage);
+            if (selected == null) {
+                appendLog(
+                        "[startup] "
+                                + AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
+                                + " の選択がキャンセルされました。再選択を求めます。");
+                showWarningDialog(
+                        "依頼書原本フォルダ（必須）",
+                        AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR
+                                + " の設定は必須です。\n"
+                                + "BOX ドライブ上の依頼書原本フォルダを選択してください。");
+                continue;
+            }
+            String abs = selected.toPath().toAbsolutePath().normalize().toString();
+            updateEnvTabValue(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, abs);
+            DesktopSessionStateStore.save(collectDesktopSession());
+            appendLog("[startup] " + AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR + " を設定: " + abs);
+        }
+    }
+
+    /** BOX 同期フォルダ（{@code %USERPROFILE%\\Box} 等）があれば DirectoryChooser の初期ディレクトリ候補にする。 */
+    private static Optional<Path> resolveBoxDriveInitialDirectory() {
+        LinkedHashSet<String> candidates = new LinkedHashSet<>();
+        String userProfile = System.getenv("USERPROFILE");
+        if (userProfile != null && !userProfile.isBlank()) {
+            candidates.add(Path.of(userProfile.trim(), "Box").toString());
+        }
+        String home = System.getProperty("user.home");
+        if (home != null && !home.isBlank()) {
+            candidates.add(Path.of(home.trim(), "Box").toString());
+        }
+        for (String raw : candidates) {
+            try {
+                Path p = Path.of(raw).toAbsolutePath().normalize();
+                if (Files.isDirectory(p)) {
+                    return Optional.of(p);
+                }
+            } catch (Exception ignored) {
+                // try next candidate
+            }
+        }
+        return Optional.empty();
     }
 
     /**
@@ -4554,8 +4637,6 @@ public final class MainShellController {
                 r.setValue(pmAiSummary != null ? pmAiSummary : "");
             } else if (AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR.equals(name)) {
                 r.setValue(site.aladdinMasterDir());
-            } else if (AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR.equals(name)) {
-                r.setValue(site.requestFormOriginalDir());
             } else if (AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE.equals(name)) {
                 r.setValue(site.requestFormJuchuFile());
             }
@@ -6353,7 +6434,7 @@ public final class MainShellController {
                 return AppPaths.defaultRequestFormJuchuFileForFactory(GlobalInitSettingTarget.load());
             }
             case AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR -> {
-                return AppPaths.defaultRequestFormOriginalDirForFactory(GlobalInitSettingTarget.load());
+                return "";
             }
             case AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR -> {
                 return AppPaths.resolveResultDispatchTableDir(u).toString();

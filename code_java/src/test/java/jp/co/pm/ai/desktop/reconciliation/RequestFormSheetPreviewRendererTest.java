@@ -19,16 +19,17 @@ import org.junit.jupiter.api.io.TempDir;
 class RequestFormSheetPreviewRendererTest {
 
     @Test
-    void loadPreviewData_clipsToA1ThroughAn28(@TempDir Path tmp) throws Exception {
+    void loadPreviewData_clipsToA1ThroughAo29(@TempDir Path tmp) throws Exception {
         File excel = tmp.resolve("preview-range.xlsx").toFile();
         try (Workbook wb = new XSSFWorkbook();
                 FileOutputStream out = new FileOutputStream(excel)) {
             Sheet sheet = wb.createSheet("E5-1");
             sheet.createRow(0).createCell(0).setCellValue("左上");
             Row row29 = sheet.createRow(28);
-            row29.createCell(0).setCellValue("範囲外行");
-            row29.createCell(39).setCellValue("AN29");
+            row29.createCell(0).setCellValue("範囲内最終行");
             row29.createCell(40).setCellValue("AO29");
+            Row row30 = sheet.createRow(29);
+            row30.createCell(0).setCellValue("範囲外行");
             sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 2));
             wb.write(out);
         }
@@ -36,19 +37,19 @@ class RequestFormSheetPreviewRendererTest {
         RequestFormSheetPreviewRenderer.PreviewData data =
                 RequestFormSheetPreviewRenderer.loadPreviewData(excel, "E5-1");
 
-        assertEquals(28, data.rowCount());
-        assertEquals(40, data.colCount());
+        assertEquals(29, data.rowCount());
+        assertEquals(41, data.colCount());
         assertEquals(0, data.firstRow());
         assertEquals(0, data.firstCol());
         assertEquals("左上", data.texts()[0][0]);
-        assertEquals("", data.texts()[27][0]);
-        assertEquals("", data.texts()[27][39]);
+        assertEquals("範囲内最終行", data.texts()[28][0]);
+        assertEquals("AO29", data.texts()[28][40]);
         assertEquals(3, data.colSpans()[0][0]);
     }
 
     @Test
-    void previewRangeSpec_isA1An28() {
-        assertEquals("A1:AN28", RequestFormSheetPreviewRenderer.PREVIEW_RANGE_SPEC);
+    void previewRangeSpec_isA1Ao29() {
+        assertEquals("A1:AO29", RequestFormSheetPreviewRenderer.PREVIEW_RANGE_SPEC);
     }
 
     @Test

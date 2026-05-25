@@ -15,7 +15,7 @@ public final class RequestFormReconciliationStandalone extends Application {
         primaryStage.setTitle("湖南工場 受注一括照合・対比型入力支援システム");
         ReconciliationApp app = new ReconciliationApp();
         Parent root = app.buildEmbeddedRoot(primaryStage, null, Map.of());
-        Scene scene = new Scene(root, 1300, 700);
+        Scene scene = new Scene(root, 1560, 700);
         primaryStage.setScene(scene);
         primaryStage.show();
     }

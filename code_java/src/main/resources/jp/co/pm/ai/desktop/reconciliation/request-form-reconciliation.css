@@ -265,7 +265,8 @@
     -fx-background-color: #b02a37;
 }
 
-.pm-request-form-reconciliation-root .btn-copy {
+.pm-request-form-reconciliation-root .btn-copy,
+.pm-request-form-reconciliation-root .btn-clear {
     -fx-background-color: derive(-fx-base, 12%);
     -fx-text-fill: -fx-text-background-color;
     -fx-font-size: 11px;
@@ -281,6 +282,12 @@
     -fx-border-color: -fx-accent;
 }
 
+.pm-request-form-reconciliation-root .btn-clear:hover {
+    -fx-background-color: derive(#dc3545, 65%);
+    -fx-border-color: #dc3545;
+    -fx-text-fill: #fecaca;
+}
+
 .pm-request-form-reconciliation-root .request-form-loading-overlay {
     -fx-background-color: derive(-fx-base, -25%);
     -fx-opacity: 0.92;
@@ -294,6 +301,12 @@
 
 .pm-request-form-reconciliation-root .request-form-image-viewer {
     -fx-background-color: derive(-fx-base, -8%);
+}
+
+.pm-request-form-reconciliation-root .request-form-field-label {
+    -fx-wrap-text: true;
+    -fx-text-overrun: clip;
+    -fx-alignment: center-right;
 }
 
 .pm-request-form-reconciliation-root .request-form-prod-row {

@@ -1,27 +1,23 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Windows ?{??z??: PowerShell ????H????? JavaFX ?f?X?N?g?b?v???N??????B
+  Windows 向け: compile 後に検証してから JavaFX デスクトップを起動する。
 
 .DESCRIPTION
-  ???K?w?? mvnw.cmd ?? compile ?? exec:exec@pm-ai-desktop ?????s??????Bpom ?? JVM ?I?v?V?????i-Xms/-Xmx?AOOM ???q?[?v?_???v???j????????K?p???????B
+  同一フォルダの mvnw.cmd で compile → verify-pm-ai-build.ps1 → exec:exec@pm-ai-desktop を実行する。
+  pom の JVM オプション（-Xms/-Xmx 等）も適用される。
 
-  ?d?v: ????t?H???_????s????????p?X????? .\ ??t??????B
+  重要: このフォルダから実行すること（相対パス前提）:
     .\run-pm-ai-desktop.ps1
-  ???|?W?g????????????:
-    .\code_java\run-pm-ai-desktop.ps1
 
-  mvnw javafx:run は mvnw 側で compile exec:exec@pm-ai-desktop に転送される。
-  直接 exec を使う場合や ClassNotFound 時は .\run-pm-ai-desktop.ps1 を使う。
-
-  ?q?[?v?????L????????:
-    .\run-pm-ai-desktop.ps1 -MonitorIntervalSec 60
+  mvnw javafx:run も pm-ai-mvn-route.cmd 経由で同じ検証を行う。
+  ClassNotFound 時は .\run-pm-ai-desktop.ps1 を推奨。
 
 .PARAMETER MaxHeap
-  Maven ?v???p?e?B jvm.max.heap?i???? 4g?B??: 2g, 4g, 8g?j?B
+  Maven プロパティ jvm.max.heap（既定 4g。例: 2g, 4g, 8g）。
 
 .PARAMETER MonitorIntervalSec
-  ?q?[?v??????u?i?b?j?B-1 ??????????G?????B0 ???? PM_AI_JVM_MEMORY_MONITOR_SEC ????B
+  ヒープ監視間隔（秒）。-1 で無効。0 で環境変数 PM_AI_JVM_MEMORY_MONITOR_SEC を使用。
 
 .EXAMPLE
   .\run-pm-ai-desktop.ps1
@@ -41,37 +37,35 @@ if ($MonitorIntervalSec -ge 0) {
 }
 
 $commonArgs = @("-q", "-Djvm.max.heap=$MaxHeap")
+$verifyScript = Join-Path $PSScriptRoot "verify-pm-ai-build.ps1"
+
+function Invoke-PmAiBuildVerify {
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $verifyScript -ProjectRoot $PSScriptRoot
+    return $LASTEXITCODE
+}
 
 & "$PSScriptRoot\mvnw.cmd" @commonArgs @("compile")
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-$requiredClasses = @(
-    "target\classes\jp\co\pm\ai\desktop\ui\TableColumnOrderPersistence.class",
-    "target\classes\jp\co\pm\ai\desktop\StartupSplashStage.class",
-    "target\classes\jp\co\pm\ai\desktop\io\Stage2OutputNaming.class",
-    "target\classes\jp\co\pm\ai\desktop\ui\ExcelLikeSpreadsheetFilter.class",
-    "target\classes\jp\co\pm\ai\planning\stage2\core\Stage2PlanRowDispatchQtyMetricsResult.class"
-)
-$missing = @()
-foreach ($rel in $requiredClasses) {
-    $p = Join-Path $PSScriptRoot $rel
-    if (-not (Test-Path -LiteralPath $p)) {
-        $missing += $p
+if ((Invoke-PmAiBuildVerify) -ne 0) {
+    Write-Warning "compile 後に必須出力が不足しています。clean compile を実行します..."
+    & "$PSScriptRoot\mvnw.cmd" @commonArgs @("clean", "compile")
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
     }
-}
-if ($missing.Count -gt 0) {
-    Write-Error @"
-compile ???K?v?? .class ??????????:
-$($missing -join [Environment]::NewLine)
-???:
-  1. ???s???? Java / Maven ?v???Z?X???I??
+    if ((Invoke-PmAiBuildVerify) -ne 0) {
+        Write-Error @"
+compile 後も必須 .class / CSS が見つかりません。
+対処:
+  1. 実行中の Java / Maven プロセスを終了
   2. .\mvnw.cmd clean compile
   3. .\run-pm-ai-desktop.ps1
 "@
-    exit 1
+        exit 1
+    }
 }
 
-& "$PSScriptRoot\mvnw.cmd" @commonArgs @("exec:exec@pm-ai-desktop")
+& "$PSScriptRoot\mvnw.cmd" @commonArgs @("validate", "exec:exec@pm-ai-desktop")
 exit $LASTEXITCODE

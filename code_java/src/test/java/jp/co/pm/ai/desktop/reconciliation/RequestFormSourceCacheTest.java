@@ -17,6 +17,25 @@ import org.junit.jupiter.api.io.TempDir;
 class RequestFormSourceCacheTest {
 
     @Test
+    void parseCache_invalidatesWhenSchemaVersionChanges(@TempDir Path tmp) throws Exception {
+        File cacheRoot = tmp.resolve("preview_cache").toFile();
+        File source = tmp.resolve("依頼書B.xlsm").toFile();
+        Files.writeString(source.toPath(), "dummy");
+
+        File cacheFile = RequestFormSourceCache.parseCacheFile(cacheRoot, source);
+        Files.createDirectories(cacheFile.getParentFile().toPath());
+        Files.writeString(
+                cacheFile.toPath(),
+                "{\"source\":{\"lastModified\":"
+                        + source.lastModified()
+                        + ",\"length\":"
+                        + source.length()
+                        + "},\"entries\":[{\"依頼Ｎｏ\":\"E6-2\",\"加工賃\":\"18+18+13\"}]}");
+
+        assertTrue(RequestFormSourceCache.loadParseEntries(cacheRoot, source).isEmpty());
+    }
+
+    @Test
     void parseCache_reusesEntriesWhileSourceUnchanged(@TempDir Path tmp) throws Exception {
         File cacheRoot = tmp.resolve("preview_cache").toFile();
         File source = tmp.resolve("依頼書A.xlsm").toFile();
@@ -41,13 +60,13 @@ class RequestFormSourceCacheTest {
         File source = tmp.resolve("book.xlsm").toFile();
         Files.writeString(source.toPath(), "v1");
 
-        File png = RequestFormSourceCache.pngCacheFile(cacheRoot, "book.xlsm", "E5-1");
-        Files.createDirectories(png.getParentFile().toPath());
-        Files.write(png.toPath(), new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0, 0, 0, 0});
-        RequestFormSourceCache.writePreviewMeta(png, source);
+        File pdf = RequestFormSourceCache.pdfCacheFile(cacheRoot, "book.xlsm", "E5-1");
+        Files.createDirectories(pdf.getParentFile().toPath());
+        Files.write(pdf.toPath(), "%PDF-1.4\n% preview\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        RequestFormSourceCache.writePreviewMeta(pdf, source);
 
         Files.writeString(source.toPath(), "v2");
-        assertFalse(RequestFormSourceCache.isPreviewCacheValid(png, source));
+        assertFalse(RequestFormSourceCache.isPreviewCacheValid(pdf, source));
     }
 
     @Test
@@ -56,18 +75,18 @@ class RequestFormSourceCacheTest {
         File source = tmp.resolve("book.xlsm").toFile();
         Files.writeString(source.toPath(), "v1");
 
-        File png = RequestFormSourceCache.pngCacheFile(cacheRoot, "book.xlsm", "E5-1");
-        Files.createDirectories(png.getParentFile().toPath());
-        Files.write(png.toPath(), new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0, 0, 0, 0});
+        File pdf = RequestFormSourceCache.pdfCacheFile(cacheRoot, "book.xlsm", "E5-1");
+        Files.createDirectories(pdf.getParentFile().toPath());
+        Files.write(pdf.toPath(), "%PDF-1.4\n% preview\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
         Files.writeString(
-                RequestFormSourceCache.pngMetaFile(png).toPath(),
+                RequestFormSourceCache.previewMetaFile(pdf).toPath(),
                 "{\"source\":{\"lastModified\":"
                         + source.lastModified()
                         + ",\"length\":"
                         + source.length()
                         + "},\"range\":\"A1:Z99\"}");
 
-        assertFalse(RequestFormSourceCache.isPreviewCacheValid(png, source));
+        assertFalse(RequestFormSourceCache.isPreviewCacheValid(pdf, source));
     }
 
     @Test
@@ -76,17 +95,17 @@ class RequestFormSourceCacheTest {
         File source = tmp.resolve("book.xlsm").toFile();
         Files.writeString(source.toPath(), "v1");
 
-        File png = RequestFormSourceCache.pngCacheFile(cacheRoot, "book.xlsm", "E5-1");
-        Files.createDirectories(png.getParentFile().toPath());
-        Files.write(png.toPath(), new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0, 0, 0, 0});
+        File pdf = RequestFormSourceCache.pdfCacheFile(cacheRoot, "book.xlsm", "E5-1");
+        Files.createDirectories(pdf.getParentFile().toPath());
+        Files.write(pdf.toPath(), "%PDF-1.4\n% preview\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
         Files.writeString(
-                RequestFormSourceCache.pngMetaFile(png).toPath(),
+                RequestFormSourceCache.previewMetaFile(pdf).toPath(),
                 "{\"source\":{\"lastModified\":"
                         + source.lastModified()
                         + ",\"length\":"
                         + source.length()
-                        + "},\"range\":\"A1:AN28\",\"renderer\":\"legacy\"}");
+                        + "},\"range\":\"A1:AO29\",\"renderer\":\"legacy\"}");
 
-        assertFalse(RequestFormSourceCache.isPreviewCacheValid(png, source));
+        assertFalse(RequestFormSourceCache.isPreviewCacheValid(pdf, source));
     }
 }

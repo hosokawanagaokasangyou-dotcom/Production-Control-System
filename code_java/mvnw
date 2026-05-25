@@ -147,17 +147,53 @@ MAVEN_HOME="${MAVEN_USER_HOME}/wrapper/dists/${distributionUrlNameMain-}/$(hash_
 
 exec_maven() {
   unset MVNW_VERBOSE MVNW_USERNAME MVNW_PASSWORD MVNW_REPOURL || :
+  _pm_ai_has_javafx_run=0
   _pm_ai_mvn_args=""
   for _pm_ai_arg in "$@"; do
     if [ "$_pm_ai_arg" = "javafx:run" ]; then
-      # validate の build-classpath と target/classes を揃えるため compile を先行
-      _pm_ai_mvn_args="$_pm_ai_mvn_args compile exec:exec@pm-ai-desktop"
+      _pm_ai_has_javafx_run=1
     else
       _pm_ai_mvn_args="$_pm_ai_mvn_args $_pm_ai_arg"
     fi
   done
+  if [ "$_pm_ai_has_javafx_run" = 1 ]; then
+    pm_ai_javafx_run
+    return $?
+  fi
   # shellcheck disable=SC2086
   exec "$MAVEN_HOME/bin/$MVN_CMD" $_pm_ai_mvn_args || die "cannot exec $MAVEN_HOME/bin/$MVN_CMD"
+}
+
+pm_ai_verify_classes() {
+  _pm_ai_missing=0
+  for _pm_ai_rel in \
+    "target/classes/jp/co/pm/ai/desktop/io/SkillsSheetMemberReader.class" \
+    "target/classes/jp/co/pm/ai/desktop/io/PlanInputTabularIo.class" \
+    "target/classes/jp/co/pm/ai/desktop/io/NetworkSourceFileReloadCache.class" \
+    "target/classes/jp/co/pm/ai/desktop/dispatch/ResultDispatchInteractiveConsolidator.class" \
+    "target/classes/jp/co/pm/ai/desktop/ui/EquipmentGraphicGanttPane.class" \
+    "target/classes/jp/co/pm/ai/desktop/reconciliation/ReconciliationApp.class" \
+    "target/classes/jp/co/pm/ai/desktop/css/pm-ai-desktop.css" \
+    "target/classes/jp/co/pm/ai/desktop/css/theme-midnight-blue.css"
+  do
+    if [ ! -f "$scriptDir/$_pm_ai_rel" ]; then
+      _pm_ai_missing=1
+      break
+    fi
+  done
+  return "$_pm_ai_missing"
+}
+
+pm_ai_javafx_run() {
+  "$MAVEN_HOME/bin/$MVN_CMD" compile || die "cannot exec $MAVEN_HOME/bin/$MVN_CMD compile"
+  if ! pm_ai_verify_classes; then
+    printf '%s\n' "[pm-ai-desktop] target/classes が不完全です。clean compile を実行します..." >&2
+    "$MAVEN_HOME/bin/$MVN_CMD" clean compile || die "cannot exec $MAVEN_HOME/bin/$MVN_CMD clean compile"
+    if ! pm_ai_verify_classes; then
+      die "[pm-ai-desktop] エラー: compile 後も必須 .class / CSS が見つかりません。Java / Maven プロセスを終了して mvnw clean compile を実行してください。"
+    fi
+  fi
+  exec "$MAVEN_HOME/bin/$MVN_CMD" validate exec:exec@pm-ai-desktop || die "cannot exec $MAVEN_HOME/bin/$MVN_CMD validate exec:exec@pm-ai-desktop"
 }
 
 if [ -d "$MAVEN_HOME" ]; then
