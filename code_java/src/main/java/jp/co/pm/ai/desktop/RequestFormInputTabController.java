@@ -1,8 +1,13 @@
 package jp.co.pm.ai.desktop;
 
+import javafx.application.Platform;
 import javafx.fxml.FXML;
+import javafx.geometry.Pos;
 import javafx.scene.Parent;
+import javafx.scene.control.Label;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 
 import java.nio.file.Path;
@@ -17,9 +22,12 @@ import jp.co.pm.ai.desktop.reconciliation.RequestFormPreviewBadgeConfig;
  */
 public final class RequestFormInputTabController {
 
+    private static final String TAB_LOADING_STYLE_CLASS = "request-form-tab-loading";
+
     private MainShellController shell;
     private ReconciliationApp reconciliationApp;
     private boolean embeddedBuilt;
+    private Parent tabLoadingPane;
 
     @FXML
     private StackPane contentHost;
@@ -34,10 +42,51 @@ public final class RequestFormInputTabController {
     }
 
     /** メインシェルで当該タブが初めて実体化されたあとに呼ぶ。 */
-    void ensureEmbeddedMounted() {
+    void onMainShellTabSelected() {
+        showTabLoadingIfNeeded();
+        Platform.runLater(this::activateAfterTabPainted);
+    }
+
+    private void activateAfterTabPainted() {
+        ensureEmbeddedMounted();
+        if (reconciliationApp == null || shell == null) {
+            return;
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        reconciliationApp.onEmbeddedTabActivated(ui);
+        logRequestFormPaths(ui);
+    }
+
+    private void showTabLoadingIfNeeded() {
+        if (contentHost == null || embeddedBuilt) {
+            return;
+        }
+        if (tabLoadingPane == null) {
+            tabLoadingPane = buildTabLoadingPane();
+        }
+        if (contentHost.getChildren().isEmpty()
+                || !contentHost.getChildren().contains(tabLoadingPane)) {
+            contentHost.getChildren().setAll(tabLoadingPane);
+        }
+    }
+
+    private static Parent buildTabLoadingPane() {
+        VBox box = new VBox(14);
+        box.setAlignment(Pos.CENTER);
+        box.getStyleClass().add(TAB_LOADING_STYLE_CLASS);
+        ProgressIndicator indicator = new ProgressIndicator();
+        indicator.setMaxSize(48, 48);
+        Label label = new Label("依頼書入力を準備しています…");
+        label.getStyleClass().add("request-form-tab-loading-label");
+        box.getChildren().addAll(indicator, label);
+        return box;
+    }
+
+    private void ensureEmbeddedMounted() {
         if (embeddedBuilt || contentHost == null) {
             return;
         }
+        showTabLoadingIfNeeded();
         reconciliationApp = new ReconciliationApp();
         reconciliationApp.setOriginalDirChangeHandler(
                 path -> {
@@ -68,7 +117,6 @@ public final class RequestFormInputTabController {
                                 : RequestFormPreviewBadgeConfig.defaults());
         contentHost.getChildren().setAll(root);
         embeddedBuilt = true;
-        logRequestFormPaths(ui);
         contentHost
                 .sceneProperty()
                 .addListener(
@@ -77,18 +125,6 @@ public final class RequestFormInputTabController {
                                 reconciliationApp.updateHostWindow(scene.getWindow());
                             }
                         });
-    }
-
-    /** メインシェルで当該タブを選択するたびに環境変数を再読込する。 */
-    void onMainShellTabSelected() {
-        ensureEmbeddedMounted();
-        if (reconciliationApp == null || shell == null) {
-            return;
-        }
-        Map<String, String> ui = shell.snapshotUiEnv();
-        reconciliationApp.configureFromUiEnv(ui);
-        reconciliationApp.reloadMasterProductListFromDisk();
-        logRequestFormPaths(ui);
     }
 
     /** デザインタブ変更後に依頼書プレビュー上部バッジを再描画する。 */

@@ -133,6 +133,9 @@ public class ReconciliationApp {
     private final List<ProductRow> productRows = new ArrayList<>();
     private final List<RawMaterialRow> rawRows = new ArrayList<>();
 private final List<ProductInfo> masterProductList = new ArrayList<>();
+    private volatile long masterProductListLoadedMtime = -1L;
+    private volatile String masterProductListLoadedPath = "";
+    private volatile boolean masterProductListLoadInFlight;
 
     // New Tab 2 Input Fields (Paper mockup sheet layout)
     private TextField newTxtProdItem;
@@ -253,9 +256,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         applyRepoRootAsWorkspaceIfPresent(repoRootHint);
         configureFromUiEnv(uiEnv);
         ensureJuchuPathDefault();
-
-        // Load master product list in cache on startup
-        loadMasterProductList();
 
         // --- TOP MENU BAR ---
         BorderPane root = new BorderPane();
@@ -738,9 +738,15 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         applyMainShellAlignedStyles(mainStackPane);
         startOriginalFilePolling();
 
-        // Load initial data
+        loadMasterProductListAsync(null);
         reloadData();
         return mainStackPane;
+    }
+
+    /** 依頼書入力タブ選択時: 環境変数反映と、変更があったときだけマスタを非同期再読込。 */
+    public void onEmbeddedTabActivated(Map<String, String> uiEnv) {
+        configureFromUiEnv(uiEnv);
+        reloadMasterProductListFromDiskIfStale(null);
     }
 
     public void updateHostWindow(Window hostWindow) {
@@ -1009,7 +1015,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     javafx.application.Platform.runLater(() -> {
                         btnRunTool.setDisable(false);
                         if (exitCode == 0) {
-                            loadMasterProductList();
+                            reloadMasterProductListFromDisk();
                             lblToolStatus.setText("成功！「マスタリレーション統合結果.xlsx」が生成されました。");
                             Alert alert = new Alert(Alert.AlertType.INFORMATION);
                             alert.setTitle("統合成功");
@@ -1731,26 +1737,102 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
     /** 環境変数変更後など、統合マスタをディスクから再読込する。 */
     public void reloadMasterProductListFromDisk() {
-        loadMasterProductList();
+        invalidateMasterProductListCache();
+        loadMasterProductListAsync(null);
+    }
+
+    /** マスタファイルに変更がないときはスキップ（タブ再選択の応答性向上）。 */
+    public void reloadMasterProductListFromDiskIfStale(Runnable onComplete) {
+        File masterFile = integratedMasterFile();
+        String path = masterFile.getAbsolutePath();
+        long mtime = masterFile.exists() ? masterFile.lastModified() : -1L;
+        synchronized (this) {
+            if (masterFile.exists()
+                    && !masterProductList.isEmpty()
+                    && path.equals(masterProductListLoadedPath)
+                    && mtime == masterProductListLoadedMtime) {
+                if (onComplete != null) {
+                    Platform.runLater(onComplete);
+                }
+                return;
+            }
+        }
+        loadMasterProductListAsync(onComplete);
+    }
+
+    private void invalidateMasterProductListCache() {
+        masterProductListLoadedMtime = -1L;
+        masterProductListLoadedPath = "";
     }
 
     private void loadMasterProductList() {
+        List<ProductInfo> loaded = loadMasterProductListFromFile();
+        applyMasterProductList(loaded, integratedMasterFile());
+    }
+
+    private void loadMasterProductListAsync(Runnable onComplete) {
+        if (masterProductListLoadInFlight) {
+            if (onComplete != null) {
+                Platform.runLater(onComplete);
+            }
+            return;
+        }
+        masterProductListLoadInFlight = true;
+        Thread loadThread =
+                new Thread(
+                        () -> {
+                            File masterFile = integratedMasterFile();
+                            List<ProductInfo> loaded = loadMasterProductListFromFile();
+                            Platform.runLater(
+                                    () -> {
+                                        try {
+                                            applyMasterProductList(loaded, masterFile);
+                                            if (onComplete != null) {
+                                                onComplete.run();
+                                            }
+                                        } finally {
+                                            masterProductListLoadInFlight = false;
+                                        }
+                                    });
+                        },
+                        "request-form-master-load");
+        loadThread.setDaemon(true);
+        loadThread.start();
+    }
+
+    private void applyMasterProductList(List<ProductInfo> loaded, File masterFile) {
         masterProductList.clear();
+        if (loaded != null && !loaded.isEmpty()) {
+            masterProductList.addAll(loaded);
+        }
+        if (masterFile != null && masterFile.exists()) {
+            masterProductListLoadedPath = masterFile.getAbsolutePath();
+            masterProductListLoadedMtime = masterFile.lastModified();
+        } else {
+            invalidateMasterProductListCache();
+        }
+    }
+
+    private List<ProductInfo> loadMasterProductListFromFile() {
+        List<ProductInfo> result = new ArrayList<>();
         File masterFile = integratedMasterFile();
         if (!masterFile.exists()) {
             System.err.println("Integrated master file not found: " + masterFile.getAbsolutePath());
-            return;
+            return result;
         }
-        
+
         try (FileInputStream fis = new FileInputStream(masterFile);
-             Workbook wb = WorkbookFactory.create(fis)) {
+                Workbook wb = WorkbookFactory.create(fis)) {
             Sheet sheet = wb.getSheet("②商品別・工程展開リスト");
             if (sheet == null) {
                 System.err.println("Sheet ②商品別・工程展開リスト not found!");
-                return;
+                return result;
             }
-            
+
             Row hRow = sheet.getRow(0);
+            if (hRow == null) {
+                return result;
+            }
             Map<String, Integer> colMap = new HashMap<>();
             for (int c = 0; c < hRow.getLastCellNum(); c++) {
                 Cell cell = hRow.getCell(c);
@@ -1758,15 +1840,19 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     colMap.put(cell.getStringCellValue().trim(), c);
                 }
             }
-            
+
             for (int r = 1; r <= sheet.getLastRowNum(); r++) {
                 Row row = sheet.getRow(r);
-                if (row == null) continue;
-                
+                if (row == null) {
+                    continue;
+                }
+
                 Cell codeCell = row.getCell(colMap.getOrDefault("商品コード", 0));
                 String shohinCode = getCellValueAsString(codeCell);
-                if (shohinCode.isEmpty()) continue;
-                
+                if (shohinCode.isEmpty()) {
+                    continue;
+                }
+
                 String seihinCode = getCellValueAsString(row.getCell(colMap.getOrDefault("製品コード", 1)));
                 String shohinName1 = getCellValueAsString(row.getCell(colMap.getOrDefault("商品名1", 2)));
                 String shohinName2 = getCellValueAsString(row.getCell(colMap.getOrDefault("商品名2", 3)));
@@ -1779,31 +1865,45 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 String foamLength = getCellValueAsString(row.getCell(colMap.getOrDefault("発泡体長さ", 10)));
                 String foamColor = getCellValueAsString(row.getCell(colMap.getOrDefault("発泡体色", 11)));
                 String foamThickness = getCellValueAsString(row.getCell(colMap.getOrDefault("発泡体厚み", 12)));
-                
+
                 List<String> steps = new ArrayList<>();
                 for (int i = 1; i <= 7; i++) {
                     String colName = "加工内容名" + i;
                     if (colMap.containsKey(colName)) {
                         String stepVal = getCellValueAsString(row.getCell(colMap.get(colName)));
-                        if (stepVal != null && !stepVal.trim().isEmpty() && !stepVal.equalsIgnoreCase("None")) {
+                        if (stepVal != null
+                                && !stepVal.trim().isEmpty()
+                                && !stepVal.equalsIgnoreCase("None")) {
                             steps.add(stepVal.trim());
                         }
                     }
                 }
                 String kakoNaiyo = String.join(",", steps);
-                
-                masterProductList.add(new ProductInfo(
-                    shohinCode, seihinCode, shohinName1, shohinName2,
-                    unitName, quantityPerCase, selfKakoKbn, foamName,
-                    foamPartNo, foamWidth, foamLength, foamColor, foamThickness,
-                    kakoNaiyo
-                ));
+
+                result.add(
+                        new ProductInfo(
+                                shohinCode,
+                                seihinCode,
+                                shohinName1,
+                                shohinName2,
+                                unitName,
+                                quantityPerCase,
+                                selfKakoKbn,
+                                foamName,
+                                foamPartNo,
+                                foamWidth,
+                                foamLength,
+                                foamColor,
+                                foamThickness,
+                                kakoNaiyo));
             }
-            System.out.println("Loaded " + masterProductList.size() + " products into lookup cache from Integrated Master.");
+            System.out.println(
+                    "Loaded " + result.size() + " products into lookup cache from Integrated Master.");
         } catch (Exception e) {
             System.err.println("Error loading integrated product master: " + e.getMessage());
             e.printStackTrace();
         }
+        return result;
     }
 
     private void addNewOrderToExcel() {

@@ -180,6 +180,10 @@ final class RequestFormMasterProductCandidateMatcher {
         String pLength = p.getFoamLength() != null ? p.getFoamLength().replaceAll("\\.0$", "") : "";
         String pWidth = p.getFoamWidth() != null ? p.getFoamWidth().replaceAll("\\.0$", "") : "";
         String dims = (pWidth.isEmpty() ? "?" : pWidth) + "×" + (pLength.isEmpty() ? "?" : pLength);
+        String color = p.getFoamColor();
+        if (color == null || color.isBlank()) {
+            color = "?";
+        }
         String kako = p.getKakoNaiyo();
         if (kako == null || kako.isBlank()) {
             kako = "?";
@@ -191,6 +195,8 @@ final class RequestFormMasterProductCandidateMatcher {
                 + p.getFoamName()
                 + " | "
                 + dims
+                + " | "
+                + color
                 + " | "
                 + kako;
     }
