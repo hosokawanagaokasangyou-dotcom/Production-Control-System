@@ -29,6 +29,7 @@
 |------|------|
 | `source-encoding-utf8-except-bas.mdc` | UTF-8（`*.bas` 除く）、CP932 禁止 |
 | `java-utf8-string-literals.mdc` | `*.java` の日本語は `\uXXXX` 禁止（globs） |
+| `code-java-maven-build.mdc` | `code_java` は Maven（`mvnw`）。`gradlew` 無し |
 | `main-shell-tab-management.mdc` | `MainShellTabId` / `MainShellTabLayoutDefaults` / `MainShellInnerTabCatalog` |
 
 ### 配台・計画

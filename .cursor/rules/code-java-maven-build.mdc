@@ -1,0 +1,30 @@
+---
+description: JavaFX デスクトップ（code_java）は Maven のみ。gradlew は存在しない
+globs: "code_java/**"
+alwaysApply: false
+---
+
+# code_java ビルド（Maven）
+
+## 事実
+
+- **ビルドシステムは Maven**（`code_java/pom.xml`）。**Gradle / `gradlew` はリポジトリに無い。**
+- `./gradlew` を実行すると **「そのようなファイルやディレクトリはありません」**（exit 127）になる。これはアプリの不具合ではなく **誤ったコマンド**。
+
+## エージェントが使うコマンド（`code_java` で実行）
+
+| 目的 | WSL / Linux | Windows |
+|------|-------------|---------|
+| 単体テスト | `./mvnw -q test -Dtest=ClassName` | `mvnw.cmd -q test -Dtest=ClassName` |
+| コンパイル | `./mvnw -q compile` | `mvnw.cmd -q compile` |
+| 起動（公式） | （Windows 向けスクリプト参照） | `.\run-pm-ai-desktop.ps1` |
+
+- ラッパーが動かない環境では **`mvn`**（システムの Maven）でもよいが、**まず `./mvnw` / `mvnw.cmd` を優先**する。
+- **`./gradlew` / `gradle` は使わない。**
+
+## 例（WSL）
+
+```bash
+cd code_java
+./mvnw -q test -Dtest=RequestFormMasterProductCandidateMatcherTest
+```

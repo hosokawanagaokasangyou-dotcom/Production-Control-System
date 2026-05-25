@@ -8,10 +8,19 @@ import java.util.Locale;
 /**
  * アラジン統合マスタから依頼書フォーム用の商品候補を、一致度スコア順に列挙する。
  * 品名（フォームの品名＝マスタのフォーム銘 foamName）は正規化後の完全一致のみ。近似一致はしない。
+ * <p>項目ごとの重み（{@link #WEIGHT_SCALE} 倍スケール）: 商品コード 1.5、品番 2、タイプ 3、長さ・品名 1。
  */
 final class RequestFormMasterProductCandidateMatcher {
 
     private static final int MIN_SCORE_TO_LIST = 20;
+
+    /** 重みの小数表現用（1.0 = 10）。 */
+    private static final int WEIGHT_SCALE = 10;
+    private static final int WEIGHT_ITEM = 15;
+    private static final int WEIGHT_PART = 20;
+    private static final int WEIGHT_TYPE = 30;
+    private static final int WEIGHT_LENGTH = 10;
+    private static final int WEIGHT_HINMEI = 10;
 
     private RequestFormMasterProductCandidateMatcher() {}
 
@@ -77,7 +86,7 @@ final class RequestFormMasterProductCandidateMatcher {
                             item, p.getShohinCode(), p.getSeihinCode(), p.getShohinName1(), p.getShohinName2());
             if (s > 0) {
                 matched++;
-                total += s;
+                total += applyFieldWeight(s, WEIGHT_ITEM);
             }
         }
         if (!part.isEmpty()) {
@@ -85,15 +94,20 @@ final class RequestFormMasterProductCandidateMatcher {
             int s = bestFieldScore(part, p.getFoamPartNo(), p.getShohinCode());
             if (s > 0) {
                 matched++;
-                total += s;
+                total += applyFieldWeight(s, WEIGHT_PART);
             }
         }
         if (!type.isEmpty()) {
             active++;
-            int s = bestFieldScore(type, p.getShohinName1(), p.getFoamName());
+            int s =
+                    bestFieldScore(
+                            type,
+                            formatTypeForLabel(p.getShohinName1()),
+                            p.getShohinName1(),
+                            p.getFoamName());
             if (s > 0) {
                 matched++;
-                total += s;
+                total += applyFieldWeight(s, WEIGHT_TYPE);
             }
         }
         if (!length.isEmpty()) {
@@ -102,7 +116,7 @@ final class RequestFormMasterProductCandidateMatcher {
             int s = bestFieldScore(length, pLength);
             if (s > 0) {
                 matched++;
-                total += s;
+                total += applyFieldWeight(s, WEIGHT_LENGTH);
             }
         }
         if (!hinmei.isEmpty()) {
@@ -110,7 +124,7 @@ final class RequestFormMasterProductCandidateMatcher {
             int s = hinmeiFieldScore(hinmei, p);
             if (s > 0) {
                 matched++;
-                total += s;
+                total += applyFieldWeight(s, WEIGHT_HINMEI);
             }
         }
 
@@ -120,6 +134,13 @@ final class RequestFormMasterProductCandidateMatcher {
             total += 10;
         }
         return total;
+    }
+
+    private static int applyFieldWeight(int rawScore, int weightScaled) {
+        if (rawScore <= 0 || weightScaled <= 0) {
+            return 0;
+        }
+        return (rawScore * weightScaled) / WEIGHT_SCALE;
     }
 
     private static int bestFieldScore(String keyword, String... fields) {
@@ -180,10 +201,7 @@ final class RequestFormMasterProductCandidateMatcher {
         String pLength = p.getFoamLength() != null ? p.getFoamLength().replaceAll("\\.0$", "") : "";
         String pWidth = p.getFoamWidth() != null ? p.getFoamWidth().replaceAll("\\.0$", "") : "";
         String dims = (pWidth.isEmpty() ? "?" : pWidth) + "×" + (pLength.isEmpty() ? "?" : pLength);
-        String color = p.getFoamColor();
-        if (color == null || color.isBlank()) {
-            color = "?";
-        }
+        String color = formatFoamColorForLabel(p.getFoamColor());
         String kako = p.getKakoNaiyo();
         if (kako == null || kako.isBlank()) {
             kako = "?";
@@ -194,11 +212,51 @@ final class RequestFormMasterProductCandidateMatcher {
                 + " | "
                 + p.getFoamName()
                 + " | "
+                + formatTypeForLabel(p.getShohinName1())
+                + " | "
                 + dims
                 + " | "
                 + color
                 + " | "
                 + kako;
+    }
+
+    /** 候補表示用タイプ（フォーム転記と同じ {@code shohinName1} の解釈）。 */
+    static String formatTypeForLabel(String shohinName1) {
+        if (shohinName1 == null || shohinName1.isBlank()) {
+            return "?";
+        }
+        String[] nameParts = shohinName1.split("-");
+        if (nameParts.length >= 2 && !nameParts[1].isBlank()) {
+            return nameParts[1].strip();
+        }
+        return shohinName1.strip();
+    }
+
+    /** 候補表示用。空は {@code ?}、数値 0 は {@code -}。 */
+    static String formatFoamColorForLabel(String foamColor) {
+        if (foamColor == null || foamColor.isBlank()) {
+            return "?";
+        }
+        String text = foamColor.strip().replaceAll("\\.0$", "");
+        if (isZeroFoamColor(text)) {
+            return "-";
+        }
+        return foamColor.strip();
+    }
+
+    private static boolean isZeroFoamColor(String text) {
+        if (text.isEmpty()) {
+            return false;
+        }
+        if ("0".equals(text)) {
+            return true;
+        }
+        try {
+            return Double.parseDouble(text) == 0.0d;
+        } catch (NumberFormatException ex) {
+            return false;
+        }
     }
 
     private record ScoredProduct(int score, ProductInfo product) {}

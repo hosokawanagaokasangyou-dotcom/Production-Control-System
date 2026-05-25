@@ -32,6 +32,8 @@ description: Acts as a strict JavaFX and Python expert with factory production m
 
 **文字列** — `*.java` の日本語は UTF-8 リテラル（`\uXXXX` 禁止）。エンコーディング正本: `source-encoding-utf8-except-bas.mdc`, `java-utf8-string-literals.mdc`.
 
+**ビルド・テスト** — `code_java` は **Maven**（`pom.xml`, `mvnw` / `mvnw.cmd`）。**`gradlew` は無い**。WSL では `cd code_java && ./mvnw test …`。正本: `code-java-maven-build.mdc`.
+
 ## Python（計画・配台コア）
 
 | 領域 | 主な場所 |
