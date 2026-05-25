@@ -47,7 +47,7 @@ public class ReconciliationApp {
     private static final String COL_MASTER_BASE_SHOHIN_RAW = "masterBase商品(原反)";
     /** 受注ﾌｧｲﾙ: ヘッダ行（0-based）。 */
     private static final int JUCHU_SHEET_HEADER_ROW_INDEX = 2;
-    /** 受注ﾌｧｲﾙ: 見出し行直下の先頭データ行（0-based。新規行は常にここへ挿入）。 */
+    /** 受注ﾌｧｲﾙ: 見出し行直下の先頭データ行（0-based）。新規行は実データ末尾の次行へ追加。 */
     private static final int JUCHU_SHEET_FIRST_DATA_ROW_INDEX = 3;
     /** 受注ﾌｧｲﾙ: POI lastRowNum が書式だけで膨らんだときの最大走査行数。 */
     private static final int JUCHU_SHEET_MAX_SCAN_ROWS = 20_000;
@@ -79,8 +79,11 @@ public class ReconciliationApp {
     private Consumer<String> juchuFileChangeHandler;
     private TextField txtJuchuPathDisplay;
     private Button btnTransfer;
+    private Button btnUndoLastTransfer;
     private Button btnBulkTransferPending;
     private Label transferBlockedReasonLabel;
+    /** 直前の単票自動転記を受注ファイルで取り消すためのスナップショット（1 件のみ）。 */
+    private JuchuTransferUndoState lastJuchuTransferUndo;
     private String targetFolder = "";
     private String juchuFilePath;
     private boolean isLoadingRecord = false;
@@ -582,6 +585,13 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         btnTransfer.getStyleClass().add("btn-transfer");
         btnTransfer.setOnAction(e -> transferToExcel());
 
+        btnUndoLastTransfer = new Button("直前の自動転記を取り消し");
+        btnUndoLastTransfer.setMaxWidth(Double.MAX_VALUE);
+        btnUndoLastTransfer.setStyle("-fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 8px;");
+        btnUndoLastTransfer.getStyleClass().add("btn-undo-transfer");
+        btnUndoLastTransfer.setDisable(true);
+        btnUndoLastTransfer.setOnAction(e -> undoLastJuchuTransfer());
+
         btnBulkTransferPending = new Button("一時保存分一括転記");
         btnBulkTransferPending.setMaxWidth(Double.MAX_VALUE);
         btnBulkTransferPending.setStyle("-fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 8px;");
@@ -611,10 +621,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
         });
         
-        HBox sideBtns = new HBox(10, btnSaveLocal, btnTransfer, btnBulkTransferPending, btnOpenJuchu);
+        HBox sideBtns =
+                new HBox(10, btnSaveLocal, btnTransfer, btnUndoLastTransfer, btnBulkTransferPending, btnOpenJuchu);
         sideBtns.setAlignment(Pos.CENTER);
         HBox.setHgrow(btnSaveLocal, Priority.ALWAYS);
         HBox.setHgrow(btnTransfer, Priority.ALWAYS);
+        HBox.setHgrow(btnUndoLastTransfer, Priority.ALWAYS);
         HBox.setHgrow(btnBulkTransferPending, Priority.ALWAYS);
         HBox.setHgrow(btnOpenJuchu, Priority.ALWAYS);
 
@@ -1295,6 +1307,56 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             transferBlockedReasonLabel.setManaged(blocked);
             transferBlockedReasonLabel.setVisible(blocked);
         }
+        updateUndoTransferButtonState();
+    }
+
+    private void updateUndoTransferButtonState() {
+        if (btnUndoLastTransfer == null) {
+            return;
+        }
+        boolean hasUndo = lastJuchuTransferUndo != null;
+        boolean blocked = resolveTransferBlockedReason() != null || juchuTransferInProgress;
+        btnUndoLastTransfer.setDisable(!hasUndo || blocked);
+        if (hasUndo && !blocked) {
+            btnUndoLastTransfer.setTooltip(
+                    new Tooltip(
+                            "直前に実行した単票の自動転記（依頼No "
+                                    + lastJuchuTransferUndo.reqNo()
+                                    + "）を受注ファイルで取り消します。"));
+        } else if (!hasUndo) {
+            btnUndoLastTransfer.setTooltip(new Tooltip("取り消せる自動転記はまだありません。"));
+        } else {
+            btnUndoLastTransfer.setTooltip(
+                    new Tooltip(
+                            blocked
+                                    ? resolveTransferBlockedReason()
+                                    : "転記処理中は取り消せません。"));
+        }
+    }
+
+    private void clearLastJuchuTransferUndo() {
+        lastJuchuTransferUndo = null;
+        updateUndoTransferButtonState();
+    }
+
+    private void rememberLastJuchuTransferUndo(
+            JuchuTransferUndoState undo, OrderRecord recordRef) {
+        if (undo == null) {
+            clearLastJuchuTransferUndo();
+            return;
+        }
+        String priorStatus = recordRef != null ? recordRef.getStatus() : null;
+        String priorDiscrepancy = recordRef != null ? recordRef.getDiscrepancy() : null;
+        lastJuchuTransferUndo =
+                new JuchuTransferUndoState(
+                        undo.reqNo(),
+                        undo.juchuFilePath(),
+                        undo.insertedNewRow(),
+                        undo.rowIndex0(),
+                        undo.priorDbValues(),
+                        priorStatus,
+                        priorDiscrepancy);
+        updateUndoTransferButtonState();
     }
 
     private boolean isPendingLocalSave(OrderRecord record) {
@@ -1438,6 +1500,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             return;
         }
 
+        clearLastJuchuTransferUndo();
         beginJuchuTransfer("一時保存分を受注ファイルへ一括転記しています…\n(1/4) 受注ファイルを開いています…");
         statusLabel.setText("一時保存分を受注ファイルへ一括転記中...");
         List<OrderRecord> pendingCopy = new ArrayList<>(pending);
@@ -1599,9 +1662,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
         boolean isNewRow = targetRow == null;
         if (isNewRow) {
-            targetRowIndex = insertNewJuchuDataRowPreservingFormulas(sheet, lastDataRowIndex, null);
-            targetRow = sheet.getRow(JUCHU_SHEET_FIRST_DATA_ROW_INDEX);
-            applyDefaultJuchuFormulasIfMissing(targetRow, colMap, targetRowIndex);
+            int destRowIdx = insertNewJuchuDataRowPreservingFormulas(sheet, lastDataRowIndex, null);
+            targetRow = sheet.getRow(destRowIdx);
+            applyDefaultJuchuFormulasIfMissing(targetRow, colMap, destRowIdx + 1);
         }
 
         setJuchuSheetReqNo(wb, sheet, targetRow, reqNo);
@@ -1944,9 +2007,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     return;
             }
             
-            int targetRowIndex = insertNewJuchuDataRowPreservingFormulas(sheet, lastDataRowIndex, null);
-            Row targetRow = sheet.getRow(JUCHU_SHEET_FIRST_DATA_ROW_INDEX);
-            applyDefaultJuchuFormulasIfMissing(targetRow, colMap, targetRowIndex);
+            int destRowIdx = insertNewJuchuDataRowPreservingFormulas(sheet, lastDataRowIndex, null);
+            Row targetRow = sheet.getRow(destRowIdx);
+            applyDefaultJuchuFormulasIfMissing(targetRow, colMap, destRowIdx + 1);
 
             setJuchuSheetReqNo(wb, sheet, targetRow, reqNo);
 
@@ -2788,13 +2851,17 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 new Thread(
                         () -> {
                             Exception error = null;
+                            JuchuTransferUndoState undoState = null;
                             try {
-                                performSingleJuchuTransfer(file, formData, this::updateLoadingOverlayText);
+                                undoState =
+                                        performSingleJuchuTransfer(
+                                                file, formData, this::updateLoadingOverlayText);
                             } catch (Exception ex) {
                                 error = ex;
                             }
 
                             final Exception finalError = error;
+                            final JuchuTransferUndoState finalUndo = undoState;
                             Platform.runLater(
                                     () -> {
                                         try {
@@ -2810,6 +2877,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
                                             statusLabel.setText("受注ファイルの更新が完了しました。");
                                             showAlert("成功", "受注ファイルにデータが一括転記・保存されました！");
+                                            rememberLastJuchuTransferUndo(finalUndo, recordRef);
 
                                             if (recordRef != null) {
                                                 recordRef.setStatus("一致 (転記完了)");
@@ -2847,6 +2915,16 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     private record JuchuTransferFormData(
             String reqNo, Map<String, String> dbValues, Map<String, String> rawValuesForNewRow) {}
 
+    /** 直前の単票自動転記を Excel 上で戻すための行スナップショット。 */
+    private record JuchuTransferUndoState(
+            String reqNo,
+            String juchuFilePath,
+            boolean insertedNewRow,
+            int rowIndex0,
+            Map<String, String> priorDbValues,
+            String priorRecordStatus,
+            String priorRecordDiscrepancy) {}
+
     private JuchuTransferFormData captureJuchuTransferFormData(String reqNo) {
         Map<String, String> rawValues =
                 selectedRecord != null
@@ -2869,7 +2947,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
     }
 
-    private void performSingleJuchuTransfer(
+    private JuchuTransferUndoState performSingleJuchuTransfer(
             File file, JuchuTransferFormData form, Consumer<String> progress) throws Exception {
         progress.accept(
                 "受注ファイルへ転記しています…\n(1/5) 受注ファイルを開いています…\n依頼No: " + form.reqNo());
@@ -2895,20 +2973,30 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
 
             boolean isNewRow = targetRow == null;
+            JuchuTransferUndoState undoState =
+                    captureJuchuTransferUndoState(
+                            file,
+                            form.reqNo(),
+                            targetRow,
+                            matchedRowIndex,
+                            isNewRow,
+                            lastDataRowIndex);
 
             if (isNewRow) {
                 progress.accept(
-                        "受注ファイルへ転記しています…\n(2/5) 見出し直下(先頭)に新規行を挿入しています…\n依頼No: "
+                        "受注ファイルへ転記しています…\n(2/5) 最終行の次に新規行を追加しています…\n依頼No: "
                                 + form.reqNo());
-                targetRowIndex = insertNewJuchuDataRowPreservingFormulas(sheet, lastDataRowIndex, progress);
-                targetRow = sheet.getRow(JUCHU_SHEET_FIRST_DATA_ROW_INDEX);
+                int destRowIdx =
+                        insertNewJuchuDataRowPreservingFormulas(sheet, lastDataRowIndex, progress);
+                targetRow = sheet.getRow(destRowIdx);
+                targetRowIndex = destRowIdx + 1;
                 applyDefaultJuchuFormulasIfMissing(targetRow, colMap, targetRowIndex);
             }
 
             progress.accept(
                     "受注ファイルへ転記しています…\n(3/5) セルへ転記しています…\n依頼No: "
                             + form.reqNo()
-                            + (isNewRow ? "（新規行・先頭）" : "（既存行）"));
+                            + (isNewRow ? "（新規行・末尾追加）" : "（既存行）"));
 
             setJuchuSheetReqNo(wb, sheet, targetRow, form.reqNo());
 
@@ -2944,6 +3032,192 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                             + form.reqNo());
             try (FileOutputStream fos = new FileOutputStream(file)) {
                 wb.write(fos);
+            }
+            return undoState;
+        }
+    }
+
+    private static JuchuTransferUndoState captureJuchuTransferUndoState(
+            File file,
+            String reqNo,
+            Row targetRow,
+            int matchedRowIndex,
+            boolean willInsertNewRow,
+            int lastDataRowIndex0) {
+        String path = file.getAbsolutePath();
+        if (willInsertNewRow) {
+            int destRowIdx =
+                    lastDataRowIndex0 >= JUCHU_SHEET_FIRST_DATA_ROW_INDEX
+                            ? lastDataRowIndex0 + 1
+                            : JUCHU_SHEET_FIRST_DATA_ROW_INDEX;
+            return new JuchuTransferUndoState(
+                    reqNo, path, true, destRowIdx, Map.of(), null, null);
+        }
+        Map<String, String> prior =
+                targetRow != null
+                        ? new LinkedHashMap<>(JuchuSheetColumnLayout.readDbValuesFromRow(targetRow))
+                        : Map.of();
+        return new JuchuTransferUndoState(
+                prior.getOrDefault("依頼No", prior.getOrDefault("依頼Ｎｏ", "")),
+                path,
+                false,
+                matchedRowIndex,
+                prior,
+                null,
+                null);
+    }
+
+    private void undoLastJuchuTransfer() {
+        if (juchuTransferInProgress || lastJuchuTransferUndo == null) {
+            return;
+        }
+        if (resolveTransferBlockedReason() != null) {
+            showAlert("エラー", resolveTransferBlockedReason());
+            updateTransferButtonState();
+            return;
+        }
+        JuchuTransferUndoState undo = lastJuchuTransferUndo;
+        File file = new File(juchuFilePath);
+        if (!file.isFile()) {
+            showAlert("エラー", "受注ファイルが見つかりません。");
+            return;
+        }
+        if (!file.getAbsolutePath().equals(undo.juchuFilePath())) {
+            showAlert(
+                    "エラー",
+                    "受注ファイルが転記時と異なります。転記時: "
+                            + undo.juchuFilePath()
+                            + "\n現在: "
+                            + file.getAbsolutePath());
+            return;
+        }
+
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("自動転記の取り消し");
+        confirm.setHeaderText("直前の自動転記を取り消しますか？");
+        confirm.setContentText(
+                "依頼No: "
+                        + undo.reqNo()
+                        + (undo.insertedNewRow()
+                                ? "\n受注ファイルで新規挿入した行を削除します。"
+                                : "\n受注ファイルの該当行を転記前の内容に戻します。"));
+        if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
+            return;
+        }
+
+        OrderRecord recordRef = selectedRecord;
+        beginJuchuTransfer(
+                "直前の自動転記を取り消しています…\n依頼No: " + undo.reqNo());
+        statusLabel.setText("直前の自動転記を取り消し中...");
+
+        Thread undoThread =
+                new Thread(
+                        () -> {
+                            Exception error = null;
+                            try {
+                                performJuchuTransferUndo(file, undo, this::updateLoadingOverlayText);
+                            } catch (Exception ex) {
+                                error = ex;
+                            }
+                            final Exception finalError = error;
+                            Platform.runLater(
+                                    () -> {
+                                        try {
+                                            if (finalError != null) {
+                                                statusLabel.setText(
+                                                        "取り消しエラー: " + finalError.getMessage());
+                                                showAlert(
+                                                        "エラー",
+                                                        "自動転記の取り消しに失敗しました:\n"
+                                                                + finalError.getMessage());
+                                                finalError.printStackTrace();
+                                                return;
+                                            }
+                                            clearLastJuchuTransferUndo();
+                                            statusLabel.setText("直前の自動転記を取り消しました。");
+                                            showAlert("完了", "直前の自動転記を取り消しました。");
+                                            if (recordRef != null
+                                                    && undo.reqNo() != null
+                                                    && !undo.reqNo().isBlank()
+                                                    && normalize_key(recordRef.getReqNo())
+                                                            .equals(normalize_key(undo.reqNo()))) {
+                                                if (undo.priorRecordStatus() != null) {
+                                                    recordRef.setStatus(undo.priorRecordStatus());
+                                                }
+                                                if (undo.priorRecordDiscrepancy() != null) {
+                                                    recordRef.setDiscrepancy(
+                                                            undo.priorRecordDiscrepancy());
+                                                    discrepancyLabel.setText(
+                                                            undo.priorRecordDiscrepancy());
+                                                }
+                                                refreshComboRecordItems();
+                                                comboRecord.getSelectionModel().select(recordRef);
+                                            }
+                                            requestReloadData(
+                                                    "取り消し後、一覧を再読込します。", null);
+                                        } finally {
+                                            endJuchuTransfer();
+                                        }
+                                    });
+                        },
+                        "request-form-juchu-undo");
+        undoThread.setDaemon(true);
+        undoThread.start();
+    }
+
+    private void performJuchuTransferUndo(
+            File file, JuchuTransferUndoState undo, Consumer<String> progress) throws Exception {
+        progress.accept("自動転記の取り消し…\n(1/3) 受注ファイルを開いています…");
+        try (FileInputStream fis = new FileInputStream(file);
+                Workbook wb = WorkbookFactory.create(fis)) {
+            Sheet sheet = wb.getSheet("受注ﾌｧｲﾙ");
+            if (sheet == null) {
+                throw new IllegalStateException("受注ﾌｧｲﾙ シートが見つかりません。");
+            }
+            if (undo.insertedNewRow()) {
+                progress.accept("自動転記の取り消し…\n(2/3) 新規挿入行を削除しています…");
+                removeJuchuDataRowAt(sheet, undo.rowIndex0());
+            } else {
+                progress.accept("自動転記の取り消し…\n(2/3) 転記前の内容へ戻しています…");
+                Row row = sheet.getRow(undo.rowIndex0());
+                if (row == null) {
+                    throw new IllegalStateException(
+                            "取り消し対象行が見つかりません（行 "
+                                    + (undo.rowIndex0() + 1)
+                                    + "）。");
+                }
+                Map<String, String> prior = undo.priorDbValues();
+                setJuchuSheetReqNo(wb, sheet, row, undo.reqNo());
+                writeJuchuRowFromValues(
+                        row,
+                        prior,
+                        false,
+                        prior.getOrDefault("入力区分", ""),
+                        prior.getOrDefault("加工区分", ""),
+                        prior.getOrDefault("入力担当", ""),
+                        prior.getOrDefault("特記事項1", ""),
+                        prior.getOrDefault("特記事項2", ""),
+                        prior.getOrDefault("特記事項3", ""),
+                        false);
+            }
+            progress.accept("自動転記の取り消し…\n(3/3) ファイルを保存しています…");
+            try (FileOutputStream fos = new FileOutputStream(file)) {
+                wb.write(fos);
+            }
+        }
+    }
+
+    private void removeJuchuDataRowAt(Sheet sheet, int rowIndex0) {
+        int last = findJuchuSheetLastPopulatedDataRowIndex(sheet);
+        if (rowIndex0 < JUCHU_SHEET_FIRST_DATA_ROW_INDEX || rowIndex0 > last) {
+            return;
+        }
+        if (rowIndex0 < last) {
+            sheet.shiftRows(rowIndex0 + 1, last, -1, true, true);
+        } else {
+            Row row = sheet.getRow(rowIndex0);
+            if (row != null) {
+                sheet.removeRow(row);
             }
         }
     }
@@ -2981,31 +3255,22 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     /**
-     * 受注ﾌｧｲﾙの見出し行直下（先頭データ行）へ行を挿入し、テンプレート行から数式・書式を複製する（値は複製しない）。
+     * 受注ﾌｧｲﾙの実データ末尾の次行へ新規行を追加する（全行シフトなし）。データが無いときのみ先頭データ行を使う。
      *
      * @param lastPopulatedDataRowIndex {@link #findJuchuSheetLastPopulatedDataRowIndex} の結果（実データ末尾）
      * @param progress 進捗表示（{@code null} 可）
-     * @return Excel 上の 1 始まり行番号（数式の行参照用）
+     * @return 挿入した行の 0-based index
      */
     private int insertNewJuchuDataRowPreservingFormulas(
             Sheet sheet, int lastPopulatedDataRowIndex, Consumer<String> progress) {
-        final int destRowIdx = JUCHU_SHEET_FIRST_DATA_ROW_INDEX;
-        int templateRowIdx;
-        if (lastPopulatedDataRowIndex >= destRowIdx) {
-            int shiftCount = lastPopulatedDataRowIndex - destRowIdx + 1;
-            if (progress != null) {
-                progress.accept(
-                        String.format(
-                                "受注ファイルへ転記しています…\n(2/5) 見出し直下へ挿入のため既存 %d 行を下へずらしています…\n（行数が多いと 1～2 分かかることがあります）",
-                                shiftCount));
-            }
-            sheet.shiftRows(destRowIdx, lastPopulatedDataRowIndex, 1, true, true);
-            templateRowIdx = destRowIdx + 1;
+        final int firstDataRow = JUCHU_SHEET_FIRST_DATA_ROW_INDEX;
+        final int destRowIdx;
+        final int templateRowIdx;
+        if (lastPopulatedDataRowIndex >= firstDataRow) {
+            destRowIdx = lastPopulatedDataRowIndex + 1;
+            templateRowIdx = lastPopulatedDataRowIndex;
         } else {
-            if (progress != null) {
-                progress.accept(
-                        "受注ファイルへ転記しています…\n(2/5) 見出し直下(先頭)に新規行を確保しています…");
-            }
+            destRowIdx = firstDataRow;
             templateRowIdx = resolveJuchuFormulaTemplateRowIndex(sheet, destRowIdx);
         }
         if (progress != null) {
@@ -3016,7 +3281,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             sheet.createRow(destRowIdx);
         }
         copyJuchuTemplateRowFormulasAndStyles(sheet, templateRowIdx, destRowIdx);
-        return destRowIdx + 1;
+        return destRowIdx;
     }
 
     /** データ行が無いとき、数式セルが最も多い行をテンプレートとして選ぶ（挿入先自身は除外）。 */
