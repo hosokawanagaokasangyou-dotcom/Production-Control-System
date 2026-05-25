@@ -220,6 +220,9 @@ public final class MainShellController {
                     AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
                     AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH,
                     AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
+                    AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR,
+                    AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR,
+                    AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE,
                     AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR,
                     AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON,
                     AppPaths.KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH,
@@ -279,6 +282,9 @@ public final class MainShellController {
     private PlanInputTabController planInputTabController;
 
     @FXML
+    private RequestFormInputTabController requestFormInputTabController;
+
+    @FXML
     private Stage1PreviewTabController stage1PreviewTabController;
 
     @FXML
@@ -313,6 +319,9 @@ public final class MainShellController {
 
     @FXML
     private UiBadgeDesignTabController uiBadgeDesignTabController;
+
+    @FXML
+    private RequestFormPreviewBadgeDesignTabController requestFormPreviewBadgeDesignTabController;
 
     @FXML
     private PushButtonDesignTabController pushButtonDesignTabController;
@@ -374,6 +383,9 @@ public final class MainShellController {
     private Tab mainShellTabPlanInput;
 
     @FXML
+    private Tab mainShellTabRequestFormInput;
+
+    @FXML
     private Tab mainShellTabStage1Preview;
 
     @FXML
@@ -402,6 +414,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabGanttPersonBadgeDesign;
+
+    @FXML
+    private Tab mainShellTabRequestFormPreviewBadgeDesign;
 
     @FXML
     private Tab mainShellTabOperatorCard;
@@ -465,6 +480,9 @@ public final class MainShellController {
 
     /** 納期管理ビュー再読み込み中のタブ差し戻しで {@link TabPane} の選択リスナーを再入しない。 */
     private final AtomicBoolean suppressDeliveryCalendarReloadTabGuard = new AtomicBoolean(false);
+
+    /** 納期管理ビュー再読み込み中は段階1～段階3.5 の実行ボタンを無効化する。 */
+    private final AtomicBoolean deliveryCalendarReloadBlockingStageRuns = new AtomicBoolean(false);
 
     /**
      * メインタブの組み替え中に {@link #refreshMainShellTabHeaderChromeFromStoredColors()} を抑止する。
@@ -566,6 +584,9 @@ public final class MainShellController {
             if (uiBadgeDesignTabController != null) {
                 uiBadgeDesignTabController.bindShell(this);
             }
+            if (requestFormPreviewBadgeDesignTabController != null) {
+                requestFormPreviewBadgeDesignTabController.bindShell(this);
+            }
             if (pushButtonDesignTabController != null) {
                 pushButtonDesignTabController.bindShell(this);
             }
@@ -591,6 +612,9 @@ public final class MainShellController {
                 .setPromptText("code/python (未設定時は環境変数 PM_AI_CODE_PYTHON_DIR)");
 
         planInputTabController.bindShell(this);
+        if (requestFormInputTabController != null) {
+            requestFormInputTabController.bindShell(this);
+        }
         stage1PreviewTabController.bindShell(this);
         if (codeDispatchLookupTablesTabController != null) {
             codeDispatchLookupTablesTabController.bindShell(this);
@@ -722,6 +746,10 @@ public final class MainShellController {
                             if (newTab == mainShellTabEquipmentStatusDashboard
                                     && equipmentStatusDashboardTabController != null) {
                                 equipmentStatusDashboardTabController.onMainShellTabSelected();
+                            }
+                            if (newTab == mainShellTabRequestFormInput
+                                    && requestFormInputTabController != null) {
+                                requestFormInputTabController.onMainShellTabSelected();
                             }
                             if (prevTab == mainShellTabEquipmentStatusDashboard
                                     && equipmentStatusDashboardTabController != null) {
@@ -911,6 +939,9 @@ public final class MainShellController {
         if (uiBadgeDesignTabController != null) {
             uiBadgeDesignTabController.applyUiBadgeSession(s);
         }
+        if (requestFormPreviewBadgeDesignTabController != null) {
+            requestFormPreviewBadgeDesignTabController.applyRequestFormPreviewBadgeSession(s);
+        }
         if (pushButtonDesignTabController != null) {
             pushButtonDesignTabController.applyPushButtonSession(s);
         }
@@ -966,6 +997,9 @@ public final class MainShellController {
         }
         if (uiBadgeDesignTabController != null) {
             uiBadgeDesignTabController.flushEditsBeforeSnapshot();
+        }
+        if (requestFormPreviewBadgeDesignTabController != null) {
+            requestFormPreviewBadgeDesignTabController.flushEditsBeforeSnapshot();
         }
         if (pushButtonDesignTabController != null) {
             pushButtonDesignTabController.flushEditsBeforeSnapshot();
@@ -1045,6 +1079,12 @@ public final class MainShellController {
                 uiBadgeDesignTabController != null
                         ? uiBadgeDesignTabController.snapshotStage1NetworkCacheBadgeStyle()
                         : PersonBadgeStyle.networkSourceCacheBadgeDefault(),
+                requestFormPreviewBadgeDesignTabController != null
+                        ? requestFormPreviewBadgeDesignTabController.snapshotPreviewBadgeLabel()
+                        : "更新",
+                requestFormPreviewBadgeDesignTabController != null
+                        ? requestFormPreviewBadgeDesignTabController.snapshotPreviewBadgeStyle()
+                        : PersonBadgeStyle.requestFormPreviewUpdateBadgeDefault(),
                 mainShellTabOrganizerHeaderGlowEnabled.get(),
                 getMainShellTabOrganizerHeaderGlowStrength(),
                 pushButtonDesignTabController != null
@@ -1080,6 +1120,21 @@ public final class MainShellController {
         return ganttPersonBadgeDesignTabController != null
                 ? ganttPersonBadgeDesignTabController.previewStyleForGantt()
                 : PersonBadgeStyle.defaultStyle();
+    }
+
+    /** 依頼書プレビュー・原本更新バッジの表示設定。 */
+    public jp.co.pm.ai.desktop.reconciliation.RequestFormPreviewBadgeConfig requestFormPreviewBadgeConfig() {
+        if (requestFormPreviewBadgeDesignTabController != null) {
+            return requestFormPreviewBadgeDesignTabController.snapshotPreviewBadgeConfig();
+        }
+        return jp.co.pm.ai.desktop.reconciliation.RequestFormPreviewBadgeConfig.defaults();
+    }
+
+    /** 依頼書入力タブのプレビュー上部バッジ見た目を再描画する。 */
+    public void refreshRequestFormPreviewBadgeAppearance() {
+        if (requestFormInputTabController != null) {
+            requestFormInputTabController.refreshPreviewBadgeAppearance();
+        }
     }
 
     /** バッジ表示文字列ごとの見た目（担当者別設定を反映）。 */
@@ -1364,6 +1419,9 @@ public final class MainShellController {
         if (uiBadgeDesignTabController != null) {
             uiBadgeDesignTabController.flushEditsBeforeSnapshot();
         }
+        if (requestFormPreviewBadgeDesignTabController != null) {
+            requestFormPreviewBadgeDesignTabController.flushEditsBeforeSnapshot();
+        }
         if (pushButtonDesignTabController != null) {
             pushButtonDesignTabController.flushEditsBeforeSnapshot();
         }
@@ -1527,6 +1585,9 @@ public final class MainShellController {
         if (t == mainShellTabPlanInput) {
             return MainShellTabId.PLAN_INPUT;
         }
+        if (t == mainShellTabRequestFormInput) {
+            return MainShellTabId.REQUEST_FORM_INPUT;
+        }
         if (t == mainShellTabStage1Preview) {
             return MainShellTabId.STAGE1_PREVIEW;
         }
@@ -1569,6 +1630,9 @@ public final class MainShellController {
         if (t == mainShellTabGanttPersonBadgeDesign) {
             return MainShellTabId.GANTT_PERSON_BADGE_DESIGN;
         }
+        if (t == mainShellTabRequestFormPreviewBadgeDesign) {
+            return MainShellTabId.REQUEST_FORM_PREVIEW_BADGE_DESIGN;
+        }
         if (t == mainShellTabOperatorCard) {
             return MainShellTabId.OPERATOR_CARD;
         }
@@ -1595,6 +1659,7 @@ public final class MainShellController {
             case USER_PROFILES -> mainShellTabUserProfiles;
             case MASTER_SUMMARY -> mainShellTabMasterSummary;
             case PLAN_INPUT -> mainShellTabPlanInput;
+            case REQUEST_FORM_INPUT -> mainShellTabRequestFormInput;
             case STAGE1_PREVIEW -> mainShellTabStage1Preview;
             case CODE_LOOKUP_TABLES -> mainShellTabCodeLookupTables;
             case EXCLUDE_RULES -> mainShellTabExcludeRules;
@@ -1609,6 +1674,7 @@ public final class MainShellController {
             case PLAN_RESULT_VIEWER -> mainShellTabPlanResultViewer;
             case EQUIPMENT_GANTT_GRAPHIC -> mainShellTabEquipmentGanttGraphic;
             case GANTT_PERSON_BADGE_DESIGN -> mainShellTabGanttPersonBadgeDesign;
+            case REQUEST_FORM_PREVIEW_BADGE_DESIGN -> mainShellTabRequestFormPreviewBadgeDesign;
             case OPERATOR_CARD -> mainShellTabOperatorCard;
             case TAB_ORGANIZER -> mainShellTabOrganizer;
         };
@@ -3425,6 +3491,11 @@ public final class MainShellController {
     }
 
     private void runStage(String script) {
+        if (isDeliveryCalendarReloadBlockingStageRuns()) {
+            String stageJa = STAGE1.equals(script) ? "段階1" : "段階2";
+            appendLog("[busy] 納期管理ビュー再読み込み中のため " + stageJa + " を開始できません。");
+            return;
+        }
         if (STAGE2.equals(script) && blockIfSummaryAiDispatchExportLocked("段階2")) {
             return;
         }
@@ -3500,6 +3571,7 @@ public final class MainShellController {
                         if (workspaceCacheHistoryTabController != null) {
                             workspaceCacheHistoryTabController.refreshListQuietly();
                         }
+                        clearPlanInputTableForStage1CacheClear();
                     } catch (IOException archiveEx) {
                         appendLog(
                                 "[stage1] キャッシュ退避に失敗したためクリアを中止しました: "
@@ -3726,12 +3798,12 @@ public final class MainShellController {
                                         () -> {
                                             MacroCompleteChime.playIfAvailable(collectUiEnv());
                                             selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
-                                            showStageCompletionDialog(
-                                                    "段階2 完了", "段階2 の処理が正常終了しました。");
                                             if (deliveryCalendarViewTabController != null) {
                                                 deliveryCalendarViewTabController
                                                         .reloadInBackgroundAfterStage2Success();
                                             }
+                                            showStageCompletionDialog(
+                                                    "段階2 完了", "段階2 の処理が正常終了しました。");
                                         };
                                 if (dispatchInteractiveTabController != null) {
                                     dispatchInteractiveTabController.reloadTableFromDiskAfterStage2Success(
@@ -3951,6 +4023,10 @@ public final class MainShellController {
         }
     }
 
+    /**
+     * 段階1～3.5 正常終了の通知。OK 待ちで後続処理を止めないため {@link Alert#show()} を使う。
+     * 納期管理ビュー再読込・サマリ Excel 等は呼び出し側が本ダイアログより先に開始すること。
+     */
     private void showStageCompletionDialog(String title, String contentText) {
         Alert alert = new Alert(AlertType.INFORMATION);
         alert.initOwner(primaryStage);
@@ -3958,7 +4034,7 @@ public final class MainShellController {
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(contentText);
-        alert.showAndWait();
+        alert.show();
     }
 
     /** 配台試行（段階3）正常終了後: 完了音・配台タブへ切替・完了ダイアログ（段階2と同趣旨）。 */
@@ -4476,6 +4552,12 @@ public final class MainShellController {
                 r.setValue(pmAiMaster != null ? pmAiMaster : "");
             } else if (AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK.equals(name)) {
                 r.setValue(pmAiSummary != null ? pmAiSummary : "");
+            } else if (AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR.equals(name)) {
+                r.setValue(site.aladdinMasterDir());
+            } else if (AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR.equals(name)) {
+                r.setValue(site.requestFormOriginalDir());
+            } else if (AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE.equals(name)) {
+                r.setValue(site.requestFormJuchuFile());
             }
         }
         GlobalInitSettingTarget.save(site);
@@ -4533,6 +4615,28 @@ public final class MainShellController {
                 t.setDisable(greyOut);
             }
         }
+    }
+
+    /**
+     * 納期管理ビューのデータ再読み込み中は段階1～段階3.5 の実行ボタンを無効化する。
+     *
+     * @param blocking {@code true} で無効化、{@code false} で通常の可否判定へ戻す
+     */
+    void setDeliveryCalendarReloadBlockingStageRuns(boolean blocking) {
+        deliveryCalendarReloadBlockingStageRuns.set(blocking);
+        if (mainRunTabController != null) {
+            mainRunTabController.setDeliveryCalendarReloadBlocking(blocking);
+        }
+        if (planInputTabController != null) {
+            planInputTabController.setDeliveryCalendarReloadBlocking(blocking);
+        }
+        if (dispatchInteractiveTabController != null) {
+            dispatchInteractiveTabController.setDeliveryCalendarReloadBlocking(blocking);
+        }
+    }
+
+    boolean isDeliveryCalendarReloadBlockingStageRuns() {
+        return deliveryCalendarReloadBlockingStageRuns.get();
     }
 
     /**
@@ -4786,6 +4890,13 @@ public final class MainShellController {
 
     void acceptReloadAfterStage1PlanInput(Runnable r) {
         this.reloadAfterStage1PlanInput = r;
+    }
+
+    /** 段階1キャッシュクリア時: 配台計画_タスク入力タブの表を空にする。 */
+    void clearPlanInputTableForStage1CacheClear() {
+        if (planInputTabController != null) {
+            planInputTabController.clearTableForStage1CacheClear();
+        }
     }
 
     void acceptReloadAfterStage1Preview(Runnable r) {
@@ -5095,6 +5206,11 @@ public final class MainShellController {
         } catch (Exception ex) {
             appendLog("[env] " + envKey + " 更新に失敗: " + ex.getMessage());
         }
+    }
+
+    /** 環境変数タブの行を更新する（session-state 保存は行リスナーで debounce される）。 */
+    void updateEnvTabValue(String envKey, String value) {
+        syncEnvTabValue(envKey, value);
     }
 
     /**
@@ -6229,6 +6345,15 @@ public final class MainShellController {
             }
             case AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR -> {
                 return AppPaths.DEFAULT_PM_AI_ACTUAL_DETAIL_SOURCE_DIR;
+            }
+            case AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR -> {
+                return AppPaths.resolveAladdinMasterDir(u).toString();
+            }
+            case AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE -> {
+                return AppPaths.defaultRequestFormJuchuFileForFactory(GlobalInitSettingTarget.load());
+            }
+            case AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR -> {
+                return AppPaths.defaultRequestFormOriginalDirForFactory(GlobalInitSettingTarget.load());
             }
             case AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR -> {
                 return AppPaths.resolveResultDispatchTableDir(u).toString();

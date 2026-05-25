@@ -28,3 +28,7 @@ alwaysApply: false
 ## 目的
 
 - デスクトップの **環境変数タブ＋session-state.json** を中心に、リポジトリ上の JSON/TSV は **既定値・説明・レビュー用**として整合させる。
+
+## 読み取り専用パス
+
+- **`PM_AI_REQUEST_FORM_ORIGINAL_DIR`** が指す依頼書原本フォルダ（未設定時は工場既定）は **読み取り専用**。詳細は `.cursor/rules/request-form-original-dir-readonly.mdc`。

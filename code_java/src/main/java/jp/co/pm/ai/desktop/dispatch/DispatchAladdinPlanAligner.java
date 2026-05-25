@@ -26,6 +26,60 @@ public final class DispatchAladdinPlanAligner {
      * 1 タスク行の日別数量を、アラジン計画の優先度に従いロール単位で再配分する。合計 m は維持する（ロール整数倍の範囲内）。
      */
     public static RowResult alignRow(RowInput input) {
+        return alignRowFromDayIndex(input, 0);
+    }
+
+    /**
+     * {@link #alignRow} と同様だが、{@code alignFromDayIndex} より前の暦日は {@code current} を変更しない。
+     * 翌日以降のみアラジン計画に沿って再配分する用途（手動修正タブのボタン操作日基準）。
+     *
+     * @param alignFromDayIndex 再配分を開始する日付軸 index（この index 以降のみ対象）。0 で全日。
+     */
+    public static RowResult alignRowFromDayIndex(RowInput input, int alignFromDayIndex) {
+        if (input == null
+                || input.currentByDayIndex() == null
+                || input.aladdinByDayIndex() == null) {
+            return unchanged(null);
+        }
+        int n = input.currentByDayIndex().length;
+        if (n == 0 || n != input.aladdinByDayIndex().length) {
+            return unchanged(input.currentByDayIndex());
+        }
+        if (alignFromDayIndex <= 0) {
+            return alignRowFull(input);
+        }
+        if (alignFromDayIndex >= n) {
+            return unchanged(input.currentByDayIndex());
+        }
+
+        double[] current = input.currentByDayIndex();
+        int futureLen = n - alignFromDayIndex;
+        double[] currentFuture = new double[futureLen];
+        double[] aladdinFuture = new double[futureLen];
+        System.arraycopy(current, alignFromDayIndex, currentFuture, 0, futureLen);
+        System.arraycopy(input.aladdinByDayIndex(), alignFromDayIndex, aladdinFuture, 0, futureLen);
+
+        RowResult futureAligned =
+                alignRowFull(
+                        new RowInput(
+                                currentFuture,
+                                aladdinFuture,
+                                input.unitM(),
+                                input.usesConvertedQtyForAladdin()));
+        if (!futureAligned.changed()) {
+            return unchanged(current);
+        }
+
+        double[] merged = current.clone();
+        System.arraycopy(
+                futureAligned.newByDayIndex(), 0, merged, alignFromDayIndex, futureLen);
+        if (arraysNearEqual(current, merged)) {
+            return new RowResult(current.clone(), false, 0);
+        }
+        return new RowResult(merged, true, futureAligned.rollMoves());
+    }
+
+    private static RowResult alignRowFull(RowInput input) {
         if (input == null
                 || input.currentByDayIndex() == null
                 || input.aladdinByDayIndex() == null) {

@@ -65,6 +65,95 @@ class AppPathsTest {
     }
 
     @Test
+    void requestFormJuchuFile_usesFilePickerNotFolder() {
+        assertTrue(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE));
+        assertTrue(AppPaths.isExcelWorkbookPathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE));
+        assertFalse(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE));
+    }
+
+    @Test
+    void requestFormOriginalDir_usesFolderPickerNotFile() {
+        assertTrue(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR));
+        assertFalse(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR));
+    }
+
+    @Test
+    void resolveRequestFormOriginalDir_usesEnvOverrideOrFactoryDefault(@TempDir Path tmp) throws Exception {
+        Path custom = tmp.resolve("original-forms");
+        Files.createDirectories(custom);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, custom.toString());
+        assertEquals(
+                custom.toAbsolutePath().normalize(),
+                AppPaths.resolveRequestFormOriginalDir(ui));
+
+        GlobalInitSettingTarget.save(FactorySite.KONAN);
+        assertEquals(
+                Path.of(AppPaths.defaultRequestFormOriginalDirForFactory(FactorySite.KONAN))
+                        .toAbsolutePath()
+                        .normalize(),
+                AppPaths.resolveRequestFormOriginalDir(Map.of()));
+
+        GlobalInitSettingTarget.save(FactorySite.KOKUBU);
+        assertEquals(
+                Path.of(AppPaths.defaultRequestFormOriginalDirForFactory(FactorySite.KOKUBU))
+                        .toAbsolutePath()
+                        .normalize(),
+                AppPaths.resolveRequestFormOriginalDir(Map.of()));
+    }
+
+    @Test
+    void resolveRequestFormJuchuFile_usesEnvOverrideOrFactoryDefault(@TempDir Path tmp) throws Exception {
+        Path book = tmp.resolve("加工依頼書入力.xlsm");
+        Files.createFile(book);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE, book.toString());
+        assertEquals(book.toAbsolutePath().normalize(), AppPaths.resolveRequestFormJuchuFile(ui).get());
+
+        GlobalInitSettingTarget.save(FactorySite.KONAN);
+        assertEquals(
+                AppPaths.DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KONAN,
+                AppPaths.resolveRequestFormJuchuFile(Map.of()).get().toString());
+
+        GlobalInitSettingTarget.save(FactorySite.KOKUBU);
+        assertEquals(
+                AppPaths.DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KOKUBU,
+                AppPaths.resolveRequestFormJuchuFile(Map.of()).get().toString());
+    }
+
+    @Test
+    void resolveAladdinMasterDir_usesEnvOverrideOrFactoryDefault(@TempDir Path fakeRepo) {
+        Path custom = fakeRepo.resolve("custom-aladdin");
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        fakeRepo.toString(),
+                        AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR,
+                        custom.toString());
+        assertEquals(custom.toAbsolutePath().normalize(), AppPaths.resolveAladdinMasterDir(ui));
+
+        GlobalInitSettingTarget.save(FactorySite.KONAN);
+        assertEquals(
+                AppPaths.DEFAULT_PM_AI_ALADDIN_MASTER_DIR_KONAN,
+                AppPaths.resolveAladdinMasterDir(Map.of()).toString());
+
+        GlobalInitSettingTarget.save(FactorySite.KOKUBU);
+        assertEquals(
+                AppPaths.DEFAULT_PM_AI_ALADDIN_MASTER_DIR_KOKUBU,
+                AppPaths.resolveAladdinMasterDir(Map.of()).toString());
+    }
+
+    @Test
+    void defaultAladdinMasterDir_pathsMatchFactorySharedData() {
+        assertEquals(
+                AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR + "\\" + AppPaths.ALADDIN_MASTER_DIR_LEAF_NAME,
+                AppPaths.DEFAULT_PM_AI_ALADDIN_MASTER_DIR_KONAN);
+        assertEquals(
+                AppPaths.DEFAULT_KOKUBU_DATA_DIR + "\\" + AppPaths.ALADDIN_MASTER_DIR_LEAF_NAME,
+                AppPaths.DEFAULT_PM_AI_ALADDIN_MASTER_DIR_KOKUBU);
+    }
+
+    @Test
     void tabularMasterTablePaths_useFilePickerNotFolder() {
         assertTrue(AppPaths.isTabularDataTablePathEnvKey("RAW_FABRIC_WIDTH_TABLE_PATH"));
         assertTrue(AppPaths.isFilePathEnvKey("PRODUCT_THICKNESS_TABLE_PATH"));

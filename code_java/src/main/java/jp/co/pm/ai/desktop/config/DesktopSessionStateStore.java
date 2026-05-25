@@ -196,6 +196,7 @@ public final class DesktopSessionStateStore {
         putStringIntMap(root, "innerTabSelectedIndexByShellTabKey", state.innerTabSelectedIndexByShellTabKey());
         putEquipmentGanttGraphicPrefs(root, state);
         putStage1NetworkCacheBadgePrefs(root, state);
+        putRequestFormPreviewUpdateBadgePrefs(root, state);
         root.put("mainShellTabOrganizerHeaderGlow", state.mainShellTabOrganizerHeaderGlow());
         root.put(
                 "mainShellTabOrganizerHeaderGlowStrength",
@@ -380,6 +381,8 @@ public final class DesktopSessionStateStore {
                 text(root, "equipmentGanttPlanJsonPath"),
                 text(root, "stage1NetworkCacheBadgeLabel"),
                 loadStage1NetworkCacheBadgeStyle(root),
+                text(root, "requestFormPreviewUpdateBadgeLabel"),
+                loadRequestFormPreviewUpdateBadgeStyle(root),
                 optionalBoolean(root, "mainShellTabOrganizerHeaderGlow", true),
                 clamp01(optionalDouble(root, "mainShellTabOrganizerHeaderGlowStrength", 1d)),
                 loadPushButtonDesignPrefs(root),
@@ -1026,6 +1029,15 @@ public final class DesktopSessionStateStore {
         return st != null ? st : PersonBadgeStyle.networkSourceCacheBadgeDefault();
     }
 
+    private static PersonBadgeStyle loadRequestFormPreviewUpdateBadgeStyle(JsonNode root) {
+        JsonNode n = root.get("requestFormPreviewUpdateBadgeStyle");
+        if (n == null || !n.isObject()) {
+            return PersonBadgeStyle.requestFormPreviewUpdateBadgeDefault();
+        }
+        PersonBadgeStyle st = loadPersonBadgeStyleObject(n);
+        return st != null ? st : PersonBadgeStyle.requestFormPreviewUpdateBadgeDefault();
+    }
+
     private static void putStage1NetworkCacheBadgePrefs(ObjectNode root, DesktopSessionState state) {
         put(root, "stage1NetworkCacheBadgeLabel", state.stage1NetworkCacheBadgeLabel());
         PersonBadgeStyle st = state.stage1NetworkCacheBadgeStyle();
@@ -1033,6 +1045,27 @@ public final class DesktopSessionStateStore {
             return;
         }
         ObjectNode o = root.putObject("stage1NetworkCacheBadgeStyle");
+        o.put("fontFamily", st.fontFamily() != null ? st.fontFamily() : "");
+        o.put("fontPercent", st.fontPercent());
+        o.put("fillHex", st.fillHex());
+        o.put("textHex", st.textHex());
+        o.put("strokeHex", st.strokeHex());
+        o.put("strokeWidth", st.strokeWidth());
+        o.put("cornerRadius", st.cornerRadius());
+        o.put("pill", st.pill());
+        o.put("glowColorHex", st.glowColorHex());
+        o.put("glowRadius", st.glowRadius());
+        o.put("glowSpread", st.glowSpread());
+        o.put("opacity", st.opacity());
+    }
+
+    private static void putRequestFormPreviewUpdateBadgePrefs(ObjectNode root, DesktopSessionState state) {
+        put(root, "requestFormPreviewUpdateBadgeLabel", state.requestFormPreviewUpdateBadgeLabel());
+        PersonBadgeStyle st = state.requestFormPreviewUpdateBadgeStyle();
+        if (st == null) {
+            return;
+        }
+        ObjectNode o = root.putObject("requestFormPreviewUpdateBadgeStyle");
         o.put("fontFamily", st.fontFamily() != null ? st.fontFamily() : "");
         o.put("fontPercent", st.fontPercent());
         o.put("fillHex", st.fillHex());

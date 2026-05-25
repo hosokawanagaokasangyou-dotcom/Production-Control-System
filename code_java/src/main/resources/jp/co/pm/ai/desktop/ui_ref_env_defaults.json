@@ -330,5 +330,17 @@
     "key" : "PM_AI_DEBUG_STAGE3_PLAN_ACTUAL_SINGLE_LINE",
     "value" : "0",
     "description" : "配台手動修正: 段階3試行後の日付セルで（段階3前）（段階3後）を改行せず1行表示（スペース区切り）。1/true/yes/on で有効。0/false/no/off/none で2行（改行）表示。既定は0（2行表示）。"
+  }, {
+    "key" : "PM_AI_ALADDIN_MASTER_DIR",
+    "value" : "",
+    "description" : "依頼書入力タブのアラジンマスタフォルダ（フルパス）。後加工商品／加工内容／工程マスタとマスタリレーション統合結果.xlsx。空のときは工場既定 UNC（湖南: 共有DATA/アラジンマスタ、国分: DATA/アラジンマスタ）。環境変数初期化の工場選択でも設定。「フォルダ...」で選択可。"
+  }, {
+    "key" : "PM_AI_REQUEST_FORM_JUCHU_FILE",
+    "value" : "",
+    "description" : "依頼書入力タブの受注データベース Excel（受注ﾌｧｲﾙ シート）のフルパス。空のとき工場既定 UNC（湖南: 生産管理システム/管理システム/加工依頼書入力.xlsm、国分: DATA/加工依頼書入力.xlsm）。環境変数初期化の工場選択でも設定。「ファイル...」で選択可。"
+  }, {
+    "key" : "PM_AI_REQUEST_FORM_ORIGINAL_DIR",
+    "value" : "",
+    "description" : "依頼書入力タブの依頼書原本フォルダ（フルパス）。*加工依頼書*.xlsm 等の原本 Excel を含むディレクトリ。空のとき工場既定（受注ファイル既定の親フォルダ。湖南: 生産管理システム/管理システム、国分: DATA）。環境変数初期化の工場選択でも設定。「フォルダ...」で選択可。"
   } ]
 }

@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ColorPicker?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Slider?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.TitledPane?>
+<?import javafx.scene.control.Accordion?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="jp.co.pm.ai.desktop.RequestFormPreviewBadgeDesignTabController"
+      fillWidth="true" spacing="8.0">
+    <padding>
+        <Insets bottom="8.0" left="12.0" right="12.0" top="8.0"/>
+    </padding>
+    <Accordion fx:id="designAccordion" maxWidth="Infinity">
+        <panes>
+            <TitledPane animated="true" text="依頼書プレビュー・原本更新バッジ" expanded="true">
+                <content>
+                    <VBox spacing="8.0">
+                        <padding>
+                            <Insets bottom="4.0" left="4.0" right="4.0" top="4.0"/>
+                        </padding>
+                        <Label styleClass="pm-plan-result-viewer-hint-inline"
+                               text="依頼書原本フォルダ内の Excel が更新されると、依頼書入力タブのプレビュー上部（ファイル名横）にこのバッジが表示されます。該当ファイルの依頼書をプレビューするとバッジは消えます。更新検知は 5 分毎にファイル更新日時で行います。"/>
+                        <HBox alignment="CENTER_LEFT" spacing="8.0">
+                            <Label prefWidth="140.0" text="バッジ文言"/>
+                            <TextField fx:id="badgeTextField" maxWidth="480.0" promptText="例: 更新"/>
+                        </HBox>
+                        <HBox alignment="CENTER_LEFT" spacing="12.0">
+                            <Label text="プレビュー"/>
+                            <HBox fx:id="badgePreviewBox" alignment="CENTER_LEFT" spacing="8.0"/>
+                        </HBox>
+                        <FlowPane hgap="8.0" maxWidth="Infinity" vgap="6.0">
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="フォント"/>
+                                <ComboBox fx:id="badgeFontCombo" editable="false" prefWidth="220.0"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="文字サイズ％"/>
+                                <Slider fx:id="badgeFontPctSlider" blockIncrement="5.0" max="160.0"
+                                        min="40.0" prefWidth="120.0" value="92.0"/>
+                                <Label fx:id="badgeFontPctLabel" text="92%"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="背景色"/>
+                                <ColorPicker fx:id="badgeFillPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="文字色"/>
+                                <ColorPicker fx:id="badgeTextPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="枠色"/>
+                                <ColorPicker fx:id="badgeStrokePicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="枠太さ"/>
+                                <Slider fx:id="badgeStrokeSlider" blockIncrement="0.5" max="6.0"
+                                        min="0.0" prefWidth="100.0" value="1.2"/>
+                                <Label fx:id="badgeStrokeLabel" text="1.2"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="角丸"/>
+                                <Slider fx:id="badgeCornerSlider" blockIncrement="1.0" max="24.0"
+                                        min="0.0" prefWidth="100.0" value="8.0"/>
+                                <Label fx:id="badgeCornerLabel" text="8"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <CheckBox fx:id="badgePillCheck" mnemonicParsing="false" text="ピル形状"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="グロー色"/>
+                                <ColorPicker fx:id="badgeGlowColorPicker"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="グロー半径（基準比）"/>
+                                <Slider fx:id="badgeGlowRadiusPctSlider" blockIncrement="5.0" max="400.0"
+                                        min="0.0" prefWidth="120.0" value="100.0"/>
+                                <Label fx:id="badgeGlowRadiusPctLabel" text="100%"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT" spacing="6.0">
+                                <Label prefWidth="140.0" text="グロー spread（基準比）"/>
+                                <Slider fx:id="badgeGlowSpreadPctSlider" blockIncrement="5.0" max="400.0"
+                                        min="0.0" prefWidth="120.0" value="100.0"/>
+                                <Label fx:id="badgeGlowSpreadPctLabel" text="100%"/>
+                            </HBox>
+                        </FlowPane>
+                    </VBox>
+                </content>
+            </TitledPane>
+        </panes>
+    </Accordion>
+</VBox>

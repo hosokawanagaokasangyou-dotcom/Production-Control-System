@@ -10,6 +10,32 @@ import org.junit.jupiter.api.Test;
 class DispatchAladdinPlanAlignerTest {
 
     @Test
+    void alignRowFromDayIndex_preservesPrefixAndAlignsSuffix() {
+        var result =
+                DispatchAladdinPlanAligner.alignRowFromDayIndex(
+                        new DispatchAladdinPlanAligner.RowInput(
+                                new double[] {300, 300, 0},
+                                new double[] {500, 0, 500},
+                                300,
+                                false),
+                        1);
+        assertTrue(result.changed());
+        assertArrayEquals(new double[] {300, 0, 300}, result.newByDayIndex(), 1e-9);
+        assertEquals(1, result.rollMoves());
+    }
+
+    @Test
+    void alignRowFromDayIndex_whenNoFutureDays_unchanged() {
+        var result =
+                DispatchAladdinPlanAligner.alignRowFromDayIndex(
+                        new DispatchAladdinPlanAligner.RowInput(
+                                new double[] {300, 300}, new double[] {0, 500}, 300, false),
+                        2);
+        assertFalse(result.changed());
+        assertArrayEquals(new double[] {300, 300}, result.newByDayIndex(), 1e-9);
+    }
+
+    @Test
     void alignRow_movesToAladdinDaysWithRollUnit() {
         var result =
                 DispatchAladdinPlanAligner.alignRow(

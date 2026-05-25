@@ -102,6 +102,11 @@
                         <fx:include fx:id="planInputTab" source="PlanInputTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabRequestFormInput" closable="false" text="依頼書入力">
+                    <content>
+                        <fx:include fx:id="requestFormInputTab" source="RequestFormInputTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabStage1Preview" closable="false"
                      text="段階1 成形結果">
                     <content>
@@ -166,6 +171,13 @@
                      text="設備ガント・担当バッジ">
                     <content>
                         <fx:include fx:id="ganttPersonBadgeDesignTab" source="GanttPersonBadgeDesignTab.fxml"/>
+                    </content>
+                </Tab>
+                <Tab fx:id="mainShellTabRequestFormPreviewBadgeDesign" closable="false"
+                     text="依頼書プレビューバッジ">
+                    <content>
+                        <fx:include fx:id="requestFormPreviewBadgeDesignTab"
+                                    source="RequestFormPreviewBadgeDesignTab.fxml"/>
                     </content>
                 </Tab>
                 <Tab fx:id="mainShellTabOperatorCard" closable="false"

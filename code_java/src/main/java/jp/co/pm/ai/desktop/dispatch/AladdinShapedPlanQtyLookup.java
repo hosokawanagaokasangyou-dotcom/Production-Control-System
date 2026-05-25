@@ -2,9 +2,15 @@ package jp.co.pm.ai.desktop.dispatch;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import jp.co.pm.ai.desktop.io.JsonTableIo;
@@ -117,6 +123,48 @@ public final class AladdinShapedPlanQtyLookup {
         }
         Double v = byProc.get(pk);
         return v != null ? v : 0.0;
+    }
+
+    /**
+     * ルックアップ内の {@code 機械名×依頼NO} に正の計画数量がある日付列（{@code yyyy/MM/dd}）を暦日に変換して返す。
+     */
+    public static List<LocalDate> distinctPlanDatesFor(
+            Map<String, Map<String, Map<String, Map<String, Double>>>> lookup,
+            String machineName,
+            String taskId) {
+        if (lookup == null || lookup.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Map<String, Map<String, Double>>> byTid =
+                lookup.get(normalizeEquipmentMatchKey(machineName));
+        if (byTid == null) {
+            return List.of();
+        }
+        Map<String, Map<String, Double>> byDate = byTid.get(taskId != null ? taskId.strip() : "");
+        if (byDate == null || byDate.isEmpty()) {
+            return List.of();
+        }
+        Set<LocalDate> out = new LinkedHashSet<>();
+        for (String dsKey : byDate.keySet()) {
+            LocalDate d = parsePlanDateColumn(dsKey);
+            if (d != null) {
+                out.add(d);
+            }
+        }
+        return new ArrayList<>(out);
+    }
+
+    /** {@code yyyy/MM/dd} または {@code yyyy-MM-dd} 形式の日付列キーを {@link LocalDate} に変換。 */
+    public static LocalDate parsePlanDateColumn(String raw) {
+        String n = normaliseDateStr(raw);
+        if (n == null) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(n, DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+        } catch (DateTimeParseException ex) {
+            return null;
+        }
     }
 
     /** Mirrors Python {@code _normalize_process_name_for_rule_match} (NFKC + remove spaces). */

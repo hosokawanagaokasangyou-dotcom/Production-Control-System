@@ -1,0 +1,320 @@
+/* 依頼書入力（reconciliation）— メインシェルテーマに追従。入れ子テーマは使わない。 */
+
+.pm-request-form-reconciliation-root {
+    -fx-font-family: 'Meiryo', 'Yu Gothic', sans-serif;
+    -fx-background-color: -fx-background;
+}
+
+.pm-request-form-reconciliation-root .top-bar {
+    -fx-background-color: derive(-fx-base, -12%);
+    -fx-padding: 10px 15px;
+    -fx-border-color: transparent transparent derive(-fx-text-box-border, 20%) transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.pm-request-form-reconciliation-root .top-title {
+    -fx-text-fill: -fx-text-background-color;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.pm-request-form-reconciliation-root .top-status {
+    -fx-text-fill: -fx-mid-text-color;
+    -fx-font-size: 12px;
+}
+
+.pm-request-form-reconciliation-root .pane-container {
+    -fx-background-color: derive(-fx-base, 8%);
+    -fx-border-color: derive(-fx-text-box-border, 15%);
+    -fx-border-width: 1px;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+    -fx-padding: 12px;
+}
+
+.pm-request-form-reconciliation-root .pane-title-left {
+    -fx-text-fill: -fx-accent;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-padding: 0 0 8px 0;
+    -fx-border-color: transparent transparent derive(-fx-text-box-border, 10%) transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.pm-request-form-reconciliation-root .pane-title-right {
+    -fx-text-fill: -fx-accent;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+.pm-request-form-reconciliation-root .scroll-pane,
+.pm-request-form-reconciliation-root .scroll-pane > .viewport {
+    -fx-background-color: transparent;
+}
+
+.pm-request-form-reconciliation-root .label {
+    -fx-text-fill: -fx-text-background-color;
+}
+
+/* 入力欄: 背景・文字色は Modena 変数で対比を確保 */
+.pm-request-form-reconciliation-root .text-field,
+.pm-request-form-reconciliation-root .password-field,
+.pm-request-form-reconciliation-root .text-area,
+.pm-request-form-reconciliation-root .combo-box-base,
+.pm-request-form-reconciliation-root .date-picker,
+.pm-request-form-reconciliation-root .spinner,
+.pm-request-form-reconciliation-root .settings-new-input,
+.pm-request-form-reconciliation-root .paper-meta-input,
+.pm-request-form-reconciliation-root .paper-input-cell,
+.pm-request-form-reconciliation-root .paper-vertical-input {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-text-fill: -fx-text-inner-color;
+    -fx-prompt-text-fill: derive(-fx-text-inner-color, -35%);
+    -fx-border-color: -fx-text-box-border;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+    -fx-padding: 4px 8px;
+}
+
+.pm-request-form-reconciliation-root .combo-box .list-cell,
+.pm-request-form-reconciliation-root .date-picker .text-field {
+    -fx-text-fill: -fx-text-inner-color;
+    -fx-background-color: transparent;
+}
+
+.pm-request-form-reconciliation-root .text-field:focused,
+.pm-request-form-reconciliation-root .combo-box-base:focused,
+.pm-request-form-reconciliation-root .date-picker:focused,
+.pm-request-form-reconciliation-root .spinner:focused {
+    -fx-border-color: -fx-accent;
+}
+
+.pm-request-form-reconciliation-root .section-title-form {
+    -fx-text-fill: -fx-accent;
+}
+
+.pm-request-form-reconciliation-root .section-title-new-mode {
+    -fx-text-fill: #16a34a;
+}
+
+.pm-request-form-reconciliation-root .section-title-prod {
+    -fx-text-fill: derive(-fx-accent, -15%);
+}
+
+.pm-request-form-reconciliation-root .section-title-raw {
+    -fx-text-fill: #d97706;
+}
+
+.pm-request-form-reconciliation-root .section-title-workflow {
+    -fx-text-fill: #7c3aed;
+}
+
+.pm-request-form-reconciliation-root .paper-edaban-input {
+    -fx-background-color: derive(-fx-accent, 75%);
+    -fx-text-fill: -fx-text-inner-color;
+    -fx-border-color: derive(-fx-accent, 25%);
+}
+
+.pm-request-form-reconciliation-root .paper-edaban-input:focused {
+    -fx-border-color: -fx-accent;
+}
+
+.pm-request-form-reconciliation-root .button {
+    -fx-background-color: -fx-accent;
+    -fx-text-fill: -fx-light-text-color;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+    -fx-padding: 6px 12px;
+}
+
+.pm-request-form-reconciliation-root .button:hover {
+    -fx-background-color: derive(-fx-accent, -12%);
+}
+
+.pm-request-form-reconciliation-root .btn-new-record {
+    -fx-background-color: #16a34a;
+    -fx-text-fill: white;
+}
+
+.pm-request-form-reconciliation-root .btn-new-record:hover {
+    -fx-background-color: #15803d;
+}
+
+.pm-request-form-reconciliation-root .btn-save-local {
+    -fx-background-color: derive(-fx-base, 25%);
+    -fx-text-fill: -fx-text-background-color;
+}
+
+.pm-request-form-reconciliation-root .btn-save-local:hover {
+    -fx-background-color: derive(-fx-base, 35%);
+}
+
+.pm-request-form-reconciliation-root .btn-transfer {
+    -fx-background-color: derive(-fx-accent, -20%);
+    -fx-text-fill: -fx-light-text-color;
+}
+
+.pm-request-form-reconciliation-root .btn-transfer:hover {
+    -fx-background-color: derive(-fx-accent, -32%);
+}
+
+.pm-request-form-reconciliation-root .discrepancy-label-discrepancy {
+    -fx-background-color: derive(#dc3545, -40%);
+    -fx-text-fill: #fecaca;
+    -fx-padding: 6px 10px;
+    -fx-background-radius: 3px;
+    -fx-font-weight: bold;
+}
+
+.pm-request-form-reconciliation-root .discrepancy-label-unregistered {
+    -fx-background-color: derive(#f59e0b, -45%);
+    -fx-text-fill: #fde68a;
+    -fx-padding: 6px 10px;
+    -fx-background-radius: 3px;
+    -fx-font-weight: bold;
+}
+
+.pm-request-form-reconciliation-root .discrepancy-label-matched {
+    -fx-background-color: derive(#16a34a, -45%);
+    -fx-text-fill: #bbf7d0;
+    -fx-padding: 6px 10px;
+    -fx-background-radius: 3px;
+    -fx-font-weight: bold;
+}
+
+.pm-request-form-reconciliation-root .discrepancy-label-info {
+    -fx-background-color: derive(-fx-base, 15%);
+    -fx-text-fill: -fx-mid-text-color;
+    -fx-padding: 6px 10px;
+    -fx-background-radius: 3px;
+    -fx-font-weight: bold;
+}
+
+.pm-request-form-reconciliation-root .form-scroll-pane,
+.pm-request-form-reconciliation-root .form-tab-container {
+    -fx-background-color: -fx-background;
+}
+
+.pm-request-form-reconciliation-root .form-tab-container {
+    -fx-padding: 20px;
+}
+
+.pm-request-form-reconciliation-root .paper-main-title {
+    -fx-text-fill: -fx-text-background-color;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+}
+
+.pm-request-form-reconciliation-root .paper-main-subtitle {
+    -fx-text-fill: -fx-mid-text-color;
+    -fx-font-size: 12px;
+}
+
+.pm-request-form-reconciliation-root .settings-card {
+    -fx-background-color: derive(-fx-base, 8%);
+    -fx-border-color: derive(-fx-text-box-border, 15%);
+    -fx-border-width: 1px;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+    -fx-padding: 12px;
+}
+
+.pm-request-form-reconciliation-root .settings-card-title {
+    -fx-text-fill: -fx-accent;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+}
+
+.pm-request-form-reconciliation-root .settings-list {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-border-color: -fx-text-box-border;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}
+
+.pm-request-form-reconciliation-root .settings-list .list-cell {
+    -fx-text-fill: -fx-text-inner-color;
+    -fx-background-color: -fx-control-inner-background;
+    -fx-padding: 6px 10px;
+}
+
+.pm-request-form-reconciliation-root .settings-list .list-cell:hover,
+.pm-request-form-reconciliation-root .settings-list .list-cell:selected {
+    -fx-background-color: -fx-selection-bar;
+    -fx-text-fill: -fx-selection-bar-text;
+}
+
+.pm-request-form-reconciliation-root .btn-settings-add {
+    -fx-background-color: #16a34a;
+    -fx-text-fill: white;
+}
+
+.pm-request-form-reconciliation-root .btn-settings-add:hover {
+    -fx-background-color: #15803d;
+}
+
+.pm-request-form-reconciliation-root .btn-settings-del {
+    -fx-background-color: #dc3545;
+    -fx-text-fill: white;
+}
+
+.pm-request-form-reconciliation-root .btn-settings-del:hover {
+    -fx-background-color: #b02a37;
+}
+
+.pm-request-form-reconciliation-root .btn-copy {
+    -fx-background-color: derive(-fx-base, 12%);
+    -fx-text-fill: -fx-text-background-color;
+    -fx-font-size: 11px;
+    -fx-padding: 3px 6px;
+    -fx-border-color: derive(-fx-text-box-border, 8%);
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}
+
+.pm-request-form-reconciliation-root .btn-copy:hover {
+    -fx-background-color: derive(-fx-base, 22%);
+    -fx-border-color: -fx-accent;
+}
+
+.pm-request-form-reconciliation-root .request-form-loading-overlay {
+    -fx-background-color: derive(-fx-base, -25%);
+    -fx-opacity: 0.92;
+}
+
+.pm-request-form-reconciliation-root .request-form-loading-label {
+    -fx-text-fill: -fx-text-background-color;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+}
+
+.pm-request-form-reconciliation-root .request-form-image-viewer {
+    -fx-background-color: derive(-fx-base, -8%);
+}
+
+.pm-request-form-reconciliation-root .request-form-prod-row {
+    -fx-border-color: derive(-fx-text-box-border, 10%);
+    -fx-border-width: 1px;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+    -fx-padding: 10px;
+    -fx-background-color: derive(-fx-base, 4%);
+}
+
+.pm-request-form-reconciliation-root .request-form-sheet-scroll {
+    -fx-background-color: transparent;
+    -fx-border-color: derive(-fx-text-box-border, 12%);
+}
+
+.pm-request-form-reconciliation-root .excel-grid-label-empty,
+.pm-request-form-reconciliation-root .excel-grid-label-info {
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-request-form-reconciliation-root .excel-grid-label-error {
+    -fx-text-fill: #f87171;
+}

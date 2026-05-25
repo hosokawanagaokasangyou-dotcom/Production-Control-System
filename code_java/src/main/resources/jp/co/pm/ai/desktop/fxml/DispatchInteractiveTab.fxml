@@ -57,9 +57,8 @@
                 <Tooltip text="段階3前: タスク×日付の (段階3前) 数量を (アラ計画) に沿うようロール単位で再配分する"/>
             </tooltip>
         </Button>
-        <Button mnemonicParsing="false" text="段階2必須列チェック"
-                onAction="#onEnsureStage2RequiredColumnsAction"/>
         <Button fx:id="saveButton" mnemonicParsing="false" text="保存 (JSON+xlsx)"
+                styleClass="pm-dispatch-save-button"
                 onAction="#onSaveAction"/>
         <Button fx:id="dispatchTrialButton" mnemonicParsing="false" text="段階3"
                 styleClass="pm-stage-run-button,pm-stage-run-3"

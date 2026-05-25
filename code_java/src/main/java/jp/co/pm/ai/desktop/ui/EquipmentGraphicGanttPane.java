@@ -13,10 +13,12 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.function.BiConsumer;
+import java.util.function.IntPredicate;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -141,6 +143,17 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
     /** {@link #build} のルート {@link BorderPane} から再構築前に保存するスクロール位置。 */
     public record EquipmentGanttScrollState(double hValue, double vValue) {}
 
+    /** 暦日ジャンプ用：ガント先頭行のコンテンツ Y と {@link LocalDate} の対応。 */
+    public record GanttDateJumpAnchor(LocalDate date, double contentMinY) {}
+
+    /** {@link #scrollToDate} の結果。 */
+    public enum GanttDateJumpResult {
+        SUCCESS,
+        NO_GANTT,
+        NO_SUCH_DATE,
+        SCROLL_UNAVAILABLE
+    }
+
     /** 印刷レイアウト計測（{@link #measurePrintLayout}）。 */
     public record EquipmentGanttPrintMetrics(
             double contentWidth,
@@ -163,7 +176,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double printContentHeight,
             double printTimelineWidth,
             double printLeftWidth,
-            HBox headerRightContent) {
+            HBox headerRightContent,
+            List<GanttDateJumpAnchor> dateJumpAnchors,
+            Runnable syncVirtualBodyToViewport) {
         /** @deprecated 左スクロールが不要な呼び出し向け。印刷では左も展開するため拡張コンストラクタを使う。 */
         @Deprecated
         public EquipmentGanttViewHandles(ScrollPane timelineScroll, Runnable scheduleViewportRepaint) {
@@ -180,6 +195,8 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                     0.0,
                     0.0,
                     0.0,
+                    null,
+                    List.of(),
                     null);
         }
     }
@@ -387,6 +404,133 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
      *
      * @param zoomAnchorOrNull 非 null のときは横位置のみアンカー基準（マウス中心ズーム）。縦は常に {@code snap} を使う。
      */
+    /**
+     * ガント表示日付文字列（例 {@code 2026年5月25日(月)} や {@code 【2026/05/07】}）を {@link LocalDate} に解釈する。
+     */
+    public static Optional<LocalDate> parseGanttDisplayDate(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return Optional.empty();
+        }
+        String s = raw.strip();
+        Matcher compact = COMPACT_JP_DATE.matcher(s);
+        if (compact.matches()) {
+            try {
+                int y = Integer.parseInt(compact.group(1));
+                Matcher md = Pattern.compile("^(\\d{1,2})月(\\d{1,2})日").matcher(compact.group(2));
+                if (md.find()) {
+                    return Optional.of(
+                            LocalDate.of(
+                                    y,
+                                    Integer.parseInt(md.group(1)),
+                                    Integer.parseInt(md.group(2))));
+                }
+            } catch (Exception ignored) {
+                // fall through
+            }
+        }
+        Matcher loose = LOOSE_YMD.matcher(s);
+        if (loose.find()) {
+            try {
+                return Optional.of(
+                        LocalDate.of(
+                                Integer.parseInt(loose.group(1)),
+                                Integer.parseInt(loose.group(2)),
+                                Integer.parseInt(loose.group(3))));
+            } catch (Exception ignored) {
+                // fall through
+            }
+        }
+        String normalized = compactDateLine(s);
+        if (!normalized.isBlank() && !normalized.equals(s)) {
+            return parseGanttDisplayDate(normalized);
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * 構築済みガントに含まれる暦日一覧（出現順・重複なし）。
+     */
+    public static List<LocalDate> listAvailableDates(BorderPane graphicRoot) {
+        if (graphicRoot == null) {
+            return List.of();
+        }
+        Object ud = graphicRoot.getUserData();
+        if (!(ud instanceof EquipmentGanttViewHandles handles)) {
+            return List.of();
+        }
+        List<GanttDateJumpAnchor> anchors = handles.dateJumpAnchors();
+        if (anchors == null || anchors.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<LocalDate> out = new LinkedHashSet<>();
+        for (GanttDateJumpAnchor a : anchors) {
+            if (a != null && a.date() != null) {
+                out.add(a.date());
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    /**
+     * 指定暦日の先頭行へ縦スクロールする。見つからない・未構築のときは {@link GanttDateJumpResult} で返す。
+     */
+    public static GanttDateJumpResult scrollToDate(BorderPane graphicRoot, LocalDate target) {
+        if (graphicRoot == null || target == null) {
+            return GanttDateJumpResult.NO_GANTT;
+        }
+        Object ud = graphicRoot.getUserData();
+        if (!(ud instanceof EquipmentGanttViewHandles handles)) {
+            return GanttDateJumpResult.NO_GANTT;
+        }
+        List<GanttDateJumpAnchor> anchors = handles.dateJumpAnchors();
+        if (anchors == null || anchors.isEmpty()) {
+            return GanttDateJumpResult.NO_SUCH_DATE;
+        }
+        Double contentMinY = null;
+        for (GanttDateJumpAnchor a : anchors) {
+            if (a != null && target.equals(a.date())) {
+                contentMinY = a.contentMinY();
+                break;
+            }
+        }
+        if (contentMinY == null) {
+            return GanttDateJumpResult.NO_SUCH_DATE;
+        }
+        final double jumpContentMinY = contentMinY;
+        ScrollPane sp = handles.timelineScroll();
+        if (sp == null) {
+            return GanttDateJumpResult.SCROLL_UNAVAILABLE;
+        }
+        Runnable applyScroll =
+                () -> {
+                    Node content = sp.getContent();
+                    Bounds vp = sp.getViewportBounds();
+                    if (content == null || vp == null || !(vp.getHeight() > 1.0)) {
+                        return;
+                    }
+                    double contentH = content.getLayoutBounds().getHeight();
+                    double viewportH = vp.getHeight();
+                    double excess = contentH - viewportH;
+                    if (!(excess > 1.0) || !Double.isFinite(excess)) {
+                        sp.setVvalue(0.0);
+                        return;
+                    }
+                    double offset = Math.min(viewportH * 0.12, 48.0);
+                    double scrollPx = Math.max(0.0, jumpContentMinY - offset);
+                    sp.setVvalue(Math.clamp(scrollPx / excess, 0.0, 1.0));
+                    Runnable sync = handles.syncVirtualBodyToViewport();
+                    if (sync != null) {
+                        sync.run();
+                    }
+                    Runnable repaint = handles.scheduleViewportRepaint();
+                    if (repaint != null) {
+                        repaint.run();
+                    }
+                };
+        Platform.runLater(applyScroll);
+        return GanttDateJumpResult.SUCCESS;
+    }
+
     public static void restoreScrollAfterRebuild(
             BorderPane graphicRoot,
             EquipmentGanttScrollState snap,
@@ -1069,6 +1213,7 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         final boolean useVirtualBody =
                 !vectorPrint && parsed.displayRows().size() >= ROW_VIRTUALIZATION_MIN_ROWS;
         List<GanttBodyRowPlan> bodyRowPlans = new ArrayList<>();
+        List<GanttDateJumpAnchor> dateJumpAnchors = new ArrayList<>();
         for (int ri = 0; ri < parsed.displayRows().size(); ri++) {
             DisplayRow dr = parsed.displayRows().get(ri);
             if (dr.sectionBanner() != null) {
@@ -1204,6 +1349,15 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
 
             double rowCanvasH = Math.max(1.0, cellBodyH);
             double timelineRowContentMinY = gridTimelineContentY;
+            if (!dplan.continuation()) {
+                String dateTxt = dplan.dateText() != null ? dplan.dateText() : "";
+                parseGanttDisplayDate(dateTxt)
+                        .ifPresent(
+                                d ->
+                                        dateJumpAnchors.add(
+                                                new GanttDateJumpAnchor(
+                                                        d, timelineRowContentMinY)));
+            }
             List<String> cellsInSlots = dr.cellsInSlots();
             List<BarRun> cachedBarRuns = collectBarRuns(cellsInSlots);
             int slotCountForRow = cellsInSlots.size();
@@ -1641,6 +1795,11 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         double printPadVert = mainColumn.getPadding().getTop() + mainColumn.getPadding().getBottom();
         double printContentWidth = leftTotal + timelineWidth + progressTotal;
         double printContentHeight = printPadVert + layout.headerHeight + gridTimelineContentY;
+        final VirtualGanttBodyHost virtualHostForJump = virtualHost;
+        Runnable syncVirtualBodyToViewport =
+                virtualHostForJump != null
+                        ? () -> virtualHostForJump.syncToViewport(rightBodyScroll)
+                        : null;
         root.setUserData(
                 new EquipmentGanttViewHandles(
                         leftBodyScroll,
@@ -1655,7 +1814,9 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
                         printContentHeight,
                         timelineWidth,
                         leftTotal,
-                        headerRightContent));
+                        headerRightContent,
+                        List.copyOf(dateJumpAnchors),
+                        syncVirtualBodyToViewport));
 
         Label hint =
                 new Label(
@@ -1703,8 +1864,107 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             err.setPrefSize(paperW, paperH);
             return err;
         }
-        PrintSheetDims dims = computeDedicatedPrintDims(spec, paperW, paperH, repaired, parsed);
+        PrintSheetDims dims = computeDedicatedPrintDims(spec, paperW, paperH, repaired, parsed, false);
         return assembleDedicatedPrintSheet(repaired.effCols(), parsed, dims, paperW, paperH, spec);
+    }
+
+    /**
+     * 1 暦日分の印刷行（{@code spec.rows()}）を、用紙高さに収まるローカル行インデックス束に分割する。
+     *
+     * <p>収まる場合は {@code [[0,1,...,n-1]]} の 1 要素。超える場合は固定の読み取り可能行高で複数ページに分割する
+     * （各ページは {@link #buildDedicatedPrintSheet} が列見出し・時刻軸・暦日見出しを描く）。
+     */
+    public static List<List<Integer>> splitLocalRowIndicesToFitPaper(
+            jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec spec,
+            double paperWidthPx,
+            double paperHeightPx) {
+        if (spec == null || spec.rows() == null || spec.rows().isEmpty()) {
+            return List.of();
+        }
+        double paperW = Math.max(2, paperWidthPx);
+        double paperH = Math.max(2, paperHeightPx);
+        jp.co.pm.ai.desktop.print.EquipmentGanttPrintTableData densified =
+                jp.co.pm.ai.desktop.print.EquipmentGanttPrintTimelineColumnDensifier.densify(
+                        spec.columns(),
+                        spec.rows(),
+                        spec.badgeSlotRows(),
+                        spec.printTimeRangeStartInclusive(),
+                        spec.printTimeRangeEndExclusive());
+        RepairedGanttTable repaired =
+                RepairedGanttTable.from(
+                        densified.columns(), densified.rows(), densified.badgeSlotRows());
+        ParseResult parsed = parse(repaired.effCols(), repaired.effRows(), repaired.badgeEff());
+        if (parsed.slotColumnIndices().isEmpty()) {
+            return List.of(allLocalRowIndices(spec.rows().size()));
+        }
+        PrintSheetDims fitProbe =
+                computeDedicatedPrintDims(spec, paperW, paperH, repaired, parsed, false);
+        if (estimateDedicatedPrintContentHeight(fitProbe, spec) <= paperH + 0.5) {
+            return List.of(allLocalRowIndices(spec.rows().size()));
+        }
+        PrintSheetDims paginateDims =
+                computeDedicatedPrintDims(spec, paperW, paperH, repaired, parsed, true);
+        double printRowScale = Math.clamp(spec.rowHeightPercent(), 50, 200) / 100.0;
+        TimelineRowHeights rowHeights =
+                computeTimelineRowHeights(
+                        paginateDims.layout(), paginateDims.barFont(), printRowScale);
+        int rowCount = spec.rows().size();
+        List<String> columns = spec.columns();
+        IntPredicate isSection =
+                i -> {
+                    if (i < 0 || i >= rowCount) {
+                        return false;
+                    }
+                    ObservableList<String> row = spec.rows().get(i);
+                    return isDedicatedPrintSectionRow(columns, row);
+                };
+        return jp.co.pm.ai.desktop.print.EquipmentGanttPrintVerticalPagination.paginateLocalRowIndices(
+                rowCount,
+                isSection,
+                paperH,
+                paginateDims.pad(),
+                paginateDims.headerH(),
+                paginateDims.sectionH(),
+                rowHeights.cellBodyH());
+    }
+
+    private static boolean isDedicatedPrintSectionRow(
+            List<String> columns, ObservableList<String> row) {
+        if (row == null || row.isEmpty()) {
+            return true;
+        }
+        return isSectionRow(row)
+                || jp.co.pm.ai.desktop.print.EquipmentGanttPrintDaySlices.isPrintDayBoundaryRow(
+                        columns, row);
+    }
+
+    private static List<Integer> allLocalRowIndices(int n) {
+        List<Integer> out = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            out.add(i);
+        }
+        return out;
+    }
+
+    private static double estimateDedicatedPrintContentHeight(
+            PrintSheetDims dims, jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec spec) {
+        double printRowScale = Math.clamp(spec.rowHeightPercent(), 50, 200) / 100.0;
+        TimelineRowHeights rowHeights =
+                computeTimelineRowHeights(dims.layout(), dims.barFont(), printRowScale);
+        double cellH = rowHeights.cellBodyH();
+        double h = dims.pad() + dims.headerH();
+        List<String> columns = spec.columns();
+        for (int i = 0; i < spec.rows().size(); i++) {
+            ObservableList<String> row = spec.rows().get(i);
+            if (row == null || row.isEmpty()) {
+                continue;
+            }
+            h +=
+                    isDedicatedPrintSectionRow(columns, row)
+                            ? dims.sectionH()
+                            : cellH;
+        }
+        return h + dims.pad();
     }
 
     private static final double PRINT_SHEET_PAD = 8;
@@ -1746,6 +2006,19 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
             double paperH,
             RepairedGanttTable repaired,
             ParseResult parsed) {
+        return computeDedicatedPrintDims(spec, paperW, paperH, repaired, parsed, false);
+    }
+
+    /**
+     * @param fixedReadableRowHeight {@code true} のとき行高を {@link #PRINT_MAX_ROW_H} に固定（縦ページ分割用）
+     */
+    private static PrintSheetDims computeDedicatedPrintDims(
+            jp.co.pm.ai.desktop.print.EquipmentGanttPrintPageSpec spec,
+            double paperW,
+            double paperH,
+            RepairedGanttTable repaired,
+            ParseResult parsed,
+            boolean fixedReadableRowHeight) {
         GanttPalette palette = GanttPalette.forMonochrome(DesktopTheme.LIGHT);
         LayoutMetrics probe =
                 LayoutMetrics.fromScales(
@@ -1793,10 +2066,15 @@ public final class EquipmentGraphicGanttPane extends BorderPane {
         }
         double availableBody =
                 paperH - 2 * PRINT_SHEET_PAD - PRINT_HEADER_H - sectionRows * PRINT_SECTION_H;
-        double rowBodyH =
-                dataRows > 0
-                        ? Math.clamp(availableBody / dataRows - 4, PRINT_MIN_ROW_H, PRINT_MAX_ROW_H)
-                        : PRINT_MIN_ROW_H;
+        double rowBodyH;
+        if (fixedReadableRowHeight) {
+            rowBodyH = PRINT_MAX_ROW_H;
+        } else if (dataRows > 0) {
+            rowBodyH =
+                    Math.clamp(availableBody / dataRows - 4, PRINT_MIN_ROW_H, PRINT_MAX_ROW_H);
+        } else {
+            rowBodyH = PRINT_MIN_ROW_H;
+        }
         double outerPad = Math.min(rowBodyH * 0.22, 4);
         double barFontPx = Math.clamp(rowBodyH * 0.42, 7, 12);
         LayoutMetrics layout =

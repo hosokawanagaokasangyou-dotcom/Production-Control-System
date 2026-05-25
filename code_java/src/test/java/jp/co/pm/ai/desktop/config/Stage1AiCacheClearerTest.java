@@ -30,9 +30,11 @@ class Stage1AiCacheClearerTest {
         Path aiCache = json.resolve(Stage1AiCacheClearer.AI_REMARKS_CACHE_FILENAME);
         Path dispatchJson = output.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME);
         Path aladdinShaped = output.resolve(AppPaths.SHAPED_ALADDIN_PLAN_JSON_BASENAME);
+        Path planInputTasks = output.resolve(AppPaths.STAGE1_PLAN_TASKS_FILENAME);
         Files.writeString(aiCache, "{}");
         Files.writeString(dispatchJson, "{}");
         Files.writeString(aladdinShaped, "{}");
+        Files.writeString(planInputTasks, "stub");
 
         Map<String, String> ui =
                 Map.of(
@@ -50,6 +52,8 @@ class Stage1AiCacheClearerTest {
         assertFalse(Files.exists(aiCache));
         assertFalse(Files.exists(dispatchJson));
         assertFalse(Files.exists(aladdinShaped));
+        assertFalse(Files.exists(planInputTasks));
         assertFalse(Stage1AiCacheClearer.hasAnyExistingDiskCache(ui));
+        assertFalse(Stage1AiCacheClearer.hasExistingPlanInputTasksFile(ui));
     }
 }

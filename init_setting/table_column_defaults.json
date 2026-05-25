@@ -1,6 +1,6 @@
 {
   "processingActualsDetailRaw" : [ ],
-  "planInput_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, true ],
+  "planInput_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, true ],
   "stage1Preview_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
   "aladdinProcessingPlanRaw_columnVisible" : [ true, true, true, false, true, true, true, true, false, true, true, false, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, true, false, false, true, false, false, true, true, true, true, true, false, true, true, true, true, false, true, false, false, true, true, true, true, true, true, true, true, true, false, false, true, true, true, true, false, false, true, true, true, true, false, true, true, true, true, true, false, true, false, false, true, true, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, false, true, true, true, true, true, true, true, true, true, false, true, true, true, false, false, true, true, true, true, false, true, true, false, true, false, true, true, true, true, true, true, true, true ],
   "resultDispatchTable_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
@@ -513,6 +513,9 @@
     "width" : 40.0
   }, {
     "title" : "依頼NO",
+    "width" : 68.0
+  }, {
+    "title" : "受注NO",
     "width" : 68.0
   }, {
     "title" : "回答納期",

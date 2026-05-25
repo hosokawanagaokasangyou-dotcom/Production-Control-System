@@ -131,11 +131,18 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
             s3_meta = pc.interactive_stage3_last_run_meta_snapshot()
         except Exception:
             s3_meta = {}
+        _remaining_at_end = []
+        try:
+            _remaining_at_end = pc.interactive_trial_remaining_tasks_at_calendar_end_snapshot()
+        except Exception:
+            _remaining_at_end = []
         _ot_sim = (os.environ.get(pc.ENV_OVERTIME_SIMULATION_JSON) or "").strip()
         _note_base = (
             "段階3配台試行（段階2同一条件）。"
-            "配台ループのブロック条件は段階2と同一（JSON 暦日数量は配台中の上限にしない）。"
-            "致命: 機械カレンダー未作成・勤怠未作成・勤怠最終日までに割り切れない残タスク。"
+            "配台ループのブロック条件は段階2と同一。"
+            "JSON 暦日×数量（interactive_dispatch_targets）がある手動修正試行ではループ内キャップも有効。"
+            "致命: 機械カレンダー未作成・勤怠未作成。"
+            "勤怠最終日まで未割当のタスクは remaining_tasks_at_calendar_end に載せて試行は続行。"
             "計画暦日未達は dispatch_qty_shortfall に載せる。"
             "勤怠日付の自動拡張は行わない。"
         )
@@ -148,16 +155,34 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
             "op_shortage": snap["op_shortage"],
             "as_shortage": snap["as_shortage"],
             "dispatch_qty_shortfall": dispatch_qty_shortfall,
+            "remaining_tasks_at_calendar_end": _remaining_at_end,
             "stage3": s3_meta,
         }
         if isinstance(paths, dict):
             shortage_payload["production_plan"] = str(paths.get("production_plan") or "")
             shortage_payload["member_schedule"] = str(paths.get("member_schedule") or "")
+        if _remaining_at_end:
+            print(
+                "[dispatch trial] 警告: 勤怠最終日まで未割当 "
+                f"{len(_remaining_at_end)} 件（remaining_tasks_at_calendar_end を参照）",
+                flush=True,
+            )
         shortage_path.write_text(
             json.dumps(shortage_payload, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
         print("[dispatch trial] 不足情報JSONを書き出しました。", flush=True)
+        try:
+            from planning_core.dispatch_workspace import resolve_result_dispatch_table_output_dir
+
+            _pip = (os.environ.get(pc.ENV_PLAN_INPUT_PATH) or "").strip()
+            _out_dir = resolve_result_dispatch_table_output_dir(_pip)
+            _written = Path(_out_dir) / pc.RESULT_DISPATCH_TABLE_JSON_FILENAME if _out_dir else None
+            if _written is not None and _written.is_file() and _written.resolve() != path.resolve():
+                path.write_text(_written.read_text(encoding="utf-8"), encoding="utf-8")
+                print(f"[dispatch trial] 結果_配台表.json を入力パスへ同期: {_written} -> {path}", flush=True)
+        except Exception as _sync_e:
+            print(f"[dispatch trial] 結果_配台表.json 同期スキップ: {_sync_e}", flush=True)
         return 0, shortage_path
     except Exception as e:
         if type(e).__name__ == "PlanningValidationError":

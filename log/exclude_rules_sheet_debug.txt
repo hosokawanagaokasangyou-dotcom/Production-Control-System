@@ -1,0 +1,230 @@
+--- 2026-05-24 08:59:26 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx pairs=14 ai_d_to_e=False
+
+--- 2026-05-24 08:59:26 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開しました。
+details=keep_vba=False sheets=1
+
+--- 2026-05-24 08:59:26 ---
+event=SKIP_NO_SHEET
+phase=配台シート読込
+summary=シートはありません。VBA の「設定_配台不要工程_シートを確保」を実行れるか」段階1/2 をマクロから起動してください。
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx
+
+--- 2026-05-24 08:59:26 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-05-24 09:01:40 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx pairs=14 ai_d_to_e=False
+
+--- 2026-05-24 09:01:40 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開しました。
+details=keep_vba=False sheets=1
+
+--- 2026-05-24 09:01:40 ---
+event=SKIP_NO_SHEET
+phase=配台シート読込
+summary=シートはありません。VBA の「設定_配台不要工程_シートを確保」を実行れるか」段階1/2 をマクロから起動してください。
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx
+
+--- 2026-05-24 09:01:40 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-05-24 09:20:14 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx pairs=14 ai_d_to_e=False
+
+--- 2026-05-24 09:20:14 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開しました。
+details=keep_vba=False sheets=1
+
+--- 2026-05-24 09:20:14 ---
+event=SKIP_NO_SHEET
+phase=配台シート読込
+summary=シートはありません。VBA の「設定_配台不要工程_シートを確保」を実行れるか」段階1/2 をマクロから起動してください。
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx
+
+--- 2026-05-24 09:20:14 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-05-24 09:21:43 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx pairs=14 ai_d_to_e=False
+
+--- 2026-05-24 09:21:43 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開しました。
+details=keep_vba=False sheets=1
+
+--- 2026-05-24 09:21:43 ---
+event=SKIP_NO_SHEET
+phase=配台シート読込
+summary=シートはありません。VBA の「設定_配台不要工程_シートを確保」を実行れるか」段階1/2 をマクロから起動してください。
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx
+
+--- 2026-05-24 09:21:43 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-05-24 09:33:39 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx pairs=14 ai_d_to_e=False
+
+--- 2026-05-24 09:33:39 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開しました。
+details=keep_vba=False sheets=1
+
+--- 2026-05-24 09:33:39 ---
+event=SKIP_NO_SHEET
+phase=配台シート読込
+summary=シートはありません。VBA の「設定_配台不要工程_シートを確保」を実行れるか」段階1/2 をマクロから起動してください。
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx
+
+--- 2026-05-24 09:33:39 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-05-24 09:47:59 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx pairs=14 ai_d_to_e=False
+
+--- 2026-05-24 09:47:59 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開しました。
+details=keep_vba=False sheets=1
+
+--- 2026-05-24 09:47:59 ---
+event=SKIP_NO_SHEET
+phase=配台シート読込
+summary=シートはありません。VBA の「設定_配台不要工程_シートを確保」を実行れるか」段階1/2 をマクロから起動してください。
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx
+
+--- 2026-05-24 09:47:59 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-05-24 09:49:06 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx pairs=14 ai_d_to_e=False
+
+--- 2026-05-24 09:49:06 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開しました。
+details=keep_vba=False sheets=1
+
+--- 2026-05-24 09:49:06 ---
+event=SKIP_NO_SHEET
+phase=配台シート読込
+summary=シートはありません。VBA の「設定_配台不要工程_シートを確保」を実行れるか」段階1/2 をマクロから起動してください。
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx
+
+--- 2026-05-24 09:49:06 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-05-24 09:49:52 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx pairs=14 ai_d_to_e=False
+
+--- 2026-05-24 09:49:52 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開しました。
+details=keep_vba=False sheets=1
+
+--- 2026-05-24 09:49:52 ---
+event=SKIP_NO_SHEET
+phase=配台シート読込
+summary=シートはありません。VBA の「設定_配台不要工程_シートを確保」を実行れるか」段階1/2 をマクロから起動してください。
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx
+
+--- 2026-05-24 09:49:52 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-05-24 10:05:53 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx pairs=14 ai_d_to_e=False
+
+--- 2026-05-24 10:05:53 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開しました。
+details=keep_vba=False sheets=1
+
+--- 2026-05-24 10:05:53 ---
+event=SKIP_NO_SHEET
+phase=配台シート読込
+summary=シートはありません。VBA の「設定_配台不要工程_シートを確保」を実行れるか」段階1/2 をマクロから起動してください。
+details=path=/mnt/c/工程管理AIプロジェクト_JAVA/output/plan_input_tasks.xlsx
+
+--- 2026-05-24 10:05:53 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+
+--- 2026-05-24 13:36:15 ---
+event=START
+phase=配台シート読込
+summary=設定シート保守開始
+details=path=C:\工程管理AIプロジェクト_JAVA\output\plan_input_tasks.xlsx pairs=14 ai_d_to_e=False
+
+--- 2026-05-24 13:36:15 ---
+event=OPEN_OK
+phase=配台シート読込
+summary=ブックを開しました。
+details=keep_vba=False sheets=1
+
+--- 2026-05-24 13:36:15 ---
+event=SKIP_NO_SHEET
+phase=配台シート読込
+summary=シートはありません。VBA の「設定_配台不要工程_シートを確保」を実行れるか」段階1/2 をマクロから起動してください。
+details=path=C:\工程管理AIプロジェクト_JAVA\output\plan_input_tasks.xlsx
+
+--- 2026-05-24 13:36:15 ---
+event=CLOSED
+phase=配台シート読込
+summary=ブックをクローズしました。
+

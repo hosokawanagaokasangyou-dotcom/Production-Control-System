@@ -89,10 +89,12 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinSystemDispatchDisplayQty;
 import jp.co.pm.ai.desktop.dispatch.DispatchAladdinPlanAligner;
+import jp.co.pm.ai.desktop.dispatch.DispatchInteractiveDateAxis;
 import jp.co.pm.ai.desktop.dispatch.DispatchInteractiveRollUnitSupport;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialConsistency;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialShortages;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialShortages.DispatchQtyShortfallRow;
+import jp.co.pm.ai.desktop.dispatch.DispatchTimelineCalendarMetersIndex;
 import jp.co.pm.ai.desktop.dispatch.DispatchTimelineMetaMissShortfalls;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck.TaskKey;
@@ -136,7 +138,8 @@ public final class DispatchInteractiveTabController {
     private final AtomicBoolean pendingGridRebuildAfterTabAttach = new AtomicBoolean(false);
 
 
-    private record ReloadBundle(ResultDispatchDocument doc) {}
+    private record ReloadBundle(
+            ResultDispatchDocument doc, DispatchTimelineCalendarMetersIndex timelineMeters) {}
 
     private record DispatchSaveOutcome(Path jsonPath, String xlsxStdoutLine) {}
 
@@ -244,6 +247,7 @@ public final class DispatchInteractiveTabController {
                     ResultDispatchSchema.COL_PROCESS,
                     ResultDispatchSchema.COL_MACHINE,
                     "加工内容",
+                    ResultDispatchSchema.COL_ORDER_NO,
                     "依頼NO",
                     "換算数量",
                     "実加工数",
@@ -280,6 +284,9 @@ public final class DispatchInteractiveTabController {
     /** True while load/rebuild progress UI disables the toolbar ({@link #setReloadInteractionDisabled}). */
     private boolean reloadInteractionDisabled;
 
+    /** 納期管理ビュー再読み込み中（メインシェルから同期）。 */
+    private boolean deliveryCalendarReloadBlocking;
+
     /** Avoid treating programmatic grid updates as user edits ({@link #onWideGridChange}). */
     private final AtomicBoolean suppressDispatchGridDirty = new AtomicBoolean(false);
 
@@ -311,6 +318,9 @@ public final class DispatchInteractiveTabController {
     private static final String DISPATCH_TRIAL_BUTTON_TEXT_SUMMARY_LOCKED =
             "段階3（サマリエクセル更新中）";
 
+    private static final String DISPATCH_TRIAL_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD =
+            "段階3（納期管理ビュー更新中）";
+
     private static final String OVERTIME_SIM_BUTTON_SUBTITLE = "(残業/休出シュミ)";
 
     private static final String OVERTIME_SIM_BUTTON_TEXT_DEFAULT =
@@ -318,6 +328,14 @@ public final class DispatchInteractiveTabController {
 
     private static final String OVERTIME_SIM_BUTTON_TEXT_SUMMARY_LOCKED =
             "段階3.5（サマリ更新中）\n" + OVERTIME_SIM_BUTTON_SUBTITLE;
+
+    private static final String OVERTIME_SIM_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD =
+            "段階3.5（納期管理ビュー更新中）\n" + OVERTIME_SIM_BUTTON_SUBTITLE;
+
+    private static final String ALIGN_TO_ALADDIN_PLAN_BUTTON_TEXT_DEFAULT = "アラジン計画に合わせる";
+
+    private static final String ALIGN_TO_ALADDIN_PLAN_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD =
+            "納期管理ビュー更新中";
 
     @FXML
     private Button wideRowUpButton;
@@ -377,6 +395,10 @@ public final class DispatchInteractiveTabController {
     private MainShellController shell;
 
     private ResultDispatchDocument doc = ResultDispatchDocument.empty();
+
+    /** 設備ガント契約由来の暦日別加工量(m)。タスク×日付の段階3表示をガントと揃える。 */
+    private DispatchTimelineCalendarMetersIndex timelineCalendarMeters =
+            DispatchTimelineCalendarMetersIndex.empty();
 
     private List<LocalDate> dateAxis = new ArrayList<>();
 
@@ -874,25 +896,17 @@ public final class DispatchInteractiveTabController {
         // no-op: 段階2実行は配台計画_タスク入力タブへ移動済み
     }
 
-    @FXML
-    private void onEnsureStage2RequiredColumnsAction() {
-        if (reloadInteractionDisabled) {
-            return;
-        }
-        if (ResultDispatchStage2ColumnSupport.ensureStage2RequiredColumns(doc)) {
-            rebuildGrids();
-            markDispatchDocDirty();
-            if (statusLabel != null) {
-                statusLabel.setText("段階2必須列を補完しました（保存してください）");
-            }
-        } else if (statusLabel != null) {
-            statusLabel.setText("段階2必須列は揃っています");
-        }
+    void setDeliveryCalendarReloadBlocking(boolean blocking) {
+        deliveryCalendarReloadBlocking = blocking;
+        applyDispatchTrialButtonEnabledState();
     }
 
     @FXML
     private void onAlignToAladdinPlanAction() {
-        if (reloadInteractionDisabled || doc == null || docHasActualDispatchQtyColumn()) {
+        if (reloadInteractionDisabled
+                || deliveryCalendarReloadBlocking
+                || doc == null
+                || docHasActualDispatchQtyColumn()) {
             return;
         }
         if (wideProfiles.isEmpty() || dateAxis.isEmpty()) {
@@ -921,11 +935,25 @@ public final class DispatchInteractiveTabController {
             confirm.initOwner(shell.primaryStageForDialogs());
         }
         confirm.setTitle("アラジン計画に合わせる");
-        confirm.setHeaderText("段階3前の数量をアラジン計画に沿って再配分します");
+        confirm.setHeaderText("翌日以降の数量をアラジン計画に沿って再配分します");
         confirm.setContentText(
-                "各タスク行の合計数量は維持し、ロール単位で日付間に移動します。"
+                "操作日（"
+                        + LocalDate.now()
+                        + "）以前の暦日は変更しません。"
+                        + "翌日以降のみ、各タスク行の合計数量を維持したままロール単位で日付間に移動します。"
                         + "\n換算数量が原反ロール長より小さい行は、表示上 20 m 等でも 1 ロール単位で移動します。");
         if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
+            return;
+        }
+
+        final int alignFromDayIndex = aladdinAlignFromDayIndexOnAxis();
+        if (alignFromDayIndex >= dateAxis.size()) {
+            if (statusLabel != null) {
+                statusLabel.setText(
+                        "翌日以降（"
+                                + LocalDate.now().plusDays(1)
+                                + "）以降の日付列がありません");
+            }
             return;
         }
 
@@ -967,12 +995,13 @@ public final class DispatchInteractiveTabController {
             AladdinSystemDispatchDisplayQty.TaskQtyContext qtyCtx =
                     taskQtyContextForWideProfile(profile);
             DispatchAladdinPlanAligner.RowResult aligned =
-                    DispatchAladdinPlanAligner.alignRow(
+                    DispatchAladdinPlanAligner.alignRowFromDayIndex(
                             new DispatchAladdinPlanAligner.RowInput(
                                     current,
                                     aladdin,
                                     unitM,
-                                    qtyCtx.usesConvertedQtyForAladdinDisplay()));
+                                    qtyCtx.usesConvertedQtyForAladdinDisplay()),
+                            alignFromDayIndex);
             if (!aligned.changed()) {
                 if (unitM <= 1e-9
                         || !Stage2PlanRowDispatchQtyMetrics.isQtyAlignedToRollUnit(
@@ -1050,6 +1079,20 @@ public final class DispatchInteractiveTabController {
             sum += v;
         }
         return sum;
+    }
+
+    /** アラジン整列: 操作日の翌日に対応する日付軸 index（該当列が無ければ {@code dateAxis.size()}）。 */
+    private int aladdinAlignFromDayIndexOnAxis() {
+        if (dateAxis == null || dateAxis.isEmpty()) {
+            return 0;
+        }
+        LocalDate fromDate = LocalDate.now().plusDays(1);
+        for (int j = 0; j < dateAxis.size(); j++) {
+            if (!dateAxis.get(j).isBefore(fromDate)) {
+                return j;
+            }
+        }
+        return dateAxis.size();
     }
 
     private AladdinSystemDispatchDisplayQty.TaskQtyContext taskQtyContextForWideProfile(
@@ -1187,7 +1230,9 @@ public final class DispatchInteractiveTabController {
         if (shell.blockIfMaterialLookupTablesHaveBlankValues(blockLabel)) {
             return;
         }
-        if (reloadInteractionDisabled || dispatchDocDirtySinceSave) {
+        if (reloadInteractionDisabled
+                || deliveryCalendarReloadBlocking
+                || dispatchDocDirtySinceSave) {
             return;
         }
         if (!shell.tryBeginDispatchTrialGating(timingKind)) {
@@ -1261,59 +1306,75 @@ public final class DispatchInteractiveTabController {
                                 () -> {
                                     try {
                                         shell.reloadDeliveryCalendarInBackgroundAfterDispatchTrialSuccess();
-                                        try {
-                                            showDispatchQtyShortfallDialogIfNeeded(owner);
-                                            showDispatchShortageHintsDialogIfNeeded(owner);
-                                            DispatchTrialConsistency.CheckResult cr =
-                                                    DispatchTrialConsistency.compareDocuments(
-                                                            trialInputSnapshot, doc);
-                                            if (cr.consistent()) {
-                                                shell.appendLog(
-                                                        "[整合性] 保存済み表と試行後の成果物（結果_配台表.json）は、"
-                                                                + "依頼NO×機械名の当日配台数量合計および配台試行順番（工程別最小値）の観点で一致しました。");
-                                                shell.appendLog(
-                                                        "[dispatch-editor] trial: 整合性OK（保存表と再読込JSONの数量・試行順）");
-                                            } else {
-                                                shell.appendLog(
-                                                        "[整合性] 保存済み表と試行後の成果物に差異があります（詳細は下記）:");
-                                                for (String dl : cr.detailLines()) {
-                                                    shell.appendLog(dl);
-                                                }
-                                                Alert warn = new Alert(AlertType.WARNING);
-                                                warn.setTitle("配台試行: 整合性確認");
-                                                warn.setHeaderText(
-                                                        "試行前の保存内容と、試行後に読み込んだ結果_配台表.json に差異があります。");
-                                                warn.setContentText(String.join("\n", cr.detailLines()));
-                                                warn.show();
-                                                shell.appendLog(
-                                                        "[dispatch-editor] trial: 整合性に差異あり（"
-                                                                + cr.detailLines().size()
-                                                                + " 件）— ログ・ダイアログ参照");
-                                            }
-                                            DispatchTrialUnassignedWizard.showIfNeeded(
-                                                    owner, shell, Path.of(shortagesPath));
-                                            if (stage35) {
-                                                shell.notifyStage35OvertimeSimulationSuccess();
-                                            } else {
-                                                shell.notifyStage3DispatchTrialSuccess();
-                                            }
-                                        } catch (Throwable upex) {
-                                            String em =
-                                                    upex.getMessage() != null
-                                                            ? upex.getMessage()
-                                                            : upex.getClass().getSimpleName();
-                                            shell.appendLog("[配台試行] 試行後処理で例外: " + em);
-                                            shell.appendLog(
-                                                    "[dispatch-editor] trial post-run: " + em);
-                                            if (stage35) {
-                                                shell.notifyStage35OvertimeSimulationFailure(em);
-                                            } else {
-                                                shell.notifyStage3DispatchTrialFailure(em);
-                                            }
+                                        if (stage35) {
+                                            shell.notifyStage35OvertimeSimulationSuccess();
+                                        } else {
+                                            shell.notifyStage3DispatchTrialSuccess();
                                         }
-                                    } finally {
+                                    } catch (Throwable upex) {
+                                        String em =
+                                                upex.getMessage() != null
+                                                        ? upex.getMessage()
+                                                        : upex.getClass().getSimpleName();
+                                        shell.appendLog("[配台試行] 試行後処理で例外: " + em);
+                                        shell.appendLog("[dispatch-editor] trial post-run: " + em);
+                                        if (stage35) {
+                                            shell.notifyStage35OvertimeSimulationFailure(em);
+                                        } else {
+                                            shell.notifyStage3DispatchTrialFailure(em);
+                                        }
                                         shell.endDispatchTrialGating(timingKind);
+                                        return;
                                     }
+                                    Platform.runLater(
+                                            () -> {
+                                                try {
+                                                    showDispatchQtyShortfallDialogIfNeeded(owner);
+                                                    showDispatchShortageHintsDialogIfNeeded(owner);
+                                                    DispatchTrialConsistency.CheckResult cr =
+                                                            DispatchTrialConsistency.compareDocuments(
+                                                                    trialInputSnapshot, doc);
+                                                    if (cr.consistent()) {
+                                                        shell.appendLog(
+                                                                "[整合性] 保存済み表と試行後の成果物（結果_配台表.json）は、"
+                                                                        + "依頼NO×機械名の当日配台数量合計および配台試行順番（工程別最小値）の観点で一致しました。");
+                                                        shell.appendLog(
+                                                                "[dispatch-editor] trial: 整合性OK（保存表と再読込JSONの数量・試行順）");
+                                                    } else {
+                                                        shell.appendLog(
+                                                                "[整合性] 保存済み表と試行後の成果物に差異があります（詳細は下記）:");
+                                                        for (String dl : cr.detailLines()) {
+                                                            shell.appendLog(dl);
+                                                        }
+                                                        Alert warn = new Alert(AlertType.WARNING);
+                                                        warn.setTitle("配台試行: 整合性確認");
+                                                        warn.setHeaderText(
+                                                                "試行前の保存内容と、試行後に読み込んだ結果_配台表.json に差異があります。");
+                                                        warn.setContentText(
+                                                                String.join("\n", cr.detailLines()));
+                                                        warn.show();
+                                                        shell.appendLog(
+                                                                "[dispatch-editor] trial: 整合性に差異あり（"
+                                                                        + cr.detailLines().size()
+                                                                        + " 件）— ログ・ダイアログ参照");
+                                                    }
+                                                    DispatchTrialUnassignedWizard.showIfNeeded(
+                                                            owner, shell, Path.of(shortagesPath));
+                                                } catch (Throwable deferredEx) {
+                                                    String em =
+                                                            deferredEx.getMessage() != null
+                                                                    ? deferredEx.getMessage()
+                                                                    : deferredEx.getClass()
+                                                                            .getSimpleName();
+                                                    shell.appendLog(
+                                                            "[配台試行] 試行後確認ダイアログで例外: " + em);
+                                                    shell.appendLog(
+                                                            "[dispatch-editor] trial post-run deferred: "
+                                                                    + em);
+                                                } finally {
+                                                    shell.endDispatchTrialGating(timingKind);
+                                                }
+                                            });
                                 });
                     } catch (Throwable sucEx) {
                         String em =
@@ -1405,7 +1466,9 @@ public final class DispatchInteractiveTabController {
         if (shell.blockIfMaterialLookupTablesHaveBlankValues("段階3.5（残業シミュ）")) {
             return;
         }
-        if (reloadInteractionDisabled || dispatchDocDirtySinceSave) {
+        if (reloadInteractionDisabled
+                || deliveryCalendarReloadBlocking
+                || dispatchDocDirtySinceSave) {
             return;
         }
         showReloadProgress();
@@ -1520,6 +1583,7 @@ public final class DispatchInteractiveTabController {
         if (!Files.isRegularFile(p)) {
             statusLabel.setText("ファイルなし");
             doc = ResultDispatchDocument.empty();
+            timelineCalendarMeters = DispatchTimelineCalendarMetersIndex.empty();
             clearDispatchShortfallUi();
             rebuildGrids(this::hideReloadProgress);
             clearDispatchDocDirty();
@@ -1543,13 +1607,17 @@ public final class DispatchInteractiveTabController {
                     @Override
                     protected ReloadBundle call() throws Exception {
                         ResultDispatchDocument d = ResultDispatchJsonIo.read(jsonPath);
-                        return new ReloadBundle(d);
+                        DispatchTimelineCalendarMetersIndex timeline =
+                                DispatchTimelineCalendarMetersIndex.tryLoadNearResultDispatchJson(
+                                        jsonPath);
+                        return new ReloadBundle(d, timeline);
                     }
                 };
         task.setOnSucceeded(
                 ev -> {
                     ReloadBundle b = task.getValue();
                     doc = b.doc();
+                    timelineCalendarMeters = b.timelineMeters();
                     if (validatePlanInputCoverage) {
                         showPlanInputCoverageGapErrorIfNeeded(jsonPath);
                     }
@@ -1610,6 +1678,7 @@ public final class DispatchInteractiveTabController {
                 ev -> {
                     Throwable loadEx = task.getException();
                     doc = ResultDispatchDocument.empty();
+                    timelineCalendarMeters = DispatchTimelineCalendarMetersIndex.empty();
                     statusLabel.setText("読込エラー");
                     shell.appendLog(
                             "[dispatch-editor] load failed: "
@@ -1658,6 +1727,7 @@ public final class DispatchInteractiveTabController {
         }
         bumpDispatchSpreadsheetLayoutGeneration();
         doc = ResultDispatchDocument.empty();
+        timelineCalendarMeters = DispatchTimelineCalendarMetersIndex.empty();
         clearDispatchShortfallUi();
         SpreadsheetTabularSupport.showScratchGridWhileReloading(wideSpreadsheet);
         SpreadsheetTabularSupport.showScratchGridWhileReloading(byDaySpreadsheet);
@@ -1671,7 +1741,7 @@ public final class DispatchInteractiveTabController {
         if (byDaySpreadsheet != null && byDaySpreadsheet.getScene() != null) {
             byDaySpreadsheet.requestLayout();
         }
-            }
+    }
 
     /**
      * 段階2パイプライン開始時に、古い行を誤認しないよう表の表示を空にする（JSON パスラベルは維持）。
@@ -1771,6 +1841,7 @@ public final class DispatchInteractiveTabController {
     private void applyDispatchTrialButtonEnabledState() {
         boolean blockTrial =
                 reloadInteractionDisabled
+                        || deliveryCalendarReloadBlocking
                         || dispatchDocDirtySinceSave
                         || isSummaryExportLockedByLockFile();
         if (dispatchTrialButton != null) {
@@ -1779,10 +1850,19 @@ public final class DispatchInteractiveTabController {
         if (overtimeSimulationButton != null) {
             overtimeSimulationButton.setDisable(blockTrial);
         }
-        if (isSummaryExportLockedByLockFile() && !reloadInteractionDisabled) {
+        if (isSummaryExportLockedByLockFile() && !reloadInteractionDisabled && !deliveryCalendarReloadBlocking) {
             Tooltip t =
                     new Tooltip(
                             "サマリ xlsx を作成中です。完了後に配台試行するか、実行・ログタブの「ロック解除」を使用してください。");
+            if (dispatchTrialButton != null) {
+                dispatchTrialButton.setTooltip(t);
+            }
+            if (overtimeSimulationButton != null) {
+                overtimeSimulationButton.setTooltip(t);
+            }
+        } else if (deliveryCalendarReloadBlocking && !reloadInteractionDisabled) {
+            Tooltip t =
+                    new Tooltip("納期管理ビューを再読み込み中です。完了後に配台試行を実行してください。");
             if (dispatchTrialButton != null) {
                 dispatchTrialButton.setTooltip(t);
             }
@@ -1808,14 +1888,18 @@ public final class DispatchInteractiveTabController {
             }
         }
         if (dispatchTrialButton != null) {
-            if (isSummaryExportLockedByLockFile() && !reloadInteractionDisabled) {
+            if (deliveryCalendarReloadBlocking && !reloadInteractionDisabled) {
+                dispatchTrialButton.setText(DISPATCH_TRIAL_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD);
+            } else if (isSummaryExportLockedByLockFile() && !reloadInteractionDisabled) {
                 dispatchTrialButton.setText(DISPATCH_TRIAL_BUTTON_TEXT_SUMMARY_LOCKED);
             } else {
                 dispatchTrialButton.setText(DISPATCH_TRIAL_BUTTON_TEXT_DEFAULT);
             }
         }
         if (overtimeSimulationButton != null) {
-            if (isSummaryExportLockedByLockFile() && !reloadInteractionDisabled) {
+            if (deliveryCalendarReloadBlocking && !reloadInteractionDisabled) {
+                overtimeSimulationButton.setText(OVERTIME_SIM_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD);
+            } else if (isSummaryExportLockedByLockFile() && !reloadInteractionDisabled) {
                 overtimeSimulationButton.setText(OVERTIME_SIM_BUTTON_TEXT_SUMMARY_LOCKED);
             } else {
                 overtimeSimulationButton.setText(OVERTIME_SIM_BUTTON_TEXT_DEFAULT);
@@ -1830,18 +1914,26 @@ public final class DispatchInteractiveTabController {
         }
         boolean disabled =
                 reloadInteractionDisabled
+                        || deliveryCalendarReloadBlocking
                         || doc == null
                         || docHasActualDispatchQtyColumn()
                         || wideProfiles.isEmpty()
                         || dateAxis.isEmpty();
         alignToAladdinPlanButton.setDisable(disabled);
-        if (docHasActualDispatchQtyColumn()) {
+        if (deliveryCalendarReloadBlocking) {
+            alignToAladdinPlanButton.setText(ALIGN_TO_ALADDIN_PLAN_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD);
             alignToAladdinPlanButton.setTooltip(
-                    new Tooltip("段階3試行後は (段階3前) 数量の自動整列はできません"));
+                    new Tooltip("納期管理ビューを再読み込み中です。完了後に実行してください。"));
         } else {
-            alignToAladdinPlanButton.setTooltip(
-                    new Tooltip(
-                            "段階3前: タスク×日付の (段階3前) 数量を (アラ計画) に沿うようロール単位で再配分する"));
+            alignToAladdinPlanButton.setText(ALIGN_TO_ALADDIN_PLAN_BUTTON_TEXT_DEFAULT);
+            if (docHasActualDispatchQtyColumn()) {
+                alignToAladdinPlanButton.setTooltip(
+                        new Tooltip("段階3試行後は (段階3前) 数量の自動整列はできません"));
+            } else {
+                alignToAladdinPlanButton.setTooltip(
+                        new Tooltip(
+                                "段階3前: タスク×日付の (段階3前) 数量を (アラ計画) に沿うようロール単位で再配分する"));
+            }
         }
     }
 
@@ -1921,8 +2013,13 @@ public final class DispatchInteractiveTabController {
     }
 
     private List<LocalDate> computeDateAxisList() {
-        List<LocalDate> distinct = ResultDispatchPivot.distinctDates(doc.rows());
-        if (distinct.isEmpty()) {
+        if (aladdinPlanLookup.isEmpty()) {
+            aladdinPlanLookup = loadAladdinPlanLookupForDisplay();
+        }
+        List<LocalDate> range =
+                DispatchInteractiveDateAxis.computeInclusiveRange(
+                        doc, aladdinPlanLookup, lastDispatchShortfallRows);
+        if (range.isEmpty()) {
             List<LocalDate> ax = new ArrayList<>();
             LocalDate t = LocalDate.now();
             for (int i = 0; i < 14; i++) {
@@ -1930,7 +2027,6 @@ public final class DispatchInteractiveTabController {
             }
             return ax;
         }
-        List<LocalDate> range = ResultDispatchPivot.dateRangeInclusive(distinct);
         return range;
     }
 
@@ -2169,18 +2265,10 @@ public final class DispatchInteractiveTabController {
                 LocalDate day = axis.get(j);
                 wr.setAmount(
                         j,
-                        ResultDispatchPivot.sumQuantityForProfileAndDateForWideMerge(
-                                doc.rows(),
-                                profile,
-                                day,
-                                ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS));
+                        wideDisplayPlanMetersForDate(profile, day));
                 wr.setActualAmount(
                         j,
-                        ResultDispatchPivot.sumActualQuantityForProfileAndDateForWideMerge(
-                                doc.rows(),
-                                profile,
-                                day,
-                                ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS));
+                        wideDisplayActualMetersForDate(profile, day));
             }
             rowItems.add(wr);
 
@@ -2254,12 +2342,10 @@ public final class DispatchInteractiveTabController {
                 LocalDate day = axis.get(j);
                 br.setAmount(
                         j,
-                        ResultDispatchPivot.sumQuantityForProcessMachineDate(
-                                doc.rows(), en.getKey(), en.getValue(), day));
+                        byDayDisplayPlanMetersForDate(en.getKey(), en.getValue(), day));
                 br.setActualAmount(
                         j,
-                        ResultDispatchPivot.sumActualQuantityForProcessMachineDate(
-                                doc.rows(), en.getKey(), en.getValue(), day));
+                        byDayDisplayActualMetersForDate(en.getKey(), en.getValue(), day));
             }
             byItems.add(br);
         }
@@ -3124,30 +3210,96 @@ public final class DispatchInteractiveTabController {
         double qtyConv = ResultDispatchNormalizer.parseDouble(wr.getStatic("換算数量"));
         double actualDone = ResultDispatchNormalizer.parseDouble(wr.getStatic("実加工数"));
         double rollUnitM = resolveRollUnitForWideRow(wr).unitM();
+        double actualTotal = stage3DispatchQtyTotalForWideRow(wr);
         return Stage3DispatchQtyBalanceCheck.formatCheck(
-                qtyConv,
-                actualDone,
-                stage3DispatchQtyTotalForWideRow(wr),
-                docHasActualDispatchQtyColumn(),
-                rollUnitM);
+                        qtyConv,
+                        actualDone,
+                        actualTotal,
+                        docHasActualDispatchQtyColumn(),
+                        rollUnitM);
     }
 
     /**
-     * 段階3配台数・照合の合計。手動移動は {@link ResultDispatchSchema#COL_DISPATCH_QTY} のみ更新するため、
-     * 試行後は当日配台数量の日別合計を使う（未試行時は実配台合計にフォールバック）。
+     * 段階3配台数・照合の合計。段階3試行後（実配台数量列あり）はタイムライン実績（段階3後）の日別合計。
+     * 未試行時は当日配台数量の合計にフォールバック。
      */
     private double stage3DispatchQtyTotalForWideRow(WideRow wr) {
         if (docHasActualDispatchQtyColumn()) {
-            return wr.sumPlanAmounts();
+            return wr.sumActualAmounts();
         }
-        return wr.sumActualAmounts();
+        return wr.sumPlanAmounts();
+    }
+
+    /**
+     * 段階3試行後は設備ガント契約の暦日別 m を優先（配台表1行集約とガントの差を解消）。未読込時は配台表。
+     */
+    private double wideDisplayPlanMetersForDate(Map<String, String> profile, LocalDate day) {
+        if (docHasActualDispatchQtyColumn() && timelineCalendarMeters.isLoaded()) {
+            Optional<Double> tl =
+                    timelineCalendarMeters.metersForTaskProfile(
+                            profile.get("依頼NO"),
+                            profile.get(ResultDispatchSchema.COL_PROCESS),
+                            profile.get(ResultDispatchSchema.COL_MACHINE),
+                            day);
+            if (tl.isPresent()) {
+                return tl.get();
+            }
+        }
+        return ResultDispatchPivot.sumQuantityForProfileAndDateForWideMerge(
+                doc.rows(),
+                profile,
+                day,
+                ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+    }
+
+    private double wideDisplayActualMetersForDate(Map<String, String> profile, LocalDate day) {
+        if (docHasActualDispatchQtyColumn() && timelineCalendarMeters.isLoaded()) {
+            Optional<Double> tl =
+                    timelineCalendarMeters.metersForTaskProfile(
+                            profile.get("依頼NO"),
+                            profile.get(ResultDispatchSchema.COL_PROCESS),
+                            profile.get(ResultDispatchSchema.COL_MACHINE),
+                            day);
+            if (tl.isPresent()) {
+                return tl.get();
+            }
+        }
+        return ResultDispatchPivot.sumActualQuantityForProfileAndDateForWideMerge(
+                doc.rows(),
+                profile,
+                day,
+                ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+    }
+
+    private double byDayDisplayPlanMetersForDate(String process, String machine, LocalDate day) {
+        if (docHasActualDispatchQtyColumn() && timelineCalendarMeters.isLoaded()) {
+            Optional<Double> tl =
+                    timelineCalendarMeters.metersForProcessMachine(process, machine, day);
+            if (tl.isPresent()) {
+                return tl.get();
+            }
+        }
+        return ResultDispatchPivot.sumQuantityForProcessMachineDate(
+                doc.rows(), process, machine, day);
+    }
+
+    private double byDayDisplayActualMetersForDate(String process, String machine, LocalDate day) {
+        if (docHasActualDispatchQtyColumn() && timelineCalendarMeters.isLoaded()) {
+            Optional<Double> tl =
+                    timelineCalendarMeters.metersForProcessMachine(process, machine, day);
+            if (tl.isPresent()) {
+                return tl.get();
+            }
+        }
+        return ResultDispatchPivot.sumActualQuantityForProcessMachineDate(
+                doc.rows(), process, machine, day);
     }
 
     private double stage3DispatchQtyTotalForByDayRow(ByDayRow br) {
         if (docHasActualDispatchQtyColumn()) {
-            return br.sumPlanAmounts();
+            return br.sumActualAmounts();
         }
-        return br.sumActualAmounts();
+        return br.sumPlanAmounts();
     }
 
     private String byDayStaticCellText(ByDayRow br, String title) {
@@ -3339,9 +3491,15 @@ public final class DispatchInteractiveTabController {
             return new ArrayList<>(dateAxis);
         }
         if (snapshotDoc != null) {
-            List<LocalDate> distinct = ResultDispatchPivot.distinctDates(snapshotDoc.rows());
-            if (!distinct.isEmpty()) {
-                return ResultDispatchPivot.dateRangeInclusive(distinct);
+            Map<String, Map<String, Map<String, Map<String, Double>>>> lookup =
+                    aladdinPlanLookup.isEmpty()
+                            ? loadAladdinPlanLookupForDisplay()
+                            : aladdinPlanLookup;
+            List<LocalDate> axis =
+                    DispatchInteractiveDateAxis.computeInclusiveRange(
+                            snapshotDoc, lookup, lastDispatchShortfallRows);
+            if (!axis.isEmpty()) {
+                return axis;
             }
         }
         return computeDateAxisList();
@@ -3360,6 +3518,10 @@ public final class DispatchInteractiveTabController {
         return snap != null ? snap : 0.0;
     }
 
+    /**
+     * 試行後にユーザーが当日配台数量を手動変更したセルか。
+     * 試行前に当該暦日の配台が無かった日（snap≈0）や、タイムライン未達（plan≠actual）は含めない。
+     */
     private boolean isStage3QtyRevisedAfterTrial(
             Map<String, String> profile,
             LocalDate day,
@@ -3375,10 +3537,10 @@ public final class DispatchInteractiveTabController {
                         profile.get(ResultDispatchSchema.COL_MACHINE),
                         day.toString());
         Double snap = stage3TrialPlanQtySnapshot.get(key);
-        if (snap != null) {
-            return Math.abs(planAmt - snap) > eps;
+        if (snap == null || snap <= eps) {
+            return false;
         }
-        return Math.abs(planAmt - actualAmt) > eps;
+        return Math.abs(planAmt - snap) > eps;
     }
 
     private double aladdinPlanQtyForWideRow(WideRow wr, LocalDate day) {
@@ -3530,8 +3692,9 @@ public final class DispatchInteractiveTabController {
         if (!cell.getStyleClass().contains(DISPATCH_DATE_QTY_GRAPHIC_ONLY_STYLE_CLASS)) {
             cell.getStyleClass().add(DISPATCH_DATE_QTY_GRAPHIC_ONLY_STYLE_CLASS);
         }
-        SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(cell, "");
-        Tooltip.install(graphic, new Tooltip(formatStage3FixedSlotsAsText(slots, false)));
+        String copyText = formatStage3FixedSlotsAsText(slots, false);
+        SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(cell, copyText);
+        Tooltip.install(graphic, new Tooltip(copyText));
     }
 
     /**
@@ -3552,7 +3715,7 @@ public final class DispatchInteractiveTabController {
             if (!cell.getStyleClass().contains(DISPATCH_DATE_QTY_GRAPHIC_ONLY_STYLE_CLASS)) {
                 cell.getStyleClass().add(DISPATCH_DATE_QTY_GRAPHIC_ONLY_STYLE_CLASS);
             }
-            SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(cell, "");
+            SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(cell, qtxt != null ? qtxt : "");
             Tooltip.install(graphic, new Tooltip(qtxt));
         } else {
             clearDispatchQtyCellGraphic(cell);

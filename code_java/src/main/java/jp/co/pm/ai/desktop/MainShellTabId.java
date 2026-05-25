@@ -18,6 +18,8 @@ public enum MainShellTabId {
     USER_PROFILES("userProfiles"),
     MASTER_SUMMARY("masterSummary"),
     PLAN_INPUT("planInput"),
+    /** 加工依頼書の照合・対比型入力（湖南工場・ReconciliationApp 由来）。 */
+    REQUEST_FORM_INPUT("requestFormInput"),
     STAGE1_PREVIEW("stage1Preview"),
     /** メイン画面「材料・製品種類情報」: {@code code/} 配下の製品・原反キー・値テーブル。 */
     CODE_LOOKUP_TABLES("codeLookupTables"),
@@ -30,6 +32,8 @@ public enum MainShellTabId {
     PLAN_RESULT_VIEWER("planResultViewer"),
     EQUIPMENT_GANTT_GRAPHIC("equipmentGanttGraphic"),
     GANTT_PERSON_BADGE_DESIGN("ganttPersonBadgeDesign"),
+    /** 依頼書プレビュー・原本更新バッジのデザイン。 */
+    REQUEST_FORM_PREVIEW_BADGE_DESIGN("requestFormPreviewBadgeDesign"),
     OPERATOR_CARD("operatorCard"),
     DISPATCH_INTERACTIVE("dispatchInteractive"),
     /** 配台ワークスペースのスナップショット履歴（結果 JSON・ガント表示・列順の復元）。 */

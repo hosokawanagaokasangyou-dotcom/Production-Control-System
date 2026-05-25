@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -34,6 +35,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.Slider;
+import javafx.scene.control.DatePicker;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
@@ -170,6 +172,15 @@ public final class EquipmentGanttGraphicTabController {
 
     @FXML
     private BorderPane contentPane;
+
+    @FXML
+    private DatePicker ganttJumpDatePicker;
+
+    @FXML
+    private Button ganttJumpButton;
+
+    /** 読込直後の DatePicker 初期化中はジャンプを抑止する。 */
+    private boolean suppressGanttJumpDatePicker;
 
     private MainShellController shell;
 
@@ -368,7 +379,103 @@ public final class EquipmentGanttGraphicTabController {
         populateEquipmentGraphicBarFontComboItems();
         attachGraphicToolbarListeners();
         attachPrintTimeRangeListeners();
+        attachGanttJumpDatePickerListeners();
         refreshPrintTimeRegularHint();
+    }
+
+    private void attachGanttJumpDatePickerListeners() {
+        if (ganttJumpDatePicker != null) {
+            ganttJumpDatePicker
+                    .valueProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (suppressGanttJumpDatePicker || b == null) {
+                                    return;
+                                }
+                                performGanttDateJump(b);
+                            });
+        }
+    }
+
+    @FXML
+    private void onGanttJumpButtonAction() {
+        if (ganttJumpDatePicker == null) {
+            return;
+        }
+        LocalDate date = ganttJumpDatePicker.getValue();
+        if (date != null) {
+            performGanttDateJump(date);
+        }
+    }
+
+    private void performGanttDateJump(LocalDate date) {
+        BorderPane gantt = currentEquipmentGanttBorderPane();
+        if (gantt == null) {
+            setGanttJumpStatus("ガントが未読込のためジャンプできません。");
+            return;
+        }
+        EquipmentGraphicGanttPane.GanttDateJumpResult result =
+                EquipmentGraphicGanttPane.scrollToDate(gantt, date);
+        switch (result) {
+            case SUCCESS -> setGanttJumpStatus(
+                    String.format("日付 %s の行へジャンプしました。", formatGanttJumpDate(date)));
+            case NO_SUCH_DATE -> setGanttJumpStatus(
+                    String.format("日付 %s はこのガントに含まれません。", formatGanttJumpDate(date)));
+            case NO_GANTT -> setGanttJumpStatus("ガントが未読込のためジャンプできません。");
+            case SCROLL_UNAVAILABLE -> setGanttJumpStatus("スクロール位置を変更できませんでした。");
+            default -> setGanttJumpStatus("");
+        }
+    }
+
+    private BorderPane currentEquipmentGanttBorderPane() {
+        if (graphicRootWrapper == null || !(graphicRootWrapper.getCenter() instanceof BorderPane bp)) {
+            return null;
+        }
+        return bp;
+    }
+
+    private void refreshGanttJumpDatePicker() {
+        if (ganttJumpDatePicker == null) {
+            return;
+        }
+        BorderPane gantt = currentEquipmentGanttBorderPane();
+        List<LocalDate> dates =
+                gantt != null
+                        ? EquipmentGraphicGanttPane.listAvailableDates(gantt)
+                        : List.of();
+        boolean enabled = !dates.isEmpty();
+        ganttJumpDatePicker.setDisable(!enabled);
+        if (ganttJumpButton != null) {
+            ganttJumpButton.setDisable(!enabled);
+        }
+        if (!enabled) {
+            suppressGanttJumpDatePicker = true;
+            try {
+                ganttJumpDatePicker.setValue(null);
+            } finally {
+                suppressGanttJumpDatePicker = false;
+            }
+            return;
+        }
+        suppressGanttJumpDatePicker = true;
+        try {
+            LocalDate current = ganttJumpDatePicker.getValue();
+            if (current == null || !dates.contains(current)) {
+                ganttJumpDatePicker.setValue(dates.get(0));
+            }
+        } finally {
+            suppressGanttJumpDatePicker = false;
+        }
+    }
+
+    private static String formatGanttJumpDate(LocalDate date) {
+        return date != null ? date.toString() : "—";
+    }
+
+    private void setGanttJumpStatus(String message) {
+        if (statusLabel != null && message != null && !message.isBlank()) {
+            statusLabel.setText(message);
+        }
     }
 
     /** FXML で定義済みのコントロールへ値変更リスナーを付ける（ノード生成は FXML 側）。 */
@@ -1479,6 +1586,7 @@ public final class EquipmentGanttGraphicTabController {
             contentPane.setCenter(emptyPlaceholder(placeholderMsg));
         }
         expandSourceAccordionForAttention();
+        refreshGanttJumpDatePicker();
     }
 
     private void applyGraphicCenter(JsonTableIo.SheetTable st) {
@@ -1505,6 +1613,7 @@ public final class EquipmentGanttGraphicTabController {
                                     + skipReason
                                     + "\n正しい master.xlsm と段階2出力を確認してください。"));
             installGraphicWheelZoomIfNeeded();
+            refreshGanttJumpDatePicker();
             return;
         }
 
@@ -1536,6 +1645,7 @@ public final class EquipmentGanttGraphicTabController {
                     && h.scheduleViewportRepaint() != null) {
                 Platform.runLater(h.scheduleViewportRepaint());
             }
+            refreshGanttJumpDatePicker();
             return;
         }
         equipmentGanttGraphicRenderKey = renderKeyNow;
@@ -1568,6 +1678,7 @@ public final class EquipmentGanttGraphicTabController {
                 && h.scheduleViewportRepaint() != null) {
             Platform.runLater(h.scheduleViewportRepaint());
         }
+        refreshGanttJumpDatePicker();
     }
 
     /**
@@ -1759,7 +1870,9 @@ public final class EquipmentGanttGraphicTabController {
     }
 
     private List<Parent> composeGanttPrintPages(PreparedGanttPrintJob prepared, PageLayout layout) {
-        List<Parent> pages = new ArrayList<>(prepared.groups().size());
+        double paperW = layout.getPrintableWidth();
+        double paperH = layout.getPrintableHeight();
+        List<Parent> pages = new ArrayList<>();
         for (List<Integer> idxGroup : prepared.groups()) {
             ObservableList<ObservableList<String>> slice =
                     EquipmentGanttPrintDaySlices.sliceRowsByIndices(
@@ -1769,13 +1882,29 @@ public final class EquipmentGanttGraphicTabController {
                             prepared.printTable().badgeSlotRows(),
                             idxGroup,
                             prepared.slotCols());
-            EquipmentGanttPrintPageSpec printSpec =
+            EquipmentGanttPrintPageSpec daySpec =
                     equipmentGanttPrintPageSpec(
                             prepared.printCols(),
                             slice,
                             badgeSlice,
                             prepared.printRange());
-            pages.add(EquipmentGanttPrintCompositor.composePage(printSpec, layout));
+            List<List<Integer>> localChunks =
+                    EquipmentGraphicGanttPane.splitLocalRowIndicesToFitPaper(
+                            daySpec, paperW, paperH);
+            for (List<Integer> localIdx : localChunks) {
+                ObservableList<ObservableList<String>> pageRows =
+                        EquipmentGanttPrintDaySlices.sliceRowsByIndices(slice, localIdx);
+                List<List<String>> pageBadges =
+                        EquipmentGanttPrintDaySlices.sliceBadgeRowsAligned(
+                                badgeSlice, localIdx, prepared.slotCols());
+                EquipmentGanttPrintPageSpec printSpec =
+                        equipmentGanttPrintPageSpec(
+                                prepared.printCols(),
+                                pageRows,
+                                pageBadges,
+                                prepared.printRange());
+                pages.add(EquipmentGanttPrintCompositor.composePage(printSpec, layout));
+            }
         }
         return pages;
     }

@@ -1,0 +1,305 @@
+/* style_midnight.css - Premium Midnight Blue Theme */
+.root {
+    -fx-font-family: 'Meiryo', 'Yu Gothic', sans-serif;
+    -fx-background-color: #0F172A; /* Deepest Midnight Slate Navy */
+}
+
+/* Custom Containers */
+.pane-container {
+    -fx-background-color: #1E293B; /* Elegant Dark Slate Navy */
+    -fx-border-color: #334155;
+    -fx-border-width: 1px;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+    -fx-padding: 12px;
+}
+
+.pane-title-left {
+    -fx-text-fill: #38BDF8; /* Bright Sky Blue */
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-padding: 0 0 8px 0;
+    -fx-border-color: transparent transparent #334155 transparent;
+    -fx-border-width: 1px;
+}
+
+.pane-title-right {
+    -fx-text-fill: #38BDF8;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+/* Top bar styles */
+.top-bar {
+    -fx-background-color: #0B0F19; /* Solid deep dark bar */
+    -fx-padding: 10px 15px;
+    -fx-border-color: transparent transparent #1E293B transparent;
+    -fx-border-width: 1px;
+}
+
+.top-title {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.top-status {
+    -fx-text-fill: #94A3B8;
+    -fx-font-size: 12px;
+}
+
+/* ScrollPane */
+.scroll-pane {
+    -fx-background-color: transparent;
+    -fx-viewport-background-color: transparent;
+}
+
+/* Section titles on the left form (Highly legible contrasting accents) */
+.section-title-form {
+    -fx-text-fill: #38BDF8; /* Soft Sky Blue */
+}
+
+.section-title-new-mode {
+    -fx-text-fill: #34D399; /* Bright Emerald Green */
+}
+
+.section-title-prod {
+    -fx-text-fill: #60A5FA; /* Bright Royal Blue */
+}
+
+.section-title-raw {
+    -fx-text-fill: #F59E0B; /* Bright Amber */
+}
+
+.section-title-workflow {
+    -fx-text-fill: #C084FC; /* Bright Soft Purple */
+}
+
+/* Labels */
+.label {
+    -fx-text-fill: #E2E8F0; /* Soft crisp white/slate */
+}
+
+/* Form Inputs (White background with black text for supreme readability) */
+.text-field, .combo-box {
+    -fx-background-color: #FFFFFF;
+    -fx-text-fill: #0F172A;
+    -fx-prompt-text-fill: #64748B;
+    -fx-border-color: #CBD5E1;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+    -fx-padding: 4px 8px;
+}
+
+.text-field:focused, .combo-box:focused {
+    -fx-border-color: #38BDF8;
+    -fx-background-color: #F8FAFC;
+}
+
+.combo-box .list-cell {
+    -fx-text-fill: #0F172A;
+}
+
+.combo-box-popup .list-view {
+    -fx-background-color: #FFFFFF;
+    -fx-border-color: #CBD5E1;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}
+
+.combo-box-popup .list-view .list-cell {
+    -fx-text-fill: #0F172A;
+    -fx-background-color: #FFFFFF;
+    -fx-padding: 6px 12px;
+}
+
+.combo-box-popup .list-view .list-cell:hover {
+    -fx-background-color: #38BDF8;
+    -fx-text-fill: #FFFFFF;
+}
+
+/* Yellow Edaban Input highlight - styled elegantly for high visibility and contrast */
+.paper-edaban-input {
+    -fx-background-color: #FEF9E7;
+    -fx-text-fill: #7D6608;
+    -fx-border-color: #F4D03F;
+}
+
+.paper-edaban-input:focused {
+    -fx-background-color: #FFFDF3;
+    -fx-border-color: #38BDF8;
+}
+
+/* Premium Buttons Styling */
+.button {
+    -fx-background-color: #3B82F6; /* Modern Blue */
+    -fx-text-fill: #FFFFFF;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+    -fx-padding: 6px 12px;
+}
+
+.button:hover {
+    -fx-background-color: #2563EB;
+}
+
+.btn-reload {
+    -fx-background-color: #3B82F6;
+}
+
+.btn-reload:hover {
+    -fx-background-color: #2563EB;
+}
+
+.btn-new-record {
+    -fx-background-color: #10B981; /* Emerald Green */
+}
+
+.btn-new-record:hover {
+    -fx-background-color: #059669;
+}
+
+.btn-save-local {
+    -fx-background-color: #64748B; /* Modern Slate grey */
+}
+
+.btn-save-local:hover {
+    -fx-background-color: #475569;
+}
+
+.btn-transfer {
+    -fx-background-color: #4F46E5; /* Solid Indigo Violet like user reference image */
+}
+
+.btn-transfer:hover {
+    -fx-background-color: #4338CA;
+}
+
+/* Discrepancy label styling */
+.discrepancy-label-info {
+    -fx-background-color: #334155;
+    -fx-text-fill: #94A3B8;
+    -fx-font-weight: bold;
+    -fx-padding: 8px 12px;
+    -fx-background-radius: 4px;
+}
+
+.discrepancy-label-matched {
+    -fx-background-color: #064E3B; /* Deep emerald */
+    -fx-text-fill: #34D399; /* Light green */
+    -fx-font-weight: bold;
+    -fx-padding: 8px 12px;
+    -fx-background-radius: 4px;
+}
+
+.discrepancy-label-discrepancy {
+    -fx-background-color: #7F1D1D; /* Deep red */
+    -fx-text-fill: #F87171; /* Light red */
+    -fx-font-weight: bold;
+    -fx-padding: 8px 12px;
+    -fx-background-radius: 4px;
+}
+
+.discrepancy-label-unregistered {
+    -fx-background-color: #78350F; /* Deep amber */
+    -fx-text-fill: #FBBF24; /* Light amber */
+    -fx-font-weight: bold;
+    -fx-padding: 8px 12px;
+    -fx-background-radius: 4px;
+}
+
+/* --- Settings Tab Styles --- */
+.form-scroll-pane {
+    -fx-background-color: #0F172A;
+}
+
+.form-tab-container {
+    -fx-padding: 20px;
+    -fx-background-color: #0F172A;
+}
+
+.paper-main-title {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+}
+
+.paper-main-subtitle {
+    -fx-text-fill: #94A3B8;
+    -fx-font-size: 12px;
+}
+
+.settings-card {
+    -fx-background-color: #1E293B;
+    -fx-border-color: #334155;
+    -fx-border-width: 1px;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+    -fx-padding: 15px;
+}
+
+.settings-card-title {
+    -fx-text-fill: #38BDF8;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+}
+
+.settings-list {
+    -fx-background-color: #0F172A;
+    -fx-border-color: #334155;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}
+
+.settings-list .list-cell {
+    -fx-background-color: #0F172A;
+    -fx-text-fill: #F1F5F9;
+    -fx-padding: 6px 10px;
+}
+
+.settings-list .list-cell:hover, .settings-list .list-cell:selected {
+    -fx-background-color: #38BDF8;
+    -fx-text-fill: #0F172A;
+}
+
+.settings-new-input {
+    -fx-background-color: #FFFFFF;
+    -fx-text-fill: #0F172A;
+}
+
+.btn-settings-add {
+    -fx-background-color: #10B981;
+}
+
+.btn-settings-add:hover {
+    -fx-background-color: #059669;
+}
+
+.btn-settings-del {
+    -fx-background-color: #EF4444;
+}
+
+.btn-settings-del:hover {
+    -fx-background-color: #DC2626;
+}
+
+/* Copy Button */
+.btn-copy {
+    -fx-background-color: #334155;
+    -fx-text-fill: #E2E8F0;
+    -fx-font-size: 11px;
+    -fx-padding: 3px 6px;
+    -fx-border-color: #475569;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}
+
+.btn-copy:hover {
+    -fx-background-color: #475569;
+    -fx-text-fill: #FFFFFF;
+    -fx-border-color: #38BDF8;
+}

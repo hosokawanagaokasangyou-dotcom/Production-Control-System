@@ -80,6 +80,8 @@ import java.util.Map;
  * @param equipmentGanttPlanJsonPath 設備ガント・グラフィックタブの計画 JSON パス（空は未保存）
  * @param stage1NetworkCacheBadgeLabel 段階1付近バッジの表示文言（ネットワークソースがキャッシュのとき）
  * @param stage1NetworkCacheBadgeStyle 同バッジの {@link PersonBadgeStyle}
+ * @param requestFormPreviewUpdateBadgeLabel 依頼書プレビュー・原本更新バッジの表示文言
+ * @param requestFormPreviewUpdateBadgeStyle 同バッジの {@link PersonBadgeStyle}
  * @param mainShellTabOrganizerHeaderGlow メインシェル「タブの並び」で指定した見出し色にグロー（dropshadow）を付けるか
  * @param mainShellTabOrganizerHeaderGlowStrength 見出しグローの強さ（0.0〜1.0、1.0 が従来既定の見え方）
  * @param pushButtonDesignPrefs プッシュボタン見た目のユーザー上書き
@@ -165,6 +167,8 @@ public record DesktopSessionState(
         String equipmentGanttPlanJsonPath,
         String stage1NetworkCacheBadgeLabel,
         PersonBadgeStyle stage1NetworkCacheBadgeStyle,
+        String requestFormPreviewUpdateBadgeLabel,
+        PersonBadgeStyle requestFormPreviewUpdateBadgeStyle,
         boolean mainShellTabOrganizerHeaderGlow,
         double mainShellTabOrganizerHeaderGlowStrength,
         PushButtonDesignPrefs pushButtonDesignPrefs,
@@ -452,6 +456,8 @@ public record DesktopSessionState(
                 "",
                 "",
                 PersonBadgeStyle.networkSourceCacheBadgeDefault(),
+                "更新",
+                PersonBadgeStyle.requestFormPreviewUpdateBadgeDefault(),
                 true,
                 1d,
                 PushButtonDesignPrefs.inactiveDefaults(),
@@ -543,6 +549,8 @@ public record DesktopSessionState(
                 bootstrap.equipmentGanttPlanJsonPath(),
                 stage1NetworkCacheBadgeLabel(),
                 stage1NetworkCacheBadgeStyle(),
+                requestFormPreviewUpdateBadgeLabel(),
+                requestFormPreviewUpdateBadgeStyle(),
                 mainShellTabOrganizerHeaderGlow(),
                 mainShellTabOrganizerHeaderGlowStrength(),
                 pushButtonDesignPrefs(),

@@ -1,0 +1,199 @@
+/* style_emerald.css - Forest Night Theme */
+.root {
+    -fx-font-family: 'Meiryo', 'Yu Gothic', sans-serif;
+    -fx-background-color: #004D40; /* Forest Deep Dark Green */
+}
+
+.label {
+    -fx-text-fill: #E0F2F1;
+}
+
+.pane-container {
+    -fx-background-color: #00695C;
+    -fx-border-color: #00796B;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+    -fx-padding: 12px;
+}
+
+.pane-title-left {
+    -fx-text-fill: #E0F2F1;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-border-color: transparent transparent #00796B transparent;
+    -fx-border-width: 1px;
+    -fx-padding: 0 0 8px 0;
+}
+
+.pane-title-right {
+    -fx-text-fill: #E0F2F1;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+.top-bar {
+    -fx-background-color: #00332C;
+    -fx-padding: 10px 15px;
+    -fx-border-color: transparent transparent #00796B transparent;
+    -fx-border-width: 1px;
+}
+
+.top-title {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.top-status {
+    -fx-text-fill: #E0F2F1;
+    -fx-font-size: 12px;
+}
+
+/* Form inputs styling */
+.text-field, .combo-box {
+    -fx-background-color: #00796B;
+    -fx-text-fill: white;
+    -fx-prompt-text-fill: #80CBC4;
+    -fx-border-color: #004D40;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}
+
+.text-field:focused, .combo-box:focused {
+    -fx-border-color: #1ABC9C;
+    -fx-background-color: #005A50;
+}
+
+.combo-box .list-cell {
+    -fx-text-fill: white;
+}
+
+.combo-box-popup .list-view {
+    -fx-background-color: #00796B;
+    -fx-border-color: #004D40;
+}
+
+.combo-box-popup .list-view .list-cell {
+    -fx-text-fill: white;
+    -fx-background-color: #00796B;
+}
+
+.combo-box-popup .list-view .list-cell:hover {
+    -fx-background-color: #1ABC9C;
+    -fx-text-fill: white;
+}
+
+/* Branch code input dark yellow highlight */
+.paper-edaban-input {
+    -fx-background-color: #3E3E0E;
+    -fx-text-fill: #FFFFFF;
+    -fx-border-color: #FFEB3B;
+}
+
+/* Buttons */
+.button {
+    -fx-background-color: #F39C12; /* Accent orange */
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}
+
+.button:hover {
+    -fx-background-color: #D68910;
+}
+
+.btn-reload {
+    -fx-background-color: #F39C12;
+}
+
+.btn-reload:hover {
+    -fx-background-color: #D68910;
+}
+
+.btn-new-record {
+    -fx-background-color: #2ECC71;
+}
+
+.btn-new-record:hover {
+    -fx-background-color: #27AE60;
+}
+
+.btn-save-local {
+    -fx-background-color: #00796B;
+}
+
+.btn-save-local:hover {
+    -fx-background-color: #005A50;
+}
+
+.btn-transfer {
+    -fx-background-color: #F39C12;
+}
+
+.btn-transfer:hover {
+    -fx-background-color: #D68910;
+}
+
+/* Custom titles color accentuation */
+.section-title-form { -fx-text-fill: #81C784; }
+.section-title-new-mode { -fx-text-fill: #2ECC71; }
+.section-title-prod { -fx-text-fill: #4FC3F7; }
+.section-title-raw { -fx-text-fill: #A5D6A7; }
+.section-title-workflow { -fx-text-fill: #B39DDB; }
+
+/* Custom Discrepancy Labels */
+.discrepancy-label-discrepancy { -fx-background-color: #E74C3C; -fx-text-fill: white; -fx-padding: 6px 10px; -fx-background-radius: 3px; }
+.discrepancy-label-unregistered { -fx-background-color: #F1C40F; -fx-text-fill: #004D40; -fx-padding: 6px 10px; -fx-background-radius: 3px; }
+.discrepancy-label-matched { -fx-background-color: #2ECC71; -fx-text-fill: white; -fx-padding: 6px 10px; -fx-background-radius: 3px; }
+.discrepancy-label-info { -fx-background-color: #00695C; -fx-text-fill: #E0F2F1; -fx-padding: 6px 10px; -fx-background-radius: 3px; }
+
+/* Settings Card Styles */
+.settings-card {
+    -fx-background-color: #00695C;
+    -fx-border-color: #00796B;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+    -fx-padding: 12px;
+}
+.settings-card-title {
+    -fx-text-fill: #E0F2F1;
+    -fx-font-weight: bold;
+}
+.settings-list {
+    -fx-background-color: #004D40;
+    -fx-border-color: #00796B;
+}
+.settings-list .list-cell {
+    -fx-text-fill: #E0F2F1;
+    -fx-background-color: #004D40;
+}
+.settings-list .list-cell:hover, .settings-list .list-cell:selected {
+    -fx-background-color: #1ABC9C;
+    -fx-text-fill: white;
+}
+.btn-settings-add { -fx-background-color: #2ECC71; }
+.btn-settings-add:hover { -fx-background-color: #27AE60; }
+.btn-settings-del { -fx-background-color: #E74C3C; }
+.btn-settings-del:hover { -fx-background-color: #C0392B; }
+
+/* Copy Button */
+.btn-copy {
+    -fx-background-color: #00796B;
+    -fx-text-fill: #E0F2F1;
+    -fx-font-size: 11px;
+    -fx-padding: 3px 6px;
+    -fx-border-color: #004D40;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}
+
+.btn-copy:hover {
+    -fx-background-color: #005A50;
+    -fx-text-fill: white;
+    -fx-border-color: #1ABC9C;
+}

@@ -121,6 +121,9 @@ public final class PlanInputTabController {
     private static final String STAGE2_RUN_BUTTON_TEXT_SUMMARY_LOCKED =
             "段階2（サマリエクセル更新中）";
 
+    private static final String STAGE2_RUN_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD =
+            "段階2（納期管理ビュー更新中）";
+
     @FXML
     private CheckBox stage2SkipTodayDispatchCheckBox;
 
@@ -170,6 +173,9 @@ public final class PlanInputTabController {
      * 配台計画_タスク入力タブの表を手動変更したが「保存」または「再読み」でディスクと同期していないとき、段階2を抑止する。
      */
     private boolean stage2BlockedByUnsavedPlanInputTableEdit;
+
+    /** 納期管理ビュー再読み込み中（メインシェルから同期）。 */
+    private boolean deliveryCalendarReloadBlocking;
 
     @FXML
     private void initialize() {
@@ -331,6 +337,11 @@ public final class PlanInputTabController {
         applyStage2RunButtonEnabledState();
     }
 
+    void setDeliveryCalendarReloadBlocking(boolean blocking) {
+        deliveryCalendarReloadBlocking = blocking;
+        applyStage2RunButtonEnabledState();
+    }
+
     /**
      * 配台計画手動修正の表に未保存の変更があるとき {@code blocked} を true にする（保存または「再読み」で false）。
      */
@@ -369,6 +380,7 @@ public final class PlanInputTabController {
         }
         boolean disable =
                 stage2RunPipelineBusy
+                        || deliveryCalendarReloadBlocking
                         || isSummaryExportLockedByLockFile()
                         || stage2BlockedByDispatchUnsavedEdit
                         || stage2BlockedByUnsavedPlanInputTableEdit;
@@ -378,6 +390,12 @@ public final class PlanInputTabController {
         if (stage2RunPipelineBusy) {
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(null);
+            }
+        } else if (deliveryCalendarReloadBlocking) {
+            Tooltip blockedTip =
+                    new Tooltip("納期管理ビューを再読み込み中です。完了後に実行してください。");
+            if (stage2RunButton != null) {
+                stage2RunButton.setTooltip(blockedTip);
             }
         } else if (isSummaryExportLockedByLockFile()) {
             Tooltip blockedTip =
@@ -405,7 +423,9 @@ public final class PlanInputTabController {
                 stage2RunButton.setTooltip(null);
             }
         }
-        if (isSummaryExportLockedByLockFile()) {
+        if (deliveryCalendarReloadBlocking) {
+            stage2RunButton.setText(STAGE2_RUN_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD);
+        } else if (isSummaryExportLockedByLockFile()) {
             stage2RunButton.setText(STAGE2_RUN_BUTTON_TEXT_SUMMARY_LOCKED);
         } else {
             stage2RunButton.setText(STAGE2_RUN_BUTTON_TEXT_DEFAULT);
@@ -761,6 +781,23 @@ public final class PlanInputTabController {
     void reloadQuietlyFromDisk() {
         syncFromEnv();
         loadFromCurrentPath(false);
+    }
+
+    /** 段階1「キャッシュをクリアして実行」等で、表表示を空にする（ディスク削除は {@link Stage1AiCacheClearer}）。 */
+    void clearTableForStage1CacheClear() {
+        headersRef.clear();
+        if (rows != null) {
+            rows.clear();
+        }
+        if (rowSearchField != null) {
+            rowSearchField.clear();
+        }
+        clearColumnFiltersAndSort();
+        clearPlanInputTableDirtySinceSave();
+        rebuildSpreadsheet();
+        if (shell != null) {
+            shell.appendLog("[plan-input] キャッシュクリアに伴い表を空にしました。");
+        }
     }
 
     @FXML

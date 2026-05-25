@@ -159,6 +159,7 @@ public final class WorkspaceCacheHistoryTabController {
                     shell.appendLog(line);
                 }
                 shell.appendLog("[cache-archive] キャッシュをクリアしました。");
+                shell.clearPlanInputTableForStage1CacheClear();
             }
             if (archiveLabelField != null) {
                 archiveLabelField.clear();

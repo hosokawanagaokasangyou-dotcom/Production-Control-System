@@ -40,6 +40,12 @@
 | `processing-plan-data-full-unprocessed.mdc` | 換算>0・実加工=0・未加工=0 → 全数未加工 |
 | `planning-core-huge-file.mdc` | `_core.py` は `_core_FILE_MAP.txt` + 局所 read |
 
+### データ・外部パス
+
+| 正本 | 要点 |
+|------|------|
+| `request-form-original-dir-readonly.mdc` | `PM_AI_REQUEST_FORM_ORIGINAL_DIR` 配下は読み取り専用（作成・変更・削除禁止） |
+
 ### ドキュメント・その他
 
 | 正本 | 要点 |

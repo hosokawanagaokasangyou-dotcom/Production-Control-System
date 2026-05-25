@@ -1,0 +1,199 @@
+/* style_amethyst.css - Dark Amethyst Theme */
+.root {
+    -fx-font-family: 'Meiryo', 'Yu Gothic', sans-serif;
+    -fx-background-color: #2C2C54; /* Deep Amethyst Dark */
+}
+
+.label {
+    -fx-text-fill: #F1F2F6;
+}
+
+.pane-container {
+    -fx-background-color: #40407A;
+    -fx-border-color: #474787;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+    -fx-padding: 12px;
+}
+
+.pane-title-left {
+    -fx-text-fill: #F1F2F6;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-border-color: transparent transparent #474787 transparent;
+    -fx-border-width: 1px;
+    -fx-padding: 0 0 8px 0;
+}
+
+.pane-title-right {
+    -fx-text-fill: #F1F2F6;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+.top-bar {
+    -fx-background-color: #1B1B3A;
+    -fx-padding: 10px 15px;
+    -fx-border-color: transparent transparent #474787 transparent;
+    -fx-border-width: 1px;
+}
+
+.top-title {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.top-status {
+    -fx-text-fill: #F1F2F6;
+    -fx-font-size: 12px;
+}
+
+/* Form inputs styling */
+.text-field, .combo-box {
+    -fx-background-color: #474787;
+    -fx-text-fill: white;
+    -fx-prompt-text-fill: #A5A5C7;
+    -fx-border-color: #2C2C54;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}
+
+.text-field:focused, .combo-box:focused {
+    -fx-border-color: #706FD3;
+    -fx-background-color: #3B3B6D;
+}
+
+.combo-box .list-cell {
+    -fx-text-fill: white;
+}
+
+.combo-box-popup .list-view {
+    -fx-background-color: #474787;
+    -fx-border-color: #2C2C54;
+}
+
+.combo-box-popup .list-view .list-cell {
+    -fx-text-fill: white;
+    -fx-background-color: #474787;
+}
+
+.combo-box-popup .list-view .list-cell:hover {
+    -fx-background-color: #706FD3;
+    -fx-text-fill: white;
+}
+
+/* Branch code input dark yellow highlight */
+.paper-edaban-input {
+    -fx-background-color: #4A3B10;
+    -fx-text-fill: #FFFFFF;
+    -fx-border-color: #FFC107;
+}
+
+/* Buttons */
+.button {
+    -fx-background-color: #B33939; /* Amethyst crimson */
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}
+
+.button:hover {
+    -fx-background-color: #902A2A;
+}
+
+.btn-reload {
+    -fx-background-color: #B33939;
+}
+
+.btn-reload:hover {
+    -fx-background-color: #902A2A;
+}
+
+.btn-new-record {
+    -fx-background-color: #33D9B2;
+}
+
+.btn-new-record:hover {
+    -fx-background-color: #21B99B;
+}
+
+.btn-save-local {
+    -fx-background-color: #474787;
+}
+
+.btn-save-local:hover {
+    -fx-background-color: #3B3B6D;
+}
+
+.btn-transfer {
+    -fx-background-color: #706FD3;
+}
+
+.btn-transfer:hover {
+    -fx-background-color: #5B5AC5;
+}
+
+/* Custom titles color accentuation */
+.section-title-form { -fx-text-fill: #FF7675; }
+.section-title-new-mode { -fx-text-fill: #55EFC4; }
+.section-title-prod { -fx-text-fill: #74B9FF; }
+.section-title-raw { -fx-text-fill: #55EFC4; }
+.section-title-workflow { -fx-text-fill: #A29BFE; }
+
+/* Custom Discrepancy Labels */
+.discrepancy-label-discrepancy { -fx-background-color: #FF5252; -fx-text-fill: white; -fx-padding: 6px 10px; -fx-background-radius: 3px; }
+.discrepancy-label-unregistered { -fx-background-color: #FFB142; -fx-text-fill: #2C2C54; -fx-padding: 6px 10px; -fx-background-radius: 3px; }
+.discrepancy-label-matched { -fx-background-color: #33D9B2; -fx-text-fill: #2C2C54; -fx-padding: 6px 10px; -fx-background-radius: 3px; }
+.discrepancy-label-info { -fx-background-color: #40407A; -fx-text-fill: #F1F2F6; -fx-padding: 6px 10px; -fx-background-radius: 3px; }
+
+/* Settings Card Styles */
+.settings-card {
+    -fx-background-color: #40407A;
+    -fx-border-color: #474787;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+    -fx-padding: 12px;
+}
+.settings-card-title {
+    -fx-text-fill: #F1F2F6;
+    -fx-font-weight: bold;
+}
+.settings-list {
+    -fx-background-color: #2C2C54;
+    -fx-border-color: #474787;
+}
+.settings-list .list-cell {
+    -fx-text-fill: #F1F2F6;
+    -fx-background-color: #2C2C54;
+}
+.settings-list .list-cell:hover, .settings-list .list-cell:selected {
+    -fx-background-color: #706FD3;
+    -fx-text-fill: white;
+}
+.btn-settings-add { -fx-background-color: #33D9B2; }
+.btn-settings-add:hover { -fx-background-color: #21B99B; }
+.btn-settings-del { -fx-background-color: #FF5252; }
+.btn-settings-del:hover { -fx-background-color: #D63031; }
+
+/* Copy Button */
+.btn-copy {
+    -fx-background-color: #474787;
+    -fx-text-fill: #F1F2F6;
+    -fx-font-size: 11px;
+    -fx-padding: 3px 6px;
+    -fx-border-color: #2C2C54;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}
+
+.btn-copy:hover {
+    -fx-background-color: #3B3B6D;
+    -fx-text-fill: white;
+    -fx-border-color: #706FD3;
+}
