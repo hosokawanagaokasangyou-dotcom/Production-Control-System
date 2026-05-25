@@ -587,34 +587,29 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         });
         
         Button btnSaveLocal = new Button("手修正を一時保存");
-        btnSaveLocal.setMaxWidth(Double.MAX_VALUE);
-        btnSaveLocal.setStyle("-fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 8px;");
+        configureSideActionButton(btnSaveLocal);
         btnSaveLocal.getStyleClass().add("btn-save-local");
         btnSaveLocal.setOnAction(e -> saveLocalForm());
         
         btnTransfer = new Button("受注ファイルへ自動転記・更新");
-        btnTransfer.setMaxWidth(Double.MAX_VALUE);
-        btnTransfer.setStyle("-fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 8px;");
+        configureSideActionButton(btnTransfer);
         btnTransfer.getStyleClass().add("btn-transfer");
         btnTransfer.setOnAction(e -> transferToExcel());
 
         btnUndoLastTransfer = new Button("直前の自動転記を取り消し");
-        btnUndoLastTransfer.setMaxWidth(Double.MAX_VALUE);
-        btnUndoLastTransfer.setStyle("-fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 8px;");
+        configureSideActionButton(btnUndoLastTransfer);
         btnUndoLastTransfer.getStyleClass().add("btn-undo-transfer");
         btnUndoLastTransfer.setDisable(true);
         btnUndoLastTransfer.setOnAction(e -> undoLastJuchuTransfer());
 
         btnBulkTransferPending = new Button("一時保存分一括転記");
-        btnBulkTransferPending.setMaxWidth(Double.MAX_VALUE);
-        btnBulkTransferPending.setStyle("-fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 8px;");
+        configureSideActionButton(btnBulkTransferPending);
         btnBulkTransferPending.getStyleClass().add("btn-transfer");
         btnBulkTransferPending.setOnAction(e -> transferAllPendingLocalSaves());
         updateTransferButtonState();
 
         Button btnOpenJuchu = new Button("受注エクセルを開く");
-        btnOpenJuchu.setMaxWidth(Double.MAX_VALUE);
-        btnOpenJuchu.setStyle("-fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 8px;");
+        configureSideActionButton(btnOpenJuchu);
         btnOpenJuchu.getStyleClass().add("btn-reload");
         btnOpenJuchu.setOnAction(evt -> {
             File currentFile = new File(juchuFilePath);
@@ -634,14 +629,20 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
         });
         
-        HBox sideBtns =
-                new HBox(10, btnSaveLocal, btnTransfer, btnUndoLastTransfer, btnBulkTransferPending, btnOpenJuchu);
-        sideBtns.setAlignment(Pos.CENTER);
-        HBox.setHgrow(btnSaveLocal, Priority.ALWAYS);
-        HBox.setHgrow(btnTransfer, Priority.ALWAYS);
-        HBox.setHgrow(btnUndoLastTransfer, Priority.ALWAYS);
-        HBox.setHgrow(btnBulkTransferPending, Priority.ALWAYS);
-        HBox.setHgrow(btnOpenJuchu, Priority.ALWAYS);
+        FlowPane sideBtns =
+                new FlowPane(
+                        8,
+                        8,
+                        btnSaveLocal,
+                        btnTransfer,
+                        btnUndoLastTransfer,
+                        btnBulkTransferPending,
+                        btnOpenJuchu);
+        sideBtns.getStyleClass().add("request-form-action-flow");
+        sideBtns.setAlignment(javafx.geometry.Pos.CENTER);
+        sideBtns.setColumnHalignment(javafx.geometry.HPos.CENTER);
+        sideBtns.setMaxWidth(Double.MAX_VALUE);
+        sideBtns.prefWrapLengthProperty().bind(btnContainer.widthProperty());
 
         Tooltip transferButtonsTooltip = new Tooltip();
         sideBtns.addEventFilter(
@@ -2427,7 +2428,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         newCmbFormUser.setValue(activeVals.getOrDefault("ユーザー", ""));
         newDpFormDeliv.setValue(parseLocalDate(activeVals.getOrDefault("希望納期", "")));
         newDpFormAdjustDeliv.setValue(parseLocalDate(activeVals.getOrDefault("調整納期", "")));
-        newDpFormInputDate.setValue(parseLocalDate(activeVals.getOrDefault("入力日", "")));
+        newDpFormInputDate.setValue(java.time.LocalDate.now());
         txtProcess.setText(activeVals.getOrDefault("加工内容", ""));
         newTxtFormWage.setText(activeVals.getOrDefault("加工賃", ""));
         newTxtFormContractNo.setText(
@@ -3648,6 +3649,20 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
     }
 
+    /** 受注ファイルの「入力日」列。転記時は db の値で上書き（空のときのみ新規行で本日）。 */
+    private static void applyJuchuNyuryokuBiFromDb(
+            Row targetRow, Map<String, String> db, boolean fallbackToTodayIfBlank) {
+        if (targetRow == null) {
+            return;
+        }
+        String nyuryokuBi = db != null ? db.getOrDefault("入力日", "") : "";
+        if (nyuryokuBi != null && !nyuryokuBi.isBlank()) {
+            setJuchuDateOrStringByLayout(targetRow, JuchuSheetColumnLayout.Col.NYURYOKU_BI, nyuryokuBi);
+        } else if (fallbackToTodayIfBlank) {
+            setJuchuDateByLayout(targetRow, JuchuSheetColumnLayout.Col.NYURYOKU_BI, new Date());
+        }
+    }
+
     private static void setJuchuDateByLayout(Row row, JuchuSheetColumnLayout.Col col, Date value) {
         if (row == null || col == null || value == null) {
             return;
@@ -3757,9 +3772,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 targetRow,
                 JuchuSheetColumnLayout.Col.NYURYOKU_TANTO,
                 resolveWorkFieldValue(inputTanto, isNewRow ? "自動転記" : ""));
-        if (setInputDateNow) {
-            setJuchuDateByLayout(targetRow, JuchuSheetColumnLayout.Col.NYURYOKU_BI, new Date());
-        }
+        applyJuchuNyuryokuBiFromDb(targetRow, db, setInputDateNow);
 
         setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.HINMEI, db.getOrDefault("品名", ""));
         setJuchuCellByLayout(targetRow, JuchuSheetColumnLayout.Col.SEIHIN, db.getOrDefault("製品", ""));
@@ -3829,6 +3842,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         db.put(
                 "入力担当",
                 newCmbFormInputTanto.getValue() != null ? newCmbFormInputTanto.getValue().trim() : "");
+        if (newDpFormInputDate.getValue() != null) {
+            db.put("入力日", newDpFormInputDate.getValue().toString());
+        } else {
+            db.put("入力日", java.time.LocalDate.now().toString());
+        }
         db.put("特記事項1", newTxtFormTokki1.getText().trim());
         db.put("特記事項2", newTxtFormTokki2.getText().trim());
         db.put("特記事項3", newTxtFormTokki3.getText().trim());
@@ -4338,6 +4356,16 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         GridPane.setHgrow(field, Priority.ALWAYS);
         GridPane.setFillWidth(field, true);
         grid.add(field, col, row, colSpan, rowSpan);
+    }
+
+    /** 横並び操作ボタン: ラベル全文表示（均等縮小・省略記号を避ける）。 */
+    private static void configureSideActionButton(Button button) {
+        button.setStyle("-fx-font-weight: bold; -fx-cursor: hand; -fx-padding: 8px 12px;");
+        button.setMinWidth(Region.USE_COMPUTED_SIZE);
+        button.setPrefWidth(Region.USE_COMPUTED_SIZE);
+        button.setMaxWidth(Region.USE_COMPUTED_SIZE);
+        button.setWrapText(false);
+        button.getStyleClass().add("request-form-side-action-btn");
     }
 
     private static void configureSplitFieldRow(HBox box, Region primary, Region secondary) {

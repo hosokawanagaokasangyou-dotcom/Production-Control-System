@@ -202,6 +202,17 @@
     -fx-background-color: #15803d;
 }
 
+.pm-request-form-reconciliation-root .request-form-action-flow {
+    -fx-padding: 2px 0;
+}
+
+.pm-request-form-reconciliation-root .request-form-side-action-btn {
+    -fx-text-overrun: clip;
+    -fx-min-width: -1;
+    -fx-pref-width: -1;
+    -fx-max-width: -1;
+}
+
 .pm-request-form-reconciliation-root .btn-save-local {
     -fx-background-color: derive(-fx-base, 25%);
     -fx-text-fill: -fx-text-background-color;
