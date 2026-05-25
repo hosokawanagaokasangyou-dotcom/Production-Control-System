@@ -1271,16 +1271,50 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         return new File(parent, "~$" + name);
     }
 
-    private boolean isJuchuFileLockedForWrite() {
+    /**
+     * 受注ブックが実際に排他ロックされているか（{@code ~$} の有無だけでは判定しない）。
+     * UNC 上に Excel 終了後も残る {@code ~$} だけでは誤検出しやすいため、本体を {@code rw} で開けるかを正とする。
+     */
+    private static boolean isJuchuWorkbookWritableForTransfer(File workbook) {
+        if (workbook == null || !workbook.isFile()) {
+            return false;
+        }
+        try (java.io.RandomAccessFile ignored = new java.io.RandomAccessFile(workbook, "rw")) {
+            return true;
+        } catch (java.io.IOException ex) {
+            return false;
+        }
+    }
+
+    /**
+     * 転記不可の理由（転記処理中フラグは含めない）。転記可能なら {@code null}。
+     */
+    private String describeJuchuWriteBlockExcludingTransfer() {
         if (juchuFilePath == null || juchuFilePath.isBlank()) {
-            return true;
+            return "受注ファイルが未設定です。設定タブまたは環境変数 PM_AI_REQUEST_FORM_JUCHU_FILE を指定してください。";
         }
-        File file = new File(juchuFilePath);
-        if (!file.isFile()) {
-            return true;
+        File juchuFile = new File(juchuFilePath);
+        if (!juchuFile.isFile()) {
+            return "受注ファイルが見つかりません: " + juchuFilePath;
         }
-        File lockFile = excelLockFileFor(file);
-        return lockFile != null && lockFile.isFile();
+        if (isJuchuWorkbookWritableForTransfer(juchuFile)) {
+            return null;
+        }
+        File lockFile = excelLockFileFor(juchuFile);
+        if (lockFile != null && lockFile.isFile()) {
+            return "受注ファイルが Excel で使用中（読み取り専用）です。保存して閉じてから再試行してください。"
+                    + " ロック: "
+                    + lockFile.getName()
+                    + "（フォルダ: "
+                    + lockFile.getParent()
+                    + "）";
+        }
+        return "受注ファイルに書き込めません（読み取り専用・権限・ネットワーク接続を確認してください）: "
+                + juchuFile.getAbsolutePath();
+    }
+
+    private boolean isJuchuFileLockedForWrite() {
+        return describeJuchuWriteBlockExcludingTransfer() != null;
     }
 
     /**
@@ -1291,20 +1325,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (juchuTransferInProgress) {
             return "受注ファイルへの転記処理を実行中です。完了までお待ちください。";
         }
-        if (juchuFilePath == null || juchuFilePath.isBlank()) {
-            return "受注ファイルが未設定です。設定タブまたは環境変数 PM_AI_REQUEST_FORM_JUCHU_FILE を指定してください。";
-        }
-        File juchuFile = new File(juchuFilePath);
-        if (!juchuFile.isFile()) {
-            return "受注ファイルが見つかりません: " + juchuFilePath;
-        }
-        File lockFile = excelLockFileFor(juchuFile);
-        if (lockFile != null && lockFile.isFile()) {
-            return "受注ファイルが Excel で使用中（読み取り専用）です。保存して閉じてから再試行してください。"
-                    + " ロック: "
-                    + lockFile.getName();
-        }
-        return null;
+        return describeJuchuWriteBlockExcludingTransfer();
+    }
+
+    private void showJuchuWriteBlockedAlert() {
+        String reason = describeJuchuWriteBlockExcludingTransfer();
+        showAlert("エラー", reason != null ? reason : "受注ファイルへ転記できません。");
     }
 
     private void updateTransferButtonState() {
@@ -1483,17 +1509,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             return;
         }
         if (isJuchuFileLockedForWrite()) {
-            File juchuFile = new File(juchuFilePath);
-            File lockFile = excelLockFileFor(juchuFile);
-            String lockHint =
-                    lockFile != null && lockFile.isFile()
-                            ? "\nロックファイル: " + lockFile.getAbsolutePath()
-                            : "";
-            showAlert(
-                    "エラー",
-                    "受注ファイルが読み取り専用（使用中）のため転記できません。"
-                            + " Excel で開いている場合は保存して閉じてから再試行してください。"
-                            + lockHint);
+            showJuchuWriteBlockedAlert();
             updateTransferButtonState();
             if (onComplete != null) {
                 onComplete.accept(false);
@@ -2901,17 +2917,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
 
         if (isJuchuFileLockedForWrite()) {
-            File juchuFile = new File(juchuFilePath);
-            File lockFile = excelLockFileFor(juchuFile);
-            String lockHint =
-                    lockFile != null && lockFile.isFile()
-                            ? "\nロックファイル: " + lockFile.getAbsolutePath()
-                            : "";
-            showAlert(
-                    "エラー",
-                    "受注ファイルが読み取り専用（使用中）のため転記できません。"
-                            + " Excel で開いている場合は保存して閉じてから再試行してください。"
-                            + lockHint);
+            showJuchuWriteBlockedAlert();
             updateTransferButtonState();
             return;
         }
