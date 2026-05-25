@@ -24,14 +24,23 @@ class RequestFormMasterProductCandidateMatcherTest {
                         "15020",
                         "1300",
                         "250",
-                        "",
+                        "白",
                         "",
                         "EC,梱包");
 
         String label = RequestFormMasterProductCandidateMatcher.formatCandidateLabel(p);
 
         assertTrue(label.endsWith(" | EC,梱包"));
-        assertTrue(label.contains("1300×250"));
+        assertTrue(label.contains("1300×250 | 白 | EC,梱包"));
+    }
+
+    @Test
+    void formatCandidateLabel_emptyFoamColor_showsPlaceholder() {
+        ProductInfo p =
+                new ProductInfo(
+                        "X", "", "", "", "", "", "", "", "", "1", "1", "", "", "");
+        String label = RequestFormMasterProductCandidateMatcher.formatCandidateLabel(p);
+        assertTrue(label.contains("1×1 | ? | "));
     }
 
     @Test

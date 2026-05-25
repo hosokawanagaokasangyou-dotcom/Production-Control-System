@@ -1,5 +1,18 @@
 /* 依頼書入力（reconciliation）— メインシェルテーマに追従。入れ子テーマは使わない。 */
 
+.pm-request-form-input-tab {
+    -fx-background-color: derive(-fx-base, 8%);
+}
+
+.pm-request-form-input-tab .request-form-tab-loading {
+    -fx-background-color: derive(-fx-base, 8%);
+}
+
+.pm-request-form-input-tab .request-form-tab-loading-label {
+    -fx-text-fill: -fx-text-background-color;
+    -fx-font-size: 13px;
+}
+
 .pm-request-form-reconciliation-root {
     -fx-font-family: 'Meiryo', 'Yu Gothic', sans-serif;
     -fx-background-color: -fx-background;

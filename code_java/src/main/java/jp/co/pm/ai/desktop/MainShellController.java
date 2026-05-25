@@ -751,7 +751,8 @@ public final class MainShellController {
                             }
                             if (newTab == mainShellTabRequestFormInput
                                     && requestFormInputTabController != null) {
-                                requestFormInputTabController.onMainShellTabSelected();
+                                Platform.runLater(
+                                        requestFormInputTabController::onMainShellTabSelected);
                             }
                             if (prevTab == mainShellTabEquipmentStatusDashboard
                                     && equipmentStatusDashboardTabController != null) {
