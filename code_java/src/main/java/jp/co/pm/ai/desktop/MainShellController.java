@@ -758,6 +758,10 @@ public final class MainShellController {
                                     && equipmentStatusDashboardTabController != null) {
                                 equipmentStatusDashboardTabController.onMainShellTabDeselected();
                             }
+                            if (prevTab == mainShellTabRequestFormInput
+                                    && requestFormInputTabController != null) {
+                                requestFormInputTabController.onMainShellTabDeselected();
+                            }
                             if (newTab == mainShellTabEquipmentGanttGraphic
                                     && equipmentGanttGraphicTabController != null) {
                                 equipmentGanttGraphicTabController

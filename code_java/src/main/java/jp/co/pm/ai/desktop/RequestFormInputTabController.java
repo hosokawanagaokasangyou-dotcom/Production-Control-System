@@ -47,6 +47,13 @@ public final class RequestFormInputTabController {
         Platform.runLater(this::activateAfterTabPainted);
     }
 
+    /** 依頼書入力タブから離れたとき（バックグラウンド監視停止）。 */
+    void onMainShellTabDeselected() {
+        if (reconciliationApp != null) {
+            reconciliationApp.onEmbeddedTabDeactivated();
+        }
+    }
+
     private void activateAfterTabPainted() {
         ensureEmbeddedMounted();
         if (reconciliationApp == null || shell == null) {

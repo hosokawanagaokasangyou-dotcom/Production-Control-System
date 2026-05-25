@@ -67,7 +67,10 @@ public class ReconciliationApp {
     private static final double SPLIT_LEFT_RATIO = Math.min(0.85, 0.30 * UI_WIDTH_SCALE);
     /** フォーム項目名ラベル列の最小幅（100% 設計 × {@link #UI_WIDTH_SCALE}）。 */
     private static final double FORM_LABEL_COLUMN_MIN_WIDTH = 70.0 * UI_WIDTH_SCALE;
-    private static final long ORIGINAL_FILE_POLL_INTERVAL_MS = 5L * 60L * 1000L;
+    /** 依頼書タブ表示中: 受注ファイル {@code ~$} ロックの確認間隔。 */
+    private static final long JUCHU_LOCK_POLL_INTERVAL_MS = 10_000L;
+    /** 依頼書タブ表示中: 原本 Excel の更新確認間隔。 */
+    private static final long ORIGINAL_FILE_POLL_INTERVAL_MS = 30_000L;
     /** {@link #saveLocalForm()} 後・受注ファイル未転記のステータス。 */
     private static final String STATUS_LOCAL_SAVE_PENDING = "手修正済み (未保存)";
 
@@ -106,7 +109,10 @@ public class ReconciliationApp {
     private File currentPreviewOriginalFile;
     private final RequestFormOriginalUpdateMonitor originalUpdateMonitor =
             new RequestFormOriginalUpdateMonitor();
+    private javafx.animation.Timeline juchuLockPollTimeline;
     private javafx.animation.Timeline originalFilePollTimeline;
+    private javafx.animation.PauseTransition pollStatusHighlightPause;
+    private Label embeddedTabPollStatusLabel;
     private Supplier<RequestFormPreviewBadgeConfig> previewBadgeConfigSupplier =
             RequestFormPreviewBadgeConfig::defaults;
     
@@ -301,7 +307,14 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         statusLabel = new Label("データベース読込中...");
         statusLabel.getStyleClass().add("top-status");
 
-        topBar.getChildren().addAll(titleLabel, btnSelectFolder, btnReload, statusLabel);
+        embeddedTabPollStatusLabel = new Label();
+        embeddedTabPollStatusLabel.getStyleClass().add("request-form-poll-status");
+        embeddedTabPollStatusLabel.setManaged(false);
+        embeddedTabPollStatusLabel.setVisible(false);
+        HBox.setHgrow(embeddedTabPollStatusLabel, Priority.ALWAYS);
+
+        topBar.getChildren().addAll(
+                titleLabel, btnSelectFolder, btnReload, embeddedTabPollStatusLabel, statusLabel);
         root.setTop(topBar);
 
         // --- SPLIT WORKSPACE (Tab 1 Content) ---
@@ -748,7 +761,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         });
 
         applyMainShellAlignedStyles(mainStackPane);
-        startOriginalFilePolling();
+        originalUpdateMonitor.setOnUpdatedKeysChanged(
+                keys -> Platform.runLater(this::refreshPreviewFileHeader));
 
         loadMasterProductListAsync(null);
         reloadData();
@@ -759,6 +773,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     public void onEmbeddedTabActivated(Map<String, String> uiEnv) {
         configureFromUiEnv(uiEnv);
         reloadMasterProductListFromDiskIfStale(null);
+        startEmbeddedTabPolling();
+    }
+
+    /** 依頼書入力タブを離れたとき: バックグラウンド監視を停止。 */
+    public void onEmbeddedTabDeactivated() {
+        stopEmbeddedTabPolling();
     }
 
     public void updateHostWindow(Window hostWindow) {
@@ -2704,20 +2724,89 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
     }
 
-    private void startOriginalFilePolling() {
-        originalUpdateMonitor.setOnUpdatedKeysChanged(
-                keys -> Platform.runLater(this::refreshPreviewFileHeader));
-        if (originalFilePollTimeline != null) {
-            originalFilePollTimeline.stop();
+    /** 依頼書タブ表示中のみ: 転記ロック（10秒）と原本更新（30秒）を監視。 */
+    private void startEmbeddedTabPolling() {
+        stopEmbeddedTabPolling();
+        if (embeddedTabPollStatusLabel != null) {
+            embeddedTabPollStatusLabel.setManaged(true);
+            embeddedTabPollStatusLabel.setVisible(true);
+            embeddedTabPollStatusLabel.setText("監視中（転記ロック 10秒 / 原本 30秒）");
         }
+        juchuLockPollTimeline =
+                new javafx.animation.Timeline(
+                        new javafx.animation.KeyFrame(
+                                javafx.util.Duration.millis(JUCHU_LOCK_POLL_INTERVAL_MS),
+                                e -> runJuchuLockPollTick()));
+        juchuLockPollTimeline.setCycleCount(javafx.animation.Timeline.INDEFINITE);
+        juchuLockPollTimeline.play();
+
         originalFilePollTimeline =
                 new javafx.animation.Timeline(
                         new javafx.animation.KeyFrame(
                                 javafx.util.Duration.millis(ORIGINAL_FILE_POLL_INTERVAL_MS),
-                                e -> pollOriginalFilesInWorkspace()));
+                                e -> runOriginalFilePollTick()));
         originalFilePollTimeline.setCycleCount(javafx.animation.Timeline.INDEFINITE);
         originalFilePollTimeline.play();
+
+        runJuchuLockPollTick();
+        runOriginalFilePollTick();
+    }
+
+    private void stopEmbeddedTabPolling() {
+        if (juchuLockPollTimeline != null) {
+            juchuLockPollTimeline.stop();
+            juchuLockPollTimeline = null;
+        }
+        if (originalFilePollTimeline != null) {
+            originalFilePollTimeline.stop();
+            originalFilePollTimeline = null;
+        }
+        if (pollStatusHighlightPause != null) {
+            pollStatusHighlightPause.stop();
+            pollStatusHighlightPause = null;
+        }
+        if (embeddedTabPollStatusLabel != null) {
+            embeddedTabPollStatusLabel.getStyleClass().remove("request-form-poll-active");
+            embeddedTabPollStatusLabel.setManaged(false);
+            embeddedTabPollStatusLabel.setVisible(false);
+        }
+    }
+
+    private void runJuchuLockPollTick() {
+        updateTransferButtonState();
+        flashPollStatus("転記ロック");
+    }
+
+    private void runOriginalFilePollTick() {
         pollOriginalFilesInWorkspace();
+        flashPollStatus("原本更新");
+    }
+
+    private void flashPollStatus(String aspect) {
+        if (embeddedTabPollStatusLabel == null) {
+            return;
+        }
+        String time =
+                java.time.LocalTime.now()
+                        .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+        embeddedTabPollStatusLabel.setText("確認 " + time + "（" + aspect + "）");
+        if (!embeddedTabPollStatusLabel.getStyleClass().contains("request-form-poll-active")) {
+            embeddedTabPollStatusLabel.getStyleClass().add("request-form-poll-active");
+        }
+        if (pollStatusHighlightPause != null) {
+            pollStatusHighlightPause.stop();
+        }
+        pollStatusHighlightPause =
+                new javafx.animation.PauseTransition(javafx.util.Duration.seconds(2.5));
+        pollStatusHighlightPause.setOnFinished(
+                e -> {
+                    if (embeddedTabPollStatusLabel == null) {
+                        return;
+                    }
+                    embeddedTabPollStatusLabel.getStyleClass().remove("request-form-poll-active");
+                    embeddedTabPollStatusLabel.setText("監視中（転記ロック 10秒 / 原本 30秒）");
+                });
+        pollStatusHighlightPause.play();
     }
 
     private void pollOriginalFilesInWorkspace() {
@@ -4260,37 +4349,23 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         secondary.setMaxWidth(Double.MAX_VALUE);
     }
 
-    /** 製品行の「商品」欄とマスタ候補から自動転記された関連欄をクリアする。 */
+    /** 製品行の「商品」欄（商品コード）のみクリアする。品番・タイプ・寸法・候補コンボは触らない。 */
     private void clearProductRowShohin(ProductRow pRow) {
         isLoadingRecord = true;
         try {
             pRow.txtItem.clear();
-            pRow.txtPart.clear();
-            pRow.txtType.clear();
-            pRow.txtWidth.clear();
-            pRow.txtLength.clear();
-            pRow.cmbSearch.getSelectionModel().clearSelection();
-            pRow.cmbSearch.setValue(null);
-            pRow.cmbSearch.setItems(FXCollections.emptyObservableList());
-            pRow.cmbSearch.hide();
+            clearSelectedMasterCandidate(pRow.cmbSearch, pRow.selectedCandidatePane);
         } finally {
             isLoadingRecord = false;
         }
     }
 
-    /** 原反行の「商品」欄とマスタ候補から自動転記された関連欄をクリアする。 */
+    /** 原反行の「商品」欄（商品コード）のみクリアする。品番・タイプ・寸法・候補コンボは触らない。 */
     private void clearRawMaterialRowShohin(RawMaterialRow rRow) {
         isLoadingRecord = true;
         try {
             rRow.txtItem.clear();
-            rRow.txtPart.clear();
-            rRow.txtType.clear();
-            rRow.txtWidth.clear();
-            rRow.txtLength.clear();
-            rRow.cmbSearch.getSelectionModel().clearSelection();
-            rRow.cmbSearch.setValue(null);
-            rRow.cmbSearch.setItems(FXCollections.emptyObservableList());
-            rRow.cmbSearch.hide();
+            clearSelectedMasterCandidate(rRow.cmbSearch, rRow.selectedCandidatePane);
         } finally {
             isLoadingRecord = false;
         }
@@ -4373,6 +4448,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         public TextField txtItem;
         public TextField txtPart;
         public ComboBox<String> cmbSearch;
+        /** 候補確定後のマスタ行表示（フィルタ一致色付き）。 */
+        public HBox selectedCandidatePane;
         public TextField txtType;
         public TextField txtWidth;
         public TextField txtLength;
@@ -4393,6 +4470,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         public TextField txtItem;
         public TextField txtPart;
         public ComboBox<String> cmbSearch;
+        /** 候補確定後のマスタ行表示（フィルタ一致色付き）。 */
+        public HBox selectedCandidatePane;
         public TextField txtType;
         public TextField txtWidth;
         public TextField txtLength;
@@ -4487,8 +4566,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         wireCandidateComboBox(pRow.cmbSearch, () -> updateRowProdCandidates(pRow, true));
         HBox partBox = new HBox(5, pRow.txtPart, pRow.cmbSearch);
         configureSplitFieldRow(partBox, pRow.txtPart, pRow.cmbSearch);
+        pRow.selectedCandidatePane = createSelectedCandidatePane();
+        VBox partColumn = new VBox(4, partBox, pRow.selectedCandidatePane);
+        partColumn.setMaxWidth(Double.MAX_VALUE);
         pRow.grid.add(lblPart, 0, 2);
-        addFormField(pRow.grid, partBox, 1, 2, 3, 1);
+        addFormField(pRow.grid, partColumn, 1, 2, 3, 1);
 
         Label lblType = new Label("タイプ:");
         styleFormLabel(lblType);
@@ -4590,7 +4672,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             updateRowProdCandidates(pRow, false);
             updateSpec.run();
         });
-        pRow.txtItem.textProperty().addListener((obs, oldV, newV) -> updateRowProdCandidates(pRow, false));
+        pRow.txtItem.textProperty().addListener((obs, oldV, newV) -> {
+            updateRowProdCandidates(pRow, false);
+            syncSelectedCandidatePaneWithItemCode(pRow.cmbSearch, pRow.selectedCandidatePane, newV);
+        });
         pRow.txtType.textProperty().addListener((obs, oldV, newV) -> {
             updateRowProdCandidates(pRow, false);
             updateSpec.run();
@@ -4646,6 +4731,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private static final String MASTER_CANDIDATE_FILTER_KEYWORDS_PROP = "filterKeywords";
+    private static final String MASTER_CANDIDATE_SELECTED_LABEL_PROP = "selectedCandidateLabel";
 
     private static void wireCandidateComboBox(ComboBox<String> combo, Runnable refreshOnOpen) {
         combo.setOnShowing(
@@ -4723,28 +4809,102 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         return null;
     }
 
-    /** マスタ候補コンボの選択を製品行とフォーム共通の加工内容へ反映する。 */
+    private static HBox createSelectedCandidatePane() {
+        HBox pane = new HBox();
+        pane.getStyleClass().add("request-form-master-candidate-selected");
+        pane.setAlignment(Pos.CENTER_LEFT);
+        pane.setManaged(false);
+        pane.setVisible(false);
+        pane.setMaxWidth(Double.MAX_VALUE);
+        Tooltip.install(pane, new Tooltip("マスタ候補で確定した内容（フィルタ一致部分は黄色）"));
+        return pane;
+    }
+
+    private void refreshSelectedCandidateDisplay(ComboBox<String> combo, HBox selectedPane) {
+        if (selectedPane == null) {
+            return;
+        }
+        selectedPane.getChildren().clear();
+        Object stored = combo != null ? combo.getProperties().get(MASTER_CANDIDATE_SELECTED_LABEL_PROP) : null;
+        String label = stored instanceof String s ? s : null;
+        if (label == null || label.isBlank()) {
+            selectedPane.setManaged(false);
+            selectedPane.setVisible(false);
+            return;
+        }
+        selectedPane.setManaged(true);
+        selectedPane.setVisible(true);
+        selectedPane
+                .getChildren()
+                .add(
+                        RequestFormMasterCandidateLabelHighlighter.buildGraphic(
+                                label, masterCandidateFilterKeywords(combo)));
+    }
+
+    private static void clearSelectedMasterCandidate(ComboBox<String> combo, HBox selectedPane) {
+        if (combo != null) {
+            combo.getProperties().remove(MASTER_CANDIDATE_SELECTED_LABEL_PROP);
+        }
+        if (selectedPane != null) {
+            selectedPane.getChildren().clear();
+            selectedPane.setManaged(false);
+            selectedPane.setVisible(false);
+        }
+    }
+
+    private void syncSelectedCandidatePaneWithItemCode(
+            ComboBox<String> combo, HBox selectedPane, String itemCodeText) {
+        if (combo == null || selectedPane == null) {
+            return;
+        }
+        Object stored = combo.getProperties().get(MASTER_CANDIDATE_SELECTED_LABEL_PROP);
+        if (!(stored instanceof String label) || label.isBlank()) {
+            return;
+        }
+        String selectedCode = shohinCodeFromMasterCandidateLabel(label);
+        String current = normalize_text(itemCodeText);
+        if (!selectedCode.equals(current)) {
+            clearSelectedMasterCandidate(combo, selectedPane);
+        }
+    }
+
+    /**
+     * マスタ候補の選択確定: 「商品」欄へ商品コードを入れ、確定ラベルを色付きで表示する。
+     */
+    private void confirmMasterCandidateSelection(
+            String candidateLabel, TextField txtItem, ComboBox<String> combo, HBox selectedPane) {
+        applyMasterCandidateShohinCodeOnly(candidateLabel, txtItem);
+        if (combo == null) {
+            return;
+        }
+        if (candidateLabel != null && candidateLabel.contains(" | ")) {
+            combo.getProperties().put(MASTER_CANDIDATE_SELECTED_LABEL_PROP, candidateLabel);
+        } else {
+            combo.getProperties().remove(MASTER_CANDIDATE_SELECTED_LABEL_PROP);
+        }
+        refreshSelectedCandidateDisplay(combo, selectedPane);
+    }
+
+    /** マスタ候補コンボの選択確定時、当該行の「商品」欄（商品コード）のみを反映する。 */
     private void applyMasterProductCandidateSelection(String candidateLabel, ProductRow pRow) {
+        if (pRow == null) {
+            return;
+        }
+        confirmMasterCandidateSelection(
+                candidateLabel, pRow.txtItem, pRow.cmbSearch, pRow.selectedCandidatePane);
+    }
+
+    private void applyMasterCandidateShohinCodeOnly(String candidateLabel, TextField txtItem) {
+        if (txtItem == null) {
+            return;
+        }
         ProductInfo product = findMasterProductByShohinCode(shohinCodeFromMasterCandidateLabel(candidateLabel));
-        if (product == null || pRow == null) {
+        if (product == null) {
             return;
         }
         isLoadingRecord = true;
         try {
-            pRow.txtItem.setText(product.getShohinCode());
-            pRow.txtPart.setText(product.getFoamPartNo());
-            String[] nameParts = product.getShohinName1().split("-");
-            if (nameParts.length >= 2) {
-                pRow.txtType.setText(nameParts[1]);
-            } else if (!product.getShohinName1().isBlank()) {
-                pRow.txtType.setText(product.getShohinName1());
-            }
-            pRow.txtWidth.setText(product.getFoamWidth());
-            pRow.txtLength.setText(product.getFoamLength());
-            updateProductRowSpecDisplay(pRow);
-            if (txtProcess != null) {
-                txtProcess.setText(product.getKakoNaiyo());
-            }
+            txtItem.setText(product.getShohinCode());
         } finally {
             isLoadingRecord = false;
         }
@@ -4764,6 +4924,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         String kwLength = normalize_text(pRow.txtLength.getText());
         String kwHinmei = normalize_text(pRow.txtHinmei.getText());
         setMasterCandidateFilterKeywords(pRow.cmbSearch, kwItem, kwPart, kwType, kwLength, kwHinmei);
+        refreshSelectedCandidateDisplay(pRow.cmbSearch, pRow.selectedCandidatePane);
 
         java.util.List<String> filtered;
         if (kwItem.isEmpty()
@@ -4803,6 +4964,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         String kwLength = normalize_text(rRow.txtLength.getText());
         String kwHinmei = normalize_text(rRow.txtHinmei.getText());
         setMasterCandidateFilterKeywords(rRow.cmbSearch, kwItem, kwPart, kwType, kwLength, kwHinmei);
+        refreshSelectedCandidateDisplay(rRow.cmbSearch, rRow.selectedCandidatePane);
 
         java.util.List<String> filtered;
         if (kwItem.isEmpty()
@@ -4885,8 +5047,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         wireCandidateComboBox(rRow.cmbSearch, () -> updateRowRawCandidates(rRow, true));
         HBox partBox = new HBox(5, rRow.txtPart, rRow.cmbSearch);
         configureSplitFieldRow(partBox, rRow.txtPart, rRow.cmbSearch);
+        rRow.selectedCandidatePane = createSelectedCandidatePane();
+        VBox partColumn = new VBox(4, partBox, rRow.selectedCandidatePane);
+        partColumn.setMaxWidth(Double.MAX_VALUE);
         rRow.grid.add(lblPart, 0, 2);
-        addFormField(rRow.grid, partBox, 1, 2, 3, 1);
+        addFormField(rRow.grid, partColumn, 1, 2, 3, 1);
 
         Label lblType = new Label("タイプ:");
         styleFormLabel(lblType);
@@ -4987,7 +5152,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             updateRowRawCandidates(rRow, false);
             updateSpec.run();
         });
-        rRow.txtItem.textProperty().addListener((obs, oldV, newV) -> updateRowRawCandidates(rRow, false));
+        rRow.txtItem.textProperty().addListener((obs, oldV, newV) -> {
+            updateRowRawCandidates(rRow, false);
+            syncSelectedCandidatePaneWithItemCode(rRow.cmbSearch, rRow.selectedCandidatePane, newV);
+        });
         rRow.txtType.textProperty().addListener((obs, oldV, newV) -> {
             updateRowRawCandidates(rRow, false);
             updateSpec.run();
@@ -4998,29 +5166,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             updateSpec.run();
         });
         
-        rRow.cmbSearch.setOnAction(evt -> {
-            String sel = rRow.cmbSearch.getValue();
-            if (sel != null && sel.contains(" | ")) {
-                String code = sel.split(" \\| ")[0].trim();
-                for (ProductInfo p : masterProductList) {
-                    if (p.getShohinCode().equals(code)) {
-                        isLoadingRecord = true;
-                        try {
-                            rRow.txtItem.setText(p.getShohinCode());
-                            rRow.txtPart.setText(p.getFoamPartNo());
-                            String[] nameParts = p.getShohinName1().split("-");
-                            if (nameParts.length >= 2) rRow.txtType.setText(nameParts[1]);
-                            rRow.txtWidth.setText(p.getFoamWidth());
-                            rRow.txtLength.setText(p.getFoamLength());
-                            updateRawRowSpecDisplay(rRow);
-                        } finally {
-                            isLoadingRecord = false;
-                        }
-                        break;
-                    }
-                }
-            }
-        });
+        rRow.cmbSearch.setOnAction(
+                evt ->
+                        confirmMasterCandidateSelection(
+                                rRow.cmbSearch.getValue(), rRow.txtItem, rRow.cmbSearch, rRow.selectedCandidatePane));
 
         rawRows.add(rRow);
         rawRowsContainer.getChildren().add(rRow.grid);
