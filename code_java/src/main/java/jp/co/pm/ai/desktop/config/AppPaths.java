@@ -86,6 +86,15 @@ public final class AppPaths {
      */
     public static final String KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR = "PM_AI_REQUEST_FORM_ORIGINAL_DIR";
 
+    /**
+     * 依頼書 PDF プレビュー: Type0 日本語フォントのサイズ補正係数（Excel pt に乗算）。{@code 0.50}～{@code 1.00}。
+     */
+    public static final String KEY_PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE =
+            "PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE";
+
+    /** {@link #KEY_PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE} の既定（はみ出し抑制）。 */
+    public static final float DEFAULT_PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE = 0.72f;
+
     /** {@link #KEY_PM_AI_REQUEST_FORM_JUCHU_FILE} 未設定時のファイル名（作業フォルダ直下）。 */
     public static final String DEFAULT_REQUEST_FORM_JUCHU_FILE_NAME = "加工依頼書入力.xlsm";
 
@@ -734,6 +743,27 @@ public final class AppPaths {
      * {@link #KEY_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES} を解決する。不正な値は {@link #DEFAULT_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES}
      * にフォールバック。0 以下は「上限なし」。
      */
+    /**
+     * {@link #KEY_PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE} を解決する。空・不正は {@link
+     * #DEFAULT_PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE}。範囲外は {@code 0.50}～{@code 1.00} にクランプ。
+     */
+    public static float resolveRequestFormPreviewPdfCjkScale(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String raw = trim(u.get(KEY_PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE));
+        if (raw.isEmpty()) {
+            return DEFAULT_PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE;
+        }
+        try {
+            float v = Float.parseFloat(raw.replace(',', '.'));
+            if (Float.isNaN(v) || Float.isInfinite(v)) {
+                return DEFAULT_PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE;
+            }
+            return Math.max(0.50f, Math.min(1.00f, v));
+        } catch (NumberFormatException ex) {
+            return DEFAULT_PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE;
+        }
+    }
+
     public static long resolveActualDetailRawMaxBytes(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
         String raw = trim(u.get(KEY_PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES));

@@ -28,7 +28,12 @@ $requiredRelativePaths = @(
     "target\classes\jp\co\pm\ai\desktop\io\NetworkSourceFileReloadCache.class",
     "target\classes\jp\co\pm\ai\desktop\dispatch\ResultDispatchInteractiveConsolidator.class",
     "target\classes\jp\co\pm\ai\desktop\ui\EquipmentGraphicGanttPane.class",
+    # record / inner: incremental compile on Windows can drop these while outer .class remains
+    "target\classes\jp\co\pm\ai\desktop\ui\EquipmentGraphicGanttPane`$VerticalScrollBand.class",
+    "target\classes\jp\co\pm\ai\desktop\ui\SpreadsheetMultiColumnFilterCoordinator.class",
     "target\classes\jp\co\pm\ai\desktop\reconciliation\ReconciliationApp.class",
+    # comboRecord button cell (NoClassDefFoundError: ReconciliationApp$2)
+    "target\classes\jp\co\pm\ai\desktop\reconciliation\ReconciliationApp`$2.class",
     "target\classes\jp\co\pm\ai\desktop\css\pm-ai-desktop.css",
     "target\classes\jp\co\pm\ai\desktop\css\theme-midnight-blue.css"
 )

@@ -198,6 +198,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     // Settings & Caching fields
     private volatile long lastInteractionTime = System.currentTimeMillis();
     private static final long IDLE_THRESHOLD_MS = 2000;
+    /** バックグラウンド PDF プレビューキャッシュ生成の最小間隔（連続生成で UI/CPU を圧迫しない）。 */
+    private static final long BACKGROUND_PDF_CACHE_INTERVAL_MS = 10_000L;
     
     private static class CacheTask {
         final File excelFile;
@@ -659,7 +661,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         previewFileNameRow.setVisible(false);
         Button btnOpenExcel = new Button("原本をExcelで開く");
         btnOpenExcel.setOnAction(e -> openOriginalExcel());
-        viewerHeaderBox.getChildren().addAll(lblViewer, previewFileNameRow, btnOpenExcel);
+        Button btnClearPreviewCache = new Button("プレビューキャッシュをクリア");
+        btnClearPreviewCache.getStyleClass().add("btn-clear");
+        btnClearPreviewCache.setOnAction(e -> confirmAndClearPreviewCache());
+        viewerHeaderBox
+                .getChildren()
+                .addAll(lblViewer, previewFileNameRow, btnOpenExcel, btnClearPreviewCache);
         HBox.setHgrow(previewFileNameRow, Priority.ALWAYS);
         sheetScrollPane = new ScrollPane();
         sheetScrollPane.setFitToWidth(true);
@@ -1138,6 +1145,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     /** 環境変数タブの依頼書入力向けパスを反映する（タブ再選択時も可）。 */
     public void configureFromUiEnv(Map<String, String> uiEnv) {
         uiEnvSnapshot = uiEnv != null ? Map.copyOf(uiEnv) : Map.of();
+        RequestFormSheetPreviewPdfRenderer.applyCjkMetricsScaleFromUi(uiEnvSnapshot);
         aladdinMasterDir = AppPaths.resolveAladdinMasterDir(uiEnvSnapshot);
         applyRequestFormOriginalDirFromUiEnv();
         applyJuchuFilePathFromUiEnv();
@@ -2151,7 +2159,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     RequestFormSheetPreviewRenderer.generatePreviewPdf(
                             task.excelFile, task.sheetName, task.outputFile);
                     RequestFormSourceCache.writePreviewMeta(task.outputFile, task.excelFile);
-                    System.out.println("Background cached: " + task.outputFile.getName());
+                    System.out.println(
+                            "Background cached (pdf): " + task.outputFile.getName());
                 } catch (Exception e) {
                     System.err.println("Background cache exception: " + e.getMessage());
                 }
@@ -2163,7 +2172,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 }
 
                 try {
-                    Thread.sleep(200);
+                    Thread.sleep(BACKGROUND_PDF_CACHE_INTERVAL_MS);
                 } catch (InterruptedException e) {
                     break;
                 }
@@ -2350,6 +2359,57 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             isLoadingRecord = false;
         }
         refreshAllRowCandidates();
+    }
+
+    private void confirmAndClearPreviewCache() {
+        File cacheRoot = previewCacheDirectory();
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("プレビューキャッシュのクリア");
+        alert.setHeaderText("preview_cache を削除しますか？");
+        alert.setContentText(
+                "次をすべて削除します。\n"
+                        + "・PDF プレビュー（preview_cache/pdf）\n"
+                        + "・原本解析キャッシュ（preview_cache/parse）\n\n"
+                        + "保存先: "
+                        + cacheRoot.getAbsolutePath()
+                        + "\n\n"
+                        + "表示中の依頼書プレビューは再生成されます。"
+                        + "照合データの再解析が必要なときは、読込を実行してください。");
+        ButtonType ok = new ButtonType("クリア", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancel = new ButtonType("キャンセル", ButtonBar.ButtonData.CANCEL_CLOSE);
+        alert.getButtonTypes().setAll(ok, cancel);
+        Optional<ButtonType> choice = alert.showAndWait();
+        if (choice.isEmpty() || choice.get() != ok) {
+            return;
+        }
+
+        synchronized (cacheQueue) {
+            cacheQueue.clear();
+        }
+
+        RequestFormSourceCache.ClearDiskCacheResult result =
+                RequestFormSourceCache.clearAllDiskCache(cacheRoot);
+
+        StringBuilder msg = new StringBuilder();
+        msg.append("プレビューキャッシュをクリアしました。\n");
+        msg.append("PDF: ").append(result.pdfFilesDeleted()).append(" 件\n");
+        msg.append("解析(parse): ").append(result.parseFilesDeleted()).append(" 件");
+        if (result.deleteFailures() > 0) {
+            msg.append("\n削除できなかったファイル: ").append(result.deleteFailures()).append(" 件");
+        }
+        if (result.totalDeleted() == 0) {
+            msg.append("\n（削除対象のファイルはありませんでした）");
+        }
+        showAlert("プレビューキャッシュ", msg.toString());
+
+        if (selectedRecord != null) {
+            renderOriginalSheetInGrid(selectedRecord);
+        } else {
+            sheetGrid.getChildren().clear();
+            currentPreviewOriginalFile = null;
+            refreshPreviewFileHeader();
+        }
+        enqueueBackgroundCacheTasks();
     }
 
     private void openOriginalExcel() {
@@ -4174,29 +4234,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             updateSpec.run();
         });
         
-        pRow.cmbSearch.setOnAction(evt -> {
-            String sel = pRow.cmbSearch.getValue();
-            if (sel != null && sel.contains(" | ")) {
-                String code = sel.split(" \\| ")[0].trim();
-                for (ProductInfo p : masterProductList) {
-                    if (p.getShohinCode().equals(code)) {
-                        isLoadingRecord = true;
-                        try {
-                            pRow.txtItem.setText(p.getShohinCode());
-                            pRow.txtPart.setText(p.getFoamPartNo());
-                            String[] nameParts = p.getShohinName1().split("-");
-                            if (nameParts.length >= 2) pRow.txtType.setText(nameParts[1]);
-                            pRow.txtWidth.setText(p.getFoamWidth());
-                            pRow.txtLength.setText(p.getFoamLength());
-                            updateProductRowSpecDisplay(pRow);
-                        } finally {
-                            isLoadingRecord = false;
-                        }
-                        break;
-                    }
-                }
-            }
-        });
+        pRow.cmbSearch.setOnAction(evt -> applyMasterProductCandidateSelection(pRow.cmbSearch.getValue(), pRow));
 
         productRows.add(pRow);
         productRowsContainer.getChildren().add(pRow.grid);
@@ -4236,6 +4274,53 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 });
     }
 
+    private static String shohinCodeFromMasterCandidateLabel(String candidateLabel) {
+        if (candidateLabel == null || !candidateLabel.contains(" | ")) {
+            return "";
+        }
+        return candidateLabel.split(" \\| ", 2)[0].trim();
+    }
+
+    private ProductInfo findMasterProductByShohinCode(String shohinCode) {
+        if (shohinCode == null || shohinCode.isBlank()) {
+            return null;
+        }
+        String code = shohinCode.trim();
+        for (ProductInfo p : masterProductList) {
+            if (p.getShohinCode().equals(code)) {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    /** マスタ候補コンボの選択を製品行とフォーム共通の加工内容へ反映する。 */
+    private void applyMasterProductCandidateSelection(String candidateLabel, ProductRow pRow) {
+        ProductInfo product = findMasterProductByShohinCode(shohinCodeFromMasterCandidateLabel(candidateLabel));
+        if (product == null || pRow == null) {
+            return;
+        }
+        isLoadingRecord = true;
+        try {
+            pRow.txtItem.setText(product.getShohinCode());
+            pRow.txtPart.setText(product.getFoamPartNo());
+            String[] nameParts = product.getShohinName1().split("-");
+            if (nameParts.length >= 2) {
+                pRow.txtType.setText(nameParts[1]);
+            } else if (!product.getShohinName1().isBlank()) {
+                pRow.txtType.setText(product.getShohinName1());
+            }
+            pRow.txtWidth.setText(product.getFoamWidth());
+            pRow.txtLength.setText(product.getFoamLength());
+            updateProductRowSpecDisplay(pRow);
+            if (txtProcess != null) {
+                txtProcess.setText(product.getKakoNaiyo());
+            }
+        } finally {
+            isLoadingRecord = false;
+        }
+    }
+
     private void updateRowProdCandidates(ProductRow pRow, boolean fromDropdownOpen) {
         if (isLoadingRecord && !fromDropdownOpen) {
             return;
@@ -4244,16 +4329,25 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         String kwPart = normalize_text(pRow.txtPart.getText());
         String kwType = normalize_text(pRow.txtType.getText());
         String kwLength = normalize_text(pRow.txtLength.getText());
+        String kwHinmei = normalize_text(pRow.txtHinmei.getText());
 
         java.util.List<String> filtered;
-        if (kwItem.isEmpty() && kwPart.isEmpty() && kwType.isEmpty() && kwLength.isEmpty()) {
+        if (kwItem.isEmpty()
+                && kwPart.isEmpty()
+                && kwType.isEmpty()
+                && kwLength.isEmpty()
+                && kwHinmei.isEmpty()) {
             if (!fromDropdownOpen) {
                 pRow.cmbSearch.setItems(javafx.collections.FXCollections.emptyObservableList());
                 return;
             }
-            filtered = buildMasterProductCandidateLabels(null, null, null, null, 50);
+            filtered =
+                    RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
+                            masterProductList, "", "", "", "", "", 50);
         } else {
-            filtered = buildMasterProductCandidateLabelsRelaxed(kwItem, kwPart, kwType, kwLength, 50);
+            filtered =
+                    RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
+                            masterProductList, kwItem, kwPart, kwType, kwLength, kwHinmei, 50);
         }
         pRow.cmbSearch.setItems(javafx.collections.FXCollections.observableArrayList(filtered));
         if (!fromDropdownOpen && !filtered.isEmpty() && !pRow.cmbSearch.isShowing()) {
@@ -4269,140 +4363,30 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         String kwPart = normalize_text(rRow.txtPart.getText());
         String kwType = normalize_text(rRow.txtType.getText());
         String kwLength = normalize_text(rRow.txtLength.getText());
+        String kwHinmei = normalize_text(rRow.txtHinmei.getText());
 
         java.util.List<String> filtered;
-        if (kwItem.isEmpty() && kwPart.isEmpty() && kwType.isEmpty() && kwLength.isEmpty()) {
+        if (kwItem.isEmpty()
+                && kwPart.isEmpty()
+                && kwType.isEmpty()
+                && kwLength.isEmpty()
+                && kwHinmei.isEmpty()) {
             if (!fromDropdownOpen) {
                 rRow.cmbSearch.setItems(javafx.collections.FXCollections.emptyObservableList());
                 return;
             }
-            filtered = buildMasterProductCandidateLabels(null, null, null, null, 50);
+            filtered =
+                    RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
+                            masterProductList, "", "", "", "", "", 50);
         } else {
-            filtered = buildMasterProductCandidateLabelsRelaxed(kwItem, kwPart, kwType, kwLength, 50);
+            filtered =
+                    RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
+                            masterProductList, kwItem, kwPart, kwType, kwLength, kwHinmei, 50);
         }
         rRow.cmbSearch.setItems(javafx.collections.FXCollections.observableArrayList(filtered));
         if (!fromDropdownOpen && !filtered.isEmpty() && !rRow.cmbSearch.isShowing()) {
             rRow.cmbSearch.show();
         }
-    }
-
-    /**
-     * 候補が0件のとき、長さ→タイプ→品番→品名の順でフィルタを外し、1件以上になるまで再検索する。
-     */
-    private java.util.List<String> buildMasterProductCandidateLabelsRelaxed(
-            String kwItem, String kwPart, String kwType, String kwLength, int limit) {
-        String item = emptyMasterCandidateKeyword(kwItem);
-        String part = emptyMasterCandidateKeyword(kwPart);
-        String type = emptyMasterCandidateKeyword(kwType);
-        String length = emptyMasterCandidateKeyword(kwLength);
-
-        String activeItem = item;
-        String activePart = part;
-        String activeType = type;
-        String activeLength = length;
-
-        java.util.List<String> result =
-                buildMasterProductCandidateLabels(activeItem, activePart, activeType, activeLength, limit);
-        if (!result.isEmpty()) {
-            return result;
-        }
-        if (length != null) {
-            activeLength = null;
-            result =
-                    buildMasterProductCandidateLabels(activeItem, activePart, activeType, activeLength, limit);
-            if (!result.isEmpty()) {
-                return result;
-            }
-        }
-        if (type != null) {
-            activeType = null;
-            result =
-                    buildMasterProductCandidateLabels(activeItem, activePart, activeType, activeLength, limit);
-            if (!result.isEmpty()) {
-                return result;
-            }
-        }
-        if (part != null) {
-            activePart = null;
-            result =
-                    buildMasterProductCandidateLabels(activeItem, activePart, activeType, activeLength, limit);
-            if (!result.isEmpty()) {
-                return result;
-            }
-        }
-        if (item != null) {
-            activeItem = null;
-            result =
-                    buildMasterProductCandidateLabels(activeItem, activePart, activeType, activeLength, limit);
-        }
-        return result;
-    }
-
-    private static String emptyMasterCandidateKeyword(String kw) {
-        return kw == null || kw.isEmpty() ? null : kw;
-    }
-
-    private java.util.List<String> buildMasterProductCandidateLabels(
-            String kwItem, String kwPart, String kwType, String kwLength, int limit) {
-        java.util.List<String> filtered = new java.util.ArrayList<>();
-        boolean filterActive =
-                kwItem != null && !kwItem.isEmpty()
-                        || kwPart != null && !kwPart.isEmpty()
-                        || kwType != null && !kwType.isEmpty()
-                        || kwLength != null && !kwLength.isEmpty();
-        String normItem = kwItem != null ? kwItem : "";
-        String normPart = kwPart != null ? kwPart : "";
-        String normType = kwType != null ? kwType : "";
-        String normLength = kwLength != null ? kwLength : "";
-
-        for (ProductInfo p : masterProductList) {
-            if (filterActive) {
-                boolean matchItem =
-                        normItem.isEmpty()
-                                || (p.getShohinCode() != null
-                                        && normalize_text(p.getShohinCode()).contains(normItem))
-                                || (p.getShohinName1() != null
-                                        && normalize_text(p.getShohinName1()).contains(normItem))
-                                || (p.getSeihinCode() != null
-                                        && normalize_text(p.getSeihinCode()).contains(normItem))
-                                || (p.getFoamName() != null
-                                        && normalize_text(p.getFoamName()).contains(normItem));
-                boolean matchPart =
-                        normPart.isEmpty()
-                                || (p.getFoamPartNo() != null
-                                        && normalize_text(p.getFoamPartNo()).contains(normPart))
-                                || normalize_text(p.getShohinCode()).contains(normPart);
-                boolean matchType =
-                        normType.isEmpty()
-                                || (p.getFoamName() != null
-                                        && normalize_text(p.getFoamName()).contains(normType))
-                                || (p.getShohinName1() != null
-                                        && normalize_text(p.getShohinName1()).contains(normType));
-                String pLength = normalize_text(p.getFoamLength()).replaceAll("\\.0$", "");
-                boolean matchLength = normLength.isEmpty() || pLength.contains(normLength);
-                if (!(matchItem && matchPart && matchType && matchLength)) {
-                    continue;
-                }
-            }
-            filtered.add(formatMasterProductCandidateLabel(p));
-            if (filtered.size() >= limit) {
-                break;
-            }
-        }
-        return filtered;
-    }
-
-    private static String formatMasterProductCandidateLabel(ProductInfo p) {
-        String pLength = p.getFoamLength() != null ? p.getFoamLength().replaceAll("\\.0$", "") : "";
-        String pWidth = p.getFoamWidth() != null ? p.getFoamWidth().replaceAll("\\.0$", "") : "";
-        String dims = (pWidth.isEmpty() ? "?" : pWidth) + "×" + (pLength.isEmpty() ? "?" : pLength);
-        return p.getShohinCode()
-                + " | "
-                + p.getFoamPartNo()
-                + " | "
-                + p.getFoamName()
-                + " | "
-                + dims;
     }
 
     private RawMaterialRow addRawRow(Map<String, String> initialValues) {

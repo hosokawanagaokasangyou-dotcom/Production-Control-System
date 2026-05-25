@@ -199,6 +199,12 @@ public final class EnvVarDocs {
                         + "環境変数タブのフォルダ選択可。"
                         + "プレビュー・照合・背景キャッシュの原本読込先。");
         put(
+                "PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE",
+                "依頼書 PDF プレビュー: 日本語フォントサイズ補正係数（Excel pt に乗算）。"
+                        + "範囲 0.50～1.00。空または未設定で 0.72。"
+                        + "PDF が Excel より大きくはみ出すときは 0.65～0.70、小さすぎるときは 0.80 前後。"
+                        + "変更後はプレビュー PDF キャッシュが再生成される。");
+        put(
                 "PM_AI_ACTUAL_DETAIL_WORKBOOK",
                 "加工実績明細DATAを読むブックのフルパス（指定時は"
                         + " PM_AI_ACTUAL_DETAIL_SOURCE_DIR より優先）。");

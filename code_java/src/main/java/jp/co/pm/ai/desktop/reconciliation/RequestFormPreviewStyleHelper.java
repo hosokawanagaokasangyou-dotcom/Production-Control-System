@@ -146,6 +146,12 @@ final class RequestFormPreviewStyleHelper {
 
     static double fontSizePx(Font font) {
         double points = font.getFontHeightInPoints();
+        if (points <= 0 && font instanceof XSSFFont xssfFont) {
+            int heightTwips = xssfFont.getFontHeight();
+            if (heightTwips > 0) {
+                points = heightTwips / 20.0;
+            }
+        }
         if (points <= 0) {
             points = 11.0;
         }

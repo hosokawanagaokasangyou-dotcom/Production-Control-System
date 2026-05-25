@@ -725,4 +725,27 @@ class AppPathsTest {
                 fakeRepo.resolve(AppPaths.DISPATCH_USAGE_GUIDE_DOCX).toAbsolutePath().normalize(),
                 AppPaths.resolveDispatchUsageGuideDocx(ui));
     }
+
+    @Test
+    void resolveRequestFormPreviewPdfCjkScale_clampsAndDefaults() {
+        assertEquals(
+                0.72f,
+                AppPaths.resolveRequestFormPreviewPdfCjkScale(Map.of()),
+                0.001f);
+        assertEquals(
+                0.68f,
+                AppPaths.resolveRequestFormPreviewPdfCjkScale(
+                        Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE, "0.68")),
+                0.001f);
+        assertEquals(
+                0.50f,
+                AppPaths.resolveRequestFormPreviewPdfCjkScale(
+                        Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE, "0.2")),
+                0.001f);
+        assertEquals(
+                1.00f,
+                AppPaths.resolveRequestFormPreviewPdfCjkScale(
+                        Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE, "1.5")),
+                0.001f);
+    }
 }

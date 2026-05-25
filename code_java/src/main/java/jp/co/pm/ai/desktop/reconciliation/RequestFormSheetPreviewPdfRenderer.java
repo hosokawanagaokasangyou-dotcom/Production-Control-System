@@ -23,6 +23,7 @@ import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
 
+import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormSheetPreviewRenderer.PreviewData;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormSheetShapeOverlay.OverlayShape;
 
@@ -32,10 +33,25 @@ import jp.co.pm.ai.desktop.reconciliation.RequestFormSheetShapeOverlay.OverlaySh
  */
 final class RequestFormSheetPreviewPdfRenderer {
 
-    /** 描画方式の識別子（変更時はプレビューキャッシュを無効化する）。 */
-    static final String RENDERER_SPEC = "pdfbox-v1-vector";
+    private static final String RENDERER_SPEC_BASE = "pdfbox-v2-text-fit";
 
     private static final float PX_TO_PT = 72f / 96f;
+    private static volatile float cjkMetricsScale =
+            AppPaths.DEFAULT_PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE;
+
+    /** 描画方式の識別子（係数変更時もプレビューキャッシュを無効化する）。 */
+    static String rendererSpec() {
+        int pct = Math.round(cjkMetricsScale() * 100f);
+        return RENDERER_SPEC_BASE + "-s" + pct;
+    }
+
+    static void applyCjkMetricsScaleFromUi(java.util.Map<String, String> ui) {
+        cjkMetricsScale = AppPaths.resolveRequestFormPreviewPdfCjkScale(ui);
+    }
+
+    static float cjkMetricsScale() {
+        return cjkMetricsScale;
+    }
     private static final float PREVIEW_RENDER_DPI = 144f;
     private static final Pattern BORDER_WIDTH_PATTERN =
             Pattern.compile(
@@ -282,10 +298,11 @@ final class RequestFormSheetPreviewPdfRenderer {
             float height)
             throws IOException {
         PDFont font = style.bold() ? fonts.bold() : fonts.regular();
-        float fontSizePt = (float) Math.max(6.0, style.fontSizePx() * PX_TO_PT);
         float padX = 3f * PX_TO_PT;
         float padY = Math.max(1f, Math.min(4f, (float) style.fontSizePx() * 0.08f)) * PX_TO_PT;
         float maxWidth = Math.max(1f, width - padX * 2f);
+        float maxHeight = Math.max(1f, height - padY * 2f);
+        float fontSizePt = fitFontSizeToBox(font, text, excelFontSizePt(style.fontSizePx()), maxWidth, maxHeight, style.wrapText());
         List<String> lines =
                 style.wrapText()
                         ? wrapLines(text.replace("\r", ""), font, fontSizePt, maxWidth)
@@ -334,29 +351,32 @@ final class RequestFormSheetPreviewPdfRenderer {
         }
         float padX = 3f * PX_TO_PT;
         float padY = 2f * PX_TO_PT;
+        float maxWidth = Math.max(1f, width - padX * 2f);
+        float maxHeight = Math.max(1f, height - padY * 2f);
         RequestFormPreviewCellStyle base = runs.get(0).style();
         float fontSizePt =
-                (float)
-                        Math.max(
-                                6.0,
-                                (base != null ? base.fontSizePx() : 11.0 * 96.0 / 72.0) * PX_TO_PT);
+                excelFontSizePt(base != null ? base.fontSizePx() : 11.0 * 96.0 / 72.0);
         float textWidth = 0f;
+        float maxRunPt = fontSizePt;
         for (RequestFormPreviewTextRun run : runs) {
             PDFont runFont =
                     run.style() != null && run.style().bold() ? fonts.bold() : fonts.regular();
             float runSize =
-                    (float)
-                            Math.max(
-                                    6.0,
-                                    (run.style() != null ? run.style().fontSizePx() : 11.0 * 96.0 / 72.0)
-                                            * PX_TO_PT);
+                    excelFontSizePt(
+                            run.style() != null ? run.style().fontSizePx() : 11.0 * 96.0 / 72.0);
+            maxRunPt = Math.max(maxRunPt, runSize);
             textWidth += stringWidth(runFont, run.text() != null ? run.text() : "", runSize);
         }
+        float widthScale = textWidth > maxWidth ? maxWidth / textWidth : 1f;
+        float heightScale = maxRunPt > maxHeight ? maxHeight / maxRunPt : 1f;
+        float runScale = Math.min(1f, Math.min(widthScale, heightScale));
+        float scaledTextWidth = textWidth * runScale;
+        fontSizePt *= runScale;
         float textX =
                 switch (hAlign != null ? hAlign : HorizontalAlignment.LEFT) {
                     case CENTER, CENTER_SELECTION, FILL, JUSTIFY, DISTRIBUTED ->
-                            x + (width - textWidth) / 2f;
-                    case RIGHT -> x + width - padX - textWidth;
+                            x + (width - scaledTextWidth) / 2f;
+                    case RIGHT -> x + width - padX - scaledTextWidth;
                     default -> x + padX;
                 };
         float textY =
@@ -370,10 +390,9 @@ final class RequestFormSheetPreviewPdfRenderer {
             RequestFormPreviewCellStyle style = run.style();
             PDFont runFont = style != null && style.bold() ? fonts.bold() : fonts.regular();
             float runSize =
-                    (float)
-                            Math.max(
-                                    6.0,
-                                    (style != null ? style.fontSizePx() : 11.0 * 96.0 / 72.0) * PX_TO_PT);
+                    excelFontSizePt(
+                                    style != null ? style.fontSizePx() : 11.0 * 96.0 / 72.0)
+                            * runScale;
             float[] rgb = hexToRgb(style != null ? style.foreground() : "#000000");
             stream.setNonStrokingColor(rgb[0], rgb[1], rgb[2]);
             String text = run.text() != null ? run.text() : "";
@@ -393,6 +412,51 @@ final class RequestFormSheetPreviewPdfRenderer {
         stream.newLineAtOffset(x, y);
         stream.showText(text);
         stream.endText();
+    }
+
+    private static float excelFontSizePt(double fontSizePx) {
+        return (float) Math.max(6.0, fontSizePx * PX_TO_PT * cjkMetricsScale());
+    }
+
+    private static float fitFontSizeToBox(
+            PDFont font,
+            String text,
+            float fontSizePt,
+            float maxWidth,
+            float maxHeight,
+            boolean wrapText)
+            throws IOException {
+        if (text == null || text.isBlank()) {
+            return Math.min(fontSizePt, Math.max(6f, maxHeight * 0.92f));
+        }
+        String normalized = text.replace("\r", "");
+        if (!wrapText) {
+            String line = normalized.replace('\n', ' ');
+            fontSizePt = fitFontSizeToWidth(font, line, fontSizePt, maxWidth);
+            return Math.min(fontSizePt, Math.max(6f, maxHeight * 0.92f));
+        }
+        List<String> lines = wrapLines(normalized, font, fontSizePt, maxWidth);
+        for (String line : lines) {
+            fontSizePt = fitFontSizeToWidth(font, line, fontSizePt, maxWidth);
+        }
+        float lineHeight = fontSizePt * 1.15f;
+        float blockHeight = lineHeight * Math.max(1, lines.size());
+        if (blockHeight > maxHeight && blockHeight > 0f) {
+            fontSizePt = Math.max(6f, fontSizePt * maxHeight / blockHeight);
+        }
+        return fontSizePt;
+    }
+
+    private static float fitFontSizeToWidth(PDFont font, String text, float fontSizePt, float maxWidth)
+            throws IOException {
+        if (text == null || text.isEmpty() || maxWidth <= 0f) {
+            return fontSizePt;
+        }
+        float width = stringWidth(font, text, fontSizePt);
+        if (width <= maxWidth || width <= 0f) {
+            return fontSizePt;
+        }
+        return Math.max(6f, fontSizePt * maxWidth / width);
     }
 
     private static float stringWidth(PDFont font, String text, float fontSize) throws IOException {
