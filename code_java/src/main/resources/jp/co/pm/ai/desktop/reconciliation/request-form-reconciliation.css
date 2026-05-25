@@ -202,6 +202,14 @@
     -fx-background-color: derive(-fx-accent, -32%);
 }
 
+.pm-request-form-reconciliation-root .btn-undo-transfer {
+    -fx-background-color: #b45309;
+}
+
+.pm-request-form-reconciliation-root .btn-undo-transfer:hover {
+    -fx-background-color: #92400e;
+}
+
 .pm-request-form-reconciliation-root .transfer-blocked-reason {
     -fx-text-fill: #fde68a;
     -fx-background-color: derive(#f59e0b, -45%);
