@@ -1,29 +1,19 @@
 {
   "version" : 1,
   "entries" : [ {
-    "task_id" : "W5-18",
-    "process" : "スリット",
-    "machine_name" : "スリット機1　湖南",
-    "next_day_dispatch_m" : 250.0
-  }, {
     "task_id" : "W5-6",
     "process" : "検査",
     "machine_name" : "熱融着機　湖南",
     "next_day_dispatch_m" : 600.0
-  }, {
-    "task_id" : "Y5-27",
-    "process" : "SEC",
-    "machine_name" : "SEC機　湖南",
-    "next_day_dispatch_m" : 6000.0
   }, {
     "task_id" : "Y5-16",
     "process" : "スライス",
     "machine_name" : "スライス機1　湖南",
     "next_day_dispatch_m" : 2600.0
   }, {
-    "task_id" : "W5-13",
-    "process" : "EC",
-    "machine_name" : "EC機　湖南",
-    "next_day_dispatch_m" : 5700.0
+    "task_id" : "Y5-24",
+    "process" : "SEC",
+    "machine_name" : "SEC機　湖南",
+    "next_day_dispatch_m" : 4600.0
   } ]
 }
