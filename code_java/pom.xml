@@ -209,6 +209,8 @@
         <configuration>
           <release>${maven.compiler.release}</release>
           <encoding>${project.build.sourceEncoding}</encoding>
+          <!-- Windows / ネットワークドライブで増分コンパイルがネスト・record .class を欠落させるのを防ぐ -->
+          <useIncrementalCompilation>false</useIncrementalCompilation>
           <!-- リフレクションでパラメータ名を利用する場合に有利 -->
           <parameters>true</parameters>
           <compilerArgs>

@@ -35,6 +35,13 @@ final class RequestFormSourceCache {
 
     private record PreviewMeta(SourceFingerprint source, String range, String renderer) {}
 
+    /** {@link #clearAllDiskCache(File)} の結果。 */
+    record ClearDiskCacheResult(int pdfFilesDeleted, int parseFilesDeleted, int deleteFailures) {
+        int totalDeleted() {
+            return pdfFilesDeleted + parseFilesDeleted;
+        }
+    }
+
     static File cacheRoot(File repoPreviewCacheDir) {
         return repoPreviewCacheDir;
     }
@@ -93,8 +100,7 @@ final class RequestFormSourceCache {
             if (meta == null
                     || !matches(sourceFile, meta.source())
                     || !RequestFormSheetPreviewRenderer.PREVIEW_RANGE_SPEC.equals(meta.range())
-                    || !RequestFormSheetPreviewRenderer.PREVIEW_RENDERER_SPEC.equals(
-                            meta.renderer())) {
+                    || !RequestFormSheetPreviewPdfRenderer.rendererSpec().equals(meta.renderer())) {
                 return false;
             }
             return true;
@@ -110,7 +116,7 @@ final class RequestFormSourceCache {
                 new PreviewMeta(
                         fingerprint(sourceFile),
                         RequestFormSheetPreviewRenderer.PREVIEW_RANGE_SPEC,
-                        RequestFormSheetPreviewRenderer.PREVIEW_RENDERER_SPEC));
+                        RequestFormSheetPreviewPdfRenderer.rendererSpec()));
     }
 
     static void deletePreviewCache(File pdfFile) {
@@ -120,6 +126,40 @@ final class RequestFormSourceCache {
         File meta = pdfFile != null ? previewMetaFile(pdfFile) : null;
         if (meta != null && meta.exists()) {
             meta.delete();
+        }
+    }
+
+    /**
+     * {@code preview_cache/pdf} と {@code preview_cache/parse} 配下のファイルをすべて削除する。
+     * ディレクトリ自体は残す。
+     */
+    static ClearDiskCacheResult clearAllDiskCache(File cacheRoot) {
+        if (cacheRoot == null) {
+            return new ClearDiskCacheResult(0, 0, 0);
+        }
+        int[] pdf = new int[2];
+        int[] parse = new int[2];
+        clearDirectoryFiles(pdfDir(cacheRoot), pdf);
+        clearDirectoryFiles(parseDir(cacheRoot), parse);
+        return new ClearDiskCacheResult(pdf[0], parse[0], pdf[1] + parse[1]);
+    }
+
+    private static void clearDirectoryFiles(File dir, int[] deletedAndFailures) {
+        if (dir == null || !dir.isDirectory()) {
+            return;
+        }
+        File[] children = dir.listFiles();
+        if (children == null) {
+            return;
+        }
+        for (File child : children) {
+            if (child.isFile()) {
+                if (child.delete()) {
+                    deletedAndFailures[0]++;
+                } else {
+                    deletedAndFailures[1]++;
+                }
+            }
         }
     }
 

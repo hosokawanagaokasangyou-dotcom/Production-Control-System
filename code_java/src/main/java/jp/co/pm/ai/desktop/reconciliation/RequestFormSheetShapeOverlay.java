@@ -135,7 +135,12 @@ final class RequestFormSheetShapeOverlay {
                 continue;
             }
             if (shape instanceof XSSFSimpleShape simple) {
-                List<RequestFormPreviewTextRun> runs = textRunsFromShape(simple);
+                List<RequestFormPreviewTextRun> runs;
+                try {
+                    runs = textRunsFromShape(simple);
+                } catch (RuntimeException ex) {
+                    runs = List.of();
+                }
                 boolean hasText = !runs.isEmpty();
                 String fill = null;
                 if (!hasText && !simple.isNoFill()) {

@@ -108,4 +108,25 @@ class RequestFormSourceCacheTest {
 
         assertFalse(RequestFormSourceCache.isPreviewCacheValid(pdf, source));
     }
+
+    @Test
+    void clearAllDiskCache_removesPdfAndParseFiles(@TempDir Path tmp) throws Exception {
+        File cacheRoot = tmp.resolve("preview_cache").toFile();
+        File source = tmp.resolve("book.xlsm").toFile();
+        Files.writeString(source.toPath(), "v1");
+
+        File pdf = RequestFormSourceCache.pdfCacheFile(cacheRoot, "book.xlsm", "E5-1");
+        Files.createDirectories(pdf.getParentFile().toPath());
+        Files.write(pdf.toPath(), "%PDF-1.4\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        RequestFormSourceCache.writePreviewMeta(pdf, source);
+        RequestFormSourceCache.saveParseEntries(cacheRoot, source, List.of(Map.of("依頼Ｎｏ", "E5-1")));
+
+        RequestFormSourceCache.ClearDiskCacheResult result =
+                RequestFormSourceCache.clearAllDiskCache(cacheRoot);
+        assertEquals(2, result.pdfFilesDeleted());
+        assertEquals(1, result.parseFilesDeleted());
+        assertEquals(0, result.deleteFailures());
+        assertFalse(pdf.isFile());
+        assertFalse(RequestFormSourceCache.parseCacheFile(cacheRoot, source).isFile());
+    }
 }

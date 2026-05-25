@@ -31,8 +31,10 @@ final class RequestFormSheetPreviewRenderer {
     /** Excel 1-based プレビュー範囲（依頼書フォーム全体）。 */
     static final String PREVIEW_RANGE_SPEC = "A1:AO29";
 
-    /** 描画方式の識別子（変更時はプレビューキャッシュを無効化する）。 */
-    static final String PREVIEW_RENDERER_SPEC = RequestFormSheetPreviewPdfRenderer.RENDERER_SPEC;
+    /** 描画方式の識別子（係数変更時はプレビューキャッシュを無効化する）。 */
+    static String previewRendererSpec() {
+        return RequestFormSheetPreviewPdfRenderer.rendererSpec();
+    }
 
     /** POI 0-based: 行 1～29 → 0～28。 */
     private static final int PREVIEW_FIRST_ROW = 0;
@@ -191,15 +193,24 @@ final class RequestFormSheetPreviewRenderer {
 
             List<RequestFormSheetShapeOverlay.OverlayShape> overlayShapes = List.of();
             if (sheet instanceof XSSFSheet xssfSheet) {
-                overlayShapes =
-                        RequestFormSheetShapeOverlay.loadShapes(
-                                xssfSheet,
-                                firstRow,
-                                lastRow,
-                                firstCol,
-                                lastCol,
-                                colWidthsPx,
-                                rowHeightsPx);
+                try {
+                    overlayShapes =
+                            RequestFormSheetShapeOverlay.loadShapes(
+                                    xssfSheet,
+                                    firstRow,
+                                    lastRow,
+                                    firstCol,
+                                    lastCol,
+                                    colWidthsPx,
+                                    rowHeightsPx);
+                } catch (RuntimeException ex) {
+                    // 埋め込みフォント破損等で Drawing 解析が失敗してもセル PDF は継続する
+                    System.err.println(
+                            "依頼書プレビュー: シェイプ読込をスキップしました ("
+                                    + sheetName
+                                    + "): "
+                                    + ex.getMessage());
+                }
             }
 
             return new PreviewData(
