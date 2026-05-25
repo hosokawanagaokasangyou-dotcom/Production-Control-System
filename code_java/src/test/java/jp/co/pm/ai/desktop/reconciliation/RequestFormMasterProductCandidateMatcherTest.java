@@ -31,7 +31,24 @@ class RequestFormMasterProductCandidateMatcherTest {
         String label = RequestFormMasterProductCandidateMatcher.formatCandidateLabel(p);
 
         assertTrue(label.endsWith(" | EC,梱包"));
-        assertTrue(label.contains("1300×250 | 白 | EC,梱包"));
+        assertTrue(label.contains(" | NP17 | 1300×250 | 白 | EC,梱包"));
+    }
+
+    @Test
+    void formatTypeForLabel_splitsShohinName1() {
+        assertEquals("NP17", RequestFormMasterProductCandidateMatcher.formatTypeForLabel("15020-NP17"));
+        assertEquals("WHOLE", RequestFormMasterProductCandidateMatcher.formatTypeForLabel("WHOLE"));
+        assertEquals("?", RequestFormMasterProductCandidateMatcher.formatTypeForLabel(""));
+        assertEquals("?", RequestFormMasterProductCandidateMatcher.formatTypeForLabel(null));
+    }
+
+    @Test
+    void formatCandidateLabel_zeroFoamColor_showsDash() {
+        ProductInfo p =
+                new ProductInfo(
+                        "X", "", "", "", "", "", "", "", "", "1", "1", "0", "", "");
+        String label = RequestFormMasterProductCandidateMatcher.formatCandidateLabel(p);
+        assertTrue(label.contains("1×1 | - | "));
     }
 
     @Test
@@ -84,6 +101,49 @@ class RequestFormMasterProductCandidateMatcherTest {
 
         assertEquals(1, labels.size());
         assertTrue(labels.get(0).contains("CODE-B"));
+    }
+
+    @Test
+    void buildRankedCandidateLabels_typeMatch_ranksAbovePartOnlyWithTypeWeight() {
+        List<ProductInfo> catalog =
+                List.of(
+                        new ProductInfo(
+                                "CODE-PART-ONLY",
+                                "",
+                                "15020-OTHER",
+                                "",
+                                "",
+                                "",
+                                "",
+                                "6783",
+                                "15020",
+                                "1300",
+                                "250",
+                                "",
+                                "",
+                                ""),
+                        new ProductInfo(
+                                "CODE-TYPE-MATCH",
+                                "",
+                                "15020-NP17",
+                                "",
+                                "",
+                                "",
+                                "",
+                                "6783",
+                                "15020",
+                                "1300",
+                                "250",
+                                "",
+                                "",
+                                ""));
+
+        List<String> labels =
+                RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
+                        catalog, "", "15020", "NP17", "250", "6783", 10);
+
+        assertEquals(2, labels.size());
+        assertTrue(labels.get(0).contains("CODE-TYPE-MATCH"));
     }
 
     @Test
