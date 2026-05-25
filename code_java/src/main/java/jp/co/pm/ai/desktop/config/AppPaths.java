@@ -1122,7 +1122,13 @@ public final class AppPaths {
 
     /** {@link FactorySite#KOKUBU} の {@link #KEY_PM_AI_REQUEST_FORM_JUCHU_FILE} 既定（UNC）。 */
     public static final String DEFAULT_PM_AI_REQUEST_FORM_JUCHU_FILE_KOKUBU =
-            DEFAULT_KOKUBU_DATA_DIR + "\\" + DEFAULT_REQUEST_FORM_JUCHU_FILE_NAME;
+            "\\\\192.168.0.101\\"
+                    + "共有フォルダ\\"
+                    + "国分工場\\"
+                    + "国分共有\\"
+                    + "加工管理\\"
+                    + "加工計画関連\\"
+                    + "加工依頼書入力　国分コピー入力（2024年12月28））.xlsm";
 
     /**
      * @deprecated 国分プリセットのサマリ既定は {@link #DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KOKUBU}
