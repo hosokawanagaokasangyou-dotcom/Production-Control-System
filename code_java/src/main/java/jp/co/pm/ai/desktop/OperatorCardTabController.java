@@ -18,7 +18,7 @@ import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
-import javafx.scene.control.DatePicker;
+import jp.co.pm.ai.desktop.ui.InlineMonthCalendarPane;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Spinner;
@@ -71,7 +71,7 @@ public final class OperatorCardTabController {
     private Button browseDispatchButton;
 
     @FXML
-    private DatePicker startDatePicker;
+    private InlineMonthCalendarPane startDateCalendar;
 
     @FXML
     private Spinner<Integer> dayCountSpinner;
@@ -100,10 +100,10 @@ public final class OperatorCardTabController {
     @FXML
     private void initialize() {
         installDayCountSpinner();
-        if (startDatePicker != null) {
-            startDatePicker.setValue(LocalDate.now());
-            startDatePicker
-                    .valueProperty()
+        if (startDateCalendar != null) {
+            startDateCalendar.setSelectedDate(LocalDate.now());
+            startDateCalendar
+                    .selectedDateProperty()
                     .addListener(
                             (obs, previousDate, newDate) -> {
                                 if (!Objects.equals(previousDate, newDate)) {
@@ -443,7 +443,7 @@ public final class OperatorCardTabController {
     }
 
     private void applyInferredStartDateIfNeeded() {
-        if (startDatePicker == null || cachedMemberSheets.isEmpty()) {
+        if (startDateCalendar == null || cachedMemberSheets.isEmpty()) {
             return;
         }
         SheetTable sample = sampleMemberSheetForDateColumns();
@@ -451,7 +451,9 @@ public final class OperatorCardTabController {
             return;
         }
         LocalDate current =
-                startDatePicker.getValue() != null ? startDatePicker.getValue() : LocalDate.now();
+                startDateCalendar.getSelectedDate() != null
+                        ? startDateCalendar.getSelectedDate()
+                        : LocalDate.now();
         int days = selectedDayCount();
         if (OperatorCardDocumentBuilder.canResolveDayColumns(sample.columns(), current, days)) {
             return;
@@ -459,7 +461,7 @@ public final class OperatorCardTabController {
         LocalDate inferred =
                 OperatorCardDocumentBuilder.inferScheduleStartDate(cachedMemberSheets, current);
         if (!Objects.equals(inferred, current)) {
-            startDatePicker.setValue(inferred);
+            startDateCalendar.setSelectedDate(inferred);
         }
     }
 
@@ -497,7 +499,8 @@ public final class OperatorCardTabController {
         ensureMemberCacheLoaded();
         applyInferredStartDateIfNeeded();
         List<Map<String, String>> dispatchRows = loadDispatchRows();
-        LocalDate start = startDatePicker != null ? startDatePicker.getValue() : LocalDate.now();
+        LocalDate start =
+                startDateCalendar != null ? startDateCalendar.getSelectedDate() : LocalDate.now();
         if (start == null) {
             throw new OperatorCardBuildException("start date is null");
         }
@@ -542,7 +545,8 @@ public final class OperatorCardTabController {
             statusLabel.setText(ex.getMessage());
             return;
         }
-        LocalDate start = startDatePicker != null ? startDatePicker.getValue() : LocalDate.now();
+        LocalDate start =
+                startDateCalendar != null ? startDateCalendar.getSelectedDate() : LocalDate.now();
         if (start == null) {
             statusLabel.setText("開始日を設定してください");
             return;

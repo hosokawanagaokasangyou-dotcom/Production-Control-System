@@ -113,14 +113,28 @@ class _FlushingFileHandler(logging.Handler):
     """
 
     terminator = "\n"
+    _SIZE_CHECK_INTERVAL = 64
 
     def __init__(self, filename: str, encoding: str = "utf-8-sig") -> None:
         super().__init__()
         self.baseFilename = os.path.abspath(filename)
         self.encoding = encoding
+        self._emit_count = 0
+
+    def _maybe_trim_oversized_log(self) -> None:
+        from execution_log_io import trim_execution_log_if_oversized
+
+        trim_execution_log_if_oversized(self.baseFilename)
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
+            self._emit_count += 1
+            check_size = (
+                self._emit_count == 1
+                or self._emit_count % self._SIZE_CHECK_INTERVAL == 0
+            )
+            if check_size:
+                self._maybe_trim_oversized_log()
             msg = self.format(record) + self.terminator
             with open(self.baseFilename, "a", encoding=self.encoding, newline="\n") as f:
                 f.write(msg)
@@ -129,6 +143,8 @@ class _FlushingFileHandler(logging.Handler):
                     os.fsync(f.fileno())
                 except OSError:
                     pass
+            if check_size:
+                self._maybe_trim_oversized_log()
         except Exception:
             self.handleError(record)
 
@@ -278,6 +294,12 @@ def _remove_prior_stage2_workbooks_and_prune_empty_dirs(output_root: str) -> Non
 
 # 3. ファイル用ハンドラ（VBAで後から読み取るため UTF-8 で保存）
 log_file_path = os.path.join(log_dir, "execution_log.txt")
+try:
+    from execution_log_io import trim_execution_log_if_oversized
+
+    trim_execution_log_if_oversized(log_file_path)
+except ImportError:
+    pass
 # BOM 付き UTF-8（Excel / VBA の ADODB.Stream が文字化けしにくい）
 file_handler = _FlushingFileHandler(log_file_path, encoding="utf-8-sig")
 file_handler.setFormatter(formatter)

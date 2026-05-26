@@ -560,6 +560,40 @@
     -fx-font-size: 11px;
 }
 
+.pm-inline-month-calendar {
+    -fx-padding: 4 0 0 0;
+}
+
+.pm-inline-month-calendar-title {
+    -fx-font-weight: bold;
+}
+
+.pm-inline-month-calendar-nav {
+    -fx-min-width: 28;
+    -fx-padding: 2 6 2 6;
+}
+
+.pm-inline-month-calendar-weekday {
+    -fx-font-size: 11px;
+    -fx-opacity: 0.85;
+}
+
+.pm-inline-month-calendar-day {
+    -fx-min-width: 32;
+    -fx-min-height: 32;
+    -fx-padding: 0;
+}
+
+.pm-inline-month-calendar-day-selected {
+    -fx-background-color: -fx-accent;
+    -fx-text-fill: -fx-accent-contrast;
+}
+
+.pm-inline-month-calendar-day-today {
+    -fx-border-color: -fx-accent;
+    -fx-border-width: 1;
+}
+
 /* A4 preview: always paper-like (dark app themes must not wash out text on white). */
 .pm-operator-card-root {
     -fx-background-color: white;

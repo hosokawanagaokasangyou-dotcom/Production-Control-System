@@ -18,6 +18,8 @@ _py_here = os.path.dirname(os.path.abspath(__file__))
 if _py_here:
     sys.path.insert(0, _py_here)
 
+from execution_log_io import trim_execution_log_if_oversized
+
 # planning_core は import 途中（FileHandler より前）で落ちると execution_log が作られない。
 # VBA は「ログ無し」を判定するため、読み込み前に必ず log/execution_log.txt を用意する。
 def _repo_root_for_stage1() -> str:
@@ -56,6 +58,7 @@ def _append_execution_log_line(level: str, msg: str) -> None:
     for path in _execution_log_paths_stage1():
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
+            trim_execution_log_if_oversized(path)
             with open(path, "a", encoding="utf-8-sig", newline="\n") as f:
                 f.write(line)
                 f.flush()
@@ -101,6 +104,7 @@ except Exception:
     for path in _execution_log_paths_stage1():
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
+            trim_execution_log_if_oversized(path)
             with open(path, "a", encoding="utf-8-sig", newline="\n") as f:
                 f.write(_err_head)
                 f.write(_tb)
