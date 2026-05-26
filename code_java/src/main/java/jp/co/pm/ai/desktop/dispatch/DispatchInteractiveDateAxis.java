@@ -22,6 +22,12 @@ public final class DispatchInteractiveDateAxis {
      */
     public static final int SLIDE_CUSHION_CALENDAR_DAYS = 7;
 
+    /**
+     * 配台計画手動修正「タスク×日付」表: データの最小配台日が今日より後でも、列の開始を今日から
+     * この暦日数だけ過去まで広げる（当日を含めず「14日前」＝ {@code today.minusDays(14)} から）。
+     */
+    public static final int DISPATCH_WIDE_DATE_AXIS_PAST_DAYS = 14;
+
     private static final String COL_PROCESS_START = "加工開始日時";
     private static final String COL_PROCESS_COMPLETE = "加工完了日";
     private static final String COL_SPECIFIED_DUE = "指定納期";
@@ -53,9 +59,34 @@ public final class DispatchInteractiveDateAxis {
                         DispatchTimelineMetaMissShortfalls.detectFromDocument(doc));
         collectSlideCushionInto(ds, doc, mergedShortfalls);
         if (ds.isEmpty()) {
-            return List.of();
+            return defaultAxisWhenNoDataDates();
         }
-        return ResultDispatchPivot.dateRangeInclusive(new ArrayList<>(ds));
+        return extendAxisMinToPastDays(
+                ResultDispatchPivot.dateRangeInclusive(new ArrayList<>(ds)),
+                DISPATCH_WIDE_DATE_AXIS_PAST_DAYS);
+    }
+
+    /**
+     * タスク×日付の日付列: 最小日を {@code today.minusDays(pastDays)} まで引き伸ばす（既にそれより過去ならそのまま）。
+     */
+    public static List<LocalDate> extendAxisMinToPastDays(List<LocalDate> axis, int pastDays) {
+        if (axis == null || axis.isEmpty() || pastDays < 0) {
+            return axis != null ? axis : List.of();
+        }
+        LocalDate floor = LocalDate.now().minusDays(pastDays);
+        LocalDate min = axis.getFirst();
+        if (!min.isAfter(floor)) {
+            return axis;
+        }
+        return ResultDispatchPivot.dateRangeInclusive(List.of(floor, axis.getLast()));
+    }
+
+    /** JSON 等に配台日が無いときの既定軸（過去 {@link #DISPATCH_WIDE_DATE_AXIS_PAST_DAYS} 日〜先の余白）。 */
+    public static List<LocalDate> defaultAxisWhenNoDataDates() {
+        LocalDate today = LocalDate.now();
+        LocalDate start = today.minusDays(DISPATCH_WIDE_DATE_AXIS_PAST_DAYS);
+        LocalDate end = today.plusDays(SLIDE_CUSHION_CALENDAR_DAYS);
+        return ResultDispatchPivot.dateRangeInclusive(List.of(start, end));
     }
 
     /** デバッグ計測用: 各ソースが寄与した max 暦日。 */

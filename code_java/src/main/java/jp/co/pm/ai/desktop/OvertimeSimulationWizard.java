@@ -95,6 +95,9 @@ public final class OvertimeSimulationWizard {
         Label intro =
                 new Label(
                         "メンバー勤怠を確認し、残業時間（分）を入力してください。"
+                                + " 日付列は本日から "
+                                + AttendanceOvertimePreview.OVERTIME_SIM_DATE_WINDOW_DAYS_AFTER_TODAY
+                                + " 日後まで（当日を含む）に限定しています。"
                                 + " 勤怠行はダブルクリックで ○（出勤）とグレー（休み）を切り替えられます（休日出勤シミュレーション）。"
                                 + " 確定後、変更内容を反映して段階3（配台試行）を実行します。");
         intro.setWrapText(true);

@@ -32,6 +32,18 @@ class DispatchInteractiveDateAxisTest {
     }
 
     @Test
+    void extendAxisMinToPastDays_extendsWhenDataStartsAtToday() {
+        LocalDate today = LocalDate.now();
+        List<LocalDate> axis =
+                DispatchInteractiveDateAxis.extendAxisMinToPastDays(
+                        List.of(today, today.plusDays(5)),
+                        DispatchInteractiveDateAxis.DISPATCH_WIDE_DATE_AXIS_PAST_DAYS);
+        assertEquals(today.minusDays(14), axis.getFirst());
+        assertEquals(today.plusDays(5), axis.getLast());
+        assertEquals(20, axis.size());
+    }
+
+    @Test
     void computeInclusiveRange_includesShortfallAndAladdinDates() {
         List<String> cols = new ArrayList<>(ResultDispatchSchema.canonicalColumnOrder());
         List<Map<String, String>> rows = List.of(row("E6-1", "スリット機1\u3000湖南", "2026/06/08", 4200, "2026/06/08 08:55"));

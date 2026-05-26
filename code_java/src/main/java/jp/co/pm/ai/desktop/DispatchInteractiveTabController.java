@@ -2076,12 +2076,7 @@ public final class DispatchInteractiveTabController {
                 DispatchInteractiveDateAxis.computeInclusiveRange(
                         doc, aladdinPlanLookup, lastDispatchShortfallRows);
         if (range.isEmpty()) {
-            List<LocalDate> ax = new ArrayList<>();
-            LocalDate t = LocalDate.now();
-            for (int i = 0; i < 14; i++) {
-                ax.add(t.plusDays(i));
-            }
-            return ax;
+            return DispatchInteractiveDateAxis.defaultAxisWhenNoDataDates();
         }
         return range;
     }
