@@ -175,6 +175,64 @@
     -fx-text-fill: #ffffff;
 }
 
+/*
+ * TableView: タスク×日付（pm-ai-readable-spreadsheet）と同じ固定配色。段階3.5 残業シミュ等。
+ */
+.pm-ai-readable-table.table-view {
+    -fx-background-color: #ffffff;
+    -fx-control-inner-background: #ffffff;
+    -fx-selection-bar-text: #111111;
+}
+
+.pm-ai-readable-table .column-header-background {
+    -fx-background-color: #e8e8e8;
+}
+
+.pm-ai-readable-table .column-header,
+.pm-ai-readable-table .column-header .label {
+    -fx-background-color: #e8e8e8;
+    -fx-text-fill: #111111;
+    -fx-border-color: #cccccc;
+}
+
+.pm-ai-readable-table .table-row-cell .table-cell {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #111111;
+    -fx-border-color: #cccccc;
+    -fx-border-width: 0 1 1 0;
+    -fx-background-insets: 0;
+    -fx-padding: 2 4 2 4;
+}
+
+.pm-ai-readable-table .table-row-cell .table-cell.pm-ai-readable-date-cell {
+    -fx-background-color: #d4edd4;
+}
+
+.pm-ai-readable-table .table-row-cell:selected .table-cell.pm-ai-readable-date-cell {
+    -fx-background-color: #b8d8b8;
+}
+
+.pm-ai-readable-table .table-row-cell:selected .table-cell {
+    -fx-background-color: #b8c8d8;
+    -fx-text-fill: #111111;
+}
+
+.pm-ai-readable-table .table-cell.overtime-sim-cell-off {
+    -fx-background-color: #cbd5e1;
+    -fx-text-fill: #111111;
+    -fx-border-color: #cccccc;
+}
+
+.pm-ai-readable-table .table-cell .text-field {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #111111;
+    -fx-border-color: #999999;
+}
+
+.pm-ai-readable-table .table-cell .label {
+    -fx-text-fill: #111111;
+}
+
 .pm-ai-readable-spreadsheet .spreadsheet-cell.dispatch-date-qty-shortfall-cell:filled:selected > .text-input.text-field {
     -fx-text-fill: #ffffff;
     -fx-highlight-text-fill: #ffffff;

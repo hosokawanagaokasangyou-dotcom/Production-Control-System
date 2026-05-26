@@ -31,6 +31,28 @@ class AttendanceOvertimePreviewTest {
     }
 
     @Test
+    void limitToDateWindow_keepsOnlyInclusiveRange() throws Exception {
+        String json =
+                """
+                {"format_version":1,"ok":true,"members":["A"],
+                "dates":["2026-05-20","2026-05-25","2026-06-30"],
+                "cells":{"2026-05-20":{"A":{"is_working":true,"eligible_for_assignment":true,
+                "overtime_minutes":0,"weekend":false}},
+                "2026-05-25":{"A":{"is_working":true,"eligible_for_assignment":true,
+                "overtime_minutes":10,"weekend":false}},
+                "2026-06-30":{"A":{"is_working":false,"eligible_for_assignment":false,
+                "overtime_minutes":0,"weekend":false}}}}
+                """;
+        AttendanceOvertimePreview.Preview p = AttendanceOvertimePreview.parseJson(json);
+        AttendanceOvertimePreview.Preview limited =
+                AttendanceOvertimePreview.limitToDateWindow(
+                        p, LocalDate.of(2026, 5, 24), LocalDate.of(2026, 5, 26));
+        assertEquals(List.of(LocalDate.of(2026, 5, 25)), limited.dates());
+        assertEquals(10, limited.cells().get(LocalDate.of(2026, 5, 25)).get("A").overtimeMinutes());
+        assertFalse(limited.cells().containsKey(LocalDate.of(2026, 5, 20)));
+    }
+
+    @Test
     void editState_toggleWorkingAndOvertime() throws Exception {
         String json =
                 """

@@ -19974,7 +19974,11 @@ def build_attendance_overtime_preview_dict() -> dict:
             "cells": {},
         }
     attendance_data, _ai_log = load_attendance_and_analyze(members)
-    sorted_dates = sorted(attendance_data.keys())
+    today = date.today()
+    window_end = today + timedelta(days=30)
+    sorted_dates = sorted(
+        d for d in attendance_data.keys() if today <= d <= window_end
+    )
     cells: dict = {}
     for d in sorted_dates:
         d_key = d.isoformat()

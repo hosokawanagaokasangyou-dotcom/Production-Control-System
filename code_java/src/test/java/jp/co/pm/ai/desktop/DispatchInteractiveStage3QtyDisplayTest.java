@@ -157,6 +157,36 @@ class DispatchInteractiveStage3QtyDisplayTest {
     }
 
     @Test
+    void fixedSlots_stage35Compare_showsBaselineAndCurrent() {
+        List<DispatchInteractiveTabController.Stage3QtyLineSlot> slots =
+                DispatchInteractiveTabController.buildStage3QtyFixedLineSlots(
+                        3900, 6000, 6100, false, 1e-3, true, 6000);
+        assertEquals(4, slots.size());
+        assertTrue(slots.get(0).lineText().startsWith(DispatchInteractiveTabController.LABEL_ALADDIN_PLAN));
+        assertTrue(slots.get(1).lineText().startsWith(DispatchInteractiveTabController.LABEL_STAGE3_PLAN));
+        assertEquals(
+                DispatchInteractiveTabController.LABEL_STAGE3_ACTUAL + "6000",
+                slots.get(2).lineText());
+        assertEquals(
+                DispatchInteractiveTabController.LABEL_STAGE35_ACTUAL + "6100",
+                slots.get(3).lineText());
+    }
+
+    @Test
+    void dateQtyLineFilter_hidesStage35After() {
+        List<DispatchInteractiveTabController.Stage3QtyLineSlot> slots =
+                DispatchInteractiveTabController.buildStage3QtyFixedLineSlots(
+                        4000, 7600, 7700, false, 1e-3, true, 7600);
+        var filter =
+                new jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence
+                        .DispatchInteractiveDateQtyLineFilterPrefs(true, true, true, false);
+        List<DispatchInteractiveTabController.Stage3QtyLineSlot> filtered =
+                DispatchInteractiveTabController.applyDateQtyLineFilterToSlots(slots, filter);
+        assertFalse(filtered.get(3).visible());
+        assertTrue(filtered.get(2).lineText().startsWith(DispatchInteractiveTabController.LABEL_STAGE3_ACTUAL));
+    }
+
+    @Test
     void dateQtyLineFilter_textMultiline() {
         String raw =
                 DispatchInteractiveTabController.formatDispatchPlanActualQtyDisplay(

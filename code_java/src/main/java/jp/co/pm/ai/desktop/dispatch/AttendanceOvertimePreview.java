@@ -15,6 +15,9 @@ public final class AttendanceOvertimePreview {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    /** 段階3.5 ウィザード: 暦日表示は当日からこの日数後まで（当日を含む）。 */
+    public static final int OVERTIME_SIM_DATE_WINDOW_DAYS_AFTER_TODAY = 30;
+
     private AttendanceOvertimePreview() {}
 
     public record CellInfo(
@@ -65,6 +68,40 @@ public final class AttendanceOvertimePreview {
             cells.put(d, row);
         }
         return new Preview(ok, error, members, dates, cells);
+    }
+
+    /**
+     * 段階3.5 ウィザード向け: {@code fromInclusive} 〜 {@code toInclusive} の暦日だけ残す。
+     */
+    public static Preview limitToDateWindow(
+            Preview preview, LocalDate fromInclusive, LocalDate toInclusive) {
+        if (preview == null) {
+            return new Preview(false, "preview is null", List.of(), List.of(), Map.of());
+        }
+        if (fromInclusive == null || toInclusive == null || fromInclusive.isAfter(toInclusive)) {
+            return preview;
+        }
+        List<LocalDate> dates = new ArrayList<>();
+        for (LocalDate d : preview.dates()) {
+            if (!d.isBefore(fromInclusive) && !d.isAfter(toInclusive)) {
+                dates.add(d);
+            }
+        }
+        Map<LocalDate, Map<String, CellInfo>> cells = new LinkedHashMap<>();
+        for (LocalDate d : dates) {
+            Map<String, CellInfo> row = preview.cells().get(d);
+            if (row != null) {
+                cells.put(d, row);
+            }
+        }
+        return new Preview(preview.ok(), preview.error(), preview.members(), dates, cells);
+    }
+
+    /** 当日 〜 当日+{@link #OVERTIME_SIM_DATE_WINDOW_DAYS_AFTER_TODAY}（両端含む）。 */
+    public static Preview limitToDefaultOvertimeSimWindow(Preview preview) {
+        LocalDate today = LocalDate.now();
+        return limitToDateWindow(
+                preview, today, today.plusDays(OVERTIME_SIM_DATE_WINDOW_DAYS_AFTER_TODAY));
     }
 
     public static String formatDateHeader(LocalDate d) {

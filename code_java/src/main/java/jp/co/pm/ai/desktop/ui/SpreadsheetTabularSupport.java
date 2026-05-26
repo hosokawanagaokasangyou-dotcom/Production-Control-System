@@ -139,6 +139,26 @@ public final class SpreadsheetTabularSupport {
     }
 
     /**
+     * タスク×日付表（{@link #installPmAiReadableSpreadsheetChrome}）と同じ固定配色を {@link TableView} に適用する。
+     * 段階3.5 残業シミュレーション等、テーマ非依存の読みやすい表向け。
+     */
+    public static void installPmAiReadableTableChrome(TableView<?> table) {
+        Objects.requireNonNull(table, "table");
+        if (!table.getStyleClass().contains("pm-ai-readable-table")) {
+            table.getStyleClass().add("pm-ai-readable-table");
+        }
+        String url =
+                Objects.requireNonNull(
+                                SpreadsheetTabularSupport.class.getResource(
+                                        "/jp/co/pm/ai/desktop/css/delivery-calendar-spreadsheet.css"),
+                                "delivery-calendar-spreadsheet.css")
+                        .toExternalForm();
+        if (!table.getStylesheets().contains(url)) {
+            table.getStylesheets().add(url);
+        }
+    }
+
+    /**
      * ControlsFX {@link SpreadsheetCell#setItem} は {@code isEditable()==false} では何もしない。
      * 表示専用セルへ値を入れるときは本メソッドを使う。
      */

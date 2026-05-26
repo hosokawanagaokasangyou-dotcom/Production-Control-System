@@ -107,6 +107,7 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPivot;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
+import jp.co.pm.ai.desktop.dispatch.Stage35BaselineActualSnapshotStore;
 import jp.co.pm.ai.desktop.dispatch.Stage3DispatchQtyBalanceCheck;
 import jp.co.pm.ai.desktop.ui.TabularCellHighlight;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage2ColumnSupport;
@@ -215,8 +216,14 @@ public final class DispatchInteractiveTabController {
     /** (アラ計画)＋(段階3前)＋(段階3後/改) の3行固定表示用行高（px）。 */
     private static final double DISPATCH_ALADDIN_STAGE3_MULTILINE_ROW_HEIGHT_PX = 66.0;
 
+    /** 段階3.5 比較表示: 上記3行＋(段階3.5後) の4行固定表示用行高（px）。 */
+    private static final double DISPATCH_ALADDIN_STAGE35_MULTILINE_ROW_HEIGHT_PX = 88.0;
+
     /** 段階3日付セル: 1行目=(アラ計画)、2行目=(段階3前)、3行目=(段階3後)または(段階3改)。 */
     private static final int STAGE3_QTY_FIXED_LINE_COUNT = 3;
+
+    /** 段階3.5試行後: 4行目=(段階3.5後)。 */
+    private static final int STAGE35_QTY_FIXED_LINE_COUNT = 4;
 
     /**
      * 段階3数量セルの固定行スロット。{@link #visible} が false の行は {@code \u00a0} で行位置だけ確保する。
@@ -237,6 +244,15 @@ public final class DispatchInteractiveTabController {
 
     /** 日付セル表示: 段階3試行後の実績（実配台数量・DnD/編集では変更しない）。 */
     static final String LABEL_STAGE3_ACTUAL = "(\u6bb5\u968e3\u5f8c)";
+
+    /** 日付セル表示: 段階3.5試行後の実績（最新の実配台数量）。 */
+    static final String LABEL_STAGE35_ACTUAL = "(\u6bb5\u968e3.5\u5f8c)";
+
+    /** 日付セル内の (段階3.5後) 行用。 */
+    private static final String DISPATCH_STAGE35_AFTER_LINE_STYLE_CLASS = "dispatch-stage35-after-line";
+
+    private static final String STAGE35_AFTER_LINE_INLINE_STYLE =
+            "-fx-font-weight: bold; -fx-text-fill: #2E7D32;";
 
     /** 段階3試行後の実配台数量（日付セルの括弧内）を行単位で合算する列。 */
     private static final String COL_STAGE3_DISPATCH_QTY_TOTAL = "段階3配台数";
@@ -353,6 +369,9 @@ public final class DispatchInteractiveTabController {
     private CheckBox showStage3AfterQtyLineCheck;
 
     @FXML
+    private CheckBox showStage35AfterQtyLineCheck;
+
+    @FXML
     private Button alignToAladdinPlanButton;
 
     @FXML
@@ -407,6 +426,11 @@ public final class DispatchInteractiveTabController {
      * 手動移動・編集でずれたセルは (段階3改) 表示に切り替える。
      */
     private final Map<String, Double> stage3TrialPlanQtySnapshot = new HashMap<>();
+
+    /**
+     * 段階3.5試行直前の実配台数量（プロファイル×配台日）。非空のとき日付セルに (段階3後) と (段階3.5後) を併記する。
+     */
+    private final Map<String, Double> stage35BaselineActualQtySnapshot = new HashMap<>();
 
     private boolean pendingStage3TrialSnapshotCapture;
 
@@ -507,6 +531,9 @@ public final class DispatchInteractiveTabController {
             if (showStage3AfterQtyLineCheck != null) {
                 showStage3AfterQtyLineCheck.setSelected(dateQtyLineFilter.showStage3After());
             }
+            if (showStage35AfterQtyLineCheck != null) {
+                showStage35AfterQtyLineCheck.setSelected(dateQtyLineFilter.showStage35After());
+            }
         } finally {
             suppressDateQtyLineFilterUi.set(false);
         }
@@ -531,13 +558,17 @@ public final class DispatchInteractiveTabController {
         if (showStage3AfterQtyLineCheck != null) {
             showStage3AfterQtyLineCheck.selectedProperty().addListener((o, a, b) -> onFilterChanged.run());
         }
+        if (showStage35AfterQtyLineCheck != null) {
+            showStage35AfterQtyLineCheck.selectedProperty().addListener((o, a, b) -> onFilterChanged.run());
+        }
     }
 
     private DispatchInteractiveDateQtyLineFilterPrefs snapshotDateQtyLineFilterPrefs() {
         return new DispatchInteractiveDateQtyLineFilterPrefs(
                 showAladdinPlanQtyLineCheck == null || showAladdinPlanQtyLineCheck.isSelected(),
                 showStage3PlanQtyLineCheck == null || showStage3PlanQtyLineCheck.isSelected(),
-                showStage3AfterQtyLineCheck == null || showStage3AfterQtyLineCheck.isSelected());
+                showStage3AfterQtyLineCheck == null || showStage3AfterQtyLineCheck.isSelected(),
+                showStage35AfterQtyLineCheck == null || showStage35AfterQtyLineCheck.isSelected());
     }
 
     void bindShell(MainShellController shell) {
@@ -1286,6 +1317,14 @@ public final class DispatchInteractiveTabController {
         final ResultDispatchDocument trialInputSnapshot = doc.copy();
         captureStage3TrialPlanQtySnapshotFromDocument(
                 trialInputSnapshot, snapshotDateAxisForTrialPlanQtyCapture(trialInputSnapshot));
+        if (stage35) {
+            captureStage35BaselineActualQtySnapshotFromDocument(
+                    trialInputSnapshot,
+                    snapshotDateAxisForTrialPlanQtyCapture(trialInputSnapshot),
+                    jsonPath);
+        } else {
+            clearStage35BaselineActualQtySnapshot(jsonPath);
+        }
         Stage owner = shell.getPrimaryStage();
         final Path simJson = overtimeSimulationJson;
 
@@ -1650,8 +1689,10 @@ public final class DispatchInteractiveTabController {
                         if (stage3TrialPlanQtySnapshot.isEmpty()) {
                             scheduleStage3TrialPlanQtySnapshotCapture();
                         }
+                        loadStage35BaselineActualQtySnapshotFromDiskIfNeeded(jsonPath);
                     } else {
                         clearDispatchShortfallUi();
+                        clearStage35BaselineActualQtySnapshot(jsonPath);
                         // 段階2直後も plan スナップショットを取り、日付セル内 (段階2後) 表示の基準にする
                         scheduleStage3TrialPlanQtySnapshotCapture();
                     }
@@ -3391,6 +3432,11 @@ public final class DispatchInteractiveTabController {
                     !planSlidAway
                             && isStage3QtyRevisedAfterTrial(
                                     wr.profileMap(), axis.get(dateIdx), planAmt, actualAmt, eps);
+            boolean stage35CompareSlide = hasStage35BaselineActualSnapshot();
+            double stage3BaselineSlide =
+                    stage35CompareSlide
+                            ? stage35BaselineActualForCell(wr.profileMap(), axis.get(dateIdx))
+                            : 0.0;
             applyDispatchPlanActualQtyCellDisplayWithPlanSlide(
                     cell,
                     aladdinAmt,
@@ -3402,6 +3448,8 @@ public final class DispatchInteractiveTabController {
                     stage3Revised,
                     planSlidAway,
                     planMovedToDate,
+                    stage35CompareSlide,
+                    stage3BaselineSlide,
                     dateQtyLineFilter);
             tagDispatchDateQtyCell(cell, dispatchDateQtyMultilineCell());
             return;
@@ -3409,6 +3457,11 @@ public final class DispatchInteractiveTabController {
         boolean stage3Revised =
                 isStage3QtyRevisedAfterTrial(
                         wr.profileMap(), axis.get(dateIdx), planAmt, actualAmt, eps);
+        boolean stage35Compare = hasStage35BaselineActualSnapshot();
+        double stage3BaselineActual =
+                stage35Compare
+                        ? stage35BaselineActualForCell(wr.profileMap(), axis.get(dateIdx))
+                        : 0.0;
         applyDispatchPlanActualQtyCellDisplay(
                 cell,
                 aladdinAmt,
@@ -3418,6 +3471,8 @@ public final class DispatchInteractiveTabController {
                 eps,
                 stage3PlanActualSingleLineDisplay(),
                 stage3Revised,
+                stage35Compare,
+                stage3BaselineActual,
                 dateQtyLineFilter);
         tagDispatchDateQtyCell(cell, dispatchDateQtyMultilineCell());
     }
@@ -3430,6 +3485,11 @@ public final class DispatchInteractiveTabController {
         double eps = 1e-3;
         boolean stage3Revised =
                 docHasActualDispatchQtyColumn() && Math.abs(planAmt - actualAmt) > eps;
+        boolean stage35Compare = hasStage35BaselineActualSnapshot();
+        double stage3BaselineActual =
+                stage35Compare
+                        ? stage35BaselineActualForByDay(br, axis.get(dateIdx))
+                        : 0.0;
         applyDispatchPlanActualQtyCellDisplay(
                 cell,
                 aladdinAmt,
@@ -3439,6 +3499,8 @@ public final class DispatchInteractiveTabController {
                 eps,
                 stage3PlanActualSingleLineDisplay(),
                 stage3Revised,
+                stage35Compare,
+                stage3BaselineActual,
                 dateQtyLineFilter);
         tagDispatchDateQtyCell(cell, dispatchDateQtyMultilineCell());
     }
@@ -3450,6 +3512,69 @@ public final class DispatchInteractiveTabController {
     private void clearStage3TrialPlanQtySnapshot() {
         stage3TrialPlanQtySnapshot.clear();
         pendingStage3TrialSnapshotCapture = false;
+    }
+
+    private boolean hasStage35BaselineActualSnapshot() {
+        return !stage35BaselineActualQtySnapshot.isEmpty();
+    }
+
+    private void clearStage35BaselineActualQtySnapshot(Path dispatchJsonPath) {
+        stage35BaselineActualQtySnapshot.clear();
+        if (dispatchJsonPath != null) {
+            Stage35BaselineActualSnapshotStore.deleteSidecar(dispatchJsonPath);
+        }
+    }
+
+    private void loadStage35BaselineActualQtySnapshotFromDiskIfNeeded(Path dispatchJsonPath) {
+        if (dispatchJsonPath == null || !stage35BaselineActualQtySnapshot.isEmpty()) {
+            return;
+        }
+        if (!docHasActualDispatchQtyColumn()) {
+            return;
+        }
+        Map<String, Double> loaded = Stage35BaselineActualSnapshotStore.tryLoad(dispatchJsonPath);
+        if (!loaded.isEmpty()) {
+            stage35BaselineActualQtySnapshot.clear();
+            stage35BaselineActualQtySnapshot.putAll(loaded);
+        }
+    }
+
+    private void captureStage35BaselineActualQtySnapshotFromDocument(
+            ResultDispatchDocument sourceDoc, List<LocalDate> axis, Path dispatchJsonPath) {
+        stage35BaselineActualQtySnapshot.clear();
+        stage35BaselineActualQtySnapshot.putAll(
+                Stage35BaselineActualSnapshotStore.captureFromDocument(sourceDoc, axis));
+        if (dispatchJsonPath != null && !stage35BaselineActualQtySnapshot.isEmpty()) {
+            Stage35BaselineActualSnapshotStore.write(dispatchJsonPath, stage35BaselineActualQtySnapshot);
+        }
+    }
+
+    private double stage35BaselineActualForCell(Map<String, String> profile, LocalDate day) {
+        if (profile == null || day == null) {
+            return 0.0;
+        }
+        String key = Stage35BaselineActualSnapshotStore.cellKey(profile, day);
+        Double snap = stage35BaselineActualQtySnapshot.get(key);
+        return snap != null ? snap : 0.0;
+    }
+
+    /** 工程+機械×日ビュー: 同一機械・暦日のタスク別 baseline を合算する。 */
+    private double stage35BaselineActualForByDay(ByDayRow br, LocalDate day) {
+        if (!hasStage35BaselineActualSnapshot() || br == null || day == null) {
+            return 0.0;
+        }
+        String machine = br.machine() != null ? br.machine().strip() : "";
+        String dateIso = day.toString();
+        double sum = 0.0;
+        for (Map.Entry<String, Double> e : stage35BaselineActualQtySnapshot.entrySet()) {
+            String[] parts = e.getKey().split("\u0001", -1);
+            if (parts.length >= 3
+                    && machine.equals(parts[1].strip())
+                    && dateIso.equals(parts[2].strip())) {
+                sum += e.getValue();
+            }
+        }
+        return sum;
     }
 
     private void captureStage3TrialPlanQtySnapshot(
@@ -3612,7 +3737,9 @@ public final class DispatchInteractiveTabController {
         if (dispatchDateQtyMultilineCell()) {
             double rowHeightPx =
                     docHasActualDispatchQtyColumn()
-                            ? DISPATCH_ALADDIN_STAGE3_MULTILINE_ROW_HEIGHT_PX
+                            ? (hasStage35BaselineActualSnapshot()
+                                    ? DISPATCH_ALADDIN_STAGE35_MULTILINE_ROW_HEIGHT_PX
+                                    : DISPATCH_ALADDIN_STAGE3_MULTILINE_ROW_HEIGHT_PX)
                             : DISPATCH_STAGE3_MULTILINE_ROW_HEIGHT_PX;
             SpreadsheetTabularSupport.applySpreadsheetGridRowHeightsAndWrap(
                     grid,
@@ -3647,6 +3774,8 @@ public final class DispatchInteractiveTabController {
                 eps,
                 singleLineDisplay,
                 stage3RevisedAfterTrial,
+                false,
+                0.0,
                 DispatchInteractiveDateQtyLineFilterPrefs.defaults());
     }
 
@@ -3659,6 +3788,8 @@ public final class DispatchInteractiveTabController {
             double eps,
             boolean singleLineDisplay,
             boolean stage3RevisedAfterTrial,
+            boolean stage35CompareMode,
+            double stage3BaselineActualAmt,
             DispatchInteractiveDateQtyLineFilterPrefs lineFilter) {
         if (hasActualColumn && !singleLineDisplay) {
             List<Stage3QtyLineSlot> slots =
@@ -3668,7 +3799,9 @@ public final class DispatchInteractiveTabController {
                                     planAmt,
                                     actualAmt,
                                     stage3RevisedAfterTrial,
-                                    eps),
+                                    eps,
+                                    stage35CompareMode,
+                                    stage3BaselineActualAmt),
                             lineFilter);
             setDispatchQtyCellDisplay(cell, slots, false);
             return;
@@ -3682,7 +3815,9 @@ public final class DispatchInteractiveTabController {
                                 hasActualColumn,
                                 eps,
                                 singleLineDisplay,
-                                stage3RevisedAfterTrial),
+                                stage3RevisedAfterTrial,
+                                stage35CompareMode,
+                                stage3BaselineActualAmt),
                         lineFilter,
                         singleLineDisplay);
         setDispatchQtyCellDisplay(cell, qtxt, singleLineDisplay);
@@ -3715,6 +3850,7 @@ public final class DispatchInteractiveTabController {
                 qtxt != null
                         && !qtxt.isBlank()
                         && (qtxt.contains(LABEL_STAGE3_REVISED)
+                                || qtxt.contains(LABEL_STAGE35_ACTUAL)
                                 || qtxt.contains(LABEL_STAGE3_ACTUAL));
         if (useStyledGraphic) {
             applyDispatchQtyGraphicCellDisplay(
@@ -3733,14 +3869,41 @@ public final class DispatchInteractiveTabController {
             double actualAmt,
             boolean stage3RevisedAfterTrial,
             double eps) {
-        List<Stage3QtyLineSlot> slots = new ArrayList<>(STAGE3_QTY_FIXED_LINE_COUNT);
+        return buildStage3QtyFixedLineSlots(
+                aladdinPlanAmt, planAmt, actualAmt, stage3RevisedAfterTrial, eps, false, 0.0);
+    }
+
+    static List<Stage3QtyLineSlot> buildStage3QtyFixedLineSlots(
+            double aladdinPlanAmt,
+            double planAmt,
+            double actualAmt,
+            boolean stage3RevisedAfterTrial,
+            double eps,
+            boolean stage35CompareMode,
+            double stage3BaselineActualAmt) {
+        int lineCount = stage35CompareMode ? STAGE35_QTY_FIXED_LINE_COUNT : STAGE3_QTY_FIXED_LINE_COUNT;
+        List<Stage3QtyLineSlot> slots = new ArrayList<>(lineCount);
         slots.add(stage3QtyLineSlot(LABEL_ALADDIN_PLAN, aladdinPlanAmt, eps));
         if (stage3RevisedAfterTrial) {
-            slots.add(stage3QtyEmptyLineSlot());
-            slots.add(stage3QtyLineSlot(LABEL_STAGE3_REVISED, planAmt, eps));
+            if (stage35CompareMode) {
+                slots.add(stage3QtyLineSlot(LABEL_STAGE3_REVISED, planAmt, eps));
+                slots.add(stage3QtyLineSlot(LABEL_STAGE3_ACTUAL, stage3BaselineActualAmt, eps));
+                slots.add(stage3QtyLineSlot(LABEL_STAGE35_ACTUAL, actualAmt, eps));
+            } else {
+                slots.add(stage3QtyEmptyLineSlot());
+                slots.add(stage3QtyLineSlot(LABEL_STAGE3_REVISED, planAmt, eps));
+            }
         } else {
             slots.add(stage3QtyLineSlot(LABEL_STAGE3_PLAN, planAmt, eps));
-            slots.add(stage3QtyLineSlot(LABEL_STAGE3_ACTUAL, actualAmt, eps));
+            if (stage35CompareMode) {
+                slots.add(stage3QtyLineSlot(LABEL_STAGE3_ACTUAL, stage3BaselineActualAmt, eps));
+                slots.add(stage3QtyLineSlot(LABEL_STAGE35_ACTUAL, actualAmt, eps));
+            } else {
+                slots.add(stage3QtyLineSlot(LABEL_STAGE3_ACTUAL, actualAmt, eps));
+            }
+        }
+        while (slots.size() < lineCount) {
+            slots.add(stage3QtyEmptyLineSlot());
         }
         return slots;
     }
@@ -3757,29 +3920,77 @@ public final class DispatchInteractiveTabController {
             boolean planSlidAway,
             boolean planMovedToDate,
             double eps) {
-        List<Stage3QtyLineSlot> slots = new ArrayList<>(STAGE3_QTY_FIXED_LINE_COUNT);
+        return buildStage3QtyFixedLineSlotsWithPlanSlide(
+                aladdinPlanAmt,
+                snapPlanAmt,
+                planAmt,
+                actualAmt,
+                stage3RevisedAfterTrial,
+                planSlidAway,
+                planMovedToDate,
+                eps,
+                false,
+                0.0);
+    }
+
+    static List<Stage3QtyLineSlot> buildStage3QtyFixedLineSlotsWithPlanSlide(
+            double aladdinPlanAmt,
+            double snapPlanAmt,
+            double planAmt,
+            double actualAmt,
+            boolean stage3RevisedAfterTrial,
+            boolean planSlidAway,
+            boolean planMovedToDate,
+            double eps,
+            boolean stage35CompareMode,
+            double stage3BaselineActualAmt) {
+        int lineCount = stage35CompareMode ? STAGE35_QTY_FIXED_LINE_COUNT : STAGE3_QTY_FIXED_LINE_COUNT;
+        List<Stage3QtyLineSlot> slots = new ArrayList<>(lineCount);
         slots.add(stage3QtyLineSlot(LABEL_ALADDIN_PLAN, aladdinPlanAmt, eps));
         if (planSlidAway) {
             slots.add(stage3QtyLineSlot(LABEL_STAGE2_PLAN, snapPlanAmt, eps));
             slots.add(stage3QtyEmptyLineSlot());
+            while (slots.size() < lineCount) {
+                slots.add(stage3QtyEmptyLineSlot());
+            }
             return slots;
         }
         if (planMovedToDate) {
             if (stage3RevisedAfterTrial) {
-                slots.add(stage3QtyEmptyLineSlot());
-                slots.add(stage3QtyLineSlot(LABEL_STAGE3_REVISED, planAmt, eps));
+                if (stage35CompareMode) {
+                    slots.add(stage3QtyLineSlot(LABEL_STAGE3_REVISED, planAmt, eps));
+                    slots.add(stage3QtyLineSlot(LABEL_STAGE3_ACTUAL, stage3BaselineActualAmt, eps));
+                    slots.add(stage3QtyLineSlot(LABEL_STAGE35_ACTUAL, actualAmt, eps));
+                } else {
+                    slots.add(stage3QtyEmptyLineSlot());
+                    slots.add(stage3QtyLineSlot(LABEL_STAGE3_REVISED, planAmt, eps));
+                }
             } else {
                 slots.add(stage3QtyEmptyLineSlot());
                 double afterAmt = actualAmt > eps ? actualAmt : planAmt;
-                slots.add(stage3QtyLineSlot(LABEL_STAGE3_ACTUAL, afterAmt, eps));
+                if (stage35CompareMode) {
+                    slots.add(stage3QtyLineSlot(LABEL_STAGE3_ACTUAL, stage3BaselineActualAmt, eps));
+                    slots.add(stage3QtyLineSlot(LABEL_STAGE35_ACTUAL, afterAmt, eps));
+                } else {
+                    slots.add(stage3QtyLineSlot(LABEL_STAGE3_ACTUAL, afterAmt, eps));
+                }
+            }
+            while (slots.size() < lineCount) {
+                slots.add(stage3QtyEmptyLineSlot());
             }
             return slots;
         }
         return buildStage3QtyFixedLineSlots(
-                aladdinPlanAmt, planAmt, actualAmt, stage3RevisedAfterTrial, eps);
+                aladdinPlanAmt,
+                planAmt,
+                actualAmt,
+                stage3RevisedAfterTrial,
+                eps,
+                stage35CompareMode,
+                stage3BaselineActualAmt);
     }
 
-    private void applyDispatchPlanActualQtyCellDisplayWithPlanSlide(
+    private static void applyDispatchPlanActualQtyCellDisplayWithPlanSlide(
             SpreadsheetCell cell,
             double aladdinPlanAmt,
             double snapPlanAmt,
@@ -3790,6 +4001,8 @@ public final class DispatchInteractiveTabController {
             boolean stage3RevisedAfterTrial,
             boolean planSlidAway,
             boolean planMovedToDate,
+            boolean stage35CompareMode,
+            double stage3BaselineActualAmt,
             DispatchInteractiveDateQtyLineFilterPrefs lineFilter) {
         if (!singleLineDisplay) {
             List<Stage3QtyLineSlot> slots =
@@ -3802,7 +4015,9 @@ public final class DispatchInteractiveTabController {
                                     stage3RevisedAfterTrial,
                                     planSlidAway,
                                     planMovedToDate,
-                                    eps),
+                                    eps,
+                                    stage35CompareMode,
+                                    stage3BaselineActualAmt),
                             lineFilter);
             setDispatchQtyCellDisplay(cell, slots, false);
             return;
@@ -3818,7 +4033,9 @@ public final class DispatchInteractiveTabController {
                                         stage3RevisedAfterTrial,
                                         planSlidAway,
                                         planMovedToDate,
-                                        eps),
+                                        eps,
+                                        stage35CompareMode,
+                                        stage3BaselineActualAmt),
                                 true),
                         lineFilter,
                         true);
@@ -3830,8 +4047,7 @@ public final class DispatchInteractiveTabController {
         if (slots == null || slots.isEmpty()) {
             return slots;
         }
-        if (filter == null
-                || (filter.showAladdinPlan() && filter.showStage3Plan() && filter.showStage3After())) {
+        if (filter == null || dateQtyLineFilterShowsAll(slots, filter)) {
             return slots;
         }
         List<Stage3QtyLineSlot> out = new ArrayList<>(slots.size());
@@ -3847,6 +4063,8 @@ public final class DispatchInteractiveTabController {
                 out.add(filter.showStage3Plan() ? slot : stage3QtyEmptyLineSlot());
             } else if (line.startsWith(LABEL_STAGE3_PLAN)) {
                 out.add(filter.showStage3Plan() ? slot : stage3QtyEmptyLineSlot());
+            } else if (line.startsWith(LABEL_STAGE35_ACTUAL)) {
+                out.add(filter.showStage35After() ? slot : stage3QtyEmptyLineSlot());
             } else if (line.startsWith(LABEL_STAGE3_ACTUAL) || line.startsWith(LABEL_STAGE3_REVISED)) {
                 out.add(filter.showStage3After() ? slot : stage3QtyEmptyLineSlot());
             } else {
@@ -3856,15 +4074,34 @@ public final class DispatchInteractiveTabController {
         return out;
     }
 
+    private static boolean dateQtyLineFilterShowsAll(
+            List<Stage3QtyLineSlot> slots, DispatchInteractiveDateQtyLineFilterPrefs filter) {
+        if (!filter.showAladdinPlan() || !filter.showStage3Plan() || !filter.showStage3After()) {
+            return false;
+        }
+        boolean hasStage35Line =
+                slots != null
+                        && slots.stream()
+                                .anyMatch(
+                                        s ->
+                                                s.visible()
+                                                        && s.lineText()
+                                                                .startsWith(LABEL_STAGE35_ACTUAL));
+        return !hasStage35Line || filter.showStage35After();
+    }
+
     static String filterDispatchQtyDisplayText(
             String text,
             DispatchInteractiveDateQtyLineFilterPrefs filter,
             boolean singleLineDisplay) {
-        if (text == null
-                || text.isBlank()
-                || filter == null
-                || (filter.showAladdinPlan() && filter.showStage3Plan() && filter.showStage3After())) {
+        if (text == null || text.isBlank() || filter == null) {
             return text != null ? text : "";
+        }
+        if (filter.showAladdinPlan()
+                && filter.showStage3Plan()
+                && filter.showStage3After()
+                && (!text.contains(LABEL_STAGE35_ACTUAL) || filter.showStage35After())) {
+            return text;
         }
         if (singleLineDisplay) {
             StringBuilder sb = new StringBuilder();
@@ -3902,6 +4139,9 @@ public final class DispatchInteractiveTabController {
         }
         if (line.startsWith(LABEL_STAGE3_PLAN)) {
             return filter.showStage3Plan();
+        }
+        if (line.startsWith(LABEL_STAGE35_ACTUAL)) {
+            return filter.showStage35After();
         }
         if (line.startsWith(LABEL_STAGE3_ACTUAL) || line.startsWith(LABEL_STAGE3_REVISED)) {
             return filter.showStage3After();
@@ -3994,8 +4234,9 @@ public final class DispatchInteractiveTabController {
         int idx = 0;
         while (idx < text.length()) {
             int revised = text.indexOf(LABEL_STAGE3_REVISED, idx);
+            int s35Actual = text.indexOf(LABEL_STAGE35_ACTUAL, idx);
             int s3Actual = text.indexOf(LABEL_STAGE3_ACTUAL, idx);
-            int next = nextStyledSegmentIndex(text, idx, revised, s3Actual);
+            int next = nextStyledSegmentIndex(text, idx, revised, s35Actual, s3Actual);
             if (next < 0) {
                 Text tail = new Text(text.substring(idx));
                 tail.setStyle(STAGE3_QTY_DEFAULT_TEXT_INLINE_STYLE);
@@ -4013,6 +4254,12 @@ public final class DispatchInteractiveTabController {
                 styled.setStyle("-fx-font-weight: bold; -fx-fill: #1565C0;");
                 flow.getChildren().add(styled);
                 idx = end;
+            } else if (next == s35Actual) {
+                int end = segmentEndIndex(text, next + LABEL_STAGE35_ACTUAL.length());
+                Text styled = new Text(text.substring(next, end));
+                styled.setStyle("-fx-font-weight: bold; -fx-fill: #2E7D32;");
+                flow.getChildren().add(styled);
+                idx = end;
             } else {
                 int end = segmentEndIndex(text, next + LABEL_STAGE3_ACTUAL.length());
                 Text bold = new Text(text.substring(next, end));
@@ -4024,10 +4271,14 @@ public final class DispatchInteractiveTabController {
         return flow;
     }
 
-    private static int nextStyledSegmentIndex(String text, int from, int revised, int s3Actual) {
+    private static int nextStyledSegmentIndex(
+            String text, int from, int revised, int s35Actual, int s3Actual) {
         int next = -1;
         if (revised >= from) {
             next = revised;
+        }
+        if (s35Actual >= from && (next < 0 || s35Actual < next)) {
+            next = s35Actual;
         }
         if (s3Actual >= from && (next < 0 || s3Actual < next)) {
             next = s3Actual;
@@ -4066,6 +4317,28 @@ public final class DispatchInteractiveTabController {
             double eps,
             boolean singleLineDisplay,
             boolean stage3RevisedAfterTrial) {
+        return formatDispatchPlanActualQtyDisplay(
+                aladdinPlanAmt,
+                planAmt,
+                actualAmt,
+                hasActualColumn,
+                eps,
+                singleLineDisplay,
+                stage3RevisedAfterTrial,
+                false,
+                0.0);
+    }
+
+    static String formatDispatchPlanActualQtyDisplay(
+            double aladdinPlanAmt,
+            double planAmt,
+            double actualAmt,
+            boolean hasActualColumn,
+            double eps,
+            boolean singleLineDisplay,
+            boolean stage3RevisedAfterTrial,
+            boolean stage35CompareMode,
+            double stage3BaselineActualAmt) {
         boolean hasAladdin = aladdinPlanAmt > eps;
         boolean hasPlan = planAmt > eps;
         if (hasActualColumn) {
@@ -4075,7 +4348,9 @@ public final class DispatchInteractiveTabController {
                             planAmt,
                             actualAmt,
                             stage3RevisedAfterTrial,
-                            eps),
+                            eps,
+                            stage35CompareMode,
+                            stage3BaselineActualAmt),
                     singleLineDisplay);
         }
         if (!hasAladdin && !hasPlan) {
@@ -4146,6 +4421,9 @@ public final class DispatchInteractiveTabController {
         if (line.startsWith(LABEL_STAGE3_REVISED)) {
             lbl.getStyleClass().add(DISPATCH_STAGE3_REVISED_LINE_STYLE_CLASS);
             lbl.setStyle(STAGE3_REVISED_LINE_INLINE_STYLE);
+        } else if (line.startsWith(LABEL_STAGE35_ACTUAL)) {
+            lbl.getStyleClass().add(DISPATCH_STAGE35_AFTER_LINE_STYLE_CLASS);
+            lbl.setStyle(STAGE35_AFTER_LINE_INLINE_STYLE);
         } else if (line.startsWith(LABEL_STAGE3_ACTUAL)) {
             lbl.getStyleClass().add(DISPATCH_STAGE3_AFTER_LINE_STYLE_CLASS);
             lbl.setStyle(STAGE3_AFTER_LINE_INLINE_STYLE);
