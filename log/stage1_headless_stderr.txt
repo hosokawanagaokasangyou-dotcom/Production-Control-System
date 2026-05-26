@@ -1,0 +1,3 @@
+[stage1-input] 加工計画DATA 読込完了: ファイル='\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ\\工程別生産計画問合せ問合せ_20260526_170255.xlsx' シート（文脈ラベル）='先頭シート'
+[stage1-input] 参照環境変数: PM_AI_PROCESSING_PLAN_PATH, PM_AI_PROCESSING_PLAN_SHEET, PM_AI_PROCESSING_PLAN_HEADER_ROW, PM_AI_TASK_INPUT_SOURCE_DIR
+[stage1-input] PM_AI_TASK_INPUT_SOURCE_DIR='\\\\192.168.0.101\\共有フォルダ\\湖南工場\\湖南共有\\生産管理システム\\管理システム\\●DATA\\生産計画問合せ'

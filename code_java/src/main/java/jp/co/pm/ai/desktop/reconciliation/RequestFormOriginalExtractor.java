@@ -20,6 +20,19 @@ final class RequestFormOriginalExtractor {
 
     private static final DataFormatter CELL_FORMATTER = new DataFormatter();
 
+    /**
+     * 依頼書原本の契約Ｎｏ改訂表記で使われる矢印（{@code →} / {@code ⇒} / {@code ->} 等）。
+     * 長いパターンを先に並べ、最後に出現した矢印以降を改訂先契約Ｎｏとして採用する。
+     */
+    private static final java.util.regex.Pattern CONTRACT_REVISION_ARROW =
+            java.util.regex.Pattern.compile(
+                    "(?:"
+                            + "==>|-->|=>|->"
+                            + "|-\\s*>|=\\s*>"
+                            + "|→|⇒|⇨|⇾|⟹|⟶|➔|➜|➝|➞|➡|➤|»|›"
+                            + "|[＞>](?=\\s*[0-9A-Za-z])"
+                            + ")");
+
     private RequestFormOriginalExtractor() {}
 
     static Map<String, String> buildRawMapFromSheet(File file, String sName, Sheet rawSheet) {
@@ -57,10 +70,11 @@ final class RequestFormOriginalExtractor {
             categories.add(cellString(rawSheet, rowIndex, RequestFormOriginalCellLayout.ProductColumn.CATEGORY.columnIndex()));
             if (productSlot < RequestFormOriginalCellLayout.PRODUCT_CONTRACT_COLUMN_INDICES.length) {
                 contracts.add(
-                        cellString(
-                                rawSheet,
-                                RequestFormOriginalCellLayout.PRODUCT_CONTRACT_ROW_INDEX,
-                                RequestFormOriginalCellLayout.PRODUCT_CONTRACT_COLUMN_INDICES[productSlot]));
+                        resolveContractNoFromOriginalCell(
+                                cellString(
+                                        rawSheet,
+                                        RequestFormOriginalCellLayout.PRODUCT_CONTRACT_ROW_INDEX,
+                                        RequestFormOriginalCellLayout.PRODUCT_CONTRACT_COLUMN_INDICES[productSlot])));
             } else {
                 contracts.add("");
             }
@@ -213,6 +227,28 @@ final class RequestFormOriginalExtractor {
             return "ｽｷﾝ面";
         }
         return trimmed;
+    }
+
+    /**
+     * 依頼書原本の契約Ｎｏセル値を受注フォーム向けに解決する。
+     * {@code A655440 → A22222} のように矢印で改訂先が書かれているときは、最後の矢印以降（{@code A22222}）を採用する。
+     * 矢印は {@code →} / {@code ⇒} / {@code ➡} / {@code ->} / {@code =>} / {@code ＞} 等の表記ゆれに対応する。
+     */
+    static String resolveContractNoFromOriginalCell(String cellValue) {
+        if (cellValue == null || cellValue.isBlank()) {
+            return "";
+        }
+        String normalized =
+                java.text.Normalizer.normalize(cellValue.strip(), java.text.Normalizer.Form.NFKC);
+        java.util.regex.Matcher matcher = CONTRACT_REVISION_ARROW.matcher(normalized);
+        int lastArrowEnd = -1;
+        while (matcher.find()) {
+            lastArrowEnd = matcher.end();
+        }
+        if (lastArrowEnd >= 0 && lastArrowEnd < normalized.length()) {
+            return normalized.substring(lastArrowEnd).strip();
+        }
+        return normalized;
     }
 
     static String inferFeedLocation(String processingContent) {
