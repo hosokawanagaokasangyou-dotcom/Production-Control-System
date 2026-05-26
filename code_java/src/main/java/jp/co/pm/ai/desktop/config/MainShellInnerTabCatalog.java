@@ -67,6 +67,14 @@ public final class MainShellInnerTabCatalog {
                             "\u751f\u7523\u8a08\u753b (multi_day) / \u30e1\u30f3\u30d0\u30fc\u52e4\u52d9",
                             "\uff08\u5404\u30c7\u30fc\u30bf\u30bb\u30c3\u30c8\uff09\u30b7\u30fc\u30c8",
                             "\u4e00\u89a7\uff08\u8868\uff09 / \u30ac\u30f3\u30c8");
+            case SPECIAL_RULES ->
+                    List.of(
+                            "要約",
+                            "列挙",
+                            "ルールビルダー",
+                            "ルール試走",
+                            "適用トレース",
+                            "JSON");
             default -> List.of();
         };
     }

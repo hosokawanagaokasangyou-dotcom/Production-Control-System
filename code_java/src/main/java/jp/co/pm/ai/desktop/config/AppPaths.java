@@ -119,6 +119,18 @@ public final class AppPaths {
      */
     public static final String KEY_PM_AI_EXCLUDE_RULES_JSON = "PM_AI_EXCLUDE_RULES_JSON";
 
+    /** §B 特別ルール DSL JSON（{@link jp.co.pm.ai.desktop.dispatch.rules.paths.DispatchRulePaths}）。 */
+    public static final String KEY_PM_AI_DISPATCH_SPECIAL_RULES_JSON =
+            jp.co.pm.ai.desktop.dispatch.rules.paths.DispatchRulePaths
+                    .KEY_PM_AI_DISPATCH_SPECIAL_RULES_JSON;
+
+    public static final String KEY_PM_AI_DISPATCH_RULE_ENGINE =
+            jp.co.pm.ai.desktop.dispatch.rules.paths.DispatchRulePaths.KEY_PM_AI_DISPATCH_RULE_ENGINE;
+
+    public static final String KEY_PM_AI_DISPATCH_RULE_LEGACY_FALLBACK =
+            jp.co.pm.ai.desktop.dispatch.rules.paths.DispatchRulePaths
+                    .KEY_PM_AI_DISPATCH_RULE_LEGACY_FALLBACK;
+
     /** リポジトリ直下の人間向け要約（デスクトップ「特別ルール」タブと運用で同期）。 */
     public static final String SPECIAL_RULES_SUMMARY_MD = "特別ルール.md";
 
@@ -390,6 +402,7 @@ public final class AppPaths {
         HashSet<String> s = new HashSet<>();
         s.add(KEY_GEMINI_CREDENTIALS_JSON);
         s.add(KEY_PM_AI_EXCLUDE_RULES_JSON);
+        s.add(KEY_PM_AI_DISPATCH_SPECIAL_RULES_JSON);
         s.add(KEY_PM_AI_MASTER_WORKBOOK);
         s.add(KEY_PM_AI_COLUMN_CONFIG_WORKBOOK);
         s.add(KEY_PM_AI_DATA_EXTRACTION_SOURCE_WORKBOOK);
@@ -1247,6 +1260,25 @@ public final class AppPaths {
      * STAGE1_EXCLUDE_RULES_JSON_FILENAME}).
      */
     public static final String STAGE1_EXCLUDE_RULES_JSON_FILENAME = "stage1_exclude_rules.json";
+
+    /**
+     * §B 特別ルール JSON 作業正本（サマリ Excel 同階層 {@code dispatch_special_rules/}）。
+     */
+    public static Path dispatchSpecialRulesJsonPath(Map<String, String> ui) {
+        return jp.co.pm.ai.desktop.dispatch.rules.paths.DispatchRulePaths.workJsonPath(ui);
+    }
+
+    /** 作業先が無ければリポジトリ同梱テンプレからコピー。 */
+    public static boolean ensureDispatchSpecialRulesJsonFromRepoIfMissing(Map<String, String> ui) {
+        return jp.co.pm.ai.desktop.dispatch.rules.paths.DispatchRulePaths
+                .ensureWorkJsonFromRepoIfMissing(ui);
+    }
+
+    public static java.util.Optional<Path> resolveDefaultDispatchSpecialRulesJsonPath(
+            Map<String, String> ui) {
+        return jp.co.pm.ai.desktop.dispatch.rules.paths.DispatchRulePaths
+                .resolveDefaultWorkJson(ui);
+    }
 
     /**
      * Gemini List Models から抽出した Flash-Lite 系（無料枠向け）のキャッシュ JSON（{@code code/json/} 配下）。

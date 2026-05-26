@@ -12922,12 +12922,10 @@ def build_task_queue_from_planning_df(
             )
 
         # 特別ルール列挙.md（L4/L5/L6/L8）: 列・global_speed で確定した速度のあとに上書き
-        speed = _apply_dispatch_speed_special_rules_enumerated_md(
-            row=row,
-            task_id=task_id,
-            machine=machine,
-            machine_name=machine_name,
-            speed=speed,
+        from planning_core.dispatch_rules.hook_adapter import apply_speed_special_rules
+
+        speed = apply_speed_special_rules(
+            row, task_id, machine, machine_name, speed, _apply_dispatch_speed_special_rules_enumerated_md
         )
 
         _prod_w = _planning_df_cell_scalar(row, PLAN_COL_PRODUCT_WIDTH)
@@ -31250,18 +31248,10 @@ def _trial_order_flow_eligible_tasks(
                 continue
 
         # B-6: SEC 前の接続ロールが上限以上なら接続を止めて SEC を進める（総ロール・スリット経路と同趣旨）
-        if wip_connection_before_sec is not None and wip_connection_before_sec >= float(
-            WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS
-        ):
-            proc = _normalize_process_name_for_rule_match(task.get("machine"))
-            mach = _normalize_equipment_match_key(task.get("machine_name"))
-            if (
-                proc
-                == _normalize_process_name_for_rule_match(SPECIAL_WIP_CONNECTION_PROCESS)
-                and mach
-                == _normalize_equipment_match_key(SPECIAL_WIP_CONNECTION_MACHINE)
-            ):
-                continue
+        from planning_core.dispatch_rules.hook_adapter import eligible_l13_connection_skip
+
+        if eligible_l13_connection_skip(task, wip_connection_before_sec, task_queue):
+            continue
 
         # L10 B-4.1: 加工内容が「スリット,SEC」の依頼では、**当該依頼**でスリットが SLIT_BEFORE_SEC_MIN_SLIT_ROLLS ロール以上終わるまで SEC を開始しない
         if _l10_b41_sec_blocked_by_slit_min_rolls(task, task_queue):

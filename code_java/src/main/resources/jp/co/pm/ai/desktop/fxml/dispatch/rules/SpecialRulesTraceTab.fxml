@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="jp.co.pm.ai.desktop.dispatch.rules.trace.SpecialRulesTraceTabController"
+      spacing="8">
+    <padding><Insets bottom="8" left="8" right="8" top="8"/></padding>
+    <HBox spacing="8">
+        <Button text="再読込" onAction="#onReloadAction"/>
+        <Label text="dispatch_rule_applications.json（段階2 実行後）" wrapText="true"/>
+    </HBox>
+    <ListView fx:id="eventList" VBox.vgrow="ALWAYS"/>
+</VBox>

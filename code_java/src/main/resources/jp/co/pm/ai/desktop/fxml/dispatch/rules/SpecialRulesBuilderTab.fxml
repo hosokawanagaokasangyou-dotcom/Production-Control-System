@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import jp.co.pm.ai.desktop.dispatch.rules.ui.editor.DispatchRuleGraphEditorPane?>
+
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="jp.co.pm.ai.desktop.dispatch.rules.SpecialRulesBuilderTabController"
+      spacing="8">
+    <padding><Insets bottom="8" left="8" right="8" top="8"/></padding>
+    <Label fx:id="runStatusBanner" wrapText="true" style="-fx-background-color: #fff8e1; -fx-padding: 6;"/>
+    <HBox spacing="8" alignment="CENTER_LEFT">
+        <Label fx:id="schemaBadge" text="schema v1"/>
+        <TextField fx:id="pathField" HBox.hgrow="ALWAYS" editable="false"/>
+        <Button text="再読込" onAction="#onReloadAction"/>
+        <Button text="検証" onAction="#onValidateAction"/>
+        <Button text="衝突" onAction="#onConflictAction"/>
+        <Button text="保存" onAction="#onSaveAction"/>
+    </HBox>
+    <HBox spacing="8">
+        <ComboBox fx:id="ruleCombo" prefWidth="260"/>
+        <CheckBox fx:id="ruleEnabledCheck" text="有効" onAction="#onToggleEnabledAction"/>
+        <Label fx:id="applyOrderSummary" wrapText="true" HBox.hgrow="ALWAYS"/>
+    </HBox>
+    <SplitPane dividerPositions="0.65" VBox.vgrow="ALWAYS">
+        <items>
+            <DispatchRuleGraphEditorPane fx:id="graphEditor"/>
+            <VBox spacing="6">
+                <Label text="Inspector"/>
+                <TextArea fx:id="inspectorArea" prefRowCount="8" wrapText="true" VBox.vgrow="ALWAYS"/>
+                <Label text="衝突"/>
+                <TextArea fx:id="conflictArea" prefRowCount="4" wrapText="true"/>
+            </VBox>
+        </items>
+    </SplitPane>
+    <Label text="編集履歴（ダブルクリックで復元）"/>
+    <ListView fx:id="historyList" prefHeight="80"/>
+</VBox>

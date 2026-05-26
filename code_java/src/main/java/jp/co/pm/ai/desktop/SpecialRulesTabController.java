@@ -5,98 +5,134 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+
 import javafx.fxml.FXML;
 import javafx.scene.control.Label;
-import javafx.scene.control.RadioButton;
+import javafx.scene.control.Tab;
+import javafx.scene.control.TabPane;
 import javafx.scene.control.TextArea;
-import javafx.scene.control.Toggle;
-import javafx.scene.control.ToggleGroup;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.dispatch.rules.SpecialRulesBuilderTabController;
+import jp.co.pm.ai.desktop.dispatch.rules.SpecialRulesTestLabTabController;
+import jp.co.pm.ai.desktop.dispatch.rules.migration.DispatchRuleMigrationService;
+import jp.co.pm.ai.desktop.dispatch.rules.model.DispatchRuleDocument;
+import jp.co.pm.ai.desktop.dispatch.rules.paths.DispatchRulePaths;
+import jp.co.pm.ai.desktop.dispatch.rules.trace.SpecialRulesTraceTabController;
 
-/**
- * リポジトリ直下の {@link AppPaths#SPECIAL_RULES_SUMMARY_MD} と {@link AppPaths#SPECIAL_RULES_ENUMERATED_MD} を閲覧する。
- */
+/** Special rules tab: markdown + builder + test lab + trace + JSON. */
 public final class SpecialRulesTabController {
+
+    private static final ObjectMapper JSON =
+            new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
     private MainShellController shell;
 
-    @FXML
-    private ToggleGroup sourceToggle;
+    @FXML private TabPane innerTabPane;
+    @FXML private Label markdownPathLabel;
+    @FXML private TextArea summaryBodyArea;
+    @FXML private TextArea enumeratedBodyArea;
+    @FXML private TextArea jsonBodyArea;
 
-    @FXML
-    private RadioButton summaryRadio;
-
-    @FXML
-    private RadioButton enumeratedRadio;
-
-    @FXML
-    private Label pathLabel;
-
-    @FXML
-    private TextArea bodyArea;
+    @FXML private SpecialRulesBuilderTabController builderTabController;
+    @FXML private SpecialRulesTestLabTabController testLabTabController;
+    @FXML private SpecialRulesTraceTabController traceTabController;
 
     @FXML
     private void initialize() {
-        summaryRadio.setUserData(Boolean.TRUE);
-        enumeratedRadio.setUserData(Boolean.FALSE);
-        sourceToggle
-                .selectedToggleProperty()
-                .addListener(
-                        (obs, prev, cur) -> {
-                            if (shell != null && cur != null) {
-                                loadCurrent(false);
-                            }
-                        });
+        // sub-controllers wired via fx:include
     }
 
     void bindShell(MainShellController shell) {
         this.shell = shell;
-        loadCurrent(false);
+        loadMarkdown(true);
+        loadMarkdown(false);
+        reloadJsonEditor();
+        if (builderTabController != null) {
+            builderTabController.bindShell(shell);
+        }
+        if (testLabTabController != null && builderTabController != null) {
+            testLabTabController.bindShell(shell, builderTabController);
+        }
+        if (traceTabController != null) {
+            traceTabController.bindShell(shell);
+        }
     }
 
     @FXML
-    private void onReloadAction() {
-        loadCurrent(true);
+    private void onReloadMarkdownAction() {
+        Tab sel = innerTabPane != null ? innerTabPane.getSelectionModel().getSelectedItem() : null;
+        boolean summary = sel == null || "要約".equals(sel.getText());
+        loadMarkdown(summary);
     }
 
-    private void loadCurrent(boolean userCompletionDialog) {
+    @FXML
+    private void onReloadJsonAction() {
+        reloadJsonEditor();
+    }
+
+    @FXML
+    private void onSaveJsonAction() {
+        if (shell == null || jsonBodyArea == null) {
+            return;
+        }
+        try {
+            Path work = DispatchRulePaths.resolveWorkJson(shell.snapshotUiEnv());
+            Files.createDirectories(work.getParent());
+            Files.writeString(work, jsonBodyArea.getText(), StandardCharsets.UTF_8);
+            shell.dispatchRulesAppendLog("[dispatch-rules] JSON tab saved: " + work);
+            if (builderTabController != null) {
+                builderTabController.bindShell(shell);
+            }
+        } catch (IOException ex) {
+            shell.showErrorDialog("保存エラー", ex.getMessage());
+        }
+    }
+
+    private void loadMarkdown(boolean summary) {
         if (shell == null) {
             return;
         }
-        Toggle sel = sourceToggle != null ? sourceToggle.getSelectedToggle() : null;
-        boolean summary =
-                sel == null || sel == summaryRadio || Boolean.TRUE.equals(sel.getUserData());
         Path path =
                 summary
                         ? AppPaths.resolveSpecialRulesSummaryMd(shell.snapshotUiEnv())
                         : AppPaths.resolveSpecialRulesEnumeratedMd(shell.snapshotUiEnv());
-        pathLabel.setText(path.toString());
+        if (markdownPathLabel != null) {
+            markdownPathLabel.setText(path.toString());
+        }
+        TextArea area = summary ? summaryBodyArea : enumeratedBodyArea;
+        if (area == null) {
+            return;
+        }
         try {
             if (Files.isRegularFile(path)) {
-                bodyArea.setText(Files.readString(path, StandardCharsets.UTF_8));
-                shell.appendLog("[special-rules] load ok: " + path);
-                if (userCompletionDialog) {
-                    shell.showInformationDialog("再読込完了", "特別ルールを読み込みました。\n" + path);
-                }
+                area.setText(Files.readString(path, StandardCharsets.UTF_8));
             } else {
-                bodyArea.setText(
-                        "ファイルが見つかりません。\n"
-                                + path
-                                + "\n\nリポジトリ根（PM_AI_REPO_ROOT）を環境変数タブで確認してください。");
-                shell.appendLog("[special-rules] missing: " + path);
-                if (userCompletionDialog) {
-                    shell.showWarningDialog("再読込", "ファイルが見つかりません。\n" + path);
-                }
+                area.setText("ファイルが見つかりません: " + path);
             }
         } catch (IOException ex) {
-            bodyArea.setText("読込エラー: " + ex.getMessage());
-            shell.appendLog("[special-rules] read error: " + ex.getMessage());
-            if (userCompletionDialog) {
-                shell.showErrorDialog(
-                        "読込エラー",
-                        ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            area.setText("読込エラー: " + ex.getMessage());
+        }
+    }
+
+    private void reloadJsonEditor() {
+        if (shell == null || jsonBodyArea == null) {
+            return;
+        }
+        DispatchRulePaths.ensureWorkJsonFromRepoIfMissing(shell.dispatchRulesUiEnv());
+        Path work = DispatchRulePaths.resolveWorkJson(shell.dispatchRulesUiEnv());
+        try {
+            if (Files.isRegularFile(work)) {
+                var raw = JSON.readTree(Files.readString(work, StandardCharsets.UTF_8));
+                var migrated = DispatchRuleMigrationService.migrate((com.fasterxml.jackson.databind.node.ObjectNode) raw);
+                jsonBodyArea.setText(JSON.writerWithDefaultPrettyPrinter().writeValueAsString(migrated));
+            } else {
+                jsonBodyArea.setText(JSON.writerWithDefaultPrettyPrinter().writeValueAsString(new DispatchRuleDocument()));
             }
+        } catch (IOException ex) {
+            jsonBodyArea.setText("読込エラー: " + ex.getMessage());
         }
     }
 }

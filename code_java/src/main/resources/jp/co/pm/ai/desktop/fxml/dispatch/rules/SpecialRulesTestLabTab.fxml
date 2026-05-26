@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import jp.co.pm.ai.desktop.dispatch.rules.ui.editor.DispatchRuleGraphEditorPane?>
+
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="jp.co.pm.ai.desktop.dispatch.rules.SpecialRulesTestLabTabController"
+      spacing="8">
+    <padding><Insets bottom="8" left="8" right="8" top="8"/></padding>
+    <HBox spacing="8" alignment="CENTER_LEFT">
+        <Label text="タスク:"/>
+        <TextField fx:id="taskIdField" prefWidth="220"/>
+        <Button text="試走開始" onAction="#onRunSimulationAction"/>
+        <Button fx:id="stepButton" text="1ステップ" onAction="#onStepAction"/>
+        <Button text="リセット" onAction="#onResetAction"/>
+    </HBox>
+    <Label fx:id="stepLabel" wrapText="true"/>
+    <Label fx:id="resultLabel" wrapText="true" style="-fx-font-weight: bold;"/>
+    <SplitPane dividerPositions="0.5" VBox.vgrow="ALWAYS">
+        <items>
+            <DispatchRuleGraphEditorPane fx:id="simulationGraph"/>
+            <ListView fx:id="stepList"/>
+        </items>
+    </SplitPane>
+</VBox>

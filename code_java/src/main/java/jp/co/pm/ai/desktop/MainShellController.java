@@ -78,6 +78,10 @@ import jp.co.pm.ai.desktop.audio.UiClickSound;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.bridge.Stage2PythonChildEnv;
+import jp.co.pm.ai.desktop.dispatch.rules.paths.DispatchRulePaths;
+import jp.co.pm.ai.desktop.dispatch.rules.stage.DispatchRuleBuilderRunContext;
+import jp.co.pm.ai.desktop.dispatch.rules.stage.DispatchRuleStageRunOverlay;
+import jp.co.pm.ai.desktop.dispatch.rules.trace.DispatchRuleTraceLoader;
 import jp.co.pm.ai.desktop.bridge.StagePythonExecutable;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.Stage1AiCacheClearer;
@@ -3662,6 +3666,7 @@ public final class MainShellController {
         try {
             Map<String, String> uiRun = collectUiEnv();
             overlayWorkingExcludeRulesJsonPathForStageRun(uiRun);
+            overlayDispatchSpecialRulesForStageRun(uiRun, script);
             overlayDispatchLookupTablePathsForStageRun(uiRun);
             overlayMainRunSkipGeminiApiEnv(uiRun);
             if (STAGE1.equals(script)) {
@@ -3893,6 +3898,7 @@ public final class MainShellController {
     }
 
     private void completeStageRunOnFx(String script, Integer code, Throwable err, List<String> tailSnap) {
+        DispatchRuleBuilderRunContext.get().clearActiveRun();
         if (STAGE1.equals(script)) {
             endPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE1);
         } else if (STAGE2.equals(script)) {
@@ -4061,6 +4067,7 @@ public final class MainShellController {
             return false;
         }
         activeDispatchTrialKind = kind;
+        overlayDispatchSpecialRulesForStageTrial(kind);
         applyRunTabGating();
         return true;
     }
@@ -4070,6 +4077,7 @@ public final class MainShellController {
         if (activeDispatchTrialKind == kind) {
             activeDispatchTrialKind = null;
         }
+        DispatchRuleBuilderRunContext.get().clearActiveRun();
         runLock.set(false);
         applyRunTabGating();
     }
@@ -4109,11 +4117,12 @@ public final class MainShellController {
             return;
         }
         for (Tab t : tabs) {
-            t.setDisable(pipelineBusy && t != mainShellTabRun);
+            boolean specialRulesTab = t == mainShellTabSpecialRules;
+            t.setDisable(pipelineBusy && t != mainShellTabRun && !specialRulesTab);
         }
         if (pipelineBusy) {
             Tab sel = tabPane.getSelectionModel().getSelectedItem();
-            if (sel != mainShellTabRun) {
+            if (sel != mainShellTabRun && sel != mainShellTabSpecialRules) {
                 tabPane.getSelectionModel().select(mainShellTabRun);
             }
         }
@@ -4895,6 +4904,16 @@ public final class MainShellController {
         return collectUiEnv();
     }
 
+    /** {@code jp.co.pm.ai.desktop.dispatch.rules} 子タブ向け。 */
+    public Map<String, String> dispatchRulesUiEnv() {
+        return snapshotUiEnv();
+    }
+
+    /** {@code jp.co.pm.ai.desktop.dispatch.rules} 子タブ向け。 */
+    public void dispatchRulesAppendLog(String line) {
+        appendLog(line);
+    }
+
     /** 環境変数タブ「配台 Gemini モデル優先」から無料枠 Flash-Lite 一覧を即時再取得する。 */
     public void requestGeminiFreeTierModelsForceRefresh() {
         if (geminiFreeTierModelsRefreshService != null) {
@@ -5389,6 +5408,45 @@ public final class MainShellController {
                             uiRun.put(AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON, p.toString());
                             syncEnvTabValue(AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON, p.toString());
                         });
+    }
+
+    /** 段階1～3.5 実行前: 特別ルール JSON を run_snapshots へ凍結し env を上書き。 */
+    private void overlayDispatchSpecialRulesForStageRun(Map<String, String> uiRun, String script) {
+        if (uiRun == null) {
+            return;
+        }
+        String stage =
+                STAGE1.equals(script)
+                        ? "stage1"
+                        : STAGE2.equals(script) ? "stage2" : "stage";
+        try {
+            AppPaths.ensureDispatchSpecialRulesJsonFromRepoIfMissing(uiRun);
+            var capture = DispatchRuleStageRunOverlay.captureForStage(stage, uiRun);
+            if (capture.snapshotPath() != null && Files.isRegularFile(capture.snapshotPath())) {
+                uiRun.put(
+                        DispatchRulePaths.KEY_PM_AI_DISPATCH_SPECIAL_RULES_JSON,
+                        capture.snapshotPath().toString());
+                syncEnvTabValue(
+                        DispatchRulePaths.KEY_PM_AI_DISPATCH_SPECIAL_RULES_JSON,
+                        capture.snapshotPath().toString());
+                appendLog("[dispatch-rules] run snapshot: " + capture.runId());
+            } else {
+                AppPaths.resolveDefaultDispatchSpecialRulesJsonPath(uiRun)
+                        .ifPresent(
+                                p -> {
+                                    uiRun.put(DispatchRulePaths.KEY_PM_AI_DISPATCH_SPECIAL_RULES_JSON, p.toString());
+                                    syncEnvTabValue(DispatchRulePaths.KEY_PM_AI_DISPATCH_SPECIAL_RULES_JSON, p.toString());
+                                });
+            }
+        } catch (IOException ex) {
+            appendLog("[dispatch-rules] snapshot failed: " + ex.getMessage());
+        }
+    }
+
+    private void overlayDispatchSpecialRulesForStageTrial(PipelineExecutionTimingKind kind) {
+        Map<String, String> uiRun = collectUiEnv();
+        String stage = kind == PipelineExecutionTimingKind.STAGE3_5 ? "stage3_5" : "stage3";
+        overlayDispatchSpecialRulesForStageRun(uiRun, stage);
     }
 
     private void syncExcludeRulesJsonPathToEnvTab(String pathStr) {
