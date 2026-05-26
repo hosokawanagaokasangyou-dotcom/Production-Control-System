@@ -1501,6 +1501,147 @@ def _log_dispatch_trace_schedule(task_id, msg: str, *args) -> None:
             pass
 
 
+# #region agent log
+_AGENT_DEBUG_TRACE_TASK_IDS: frozenset[str] = frozenset(
+    x.strip()
+    for x in (os.environ.get("PM_AI_AGENT_DEBUG_TRACE_TASK_ID") or "W6-4").split(",")
+    if x.strip()
+)
+
+
+def _agent_debug_trace_task_enabled(task_id) -> bool:
+    if not _AGENT_DEBUG_TRACE_TASK_IDS:
+        return False
+    return str(task_id or "").strip() in _AGENT_DEBUG_TRACE_TASK_IDS
+
+
+def _agent_debug_dispatch_trace(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict | None = None,
+    *,
+    task_id=None,
+    emit_stderr: bool = False,
+) -> None:
+    if task_id is not None and not _agent_debug_trace_task_enabled(task_id):
+        return
+    payload = dict(data or {})
+    payload.setdefault("trace_task_ids", sorted(_AGENT_DEBUG_TRACE_TASK_IDS))
+    if task_id is not None:
+        payload.setdefault("task_id", str(task_id or "").strip())
+    _sid = (os.environ.get("PM_AI_AGENT_DEBUG_SESSION") or "").strip() or "unknown"
+    _sidecar_paths: list[str] = []
+    try:
+        from . import agent_debug_ndjson as _ad
+
+        _ad.append_structured(hypothesis_id, location, message, payload)
+    except Exception as ex:
+        payload["ndjson_error"] = str(ex)[:200]
+    for _sidecar in (
+        os.path.join(log_dir, f"agent_debug_{_sid}.ndjson"),
+        os.path.join(log_dir, "w64_agent_debug.ndjson"),
+    ):
+        try:
+            os.makedirs(log_dir, exist_ok=True)
+            line_obj = {
+                "sessionId": _sid,
+                "hypothesisId": hypothesis_id,
+                "location": location,
+                "message": message,
+                "data": payload,
+                "timestamp": int(time_module.time() * 1000),
+            }
+            with open(_sidecar, "a", encoding="utf-8", newline="\n") as f:
+                f.write(json.dumps(line_obj, ensure_ascii=False) + "\n")
+            _sidecar_paths.append(_sidecar)
+        except OSError:
+            pass
+    _repo = (os.environ.get("PM_AI_REPO_ROOT") or "").strip()
+    if _repo:
+        _repo_sidecar = os.path.join(
+            os.path.abspath(_repo), "log", "w64_agent_debug.ndjson"
+        )
+        try:
+            os.makedirs(os.path.dirname(_repo_sidecar), exist_ok=True)
+            line_obj = {
+                "sessionId": _sid,
+                "hypothesisId": hypothesis_id,
+                "location": location,
+                "message": message,
+                "data": payload,
+                "timestamp": int(time_module.time() * 1000),
+            }
+            with open(_repo_sidecar, "a", encoding="utf-8", newline="\n") as f:
+                f.write(json.dumps(line_obj, ensure_ascii=False) + "\n")
+            _sidecar_paths.append(_repo_sidecar)
+        except OSError:
+            pass
+    payload["sidecar_paths"] = _sidecar_paths
+    try:
+        logging.warning(
+            "[agent-debug hyp=%s task=%s] %s %s",
+            hypothesis_id,
+            task_id or "-",
+            message,
+            json.dumps(payload, ensure_ascii=False)[:2000],
+        )
+    except Exception:
+        pass
+    if emit_stderr:
+        try:
+            print(
+                f"[agent-debug hyp={hypothesis_id} task={task_id or '-'}] "
+                f"{message} {json.dumps(payload, ensure_ascii=False)[:1500]}",
+                flush=True,
+            )
+        except Exception:
+            pass
+
+
+def _agent_debug_dispatch_day_block_reason(
+    task: dict,
+    task_queue: list,
+    current_date: date,
+    *,
+    avail_dt: dict,
+    tasks_today: list,
+    active_serial_tid: str | None = None,
+) -> tuple[str, str]:
+    """配台日次ループ終了時点のブロック理由（hypothesisId, reason_code）。"""
+    tid = str(task.get("task_id") or "").strip()
+    rem = float(task.get("remaining_units") or 0)
+    if rem <= 1e-12:
+        return ("", "completed")
+    if not avail_dt:
+        return ("H-B", "zero_working_members")
+    sdr = task.get("start_date_req")
+    if isinstance(sdr, date) and sdr > current_date:
+        return ("H-C", f"start_date_req_after_day:{sdr.isoformat()}")
+    if STAGE2_SERIAL_DISPATCH_BY_TASK_ID and active_serial_tid and tid != active_serial_tid:
+        return ("H-F", f"serial_dispatch_active:{active_serial_tid}")
+    if _task_not_yet_schedulable_due_to_dependency_or_b2_room(task, task_queue):
+        if task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind"):
+            ec_done = _pipeline_ec_roll_done_units(task_queue, tid)
+            insp_room = _roll_pipeline_inspection_assign_room(task_queue, tid)
+            return (
+                "H-D",
+                f"roll_pipeline_blocked ec_done={ec_done:.4f} insp_room={insp_room:.4f}",
+            )
+        return ("H-C", "same_request_dependency")
+    if task.get("_dispatch_block_no_op_on_working_days"):
+        return ("H-E", "no_op_on_working_days")
+    task_ids_today = {
+        id(t)
+        for t in tasks_today
+        if float(t.get("remaining_units") or 0) > 1e-12
+    }
+    if id(task) not in task_ids_today:
+        return ("H-C", "not_in_tasks_today")
+    return ("H-G", "eligible_but_unassigned")
+# #endregion agent log
+
+
 # True: 従来の「人数最優先」タプル (-人数, 開始, -短縮数, 優先度合計)。False のとき下記スラック分と組み合わせ
 TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF = os.environ.get(
     "TEAM_ASSIGN_PRIORITIZE_SURPLUS_STAFF", "0"
@@ -27514,6 +27655,79 @@ def _raise_if_remaining_tasks_exceed_attendance_calendar(
     no_op_blocked = [
         t for t in pending if t.get("_dispatch_block_no_op_on_working_days")
     ]
+    # #region agent log
+    for _tid_tr in sorted(_AGENT_DEBUG_TRACE_TASK_IDS):
+        _rows_end: list[dict] = []
+        for _t_full in task_queue or []:
+            if str(_t_full.get("task_id") or "").strip() != _tid_tr:
+                continue
+            _rem_f = float(_t_full.get("remaining_units") or 0)
+            if _rem_f <= 1e-12:
+                continue
+            _tid_tr_s = str(_tid_tr or "").strip()
+            _ec_done = _pipeline_ec_roll_done_units(task_queue, _tid_tr_s)
+            _insp_room = _roll_pipeline_inspection_assign_room(task_queue, _tid_tr_s)
+            _dep = _task_not_yet_schedulable_due_to_dependency_or_b2_room(
+                _t_full, task_queue
+            )
+            _rows_end.append(
+                {
+                    "machine": str(_t_full.get("machine") or ""),
+                    "machine_name": str(_t_full.get("machine_name") or ""),
+                    "remaining_units": _rem_f,
+                    "initial_remaining_units": float(
+                        _t_full.get("initial_remaining_units") or 0
+                    ),
+                    "start_date_req": _t_full.get("start_date_req").isoformat()
+                    if isinstance(_t_full.get("start_date_req"), date)
+                    else str(_t_full.get("start_date_req")),
+                    "dispatch_trial_order": _t_full.get("dispatch_trial_order"),
+                    "roll_pipeline_ec": bool(_t_full.get("roll_pipeline_ec")),
+                    "roll_pipeline_inspection": bool(
+                        _t_full.get("roll_pipeline_inspection")
+                    ),
+                    "roll_pipeline_rewind": bool(_t_full.get("roll_pipeline_rewind")),
+                    "no_op_block": bool(
+                        _t_full.get("_dispatch_block_no_op_on_working_days")
+                    ),
+                    "dependency_or_b2_blocked": _dep,
+                    "ec_roll_done_units": _ec_done,
+                    "insp_assign_room": _insp_room,
+                }
+            )
+        if _rows_end:
+            _agent_debug_dispatch_trace(
+                "H-A",
+                "_core.py:_raise_if_remaining_tasks_exceed_attendance_calendar",
+                "勤怠カレンダー終了時点の W6-4 診断サマリ",
+                {
+                    "calendar_last_plan_day": last_iso,
+                    "pending_count": len(pending),
+                    "rows": _rows_end,
+                },
+                task_id=_tid_tr,
+                emit_stderr=True,
+            )
+    for t in pending:
+        _tid_dbg = str(t.get("task_id") or "").strip()
+        if not _agent_debug_trace_task_enabled(_tid_dbg):
+            continue
+        _agent_debug_dispatch_trace(
+            "H-A",
+            "_core.py:_raise_if_remaining_tasks_exceed_attendance_calendar",
+            "勤怠カレンダー終了時点で未配台",
+            {
+                "calendar_last_plan_day": last_iso,
+                "pending_count": len(pending),
+                "process": t.get("process"),
+                "machine_name": t.get("machine_name"),
+                "remaining_units": t.get("remaining_units"),
+                "remaining_m": t.get("remaining_m"),
+                "no_op_block": bool(t.get("_dispatch_block_no_op_on_working_days")),
+            },
+            task_id=_tid_dbg,
+        )
+    # #endregion agent log
     no_op_hint = ""
     if no_op_blocked:
         no_op_samples: list[str] = []
@@ -32233,6 +32447,23 @@ def _assign_one_roll_trial_order_flow(
                 and not op_today
             ):
                 task["_dispatch_block_no_op_on_working_days"] = True
+                # #region agent log
+                _agent_debug_dispatch_trace(
+                    "H-E",
+                    "_core.py:assign_team:no_op",
+                    "稼働日に OP 0 人で必須人数を満たせない",
+                    {
+                        "day": current_date.isoformat()
+                        if isinstance(current_date, date)
+                        else str(current_date),
+                        "machine": machine,
+                        "machine_name": machine_name,
+                        "capable_count": len(capable_members),
+                        "req_num": int(req_num or 1),
+                    },
+                    task_id=task.get("task_id"),
+                )
+                # #endregion agent log
                 if not task.get("_dispatch_no_op_warned"):
                     task["_dispatch_no_op_warned"] = True
                     _as_only = [
@@ -35566,6 +35797,18 @@ def _generate_plan_impl(
 
     _reset_dispatch_trace_per_task_logfiles()
 
+    if _AGENT_DEBUG_TRACE_TASK_IDS:
+        logging.warning(
+            "[agent-debug] 配台トレース有効 task_ids=%s sidecar=%s",
+            ", ".join(sorted(_AGENT_DEBUG_TRACE_TASK_IDS)),
+            os.path.join(log_dir, "w64_agent_debug.ndjson"),
+        )
+        print(
+            "[agent-debug] 配台トレース有効 task_ids="
+            + ", ".join(sorted(_AGENT_DEBUG_TRACE_TASK_IDS)),
+            flush=True,
+        )
+
     _t_s2_entry = time_module.perf_counter()
     (
         skills_dict,
@@ -36041,6 +36284,52 @@ def _generate_plan_impl(
     _master_attendance_date_set = frozenset(attendance_data.keys())
     _master_plan_dates_template = list(sorted_dates)
     _calendar_last_plan_day = _master_plan_dates_template[-1]
+
+    # #region agent log
+    if _AGENT_DEBUG_TRACE_TASK_IDS:
+        for _tid_tr in sorted(_AGENT_DEBUG_TRACE_TASK_IDS):
+            _rows_tr = [
+                t
+                for t in task_queue
+                if str(t.get("task_id", "") or "").strip() == _tid_tr
+                and float(t.get("initial_remaining_units") or 0) > 1e-12
+            ]
+            _agent_debug_dispatch_trace(
+                "H-A",
+                "_core.py:generate_plan:queue_snapshot",
+                "配台開始時の依頼NO行スナップショット",
+                {
+                    "calendar_last_plan_day": _calendar_last_plan_day.isoformat()
+                    if isinstance(_calendar_last_plan_day, date)
+                    else str(_calendar_last_plan_day),
+                    "plan_day_count": len(_master_plan_dates_template),
+                    "row_count": len(_rows_tr),
+                    "rows": [
+                        {
+                            "machine": str(t.get("machine") or ""),
+                            "machine_name": str(t.get("machine_name") or ""),
+                            "initial_remaining_units": float(
+                                t.get("initial_remaining_units") or 0
+                            ),
+                            "start_date_req": t.get("start_date_req").isoformat()
+                            if isinstance(t.get("start_date_req"), date)
+                            else str(t.get("start_date_req")),
+                            "dispatch_trial_order": t.get("dispatch_trial_order"),
+                            "roll_pipeline_ec": bool(t.get("roll_pipeline_ec")),
+                            "roll_pipeline_inspection": bool(
+                                t.get("roll_pipeline_inspection")
+                            ),
+                            "roll_pipeline_rewind": bool(
+                                t.get("roll_pipeline_rewind")
+                            ),
+                        }
+                        for t in _rows_tr
+                    ],
+                },
+                task_id=_tid_tr,
+                emit_stderr=True,
+            )
+    # #endregion agent log
 
     for t in task_queue:
         t["remaining_units"] = float(t.get("initial_remaining_units") or 0)
@@ -37496,6 +37785,51 @@ def _generate_plan_impl(
                             ),
                             _t.get("dispatch_trial_order"),
                         )
+
+            # #region agent log
+            if _AGENT_DEBUG_TRACE_TASK_IDS:
+                _serial_tid_dbg = locals().get("_active_serial_tid")
+                for _tid_day in sorted(_AGENT_DEBUG_TRACE_TASK_IDS):
+                    for _t_day in task_queue:
+                        if str(_t_day.get("task_id", "") or "").strip() != _tid_day:
+                            continue
+                        _rem_day = float(_t_day.get("remaining_units") or 0)
+                        if _rem_day <= 1e-12:
+                            continue
+                        _hyp, _reason = _agent_debug_dispatch_day_block_reason(
+                            _t_day,
+                            task_queue,
+                            current_date,
+                            avail_dt=avail_dt,
+                            tasks_today=tasks_today,
+                            active_serial_tid=_serial_tid_dbg,
+                        )
+                        if not _hyp:
+                            continue
+                        _agent_debug_dispatch_trace(
+                            _hyp,
+                            "_core.py:generate_plan:daily_remaining",
+                            "日次終了時点の未配台行",
+                            {
+                                "day": current_date.isoformat()
+                                if isinstance(current_date, date)
+                                else str(current_date),
+                                "reason": _reason,
+                                "machine": str(_t_day.get("machine") or ""),
+                                "machine_name": str(_t_day.get("machine_name") or ""),
+                                "remaining_units": _rem_day,
+                                "working_members": len(avail_dt),
+                                "tasks_today_count": len(tasks_today),
+                                "dispatch_trial_order": _t_day.get(
+                                    "dispatch_trial_order"
+                                ),
+                                "no_op_block": bool(
+                                    _t_day.get("_dispatch_block_no_op_on_working_days")
+                                ),
+                            },
+                            task_id=_tid_day,
+                        )
+            # #endregion agent log
 
             if STAGE2_RETRY_SHIFT_DUE_ON_PARTIAL_REMAINING:
                 missed_tids = _collect_task_ids_missed_deadline_after_day(
