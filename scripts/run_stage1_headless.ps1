@@ -73,8 +73,6 @@ if (-not $MasterWorkbook) {
 }
 
 $env:PM_AI_MASTER_WORKBOOK = $MasterWorkbook
-$env:PM_AI_AGENT_DEBUG_SESSION = "55255a"
-$env:PM_AI_DEBUG_LOG = Join-Path $RepoRoot ".cursor\debug-55255a.log"
 
 Set-Location $pyDir
 Write-Host "[stage1-headless] repo=$RepoRoot"
