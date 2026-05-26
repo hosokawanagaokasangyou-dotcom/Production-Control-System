@@ -124,6 +124,36 @@ class RequestFormOriginalExtractorTest {
     }
 
     @Test
+    void resolveContractNoFromOriginalCell_takesValueAfterArrow() {
+        assertEquals("A22222", RequestFormOriginalExtractor.resolveContractNoFromOriginalCell("A655440 → A22222"));
+        assertEquals("A22222", RequestFormOriginalExtractor.resolveContractNoFromOriginalCell("A655440→A22222"));
+        assertEquals("A22222", RequestFormOriginalExtractor.resolveContractNoFromOriginalCell("A655440 -> A22222"));
+        assertEquals("A22222", RequestFormOriginalExtractor.resolveContractNoFromOriginalCell("A655440 ⇒ A22222"));
+        assertEquals("A22222", RequestFormOriginalExtractor.resolveContractNoFromOriginalCell("A655440➡A22222"));
+        assertEquals("A22222", RequestFormOriginalExtractor.resolveContractNoFromOriginalCell("A655440 => A22222"));
+        assertEquals("A22222", RequestFormOriginalExtractor.resolveContractNoFromOriginalCell("A655440 > A22222"));
+        assertEquals("A22222", RequestFormOriginalExtractor.resolveContractNoFromOriginalCell("A655440　＞　A22222"));
+        assertEquals("A22222", RequestFormOriginalExtractor.resolveContractNoFromOriginalCell("A655440－＞A22222"));
+        assertEquals("C33333", RequestFormOriginalExtractor.resolveContractNoFromOriginalCell("A11111 → B22222 ⇒ C33333"));
+        assertEquals("183784G", RequestFormOriginalExtractor.resolveContractNoFromOriginalCell("183784G"));
+        assertEquals("", RequestFormOriginalExtractor.resolveContractNoFromOriginalCell("   "));
+    }
+
+    @Test
+    void buildRawMapFromSheet_contractNoAfterArrow() throws Exception {
+        File file = new File("sample.xlsm");
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            XSSFSheet sheet = wb.createSheet("E5-4");
+            sheet.createRow(4).createCell(17).setCellValue("E5-4");
+            fillProductRow(sheet, 9, "6783", "15025", "JP17", "1360", "250");
+            sheet.createRow(20).createCell(4).setCellValue("A655440 → A22222");
+
+            Map<String, String> raw = RequestFormOriginalExtractor.buildRawMapFromSheet(file, "E5-4", sheet);
+            assertEquals("A22222", raw.get("契約Ｎｏ"));
+        }
+    }
+
+    @Test
     void buildRawMapFromSheet_threeProductContractsFromE21L21S21() throws Exception {
         File file = new File("sample.xlsm");
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
