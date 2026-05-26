@@ -6,7 +6,12 @@ import json
 import os
 import sys
 
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
+# python -P / PYTHONSAFEPATH ではスクリプト所在ディレクトリが sys.path に入らない。
+# 同梱 embed 実行時は JAVA 側の PYTHONPATH が効かない／限定されることがあるため、段階1/2/3 と同様に明示する。
+_py_here = os.path.dirname(os.path.abspath(__file__))
+if _py_here:
+    sys.path.insert(0, _py_here)
+os.chdir(_py_here)
 
 try:
     import workbook_env_bootstrap as _wbe

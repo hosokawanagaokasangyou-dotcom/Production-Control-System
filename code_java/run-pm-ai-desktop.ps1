@@ -14,7 +14,7 @@
   ClassNotFound 時は .\run-pm-ai-desktop.ps1 を推奨。
 
 .PARAMETER MaxHeap
-  Maven プロパティ jvm.max.heap（既定 4g。例: 2g, 4g, 8g）。
+  Maven プロパティ jvm.max.heap を上書き（例: 2g, 4g, 8g）。未指定時は pom.xml の jvm.max.heap をそのまま使う。
 
 .PARAMETER MonitorIntervalSec
   ヒープ監視間隔（秒）。-1 で無効。0 で環境変数 PM_AI_JVM_MEMORY_MONITOR_SEC を使用。
@@ -25,7 +25,7 @@
   .\run-pm-ai-desktop.ps1 -MaxHeap 4g -MonitorIntervalSec 30
 #>
 param(
-    [string] $MaxHeap = "4g",
+    [string] $MaxHeap = "",
     [int] $MonitorIntervalSec = -1
 )
 
@@ -36,7 +36,10 @@ if ($MonitorIntervalSec -ge 0) {
     $env:PM_AI_JVM_MEMORY_MONITOR_SEC = "$MonitorIntervalSec"
 }
 
-$commonArgs = @("-q", "-Djvm.max.heap=$MaxHeap")
+$commonArgs = @("-q")
+if (-not [string]::IsNullOrWhiteSpace($MaxHeap)) {
+    $commonArgs += "-Djvm.max.heap=$MaxHeap"
+}
 $verifyScript = Join-Path $PSScriptRoot "verify-pm-ai-build.ps1"
 
 function Invoke-PmAiBuildVerify {

@@ -82,10 +82,12 @@ for i in range(1, 8):
     df_product_steps[name_col] = df_product_steps[code_col].map(naiyo_dict).fillna("")
     df_product_steps[koutei_col] = df_product_steps[code_col].map(koutei_dict).fillna("")
 
-# Filter df_product_steps to only show products that have at least one processing step!
-has_processing = df_product_steps["加工内容コード1"] != ""
-df_product_steps_filtered = df_product_steps[has_processing].copy()
-print(f"Products with processing: {len(df_product_steps_filtered)} of {len(df_product_steps)}")
+# 後加工商品マスタの全商品をシート②へ出力する（加工内容コード未設定でも依頼書入力の商品一覧に必要）
+has_processing_step1 = df_product_steps["加工内容コード1"] != ""
+print(
+    f"Products with processing step1: {int(has_processing_step1.sum())} of {len(df_product_steps)}"
+)
+print(f"Products exported to sheet2: {len(df_product_steps)}")
 
 # 3. Unpivoted Content-Centric relation
 print("Building Content-Centric Product Usage sheet...")
@@ -177,11 +179,15 @@ def create_sheet_with_styling(name, df, header_fill):
                 cell.alignment = align_center
                 cell.number_format = "@"
             elif isinstance(val, (int, float)):
-                cell.alignment = align_right
-                if int(val) == val:
-                    cell.number_format = '#,##0'
+                if pd.isna(val):
+                    cell.value = None
+                    cell.alignment = align_left
                 else:
-                    cell.number_format = '#,##0.00'
+                    cell.alignment = align_right
+                    if float(val).is_integer():
+                        cell.number_format = '#,##0'
+                    else:
+                        cell.number_format = '#,##0.00'
             else:
                 cell.alignment = align_left
                 
@@ -200,7 +206,7 @@ print("Creating Sheet 1: ①工程・加工内容マスター統合")
 create_sheet_with_styling("①工程・加工内容マスター統合", df_base_master, fill_naiyo)
 
 print("Creating Sheet 2: ②商品別・工程展開リスト")
-create_sheet_with_styling("②商品別・工程展開リスト", df_product_steps_filtered, fill_product)
+create_sheet_with_styling("②商品別・工程展開リスト", df_product_steps, fill_product)
 
 print("Creating Sheet 3: ③加工内容別・使用商品一覧")
 create_sheet_with_styling("③加工内容別・使用商品一覧", df_flat_relation, fill_flat)

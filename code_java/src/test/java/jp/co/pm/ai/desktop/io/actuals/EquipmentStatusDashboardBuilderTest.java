@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.io.actuals;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Assertions;
@@ -486,6 +487,50 @@ class EquipmentStatusDashboardBuilderTest {
         Assertions.assertEquals("M-idle", out.get(0).machineName());
         Assertions.assertEquals(EquipmentMachineStatus.Status.STOPPED, out.get(0).status());
         Assertions.assertTrue(out.get(0).dispatchPlans().isEmpty());
+    }
+
+    @Test
+    void build_duplicateLotRows_dedupedBeforeDailyActualSum() {
+        List<String> headers =
+                List.of(
+                        "機械名",
+                        "依頼NO",
+                        "工程名",
+                        "加工日",
+                        "加工開始日時",
+                        "換算数量",
+                        "実加工数");
+        List<List<String>> rows = new ArrayList<>();
+        for (int i = 0; i < 136; i++) {
+            rows.add(
+                    List.of(
+                            "スライス機1　湖南",
+                            "Y5-16",
+                            "スライス",
+                            "2026/05/26",
+                            "2026/05/26 09:00",
+                            "8000",
+                            "1400"));
+        }
+        List<String> alHeaders = List.of("機械名", "依頼NO", "工程名", "2026/05/26");
+        List<List<String>> alRows =
+                List.of(
+                        List.of("スライス機1　湖南", "Y5-16", "スライス", "2600"),
+                        List.of("スライス機1　湖南", "V5-7", "スライス", "400"),
+                        List.of("スライス機1　湖南", "Y5-17", "スライス", "5000"));
+        ActualsSnapshot actuals = EquipmentStatusDashboardBuilder.normalizeActualsSnapshot(
+                new ActualsSnapshot(headers, rows));
+        List<EquipmentMachineStatus> out =
+                EquipmentStatusDashboardBuilder.build(
+                        actuals,
+                        new AladdinSnapshot(alHeaders, alRows),
+                        new DispatchSnapshot(List.of(), List.of()),
+                        LocalDate.of(2026, 5, 26),
+                        LocalDate.of(2026, 5, 26),
+                        LocalDate.of(2026, 5, 26));
+        EquipmentMachineStatus slice = out.get(0);
+        Assertions.assertEquals(17.5, slice.actualTask().orElseThrow().completionPct(), 0.01);
+        Assertions.assertEquals(EquipmentMachineStatus.Status.RUNNING, slice.status());
     }
 
     @Test

@@ -58,6 +58,7 @@ public final class GlobalSettingsTabController {
                             if (newV != null) {
                                 GlobalInitSettingTarget.save(newV);
                                 if (shell != null) {
+                                    shell.applyFactoryRequestFormGlobalSettings(newV, false);
                                     shell.refreshMainRunTabFactoryLogo();
                                 }
                             }
@@ -93,7 +94,10 @@ public final class GlobalSettingsTabController {
         try {
             shell.preparePackageDefaultsExport();
             InitSettingPersistence.savePackageDefaults(
-                    shell.snapshotUiEnv(), shell.snapshotDesktopSessionForExport());
+                    shell.snapshotUiEnv(),
+                    shell.snapshotDesktopSessionForExport(),
+                    GlobalInitSettingTarget.load(),
+                    shell.snapshotJuchuHeaderAliasRegistryForExport());
             Alert ok = new Alert(AlertType.INFORMATION);
             if (shell.primaryStageForDialogs() != null) {
                 ok.initOwner(shell.primaryStageForDialogs());
@@ -104,9 +108,11 @@ public final class GlobalSettingsTabController {
             ok.setContentText(
                     "書き出しました。init_setting に "
                             + InitSettingPaths.sessionDefaultsFileForFactory(t)
-                            + "（メイン／子タブ含む）と、"
+                            + "（メイン／子タブ・依頼書フォーム候補含む）、"
                             + InitSettingPaths.tableColumnDefaultsFileForFactory(t)
-                            + "（列・行高・納期管理ビュー等をバンドル既定にマージ）を出力しました。");
+                            + "（列・行高・納期管理ビュー等）、"
+                            + InitSettingPaths.juchuHeaderAliasesFileForFactory(t)
+                            + "（列定義ウィザード）を出力しました。");
             ok.showAndWait();
         } catch (Exception ex) {
             Alert err = new Alert(AlertType.ERROR);

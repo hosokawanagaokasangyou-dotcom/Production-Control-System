@@ -10,10 +10,18 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 
+import jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices;
+
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
+import jp.co.pm.ai.desktop.config.FactorySite;
+import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
+import jp.co.pm.ai.desktop.reconciliation.JuchuHeaderAliasRegistry;
 import jp.co.pm.ai.desktop.reconciliation.ReconciliationApp;
 import jp.co.pm.ai.desktop.reconciliation.RequestFormPreviewBadgeConfig;
 
@@ -28,6 +36,7 @@ public final class RequestFormInputTabController {
     private ReconciliationApp reconciliationApp;
     private boolean embeddedBuilt;
     private Parent tabLoadingPane;
+    private RequestFormComboChoices pendingComboChoices = RequestFormComboChoices.empty();
 
     @FXML
     private StackPane contentHost;
@@ -94,7 +103,11 @@ public final class RequestFormInputTabController {
             return;
         }
         showTabLoadingIfNeeded();
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
         reconciliationApp = new ReconciliationApp();
+        FactorySite factorySite = GlobalInitSettingTarget.load();
+        reconciliationApp.configureJuchuHeaderAliasRegistry(
+                JuchuHeaderAliasRegistry.loadForFactory(factorySite, ui));
         reconciliationApp.setOriginalDirChangeHandler(
                 path -> {
                     if (shell != null) {
@@ -114,9 +127,11 @@ public final class RequestFormInputTabController {
         if (host == null && shell != null) {
             host = shell.primaryStageForDialogs();
         }
-        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
         Path repoRoot = shell != null ? AppPaths.resolveRepoRoot(ui) : null;
         Parent root = reconciliationApp.buildEmbeddedRoot(host, repoRoot, ui);
+        if (pendingComboChoices != null) {
+            reconciliationApp.applyComboChoices(pendingComboChoices.mergedWithDefaults());
+        }
         reconciliationApp.setPreviewBadgeConfigSupplier(
                 () ->
                         shell != null
@@ -138,6 +153,51 @@ public final class RequestFormInputTabController {
     void refreshPreviewBadgeAppearance() {
         if (reconciliationApp != null) {
             reconciliationApp.refreshPreviewBadgeAppearance();
+        }
+    }
+
+    void applyComboChoicesFromSession(RequestFormComboChoices choices) {
+        pendingComboChoices =
+                choices != null ? choices : RequestFormComboChoices.empty();
+        if (reconciliationApp != null) {
+            reconciliationApp.applyComboChoices(pendingComboChoices.mergedWithDefaults());
+        }
+    }
+
+    RequestFormComboChoices snapshotComboChoices() {
+        if (reconciliationApp != null) {
+            return reconciliationApp.snapshotComboChoices();
+        }
+        return pendingComboChoices != null
+                ? pendingComboChoices
+                : RequestFormComboChoices.empty();
+    }
+
+    JuchuHeaderAliasRegistry snapshotJuchuHeaderAliasRegistry() {
+        if (reconciliationApp != null) {
+            return reconciliationApp.juchuHeaderAliasRegistry();
+        }
+        return JuchuHeaderAliasRegistry.loadForFactory(
+                GlobalInitSettingTarget.load(), shell != null ? shell.snapshotUiEnv() : Map.of());
+    }
+
+    void reloadJuchuHeaderAliasRegistry(
+            FactorySite site, Map<String, String> ui, boolean restoreFromInitSetting) {
+        FactorySite effective = site != null ? site : GlobalInitSettingTarget.load();
+        Map<String, String> env = ui != null ? ui : Map.of();
+        JuchuHeaderAliasRegistry registry =
+                JuchuHeaderAliasRegistry.loadForFactory(effective, env);
+        if (restoreFromInitSetting) {
+            Path initSetting = DesktopSessionStateStore.factoryJuchuHeaderAliasesPath(env, effective);
+            if (initSetting != null && Files.isRegularFile(initSetting)) {
+                try {
+                    registry.replaceFromInitSetting(initSetting);
+                } catch (IOException ignored) {
+                }
+            }
+        }
+        if (reconciliationApp != null) {
+            reconciliationApp.configureJuchuHeaderAliasRegistry(registry);
         }
     }
 

@@ -7,6 +7,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.control.OverrunStyle;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -66,12 +67,14 @@ public final class EquipmentStatusCardFactory {
             Label chip = new Label(statusLabel(status.status()));
             chip.getStyleClass().addAll("pm-equipment-status-chip", chipStyleClass(status.status()));
             EquipmentStatusDashboardAppearanceApplier.applyLabelFont(chip, ap, ap.planFontPx());
+            Tooltip.install(chip, new Tooltip(statusChipTooltip(status.status())));
             header.getChildren().addAll(spacer, chip);
         }
 
         card.getChildren().add(header);
 
         if (status.status() == EquipmentMachineStatus.Status.STOPPED) {
+            appendSectionRule(card, width, ap);
             StackPane stoppedPane = new StackPane();
             stoppedPane.getStyleClass().add("pm-equipment-status-stopped-pane");
             stoppedPane.setMinHeight(Math.max(80, ap.chartSizePx() * 1.1));
@@ -85,39 +88,19 @@ public final class EquipmentStatusCardFactory {
             status.actualTask()
                     .ifPresent(
                             task -> {
-                                Label meta =
-                                        new Label(metaLine(task));
-                                meta.getStyleClass().add("pm-equipment-status-meta");
-                                EquipmentStatusDashboardAppearanceApplier.applyLabelFont(
-                                        meta, ap, ap.metaFontPx());
-                                meta.setWrapText(true);
-                                meta.setMaxWidth(width - ap.cardPadding() * 2);
-                                card.getChildren().add(meta);
-
-                                StackPane chartPane =
-                                        EquipmentStatusDashboardAppearanceApplier.buildPieChart(
-                                                task.completionPct(), ap);
-                                card.getChildren().add(chartPane);
-
-                                String badgeText =
-                                        PersonNameBadgeText.badgeTwoFromRawName(task.memberRaw());
-                                if (!badgeText.isBlank()
-                                        && PersonNameHeuristics.looksLikePersonName(
-                                                task.memberRaw())) {
-                                    PersonBadgeStyle st =
-                                            badgeStyleResolver != null
-                                                    ? badgeStyleResolver.apply(
-                                                            PersonNameBadgeText.surnameLabelOnly(
-                                                                    task.memberRaw()))
-                                                    : PersonBadgeStyle.defaultStyle();
-                                    card.getChildren()
-                                            .add(
-                                                    PersonBadgeNodeFactory.createBadge(
-                                                            badgeText,
-                                                            st,
-                                                            1.0,
-                                                            Math.max(10, ap.metaFontPx())));
-                                }
+                                appendSectionRule(card, width, ap);
+                                card.getChildren()
+                                        .add(
+                                                buildLatestActualSection(
+                                                        task,
+                                                        width,
+                                                        ap,
+                                                        badgeStyleResolver));
+                                appendSectionRule(card, width, ap);
+                                card.getChildren()
+                                        .add(
+                                                buildDayAladdinAchievementSection(
+                                                        task, opts, width, ap));
                             });
         }
 
@@ -141,6 +124,107 @@ public final class EquipmentStatusCardFactory {
         return card;
     }
 
+    private static void appendSectionRule(
+            VBox card, double cardWidth, EquipmentStatusDashboardAppearancePrefs ap) {
+        double contentWidth = cardWidth - ap.cardPadding() * 2;
+        Region rule = new Region();
+        rule.getStyleClass().add("pm-equipment-status-section-rule");
+        rule.setMinWidth(contentWidth);
+        rule.setPrefWidth(contentWidth);
+        rule.setMaxWidth(contentWidth);
+        rule.setMinHeight(1);
+        rule.setPrefHeight(1);
+        rule.setMaxHeight(1);
+        VBox.setMargin(rule, new Insets(4, 0, 4, 0));
+        card.getChildren().add(rule);
+    }
+
+    private static VBox buildLatestActualSection(
+            EquipmentMachineStatus.ActualTaskRow task,
+            double cardWidth,
+            EquipmentStatusDashboardAppearancePrefs ap,
+            Function<String, PersonBadgeStyle> badgeStyleResolver) {
+        double contentWidth = cardWidth - ap.cardPadding() * 2;
+        VBox section = new VBox(2.0);
+        Label head = new Label("直近実績");
+        head.getStyleClass().add("pm-equipment-status-plan-head");
+        EquipmentStatusDashboardAppearanceApplier.applyLabelFont(head, ap, ap.planFontPx());
+        Label meta = new Label(metaLine(task));
+        meta.getStyleClass().add("pm-equipment-status-meta");
+        EquipmentStatusDashboardAppearanceApplier.applyLabelFont(meta, ap, ap.metaFontPx());
+        meta.setWrapText(true);
+        meta.setMaxWidth(contentWidth);
+        section.getChildren().addAll(head, meta);
+        String badgeText = PersonNameBadgeText.badgeTwoFromRawName(task.memberRaw());
+        if (!badgeText.isBlank()
+                && PersonNameHeuristics.looksLikePersonName(task.memberRaw())) {
+            PersonBadgeStyle st =
+                    badgeStyleResolver != null
+                            ? badgeStyleResolver.apply(
+                                    PersonNameBadgeText.surnameLabelOnly(task.memberRaw()))
+                            : PersonBadgeStyle.defaultStyle();
+            section.getChildren()
+                    .add(
+                            PersonBadgeNodeFactory.createBadge(
+                                    badgeText, st, 1.0, Math.max(10, ap.metaFontPx())));
+        }
+        return section;
+    }
+
+    private static VBox buildDayAladdinAchievementSection(
+            EquipmentMachineStatus.ActualTaskRow task,
+            DisplayOptions opts,
+            double cardWidth,
+            EquipmentStatusDashboardAppearancePrefs ap) {
+        double contentWidth = cardWidth - ap.cardPadding() * 2;
+        VBox section = new VBox(4.0);
+        section.setAlignment(Pos.CENTER_LEFT);
+
+        Label head = new Label(achievementSectionTitle(opts));
+        head.getStyleClass().add("pm-equipment-status-plan-head");
+        head.setWrapText(true);
+        head.setMaxWidth(contentWidth);
+        EquipmentStatusDashboardAppearanceApplier.applyLabelFont(head, ap, ap.planFontPx());
+
+        StackPane chartPane =
+                EquipmentStatusDashboardAppearanceApplier.buildPieChart(task.completionPct(), ap);
+        Tooltip.install(
+                chartPane,
+                new Tooltip(
+                        "当機械の当日実績合計 ÷ 当日アラジン計画合計。"
+                                + " 直近実績の依頼NO単位の進捗ではありません。"));
+
+        Label foot = new Label("当機械 · 実績合計 ÷ 当日アラジン計画合計");
+        foot.getStyleClass().add("pm-equipment-status-achievement-foot");
+        foot.setWrapText(true);
+        foot.setMaxWidth(contentWidth);
+        EquipmentStatusDashboardAppearanceApplier.applyLabelFont(
+                foot, ap, Math.max(9, ap.planFontPx() - 1));
+
+        section.getChildren().add(head);
+        section.getChildren().add(chartPane);
+        section.getChildren().add(foot);
+        return section;
+    }
+
+    private static String achievementSectionTitle(DisplayOptions opts) {
+        String date = opts != null ? nz(opts.actualDateLabel()) : "—";
+        if ("—".equals(date)) {
+            return "当日アラジン達成率（機械合計）";
+        }
+        return "当日アラジン達成率（" + date + "・機械合計）";
+    }
+
+    private static String statusChipTooltip(EquipmentMachineStatus.Status status) {
+        return switch (status) {
+            case STOPPED -> "選択した実績日に、この機械の加工実績がありません。";
+            case RUNNING ->
+                    "当日アラジン計画（当機械合計）に対し、実績合計が未達です。依頼NO単位の完了ではありません。";
+            case COMPLETED ->
+                    "当日アラジン計画（当機械合計）を実績合計が上回った状態です。依頼NO単位の完了ではありません。";
+        };
+    }
+
     private static void appendPlanSection(
             VBox card,
             String title,
@@ -152,6 +236,7 @@ public final class EquipmentStatusCardFactory {
         if (!visible) {
             return;
         }
+        appendSectionRule(card, width, ap);
         Label head = new Label(title + (dateLabel.isBlank() ? "" : " (" + dateLabel + ")"));
         head.getStyleClass().add("pm-equipment-status-plan-head");
         EquipmentStatusDashboardAppearanceApplier.applyLabelFont(head, ap, ap.planFontPx());
@@ -192,7 +277,7 @@ public final class EquipmentStatusCardFactory {
         return switch (status) {
             case STOPPED -> "停機";
             case RUNNING -> "稼働中";
-            case COMPLETED -> "完了";
+            case COMPLETED -> "予定達成";
         };
     }
 
@@ -211,6 +296,18 @@ public final class EquipmentStatusCardFactory {
      */
     public static VBox createEmptyState(
             String actualDateLabel, String planDateLabel, boolean sourcesLoaded, boolean fullscreen) {
+        return createEmptyState(actualDateLabel, planDateLabel, sourcesLoaded, fullscreen, "");
+    }
+
+    /**
+     * @param loadErrorDetail 空でなければ読込失敗パネルとして表示
+     */
+    public static VBox createEmptyState(
+            String actualDateLabel,
+            String planDateLabel,
+            boolean sourcesLoaded,
+            boolean fullscreen,
+            String loadErrorDetail) {
         VBox box = new VBox(10.0);
         box.setAlignment(Pos.CENTER);
         box.setPadding(new Insets(32, 24, 32, 24));
@@ -222,7 +319,12 @@ public final class EquipmentStatusCardFactory {
 
         String detailText;
         String hintText;
-        if (sourcesLoaded) {
+        if (loadErrorDetail != null && !loadErrorDetail.isBlank()) {
+            title.setText("ダッシュボード読込エラー");
+            detailText = loadErrorDetail.strip();
+            hintText =
+                    "［再読込］を押すか、「実行・ログ」タブで詳細（スタックトレース）を確認してください。";
+        } else if (sourcesLoaded) {
             detailText =
                     "実績 "
                             + nz(actualDateLabel)

@@ -45,5 +45,12 @@ class RequestFormOriginalCellLayoutTest {
     void formExtractKeys_includeTokkiSeparately() {
         assertTrue(RequestFormOriginalCellLayout.FORM_EXTRACT_RAW_KEYS.contains("特記事項1"));
         assertTrue(RequestFormOriginalCellLayout.FORM_EXTRACT_RAW_KEYS.contains("特記事項2"));
+        assertTrue(RequestFormOriginalCellLayout.FORM_EXTRACT_RAW_KEYS.contains("投入日"));
+    }
+
+    @Test
+    void rawColumn_inputDate_isAmColumn() {
+        assertEquals(38, RequestFormOriginalCellLayout.RawColumn.INPUT_DATE.columnIndex());
+        assertEquals("投入日", RequestFormOriginalCellLayout.RawColumn.INPUT_DATE.rawKey());
     }
 }

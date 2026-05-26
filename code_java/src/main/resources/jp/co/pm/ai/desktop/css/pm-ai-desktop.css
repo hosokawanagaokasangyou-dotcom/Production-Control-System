@@ -1256,6 +1256,18 @@
     -fx-text-fill: -fx-text-inner-color;
 }
 
+.label.pm-equipment-status-achievement-foot {
+    -fx-font-size: 10px;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-equipment-status-section-rule {
+    -fx-background-color: -fx-text-inner-color;
+    -fx-min-height: 1;
+    -fx-pref-height: 1;
+    -fx-max-height: 1;
+}
+
 .label.pm-equipment-status-date-foot {
     -fx-font-size: 10px;
     -fx-text-fill: -fx-mid-text-color;
@@ -1442,6 +1454,10 @@
     -fx-text-fill: #64748b;
 }
 
+.pm-equipment-status-fullscreen-theme-dark .pm-equipment-status-section-rule {
+    -fx-background-color: #e2e8f0;
+}
+
 .pm-equipment-status-fullscreen-theme-dark .label.pm-equipment-status-chip-running {
     -fx-text-fill: #86efac;
 }
@@ -1478,6 +1494,10 @@
     -fx-background-color: rgba(255, 255, 255, 0.45);
 }
 
+.pm-equipment-status-fullscreen-theme-light .pm-equipment-status-section-rule {
+    -fx-background-color: -fx-text-inner-color;
+}
+
 /* 壁面: 高コントラストの暗色（プロジェクター・工場ディスプレイ向け） */
 .pm-equipment-status-fullscreen-theme-wall {
     -fx-background-color: #000000;
@@ -1501,6 +1521,10 @@
     -fx-background-color: #111827;
     -fx-border-color: #64748b;
     -fx-border-width: 2;
+}
+
+.pm-equipment-status-fullscreen-theme-wall .pm-equipment-status-section-rule {
+    -fx-background-color: #f8fafc;
 }
 
 .pm-equipment-status-fullscreen-theme-wall .label.pm-equipment-status-machine,

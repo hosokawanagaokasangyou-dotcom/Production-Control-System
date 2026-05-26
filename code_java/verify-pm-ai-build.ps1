@@ -30,6 +30,7 @@ $requiredRelativePaths = @(
     "target\classes\jp\co\pm\ai\desktop\ui\EquipmentGraphicGanttPane.class",
     # record / inner: incremental compile on Windows can drop these while outer .class remains
     "target\classes\jp\co\pm\ai\desktop\ui\EquipmentGraphicGanttPane`$VerticalScrollBand.class",
+    "target\classes\jp\co\pm\ai\desktop\ui\EquipmentGraphicGanttPane`$LazyBadgeLayoutRequest.class",
     "target\classes\jp\co\pm\ai\desktop\ui\SpreadsheetMultiColumnFilterCoordinator.class",
     "target\classes\jp\co\pm\ai\desktop\reconciliation\ReconciliationApp.class",
     # comboRecord button cell (NoClassDefFoundError: ReconciliationApp$2)

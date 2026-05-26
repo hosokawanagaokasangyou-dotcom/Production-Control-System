@@ -17,5 +17,11 @@ class InitSettingPathsFactoryDefaultsTest {
         assertEquals(
                 "table_column_defaults_kokubu.json",
                 InitSettingPaths.tableColumnDefaultsFileForFactory(FactorySite.KOKUBU));
+        assertEquals(
+                "juchu_header_aliases_konan.json",
+                InitSettingPaths.juchuHeaderAliasesFileForFactory(FactorySite.KONAN));
+        assertEquals(
+                "juchu_header_aliases_kokubu.json",
+                InitSettingPaths.juchuHeaderAliasesFileForFactory(FactorySite.KOKUBU));
     }
 }

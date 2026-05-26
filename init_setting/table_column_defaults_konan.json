@@ -1,8 +1,8 @@
 {
   "processingActualsDetailRaw" : [ ],
-  "planInput_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false, true, false, false, false, false, false ],
-  "stage1Preview_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
-  "aladdinProcessingPlanRaw_columnVisible" : [ true, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, false, false, true, false, true, true, false, false, true, true, true, false, false, true, true, true, true, true, true, true, true, false, true, true, true, true, true, false, true, true, true, true, true, true, false, true, false, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, true, false, true, false, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false, true, true, true, false, false, true, true, true, true, false, true, true, true, true, false, true, false ],
+  "planInput_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, false, false, true, false, false, false, false, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "stage1Preview_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "aladdinProcessingPlanRaw_columnVisible" : [ true, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, false, false, true, false, true, true, false, false, true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false, true, true, true, false, false, true, true, true, true, false, true, true, true, true, false, true, false, true, false, false, true, true, false, true, true, true, true, true, true, true, true, false, true, true, true, true, true, false, true, true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, true, false, true, false, true, true, true, true, true, true, true, true, true ],
   "resultDispatchTable_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false ],
   "envVars" : [ {
     "title" : "変数名",
@@ -230,15 +230,6 @@
     "width" : 112.0
   }, {
     "title" : "範囲外後数",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/23",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/24",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/25",
     "width" : 112.0
   }, {
     "title" : "2026/04/26",
@@ -504,6 +495,21 @@
   }, {
     "title" : "2026/07/22",
     "width" : 112.0
+  }, {
+    "title" : "コア着予定日",
+    "width" : 112.0
+  }, {
+    "title" : "コア着日",
+    "width" : 112.0
+  }, {
+    "title" : "2026/07/23",
+    "width" : 112.0
+  }, {
+    "title" : "2026/07/24",
+    "width" : 112.0
+  }, {
+    "title" : "2026/07/25",
+    "width" : 112.0
   } ],
   "planInput" : [ {
     "title" : "配台試行順番",
@@ -513,6 +519,9 @@
     "width" : 112.0
   }, {
     "title" : "依頼NO",
+    "width" : 112.0
+  }, {
+    "title" : "受注NO",
     "width" : 112.0
   }, {
     "title" : "工程名",
@@ -745,9 +754,6 @@
     "width" : 112.0
   }, {
     "title" : "範囲外後数",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/25",
     "width" : 112.0
   }, {
     "title" : "2026/04/26",
@@ -1020,6 +1026,9 @@
     "title" : "2026/07/24",
     "width" : 112.0
   }, {
+    "title" : "2026/07/25",
+    "width" : 112.0
+  }, {
     "title" : "コア着予定日",
     "width" : 112.0
   }, {
@@ -1029,17 +1038,17 @@
   "prvSh_plan_結果_設備毎の時間割_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
   "prvSh_plan_結果_設備毎の時間割_機械名毎_columnVisible" : [ true, true, true, true, true, true, true ],
   "prvSh_plan_結果_カレンダー(出勤簿)_columnVisible" : [ true, true, true, true, true, true ],
-  "prvSh_plan_結果_メンバー別作業割合_columnVisible" : [ true, true, true, true, true, true, true, true ],
+  "prvSh_plan_結果_メンバー別作業割合_columnVisible" : [ true, true, true, true, true, true, true ],
   "prvSh_plan_列設定_結果_タスク一覧_columnVisible" : [ true, true ],
-  "prvSh_plan_結果_タスク一覧_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "prvSh_plan_結果_タスク一覧_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
   "prvSh_plan_結果_配台表_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
   "prvSh_plan_結果_AIログ_columnVisible" : [ true, true ],
-  "prvSh_member_図司　智子_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
-  "prvSh_member_宮島　　剛_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
-  "prvSh_member_冨田　裕子_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
-  "prvSh_member_森岡　真由美_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
-  "prvSh_member_竹内　正美_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
-  "prvSh_member_菅沼　めぐみ_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "prvSh_member_図司　智子_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "prvSh_member_宮島　　剛_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "prvSh_member_冨田　裕子_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "prvSh_member_森岡　真由美_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "prvSh_member_竹内　正美_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "prvSh_member_菅沼　めぐみ_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
   "prvSh_member_森下　　誠_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
   "deliveryCalendarMain_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
   "deliveryCalendarMain" : [ {
@@ -1107,12 +1116,6 @@
     "width" : 112.0
   }, {
     "title" : "受注NO",
-    "width" : 112.0
-  }, {
-    "title" : "2026年5月17日(日)",
-    "width" : 112.0
-  }, {
-    "title" : "2026年5月18日(月)",
     "width" : 112.0
   }, {
     "title" : "2026年5月19日(火)",
@@ -1225,8 +1228,14 @@
   }, {
     "title" : "2026年6月23日(火)",
     "width" : 112.0
+  }, {
+    "title" : "2026年6月24日(水)",
+    "width" : 112.0
+  }, {
+    "title" : "2026年6月25日(木)",
+    "width" : 112.0
   } ],
-  "processingActualsDetailRaw_columnVisible" : [ true, true, true, true, false, false, true, true, true, false, true, false, false, true, true, true, true, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, true, true, true ],
+  "processingActualsDetailRaw_columnVisible" : [ true, true, true, true, false, false, true, true, true, false, true, false, false, true, true, true, true, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
   "deliveryCalendarMain_ui_rowHeightPercent" : 238.05310557373863,
   "deliveryCalendarMain_ui_cellWrapText" : false,
   "deliveryCalendarMain_headerColumnCount" : 5,
@@ -1604,6 +1613,9 @@
     "title" : "加工内容",
     "width" : 72.0
   }, {
+    "title" : "受注NO",
+    "width" : 66.275390625
+  }, {
     "title" : "依頼NO",
     "width" : 66.275390625
   }, {
@@ -1621,12 +1633,6 @@
   }, {
     "title" : "段階3配台照合",
     "width" : 102.662109375
-  }, {
-    "title" : "2026-05-20",
-    "width" : 112.0
-  }, {
-    "title" : "2026-05-21",
-    "width" : 112.0
   }, {
     "title" : "2026-05-22",
     "width" : 112.0
@@ -1737,107 +1743,101 @@
     "title" : "段階3配台数",
     "width" : 90.662109375
   }, {
-    "title" : "2026-05-20",
-    "width" : 86.9765625
-  }, {
-    "title" : "2026-05-21",
-    "width" : 85.142578125
-  }, {
     "title" : "2026-05-22",
-    "width" : 86.9765625
+    "width" : 112.0
   }, {
     "title" : "2026-05-23",
-    "width" : 86.9765625
+    "width" : 112.0
   }, {
     "title" : "2026-05-24",
-    "width" : 87.228515625
+    "width" : 112.0
   }, {
     "title" : "2026-05-25",
-    "width" : 86.9765625
+    "width" : 112.0
   }, {
     "title" : "2026-05-26",
-    "width" : 87.01171875
+    "width" : 112.0
   }, {
     "title" : "2026-05-27",
-    "width" : 86.748046875
+    "width" : 112.0
   }, {
     "title" : "2026-05-28",
-    "width" : 86.9765625
+    "width" : 112.0
   }, {
     "title" : "2026-05-29",
-    "width" : 87.01171875
+    "width" : 112.0
   }, {
     "title" : "2026-05-30",
-    "width" : 86.9765625
+    "width" : 112.0
   }, {
     "title" : "2026-05-31",
-    "width" : 85.142578125
+    "width" : 112.0
   }, {
     "title" : "2026-06-01",
-    "width" : 85.177734375
+    "width" : 112.0
   }, {
     "title" : "2026-06-02",
-    "width" : 87.01171875
+    "width" : 112.0
   }, {
     "title" : "2026-06-03",
-    "width" : 87.01171875
+    "width" : 112.0
   }, {
     "title" : "2026-06-04",
-    "width" : 87.263671875
+    "width" : 112.0
   }, {
     "title" : "2026-06-05",
-    "width" : 87.01171875
+    "width" : 112.0
   }, {
     "title" : "2026-06-06",
-    "width" : 87.046875
+    "width" : 112.0
   }, {
     "title" : "2026-06-07",
-    "width" : 86.783203125
+    "width" : 112.0
   }, {
     "title" : "2026-06-08",
-    "width" : 87.01171875
+    "width" : 112.0
   }, {
     "title" : "2026-06-09",
-    "width" : 87.046875
+    "width" : 112.0
   }, {
     "title" : "2026-06-10",
-    "width" : 85.177734375
+    "width" : 112.0
   }, {
     "title" : "2026-06-11",
-    "width" : 83.34375
+    "width" : 112.0
   }, {
     "title" : "2026-06-12",
-    "width" : 85.177734375
+    "width" : 112.0
   }, {
     "title" : "2026-06-13",
-    "width" : 85.177734375
+    "width" : 112.0
   }, {
     "title" : "2026-06-14",
-    "width" : 85.4296875
+    "width" : 112.0
   }, {
     "title" : "2026-06-15",
-    "width" : 85.177734375
+    "width" : 112.0
   }, {
     "title" : "2026-06-16",
-    "width" : 85.212890625
+    "width" : 112.0
   }, {
     "title" : "2026-06-17",
-    "width" : 84.94921875
+    "width" : 112.0
   }, {
     "title" : "2026-06-18",
-    "width" : 85.177734375
+    "width" : 112.0
   }, {
     "title" : "2026-06-19",
-    "width" : 85.212890625
+    "width" : 112.0
   }, {
     "title" : "2026-06-20",
-    "width" : 87.01171875
+    "width" : 112.0
   }, {
     "title" : "2026-06-21",
-    "width" : 85.177734375
+    "width" : 112.0
   }, {
     "title" : "2026-06-22",
-    "width" : 87.01171875
+    "width" : 112.0
   } ],
   "dispatchInteractiveWide_headerColumnCount" : 10
 }

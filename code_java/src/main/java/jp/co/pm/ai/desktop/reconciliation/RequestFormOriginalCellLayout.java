@@ -11,6 +11,13 @@ public final class RequestFormOriginalCellLayout {
     /** 製品（仕上がり）ブロック: Excel 行 10–12。 */
     public static final int[] PRODUCT_ROW_INDICES = {9, 10, 11};
 
+    /** 製品行ごとの契約Ｎｏ: Excel 行 21 の E / L / S（POI row 20）。 */
+    public static final int PRODUCT_CONTRACT_ROW_INDEX = 20;
+
+    public static final int[] PRODUCT_CONTRACT_COLUMN_INDICES = {
+        columnLetterToIndex("E"), columnLetterToIndex("L"), columnLetterToIndex("S")
+    };
+
     /** 原反（材料）ブロック: Excel 行 23–25。 */
     public static final int[] RAW_ROW_INDICES = {22, 23, 24};
 
@@ -35,7 +42,6 @@ public final class RequestFormOriginalCellLayout {
         USER("ユーザー", true, 18, "E", 19),
         KIBO_NOKI("希望納期", true, 19, "I", 20),
         KAKOCHIN("加工賃", true, 19, "AE", 20),
-        KEIYAKU_NO("契約Ｎｏ", true, 20, "E", 21),
         YOTO_COMPARE("用途", false, 17, "E", 18);
 
         private final String rawKey;
@@ -113,7 +119,8 @@ public final class RequestFormOriginalCellLayout {
         GRADE("原反梱-等", true, "V"),
         COLOR("原反色", true, "Y"),
         CATEGORY("原反区分", true, "AA"),
-        STORAGE("在庫場所", true, "AF");
+        STORAGE("在庫場所", true, "AF"),
+        INPUT_DATE("投入日", true, "AM");
 
         private final String rawKey;
         private final boolean extractToForm;
@@ -160,6 +167,7 @@ public final class RequestFormOriginalCellLayout {
                     "原反色",
                     "原反区分",
                     "在庫場所",
+                    "投入日",
                     "特記事項1",
                     "特記事項2");
 

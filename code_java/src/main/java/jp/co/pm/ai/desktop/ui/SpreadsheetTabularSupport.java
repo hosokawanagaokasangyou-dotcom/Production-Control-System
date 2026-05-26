@@ -42,6 +42,8 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.text.Text;
+import javafx.scene.text.TextFlow;
 import javafx.util.Duration;
 
 import org.controlsfx.control.spreadsheet.Grid;
@@ -309,14 +311,67 @@ public final class SpreadsheetTabularSupport {
         }
         SpreadsheetCell cell = line.get(modelCol);
         Object item = cell.getItem();
-        if (item == null) {
-            return "";
+        String text = "";
+        if (item != null) {
+            text = cell.getCellType().toString(item);
+            if (text == null) {
+                text = item.toString();
+            }
         }
-        String text = cell.getCellType().toString(item);
-        if (text == null) {
-            text = item.toString();
+        if (text == null || text.isBlank()) {
+            String fromGraphic = plainTextFromSpreadsheetCellGraphic(cell);
+            if (!fromGraphic.isBlank()) {
+                return sanitizeSpreadsheetClipboardCell(fromGraphic);
+            }
         }
         return sanitizeSpreadsheetClipboardCell(text);
+    }
+
+    /** Graphic 表示セル（item 空）の Label テキストを改行連結して返す。 */
+    static String plainTextFromSpreadsheetCellGraphic(SpreadsheetCell cell) {
+        if (cell == null) {
+            return "";
+        }
+        Node graphic = cell.getGraphic();
+        if (graphic == null) {
+            return "";
+        }
+        List<String> lines = new ArrayList<>();
+        collectPlainTextLinesFromGraphicNode(graphic, lines);
+        if (lines.isEmpty()) {
+            return "";
+        }
+        return String.join("\n", lines);
+    }
+
+    private static void collectPlainTextLinesFromGraphicNode(Node node, List<String> lines) {
+        if (node == null) {
+            return;
+        }
+        if (node instanceof Label lbl) {
+            String t = lbl.getText();
+            if (t != null && !t.isBlank() && !"\u00a0".equals(t)) {
+                lines.add(t);
+            }
+            return;
+        }
+        if (node instanceof TextFlow flow) {
+            StringBuilder sb = new StringBuilder();
+            for (Node child : flow.getChildren()) {
+                if (child instanceof Text txt && txt.getText() != null) {
+                    sb.append(txt.getText());
+                }
+            }
+            if (!sb.isEmpty()) {
+                lines.add(sb.toString());
+            }
+            return;
+        }
+        if (node instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
+                collectPlainTextLinesFromGraphicNode(child, lines);
+            }
+        }
     }
 
     private static String sanitizeSpreadsheetClipboardCell(String text) {
