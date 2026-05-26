@@ -13259,12 +13259,71 @@ def build_task_queue_from_planning_df(
         )
         planning_sheet_row_seq += 1
 
+    _sync_roll_pipeline_start_date_req_min_for_same_request(task_queue)
+
     logging.info(
         "task_queue 構築完了: total=%s（配台試行によりスキップ %s 行）",
         len(task_queue),
         n_exclude_plan,
     )
     return task_queue
+
+
+def _sync_roll_pipeline_start_date_req_min_for_same_request(task_queue: list) -> None:
+    """
+    §B-2/§B-3: 同一依頼NO内で EC/検査/巻返し行の start_date_req が先行工程より遅いと、
+    先行完了後も start_date_req 未到達のままカレンダー終端まで進まない（例: W6-4）。
+    ロールパイプライン行は同一依頼NOの start_date_req 最小値に揃える。
+    """
+    by_tid: dict[str, list[tuple[dict, date]]] = {}
+    for t in task_queue or []:
+        tid = str(t.get("task_id") or "").strip()
+        if not tid:
+            continue
+        sdr = t.get("start_date_req")
+        if not isinstance(sdr, date):
+            continue
+        by_tid.setdefault(tid, []).append((t, sdr))
+    for tid, items in by_tid.items():
+        if not any(
+            t.get("roll_pipeline_ec")
+            or t.get("roll_pipeline_inspection")
+            or t.get("roll_pipeline_rewind")
+            for t, _ in items
+        ):
+            continue
+        min_sdr = min(sdr for _, sdr in items)
+        for t, sdr in items:
+            if not (
+                t.get("roll_pipeline_ec")
+                or t.get("roll_pipeline_inspection")
+                or t.get("roll_pipeline_rewind")
+            ):
+                continue
+            if sdr <= min_sdr:
+                continue
+            logging.info(
+                "roll_pipeline start_date_req 同期: 依頼NO=%s 工程=%s %s→%s",
+                tid,
+                t.get("machine_name") or t.get("machine"),
+                sdr.isoformat(),
+                min_sdr.isoformat(),
+            )
+            t["start_date_req"] = min_sdr
+            # #region agent log
+            _agent_debug_dispatch_trace(
+                "H-C",
+                "_core.py:_sync_roll_pipeline_start_date_req_min_for_same_request",
+                "roll_pipeline start_date_req を同一依頼内最小値へ同期",
+                {
+                    "previous_start_date_req": sdr.isoformat(),
+                    "synced_start_date_req": min_sdr.isoformat(),
+                    "machine": str(t.get("machine") or ""),
+                    "machine_name": str(t.get("machine_name") or ""),
+                },
+                task_id=tid,
+            )
+            # #endregion agent log
 
 
 def _task_id_priority_key(task_id):
