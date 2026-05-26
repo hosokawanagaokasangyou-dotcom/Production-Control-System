@@ -29,6 +29,15 @@ def run_stage2_generate_plan() -> None:
     """
     from planning_core import _core as pc
 
+    # #region agent log
+    try:
+        from planning_core import agent_debug_ndjson as _ad_boot
+
+        _ad_boot.bootstrap_child_debug_log("run_stage2_generate_plan")
+    except Exception as _boot_ex:
+        print(f"[agent-debug] bootstrap failed: {_boot_ex}", flush=True)
+    # #endregion agent log
+
     master_abs = pc._master_workbook_path_resolved()
     with pc._override_default_factory_hours_from_master(master_abs):
         pc._generate_plan_impl()

@@ -13,21 +13,22 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
 
 _ENV_DEBUG_LOG_KEYS = ("PM_AI_DEBUG_LOG", "CURSOR_DEBUG_LOG")
+_ENV_CURSOR_DEBUG_LOG = "PM_AI_CURSOR_DEBUG_LOG"
 _ENV_MIRROR = "PM_AI_DEBUG_LOG_MIRROR"
 _ENV_SESSION = "PM_AI_AGENT_DEBUG_SESSION"
 _ENV_REPO_ROOT = "PM_AI_REPO_ROOT"
 _ENV_WORKSPACE = "PM_AI_WORKSPACE"
 _DEFAULT_SESSION_ID = "e04a1d"
-_NESTED_REPO_LEAF = "production-control-system"
 
 
 def _log_path() -> str | None:
-    for key in _ENV_DEBUG_LOG_KEYS:
+    for key in (_ENV_CURSOR_DEBUG_LOG,) + _ENV_DEBUG_LOG_KEYS:
         p = (os.environ.get(key) or "").strip()
         if p:
             return p
@@ -109,14 +110,28 @@ def resolve_ndjson_path() -> str | None:
 
 
 def _write_targets() -> list[str]:
-    """一次パスと WSL ミラー（Java ``overlayPythonChildDebugEnv`` 付与）。"""
+    """一次パス・ミラー・リポジトリ固定サイドカー（エージェントが必ず読める経路）。"""
     out: list[str] = []
-    primary = resolve_ndjson_path()
-    if primary:
-        out.append(primary)
-    mirror = (os.environ.get(_ENV_MIRROR) or "").strip()
-    if mirror and mirror not in out:
-        out.append(mirror)
+    seen: set[str] = set()
+
+    def _add(path: str | None) -> None:
+        if not path:
+            return
+        p = os.path.abspath(path)
+        if p in seen:
+            return
+        seen.add(p)
+        out.append(p)
+
+    _add(resolve_ndjson_path())
+    _add((os.environ.get(_ENV_MIRROR) or "").strip() or None)
+
+    sid = session_id()
+    for repo in _repo_root_candidates():
+        _add(str(repo / ".cursor" / f"debug-{sid}.log"))
+        _add(str(repo / "log" / "agent_debug_latest.ndjson"))
+        _add(str(repo / "log" / f"agent_debug_{sid}.ndjson"))
+
     return out
 
 
@@ -126,7 +141,7 @@ def _append_line(path: str, json_line: str) -> bool:
         return False
     try:
         os.makedirs(parent_dir, exist_ok=True)
-        with open(path, "a", encoding="utf-8") as f:
+        with open(path, "a", encoding="utf-8", newline="\n") as f:
             f.write(json_line)
         return True
     except OSError:
@@ -140,12 +155,10 @@ def append_structured(
     data: dict[str, Any] | None = None,
 ) -> None:
     targets = _write_targets()
-    if not targets:
-        return
-    payload = data or {}
-    if "ndjson_path" not in payload:
-        payload = dict(payload)
+    payload = dict(data or {})
+    if targets and "ndjson_path" not in payload:
         payload["ndjson_path"] = targets[0]
+    payload.setdefault("write_targets", targets[:8])
     line_obj = {
         "sessionId": session_id(),
         "hypothesisId": hypothesis_id,
@@ -155,5 +168,34 @@ def append_structured(
         "timestamp": int(time.time() * 1000),
     }
     json_line = json.dumps(line_obj, ensure_ascii=False) + "\n"
+    wrote_any = False
     for path in targets:
-        _append_line(path, json_line)
+        if _append_line(path, json_line):
+            wrote_any = True
+    if not wrote_any:
+        try:
+            print(
+                f"[agent-debug-write-failed] {message} targets={targets!r}",
+                file=sys.stderr,
+                flush=True,
+            )
+        except Exception:
+            pass
+
+
+def bootstrap_child_debug_log(component: str = "python_child") -> None:
+    """段階2子プロセス起動直後に 1 行書き、NDJSON 経路が有効か確認する。"""
+    append_structured(
+        "H-LOG",
+        "agent_debug_ndjson.bootstrap_child_debug_log",
+        "Python 子プロセス NDJSON ブートストラップ",
+        {
+            "component": component,
+            "cwd": os.getcwd(),
+            "repo_root_candidates": [str(p) for p in _repo_root_candidates()],
+            "resolved_ndjson_path": resolve_ndjson_path(),
+            "pm_ai_debug_log": (os.environ.get("PM_AI_DEBUG_LOG") or "").strip(),
+            "pm_ai_debug_log_mirror": (os.environ.get(_ENV_MIRROR) or "").strip(),
+            "pm_ai_repo_root": (os.environ.get(_ENV_REPO_ROOT) or "").strip(),
+        },
+    )

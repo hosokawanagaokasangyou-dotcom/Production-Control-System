@@ -181,7 +181,10 @@ public final class MainShellController {
                     AppPaths.KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH,
                     AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH,
                     AppPaths.KEY_PM_AI_STAGE2_IN_PROGRESS_NEXT_DAY_DISPATCH_JSON,
-                    "PM_AI_DEBUG_LOG");
+                    "PM_AI_AGENT_DEBUG_SESSION",
+                    "PM_AI_DEBUG_LOG",
+                    AppPaths.KEY_PM_AI_CURSOR_DEBUG_LOG,
+                    AppPaths.KEY_PM_AI_DEBUG_LOG_MIRROR);
 
     private static final String PREFIX_CHILD = "[child] ";
     private static final String NDJSON_START = PREFIX_CHILD + "{";
@@ -3733,6 +3736,30 @@ public final class MainShellController {
                 refreshNetworkSourceDirListingSkipsBeforeStageRun(uiRun);
             }
             Map<String, String> childEnv = childEnvForPython(uiRun);
+            if (STAGE2.equals(script)) {
+                String dbgLog = childEnv.get("PM_AI_DEBUG_LOG");
+                String dbgSid = childEnv.get("PM_AI_AGENT_DEBUG_SESSION");
+                appendLog(
+                        "[stage2-debug] NDJSON session="
+                                + (dbgSid != null ? dbgSid : "")
+                                + " log="
+                                + (dbgLog != null ? dbgLog : "（未解決）"));
+                AgentDebugLog.appendStructured(
+                        collectUiEnv(),
+                        dbgSid != null && !dbgSid.isBlank()
+                                ? dbgSid
+                                : AgentDebugLog.DEFAULT_SESSION_ID,
+                        "H-LOG",
+                        "MainShellController.runStage",
+                        "段階2子プロセス起動直前",
+                        Map.of(
+                                "script",
+                                script,
+                                "pm_ai_debug_log",
+                                dbgLog != null ? dbgLog : "",
+                                "pm_ai_agent_debug_session",
+                                dbgSid != null ? dbgSid : ""));
+            }
             if (lastNetworkSourceResolution != null) {
                 for (String line : lastNetworkSourceResolution.logLines()) {
                     appendLog(line);

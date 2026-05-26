@@ -1631,6 +1631,9 @@ def _agent_debug_dispatch_day_block_reason(
         return ("H-C", "same_request_dependency")
     if task.get("_dispatch_block_no_op_on_working_days"):
         return ("H-E", "no_op_on_working_days")
+    _sr = _agent_debug_special_rule_block_reason(task, task_queue)
+    if _sr is not None:
+        return _sr
     task_ids_today = {
         id(t)
         for t in tasks_today
@@ -20339,6 +20342,45 @@ def _wip_ec_l11_aggregate_is_global() -> bool:
     return WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE == "global"
 
 
+def _agent_debug_special_rule_block_reason(
+    task: dict, task_queue: list
+) -> tuple[str, str] | None:
+    """特別ルール（L11/L10/B-6 等）による当日候補除外の理由。トレース用。"""
+    if float(task.get("remaining_units") or 0) <= 1e-12:
+        return None
+    if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
+        if task.get("roll_pipeline_ec"):
+            if _wip_ec_l11_aggregate_is_global():
+                _wip_use = _wip_ec_before_insp_roll_count(task_queue)
+                _mode = "global"
+            else:
+                _m = WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE
+                if _m == "task_id":
+                    _wip_use = _wip_ec_before_insp_roll_count(
+                        task_queue,
+                        task_id_exact=str(task.get("task_id") or "").strip(),
+                    )
+                else:
+                    _wip_use = _wip_ec_before_insp_roll_count(
+                        task_queue,
+                        task_id_head=_wip_l11_bucket_key_for_task_id(
+                            str(task.get("task_id") or "")
+                        ),
+                    )
+                _mode = _m
+            if _wip_use >= float(WIP_LIMIT_EC_BEFORE_INSP_ROLLS):
+                return (
+                    "H-SR-L11",
+                    f"wip_ec_before_insp={_wip_use:.4f} limit={WIP_LIMIT_EC_BEFORE_INSP_ROLLS} mode={_mode}",
+                )
+    if _trial_order_hard_precheck_blocks_assign_probe(task, task_queue):
+        if _l10_b41_sec_blocked_by_slit_min_rolls(task, task_queue):
+            return ("H-SR-L10", "l10_sec_blocked_by_slit_min_rolls")
+        if _b61_sec_blocked_by_connection_min_rolls(task, task_queue):
+            return ("H-SR-B6", "b61_sec_blocked_by_connection_min_rolls")
+    return None
+
+
 WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS = os.environ.get(
     "WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS", "20"
 ).strip()
@@ -36362,6 +36404,12 @@ def _generate_plan_impl(
                     if isinstance(_calendar_last_plan_day, date)
                     else str(_calendar_last_plan_day),
                     "plan_day_count": len(_master_plan_dates_template),
+                    "special_rule_wip_limits": {
+                        "L11_ec_before_insp": WIP_LIMIT_EC_BEFORE_INSP_ROLLS,
+                        "L11_aggregate_mode": WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE,
+                        "L10_slit_before_sec": WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS,
+                        "B6_connection_before_sec": WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS,
+                    },
                     "row_count": len(_rows_tr),
                     "rows": [
                         {

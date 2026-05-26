@@ -447,6 +447,7 @@ public final class AgentDebugLog {
         env.put("PM_AI_AGENT_DEBUG_SESSION", sid);
         Path resolved = resolveEffectiveNdjsonPathForChildEnv(env, sid);
         env.put("PM_AI_DEBUG_LOG", resolved.toString());
+        env.put(AppPaths.KEY_PM_AI_CURSOR_DEBUG_LOG, resolved.toString());
         overlayMirrorEnvForPython(env, resolved);
     }
 
