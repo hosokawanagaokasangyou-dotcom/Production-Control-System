@@ -33,6 +33,7 @@ import javafx.stage.Stage;
 import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreview;
 import jp.co.pm.ai.desktop.dispatch.OvertimeSimulationEditState;
 import jp.co.pm.ai.desktop.dispatch.OvertimeSimulationOverridesWriter;
+import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 
 /**
  * 段階3.5 残業シミュレーション: 勤怠表（○/グレー）と残業時間（分）を編集し、段階3実行へ進むウィザード。
@@ -70,7 +71,9 @@ public final class OvertimeSimulationWizard {
             Consumer<Path> onRunStage3) {
         Objects.requireNonNull(preview, "preview");
         Objects.requireNonNull(onRunStage3, "onRunStage3");
-        OvertimeSimulationEditState state = new OvertimeSimulationEditState(preview);
+        AttendanceOvertimePreview.Preview windowed =
+                AttendanceOvertimePreview.limitToDefaultOvertimeSimWindow(preview);
+        OvertimeSimulationEditState state = new OvertimeSimulationEditState(windowed);
         showDialog(owner, shell, state, onRunStage3);
     }
 
@@ -192,6 +195,7 @@ public final class OvertimeSimulationWizard {
         TableView<GridRow> table = new TableView<>(FXCollections.observableArrayList(rows));
         table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
         table.getStyleClass().add("overtime-simulation-grid");
+        SpreadsheetTabularSupport.installPmAiReadableTableChrome(table);
         table.getColumns().add(buildNameColumn());
         table.getColumns().add(buildKindColumn());
         for (TableColumn<GridRow, String> dc : buildDateColumns(state)) {
@@ -326,6 +330,7 @@ public final class OvertimeSimulationWizard {
                                     setGraphic(null);
                                     setText(null);
                                     getStyleClass().remove("overtime-sim-cell-off");
+                                    getStyleClass().remove("pm-ai-readable-date-cell");
                                     return;
                                 }
                                 GridRow row = getTableRow().getItem();
@@ -347,11 +352,7 @@ public final class OvertimeSimulationWizard {
                                 if (row.kind() == RowKind.ATTENDANCE) {
                                     setGraphic(attendanceLabel);
                                     attendanceLabel.setText(cs.currentWorking() ? "○" : "");
-                                    if (cs.currentWorking()) {
-                                        getStyleClass().remove("overtime-sim-cell-off");
-                                    } else if (!getStyleClass().contains("overtime-sim-cell-off")) {
-                                        getStyleClass().add("overtime-sim-cell-off");
-                                    }
+                                    applyDateCellStyleClasses(cs.currentWorking());
                                     setTooltip(
                                             new Tooltip(
                                                     "ダブルクリック: "
@@ -360,7 +361,7 @@ public final class OvertimeSimulationWizard {
                                                                     : "グレーを解除して○（休日出勤）")));
                                 } else {
                                     if (cs.currentWorking()) {
-                                        getStyleClass().remove("overtime-sim-cell-off");
+                                        applyDateCellStyleClasses(true);
                                         overtimeField.setDisable(false);
                                         int show = cs.currentOvertimeMinutes();
                                         String want = show > 0 ? String.valueOf(show) : "";
@@ -371,9 +372,7 @@ public final class OvertimeSimulationWizard {
                                         setGraphic(overtimeField);
                                         setTooltip(new Tooltip("残業時間（分）1〜720"));
                                     } else {
-                                        if (!getStyleClass().contains("overtime-sim-cell-off")) {
-                                            getStyleClass().add("overtime-sim-cell-off");
-                                        }
+                                        applyDateCellStyleClasses(false);
                                         overtimeField.setDisable(true);
                                         overtimeField.clear();
                                         setGraphic(null);
@@ -397,10 +396,20 @@ public final class OvertimeSimulationWizard {
                                     return;
                                 }
                                 attendanceLabel.setText(cs.currentWorking() ? "○" : "");
-                                if (cs.currentWorking()) {
+                                applyDateCellStyleClasses(cs.currentWorking());
+                            }
+
+                            private void applyDateCellStyleClasses(boolean working) {
+                                if (working) {
                                     getStyleClass().remove("overtime-sim-cell-off");
-                                } else if (!getStyleClass().contains("overtime-sim-cell-off")) {
-                                    getStyleClass().add("overtime-sim-cell-off");
+                                    if (!getStyleClass().contains("pm-ai-readable-date-cell")) {
+                                        getStyleClass().add("pm-ai-readable-date-cell");
+                                    }
+                                } else {
+                                    getStyleClass().remove("pm-ai-readable-date-cell");
+                                    if (!getStyleClass().contains("overtime-sim-cell-off")) {
+                                        getStyleClass().add("overtime-sim-cell-off");
+                                    }
                                 }
                             }
                         });

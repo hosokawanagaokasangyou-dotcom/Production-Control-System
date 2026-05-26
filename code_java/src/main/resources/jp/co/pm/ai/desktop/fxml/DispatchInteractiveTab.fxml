@@ -47,7 +47,13 @@
         <CheckBox fx:id="showStage3AfterQtyLineCheck" mnemonicParsing="false" selected="true"
                   text="(段階3後)">
             <tooltip>
-                <Tooltip text="日付セル内の (段階3後)/(段階3改) 行の表示/非表示"/>
+                <Tooltip text="日付セル内の (段階3後)/(段階3改) 行の表示/非表示（段階3.5試行後は段階3.5前の実配台）"/>
+            </tooltip>
+        </CheckBox>
+        <CheckBox fx:id="showStage35AfterQtyLineCheck" mnemonicParsing="false" selected="true"
+                  text="(段階3.5後)">
+            <tooltip>
+                <Tooltip text="日付セル内の (段階3.5後) 行の表示/非表示（段階3.5試行後の実配台）"/>
             </tooltip>
         </CheckBox>
         <Button fx:id="alignToAladdinPlanButton" mnemonicParsing="false" text="アラジン計画に合わせる"
