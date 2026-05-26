@@ -59,9 +59,6 @@ $env:STAGE2_SKIP_SNAPSHOT_EXPORT = "1"
 $env:STAGE2_SKIP_SHEET_VISIBILITY_APPLY = "1"
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
-$env:PM_AI_AGENT_DEBUG_TRACE_TASK_ID = "W6-4"
-$env:PM_AI_AGENT_DEBUG_SESSION = "55255a"
-$env:PM_AI_DEBUG_LOG = Join-Path $RepoRoot ".cursor\debug-55255a.log"
 
 Set-Location $pyDir
 Write-Host "[stage2-headless] repo=$RepoRoot"
