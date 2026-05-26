@@ -29,6 +29,22 @@ if (-not $MasterWorkbook) {
         $MasterWorkbook = $localMaster
     }
 }
+if (-not $MasterWorkbook) {
+    $defaultsJson = Join-Path $RepoRoot "init_setting\session_defaults_kokubu.json"
+    if (Test-Path -LiteralPath $defaultsJson) {
+        try {
+            $raw = Get-Content -LiteralPath $defaultsJson -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($row in $raw.uiEnvRows) {
+                if ($row.name -eq "PM_AI_MASTER_WORKBOOK" -and $row.value) {
+                    $MasterWorkbook = [string]$row.value
+                    break
+                }
+            }
+        } catch {
+            Write-Host "[stage2-headless] session_defaults master read failed: $_"
+        }
+    }
+}
 
 if (-not $MasterWorkbook) {
     Write-Error "PM_AI_MASTER_WORKBOOK is not set and master.xlsm was not found under RepoRoot=$RepoRoot"
@@ -53,5 +69,13 @@ Write-Host "[stage2-headless] master=$MasterWorkbook"
 Write-Host "[stage2-headless] cwd=$pyDir"
 Write-Host "[stage2-headless] log=$logOut"
 
-& py -3.14 -X utf8 -u plan_simulation_stage2.py 2>&1 | Tee-Object -FilePath $logOut
-exit $LASTEXITCODE
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+$pyArgs = @("-3.14", "-X", "utf8", "-u", "plan_simulation_stage2.py")
+$proc = Start-Process -FilePath "py" -ArgumentList $pyArgs -WorkingDirectory $pyDir `
+    -RedirectStandardOutput $logOut -RedirectStandardError (Join-Path $RepoRoot "log\stage2_headless_stderr.txt") `
+    -NoNewWindow -Wait -PassThru
+$exitCode = $proc.ExitCode
+$ErrorActionPreference = $prevEap
+Write-Host "[stage2-headless] exit=$exitCode"
+exit $exitCode

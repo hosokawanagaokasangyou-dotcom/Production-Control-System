@@ -1515,6 +1515,41 @@ def _agent_debug_trace_task_enabled(task_id) -> bool:
     return str(task_id or "").strip() in _AGENT_DEBUG_TRACE_TASK_IDS
 
 
+def _agent_debug_trace_plan_row_skip(
+    task_id: str,
+    reason: str,
+    row,
+    *,
+    extra: dict | None = None,
+) -> None:
+    if not _agent_debug_trace_task_enabled(task_id):
+        return
+    payload = dict(extra or {})
+    payload.setdefault(
+        "machine",
+        str(row.get(TASK_COL_MACHINE, "") if hasattr(row, "get") else ""),
+    )
+    payload.setdefault(
+        "machine_name",
+        str(row.get(TASK_COL_MACHINE_NAME, "") if hasattr(row, "get") else ""),
+    )
+    if hasattr(row, "get"):
+        if TASK_COL_UNPROCESSED in row.index if hasattr(row, "index") else False:
+            payload["unprocessed"] = str(row.get(TASK_COL_UNPROCESSED, ""))
+        payload["dispatch_plan_exclude"] = str(
+            row.get(PLAN_COL_STAGE2_DISPATCH_PLAN_EXCLUDE_MARKER, "")
+            if PLAN_COL_STAGE2_DISPATCH_PLAN_EXCLUDE_MARKER in getattr(row, "index", ())
+            else row.get("配台不要", "")
+        )
+    _agent_debug_dispatch_trace(
+        "H-PLAN",
+        "_core.py:build_task_queue:plan_row_skip",
+        reason,
+        payload,
+        task_id=task_id,
+    )
+
+
 def _agent_debug_dispatch_trace(
     hypothesis_id: str,
     location: str,
@@ -1642,6 +1677,103 @@ def _agent_debug_dispatch_day_block_reason(
     if id(task) not in task_ids_today:
         return ("H-C", "not_in_tasks_today")
     return ("H-G", "eligible_but_unassigned")
+
+
+def _agent_debug_eligible_unassigned_probe(
+    task: dict,
+    task_queue: list,
+    current_date: date,
+    *,
+    daily_status: dict | None = None,
+    members: list | None = None,
+    machine_avail_dt: dict | None = None,
+    machine_day_start: datetime | None = None,
+    machine_handoff: dict | None = None,
+    skills_dict: dict | None = None,
+    dispatch_interval_mirror=None,
+) -> dict:
+    """H-G（eligible_but_unassigned）の直接ブロック要因を日次終了時点で収集。"""
+    machine = task.get("machine")
+    eq_line = str(task.get("equipment_line_key") or machine or "").strip() or machine
+    machine_occ_key = _machine_occupancy_key_resolve(task, eq_line)
+    try:
+        my_o = int(task.get("dispatch_trial_order") or 10**9)
+    except (TypeError, ValueError):
+        my_o = 10**9
+    probe: dict = {
+        "dispatch_trial_order": my_o,
+        "machine_occ_key": machine_occ_key,
+        "remaining_units": float(task.get("remaining_units") or 0),
+        "no_op_block": bool(task.get("_dispatch_block_no_op_on_working_days")),
+    }
+    if daily_status is None or members is None:
+        return probe
+    probe["min_pending_dispatch_order"] = _min_pending_dispatch_trial_order_for_date(
+        task_queue,
+        current_date,
+        daily_status=daily_status,
+        members=members,
+        machine_avail_dt=machine_avail_dt,
+        machine_day_start=machine_day_start,
+        machine_handoff=machine_handoff,
+        skills_dict=skills_dict,
+        dispatch_interval_mirror=dispatch_interval_mirror,
+    )
+    probe["global_trial_order_blocked"] = _task_blocked_by_global_dispatch_trial_order(
+        task,
+        task_queue,
+        current_date,
+        daily_status=daily_status,
+        members=members,
+        machine_avail_dt=machine_avail_dt,
+        machine_day_start=machine_day_start,
+        machine_handoff=machine_handoff,
+        skills_dict=skills_dict,
+        dispatch_interval_mirror=dispatch_interval_mirror,
+    )
+    probe["equipment_line_lower_pending"] = _equipment_line_lower_dispatch_trial_still_pending(
+        task_queue,
+        machine_occ_key,
+        my_o,
+        current_date,
+        daily_status=daily_status,
+        members=members,
+        machine_avail_dt=machine_avail_dt,
+        machine_day_start=machine_day_start,
+        machine_handoff=machine_handoff,
+        skills_dict=skills_dict,
+        dispatch_interval_mirror=dispatch_interval_mirror,
+    )
+    blockers: list[dict] = []
+    for t in task_queue:
+        if float(t.get("remaining_units") or 0) <= 1e-12:
+            continue
+        sdr = t.get("start_date_req")
+        if not isinstance(sdr, date) or sdr > current_date:
+            continue
+        _tm = t.get("machine")
+        _eqt = str(t.get("equipment_line_key") or _tm or "").strip() or (_tm or "")
+        if _machine_occupancy_key_resolve(t, _eqt) != machine_occ_key:
+            continue
+        try:
+            o = int(t.get("dispatch_trial_order") or 10**9)
+        except (TypeError, ValueError):
+            o = 10**9
+        if o >= my_o:
+            continue
+        blockers.append(
+            {
+                "task_id": str(t.get("task_id") or ""),
+                "machine": str(t.get("machine") or ""),
+                "dispatch_trial_order": o,
+                "remaining_units": float(t.get("remaining_units") or 0),
+                "dependency_blocked": _task_not_yet_schedulable_due_to_dependency_or_b2_room(
+                    t, task_queue
+                ),
+            }
+        )
+    probe["lower_order_same_machine"] = blockers[:12]
+    return probe
 # #endregion agent log
 
 
@@ -12917,16 +13049,24 @@ def build_task_queue_from_planning_df(
     _plan_df_reset_effective_roll_unit_ilocs(tasks_df)
 
     for planning_df_iloc, (row_idx, row) in enumerate(tasks_df.iterrows()):
+        task_id = planning_task_id_str_from_plan_row(row)
         if row_has_completion_keyword(row):
+            _agent_debug_trace_plan_row_skip(task_id, "completion_keyword", row)
             continue
         if _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(row):
+            _agent_debug_trace_plan_row_skip(
+                task_id, "mikan_unprocessed_zero_actual_done", row
+            )
             continue
-        task_id = planning_task_id_str_from_plan_row(row)
         if _plan_row_exclude_from_assignment(row):
             n_exclude_plan += 1
+            _agent_debug_trace_plan_row_skip(task_id, "exclude_from_assignment", row)
             continue
         if _plan_row_stage2_dispatch_plan_excluded(row):
             n_exclude_plan += 1
+            _agent_debug_trace_plan_row_skip(
+                task_id, "stage2_dispatch_plan_excluded", row
+            )
             continue
 
         machine = str(row.get(TASK_COL_MACHINE, "")).strip()
@@ -20373,6 +20513,40 @@ def _agent_debug_special_rule_block_reason(
                     "H-SR-L11",
                     f"wip_ec_before_insp={_wip_use:.4f} limit={WIP_LIMIT_EC_BEFORE_INSP_ROLLS} mode={_mode}",
                 )
+    if isinstance(WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS, int) and WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS > 0:
+        if _task_on_slit_sec_process_path(task):
+            proc = _normalize_process_name_for_rule_match(task.get("machine"))
+            mach = _normalize_equipment_match_key(task.get("machine_name"))
+            if (
+                proc == _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
+                and mach == _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
+            ):
+                slit_done_total = 0.0
+                sec_done_total = 0.0
+                _slit_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
+                _slit_mach = _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
+                _sec_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+                _sec_mach = _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
+                for _t in task_queue:
+                    _p = _normalize_process_name_for_rule_match(_t.get("machine"))
+                    _m = _normalize_equipment_match_key(_t.get("machine_name"))
+                    if not _p or not _m:
+                        continue
+                    _init = float(_t.get("initial_remaining_units") or 0)
+                    _rem = float(_t.get("remaining_units") or 0)
+                    _done = max(0.0, _init - _rem)
+                    if _done <= 1e-12:
+                        continue
+                    if _p == _slit_proc and _m == _slit_mach:
+                        slit_done_total += _done
+                    elif _p == _sec_proc and _m == _sec_mach:
+                        sec_done_total += _done
+                _wip = max(0.0, slit_done_total - sec_done_total)
+                if _wip >= float(WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS):
+                    return (
+                        "H-SR-L10",
+                        f"wip_slit_before_sec={_wip:.4f} limit={WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS}",
+                    )
     if _trial_order_hard_precheck_blocks_assign_probe(task, task_queue):
         if _l10_b41_sec_blocked_by_slit_min_rolls(task, task_queue):
             return ("H-SR-L10", "l10_sec_blocked_by_slit_min_rolls")
@@ -20428,6 +20602,20 @@ SPECIAL_WIP_CONNECTION_MACHINE = "熱融着機　湖南"
 # **同一依頼NO** のスリット完了 − SEC 完了。
 # 工場全体の wip_slit_before_sec を使うと、他依頼の SEC が進むと差が sleみ、当依頼のスリットを完走しても
 # SEC 行が候補外のまま残る（配台不可）ため、依頼単位の差のみを見る。
+def _task_on_slit_sec_process_path(task: dict) -> bool:
+    """加工内容トークンがスリット→SEC の依頼NO経路か（L10 総量制約の対象）。"""
+    toks = task.get("process_content_tokens") or []
+    norm = [_normalize_process_name_for_rule_match(x) for x in toks]
+    slit_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
+    sec_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SEC_PROCESS)
+    if slit_proc not in norm or sec_proc not in norm:
+        return False
+    try:
+        return norm.index(slit_proc) < norm.index(sec_proc)
+    except ValueError:
+        return False
+
+
 def _l10_slit_done_minus_sec_done_for_task_id(task_queue: list, task_id: str) -> float:
     tid = (task_id or "").strip()
     if not tid:
@@ -21628,6 +21816,154 @@ def _reorder_task_queue_b2_ec_inspection_consecutive(task_queue: list) -> None:
         )
 
 
+def _normalize_dispatch_trial_order_by_process_sequence_within_task_id(
+    task_queue: list,
+) -> None:
+    """
+    §A-1: 加工内容由来の process_sequence_rank がある同一依頼NO内では、
+    配台試行順番を rank 昇順に揃える（シート行順が EC→検査→スリット 等と逆でも、
+    例: W6-4 の スリット→EC→検査 を試行順でも先に回せるようにする）。
+    当該依頼NOグループが占める試行順番の数値集合は変えず、割当のみ入れ替える。
+    """
+    if len(task_queue) < 2:
+        return
+    by_tid: dict[str, list] = defaultdict(list)
+    for t in task_queue:
+        tid = str(t.get("task_id") or "").strip()
+        if tid:
+            by_tid[tid].append(t)
+    for tid, group in by_tid.items():
+        if len(group) < 2:
+            continue
+        ranks = [_task_rank_int_or_none(t) for t in group]
+        if any(r is None for r in ranks):
+            continue
+        order_vals: list[int] = []
+        for t in group:
+            raw = t.get("dispatch_trial_order")
+            if raw is None:
+                raw = t.get("dispatch_trial_order_from_sheet")
+            try:
+                order_vals.append(int(raw))
+            except (TypeError, ValueError):
+                order_vals = []
+                break
+        if len(order_vals) != len(group) or len(set(order_vals)) != len(group):
+            continue
+        sorted_orders = sorted(order_vals)
+        before = [
+            {
+                "machine": str(t.get("machine") or ""),
+                "rank": _task_rank_int_or_none(t),
+                "dispatch_trial_order": int(
+                    t.get("dispatch_trial_order")
+                    or t.get("dispatch_trial_order_from_sheet")
+                    or 0
+                ),
+            }
+            for t in group
+        ]
+        for t, new_order in zip(
+            sorted(group, key=lambda x: (_task_rank_int_or_none(x), int(x.get("same_request_line_seq") or 0))),
+            sorted_orders,
+        ):
+            t["dispatch_trial_order"] = new_order
+            if t.get("dispatch_trial_order_from_sheet") is not None:
+                t["dispatch_trial_order_from_sheet"] = new_order
+        after = [
+            {
+                "machine": str(t.get("machine") or ""),
+                "rank": _task_rank_int_or_none(t),
+                "dispatch_trial_order": int(t.get("dispatch_trial_order") or 0),
+            }
+            for t in group
+        ]
+        if before != after:
+            logging.info(
+                "§A-1 配台試行順: 加工内容順に同一依頼NO内の試行順を揃えた 依頼NO=%s before=%s after=%s",
+                tid,
+                before,
+                after,
+            )
+            # #region agent log
+            _agent_debug_dispatch_trace(
+                "H-C",
+                "_core.py:_normalize_dispatch_trial_order_by_process_sequence_within_task_id",
+                "加工内容 rank に沿って同一依頼内の配台試行順を入替",
+                {"before": before, "after": after},
+                task_id=tid,
+            )
+            # #endregion agent log
+
+
+def _reorder_task_queue_process_sequence_within_task_id(task_queue: list) -> None:
+    """
+    §A-1: 同一依頼NO内で process_sequence_rank 昇順に行を隣接させる。
+    段階1の配台試行順 1..n 付与前に呼び、複数工程依頼（例: W6-4）が
+    スリット→EC→検査 の連続ブロック＋連番になるようにする。
+    """
+    if len(task_queue) < 2:
+        return
+    moved: list[str] = []
+    max_rounds = max(len(task_queue) * 2, 4)
+    for _ in range(max_rounds):
+        by_tid: dict[str, list[tuple[int, dict]]] = defaultdict(list)
+        for i, t in enumerate(task_queue):
+            tid = str(t.get("task_id") or "").strip()
+            if tid:
+                by_tid[tid].append((i, t))
+        candidate: tuple[str, list[tuple[int, dict]]] | None = None
+        candidate_min: int | None = None
+        for tid, items in by_tid.items():
+            if len(items) < 2:
+                continue
+            if any(_task_rank_int_or_none(t) is None for _, t in items):
+                continue
+            sorted_items = sorted(
+                items,
+                key=lambda x: (
+                    _task_rank_int_or_none(x[1]),
+                    int(x[1].get("same_request_line_seq") or 0),
+                    x[0],
+                ),
+            )
+            indices = [i for i, _ in items]
+            sorted_indices = [i for i, _ in sorted_items]
+            if len(sorted_indices) >= 2 and all(
+                sorted_indices[i] == sorted_indices[0] + i
+                for i in range(len(sorted_indices))
+            ):
+                ranks_in_queue = [
+                    _task_rank_int_or_none(t)
+                    for _, t in sorted(items, key=lambda x: x[0])
+                ]
+                ranks_expected = [
+                    _task_rank_int_or_none(t) for _, t in sorted_items
+                ]
+                if ranks_in_queue == ranks_expected:
+                    continue
+            insert_at = min(indices)
+            if candidate is None or insert_at < candidate_min:
+                candidate = (tid, sorted_items)
+                candidate_min = insert_at
+        if candidate is None:
+            break
+        tid, sorted_items = candidate
+        indices = sorted([i for i, _ in sorted_items], reverse=True)
+        tasks_ordered = [t for _, t in sorted_items]
+        insert_at = min(i for i, _ in sorted_items)
+        for idx in indices:
+            task_queue.pop(idx)
+        for j, t in enumerate(tasks_ordered):
+            task_queue.insert(insert_at + j, t)
+        moved.append(tid)
+    if moved:
+        logging.info(
+            "§A-1 配台試行順: 加工内容順に同一依頼NO内の行を隣接した依頼NO: %s",
+            ",".join(dict.fromkeys(moved)),
+        )
+
+
 def _assign_sequential_dispatch_trial_order(task_queue: list) -> None:
     """
     `task_queue` のリスト順に合わせで `dispatch_trial_order` を 1..n へ付け直れ。
@@ -21679,7 +22015,9 @@ def _finalize_dispatch_trial_pattern_queue_after_pattern_sort(
     _reorder_task_queue_slit_sec_consecutive(task_queue)
     _reorder_task_queue_connection_sec_consecutive(task_queue)
     _reorder_task_queue_in_progress_front_stable(task_queue)
+    _reorder_task_queue_process_sequence_within_task_id(task_queue)
     _assign_sequential_dispatch_trial_order(task_queue)
+    _normalize_dispatch_trial_order_by_process_sequence_within_task_id(task_queue)
 
 
 def _due_basis_date_for_dispatch_pattern_sort(t: dict) -> date:
@@ -23561,6 +23899,7 @@ def _apply_dispatch_trial_order_for_generate_plan(
         )
         for t in task_queue:
             t["dispatch_trial_order"] = int(t.get("dispatch_trial_order_from_sheet") or 10**9)
+        _normalize_dispatch_trial_order_by_process_sequence_within_task_id(task_queue)
         logging.info(
             "配台試行順番: 「%s」列の値をしのまま使用しました（全 %s 行）。",
             RESULT_TASK_COL_DISPATCH_TRIAL_ORDER,
@@ -23575,7 +23914,9 @@ def _apply_dispatch_trial_order_for_generate_plan(
     _reorder_task_queue_b2_ec_inspection_consecutive(task_queue)
     _reorder_task_queue_slit_sec_consecutive(task_queue)
     _reorder_task_queue_connection_sec_consecutive(task_queue)
+    _reorder_task_queue_process_sequence_within_task_id(task_queue)
     _assign_sequential_dispatch_trial_order(task_queue)
+    _normalize_dispatch_trial_order_by_process_sequence_within_task_id(task_queue)
     logging.info(
         "配台試行順番: マスタ・タスク入力から自動計算し 1..%s を付与しました。",
         len(task_queue),
@@ -31344,6 +31685,7 @@ def _trial_order_flow_eligible_tasks(
                 ):
                     continue
         # L10: SEC前WIPが限界以上ならスリットをブロック（SECは進めてWIP解消）
+        # 対象は加工内容がスリット→SEC の依頼のみ（例: W6-4 スリット,EC,検査 は対象外）
         if wip_slit_before_sec is not None and wip_slit_before_sec >= float(
             WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS
         ):
@@ -31352,6 +31694,7 @@ def _trial_order_flow_eligible_tasks(
             if (
                 proc == _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
                 and mach == _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
+                and _task_on_slit_sec_process_path(task)
             ):
                 continue
 
@@ -32543,6 +32886,26 @@ def _assign_one_roll_trial_order_flow(
                     _prev_mach_before_co.strftime("%Y-%m-%d %H:%M"),
                     machine_occ_key,
                 )
+            elif len(capable_members) < int(req_num or 1):
+                task["_dispatch_block_no_op_on_working_days"] = True
+                # #region agent log
+                _agent_debug_dispatch_trace(
+                    "H-E",
+                    "_core.py:assign_team:skill_shortage",
+                    "稼働日にスキル候補不足で必須人数を満たせない",
+                    {
+                        "day": current_date.isoformat()
+                        if isinstance(current_date, date)
+                        else str(current_date),
+                        "machine": machine,
+                        "machine_name": machine_name,
+                        "capable_count": len(capable_members),
+                        "req_num": int(req_num or 1),
+                        "op_today": bool(op_today),
+                    },
+                    task_id=task.get("task_id"),
+                )
+                # #endregion agent log
             elif (
                 len(capable_members) >= int(req_num or 1)
                 and not op_today
@@ -32741,6 +33104,7 @@ def _trial_order_hard_precheck_blocks_assign_probe(task: dict, task_queue: list)
         if (
             proc == _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
             and mach == _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
+            and _task_on_slit_sec_process_path(task)
         ):
             return True
     if wip_connection_before_sec is not None and wip_connection_before_sec >= float(
@@ -32877,6 +33241,8 @@ def _tasks_in_min_pending_dispatch_pool(
             abolish_all_scheduling_limits=abolish_all_scheduling_limits,
             dispatch_interval_mirror=dispatch_interval_mirror,
         ):
+            continue
+        if t.get("_dispatch_block_no_op_on_working_days"):
             continue
         out.append(t)
     return out
@@ -33097,6 +33463,7 @@ def _trial_order_first_schedule_pass(
             "dispatch_interval_mirror": dispatch_interval_mirror,
         }
     _min_dispatch_eff: int | None = None
+    _pool_min: list = []
     if STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT and _assign_probe_ctx:
         _pool_min = _tasks_in_min_pending_dispatch_pool(
             task_queue,
@@ -33145,6 +33512,46 @@ def _trial_order_first_schedule_pass(
             ]
         if not eligible:
             return False
+    # #region agent log
+    if _agent_debug_trace_task_enabled("W6-4"):
+        _slit_el = [
+            t
+            for t in eligible
+            if str(t.get("task_id") or "").strip() == "W6-4"
+            and _normalize_process_name_for_rule_match(t.get("machine"))
+            == _normalize_process_name_for_rule_match("スリット")
+        ]
+        _slit_today = [
+            t
+            for t in tasks_today
+            if str(t.get("task_id") or "").strip() == "W6-4"
+            and _normalize_process_name_for_rule_match(t.get("machine"))
+            == _normalize_process_name_for_rule_match("スリット")
+            and float(t.get("remaining_units") or 0) > 1e-12
+        ]
+        if _slit_today and (
+            isinstance(current_date, date)
+            and current_date >= date(2026, 6, 13)
+        ):
+            _agent_debug_dispatch_trace(
+                "H-V6",
+                "_core.py:_trial_order_first_schedule_pass:slit_eligible",
+                "W6-4 スリット eligible 判定",
+                {
+                    "day": current_date.isoformat(),
+                    "min_dispatch_effective": _min_dispatch_eff,
+                    "pool_min_count": len(_pool_min),
+                    "slit_in_eligible": bool(_slit_el),
+                    "slit_remaining": float(
+                        _slit_today[0].get("remaining_units") or 0
+                    ),
+                    "slit_no_op_block": bool(
+                        _slit_today[0].get("_dispatch_block_no_op_on_working_days")
+                    ),
+                },
+                task_id="W6-4",
+            )
+    # #endregion agent log
     eligible_sorted = sorted(
         eligible,
         key=lambda t: (
@@ -33353,6 +33760,48 @@ def _trial_order_first_schedule_pass(
                 timeline_events=timeline_events,
             )
             if res is None:
+                # #region agent log
+                if _agent_debug_trace_task_enabled(task.get("task_id")):
+                    _eq_dbg = str(
+                        task.get("equipment_line_key") or task.get("machine") or ""
+                    ).strip() or str(task.get("machine") or "")
+                    _mok_dbg = _machine_occupancy_key_resolve(task, _eq_dbg)
+                    _fail_data: dict = {
+                        "day": current_date.isoformat()
+                        if isinstance(current_date, date)
+                        else str(current_date),
+                        "machine": str(task.get("machine") or ""),
+                        "remaining_units": float(task.get("remaining_units") or 0),
+                        "rolls_done": rolls_done,
+                        "machine_occ_key": _mok_dbg,
+                        "machine_avail_dt": str(
+                            machine_avail_dt.get(_mok_dbg)
+                        )
+                        if _mok_dbg in machine_avail_dt
+                        else None,
+                    }
+                    if _assign_probe_ctx is not None:
+                        _fail_data["assign_probe_fails"] = (
+                            _trial_order_assign_probe_fails(
+                                task,
+                                current_date,
+                                daily_status,
+                                _assign_probe_ctx,
+                            )
+                        )
+                        _fail_data["hard_precheck_blocks"] = (
+                            _trial_order_hard_precheck_blocks_assign_probe(
+                                task, task_queue
+                            )
+                        )
+                    _agent_debug_dispatch_trace(
+                        "H-H4" if rolls_done == 0 else "H-H5",
+                        "_core.py:_drain_rolls_for_task:assign_none",
+                        "assign_one_roll が None でドレイン停止",
+                        _fail_data,
+                        task_id=str(task.get("task_id") or ""),
+                    )
+                # #endregion agent log
                 break
             done_units = 1
             if task.get("roll_pipeline_inspection") or task.get(
@@ -33589,6 +34038,47 @@ def _trial_order_first_schedule_pass(
             phase1_interleave.append(t)
         else:
             phase1_rest.append(t)
+    # #region agent log
+    if _agent_debug_trace_task_enabled("W6-4") and phase2_tasks:
+        _agent_debug_dispatch_trace(
+            "H-V7",
+            "_core.py:_trial_order_first_schedule_pass:phase_split",
+            "B2 二相 split（W6-4 スリット行の所在）",
+            {
+                "day": current_date.isoformat()
+                if isinstance(current_date, date)
+                else str(current_date),
+                "phase2_count": len(phase2_tasks),
+                "phase1_rest_count": len(phase1_rest),
+                "phase1_interleave_count": len(phase1_interleave),
+                "slit_in_rest": any(
+                    str(t.get("task_id") or "").strip() == "W6-4"
+                    and _normalize_process_name_for_rule_match(t.get("machine"))
+                    == _normalize_process_name_for_rule_match("スリット")
+                    for t in phase1_rest
+                ),
+                "slit_in_interleave": any(
+                    str(t.get("task_id") or "").strip() == "W6-4"
+                    and _normalize_process_name_for_rule_match(t.get("machine"))
+                    == _normalize_process_name_for_rule_match("スリット")
+                    for t in phase1_interleave
+                ),
+                "slit_in_phase1": any(
+                    str(t.get("task_id") or "").strip() == "W6-4"
+                    and _normalize_process_name_for_rule_match(t.get("machine"))
+                    == _normalize_process_name_for_rule_match("スリット")
+                    for t in phase1_tasks
+                ),
+                "slit_in_phase2": any(
+                    str(t.get("task_id") or "").strip() == "W6-4"
+                    and _normalize_process_name_for_rule_match(t.get("machine"))
+                    == _normalize_process_name_for_rule_match("スリット")
+                    for t in phase2_tasks
+                ),
+            },
+            task_id="W6-4",
+        )
+    # #endregion agent log
 
     def _b2_merged_sort_key(t: dict) -> tuple:
         # 坌も配台試行順では後続（検査・巻返し）を EC より先に回し、熱融着のタイムラインを
@@ -33654,6 +34144,22 @@ def _trial_order_first_schedule_pass(
                 if _drain_rolls_for_task(task):
                     pass_made = True
             phase1_rest = []
+        elif phase1_rest or phase1_interleave:
+            # 段階2: §B-2 後続が載る日は、同一依頼の先行（例: スリット残）を
+            # 1ロール交互より先にドレインする。interleave（機械共有の EC 等）も対象。
+            for task in sorted(phase1_rest + phase1_interleave, key=_phase1_sort_key):
+                if _drain_rolls_for_task(task):
+                    pass_made = True
+            phase1_rest = [
+                t
+                for t in phase1_rest
+                if float(t.get("remaining_units") or 0) > 1e-12
+            ]
+            phase1_interleave = [
+                t
+                for t in phase1_interleave
+                if float(t.get("remaining_units") or 0) > 1e-12
+            ]
         merged_b2 = sorted(
             phase1_interleave + phase2_tasks,
             key=_phase1_sort_key,
@@ -36194,6 +36700,39 @@ def _generate_plan_impl(
         _try_write_main_sheet_gemini_usage_summary("段階2")
         return
 
+    # #region agent log
+    if _AGENT_DEBUG_TRACE_TASK_IDS:
+        for _tid_tr in sorted(_AGENT_DEBUG_TRACE_TASK_IDS):
+            _mask_tr = tasks_df.apply(
+                lambda row: planning_task_id_str_from_plan_row(row) == _tid_tr,
+                axis=1,
+            )
+            _hit_df = tasks_df.loc[_mask_tr]
+            _agent_debug_dispatch_trace(
+                "H-PLAN",
+                "_core.py:_generate_plan_impl:planning_df_snapshot",
+                "配台計画シート上の依頼NO行",
+                {
+                    "plan_input_path": (os.environ.get("PM_AI_PLAN_INPUT_PATH") or "").strip(),
+                    "sheet_row_count": int(len(_hit_df)),
+                    "columns_sample": list(_hit_df.columns[:12]) if len(_hit_df) else [],
+                    "rows_preview": [
+                        {
+                            "machine": str(r.get(TASK_COL_MACHINE, "")),
+                            "machine_name": str(r.get(TASK_COL_MACHINE_NAME, "")),
+                            "unprocessed": str(r.get(TASK_COL_UNPROCESSED, "")),
+                            "dispatch_trial_order": str(
+                                r.get(RESULT_TASK_COL_DISPATCH_TRIAL_ORDER, "")
+                            ),
+                        }
+                        for _, r in _hit_df.head(8).iterrows()
+                    ],
+                },
+                task_id=_tid_tr,
+                emit_stderr=True,
+            )
+    # #endregion agent log
+
     if DEBUG_DISPATCH_ONLY_TASK_IDS:
         _n_tasks_before = len(tasks_df)
         _dbg_mask = tasks_df.apply(
@@ -37913,11 +38452,7 @@ def _generate_plan_impl(
                         )
                         if not _hyp:
                             continue
-                        _agent_debug_dispatch_trace(
-                            _hyp,
-                            "_core.py:generate_plan:daily_remaining",
-                            "日次終了時点の未配台行",
-                            {
+                        _log_data = {
                                 "day": current_date.isoformat()
                                 if isinstance(current_date, date)
                                 else str(current_date),
@@ -37933,7 +38468,30 @@ def _generate_plan_impl(
                                 "no_op_block": bool(
                                     _t_day.get("_dispatch_block_no_op_on_working_days")
                                 ),
-                            },
+                            }
+                        if _hyp == "H-G":
+                            _mh_eod = _machine_handoff_state_from_timeline(
+                                timeline_events, current_date
+                            )
+                            _log_data["eligible_probe"] = (
+                                _agent_debug_eligible_unassigned_probe(
+                                    _t_day,
+                                    task_queue,
+                                    current_date,
+                                    daily_status=daily_status,
+                                    members=members,
+                                    machine_avail_dt=machine_avail_dt,
+                                    machine_day_start=_machine_day_start,
+                                    machine_handoff=_mh_eod,
+                                    skills_dict=skills_dict,
+                                    dispatch_interval_mirror=_dispatch_interval_mirror,
+                                )
+                            )
+                        _agent_debug_dispatch_trace(
+                            _hyp,
+                            "_core.py:generate_plan:daily_remaining",
+                            "日次終了時点の未配台行",
+                            _log_data,
                             task_id=_tid_day,
                         )
             # #endregion agent log
