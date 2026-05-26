@@ -18,6 +18,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices;
+
 /**
  * Persists last-used paths under {@code ~/.pm-ai-desktop/session-state.json} so tabs reload the same files on
  * the next launch.
@@ -115,6 +117,45 @@ public final class DesktopSessionStateStore {
         return acc.size() > 0 ? acc : null;
     }
 
+    /** 工場別 {@code init_setting} から依頼書フォーム ComboBox 候補を読む。 */
+    public static RequestFormComboChoices loadFactoryRequestFormComboChoices(Map<String, String> ui) {
+        return loadFactoryRequestFormComboChoices(ui, GlobalInitSettingTarget.load());
+    }
+
+    public static RequestFormComboChoices loadFactoryRequestFormComboChoices(
+            Map<String, String> ui, FactorySite site) {
+        JsonNode merged = readMergedSessionUiDefaultsNode(ui);
+        if (merged == null || !merged.isObject()) {
+            return RequestFormComboChoices.empty();
+        }
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        Path factoryFile =
+                ui != null
+                        ? InitSettingPaths.resolveRepoInitSettingDir(ui)
+                                .resolve(InitSettingPaths.sessionDefaultsFileForFactory(effective))
+                        : null;
+        if (factoryFile != null && Files.isRegularFile(factoryFile)) {
+            try {
+                JsonNode factoryRoot = JSON.readTree(factoryFile.toFile());
+                RequestFormComboChoices fromFactory = RequestFormComboChoices.fromJson(factoryRoot);
+                if (!fromFactory.isEmpty()) {
+                    return fromFactory;
+                }
+            } catch (IOException ignored) {
+            }
+        }
+        return RequestFormComboChoices.fromJson(merged);
+    }
+
+    public static Path factoryJuchuHeaderAliasesPath(Map<String, String> ui, FactorySite site) {
+        FactorySite effective = site != null ? site : GlobalInitSettingTarget.load();
+        if (ui == null || ui.isEmpty()) {
+            return null;
+        }
+        return InitSettingPaths.resolveRepoInitSettingDir(ui)
+                .resolve(InitSettingPaths.juchuHeaderAliasesFileForFactory(effective));
+    }
+
     private static void mergeSessionUiFromClasspath(ObjectNode acc, String resourcePath) {
         JsonNode n = readBundledJsonFromClasspath(resourcePath);
         if (n != null && n.isObject()) {
@@ -205,6 +246,9 @@ public final class DesktopSessionStateStore {
         putMemorySettingsPrefs(root, state);
         putEquipmentStatusDashboardPrefs(root, state);
         putWindowGeometry(root, state);
+        if (state.requestFormComboChoices() != null && !state.requestFormComboChoices().isEmpty()) {
+            state.requestFormComboChoices().writeToObjectNode(root);
+        }
         return root;
     }
 
@@ -402,7 +446,8 @@ public final class DesktopSessionStateStore {
                         DesktopSessionState.MAX_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC),
                 optionalBoolean(root, "equipmentStatusDashboardShowAladdinPlans", true),
                 optionalBoolean(root, "equipmentStatusDashboardShowDispatchPlans", true),
-                loadEquipmentStatusDashboardAppearancePrefs(root));
+                loadEquipmentStatusDashboardAppearancePrefs(root),
+                jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices.fromJson(root));
     }
 
     public static void save(DesktopSessionState state) {

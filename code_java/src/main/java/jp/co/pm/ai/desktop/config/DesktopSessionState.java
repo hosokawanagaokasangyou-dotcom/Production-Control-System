@@ -97,6 +97,7 @@ import java.util.Map;
  * @param equipmentStatusDashboardShowAladdinPlans ダッシュボードでアラジン予定を表示
  * @param equipmentStatusDashboardShowDispatchPlans ダッシュボードで配台予定を表示
  * @param equipmentStatusDashboardAppearance ダッシュボードカードの見た目設定
+ * @param requestFormComboChoices 依頼書入力フォームの ComboBox 候補（空は bundled 既定）
  */
 public record DesktopSessionState(
         String planInputPath,
@@ -183,7 +184,8 @@ public record DesktopSessionState(
         int equipmentStatusDashboardAutoRefreshIntervalSec,
         boolean equipmentStatusDashboardShowAladdinPlans,
         boolean equipmentStatusDashboardShowDispatchPlans,
-        EquipmentStatusDashboardAppearancePrefs equipmentStatusDashboardAppearance) {
+        EquipmentStatusDashboardAppearancePrefs equipmentStatusDashboardAppearance,
+        jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices requestFormComboChoices) {
 
     /** 設備ガント・担当バッジ横方向固定間隔（px）の既定、およびスライダー上限の目安。 */
     public static final double DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX = 4.0;
@@ -298,6 +300,10 @@ public record DesktopSessionState(
                 equipmentStatusDashboardPlanDate != null
                         ? equipmentStatusDashboardPlanDate.strip()
                         : "";
+        requestFormComboChoices =
+                requestFormComboChoices != null
+                        ? requestFormComboChoices
+                        : jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices.empty();
     }
 
     /** セッション保存日付（{@code yyyy-MM-dd}）または旧オフセットから実績表示日を復元。 */
@@ -472,7 +478,8 @@ public record DesktopSessionState(
                 DEFAULT_EQUIPMENT_STATUS_DASHBOARD_AUTO_REFRESH_INTERVAL_SEC,
                 true,
                 true,
-                EquipmentStatusDashboardAppearancePrefs.defaults());
+                EquipmentStatusDashboardAppearancePrefs.defaults(),
+                jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices.empty());
     }
 
     /**
@@ -565,6 +572,7 @@ public record DesktopSessionState(
                 equipmentStatusDashboardAutoRefreshIntervalSec(),
                 equipmentStatusDashboardShowAladdinPlans(),
                 equipmentStatusDashboardShowDispatchPlans(),
-                equipmentStatusDashboardAppearance());
+                equipmentStatusDashboardAppearance(),
+                requestFormComboChoices());
     }
 }

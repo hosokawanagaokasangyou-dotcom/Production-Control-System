@@ -9,6 +9,7 @@ import java.util.Map;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import jp.co.pm.ai.desktop.reconciliation.JuchuHeaderAliasRegistry;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 
 /**
@@ -22,19 +23,23 @@ public final class InitSettingPersistence {
     private InitSettingPersistence() {}
 
     /**
-     * {@link GlobalInitSettingTarget} の選択工場向けに、{@code session_defaults_<工場>.json} と {@code
-     * table_column_defaults_<工場>.json} をリポジトリ {@code init_setting/} に保存する。
+     * {@link GlobalInitSettingTarget} の選択工場向けに、{@code session_defaults_<工場>.json}、{@code
+     * table_column_defaults_<工場>.json}、{@code juchu_header_aliases_<工場>.json} をリポジトリ {@code init_setting/} に保存する。
      */
     public static void savePackageDefaults(Map<String, String> ui, DesktopSessionState state)
             throws IOException {
-        savePackageDefaults(ui, state, GlobalInitSettingTarget.load());
+        savePackageDefaults(ui, state, GlobalInitSettingTarget.load(), null);
     }
 
     /**
      * @param initSettingTarget 書き出し先ファイル名に使う工場（null のとき湖南）
+     * @param juchuHeaderAliasRegistry 非 null のとき列定義ウィザード設定をその内容で書き出す
      */
     public static void savePackageDefaults(
-            Map<String, String> ui, DesktopSessionState state, FactorySite initSettingTarget)
+            Map<String, String> ui,
+            DesktopSessionState state,
+            FactorySite initSettingTarget,
+            JuchuHeaderAliasRegistry juchuHeaderAliasRegistry)
             throws IOException {
         if (state == null) {
             return;
@@ -51,6 +56,13 @@ public final class InitSettingPersistence {
         if (merged != null && merged.isObject()) {
             JSON.writerWithDefaultPrettyPrinter().writeValue(tableDest.toFile(), merged);
         }
+
+        Path juchuDest = dir.resolve(InitSettingPaths.juchuHeaderAliasesFileForFactory(t));
+        JuchuHeaderAliasRegistry registry =
+                juchuHeaderAliasRegistry != null
+                        ? juchuHeaderAliasRegistry
+                        : JuchuHeaderAliasRegistry.loadForFactory(t, ui != null ? ui : Map.of());
+        registry.exportToJsonFile(juchuDest);
     }
 
     /**
@@ -78,6 +90,7 @@ public final class InitSettingPersistence {
         for (FactorySite site : FactorySite.values()) {
             copyIfRegularFile(srcDir, dstDir, InitSettingPaths.sessionDefaultsFileForFactory(site));
             copyIfRegularFile(srcDir, dstDir, InitSettingPaths.tableColumnDefaultsFileForFactory(site));
+            copyIfRegularFile(srcDir, dstDir, InitSettingPaths.juchuHeaderAliasesFileForFactory(site));
         }
     }
 

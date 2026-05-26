@@ -51,6 +51,14 @@ public final class InitSettingPaths {
                 .resolve("init_setting");
     }
 
+    /** 工場別の列定義ウィザード設定 JSON（{@code init_setting} 書き出し用）。 */
+    public static String juchuHeaderAliasesFileForFactory(FactorySite site) {
+        if (site == null) {
+            site = FactorySite.KONAN;
+        }
+        return "juchu_header_aliases_" + site.name().toLowerCase(Locale.ROOT) + ".json";
+    }
+
     /** {@code <cwd>/init_setting} when running from repository root. */
     public static Path cwdInitSettingDir() {
         return Path.of(System.getProperty("user.dir", "."))

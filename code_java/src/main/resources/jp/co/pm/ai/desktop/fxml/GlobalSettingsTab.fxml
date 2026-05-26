@@ -22,7 +22,7 @@
             <Separator/>
             <Label style="-fx-font-weight: bold" text="init_setting の対象工場"/>
             <Label wrapText="true" maxWidth="720" style="-fx-text-fill: -fx-mid-text-color"
-                   text="「デフォルトに戻す」と「現在の状態をデフォルトとする」で読み書きする JSON は、湖南工場用と国分工場用でファイル名が分かれます（例: session_defaults_kokubu.json）。環境タブの工場プリセット適用時もこの選択は自動で追随します（ここで変更してもよい）。"/>
+                   text="「デフォルトに戻す」と「現在の状態をデフォルトとする」で読み書きする JSON は、湖南工場用と国分工場用でファイル名が分かれます（例: session_defaults_kokubu.json、juchu_header_aliases_konan.json）。依頼書入力の ComboBox 候補は session_defaults_*.json の requestFormComboChoices、列定義ウィザードは juchu_header_aliases_*.json に含まれます。環境タブの工場プリセット適用時もこの選択は自動で追随します（ここで変更してもよい）。"/>
             <HBox alignment="CENTER_LEFT" spacing="8.0">
                 <Label text="対象工場:"/>
                 <ComboBox fx:id="initSettingTargetCombo" prefWidth="220.0"/>
@@ -36,7 +36,7 @@
             <Button fx:id="saveDefaultsButton" mnemonicParsing="false" onAction="#onSavePackageDefaultsAction"
                     text="現在の状態をデフォルトとする"/>
             <Label wrapText="true" maxWidth="720" style="-fx-text-fill: -fx-mid-text-color"
-                   text="リポジトリ直下の init_setting に、上で選んだ工場向けの session_defaults_*.json と table_column_defaults_*.json を書き出します（従来の単一名の JSON が残っていても、工場別ファイルがあればそちらが「デフォルトに戻す」の最終層として優先されます）。確認のためダイアログで「111」を入力する必要があります。"/>
+                   text="リポジトリ直下の init_setting に、上で選んだ工場向けの session_defaults_*.json（依頼書フォーム候補含む）、table_column_defaults_*.json、juchu_header_aliases_*.json（列定義ウィザード）を書き出します（従来の単一名の JSON が残っていても、工場別ファイルがあればそちらが「デフォルトに戻す」の最終層として優先されます）。確認のためダイアログで「111」を入力する必要があります。"/>
         </VBox>
     </center>
 </BorderPane>

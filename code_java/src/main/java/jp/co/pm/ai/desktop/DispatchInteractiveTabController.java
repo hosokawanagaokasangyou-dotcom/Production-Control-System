@@ -897,8 +897,30 @@ public final class DispatchInteractiveTabController {
     }
 
     void setDeliveryCalendarReloadBlocking(boolean blocking) {
+        boolean wasBlocking = deliveryCalendarReloadBlocking;
         deliveryCalendarReloadBlocking = blocking;
         applyDispatchTrialButtonEnabledState();
+        if (wasBlocking && !blocking) {
+            refreshAladdinPlanDisplayAfterDeliveryCalendarReload();
+        }
+    }
+
+    /**
+     * 納期管理ビュー再読込完了後: {@code shaped_aladdin_plan.json} はアラジン加工計画タブ反映時に更新されるが、
+     * 配台表の再構築はそれより先に走ることがある。ルックアップだけ取り直して日付セルの (アラ計画) 行を再描画する。
+     */
+    private void refreshAladdinPlanDisplayAfterDeliveryCalendarReload() {
+        if (doc == null || doc.rows().isEmpty()) {
+            return;
+        }
+        if (shell != null) {
+            shell.ensureDispatchInteractiveOnSceneForGridRebuild(false);
+        }
+        if (wideSpreadsheet != null && wideSpreadsheet.getScene() != null) {
+            rebuildGrids();
+            return;
+        }
+        pendingGridRebuildAfterTabAttach.set(true);
     }
 
     @FXML
@@ -1346,17 +1368,10 @@ public final class DispatchInteractiveTabController {
                                                         for (String dl : cr.detailLines()) {
                                                             shell.appendLog(dl);
                                                         }
-                                                        Alert warn = new Alert(AlertType.WARNING);
-                                                        warn.setTitle("配台試行: 整合性確認");
-                                                        warn.setHeaderText(
-                                                                "試行前の保存内容と、試行後に読み込んだ結果_配台表.json に差異があります。");
-                                                        warn.setContentText(
-                                                                String.join("\n", cr.detailLines()));
-                                                        warn.show();
                                                         shell.appendLog(
                                                                 "[dispatch-editor] trial: 整合性に差異あり（"
                                                                         + cr.detailLines().size()
-                                                                        + " 件）— ログ・ダイアログ参照");
+                                                                        + " 件）— 実行・ログ参照");
                                                     }
                                                     DispatchTrialUnassignedWizard.showIfNeeded(
                                                             owner, shell, Path.of(shortagesPath));
@@ -3686,15 +3701,9 @@ public final class DispatchInteractiveTabController {
                     cell, formatStage3FixedSlotsAsText(slots, true), true);
             return;
         }
-        cell.setCellGraphic(false);
-        Node graphic = buildStage3QtyFixedLineGraphic(slots);
-        cell.setGraphic(graphic);
-        if (!cell.getStyleClass().contains(DISPATCH_DATE_QTY_GRAPHIC_ONLY_STYLE_CLASS)) {
-            cell.getStyleClass().add(DISPATCH_DATE_QTY_GRAPHIC_ONLY_STYLE_CLASS);
-        }
         String copyText = formatStage3FixedSlotsAsText(slots, false);
-        SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(cell, copyText);
-        Tooltip.install(graphic, new Tooltip(copyText));
+        applyDispatchQtyGraphicCellDisplay(
+                cell, buildStage3QtyFixedLineGraphic(slots), copyText);
     }
 
     /**
@@ -3708,15 +3717,10 @@ public final class DispatchInteractiveTabController {
                         && (qtxt.contains(LABEL_STAGE3_REVISED)
                                 || qtxt.contains(LABEL_STAGE3_ACTUAL));
         if (useStyledGraphic) {
-            // isCellGraphic(true) は WebView 用経路になり CellGraphicFactory 未設定時は Graphic が出ない
-            cell.setCellGraphic(false);
-            Node graphic = buildDispatchPlanActualQtyGraphic(qtxt, singleLineDisplay);
-            cell.setGraphic(graphic);
-            if (!cell.getStyleClass().contains(DISPATCH_DATE_QTY_GRAPHIC_ONLY_STYLE_CLASS)) {
-                cell.getStyleClass().add(DISPATCH_DATE_QTY_GRAPHIC_ONLY_STYLE_CLASS);
-            }
-            SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(cell, qtxt != null ? qtxt : "");
-            Tooltip.install(graphic, new Tooltip(qtxt));
+            applyDispatchQtyGraphicCellDisplay(
+                    cell,
+                    buildDispatchPlanActualQtyGraphic(qtxt, singleLineDisplay),
+                    qtxt != null ? qtxt : "");
         } else {
             clearDispatchQtyCellGraphic(cell);
             SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(cell, qtxt != null ? qtxt : "");
@@ -4147,6 +4151,22 @@ public final class DispatchInteractiveTabController {
             lbl.setStyle(STAGE3_AFTER_LINE_INLINE_STYLE);
         } else {
             lbl.setStyle(STAGE3_QTY_DEFAULT_LINE_INLINE_STYLE);
+        }
+    }
+
+    /**
+     * 段階3ラベル Graphic 表示。item は空（納期管理 triple セルと同趣旨）し、コピー用テキストは property へ。
+     */
+    private static void applyDispatchQtyGraphicCellDisplay(
+            SpreadsheetCell cell, Node graphic, String clipboardText) {
+        cell.setCellGraphic(false);
+        cell.setGraphic(graphic);
+        if (!cell.getStyleClass().contains(DISPATCH_DATE_QTY_GRAPHIC_ONLY_STYLE_CLASS)) {
+            cell.getStyleClass().add(DISPATCH_DATE_QTY_GRAPHIC_ONLY_STYLE_CLASS);
+        }
+        SpreadsheetTabularSupport.setSpreadsheetCellDisplayValue(cell, "");
+        if (graphic != null) {
+            Tooltip.install(graphic, new Tooltip(clipboardText != null ? clipboardText : ""));
         }
     }
 

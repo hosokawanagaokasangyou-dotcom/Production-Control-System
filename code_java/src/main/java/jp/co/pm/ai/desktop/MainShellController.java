@@ -949,6 +949,12 @@ public final class MainShellController {
         if (requestFormPreviewBadgeDesignTabController != null) {
             requestFormPreviewBadgeDesignTabController.applyRequestFormPreviewBadgeSession(s);
         }
+        if (requestFormInputTabController != null) {
+            requestFormInputTabController.applyComboChoicesFromSession(
+                    resolveRequestFormComboChoices(s));
+            requestFormInputTabController.reloadJuchuHeaderAliasRegistry(
+                    GlobalInitSettingTarget.load(), collectUiEnv(), false);
+        }
         if (pushButtonDesignTabController != null) {
             pushButtonDesignTabController.applyPushButtonSession(s);
         }
@@ -1119,7 +1125,10 @@ public final class MainShellController {
                         || equipmentStatusDashboardTabController.snapshotShowDispatchPlans(),
                 equipmentStatusDashboardTabController != null
                         ? equipmentStatusDashboardTabController.snapshotAppearancePrefs()
-                        : EquipmentStatusDashboardAppearancePrefs.defaults());
+                        : EquipmentStatusDashboardAppearancePrefs.defaults(),
+                requestFormInputTabController != null
+                        ? requestFormInputTabController.snapshotComboChoices()
+                        : jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices.empty());
     }
 
     /** 設備ガントのプレビュー用に、バッジ「既定」スタイルを返す。 */
@@ -1368,6 +1377,44 @@ public final class MainShellController {
         return collectDesktopSession();
     }
 
+    public jp.co.pm.ai.desktop.reconciliation.JuchuHeaderAliasRegistry
+            snapshotJuchuHeaderAliasRegistryForExport() {
+        if (requestFormInputTabController != null) {
+            return requestFormInputTabController.snapshotJuchuHeaderAliasRegistry();
+        }
+        return jp.co.pm.ai.desktop.reconciliation.JuchuHeaderAliasRegistry.loadForFactory(
+                GlobalInitSettingTarget.load(), collectUiEnv());
+    }
+
+    /**
+     * 工場別グローバル既定（{@code init_setting}）から依頼書フォーム候補・列定義を反映する。
+     *
+     * @param restoreJuchuFromInitSetting {@code true} のとき列定義を init_setting の JSON で上書き（デフォルトに戻す用）
+     */
+    public void applyFactoryRequestFormGlobalSettings(
+            FactorySite site, boolean restoreJuchuFromInitSetting) {
+        FactorySite effective = site != null ? site : GlobalInitSettingTarget.load();
+        if (requestFormInputTabController != null) {
+            requestFormInputTabController.applyComboChoicesFromSession(
+                    DesktopSessionStateStore.loadFactoryRequestFormComboChoices(
+                            collectUiEnv(), effective));
+            requestFormInputTabController.reloadJuchuHeaderAliasRegistry(
+                    effective, collectUiEnv(), restoreJuchuFromInitSetting);
+        }
+    }
+
+    private jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices resolveRequestFormComboChoices(
+            DesktopSessionState session) {
+        jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices saved =
+                session != null
+                        ? session.requestFormComboChoices()
+                        : jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices.empty();
+        if (saved != null && !saved.isEmpty()) {
+            return saved;
+        }
+        return DesktopSessionStateStore.loadFactoryRequestFormComboChoices(collectUiEnv());
+    }
+
     /**
      * ユーザープロファイル読み出し: 列順 JSON と {@link DesktopSessionState} を適用し、テーマ・ログ・ガント等を追従させる。
      *
@@ -1535,6 +1582,7 @@ public final class MainShellController {
              * 早期 return と相性が悪く、アップグレード直後に「初期化されていない」ように見えることがあるため false。
              */
             applyDesktopSession(merged, false, false);
+            applyFactoryRequestFormGlobalSettings(GlobalInitSettingTarget.load(), true);
             TableColumnOrderPersistence.materializeTableColumnStoreAfterFactoryReset(collectUiEnv());
             applyDesktopThemeFromSession(merged);
             refreshDesktopSessionDependentUi();
@@ -4647,6 +4695,7 @@ public final class MainShellController {
             }
         }
         GlobalInitSettingTarget.save(site);
+        applyFactoryRequestFormGlobalSettings(site, false);
         if (globalSettingsTabController != null) {
             globalSettingsTabController.refreshInitSettingTargetComboFromStore();
         }

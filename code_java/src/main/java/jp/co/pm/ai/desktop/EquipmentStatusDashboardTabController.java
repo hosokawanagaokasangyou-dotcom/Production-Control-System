@@ -1,8 +1,11 @@
 package jp.co.pm.ai.desktop;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
@@ -21,6 +24,7 @@ import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TitledPane;
 import javafx.scene.control.ToggleButton;
+import javafx.scene.control.Tooltip;
 import javafx.scene.control.TextInputControl;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
@@ -49,6 +53,7 @@ import jp.co.pm.ai.desktop.ui.EquipmentStatusFullscreenStage;
 public final class EquipmentStatusDashboardTabController {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy/MM/dd");
+    private static final String LOAD_ERROR_STYLE = "-fx-text-fill: #fca5a5;";
 
     private MainShellController shell;
 
@@ -87,6 +92,7 @@ public final class EquipmentStatusDashboardTabController {
     private LoadedSources cachedSources;
     private SourceFingerprint loadedFingerprint;
     private List<EquipmentMachineStatus> currentStatuses = List.of();
+    private String lastLoadErrorDetail = "";
 
     private LocalDate actualDate = LocalDate.now();
     private LocalDate planDate = LocalDate.now();
@@ -304,7 +310,7 @@ public final class EquipmentStatusDashboardTabController {
 
     @FXML
     private void onReloadAction() {
-        reloadFromSources();
+        reloadFromSources(true);
     }
 
     @FXML
@@ -433,6 +439,10 @@ public final class EquipmentStatusDashboardTabController {
     }
 
     private void reloadFromSources() {
+        reloadFromSources(false);
+    }
+
+    private void reloadFromSources(boolean userInitiated) {
         if (shell == null) {
             return;
         }
@@ -462,6 +472,8 @@ public final class EquipmentStatusDashboardTabController {
                         }
                         return;
                     }
+                    lastLoadErrorDetail = "";
+                    clearLoadErrorPresentation();
                     setLoading(false);
                     loadedFingerprint = decision.fingerprint();
                     cachedSources = decision.sources();
@@ -471,16 +483,19 @@ public final class EquipmentStatusDashboardTabController {
         activeReloadTask.setOnFailed(
                 e -> {
                     setLoading(false);
-                    if (machineCountLabel != null) {
-                        machineCountLabel.setText("読込エラー");
-                    }
-                    if (sourceSummaryLabel != null) {
-                        sourceSummaryLabel.setText("［再読込］でやり直してください");
-                    }
-                    if (shell != null && activeReloadTask.getException() != null) {
-                        shell.appendLog(
-                                "[dashboard] reload failed: "
-                                        + activeReloadTask.getException().getMessage());
+                    Throwable ex = activeReloadTask.getException();
+                    Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+                    String sourceContext = EquipmentStatusDashboardSourceLoader.formatSourceContext(ui);
+                    lastLoadErrorDetail = formatLoadErrorDetail(ex);
+                    presentLoadError(sourceContext, lastLoadErrorDetail, ex);
+                    logLoadError(sourceContext, ex);
+                    if (userInitiated && shell != null) {
+                        shell.showErrorDialog(
+                                "ダッシュボード読込エラー",
+                                sourceContext
+                                        + "\n\n"
+                                        + lastLoadErrorDetail
+                                        + "\n\n詳細スタックは「実行・ログ」タブを参照してください。");
                     }
                 });
         Thread t = new Thread(activeReloadTask, "equipment-status-dashboard-reload");
@@ -504,9 +519,14 @@ public final class EquipmentStatusDashboardTabController {
         if (on) {
             if (machineCountLabel != null) {
                 machineCountLabel.setText("読込中…");
+                machineCountLabel.setStyle("");
             }
             if (sourceSummaryLabel != null) {
                 sourceSummaryLabel.setText("実績・アラジン・配台を読み込んでいます");
+                sourceSummaryLabel.setTooltip(null);
+            }
+            if (loadStatsLabel != null) {
+                loadStatsLabel.setText("");
             }
         } else if (fullscreenStage.isShowing()) {
             fullscreenStage.setMetaText(buildMetaSummary());
@@ -591,7 +611,8 @@ public final class EquipmentStatusDashboardTabController {
                                         opts.actualDateLabel(),
                                         opts.planDateLabel(),
                                         sourcesLoaded,
-                                        false));
+                                        false,
+                                        lastLoadErrorDetail));
             }
         }
         if (empty) {
@@ -632,11 +653,14 @@ public final class EquipmentStatusDashboardTabController {
         }
         if (machineCountLabel != null) {
             if (cachedSources == null) {
-                machineCountLabel.setText("—");
+                machineCountLabel.setText(lastLoadErrorDetail.isBlank() ? "—" : "読込エラー");
             } else if (currentStatuses.isEmpty()) {
                 machineCountLabel.setText("該当なし（非稼働日の可能性）");
             } else {
                 machineCountLabel.setText(currentStatuses.size() + "台");
+            }
+            if (lastLoadErrorDetail.isBlank()) {
+                machineCountLabel.setStyle("");
             }
         }
         if (sourceSummaryLabel != null && cachedSources != null) {
@@ -718,5 +742,89 @@ public final class EquipmentStatusDashboardTabController {
             autoRefreshTimeline.setCycleCount(Timeline.INDEFINITE);
             autoRefreshTimeline.play();
         }
+    }
+
+    private void presentLoadError(String sourceContext, String detail, Throwable ex) {
+        if (machineCountLabel != null) {
+            machineCountLabel.setText("読込エラー");
+            machineCountLabel.setStyle(LOAD_ERROR_STYLE);
+        }
+        if (sourceSummaryLabel != null) {
+            sourceSummaryLabel.setText(
+                    sourceContext
+                            + "\n\n"
+                            + detail
+                            + "\n\n［再読込］でやり直してください。詳細は「実行・ログ」タブも参照。");
+            Tooltip tooltip = new Tooltip(sourceContext + "\n\n" + detail + "\n\n" + formatStackTrace(ex));
+            tooltip.setWrapText(true);
+            tooltip.setMaxWidth(720);
+            sourceSummaryLabel.setTooltip(tooltip);
+        }
+        if (loadStatsLabel != null) {
+            loadStatsLabel.setText("読込エラー — " + detail.replace('\n', ' '));
+            loadStatsLabel.setStyle(LOAD_ERROR_STYLE);
+        }
+        renderCards();
+    }
+
+    private void clearLoadErrorPresentation() {
+        if (machineCountLabel != null) {
+            machineCountLabel.setStyle("");
+        }
+        if (sourceSummaryLabel != null) {
+            sourceSummaryLabel.setTooltip(null);
+        }
+        if (loadStatsLabel != null) {
+            loadStatsLabel.setStyle("");
+        }
+    }
+
+    private void logLoadError(String sourceContext, Throwable ex) {
+        if (shell == null) {
+            return;
+        }
+        shell.appendLog("[dashboard] 読込失敗");
+        for (String line : sourceContext.split("\n")) {
+            if (!line.isBlank()) {
+                shell.appendLog("[dashboard] " + line.strip());
+            }
+        }
+        shell.appendLog("[dashboard] " + formatLoadErrorDetail(ex));
+        for (String line : formatStackTrace(ex).split("\n")) {
+            if (!line.isBlank()) {
+                shell.appendLog("[dashboard] " + line);
+            }
+        }
+    }
+
+    private static String formatLoadErrorDetail(Throwable ex) {
+        if (ex == null) {
+            return "原因不明";
+        }
+        StringBuilder sb = new StringBuilder();
+        Throwable cur = ex;
+        int depth = 0;
+        while (cur != null && depth < 6) {
+            if (depth > 0) {
+                sb.append("\n原因: ");
+            }
+            sb.append(cur.getClass().getSimpleName());
+            String msg = cur.getMessage();
+            if (msg != null && !msg.isBlank()) {
+                sb.append(": ").append(msg.strip());
+            }
+            cur = cur.getCause();
+            depth++;
+        }
+        return sb.toString();
+    }
+
+    private static String formatStackTrace(Throwable ex) {
+        if (ex == null) {
+            return "";
+        }
+        StringWriter sw = new StringWriter();
+        ex.printStackTrace(new PrintWriter(sw));
+        return sw.toString().strip();
     }
 }

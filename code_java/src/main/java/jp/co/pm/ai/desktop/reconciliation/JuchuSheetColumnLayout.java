@@ -14,12 +14,20 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * 受注ファイル「受注ﾌｧｲﾙ」シート行3の列位置と見出し名の正本。
+ * 受注ファイル「受注ﾌｧｲﾙ」シートの列位置と見出し名の正本。
  * 転記・読込は列 index を優先し、見出しは検証用（別名許容）。
+ * 見出し行は {@link JuchuHeaderAliasRegistry} でファイル別に設定（既定 3 行目）。
  */
 public final class JuchuSheetColumnLayout {
 
-    public static final int HEADER_ROW_INDEX = 2;
+    /** 見出し行の既定（0-based、3 行目）。 */
+    public static final int HEADER_ROW_INDEX = JuchuHeaderAliasRegistry.DEFAULT_HEADER_ROW_ONE_BASED - 1;
+
+    /** 行3見出し走査: この列数まで（BR 付近の見出し取りこぼし防止）。 */
+    public static final int HEADER_PICK_MAX_SCAN_COLUMNS = 512;
+
+    /** 行3見出し走査: 連続空セルがこの数に達したら以降の列は採用候補に含めない。 */
+    public static final int HEADER_PICK_EMPTY_RUN_STOP = 10;
 
     public enum Col {
         IRAI_NO("A", "依頼No", "依頼Ｎｏ", "依頼NO"),
@@ -36,7 +44,7 @@ public final class JuchuSheetColumnLayout {
         SURYO_1("M", "数量1"),
         EC_MEN("N", "EC面", "ＥＣ面"),
         TRIMMING("O", "トリミング", "ﾄﾘﾐﾝｸﾞ"),
-        WARISU("P", "割数"),
+        WARISU("P", "割数", "加工回数（加工換算数に利用）"),
         HINMEI_1("Q", "品名1"),
         GENPAN("R", "原反"),
         KON_TO("S", "梱-等", "梱－等"),
@@ -45,6 +53,7 @@ public final class JuchuSheetColumnLayout {
         SURYO("V", "数量"),
         ZAIKO_BASHO("W", "在庫場所"),
         TONYU_BASHO("X", "投入場所"),
+        TONYU_BI("Y", "投入日"),
         KAKO_NAIYO("Z", "加工内容"),
         TOKKI_1("AA", "特記事項1"),
         TOKKI_2("AB", "特記事項2"),
@@ -54,6 +63,8 @@ public final class JuchuSheetColumnLayout {
         KIBO_NOKI("AF", "希望納期"),
         CHOSEI_NOKI("AG", "調整納期"),
         KAKOCHIN("AH", "加工賃"),
+        KEIYAKU_NO("AI", "契約Ｎｏ", "契約No", "契約NO"),
+        GENPAN_ROLL_SU("AJ", "原反ロール数"),
         MASTER_BASE_SHOHIN_PRODUCT("AP", "masterBase商品(製品)"),
         MASTER_BASE_SHOHIN_RAW("AQ", "masterBase商品(原反)");
 
@@ -106,7 +117,54 @@ public final class JuchuSheetColumnLayout {
             };
         }
 
+        /** 依頼書フォーム上のブロックと項目名（ウィザード表示用）。 */
+        public String formItemDescription() {
+            return switch (this) {
+                case IRAI_NO -> "【受注転記】依頼Ｎｏ";
+                case NYURYOKU_KBN -> "【作業指示】入力区分";
+                case KAKO_KBN -> "【作業指示】加工区分";
+                case NYURYOKU_TANTO -> "【作業指示】入力担当";
+                case NYURYOKU_BI -> "【基本情報】入力日";
+                case HINMEI -> "【製品（仕上がり）】品名";
+                case SEIHIN -> "【製品（仕上がり）】製品名";
+                case KON_TO_1 -> "【製品（仕上がり）】梱-等";
+                case IRO_1 -> "【製品（仕上がり）】色";
+                case KUBUN_1 -> "【製品（仕上がり）】区分";
+                case EDABAN -> "【製品（仕上がり）】枝番";
+                case SURYO_1 -> "【製品（仕上がり）】数量";
+                case EC_MEN -> "【製品（仕上がり）】EC面";
+                case TRIMMING -> "【製品（仕上がり）】トリミング";
+                case WARISU -> "【原反（材料）】割数";
+                case HINMEI_1 -> "【原反（材料）】原反名";
+                case GENPAN -> "【原反（材料）】原反（仕様）";
+                case KON_TO -> "【原反（材料）】梱-等";
+                case IRO -> "【原反（材料）】色";
+                case KUBUN -> "【原反（材料）】区分";
+                case SURYO -> "【原反（材料）】数量";
+                case ZAIKO_BASHO -> "【原反（材料）】在庫場所";
+                case TONYU_BASHO -> "【原反（材料）】投入場所";
+                case TONYU_BI -> "【原反（材料）】投入日";
+                case KAKO_NAIYO -> "【基本情報】加工内容";
+                case TOKKI_1 -> "【作業指示】特記事項1";
+                case TOKKI_2 -> "【作業指示】特記事項2";
+                case TOKKI_3 -> "【作業指示】特記事項3";
+                case YOTO -> "【作業指示】用途";
+                case USER -> "【基本情報】ユーザー";
+                case KIBO_NOKI -> "【基本情報】希望納期";
+                case CHOSEI_NOKI -> "【基本情報】調整納期";
+                case KAKOCHIN -> "【基本情報】加工賃";
+                case KEIYAKU_NO -> "【製品（仕上がり）】契約Ｎｏ";
+                case GENPAN_ROLL_SU -> "【原反（材料）】原反ロール数";
+                case MASTER_BASE_SHOHIN_PRODUCT -> "【製品（仕上がり）】商品（masterBase）";
+                case MASTER_BASE_SHOHIN_RAW -> "【原反（材料）】商品（masterBase）";
+            };
+        }
+
         public boolean matchesHeader(String actual) {
+            return matchesHeader(actual, List.of());
+        }
+
+        public boolean matchesHeader(String actual, List<String> extraAliases) {
             if (actual == null || actual.isBlank()) {
                 return false;
             }
@@ -114,6 +172,15 @@ public final class JuchuSheetColumnLayout {
             for (String alias : aliases) {
                 if (normalizeHeader(alias).equals(normActual)) {
                     return true;
+                }
+            }
+            if (extraAliases != null) {
+                for (String extra : extraAliases) {
+                    if (extra != null
+                            && !extra.isBlank()
+                            && normalizeHeader(extra).equals(normActual)) {
+                        return true;
+                    }
                 }
             }
             return false;
@@ -186,43 +253,230 @@ public final class JuchuSheetColumnLayout {
      * 行3見出しと定義列位置を照合。不一致は警告メッセージ文字列のリスト。
      */
     public static List<String> validateHeaders(Row headerRow) {
-        List<String> warnings = new ArrayList<>();
+        return validateHeaders(headerRow, null, null);
+    }
+
+    /**
+     * ファイル別別名レジストリを考慮した見出し検証。
+     */
+    public static List<String> validateHeaders(
+            Row headerRow, JuchuHeaderAliasRegistry registry, String juchuFileAbsolutePath) {
+        int headerRowOneBased = resolveHeaderRowOneBased(registry, juchuFileAbsolutePath);
         if (headerRow == null) {
-            warnings.add("受注ﾌｧｲﾙ: 見出し行（行3）が存在しません。");
-            return warnings;
+            return List.of("受注ﾌｧｲﾙ: 見出し行（行" + headerRowOneBased + "）が存在しません。");
+        }
+        return collectHeaderMismatches(headerRow, registry, juchuFileAbsolutePath).stream()
+                .map(JuchuHeaderMismatch::summaryLine)
+                .toList();
+    }
+
+    public static int resolveHeaderRowOneBased(
+            JuchuHeaderAliasRegistry registry, String juchuFileAbsolutePath) {
+        if (registry != null && juchuFileAbsolutePath != null && !juchuFileAbsolutePath.isBlank()) {
+            return registry.headerRowOneBasedFor(juchuFileAbsolutePath);
+        }
+        return JuchuHeaderAliasRegistry.DEFAULT_HEADER_ROW_ONE_BASED;
+    }
+
+    public static int resolveHeaderRowIndex(
+            JuchuHeaderAliasRegistry registry, String juchuFileAbsolutePath) {
+        return Math.max(0, resolveHeaderRowOneBased(registry, juchuFileAbsolutePath) - 1);
+    }
+
+    public static int resolveFirstDataRowIndex(
+            JuchuHeaderAliasRegistry registry, String juchuFileAbsolutePath) {
+        return resolveHeaderRowIndex(registry, juchuFileAbsolutePath) + 1;
+    }
+
+    /** 列ごとの不一致（ウィザード用）。 */
+    public static List<JuchuHeaderMismatch> collectHeaderMismatches(
+            Row headerRow, JuchuHeaderAliasRegistry registry, String juchuFileAbsolutePath) {
+        List<JuchuHeaderMismatch> out = new ArrayList<>();
+        if (headerRow == null) {
+            return out;
+        }
+        for (Col col : Col.values()) {
+            if (registry != null
+                    && juchuFileAbsolutePath != null
+                    && registry.isExcludedFromTransfer(juchuFileAbsolutePath, col)) {
+                continue;
+            }
+            String actual = readHeaderCell(headerRow, col.columnIndex());
+            String expected =
+                    registry == null
+                            ? col.primaryHeader()
+                            : registry.expectedHeaderFor(juchuFileAbsolutePath, col);
+            if (!headerMatches(col, actual, registry, juchuFileAbsolutePath)) {
+                out.add(
+                        new JuchuHeaderMismatch(
+                                col, expected, actual, actual.isBlank()));
+            }
+        }
+        return out;
+    }
+
+    /** 既知列（{@link Col}）の行3見出しをすべて列挙（ウィザード管理用）。 */
+    public static List<JuchuHeaderMismatch> collectAllKnownColumns(
+            Row headerRow, JuchuHeaderAliasRegistry registry, String juchuFileAbsolutePath) {
+        List<JuchuHeaderMismatch> out = new ArrayList<>();
+        if (headerRow == null) {
+            return out;
         }
         for (Col col : Col.values()) {
             String actual = readHeaderCell(headerRow, col.columnIndex());
-            if (actual.isBlank()) {
-                warnings.add(
-                        col.columnLetter()
-                                + "列: 見出しが空です（期待: "
-                                + col.primaryHeader()
-                                + "）");
-                continue;
-            }
-            if (!col.matchesHeader(actual)) {
-                warnings.add(
-                        col.columnLetter()
-                                + "列: 期待「"
-                                + col.primaryHeader()
-                                + "」だが実際「"
-                                + actual
-                                + "」");
+            String expected =
+                    registry == null
+                            ? col.primaryHeader()
+                            : registry.expectedHeaderFor(juchuFileAbsolutePath, col);
+            out.add(new JuchuHeaderMismatch(col, expected, actual, actual.isBlank()));
+        }
+        return out;
+    }
+
+    public static boolean isKnownColumnIndex(int columnIndex) {
+        for (Col col : Col.values()) {
+            if (col.columnIndex() == columnIndex) {
+                return true;
             }
         }
-        return warnings;
+        return false;
+    }
+
+    /** 既知列位置以外の行3見出し（転記定義外）。 */
+    public static List<JuchuUnknownExcelColumn> collectUnknownExcelColumns(
+            Row headerRow, JuchuHeaderAliasRegistry registry, String juchuFileAbsolutePath) {
+        List<JuchuUnknownExcelColumn> out = new ArrayList<>();
+        if (headerRow == null) {
+            return out;
+        }
+        int scanExclusiveEnd = resolveHeaderPickScanExclusiveEnd(headerRow);
+        for (int c = 0; c < scanExclusiveEnd; c++) {
+            if (isKnownColumnIndex(c)) {
+                continue;
+            }
+            String text = readHeaderCell(headerRow, c);
+            if (text.isBlank()) {
+                continue;
+            }
+            String letter = indexToColumnLetter(c);
+            boolean ignored =
+                    registry != null
+                            && registry.isUnknownColumnIgnored(juchuFileAbsolutePath, letter);
+            out.add(new JuchuUnknownExcelColumn(letter, c, text, ignored));
+        }
+        return out;
+    }
+
+    static boolean headerMatches(
+            Col col,
+            String actual,
+            JuchuHeaderAliasRegistry registry,
+            String juchuFileAbsolutePath) {
+        List<String> extras =
+                registry == null
+                        ? List.of()
+                        : registry.extraAliasesFor(juchuFileAbsolutePath, col);
+        if (registry != null) {
+            Optional<String> override =
+                    registry.expectedOverrideFor(juchuFileAbsolutePath, col);
+            if (override.isPresent()) {
+                if (actual.isBlank()) {
+                    return true;
+                }
+                if (normalizeHeader(actual).equals(normalizeHeader(override.get()))) {
+                    return true;
+                }
+            }
+        }
+        return col.matchesHeader(actual, extras);
+    }
+
+    /** 行3の非空見出し一覧（ウィザードの Excel 見出し選択用）。 */
+    public static List<ExcelHeaderPick> readExcelHeaderPicks(Row headerRow) {
+        List<ExcelHeaderPick> picks = new ArrayList<>();
+        if (headerRow == null) {
+            return picks;
+        }
+        int scanExclusiveEnd = resolveHeaderPickScanExclusiveEnd(headerRow);
+        for (int c = 0; c < scanExclusiveEnd; c++) {
+            String text = readHeaderCell(headerRow, c);
+            if (text.isBlank()) {
+                continue;
+            }
+            picks.add(new ExcelHeaderPick(indexToColumnLetter(c), c, text));
+        }
+        return picks;
+    }
+
+    /**
+     * 行3を左から走査し、非空見出しの採用候補に含める列の終端（exclusive）。
+     * {@link #HEADER_PICK_EMPTY_RUN_STOP} 個連続で空の列が出た時点より右は除外する。
+     */
+    public static int resolveHeaderPickScanExclusiveEnd(Row headerRow) {
+        if (headerRow == null) {
+            return 0;
+        }
+        int lastCellNum = Math.max(headerRow.getLastCellNum(), 0);
+        int layoutMax =
+                Arrays.stream(Col.values()).mapToInt(Col::columnIndex).max().orElse(0) + 1;
+        int provisional =
+                Math.min(Math.max(lastCellNum, layoutMax), HEADER_PICK_MAX_SCAN_COLUMNS);
+
+        int consecutiveEmpty = 0;
+        boolean seenHeader = false;
+        for (int c = 0; c < provisional; c++) {
+            if (readHeaderCell(headerRow, c).isBlank()) {
+                if (seenHeader) {
+                    consecutiveEmpty++;
+                    if (consecutiveEmpty >= HEADER_PICK_EMPTY_RUN_STOP) {
+                        return c - HEADER_PICK_EMPTY_RUN_STOP + 1;
+                    }
+                }
+            } else {
+                seenHeader = true;
+                consecutiveEmpty = 0;
+            }
+        }
+        return provisional;
+    }
+
+    public record ExcelHeaderPick(String columnLetter, int columnIndex, String headerText) {
+        public String displayLabel() {
+            return columnLetter + "列: " + headerText;
+        }
+    }
+
+    /** 行3の見出しセルへ期待見出しを書き込む（0-based 行 index は {@link #HEADER_ROW_INDEX}）。 */
+    public static void writeHeaderCell(Row headerRow, Col col, String headerText) {
+        if (headerRow == null || col == null) {
+            return;
+        }
+        Cell cell = headerRow.getCell(col.columnIndex());
+        if (cell == null) {
+            cell = headerRow.createCell(col.columnIndex());
+        }
+        cell.setCellValue(headerText != null ? headerText : "");
     }
 
     /**
      * レイアウト定義に基づき db キー → 値 のマップを構築（読込用）。
      */
     public static Map<String, String> readDbValuesFromRow(Row dataRow) {
+        return readDbValuesFromRow(dataRow, null, null);
+    }
+
+    public static Map<String, String> readDbValuesFromRow(
+            Row dataRow, JuchuHeaderAliasRegistry registry, String juchuFileAbsolutePath) {
         Map<String, String> vals = new LinkedHashMap<>();
         if (dataRow == null) {
             return vals;
         }
         for (Col col : Col.values()) {
+            if (registry != null
+                    && juchuFileAbsolutePath != null
+                    && registry.isExcludedFromTransfer(juchuFileAbsolutePath, col)) {
+                continue;
+            }
             String value = readDataCell(dataRow, col.columnIndex());
             vals.put(col.dbKey(), value);
             if (col == Col.HINMEI_1) {
@@ -338,5 +592,34 @@ public final class JuchuSheetColumnLayout {
             return new String[] {part, type, dims, ""};
         }
         return new String[] {text, "", "", ""};
+    }
+
+    /**
+     * 原反ロール数 = 数量 ÷ 長さ(m) の整数部分（小数点以下切り捨て）。
+     * 数量・長さのいずれかが空、または長さ≦0 のときは空。
+     */
+    public static java.util.OptionalInt computeRawRollCountFromQtyAndLength(String qtyText, String lengthText) {
+        if (qtyText == null || qtyText.isBlank() || lengthText == null || lengthText.isBlank()) {
+            return java.util.OptionalInt.empty();
+        }
+        double qty = parseLooseNumeric(qtyText);
+        double length = parseLooseNumeric(lengthText);
+        if (length <= 0.0) {
+            return java.util.OptionalInt.empty();
+        }
+        return java.util.OptionalInt.of((int) Math.floor(qty / length));
+    }
+
+    private static double parseLooseNumeric(String text) {
+        if (text == null || text.isBlank()) {
+            return 0.0;
+        }
+        String trimmed = text.strip();
+        java.util.regex.Matcher m =
+                java.util.regex.Pattern.compile("[-+]?\\d*\\.\\d+|\\d+").matcher(trimmed);
+        if (m.find()) {
+            return Double.parseDouble(m.group());
+        }
+        return 0.0;
     }
 }

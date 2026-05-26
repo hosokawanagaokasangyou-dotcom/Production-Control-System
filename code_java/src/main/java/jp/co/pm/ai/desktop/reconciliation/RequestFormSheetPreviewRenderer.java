@@ -18,7 +18,7 @@ import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
+import jp.co.pm.ai.desktop.io.PoiWorkbookOpener;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 
@@ -73,7 +73,7 @@ final class RequestFormSheetPreviewRenderer {
     @SuppressWarnings("unchecked")
     static PreviewData loadPreviewData(File excelFile, String sheetName) throws IOException {
         try (FileInputStream fis = new FileInputStream(excelFile);
-                Workbook wb = WorkbookFactory.create(fis)) {
+                Workbook wb = PoiWorkbookOpener.open(fis)) {
             Sheet sheet = wb.getSheet(sheetName);
             if (sheet == null) {
                 throw new IOException("シートが見つかりません: " + sheetName);

@@ -386,7 +386,9 @@ public final class EquipmentStatusDashboardSourceLoader {
             if (t.columns().isEmpty() && t.rows().isEmpty()) {
                 return Optional.empty();
             }
-            return Optional.of(new ActualsSnapshot(t.columns(), t.rows()));
+            return Optional.of(
+                    EquipmentStatusDashboardBuilder.normalizeActualsSnapshot(
+                            new ActualsSnapshot(t.columns(), t.rows())));
         } catch (Exception ex) {
             return Optional.empty();
         }
@@ -510,6 +512,42 @@ public final class EquipmentStatusDashboardSourceLoader {
     private static String dispatchLabel(Map<String, String> ui) {
         Path p = AppPaths.resolveResultDispatchTableJsonPath(ui);
         return Files.isRegularFile(p) ? p.getFileName().toString() : "(なし)";
+    }
+
+    /** 読込エラー表示・ログ向けに、解決済みソースパスを1ブロックで返す。 */
+    public static String formatSourceContext(Map<String, String> ui) {
+        Map<String, String> env = ui != null ? ui : Map.of();
+        NetworkSourceDirResolver.Result r = NetworkSourceDirResolver.resolve(env);
+        String actual =
+                r.actualDetailPath()
+                        .map(p -> p.toAbsolutePath().normalize().toString())
+                        .orElse("(未設定 — PM_AI_ACTUAL_DETAIL_SOURCE_DIR / WORKBOOK を確認)");
+        String aladdin =
+                r.taskInputPath()
+                        .map(p -> p.toAbsolutePath().normalize().toString())
+                        .orElseGet(
+                                () -> {
+                                    Path shaped = AppPaths.resolveShapedAladdinPlanJsonPath(env);
+                                    if (Files.isRegularFile(shaped)) {
+                                        return shaped.toAbsolutePath().normalize()
+                                                + " (shaped_aladdin JSON)";
+                                    }
+                                    return "(なし — PM_AI_TASK_INPUT_SOURCE_DIR 等を確認)";
+                                });
+        Path dispatch = AppPaths.resolveResultDispatchTableJsonPath(env);
+        String dispatchPath =
+                Files.isRegularFile(dispatch)
+                        ? dispatch.toAbsolutePath().normalize().toString()
+                        : "(なし — 結果_配台表.json を確認)";
+        String sheet = env.getOrDefault(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SHEET, "").strip();
+        StringBuilder sb = new StringBuilder();
+        sb.append("実績: ").append(actual);
+        if (!sheet.isEmpty()) {
+            sb.append("\n実績シート: ").append(sheet);
+        }
+        sb.append("\nアラジン: ").append(aladdin);
+        sb.append("\n配台: ").append(dispatchPath);
+        return sb.toString();
     }
 
     private static boolean isExcelPath(Path file) {

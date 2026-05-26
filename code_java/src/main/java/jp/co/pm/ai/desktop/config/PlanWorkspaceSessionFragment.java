@@ -256,6 +256,7 @@ public record PlanWorkspaceSessionFragment(
                 base.equipmentStatusDashboardAutoRefreshIntervalSec(),
                 base.equipmentStatusDashboardShowAladdinPlans(),
                 base.equipmentStatusDashboardShowDispatchPlans(),
-                base.equipmentStatusDashboardAppearance());
+                base.equipmentStatusDashboardAppearance(),
+                base.requestFormComboChoices());
     }
 }

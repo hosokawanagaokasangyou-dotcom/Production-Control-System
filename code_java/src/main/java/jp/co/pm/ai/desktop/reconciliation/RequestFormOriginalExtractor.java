@@ -36,7 +36,9 @@ final class RequestFormOriginalExtractor {
         List<String> grades = new ArrayList<>();
         List<String> colors = new ArrayList<>();
         List<String> categories = new ArrayList<>();
+        List<String> contracts = new ArrayList<>();
 
+        int productSlot = 0;
         for (int rowIndex : RequestFormOriginalCellLayout.PRODUCT_ROW_INDICES) {
             if (!RequestFormOriginalCellLayout.isProductRowPopulated(thisCellReader(rawSheet), rowIndex)) {
                 continue;
@@ -53,6 +55,16 @@ final class RequestFormOriginalExtractor {
             grades.add(cellString(rawSheet, rowIndex, RequestFormOriginalCellLayout.ProductColumn.GRADE.columnIndex()));
             colors.add(cellString(rawSheet, rowIndex, RequestFormOriginalCellLayout.ProductColumn.COLOR.columnIndex()));
             categories.add(cellString(rawSheet, rowIndex, RequestFormOriginalCellLayout.ProductColumn.CATEGORY.columnIndex()));
+            if (productSlot < RequestFormOriginalCellLayout.PRODUCT_CONTRACT_COLUMN_INDICES.length) {
+                contracts.add(
+                        cellString(
+                                rawSheet,
+                                RequestFormOriginalCellLayout.PRODUCT_CONTRACT_ROW_INDEX,
+                                RequestFormOriginalCellLayout.PRODUCT_CONTRACT_COLUMN_INDICES[productSlot]));
+            } else {
+                contracts.add("");
+            }
+            productSlot++;
         }
 
         if (!hinmeis.isEmpty()) {
@@ -62,6 +74,11 @@ final class RequestFormOriginalExtractor {
             rawMap.put("梱-等1", RequestFormOriginalCellLayout.joinNonBlankLines(grades));
             rawMap.put("色1", RequestFormOriginalCellLayout.joinNonBlankLines(colors));
             rawMap.put("区分1", RequestFormOriginalCellLayout.joinNonBlankLines(categories));
+            rawMap.put(
+                    "契約Ｎｏ",
+                    String.join(
+                            "\n",
+                            contracts.stream().map(s -> s == null ? "" : s.strip()).toList()));
         }
 
         int firstProductRow = RequestFormOriginalCellLayout.PRODUCT_ROW_INDICES[0];
@@ -85,6 +102,7 @@ final class RequestFormOriginalExtractor {
         List<String> rawColors = new ArrayList<>();
         List<String> rawCategories = new ArrayList<>();
         List<String> storages = new ArrayList<>();
+        List<String> inputDates = new ArrayList<>();
 
         for (int rowIndex : RequestFormOriginalCellLayout.RAW_ROW_INDICES) {
             if (!RequestFormOriginalCellLayout.isRawRowPopulated(thisCellReader(rawSheet), rowIndex)) {
@@ -103,6 +121,8 @@ final class RequestFormOriginalExtractor {
             rawColors.add(cellString(rawSheet, rowIndex, RequestFormOriginalCellLayout.RawColumn.COLOR.columnIndex()));
             rawCategories.add(cellString(rawSheet, rowIndex, RequestFormOriginalCellLayout.RawColumn.CATEGORY.columnIndex()));
             storages.add(cellString(rawSheet, rowIndex, RequestFormOriginalCellLayout.RawColumn.STORAGE.columnIndex()));
+            inputDates.add(
+                    cellString(rawSheet, rowIndex, RequestFormOriginalCellLayout.RawColumn.INPUT_DATE.columnIndex()));
         }
 
         if (!rawHinmeis.isEmpty()) {
@@ -115,6 +135,7 @@ final class RequestFormOriginalExtractor {
             rawMap.put("原反色", RequestFormOriginalCellLayout.joinNonBlankLines(rawColors));
             rawMap.put("原反区分", RequestFormOriginalCellLayout.joinNonBlankLines(rawCategories));
             rawMap.put("在庫場所", RequestFormOriginalCellLayout.joinNonBlankLines(storages));
+            rawMap.put("投入日", RequestFormOriginalCellLayout.joinNonBlankLines(inputDates));
         }
 
         rawMap.put("加工内容", readProcessingSteps(rawSheet));

@@ -22,6 +22,7 @@ import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
+import jp.co.pm.ai.desktop.io.TaskInputSourceRawGridIo;
 import jp.co.pm.ai.desktop.io.gantt.PersonNameHeuristics;
 
 /**
@@ -154,8 +155,19 @@ public final class EquipmentStatusDashboardBuilder {
         if (sheet == null) {
             return new ActualsSnapshot(List.of(), List.of());
         }
+        PlanInputTabularIo.TabularSheet deduped =
+                TaskInputSourceRawGridIo.applyProcessingActualsDedupeByQuadKey(sheet);
         return new ActualsSnapshot(
-                copyList(sheet.headers()), copyMatrix(sheet.rows()));
+                copyList(deduped.headers()), copyMatrix(deduped.rows()));
+    }
+
+    /** ロット別明細の重複行を除いてからダッシュボード集計に渡す。 */
+    public static ActualsSnapshot normalizeActualsSnapshot(ActualsSnapshot snapshot) {
+        if (snapshot == null) {
+            return new ActualsSnapshot(List.of(), List.of());
+        }
+        return actualsFrom(
+                new PlanInputTabularIo.TabularSheet(snapshot.headers(), snapshot.rows()));
     }
 
     public static AladdinSnapshot aladdinFrom(PlanInputTabularIo.TabularSheet sheet) {
