@@ -316,6 +316,7 @@ _STAGE2_MACHINE_DAILY_STARTUP_MIN_BY_MACHINE: dict[str, int] = {}
 # 設定_機械_日次始業準備「必要人数」（機械名キー・正規化キー）。0 は人数割当なし。
 _STAGE2_MACHINE_DAILY_STARTUP_REQ_BY_MACHINE: dict[str, int] = {}
 # 設定_依頼切替前後時間（generate_plan 開始時に再設定）
+# 後始末: STAGE2_ENABLE_POST_MACHINING_CLEANUP=1 等で有効（既定は無効）。
 _STAGE2_REQUEST_SWITCH_PREP_BY_PROC_MACHINE: dict[tuple[str, str], int] = {}
 _STAGE2_REQUEST_SWITCH_PREP_BY_MACHINE: dict[str, int] = {}
 _STAGE2_BREAK_RESUME_PREP_BY_PROC_MACHINE: dict[tuple[str, str], int] = {}
@@ -25624,12 +25625,19 @@ def _lookup_break_resume_prep_minutes(
     )
 
 
+def _stage2_post_machining_cleanup_enabled() -> bool:
+    """後始末（post_machining_cleanup）を配台に適用するか。既定は無効。"""
+    return _stage2_truthy_env("STAGE2_ENABLE_POST_MACHINING_CLEANUP")
+
+
 def _lookup_post_machining_cleanup_minutes(
     machine_proc: str,
     machine_name: str,
     *,
     eq_line: str = "",
 ) -> int:
+    if not _stage2_post_machining_cleanup_enabled():
+        return 0
     proc, mn = _normalize_proc_machine_for_prep_lookup(
         machine_proc, machine_name, eq_line=eq_line
     )
@@ -30123,7 +30131,7 @@ def _repair_timeline_for_same_tid_prebreak_cleanup(
     task_queue: list,
     machine_day_floor: datetime,
 ) -> bool:
-    """後始末は廃止。常に False。"""
+    """後始末は Phase 1 無効化中（lookup ゲート）。再有効化時は EOD 確保方式へ置換予定。常に False。"""
     return False
     mach_occ = str(machine_occ_key or "").strip()
     if not mach_occ:
@@ -30297,7 +30305,7 @@ def _repair_timeline_shorten_machining_for_changeover_cleanup(
     task_queue: list,
     machine_day_floor: datetime,
 ) -> bool:
-    """後始末は廃止。常に False。"""
+    """後始末は Phase 1 無効化中（lookup ゲート）。再有効化時は EOD 確保方式へ置換予定。常に False。"""
     return False
     need, cu_prev, last_lead, last_eq_s = _changeover_need_cleanup_for_next_assign(
         machine_handoff=machine_handoff,
