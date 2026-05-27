@@ -2,8 +2,9 @@
 manual/.venv/
 manual/.venv-docx/
 # Java Desktop ネットワークソース代替キャッシュ（リポジトリ直下 .pm-ai-cache/）。無視しない — Git のステージング対象。
-# Log files（ステージングしない）
+# Log files（ステージングしない。execution_log.txt は実行ごとに肥大化するため Git 対象外）
 /log/
+log/execution_log.txt
 *.log
 # Excel creates lock files while a workbook is open
 **/~$*
@@ -29,6 +30,5 @@ pm-ai-package-release/
 *.hprof
 *.hprof.*
 *.lock
-execution_log.txt
 stage1_task_input_table.xlsx
 output/plan_input_tasks.xlsx

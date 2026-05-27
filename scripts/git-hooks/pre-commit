@@ -8,6 +8,7 @@ if [[ ! -x "$RUN_PY" ]]; then
   chmod +x "$RUN_PY" "$ROOT/scripts/resolve_python3.sh" 2>/dev/null || true
 fi
 "$RUN_PY" "$ROOT/scripts/check_staged_markdown_utf8.py"
+"$RUN_PY" "$ROOT/scripts/check_staged_ignored_log_paths.py"
 VT="$ROOT/version.txt"
 if [[ ! -f "$VT" ]]; then
   exit 0
