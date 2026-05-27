@@ -157,17 +157,18 @@ final class RequestFormMasterProductCandidateMatcher {
         if (keyword.isEmpty() || field == null || field.isBlank()) {
             return 0;
         }
+        String kwd = normalize(keyword);
         String k = normalize(field);
-        if (k.isEmpty()) {
+        if (kwd.isEmpty() || k.isEmpty()) {
             return 0;
         }
-        if (k.equals(keyword)) {
+        if (k.equals(kwd)) {
             return 100;
         }
-        if (k.contains(keyword)) {
+        if (k.contains(kwd)) {
             return 78;
         }
-        if (keyword.length() >= 3 && keyword.contains(k)) {
+        if (kwd.length() >= 3 && kwd.contains(k)) {
             return 55;
         }
         return 0;

@@ -4445,7 +4445,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         text = java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFKC);
         text = text.replaceAll("\\s+", "");
         text = text.replace("－", "-").replace("ー", "-").replace("―", "-").replace("‐", "-");
-        return text.toUpperCase();
+        return text.toUpperCase(java.util.Locale.ROOT);
     }
 
     private void copyToClipboard(String text, Button sourceButton) {
@@ -5213,12 +5213,41 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
     private static final String MASTER_CANDIDATE_FILTER_KEYWORDS_PROP = "filterKeywords";
     private static final String MASTER_CANDIDATE_SELECTED_LABEL_PROP = "selectedCandidateLabel";
+    private static final String MASTER_CANDIDATE_ALL_ITEMS_PROP = "allCandidateItems";
+    private static final String MASTER_CANDIDATE_SUPPRESS_EDITOR_FILTER_PROP = "suppressCandidateEditorFilter";
 
     private static void wireCandidateComboBox(ComboBox<String> combo, Runnable refreshOnOpen) {
+        combo.setEditable(true);
+        combo.getEditor()
+                .textProperty()
+                .addListener(
+                        (obs, oldV, newV) -> {
+                            if (Boolean.TRUE.equals(
+                                    combo.getProperties().get(MASTER_CANDIDATE_SUPPRESS_EDITOR_FILTER_PROP))) {
+                                return;
+                            }
+                            applyMasterCandidateComboEditorFilter(combo, newV);
+                        });
         combo.setOnShowing(
                 e -> {
                     if (refreshOnOpen != null) {
                         refreshOnOpen.run();
+                    }
+                });
+        combo.setButtonCell(
+                new ListCell<>() {
+                    @Override
+                    protected void updateItem(String item, boolean empty) {
+                        super.updateItem(item, empty);
+                        if (empty || item == null) {
+                            setText(null);
+                            setGraphic(null);
+                            return;
+                        }
+                        setText(null);
+                        setGraphic(
+                                RequestFormMasterCandidateLabelHighlighter.buildGraphic(
+                                        item, masterCandidateFilterKeywords(combo)));
                     }
                 });
         combo.setCellFactory(
@@ -5238,6 +5267,54 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                                                 item, masterCandidateFilterKeywords(combo)));
                             }
                         });
+    }
+
+    @SuppressWarnings("unchecked")
+    private static java.util.List<String> masterCandidateAllItems(ComboBox<String> combo) {
+        Object stored = combo.getProperties().get(MASTER_CANDIDATE_ALL_ITEMS_PROP);
+        if (stored instanceof java.util.List<?> list) {
+            return (java.util.List<String>) list;
+        }
+        return java.util.List.of();
+    }
+
+    private static void setMasterCandidateAllItems(ComboBox<String> combo, java.util.List<String> allItems) {
+        combo.getProperties()
+                .put(
+                        MASTER_CANDIDATE_ALL_ITEMS_PROP,
+                        allItems != null ? java.util.List.copyOf(allItems) : java.util.List.of());
+        applyMasterCandidateComboEditorFilter(combo, combo.getEditor().getText());
+    }
+
+    private static void applyMasterCandidateComboEditorFilter(ComboBox<String> combo, String editorText) {
+        java.util.List<String> all = masterCandidateAllItems(combo);
+        String query = RequestFormMasterProductCandidateMatcher.normalize(editorText);
+        java.util.List<String> visible;
+        if (query.isEmpty()) {
+            visible = all;
+        } else {
+            visible = new java.util.ArrayList<>();
+            for (String item : all) {
+                if (RequestFormMasterProductCandidateMatcher.normalize(item).contains(query)) {
+                    visible.add(item);
+                }
+            }
+        }
+        runWithSuppressedCandidateEditorFilter(
+                combo, () -> combo.setItems(javafx.collections.FXCollections.observableArrayList(visible)));
+    }
+
+    private static void clearMasterCandidateEditor(ComboBox<String> combo) {
+        runWithSuppressedCandidateEditorFilter(combo, () -> combo.getEditor().clear());
+    }
+
+    private static void runWithSuppressedCandidateEditorFilter(ComboBox<String> combo, Runnable action) {
+        combo.getProperties().put(MASTER_CANDIDATE_SUPPRESS_EDITOR_FILTER_PROP, Boolean.TRUE);
+        try {
+            action.run();
+        } finally {
+            combo.getProperties().remove(MASTER_CANDIDATE_SUPPRESS_EDITOR_FILTER_PROP);
+        }
     }
 
     private static void setMasterCandidateFilterKeywords(
@@ -5281,9 +5358,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (shohinCode == null || shohinCode.isBlank()) {
             return null;
         }
-        String code = shohinCode.trim();
+        String code = RequestFormMasterProductCandidateMatcher.normalize(shohinCode);
         for (ProductInfo p : masterProductList) {
-            if (p.getShohinCode().equals(code)) {
+            if (RequestFormMasterProductCandidateMatcher.normalize(p.getShohinCode()).equals(code)) {
                 return p;
             }
         }
@@ -5344,7 +5421,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
         String selectedCode = shohinCodeFromMasterCandidateLabel(label);
         String current = normalize_text(itemCodeText);
-        if (!selectedCode.equals(current)) {
+        if (!RequestFormMasterProductCandidateMatcher.normalize(selectedCode)
+                .equals(RequestFormMasterProductCandidateMatcher.normalize(current))) {
             clearSelectedMasterCandidate(combo, selectedPane);
         }
     }
@@ -5414,18 +5492,21 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 && kwLength.isEmpty()
                 && kwHinmei.isEmpty()) {
             if (!fromDropdownOpen) {
-                pRow.cmbSearch.setItems(javafx.collections.FXCollections.emptyObservableList());
+                setMasterCandidateAllItems(pRow.cmbSearch, java.util.List.of());
                 return;
             }
             filtered =
                     RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
                             masterProductList, "", "", "", "", "", 50);
         } else {
+            if (!fromDropdownOpen) {
+                clearMasterCandidateEditor(pRow.cmbSearch);
+            }
             filtered =
                     RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
                             masterProductList, kwItem, kwPart, kwType, kwLength, kwHinmei, 50);
         }
-        pRow.cmbSearch.setItems(javafx.collections.FXCollections.observableArrayList(filtered));
+        setMasterCandidateAllItems(pRow.cmbSearch, filtered);
         if (autoOpenPopup && !fromDropdownOpen && !filtered.isEmpty() && !pRow.cmbSearch.isShowing()) {
             pRow.cmbSearch.show();
         }
@@ -5454,18 +5535,21 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 && kwLength.isEmpty()
                 && kwHinmei.isEmpty()) {
             if (!fromDropdownOpen) {
-                rRow.cmbSearch.setItems(javafx.collections.FXCollections.emptyObservableList());
+                setMasterCandidateAllItems(rRow.cmbSearch, java.util.List.of());
                 return;
             }
             filtered =
                     RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
                             masterProductList, "", "", "", "", "", 50);
         } else {
+            if (!fromDropdownOpen) {
+                clearMasterCandidateEditor(rRow.cmbSearch);
+            }
             filtered =
                     RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
                             masterProductList, kwItem, kwPart, kwType, kwLength, kwHinmei, 50);
         }
-        rRow.cmbSearch.setItems(javafx.collections.FXCollections.observableArrayList(filtered));
+        setMasterCandidateAllItems(rRow.cmbSearch, filtered);
         if (autoOpenPopup && !fromDropdownOpen && !filtered.isEmpty() && !rRow.cmbSearch.isShowing()) {
             rRow.cmbSearch.show();
         }

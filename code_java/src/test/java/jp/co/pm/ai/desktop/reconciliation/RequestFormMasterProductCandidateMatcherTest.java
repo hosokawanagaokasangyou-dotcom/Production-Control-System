@@ -147,6 +147,34 @@ class RequestFormMasterProductCandidateMatcherTest {
     }
 
     @Test
+    void buildRankedCandidateLabels_lowercaseKeywords_matchUppercaseMasterFields() {
+        List<ProductInfo> catalog =
+                List.of(
+                        new ProductInfo(
+                                "A2F20AXD0250FN1",
+                                "S1",
+                                "15020-NP17",
+                                "",
+                                "",
+                                "",
+                                "",
+                                "6783",
+                                "15020",
+                                "1300",
+                                "250",
+                                "白",
+                                "",
+                                "EC,梱包"));
+
+        List<String> labels =
+                RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
+                        catalog, "a2f20axd0250fn1", "15020", "np17", "250", "6783", 10);
+
+        assertEquals(1, labels.size());
+        assertTrue(labels.get(0).contains("A2F20AXD0250FN1"));
+    }
+
+    @Test
     void buildRankedCandidateLabels_exactHinmei_returnsOnlyExactFoamName() {
         List<ProductInfo> catalog =
                 List.of(

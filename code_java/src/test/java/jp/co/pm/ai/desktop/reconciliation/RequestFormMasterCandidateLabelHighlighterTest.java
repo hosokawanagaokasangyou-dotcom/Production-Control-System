@@ -34,6 +34,18 @@ class RequestFormMasterCandidateLabelHighlighterTest {
     }
 
     @Test
+    void highlightMask_lowercaseFilter_matchesUppercaseLabel() {
+        String label = "A2F20AXD0250FN1 | 15020-NP17 | 6783 | NP17 | 1300×250 | 白 | EC,梱包";
+        boolean[] mask =
+                RequestFormMasterCandidateLabelHighlighter.highlightMask(
+                        label, List.of("np17", "6783", "ec"));
+
+        assertTrue(mask[label.indexOf("NP17")]);
+        assertTrue(mask[label.indexOf("6783")]);
+        assertTrue(mask[label.indexOf("EC")]);
+    }
+
+    @Test
     void highlightMask_emptyFilters_leavesMaskClear() {
         boolean[] mask =
                 RequestFormMasterCandidateLabelHighlighter.highlightMask("ABC | 15020", List.of());
