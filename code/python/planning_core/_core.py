@@ -17883,6 +17883,12 @@ def parse_need_sheet_special_rules(needs_df, label_col, equipment_list, cond_col
     return rules
 
 
+def _log_map_key_label(key: str) -> str:
+    """ログ用 map キー表示。repr だと U+3000 が \\u3000 と逃逸するため正規化して引用。"""
+    s = _normalize_equipment_match_key(key)
+    return f"'{s}'"
+
+
 def resolve_need_required_op(process: str, machine_name: str, task_id: str, req_map: dict, need_rules: list) -> int:
     """
     need シートの「工程名 + 機械名」で必須OP人数を解決（特別指定1〜99は order は尝さいろど優先）。
@@ -17894,8 +17900,8 @@ def resolve_need_required_op(process: str, machine_name: str, task_id: str, req_
     のいうれかで base を引ける剝杝。
     need_rules の overrides も同様にキーを挝つ。
     """
-    p = str(process).strip()
-    m = str(machine_name).strip()
+    p = _normalize_equipment_match_key(process)
+    m = _normalize_equipment_match_key(machine_name)
 
     combo_key = f"{p}+{m}" if p and m else None
 
@@ -17929,20 +17935,20 @@ def resolve_need_required_op_explain(
     """
     resolve_need_required_op と同値を返しつつ」ログ用に参照元の説明文字列を付ける。
     """
-    p = str(process).strip()
-    m = str(machine_name).strip()
+    p = _normalize_equipment_match_key(process)
+    m = _normalize_equipment_match_key(machine_name)
     combo_key = f"{p}+{m}" if p and m else None
     base = None
     base_src = ""
     if combo_key and combo_key in req_map:
         base = req_map.get(combo_key)
-        base_src = f"req_map[{combo_key!r}]={base}"
+        base_src = f"req_map[{_log_map_key_label(combo_key)}]={base}"
     elif m and m in req_map:
         base = req_map[m]
-        base_src = f"req_map[機械名のみ {m!r}]={base}（複坈キー丝在）"
+        base_src = f"req_map[機械名のみ {_log_map_key_label(m)}]={base}（複坈キー丝在）"
     elif p and p in req_map:
         base = req_map[p]
-        base_src = f"req_map[工程名のみ {p!r}]={base}（複坈・機械キー丝在）"
+        base_src = f"req_map[工程名のみ {_log_map_key_label(p)}]={base}（複坈・機械キー丝在）"
     else:
         base = 1
         base_src = "req_map該当なし→既定1"
@@ -17952,13 +17958,13 @@ def resolve_need_required_op_explain(
         order = rule.get("order", "?")
         if combo_key and combo_key in rule["overrides"]:
             v = int(rule["overrides"][combo_key])
-            return v, f"need特別指定{order} [{combo_key!r}]={v}"
+            return v, f"need特別指定{order} [{_log_map_key_label(combo_key)}]={v}"
         if m and m in rule["overrides"]:
             v = int(rule["overrides"][m])
-            return v, f"need特別指定{order} [機械名{m!r}]={v}"
+            return v, f"need特別指定{order} [機械名{_log_map_key_label(m)}]={v}"
         if p and p in rule["overrides"]:
             v = int(rule["overrides"][p])
-            return v, f"need特別指定{order} [工程名{p!r}]={v}"
+            return v, f"need特別指定{order} [工程名{_log_map_key_label(p)}]={v}"
     return int(base), base_src
 
 
@@ -18015,8 +18021,8 @@ def resolve_need_surplus_extra_max(
     _ = (task_id, need_rules)
     if not surplus_map:
         return 0
-    p = str(process).strip()
-    m = str(machine_name).strip()
+    p = _normalize_equipment_match_key(process)
+    m = _normalize_equipment_match_key(machine_name)
     combo_key = f"{p}+{m}" if p and m else None
     v = None
     if combo_key and combo_key in surplus_map:
@@ -18048,18 +18054,18 @@ def resolve_need_surplus_extra_max_explain(
     _ = need_rules
     if not surplus_map:
         return val, "surplus_map空（配台時追加人数行なし）"
-    p = str(process).strip()
-    m = str(machine_name).strip()
+    p = _normalize_equipment_match_key(process)
+    m = _normalize_equipment_match_key(machine_name)
     combo_key = f"{p}+{m}" if p and m else None
     if combo_key and combo_key in surplus_map:
         raw = surplus_map[combo_key]
-        return val, f"surplus_map[{combo_key!r}]={raw}"
+        return val, f"surplus_map[{_log_map_key_label(combo_key)}]={raw}"
     if m and m in surplus_map:
         raw = surplus_map[m]
-        return val, f"surplus_map[機械名のみ {m!r}]={raw}（複坈キー丝在）"
+        return val, f"surplus_map[機械名のみ {_log_map_key_label(m)}]={raw}（複坈キー丝在）"
     if p and p in surplus_map:
         raw = surplus_map[p]
-        return val, f"surplus_map[工程名のみ {p!r}]={raw}（複坈キー丝在）"
+        return val, f"surplus_map[工程名のみ {_log_map_key_label(p)}]={raw}（複坈キー丝在）"
     return val, "surplus当キーなし→0"
 
 
@@ -18856,8 +18862,8 @@ def load_skills_and_needs():
             m = needs_raw.iat[machine_header_row, col_idx]
             if pd.isna(p) or pd.isna(m):
                 continue
-            p_s = str(p).strip()
-            m_s = str(m).strip()
+            p_s = _normalize_equipment_match_key(str(p).strip())
+            m_s = _normalize_equipment_match_key(str(m).strip())
             if not p_s or not m_s or p_s.lower() == "nan" or m_s.lower() == "nan":
                 continue
             pm_cols.append((col_idx, p_s, m_s))
@@ -18920,8 +18926,8 @@ def load_skills_and_needs():
             _bn = req_map.get(_ck)
             _sx = surplus_map.get(_ck, 0) if surplus_map else 0
             logging.info(
-                "need列サマリ combo=%r 基本必須人数=%s 配台時追加人数上限=%s",
-                _ck,
+                "need列サマリ combo=%s 基本必須人数=%s 配台時追加人数上限=%s",
+                _log_map_key_label(_ck),
                 _bn,
                 _sx,
             )
