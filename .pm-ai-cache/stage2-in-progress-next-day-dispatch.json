@@ -1,14 +1,14 @@
 {
   "version" : 1,
   "entries" : [ {
-    "task_id" : "W5-13",
-    "process" : "検査",
-    "machine_name" : "熱融着機　湖南",
-    "next_day_dispatch_m" : 3900.0
-  }, {
-    "task_id" : "Y5-28",
+    "task_id" : "Y5-26",
     "process" : "SEC",
     "machine_name" : "SEC機　湖南",
-    "next_day_dispatch_m" : 4400.0
+    "next_day_dispatch_m" : 3400.0
+  }, {
+    "task_id" : "Y5-20",
+    "process" : "スリット",
+    "machine_name" : "スリット機1　湖南",
+    "next_day_dispatch_m" : 2100.0
   } ]
 }
