@@ -42,7 +42,17 @@ public final class SpecialRulesTabController {
 
     @FXML
     private void initialize() {
-        // sub-controllers wired via fx:include
+        if (innerTabPane != null) {
+            innerTabPane
+                    .getSelectionModel()
+                    .selectedItemProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (b != null && "ルール試走".equals(b.getText()) && testLabTabController != null) {
+                                    testLabTabController.refreshPickers();
+                                }
+                            });
+        }
     }
 
     void bindShell(MainShellController shell) {
@@ -55,9 +65,16 @@ public final class SpecialRulesTabController {
         }
         if (testLabTabController != null && builderTabController != null) {
             testLabTabController.bindShell(shell, builderTabController);
+            testLabTabController.refreshPickers();
         }
         if (traceTabController != null) {
             traceTabController.bindShell(shell);
+        }
+    }
+
+    void reloadTraceFromDisk() {
+        if (traceTabController != null) {
+            traceTabController.reloadFromDisk();
         }
     }
 

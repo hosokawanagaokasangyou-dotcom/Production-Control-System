@@ -26,12 +26,20 @@ public final class SpecialRulesTraceTabController {
     }
 
     private void reload() {
+        reloadFromDisk();
+    }
+
+    public void reloadFromDisk() {
         if (shell == null || eventList == null) {
             return;
         }
         try {
             List<DispatchRuleTraceLoader.ApplicationEvent> events =
                     DispatchRuleTraceLoader.loadFromWorkDir(shell.dispatchRulesUiEnv());
+            if (events.isEmpty()) {
+                eventList.getItems().setAll("（sidecar 未生成 — 段階2 実行後に表示）");
+                return;
+            }
             eventList.getItems().setAll(
                     events.stream()
                             .map(
@@ -45,7 +53,7 @@ public final class SpecialRulesTraceTabController {
                                                     + e.summaryJa())
                             .toList());
         } catch (Exception ex) {
-            eventList.getItems().setAll("（sidecar 未生成 — 段階2 実行後に表示）");
+            eventList.getItems().setAll("（sidecar 読込失敗: " + ex.getMessage() + "）");
         }
     }
 }

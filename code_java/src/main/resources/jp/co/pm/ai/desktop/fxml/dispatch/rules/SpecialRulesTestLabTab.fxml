@@ -3,6 +3,7 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
+<?import jp.co.pm.ai.desktop.dispatch.rules.ui.DispatchRuleRollStageVisualPane?>
 <?import jp.co.pm.ai.desktop.dispatch.rules.ui.editor.DispatchRuleGraphEditorPane?>
 
 <VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
@@ -11,14 +12,28 @@
     <padding><Insets bottom="8" left="8" right="8" top="8"/></padding>
     <HBox spacing="8" alignment="CENTER_LEFT">
         <Label text="タスク:"/>
-        <TextField fx:id="taskIdField" prefWidth="220"/>
+        <ComboBox fx:id="taskPicker" prefWidth="280"/>
+        <Button text="タスク再読込" onAction="#onRefreshTasksAction"/>
+        <Label text="ルール:"/>
+        <ComboBox fx:id="rulePicker" prefWidth="180"/>
         <Button text="試走開始" onAction="#onRunSimulationAction"/>
         <Button fx:id="stepButton" text="1ステップ" onAction="#onStepAction"/>
+        <Button text="▶ 再生" onAction="#onPlayAction"/>
         <Button text="リセット" onAction="#onResetAction"/>
     </HBox>
+    <HBox spacing="12" alignment="CENTER_LEFT">
+        <CheckBox fx:id="allRollsCheckBox" text="全ロール試走" selected="true"/>
+        <Label text="WIP初期:"/>
+        <Spinner fx:id="initialWipSpinner" prefWidth="72" editable="true"/>
+        <Label text="（接続→SEC: 接続行選択時は SEC 行と通し試走）"/>
+        <Label text="速度:"/>
+        <Slider fx:id="speedSlider" min="0.5" max="2.0" value="1.0" prefWidth="120"/>
+        <Label fx:id="speedLabel" text="1.0x"/>
+    </HBox>
+    <DispatchRuleRollStageVisualPane fx:id="rollStageVisual"/>
     <Label fx:id="stepLabel" wrapText="true"/>
     <Label fx:id="resultLabel" wrapText="true" style="-fx-font-weight: bold;"/>
-    <SplitPane dividerPositions="0.5" VBox.vgrow="ALWAYS">
+    <SplitPane dividerPositions="0.55" VBox.vgrow="ALWAYS">
         <items>
             <DispatchRuleGraphEditorPane fx:id="simulationGraph"/>
             <ListView fx:id="stepList"/>

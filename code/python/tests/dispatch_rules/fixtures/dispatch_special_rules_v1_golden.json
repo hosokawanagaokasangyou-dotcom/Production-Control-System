@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "engineMinVersion": "1.0.0",
+  "rules": [
+    {
+      "id": "L13",
+      "name": "接続→SEC WIP",
+      "enabled": true,
+      "applyOrder": 40,
+      "executionMode": "auto",
+      "legacyFallback": true,
+      "graph": { "nodes": [], "edges": [] }
+    }
+  ]
+}

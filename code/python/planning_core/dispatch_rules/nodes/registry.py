@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from typing import Any, Callable
 
 from planning_core.dispatch_rules.context import RuleContext
@@ -20,14 +22,37 @@ def get(node_type: str) -> Executor | None:
     return _REGISTRY.get(node_type)
 
 
+def _normalize_machine_name(val: object) -> str:
+    if val is None:
+        return ""
+    t = unicodedata.normalize("NFKC", str(val))
+    t = t.replace("\u00a0", " ").replace("\u3000", " ")
+    t = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _machine_matches(rule_machine: str, task_machine: str) -> bool:
+    rule_m = _normalize_machine_name(rule_machine)
+    task_m = _normalize_machine_name(task_machine)
+    if not rule_m:
+        return True
+    if not task_m:
+        return False
+    if task_m == rule_m:
+        return True
+    return task_m.startswith(rule_m + " ") or task_m.startswith(rule_m)
+
+
 def _scope_matches(node: RuleNode, ctx: RuleContext) -> bool:
     task = ctx.task or {}
     params = node.params
     process = str(params.get("process_name", "")).strip()
     machine = str(params.get("machine_name", "")).strip()
-    if process and str(task.get("工程名", task.get("process", ""))).strip() != process:
+    task_proc = str(task.get("工程名", task.get("process", ""))).strip()
+    task_mach = str(task.get("機械名", task.get("machine_name", task.get("machine", "")))).strip()
+    if process and task_proc != process:
         return False
-    if machine and str(task.get("機械名", task.get("machine", ""))).strip() != machine:
+    if machine and not _machine_matches(machine, task_mach):
         return False
     return True
 
@@ -68,23 +93,42 @@ def _exec_filter_row(node: RuleNode, ctx: RuleContext, state: dict[str, Any]) ->
 def _exec_compare(node: RuleNode, ctx: RuleContext, state: dict[str, Any]) -> dict[str, Any] | None:
     left = state.get("metric_value")
     right = state.get("threshold_value")
+    edges = state.get("__edges__") or []
+    for edge in edges:
+        if edge.to_node != node.id:
+            continue
+        if edge.to_port == "threshold":
+            right = state.get(f"threshold:{edge.from_node}", right)
+        else:
+            left = state.get(f"metric:{edge.from_node}", left)
     if left is None or right is None:
-        state["compare_pass"] = False
-        return state
-    op = str(node.params.get("operator", ">="))
-    if op == ">=":
-        state["compare_pass"] = float(left) >= float(right)
-    elif op == ">":
-        state["compare_pass"] = float(left) > float(right)
-    elif op == "<=":
-        state["compare_pass"] = float(left) <= float(right)
-    elif op == "<":
-        state["compare_pass"] = float(left) < float(right)
-    elif op == "==":
-        state["compare_pass"] = float(left) == float(right)
+        passed = False
     else:
-        state["compare_pass"] = False
+        op = str(node.params.get("operator", ">="))
+        if op == ">=":
+            passed = float(left) >= float(right)
+        elif op == ">":
+            passed = float(left) > float(right)
+        elif op == "<=":
+            passed = float(left) <= float(right)
+        elif op == "<":
+            passed = float(left) < float(right)
+        elif op == "==":
+            passed = float(left) == float(right)
+        else:
+            passed = False
+    compares = state.setdefault("compare_by_node", {})
+    compares[node.id] = passed
+    state["compare_pass"] = passed
     return state
+
+
+def _inbound_compare_pass(node: RuleNode, state: dict[str, Any]) -> bool:
+    edge_from = (state.get("__edge_to_from__") or {}).get(node.id)
+    compares = state.get("compare_by_node") or {}
+    if edge_from and edge_from in compares:
+        return bool(compares[edge_from])
+    return bool(state.get("compare_pass"))
 
 
 def _exec_const_number(node: RuleNode, ctx: RuleContext, state: dict[str, Any]) -> dict[str, Any] | None:
@@ -99,25 +143,30 @@ def _exec_const_number(node: RuleNode, ctx: RuleContext, state: dict[str, Any]) 
             state["threshold_value"] = float(node.params.get("value", 0) or 0)
     else:
         state["threshold_value"] = float(node.params.get("value", 0) or 0)
+    state[f"threshold:{node.id}"] = state["threshold_value"]
     return state
 
 
 def _exec_metric_wip(node: RuleNode, ctx: RuleContext, state: dict[str, Any]) -> dict[str, Any] | None:
     metrics = ctx.metrics
     key = str(node.params.get("metric_key", "wip_connection_sec"))
-    state["metric_value"] = float(metrics.get(key, metrics.get("wip_total", 0)) or 0)
+    value = float(metrics.get(key, metrics.get("wip_total", 0)) or 0)
+    state["metric_value"] = value
+    state[f"metric:{node.id}"] = value
     return state
 
 
 def _exec_metric_roll_diff(node: RuleNode, ctx: RuleContext, state: dict[str, Any]) -> dict[str, Any] | None:
     metrics = ctx.metrics
     key = str(node.params.get("metric_key", "request_roll_diff"))
-    state["metric_value"] = float(metrics.get(key, 0) or 0)
+    value = float(metrics.get(key, 0) or 0)
+    state["metric_value"] = value
+    state[f"metric:{node.id}"] = value
     return state
 
 
 def _exec_block_candidate(node: RuleNode, ctx: RuleContext, state: dict[str, Any]) -> dict[str, Any] | None:
-    if state.get("compare_pass"):
+    if _inbound_compare_pass(node, state):
         ctx.blocked = True
         ctx.block_reason = str(
             node.params.get("summary_ja", node.params.get("reason_code", "blocked"))
@@ -127,7 +176,7 @@ def _exec_block_candidate(node: RuleNode, ctx: RuleContext, state: dict[str, Any
 
 
 def _exec_block_downstream(node: RuleNode, ctx: RuleContext, state: dict[str, Any]) -> dict[str, Any] | None:
-    if state.get("compare_pass"):
+    if _inbound_compare_pass(node, state):
         downstream = str(node.params.get("downstream_process", "SEC"))
         task = ctx.task or {}
         proc = str(task.get("工程名", task.get("process", ""))).strip()

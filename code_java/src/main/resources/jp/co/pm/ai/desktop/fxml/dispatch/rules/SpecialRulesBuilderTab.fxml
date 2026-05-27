@@ -18,11 +18,26 @@
         <Button text="衝突" onAction="#onConflictAction"/>
         <Button text="保存" onAction="#onSaveAction"/>
     </HBox>
-    <HBox spacing="8">
-        <ComboBox fx:id="ruleCombo" prefWidth="260"/>
+    <HBox spacing="8" alignment="CENTER_LEFT">
+        <ComboBox fx:id="ruleCombo" prefWidth="220"/>
         <CheckBox fx:id="ruleEnabledCheck" text="有効" onAction="#onToggleEnabledAction"/>
+        <ComboBox fx:id="executionModeCombo" prefWidth="100"/>
+        <Button text="↑" onAction="#onMoveRuleUpAction"/>
+        <Button text="↓" onAction="#onMoveRuleDownAction"/>
+        <Button text="すべてON" onAction="#onEnableAllRulesAction"/>
+        <Button text="すべてOFF" onAction="#onDisableAllRulesAction"/>
         <Label fx:id="applyOrderSummary" wrapText="true" HBox.hgrow="ALWAYS"/>
     </HBox>
+    <TableView fx:id="ruleTable" prefHeight="120">
+        <columns>
+            <TableColumn fx:id="orderCol" text="順" prefWidth="40"/>
+            <TableColumn fx:id="enabledCol" text="ON" prefWidth="40"/>
+            <TableColumn fx:id="idCol" text="ID" prefWidth="60"/>
+            <TableColumn fx:id="nameCol" text="名称" prefWidth="160"/>
+            <TableColumn fx:id="modeCol" text="実行元" prefWidth="80"/>
+            <TableColumn fx:id="applyOrderCol" text="applyOrder" prefWidth="80"/>
+        </columns>
+    </TableView>
     <SplitPane dividerPositions="0.65" VBox.vgrow="ALWAYS">
         <items>
             <DispatchRuleGraphEditorPane fx:id="graphEditor"/>

@@ -24,6 +24,8 @@ public final class DispatchRuleGraphEditorPane extends Pane {
     private final Canvas canvas = new Canvas(800, 480);
     private DispatchRuleGraph graph = new DispatchRuleGraph();
     private String highlightedNodeId = "";
+    private double wipOverlayValue = -1;
+    private double wipOverlayThreshold = 20;
     private Consumer<String> nodeSelectionHandler = id -> {};
 
     public DispatchRuleGraphEditorPane() {
@@ -54,6 +56,19 @@ public final class DispatchRuleGraphEditorPane extends Pane {
 
     public void setHighlightedNodeId(String nodeId) {
         this.highlightedNodeId = nodeId != null ? nodeId : "";
+        redraw();
+    }
+
+    public void setWipOverlay(double wip, double threshold) {
+        this.wipOverlayValue = wip;
+        if (threshold > 0) {
+            this.wipOverlayThreshold = threshold;
+        }
+        redraw();
+    }
+
+    public void clearWipOverlay() {
+        this.wipOverlayValue = -1;
         redraw();
     }
 
@@ -125,6 +140,19 @@ public final class DispatchRuleGraphEditorPane extends Pane {
         g.setTextAlign(TextAlignment.CENTER);
         String text = node.label != null && !node.label.isBlank() ? node.label : node.type;
         g.fillText(truncate(text, 16), node.x + NODE_W / 2, node.y + NODE_H / 2 + 4);
+        if (wipOverlayValue >= 0
+                && node.type != null
+                && (node.type.startsWith("metric.wip") || node.type.startsWith("compare.threshold"))) {
+            g.setFill(
+                    wipOverlayValue >= wipOverlayThreshold
+                            ? Color.web("#C0392B")
+                            : Color.web("#2980B9"));
+            g.setFont(Font.font(12));
+            g.fillText(
+                    String.format("WIP %.0f", wipOverlayValue),
+                    node.x + NODE_W / 2,
+                    node.y + NODE_H - 8);
+        }
     }
 
     private static String truncate(String s, int max) {

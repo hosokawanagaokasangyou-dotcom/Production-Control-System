@@ -3963,6 +3963,9 @@ public final class MainShellController {
                             () -> {
                                 refreshEquipmentGanttGraphicAfterPipelineRun();
                                 refreshOperatorCardAfterPipelineRun();
+                                if (dispatchInteractiveTabController != null) {
+                                    dispatchInteractiveTabController.reloadSpecialRuleBadges();
+                                }
                                 Runnable afterDispatchReload =
                                         () -> {
                                             MacroCompleteChime.playIfAvailable(collectUiEnv());
@@ -3979,6 +3982,9 @@ public final class MainShellController {
                                             afterDispatchReload);
                                 } else {
                                     afterDispatchReload.run();
+                                }
+                                if (specialRulesTabController != null) {
+                                    specialRulesTabController.reloadTraceFromDisk();
                                 }
                             });
                     // サマリ xlsx は段階2 exit 0 直後には作らない。納期管理ビュー再読込完了後に出力する。
@@ -5191,7 +5197,8 @@ public final class MainShellController {
     }
 
     /** 配台計画手動修正タブの配台ロール単位 (m) 解決用。未初期化時は {@code null}。 */
-    PlanInputTabController planInputTabControllerForDispatchRollUnit() {
+    /** Package / dispatch-rules access to plan input tab. */
+public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         return planInputTabController;
     }
 

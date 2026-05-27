@@ -15,7 +15,11 @@ if ! command -v "$PY" >/dev/null 2>&1; then
   PY="python3"
 fi
 echo "[verify] phase=$PHASE python=$($PY --version 2>&1)"
-"$PY" -m pytest code/python/tests/dispatch_rules/ -q --tb=short
+if [[ "$PHASE" == "1" ]]; then
+  "$PY" -m pytest code/python/tests/dispatch_rules/test_migrations.py code/python/tests/dispatch_rules/test_migrations_golden.py code/python/tests/dispatch_rules/test_execution_planner.py code/python/tests/dispatch_rules/test_conflict_checker.py code/python/tests/dispatch_rules/test_simulation.py code/python/tests/dispatch_rules/test_trace_recorder.py -q --tb=short
+else
+  "$PY" -m pytest code/python/tests/dispatch_rules/ -q --tb=short
+fi
 "$PY" code/python/tools/validate_dispatch_rules.py \
   code/json/dispatch_special_rules/dispatch_special_rules.json --conflicts
 if [[ -d code_java ]]; then

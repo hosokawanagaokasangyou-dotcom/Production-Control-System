@@ -1,0 +1,11 @@
+{
+  "version": 0,
+  "rules": [
+    {
+      "id": "L13",
+      "name": "接続→SEC WIP",
+      "priority": 40,
+      "graph": { "nodes": [], "edges": [] }
+    }
+  ]
+}

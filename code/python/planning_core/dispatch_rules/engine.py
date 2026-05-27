@@ -83,7 +83,12 @@ def _topo_nodes(rule) -> list:
 
 
 def _run_dsl_rule(rule, ctx: RuleContext, phase: RulePhase) -> RulePhaseResult:
-    state: dict[str, Any] = {"scope_match": True, "condition_pass": True}
+    state: dict[str, Any] = {
+        "scope_match": True,
+        "condition_pass": True,
+        "__edge_to_from__": {edge.to_node: edge.from_node for edge in rule.graph.edges},
+        "__edges__": list(rule.graph.edges),
+    }
     events: list[dict[str, Any]] = []
     for node in _topo_nodes(rule):
         executor = get(node.type)

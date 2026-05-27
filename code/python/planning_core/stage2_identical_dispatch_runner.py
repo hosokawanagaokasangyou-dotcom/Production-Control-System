@@ -23,11 +23,23 @@ from pathlib import Path
 ENV_INTERACTIVE_TRIAL_STAGE2_PARITY = "PM_AI_INTERACTIVE_TRIAL_STAGE2_PARITY"
 
 
+def _flush_dispatch_rule_trace_sidecar() -> None:
+    try:
+        from planning_core.dispatch_rules import trace_recorder
+
+        path = trace_recorder.write_sidecar()
+        if path is not None:
+            print(f"[dispatch-rules] trace sidecar: {path}", flush=True)
+    except Exception as ex:
+        print(f"[dispatch-rules] trace sidecar failed: {ex}", flush=True)
+
+
 def run_stage2_generate_plan() -> None:
     """
     段階2標準: マスタの工場時間オーバーライドのうえで ``_generate_plan_impl()`` を 1 回実行する。
     """
     from planning_core import _core as pc
+    from planning_core.dispatch_rules import trace_recorder
 
     # #region agent log
     try:
@@ -38,9 +50,13 @@ def run_stage2_generate_plan() -> None:
         print(f"[agent-debug] bootstrap failed: {_boot_ex}", flush=True)
     # #endregion agent log
 
+    trace_recorder.reset_trace()
     master_abs = pc._master_workbook_path_resolved()
-    with pc._override_default_factory_hours_from_master(master_abs):
-        pc._generate_plan_impl()
+    try:
+        with pc._override_default_factory_hours_from_master(master_abs):
+            pc._generate_plan_impl()
+    finally:
+        _flush_dispatch_rule_trace_sidecar()
 
 
 def run_interactive_dispatch_trial_from_result_dispatch_json(
@@ -74,6 +90,9 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
     os.environ["PM_AI_INTERACTIVE_DISPATCH_TRIAL"] = "1"
     os.environ[ENV_INTERACTIVE_TRIAL_STAGE2_PARITY] = "1"
 
+    from planning_core.dispatch_rules import trace_recorder
+
+    trace_recorder.reset_trace()
     shortage_path = path.with_name("dispatch_trial_shortages.json")
 
     try:
@@ -226,3 +245,5 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
         print(f"dispatch trial failed: {e}", flush=True)
         traceback.print_exc()
         return 1, None
+    finally:
+        _flush_dispatch_rule_trace_sidecar()

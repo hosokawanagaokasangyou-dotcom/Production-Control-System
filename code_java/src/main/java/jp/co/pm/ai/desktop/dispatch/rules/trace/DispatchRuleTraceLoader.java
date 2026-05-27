@@ -53,6 +53,6 @@ public final class DispatchRuleTraceLoader {
     }
 
     public static void reloadFromLatestStage2(Map<String, String> ui) {
-        // sidecar is written by Python trace_recorder during stage2
+        // sidecar is written by Python trace_recorder during stage2; Java reloads via SpecialRulesTabController
     }
 }

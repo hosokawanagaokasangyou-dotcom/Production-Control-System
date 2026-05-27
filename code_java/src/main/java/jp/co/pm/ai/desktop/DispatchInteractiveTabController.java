@@ -89,6 +89,7 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinSystemDispatchDisplayQty;
 import jp.co.pm.ai.desktop.dispatch.DispatchAladdinPlanAligner;
+import jp.co.pm.ai.desktop.dispatch.rules.ui.trace.DispatchRuleApplicationBadgeSupport;
 import jp.co.pm.ai.desktop.dispatch.DispatchInteractiveDateAxis;
 import jp.co.pm.ai.desktop.dispatch.DispatchInteractiveRollUnitSupport;
 import jp.co.pm.ai.desktop.dispatch.DispatchTrialConsistency;
@@ -257,6 +258,8 @@ public final class DispatchInteractiveTabController {
     /** 段階3試行後の実配台数量（日付セルの括弧内）を行単位で合算する列。 */
     private static final String COL_STAGE3_DISPATCH_QTY_TOTAL = "段階3配台数";
 
+    private static final String COL_SPECIAL_RULES = "特別ルール";
+
     private static final List<String> WIDE_STATIC_HEADERS =
             List.of(
                     ResultDispatchSchema.COL_DISPATCH_TRIAL_ORDER,
@@ -269,7 +272,8 @@ public final class DispatchInteractiveTabController {
                     "実加工数",
                     "計画合計",
                     COL_STAGE3_DISPATCH_QTY_TOTAL,
-                    Stage3DispatchQtyBalanceCheck.COL_TITLE);
+                    Stage3DispatchQtyBalanceCheck.COL_TITLE,
+                    COL_SPECIAL_RULES);
 
     /** 「工程+機械×日」ビューの先頭固定列（日付ブロックの直前まで）。 */
     private static final List<String> BY_DAY_STATIC_HEADERS =
@@ -458,6 +462,9 @@ public final class DispatchInteractiveTabController {
     /** Parallel to {@link #wideProfiles} rows in the wide grid. */
     private final List<WideRow> wideRowItems = new ArrayList<>();
 
+    private final DispatchRuleApplicationBadgeSupport specialRuleBadges =
+            new DispatchRuleApplicationBadgeSupport();
+
     private List<DispatchQtyShortfallRow> lastDispatchShortfallRows = List.of();
 
     /** {@link DispatchTrialShortages.FullBundle#shortageHints()}（op_shortage / as_shortage）。試行後ダイアログ用。 */
@@ -575,6 +582,13 @@ public final class DispatchInteractiveTabController {
         this.shell = shell;
         ensureInnerTabPersistenceWired();
         shell.syncPlanInputStage2ButtonFromDispatchDirty();
+        reloadSpecialRuleBadges();
+    }
+
+    void reloadSpecialRuleBadges() {
+        if (shell != null) {
+            specialRuleBadges.reload(shell.snapshotUiEnv());
+        }
     }
 
     /**
@@ -3244,10 +3258,17 @@ public final class DispatchInteractiveTabController {
 
     private static boolean isComputedWideStaticHeader(String title) {
         return COL_STAGE3_DISPATCH_QTY_TOTAL.equals(title)
-                || Stage3DispatchQtyBalanceCheck.COL_TITLE.equals(title);
+                || Stage3DispatchQtyBalanceCheck.COL_TITLE.equals(title)
+                || COL_SPECIAL_RULES.equals(title);
     }
 
     private String wideStaticCellText(WideRow wr, String title) {
+        if (COL_SPECIAL_RULES.equals(title)) {
+            return specialRuleBadges.badgeForRow(
+                    wr.getStatic("依頼NO"),
+                    wr.getStatic(ResultDispatchSchema.COL_PROCESS),
+                    wr.getStatic(ResultDispatchSchema.COL_MACHINE));
+        }
         if (COL_STAGE3_DISPATCH_QTY_TOTAL.equals(title)) {
             return formatStage3DispatchQtyTotal(stage3DispatchQtyTotalForWideRow(wr));
         }

@@ -584,6 +584,45 @@ public final class PlanInputTabController {
         return Optional.empty();
     }
 
+    /** 試走ラボ用: 依頼NO・工程名・機械名ラベル一覧。 */
+    public List<String> listPlanInputTaskLabels() {
+        if (headersRef.isEmpty() || rows == null || rows.isEmpty()) {
+            return List.of();
+        }
+        int colTask = headersRef.indexOf("依頼NO");
+        int colProcess = headersRef.indexOf("工程名");
+        int colMachine = headersRef.indexOf("機械名");
+        List<String> out = new ArrayList<>();
+        for (ObservableList<String> cells : rows) {
+            String tid = colTask >= 0 ? cellAt(cells, colTask) : "";
+            if (tid.isEmpty()) {
+                continue;
+            }
+            String proc = colProcess >= 0 ? cellAt(cells, colProcess) : "";
+            String mach = colMachine >= 0 ? cellAt(cells, colMachine) : "";
+            out.add(tid + " / " + proc + " / " + mach);
+        }
+        return out;
+    }
+
+    /** 試走ラボ用: ラベルから行 Map を返す。 */
+    public Optional<Map<String, String>> findPlanRowMapByLabel(String label) {
+        if (label == null || label.isBlank() || headersRef.isEmpty()) {
+            return Optional.empty();
+        }
+        String[] parts = label.split(" / ", 3);
+        String tid = parts.length > 0 ? parts[0].strip() : "";
+        String proc = parts.length > 1 ? parts[1].strip() : "";
+        String mach = parts.length > 2 ? parts[2].strip() : "";
+        Optional<Map<String, String>> found = findPlanRowMapByKeys(tid, proc, mach);
+        if (found.isPresent()) {
+            Map<String, String> row = new LinkedHashMap<>(found.get());
+            row.putIfAbsent("task_id", tid);
+            return Optional.of(row);
+        }
+        return Optional.empty();
+    }
+
     private static boolean isPlanRowExcludedFromStage2Queue(Map<String, String> row) {
         return DispatchPlanInputInteractiveCoverageCheck.isExcludedFromDispatchCoverage(row);
     }
@@ -1152,7 +1191,7 @@ public final class PlanInputTabController {
         return pathField.getText() != null ? pathField.getText().trim() : "";
     }
 
-    String snapshotPlanInputSheet() {
+    public String snapshotPlanInputSheet() {
         return sheetField.getText() != null ? sheetField.getText().trim() : "";
     }
 

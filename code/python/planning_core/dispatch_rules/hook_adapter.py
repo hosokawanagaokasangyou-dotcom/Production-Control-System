@@ -80,6 +80,26 @@ def eligible_l13_connection_skip(
         if result.modified:
             return ctx.blocked
         return False
+    legacy_skip = _legacy_l13_connection_skip(task, wip_connection_before_sec)
+    if legacy_skip:
+        trace_recorder.append_event(
+            task_id=str(task.get("task_id", "")),
+            day=None,
+            rule_id="L13",
+            apply_order=40,
+            execution_source="legacy",
+            phase=RulePhase.ELIGIBLE_FILTER.value,
+            effect="block_candidate",
+            reason_code="H-SR-B6",
+            summary_ja="WIP上限により接続を当日候補から除外（従来）",
+        )
+    return legacy_skip
+
+
+def _legacy_l13_connection_skip(
+    task: dict,
+    wip_connection_before_sec: float | None,
+) -> bool:
     limit_raw = os.environ.get("WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS", "20")
     try:
         limit = float(limit_raw)

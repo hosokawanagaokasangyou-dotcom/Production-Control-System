@@ -57,6 +57,21 @@ public final class DispatchRuleConflictChecker {
                             List.of("L10", "L13"),
                             "L10 と L13 が同時有効 — SEC ゲート経路に注意"));
         }
+        List<DispatchRuleEntry> speedRules = new ArrayList<>();
+        for (DispatchRuleEntry r : enabled) {
+            if (r.graph != null
+                    && r.graph.nodes.stream().anyMatch(n -> "action.set_speed_mpm".equals(n.type))) {
+                speedRules.add(r);
+            }
+        }
+        if (speedRules.size() >= 2) {
+            items.add(
+                    new ConflictItem(
+                            "effect_contradiction",
+                            "warning",
+                            speedRules.stream().map(r -> r.id).toList(),
+                            "複数の速度上書きルールが有効です（applyOrder で順序確認）"));
+        }
         return new ConflictReport(items);
     }
 }
