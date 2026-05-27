@@ -125,6 +125,7 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
+import jp.co.pm.ai.desktop.io.ProcessOwnedLockFiles;
 import jp.co.pm.ai.desktop.io.SummaryAiDispatchExportLock;
 import jp.co.pm.ai.desktop.io.SummaryAiDispatchWorkbookExporter;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
@@ -686,6 +687,7 @@ public final class MainShellController {
 
         primaryStage.setOnCloseRequest(
                 e -> {
+                    ProcessOwnedLockFiles.releaseAllOwnedQuietly();
                     if (geminiFreeTierModelsRefreshService != null) {
                         geminiFreeTierModelsRefreshService.shutdown();
                     }

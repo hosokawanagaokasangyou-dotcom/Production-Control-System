@@ -55,6 +55,7 @@ public final class PipelineExecutionTimingHistoryLock {
 
         private AcquiredLock(Path lockPath) {
             this.lockPath = lockPath;
+            ProcessOwnedLockFiles.register(lockPath);
         }
 
         public Path lockPath() {
@@ -66,7 +67,7 @@ public final class PipelineExecutionTimingHistoryLock {
                 return;
             }
             released = true;
-            deleteIfExistsQuiet(lockPath);
+            ProcessOwnedLockFiles.releaseIfOwnedByCurrentProcess(lockPath);
         }
 
         @Override
@@ -144,14 +145,6 @@ public final class PipelineExecutionTimingHistoryLock {
             return InetAddress.getLocalHost().getHostAddress();
         } catch (Exception ex) {
             return "";
-        }
-    }
-
-    private static boolean deleteIfExistsQuiet(Path lock) {
-        try {
-            return Files.deleteIfExists(lock);
-        } catch (IOException ignored) {
-            return false;
         }
     }
 

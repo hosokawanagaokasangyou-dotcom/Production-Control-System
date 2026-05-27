@@ -51,6 +51,7 @@ public final class SummaryAiDispatchExportLock {
 
         private AcquiredLock(Path lockPath) {
             this.lockPath = lockPath;
+            ProcessOwnedLockFiles.register(lockPath);
         }
 
         public Path lockPath() {
@@ -62,7 +63,7 @@ public final class SummaryAiDispatchExportLock {
                 return;
             }
             released = true;
-            SummaryAiDispatchExportLock.deleteIfExistsQuiet(lockPath);
+            ProcessOwnedLockFiles.releaseIfOwnedByCurrentProcess(lockPath);
         }
 
         @Override
