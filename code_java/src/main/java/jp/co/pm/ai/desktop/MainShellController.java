@@ -3898,6 +3898,7 @@ public final class MainShellController {
     }
 
     private void completeStageRunOnFx(String script, Integer code, Throwable err, List<String> tailSnap) {
+        mainRunTabController.flushPendingLogAppends();
         DispatchRuleBuilderRunContext.get().clearActiveRun();
         if (STAGE1.equals(script)) {
             endPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE1);
@@ -4008,6 +4009,7 @@ public final class MainShellController {
             mainRunTabController.resetStage1ClearCacheAndRunCheckbox();
             mainRunTabController.resetDevCheckboxesAfterStage1Run();
         }
+        mainRunTabController.flushPendingLogAppends();
     }
 
     /**

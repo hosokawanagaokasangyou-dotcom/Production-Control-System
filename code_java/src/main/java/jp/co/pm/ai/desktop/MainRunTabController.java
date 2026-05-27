@@ -206,11 +206,22 @@ public final class MainRunTabController {
 
     private double pendingSessionLogScroll = Double.NaN;
 
-    private final Object portableSyncLogLock = new Object();
+    private final Object logAppendLock = new Object();
 
-    private final List<String> portableSyncLogPending = new ArrayList<>();
+    private final List<String> logAppendPending = new ArrayList<>();
 
-    private static final int PORTABLE_SYNC_LOG_BATCH_SIZE = 25;
+    private Timeline logAppendFlushTimeline;
+
+    private Timeline logListRefreshDebounceTimeline;
+
+    private static final int LOG_APPEND_BATCH_MAX = 40;
+
+    private static final Duration LOG_APPEND_FLUSH_DELAY = Duration.millis(32);
+
+    private static final Duration LOG_LIST_REFRESH_DEBOUNCE = Duration.millis(120);
+
+    /** この割合以上で末尾にいるときだけ自動 scrollTo（ユーザーが上へスクロール中は追従しない）。 */
+    private static final double LOG_AUTO_SCROLL_BOTTOM_THRESHOLD = 0.92;
 
     @FXML
     private void initialize() {
@@ -252,8 +263,8 @@ public final class MainRunTabController {
                     .addListener(
                             (o, a, b) -> {
                                 refreshLogLinesVisiblePredicate();
-                                if (logListView != null) {
-                                    logListView.refresh();
+                                if (!snapshotLogSearchText().isEmpty()) {
+                                    scheduleDebouncedLogListRefresh();
                                 }
                             });
         }
@@ -409,14 +420,7 @@ public final class MainRunTabController {
                                 }
                             }
                         });
-        logListView
-                .widthProperty()
-                .addListener(
-                        (o, a, b) -> {
-                            if (logListView != null) {
-                                logListView.refresh();
-                            }
-                        });
+        logListView.widthProperty().addListener((o, a, b) -> scheduleDebouncedLogListRefresh());
         logListView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         installLogClipboardSupport();
     }
@@ -433,6 +437,105 @@ public final class MainRunTabController {
         double lineHeight = appliedLogFont.getSize() * 1.35;
         double cell = Math.clamp(lineHeight * 1.45, 22.0, 52.0);
         logListView.setFixedCellSize(cell);
+    }
+
+    private void scheduleDebouncedLogListRefresh() {
+        if (logListView == null) {
+            return;
+        }
+        Runnable schedule =
+                () -> {
+                    if (logListRefreshDebounceTimeline == null) {
+                        logListRefreshDebounceTimeline =
+                                new Timeline(
+                                        new KeyFrame(
+                                                LOG_LIST_REFRESH_DEBOUNCE,
+                                                e -> {
+                                                    if (logListView != null) {
+                                                        logListView.refresh();
+                                                    }
+                                                }));
+                        logListRefreshDebounceTimeline.setCycleCount(1);
+                    }
+                    logListRefreshDebounceTimeline.playFromStart();
+                };
+        if (Platform.isFxApplicationThread()) {
+            schedule.run();
+        } else {
+            Platform.runLater(schedule);
+        }
+    }
+
+    private boolean shouldAutoScrollLogToEnd() {
+        if (logListView == null) {
+            return true;
+        }
+        double proportion = readVerticalScrollProportion(logListView);
+        return !Double.isFinite(proportion)
+                || proportion >= LOG_AUTO_SCROLL_BOTTOM_THRESHOLD;
+    }
+
+    private void scrollLogListToLastVisibleRowIfNeeded() {
+        if (logListView == null || !shouldAutoScrollLogToEnd()) {
+            return;
+        }
+        int n = logLinesVisible.size();
+        if (n > 0) {
+            logListView.scrollTo(n - 1);
+        }
+    }
+
+    private void scheduleLogAppendFlush(boolean immediate) {
+        Runnable schedule =
+                () -> {
+                    if (immediate) {
+                        if (logAppendFlushTimeline != null) {
+                            logAppendFlushTimeline.stop();
+                        }
+                        flushPendingLogAppendsOnFxThread();
+                    } else {
+                        if (logAppendFlushTimeline == null) {
+                            logAppendFlushTimeline =
+                                    new Timeline(
+                                            new KeyFrame(
+                                                    LOG_APPEND_FLUSH_DELAY,
+                                                    e -> flushPendingLogAppendsOnFxThread()));
+                            logAppendFlushTimeline.setCycleCount(1);
+                        }
+                        logAppendFlushTimeline.playFromStart();
+                    }
+                };
+        if (Platform.isFxApplicationThread()) {
+            schedule.run();
+        } else {
+            Platform.runLater(schedule);
+        }
+    }
+
+    /** バッチ追記の残りを UI へ反映する（ポータル同期終了時など）。 */
+    void flushPendingLogAppends() {
+        if (Platform.isFxApplicationThread()) {
+            flushPendingLogAppendsOnFxThread();
+        } else {
+            Platform.runLater(this::flushPendingLogAppendsOnFxThread);
+        }
+    }
+
+    private void flushPendingLogAppendsOnFxThread() {
+        if (!Platform.isFxApplicationThread()) {
+            Platform.runLater(this::flushPendingLogAppendsOnFxThread);
+            return;
+        }
+        List<String> batch;
+        synchronized (logAppendLock) {
+            if (logAppendPending.isEmpty()) {
+                return;
+            }
+            batch = new ArrayList<>(logAppendPending);
+            logAppendPending.clear();
+        }
+        logLinesAll.addAll(batch);
+        scrollLogListToLastVisibleRowIfNeeded();
     }
 
     private void installLogClipboardSupport() {
@@ -992,9 +1095,18 @@ public final class MainRunTabController {
 
     /** メイン実行タブのログ一覧を空にする（クリアボタンと同一。ポータルバージョンアップ完了後など）。 */
     void clearMainRunTabLog() {
-        logLinesAll.clear();
-        if (shell != null) {
-            shell.scheduleDesktopSessionSave();
+        Runnable clear =
+                () -> {
+                    flushPendingLogAppendsOnFxThread();
+                    logLinesAll.clear();
+                    if (shell != null) {
+                        shell.scheduleDesktopSessionSave();
+                    }
+                };
+        if (Platform.isFxApplicationThread()) {
+            clear.run();
+        } else {
+            Platform.runLater(clear);
         }
     }
 
@@ -1019,53 +1131,18 @@ public final class MainRunTabController {
     }
 
     /**
-     * バックグラウンドのポータル同期から呼ぶ。25 行ごとに UI へまとめて追記し、大量の {@code runLater} を抑える。
+     * バックグラウンドのポータル同期から呼ぶ。通常ログ追記と同じバッチ機構へ委譲する。
      */
     void appendPortableBundleSyncLog(String line) {
-        if (line == null || line.isEmpty()) {
-            return;
-        }
-        List<String> flush = null;
-        synchronized (portableSyncLogLock) {
-            portableSyncLogPending.add(line);
-            if (portableSyncLogPending.size() >= PORTABLE_SYNC_LOG_BATCH_SIZE) {
-                flush = new ArrayList<>(portableSyncLogPending);
-                portableSyncLogPending.clear();
-            }
-        }
-        if (flush != null) {
-            appendPortableBundleSyncLogBatch(flush);
-        }
+        appendLog(line, true);
     }
 
     /** 同期スレッド終了時に残りを UI へ反映する。 */
     void flushPortableBundleSyncLog() {
-        List<String> flush;
-        synchronized (portableSyncLogLock) {
-            if (portableSyncLogPending.isEmpty()) {
-                return;
-            }
-            flush = new ArrayList<>(portableSyncLogPending);
-            portableSyncLogPending.clear();
+        flushPendingLogAppends();
+        if (shell != null) {
+            shell.scheduleDesktopSessionSave();
         }
-        appendPortableBundleSyncLogBatch(flush);
-    }
-
-    private void appendPortableBundleSyncLogBatch(List<String> batch) {
-        if (batch == null || batch.isEmpty()) {
-            return;
-        }
-        Platform.runLater(
-                () -> {
-                    logLinesAll.addAll(batch);
-                    int n = logLinesVisible.size();
-                    if (n > 0 && logListView != null) {
-                        logListView.scrollTo(n - 1);
-                    }
-                    if (shell != null) {
-                        shell.scheduleDesktopSessionSave();
-                    }
-                });
     }
 
     TextField getWorkbookField() {
@@ -1320,20 +1397,26 @@ public final class MainRunTabController {
      * lines before restoring session scroll).
      */
     void appendLog(String line, boolean scrollToEnd) {
-        Runnable add =
-                () -> {
-                    logLinesAll.add(line);
-                    if (scrollToEnd) {
-                        int n = logLinesVisible.size();
-                        if (n > 0) {
-                            logListView.scrollTo(n - 1);
-                        }
-                    }
-                };
-        if (Platform.isFxApplicationThread()) {
-            add.run();
-        } else {
-            Platform.runLater(add);
+        if (line == null || line.isEmpty()) {
+            return;
+        }
+        if (!scrollToEnd) {
+            Runnable addImmediate =
+                    () -> {
+                        flushPendingLogAppendsOnFxThread();
+                        logLinesAll.add(line);
+                    };
+            if (Platform.isFxApplicationThread()) {
+                addImmediate.run();
+            } else {
+                Platform.runLater(addImmediate);
+            }
+            return;
+        }
+        synchronized (logAppendLock) {
+            logAppendPending.add(line);
+            boolean immediate = logAppendPending.size() >= LOG_APPEND_BATCH_MAX;
+            scheduleLogAppendFlush(immediate);
         }
     }
 
@@ -1343,19 +1426,28 @@ public final class MainRunTabController {
      */
     void restoreRunLogUiFromSession(
             String filterName, List<String> lines, double scrollProportion) {
-        suppressRunLogSessionPersistence.set(true);
-        try {
-            if (lines != null && !lines.isEmpty()) {
-                logLinesAll.setAll(lines);
-            } else {
-                logLinesAll.clear();
-            }
-            logFilterCombo.setValue(LogViewFilter.fromStoredName(filterName));
-            refreshLogLinesVisiblePredicate();
-        } finally {
-            suppressRunLogSessionPersistence.set(false);
+        Runnable restore =
+                () -> {
+                    flushPendingLogAppendsOnFxThread();
+                    suppressRunLogSessionPersistence.set(true);
+                    try {
+                        if (lines != null && !lines.isEmpty()) {
+                            logLinesAll.setAll(lines);
+                        } else {
+                            logLinesAll.clear();
+                        }
+                        logFilterCombo.setValue(LogViewFilter.fromStoredName(filterName));
+                        refreshLogLinesVisiblePredicate();
+                    } finally {
+                        suppressRunLogSessionPersistence.set(false);
+                    }
+                    pendingSessionLogScroll = scrollProportion;
+                };
+        if (Platform.isFxApplicationThread()) {
+            restore.run();
+        } else {
+            Platform.runLater(restore);
         }
-        pendingSessionLogScroll = scrollProportion;
     }
 
     /** Applies {@link #pendingSessionLogScroll} once the log {@link ListView} is laid out. */
