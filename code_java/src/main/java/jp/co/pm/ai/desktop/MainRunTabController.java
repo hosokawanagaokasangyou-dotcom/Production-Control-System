@@ -176,6 +176,9 @@ public final class MainRunTabController {
     private Label operatorUserLabel;
 
     @FXML
+    private Button changeOperatorPinButton;
+
+    @FXML
     private Label pipelineTimingStage1Label;
 
     @FXML
@@ -830,6 +833,17 @@ public final class MainRunTabController {
         }
         String op = FactoryOperatorUserStore.sessionOperatorName();
         operatorUserLabel.setText(op.isBlank() ? "操作者: （未選択）" : "操作者: " + op);
+        if (changeOperatorPinButton != null) {
+            changeOperatorPinButton.setDisable(op.isBlank());
+        }
+    }
+
+    @FXML
+    private void onChangeOperatorPinAction() {
+        if (shell == null) {
+            return;
+        }
+        shell.promptChangeSessionOperatorPin();
     }
 
     /**

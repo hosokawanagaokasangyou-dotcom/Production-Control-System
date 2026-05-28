@@ -32,6 +32,7 @@
                     <Label fx:id="factoryLogoCaptionLabel" alignment="CENTER" contentDisplay="CENTER" maxWidth="132.0" mouseTransparent="true" styleClass="pm-run-factory-logo-caption" text="" textAlignment="CENTER" wrapText="false" />
                 </StackPane>
                 <Label fx:id="operatorUserLabel" styleClass="pm-muted-label" text="操作者: （未選択）" />
+                <Button fx:id="changeOperatorPinButton" mnemonicParsing="false" onAction="#onChangeOperatorPinAction" text="PIN変更" />
                 <Region HBox.hgrow="ALWAYS" />
                 <HBox alignment="CENTER_RIGHT" spacing="8.0">
                     <Button mnemonicParsing="false" onAction="#onOpenDispatchUsageGuideDocxAction" text="配台の使い方" />

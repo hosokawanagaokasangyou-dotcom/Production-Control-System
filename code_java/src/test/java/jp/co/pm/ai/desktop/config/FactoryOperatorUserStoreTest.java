@@ -86,6 +86,36 @@ class FactoryOperatorUserStoreTest {
     }
 
     @Test
+    void normalizePinAcceptsFourToTenDigits() {
+        assertEquals("1234", FactoryOperatorUserStore.normalizePin("1234"));
+        assertEquals("1234567890", FactoryOperatorUserStore.normalizePin("1234567890"));
+        assertTrue(FactoryOperatorUserStore.normalizePin("123") == null);
+        assertTrue(FactoryOperatorUserStore.normalizePin("12345678901") == null);
+        assertTrue(FactoryOperatorUserStore.normalizePin("12a4") == null);
+    }
+
+    @Test
+    void changePinByUser_setsAndChangesOwnPin() throws Exception {
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "砂田");
+        FactoryOperatorUserStore.changePinByUser(FactorySite.KONAN, "砂田", "", "567890");
+        assertTrue(FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "砂田", "567890"));
+        FactoryOperatorUserStore.changePinByUser(FactorySite.KONAN, "砂田", "567890", "4321");
+        assertTrue(FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "砂田", "4321"));
+    }
+
+    @Test
+    void changePinByUser_rejectsOtherUserOrWrongCurrent() throws Exception {
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "砂田");
+        FactoryOperatorUserStore.changePinByUser(FactorySite.KONAN, "砂田", "", "1111");
+        assertThrows(
+                IllegalStateException.class,
+                () -> FactoryOperatorUserStore.changePinByUser(FactorySite.KONAN, "古家", "1111", "2222"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> FactoryOperatorUserStore.changePinByUser(FactorySite.KONAN, "砂田", "9999", "2222"));
+    }
+
+    @Test
     void verifyPinAllowsWhenUnset() throws Exception {
         assertTrue(!FactoryOperatorUserStore.hasPin(FactorySite.KONAN, "砂田"));
         assertTrue(FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "砂田", "1234"));

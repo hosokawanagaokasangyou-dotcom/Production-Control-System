@@ -25,7 +25,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
- * 工場別の配台システム操作者名（起動時選択・作成者表示用）と 4 桁 PIN。
+ * 工場別の配台システム操作者名（起動時選択・作成者表示用）と PIN（4～10 桁数字）。
  *
  * <p>永続化: {@link AppPaths#factoryOperatorUsersStorePath}（サマリ Excel と同一フォルダの
  * {@link AppPaths#FACTORY_OPERATOR_USERS_BIN}、バイナリ形式）。旧 {@code ~/.pm-ai-desktop/factory-operator-users.json}
@@ -49,7 +49,12 @@ public final class FactoryOperatorUserStore {
     public static final int SCHEMA_VERSION = 3;
     public static final int MAX_NAMES_PER_FACTORY = 50;
     public static final int MAX_NAME_LENGTH = 40;
-    public static final int PIN_LENGTH = 4;
+    public static final int MIN_PIN_LENGTH = 4;
+    public static final int MAX_PIN_LENGTH = 10;
+
+    /** @deprecated {@link #MIN_PIN_LENGTH} を使用 */
+    @Deprecated
+    public static final int PIN_LENGTH = MIN_PIN_LENGTH;
     public static final int MAX_CONSECUTIVE_PIN_FAILURES = 20;
 
     /** ユーザー管理者タブを開くための管理者パスワード（平文）。 */
@@ -246,8 +251,45 @@ public final class FactoryOperatorUserStore {
         saveDocument(doc);
     }
 
+    public static String pinLengthRangeDescriptionJa() {
+        return MIN_PIN_LENGTH + "～" + MAX_PIN_LENGTH + "桁の数字";
+    }
+
     /**
-     * 4 桁 PIN を新規発行する（既存 PIN があれば上書き）。
+     * ログイン中の操作者が自分の PIN を変更する（未設定のときは新規設定）。
+     *
+     * @throws IllegalStateException 自分以外／ロック中
+     * @throws IllegalArgumentException PIN 形式不正・現在 PIN 不一致
+     */
+    public static void changePinByUser(
+            FactorySite site, String name, String currentPin, String newPin) throws IOException {
+        FactorySite factory = site != null ? site : FactorySite.KONAN;
+        String normalized = normalizeName(name);
+        if (normalized.isEmpty()) {
+            throw new IllegalArgumentException("名前が空です。");
+        }
+        if (!normalized.equals(sessionOperatorName())) {
+            throw new IllegalStateException("自分の PIN のみ変更できます。");
+        }
+        if (isPinLocked(factory, normalized)) {
+            throw new IllegalStateException(
+                    "PIN がロックされています。ユーザー管理者タブでロック解除してください。");
+        }
+        String newPinNorm = normalizePin(newPin);
+        if (newPinNorm == null) {
+            throw new IllegalArgumentException("新しい PIN は " + pinLengthRangeDescriptionJa() + " です。");
+        }
+        if (hasPin(factory, normalized)) {
+            String currentNorm = normalizePin(currentPin);
+            if (currentNorm == null || !verifyPin(factory, normalized, currentNorm)) {
+                throw new IllegalArgumentException("現在の PIN が正しくありません。");
+            }
+        }
+        assignPin(factory, normalized, newPinNorm);
+    }
+
+    /**
+     * 管理者向け: ランダム 4 桁 PIN を新規発行する（既存 PIN があれば上書き）。
      *
      * @return 発行した PIN（このタイミングのみ平文表示可能）
      */
@@ -256,7 +298,7 @@ public final class FactoryOperatorUserStore {
     }
 
     /**
-     * 4 桁 PIN を再発行する（{@link #issuePin} と同じだが意図を明示する別名）。
+     * 管理者向け: {@link #issuePin} と同じだが意図を明示する別名。
      */
     public static String reissuePin(FactorySite site, String name) throws IOException {
         return issuePin(site, name);
@@ -270,7 +312,7 @@ public final class FactoryOperatorUserStore {
             throw new IllegalArgumentException("名前が空です。");
         }
         if (pinNorm == null) {
-            throw new IllegalArgumentException("PIN は " + PIN_LENGTH + " 桁の数字です。");
+            throw new IllegalArgumentException("PIN は " + pinLengthRangeDescriptionJa() + " です。");
         }
         Document doc = loadDocument();
         FactoryOperatorUsers current = ensureFactory(doc, factory);
@@ -662,7 +704,7 @@ public final class FactoryOperatorUserStore {
             return null;
         }
         String t = raw.strip();
-        if (t.length() != PIN_LENGTH || !t.chars().allMatch(Character::isDigit)) {
+        if (t.length() < MIN_PIN_LENGTH || t.length() > MAX_PIN_LENGTH || !t.chars().allMatch(Character::isDigit)) {
             return null;
         }
         return t;

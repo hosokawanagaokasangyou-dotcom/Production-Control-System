@@ -22,7 +22,7 @@ import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 
-/** 工場別の配台システム操作者名と 4 桁 PIN の管理タブ（管理者パスワードで開く）。 */
+/** 工場別の配台システム操作者名と PIN（4～10 桁）の管理タブ（管理者パスワードで開く）。 */
 public final class OperatorUserManagementTabController {
 
     static final class OperatorRow {
@@ -230,7 +230,7 @@ public final class OperatorUserManagementTabController {
         confirm.setContentText(
                 reissue
                         ? "「" + name + "」の PIN を再発行します。旧 PIN は使えなくなります。よろしいですか？"
-                        : "「" + name + "」に 4 桁 PIN を新規発行します。よろしいですか？");
+                        : "「" + name + "」に PIN（" + FactoryOperatorUserStore.pinLengthRangeDescriptionJa() + "）を新規発行します。よろしいですか？");
         if (shell.primaryStageForDialogs() != null) {
             confirm.initOwner(shell.primaryStageForDialogs());
         }

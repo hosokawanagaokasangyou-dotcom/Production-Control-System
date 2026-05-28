@@ -17,7 +17,7 @@
     </padding>
     <Label styleClass="pm-section-title" text="ユーザー管理者（操作者名・PIN）"
            wrapText="true"/>
-    <Label text="工場ごとに配台システム起動時の名前選択肢と 4 桁 PIN を管理します。設定はサマリ Excel と同じフォルダのバイナリファイル（factory-operator-users.bin）に保存されます。PIN を 20 回連続で間違えるとロックされます。"
+    <Label text="工場ごとに配台システム起動時の名前選択肢と PIN（4～10 桁）を管理します。ユーザーは実行・ログタブから自分の PIN を変更できます。設定はサマリ Excel と同じフォルダのバイナリファイル（factory-operator-users.bin）に保存されます。PIN を 20 回連続で間違えるとロックされます。"
            wrapText="true"/>
     <Separator/>
     <Label fx:id="factoryLabel" styleClass="pm-muted-label" wrapText="true"/>

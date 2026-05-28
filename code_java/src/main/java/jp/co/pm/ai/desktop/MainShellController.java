@@ -5127,12 +5127,12 @@ public final class MainShellController {
                 new Label(
                         "操作者「"
                                 + operatorName
-                                + "」の "
-                                + FactoryOperatorUserStore.PIN_LENGTH
-                                + " 桁 PIN を入力してください。");
+                                + "」の PIN（"
+                                + FactoryOperatorUserStore.pinLengthRangeDescriptionJa()
+                                + "）を入力してください。");
         hint.setWrapText(true);
         PasswordField pf = new PasswordField();
-        pf.setPromptText("4 桁 PIN");
+        pf.setPromptText("PIN");
         VBox box = new VBox(8, hint, new Label("PIN:"), pf);
         dialog.getDialogPane().setContent(box);
         dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
@@ -5151,7 +5151,8 @@ public final class MainShellController {
             }
             String pin = ans.get();
             if (FactoryOperatorUserStore.normalizePin(pin) == null) {
-                showWarningDialog("PIN", FactoryOperatorUserStore.PIN_LENGTH + " 桁の数字を入力してください。");
+                showWarningDialog(
+                        "PIN", FactoryOperatorUserStore.pinLengthRangeDescriptionJa() + "を入力してください。");
                 continue;
             }
             try {
@@ -5188,6 +5189,85 @@ public final class MainShellController {
                 showWarningDialog("PIN", ex.getMessage() != null ? ex.getMessage() : ex.toString());
                 return false;
             }
+        }
+    }
+
+    /** 実行・ログタブなどから、ログイン中操作者の PIN 変更ダイアログを開く。 */
+    void promptChangeSessionOperatorPin() {
+        if (primaryStage == null) {
+            return;
+        }
+        String operator = FactoryOperatorUserStore.sessionOperatorName();
+        if (operator.isBlank()) {
+            showWarningDialog("PIN 変更", "操作者が未選択です。先に操作者名を選んでください。");
+            return;
+        }
+        FactorySite factory = GlobalInitSettingTarget.load();
+        boolean hasPin;
+        try {
+            hasPin = FactoryOperatorUserStore.hasPin(factory, operator);
+            if (FactoryOperatorUserStore.isPinLocked(factory, operator)) {
+                showWarningDialog(
+                        "PIN ロック",
+                        "PIN がロックされています。ユーザー管理者タブでロック解除してください。");
+                return;
+            }
+        } catch (IOException ex) {
+            showWarningDialog("PIN 変更", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            return;
+        }
+
+        Dialog<ButtonType> dialog = new Dialog<>();
+        prepareDialogForMainTheme(dialog);
+        dialog.setTitle(hasPin ? "PIN 変更" : "PIN 設定");
+        dialog.setHeaderText(null);
+        Label hint =
+                new Label(
+                        "操作者「"
+                                + operator
+                                + "」の PIN（"
+                                + FactoryOperatorUserStore.pinLengthRangeDescriptionJa()
+                                + "）を"
+                                + (hasPin ? "変更" : "設定")
+                                + "します。");
+        hint.setWrapText(true);
+        PasswordField currentPf = new PasswordField();
+        currentPf.setPromptText("現在の PIN");
+        PasswordField newPf = new PasswordField();
+        newPf.setPromptText("新しい PIN");
+        PasswordField confirmPf = new PasswordField();
+        confirmPf.setPromptText("新しい PIN（確認）");
+        VBox box;
+        if (hasPin) {
+            box = new VBox(8, hint, new Label("現在の PIN:"), currentPf, new Label("新しい PIN:"), newPf, new Label("確認:"), confirmPf);
+        } else {
+            box = new VBox(8, hint, new Label("新しい PIN:"), newPf, new Label("確認:"), confirmPf);
+        }
+        dialog.getDialogPane().setContent(box);
+        dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
+        Optional<ButtonType> ans = dialog.showAndWait();
+        if (ans.isEmpty() || ans.get() != ButtonType.OK) {
+            return;
+        }
+        String newPin = newPf.getText() != null ? newPf.getText().strip() : "";
+        String confirmPin = confirmPf.getText() != null ? confirmPf.getText().strip() : "";
+        if (!newPin.equals(confirmPin)) {
+            showWarningDialog("PIN 変更", "新しい PIN と確認入力が一致しません。");
+            return;
+        }
+        if (FactoryOperatorUserStore.normalizePin(newPin) == null) {
+            showWarningDialog(
+                    "PIN 変更",
+                    "新しい PIN は " + FactoryOperatorUserStore.pinLengthRangeDescriptionJa() + " です。");
+            return;
+        }
+        String currentPin = hasPin && currentPf.getText() != null ? currentPf.getText().strip() : "";
+        try {
+            FactoryOperatorUserStore.changePinByUser(factory, operator, currentPin, newPin);
+            appendLog("[operator-user] PIN を" + (hasPin ? "変更" : "設定") + "しました: " + operator);
+            showInformationDialog("PIN 変更", "PIN を" + (hasPin ? "変更" : "設定") + "しました。");
+        } catch (Exception ex) {
+            showWarningDialog("PIN 変更", ex.getMessage() != null ? ex.getMessage() : ex.toString());
         }
     }
 
