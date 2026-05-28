@@ -1,6 +1,8 @@
 package jp.co.pm.ai.desktop;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -28,7 +30,9 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
+import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.FactoryOperatorUserBackupStore;
+import jp.co.pm.ai.desktop.print.FactoryOperatorUserPdfExporter;
 import jp.co.pm.ai.desktop.io.FactoryOperatorUserBackupStore.FactoryOperatorUserBackupEntry;
 
 /** 工場別の配台システム操作者名と PIN（4～10 桁）の管理タブ（管理者パスワードで開く）。 */
@@ -111,6 +115,15 @@ public final class OperatorUserManagementTabController {
 
     @FXML
     private Button refreshButton;
+
+    @FXML
+    private Button exportUsersPdfButton;
+
+    @FXML
+    private Button openUsersPdfButton;
+
+    @FXML
+    private Label usersPdfPathLabel;
 
     @FXML
     private TableView<OperatorRow> operatorTableView;
@@ -485,6 +498,68 @@ public final class OperatorUserManagementTabController {
     }
 
     @FXML
+    private void onExportUsersPdfAction() {
+        if (shell == null) {
+            return;
+        }
+        FactorySite site = managedFactory();
+        try {
+            var ui = shell.snapshotUiEnv();
+            Path outputPath = FactoryOperatorUserPdfExporter.resolveOutputPath(ui, site);
+            FactoryOperatorUserPdfExporter.export(
+                    outputPath,
+                    site,
+                    buildPdfRows(site),
+                    FactoryOperatorUserStore.sessionOperatorName(),
+                    Instant.now(),
+                    FactoryOperatorUserStore.storePath().toString());
+            lastExportedUsersPdfPath = outputPath;
+            refreshUsersPdfControls(ui, site);
+            shell.appendLog("[operator-user-pdf] 出力: " + outputPath);
+            try {
+                DesktopFileOpener.openFile(outputPath);
+            } catch (Exception openEx) {
+                shell.appendLog(
+                        "[operator-user-pdf] open: "
+                                + (openEx.getMessage() != null ? openEx.getMessage() : openEx.toString()));
+            }
+            Alert done = new Alert(AlertType.INFORMATION);
+            done.setTitle("PDF 出力");
+            done.setHeaderText(null);
+            done.setContentText("ユーザー管理情報を PDF 化しました。\n" + outputPath);
+            if (shell.primaryStageForDialogs() != null) {
+                done.initOwner(shell.primaryStageForDialogs());
+            }
+            done.showAndWait();
+        } catch (Exception ex) {
+            warn("PDF 出力", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+        }
+    }
+
+    @FXML
+    private void onOpenUsersPdfAction() {
+        if (shell == null) {
+            return;
+        }
+        FactorySite site = managedFactory();
+        Path path = lastExportedUsersPdfPath;
+        if (path == null || !Files.isRegularFile(path)) {
+            path = FactoryOperatorUserPdfExporter.resolveOutputPath(shell.snapshotUiEnv(), site);
+        }
+        if (!Files.isRegularFile(path)) {
+            warn("PDF を開く", "PDF が未作成です。先に PDF 出力を実行してください。");
+            refreshUsersPdfControls(shell.snapshotUiEnv(), site);
+            return;
+        }
+        try {
+            DesktopFileOpener.openFile(path);
+            shell.appendLog("[operator-user-pdf] 開く: " + path);
+        } catch (Exception ex) {
+            warn("PDF を開く", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+        }
+    }
+
+    @FXML
     private void onCreateBackupAction() {
         if (shell == null) {
             return;
@@ -579,6 +654,35 @@ public final class OperatorUserManagementTabController {
         }
     }
 
+    private Path lastExportedUsersPdfPath;
+
+    private List<FactoryOperatorUserPdfExporter.Row> buildPdfRows(FactorySite site) throws IOException {
+        List<FactoryOperatorUserPdfExporter.Row> rows = new ArrayList<>();
+        for (String name : FactoryOperatorUserStore.namesForFactory(site)) {
+            rows.add(
+                    new FactoryOperatorUserPdfExporter.Row(
+                            name,
+                            FactoryOperatorUserStore.pinStatusLabel(site, name),
+                            FactoryOperatorUserStore.adminPinDisplayLabel(site, name)));
+        }
+        return rows;
+    }
+
+    private void refreshUsersPdfControls(java.util.Map<String, String> ui, FactorySite site) {
+        Path expected = FactoryOperatorUserPdfExporter.resolveOutputPath(ui, site);
+        if (Files.isRegularFile(expected)) {
+            lastExportedUsersPdfPath = expected;
+        }
+        if (openUsersPdfButton != null) {
+            openUsersPdfButton.setDisable(
+                    lastExportedUsersPdfPath == null
+                            || !Files.isRegularFile(lastExportedUsersPdfPath));
+        }
+        if (usersPdfPathLabel != null) {
+            usersPdfPathLabel.setText("PDF 出力先: " + expected);
+        }
+    }
+
     private void refreshPresentation() {
         FactorySite site = managedFactory();
         FactorySite appFactory = GlobalInitSettingTarget.load();
@@ -624,6 +728,7 @@ public final class OperatorUserManagementTabController {
         }
         if (shell != null) {
             refreshBackupList(shell.snapshotUiEnv());
+            refreshUsersPdfControls(shell.snapshotUiEnv(), site);
         }
     }
 

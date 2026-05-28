@@ -1244,6 +1244,19 @@ public final class AppPaths {
         return siblingOfSummaryAiDispatchWorkbook(ui, FACTORY_OPERATOR_USERS_BIN);
     }
 
+    /** 工場別ユーザー管理 PDF のファイル名（{@link FactorySite#name()} を含む）。 */
+    public static String factoryOperatorUsersPdfFileName(FactorySite site) {
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        return "factory-operator-users-" + effective.name() + ".pdf";
+    }
+
+    /**
+     * 工場別ユーザー管理 PDF の絶対パス。親フォルダは {@link #summaryAiDispatchXlsxPath(Map)} と同一。
+     */
+    public static Path factoryOperatorUsersPdfPath(Map<String, String> ui, FactorySite site) {
+        return siblingOfSummaryAiDispatchWorkbook(ui, factoryOperatorUsersPdfFileName(site));
+    }
+
     /**
      * ユーザー管理バイナリの手動バックアップルート。{@link #factoryOperatorUsersStorePath(Map)} の親配下。
      */

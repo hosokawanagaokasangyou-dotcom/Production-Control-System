@@ -19,7 +19,7 @@
     </padding>
     <Label styleClass="pm-section-title" text="ユーザー管理者（操作者名・PIN）"
            wrapText="true"/>
-    <Label text="工場ごとに配台システム起動時の名前選択肢と PIN（4～10 桁）を管理します。管理者は一覧の「PIN（管理者閲覧）」列で各ユーザーの PIN を確認できます。下の「管理対象工場」で湖南／国分を切り替えてください。"
+    <Label text="工場ごとに配台システム起動時の名前選択肢と PIN（4～10 桁）を管理します。管理者は一覧の「PIN（管理者閲覧）」列で各ユーザーの PIN を確認でき、PDF 出力で工場別のユーザー情報を保存できます。下の「管理対象工場」で湖南／国分を切り替えてください。"
            wrapText="true"/>
     <Separator/>
     <HBox spacing="8.0" alignment="CENTER_LEFT">
@@ -47,7 +47,10 @@
     <TableView fx:id="operatorTableView" prefHeight="220.0" VBox.vgrow="ALWAYS"/>
     <HBox spacing="8.0" alignment="CENTER_LEFT">
         <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshAction" text="一覧更新"/>
+        <Button fx:id="exportUsersPdfButton" mnemonicParsing="false" onAction="#onExportUsersPdfAction" text="PDF 出力"/>
+        <Button fx:id="openUsersPdfButton" mnemonicParsing="false" onAction="#onOpenUsersPdfAction" text="PDF を開く"/>
     </HBox>
+    <Label fx:id="usersPdfPathLabel" styleClass="pm-muted-label" wrapText="true"/>
     <Separator/>
     <Label styleClass="pm-section-title" text="ユーザー管理バイナリのバックアップ（世代管理・全工場共通）"/>
     <Label text="手動で factory-operator-users.bin（湖南・国分のユーザー情報を含む）のバックアップを取り、一覧から選択して復元できます（管理者向け）。"
