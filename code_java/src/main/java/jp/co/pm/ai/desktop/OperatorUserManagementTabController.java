@@ -78,6 +78,9 @@ public final class OperatorUserManagementTabController {
     private Button issuePinButton;
 
     @FXML
+    private Button unlockPinButton;
+
+    @FXML
     private Button refreshButton;
 
     @FXML
@@ -213,7 +216,14 @@ public final class OperatorUserManagementTabController {
             return;
         }
         String name = sel.getName();
-        boolean reissue = "設定済".equals(sel.getPinStatus());
+        FactorySite site = GlobalInitSettingTarget.load();
+        boolean reissue;
+        try {
+            reissue = FactoryOperatorUserStore.hasPin(site, name);
+        } catch (IOException ex) {
+            warn("PIN 発行", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            return;
+        }
         Alert confirm = new Alert(AlertType.CONFIRMATION);
         confirm.setTitle(reissue ? "PIN 再発行" : "PIN 発行");
         confirm.setHeaderText(null);
@@ -229,7 +239,6 @@ public final class OperatorUserManagementTabController {
             return;
         }
         try {
-            FactorySite site = GlobalInitSettingTarget.load();
             String pin = FactoryOperatorUserStore.issuePin(site, name);
             refreshPresentation();
             shell.appendLog(
@@ -256,6 +265,52 @@ public final class OperatorUserManagementTabController {
             info.showAndWait();
         } catch (Exception ex) {
             warn(reissue ? "PIN 再発行" : "PIN 発行", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+        }
+    }
+
+    @FXML
+    private void onUnlockPinAction() {
+        if (shell == null || operatorTableView == null) {
+            return;
+        }
+        OperatorRow sel = operatorTableView.getSelectionModel().getSelectedItem();
+        if (sel == null || sel.getName().isBlank()) {
+            warn("ロック解除", "ロック解除するユーザーを一覧から選んでください。");
+            return;
+        }
+        String name = sel.getName();
+        FactorySite site = GlobalInitSettingTarget.load();
+        try {
+            if (!FactoryOperatorUserStore.isPinLocked(site, name)) {
+                warn("ロック解除", "「" + name + "」は PIN ロックされていません。");
+                return;
+            }
+        } catch (IOException ex) {
+            warn("ロック解除", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            return;
+        }
+        Alert confirm = new Alert(AlertType.CONFIRMATION);
+        confirm.setTitle("PIN ロック解除");
+        confirm.setHeaderText(null);
+        confirm.setContentText("「" + name + "」の PIN ロックを解除します。よろしいですか？");
+        if (shell.primaryStageForDialogs() != null) {
+            confirm.initOwner(shell.primaryStageForDialogs());
+        }
+        Optional<ButtonType> ans = confirm.showAndWait();
+        if (ans.isEmpty() || ans.get() != ButtonType.OK) {
+            return;
+        }
+        try {
+            FactoryOperatorUserStore.unlockPin(site, name);
+            refreshPresentation();
+            shell.appendLog(
+                    "[operator-user] PIN ロック解除: "
+                            + name
+                            + " （"
+                            + site.displayLabelJa()
+                            + "）");
+        } catch (Exception ex) {
+            warn("ロック解除", ex.getMessage() != null ? ex.getMessage() : ex.toString());
         }
     }
 

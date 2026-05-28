@@ -116,7 +116,42 @@ class FactoryOperatorUserStoreTest {
         String pin = FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "砂田");
         assertTrue(FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "砂田", pin));
         String saved = Files.readString(FactoryOperatorUserStore.storePath());
-        assertTrue(saved.contains("\"schemaVersion\" : 2"));
+        assertTrue(saved.contains("\"schemaVersion\" : 3"));
         assertTrue(saved.contains("pinHashes"));
+    }
+
+    @Test
+    void locksAfterTwentyConsecutiveWrongPins() throws Exception {
+        String pin = FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "砂田");
+        for (int i = 0; i < FactoryOperatorUserStore.MAX_CONSECUTIVE_PIN_FAILURES - 1; i++) {
+            assertEquals(
+                    FactoryOperatorUserStore.PinVerificationResult.WRONG_PIN,
+                    FactoryOperatorUserStore.verifyPinAttempt(FactorySite.KONAN, "砂田", "0000"));
+            assertTrue(!FactoryOperatorUserStore.isPinLocked(FactorySite.KONAN, "砂田"));
+        }
+        assertEquals(
+                FactoryOperatorUserStore.PinVerificationResult.LOCKED,
+                FactoryOperatorUserStore.verifyPinAttempt(FactorySite.KONAN, "砂田", "0000"));
+        assertTrue(FactoryOperatorUserStore.isPinLocked(FactorySite.KONAN, "砂田"));
+        assertEquals("ロック", FactoryOperatorUserStore.pinStatusLabel(FactorySite.KONAN, "砂田"));
+        assertEquals(
+                FactoryOperatorUserStore.PinVerificationResult.LOCKED,
+                FactoryOperatorUserStore.verifyPinAttempt(FactorySite.KONAN, "砂田", pin));
+        FactoryOperatorUserStore.unlockPin(FactorySite.KONAN, "砂田");
+        assertTrue(!FactoryOperatorUserStore.isPinLocked(FactorySite.KONAN, "砂田"));
+        assertEquals(
+                FactoryOperatorUserStore.PinVerificationResult.SUCCESS,
+                FactoryOperatorUserStore.verifyPinAttempt(FactorySite.KONAN, "砂田", pin));
+    }
+
+    @Test
+    void issuePinClearsLock() throws Exception {
+        FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "古家");
+        for (int i = 0; i < FactoryOperatorUserStore.MAX_CONSECUTIVE_PIN_FAILURES; i++) {
+            FactoryOperatorUserStore.verifyPinAttempt(FactorySite.KONAN, "古家", "9999");
+        }
+        assertTrue(FactoryOperatorUserStore.isPinLocked(FactorySite.KONAN, "古家"));
+        FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "古家");
+        assertTrue(!FactoryOperatorUserStore.isPinLocked(FactorySite.KONAN, "古家"));
     }
 }

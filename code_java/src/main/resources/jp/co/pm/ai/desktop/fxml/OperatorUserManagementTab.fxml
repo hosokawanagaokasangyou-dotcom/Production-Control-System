@@ -17,7 +17,7 @@
     </padding>
     <Label styleClass="pm-section-title" text="ユーザー管理者（操作者名・PIN）"
            wrapText="true"/>
-    <Label text="工場ごとに配台システム起動時の名前選択肢と 4 桁 PIN を管理します。タブ自体は管理者パスワードで開きます。PIN 未設定のユーザーは起動時 PIN なしでログインできます。"
+    <Label text="工場ごとに配台システム起動時の名前選択肢と 4 桁 PIN を管理します。PIN を 20 回連続で間違えるとロックされます。タブ自体は管理者パスワードで開きます。"
            wrapText="true"/>
     <Separator/>
     <Label fx:id="factoryLabel" styleClass="pm-muted-label" wrapText="true"/>
@@ -34,6 +34,7 @@
         <Button fx:id="removeNameButton" mnemonicParsing="false" onAction="#onRemoveNameAction" text="選択を削除"/>
         <Button fx:id="resetDefaultsButton" mnemonicParsing="false" onAction="#onResetDefaultsAction" text="既定4名に戻す"/>
         <Button fx:id="issuePinButton" mnemonicParsing="false" onAction="#onIssuePinAction" text="PIN 発行／再発行"/>
+        <Button fx:id="unlockPinButton" mnemonicParsing="false" onAction="#onUnlockPinAction" text="PIN ロック解除"/>
     </HBox>
     <Label text="ユーザー一覧（起動時の選択肢）"/>
     <TableView fx:id="operatorTableView" prefHeight="320.0" VBox.vgrow="ALWAYS"/>

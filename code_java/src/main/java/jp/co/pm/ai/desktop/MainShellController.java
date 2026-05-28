@@ -5065,9 +5065,21 @@ public final class MainShellController {
             }
             String name = chosen.get();
             try {
-                if (FactoryOperatorUserStore.hasPin(factory, name)
-                        && !promptAndVerifyOperatorPin(factory, name)) {
-                    continue;
+                if (FactoryOperatorUserStore.hasPin(factory, name)) {
+                    if (FactoryOperatorUserStore.isPinLocked(factory, name)) {
+                        showWarningDialog(
+                                "PIN ロック",
+                                "操作者「"
+                                        + name
+                                        + "」は PIN を "
+                                        + FactoryOperatorUserStore.MAX_CONSECUTIVE_PIN_FAILURES
+                                        + " 回連続で間違えたためロックされています。\n"
+                                        + "ユーザー管理者タブでロック解除または PIN 再発行してください。");
+                        continue;
+                    }
+                    if (!promptAndVerifyOperatorPin(factory, name)) {
+                        continue;
+                    }
                 }
                 FactoryOperatorUserStore.selectSessionOperator(factory, name);
                 appendLog(
@@ -5087,6 +5099,22 @@ public final class MainShellController {
 
     private boolean promptAndVerifyOperatorPin(FactorySite factory, String operatorName) {
         if (primaryStage == null) {
+            return false;
+        }
+        try {
+            if (FactoryOperatorUserStore.isPinLocked(factory, operatorName)) {
+                showWarningDialog(
+                        "PIN ロック",
+                        "操作者「"
+                                + operatorName
+                                + "」は PIN を "
+                                + FactoryOperatorUserStore.MAX_CONSECUTIVE_PIN_FAILURES
+                                + " 回連続で間違えたためロックされています。\n"
+                                + "ユーザー管理者タブでロック解除または PIN 再発行してください。");
+                return false;
+            }
+        } catch (IOException ex) {
+            showWarningDialog("PIN", ex.getMessage() != null ? ex.getMessage() : ex.toString());
             return false;
         }
         Dialog<String> dialog = new Dialog<>();
@@ -5125,14 +5153,39 @@ public final class MainShellController {
                 continue;
             }
             try {
-                if (FactoryOperatorUserStore.verifyPin(factory, operatorName, pin)) {
-                    return true;
+                FactoryOperatorUserStore.PinVerificationResult result =
+                        FactoryOperatorUserStore.verifyPinAttempt(factory, operatorName, pin);
+                switch (result) {
+                    case SUCCESS -> {
+                        return true;
+                    }
+                    case LOCKED -> {
+                        showWarningDialog(
+                                "PIN ロック",
+                                "操作者「"
+                                        + operatorName
+                                        + "」は PIN を "
+                                        + FactoryOperatorUserStore.MAX_CONSECUTIVE_PIN_FAILURES
+                                        + " 回連続で間違えたためロックされました。\n"
+                                        + "ユーザー管理者タブでロック解除または PIN 再発行してください。");
+                        return false;
+                    }
+                    case WRONG_PIN -> {
+                        int remaining = FactoryOperatorUserStore.remainingPinAttempts(factory, operatorName);
+                        showWarningDialog(
+                                "PIN",
+                                remaining > 0
+                                        ? "PIN が正しくありません。残り "
+                                                + remaining
+                                                + " 回でロックされます。"
+                                        : "PIN が正しくありません。");
+                    }
+                    default -> showWarningDialog("PIN", "PIN が正しくありません。");
                 }
             } catch (IOException ex) {
                 showWarningDialog("PIN", ex.getMessage() != null ? ex.getMessage() : ex.toString());
                 return false;
             }
-            showWarningDialog("PIN", "PIN が正しくありません。");
         }
     }
 
