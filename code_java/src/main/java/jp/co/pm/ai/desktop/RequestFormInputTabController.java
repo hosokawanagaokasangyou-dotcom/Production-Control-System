@@ -11,10 +11,12 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices;
+import jp.co.pm.ai.desktop.reconciliation.RequestFormFeedLocPlanSync;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
@@ -160,6 +162,38 @@ public final class RequestFormInputTabController {
         if (reconciliationApp != null) {
             reconciliationApp.refreshSessionInputTantoLabel();
         }
+    }
+
+    /**
+     * 段階1正常終了後: 計画データの原反投入場所を依頼書入力の投入場所候補へ追記する。
+     *
+     * @return 追加分（失敗時は -1、追記なしは 0）
+     */
+    int mergeFeedLocFromStage1Plan(Map<String, String> ui) {
+        List<String> fromPlan;
+        try {
+            fromPlan = RequestFormFeedLocPlanSync.collectDistinctFeedLocations(ui);
+        } catch (IOException ex) {
+            return -1;
+        }
+        if (fromPlan.isEmpty()) {
+            return 0;
+        }
+        if (reconciliationApp != null) {
+            return reconciliationApp.mergeFeedLocOptionsFromPlanning(fromPlan);
+        }
+        List<String> before = pendingComboChoices.optionsFor(RequestFormComboChoices.KEY_FEED_LOC);
+        List<String> merged = RequestFormFeedLocPlanSync.mergeDistinctFeedLocations(before, fromPlan);
+        int added = RequestFormFeedLocPlanSync.countNewValues(before, merged);
+        if (added <= 0) {
+            return 0;
+        }
+        java.util.LinkedHashMap<String, java.util.List<String>> map =
+                new java.util.LinkedHashMap<>(pendingComboChoices.asMap());
+        map.put(RequestFormComboChoices.KEY_FEED_LOC, merged);
+        pendingComboChoices =
+                RequestFormComboChoices.of(map, pendingComboChoices.fieldDefaultsAsMap());
+        return added;
     }
 
     void applyComboChoicesFromSession(RequestFormComboChoices choices) {

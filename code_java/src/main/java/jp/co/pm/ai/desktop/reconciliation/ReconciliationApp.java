@@ -1320,6 +1320,32 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         syncFieldDefaultSelectorCombos();
     }
 
+    /**
+     * 段階1計画データの原反投入場所を候補リストへ追記する。
+     *
+     * @return 新規追加分の件数（追記なしは 0）
+     */
+    public int mergeFeedLocOptionsFromPlanning(List<String> fromPlan) {
+        if (fromPlan == null || fromPlan.isEmpty()) {
+            return 0;
+        }
+        List<String> before = List.copyOf(optFeedLoc);
+        List<String> merged = RequestFormFeedLocPlanSync.mergeDistinctFeedLocations(before, fromPlan);
+        int added = RequestFormFeedLocPlanSync.countNewValues(before, merged);
+        if (added <= 0) {
+            return 0;
+        }
+        optFeedLoc.setAll(merged);
+        java.util.LinkedHashMap<String, java.util.List<String>> map =
+                new java.util.LinkedHashMap<>(comboChoicesState.asMap());
+        map.put(RequestFormComboChoices.KEY_FEED_LOC, List.copyOf(optFeedLoc));
+        comboChoicesState =
+                RequestFormComboChoices.of(map, comboChoicesState.fieldDefaultsAsMap())
+                        .mergedWithDefaults();
+        refreshDynamicRowComboItems();
+        return added;
+    }
+
     public JuchuHeaderAliasRegistry juchuHeaderAliasRegistry() {
         return juchuHeaderAliasRegistry;
     }

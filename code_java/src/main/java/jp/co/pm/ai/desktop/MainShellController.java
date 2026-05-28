@@ -4077,6 +4077,7 @@ public final class MainShellController {
                 if (reloadAfterStage1PlanInput != null) {
                     reloadAfterStage1PlanInput.run();
                 }
+                syncRequestFormFeedLocFromStage1Plan();
                 invalidateDeliveryCalendarAfterPipelineRun();
                 refreshEquipmentGanttGraphicAfterPipelineRun();
                 MacroCompleteChime.playIfAvailable(collectUiEnv());
@@ -6104,6 +6105,19 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                     "新規材料・製品種類の入力ダイアログを表示できませんでした。\n"
                             + (ex.getMessage() != null ? ex.getMessage() : ex.toString())
                             + "\n\n「材料・製品種類情報」タブで手動入力してください。");
+        }
+    }
+
+    private void syncRequestFormFeedLocFromStage1Plan() {
+        if (requestFormInputTabController == null) {
+            return;
+        }
+        int added = requestFormInputTabController.mergeFeedLocFromStage1Plan(collectUiEnv());
+        if (added > 0) {
+            appendLog("[stage1] 依頼書入力の投入場所候補を計画データから " + added + " 件追加しました。");
+            scheduleDesktopSessionSave();
+        } else if (added < 0) {
+            appendLog("[stage1] 依頼書入力の投入場所候補の計画データ取込に失敗しました。");
         }
     }
 
