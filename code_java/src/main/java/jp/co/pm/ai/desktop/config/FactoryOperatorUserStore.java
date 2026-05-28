@@ -710,6 +710,14 @@ public final class FactoryOperatorUserStore {
         return t;
     }
 
+    /** 永続化ファイルが無いとき、現行内容をディスクへ書き出す。 */
+    public static void ensureStoreFileOnDisk() throws IOException {
+        Path path = storePath();
+        if (!Files.isRegularFile(path)) {
+            saveDocument(loadDocument());
+        }
+    }
+
     private static String generatePin() {
         int n = SECURE_RANDOM.nextInt(10_000);
         return String.format("%04d", n);

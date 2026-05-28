@@ -3,6 +3,7 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextField?>
@@ -37,8 +38,22 @@
         <Button fx:id="unlockPinButton" mnemonicParsing="false" onAction="#onUnlockPinAction" text="PIN ロック解除"/>
     </HBox>
     <Label text="ユーザー一覧（起動時の選択肢）"/>
-    <TableView fx:id="operatorTableView" prefHeight="320.0" VBox.vgrow="ALWAYS"/>
+    <TableView fx:id="operatorTableView" prefHeight="220.0" VBox.vgrow="ALWAYS"/>
     <HBox spacing="8.0" alignment="CENTER_LEFT">
         <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshAction" text="一覧更新"/>
     </HBox>
+    <Separator/>
+    <Label styleClass="pm-section-title" text="ユーザー管理バイナリのバックアップ（世代管理）"/>
+    <Label text="手動で factory-operator-users.bin のバックアップを取り、一覧から選択して復元できます（管理者向け）。"
+           wrapText="true"/>
+    <HBox spacing="8.0" alignment="CENTER_LEFT">
+        <Label text="メモ"/>
+        <TextField fx:id="backupLabelField" prefWidth="320.0" promptText="任意（手動バックアップ時）"/>
+        <Button fx:id="createBackupButton" mnemonicParsing="false" onAction="#onCreateBackupAction" text="手動バックアップ"/>
+        <Button fx:id="restoreBackupButton" mnemonicParsing="false" onAction="#onRestoreBackupAction" text="選択を復元"/>
+        <Button fx:id="refreshBackupButton" mnemonicParsing="false" onAction="#onRefreshBackupAction" text="バックアップ一覧更新"/>
+    </HBox>
+    <Label fx:id="backupStorePathLabel" styleClass="pm-muted-label" wrapText="true"/>
+    <Label text="バックアップ一覧（新しい順）"/>
+    <ListView fx:id="backupListView" prefHeight="160.0"/>
 </VBox>

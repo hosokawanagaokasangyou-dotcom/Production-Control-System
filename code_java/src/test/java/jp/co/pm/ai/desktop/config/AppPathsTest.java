@@ -594,6 +594,19 @@ class AppPathsTest {
     }
 
     @Test
+    void factoryOperatorUsersBackupsRoot_usesSummaryWorkbookParent(@TempDir Path tmp) throws Exception {
+        Path custom = tmp.resolve("shared").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, custom.toString());
+        Path expected =
+                custom.getParent()
+                        .resolve(AppPaths.FACTORY_OPERATOR_USERS_BACKUPS_DIR)
+                        .toAbsolutePath()
+                        .normalize();
+        assertEquals(expected, AppPaths.factoryOperatorUsersBackupsRoot(ui));
+    }
+
+    @Test
     void resolveMasterWorkbookPathResolved_relativeUsesCodeFolder(@TempDir Path tmp) throws Exception {
         Path code = tmp.resolve("code");
         Path py = code.resolve("python");

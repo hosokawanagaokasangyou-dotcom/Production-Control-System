@@ -1233,10 +1233,31 @@ public final class AppPaths {
     }
 
     /**
+     * ユーザー管理バイナリの手動バックアップ退避フォルダ（{@link #factoryOperatorUsersStorePath(Map)} の親配下）。
+     */
+    public static final String FACTORY_OPERATOR_USERS_BACKUPS_DIR = "factory-operator-users-backups";
+
+    /**
      * 操作者名・PIN 設定の絶対パス。親フォルダは {@link #summaryAiDispatchXlsxPath(Map)} と同一。
      */
     public static Path factoryOperatorUsersStorePath(Map<String, String> ui) {
         return siblingOfSummaryAiDispatchWorkbook(ui, FACTORY_OPERATOR_USERS_BIN);
+    }
+
+    /**
+     * ユーザー管理バイナリの手動バックアップルート。{@link #factoryOperatorUsersStorePath(Map)} の親配下。
+     */
+    public static Path factoryOperatorUsersBackupsRoot(Map<String, String> ui) {
+        Path store = factoryOperatorUsersStorePath(ui);
+        Path parent = store.getParent();
+        if (parent == null) {
+            return resolveRepoRoot(ui)
+                    .resolve("code")
+                    .resolve(FACTORY_OPERATOR_USERS_BACKUPS_DIR)
+                    .toAbsolutePath()
+                    .normalize();
+        }
+        return parent.resolve(FACTORY_OPERATOR_USERS_BACKUPS_DIR).toAbsolutePath().normalize();
     }
 
     /**

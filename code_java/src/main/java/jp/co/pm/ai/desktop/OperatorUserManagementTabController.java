@@ -1,6 +1,9 @@
 package jp.co.pm.ai.desktop;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -13,17 +16,25 @@ import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
 
+import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
+import jp.co.pm.ai.desktop.io.FactoryOperatorUserBackupStore;
+import jp.co.pm.ai.desktop.io.FactoryOperatorUserBackupStore.FactoryOperatorUserBackupEntry;
 
 /** 工場別の配台システム操作者名と PIN（4～10 桁）の管理タブ（管理者パスワードで開く）。 */
 public final class OperatorUserManagementTabController {
+
+    private static final DateTimeFormatter BACKUP_TS =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
 
     static final class OperatorRow {
         private final SimpleStringProperty name = new SimpleStringProperty();
@@ -87,6 +98,24 @@ public final class OperatorUserManagementTabController {
     private TableView<OperatorRow> operatorTableView;
 
     @FXML
+    private TextField backupLabelField;
+
+    @FXML
+    private Button createBackupButton;
+
+    @FXML
+    private Button restoreBackupButton;
+
+    @FXML
+    private Button refreshBackupButton;
+
+    @FXML
+    private ListView<FactoryOperatorUserBackupEntry> backupListView;
+
+    @FXML
+    private Label backupStorePathLabel;
+
+    @FXML
     private void initialize() {
         if (operatorTableView != null) {
             TableColumn<OperatorRow, String> nameCol = new TableColumn<>("名前");
@@ -97,6 +126,27 @@ public final class OperatorUserManagementTabController {
             pinCol.setPrefWidth(120);
             operatorTableView.getColumns().setAll(nameCol, pinCol);
             operatorTableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        }
+        if (backupListView != null) {
+            backupListView.setCellFactory(
+                    lv ->
+                            new ListCell<>() {
+                                @Override
+                                protected void updateItem(FactoryOperatorUserBackupEntry item, boolean empty) {
+                                    super.updateItem(item, empty);
+                                    if (empty || item == null) {
+                                        setText(null);
+                                        return;
+                                    }
+                                    String ts = BACKUP_TS.format(Instant.ofEpochMilli(item.createdAtMillis()));
+                                    String by =
+                                            item.createdByOperator() != null
+                                                            && !item.createdByOperator().isBlank()
+                                                    ? item.createdByOperator()
+                                                    : "（不明）";
+                                    setText(ts + "  —  " + item.displayLabel() + "  [作成: " + by + "]");
+                                }
+                            });
         }
         refreshPresentation();
     }
@@ -323,6 +373,101 @@ public final class OperatorUserManagementTabController {
         refreshPresentation();
     }
 
+    @FXML
+    private void onCreateBackupAction() {
+        if (shell == null) {
+            return;
+        }
+        String label =
+                backupLabelField != null && backupLabelField.getText() != null
+                        ? backupLabelField.getText().strip()
+                        : "";
+        try {
+            var ui = shell.snapshotUiEnv();
+            FactoryOperatorUserBackupEntry created =
+                    FactoryOperatorUserBackupStore.createManualBackup(ui, label);
+            if (backupLabelField != null) {
+                backupLabelField.clear();
+            }
+            refreshBackupList(ui);
+            refreshPresentation();
+            shell.appendLog(
+                    "[operator-user-backup] 手動バックアップ: "
+                            + created.displayLabel()
+                            + " ("
+                            + created.id()
+                            + ")");
+        } catch (Exception ex) {
+            warn("バックアップ", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+        }
+    }
+
+    @FXML
+    private void onRestoreBackupAction() {
+        if (shell == null || backupListView == null) {
+            return;
+        }
+        FactoryOperatorUserBackupEntry sel = backupListView.getSelectionModel().getSelectedItem();
+        if (sel == null) {
+            warn("復元", "復元するバックアップを一覧から選んでください。");
+            return;
+        }
+        Alert confirm = new Alert(AlertType.CONFIRMATION);
+        confirm.setTitle("復元の確認");
+        confirm.setHeaderText(null);
+        confirm.setContentText(
+                "選択したバックアップ（"
+                        + sel.displayLabel()
+                        + "）で現行のユーザー管理ファイル（"
+                        + AppPaths.FACTORY_OPERATOR_USERS_BIN
+                        + "）を上書きします。\n\n続行しますか？");
+        if (shell.primaryStageForDialogs() != null) {
+            confirm.initOwner(shell.primaryStageForDialogs());
+        }
+        Optional<ButtonType> ans = confirm.showAndWait();
+        if (ans.isEmpty() || ans.get() != ButtonType.OK) {
+            return;
+        }
+        try {
+            var ui = shell.snapshotUiEnv();
+            FactoryOperatorUserBackupStore.restoreFromBackup(sel, ui);
+            refreshPresentation();
+            shell.appendLog("[operator-user-backup] 復元しました: " + sel.displayLabel());
+            Alert done = new Alert(AlertType.INFORMATION);
+            done.setTitle("復元完了");
+            done.setHeaderText(null);
+            done.setContentText("バックアップからユーザー管理情報を復元しました。");
+            if (shell.primaryStageForDialogs() != null) {
+                done.initOwner(shell.primaryStageForDialogs());
+            }
+            done.showAndWait();
+        } catch (Exception ex) {
+            warn("復元", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+        }
+    }
+
+    @FXML
+    private void onRefreshBackupAction() {
+        if (shell == null) {
+            return;
+        }
+        refreshBackupList(shell.snapshotUiEnv());
+    }
+
+    private void refreshBackupList(java.util.Map<String, String> ui) {
+        if (backupListView != null) {
+            backupListView.getItems().setAll(FactoryOperatorUserBackupStore.loadIndex(ui));
+        }
+        if (backupStorePathLabel != null) {
+            backupStorePathLabel.setText(
+                    "バックアップ先: "
+                            + FactoryOperatorUserBackupStore.resolveBackupsRoot(ui)
+                            + "　保持上限 "
+                            + FactoryOperatorUserBackupStore.MAX_BACKUP_GENERATIONS
+                            + " 世代");
+        }
+    }
+
     private void refreshPresentation() {
         FactorySite site = GlobalInitSettingTarget.load();
         if (factoryLabel != null) {
@@ -351,6 +496,7 @@ public final class OperatorUserManagementTabController {
         }
         if (shell != null) {
             shell.refreshMainRunTabOperatorLabel();
+            refreshBackupList(shell.snapshotUiEnv());
         }
     }
 
