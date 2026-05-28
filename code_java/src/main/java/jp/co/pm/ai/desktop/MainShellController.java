@@ -5101,7 +5101,10 @@ public final class MainShellController {
                                 + name
                                 + " （"
                                 + factory.displayLabelJa()
-                                + "）");
+                                + "）"
+                                + (FactoryOperatorUserStore.isGuestOperator(name)
+                                        ? " ※サマリ Excel 生成不可"
+                                        : ""));
             } catch (Exception ex) {
                 showWarningDialog(
                         "操作者名",
@@ -5269,6 +5272,10 @@ public final class MainShellController {
             showWarningDialog("PIN 変更", "操作者が未選択です。先に操作者名を選んでください。");
             return;
         }
+        if (FactoryOperatorUserStore.isGuestSession()) {
+            showWarningDialog("PIN 変更", "ゲストユーザーは PIN を設定できません。");
+            return;
+        }
         FactorySite factory = GlobalInitSettingTarget.load();
         boolean hasPin;
         try {
@@ -5348,12 +5355,12 @@ public final class MainShellController {
         }
         List<String> names;
         try {
-            names = FactoryOperatorUserStore.namesForFactory(site);
+            names = FactoryOperatorUserStore.loginChoicesForFactory(site);
         } catch (IOException ex) {
-            names = FactoryOperatorUserStore.DEFAULT_NAMES;
-        }
-        if (names.isEmpty()) {
-            names = FactoryOperatorUserStore.DEFAULT_NAMES;
+            names = new ArrayList<>(FactoryOperatorUserStore.DEFAULT_NAMES);
+            if (!names.contains(FactoryOperatorUserStore.GUEST_OPERATOR_NAME)) {
+                names.add(FactoryOperatorUserStore.GUEST_OPERATOR_NAME);
+            }
         }
         String pref;
         try {
@@ -5373,7 +5380,10 @@ public final class MainShellController {
                 (startup ? "配台システムを利用する操作者名を選んでください。\n" : "")
                         + "工場: "
                         + site.displayLabelJa()
-                        + "\n（作成者表示に使用します。一覧の編集はユーザー管理者タブから行えます。）");
+                        + "\n（作成者表示に使用します。一覧の編集はユーザー管理者タブから行えます。）\n"
+                        + "「"
+                        + FactoryOperatorUserStore.GUEST_OPERATOR_NAME
+                        + "」は PIN 不要ですが、サマリ Excel は生成できません。");
         return d.showAndWait();
     }
 
@@ -6167,6 +6177,10 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
      * サマリ xlsx 出力（ロック取得→バックグラウンド→解放）。他 PC／自 PC の作成中はロックでスキップする。
      */
     void runSummaryExportAsync(SummaryExportJob job) {
+        if (!FactoryOperatorUserStore.sessionMayGenerateSummaryExcel()) {
+            appendLog("[summary-ai-dispatch] ゲストユーザーはサマリ Excel を生成できません。");
+            return;
+        }
         Map<String, String> ui = collectUiEnv();
         Path workbook = AppPaths.summaryAiDispatchXlsxPath(ui);
         Optional<SummaryAiDispatchExportLock.AcquiredLock> lock;

@@ -309,4 +309,30 @@ class FactoryOperatorUserStoreTest {
         FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "古家");
         assertTrue(!FactoryOperatorUserStore.isPinLocked(FactorySite.KONAN, "古家"));
     }
+
+    @Test
+    void loginChoicesIncludeGuestWithoutPersistingToNames() throws Exception {
+        List<String> choices = FactoryOperatorUserStore.loginChoicesForFactory(FactorySite.KONAN);
+        assertTrue(choices.contains(FactoryOperatorUserStore.GUEST_OPERATOR_NAME));
+        assertTrue(!FactoryOperatorUserStore.namesForFactory(FactorySite.KONAN).contains(FactoryOperatorUserStore.GUEST_OPERATOR_NAME));
+    }
+
+    @Test
+    void guestSessionRequiresNoPinAndBlocksSummaryExcel() throws Exception {
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, FactoryOperatorUserStore.GUEST_OPERATOR_NAME);
+        assertEquals(FactoryOperatorUserStore.GUEST_OPERATOR_NAME, FactoryOperatorUserStore.sessionOperatorName());
+        assertTrue(FactoryOperatorUserStore.isGuestSession());
+        assertTrue(!FactoryOperatorUserStore.sessionMayGenerateSummaryExcel());
+        assertTrue(!FactoryOperatorUserStore.hasPin(FactorySite.KONAN, FactoryOperatorUserStore.GUEST_OPERATOR_NAME));
+        assertEquals(
+                FactoryOperatorUserStore.GUEST_OPERATOR_NAME,
+                FactoryOperatorUserStore.lastSelectedForFactory(FactorySite.KONAN));
+    }
+
+    @Test
+    void addNameRejectsGuestOperatorName() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> FactoryOperatorUserStore.addName(FactorySite.KONAN, FactoryOperatorUserStore.GUEST_OPERATOR_NAME));
+    }
 }

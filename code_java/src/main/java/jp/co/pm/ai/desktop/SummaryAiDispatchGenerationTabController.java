@@ -21,6 +21,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.SummaryAiDispatchGenerationStore;
 import jp.co.pm.ai.desktop.io.SummaryAiDispatchGenerationStore.SummaryAiDispatchGenerationEntry;
@@ -169,6 +170,13 @@ public final class SummaryAiDispatchGenerationTabController {
         }
         Map<String, String> ui = shell.snapshotUiEnv();
         boolean own = SummaryAiDispatchGenerationStore.isCreatedByCurrentUser(sel, ui);
+        boolean guest = FactoryOperatorUserStore.isGuestSession();
+        if (manualArchiveButton != null) {
+            manualArchiveButton.setDisable(guest);
+        }
+        if (restoreButton != null) {
+            restoreButton.setDisable(sel == null || guest);
+        }
         if (deleteButton != null) {
             deleteButton.setDisable(sel == null || !own);
         }
@@ -214,6 +222,10 @@ public final class SummaryAiDispatchGenerationTabController {
     @FXML
     private void onManualArchiveAction() {
         if (shell == null) {
+            return;
+        }
+        if (FactoryOperatorUserStore.isGuestSession()) {
+            showInfo("手動退避", "ゲストユーザーはサマリ Excel を上書き・生成できません。");
             return;
         }
         if (shell.isSummaryAiDispatchExportLocked()) {
@@ -282,6 +294,10 @@ public final class SummaryAiDispatchGenerationTabController {
         }
         SummaryAiDispatchGenerationEntry sel = selectedEntry();
         if (sel == null) {
+            return;
+        }
+        if (FactoryOperatorUserStore.isGuestSession()) {
+            showInfo("復元", "ゲストユーザーはサマリ Excel を上書き・生成できません。");
             return;
         }
         if (shell.isSummaryAiDispatchExportLocked()) {

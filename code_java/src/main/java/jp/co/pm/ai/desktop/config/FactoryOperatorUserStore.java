@@ -65,6 +65,11 @@ public final class FactoryOperatorUserStore {
     /** ユーザー管理者タブを開くための管理者パスワード（平文）。 */
     public static final String ADMIN_TAB_PASSWORD = "nagaoka123";
 
+    /**
+     * ログイン専用のゲスト操作者名（ユーザー一覧には含めない）。PIN 不要・サマリ Excel 生成不可。
+     */
+    public static final String GUEST_OPERATOR_NAME = "ゲスト";
+
     public static final List<String> DEFAULT_NAMES =
             List.of("砂田", "古家", "図司", "細川");
 
@@ -153,6 +158,28 @@ public final class FactoryOperatorUserStore {
         sessionOperatorName = "";
     }
 
+    public static boolean isGuestOperator(String name) {
+        return GUEST_OPERATOR_NAME.equals(normalizeName(name));
+    }
+
+    public static boolean isGuestSession() {
+        return isGuestOperator(sessionOperatorName());
+    }
+
+    /** 現在セッションがサマリ Excel の生成・上書きを行えるか。 */
+    public static boolean sessionMayGenerateSummaryExcel() {
+        return !isGuestSession();
+    }
+
+    /** 起動時ログイン選択肢（登録操作者＋ゲスト）。 */
+    public static List<String> loginChoicesForFactory(FactorySite site) throws IOException {
+        List<String> choices = new ArrayList<>(namesForFactory(site));
+        if (!choices.contains(GUEST_OPERATOR_NAME)) {
+            choices.add(GUEST_OPERATOR_NAME);
+        }
+        return choices;
+    }
+
     public static List<String> namesForFactory(FactorySite site) throws IOException {
         return new ArrayList<>(loadFactory(site).names());
     }
@@ -164,7 +191,7 @@ public final class FactoryOperatorUserStore {
     public static boolean hasPin(FactorySite site, String name) throws IOException {
         FactorySite factory = site != null ? site : FactorySite.KONAN;
         String normalized = normalizeName(name);
-        if (normalized.isEmpty()) {
+        if (normalized.isEmpty() || isGuestOperator(normalized)) {
             return false;
         }
         String hash = loadFactory(factory).pinHashes().get(normalized);
@@ -448,8 +475,23 @@ public final class FactoryOperatorUserStore {
             throw new IllegalArgumentException("操作者名が空です。");
         }
         Document doc = loadDocument();
-        FactoryOperatorUsers current = doc.factories().get(factory);
-        if (current == null || !current.names().contains(normalized)) {
+        FactoryOperatorUsers current = ensureFactory(doc, factory);
+        if (isGuestOperator(normalized)) {
+            sessionOperatorName = normalized;
+            doc.factories()
+                    .put(
+                            factory,
+                            new FactoryOperatorUsers(
+                                    current.names(),
+                                    normalized,
+                                    current.pinHashes(),
+                                    current.pinFailedAttempts(),
+                                    current.pinMustChange(),
+                                    current.pinPlaintextAdmin()));
+            saveDocument(doc);
+            return;
+        }
+        if (!current.names().contains(normalized)) {
             throw new IllegalArgumentException("操作者名が一覧にありません: " + normalized);
         }
         sessionOperatorName = normalized;
@@ -476,6 +518,9 @@ public final class FactoryOperatorUserStore {
         String normalized = normalizeName(name);
         if (normalized.isEmpty()) {
             throw new IllegalArgumentException("名前が空です。");
+        }
+        if (isGuestOperator(normalized)) {
+            throw new IllegalArgumentException("「" + GUEST_OPERATOR_NAME + "」は予約された操作者名です。");
         }
         Document doc = loadDocument();
         FactoryOperatorUsers current = ensureFactory(doc, factory);
@@ -771,7 +816,7 @@ public final class FactoryOperatorUserStore {
             names.addAll(DEFAULT_NAMES);
         }
         String last = normalizeName(node.path("lastSelected").asText(""));
-        if (!last.isEmpty() && !names.contains(last)) {
+        if (!last.isEmpty() && !names.contains(last) && !isGuestOperator(last)) {
             last = "";
         }
         Map<String, String> pinHashes = new LinkedHashMap<>();

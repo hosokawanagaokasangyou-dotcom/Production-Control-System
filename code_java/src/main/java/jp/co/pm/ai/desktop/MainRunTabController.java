@@ -834,7 +834,7 @@ public final class MainRunTabController {
         String op = FactoryOperatorUserStore.sessionOperatorName();
         operatorUserLabel.setText(op.isBlank() ? "操作者: （未選択）" : "操作者: " + op);
         if (changeOperatorPinButton != null) {
-            changeOperatorPinButton.setDisable(op.isBlank());
+            changeOperatorPinButton.setDisable(op.isBlank() || FactoryOperatorUserStore.isGuestSession());
         }
     }
 
