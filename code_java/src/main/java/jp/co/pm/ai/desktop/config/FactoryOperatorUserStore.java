@@ -130,7 +130,18 @@ public final class FactoryOperatorUserStore {
 
     /** {@link AppPaths#summaryAiDispatchXlsxPath} と同じフォルダへストアパスを解決する。 */
     public static synchronized void configureFromUi(Map<String, String> ui) {
-        Path next = AppPaths.factoryOperatorUsersStorePath(ui != null ? ui : Map.of());
+        configureFromUi(ui, null);
+    }
+
+    /**
+     * 利用工場に合わせた bin パスへストアを解決する。
+     *
+     * <p>サマリ Excel 環境変数が別工場を指すときも {@code site} の DATA フォルダ側を使う。
+     */
+    public static synchronized void configureFromUi(Map<String, String> ui, FactorySite site) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        FactorySite effective = site != null ? site : GlobalInitSettingTarget.loadEffective(u);
+        Path next = AppPaths.factoryOperatorUsersStorePath(u, effective);
         if (storeConfigured && next.equals(configuredStorePath)) {
             return;
         }

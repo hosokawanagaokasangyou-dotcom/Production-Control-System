@@ -1190,20 +1190,47 @@ public final class AppPaths {
      * {@link #KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} が非空のときはそのパス（絶対、または {@code code/} 基準の相対）を返す。
      */
     public static Path summaryAiDispatchXlsxPath(Map<String, String> ui) {
+        return summaryAiDispatchXlsxPathForFactory(ui, null);
+    }
+
+    /**
+     * 利用工場に合わせたサマリ Excel パス。
+     *
+     * <p>環境変数のサマリパスが別工場を指すときは {@code site} の工場既定 UNC を使う（操作者 bin／PDF と整合）。
+     */
+    public static Path summaryAiDispatchXlsxPathForFactory(Map<String, String> ui, FactorySite site) {
         Map<String, String> u = ui != null ? ui : Map.of();
+        if (site != null) {
+            String override = trim(u.get(KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK));
+            if (!override.isEmpty()) {
+                Optional<FactorySite> summarySite =
+                        FactorySite.inferFromPortableBundleSourceValue(override);
+                if (summarySite.isEmpty() || summarySite.get() == site) {
+                    return summaryAiDispatchXlsxPathFromOverride(u, override);
+                }
+            }
+            String factoryDefault = site.pmAiSummaryAiDispatchWorkbookEnvValue(u);
+            if (factoryDefault != null && !factoryDefault.isBlank()) {
+                return Path.of(factoryDefault.trim()).toAbsolutePath().normalize();
+            }
+        }
         String override = trim(u.get(KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK));
         if (!override.isEmpty()) {
-            Path p = Path.of(override);
-            if (!p.isAbsolute()) {
-                p = resolveRepoRoot(u).resolve("code").resolve(override);
-            }
-            return p.toAbsolutePath().normalize();
+            return summaryAiDispatchXlsxPathFromOverride(u, override);
         }
         return resolveRepoRoot(u)
                 .resolve("code")
                 .resolve(SUMMARY_AI_DISPATCH_XLSX)
                 .toAbsolutePath()
                 .normalize();
+    }
+
+    private static Path summaryAiDispatchXlsxPathFromOverride(Map<String, String> u, String override) {
+        Path p = Path.of(override);
+        if (!p.isAbsolute()) {
+            p = resolveRepoRoot(u).resolve("code").resolve(override);
+        }
+        return p.toAbsolutePath().normalize();
     }
 
     /** 設備ガント PDF（{@link #summaryAiDispatchXlsxPath} と同一フォルダ）。VBA スナップショット名に合わせる。 */
@@ -1241,7 +1268,16 @@ public final class AppPaths {
      * 操作者名・PIN 設定の絶対パス。親フォルダは {@link #summaryAiDispatchXlsxPath(Map)} と同一。
      */
     public static Path factoryOperatorUsersStorePath(Map<String, String> ui) {
-        return siblingOfSummaryAiDispatchWorkbook(ui, FACTORY_OPERATOR_USERS_BIN);
+        return factoryOperatorUsersStorePath(ui, null);
+    }
+
+    /**
+     * 利用工場に合わせた操作者名・PIN 設定の絶対パス。
+     *
+     * <p>環境変数のサマリパスが別工場を指すときは {@code site} の工場既定 UNC 配下を使う。
+     */
+    public static Path factoryOperatorUsersStorePath(Map<String, String> ui, FactorySite site) {
+        return siblingOfSummaryAiDispatchWorkbookForFactory(ui, site, FACTORY_OPERATOR_USERS_BIN);
     }
 
     /** 工場別ユーザー管理 PDF のファイル名（{@link FactorySite#name()} を含む）。 */
@@ -1254,14 +1290,21 @@ public final class AppPaths {
      * 工場別ユーザー管理 PDF の絶対パス。親フォルダは {@link #summaryAiDispatchXlsxPath(Map)} と同一。
      */
     public static Path factoryOperatorUsersPdfPath(Map<String, String> ui, FactorySite site) {
-        return siblingOfSummaryAiDispatchWorkbook(ui, factoryOperatorUsersPdfFileName(site));
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        return siblingOfSummaryAiDispatchWorkbookForFactory(
+                ui, effective, factoryOperatorUsersPdfFileName(effective));
     }
 
     /**
      * ユーザー管理バイナリの手動バックアップルート。{@link #factoryOperatorUsersStorePath(Map)} の親配下。
      */
     public static Path factoryOperatorUsersBackupsRoot(Map<String, String> ui) {
-        Path store = factoryOperatorUsersStorePath(ui);
+        return factoryOperatorUsersBackupsRoot(ui, null);
+    }
+
+    /** 利用工場に合わせた手動バックアップルート。 */
+    public static Path factoryOperatorUsersBackupsRoot(Map<String, String> ui, FactorySite site) {
+        Path store = factoryOperatorUsersStorePath(ui, site);
         Path parent = store.getParent();
         if (parent == null) {
             return resolveRepoRoot(ui)
@@ -1297,7 +1340,12 @@ public final class AppPaths {
     }
 
     private static Path siblingOfSummaryAiDispatchWorkbook(Map<String, String> ui, String fileName) {
-        Path summary = summaryAiDispatchXlsxPath(ui);
+        return siblingOfSummaryAiDispatchWorkbookForFactory(ui, null, fileName);
+    }
+
+    private static Path siblingOfSummaryAiDispatchWorkbookForFactory(
+            Map<String, String> ui, FactorySite site, String fileName) {
+        Path summary = summaryAiDispatchXlsxPathForFactory(ui, site);
         Path parent = summary.getParent();
         if (parent == null) {
             return resolveRepoRoot(ui).resolve("code").resolve(fileName).toAbsolutePath().normalize();

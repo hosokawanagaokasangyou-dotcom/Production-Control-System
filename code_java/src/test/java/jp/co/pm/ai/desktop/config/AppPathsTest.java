@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -578,6 +579,44 @@ class AppPathsTest {
                         .toAbsolutePath()
                         .normalize();
         assertEquals(expected, AppPaths.pipelineExecutionTimingHistoryPath(ui));
+    }
+
+    @Test
+    void summaryAiDispatchXlsxPathForFactory_usesFactoryDefaultWhenEnvPointsToOtherFactory(@TempDir Path tmp)
+            throws Exception {
+        Path konanSummary =
+                tmp.resolve("湖南工場").resolve("共有DATA").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createDirectories(konanSummary.getParent());
+        Files.createFile(konanSummary);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, konanSummary.toString());
+        Path kokubuSummary =
+                AppPaths.summaryAiDispatchXlsxPathForFactory(ui, FactorySite.KOKUBU);
+        assertTrue(
+                kokubuSummary.toString().contains("国分"),
+                "国分既定サマリへ切替: " + kokubuSummary);
+        assertEquals(
+                konanSummary.toAbsolutePath().normalize(),
+                AppPaths.summaryAiDispatchXlsxPathForFactory(ui, FactorySite.KONAN));
+    }
+
+    @Test
+    void factoryOperatorUsersStorePath_usesEffectiveFactoryDataDirWhenSummaryMismatch(@TempDir Path tmp)
+            throws Exception {
+        Path konanSummary =
+                tmp.resolve("湖南工場").resolve("共有DATA").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createDirectories(konanSummary.getParent());
+        Files.createFile(konanSummary);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, konanSummary.toString());
+        Path store = AppPaths.factoryOperatorUsersStorePath(ui, FactorySite.KOKUBU);
+        Path konanBin =
+                konanSummary.getParent()
+                        .resolve(AppPaths.FACTORY_OPERATOR_USERS_BIN)
+                        .toAbsolutePath()
+                        .normalize();
+        assertNotEquals(konanBin, store, "湖南サマリ配下ではなく国分側 bin を参照");
+        assertEquals(AppPaths.FACTORY_OPERATOR_USERS_BIN, store.getFileName().toString());
     }
 
     @Test

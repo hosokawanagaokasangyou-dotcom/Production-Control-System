@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -232,7 +233,7 @@ class FactoryOperatorUserStoreTest {
         Path summary = tmp.resolve("shared").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
         Files.createDirectories(summary.getParent());
         Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, summary.toString());
-        FactoryOperatorUserStore.configureFromUi(ui);
+        FactoryOperatorUserStore.configureFromUi(ui, FactorySite.KONAN);
         Path expected =
                 summary.getParent()
                         .resolve(AppPaths.FACTORY_OPERATOR_USERS_BIN)
@@ -243,6 +244,28 @@ class FactoryOperatorUserStoreTest {
         assertTrue(Files.isRegularFile(expected));
         byte[] saved = Files.readAllBytes(expected);
         assertEquals('P', saved[0]);
+    }
+
+    @Test
+    void configureFromUiUsesEffectiveFactoryWhenSummaryPointsToOtherFactory() throws Exception {
+        System.clearProperty("pm.ai.test.factoryOperatorUserStore");
+        Path konanSummary =
+                tmp.resolve("湖南工場").resolve("共有DATA").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createDirectories(konanSummary.getParent());
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                        konanSummary.toString(),
+                        AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR,
+                        AppPaths.DEFAULT_PM_AI_ALADDIN_MASTER_DIR_KOKUBU);
+        FactoryOperatorUserStore.configureFromUi(ui, FactorySite.KOKUBU);
+        Path store = FactoryOperatorUserStore.storePath();
+        Path konanBin =
+                konanSummary.getParent()
+                        .resolve(AppPaths.FACTORY_OPERATOR_USERS_BIN)
+                        .toAbsolutePath()
+                        .normalize();
+        assertNotEquals(konanBin, store, "湖南サマリ配下ではなく国分側 bin を参照");
     }
 
     @Test

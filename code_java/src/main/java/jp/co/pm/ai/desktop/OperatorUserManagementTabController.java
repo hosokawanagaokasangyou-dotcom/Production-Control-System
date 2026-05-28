@@ -725,13 +725,14 @@ public final class OperatorUserManagementTabController {
     }
 
     private void refreshBackupList(java.util.Map<String, String> ui) {
+        FactorySite site = effectiveAppFactory();
         if (backupListView != null) {
             backupListView.getItems().setAll(FactoryOperatorUserBackupStore.loadIndex(ui));
         }
         if (backupStorePathLabel != null) {
             backupStorePathLabel.setText(
                     "バックアップ先: "
-                            + FactoryOperatorUserBackupStore.resolveBackupsRoot(ui)
+                            + FactoryOperatorUserBackupStore.resolveBackupsRoot(ui, site)
                             + "　保持上限 "
                             + FactoryOperatorUserBackupStore.MAX_BACKUP_GENERATIONS
                             + " 世代");
@@ -770,6 +771,9 @@ public final class OperatorUserManagementTabController {
     private void refreshPresentation() {
         syncManagedFactoryComboToAppFactory();
         FactorySite site = effectiveAppFactory();
+        if (shell != null) {
+            FactoryOperatorUserStore.configureFromUi(shell.snapshotUiEnv(), site);
+        }
         if (factoryLabel != null) {
             factoryLabel.setText(
                     "環境変数の利用工場（"

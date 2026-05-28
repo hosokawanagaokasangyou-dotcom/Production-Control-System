@@ -681,7 +681,8 @@ public final class MainShellController {
         primaryStage.setMinHeight(480);
 
             applyDesktopSession(DesktopSessionStateStore.load());
-            GlobalInitSettingTarget.loadEffective(collectUiEnv());
+            FactorySite effectiveFactory = GlobalInitSettingTarget.loadEffective(collectUiEnv());
+            FactoryOperatorUserStore.configureFromUi(collectUiEnv(), effectiveFactory);
             if (globalSettingsTabController != null) {
                 globalSettingsTabController.refreshInitSettingTargetComboFromStore();
             }
@@ -3433,7 +3434,8 @@ public final class MainShellController {
                         mainRunTabController.refreshOpenWorkbookHintLabels();
                     }
                     pipelineExecutionTimingHistory.configureFromUi(collectUiEnv());
-                    FactoryOperatorUserStore.configureFromUi(collectUiEnv());
+                    FactoryOperatorUserStore.configureFromUi(
+                            collectUiEnv(), GlobalInitSettingTarget.loadEffective(collectUiEnv()));
                 });
         Runnable schedule = () -> uiEnvSaveDebounce.playFromStart();
         this.uiEnvPersistSchedule = schedule;
@@ -5067,6 +5069,7 @@ public final class MainShellController {
             return;
         }
         FactorySite factory = site != null ? site : GlobalInitSettingTarget.load();
+        FactoryOperatorUserStore.configureFromUi(collectUiEnv(), factory);
         FactoryOperatorUserStore.clearSessionOperatorName();
         while (FactoryOperatorUserStore.sessionOperatorName().isBlank()) {
             Optional<String> chosen = promptOperatorUserChoice(factory, startup);

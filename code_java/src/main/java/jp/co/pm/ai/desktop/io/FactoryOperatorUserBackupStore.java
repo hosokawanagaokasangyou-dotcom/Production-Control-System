@@ -20,6 +20,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
+import jp.co.pm.ai.desktop.config.FactorySite;
+import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 
 /**
  * {@link AppPaths#FACTORY_OPERATOR_USERS_BIN} の手動バックアップ（世代管理）。
@@ -62,11 +64,17 @@ public final class FactoryOperatorUserBackupStore {
     private FactoryOperatorUserBackupStore() {}
 
     public static Path resolveBackupsRoot(Map<String, String> ui) {
+        return resolveBackupsRoot(ui, null);
+    }
+
+    public static Path resolveBackupsRoot(Map<String, String> ui, FactorySite site) {
         String testRoot = System.getProperty("pm.ai.test.factoryOperatorUserBackupRoot");
         if (testRoot != null && !testRoot.isBlank()) {
             return Path.of(testRoot).toAbsolutePath().normalize();
         }
-        return AppPaths.factoryOperatorUsersBackupsRoot(ui);
+        Map<String, String> u = ui != null ? ui : Map.of();
+        FactorySite effective = site != null ? site : GlobalInitSettingTarget.loadEffective(u);
+        return AppPaths.factoryOperatorUsersBackupsRoot(u, effective);
     }
 
     public static List<FactoryOperatorUserBackupEntry> loadIndex(Map<String, String> ui) {
@@ -113,14 +121,15 @@ public final class FactoryOperatorUserBackupStore {
     public static FactoryOperatorUserBackupEntry createManualBackup(Map<String, String> ui, String label)
             throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
-        FactoryOperatorUserStore.configureFromUi(u);
+        FactorySite effective = GlobalInitSettingTarget.loadEffective(u);
+        FactoryOperatorUserStore.configureFromUi(u, effective);
         FactoryOperatorUserStore.ensureStoreFileOnDisk();
         Path current = FactoryOperatorUserStore.storePath();
         if (!Files.isRegularFile(current)) {
             throw new IOException("バックアップ対象のユーザー管理ファイルがありません: " + current);
         }
 
-        Path backupsRoot = resolveBackupsRoot(u);
+        Path backupsRoot = resolveBackupsRoot(u, effective);
         Files.createDirectories(backupsRoot);
         String id = UUID.randomUUID().toString().replace("-", "");
         String folder = "backup-" + id;
@@ -158,12 +167,13 @@ public final class FactoryOperatorUserBackupStore {
             throw new IllegalArgumentException("バックアップが未選択です。");
         }
         Map<String, String> u = ui != null ? ui : Map.of();
-        Path backupsRoot = resolveBackupsRoot(u);
+        FactorySite effective = GlobalInitSettingTarget.loadEffective(u);
+        Path backupsRoot = resolveBackupsRoot(u, effective);
         Path backupFile = entry.resolveBackupFile(backupsRoot);
         if (!Files.isRegularFile(backupFile)) {
             throw new IOException("バックアップファイルが見つかりません: " + backupFile);
         }
-        FactoryOperatorUserStore.configureFromUi(u);
+        FactoryOperatorUserStore.configureFromUi(u, effective);
         Path target = FactoryOperatorUserStore.storePath();
         if (target.getParent() != null) {
             Files.createDirectories(target.getParent());
