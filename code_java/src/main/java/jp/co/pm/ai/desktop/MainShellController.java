@@ -4959,6 +4959,9 @@ public final class MainShellController {
         if (operatorUserManagementTabController != null) {
             operatorUserManagementTabController.refreshPresentationQuietly();
         }
+        if (summaryAiDispatchGenerationTabController != null) {
+            summaryAiDispatchGenerationTabController.refreshListQuietly();
+        }
     }
 
     /**

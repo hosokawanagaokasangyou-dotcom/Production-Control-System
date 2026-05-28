@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -62,6 +63,12 @@ public final class SummaryAiDispatchGenerationTabController {
     private Label storePathLabel;
 
     @FXML
+    private Label operatorScopeLabel;
+
+    @FXML
+    private Label historyHeadingLabel;
+
+    @FXML
     private void initialize() {
         if (generationListView != null) {
             generationListView.setCellFactory(
@@ -107,8 +114,50 @@ public final class SummaryAiDispatchGenerationTabController {
         if (generationListView == null || shell == null) {
             return;
         }
-        generationListView.getItems().setAll(
-                SummaryAiDispatchGenerationStore.loadIndex(shell.snapshotUiEnv()));
+        Map<String, String> ui = shell.snapshotUiEnv();
+        List<SummaryAiDispatchGenerationEntry> entries =
+                SummaryAiDispatchGenerationStore.loadIndex(ui);
+        generationListView.getItems().setAll(entries);
+        refreshScopeLabels(ui, entries.size());
+    }
+
+    private void refreshScopeLabels(Map<String, String> ui, int count) {
+        String operator = SummaryAiDispatchGenerationStore.resolveOperatorUser(ui);
+        if (operatorScopeLabel != null) {
+            operatorScopeLabel.setText(
+                    "操作者: "
+                            + operator
+                            + "　退避 "
+                            + count
+                            + " / "
+                            + SummaryAiDispatchGenerationStore.MAX_GENERATIONS_PER_USER
+                            + " 件");
+        }
+        if (historyHeadingLabel != null) {
+            historyHeadingLabel.setText("退避履歴（" + operator + "・新しい順）");
+        }
+    }
+
+    @FXML
+    private void onOpenCurrentSummaryAction() {
+        if (shell == null) {
+            return;
+        }
+        if (shell.isSummaryAiDispatchExportLocked()) {
+            showInfo("現行を開く", "サマリ xlsx を作成中のため開けません。");
+            return;
+        }
+        Path current = AppPaths.summaryAiDispatchXlsxPath(shell.snapshotUiEnv());
+        if (!Files.isRegularFile(current)) {
+            showInfo("現行を開く", "現行サマリ Excel が見つかりません:\n" + current);
+            return;
+        }
+        try {
+            DesktopFileOpener.openFileReadOnly(current);
+            shell.appendLog("[summary-generation] opened current (read-only): " + current);
+        } catch (Exception ex) {
+            showError("現行を開く", "ファイルを開けませんでした", ex);
+        }
     }
 
     private void refreshStorePathLabel() {
@@ -117,9 +166,9 @@ public final class SummaryAiDispatchGenerationTabController {
         }
         Map<String, String> ui = shell.snapshotUiEnv();
         storePathLabel.setText(
-                "保存先: "
-                        + SummaryAiDispatchGenerationStore.resolveGenerationsRoot(ui)
-                        + "　現行: "
+                "退避先: "
+                        + SummaryAiDispatchGenerationStore.resolveUserGenerationsRoot(ui)
+                        + "　現行（上書き先）: "
                         + AppPaths.summaryAiDispatchXlsxPath(ui));
     }
 
@@ -174,7 +223,9 @@ public final class SummaryAiDispatchGenerationTabController {
             return;
         }
         Map<String, String> ui = shell.snapshotUiEnv();
-        Path workbook = sel.resolveWorkbookPath(SummaryAiDispatchGenerationStore.resolveGenerationsRoot(ui));
+        Path workbook =
+                sel.resolveWorkbookPath(
+                        SummaryAiDispatchGenerationStore.resolveUserGenerationsRoot(ui));
         if (!Files.isRegularFile(workbook)) {
             showInfo("開く", "退避ファイルが見つかりません:\n" + workbook);
             return;

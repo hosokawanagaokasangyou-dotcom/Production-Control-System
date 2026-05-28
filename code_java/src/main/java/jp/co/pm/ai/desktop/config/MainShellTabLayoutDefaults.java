@@ -108,15 +108,15 @@ public final class MainShellTabLayoutDefaults {
                                 MainShellTabLayoutNode.tabNode(
                                         MainShellTabId.OPERATOR_USER_MANAGEMENT.key(), ""),
                                 MainShellTabLayoutNode.tabNode(
-                                        MainShellTabId.SUMMARY_AI_DISPATCH_EXPORT_CUSTOMIZE.key(), ""),
-                                MainShellTabLayoutNode.tabNode(
-                                        MainShellTabId.SUMMARY_AI_DISPATCH_GENERATION.key(), ""))));
+                                        MainShellTabId.SUMMARY_AI_DISPATCH_EXPORT_CUSTOMIZE.key(), ""))));
 
         top.add(
                 MainShellTabLayoutNode.groupNode(
                         "\u7d50\u679c\u60c5\u5831",
                         "",
                         List.of(
+                                MainShellTabLayoutNode.tabNode(
+                                        MainShellTabId.SUMMARY_AI_DISPATCH_GENERATION.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_RESULT_VIEWER.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.STAGE1_PREVIEW.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.CODE_LOOKUP_TABLES.key(), ""),

@@ -15,22 +15,24 @@
     <padding>
         <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
     </padding>
-    <Label styleClass="pm-section-title" text="サマリ Excel 世代管理"
+    <Label styleClass="pm-section-title" text="サマリ Excel 世代"
            wrapText="true"/>
-    <Label text="サマリ_AI配台.xlsx を上書き出力する直前に、現行ブックを自動退避します（既定 30 世代）。履歴から読み取り専用で開くか、現行ブックへ復元できます。"
+    <Label text="最新のサマリ_AI配台.xlsx は従来どおり共有先へ上書きされます。上書き直前の旧版だけを、ログイン中の操作者ごとに最大10件まで退避し、このタブで閲覧・復元できます。"
            wrapText="true"/>
+    <Label fx:id="operatorScopeLabel" wrapText="true"/>
     <Separator/>
     <HBox spacing="8.0" alignment="CENTER_LEFT">
         <Label text="ラベル"/>
         <TextField fx:id="manualArchiveLabelField" prefWidth="320.0" promptText="任意（手動退避時）"/>
         <Button fx:id="manualArchiveButton" mnemonicParsing="false" onAction="#onManualArchiveAction" text="現行を手動退避"/>
+        <Button mnemonicParsing="false" onAction="#onOpenCurrentSummaryAction" text="現行を開く"/>
     </HBox>
     <Label fx:id="storePathLabel" styleClass="pm-muted-label" wrapText="true"/>
     <Separator/>
-    <Label text="世代履歴（新しい順）"/>
+    <Label fx:id="historyHeadingLabel" text="退避履歴（新しい順）"/>
     <ListView fx:id="generationListView" prefHeight="360.0" VBox.vgrow="ALWAYS"/>
     <HBox spacing="8.0" alignment="CENTER_LEFT">
-        <Button fx:id="openButton" mnemonicParsing="false" onAction="#onOpenGenerationAction" text="読み取り専用で開く"/>
+        <Button fx:id="openButton" mnemonicParsing="false" onAction="#onOpenGenerationAction" text="選択を読取専用で開く"/>
         <Button fx:id="restoreButton" mnemonicParsing="false" onAction="#onRestoreGenerationAction" text="現行へ復元"/>
         <Button fx:id="renameButton" mnemonicParsing="false" onAction="#onRenameGenerationAction" text="ラベル変更"/>
         <Button fx:id="deleteButton" mnemonicParsing="false" onAction="#onDeleteGenerationAction" text="削除"/>
