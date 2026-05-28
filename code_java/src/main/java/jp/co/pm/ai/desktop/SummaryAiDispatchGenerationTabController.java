@@ -89,9 +89,26 @@ public final class SummaryAiDispatchGenerationTabController {
                                                     : "（無題）";
                                     String reason =
                                             SummaryAiDispatchGenerationStore.reasonLabelJa(item.reason());
-                                    setText(ts + "  —  " + lb + "  [" + reason + "]");
+                                    String owner =
+                                            item.operatorUser() != null && !item.operatorUser().isBlank()
+                                                    ? item.operatorUser()
+                                                    : "（不明）";
+                                    setText(
+                                            "["
+                                                    + owner
+                                                    + "] "
+                                                    + ts
+                                                    + "  —  "
+                                                    + lb
+                                                    + "  ["
+                                                    + reason
+                                                    + "]");
                                 }
                             });
+            generationListView
+                    .getSelectionModel()
+                    .selectedItemProperty()
+                    .addListener((obs, old, sel) -> updateEntryActionButtons(sel));
         }
         refreshList();
     }
@@ -116,25 +133,47 @@ public final class SummaryAiDispatchGenerationTabController {
         }
         Map<String, String> ui = shell.snapshotUiEnv();
         List<SummaryAiDispatchGenerationEntry> entries =
-                SummaryAiDispatchGenerationStore.loadIndex(ui);
+                SummaryAiDispatchGenerationStore.loadAllGenerations(ui);
         generationListView.getItems().setAll(entries);
-        refreshScopeLabels(ui, entries.size());
+        refreshScopeLabels(ui, entries);
+        updateEntryActionButtons(generationListView.getSelectionModel().getSelectedItem());
     }
 
-    private void refreshScopeLabels(Map<String, String> ui, int count) {
+    private void refreshScopeLabels(
+            Map<String, String> ui, List<SummaryAiDispatchGenerationEntry> allEntries) {
         String operator = SummaryAiDispatchGenerationStore.resolveOperatorUser(ui);
+        long ownCount =
+                allEntries.stream()
+                        .filter(e -> SummaryAiDispatchGenerationStore.isCreatedByCurrentUser(e, ui))
+                        .count();
         if (operatorScopeLabel != null) {
             operatorScopeLabel.setText(
                     "操作者: "
                             + operator
-                            + "　退避 "
-                            + count
+                            + "　自分の退避 "
+                            + ownCount
                             + " / "
                             + SummaryAiDispatchGenerationStore.MAX_GENERATIONS_PER_USER
-                            + " 件");
+                            + " 件　一覧 "
+                            + allEntries.size()
+                            + " 件（全操作者）");
         }
         if (historyHeadingLabel != null) {
-            historyHeadingLabel.setText("退避履歴（" + operator + "・新しい順）");
+            historyHeadingLabel.setText("退避履歴（全操作者・新しい順）");
+        }
+    }
+
+    private void updateEntryActionButtons(SummaryAiDispatchGenerationEntry sel) {
+        if (shell == null) {
+            return;
+        }
+        Map<String, String> ui = shell.snapshotUiEnv();
+        boolean own = SummaryAiDispatchGenerationStore.isCreatedByCurrentUser(sel, ui);
+        if (deleteButton != null) {
+            deleteButton.setDisable(sel == null || !own);
+        }
+        if (renameButton != null) {
+            renameButton.setDisable(sel == null || !own);
         }
     }
 
@@ -223,9 +262,7 @@ public final class SummaryAiDispatchGenerationTabController {
             return;
         }
         Map<String, String> ui = shell.snapshotUiEnv();
-        Path workbook =
-                sel.resolveWorkbookPath(
-                        SummaryAiDispatchGenerationStore.resolveUserGenerationsRoot(ui));
+        Path workbook = sel.resolveWorkbookPathForOperator(ui);
         if (!Files.isRegularFile(workbook)) {
             showInfo("開く", "退避ファイルが見つかりません:\n" + workbook);
             return;
@@ -317,8 +354,14 @@ public final class SummaryAiDispatchGenerationTabController {
         if (sel == null) {
             return;
         }
+        if (!SummaryAiDispatchGenerationStore.isCreatedByCurrentUser(sel, shell.snapshotUiEnv())) {
+            showInfo("削除", "自分が作成した退避のみ削除できます。");
+            return;
+        }
         Alert confirm = new Alert(AlertType.CONFIRMATION);
-        confirm.setContentText("この世代を削除しますか？");
+        confirm.setTitle("削除の確認");
+        confirm.setHeaderText(null);
+        confirm.setContentText("自分が作成したこの世代を削除しますか？");
         if (shell.primaryStageForDialogs() != null) {
             confirm.initOwner(shell.primaryStageForDialogs());
         }

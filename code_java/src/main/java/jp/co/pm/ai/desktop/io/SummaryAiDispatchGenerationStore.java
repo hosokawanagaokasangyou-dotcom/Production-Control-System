@@ -61,13 +61,24 @@ public final class SummaryAiDispatchGenerationStore {
             String sourceWorkbookPath) {
 
         public Path resolveDirectory(Path userGenerationsRoot) {
-            String folder = folderName != null && !folderName.isBlank() ? folderName : id;
-            return userGenerationsRoot.resolve(folder).toAbsolutePath().normalize();
-        }
+        String folder = folderName != null && !folderName.isBlank() ? folderName : id;
+        return userGenerationsRoot.resolve(folder).toAbsolutePath().normalize();
+    }
+
+    public Path resolveDirectoryForOperator(Map<String, String> ui) {
+        return resolveDirectory(
+                SummaryAiDispatchGenerationStore.resolveOperatorGenerationsRoot(ui, operatorUser));
+    }
 
         public Path resolveWorkbookPath(Path userGenerationsRoot) {
-            return resolveDirectory(userGenerationsRoot).resolve(WORKBOOK_ARCHIVE_NAME);
+            return resolveDirectory(userGenerationsRoot)
+                    .resolve(SummaryAiDispatchGenerationStore.WORKBOOK_ARCHIVE_NAME);
         }
+
+    public Path resolveWorkbookPathForOperator(Map<String, String> ui) {
+        return resolveWorkbookPath(
+                SummaryAiDispatchGenerationStore.resolveOperatorGenerationsRoot(ui, operatorUser));
+    }
 
         public String displayLabel() {
             if (label != null && !label.isBlank()) {
@@ -96,8 +107,13 @@ public final class SummaryAiDispatchGenerationStore {
 
     /** 操作者別の退避ルート（{@code summary-ai-dispatch-generations/<操作者>/}）。 */
     public static Path resolveUserGenerationsRoot(Map<String, String> ui) {
+        return resolveOperatorGenerationsRoot(ui, resolveOperatorUser(ui));
+    }
+
+    public static Path resolveOperatorGenerationsRoot(Map<String, String> ui, String operatorUser) {
+        String op = operatorUser != null ? operatorUser.strip() : "";
         return resolveGenerationsRoot(ui)
-                .resolve(sanitizeOperatorDirName(resolveOperatorUser(ui)))
+                .resolve(sanitizeOperatorDirName(op.isEmpty() ? UNKNOWN_OPERATOR_DIR : op))
                 .toAbsolutePath()
                 .normalize();
     }
@@ -112,8 +128,48 @@ public final class SummaryAiDispatchGenerationStore {
         return session.isBlank() ? UNKNOWN_OPERATOR_DIR : session;
     }
 
+    public static boolean isCreatedByCurrentUser(
+            SummaryAiDispatchGenerationEntry entry, Map<String, String> ui) {
+        if (entry == null) {
+            return false;
+        }
+        String current = resolveOperatorUser(ui);
+        String owner = entry.operatorUser() != null ? entry.operatorUser().strip() : "";
+        return !owner.isEmpty() && owner.equals(current);
+    }
+
+    /** ログイン中操作者の退避一覧（書き込み・上限判定用）。 */
     public static List<SummaryAiDispatchGenerationEntry> loadIndex(Map<String, String> ui) {
-        Path idx = resolveUserGenerationsRoot(ui).resolve(INDEX_FILE);
+        return loadIndexForOperator(ui, resolveOperatorUser(ui));
+    }
+
+    /** 全操作者の退避を新しい順に返す（履歴閲覧用）。 */
+    public static List<SummaryAiDispatchGenerationEntry> loadAllGenerations(Map<String, String> ui) {
+        Path root = resolveGenerationsRoot(ui);
+        if (!Files.isDirectory(root)) {
+            return List.of();
+        }
+        List<SummaryAiDispatchGenerationEntry> all = new ArrayList<>();
+        try (var stream = Files.list(root)) {
+            for (Path sub : stream.filter(Files::isDirectory).sorted().toList()) {
+                all.addAll(loadIndexFromUserRoot(sub));
+            }
+        } catch (IOException ignored) {
+            return List.of();
+        }
+        all.sort(
+                Comparator.comparingLong(SummaryAiDispatchGenerationEntry::createdAtMillis)
+                        .reversed());
+        return List.copyOf(all);
+    }
+
+    public static List<SummaryAiDispatchGenerationEntry> loadIndexForOperator(
+            Map<String, String> ui, String operatorUser) {
+        return loadIndexFromUserRoot(resolveOperatorGenerationsRoot(ui, operatorUser));
+    }
+
+    private static List<SummaryAiDispatchGenerationEntry> loadIndexFromUserRoot(Path userRoot) {
+        Path idx = userRoot.resolve(INDEX_FILE);
         try {
             if (!Files.isRegularFile(idx)) {
                 return List.of();
@@ -126,7 +182,7 @@ public final class SummaryAiDispatchGenerationStore {
             if (arr == null || !arr.isArray()) {
                 return List.of();
             }
-            String operator = resolveOperatorUser(ui);
+            String indexOperator = text(root, "operatorUser");
             List<SummaryAiDispatchGenerationEntry> out = new ArrayList<>();
             for (JsonNode n : arr) {
                 if (n == null || !n.isObject()) {
@@ -138,7 +194,12 @@ public final class SummaryAiDispatchGenerationStore {
                 }
                 String entryOperator = text(n, "operatorUser");
                 if (entryOperator.isBlank()) {
-                    entryOperator = operator;
+                    entryOperator = indexOperator;
+                }
+                if (entryOperator.isBlank()) {
+                    entryOperator = userRoot.getFileName() != null
+                            ? userRoot.getFileName().toString()
+                            : UNKNOWN_OPERATOR_DIR;
                 }
                 out.add(
                         new SummaryAiDispatchGenerationEntry(
@@ -197,8 +258,7 @@ public final class SummaryAiDispatchGenerationStore {
         if (entry == null) {
             return;
         }
-        Path userRoot = resolveUserGenerationsRoot(ui);
-        Path archiveWorkbook = entry.resolveWorkbookPath(userRoot);
+        Path archiveWorkbook = entry.resolveWorkbookPathForOperator(ui);
         if (!Files.isRegularFile(archiveWorkbook)) {
             throw new IOException("退避ブックが見つかりません: " + archiveWorkbook);
         }
@@ -215,14 +275,18 @@ public final class SummaryAiDispatchGenerationStore {
         if (entry == null) {
             return;
         }
-        Path userRoot = resolveUserGenerationsRoot(ui);
+        if (!isCreatedByCurrentUser(entry, ui)) {
+            throw new IllegalStateException("自分が作成した退避のみ削除できます。");
+        }
+        String owner = entry.operatorUser() != null ? entry.operatorUser().strip() : resolveOperatorUser(ui);
+        Path userRoot = resolveOperatorGenerationsRoot(ui, owner);
         Path dir = entry.resolveDirectory(userRoot);
         if (Files.isDirectory(dir)) {
             deleteDirectoryRecursive(dir);
         }
-        List<SummaryAiDispatchGenerationEntry> cur = new ArrayList<>(loadIndex(ui));
+        List<SummaryAiDispatchGenerationEntry> cur = new ArrayList<>(loadIndexForOperator(ui, owner));
         cur.removeIf(e -> e.id().equals(entry.id()));
-        saveIndex(ui, cur);
+        saveIndexForOperator(ui, owner, cur);
     }
 
     public static void updateEntryLabel(
@@ -231,14 +295,18 @@ public final class SummaryAiDispatchGenerationStore {
         if (entry == null) {
             return;
         }
-        Path userRoot = resolveUserGenerationsRoot(ui);
+        if (!isCreatedByCurrentUser(entry, ui)) {
+            throw new IllegalStateException("自分が作成した退避のみラベル変更できます。");
+        }
+        String owner = entry.operatorUser() != null ? entry.operatorUser().strip() : resolveOperatorUser(ui);
+        Path userRoot = resolveOperatorGenerationsRoot(ui, owner);
         Path manifest = entry.resolveDirectory(userRoot).resolve(MANIFEST_FILE);
         if (Files.isRegularFile(manifest)) {
             ObjectNode root = (ObjectNode) JSON.readTree(manifest.toFile());
             root.put("label", newLabel != null ? newLabel.strip() : "");
             JSON.writerWithDefaultPrettyPrinter().writeValue(manifest.toFile(), root);
         }
-        List<SummaryAiDispatchGenerationEntry> cur = new ArrayList<>(loadIndex(ui));
+        List<SummaryAiDispatchGenerationEntry> cur = new ArrayList<>(loadIndexForOperator(ui, owner));
         for (int i = 0; i < cur.size(); i++) {
             if (cur.get(i).id().equals(entry.id())) {
                 SummaryAiDispatchGenerationEntry old = cur.get(i);
@@ -255,7 +323,7 @@ public final class SummaryAiDispatchGenerationStore {
                 break;
             }
         }
-        saveIndex(ui, cur);
+        saveIndexForOperator(ui, owner, cur);
     }
 
     public static String reasonLabelJa(String reason) {
@@ -347,10 +415,10 @@ public final class SummaryAiDispatchGenerationStore {
         }
         entries.sort(
                 Comparator.comparingLong(SummaryAiDispatchGenerationEntry::createdAtMillis));
-        Path userRoot = resolveUserGenerationsRoot(ui);
         while (entries.size() > max) {
             SummaryAiDispatchGenerationEntry oldest = entries.remove(0);
             try {
+                Path userRoot = resolveOperatorGenerationsRoot(ui, oldest.operatorUser());
                 Path dir = oldest.resolveDirectory(userRoot);
                 if (Files.isDirectory(dir)) {
                     deleteDirectoryRecursive(dir);
@@ -362,10 +430,16 @@ public final class SummaryAiDispatchGenerationStore {
 
     private static void saveIndex(Map<String, String> ui, List<SummaryAiDispatchGenerationEntry> entries)
             throws IOException {
-        Path userRoot = resolveUserGenerationsRoot(ui);
+        saveIndexForOperator(ui, resolveOperatorUser(ui), entries);
+    }
+
+    private static void saveIndexForOperator(
+            Map<String, String> ui, String operatorUser, List<SummaryAiDispatchGenerationEntry> entries)
+            throws IOException {
+        Path userRoot = resolveOperatorGenerationsRoot(ui, operatorUser);
         Files.createDirectories(userRoot);
         ObjectNode doc = JSON.createObjectNode();
-        doc.put("operatorUser", resolveOperatorUser(ui));
+        doc.put("operatorUser", operatorUser != null ? operatorUser.strip() : "");
         ArrayNode arr = doc.putArray("entries");
         for (SummaryAiDispatchGenerationEntry e : entries) {
             ObjectNode o = arr.addObject();

@@ -1063,6 +1063,15 @@ public final class MainRunTabController {
     }
 
     @FXML
+    private void onOpenSummaryGenerationHistoryAction() {
+        if (shell == null) {
+            return;
+        }
+        shell.selectMainShellTab(MainShellTabId.SUMMARY_AI_DISPATCH_GENERATION);
+        appendLog("[summary-generation] サマリ Excel 世代タブを開きました");
+    }
+
+    @FXML
     private void onForceUnlockSummaryExportLockAction() {
         if (shell == null) {
             return;

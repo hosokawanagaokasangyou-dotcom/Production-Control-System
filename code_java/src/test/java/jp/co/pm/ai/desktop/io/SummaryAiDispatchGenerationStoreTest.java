@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop.io;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -146,5 +147,58 @@ class SummaryAiDispatchGenerationStoreTest {
                 SummaryAiDispatchGenerationStore.loadIndex(ui(repo, USER_FURUYA))
                         .get(0)
                         .reason());
+    }
+
+    @Test
+    void loadAllGenerations_mergesAllOperators(@TempDir Path repo) throws Exception {
+        Path shared = repo.resolve("shared");
+        Files.createDirectories(shared);
+        Path current = shared.resolve("summary.xlsx");
+        Files.writeString(current, "sunada");
+        SummaryAiDispatchGenerationStore.archiveBeforeOverwrite(
+                current, ui(repo, USER_SUNADA), "sunada");
+        Files.writeString(current, "furuya");
+        SummaryAiDispatchGenerationStore.archiveBeforeOverwrite(
+                current, ui(repo, USER_FURUYA), "furuya");
+
+        Map<String, String> viewer = ui(repo, USER_SUNADA);
+        var all = SummaryAiDispatchGenerationStore.loadAllGenerations(viewer);
+        assertEquals(2, all.size());
+        assertTrue(all.stream().anyMatch(e -> "sunada".equals(e.reason())));
+        assertTrue(all.stream().anyMatch(e -> "furuya".equals(e.reason())));
+    }
+
+    @Test
+    void deleteEntry_allowsOnlyOwnGenerations(@TempDir Path repo) throws Exception {
+        Path shared = repo.resolve("shared");
+        Files.createDirectories(shared);
+        Path current = shared.resolve("summary.xlsx");
+        Files.writeString(current, "furuya");
+        SummaryAiDispatchGenerationStore.archiveBeforeOverwrite(
+                current, ui(repo, USER_FURUYA), "furuya");
+        var furuyaEntry =
+                SummaryAiDispatchGenerationStore.loadAllGenerations(ui(repo, USER_SUNADA)).get(0);
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> SummaryAiDispatchGenerationStore.deleteEntry(furuyaEntry, ui(repo, USER_SUNADA)));
+
+        SummaryAiDispatchGenerationStore.deleteEntry(furuyaEntry, ui(repo, USER_FURUYA));
+        assertTrue(SummaryAiDispatchGenerationStore.loadAllGenerations(ui(repo, USER_FURUYA)).isEmpty());
+    }
+
+    @Test
+    void restoreToCurrentWorkbook_canUseOtherOperatorsArchive(@TempDir Path repo) throws Exception {
+        Path shared = repo.resolve("shared");
+        Files.createDirectories(shared);
+        Path current = shared.resolve("summary.xlsx");
+        Files.writeString(current, "furuya-archive");
+        SummaryAiDispatchGenerationStore.archiveBeforeOverwrite(
+                current, ui(repo, USER_FURUYA), "furuya");
+        var entry = SummaryAiDispatchGenerationStore.loadAllGenerations(ui(repo, USER_SUNADA)).get(0);
+        Files.writeString(current, "current");
+
+        SummaryAiDispatchGenerationStore.restoreToCurrentWorkbook(entry, ui(repo, USER_SUNADA));
+        assertEquals("furuya-archive", Files.readString(current));
     }
 }

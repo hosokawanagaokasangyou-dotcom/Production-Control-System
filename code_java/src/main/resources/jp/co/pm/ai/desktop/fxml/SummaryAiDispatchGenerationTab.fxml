@@ -17,7 +17,7 @@
     </padding>
     <Label styleClass="pm-section-title" text="サマリ Excel 世代"
            wrapText="true"/>
-    <Label text="最新のサマリ_AI配台.xlsx は従来どおり共有先へ上書きされます。上書き直前の旧版だけを、ログイン中の操作者ごとに最大10件まで退避し、このタブで閲覧・復元できます。"
+    <Label text="最新のサマリ_AI配台.xlsx は従来どおり共有先へ上書きされます。上書き直前の旧版を操作者ごとに最大10件まで退避します。一覧では全操作者の退避を閲覧でき、削除・ラベル変更は自分が作成したものだけ可能です。"
            wrapText="true"/>
     <Label fx:id="operatorScopeLabel" wrapText="true"/>
     <Separator/>
@@ -35,7 +35,7 @@
         <Button fx:id="openButton" mnemonicParsing="false" onAction="#onOpenGenerationAction" text="選択を読取専用で開く"/>
         <Button fx:id="restoreButton" mnemonicParsing="false" onAction="#onRestoreGenerationAction" text="現行へ復元"/>
         <Button fx:id="renameButton" mnemonicParsing="false" onAction="#onRenameGenerationAction" text="ラベル変更"/>
-        <Button fx:id="deleteButton" mnemonicParsing="false" onAction="#onDeleteGenerationAction" text="削除"/>
+        <Button fx:id="deleteButton" mnemonicParsing="false" onAction="#onDeleteGenerationAction" text="自分の退避を削除"/>
         <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshListAction" text="一覧更新"/>
     </HBox>
 </VBox>
