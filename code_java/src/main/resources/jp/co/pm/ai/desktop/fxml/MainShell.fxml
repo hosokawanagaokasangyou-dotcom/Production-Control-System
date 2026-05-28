@@ -97,7 +97,7 @@
                         <fx:include fx:id="userProfilesTab" source="UserProfilesTab.fxml"/>
                     </content>
                 </Tab>
-                <Tab fx:id="mainShellTabOperatorUserManagement" closable="false" text="ユーザー管理">
+                <Tab fx:id="mainShellTabOperatorUserManagement" closable="false" text="ユーザー管理者">
                     <content>
                         <fx:include fx:id="operatorUserManagementTab"
                                     source="OperatorUserManagementTab.fxml"/>

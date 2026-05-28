@@ -3,8 +3,8 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
-<?import javafx.scene.control.ListView?>
 <?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TableView?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
@@ -15,9 +15,9 @@
     <padding>
         <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
     </padding>
-    <Label styleClass="pm-section-title" text="ユーザー管理（操作者名）"
+    <Label styleClass="pm-section-title" text="ユーザー管理者（操作者名・PIN）"
            wrapText="true"/>
-    <Label text="工場ごとに配台システム起動時の名前選択肢を管理します。選択した名前はサマリ Excel 作成ロック等の作成者表示に使われます。"
+    <Label text="工場ごとに配台システム起動時の名前選択肢と 4 桁 PIN を管理します。タブ自体は管理者パスワードで開きます。PIN 未設定のユーザーは起動時 PIN なしでログインできます。"
            wrapText="true"/>
     <Separator/>
     <Label fx:id="factoryLabel" styleClass="pm-muted-label" wrapText="true"/>
@@ -33,9 +33,10 @@
         <Button fx:id="addNameButton" mnemonicParsing="false" onAction="#onAddNameAction" text="追加"/>
         <Button fx:id="removeNameButton" mnemonicParsing="false" onAction="#onRemoveNameAction" text="選択を削除"/>
         <Button fx:id="resetDefaultsButton" mnemonicParsing="false" onAction="#onResetDefaultsAction" text="既定4名に戻す"/>
+        <Button fx:id="issuePinButton" mnemonicParsing="false" onAction="#onIssuePinAction" text="PIN 発行／再発行"/>
     </HBox>
-    <Label text="名前一覧（起動時の選択肢）"/>
-    <ListView fx:id="nameListView" prefHeight="320.0" VBox.vgrow="ALWAYS"/>
+    <Label text="ユーザー一覧（起動時の選択肢）"/>
+    <TableView fx:id="operatorTableView" prefHeight="320.0" VBox.vgrow="ALWAYS"/>
     <HBox spacing="8.0" alignment="CENTER_LEFT">
         <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshAction" text="一覧更新"/>
     </HBox>

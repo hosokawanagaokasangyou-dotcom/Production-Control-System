@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,5 +70,53 @@ class FactoryOperatorUserStoreTest {
         FactoryOperatorUserStore.clearSessionOperatorName();
         assertEquals("古家", FactoryOperatorUserStore.lastSelectedForFactory(FactorySite.KONAN));
         assertTrue(Files.isRegularFile(FactoryOperatorUserStore.storePath()));
+    }
+
+    @Test
+    void issuePinVerifyAndPersist() throws Exception {
+        String pin = FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "砂田");
+        assertEquals(4, pin.length());
+        assertTrue(FactoryOperatorUserStore.hasPin(FactorySite.KONAN, "砂田"));
+        assertTrue(FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "砂田", pin));
+        assertTrue(!FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "砂田", "0000"));
+        assertEquals("設定済", FactoryOperatorUserStore.pinStatusLabel(FactorySite.KONAN, "砂田"));
+    }
+
+    @Test
+    void verifyPinAllowsWhenUnset() throws Exception {
+        assertTrue(!FactoryOperatorUserStore.hasPin(FactorySite.KONAN, "砂田"));
+        assertTrue(FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "砂田", "1234"));
+    }
+
+    @Test
+    void removeNameClearsPin() throws Exception {
+        FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "古家");
+        FactoryOperatorUserStore.removeName(FactorySite.KONAN, "古家");
+        assertTrue(!FactoryOperatorUserStore.namesForFactory(FactorySite.KONAN).contains("古家"));
+        FactoryOperatorUserStore.addName(FactorySite.KONAN, "古家");
+        assertTrue(!FactoryOperatorUserStore.hasPin(FactorySite.KONAN, "古家"));
+    }
+
+    @Test
+    void migratesSchemaV1Json() throws Exception {
+        FactoryOperatorUserStore.writeRawJsonForTests(
+                """
+                {
+                  "schemaVersion": 1,
+                  "factories": {
+                    "KONAN": {
+                      "names": ["砂田", "古家"],
+                      "lastSelected": "砂田"
+                    }
+                  }
+                }
+                """);
+        assertEquals(List.of("砂田", "古家"), FactoryOperatorUserStore.namesForFactory(FactorySite.KONAN));
+        assertTrue(!FactoryOperatorUserStore.hasPin(FactorySite.KONAN, "砂田"));
+        String pin = FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "砂田");
+        assertTrue(FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "砂田", pin));
+        String saved = Files.readString(FactoryOperatorUserStore.storePath());
+        assertTrue(saved.contains("\"schemaVersion\" : 2"));
+        assertTrue(saved.contains("pinHashes"));
     }
 }

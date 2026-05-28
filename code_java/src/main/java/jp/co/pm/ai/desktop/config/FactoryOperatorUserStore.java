@@ -5,7 +5,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -18,31 +22,43 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
- * 工場別の配台システム操作者名（起動時選択・作成者表示用）。
+ * 工場別の配台システム操作者名（起動時選択・作成者表示用）と 4 桁 PIN。
  *
  * <p>永続化: {@code ~/.pm-ai-desktop/factory-operator-users.json}
  */
 public final class FactoryOperatorUserStore {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final HexFormat HEX = HexFormat.of();
 
     private static final Path DEFAULT_STORE =
             Paths.get(System.getProperty("user.home"), ".pm-ai-desktop", "factory-operator-users.json");
 
-    public static final int SCHEMA_VERSION = 1;
+    public static final int SCHEMA_VERSION = 2;
     public static final int MAX_NAMES_PER_FACTORY = 50;
     public static final int MAX_NAME_LENGTH = 40;
+    public static final int PIN_LENGTH = 4;
+
+    /** ユーザー管理者タブを開くための管理者パスワード（平文）。 */
+    public static final String ADMIN_TAB_PASSWORD = "nagaoka123";
 
     public static final List<String> DEFAULT_NAMES =
             List.of("砂田", "古家", "図司", "細川");
 
     private static volatile String sessionOperatorName = "";
 
-    public record FactoryOperatorUsers(List<String> names, String lastSelected) {
+    public record FactoryOperatorUsers(
+            List<String> names, String lastSelected, Map<String, String> pinHashes) {
 
         public FactoryOperatorUsers {
             names = names != null ? List.copyOf(names) : List.of();
             lastSelected = lastSelected != null ? lastSelected.strip() : "";
+            pinHashes = pinHashes != null ? Map.copyOf(pinHashes) : Map.of();
+        }
+
+        public FactoryOperatorUsers(List<String> names, String lastSelected) {
+            this(names, lastSelected, Map.of());
         }
     }
 
@@ -73,6 +89,70 @@ public final class FactoryOperatorUserStore {
         return loadFactory(site).lastSelected();
     }
 
+    public static boolean hasPin(FactorySite site, String name) throws IOException {
+        FactorySite factory = site != null ? site : FactorySite.KONAN;
+        String normalized = normalizeName(name);
+        if (normalized.isEmpty()) {
+            return false;
+        }
+        String hash = loadFactory(factory).pinHashes().get(normalized);
+        return hash != null && !hash.isBlank();
+    }
+
+    public static boolean verifyPin(FactorySite site, String name, String pin) throws IOException {
+        FactorySite factory = site != null ? site : FactorySite.KONAN;
+        String normalized = normalizeName(name);
+        String pinNorm = normalizePin(pin);
+        if (normalized.isEmpty() || pinNorm == null) {
+            return false;
+        }
+        String expected = loadFactory(factory).pinHashes().get(normalized);
+        if (expected == null || expected.isBlank()) {
+            return true;
+        }
+        return MessageDigest.isEqual(
+                expected.getBytes(StandardCharsets.UTF_8),
+                hashPin(factory, normalized, pinNorm).getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * 4 桁 PIN を新規発行する（既存 PIN があれば上書き）。
+     *
+     * @return 発行した PIN（このタイミングのみ平文表示可能）
+     */
+    public static String issuePin(FactorySite site, String name) throws IOException {
+        return assignPin(site, name, generatePin());
+    }
+
+    /**
+     * 4 桁 PIN を再発行する（{@link #issuePin} と同じだが意図を明示する別名）。
+     */
+    public static String reissuePin(FactorySite site, String name) throws IOException {
+        return issuePin(site, name);
+    }
+
+    private static String assignPin(FactorySite site, String name, String pin) throws IOException {
+        FactorySite factory = site != null ? site : FactorySite.KONAN;
+        String normalized = normalizeName(name);
+        String pinNorm = normalizePin(pin);
+        if (normalized.isEmpty()) {
+            throw new IllegalArgumentException("名前が空です。");
+        }
+        if (pinNorm == null) {
+            throw new IllegalArgumentException("PIN は " + PIN_LENGTH + " 桁の数字です。");
+        }
+        Document doc = loadDocument();
+        FactoryOperatorUsers current = ensureFactory(doc, factory);
+        if (!current.names().contains(normalized)) {
+            throw new IllegalArgumentException("操作者名が一覧にありません: " + normalized);
+        }
+        Map<String, String> pins = new LinkedHashMap<>(current.pinHashes());
+        pins.put(normalized, hashPin(factory, normalized, pinNorm));
+        doc.factories().put(factory, new FactoryOperatorUsers(current.names(), current.lastSelected(), pins));
+        saveDocument(doc);
+        return pinNorm;
+    }
+
     /**
      * セッション操作者を設定し、工場別 {@code lastSelected} を永続化する。
      *
@@ -90,7 +170,11 @@ public final class FactoryOperatorUserStore {
             throw new IllegalArgumentException("操作者名が一覧にありません: " + normalized);
         }
         sessionOperatorName = normalized;
-        doc.factories().put(factory, new FactoryOperatorUsers(current.names(), normalized));
+        doc.factories()
+                .put(
+                        factory,
+                        new FactoryOperatorUsers(
+                                current.names(), normalized, current.pinHashes()));
         saveDocument(doc);
     }
 
@@ -110,7 +194,10 @@ public final class FactoryOperatorUserStore {
         }
         List<String> next = new ArrayList<>(current.names());
         next.add(normalized);
-        doc.factories().put(factory, new FactoryOperatorUsers(next, current.lastSelected()));
+        doc.factories()
+                .put(
+                        factory,
+                        new FactoryOperatorUsers(next, current.lastSelected(), current.pinHashes()));
         saveDocument(doc);
     }
 
@@ -129,7 +216,9 @@ public final class FactoryOperatorUserStore {
         next.remove(normalized);
         String last =
                 normalized.equals(current.lastSelected()) ? "" : current.lastSelected();
-        doc.factories().put(factory, new FactoryOperatorUsers(next, last));
+        Map<String, String> pins = new LinkedHashMap<>(current.pinHashes());
+        pins.remove(normalized);
+        doc.factories().put(factory, new FactoryOperatorUsers(next, last, pins));
         if (normalized.equals(sessionOperatorName) && factory == GlobalInitSettingTarget.load()) {
             sessionOperatorName = "";
         }
@@ -142,11 +231,23 @@ public final class FactoryOperatorUserStore {
         FactoryOperatorUsers current = ensureFactory(doc, factory);
         String last =
                 DEFAULT_NAMES.contains(current.lastSelected()) ? current.lastSelected() : "";
-        doc.factories().put(factory, new FactoryOperatorUsers(DEFAULT_NAMES, last));
+        Map<String, String> pins = new LinkedHashMap<>();
+        for (String n : DEFAULT_NAMES) {
+            String h = current.pinHashes().get(n);
+            if (h != null && !h.isBlank()) {
+                pins.put(n, h);
+            }
+        }
+        doc.factories().put(factory, new FactoryOperatorUsers(DEFAULT_NAMES, last, pins));
         if (!DEFAULT_NAMES.contains(sessionOperatorName) && factory == GlobalInitSettingTarget.load()) {
             sessionOperatorName = "";
         }
         saveDocument(doc);
+    }
+
+    /** 一覧表示用: PIN が設定済みか。 */
+    public static String pinStatusLabel(FactorySite site, String name) throws IOException {
+        return hasPin(site, name) ? "設定済" : "未設定";
     }
 
     private static FactoryOperatorUsers loadFactory(FactorySite site) throws IOException {
@@ -210,7 +311,27 @@ public final class FactoryOperatorUserStore {
         if (!last.isEmpty() && !names.contains(last)) {
             last = "";
         }
-        return new FactoryOperatorUsers(names, last);
+        Map<String, String> pinHashes = new LinkedHashMap<>();
+        JsonNode pinsNode = node.get("pinHashes");
+        if (pinsNode != null && pinsNode.isObject()) {
+            pinsNode
+                    .fields()
+                    .forEachRemaining(
+                            e -> {
+                                String key = normalizeName(e.getKey());
+                                if (key.isEmpty() || !names.contains(key)) {
+                                    return;
+                                }
+                                JsonNode v = e.getValue();
+                                if (v != null && v.isTextual()) {
+                                    String hash = v.asText("").strip();
+                                    if (!hash.isEmpty()) {
+                                        pinHashes.put(key, hash);
+                                    }
+                                }
+                            });
+        }
+        return new FactoryOperatorUsers(names, last, pinHashes);
     }
 
     private static void saveDocument(Document doc) throws IOException {
@@ -228,6 +349,12 @@ public final class FactoryOperatorUserStore {
                 arr.add(name);
             }
             fo.put("lastSelected", e.getValue().lastSelected());
+            ObjectNode pins = fo.putObject("pinHashes");
+            for (Map.Entry<String, String> pe : e.getValue().pinHashes().entrySet()) {
+                if (e.getValue().names().contains(pe.getKey())) {
+                    pins.put(pe.getKey(), pe.getValue());
+                }
+            }
         }
         JSON.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), root);
     }
@@ -259,6 +386,34 @@ public final class FactoryOperatorUserStore {
             t = t.substring(0, MAX_NAME_LENGTH);
         }
         return t;
+    }
+
+    public static String normalizePin(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String t = raw.strip();
+        if (t.length() != PIN_LENGTH || !t.chars().allMatch(Character::isDigit)) {
+            return null;
+        }
+        return t;
+    }
+
+    private static String generatePin() {
+        int n = SECURE_RANDOM.nextInt(10_000);
+        return String.format("%04d", n);
+    }
+
+    private static String hashPin(FactorySite factory, String name, String pin) {
+        String payload =
+                factory.name() + "|" + normalizeName(name) + "|" + Objects.requireNonNull(pin);
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(payload.getBytes(StandardCharsets.UTF_8));
+            return HEX.formatHex(digest);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 
     private record Document(int schemaVersion, Map<FactorySite, FactoryOperatorUsers> factories) {

@@ -48,6 +48,7 @@ import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Labeled;
+import javafx.scene.control.PasswordField;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollPane;
@@ -468,6 +469,11 @@ public final class MainShellController {
 
     /** {@link #emitShellTabNavigation()} 用の直前リーフ（列フィルタ解除・実行タブ離脱保存）。 */
     private Tab lastEffectiveShellLeaf;
+
+    /** ユーザー管理者タブをこのセッションで解錠済みか。 */
+    private boolean operatorUserAdminTabUnlocked;
+
+    private final AtomicBoolean suppressOperatorUserAdminTabGuard = new AtomicBoolean(false);
 
     private ObservableList<EnvVarRow> envRows;
 
@@ -1837,10 +1843,82 @@ public final class MainShellController {
     private void emitShellTabNavigation() {
         Tab now = resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
         Tab prev = lastEffectiveShellLeaf;
+        if (now == mainShellTabOperatorUserManagement
+                && !operatorUserAdminTabUnlocked
+                && !suppressOperatorUserAdminTabGuard.get()) {
+            if (!promptOperatorUserAdminTabUnlock()) {
+                suppressOperatorUserAdminTabGuard.set(true);
+                try {
+                    if (prev != null && prev != mainShellTabOperatorUserManagement) {
+                        selectShellTabLeaf(prev);
+                    } else {
+                        selectMainShellTab(MainShellTabId.RUN);
+                    }
+                } finally {
+                    suppressOperatorUserAdminTabGuard.set(false);
+                }
+                return;
+            }
+            operatorUserAdminTabUnlocked = true;
+        }
         lastEffectiveShellLeaf = now;
         if (prev == mainShellTabRun && now != mainShellTabRun) {
             DesktopSessionStateStore.save(collectDesktopSession());
         }
+    }
+
+    private boolean selectShellTabLeaf(Tab leaf) {
+        if (leaf == null || tabPane == null) {
+            return false;
+        }
+        return selectShellTabLeafRecursive(tabPane, leaf);
+    }
+
+    private boolean selectShellTabLeafRecursive(TabPane pane, Tab target) {
+        for (Tab t : pane.getTabs()) {
+            if (t == target) {
+                pane.getSelectionModel().select(t);
+                return true;
+            }
+        }
+        for (Tab t : pane.getTabs()) {
+            if (t.getContent() instanceof TabPane inner) {
+                if (selectShellTabLeafRecursive(inner, target)) {
+                    pane.getSelectionModel().select(t);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean promptOperatorUserAdminTabUnlock() {
+        if (primaryStage == null) {
+            return false;
+        }
+        Dialog<String> dialog = new Dialog<>();
+        prepareDialogForMainTheme(dialog);
+        dialog.setTitle("ユーザー管理者");
+        dialog.setHeaderText(null);
+        Label hint =
+                new Label("ユーザー管理者タブを開くには管理者パスワードを入力してください。");
+        hint.setWrapText(true);
+        PasswordField pf = new PasswordField();
+        pf.setPromptText("管理者パスワード");
+        VBox box = new VBox(8, hint, new Label("パスワード:"), pf);
+        dialog.getDialogPane().setContent(box);
+        dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
+        dialog.setResultConverter(
+                bt -> {
+                    if (bt != ButtonType.OK) {
+                        return null;
+                    }
+                    String t = pf.getText();
+                    return t != null ? t : "";
+                });
+        Optional<String> ans = dialog.showAndWait();
+        return ans.isPresent()
+                && FactoryOperatorUserStore.ADMIN_TAB_PASSWORD.equals(ans.get());
     }
 
     /**
@@ -4982,14 +5060,19 @@ public final class MainShellController {
                         "操作者名（必須）",
                         factory.displayLabelJa()
                                 + " の操作者名を選択してください。\n"
-                                + "一覧の編集は「ユーザー管理」タブから行えます。");
+                                + "一覧の編集は「ユーザー管理者」タブから行えます。");
                 continue;
             }
+            String name = chosen.get();
             try {
-                FactoryOperatorUserStore.selectSessionOperator(factory, chosen.get());
+                if (FactoryOperatorUserStore.hasPin(factory, name)
+                        && !promptAndVerifyOperatorPin(factory, name)) {
+                    continue;
+                }
+                FactoryOperatorUserStore.selectSessionOperator(factory, name);
                 appendLog(
                         "[startup] 操作者: "
-                                + chosen.get()
+                                + name
                                 + " （"
                                 + factory.displayLabelJa()
                                 + "）");
@@ -5000,6 +5083,57 @@ public final class MainShellController {
             }
         }
         refreshMainRunTabOperatorLabel();
+    }
+
+    private boolean promptAndVerifyOperatorPin(FactorySite factory, String operatorName) {
+        if (primaryStage == null) {
+            return false;
+        }
+        Dialog<String> dialog = new Dialog<>();
+        prepareDialogForMainTheme(dialog);
+        dialog.setTitle("PIN 認証");
+        dialog.setHeaderText(null);
+        Label hint =
+                new Label(
+                        "操作者「"
+                                + operatorName
+                                + "」の "
+                                + FactoryOperatorUserStore.PIN_LENGTH
+                                + " 桁 PIN を入力してください。");
+        hint.setWrapText(true);
+        PasswordField pf = new PasswordField();
+        pf.setPromptText("4 桁 PIN");
+        VBox box = new VBox(8, hint, new Label("PIN:"), pf);
+        dialog.getDialogPane().setContent(box);
+        dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
+        dialog.setResultConverter(
+                bt -> {
+                    if (bt != ButtonType.OK) {
+                        return null;
+                    }
+                    String t = pf.getText();
+                    return t != null ? t.strip() : "";
+                });
+        while (true) {
+            Optional<String> ans = dialog.showAndWait();
+            if (ans.isEmpty()) {
+                return false;
+            }
+            String pin = ans.get();
+            if (FactoryOperatorUserStore.normalizePin(pin) == null) {
+                showWarningDialog("PIN", FactoryOperatorUserStore.PIN_LENGTH + " 桁の数字を入力してください。");
+                continue;
+            }
+            try {
+                if (FactoryOperatorUserStore.verifyPin(factory, operatorName, pin)) {
+                    return true;
+                }
+            } catch (IOException ex) {
+                showWarningDialog("PIN", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+                return false;
+            }
+            showWarningDialog("PIN", "PIN が正しくありません。");
+        }
     }
 
     private void maybePromptOperatorUserAtStartup() {
@@ -5037,7 +5171,7 @@ public final class MainShellController {
                 (startup ? "配台システムを利用する操作者名を選んでください。\n" : "")
                         + "工場: "
                         + site.displayLabelJa()
-                        + "\n（作成者表示に使用します。ユーザー管理タブで一覧を編集できます。）");
+                        + "\n（作成者表示に使用します。一覧の編集はユーザー管理者タブから行えます。）");
         return d.showAndWait();
     }
 

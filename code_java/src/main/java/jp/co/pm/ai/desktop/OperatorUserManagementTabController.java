@@ -1,22 +1,55 @@
 package jp.co.pm.ai.desktop;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
+import javafx.beans.property.SimpleStringProperty;
+import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
-import javafx.scene.control.ListView;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import javafx.scene.control.cell.PropertyValueFactory;
 
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 
-/** 工場別の配台システム操作者名（起動時選択肢）の管理タブ。 */
+/** 工場別の配台システム操作者名と 4 桁 PIN の管理タブ（管理者パスワードで開く）。 */
 public final class OperatorUserManagementTabController {
+
+    static final class OperatorRow {
+        private final SimpleStringProperty name = new SimpleStringProperty();
+        private final SimpleStringProperty pinStatus = new SimpleStringProperty();
+
+        OperatorRow(String name, String pinStatus) {
+            this.name.set(name);
+            this.pinStatus.set(pinStatus);
+        }
+
+        String getName() {
+            return name.get();
+        }
+
+        SimpleStringProperty nameProperty() {
+            return name;
+        }
+
+        String getPinStatus() {
+            return pinStatus.get();
+        }
+
+        SimpleStringProperty pinStatusProperty() {
+            return pinStatus;
+        }
+    }
 
     private MainShellController shell;
 
@@ -42,13 +75,26 @@ public final class OperatorUserManagementTabController {
     private Button resetDefaultsButton;
 
     @FXML
+    private Button issuePinButton;
+
+    @FXML
     private Button refreshButton;
 
     @FXML
-    private ListView<String> nameListView;
+    private TableView<OperatorRow> operatorTableView;
 
     @FXML
     private void initialize() {
+        if (operatorTableView != null) {
+            TableColumn<OperatorRow, String> nameCol = new TableColumn<>("名前");
+            nameCol.setCellValueFactory(new PropertyValueFactory<>("name"));
+            nameCol.setPrefWidth(180);
+            TableColumn<OperatorRow, String> pinCol = new TableColumn<>("PIN");
+            pinCol.setCellValueFactory(new PropertyValueFactory<>("pinStatus"));
+            pinCol.setPrefWidth(120);
+            operatorTableView.getColumns().setAll(nameCol, pinCol);
+            operatorTableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        }
         refreshPresentation();
     }
 
@@ -93,18 +139,19 @@ public final class OperatorUserManagementTabController {
 
     @FXML
     private void onRemoveNameAction() {
-        if (shell == null || nameListView == null) {
+        if (shell == null || operatorTableView == null) {
             return;
         }
-        String sel = nameListView.getSelectionModel().getSelectedItem();
-        if (sel == null || sel.isBlank()) {
+        OperatorRow sel = operatorTableView.getSelectionModel().getSelectedItem();
+        if (sel == null || sel.getName().isBlank()) {
             warn("削除", "削除する名前を一覧から選んでください。");
             return;
         }
+        String name = sel.getName();
         Alert confirm = new Alert(AlertType.CONFIRMATION);
         confirm.setTitle("削除の確認");
         confirm.setHeaderText(null);
-        confirm.setContentText("「" + sel + "」をこの工場の一覧から削除しますか？");
+        confirm.setContentText("「" + name + "」をこの工場の一覧から削除しますか？");
         if (shell.primaryStageForDialogs() != null) {
             confirm.initOwner(shell.primaryStageForDialogs());
         }
@@ -114,9 +161,9 @@ public final class OperatorUserManagementTabController {
         }
         try {
             FactorySite site = GlobalInitSettingTarget.load();
-            FactoryOperatorUserStore.removeName(site, sel);
+            FactoryOperatorUserStore.removeName(site, name);
             refreshPresentation();
-            shell.appendLog("[operator-user] 名前を削除: " + sel + " （" + site.displayLabelJa() + "）");
+            shell.appendLog("[operator-user] 名前を削除: " + name + " （" + site.displayLabelJa() + "）");
             if (FactoryOperatorUserStore.sessionOperatorName().isBlank()) {
                 shell.requireOperatorSelectionForFactory(site, false);
             }
@@ -156,6 +203,63 @@ public final class OperatorUserManagementTabController {
     }
 
     @FXML
+    private void onIssuePinAction() {
+        if (shell == null || operatorTableView == null) {
+            return;
+        }
+        OperatorRow sel = operatorTableView.getSelectionModel().getSelectedItem();
+        if (sel == null || sel.getName().isBlank()) {
+            warn("PIN 発行", "PIN を発行するユーザーを一覧から選んでください。");
+            return;
+        }
+        String name = sel.getName();
+        boolean reissue = "設定済".equals(sel.getPinStatus());
+        Alert confirm = new Alert(AlertType.CONFIRMATION);
+        confirm.setTitle(reissue ? "PIN 再発行" : "PIN 発行");
+        confirm.setHeaderText(null);
+        confirm.setContentText(
+                reissue
+                        ? "「" + name + "」の PIN を再発行します。旧 PIN は使えなくなります。よろしいですか？"
+                        : "「" + name + "」に 4 桁 PIN を新規発行します。よろしいですか？");
+        if (shell.primaryStageForDialogs() != null) {
+            confirm.initOwner(shell.primaryStageForDialogs());
+        }
+        Optional<ButtonType> ans = confirm.showAndWait();
+        if (ans.isEmpty() || ans.get() != ButtonType.OK) {
+            return;
+        }
+        try {
+            FactorySite site = GlobalInitSettingTarget.load();
+            String pin = FactoryOperatorUserStore.issuePin(site, name);
+            refreshPresentation();
+            shell.appendLog(
+                    "[operator-user] PIN を"
+                            + (reissue ? "再発行" : "発行")
+                            + ": "
+                            + name
+                            + " （"
+                            + site.displayLabelJa()
+                            + "）");
+            Alert info = new Alert(AlertType.INFORMATION);
+            info.setTitle(reissue ? "PIN 再発行完了" : "PIN 発行完了");
+            info.setHeaderText(null);
+            info.setContentText(
+                    "操作者「"
+                            + name
+                            + "」の PIN は "
+                            + pin
+                            + " です。\n"
+                            + "この画面を閉じると再表示できません。必ず控えてください。");
+            if (shell.primaryStageForDialogs() != null) {
+                info.initOwner(shell.primaryStageForDialogs());
+            }
+            info.showAndWait();
+        } catch (Exception ex) {
+            warn(reissue ? "PIN 再発行" : "PIN 発行", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+        }
+    }
+
+    @FXML
     private void onChangeSessionOperatorAction() {
         if (shell == null) {
             return;
@@ -176,11 +280,18 @@ public final class OperatorUserManagementTabController {
                             ? "現在の操作者: （未選択）"
                             : "現在の操作者: " + op);
         }
-        if (nameListView != null) {
+        if (operatorTableView != null) {
             try {
-                nameListView.getItems().setAll(FactoryOperatorUserStore.namesForFactory(site));
-            } catch (Exception ex) {
-                nameListView.getItems().clear();
+                List<String> names = FactoryOperatorUserStore.namesForFactory(site);
+                List<OperatorRow> rows = new ArrayList<>();
+                for (String name : names) {
+                    rows.add(
+                            new OperatorRow(
+                                    name, FactoryOperatorUserStore.pinStatusLabel(site, name)));
+                }
+                operatorTableView.setItems(FXCollections.observableArrayList(rows));
+            } catch (IOException ex) {
+                operatorTableView.setItems(FXCollections.observableArrayList());
             }
         }
         if (shell != null) {
