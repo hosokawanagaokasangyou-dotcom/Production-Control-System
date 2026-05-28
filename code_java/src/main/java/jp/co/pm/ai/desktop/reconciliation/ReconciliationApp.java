@@ -439,6 +439,19 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         basicGrid.add(lblWage, 0, 2);
         addFormField(basicGrid, newTxtFormWage, 1, 2);
 
+        Label lblUketsukeNo = new Label("受付Ｎｏ:");
+        styleFormLabel(lblUketsukeNo);
+        newTxtUketsukeNo = new TextField();
+        newTxtUketsukeNo.setStyle("-fx-font-size: 11px;");
+        basicGrid.add(lblUketsukeNo, 2, 2);
+        addFormField(basicGrid, newTxtUketsukeNo, 3, 2);
+
+        // 依頼Ｎｏの実フィールドは txtReqNo。clearInputForm / addNewOrderToExcel が参照する
+        // newTxtIraiNo は未生成のままだと NPE になるため生成だけしておく。
+        if (newTxtIraiNo == null) {
+            newTxtIraiNo = new TextField();
+        }
+
         Label lblInputDate = new Label("入力日:");
         styleFormLabel(lblInputDate);
         newDpFormInputDate = new DatePicker();
@@ -2777,6 +2790,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         newDpFormInputDate.setValue(java.time.LocalDate.now());
         txtProcess.setText(activeVals.getOrDefault("加工内容", ""));
         newTxtFormWage.setText(activeVals.getOrDefault("加工賃", ""));
+        newTxtUketsukeNo.setText(activeVals.getOrDefault("受付Ｎｏ", ""));
         newCmbFormYoto.setValue(activeVals.getOrDefault("用途", ""));
         newCmbFormInputKbn.setValue(activeVals.getOrDefault("入力区分", ""));
         newCmbFormKakoKbn.setValue(activeVals.getOrDefault("加工区分", ""));
@@ -4279,6 +4293,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         setJuchuCellIfIncluded(targetRow, JuchuSheetColumnLayout.Col.TONYU_BASHO, db.getOrDefault("投入場所", ""));
         setJuchuDateOrStringIfIncluded(targetRow, JuchuSheetColumnLayout.Col.TONYU_BI, db.getOrDefault("投入日", ""));
 
+        setJuchuCellIfIncluded(targetRow, JuchuSheetColumnLayout.Col.UKETSUKE_NO, db.getOrDefault("受付Ｎｏ", ""));
         setJuchuCellIfIncluded(targetRow, JuchuSheetColumnLayout.Col.KAKO_NAIYO, db.getOrDefault("加工内容", ""));
         setJuchuCellIfIncluded(targetRow, JuchuSheetColumnLayout.Col.TOKKI_1, tokki1 != null ? tokki1 : db.getOrDefault("特記事項1", ""));
         setJuchuCellIfIncluded(targetRow, JuchuSheetColumnLayout.Col.TOKKI_2, tokki2 != null ? tokki2 : db.getOrDefault("特記事項2", ""));
@@ -4317,6 +4332,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
         db.put("加工内容", txtProcess.getText().trim());
         db.put("加工賃", newTxtFormWage.getText().trim());
+        db.put("受付Ｎｏ", newTxtUketsukeNo.getText().trim());
         db.put("用途", newCmbFormYoto.getValue() != null ? newCmbFormYoto.getValue().trim() : "");
         db.put(
                 "入力区分",

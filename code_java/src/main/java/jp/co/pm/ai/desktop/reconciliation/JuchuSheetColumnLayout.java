@@ -35,6 +35,7 @@ public final class JuchuSheetColumnLayout {
         KAKO_KBN("C", "加工区分"),
         NYURYOKU_TANTO("D", "入力担当"),
         NYURYOKU_BI("E", "入力日"),
+        UKETSUKE_NO("F", "受付Ｎｏ", "受付No", "受付NO"),
         HINMEI("G", "品名"),
         SEIHIN("H", "製品"),
         KON_TO_1("I", "梱-等1", "梱－等1"),
@@ -125,6 +126,7 @@ public final class JuchuSheetColumnLayout {
                 case KAKO_KBN -> "【作業指示】加工区分";
                 case NYURYOKU_TANTO -> "【作業指示】入力担当";
                 case NYURYOKU_BI -> "【基本情報】入力日";
+                case UKETSUKE_NO -> "【基本情報】受付Ｎｏ";
                 case HINMEI -> "【製品（仕上がり）】品名";
                 case SEIHIN -> "【製品（仕上がり）】製品名";
                 case KON_TO_1 -> "【製品（仕上がり）】梱-等";
