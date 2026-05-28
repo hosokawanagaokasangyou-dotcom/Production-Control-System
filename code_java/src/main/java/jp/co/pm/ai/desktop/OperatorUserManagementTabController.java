@@ -24,7 +24,6 @@ import javafx.scene.control.ListView;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
-import javafx.scene.control.cell.PropertyValueFactory;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
@@ -150,13 +149,13 @@ public final class OperatorUserManagementTabController {
     private void initialize() {
         if (operatorTableView != null) {
             TableColumn<OperatorRow, String> nameCol = new TableColumn<>("名前");
-            nameCol.setCellValueFactory(new PropertyValueFactory<>("name"));
+            nameCol.setCellValueFactory(row -> row.getValue().nameProperty());
             nameCol.setPrefWidth(180);
             TableColumn<OperatorRow, String> pinCol = new TableColumn<>("状態");
-            pinCol.setCellValueFactory(new PropertyValueFactory<>("pinStatus"));
+            pinCol.setCellValueFactory(row -> row.getValue().pinStatusProperty());
             pinCol.setPrefWidth(100);
             TableColumn<OperatorRow, String> adminPinCol = new TableColumn<>("PIN（管理者閲覧）");
-            adminPinCol.setCellValueFactory(new PropertyValueFactory<>("adminPin"));
+            adminPinCol.setCellValueFactory(row -> row.getValue().adminPinProperty());
             adminPinCol.setPrefWidth(140);
             operatorTableView.getColumns().setAll(nameCol, pinCol, adminPinCol);
             operatorTableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
@@ -712,6 +711,7 @@ public final class OperatorUserManagementTabController {
         }
         if (operatorTableView != null) {
             try {
+                FactoryOperatorUserStore.ensureStoreFileOnDisk();
                 List<String> names = FactoryOperatorUserStore.namesForFactory(site);
                 List<OperatorRow> rows = new ArrayList<>();
                 for (String name : names) {
@@ -724,6 +724,11 @@ public final class OperatorUserManagementTabController {
                 operatorTableView.setItems(FXCollections.observableArrayList(rows));
             } catch (IOException ex) {
                 operatorTableView.setItems(FXCollections.observableArrayList());
+                String msg = ex.getMessage() != null ? ex.getMessage() : ex.toString();
+                if (shell != null) {
+                    shell.appendLog("[operator-user] 一覧読込失敗: " + msg);
+                }
+                warn("ユーザー一覧", "操作者名設定の読込に失敗しました。\n" + msg);
             }
         }
         if (shell != null) {
