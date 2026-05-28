@@ -156,6 +156,12 @@ public final class RequestFormInputTabController {
         }
     }
 
+    void refreshSessionInputTantoLabel() {
+        if (reconciliationApp != null) {
+            reconciliationApp.refreshSessionInputTantoLabel();
+        }
+    }
+
     void applyComboChoicesFromSession(RequestFormComboChoices choices) {
         pendingComboChoices =
                 choices != null ? choices : RequestFormComboChoices.empty();

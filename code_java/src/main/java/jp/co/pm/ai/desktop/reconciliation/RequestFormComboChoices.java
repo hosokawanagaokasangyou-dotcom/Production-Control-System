@@ -21,6 +21,8 @@ public final class RequestFormComboChoices {
 
     public static final String KEY_INPUT_KBN = "inputKbn";
     public static final String KEY_KAKO_KBN = "kakoKbn";
+    /** @deprecated 入力担当はログイン操作者固定のため永続化しない */
+    @Deprecated
     public static final String KEY_INPUT_TANTO = "inputTanto";
     public static final String KEY_WARI_SU = "wariSu";
     public static final String KEY_EC_SIDE = "ecSide";
@@ -34,7 +36,6 @@ public final class RequestFormComboChoices {
             List.of(
                     KEY_INPUT_KBN,
                     KEY_KAKO_KBN,
-                    KEY_INPUT_TANTO,
                     KEY_WARI_SU,
                     KEY_EC_SIDE,
                     KEY_TRIMMING,
@@ -99,7 +100,6 @@ public final class RequestFormComboChoices {
         LinkedHashMap<String, List<String>> map = new LinkedHashMap<>();
         map.put(KEY_INPUT_KBN, List.of("通常入力", "例外入力"));
         map.put(KEY_KAKO_KBN, List.of("後加工", "TPI"));
-        map.put(KEY_INPUT_TANTO, List.of("古家", "図司", "砂田"));
         map.put(KEY_WARI_SU, List.of("1", "2", "3", "5", "6", "7", "8", "9", "10"));
         map.put(
                 KEY_EC_SIDE,

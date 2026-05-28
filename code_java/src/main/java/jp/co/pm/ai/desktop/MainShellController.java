@@ -5057,6 +5057,9 @@ public final class MainShellController {
         if (summaryAiDispatchGenerationTabController != null) {
             summaryAiDispatchGenerationTabController.refreshListQuietly();
         }
+        if (requestFormInputTabController != null) {
+            requestFormInputTabController.refreshSessionInputTantoLabel();
+        }
     }
 
     /**

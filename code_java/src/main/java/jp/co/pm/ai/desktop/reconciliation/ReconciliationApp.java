@@ -42,6 +42,7 @@ import java.util.regex.Pattern;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.StagePythonExecutable;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.io.PoiWorkbookOpener;
 import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
 
@@ -179,15 +180,13 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     private ComboBox<String> newCmbFormYoto;
     private ComboBox<String> newCmbFormInputKbn;
     private ComboBox<String> newCmbFormKakoKbn;
-    private ComboBox<String> newCmbFormInputTanto;
-         // 用途
+    private Label lblFormInputTanto;
     private ComboBox<String> newCmbFormUser;         // ユーザー
     private ComboBox<String> newCmbInputKbn;         // 入力区分 (header)
     private ComboBox<String> newCmbKakoKbn;          // 加工区分 (header)
     /** 設定タブ: 【作業指示】入力区分・加工区分の新規行既定 */
     private ComboBox<String> cmbSettingsDefaultInputKbn;
     private ComboBox<String> cmbSettingsDefaultKakoKbn;
-    private ComboBox<String> newCmbInputTanto;       // 入力担当 (header)
     private ComboBox<String> newCmbWariSu;           // 割数 (product row)
 
     private TextField newTxtFormTokki1;
@@ -204,7 +203,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     // Settings data - combo option lists (editable by user)
     private final ObservableList<String> optInputKbn    = FXCollections.observableArrayList("通常入力", "例外入力");
     private final ObservableList<String> optKakoKbn     = FXCollections.observableArrayList("後加工", "TPI");
-    private final ObservableList<String> optInputTanto  = FXCollections.observableArrayList("古家", "図司", "砂田");
     private final ObservableList<String> optWariSu      = FXCollections.observableArrayList("1","2","3","5","6","7","8","9","10");
     private final ObservableList<String> optEcSide      = FXCollections.observableArrayList("Ｈ面","Ｑ面","両面","ｽﾗｲｽ面","ｽｷﾝ面","Ｑ面/-","Ｈ面/-","Ｑ面/Ｑ面/-","H面/H面/-");
     private final ObservableList<String> optTrimming    = FXCollections.observableArrayList("有","無","-");
@@ -522,10 +520,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
         Label lblInputTanto = new Label("入力担当:");
         styleFormLabel(lblInputTanto);
-        newCmbFormInputTanto = new ComboBox<>(optInputTanto);
-        newCmbFormInputTanto.setStyle("-fx-font-size: 11px;");
+        lblFormInputTanto = new Label();
+        lblFormInputTanto.setStyle("-fx-font-size: 11px;");
         workGrid.add(lblInputTanto, 0, 1);
-        addFormField(workGrid, newCmbFormInputTanto, 1, 1);
+        addFormField(workGrid, lblFormInputTanto, 1, 1);
+        refreshFormInputTantoLabel();
 
         Label lblYoto = new Label("用途:");
         styleFormLabel(lblYoto);
@@ -907,7 +906,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 new VBox[] {
                     buildListEditor("\u5165\u529b\u533a\u5206", optInputKbn),
                     buildListEditor("\u52a0\u5de5\u533a\u5206", optKakoKbn),
-                    buildListEditor("\u5165\u529b\u62c5\u5f53", optInputTanto),
                     buildListEditor("\u5272\u6570", optWariSu),
                     buildListEditor("\uff25\uff23\u9762", optEcSide),
                     buildListEditor("\uff84\uff98\uff90\uff9d\uff78\uff9e", optTrimming),
@@ -1271,7 +1269,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         java.util.LinkedHashMap<String, java.util.List<String>> map = new java.util.LinkedHashMap<>();
         map.put(RequestFormComboChoices.KEY_INPUT_KBN, java.util.List.copyOf(optInputKbn));
         map.put(RequestFormComboChoices.KEY_KAKO_KBN, java.util.List.copyOf(optKakoKbn));
-        map.put(RequestFormComboChoices.KEY_INPUT_TANTO, java.util.List.copyOf(optInputTanto));
         map.put(RequestFormComboChoices.KEY_WARI_SU, java.util.List.copyOf(optWariSu));
         map.put(RequestFormComboChoices.KEY_EC_SIDE, java.util.List.copyOf(optEcSide));
         map.put(RequestFormComboChoices.KEY_TRIMMING, java.util.List.copyOf(optTrimming));
@@ -1306,9 +1303,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 optInputKbn, comboChoicesState.optionsFor(RequestFormComboChoices.KEY_INPUT_KBN));
         replaceOptList(
                 optKakoKbn, comboChoicesState.optionsFor(RequestFormComboChoices.KEY_KAKO_KBN));
-        replaceOptList(
-                optInputTanto,
-                comboChoicesState.optionsFor(RequestFormComboChoices.KEY_INPUT_TANTO));
         replaceOptList(
                 optWariSu, comboChoicesState.optionsFor(RequestFormComboChoices.KEY_WARI_SU));
         replaceOptList(
@@ -1398,14 +1392,30 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (!optYoto.isEmpty()) newCmbFormYoto.setValue(optYoto.get(0));
         if (!optUser.isEmpty()) newCmbFormUser.setValue(optUser.get(0));
         applyWorkInstructionDefaultsToFormCombos();
-        if (!optInputTanto.isEmpty()) newCmbFormInputTanto.setValue(optInputTanto.get(0));
+        refreshFormInputTantoLabel();
         newDpFormDeliv.setValue(null);
         newDpFormAdjustDeliv.setValue(null);
         newDpFormInputDate.setValue(null);
         newTxtFormWage.setText("9");
-        if (!optInputTanto.isEmpty()) newCmbInputTanto.setValue(optInputTanto.get(0));
         newTxtUketsukeNo.setText("");
         newTxtIraiNo.setText("");
+    }
+
+    /** 操作者変更後に依頼書フォームの入力担当表示を更新する。 */
+    public void refreshSessionInputTantoLabel() {
+        Platform.runLater(this::refreshFormInputTantoLabel);
+    }
+
+    private void refreshFormInputTantoLabel() {
+        if (lblFormInputTanto == null) {
+            return;
+        }
+        String operator = sessionInputTanto();
+        lblFormInputTanto.setText(operator.isBlank() ? "（未ログイン）" : operator);
+    }
+
+    private static String sessionInputTanto() {
+        return FactoryOperatorUserStore.sessionOperatorName();
     }
 
     /** 環境変数タブの依頼書入力向けパスを反映する（タブ再選択時も可）。 */
@@ -1954,7 +1964,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 db.get("特記事項1"),
                 db.get("特記事項2"),
                 db.get("特記事項3"),
-                isNewRow);
+                isNewRow,
+                true);
 
         if (isNewRow) {
             if (raw != null && !raw.isEmpty()) {
@@ -2331,6 +2342,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     db.get("特記事項1"),
                     db.get("特記事項2"),
                     db.get("特記事項3"),
+                    true,
                     true);
             
             fis.close();
@@ -2742,7 +2754,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         newCmbFormYoto.setValue(activeVals.getOrDefault("用途", ""));
         newCmbFormInputKbn.setValue(activeVals.getOrDefault("入力区分", ""));
         newCmbFormKakoKbn.setValue(activeVals.getOrDefault("加工区分", ""));
-        newCmbFormInputTanto.setValue(activeVals.getOrDefault("入力担当", ""));
+        refreshFormInputTantoLabel();
         newTxtFormTokki1.setText(activeVals.getOrDefault("特記事項1", ""));
         newTxtFormTokki2.setText(activeVals.getOrDefault("特記事項2", ""));
         newTxtFormTokki3.setText(activeVals.getOrDefault("特記事項3", ""));
@@ -3420,7 +3432,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     mergedDb.get("特記事項1"),
                     mergedDb.get("特記事項2"),
                     mergedDb.get("特記事項3"),
-                    isNewRow);
+                    isNewRow,
+                    true);
 
             if (isNewRow) {
                 progress.accept(
@@ -3604,6 +3617,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         prior.getOrDefault("特記事項1", ""),
                         prior.getOrDefault("特記事項2", ""),
                         prior.getOrDefault("特記事項3", ""),
+                        false,
                         false);
             }
             progress.accept("自動転記の取り消し…\n(3/3) ファイルを保存しています…");
@@ -4186,7 +4200,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             String tokki1,
             String tokki2,
             String tokki3,
-            boolean setInputDateNow) {
+            boolean setInputDateNow,
+            boolean useSessionInputTanto) {
         if (targetRow == null || db == null) {
             return;
         }
@@ -4198,10 +4213,20 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 targetRow,
                 JuchuSheetColumnLayout.Col.KAKO_KBN,
                 resolveWorkFieldValue(kakoKbn, isNewRow ? defaultKakoKbnForNewRow() : ""));
+        String resolvedInputTanto;
+        if (useSessionInputTanto) {
+            resolvedInputTanto = sessionInputTanto();
+            if (resolvedInputTanto.isBlank()) {
+                resolvedInputTanto =
+                        resolveWorkFieldValue(inputTanto, isNewRow ? "自動転記" : "");
+            }
+        } else {
+            resolvedInputTanto = resolveWorkFieldValue(inputTanto, isNewRow ? "自動転記" : "");
+        }
         setJuchuCellIfIncluded(
                 targetRow,
                 JuchuSheetColumnLayout.Col.NYURYOKU_TANTO,
-                resolveWorkFieldValue(inputTanto, isNewRow ? "自動転記" : ""));
+                resolvedInputTanto);
         applyJuchuNyuryokuBiFromDbIfIncluded(targetRow, db, setInputDateNow);
 
         setJuchuCellIfIncluded(targetRow, JuchuSheetColumnLayout.Col.HINMEI, db.getOrDefault("品名", ""));
@@ -4273,9 +4298,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         db.put(
                 "加工区分",
                 newCmbFormKakoKbn.getValue() != null ? newCmbFormKakoKbn.getValue().trim() : "");
-        db.put(
-                "入力担当",
-                newCmbFormInputTanto.getValue() != null ? newCmbFormInputTanto.getValue().trim() : "");
+        db.put("入力担当", sessionInputTanto());
         if (newDpFormInputDate.getValue() != null) {
             db.put("入力日", newDpFormInputDate.getValue().toString());
         } else {
