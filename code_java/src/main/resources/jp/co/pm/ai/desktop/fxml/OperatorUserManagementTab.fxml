@@ -40,6 +40,7 @@
         <Button fx:id="removeNameButton" mnemonicParsing="false" onAction="#onRemoveNameAction" text="選択を削除"/>
         <Button fx:id="resetDefaultsButton" mnemonicParsing="false" onAction="#onResetDefaultsAction" text="既定4名に戻す"/>
         <Button fx:id="issuePinButton" mnemonicParsing="false" onAction="#onIssuePinAction" text="PIN 発行／再発行"/>
+        <Button fx:id="assignPinButton" mnemonicParsing="false" onAction="#onAssignPinManuallyAction" text="PIN 手動設定"/>
         <Button fx:id="viewPinButton" mnemonicParsing="false" onAction="#onViewPinAction" text="選択ユーザーの PIN"/>
         <Button fx:id="unlockPinButton" mnemonicParsing="false" onAction="#onUnlockPinAction" text="PIN ロック解除"/>
     </HBox>

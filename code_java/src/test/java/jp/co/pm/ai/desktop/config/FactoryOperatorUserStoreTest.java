@@ -335,4 +335,22 @@ class FactoryOperatorUserStoreTest {
                 IllegalArgumentException.class,
                 () -> FactoryOperatorUserStore.addName(FactorySite.KONAN, FactoryOperatorUserStore.GUEST_OPERATOR_NAME));
     }
+
+    @Test
+    void assignPinByAdmin_setsSpecifiedPinWithoutMustChange() throws Exception {
+        FactoryOperatorUserStore.assignPinByAdmin(FactorySite.KONAN, "砂田", "1357");
+        assertTrue(FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "砂田", "1357"));
+        assertTrue(!FactoryOperatorUserStore.mustChangePin(FactorySite.KONAN, "砂田"));
+        assertEquals("1357", FactoryOperatorUserStore.adminViewablePin(FactorySite.KONAN, "砂田").orElse(""));
+        assertEquals("設定済", FactoryOperatorUserStore.pinStatusLabel(FactorySite.KONAN, "砂田"));
+    }
+
+    @Test
+    void assignPinByAdmin_rejectsGuestOperator() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        FactoryOperatorUserStore.assignPinByAdmin(
+                                FactorySite.KONAN, FactoryOperatorUserStore.GUEST_OPERATOR_NAME, "1234"));
+    }
 }

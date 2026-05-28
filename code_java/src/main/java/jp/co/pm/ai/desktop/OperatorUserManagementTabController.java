@@ -21,9 +21,13 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.PasswordField;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.VBox;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
@@ -105,6 +109,9 @@ public final class OperatorUserManagementTabController {
 
     @FXML
     private Button issuePinButton;
+
+    @FXML
+    private Button assignPinButton;
 
     @FXML
     private Button unlockPinButton;
@@ -408,6 +415,76 @@ public final class OperatorUserManagementTabController {
             info.showAndWait();
         } catch (Exception ex) {
             warn(reissue ? "PIN 再発行" : "PIN 発行", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+        }
+    }
+
+    @FXML
+    private void onAssignPinManuallyAction() {
+        if (shell == null || operatorTableView == null) {
+            return;
+        }
+        OperatorRow sel = operatorTableView.getSelectionModel().getSelectedItem();
+        if (sel == null || sel.getName().isBlank()) {
+            warn("PIN 手動設定", "PIN を設定するユーザーを一覧から選んでください。");
+            return;
+        }
+        String name = sel.getName();
+        FactorySite site = managedFactory();
+        Dialog<ButtonType> dialog = new Dialog<>();
+        if (shell.primaryStageForDialogs() != null) {
+            dialog.initOwner(shell.primaryStageForDialogs());
+        }
+        dialog.setTitle("PIN 手動設定");
+        dialog.setHeaderText(null);
+        Label hint =
+                new Label(
+                        "操作者「"
+                                + name
+                                + "」（"
+                                + site.displayLabelJa()
+                                + "）の PIN（"
+                                + FactoryOperatorUserStore.pinLengthRangeDescriptionJa()
+                                + "）を入力してください。");
+        hint.setWrapText(true);
+        PasswordField pinField = new PasswordField();
+        pinField.setPromptText("PIN");
+        PasswordField confirmField = new PasswordField();
+        confirmField.setPromptText("PIN（確認）");
+        dialog.getDialogPane().setContent(new VBox(8, hint, new Label("PIN:"), pinField, new Label("確認:"), confirmField));
+        dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
+        Optional<ButtonType> ans = dialog.showAndWait();
+        if (ans.isEmpty() || ans.get() != ButtonType.OK) {
+            return;
+        }
+        String pin = pinField.getText() != null ? pinField.getText().strip() : "";
+        String confirm = confirmField.getText() != null ? confirmField.getText().strip() : "";
+        if (FactoryOperatorUserStore.normalizePin(pin) == null) {
+            warn("PIN 手動設定", FactoryOperatorUserStore.pinLengthRangeDescriptionJa() + "を入力してください。");
+            return;
+        }
+        if (!pin.equals(confirm)) {
+            warn("PIN 手動設定", "PIN と確認入力が一致しません。");
+            return;
+        }
+        try {
+            FactoryOperatorUserStore.assignPinByAdmin(site, name, pin);
+            refreshPresentation();
+            shell.appendLog(
+                    "[operator-user] PIN を手動設定: "
+                            + name
+                            + " （"
+                            + site.displayLabelJa()
+                            + "）");
+            Alert done = new Alert(AlertType.INFORMATION);
+            done.setTitle("PIN 手動設定");
+            done.setHeaderText(null);
+            done.setContentText("操作者「" + name + "」の PIN を設定しました。");
+            if (shell.primaryStageForDialogs() != null) {
+                done.initOwner(shell.primaryStageForDialogs());
+            }
+            done.showAndWait();
+        } catch (Exception ex) {
+            warn("PIN 手動設定", ex.getMessage() != null ? ex.getMessage() : ex.toString());
         }
     }
 

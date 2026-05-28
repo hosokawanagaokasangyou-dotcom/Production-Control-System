@@ -421,6 +421,20 @@ public final class FactoryOperatorUserStore {
         return issuePin(site, name);
     }
 
+    /**
+     * 管理者向け: 指定した PIN を手動で設定する（初回ログイン時の変更は不要）。
+     *
+     * @return 設定した PIN（正規化後）
+     */
+    public static String assignPinByAdmin(FactorySite site, String name, String pin) throws IOException {
+        FactorySite factory = site != null ? site : FactorySite.KONAN;
+        String normalized = normalizeName(name);
+        if (isGuestOperator(normalized)) {
+            throw new IllegalArgumentException("ゲストユーザーには PIN を設定できません。");
+        }
+        return assignPin(factory, normalized, pin, false);
+    }
+
     private static String assignPin(
             FactorySite site, String name, String pin, boolean requireChangeOnNextLogin) throws IOException {
         FactorySite factory = site != null ? site : FactorySite.KONAN;
