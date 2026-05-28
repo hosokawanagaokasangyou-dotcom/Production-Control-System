@@ -1493,7 +1493,7 @@ public final class DeliveryCalendarViewTabController {
                 exportUi -> {
                     Path out =
                             SummaryAiDispatchWorkbookExporter.writeOverwrite(
-                                    exportUi, main, actuals, aladdin, dispatch);
+                                    exportUi, main, actuals, aladdin, dispatch, "delivery-reload");
                     shell.appendLog(
                             "[summary-ai-dispatch] エクセル出力: "
                                     + out
@@ -1501,6 +1501,7 @@ public final class DeliveryCalendarViewTabController {
                                     + SummaryAiDispatchWorkbookExporter.rowCountSummary(
                                             main, dispatch, actuals, aladdin)
                                     + "）");
+                    shell.appendSummaryGenerationArchivedLog();
                     return out;
                 });
     }
@@ -1953,27 +1954,26 @@ public final class DeliveryCalendarViewTabController {
     }
 
     private void refreshCompareStageFlagsFromDispatch(DispatchTableSnapshot dispatchSnap) {
-        boolean stage3 =
-                dispatchSnap != null
-                        && ResultDispatchStage3Support.hasStage3ActualColumn(dispatchSnap.headers());
-        if (!stage3) {
-            Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
-            stage3 =
-                    ResultDispatchStage3Support.detectStage3FromDispatchJsonPath(
-                            AppPaths.resolveResultDispatchTableJsonPath(ui));
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        ResultDispatchStage3Support.PlanningStage stage =
+                ResultDispatchStage3Support.detectPlanningStage(jsonPath);
+        if (dispatchSnap != null
+                && !ResultDispatchStage3Support.hasStage3ActualColumn(dispatchSnap.headers())) {
+            stage = ResultDispatchStage3Support.PlanningStage.STAGE2;
         }
-        compareHideStage3PlanLine = stage3;
-        ResultDispatchStage3Support.applyPlanningStageBadge(dataStageBadgeLabel, stage3);
+        compareHideStage3PlanLine = stage != ResultDispatchStage3Support.PlanningStage.STAGE2;
+        ResultDispatchStage3Support.applyPlanningStageBadge(dataStageBadgeLabel, stage);
     }
 
     /** 配台 JSON の段階表示バッジを更新（子タブ再読込後にも呼ぶ）。 */
     void refreshPlanningStageBadgeFromDispatchJson() {
         Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
-        boolean stage3 =
-                ResultDispatchStage3Support.detectStage3FromDispatchJsonPath(
-                        AppPaths.resolveResultDispatchTableJsonPath(ui));
-        compareHideStage3PlanLine = stage3;
-        ResultDispatchStage3Support.applyPlanningStageBadge(dataStageBadgeLabel, stage3);
+        Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        ResultDispatchStage3Support.PlanningStage stage =
+                ResultDispatchStage3Support.detectPlanningStage(jsonPath);
+        compareHideStage3PlanLine = stage != ResultDispatchStage3Support.PlanningStage.STAGE2;
+        ResultDispatchStage3Support.applyPlanningStageBadge(dataStageBadgeLabel, stage);
     }
 
     /** 既存 Triple の plan/actual を維持し (段階3前) と (段階3後) だけ差し替える。 */

@@ -1209,10 +1209,32 @@ public final class AppPaths {
             "pipeline-execution-timing-history.json";
 
     /**
+     * サマリ Excel 世代退避フォルダ（{@link #summaryAiDispatchXlsxPath(Map)} の親配下）。
+     * {@link jp.co.pm.ai.desktop.io.SummaryAiDispatchGenerationStore} が使用。
+     */
+    public static final String SUMMARY_AI_DISPATCH_GENERATIONS_DIR = "summary-ai-dispatch-generations";
+
+    /**
      * 実行時間履歴 JSON の絶対パス。親フォルダは {@link #summaryAiDispatchXlsxPath(Map)} と同一。
      */
     public static Path pipelineExecutionTimingHistoryPath(Map<String, String> ui) {
         return siblingOfSummaryAiDispatchWorkbook(ui, PIPELINE_EXECUTION_TIMING_HISTORY_JSON);
+    }
+
+    /**
+     * サマリ Excel 世代退避のルート。{@link #summaryAiDispatchXlsxPath(Map)} の親配下。
+     */
+    public static Path summaryAiDispatchGenerationsRoot(Map<String, String> ui) {
+        Path summary = summaryAiDispatchXlsxPath(ui);
+        Path parent = summary.getParent();
+        if (parent == null) {
+            return resolveRepoRoot(ui)
+                    .resolve("code")
+                    .resolve(SUMMARY_AI_DISPATCH_GENERATIONS_DIR)
+                    .toAbsolutePath()
+                    .normalize();
+        }
+        return parent.resolve(SUMMARY_AI_DISPATCH_GENERATIONS_DIR).toAbsolutePath().normalize();
     }
 
     /**

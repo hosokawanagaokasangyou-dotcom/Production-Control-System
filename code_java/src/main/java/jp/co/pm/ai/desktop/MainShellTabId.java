@@ -46,6 +46,8 @@ public enum MainShellTabId {
     PIPELINE_EXECUTION_TIMING("pipelineExecutionTiming"),
     /** サマリ_AI配台.xlsx 出力の見出し列・フォント・列順・テーマ。 */
     SUMMARY_AI_DISPATCH_EXPORT_CUSTOMIZE("summaryAiDispatchExportCustomize"),
+    /** サマリ Excel の世代退避・復元。 */
+    SUMMARY_AI_DISPATCH_GENERATION("summaryAiDispatchGeneration"),
     /** メインシェル末尾の「タブ整理」（入れ子構成・色の編集用）。 */
     TAB_ORGANIZER("tabOrganizer");
 

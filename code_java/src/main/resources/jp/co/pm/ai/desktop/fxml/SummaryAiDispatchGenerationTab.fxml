@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
+      spacing="10.0"
+      fx:controller="jp.co.pm.ai.desktop.SummaryAiDispatchGenerationTabController">
+    <padding>
+        <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
+    </padding>
+    <Label styleClass="pm-section-title" text="サマリ Excel 世代管理"
+           wrapText="true"/>
+    <Label text="サマリ_AI配台.xlsx を上書き出力する直前に、現行ブックを自動退避します（既定 30 世代）。履歴から読み取り専用で開くか、現行ブックへ復元できます。"
+           wrapText="true"/>
+    <Separator/>
+    <HBox spacing="8.0" alignment="CENTER_LEFT">
+        <Label text="ラベル"/>
+        <TextField fx:id="manualArchiveLabelField" prefWidth="320.0" promptText="任意（手動退避時）"/>
+        <Button fx:id="manualArchiveButton" mnemonicParsing="false" onAction="#onManualArchiveAction" text="現行を手動退避"/>
+    </HBox>
+    <Label fx:id="storePathLabel" styleClass="pm-muted-label" wrapText="true"/>
+    <Separator/>
+    <Label text="世代履歴（新しい順）"/>
+    <ListView fx:id="generationListView" prefHeight="360.0" VBox.vgrow="ALWAYS"/>
+    <HBox spacing="8.0" alignment="CENTER_LEFT">
+        <Button fx:id="openButton" mnemonicParsing="false" onAction="#onOpenGenerationAction" text="読み取り専用で開く"/>
+        <Button fx:id="restoreButton" mnemonicParsing="false" onAction="#onRestoreGenerationAction" text="現行へ復元"/>
+        <Button fx:id="renameButton" mnemonicParsing="false" onAction="#onRenameGenerationAction" text="ラベル変更"/>
+        <Button fx:id="deleteButton" mnemonicParsing="false" onAction="#onDeleteGenerationAction" text="削除"/>
+        <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshListAction" text="一覧更新"/>
+    </HBox>
+</VBox>

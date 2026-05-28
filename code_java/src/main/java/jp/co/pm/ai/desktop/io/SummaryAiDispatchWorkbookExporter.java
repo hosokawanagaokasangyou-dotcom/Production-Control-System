@@ -77,14 +77,26 @@ public final class SummaryAiDispatchWorkbookExporter {
 
     private SummaryAiDispatchWorkbookExporter() {}
 
+    /** 4シートを出力先へ上書き保存する。 */
+    public static Path writeOverwrite(
+            Map<String, String> ui,
+            PlanInputTabularIo.TabularSheet mainCompare,
+            PlanInputTabularIo.TabularSheet actuals,
+            PlanInputTabularIo.TabularSheet aladdin,
+            PlanInputTabularIo.TabularSheet dispatch)
+            throws IOException {
+        return writeOverwrite(ui, mainCompare, actuals, aladdin, dispatch, "export");
+    }
+
     /**
      * 4シートを出力先へ上書き保存する。
      *
      * <p>完成ファイルはまず {@link AppPaths#resolveRepoRoot} 直下に {@code .tmp} 経由で確定し、
      * {@link AppPaths#summaryAiDispatchXlsxPath}（環境変数 {@link
      * AppPaths#KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 含む）へコピーする。共有ドライブ上での
-     * リネーム置換を避けるため。
+     * リネーム置換を避けるため。上書き直前に現行ブックを {@link SummaryAiDispatchGenerationStore} へ退避する。
      *
+     * @param archiveReason 世代退避の理由（例: {@code delivery-reload}, {@code stage3-export}）
      * @return 書き込んだ絶対パス（{@link AppPaths#summaryAiDispatchXlsxPath}）
      */
     public static Path writeOverwrite(
@@ -92,7 +104,8 @@ public final class SummaryAiDispatchWorkbookExporter {
             PlanInputTabularIo.TabularSheet mainCompare,
             PlanInputTabularIo.TabularSheet actuals,
             PlanInputTabularIo.TabularSheet aladdin,
-            PlanInputTabularIo.TabularSheet dispatch)
+            PlanInputTabularIo.TabularSheet dispatch,
+            String archiveReason)
             throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
         Path output = AppPaths.summaryAiDispatchXlsxPath(u);
@@ -133,20 +146,28 @@ public final class SummaryAiDispatchWorkbookExporter {
         } finally {
             Files.deleteIfExists(stagingTmp);
         }
-        publishStagingToOutput(stagingFinal, output);
+        publishStagingToOutput(stagingFinal, output, u, archiveReason);
         return output.toAbsolutePath().normalize();
+    }
+
+    /** @see #takeLastArchivedGeneration */
+    public static java.util.Optional<SummaryAiDispatchGenerationStore.SummaryAiDispatchGenerationEntry>
+            takeLastArchivedGeneration() {
+        return SummaryAiDispatchGenerationStore.takeLastArchived();
     }
 
     /**
      * 共有ドライブ等では同一ボリューム上の {@link Files#move} が失敗しうるため、リポジトリ直下で
      * 完成ファイルを確定してから {@link AppPaths#summaryAiDispatchXlsxPath} へコピーする。
      */
-    private static void publishStagingToOutput(Path staging, Path output) throws IOException {
+    private static void publishStagingToOutput(
+            Path staging, Path output, Map<String, String> ui, String archiveReason) throws IOException {
         Path s = staging.toAbsolutePath().normalize();
         Path o = output.toAbsolutePath().normalize();
         if (Files.exists(s) && Files.exists(o) && Files.isSameFile(s, o)) {
             return;
         }
+        SummaryAiDispatchGenerationStore.archiveBeforeOverwrite(o, ui, archiveReason);
         if (o.getParent() != null) {
             Files.createDirectories(o.getParent());
         }
@@ -192,6 +213,20 @@ public final class SummaryAiDispatchWorkbookExporter {
      */
     public static Path writeFromPipelineArtifacts(
             Map<String, String> ui, PlanInputTabularIo.TabularSheet mainCompare) throws IOException {
+        return writeFromPipelineArtifacts(ui, mainCompare, "pipeline-export");
+    }
+
+    /**
+     * 段階2/段階3 直後など: ディスク上の配台・成形 JSON と、任意のメイン表スナップショットでサマリを更新する。
+     *
+     * @param mainCompare メイン表が未読込のときは {@link #emptySheet()} を渡す
+     * @param archiveReason 世代退避の理由
+     */
+    public static Path writeFromPipelineArtifacts(
+            Map<String, String> ui,
+            PlanInputTabularIo.TabularSheet mainCompare,
+            String archiveReason)
+            throws IOException {
         Map<String, String> u = ui != null ? ui : Map.of();
         PlanInputTabularIo.TabularSheet dispatch = loadDispatch(u);
         PlanInputTabularIo.TabularSheet actuals = loadArrayTableOrEmpty(
@@ -200,7 +235,7 @@ public final class SummaryAiDispatchWorkbookExporter {
                 loadArrayTableOrEmpty(AppPaths.resolveShapedAladdinPlanJsonPath(u));
         PlanInputTabularIo.TabularSheet main =
                 mainCompare != null ? mainCompare : emptySheet();
-        return writeOverwrite(u, main, actuals, aladdin, dispatch);
+        return writeOverwrite(u, main, actuals, aladdin, dispatch, archiveReason);
     }
 
     private static PlanInputTabularIo.TabularSheet loadDispatch(Map<String, String> ui) throws IOException {

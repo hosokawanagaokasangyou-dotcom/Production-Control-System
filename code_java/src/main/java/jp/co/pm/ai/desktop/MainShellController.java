@@ -127,6 +127,7 @@ import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.ProcessOwnedLockFiles;
 import jp.co.pm.ai.desktop.io.SummaryAiDispatchExportLock;
+import jp.co.pm.ai.desktop.io.SummaryAiDispatchGenerationStore;
 import jp.co.pm.ai.desktop.io.SummaryAiDispatchWorkbookExporter;
 import jp.co.pm.ai.desktop.io.Stage2OutputNaming;
 import jp.co.pm.ai.desktop.io.WorkbookEnvSheetReader;
@@ -286,6 +287,9 @@ public final class MainShellController {
     private SummaryAiDispatchExportCustomizeTabController summaryAiDispatchExportCustomizeTabController;
 
     @FXML
+    private SummaryAiDispatchGenerationTabController summaryAiDispatchGenerationTabController;
+
+    @FXML
     private UserProfilesTabController userProfilesTabController;
 
     @FXML
@@ -382,6 +386,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabSummaryAiDispatchExportCustomize;
+
+    @FXML
+    private Tab mainShellTabSummaryAiDispatchGeneration;
 
     @FXML
     private Tab mainShellTabUserProfiles;
@@ -579,9 +586,12 @@ public final class MainShellController {
             if (globalSettingsTabController != null) {
                 globalSettingsTabController.bindShell(this);
             }
-            if (summaryAiDispatchExportCustomizeTabController != null) {
-                summaryAiDispatchExportCustomizeTabController.bindShell(this);
-            }
+        if (summaryAiDispatchExportCustomizeTabController != null) {
+            summaryAiDispatchExportCustomizeTabController.bindShell(this);
+        }
+        if (summaryAiDispatchGenerationTabController != null) {
+            summaryAiDispatchGenerationTabController.bindShell(this);
+        }
             if (userProfilesTabController != null) {
                 userProfilesTabController.bindShell(this);
             }
@@ -1640,6 +1650,9 @@ public final class MainShellController {
         if (t == mainShellTabSummaryAiDispatchExportCustomize) {
             return MainShellTabId.SUMMARY_AI_DISPATCH_EXPORT_CUSTOMIZE;
         }
+        if (t == mainShellTabSummaryAiDispatchGeneration) {
+            return MainShellTabId.SUMMARY_AI_DISPATCH_GENERATION;
+        }
         if (t == mainShellTabUserProfiles) {
             return MainShellTabId.USER_PROFILES;
         }
@@ -1720,6 +1733,7 @@ public final class MainShellController {
             case MEMORY_SETTINGS -> mainShellTabMemorySettings;
             case GLOBAL_SETTINGS -> mainShellTabGlobalSettings;
             case SUMMARY_AI_DISPATCH_EXPORT_CUSTOMIZE -> mainShellTabSummaryAiDispatchExportCustomize;
+            case SUMMARY_AI_DISPATCH_GENERATION -> mainShellTabSummaryAiDispatchGeneration;
             case USER_PROFILES -> mainShellTabUserProfiles;
             case MASTER_SUMMARY -> mainShellTabMasterSummary;
             case PLAN_INPUT -> mainShellTabPlanInput;
@@ -5064,14 +5078,44 @@ public final class MainShellController {
         return target;
     }
 
-    /** 段階3.5 正常終了後: 段階3 完了と同趣旨。 */
+    /** 段階3.5 正常終了後: 勤怠適用サマリ付き完了通知。 */
     void notifyStage35OvertimeSimulationSuccess() {
-        notifyStage3DispatchTrialSuccess();
+        appendLog("[end] 段階3.5（残業シミュ→配台試行）正常終了");
+        refreshOperatorCardAfterPipelineRun();
+        MacroCompleteChime.playIfAvailable(collectUiEnv());
+        selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
+        java.nio.file.Path jsonPath =
+                AppPaths.resolveResultDispatchTableJsonPath(collectUiEnv());
+        jp.co.pm.ai.desktop.dispatch.Stage35BaselineActualSnapshotStore.Stage35TrialMeta meta =
+                jp.co.pm.ai.desktop.dispatch.Stage35BaselineActualSnapshotStore.tryLoadMeta(
+                        jsonPath);
+        StringBuilder body = new StringBuilder();
+        body.append("段階3.5（残業シミュ→配台試行）の処理が正常終了しました。\n\n");
+        if (meta.hasTrialApplied() && meta.overrideSummary() != null) {
+            body.append(meta.overrideSummary().formatSummaryLine()).append('\n');
+        }
+        body.append(
+                "\n勤怠は適用済みですが、配台数量に差が出ない場合があります"
+                        + "（対象メンバーが当該日に割当されない等）。");
+        showStageCompletionDialog("段階3.5 完了", body.toString());
     }
 
-    /** 段階3.5 異常終了後: 段階3 失敗と同趣旨。 */
+    /** 段階3.5 異常終了後: 段階3 失敗と同趣旨（タイトルのみ段階3.5）。 */
     void notifyStage35OvertimeSimulationFailure(String detailMessage) {
-        notifyStage3DispatchTrialFailure(detailMessage);
+        selectMainShellTab(MainShellTabId.RUN);
+        Alert alert = new Alert(AlertType.ERROR);
+        alert.initOwner(primaryStage);
+        applyAlertStylesheetsFromOwner(alert);
+        alert.setTitle("段階3.5 失敗");
+        alert.setHeaderText(null);
+        StringBuilder body = new StringBuilder();
+        body.append("段階3.5（残業シミュ→配台試行）が異常終了しました。\n");
+        if (detailMessage != null && !detailMessage.isBlank()) {
+            body.append(detailMessage.trim()).append('\n');
+        }
+        body.append("\n詳細は「実行・ログ」タブのログを確認してください。");
+        applyScrollableAlertBody(alert, body.toString());
+        alert.showAndWait();
     }
 
     /** 実行・ログタブ「その他」の Gemini スキップチェック状態（配台不要ルールタブの Java 側 AI 用）。 */
@@ -5227,10 +5271,29 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         runSummaryExportAsync(
                 ui -> {
                     Path out =
-                            SummaryAiDispatchWorkbookExporter.writeFromPipelineArtifacts(ui, main);
+                            SummaryAiDispatchWorkbookExporter.writeFromPipelineArtifacts(
+                                    ui, main, "stage3-export");
                     appendLog("[summary-ai-dispatch] 段階3後エクセル出力: " + out);
+                    appendSummaryGenerationArchivedLog();
                     return out;
                 });
+    }
+
+    /** サマリ上書き直前に退避した世代があればログへ追記し、世代タブを更新する。 */
+    void appendSummaryGenerationArchivedLog() {
+        SummaryAiDispatchWorkbookExporter.takeLastArchivedGeneration()
+                .ifPresent(
+                        entry ->
+                                appendLog(
+                                        "[summary-generation] 旧版を退避: "
+                                                + entry.displayLabel()
+                                                + " ("
+                                                + SummaryAiDispatchGenerationStore.reasonLabelJa(
+                                                        entry.reason())
+                                                + ")"));
+        if (summaryAiDispatchGenerationTabController != null) {
+            summaryAiDispatchGenerationTabController.refreshListQuietly();
+        }
     }
 
     @FunctionalInterface
