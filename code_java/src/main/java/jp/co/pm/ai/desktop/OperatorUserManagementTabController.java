@@ -1,6 +1,5 @@
 package jp.co.pm.ai.desktop;
 
-import java.util.List;
 import java.util.Optional;
 
 import javafx.fxml.FXML;
