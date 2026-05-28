@@ -59,6 +59,9 @@ public final class FactoryOperatorUserStore {
     public static final int PIN_LENGTH = MIN_PIN_LENGTH;
     public static final int MAX_CONSECUTIVE_PIN_FAILURES = 20;
 
+    /** ユーザー管理者タブを開くための管理者ユーザー名（平文）。 */
+    public static final String ADMIN_TAB_USERNAME = "Administrator";
+
     /** ユーザー管理者タブを開くための管理者パスワード（平文）。 */
     public static final String ADMIN_TAB_PASSWORD = "nagaoka123";
 
@@ -302,6 +305,13 @@ public final class FactoryOperatorUserStore {
 
     public static String pinLengthRangeDescriptionJa() {
         return MIN_PIN_LENGTH + "～" + MAX_PIN_LENGTH + "桁の数字";
+    }
+
+    /** ユーザー管理者タブ解錠: ユーザー名 {@link #ADMIN_TAB_USERNAME} とパスワードを照合する。 */
+    public static boolean verifyAdminTabAccess(String username, String password) {
+        String user = username != null ? username.strip() : "";
+        String pass = password != null ? password : "";
+        return ADMIN_TAB_USERNAME.equals(user) && ADMIN_TAB_PASSWORD.equals(pass);
     }
 
     /**

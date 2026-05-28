@@ -55,6 +55,7 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.TreeItem;
 import javafx.scene.layout.HBox;
@@ -1897,29 +1898,34 @@ public final class MainShellController {
         if (primaryStage == null) {
             return false;
         }
-        Dialog<String> dialog = new Dialog<>();
+        Dialog<ButtonType> dialog = new Dialog<>();
         prepareDialogForMainTheme(dialog);
         dialog.setTitle("ユーザー管理者");
         dialog.setHeaderText(null);
         Label hint =
-                new Label("ユーザー管理者タブを開くには管理者パスワードを入力してください。");
+                new Label(
+                        "ユーザー管理者タブを開くには、ユーザー名 "
+                                + FactoryOperatorUserStore.ADMIN_TAB_USERNAME
+                                + " と管理者パスワードを入力してください。");
         hint.setWrapText(true);
+        TextField userField = new TextField();
+        userField.setPromptText(FactoryOperatorUserStore.ADMIN_TAB_USERNAME);
         PasswordField pf = new PasswordField();
         pf.setPromptText("管理者パスワード");
-        VBox box = new VBox(8, hint, new Label("パスワード:"), pf);
+        VBox box =
+                new VBox(
+                        8,
+                        hint,
+                        new Label("ユーザー名:"),
+                        userField,
+                        new Label("パスワード:"),
+                        pf);
         dialog.getDialogPane().setContent(box);
         dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
-        dialog.setResultConverter(
-                bt -> {
-                    if (bt != ButtonType.OK) {
-                        return null;
-                    }
-                    String t = pf.getText();
-                    return t != null ? t : "";
-                });
-        Optional<String> ans = dialog.showAndWait();
+        Optional<ButtonType> ans = dialog.showAndWait();
         return ans.isPresent()
-                && FactoryOperatorUserStore.ADMIN_TAB_PASSWORD.equals(ans.get());
+                && ans.get() == ButtonType.OK
+                && FactoryOperatorUserStore.verifyAdminTabAccess(userField.getText(), pf.getText());
     }
 
     /**
