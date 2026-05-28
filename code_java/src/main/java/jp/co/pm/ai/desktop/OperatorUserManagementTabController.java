@@ -179,12 +179,28 @@ public final class OperatorUserManagementTabController {
         }
         try {
             FactorySite site = GlobalInitSettingTarget.load();
-            FactoryOperatorUserStore.addName(site, name);
+            String pin = FactoryOperatorUserStore.addName(site, name);
             if (newNameField != null) {
                 newNameField.clear();
             }
             refreshPresentation();
             shell.appendLog("[operator-user] 名前を追加: " + name + " （" + site.displayLabelJa() + "）");
+            Alert info = new Alert(AlertType.INFORMATION);
+            info.setTitle("ユーザー追加完了");
+            info.setHeaderText(null);
+            info.setContentText(
+                    "「"
+                            + name
+                            + "」を追加しました。\n"
+                            + "初期 PIN（ランダム）は "
+                            + pin
+                            + " です。\n"
+                            + "初回ログイン時に PIN 変更が必要です。\n"
+                            + "この画面を閉じると再表示できません。必ず控えてください。");
+            if (shell.primaryStageForDialogs() != null) {
+                info.initOwner(shell.primaryStageForDialogs());
+            }
+            info.showAndWait();
         } catch (Exception ex) {
             warn("追加", ex.getMessage() != null ? ex.getMessage() : ex.toString());
         }
@@ -279,8 +295,16 @@ public final class OperatorUserManagementTabController {
         confirm.setHeaderText(null);
         confirm.setContentText(
                 reissue
-                        ? "「" + name + "」の PIN を再発行します。旧 PIN は使えなくなります。よろしいですか？"
-                        : "「" + name + "」に PIN（" + FactoryOperatorUserStore.pinLengthRangeDescriptionJa() + "）を新規発行します。よろしいですか？");
+                        ? "「"
+                                + name
+                                + "」の PIN を再発行します。旧 PIN は使えなくなります。\n"
+                                + "初回ログイン時に PIN 変更が必要です。よろしいですか？"
+                        : "「"
+                                + name
+                                + "」にランダム PIN（"
+                                + FactoryOperatorUserStore.pinLengthRangeDescriptionJa()
+                                + "）を新規発行します。\n"
+                                + "初回ログイン時に PIN 変更が必要です。よろしいですか？");
         if (shell.primaryStageForDialogs() != null) {
             confirm.initOwner(shell.primaryStageForDialogs());
         }
@@ -308,6 +332,7 @@ public final class OperatorUserManagementTabController {
                             + "」の PIN は "
                             + pin
                             + " です。\n"
+                            + "初回ログイン時に PIN 変更が必要です。\n"
                             + "この画面を閉じると再表示できません。必ず控えてください。");
             if (shell.primaryStageForDialogs() != null) {
                 info.initOwner(shell.primaryStageForDialogs());

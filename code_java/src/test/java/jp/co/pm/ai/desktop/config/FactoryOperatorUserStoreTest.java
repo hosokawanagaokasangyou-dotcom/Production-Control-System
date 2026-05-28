@@ -80,8 +80,28 @@ class FactoryOperatorUserStoreTest {
         String pin = FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "砂田");
         assertEquals(4, pin.length());
         assertTrue(FactoryOperatorUserStore.hasPin(FactorySite.KONAN, "砂田"));
+        assertTrue(FactoryOperatorUserStore.mustChangePin(FactorySite.KONAN, "砂田"));
         assertTrue(FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "砂田", pin));
         assertTrue(!FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "砂田", "0000"));
+        assertEquals("初回変更待", FactoryOperatorUserStore.pinStatusLabel(FactorySite.KONAN, "砂田"));
+    }
+
+    @Test
+    void addNameIssuesRandomPinRequiringFirstLoginChange() throws Exception {
+        String pin = FactoryOperatorUserStore.addName(FactorySite.KONAN, "山田");
+        assertEquals(4, pin.length());
+        assertTrue(FactoryOperatorUserStore.hasPin(FactorySite.KONAN, "山田"));
+        assertTrue(FactoryOperatorUserStore.mustChangePin(FactorySite.KONAN, "山田"));
+        assertTrue(FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "山田", pin));
+        assertEquals("初回変更待", FactoryOperatorUserStore.pinStatusLabel(FactorySite.KONAN, "山田"));
+    }
+
+    @Test
+    void changePinOnFirstLoginClearsMustChangeFlag() throws Exception {
+        String pin = FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "砂田");
+        FactoryOperatorUserStore.changePinOnFirstLogin(FactorySite.KONAN, "砂田", pin, "8765");
+        assertTrue(!FactoryOperatorUserStore.mustChangePin(FactorySite.KONAN, "砂田"));
+        assertTrue(FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "砂田", "8765"));
         assertEquals("設定済", FactoryOperatorUserStore.pinStatusLabel(FactorySite.KONAN, "砂田"));
     }
 
@@ -101,6 +121,15 @@ class FactoryOperatorUserStoreTest {
         assertTrue(FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "砂田", "567890"));
         FactoryOperatorUserStore.changePinByUser(FactorySite.KONAN, "砂田", "567890", "4321");
         assertTrue(FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "砂田", "4321"));
+    }
+
+    @Test
+    void changePinByUser_clearsMustChangeFlag() throws Exception {
+        String pin = FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "砂田");
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "砂田");
+        FactoryOperatorUserStore.changePinByUser(FactorySite.KONAN, "砂田", pin, "9999");
+        assertTrue(!FactoryOperatorUserStore.mustChangePin(FactorySite.KONAN, "砂田"));
+        assertTrue(FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "砂田", "9999"));
     }
 
     @Test
@@ -126,8 +155,10 @@ class FactoryOperatorUserStoreTest {
         FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "古家");
         FactoryOperatorUserStore.removeName(FactorySite.KONAN, "古家");
         assertTrue(!FactoryOperatorUserStore.namesForFactory(FactorySite.KONAN).contains("古家"));
-        FactoryOperatorUserStore.addName(FactorySite.KONAN, "古家");
-        assertTrue(!FactoryOperatorUserStore.hasPin(FactorySite.KONAN, "古家"));
+        String pin = FactoryOperatorUserStore.addName(FactorySite.KONAN, "古家");
+        assertTrue(FactoryOperatorUserStore.hasPin(FactorySite.KONAN, "古家"));
+        assertTrue(FactoryOperatorUserStore.mustChangePin(FactorySite.KONAN, "古家"));
+        assertTrue(FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "古家", pin));
     }
 
     @Test

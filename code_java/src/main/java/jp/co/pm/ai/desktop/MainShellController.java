@@ -5079,8 +5079,14 @@ public final class MainShellController {
                                         + "ユーザー管理者タブでロック解除または PIN 再発行してください。");
                         continue;
                     }
-                    if (!promptAndVerifyOperatorPin(factory, name)) {
+                    Optional<String> verifiedPin = promptAndVerifyOperatorPin(factory, name);
+                    if (verifiedPin.isEmpty()) {
                         continue;
+                    }
+                    if (FactoryOperatorUserStore.mustChangePin(factory, name)) {
+                        if (!promptRequiredInitialPinChange(factory, name, verifiedPin.get())) {
+                            continue;
+                        }
                     }
                 }
                 FactoryOperatorUserStore.selectSessionOperator(factory, name);
@@ -5099,9 +5105,9 @@ public final class MainShellController {
         refreshMainRunTabOperatorLabel();
     }
 
-    private boolean promptAndVerifyOperatorPin(FactorySite factory, String operatorName) {
+    private Optional<String> promptAndVerifyOperatorPin(FactorySite factory, String operatorName) {
         if (primaryStage == null) {
-            return false;
+            return Optional.empty();
         }
         try {
             if (FactoryOperatorUserStore.isPinLocked(factory, operatorName)) {
@@ -5113,11 +5119,11 @@ public final class MainShellController {
                                 + FactoryOperatorUserStore.MAX_CONSECUTIVE_PIN_FAILURES
                                 + " 回連続で間違えたためロックされています。\n"
                                 + "ユーザー管理者タブでロック解除または PIN 再発行してください。");
-                return false;
+                return Optional.empty();
             }
         } catch (IOException ex) {
             showWarningDialog("PIN", ex.getMessage() != null ? ex.getMessage() : ex.toString());
-            return false;
+            return Optional.empty();
         }
         Dialog<String> dialog = new Dialog<>();
         prepareDialogForMainTheme(dialog);
@@ -5147,7 +5153,7 @@ public final class MainShellController {
         while (true) {
             Optional<String> ans = dialog.showAndWait();
             if (ans.isEmpty()) {
-                return false;
+                return Optional.empty();
             }
             String pin = ans.get();
             if (FactoryOperatorUserStore.normalizePin(pin) == null) {
@@ -5160,7 +5166,7 @@ public final class MainShellController {
                         FactoryOperatorUserStore.verifyPinAttempt(factory, operatorName, pin);
                 switch (result) {
                     case SUCCESS -> {
-                        return true;
+                        return Optional.of(pin);
                     }
                     case LOCKED -> {
                         showWarningDialog(
@@ -5171,7 +5177,7 @@ public final class MainShellController {
                                         + FactoryOperatorUserStore.MAX_CONSECUTIVE_PIN_FAILURES
                                         + " 回連続で間違えたためロックされました。\n"
                                         + "ユーザー管理者タブでロック解除または PIN 再発行してください。");
-                        return false;
+                        return Optional.empty();
                     }
                     case WRONG_PIN -> {
                         int remaining = FactoryOperatorUserStore.remainingPinAttempts(factory, operatorName);
@@ -5187,7 +5193,62 @@ public final class MainShellController {
                 }
             } catch (IOException ex) {
                 showWarningDialog("PIN", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+                return Optional.empty();
+            }
+        }
+    }
+
+    /** ランダム初期 PIN でログイン後、初回のみ PIN 変更を強制する。 */
+    private boolean promptRequiredInitialPinChange(
+            FactorySite factory, String operatorName, String currentPin) {
+        if (primaryStage == null) {
+            return false;
+        }
+        Dialog<ButtonType> dialog = new Dialog<>();
+        prepareDialogForMainTheme(dialog);
+        dialog.setTitle("初回 PIN 変更（必須）");
+        dialog.setHeaderText(null);
+        Label hint =
+                new Label(
+                        "操作者「"
+                                + operatorName
+                                + "」は初回ログインのため、新しい PIN（"
+                                + FactoryOperatorUserStore.pinLengthRangeDescriptionJa()
+                                + "）を設定してください。");
+        hint.setWrapText(true);
+        PasswordField newPf = new PasswordField();
+        newPf.setPromptText("新しい PIN");
+        PasswordField confirmPf = new PasswordField();
+        confirmPf.setPromptText("新しい PIN（確認）");
+        VBox box = new VBox(8, hint, new Label("新しい PIN:"), newPf, new Label("確認:"), confirmPf);
+        dialog.getDialogPane().setContent(box);
+        dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK);
+        while (true) {
+            Optional<ButtonType> ans = dialog.showAndWait();
+            if (ans.isEmpty() || ans.get() != ButtonType.OK) {
                 return false;
+            }
+            String newPin = newPf.getText() != null ? newPf.getText().strip() : "";
+            String confirmPin = confirmPf.getText() != null ? confirmPf.getText().strip() : "";
+            if (!newPin.equals(confirmPin)) {
+                showWarningDialog("初回 PIN 変更", "新しい PIN と確認入力が一致しません。");
+                continue;
+            }
+            if (FactoryOperatorUserStore.normalizePin(newPin) == null) {
+                showWarningDialog(
+                        "初回 PIN 変更",
+                        "新しい PIN は "
+                                + FactoryOperatorUserStore.pinLengthRangeDescriptionJa()
+                                + " です。");
+                continue;
+            }
+            try {
+                FactoryOperatorUserStore.changePinOnFirstLogin(factory, operatorName, currentPin, newPin);
+                appendLog("[operator-user] 初回 PIN を変更しました: " + operatorName);
+                showInformationDialog("初回 PIN 変更", "PIN を変更しました。ログインを続行します。");
+                return true;
+            } catch (Exception ex) {
+                showWarningDialog("初回 PIN 変更", ex.getMessage() != null ? ex.getMessage() : ex.toString());
             }
         }
     }
