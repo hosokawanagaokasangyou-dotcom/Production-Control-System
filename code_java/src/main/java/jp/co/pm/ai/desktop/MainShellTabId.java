@@ -16,6 +16,8 @@ public enum MainShellTabId {
     GLOBAL_SETTINGS("globalSettings"),
     /** ユーザープロファイル（UI 設定の保存・読み出し、{@code ~/.pm-ai-desktop/user-profiles}）。 */
     USER_PROFILES("userProfiles"),
+    /** 工場別の配台システム操作者名（起動時選択・作成者表示）。 */
+    OPERATOR_USER_MANAGEMENT("operatorUserManagement"),
     MASTER_SUMMARY("masterSummary"),
     PLAN_INPUT("planInput"),
     /** 加工依頼書の照合・対比型入力（湖南工場・ReconciliationApp 由来）。 */

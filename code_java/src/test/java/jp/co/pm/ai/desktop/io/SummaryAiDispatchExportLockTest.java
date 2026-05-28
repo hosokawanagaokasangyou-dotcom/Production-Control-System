@@ -9,18 +9,54 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
+import jp.co.pm.ai.desktop.config.FactorySite;
 
 class SummaryAiDispatchExportLockTest {
 
     @TempDir
     Path temp;
 
+    @BeforeEach
+    void isolateOperatorStore() throws Exception {
+        System.setProperty(
+                "pm.ai.test.factoryOperatorUserStore",
+                temp.resolve("operators.json").toString());
+        FactoryOperatorUserStore.resetStoreForTests();
+    }
+
+    @AfterEach
+    void clearOperatorStoreProperty() {
+        System.clearProperty("pm.ai.test.factoryOperatorUserStore");
+        FactoryOperatorUserStore.clearSessionOperatorName();
+    }
+
     @Test
     void acquireReleaseAndForceRemove() throws Exception {
         Path workbook = temp.resolve("サマリ_AI配台.xlsx");
         Files.createDirectories(temp);
+        FactoryOperatorUserStore.writeRawJsonForTests(
+                """
+                {
+                  "schemaVersion": 1,
+                  "factories": {
+                    "KONAN": {
+                      "names": ["砂田", "古家", "図司", "細川"],
+                      "lastSelected": "砂田"
+                    },
+                    "KOKUBU": {
+                      "names": ["砂田", "古家", "図司", "細川"],
+                      "lastSelected": ""
+                    }
+                  }
+                }
+                """);
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "砂田");
         assertFalse(SummaryAiDispatchExportLock.isLocked(workbook));
 
         try (SummaryAiDispatchExportLock.AcquiredLock lock =
@@ -29,6 +65,8 @@ class SummaryAiDispatchExportLockTest {
             var info = SummaryAiDispatchExportLock.readLockInfo(workbook).orElseThrow();
             assertEquals(workbook.toAbsolutePath().normalize().toString(), info.workbook());
             assertFalse(info.host().isBlank());
+            assertEquals("砂田", info.operator());
+            assertEquals("砂田@" + info.host(), info.displayCreator());
         }
         assertFalse(SummaryAiDispatchExportLock.isLocked(workbook));
 

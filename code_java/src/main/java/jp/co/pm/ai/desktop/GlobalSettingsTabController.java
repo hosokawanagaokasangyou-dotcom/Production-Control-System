@@ -60,6 +60,7 @@ public final class GlobalSettingsTabController {
                                 if (shell != null) {
                                     shell.applyFactoryRequestFormGlobalSettings(newV, false);
                                     shell.refreshMainRunTabFactoryLogo();
+                                    shell.requireOperatorSelectionForFactory(newV, false);
                                 }
                             }
                         });

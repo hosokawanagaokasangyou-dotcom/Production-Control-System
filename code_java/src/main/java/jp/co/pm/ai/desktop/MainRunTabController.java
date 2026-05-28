@@ -52,6 +52,7 @@ import javafx.util.StringConverter;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.AppVersionInfo;
+import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.FactorySiteLogoSupport;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
@@ -170,6 +171,9 @@ public final class MainRunTabController {
 
     @FXML
     private Label factoryLogoCaptionLabel;
+
+    @FXML
+    private Label operatorUserLabel;
 
     @FXML
     private Label pipelineTimingStage1Label;
@@ -717,6 +721,7 @@ public final class MainRunTabController {
         refreshAppVersionLabel();
         refreshOpenWorkbookHintLabels();
         refreshFactorySiteLogo();
+        refreshOperatorUserLabel();
         startSummaryExportLockPolling();
         refreshSummaryWorkbookOpenLockState();
         pipelineTimingHistoryListener = () -> Platform.runLater(this::refreshPipelineExecutionTimingLabels);
@@ -771,7 +776,7 @@ public final class MainRunTabController {
             if (locked) {
                 String host =
                         SummaryAiDispatchExportLock.readLockInfo(workbook)
-                                .map(SummaryAiDispatchExportLock.LockInfo::displayHost)
+                                .map(SummaryAiDispatchExportLock.LockInfo::displayCreator)
                                 .orElse("他端末");
                 summaryWorkbookOpenHintLabel.setText(fileName + " （作成中: " + host + "）");
                 if (openSummaryAiDispatchButton != null) {
@@ -816,6 +821,15 @@ public final class MainRunTabController {
         Tooltip.install(
                 factoryLogoHost,
                 new Tooltip(site.displayLabelJa() + "（init_setting 対象工場）"));
+    }
+
+    /** 起動時選択した操作者名をヘッダーに表示する。 */
+    void refreshOperatorUserLabel() {
+        if (operatorUserLabel == null) {
+            return;
+        }
+        String op = FactoryOperatorUserStore.sessionOperatorName();
+        operatorUserLabel.setText(op.isBlank() ? "操作者: （未選択）" : "操作者: " + op);
     }
 
     /**
@@ -1022,7 +1036,7 @@ public final class MainRunTabController {
         if (shell.isSummaryAiDispatchExportLocked()) {
             String host =
                     SummaryAiDispatchExportLock.readLockInfo(p)
-                            .map(SummaryAiDispatchExportLock.LockInfo::displayHost)
+                            .map(SummaryAiDispatchExportLock.LockInfo::displayCreator)
                             .orElse("他端末");
             appendLog("[summary-ai-dispatch] 作成中のため開けません（" + host + "）");
             return;
@@ -1060,7 +1074,7 @@ public final class MainRunTabController {
         }
         String host =
                 SummaryAiDispatchExportLock.readLockInfo(workbook)
-                        .map(SummaryAiDispatchExportLock.LockInfo::displayHost)
+                        .map(SummaryAiDispatchExportLock.LockInfo::displayCreator)
                         .orElse("他端末");
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("サマリ作成ロックの強制解除");

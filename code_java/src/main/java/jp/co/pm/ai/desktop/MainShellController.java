@@ -94,6 +94,7 @@ import jp.co.pm.ai.desktop.config.DispatchTrialLogUiStore;
 import jp.co.pm.ai.desktop.config.JvmMemoryLogStore;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutDefaults;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
+import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.GeminiDispatchModelTryOrderDefaults;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
@@ -293,6 +294,9 @@ public final class MainShellController {
     private UserProfilesTabController userProfilesTabController;
 
     @FXML
+    private OperatorUserManagementTabController operatorUserManagementTabController;
+
+    @FXML
     private PlanInputTabController planInputTabController;
 
     @FXML
@@ -392,6 +396,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabUserProfiles;
+
+    @FXML
+    private Tab mainShellTabOperatorUserManagement;
 
     @FXML
     private Tab mainShellTabMasterSummary;
@@ -594,6 +601,9 @@ public final class MainShellController {
         }
             if (userProfilesTabController != null) {
                 userProfilesTabController.bindShell(this);
+            }
+            if (operatorUserManagementTabController != null) {
+                operatorUserManagementTabController.bindShell(this);
             }
             masterReadSummaryTabController.bindShell(this);
             planResultViewerTabController.bindShell(this);
@@ -1656,6 +1666,9 @@ public final class MainShellController {
         if (t == mainShellTabUserProfiles) {
             return MainShellTabId.USER_PROFILES;
         }
+        if (t == mainShellTabOperatorUserManagement) {
+            return MainShellTabId.OPERATOR_USER_MANAGEMENT;
+        }
         if (t == mainShellTabMasterSummary) {
             return MainShellTabId.MASTER_SUMMARY;
         }
@@ -1735,6 +1748,7 @@ public final class MainShellController {
             case SUMMARY_AI_DISPATCH_EXPORT_CUSTOMIZE -> mainShellTabSummaryAiDispatchExportCustomize;
             case SUMMARY_AI_DISPATCH_GENERATION -> mainShellTabSummaryAiDispatchGeneration;
             case USER_PROFILES -> mainShellTabUserProfiles;
+            case OPERATOR_USER_MANAGEMENT -> mainShellTabOperatorUserManagement;
             case MASTER_SUMMARY -> mainShellTabMasterSummary;
             case PLAN_INPUT -> mainShellTabPlanInput;
             case REQUEST_FORM_INPUT -> mainShellTabRequestFormInput;
@@ -3398,6 +3412,7 @@ public final class MainShellController {
             appendLog("[env] 工場既定の選択をキャンセルしたため湖南工場の既定を適用します。");
         }
         applyEnvRowsFullBundledResetAndPersist(true, site);
+        requireOperatorSelectionForFactory(site, false);
     }
 
     /**
@@ -3498,6 +3513,7 @@ public final class MainShellController {
                 () -> {
                     maybePortableBundleSelfUpdate();
                     maybePromptRequestFormOriginalDirAtStartup();
+                    maybePromptOperatorUserAtStartup();
                 });
     }
 
@@ -4925,7 +4941,101 @@ public final class MainShellController {
     }
 
     Map<String, String> snapshotUiEnv() {
-        return collectUiEnv();
+        Map<String, String> base = collectUiEnv();
+        String operator = FactoryOperatorUserStore.sessionOperatorName();
+        if (operator.isBlank()) {
+            return base;
+        }
+        Map<String, String> merged = new HashMap<>(base);
+        merged.put(AppPaths.KEY_PM_AI_OPERATOR_USER, operator);
+        return Map.copyOf(merged);
+    }
+
+    /** 実行・ログタブの操作者表示を更新する。 */
+    void refreshMainRunTabOperatorLabel() {
+        if (mainRunTabController != null) {
+            mainRunTabController.refreshOperatorUserLabel();
+        }
+        if (operatorUserManagementTabController != null) {
+            operatorUserManagementTabController.refreshPresentationQuietly();
+        }
+    }
+
+    /**
+     * 工場別の操作者名を選択させる。キャンセル不可（起動時・工場切替時）。
+     *
+     * @param startup true のとき起動直後の案内文
+     */
+    void requireOperatorSelectionForFactory(FactorySite site, boolean startup) {
+        if (primaryStage == null) {
+            return;
+        }
+        FactorySite factory = site != null ? site : GlobalInitSettingTarget.load();
+        FactoryOperatorUserStore.clearSessionOperatorName();
+        while (FactoryOperatorUserStore.sessionOperatorName().isBlank()) {
+            Optional<String> chosen = promptOperatorUserChoice(factory, startup);
+            if (chosen.isEmpty()) {
+                showWarningDialog(
+                        "操作者名（必須）",
+                        factory.displayLabelJa()
+                                + " の操作者名を選択してください。\n"
+                                + "一覧の編集は「ユーザー管理」タブから行えます。");
+                continue;
+            }
+            try {
+                FactoryOperatorUserStore.selectSessionOperator(factory, chosen.get());
+                appendLog(
+                        "[startup] 操作者: "
+                                + chosen.get()
+                                + " （"
+                                + factory.displayLabelJa()
+                                + "）");
+            } catch (Exception ex) {
+                showWarningDialog(
+                        "操作者名",
+                        ex.getMessage() != null ? ex.getMessage() : ex.toString());
+            }
+        }
+        refreshMainRunTabOperatorLabel();
+    }
+
+    private void maybePromptOperatorUserAtStartup() {
+        requireOperatorSelectionForFactory(GlobalInitSettingTarget.load(), true);
+    }
+
+    private Optional<String> promptOperatorUserChoice(FactorySite site, boolean startup) {
+        if (primaryStage == null) {
+            return Optional.empty();
+        }
+        List<String> names;
+        try {
+            names = FactoryOperatorUserStore.namesForFactory(site);
+        } catch (IOException ex) {
+            names = FactoryOperatorUserStore.DEFAULT_NAMES;
+        }
+        if (names.isEmpty()) {
+            names = FactoryOperatorUserStore.DEFAULT_NAMES;
+        }
+        String pref;
+        try {
+            pref = FactoryOperatorUserStore.lastSelectedForFactory(site);
+        } catch (IOException ex) {
+            pref = "";
+        }
+        if (pref.isBlank() || !names.contains(pref)) {
+            pref = names.get(0);
+        }
+        ChoiceDialog<String> d = new ChoiceDialog<>(pref, names);
+        d.initOwner(primaryStage);
+        applyAlertStylesheetsFromOwner(d);
+        d.setTitle("操作者名の選択");
+        d.setHeaderText(null);
+        d.setContentText(
+                (startup ? "配台システムを利用する操作者名を選んでください。\n" : "")
+                        + "工場: "
+                        + site.displayLabelJa()
+                        + "\n（作成者表示に使用します。ユーザー管理タブで一覧を編集できます。）");
+        return d.showAndWait();
     }
 
     /** {@code jp.co.pm.ai.desktop.dispatch.rules} 子タブ向け。 */
@@ -5323,7 +5433,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         Path workbook = AppPaths.summaryAiDispatchXlsxPath(collectUiEnv());
         String host =
                 SummaryAiDispatchExportLock.readLockInfo(workbook)
-                        .map(SummaryAiDispatchExportLock.LockInfo::displayHost)
+                        .map(SummaryAiDispatchExportLock.LockInfo::displayCreator)
                         .orElse("他端末");
         appendLog(
                 "[summary-ai-dispatch] "
@@ -5733,7 +5843,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         if (lock.isEmpty()) {
             String who =
                     SummaryAiDispatchExportLock.readLockInfo(workbook)
-                            .map(SummaryAiDispatchExportLock.LockInfo::displayHost)
+                            .map(SummaryAiDispatchExportLock.LockInfo::displayCreator)
                             .orElse("他端末");
             appendLog("[summary-ai-dispatch] 作成スキップ（ロック中: " + who + "）");
             refreshSummaryWorkbookLockUi();

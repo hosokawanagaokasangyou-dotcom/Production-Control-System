@@ -48,6 +48,7 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.SPECIAL_RULES.key(),
                     MainShellTabId.ACTUALS_STATUS.key(),
                     MainShellTabId.USER_PROFILES.key(),
+                    MainShellTabId.OPERATOR_USER_MANAGEMENT.key(),
                     MainShellTabId.PLAN_WORKSPACE_HISTORY.key(),
                     MainShellTabId.CACHE_HISTORY.key(),
                     MainShellTabId.API_MODEL_BENCHMARK.key(),
@@ -104,6 +105,8 @@ public final class MainShellTabLayoutDefaults {
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.MEMORY_SETTINGS.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.GLOBAL_SETTINGS.key(), ""),
                                 MainShellTabLayoutNode.tabNode(MainShellTabId.USER_PROFILES.key(), ""),
+                                MainShellTabLayoutNode.tabNode(
+                                        MainShellTabId.OPERATOR_USER_MANAGEMENT.key(), ""),
                                 MainShellTabLayoutNode.tabNode(
                                         MainShellTabId.SUMMARY_AI_DISPATCH_EXPORT_CUSTOMIZE.key(), ""),
                                 MainShellTabLayoutNode.tabNode(

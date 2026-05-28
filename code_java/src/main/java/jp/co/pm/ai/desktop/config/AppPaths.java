@@ -62,6 +62,11 @@ public final class AppPaths {
      */
     public static final String KEY_PM_AI_OUTPUT_DIR = "PM_AI_OUTPUT_DIR";
 
+    /**
+     * 配台システム起動時に選択した操作者名（{@link FactoryOperatorUserStore}）。子プロセス env に載せる。
+     */
+    public static final String KEY_PM_AI_OPERATOR_USER = "PM_AI_OPERATOR_USER";
+
     public static final String KEY_PM_AI_TASK_INPUT_SOURCE_DIR = "PM_AI_TASK_INPUT_SOURCE_DIR";
 
     /** Folder for machining actual-detail Excel exports (PQ plan/02 {@code Folder.Files}). */

@@ -26,6 +26,7 @@ public final class SummaryAiDispatchExportLock {
     private static final String KEY_VERSION = "version";
     private static final String KEY_WORKBOOK = "workbook";
     private static final String KEY_HOST = "host";
+    private static final String KEY_OPERATOR = "operator";
     private static final String KEY_PID = "pid";
     private static final String KEY_USER = "user";
     private static final String KEY_STARTED_AT = "startedAt";
@@ -35,12 +36,26 @@ public final class SummaryAiDispatchExportLock {
     public record LockInfo(
             String workbook,
             String host,
+            String operator,
             long pid,
             String user,
             Instant startedAt) {
 
         public String displayHost() {
             return host != null && !host.isBlank() ? host : "（不明）";
+        }
+
+        /** 操作者名＋端末名（作成者表示用）。 */
+        public String displayCreator() {
+            String op = operator != null ? operator.strip() : "";
+            if (!op.isEmpty()) {
+                String h = displayHost();
+                if (!"（不明）".equals(h) && !h.isBlank()) {
+                    return op + "@" + h;
+                }
+                return op;
+            }
+            return displayHost();
         }
     }
 
@@ -110,6 +125,7 @@ public final class SummaryAiDispatchExportLock {
             return Optional.of(
                     new LockInfo(
                             summaryWorkbookPath.toString(),
+                            "",
                             "",
                             0L,
                             "",
@@ -185,6 +201,7 @@ public final class SummaryAiDispatchExportLock {
         m.put(KEY_VERSION, "1");
         m.put(KEY_WORKBOOK, summaryWorkbookPath.toAbsolutePath().normalize().toString());
         m.put(KEY_HOST, hostName());
+        m.put(KEY_OPERATOR, jp.co.pm.ai.desktop.config.FactoryOperatorUserStore.sessionOperatorName());
         m.put(KEY_PID, Long.toString(ProcessHandle.current().pid()));
         m.put(KEY_USER, System.getProperty("user.name", ""));
         m.put(KEY_STARTED_AT, Instant.now().toString());
@@ -226,6 +243,7 @@ public final class SummaryAiDispatchExportLock {
         return new LockInfo(
                 m.getOrDefault(KEY_WORKBOOK, fallbackWorkbook.toString()),
                 m.getOrDefault(KEY_HOST, ""),
+                m.getOrDefault(KEY_OPERATOR, ""),
                 pid,
                 m.getOrDefault(KEY_USER, ""),
                 started);

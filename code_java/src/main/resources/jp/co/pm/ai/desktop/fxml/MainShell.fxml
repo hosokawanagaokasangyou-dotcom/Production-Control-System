@@ -97,6 +97,12 @@
                         <fx:include fx:id="userProfilesTab" source="UserProfilesTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabOperatorUserManagement" closable="false" text="ユーザー管理">
+                    <content>
+                        <fx:include fx:id="operatorUserManagementTab"
+                                    source="OperatorUserManagementTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabMasterSummary" closable="false"
                      text="マスタ読込サマリ">
                     <content>

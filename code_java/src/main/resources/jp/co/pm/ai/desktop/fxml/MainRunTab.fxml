@@ -31,6 +31,7 @@
                     <ImageView fx:id="factoryLogoImageView" fitHeight="30.0" fitWidth="126.0" mouseTransparent="true" preserveRatio="true" />
                     <Label fx:id="factoryLogoCaptionLabel" alignment="CENTER" contentDisplay="CENTER" maxWidth="132.0" mouseTransparent="true" styleClass="pm-run-factory-logo-caption" text="" textAlignment="CENTER" wrapText="false" />
                 </StackPane>
+                <Label fx:id="operatorUserLabel" styleClass="pm-muted-label" text="操作者: （未選択）" />
                 <Region HBox.hgrow="ALWAYS" />
                 <HBox alignment="CENTER_RIGHT" spacing="8.0">
                     <Button mnemonicParsing="false" onAction="#onOpenDispatchUsageGuideDocxAction" text="配台の使い方" />
