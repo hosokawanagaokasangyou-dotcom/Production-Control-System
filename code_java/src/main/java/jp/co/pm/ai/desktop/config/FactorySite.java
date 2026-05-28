@@ -191,12 +191,14 @@ public enum FactorySite {
     /**
      * 環境変数タブの工場別 UNC 等から利用工場を推定する。
      *
-     * <p>複数キーに値があるときは、ポータル正本 → 計画 → 実績 → マスタ → サマリの順で最初に判定できた工場を返す。
+     * <p>複数キーを集計し、国分／湖南の票数が多い方を返す。同点・判定不能のときは empty（呼び出し側は {@link
+     * GlobalInitSettingTarget#load()} を参照）。
      */
     public static Optional<FactorySite> inferFromUiEnv(Map<String, String> ui) {
         if (ui == null || ui.isEmpty()) {
             return Optional.empty();
         }
+        int[] scores = new int[2];
         List<String> keys =
                 List.of(
                         AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR,
@@ -204,14 +206,36 @@ public enum FactorySite {
                         AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
                         AppPaths.KEY_PM_AI_MASTER_WORKBOOK,
                         AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                        AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR,
+                        AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE,
                         AppPaths.KEY_MASTER_WORKBOOK_FILE);
         for (String key : keys) {
-            Optional<FactorySite> site = inferFromPortableBundleSourceValue(ui.getOrDefault(key, ""));
-            if (site.isPresent()) {
-                return site;
-            }
+            int weight =
+                    AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR.equals(key)
+                                    || AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR.equals(key)
+                            ? 2
+                            : 1;
+            scoreEnvValue(ui.getOrDefault(key, ""), weight, scores);
+        }
+        if (scores[1] > scores[0] && scores[1] > 0) {
+            return Optional.of(KOKUBU);
+        }
+        if (scores[0] > scores[1] && scores[0] > 0) {
+            return Optional.of(KONAN);
         }
         return Optional.empty();
+    }
+
+    private static void scoreEnvValue(String raw, int weight, int[] scores) {
+        Optional<FactorySite> site = inferFromPortableBundleSourceValue(raw);
+        if (site.isEmpty() || weight <= 0) {
+            return;
+        }
+        if (site.get() == KOKUBU) {
+            scores[1] += weight;
+        } else {
+            scores[0] += weight;
+        }
     }
 
     private static String textOrEmpty(JsonNode row, String field) {

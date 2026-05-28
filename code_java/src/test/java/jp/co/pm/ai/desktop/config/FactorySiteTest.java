@@ -121,4 +121,31 @@ class FactorySiteTest {
                                         AppPaths.DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KONAN))
                         .orElseThrow());
     }
+
+    @Test
+    void inferFromUiEnv_prefersWeightedTaskAndActualOverPortableKonan() {
+        assertEquals(
+                FactorySite.KOKUBU,
+                FactorySite.inferFromUiEnv(
+                                Map.of(
+                                        AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR,
+                                        FactorySite.KONAN.portableBundleSourceDir(),
+                                        AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                                        FactorySite.KOKUBU.taskInputSourceDir(),
+                                        AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
+                                        FactorySite.KOKUBU.actualDetailSourceDir()))
+                        .orElseThrow());
+    }
+
+    @Test
+    void inferFromUiEnv_emptyWhenKonanAndKokubuSignalsTie() {
+        assertFalse(
+                FactorySite.inferFromUiEnv(
+                                Map.of(
+                                        AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR,
+                                        FactorySite.KONAN.portableBundleSourceDir(),
+                                        AppPaths.KEY_MASTER_WORKBOOK_FILE,
+                                        FactorySite.KOKUBU.masterWorkbookFileBasename()))
+                        .isPresent());
+    }
 }

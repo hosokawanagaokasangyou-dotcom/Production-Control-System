@@ -44,7 +44,7 @@ public final class GlobalInitSettingTarget {
     /**
      * 環境変数タブの工場別 UNC から推定した工場を優先し、{@link #load()} の永続ファイルと同期する。
      *
-     * <p>推定できないときは {@link #load()} のみ。
+     * <p>推定できない／同点のときは {@link #load()}（global-init-setting-target-factory.txt）を使う。
      */
     public static FactorySite loadEffective(Map<String, String> ui) {
         Optional<FactorySite> inferred = FactorySite.inferFromUiEnv(ui);

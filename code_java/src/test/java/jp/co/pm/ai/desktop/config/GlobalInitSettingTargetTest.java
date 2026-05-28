@@ -58,4 +58,21 @@ class GlobalInitSettingTargetTest {
                 StandardCharsets.UTF_8);
         assertEquals(FactorySite.KOKUBU, GlobalInitSettingTarget.loadEffective(Map.of()));
     }
+
+    @Test
+    void loadEffective_keepsStoredKokubuWhenEnvSignalsTie() throws Exception {
+        Files.createDirectories(tmpHome.resolve(".pm-ai-desktop"));
+        Files.writeString(
+                tmpHome.resolve(".pm-ai-desktop/global-init-setting-target-factory.txt"),
+                "KOKUBU",
+                StandardCharsets.UTF_8);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR,
+                        FactorySite.KONAN.portableBundleSourceDir(),
+                        AppPaths.KEY_MASTER_WORKBOOK_FILE,
+                        FactorySite.KOKUBU.masterWorkbookFileBasename());
+        assertEquals(FactorySite.KOKUBU, GlobalInitSettingTarget.loadEffective(ui));
+        assertEquals(FactorySite.KOKUBU, GlobalInitSettingTarget.load());
+    }
 }
