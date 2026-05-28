@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.geometry.Insets?>
-<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ListView?>
 <?import javafx.scene.control.Separator?>
@@ -18,9 +18,13 @@
     </padding>
     <Label styleClass="pm-section-title" text="ユーザー管理者（操作者名・PIN）"
            wrapText="true"/>
-    <Label text="工場ごとに配台システム起動時の名前選択肢と PIN（4～10 桁）を管理します。ユーザーは実行・ログタブから自分の PIN を変更できます。設定はサマリ Excel と同じフォルダのバイナリファイル（factory-operator-users.bin）に保存されます。PIN を 20 回連続で間違えるとロックされます。"
+    <Label text="工場ごとに配台システム起動時の名前選択肢と PIN（4～10 桁）を管理します。下の「管理対象工場」で湖南／国分を切り替えてください。ユーザーは実行・ログタブから自分の PIN を変更できます。設定はサマリ Excel と同じフォルダのバイナリファイル（factory-operator-users.bin）に工場別で保存されます。PIN を 20 回連続で間違えるとロックされます。"
            wrapText="true"/>
     <Separator/>
+    <HBox spacing="8.0" alignment="CENTER_LEFT">
+        <Label text="管理対象工場"/>
+        <ComboBox fx:id="managedFactoryCombo" prefWidth="220.0"/>
+    </HBox>
     <Label fx:id="factoryLabel" styleClass="pm-muted-label" wrapText="true"/>
     <Label fx:id="sessionOperatorLabel" wrapText="true"/>
     <HBox spacing="8.0" alignment="CENTER_LEFT">
@@ -43,8 +47,8 @@
         <Button fx:id="refreshButton" mnemonicParsing="false" onAction="#onRefreshAction" text="一覧更新"/>
     </HBox>
     <Separator/>
-    <Label styleClass="pm-section-title" text="ユーザー管理バイナリのバックアップ（世代管理）"/>
-    <Label text="手動で factory-operator-users.bin のバックアップを取り、一覧から選択して復元できます（管理者向け）。"
+    <Label styleClass="pm-section-title" text="ユーザー管理バイナリのバックアップ（世代管理・全工場共通）"/>
+    <Label text="手動で factory-operator-users.bin（湖南・国分のユーザー情報を含む）のバックアップを取り、一覧から選択して復元できます（管理者向け）。"
            wrapText="true"/>
     <HBox spacing="8.0" alignment="CENTER_LEFT">
         <Label text="メモ"/>

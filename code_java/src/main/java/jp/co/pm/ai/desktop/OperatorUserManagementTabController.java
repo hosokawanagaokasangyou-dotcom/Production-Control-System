@@ -15,6 +15,7 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
@@ -63,6 +64,10 @@ public final class OperatorUserManagementTabController {
     }
 
     private MainShellController shell;
+    private boolean suppressManagedFactoryListener;
+
+    @FXML
+    private ComboBox<FactorySite> managedFactoryCombo;
 
     @FXML
     private Label factoryLabel;
@@ -148,7 +153,32 @@ public final class OperatorUserManagementTabController {
                                 }
                             });
         }
+        wireManagedFactoryCombo();
         refreshPresentation();
+    }
+
+    private void wireManagedFactoryCombo() {
+        if (managedFactoryCombo == null) {
+            return;
+        }
+        managedFactoryCombo.getItems().setAll(FactorySite.values());
+        managedFactoryCombo.setValue(GlobalInitSettingTarget.load());
+        managedFactoryCombo
+                .valueProperty()
+                .addListener(
+                        (obs, oldV, newV) -> {
+                            if (suppressManagedFactoryListener || newV == null) {
+                                return;
+                            }
+                            refreshPresentation();
+                        });
+    }
+
+    private FactorySite managedFactory() {
+        if (managedFactoryCombo != null && managedFactoryCombo.getValue() != null) {
+            return managedFactoryCombo.getValue();
+        }
+        return GlobalInitSettingTarget.load();
     }
 
     void bindShell(MainShellController shell) {
@@ -178,7 +208,7 @@ public final class OperatorUserManagementTabController {
             return;
         }
         try {
-            FactorySite site = GlobalInitSettingTarget.load();
+            FactorySite site = managedFactory();
             String pin = FactoryOperatorUserStore.addName(site, name);
             if (newNameField != null) {
                 newNameField.clear();
@@ -229,12 +259,13 @@ public final class OperatorUserManagementTabController {
             return;
         }
         try {
-            FactorySite site = GlobalInitSettingTarget.load();
+            FactorySite site = managedFactory();
             FactoryOperatorUserStore.removeName(site, name);
             refreshPresentation();
             shell.appendLog("[operator-user] 名前を削除: " + name + " （" + site.displayLabelJa() + "）");
-            if (FactoryOperatorUserStore.sessionOperatorName().isBlank()) {
-                shell.requireOperatorSelectionForFactory(site, false);
+            if (site == GlobalInitSettingTarget.load()
+                    && FactoryOperatorUserStore.sessionOperatorName().isBlank()) {
+                shell.requireOperatorSelectionForFactory(GlobalInitSettingTarget.load(), false);
             }
         } catch (Exception ex) {
             warn("削除", ex.getMessage() != null ? ex.getMessage() : ex.toString());
@@ -259,12 +290,13 @@ public final class OperatorUserManagementTabController {
             return;
         }
         try {
-            FactorySite site = GlobalInitSettingTarget.load();
+            FactorySite site = managedFactory();
             FactoryOperatorUserStore.resetNamesToDefaults(site);
             refreshPresentation();
             shell.appendLog("[operator-user] 名前一覧を既定に戻しました（" + site.displayLabelJa() + "）");
-            if (FactoryOperatorUserStore.sessionOperatorName().isBlank()) {
-                shell.requireOperatorSelectionForFactory(site, false);
+            if (site == GlobalInitSettingTarget.load()
+                    && FactoryOperatorUserStore.sessionOperatorName().isBlank()) {
+                shell.requireOperatorSelectionForFactory(GlobalInitSettingTarget.load(), false);
             }
         } catch (Exception ex) {
             warn("既定へ戻す", ex.getMessage() != null ? ex.getMessage() : ex.toString());
@@ -282,7 +314,7 @@ public final class OperatorUserManagementTabController {
             return;
         }
         String name = sel.getName();
-        FactorySite site = GlobalInitSettingTarget.load();
+        FactorySite site = managedFactory();
         boolean reissue;
         try {
             reissue = FactoryOperatorUserStore.hasPin(site, name);
@@ -354,7 +386,7 @@ public final class OperatorUserManagementTabController {
             return;
         }
         String name = sel.getName();
-        FactorySite site = GlobalInitSettingTarget.load();
+        FactorySite site = managedFactory();
         try {
             if (!FactoryOperatorUserStore.isPinLocked(site, name)) {
                 warn("ロック解除", "「" + name + "」は PIN ロックされていません。");
@@ -494,16 +526,31 @@ public final class OperatorUserManagementTabController {
     }
 
     private void refreshPresentation() {
-        FactorySite site = GlobalInitSettingTarget.load();
+        FactorySite site = managedFactory();
+        FactorySite appFactory = GlobalInitSettingTarget.load();
         if (factoryLabel != null) {
-            factoryLabel.setText("対象工場: " + site.displayLabelJa());
+            factoryLabel.setText(
+                    "この工場専用のユーザー一覧・PIN を編集しています（"
+                            + site.displayLabelJa()
+                            + "）。アプリ全体の利用工場: "
+                            + appFactory.displayLabelJa());
         }
         if (sessionOperatorLabel != null) {
             String op = FactoryOperatorUserStore.sessionOperatorName();
-            sessionOperatorLabel.setText(
-                    op.isBlank()
-                            ? "現在の操作者: （未選択）"
-                            : "現在の操作者: " + op);
+            if (site != appFactory) {
+                sessionOperatorLabel.setText(
+                        "現在の操作者: （アプリ利用工場が "
+                                + appFactory.displayLabelJa()
+                                + " のため、ここでは操作者変更できません）");
+            } else {
+                sessionOperatorLabel.setText(
+                        op.isBlank()
+                                ? "現在の操作者: （未選択）"
+                                : "現在の操作者: " + op + " （" + appFactory.displayLabelJa() + "）");
+            }
+        }
+        if (changeSessionOperatorButton != null) {
+            changeSessionOperatorButton.setDisable(site != appFactory);
         }
         if (operatorTableView != null) {
             try {
@@ -520,7 +567,6 @@ public final class OperatorUserManagementTabController {
             }
         }
         if (shell != null) {
-            shell.refreshMainRunTabOperatorLabel();
             refreshBackupList(shell.snapshotUiEnv());
         }
     }
