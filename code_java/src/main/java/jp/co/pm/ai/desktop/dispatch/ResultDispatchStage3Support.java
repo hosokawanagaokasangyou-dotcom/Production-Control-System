@@ -12,7 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import javafx.scene.control.Label;
 
 /**
- * 結果_配台表 JSON の段階3試行有無と、配台結果タブ／納期管理比較の表示方針。
+ * 結果_配台表 JSON の段階2/3/3.5 試行有無と、配台結果タブ／納期管理比較の表示方針。
  */
 public final class ResultDispatchStage3Support {
 
@@ -21,6 +21,14 @@ public final class ResultDispatchStage3Support {
     public static final String BADGE_STAGE2 = "\u6bb5\u968e2";
 
     public static final String BADGE_STAGE3 = "\u6bb5\u968e3";
+
+    public static final String BADGE_STAGE35 = "\u6bb5\u968e3.5";
+
+    public enum PlanningStage {
+        STAGE2,
+        STAGE3,
+        STAGE35
+    }
 
     private static final double EPS = 1e-6;
 
@@ -53,6 +61,20 @@ public final class ResultDispatchStage3Support {
             return false;
         }
         return false;
+    }
+
+    public static boolean detectStage35FromDispatchJsonPath(Path jsonPath) {
+        return Stage35BaselineActualSnapshotStore.tryLoadMeta(jsonPath).hasTrialApplied();
+    }
+
+    public static PlanningStage detectPlanningStage(Path jsonPath) {
+        if (detectStage35FromDispatchJsonPath(jsonPath)) {
+            return PlanningStage.STAGE35;
+        }
+        if (detectStage3FromDispatchJsonPath(jsonPath)) {
+            return PlanningStage.STAGE3;
+        }
+        return PlanningStage.STAGE2;
     }
 
     /**
@@ -116,14 +138,33 @@ public final class ResultDispatchStage3Support {
     }
 
     public static void applyPlanningStageBadge(Label badge, boolean stage3) {
+        applyPlanningStageBadge(
+                badge, stage3 ? PlanningStage.STAGE3 : PlanningStage.STAGE2);
+    }
+
+    public static void applyPlanningStageBadge(Label badge, PlanningStage stage) {
         if (badge == null) {
             return;
         }
-        badge.setText(stage3 ? BADGE_STAGE3 : BADGE_STAGE2);
-        badge.getStyleClass().removeAll(
-                "pm-planning-stage-badge-stage2", "pm-planning-stage-badge-stage3");
-        badge.getStyleClass().add(
-                stage3 ? "pm-planning-stage-badge-stage3" : "pm-planning-stage-badge-stage2");
+        PlanningStage s = stage != null ? stage : PlanningStage.STAGE2;
+        badge.setText(
+                switch (s) {
+                    case STAGE35 -> BADGE_STAGE35;
+                    case STAGE3 -> BADGE_STAGE3;
+                    case STAGE2 -> BADGE_STAGE2;
+                });
+        badge.getStyleClass()
+                .removeAll(
+                        "pm-planning-stage-badge-stage2",
+                        "pm-planning-stage-badge-stage3",
+                        "pm-planning-stage-badge-stage35");
+        badge.getStyleClass()
+                .add(
+                        switch (s) {
+                            case STAGE35 -> "pm-planning-stage-badge-stage35";
+                            case STAGE3 -> "pm-planning-stage-badge-stage3";
+                            case STAGE2 -> "pm-planning-stage-badge-stage2";
+                        });
         if (!badge.getStyleClass().contains("pm-planning-stage-badge")) {
             badge.getStyleClass().add(0, "pm-planning-stage-badge");
         }

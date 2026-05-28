@@ -187,6 +187,32 @@ class DispatchInteractiveStage3QtyDisplayTest {
     }
 
     @Test
+    void fixedSlots_stage35Compare_zeroBaselineStillShowsStage35Line() {
+        List<DispatchInteractiveTabController.Stage3QtyLineSlot> slots =
+                DispatchInteractiveTabController.buildStage3QtyFixedLineSlots(
+                        0, 0, 400, false, 1e-3, true, 0.0);
+        assertEquals(4, slots.size());
+        assertEquals(
+                DispatchInteractiveTabController.LABEL_STAGE35_ACTUAL + "400",
+                slots.get(3).lineText());
+    }
+
+    @Test
+    void formatStage35CompletionStatus_includesChangeCount() {
+        var meta =
+                new jp.co.pm.ai.desktop.dispatch.Stage35BaselineActualSnapshotStore.Stage35TrialMeta(
+                        true,
+                        "",
+                        new jp.co.pm.ai.desktop.dispatch.Stage35BaselineActualSnapshotStore
+                                .OverrideSummary(2, 1, 3),
+                        "",
+                        java.util.Map.of());
+        assertTrue(
+                DispatchInteractiveTabController.formatStage35CompletionStatus(meta)
+                        .contains("6 件適用"));
+    }
+
+    @Test
     void dateQtyLineFilter_textMultiline() {
         String raw =
                 DispatchInteractiveTabController.formatDispatchPlanActualQtyDisplay(

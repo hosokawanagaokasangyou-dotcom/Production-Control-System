@@ -61,4 +61,20 @@ class ResultDispatchStage3SupportTest {
         cols.add(ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL);
         assertTrue(ResultDispatchStage3Support.hasStage3ActualColumn(cols));
     }
+
+    @Test
+    void detectStage35FromSidecar() throws Exception {
+        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("stage35-badge");
+        java.nio.file.Path dispatchJson = dir.resolve("結果_配台表.json");
+        java.nio.file.Files.writeString(dispatchJson, "{}", java.nio.charset.StandardCharsets.UTF_8);
+        Stage35BaselineActualSnapshotStore.writeWithMeta(
+                dispatchJson,
+                java.util.Map.of(),
+                dir.resolve("overtime_simulation_overrides.json"),
+                new Stage35BaselineActualSnapshotStore.OverrideSummary(1, 0, 0));
+        assertTrue(ResultDispatchStage3Support.detectStage35FromDispatchJsonPath(dispatchJson));
+        assertEquals(
+                ResultDispatchStage3Support.PlanningStage.STAGE35,
+                ResultDispatchStage3Support.detectPlanningStage(dispatchJson));
+    }
 }

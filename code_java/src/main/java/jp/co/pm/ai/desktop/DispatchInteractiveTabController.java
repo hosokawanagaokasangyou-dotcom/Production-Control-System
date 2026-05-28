@@ -108,6 +108,8 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPivot;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
+import jp.co.pm.ai.desktop.dispatch.OvertimeSimulationOverridesReader;
+import jp.co.pm.ai.desktop.dispatch.Stage35AttendanceApplyStatusPanel;
 import jp.co.pm.ai.desktop.dispatch.Stage35BaselineActualSnapshotStore;
 import jp.co.pm.ai.desktop.dispatch.Stage3DispatchQtyBalanceCheck;
 import jp.co.pm.ai.desktop.ui.TabularCellHighlight;
@@ -179,6 +181,10 @@ public final class DispatchInteractiveTabController {
     private static final String DISPATCH_DATE_QTY_CELL_STYLE_CLASS = "dispatch-date-qty-cell";
 
     private static final String DISPATCH_DATE_QTY_SHORTFALL_CELL_STYLE_CLASS = "dispatch-date-qty-shortfall-cell";
+
+    /** 段階3.5 試行で数量が変わった日付セル。 */
+    private static final String DISPATCH_STAGE35_QTY_CHANGED_CELL_STYLE_CLASS =
+            "dispatch-stage35-qty-changed-cell";
 
   /** 段階3の2行表示（{@code \\n}）用。CSS の wrap-text は付けない。 */
     private static final String DISPATCH_DATE_QTY_MULTILINE_CELL_STYLE_CLASS =
@@ -388,6 +394,24 @@ public final class DispatchInteractiveTabController {
     private Label jsonPathLabel;
 
     @FXML
+    private VBox stage35AttendanceApplyPanel;
+
+    @FXML
+    private Label stage35AttendanceHeadlineLabel;
+
+    @FXML
+    private Label stage35AttendanceSummaryLabel;
+
+    @FXML
+    private Label stage35AttendanceOverridesLabel;
+
+    @FXML
+    private Label stage35AttendancePythonLabel;
+
+    @FXML
+    private Label stage35AttendanceAppliedAtLabel;
+
+    @FXML
     private VBox dispatchShortfallPanel;
 
     @FXML
@@ -432,9 +456,17 @@ public final class DispatchInteractiveTabController {
     private final Map<String, Double> stage3TrialPlanQtySnapshot = new HashMap<>();
 
     /**
-     * 段階3.5試行直前の実配台数量（プロファイル×配台日）。非空のとき日付セルに (段階3後) と (段階3.5後) を併記する。
+     * 段階3.5試行直前の実配台数量（プロファイル×配台日）。sidecar {@code stage35_applied} 時は
+     * (段階3後) と (段階3.5後) を併記する。
      */
     private final Map<String, Double> stage35BaselineActualQtySnapshot = new HashMap<>();
+
+    private boolean stage35TrialApplied;
+
+    private Stage35BaselineActualSnapshotStore.Stage35TrialMeta stage35TrialMeta =
+            Stage35BaselineActualSnapshotStore.Stage35TrialMeta.empty();
+
+    private String lastShortagesNote = "";
 
     private boolean pendingStage3TrialSnapshotCapture;
 
@@ -1329,18 +1361,19 @@ public final class DispatchInteractiveTabController {
         shell.appendLog("[配台試行] Python 実行ファイル: " + trialPythonExe.toAbsolutePath().normalize());
 
         final ResultDispatchDocument trialInputSnapshot = doc.copy();
+        final Path simJson = overtimeSimulationJson;
         captureStage3TrialPlanQtySnapshotFromDocument(
                 trialInputSnapshot, snapshotDateAxisForTrialPlanQtyCapture(trialInputSnapshot));
         if (stage35) {
             captureStage35BaselineActualQtySnapshotFromDocument(
                     trialInputSnapshot,
                     snapshotDateAxisForTrialPlanQtyCapture(trialInputSnapshot),
-                    jsonPath);
+                    jsonPath,
+                    simJson);
         } else {
             clearStage35BaselineActualQtySnapshot(jsonPath);
         }
         Stage owner = shell.getPrimaryStage();
-        final Path simJson = overtimeSimulationJson;
 
         Task<String> task =
                 new Task<>() {
@@ -1372,7 +1405,10 @@ public final class DispatchInteractiveTabController {
                 e -> {
                     try {
                         String shortagesPath = task.getValue();
-                        statusLabel.setText(stage35 ? "段階3.5 完了" : "配台試行完了");
+                        statusLabel.setText(
+                                stage35
+                                        ? formatStage35CompletionStatus(stage35TrialMeta)
+                                        : "配台試行完了");
                         shell.refreshRunTabStage2ArtifactLinks();
                         shell.appendLog("[dispatch-editor] trial: " + shortagesPath);
                         shell.appendLog("[配台試行] 正常終了しました。");
@@ -3448,7 +3484,7 @@ public final class DispatchInteractiveTabController {
                     !planSlidAway
                             && isStage3QtyRevisedAfterTrial(
                                     wr.profileMap(), axis.get(dateIdx), planAmt, actualAmt, eps);
-            boolean stage35CompareSlide = hasStage35BaselineActualSnapshot();
+            boolean stage35CompareSlide = hasStage35TrialApplied();
             double stage3BaselineSlide =
                     stage35CompareSlide
                             ? stage35BaselineActualForCell(wr.profileMap(), axis.get(dateIdx))
@@ -3467,13 +3503,17 @@ public final class DispatchInteractiveTabController {
                     stage35CompareSlide,
                     stage3BaselineSlide,
                     dateQtyLineFilter);
-            tagDispatchDateQtyCell(cell, dispatchDateQtyMultilineCell());
+            tagDispatchDateQtyCell(
+                    cell,
+                    dispatchDateQtyMultilineCell(),
+                    stage35CompareSlide
+                            && Math.abs(stage3BaselineSlide - actualAmt) > eps);
             return;
         }
         boolean stage3Revised =
                 isStage3QtyRevisedAfterTrial(
                         wr.profileMap(), axis.get(dateIdx), planAmt, actualAmt, eps);
-        boolean stage35Compare = hasStage35BaselineActualSnapshot();
+        boolean stage35Compare = hasStage35TrialApplied();
         double stage3BaselineActual =
                 stage35Compare
                         ? stage35BaselineActualForCell(wr.profileMap(), axis.get(dateIdx))
@@ -3490,7 +3530,10 @@ public final class DispatchInteractiveTabController {
                 stage35Compare,
                 stage3BaselineActual,
                 dateQtyLineFilter);
-        tagDispatchDateQtyCell(cell, dispatchDateQtyMultilineCell());
+        tagDispatchDateQtyCell(
+                cell,
+                dispatchDateQtyMultilineCell(),
+                stage35Compare && Math.abs(stage3BaselineActual - actualAmt) > eps);
     }
 
     private void applyByDayDispatchQtyCellDisplay(
@@ -3501,7 +3544,7 @@ public final class DispatchInteractiveTabController {
         double eps = 1e-3;
         boolean stage3Revised =
                 docHasActualDispatchQtyColumn() && Math.abs(planAmt - actualAmt) > eps;
-        boolean stage35Compare = hasStage35BaselineActualSnapshot();
+        boolean stage35Compare = hasStage35TrialApplied();
         double stage3BaselineActual =
                 stage35Compare
                         ? stage35BaselineActualForByDay(br, axis.get(dateIdx))
@@ -3518,7 +3561,10 @@ public final class DispatchInteractiveTabController {
                 stage35Compare,
                 stage3BaselineActual,
                 dateQtyLineFilter);
-        tagDispatchDateQtyCell(cell, dispatchDateQtyMultilineCell());
+        tagDispatchDateQtyCell(
+                cell,
+                dispatchDateQtyMultilineCell(),
+                stage35Compare && Math.abs(stage3BaselineActual - actualAmt) > eps);
     }
 
     private void scheduleStage3TrialPlanQtySnapshotCapture() {
@@ -3530,39 +3576,89 @@ public final class DispatchInteractiveTabController {
         pendingStage3TrialSnapshotCapture = false;
     }
 
-    private boolean hasStage35BaselineActualSnapshot() {
-        return !stage35BaselineActualQtySnapshot.isEmpty();
+    private boolean hasStage35TrialApplied() {
+        return stage35TrialApplied;
     }
 
     private void clearStage35BaselineActualQtySnapshot(Path dispatchJsonPath) {
+        stage35TrialApplied = false;
+        stage35TrialMeta = Stage35BaselineActualSnapshotStore.Stage35TrialMeta.empty();
         stage35BaselineActualQtySnapshot.clear();
         if (dispatchJsonPath != null) {
             Stage35BaselineActualSnapshotStore.deleteSidecar(dispatchJsonPath);
         }
+        refreshStage35AttendanceApplyPanel(dispatchJsonPath);
     }
 
     private void loadStage35BaselineActualQtySnapshotFromDiskIfNeeded(Path dispatchJsonPath) {
-        if (dispatchJsonPath == null || !stage35BaselineActualQtySnapshot.isEmpty()) {
+        if (dispatchJsonPath == null) {
             return;
         }
         if (!docHasActualDispatchQtyColumn()) {
             return;
         }
-        Map<String, Double> loaded = Stage35BaselineActualSnapshotStore.tryLoad(dispatchJsonPath);
-        if (!loaded.isEmpty()) {
+        Stage35BaselineActualSnapshotStore.Stage35TrialMeta meta =
+                Stage35BaselineActualSnapshotStore.tryLoadMeta(dispatchJsonPath);
+        if (meta.hasTrialApplied()) {
+            stage35TrialApplied = true;
+            stage35TrialMeta = meta;
             stage35BaselineActualQtySnapshot.clear();
-            stage35BaselineActualQtySnapshot.putAll(loaded);
+            stage35BaselineActualQtySnapshot.putAll(meta.entries());
         }
+        refreshStage35AttendanceApplyPanel(dispatchJsonPath);
     }
 
     private void captureStage35BaselineActualQtySnapshotFromDocument(
-            ResultDispatchDocument sourceDoc, List<LocalDate> axis, Path dispatchJsonPath) {
+            ResultDispatchDocument sourceDoc,
+            List<LocalDate> axis,
+            Path dispatchJsonPath,
+            Path overtimeSimulationJson) {
         stage35BaselineActualQtySnapshot.clear();
         stage35BaselineActualQtySnapshot.putAll(
                 Stage35BaselineActualSnapshotStore.captureFromDocument(sourceDoc, axis));
-        if (dispatchJsonPath != null && !stage35BaselineActualQtySnapshot.isEmpty()) {
-            Stage35BaselineActualSnapshotStore.write(dispatchJsonPath, stage35BaselineActualQtySnapshot);
+        Stage35BaselineActualSnapshotStore.OverrideSummary summary =
+                OvertimeSimulationOverridesReader.summarize(overtimeSimulationJson);
+        stage35TrialApplied = true;
+        stage35TrialMeta =
+                new Stage35BaselineActualSnapshotStore.Stage35TrialMeta(
+                        true,
+                        overtimeSimulationJson != null
+                                ? overtimeSimulationJson.toAbsolutePath().normalize().toString()
+                                : "",
+                        summary,
+                        "",
+                        Map.copyOf(stage35BaselineActualQtySnapshot));
+        if (dispatchJsonPath != null) {
+            Stage35BaselineActualSnapshotStore.writeWithMeta(
+                    dispatchJsonPath,
+                    stage35BaselineActualQtySnapshot,
+                    overtimeSimulationJson,
+                    summary);
         }
+        refreshStage35AttendanceApplyPanel(dispatchJsonPath);
+    }
+
+    static String formatStage35CompletionStatus(
+            Stage35BaselineActualSnapshotStore.Stage35TrialMeta meta) {
+        int n =
+                meta != null && meta.overrideSummary() != null
+                        ? meta.overrideSummary().totalChanges()
+                        : 0;
+        return "段階3.5 完了（勤怠 " + n + " 件適用）";
+    }
+
+    private void refreshStage35AttendanceApplyPanel(Path dispatchJsonPath) {
+        Stage35AttendanceApplyStatusPanel.ViewModel vm =
+                Stage35AttendanceApplyStatusPanel.build(
+                        stage35TrialMeta, dispatchJsonPath, lastShortagesNote);
+        Stage35AttendanceApplyStatusPanel.apply(
+                stage35AttendanceApplyPanel,
+                stage35AttendanceHeadlineLabel,
+                stage35AttendanceSummaryLabel,
+                stage35AttendanceOverridesLabel,
+                stage35AttendancePythonLabel,
+                stage35AttendanceAppliedAtLabel,
+                vm);
     }
 
     private double stage35BaselineActualForCell(Map<String, String> profile, LocalDate day) {
@@ -3576,7 +3672,7 @@ public final class DispatchInteractiveTabController {
 
     /** 工程+機械×日ビュー: 同一機械・暦日のタスク別 baseline を合算する。 */
     private double stage35BaselineActualForByDay(ByDayRow br, LocalDate day) {
-        if (!hasStage35BaselineActualSnapshot() || br == null || day == null) {
+        if (!hasStage35TrialApplied() || br == null || day == null) {
             return 0.0;
         }
         String machine = br.machine() != null ? br.machine().strip() : "";
@@ -3753,7 +3849,7 @@ public final class DispatchInteractiveTabController {
         if (dispatchDateQtyMultilineCell()) {
             double rowHeightPx =
                     docHasActualDispatchQtyColumn()
-                            ? (hasStage35BaselineActualSnapshot()
+                            ? (hasStage35TrialApplied()
                                     ? DISPATCH_ALADDIN_STAGE35_MULTILINE_ROW_HEIGHT_PX
                                     : DISPATCH_ALADDIN_STAGE3_MULTILINE_ROW_HEIGHT_PX)
                             : DISPATCH_STAGE3_MULTILINE_ROW_HEIGHT_PX;
@@ -4471,6 +4567,11 @@ public final class DispatchInteractiveTabController {
     }
 
     private static void tagDispatchDateQtyCell(SpreadsheetCell cell, boolean multiline) {
+        tagDispatchDateQtyCell(cell, multiline, false);
+    }
+
+    private static void tagDispatchDateQtyCell(
+            SpreadsheetCell cell, boolean multiline, boolean stage35QtyChanged) {
         if (cell == null) {
             return;
         }
@@ -4478,6 +4579,13 @@ public final class DispatchInteractiveTabController {
             cell.getStyleClass().add(DISPATCH_DATE_QTY_CELL_STYLE_CLASS);
         }
         cell.getStyleClass().remove(DISPATCH_DATE_QTY_SHORTFALL_CELL_STYLE_CLASS);
+        if (stage35QtyChanged) {
+            if (!cell.getStyleClass().contains(DISPATCH_STAGE35_QTY_CHANGED_CELL_STYLE_CLASS)) {
+                cell.getStyleClass().add(DISPATCH_STAGE35_QTY_CHANGED_CELL_STYLE_CLASS);
+            }
+        } else {
+            cell.getStyleClass().remove(DISPATCH_STAGE35_QTY_CHANGED_CELL_STYLE_CLASS);
+        }
         setDispatchDateQtyMultilineStyleClass(cell, multiline);
     }
 
@@ -4558,6 +4666,7 @@ public final class DispatchInteractiveTabController {
             Path shortagePath = resultDispatchJson.resolveSibling("dispatch_trial_shortages.json");
             if (Files.isRegularFile(shortagePath)) {
                 try {
+                    lastShortagesNote = DispatchTrialShortages.readNote(shortagePath);
                     DispatchTrialShortages.FullBundle fb =
                             DispatchTrialShortages.readFull(shortagePath);
                     rows = fb.dispatchQtyShortfall();
@@ -4565,12 +4674,16 @@ public final class DispatchInteractiveTabController {
                 } catch (IOException e) {
                     rows = List.of();
                     lastDispatchShortageHints = List.of();
+                    lastShortagesNote = "";
                 }
+            } else {
+                lastShortagesNote = "";
             }
         }
         rows = mergeDispatchQtyShortfallRowsUnique(
                 rows, DispatchTimelineMetaMissShortfalls.detectFromDocument(doc));
         applyDispatchShortfallRows(rows);
+        refreshStage35AttendanceApplyPanel(resultDispatchJson);
     }
 
     private static List<DispatchQtyShortfallRow> mergeDispatchQtyShortfallRowsUnique(

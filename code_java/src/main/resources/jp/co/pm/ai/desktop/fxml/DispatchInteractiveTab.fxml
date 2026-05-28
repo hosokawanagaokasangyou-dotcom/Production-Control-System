@@ -92,6 +92,15 @@
                      visible="false" managed="false"/>
     </HBox>
     <Label fx:id="jsonPathLabel" wrapText="true"/>
+    <VBox fx:id="stage35AttendanceApplyPanel" fillWidth="true" spacing="4.0" visible="false" managed="false"
+          styleClass="stage35-attendance-apply-panel">
+        <Label fx:id="stage35AttendanceHeadlineLabel" styleClass="stage35-attendance-apply-headline"
+               text="段階3.5 勤怠適用済"/>
+        <Label fx:id="stage35AttendanceSummaryLabel" wrapText="true"/>
+        <Label fx:id="stage35AttendanceOverridesLabel" wrapText="true" style="-fx-font-size: 11px;"/>
+        <Label fx:id="stage35AttendancePythonLabel" wrapText="true" style="-fx-font-size: 11px;"/>
+        <Label fx:id="stage35AttendanceAppliedAtLabel" wrapText="true" style="-fx-font-size: 11px;"/>
+    </VBox>
     <VBox fx:id="dispatchShortfallPanel" fillWidth="true" spacing="6.0" visible="false" managed="false">
         <Label style="-fx-font-weight: bold;" text="配台数量未達（タイムライン実績）"/>
         <TableView fx:id="dispatchShortfallTable" maxHeight="240.0" minHeight="120.0" prefHeight="160.0"/>

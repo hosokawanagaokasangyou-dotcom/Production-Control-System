@@ -20,6 +20,11 @@
     -fx-text-fill: #1b5e20;
 }
 
+.pm-planning-stage-badge-stage35 {
+    -fx-background-color: #ccfbf1;
+    -fx-text-fill: #0f766e;
+}
+
 .pm-ai-readable-spreadsheet.table-view.cell-spreadsheet {
     -fx-background-color: #ffffff;
     /* ControlsFX 選択セルが -fx-selection-bar-text（ダークテーマ=白）を参照するため黒に固定 */
@@ -35,11 +40,11 @@
     -fx-text-fill: black;
 }
 
-.pm-ai-readable-spreadsheet .spreadsheet-cell .label:not(.dispatch-stage3-revised-line):not(.dispatch-stage3-after-line) {
+.pm-ai-readable-spreadsheet .spreadsheet-cell .label:not(.dispatch-stage3-revised-line):not(.dispatch-stage3-after-line):not(.dispatch-stage35-after-line) {
     -fx-text-fill: black;
 }
 
-.pm-ai-readable-spreadsheet .spreadsheet-cell .text:not(.dispatch-stage3-revised-line):not(.dispatch-stage3-after-line) {
+.pm-ai-readable-spreadsheet .spreadsheet-cell .text:not(.dispatch-stage3-revised-line):not(.dispatch-stage3-after-line):not(.dispatch-stage35-after-line) {
     -fx-fill: black;
 }
 
@@ -78,7 +83,7 @@
 /* CellView は .spreadsheet-cell 自身。子 TextField は直接子（>）で指定する */
 .pm-ai-readable-spreadsheet .spreadsheet-cell > .text-input.text-field,
 .pm-ai-readable-spreadsheet .spreadsheet-cell > .text-input.text-area,
-.pm-ai-readable-spreadsheet .spreadsheet-cell .label:not(.dispatch-stage3-revised-line):not(.dispatch-stage3-after-line),
+.pm-ai-readable-spreadsheet .spreadsheet-cell .label:not(.dispatch-stage3-revised-line):not(.dispatch-stage3-after-line):not(.dispatch-stage35-after-line),
 .pm-ai-readable-spreadsheet .spreadsheet-cell .text {
     -fx-text-fill: #111111;
     -fx-fill: #111111;
@@ -173,6 +178,35 @@
 .pm-ai-readable-spreadsheet .spreadsheet-cell.dispatch-date-qty-shortfall-cell:filled:selected {
     -fx-background-color: #b71c1c;
     -fx-text-fill: #ffffff;
+}
+
+.pm-ai-readable-spreadsheet .spreadsheet-cell.dispatch-stage35-qty-changed-cell,
+.pm-ai-readable-spreadsheet .spreadsheet-cell.dispatch-stage35-qty-changed-cell:filled:selected {
+    -fx-background-color: #ccfbf1;
+    -fx-text-fill: #111111;
+}
+
+.pm-ai-readable-spreadsheet .spreadsheet-cell .label.dispatch-stage35-after-line,
+.pm-ai-readable-spreadsheet .spreadsheet-cell .dispatch-stage35-after-line,
+.pm-ai-readable-spreadsheet .spreadsheet-cell.dispatch-date-qty-graphic-only .label.dispatch-stage35-after-line,
+.pm-ai-readable-spreadsheet .spreadsheet-cell.dispatch-date-qty-graphic-only:filled:selected .label.dispatch-stage35-after-line {
+    -fx-font-weight: bold;
+    -fx-text-fill: #2e7d32;
+}
+
+.stage35-attendance-apply-panel {
+    -fx-background-color: #ecfdf5;
+    -fx-border-color: #0f766e;
+    -fx-border-width: 1;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-padding: 8 10 8 10;
+}
+
+.label.stage35-attendance-apply-headline {
+    -fx-font-weight: bold;
+    -fx-text-fill: #0f766e;
+    -fx-font-size: 13px;
 }
 
 /*

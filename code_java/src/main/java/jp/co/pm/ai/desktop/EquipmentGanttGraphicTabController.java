@@ -1507,10 +1507,9 @@ public final class EquipmentGanttGraphicTabController {
 
     private void refreshPlanningStageBadgeFromDispatchJson() {
         Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
-        boolean stage3 =
-                ResultDispatchStage3Support.detectStage3FromDispatchJsonPath(
-                        AppPaths.resolveResultDispatchTableJsonPath(ui));
-        ResultDispatchStage3Support.applyPlanningStageBadge(dataStageBadgeLabel, stage3);
+        Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        ResultDispatchStage3Support.applyPlanningStageBadge(
+                dataStageBadgeLabel, ResultDispatchStage3Support.detectPlanningStage(jsonPath));
     }
 
     private void applySelectedSheetFromMap(Map<String, JsonTableIo.SheetTable> eligible) {

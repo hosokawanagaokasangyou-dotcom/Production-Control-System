@@ -1123,6 +1123,11 @@
     -fx-text-fill: #1b5e20;
 }
 
+.label.pm-planning-stage-badge-stage35 {
+    -fx-background-color: #ccfbf1;
+    -fx-text-fill: #0f766e;
+}
+
 /* Equipment status dashboard */
 
 .label.pm-equipment-status-loading-status {

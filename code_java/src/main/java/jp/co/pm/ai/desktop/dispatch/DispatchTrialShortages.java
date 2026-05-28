@@ -97,6 +97,19 @@ public final class DispatchTrialShortages {
         return pathsFromRoot(root);
     }
 
+    public static String readNote(Path shortageJsonPath) {
+        if (shortageJsonPath == null || !Files.isRegularFile(shortageJsonPath)) {
+            return "";
+        }
+        try {
+            JsonNode root = readRoot(shortageJsonPath);
+            String note = text(root, "note");
+            return note != null ? note : "";
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
     public static FullBundle readFull(Path shortageJsonPath) throws IOException {
         if (shortageJsonPath == null || !Files.isRegularFile(shortageJsonPath)) {
             return new FullBundle(new Paths("", ""), List.of(), List.of());
