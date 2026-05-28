@@ -18,6 +18,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -47,7 +48,7 @@ public final class FactoryOperatorUserStore {
     private static volatile Path configuredStorePath;
     private static volatile boolean storeConfigured;
 
-    public static final int SCHEMA_VERSION = 4;
+    public static final int SCHEMA_VERSION = 5;
     public static final int MAX_NAMES_PER_FACTORY = 50;
     public static final int MAX_NAME_LENGTH = 40;
     public static final int MIN_PIN_LENGTH = 4;
@@ -79,7 +80,8 @@ public final class FactoryOperatorUserStore {
             String lastSelected,
             Map<String, String> pinHashes,
             Map<String, Integer> pinFailedAttempts,
-            Set<String> pinMustChange) {
+            Set<String> pinMustChange,
+            Map<String, String> pinPlaintextAdmin) {
 
         public FactoryOperatorUsers {
             names = names != null ? List.copyOf(names) : List.of();
@@ -87,14 +89,15 @@ public final class FactoryOperatorUserStore {
             pinHashes = pinHashes != null ? Map.copyOf(pinHashes) : Map.of();
             pinFailedAttempts = pinFailedAttempts != null ? Map.copyOf(pinFailedAttempts) : Map.of();
             pinMustChange = pinMustChange != null ? Set.copyOf(pinMustChange) : Set.of();
+            pinPlaintextAdmin = pinPlaintextAdmin != null ? Map.copyOf(pinPlaintextAdmin) : Map.of();
         }
 
         public FactoryOperatorUsers(List<String> names, String lastSelected) {
-            this(names, lastSelected, Map.of(), Map.of(), Set.of());
+            this(names, lastSelected, Map.of(), Map.of(), Set.of(), Map.of());
         }
 
         public FactoryOperatorUsers(List<String> names, String lastSelected, Map<String, String> pinHashes) {
-            this(names, lastSelected, pinHashes, Map.of(), Set.of());
+            this(names, lastSelected, pinHashes, Map.of(), Set.of(), Map.of());
         }
 
         public FactoryOperatorUsers(
@@ -102,7 +105,16 @@ public final class FactoryOperatorUserStore {
                 String lastSelected,
                 Map<String, String> pinHashes,
                 Map<String, Integer> pinFailedAttempts) {
-            this(names, lastSelected, pinHashes, pinFailedAttempts, Set.of());
+            this(names, lastSelected, pinHashes, pinFailedAttempts, Set.of(), Map.of());
+        }
+
+        public FactoryOperatorUsers(
+                List<String> names,
+                String lastSelected,
+                Map<String, String> pinHashes,
+                Map<String, Integer> pinFailedAttempts,
+                Set<String> pinMustChange) {
+            this(names, lastSelected, pinHashes, pinFailedAttempts, pinMustChange, Map.of());
         }
     }
 
@@ -164,6 +176,20 @@ public final class FactoryOperatorUserStore {
             return false;
         }
         return loadFactory(factory).pinMustChange().contains(normalized);
+    }
+
+    /** 管理者向け: 記録されている PIN 平文（発行・変更後のみ。旧データは空）。 */
+    public static Optional<String> adminViewablePin(FactorySite site, String name) throws IOException {
+        FactorySite factory = site != null ? site : FactorySite.KONAN;
+        String normalized = normalizeName(name);
+        if (normalized.isEmpty()) {
+            return Optional.empty();
+        }
+        String pin = loadFactory(factory).pinPlaintextAdmin().get(normalized);
+        if (pin == null || pin.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(pin);
     }
 
     public static boolean isPinLocked(FactorySite site, String name) throws IOException {
@@ -250,7 +276,8 @@ public final class FactoryOperatorUserStore {
                                 current.lastSelected(),
                                 current.pinHashes(),
                                 attempts,
-                                current.pinMustChange()));
+                                current.pinMustChange(),
+                                current.pinPlaintextAdmin()));
         saveDocument(doc);
         return nextFailures >= MAX_CONSECUTIVE_PIN_FAILURES
                 ? PinVerificationResult.LOCKED
@@ -344,7 +371,7 @@ public final class FactoryOperatorUserStore {
     /**
      * 管理者向け: ランダム 4 桁 PIN を新規発行する（既存 PIN があれば上書き）。
      *
-     * @return 発行した PIN（このタイミングのみ平文表示可能）
+     * @return 発行した PIN（管理者タブからいつでも {@link #adminViewablePin} で閲覧可能）
      */
     public static String issuePin(FactorySite site, String name) throws IOException {
         return assignPin(site, name, generatePin(), true);
@@ -383,6 +410,8 @@ public final class FactoryOperatorUserStore {
         } else {
             mustChange.remove(normalized);
         }
+        Map<String, String> plaintextAdmin = new LinkedHashMap<>(current.pinPlaintextAdmin());
+        plaintextAdmin.put(normalized, pinNorm);
         doc.factories()
                 .put(
                         factory,
@@ -391,7 +420,8 @@ public final class FactoryOperatorUserStore {
                                 current.lastSelected(),
                                 pins,
                                 attempts,
-                                mustChange));
+                                mustChange,
+                                plaintextAdmin));
         saveDocument(doc);
         return pinNorm;
     }
@@ -421,7 +451,8 @@ public final class FactoryOperatorUserStore {
                                 normalized,
                                 current.pinHashes(),
                                 current.pinFailedAttempts(),
-                                current.pinMustChange()));
+                                current.pinMustChange(),
+                                current.pinPlaintextAdmin()));
         saveDocument(doc);
     }
 
@@ -451,6 +482,8 @@ public final class FactoryOperatorUserStore {
         pins.put(normalized, hashPin(factory, normalized, pin));
         Set<String> mustChange = new LinkedHashSet<>(current.pinMustChange());
         mustChange.add(normalized);
+        Map<String, String> plaintextAdmin = new LinkedHashMap<>(current.pinPlaintextAdmin());
+        plaintextAdmin.put(normalized, pin);
         doc.factories()
                 .put(
                         factory,
@@ -459,7 +492,8 @@ public final class FactoryOperatorUserStore {
                                 current.lastSelected(),
                                 pins,
                                 current.pinFailedAttempts(),
-                                mustChange));
+                                mustChange,
+                                plaintextAdmin));
         saveDocument(doc);
         return pin;
     }
@@ -485,7 +519,12 @@ public final class FactoryOperatorUserStore {
         attempts.remove(normalized);
         Set<String> mustChange = new LinkedHashSet<>(current.pinMustChange());
         mustChange.remove(normalized);
-        doc.factories().put(factory, new FactoryOperatorUsers(next, last, pins, attempts, mustChange));
+        Map<String, String> plaintextAdmin = new LinkedHashMap<>(current.pinPlaintextAdmin());
+        plaintextAdmin.remove(normalized);
+        doc.factories()
+                .put(
+                        factory,
+                        new FactoryOperatorUsers(next, last, pins, attempts, mustChange, plaintextAdmin));
         if (normalized.equals(sessionOperatorName) && factory == GlobalInitSettingTarget.load()) {
             sessionOperatorName = "";
         }
@@ -501,6 +540,7 @@ public final class FactoryOperatorUserStore {
         Map<String, String> pins = new LinkedHashMap<>();
         Map<String, Integer> attempts = new LinkedHashMap<>();
         Set<String> mustChange = new LinkedHashSet<>();
+        Map<String, String> plaintextAdmin = new LinkedHashMap<>();
         for (String n : DEFAULT_NAMES) {
             String h = current.pinHashes().get(n);
             if (h != null && !h.isBlank()) {
@@ -513,12 +553,28 @@ public final class FactoryOperatorUserStore {
             if (current.pinMustChange().contains(n)) {
                 mustChange.add(n);
             }
+            String plain = current.pinPlaintextAdmin().get(n);
+            if (plain != null && !plain.isBlank()) {
+                plaintextAdmin.put(n, plain);
+            }
         }
-        doc.factories().put(factory, new FactoryOperatorUsers(DEFAULT_NAMES, last, pins, attempts, mustChange));
+        doc.factories()
+                .put(
+                        factory,
+                        new FactoryOperatorUsers(
+                                DEFAULT_NAMES, last, pins, attempts, mustChange, plaintextAdmin));
         if (!DEFAULT_NAMES.contains(sessionOperatorName) && factory == GlobalInitSettingTarget.load()) {
             sessionOperatorName = "";
         }
         saveDocument(doc);
+    }
+
+    /** 管理者一覧表示用: PIN 平文または未記録の案内。 */
+    public static String adminPinDisplayLabel(FactorySite site, String name) throws IOException {
+        if (!hasPin(site, name)) {
+            return "—";
+        }
+        return adminViewablePin(site, name).orElse("（再発行で確認）");
     }
 
     /** 一覧表示用: PIN / ロック状態。 */
@@ -675,6 +731,12 @@ public final class FactoryOperatorUserStore {
                     mustChange.add(name);
                 }
             }
+            ObjectNode plaintextAdmin = fo.putObject("pinPlaintextAdmin");
+            for (Map.Entry<String, String> pe : e.getValue().pinPlaintextAdmin().entrySet()) {
+                if (e.getValue().names().contains(pe.getKey())) {
+                    plaintextAdmin.put(pe.getKey(), pe.getValue());
+                }
+            }
         }
         return root;
     }
@@ -755,7 +817,28 @@ public final class FactoryOperatorUserStore {
                 }
             }
         }
-        return new FactoryOperatorUsers(names, last, pinHashes, pinFailedAttempts, pinMustChange);
+        Map<String, String> pinPlaintextAdmin = new LinkedHashMap<>();
+        JsonNode plaintextNode = node.get("pinPlaintextAdmin");
+        if (plaintextNode != null && plaintextNode.isObject()) {
+            plaintextNode
+                    .fields()
+                    .forEachRemaining(
+                            e -> {
+                                String key = normalizeName(e.getKey());
+                                if (key.isEmpty() || !names.contains(key)) {
+                                    return;
+                                }
+                                JsonNode v = e.getValue();
+                                if (v != null && v.isTextual()) {
+                                    String plain = normalizePin(v.asText(""));
+                                    if (plain != null) {
+                                        pinPlaintextAdmin.put(key, plain);
+                                    }
+                                }
+                            });
+        }
+        return new FactoryOperatorUsers(
+                names, last, pinHashes, pinFailedAttempts, pinMustChange, pinPlaintextAdmin);
     }
 
     private static void saveDocument(Document doc) throws IOException {
@@ -843,7 +926,8 @@ public final class FactoryOperatorUserStore {
                                 current.lastSelected(),
                                 current.pinHashes(),
                                 attempts,
-                                current.pinMustChange()));
+                                current.pinMustChange(),
+                                current.pinPlaintextAdmin()));
     }
 
     private static String hashPin(FactorySite factory, String name, String pin) {

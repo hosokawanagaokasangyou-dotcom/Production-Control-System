@@ -40,10 +40,12 @@ public final class OperatorUserManagementTabController {
     static final class OperatorRow {
         private final SimpleStringProperty name = new SimpleStringProperty();
         private final SimpleStringProperty pinStatus = new SimpleStringProperty();
+        private final SimpleStringProperty adminPin = new SimpleStringProperty();
 
-        OperatorRow(String name, String pinStatus) {
+        OperatorRow(String name, String pinStatus, String adminPin) {
             this.name.set(name);
             this.pinStatus.set(pinStatus);
+            this.adminPin.set(adminPin);
         }
 
         String getName() {
@@ -60,6 +62,14 @@ public final class OperatorUserManagementTabController {
 
         SimpleStringProperty pinStatusProperty() {
             return pinStatus;
+        }
+
+        String getAdminPin() {
+            return adminPin.get();
+        }
+
+        SimpleStringProperty adminPinProperty() {
+            return adminPin;
         }
     }
 
@@ -97,6 +107,9 @@ public final class OperatorUserManagementTabController {
     private Button unlockPinButton;
 
     @FXML
+    private Button viewPinButton;
+
+    @FXML
     private Button refreshButton;
 
     @FXML
@@ -126,10 +139,13 @@ public final class OperatorUserManagementTabController {
             TableColumn<OperatorRow, String> nameCol = new TableColumn<>("名前");
             nameCol.setCellValueFactory(new PropertyValueFactory<>("name"));
             nameCol.setPrefWidth(180);
-            TableColumn<OperatorRow, String> pinCol = new TableColumn<>("PIN");
+            TableColumn<OperatorRow, String> pinCol = new TableColumn<>("状態");
             pinCol.setCellValueFactory(new PropertyValueFactory<>("pinStatus"));
-            pinCol.setPrefWidth(120);
-            operatorTableView.getColumns().setAll(nameCol, pinCol);
+            pinCol.setPrefWidth(100);
+            TableColumn<OperatorRow, String> adminPinCol = new TableColumn<>("PIN（管理者閲覧）");
+            adminPinCol.setCellValueFactory(new PropertyValueFactory<>("adminPin"));
+            adminPinCol.setPrefWidth(140);
+            operatorTableView.getColumns().setAll(nameCol, pinCol, adminPinCol);
             operatorTableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         }
         if (backupListView != null) {
@@ -422,6 +438,44 @@ public final class OperatorUserManagementTabController {
     }
 
     @FXML
+    private void onViewPinAction() {
+        if (shell == null || operatorTableView == null) {
+            return;
+        }
+        OperatorRow sel = operatorTableView.getSelectionModel().getSelectedItem();
+        if (sel == null || sel.getName().isBlank()) {
+            warn("PIN 閲覧", "PIN を表示するユーザーを一覧から選んでください。");
+            return;
+        }
+        FactorySite site = managedFactory();
+        String name = sel.getName();
+        try {
+            if (!FactoryOperatorUserStore.hasPin(site, name)) {
+                warn("PIN 閲覧", "「" + name + "」には PIN が設定されていません。");
+                return;
+            }
+            Optional<String> pin = FactoryOperatorUserStore.adminViewablePin(site, name);
+            Alert info = new Alert(AlertType.INFORMATION);
+            info.setTitle("PIN 閲覧（管理者）");
+            info.setHeaderText(null);
+            info.setContentText(
+                    "操作者「"
+                            + name
+                            + "」（"
+                            + site.displayLabelJa()
+                            + "）の PIN は "
+                            + pin.orElse("（記録なし。PIN 再発行で新しい PIN を確認してください）")
+                            + " です。");
+            if (shell.primaryStageForDialogs() != null) {
+                info.initOwner(shell.primaryStageForDialogs());
+            }
+            info.showAndWait();
+        } catch (Exception ex) {
+            warn("PIN 閲覧", ex.getMessage() != null ? ex.getMessage() : ex.toString());
+        }
+    }
+
+    @FXML
     private void onChangeSessionOperatorAction() {
         if (shell == null) {
             return;
@@ -559,7 +613,9 @@ public final class OperatorUserManagementTabController {
                 for (String name : names) {
                     rows.add(
                             new OperatorRow(
-                                    name, FactoryOperatorUserStore.pinStatusLabel(site, name)));
+                                    name,
+                                    FactoryOperatorUserStore.pinStatusLabel(site, name),
+                                    FactoryOperatorUserStore.adminPinDisplayLabel(site, name)));
                 }
                 operatorTableView.setItems(FXCollections.observableArrayList(rows));
             } catch (IOException ex) {

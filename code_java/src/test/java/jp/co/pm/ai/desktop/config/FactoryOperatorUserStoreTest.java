@@ -76,6 +76,35 @@ class FactoryOperatorUserStoreTest {
     }
 
     @Test
+    void adminViewablePin_storedOnIssueAndUpdatedOnChange() throws Exception {
+        String pin = FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "砂田");
+        assertEquals(pin, FactoryOperatorUserStore.adminViewablePin(FactorySite.KONAN, "砂田").orElse(""));
+        assertEquals(pin, FactoryOperatorUserStore.adminPinDisplayLabel(FactorySite.KONAN, "砂田"));
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "砂田");
+        FactoryOperatorUserStore.changePinByUser(FactorySite.KONAN, "砂田", pin, "2468");
+        assertEquals("2468", FactoryOperatorUserStore.adminViewablePin(FactorySite.KONAN, "砂田").orElse(""));
+        assertEquals("2468", FactoryOperatorUserStore.adminPinDisplayLabel(FactorySite.KONAN, "砂田"));
+    }
+
+    @Test
+    void adminPinDisplayLabel_showsPlaceholderWhenPlaintextMissing() throws Exception {
+        FactoryOperatorUserStore.writeRawJsonForTests(
+                """
+                {
+                  "schemaVersion": 5,
+                  "factories": {
+                    "KONAN": {
+                      "names": ["砂田"],
+                      "lastSelected": "",
+                      "pinHashes": { "砂田": "deadbeef" }
+                    }
+                  }
+                }
+                """);
+        assertEquals("（再発行で確認）", FactoryOperatorUserStore.adminPinDisplayLabel(FactorySite.KONAN, "砂田"));
+    }
+
+    @Test
     void issuePinVerifyAndPersist() throws Exception {
         String pin = FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "砂田");
         assertEquals(4, pin.length());
