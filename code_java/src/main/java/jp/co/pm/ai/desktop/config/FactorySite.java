@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -183,6 +184,32 @@ public enum FactorySite {
         }
         if (raw.contains("湖南")) {
             return Optional.of(KONAN);
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * 環境変数タブの工場別 UNC 等から利用工場を推定する。
+     *
+     * <p>複数キーに値があるときは、ポータル正本 → 計画 → 実績 → マスタ → サマリの順で最初に判定できた工場を返す。
+     */
+    public static Optional<FactorySite> inferFromUiEnv(Map<String, String> ui) {
+        if (ui == null || ui.isEmpty()) {
+            return Optional.empty();
+        }
+        List<String> keys =
+                List.of(
+                        AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR,
+                        AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                        AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SOURCE_DIR,
+                        AppPaths.KEY_PM_AI_MASTER_WORKBOOK,
+                        AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                        AppPaths.KEY_MASTER_WORKBOOK_FILE);
+        for (String key : keys) {
+            Optional<FactorySite> site = inferFromPortableBundleSourceValue(ui.getOrDefault(key, ""));
+            if (site.isPresent()) {
+                return site;
+            }
         }
         return Optional.empty();
     }

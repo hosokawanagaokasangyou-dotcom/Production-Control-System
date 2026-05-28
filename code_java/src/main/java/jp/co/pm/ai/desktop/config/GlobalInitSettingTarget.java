@@ -4,6 +4,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * グローバル設定（init_setting への書き出し・「デフォルトに戻す」時の参照）で使う工場。
@@ -13,22 +15,23 @@ import java.nio.file.Paths;
  */
 public final class GlobalInitSettingTarget {
 
-    private static final Path STORE =
-            Paths.get(System.getProperty("user.home"), ".pm-ai-desktop", "global-init-setting-target-factory.txt");
-
     private GlobalInitSettingTarget() {}
 
+    private static Path storePath() {
+        return Paths.get(System.getProperty("user.home"), ".pm-ai-desktop", "global-init-setting-target-factory.txt");
+    }
+
     public static Path storePathForTests() {
-        return STORE;
+        return storePath();
     }
 
     /** 未設定・不正時は {@link FactorySite#KONAN}。 */
     public static FactorySite load() {
         try {
-            if (!Files.isRegularFile(STORE)) {
+            if (!Files.isRegularFile(storePath())) {
                 return FactorySite.KONAN;
             }
-            String raw = Files.readString(STORE, StandardCharsets.UTF_8).trim();
+            String raw = Files.readString(storePath(), StandardCharsets.UTF_8).trim();
             if (raw.isEmpty()) {
                 return FactorySite.KONAN;
             }
@@ -38,13 +41,30 @@ public final class GlobalInitSettingTarget {
         }
     }
 
+    /**
+     * 環境変数タブの工場別 UNC から推定した工場を優先し、{@link #load()} の永続ファイルと同期する。
+     *
+     * <p>推定できないときは {@link #load()} のみ。
+     */
+    public static FactorySite loadEffective(Map<String, String> ui) {
+        Optional<FactorySite> inferred = FactorySite.inferFromUiEnv(ui);
+        if (inferred.isPresent()) {
+            FactorySite site = inferred.get();
+            if (load() != site) {
+                save(site);
+            }
+            return site;
+        }
+        return load();
+    }
+
     public static void save(FactorySite site) {
         if (site == null) {
             return;
         }
         try {
-            Files.createDirectories(STORE.getParent());
-            Files.writeString(STORE, site.name(), StandardCharsets.UTF_8);
+            Files.createDirectories(storePath().getParent());
+            Files.writeString(storePath(), site.name(), StandardCharsets.UTF_8);
         } catch (Exception ignored) {
         }
     }

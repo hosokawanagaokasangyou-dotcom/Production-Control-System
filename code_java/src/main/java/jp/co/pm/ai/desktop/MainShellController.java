@@ -681,6 +681,13 @@ public final class MainShellController {
         primaryStage.setMinHeight(480);
 
             applyDesktopSession(DesktopSessionStateStore.load());
+            GlobalInitSettingTarget.loadEffective(collectUiEnv());
+            if (globalSettingsTabController != null) {
+                globalSettingsTabController.refreshInitSettingTargetComboFromStore();
+            }
+            if (mainRunTabController != null) {
+                mainRunTabController.refreshFactorySiteLogo();
+            }
             if (equipmentStatusDashboardTabController != null) {
                 equipmentStatusDashboardTabController.resetDashboardDatesToToday();
             }
@@ -5346,7 +5353,8 @@ public final class MainShellController {
     }
 
     private void maybePromptOperatorUserAtStartup() {
-        requireOperatorSelectionForFactory(GlobalInitSettingTarget.load(), true);
+        FactorySite factory = GlobalInitSettingTarget.loadEffective(collectUiEnv());
+        requireOperatorSelectionForFactory(factory, true);
     }
 
     private Optional<String> promptOperatorUserChoice(FactorySite site, boolean startup) {

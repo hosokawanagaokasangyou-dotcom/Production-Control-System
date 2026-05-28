@@ -103,4 +103,22 @@ class FactorySiteTest {
         Files.writeString(initDir.resolve(InitSettingPaths.SESSION_DEFAULTS_FILE), json);
         assertEquals(FactorySite.KOKUBU, FactorySite.inferFromPortableBundleInitSetting(installRoot).orElseThrow());
     }
+
+    @Test
+    void inferFromUiEnv_usesTaskInputWhenPortableBundleUnset() {
+        assertEquals(
+                FactorySite.KOKUBU,
+                FactorySite.inferFromUiEnv(
+                                Map.of(
+                                        AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR,
+                                        FactorySite.KOKUBU.taskInputSourceDir()))
+                        .orElseThrow());
+        assertEquals(
+                FactorySite.KONAN,
+                FactorySite.inferFromUiEnv(
+                                Map.of(
+                                        AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
+                                        AppPaths.DEFAULT_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK_KONAN))
+                        .orElseThrow());
+    }
 }

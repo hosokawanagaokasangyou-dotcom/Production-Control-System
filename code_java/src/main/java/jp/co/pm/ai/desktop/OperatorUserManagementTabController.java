@@ -684,7 +684,10 @@ public final class OperatorUserManagementTabController {
 
     private void refreshPresentation() {
         FactorySite site = managedFactory();
-        FactorySite appFactory = GlobalInitSettingTarget.load();
+        FactorySite appFactory =
+                shell != null
+                        ? GlobalInitSettingTarget.loadEffective(shell.snapshotUiEnv())
+                        : GlobalInitSettingTarget.load();
         if (factoryLabel != null) {
             factoryLabel.setText(
                     "この工場専用のユーザー一覧・PIN を編集しています（"
