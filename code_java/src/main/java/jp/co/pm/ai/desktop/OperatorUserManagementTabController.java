@@ -189,24 +189,32 @@ public final class OperatorUserManagementTabController {
         if (managedFactoryCombo == null) {
             return;
         }
-        managedFactoryCombo.getItems().setAll(FactorySite.values());
-        managedFactoryCombo.setValue(GlobalInitSettingTarget.load());
-        managedFactoryCombo
-                .valueProperty()
-                .addListener(
-                        (obs, oldV, newV) -> {
-                            if (suppressManagedFactoryListener || newV == null) {
-                                return;
-                            }
-                            refreshPresentation();
-                        });
+        managedFactoryCombo.setDisable(true);
+        syncManagedFactoryComboToAppFactory();
+    }
+
+    private FactorySite effectiveAppFactory() {
+        return shell != null
+                ? GlobalInitSettingTarget.loadEffective(shell.snapshotUiEnv())
+                : GlobalInitSettingTarget.load();
+    }
+
+    private void syncManagedFactoryComboToAppFactory() {
+        if (managedFactoryCombo == null) {
+            return;
+        }
+        FactorySite app = effectiveAppFactory();
+        suppressManagedFactoryListener = true;
+        try {
+            managedFactoryCombo.getItems().setAll(app);
+            managedFactoryCombo.setValue(app);
+        } finally {
+            suppressManagedFactoryListener = false;
+        }
     }
 
     private FactorySite managedFactory() {
-        if (managedFactoryCombo != null && managedFactoryCombo.getValue() != null) {
-            return managedFactoryCombo.getValue();
-        }
-        return GlobalInitSettingTarget.load();
+        return effectiveAppFactory();
     }
 
     void bindShell(MainShellController shell) {
@@ -683,34 +691,23 @@ public final class OperatorUserManagementTabController {
     }
 
     private void refreshPresentation() {
-        FactorySite site = managedFactory();
-        FactorySite appFactory =
-                shell != null
-                        ? GlobalInitSettingTarget.loadEffective(shell.snapshotUiEnv())
-                        : GlobalInitSettingTarget.load();
+        syncManagedFactoryComboToAppFactory();
+        FactorySite site = effectiveAppFactory();
         if (factoryLabel != null) {
             factoryLabel.setText(
-                    "この工場専用のユーザー一覧・PIN を編集しています（"
+                    "環境変数の利用工場（"
                             + site.displayLabelJa()
-                            + "）。アプリ全体の利用工場: "
-                            + appFactory.displayLabelJa());
+                            + "）のユーザー一覧・PIN のみ編集できます。");
         }
         if (sessionOperatorLabel != null) {
             String op = FactoryOperatorUserStore.sessionOperatorName();
-            if (site != appFactory) {
-                sessionOperatorLabel.setText(
-                        "現在の操作者: （アプリ利用工場が "
-                                + appFactory.displayLabelJa()
-                                + " のため、ここでは操作者変更できません）");
-            } else {
-                sessionOperatorLabel.setText(
-                        op.isBlank()
-                                ? "現在の操作者: （未選択）"
-                                : "現在の操作者: " + op + " （" + appFactory.displayLabelJa() + "）");
-            }
+            sessionOperatorLabel.setText(
+                    op.isBlank()
+                            ? "現在の操作者: （未選択）"
+                            : "現在の操作者: " + op + " （" + site.displayLabelJa() + "）");
         }
         if (changeSessionOperatorButton != null) {
-            changeSessionOperatorButton.setDisable(site != appFactory);
+            changeSessionOperatorButton.setDisable(false);
         }
         if (operatorTableView != null) {
             try {
