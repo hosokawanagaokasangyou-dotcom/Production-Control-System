@@ -967,6 +967,47 @@ elseif ($WorkspaceRoot -match '[^\x00-\x7F]') {
 }
 $usedStagingForJpackage = ($jpkgDestParent -ne $distFinal)
 
+# Robust recursive delete. Rides out transient locks (Defender real-time scan / Search
+# indexer holding freshly written child files) with exponential backoff, then as a last
+# resort renames the folder aside so the build can proceed. Does NOT kill processes.
+# Returns $true when $Path no longer exists (deleted or moved aside).
+function Remove-DirRobust {
+    param(
+        [Parameter(Mandatory = $true)][string] $Path,
+        [int] $MaxAttempts = 8,
+        [string] $Label = ''
+    )
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path)) {
+        return $true
+    }
+    $what = if ([string]::IsNullOrWhiteSpace($Label)) { $Path } else { $Label }
+    for ($i = 0; $i -lt $MaxAttempts; $i++) {
+        try {
+            Remove-Item -Recurse -Force -LiteralPath $Path -ErrorAction Stop
+            if (-not (Test-Path -LiteralPath $Path)) { return $true }
+        }
+        catch {
+            $waitMs = [int][Math]::Min(8000, 500 * [Math]::Pow(2, $i))
+            Write-Warning "Cannot remove $what (locked?). Retry ($($i + 1)/$MaxAttempts) in $waitMs ms..."
+            Start-Sleep -Milliseconds $waitMs
+        }
+    }
+    if (Test-Path -LiteralPath $Path) {
+        $asideName = (Split-Path -Leaf $Path) + '.stale-' + [Guid]::NewGuid().ToString('N').Substring(0, 12)
+        try {
+            Rename-Item -LiteralPath $Path -NewName $asideName -ErrorAction Stop
+            $asidePath = Join-Path (Split-Path -Parent $Path) $asideName
+            Write-Warning "Locked folder moved aside to: $asidePath (best-effort delete later; safe to delete manually)."
+            Remove-Item -Recurse -Force -LiteralPath $asidePath -ErrorAction SilentlyContinue
+            return (-not (Test-Path -LiteralPath $Path))
+        }
+        catch {
+            return $false
+        }
+    }
+    return $true
+}
+
 # Remove only prior jpackage app folder and bundle outputs (Cash_PMD is not removed here).
 $bundleOutInitial = Join-Path $ReleaseRoot $BundleInitialName
 $bundleOutUpgrade = Join-Path $ReleaseRoot $BundleUpgradeName
@@ -980,23 +1021,13 @@ else {
 $pathsToClean += $bundleOutInitial
 $pathsToClean += $bundleOutUpgrade
 $pathsToClean = $pathsToClean | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+
+# Best-effort: clear leftover *.stale-* folders moved aside by prior locked runs.
+Get-ChildItem -LiteralPath $ReleaseRoot -Directory -Filter '*.stale-*' -ErrorAction SilentlyContinue |
+    ForEach-Object { Remove-Item -Recurse -Force -LiteralPath $_.FullName -ErrorAction SilentlyContinue }
+
 foreach ($p in $pathsToClean) {
-    if (-not (Test-Path -LiteralPath $p)) {
-        continue
-    }
-    $removed = $false
-    for ($i = 0; $i -lt 5; $i++) {
-        try {
-            Remove-Item -Recurse -Force -LiteralPath $p -ErrorAction Stop
-            $removed = $true
-            break
-        }
-        catch {
-            Write-Warning "Cannot remove $p (locked?). Retry ($i/5)..."
-            Start-Sleep -Seconds 2
-        }
-    }
-    if (-not $removed -and (Test-Path -LiteralPath $p)) {
+    if (-not (Remove-DirRobust -Path $p -Label $p)) {
         throw "Cannot remove folder (close Explorer/app using it): $p"
     }
 }
@@ -1183,8 +1214,8 @@ $mandatoryFile = Join-Path $CodeJavaRoot 'package_app_mandatory_code_paths.txt'
 $relPref = "$ReleaseDirName/"
 
 foreach ($destBundle in @($bundleOutInitial, $bundleOutUpgrade)) {
-    if (Test-Path -LiteralPath $destBundle) {
-        Remove-Item -Recurse -Force -LiteralPath $destBundle -ErrorAction Stop
+    if (-not (Remove-DirRobust -Path $destBundle -Label $destBundle)) {
+        throw "Cannot remove folder (close Explorer/app using it): $destBundle"
     }
 }
 
