@@ -1544,6 +1544,14 @@ public final class MainShellController {
         applyAlertStylesheetsFromOwner(dialog);
     }
 
+    /** ダイアログ表示直後に入力欄へフォーカスし、すぐタイピングできるようにする。 */
+    private static void focusInputWhenDialogShown(Dialog<?> dialog, javafx.scene.Node input) {
+        if (dialog == null || input == null) {
+            return;
+        }
+        dialog.setOnShown(e -> Platform.runLater(input::requestFocus));
+    }
+
     /** 保存・読込完了などの情報ダイアログ。 */
     public void showInformationDialog(String title, String message) {
         showThemedAlert(AlertType.INFORMATION, title, null, message);
@@ -5188,6 +5196,7 @@ public final class MainShellController {
         VBox box = new VBox(8, hint, new Label("PIN:"), pf);
         dialog.getDialogPane().setContent(box);
         dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
+        focusInputWhenDialogShown(dialog, pf);
         dialog.setResultConverter(
                 bt -> {
                     if (bt != ButtonType.OK) {
@@ -5269,6 +5278,7 @@ public final class MainShellController {
         VBox box = new VBox(8, hint, new Label("新しい PIN:"), newPf, new Label("確認:"), confirmPf);
         dialog.getDialogPane().setContent(box);
         dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK);
+        focusInputWhenDialogShown(dialog, newPf);
         while (true) {
             Optional<ButtonType> ans = dialog.showAndWait();
             if (ans.isEmpty() || ans.get() != ButtonType.OK) {
@@ -5356,6 +5366,7 @@ public final class MainShellController {
         }
         dialog.getDialogPane().setContent(box);
         dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
+        focusInputWhenDialogShown(dialog, hasPin ? currentPf : newPf);
         Optional<ButtonType> ans = dialog.showAndWait();
         if (ans.isEmpty() || ans.get() != ButtonType.OK) {
             return;

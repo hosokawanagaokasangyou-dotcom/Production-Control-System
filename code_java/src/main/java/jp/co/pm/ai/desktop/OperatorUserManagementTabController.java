@@ -452,6 +452,7 @@ public final class OperatorUserManagementTabController {
         confirmField.setPromptText("PIN（確認）");
         dialog.getDialogPane().setContent(new VBox(8, hint, new Label("PIN:"), pinField, new Label("確認:"), confirmField));
         dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
+        dialog.setOnShown(e -> javafx.application.Platform.runLater(pinField::requestFocus));
         Optional<ButtonType> ans = dialog.showAndWait();
         if (ans.isEmpty() || ans.get() != ButtonType.OK) {
             return;
