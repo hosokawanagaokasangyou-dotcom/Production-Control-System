@@ -1,14 +1,17 @@
 package jp.co.pm.ai.desktop.config;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -24,7 +27,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /**
  * 工場別の配台システム操作者名（起動時選択・作成者表示用）と 4 桁 PIN。
  *
- * <p>永続化: {@code ~/.pm-ai-desktop/factory-operator-users.json}
+ * <p>永続化: {@link AppPaths#factoryOperatorUsersStorePath}（サマリ Excel と同一フォルダの
+ * {@link AppPaths#FACTORY_OPERATOR_USERS_BIN}、バイナリ形式）。旧 {@code ~/.pm-ai-desktop/factory-operator-users.json}
+ * から初回読込時に移行する。
  */
 public final class FactoryOperatorUserStore {
 
@@ -32,8 +37,14 @@ public final class FactoryOperatorUserStore {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final HexFormat HEX = HexFormat.of();
 
-    private static final Path DEFAULT_STORE =
+    private static final byte[] BINARY_MAGIC = {'P', 'M', 'O', 'U'};
+    private static final int BINARY_FORMAT_VERSION = 1;
+
+    private static final Path LEGACY_JSON_STORE =
             Paths.get(System.getProperty("user.home"), ".pm-ai-desktop", "factory-operator-users.json");
+
+    private static volatile Path configuredStorePath;
+    private static volatile boolean storeConfigured;
 
     public static final int SCHEMA_VERSION = 3;
     public static final int MAX_NAMES_PER_FACTORY = 50;
@@ -81,12 +92,25 @@ public final class FactoryOperatorUserStore {
 
     private FactoryOperatorUserStore() {}
 
+    /** {@link AppPaths#summaryAiDispatchXlsxPath} と同じフォルダへストアパスを解決する。 */
+    public static synchronized void configureFromUi(Map<String, String> ui) {
+        Path next = AppPaths.factoryOperatorUsersStorePath(ui != null ? ui : Map.of());
+        if (storeConfigured && next.equals(configuredStorePath)) {
+            return;
+        }
+        configuredStorePath = next;
+        storeConfigured = true;
+    }
+
     public static Path storePath() {
         String test = System.getProperty("pm.ai.test.factoryOperatorUserStore");
         if (test != null && !test.isBlank()) {
             return Path.of(test).toAbsolutePath().normalize();
         }
-        return DEFAULT_STORE;
+        if (storeConfigured && configuredStorePath != null) {
+            return configuredStorePath;
+        }
+        return AppPaths.factoryOperatorUsersStorePath(Map.of());
     }
 
     /** 現在セッションで選択中の操作者名（起動時に設定）。 */
@@ -386,13 +410,26 @@ public final class FactoryOperatorUserStore {
 
     private static Document loadDocument() throws IOException {
         Path path = storePath();
+        migrateLegacyStoreIfNeeded(path);
         if (!Files.isRegularFile(path)) {
             return defaultDocument();
         }
-        JsonNode root = JSON.readTree(path.toFile());
+        JsonNode root = readStoreRoot(path);
         if (root == null || !root.isObject()) {
             return defaultDocument();
         }
+        return parseDocumentRoot(root);
+    }
+
+    private static JsonNode readStoreRoot(Path path) throws IOException {
+        byte[] bytes = Files.readAllBytes(path);
+        if (isBinaryStore(bytes)) {
+            return decodeBinaryPayload(bytes);
+        }
+        return JSON.readTree(bytes);
+    }
+
+    private static Document parseDocumentRoot(JsonNode root) throws IOException {
         int ver = root.path("schemaVersion").asInt(0);
         if (ver <= 0) {
             ver = 1;
@@ -416,6 +453,96 @@ public final class FactoryOperatorUserStore {
             ensureFactory(doc, site);
         }
         return doc;
+    }
+
+    private static void migrateLegacyStoreIfNeeded(Path targetBin) throws IOException {
+        if (Files.isRegularFile(targetBin)) {
+            return;
+        }
+        Path legacySibling = targetBin.resolveSibling("factory-operator-users.json");
+        for (Path legacy : List.of(resolveLegacyJsonStorePath(), legacySibling)) {
+            if (!Files.isRegularFile(legacy)) {
+                continue;
+            }
+            JsonNode root = JSON.readTree(legacy.toFile());
+            Document doc = parseDocumentRoot(root);
+            saveDocumentToPath(targetBin, doc);
+            return;
+        }
+    }
+
+    private static boolean isBinaryStore(byte[] bytes) {
+        return bytes.length >= BINARY_MAGIC.length
+                && Arrays.compare(
+                                Arrays.copyOf(bytes, BINARY_MAGIC.length),
+                                BINARY_MAGIC)
+                        == 0;
+    }
+
+    private static JsonNode decodeBinaryPayload(byte[] fileBytes) throws IOException {
+        ByteBuffer buf = ByteBuffer.wrap(fileBytes);
+        byte[] magic = new byte[BINARY_MAGIC.length];
+        buf.get(magic);
+        if (!Arrays.equals(magic, BINARY_MAGIC)) {
+            throw new IOException("操作者名設定ファイルの形式が不正です。");
+        }
+        int formatVersion = buf.getShort() & 0xffff;
+        if (formatVersion != BINARY_FORMAT_VERSION) {
+            throw new IOException(
+                    "操作者名設定のバイナリ形式が未対応です (formatVersion=" + formatVersion + ")");
+        }
+        int payloadLen = buf.getInt();
+        if (payloadLen < 0 || buf.remaining() < payloadLen) {
+            throw new IOException("操作者名設定ファイルが壊れています。");
+        }
+        byte[] payload = new byte[payloadLen];
+        buf.get(payload);
+        return JSON.readTree(payload);
+    }
+
+    private static byte[] encodeBinaryDocument(ObjectNode root) throws IOException {
+        byte[] payload = JSON.writeValueAsBytes(root);
+        ByteBuffer buf = ByteBuffer.allocate(BINARY_MAGIC.length + 2 + 4 + payload.length);
+        buf.put(BINARY_MAGIC);
+        buf.putShort((short) BINARY_FORMAT_VERSION);
+        buf.putInt(payload.length);
+        buf.put(payload);
+        return buf.array();
+    }
+
+    private static Path resolveLegacyJsonStorePath() {
+        String test = System.getProperty("pm.ai.test.factoryOperatorUserLegacyStore");
+        if (test != null && !test.isBlank()) {
+            return Path.of(test).toAbsolutePath().normalize();
+        }
+        return LEGACY_JSON_STORE;
+    }
+
+    private static ObjectNode documentToObjectNode(Document doc) {
+        ObjectNode root = JSON.createObjectNode();
+        root.put("schemaVersion", SCHEMA_VERSION);
+        ObjectNode factories = root.putObject("factories");
+        for (Map.Entry<FactorySite, FactoryOperatorUsers> e : doc.factories().entrySet()) {
+            ObjectNode fo = factories.putObject(e.getKey().name());
+            ArrayNode arr = fo.putArray("names");
+            for (String name : e.getValue().names()) {
+                arr.add(name);
+            }
+            fo.put("lastSelected", e.getValue().lastSelected());
+            ObjectNode pins = fo.putObject("pinHashes");
+            for (Map.Entry<String, String> pe : e.getValue().pinHashes().entrySet()) {
+                if (e.getValue().names().contains(pe.getKey())) {
+                    pins.put(pe.getKey(), pe.getValue());
+                }
+            }
+            ObjectNode attempts = fo.putObject("pinFailedAttempts");
+            for (Map.Entry<String, Integer> ae : e.getValue().pinFailedAttempts().entrySet()) {
+                if (e.getValue().names().contains(ae.getKey()) && ae.getValue() != null && ae.getValue() > 0) {
+                    attempts.put(ae.getKey(), ae.getValue());
+                }
+            }
+        }
+        return root;
     }
 
     private static FactoryOperatorUsers parseFactory(JsonNode node) {
@@ -485,34 +612,20 @@ public final class FactoryOperatorUserStore {
     }
 
     private static void saveDocument(Document doc) throws IOException {
-        Path path = storePath();
+        saveDocumentToPath(storePath(), doc);
+    }
+
+    private static void saveDocumentToPath(Path path, Document doc) throws IOException {
         if (path.getParent() != null) {
             Files.createDirectories(path.getParent());
         }
-        ObjectNode root = JSON.createObjectNode();
-        root.put("schemaVersion", SCHEMA_VERSION);
-        ObjectNode factories = root.putObject("factories");
-        for (Map.Entry<FactorySite, FactoryOperatorUsers> e : doc.factories().entrySet()) {
-            ObjectNode fo = factories.putObject(e.getKey().name());
-            ArrayNode arr = fo.putArray("names");
-            for (String name : e.getValue().names()) {
-                arr.add(name);
-            }
-            fo.put("lastSelected", e.getValue().lastSelected());
-            ObjectNode pins = fo.putObject("pinHashes");
-            for (Map.Entry<String, String> pe : e.getValue().pinHashes().entrySet()) {
-                if (e.getValue().names().contains(pe.getKey())) {
-                    pins.put(pe.getKey(), pe.getValue());
-                }
-            }
-            ObjectNode attempts = fo.putObject("pinFailedAttempts");
-            for (Map.Entry<String, Integer> ae : e.getValue().pinFailedAttempts().entrySet()) {
-                if (e.getValue().names().contains(ae.getKey()) && ae.getValue() != null && ae.getValue() > 0) {
-                    attempts.put(ae.getKey(), ae.getValue());
-                }
-            }
-        }
-        JSON.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), root);
+        byte[] encoded = encodeBinaryDocument(documentToObjectNode(doc));
+        Files.write(
+                path,
+                encoded,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.WRITE);
     }
 
     private static Document defaultDocument() {
@@ -599,6 +712,8 @@ public final class FactoryOperatorUserStore {
     /** テスト用: ストアを既定状態へ戻す。 */
     public static void resetStoreForTests() throws IOException {
         sessionOperatorName = "";
+        configuredStorePath = null;
+        storeConfigured = false;
         Path path = storePath();
         Files.deleteIfExists(path);
     }

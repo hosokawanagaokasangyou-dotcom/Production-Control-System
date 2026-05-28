@@ -1214,6 +1214,12 @@ public final class AppPaths {
             "pipeline-execution-timing-history.json";
 
     /**
+     * 工場別操作者名・PIN 設定（{@link FactoryOperatorUserStore}）。{@link #summaryAiDispatchXlsxPath(Map)}
+     * と同一フォルダのバイナリ。
+     */
+    public static final String FACTORY_OPERATOR_USERS_BIN = "factory-operator-users.bin";
+
+    /**
      * サマリ Excel 世代退避フォルダ（{@link #summaryAiDispatchXlsxPath(Map)} の親配下）。
      * {@link jp.co.pm.ai.desktop.io.SummaryAiDispatchGenerationStore} が使用。
      */
@@ -1224,6 +1230,13 @@ public final class AppPaths {
      */
     public static Path pipelineExecutionTimingHistoryPath(Map<String, String> ui) {
         return siblingOfSummaryAiDispatchWorkbook(ui, PIPELINE_EXECUTION_TIMING_HISTORY_JSON);
+    }
+
+    /**
+     * 操作者名・PIN 設定の絶対パス。親フォルダは {@link #summaryAiDispatchXlsxPath(Map)} と同一。
+     */
+    public static Path factoryOperatorUsersStorePath(Map<String, String> ui) {
+        return siblingOfSummaryAiDispatchWorkbook(ui, FACTORY_OPERATOR_USERS_BIN);
     }
 
     /**

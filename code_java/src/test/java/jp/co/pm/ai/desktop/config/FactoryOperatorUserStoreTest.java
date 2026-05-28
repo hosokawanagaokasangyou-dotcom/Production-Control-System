@@ -4,9 +4,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,13 +22,14 @@ class FactoryOperatorUserStoreTest {
 
     @BeforeEach
     void isolateStore() throws Exception {
-        System.setProperty("pm.ai.test.factoryOperatorUserStore", tmp.resolve("operators.json").toString());
+        System.setProperty("pm.ai.test.factoryOperatorUserStore", tmp.resolve("operators.bin").toString());
         FactoryOperatorUserStore.resetStoreForTests();
     }
 
     @AfterEach
     void clearProperty() {
         System.clearProperty("pm.ai.test.factoryOperatorUserStore");
+        System.clearProperty("pm.ai.test.factoryOperatorUserLegacyStore");
     }
 
     @Test
@@ -115,9 +118,60 @@ class FactoryOperatorUserStoreTest {
         assertTrue(!FactoryOperatorUserStore.hasPin(FactorySite.KONAN, "砂田"));
         String pin = FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "砂田");
         assertTrue(FactoryOperatorUserStore.verifyPin(FactorySite.KONAN, "砂田", pin));
-        String saved = Files.readString(FactoryOperatorUserStore.storePath());
-        assertTrue(saved.contains("\"schemaVersion\" : 3"));
-        assertTrue(saved.contains("pinHashes"));
+        byte[] saved = Files.readAllBytes(FactoryOperatorUserStore.storePath());
+        assertEquals('P', saved[0]);
+        assertEquals('M', saved[1]);
+        assertEquals('O', saved[2]);
+        assertEquals('U', saved[3]);
+    }
+
+    @Test
+    void configureFromUiUsesSummaryWorkbookParent() throws Exception {
+        System.clearProperty("pm.ai.test.factoryOperatorUserStore");
+        Path summary = tmp.resolve("shared").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createDirectories(summary.getParent());
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, summary.toString());
+        FactoryOperatorUserStore.configureFromUi(ui);
+        Path expected =
+                summary.getParent()
+                        .resolve(AppPaths.FACTORY_OPERATOR_USERS_BIN)
+                        .toAbsolutePath()
+                        .normalize();
+        assertEquals(expected, FactoryOperatorUserStore.storePath());
+        FactoryOperatorUserStore.addName(FactorySite.KONAN, "テスト");
+        assertTrue(Files.isRegularFile(expected));
+        byte[] saved = Files.readAllBytes(expected);
+        assertEquals('P', saved[0]);
+    }
+
+    @Test
+    void migratesLegacyHomeJsonToBinary() throws Exception {
+        Path legacy = tmp.resolve("legacy").resolve("factory-operator-users.json");
+        Files.createDirectories(legacy.getParent());
+        Files.writeString(
+                legacy,
+                """
+                {
+                  "schemaVersion": 3,
+                  "factories": {
+                    "KONAN": {
+                      "names": ["砂田", "古家"],
+                      "lastSelected": "古家"
+                    }
+                  }
+                }
+                """,
+                StandardCharsets.UTF_8);
+        Path target = tmp.resolve("shared").resolve(AppPaths.FACTORY_OPERATOR_USERS_BIN);
+        Files.createDirectories(target.getParent());
+        System.setProperty("pm.ai.test.factoryOperatorUserStore", target.toString());
+        System.setProperty("pm.ai.test.factoryOperatorUserLegacyStore", legacy.toString());
+        FactoryOperatorUserStore.resetStoreForTests();
+        assertEquals(List.of("砂田", "古家"), FactoryOperatorUserStore.namesForFactory(FactorySite.KONAN));
+        assertEquals("古家", FactoryOperatorUserStore.lastSelectedForFactory(FactorySite.KONAN));
+        assertTrue(Files.isRegularFile(target));
+        byte[] saved = Files.readAllBytes(target);
+        assertEquals('P', saved[0]);
     }
 
     @Test

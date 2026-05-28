@@ -589,6 +589,7 @@ public final class MainShellController {
 
             pipelineExecutionTimingHistory.configureFromUi(ui0);
             pipelineExecutionTimingHistory.setPersistLog(this::appendLog);
+            FactoryOperatorUserStore.configureFromUi(ui0);
 
             mainRunTabController.bindShell(this);
             if (equipmentStatusDashboardTabController != null) {
@@ -3419,6 +3420,7 @@ public final class MainShellController {
                         mainRunTabController.refreshOpenWorkbookHintLabels();
                     }
                     pipelineExecutionTimingHistory.configureFromUi(collectUiEnv());
+                    FactoryOperatorUserStore.configureFromUi(collectUiEnv());
                 });
         Runnable schedule = () -> uiEnvSaveDebounce.playFromStart();
         this.uiEnvPersistSchedule = schedule;
