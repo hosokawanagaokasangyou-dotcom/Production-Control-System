@@ -422,16 +422,12 @@ public final class OvertimeSimulationWizard {
                             }
 
                             private void applyDateCellStyleClasses(boolean working) {
+                                // 出勤セルは薄緑にせず白地のまま。休みセルのみグレーで区別する。
+                                getStyleClass().remove("pm-ai-readable-date-cell");
                                 if (working) {
                                     getStyleClass().remove("overtime-sim-cell-off");
-                                    if (!getStyleClass().contains("pm-ai-readable-date-cell")) {
-                                        getStyleClass().add("pm-ai-readable-date-cell");
-                                    }
-                                } else {
-                                    getStyleClass().remove("pm-ai-readable-date-cell");
-                                    if (!getStyleClass().contains("overtime-sim-cell-off")) {
-                                        getStyleClass().add("overtime-sim-cell-off");
-                                    }
+                                } else if (!getStyleClass().contains("overtime-sim-cell-off")) {
+                                    getStyleClass().add("overtime-sim-cell-off");
                                 }
                             }
                         });
