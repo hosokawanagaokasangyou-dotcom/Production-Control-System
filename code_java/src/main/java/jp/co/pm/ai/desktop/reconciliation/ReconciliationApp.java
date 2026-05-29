@@ -891,7 +891,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
     // --- TAB 3: SETTINGS (Edit ComboBox option lists) ---
     private Tab createSettingsTab() {
-        Tab tab = new Tab("\u2699\ufe0f \u8a2d\u5b9a");
+        Tab tab = new Tab("【設定】");
         tab.setClosable(false);
 
         ScrollPane sp = new ScrollPane();
