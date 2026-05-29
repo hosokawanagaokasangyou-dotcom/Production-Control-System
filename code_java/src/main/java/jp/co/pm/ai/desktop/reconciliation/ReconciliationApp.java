@@ -5542,7 +5542,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (isLoadingRecord && !fromDropdownOpen) {
             return;
         }
-        String kwItem = normalize_text(pRow.txtItem.getText());
+        // 「商品」欄（商品コード）は候補選択の出力先のため、候補フィルタの条件には使わない
+        String kwItem = "";
         String kwPart = normalize_text(pRow.txtPart.getText());
         String kwType = normalize_text(pRow.txtType.getText());
         String kwLength = normalize_text(pRow.txtLength.getText());
@@ -5585,7 +5586,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (isLoadingRecord && !fromDropdownOpen) {
             return;
         }
-        String kwItem = normalize_text(rRow.txtItem.getText());
+        // 「商品」欄（商品コード）は候補選択の出力先のため、候補フィルタの条件には使わない
+        String kwItem = "";
         String kwPart = normalize_text(rRow.txtPart.getText());
         String kwType = normalize_text(rRow.txtType.getText());
         String kwLength = normalize_text(rRow.txtLength.getText());
