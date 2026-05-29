@@ -33139,6 +33139,9 @@ def _trial_order_first_schedule_pass(
             interactive_dispatch_targets=interactive_dispatch_targets,
             interactive_trial_meters_done=interactive_trial_meters_done,
         )
+        if _interactive_stage2_parity_active():
+            # 段階2同一パリティ: 未達 m 降順は試行順より優先すると段階2と乖離するため試行順のみ。
+            return base
         if unmet <= 1e-9:
             return (1, 0.0) + base
         return (0, -unmet) + base
@@ -36201,15 +36204,12 @@ def _generate_plan_impl(
     )
     # 段階3: 手動修正 JSON で正の「当日配台数量」がある配台日の最古を start_date_req 下限とする
     # （原反投入・既定開始より前にはしない: max(既存, 最古暦日)。非稼働日は直前稼働日へ寄せる）
-    # 段階2同一パリティでも interactive_dispatch_targets がある段階3試行では JSON 配台日で前倒し禁止。
+    # 段階2同一パリティ試行では適用しない（配台試行順・原反投入日と段階2を揃える。JSON 暦日はキャップのみ）。
     if (
         _interactive_dispatch_trial_env_active()
+        and not _interactive_stage2_parity_active()
         and isinstance(interactive_result_dispatch_json_rows, list)
         and interactive_result_dispatch_json_rows
-        and (
-            not _interactive_stage2_parity_active()
-            or interactive_dispatch_targets
-        )
     ):
         for _t_iv in task_queue:
             _min_j = _interactive_min_positive_dispatch_date_from_json_rows(
