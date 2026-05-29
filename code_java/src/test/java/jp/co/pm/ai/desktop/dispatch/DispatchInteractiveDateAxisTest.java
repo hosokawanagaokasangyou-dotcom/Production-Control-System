@@ -36,11 +36,29 @@ class DispatchInteractiveDateAxisTest {
         LocalDate today = LocalDate.now();
         List<LocalDate> axis =
                 DispatchInteractiveDateAxis.extendAxisMinToPastDays(
-                        List.of(today, today.plusDays(5)),
-                        DispatchInteractiveDateAxis.DISPATCH_WIDE_DATE_AXIS_PAST_DAYS);
+                        List.of(today, today.plusDays(5)), 14);
         assertEquals(today.minusDays(14), axis.getFirst());
         assertEquals(today.plusDays(5), axis.getLast());
         assertEquals(20, axis.size());
+    }
+
+    @Test
+    void extendAxisMinToPastDays_defaultOneDayBeforeToday() {
+        LocalDate today = LocalDate.now();
+        List<LocalDate> axis =
+                DispatchInteractiveDateAxis.extendAxisMinToPastDays(
+                        List.of(today, today.plusDays(3)),
+                        DispatchInteractiveDateAxis.DEFAULT_DATE_AXIS_PAST_DAYS);
+        assertEquals(today.minusDays(1), axis.getFirst());
+        assertEquals(5, axis.size());
+    }
+
+    @Test
+    void defaultAxisWhenNoDataDates_usesPastDaysParameter() {
+        List<LocalDate> axis = DispatchInteractiveDateAxis.defaultAxisWhenNoDataDates(3);
+        LocalDate today = LocalDate.now();
+        assertEquals(today.minusDays(3), axis.getFirst());
+        assertEquals(today.plusDays(DispatchInteractiveDateAxis.SLIDE_CUSHION_CALENDAR_DAYS), axis.getLast());
     }
 
     @Test

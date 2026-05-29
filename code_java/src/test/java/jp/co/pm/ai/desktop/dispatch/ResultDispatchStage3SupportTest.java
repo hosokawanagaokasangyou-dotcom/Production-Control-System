@@ -80,5 +80,13 @@ class ResultDispatchStage3SupportTest {
         assertEquals(
                 ResultDispatchStage3Support.PlanningStage.STAGE2,
                 ResultDispatchStage3Support.detectPlanningStage(dispatchJson));
+
+        Stage21TrialSnapshotStore.writePromotedMeta(
+                dispatchJson,
+                dir.resolve("overtime_simulation_overrides.json"),
+                new Stage21TrialSnapshotStore.OverrideSummary(1, 0, 0));
+        assertEquals(
+                ResultDispatchStage3Support.PlanningStage.STAGE21,
+                ResultDispatchStage3Support.detectPlanningStage(dispatchJson));
     }
 }

@@ -28839,20 +28839,6 @@ def _overtime_simulation_dispatch_trial_active() -> bool:
     return _overtime_simulation_json_path() is not None
 
 
-_STAGE35_OT_QTY_DBG: dict = {}
-
-
-def _stage35_ot_qty_dbg_reset() -> None:
-    global _STAGE35_OT_QTY_DBG
-    _STAGE35_OT_QTY_DBG = {
-        "ot_mode_activations": 0,
-        "ot_rolls_ok": 0,
-        "ot_rolls_fail": 0,
-        "ot_meters_m": 0.0,
-        "ot_samples": [],
-    }
-
-
 def _stage35_overtime_regular_end_floor(
     team: tuple,
     daily_status: dict,
@@ -33561,10 +33547,6 @@ def _trial_order_first_schedule_pass(
                     _done_m = 0.0
                 if _done_m >= _cap_m - 1e-5:
                     if _overtime_simulation_dispatch_trial_active():
-                        if not stage35_overtime_only:
-                            _STAGE35_OT_QTY_DBG["ot_mode_activations"] = (
-                                int(_STAGE35_OT_QTY_DBG.get("ot_mode_activations") or 0) + 1
-                            )
                         stage35_overtime_only = True
                     else:
                         break
@@ -33625,10 +33607,6 @@ def _trial_order_first_schedule_pass(
                 stage35_overtime_only=stage35_overtime_only,
             )
             if res is None:
-                if stage35_overtime_only and _overtime_simulation_dispatch_trial_active():
-                    _STAGE35_OT_QTY_DBG["ot_rolls_fail"] = (
-                        int(_STAGE35_OT_QTY_DBG.get("ot_rolls_fail") or 0) + 1
-                    )
                 break
             done_units = 1
             if task.get("roll_pipeline_inspection") or task.get(
@@ -33649,29 +33627,6 @@ def _trial_order_first_schedule_pass(
             sub_members = [m for m in best_team if m != lead_op]
             best_start = res["team_start"]
             best_end = res["actual_end_dt"]
-            if stage35_overtime_only and _overtime_simulation_dispatch_trial_active():
-                _STAGE35_OT_QTY_DBG["ot_rolls_ok"] = (
-                    int(_STAGE35_OT_QTY_DBG.get("ot_rolls_ok") or 0) + 1
-                )
-                try:
-                    _ot_um = float(task.get("unit_m") or 0)
-                except (TypeError, ValueError):
-                    _ot_um = 0.0
-                _STAGE35_OT_QTY_DBG["ot_meters_m"] = float(
-                    _STAGE35_OT_QTY_DBG.get("ot_meters_m") or 0.0
-                ) + _ot_um * float(done_units)
-                _ot_samps = _STAGE35_OT_QTY_DBG.setdefault("ot_samples", [])
-                if len(_ot_samps) < 10:
-                    _ot_samps.append(
-                        {
-                            "task_id": str(task.get("task_id") or ""),
-                            "date": str(current_date),
-                            "start": best_start.isoformat(sep=" ", timespec="minutes")
-                            if isinstance(best_start, datetime)
-                            else str(best_start),
-                            "m": _ot_um * float(done_units),
-                        }
-                    )
             best_breaks = res["team_breaks"]
             best_eff = res["avg_eff"]
             rq_base = res["rq_base"]
@@ -36721,7 +36676,6 @@ def _generate_plan_impl(
     )
     _PLAN_IMPL_INTERACTIVE_TRIAL_METERS_DONE = _interactive_trial_meters_done
     if _overtime_simulation_dispatch_trial_active():
-        _stage35_ot_qty_dbg_reset()
         _apply_stage35_stage3_meters_floor(task_queue, _interactive_trial_meters_done)
     if (
         _interactive_dispatch_trial_env_active()
@@ -39079,127 +39033,6 @@ def _generate_plan_impl(
     _interactive_append_machining_end_after_member_shift_shortages(
         timeline_events, attendance_data
     )
-    # #region agent log
-    if _overtime_simulation_dispatch_trial_active():
-        try:
-            from planning_core import agent_debug_ndjson as _agent_dbg
-
-            _probe = date(2026, 6, 1)
-            _reg_end = datetime.combine(_probe, DEFAULT_END_TIME)
-            _before17 = 0
-            _after17 = 0
-            _tl_m_reg = 0.0
-            _tl_m_ot = 0.0
-            for _ev in timeline_events or []:
-                if not _is_machining_timeline_event(_ev):
-                    continue
-                _st = _ev.get("start_dt")
-                if not isinstance(_st, datetime) or _st.date() != _probe:
-                    continue
-                try:
-                    _ud = float(_ev.get("units_done") or 0)
-                    _um = float(_ev.get("unit_m") or 0)
-                    _add_m = _ud * _um
-                except (TypeError, ValueError):
-                    _add_m = 0.0
-                if _st < _reg_end:
-                    _before17 += 1
-                    _tl_m_reg += _add_m
-                else:
-                    _after17 += 1
-                    _tl_m_ot += _add_m
-            _md_snap = dict(_LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT or {})
-            _tgt_snap = dict(_LAST_INTERACTIVE_TRIAL_PLAN_TARGETS_SNAPSHOT or {})
-            if not _tgt_snap and interactive_dispatch_targets:
-                _tgt_snap = dict(interactive_dispatch_targets)
-            _over_cap_keys: list[dict] = []
-            for _k, _cap_m in _tgt_snap.items():
-                if not isinstance(_k, tuple) or len(_k) != 4 or _k[3] != _probe:
-                    continue
-                try:
-                    _done_m = float(_md_snap.get(_k, 0.0))
-                    _cap_f = float(_cap_m)
-                except (TypeError, ValueError):
-                    continue
-                if _done_m > _cap_f + 1e-3:
-                    _over_cap_keys.append(
-                        {
-                            "key": "|".join(str(x) for x in _k),
-                            "cap_m": _cap_f,
-                            "done_m": _done_m,
-                            "over_m": _done_m - _cap_f,
-                        }
-                    )
-            _over_cap_keys.sort(key=lambda x: -float(x.get("over_m") or 0))
-            _unassigned_samples: list[dict] = []
-            for _t_u in task_queue or []:
-                try:
-                    _rem_u = float(_t_u.get("remaining_units") or 0.0)
-                except (TypeError, ValueError):
-                    _rem_u = 0.0
-                if _rem_u <= 1e-9:
-                    continue
-                try:
-                    _um_u = float(_t_u.get("unit_m") or 0.0)
-                except (TypeError, ValueError):
-                    _um_u = 0.0
-                _unassigned_samples.append(
-                    {
-                        "task_id": str(_t_u.get("task_id") or ""),
-                        "process": str(_t_u.get("machine") or ""),
-                        "machine_name": str(_t_u.get("machine_name") or ""),
-                        "remaining_units": _rem_u,
-                        "remaining_m": _rem_u * _um_u if _um_u > 1e-12 else 0.0,
-                        "has_hist": bool(_t_u.get("assigned_history")),
-                    }
-                )
-            _unassigned_samples.sort(
-                key=lambda x: -float(x.get("remaining_m") or 0.0)
-            )
-            _agent_dbg.append_structured(
-                "U1",
-                "planning_core/_core.py:generate_plan:stage35_unassigned_summary",
-                "stage35 unassigned tasks summary",
-                {
-                    "floor_meta": dict(_STAGE35_FLOOR_APPLY_META or {}),
-                    "floor_snapshot_keys": len(_STAGE35_FLOOR_METERS_SNAPSHOT or {}),
-                    "merged_meters_keys": len(
-                        _stage35_merge_floor_into_meters_done(
-                            _interactive_trial_meters_done
-                        )
-                    ),
-                    "pending_remaining_count": len(_unassigned_samples),
-                    "pending_remaining_samples": _unassigned_samples[:12],
-                    "remaining_at_calendar_end": list(
-                        _LAST_INTERACTIVE_REMAINING_TASKS_AT_CALENDAR_END or []
-                    )[:12],
-                },
-            )
-            _agent_dbg.append_structured(
-                "Q1",
-                "planning_core/_core.py:generate_plan:stage35_overtime_qty_summary",
-                "stage35 overtime qty summary",
-                {
-                    "cap_enforced_in_loop": _interactive_dispatch_cap_enforced_in_schedule_loop(),
-                    "ot_mode_activations": int(
-                        _STAGE35_OT_QTY_DBG.get("ot_mode_activations") or 0
-                    ),
-                    "ot_rolls_ok": int(_STAGE35_OT_QTY_DBG.get("ot_rolls_ok") or 0),
-                    "ot_rolls_fail": int(_STAGE35_OT_QTY_DBG.get("ot_rolls_fail") or 0),
-                    "ot_meters_from_loop": float(
-                        _STAGE35_OT_QTY_DBG.get("ot_meters_m") or 0.0
-                    ),
-                    "ot_samples": list(_STAGE35_OT_QTY_DBG.get("ot_samples") or [])[:10],
-                    "events_before_17": _before17,
-                    "events_after_17": _after17,
-                    "timeline_m_before_17": _tl_m_reg,
-                    "timeline_m_after_17": _tl_m_ot,
-                    "over_cap_on_2026_06_01": _over_cap_keys[:12],
-                },
-            )
-        except Exception:
-            pass
-    # #endregion
     df_ai_log = pd.DataFrame(list(ai_log_data.items()), columns=["項目", "内容"])
 
     from planning_core.workbook_payload import (

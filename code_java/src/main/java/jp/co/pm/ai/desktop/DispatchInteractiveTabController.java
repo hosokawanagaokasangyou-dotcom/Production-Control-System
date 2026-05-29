@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.SimpleObjectProperty;
@@ -60,6 +59,7 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.TablePosition;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
+import javafx.scene.control.TextFormatter;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.Clipboard;
@@ -102,7 +102,6 @@ import jp.co.pm.ai.desktop.dispatch.DispatchTimelineCalendarMetersIndex;
 import jp.co.pm.ai.desktop.dispatch.DispatchTimelineMetaMissShortfalls;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck.TaskKey;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreview;
 import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreviewPython;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
@@ -133,6 +132,7 @@ import jp.co.pm.ai.desktop.ui.SpreadsheetMultiColumnFilterCoordinator;
 import jp.co.pm.ai.desktop.ui.SpreadsheetRowReorderDragGhost;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
+import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence.DispatchInteractiveDateAxisPastDaysPrefs;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence.DispatchInteractiveDateQtyLineFilterPrefs;
 import jp.co.pm.ai.planning.stage2.core.Stage2PlanRowDispatchQtyMetrics;
 import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
@@ -406,6 +406,9 @@ public final class DispatchInteractiveTabController {
     private CheckBox showStage21AfterQtyLineCheck;
 
     @FXML
+    private Spinner<Integer> dateAxisPastDaysSpinner;
+
+    @FXML
     private Button alignToAladdinPlanButton;
 
     @FXML
@@ -550,7 +553,12 @@ public final class DispatchInteractiveTabController {
     private DispatchInteractiveDateQtyLineFilterPrefs dateQtyLineFilter =
             DispatchInteractiveDateQtyLineFilterPrefs.defaults();
 
+    private int dateAxisPastDays =
+            TableColumnOrderPersistence.loadDispatchInteractiveDateAxisPastDaysPrefs().pastDays();
+
     private final AtomicBoolean suppressDateQtyLineFilterUi = new AtomicBoolean(false);
+
+    private final AtomicBoolean suppressDateAxisPastDaysUi = new AtomicBoolean(false);
 
     private final AtomicBoolean suppressDispatchTableSourceUi = new AtomicBoolean(false);
 
@@ -595,6 +603,7 @@ public final class DispatchInteractiveTabController {
             wireDispatchShortfallSelectionToWideGrid();
         }
         wireDateQtyLineFilterControls();
+        wireDateAxisPastDaysSpinner();
         if (stage25AiButton != null) {
             refreshStage25AiButtonLabel();
         }
@@ -690,6 +699,110 @@ public final class DispatchInteractiveTabController {
         if (showStage21AfterQtyLineCheck != null) {
             showStage21AfterQtyLineCheck.selectedProperty().addListener((o, a, b) -> onFilterChanged.run());
         }
+    }
+
+    private void wireDateAxisPastDaysSpinner() {
+        if (dateAxisPastDaysSpinner == null) {
+            return;
+        }
+        DispatchInteractiveDateAxisPastDaysPrefs loaded =
+                TableColumnOrderPersistence.loadDispatchInteractiveDateAxisPastDaysPrefs();
+        dateAxisPastDays = loaded.pastDays();
+        suppressDateAxisPastDaysUi.set(true);
+        try {
+            configureDateAxisPastDaysSpinner(dateAxisPastDaysSpinner, dateAxisPastDays);
+        } finally {
+            suppressDateAxisPastDaysUi.set(false);
+        }
+        Runnable onChanged =
+                () -> {
+                    if (suppressDateAxisPastDaysUi.get()) {
+                        return;
+                    }
+                    commitDateAxisPastDaysSpinnerValue();
+                    int next = resolveDateAxisPastDaysFromSpinner();
+                    if (next == dateAxisPastDays) {
+                        return;
+                    }
+                    dateAxisPastDays = next;
+                    TableColumnOrderPersistence.saveDispatchInteractiveDateAxisPastDaysPrefs(
+                            new DispatchInteractiveDateAxisPastDaysPrefs(dateAxisPastDays));
+                    preferredDateAxisOrder = null;
+                    if (doc != null) {
+                        rebuildGrids();
+                    }
+                };
+        dateAxisPastDaysSpinner.valueProperty().addListener((o, a, b) -> onChanged.run());
+        dateAxisPastDaysSpinner
+                .getEditor()
+                .focusedProperty()
+                .addListener(
+                        (obs, was, is) -> {
+                            if (Boolean.FALSE.equals(is)) {
+                                onChanged.run();
+                            }
+                        });
+    }
+
+    private void commitDateAxisPastDaysSpinnerValue() {
+        if (dateAxisPastDaysSpinner == null || !dateAxisPastDaysSpinner.isEditable()) {
+            return;
+        }
+        try {
+            dateAxisPastDaysSpinner.commitValue();
+        } catch (IllegalArgumentException ex) {
+            Integer cur = dateAxisPastDaysSpinner.getValue();
+            if (cur != null) {
+                dateAxisPastDaysSpinner.getEditor().setText(Integer.toString(cur));
+            }
+        }
+    }
+
+    private int resolveDateAxisPastDaysFromSpinner() {
+        if (dateAxisPastDaysSpinner == null) {
+            return DispatchInteractiveDateAxisPastDaysPrefs.DEFAULT_PAST;
+        }
+        String raw = dateAxisPastDaysSpinner.getEditor().getText();
+        if (raw != null) {
+            String t = raw.strip();
+            if (!t.isEmpty()) {
+                String digitsOnly = t.replaceAll("[^0-9]", "");
+                if (!digitsOnly.isEmpty()) {
+                    try {
+                        int v = Integer.parseInt(digitsOnly);
+                        return Math.max(
+                                DispatchInteractiveDateAxisPastDaysPrefs.MIN,
+                                Math.min(DispatchInteractiveDateAxisPastDaysPrefs.MAX, v));
+                    } catch (NumberFormatException ignored) {
+                        // fall through
+                    }
+                }
+            }
+        }
+        Integer val = dateAxisPastDaysSpinner.getValue();
+        return val != null ? val : DispatchInteractiveDateAxisPastDaysPrefs.DEFAULT_PAST;
+    }
+
+    private static void configureDateAxisPastDaysSpinner(Spinner<Integer> spinner, int initial) {
+        int min = DispatchInteractiveDateAxisPastDaysPrefs.MIN;
+        int max = DispatchInteractiveDateAxisPastDaysPrefs.MAX;
+        SpinnerValueFactory.IntegerSpinnerValueFactory vf =
+                new SpinnerValueFactory.IntegerSpinnerValueFactory(
+                        min, max, Math.max(min, Math.min(max, initial)));
+        vf.setAmountToStepBy(1);
+        spinner.setValueFactory(vf);
+        TextFormatter<Integer> formatter =
+                new TextFormatter<>(
+                        vf.getConverter(),
+                        vf.getValue(),
+                        change -> {
+                            String text = change.getControlNewText();
+                            if (text.isEmpty()) {
+                                return change;
+                            }
+                            return text.matches("\\d{0,3}") ? change : null;
+                        });
+        spinner.getEditor().setTextFormatter(formatter);
     }
 
     private DispatchInteractiveDateQtyLineFilterPrefs snapshotDateQtyLineFilterPrefs() {
@@ -1993,7 +2106,6 @@ public final class DispatchInteractiveTabController {
                             scheduleStage3TrialPlanQtySnapshotCapture();
                         }
                         loadStage21TrialSnapshotFromDiskIfNeeded(jsonPath);
-                        logStage21QtyCompareDebug(jsonPath);
                     } else {
                         clearDispatchShortfallUi();
                         if (!retainStage21TrialMetaOnNextReload) {
@@ -2088,7 +2200,13 @@ public final class DispatchInteractiveTabController {
                 AppPaths.resolveResultDispatchTableStage2JsonPath(shell.snapshotUiEnv()));
     }
 
-    /** 段階2.1 正常終了直後: メイン JSON は再読込し、stage21 タイムラインで比較行を更新する。 */
+    /** 段階2.1 正常終了直後: stage21 成果物を正本へ反映済み。メイン JSON を再読込する。 */
+    void reloadTableFromDiskAfterStage21PromotedSuccess(Runnable afterSuccessOnFxThread) {
+        reloadFromDiskQuiet(afterSuccessOnFxThread, false, false, false);
+    }
+
+    /** @deprecated 試行のみ（正本未反映）の旧フロー。段階2.1 成功時は {@link #reloadTableFromDiskAfterStage21PromotedSuccess} を使用。 */
+    @Deprecated
     void reloadTableFromDiskAfterStage21Success(Runnable afterSuccessOnFxThread) {
         retainStage21TrialMetaOnNextReload = true;
         reloadFromDiskQuiet(afterSuccessOnFxThread, false, false, false);
@@ -2102,7 +2220,21 @@ public final class DispatchInteractiveTabController {
         captureStage21BaselineFromDocument(doc, dateAxis, mainJsonPath, overtimeOverridesJson, null);
     }
 
-    /** 段階2.1 正常終了後: sidecar に stage21 成果物パスを追記する。 */
+    /** 段階2.1 正常終了後: 正本反映済みメタを UI に載せる（比較 baseline はクリア）。 */
+    void applyStage21PromotedMetaAfterRunSuccess(Path mainJsonPath) {
+        stage21TrialApplied = false;
+        stage21BaselinePlanQtySnapshot.clear();
+        stage21TimelineCalendarMeters = DispatchTimelineCalendarMetersIndex.empty();
+        if (mainJsonPath != null) {
+            stage21TrialMeta = Stage21TrialSnapshotStore.tryLoadMeta(mainJsonPath);
+        } else {
+            stage21TrialMeta = Stage21TrialSnapshotStore.Stage21TrialMeta.empty();
+        }
+        refreshStage21AttendanceApplyPanel(mainJsonPath);
+    }
+
+    /** @deprecated 試行のみ（正本未反映）の旧フロー。 */
+    @Deprecated
     void finalizeStage21TrialAfterRunSuccess(
             Path mainJsonPath, Path stage21ResultJson, Path overtimeOverridesJson) {
         Stage21TrialSnapshotStore.OverrideSummary summary =
@@ -2111,6 +2243,7 @@ public final class DispatchInteractiveTabController {
         stage21TrialMeta =
                 new Stage21TrialSnapshotStore.Stage21TrialMeta(
                         true,
+                        false,
                         stage21ResultJson != null
                                 ? stage21ResultJson.toAbsolutePath().normalize().toString()
                                 : "",
@@ -2331,7 +2464,7 @@ public final class DispatchInteractiveTabController {
             if (stage21RunButton != null) {
                 stage21RunButton.setTooltip(
                         new Tooltip(
-                                "残業/休出シミュ付きフル再配台（成果物は output/stage21/。メイン JSON は上書きしない）"));
+                                "残業/休出シミュ付きフル再配台（成功時はメイン output へ正本反映）"));
             }
         }
         if (dispatchTrialButton != null) {
@@ -2456,9 +2589,9 @@ public final class DispatchInteractiveTabController {
         }
         List<LocalDate> range =
                 DispatchInteractiveDateAxis.computeInclusiveRange(
-                        doc, aladdinPlanLookup, lastDispatchShortfallRows);
+                        doc, aladdinPlanLookup, lastDispatchShortfallRows, dateAxisPastDays);
         if (range.isEmpty()) {
-            return DispatchInteractiveDateAxis.defaultAxisWhenNoDataDates();
+            return DispatchInteractiveDateAxis.defaultAxisWhenNoDataDates(dateAxisPastDays);
         }
         return range;
     }
@@ -3951,7 +4084,7 @@ public final class DispatchInteractiveTabController {
     }
 
     private boolean hasStage21TrialApplied() {
-        return stage21TrialApplied;
+        return stage21TrialApplied && !stage21BaselinePlanQtySnapshot.isEmpty();
     }
 
     private void clearStage21TrialSnapshot(Path dispatchJsonPath) {
@@ -3971,148 +4104,18 @@ public final class DispatchInteractiveTabController {
         }
         Stage21TrialSnapshotStore.Stage21TrialMeta meta =
                 Stage21TrialSnapshotStore.tryLoadMeta(dispatchJsonPath);
-        if (meta.hasTrialApplied()) {
+        stage21TrialMeta = meta;
+        if (meta.hasComparisonBaseline()) {
             stage21TrialApplied = true;
-            stage21TrialMeta = meta;
             stage21BaselinePlanQtySnapshot.clear();
             stage21BaselinePlanQtySnapshot.putAll(meta.entries());
             loadStage21TimelineFromDisk();
+        } else {
+            stage21TrialApplied = false;
+            stage21BaselinePlanQtySnapshot.clear();
+            stage21TimelineCalendarMeters = DispatchTimelineCalendarMetersIndex.empty();
         }
         refreshStage21AttendanceApplyPanel(dispatchJsonPath);
-    }
-
-    /** 段階3.5 試行後: (段階3後) baseline と (段階3.5後) actual の数量差分を NDJSON に記録（Q2）。 */
-    private void logStage21QtyCompareDebug(Path dispatchJsonPath) {
-        if (!stage21TrialApplied || shell == null || !docHasActualDispatchQtyColumn()) {
-            return;
-        }
-        LocalDate probe = LocalDate.of(2026, 6, 1);
-        int sameCount = 0;
-        int diffCount = 0;
-        int probeSame = 0;
-        int probeDiff = 0;
-        double probeAddedM = 0.0;
-        List<String> probeDiffs = new ArrayList<>();
-        List<Map<String, String>> profiles =
-                ResultDispatchPivot.distinctWideTaskProfiles(
-                        doc.columns(),
-                        doc.rows(),
-                        ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
-        for (Map<String, String> profile : profiles) {
-            for (LocalDate day : dateAxis) {
-                double actual =
-                        ResultDispatchPivot.sumActualQuantityForProfileAndDateForWideMerge(
-                                doc.rows(),
-                                profile,
-                                day,
-                                ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
-                double baseline = stage21BaselinePlanForCell(profile, day);
-                if (Math.abs(actual - baseline) > 1e-3) {
-                    diffCount++;
-                    if (probe.equals(day)) {
-                        probeDiff++;
-                        probeAddedM += actual - baseline;
-                        if (probeDiffs.size() < 8) {
-                            probeDiffs.add(
-                                    profile.getOrDefault("依頼NO", "")
-                                            + "|"
-                                            + profile.get(ResultDispatchSchema.COL_MACHINE)
-                                            + " b="
-                                            + baseline
-                                            + " a="
-                                            + actual
-                                            + " d="
-                                            + (actual - baseline));
-                        }
-                    }
-                } else if (actual > 1e-3 || baseline > 1e-3) {
-                    sameCount++;
-                    if (probe.equals(day)) {
-                        probeSame++;
-                    }
-                }
-            }
-        }
-        Map<String, Object> dbg = new LinkedHashMap<>();
-        dbg.put("dispatchJson", dispatchJsonPath != null ? dispatchJsonPath.toString() : "");
-        dbg.put("cellsSameQty", sameCount);
-        dbg.put("cellsDiffQty", diffCount);
-        dbg.put("on2026-06-01_same", probeSame);
-        dbg.put("on2026-06-01_diff", probeDiff);
-        dbg.put("on2026-06-01_added_m", probeAddedM);
-        dbg.put("on2026-06-01_diff_samples", probeDiffs);
-        dbg.put(
-                "overrideSummary",
-                stage21TrialMeta != null && stage21TrialMeta.overrideSummary() != null
-                        ? stage21TrialMeta.overrideSummary().totalChanges()
-                        : 0);
-        dbg.put("shortagesNoteHasSim", lastShortagesNote.contains("残業シミュレーション適用:"));
-        dbg.put("usedPreStage3PythonInput", stage3TrialInputDocumentSnapshot != null);
-        // #region agent log
-        AgentDebugLog.appendStructured(
-                shell.snapshotUiEnv(),
-                "0f46bc",
-                "Q2",
-                "DispatchInteractiveTabController.logStage21QtyCompareDebug",
-                "stage35 qty compare after reload",
-                dbg);
-        logStage21UnassignedDebug(dispatchJsonPath);
-        // #endregion
-    }
-
-    /** 段階3.5 試行後: 配台不可・配台残タスクを NDJSON に記録（U2）。 */
-    private void logStage21UnassignedDebug(Path dispatchJsonPath) {
-        if (shell == null || dispatchJsonPath == null) {
-            return;
-        }
-        try {
-            Path shortagePath = dispatchJsonPath.resolveSibling("dispatch_trial_shortages.json");
-            List<DispatchTrialShortages.ShortageHint> hints = List.of();
-            String productionPlan = "";
-            if (java.nio.file.Files.isRegularFile(shortagePath)) {
-                DispatchTrialShortages.FullBundle bundle =
-                        DispatchTrialShortages.readFull(shortagePath);
-                hints = bundle.shortageHints();
-                if (bundle.paths().productionPlan() != null) {
-                    productionPlan = bundle.paths().productionPlan();
-                }
-            }
-            List<ResultTaskUnassignedLoader.UnassignedRow> rows =
-                    ResultTaskUnassignedLoader.loadUnassigned(
-                            shell.snapshotUiEnv(), productionPlan, hints, true);
-            List<String> samples = new ArrayList<>();
-            for (ResultTaskUnassignedLoader.UnassignedRow r : rows) {
-                if (samples.size() < 12) {
-                    String memo = r.situationMemo() != null ? r.situationMemo() : "";
-                    samples.add(
-                            r.taskId()
-                                    + "|"
-                                    + r.processName()
-                                    + "|"
-                                    + r.machineName()
-                                    + " "
-                                    + (memo.length() > 80 ? memo.substring(0, 80) : memo));
-                }
-            }
-            Map<String, Object> u2 = new LinkedHashMap<>();
-            List<DispatchTrialShortages.DispatchQtyShortfallRow> metaMiss =
-                    DispatchTimelineMetaMissShortfalls.detectFromDocument(doc);
-            u2.put("unassignedTotal", rows.size());
-            u2.put("shortfallTotal", lastDispatchShortfallRows.size());
-            u2.put("shortfallMetaMiss", metaMiss.size());
-            u2.put("shortageHints", lastDispatchShortageHints.size());
-            u2.put("samples", samples);
-            u2.put("shortagesJson", shortagePath.toString());
-            AgentDebugLog.appendStructured(
-                    shell.snapshotUiEnv(),
-                    "0f46bc",
-                    "U2",
-                    "DispatchInteractiveTabController.logStage21UnassignedDebug",
-                    "stage35 unassigned tasks after reload",
-                    u2);
-        } catch (Exception ignored) {
-            // debug only
-        }
     }
 
     private void captureStage21BaselineFromDocument(
@@ -4130,6 +4133,7 @@ public final class DispatchInteractiveTabController {
         stage21TrialMeta =
                 new Stage21TrialSnapshotStore.Stage21TrialMeta(
                         true,
+                        false,
                         stage21ResultDispatchJson != null
                                 ? stage21ResultDispatchJson.toAbsolutePath().normalize().toString()
                                 : "",
@@ -4285,7 +4289,7 @@ public final class DispatchInteractiveTabController {
                             : aladdinPlanLookup;
             List<LocalDate> axis =
                     DispatchInteractiveDateAxis.computeInclusiveRange(
-                            snapshotDoc, lookup, lastDispatchShortfallRows);
+                            snapshotDoc, lookup, lastDispatchShortfallRows, dateAxisPastDays);
             if (!axis.isEmpty()) {
                 return axis;
             }

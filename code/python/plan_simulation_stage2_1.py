@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 段階2.1: 配台計画_タスク入力から残業/休出シミュ付きで段階2と同一エンジンでフル再配台する。
-成果物は PM_AI_OUTPUT_DIR（通常 output/stage21/）へ出力する。
+成果物は一旦 PM_AI_OUTPUT_DIR（通常 output/stage21/）へ出力し、正常終了後に JavaFX がメイン output へ正本反映する。
 """
 import os
 import sys

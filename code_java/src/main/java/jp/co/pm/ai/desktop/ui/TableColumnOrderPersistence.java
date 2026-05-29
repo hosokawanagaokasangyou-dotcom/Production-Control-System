@@ -222,6 +222,67 @@ public final class TableColumnOrderPersistence {
         }
     }
 
+    /**
+     * 配台計画手動修正タブの日付列: 本日基準で列表示を開始する過去日数（{@code today.minusDays(n)}）。
+     */
+    public record DispatchInteractiveDateAxisPastDaysPrefs(int pastDays) {
+        public static final int MIN = 0;
+        public static final int MAX = 365;
+        public static final int DEFAULT_PAST = 1;
+
+        public static DispatchInteractiveDateAxisPastDaysPrefs defaults() {
+            return new DispatchInteractiveDateAxisPastDaysPrefs(DEFAULT_PAST);
+        }
+
+        public DispatchInteractiveDateAxisPastDaysPrefs {
+            pastDays = Math.max(MIN, Math.min(MAX, pastDays));
+        }
+    }
+
+    private static final String KEY_DISPATCH_INTERACTIVE_DATE_AXIS_PAST_DAYS =
+            "dispatchInteractive_ui_dateAxisPastDays";
+
+    public static DispatchInteractiveDateAxisPastDaysPrefs loadDispatchInteractiveDateAxisPastDaysPrefs() {
+        try {
+            if (!Files.isRegularFile(STORE)) {
+                return DispatchInteractiveDateAxisPastDaysPrefs.defaults();
+            }
+            JsonNode root = JSON.readTree(STORE.toFile());
+            if (root == null || !root.isObject()) {
+                return DispatchInteractiveDateAxisPastDaysPrefs.defaults();
+            }
+            int past =
+                    root.path(KEY_DISPATCH_INTERACTIVE_DATE_AXIS_PAST_DAYS)
+                            .asInt(DispatchInteractiveDateAxisPastDaysPrefs.DEFAULT_PAST);
+            return new DispatchInteractiveDateAxisPastDaysPrefs(past);
+        } catch (IOException e) {
+            return DispatchInteractiveDateAxisPastDaysPrefs.defaults();
+        }
+    }
+
+    public static void saveDispatchInteractiveDateAxisPastDaysPrefs(
+            DispatchInteractiveDateAxisPastDaysPrefs prefs) {
+        if (prefs == null) {
+            return;
+        }
+        try {
+            Files.createDirectories(STORE.getParent());
+            ObjectNode root;
+            if (Files.isRegularFile(STORE)) {
+                JsonNode tree = JSON.readTree(STORE.toFile());
+                root =
+                        tree != null && tree.isObject()
+                                ? (ObjectNode) tree.deepCopy()
+                                : JSON.createObjectNode();
+            } else {
+                root = JSON.createObjectNode();
+            }
+            root.put(KEY_DISPATCH_INTERACTIVE_DATE_AXIS_PAST_DAYS, prefs.pastDays());
+            JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
+        } catch (IOException ignored) {
+        }
+    }
+
     private static String spreadsheetTabRowHeightKey(TableId id) {
         return id.jsonKey() + "_ui_rowHeightPercent";
     }

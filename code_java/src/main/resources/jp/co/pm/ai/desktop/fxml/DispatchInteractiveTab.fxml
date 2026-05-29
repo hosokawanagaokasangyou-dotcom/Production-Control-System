@@ -8,7 +8,7 @@
 <?import javafx.scene.control.ProgressBar?>
 <?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.control.Tab?>
-<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.Spinner?>
 <?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.chart.BarChart?>
@@ -38,6 +38,14 @@
                     onAction="#onColumnReorderAction"/>
             <Button minWidth="-1.0" mnemonicParsing="false" text="列の表示"
                     onAction="#onColumnVisibilityAction"/>
+            <Label minWidth="-1.0" text="表示開始:"/>
+            <Label minWidth="-1.0" text="当日"/>
+            <Spinner fx:id="dateAxisPastDaysSpinner" editable="true" prefWidth="72.0">
+                <tooltip>
+                    <Tooltip text="日付列の左端を本日から何日前まで広げるか（0＝本日のみ）"/>
+                </tooltip>
+            </Spinner>
+            <Label minWidth="-1.0" text="日前"/>
             <Label minWidth="-1.0" text="数量表示:"/>
             <CheckBox fx:id="showAladdinPlanQtyLineCheck" minWidth="-1.0" mnemonicParsing="false"
                       selected="true" text="(アラ計画)">
@@ -108,7 +116,7 @@
                     styleClass="pm-stage-run-button,pm-stage-run-2-1"
                     onAction="#onStage21RunAction">
                 <tooltip>
-                    <Tooltip text="残業/休出シミュ付きフル再配台（成果物は output/stage21/。メイン JSON は上書きしない）"/>
+                    <Tooltip text="残業/休出シミュ付きフル再配台（成功時はメイン output へ正本反映）"/>
                 </tooltip>
             </Button>
             <Button fx:id="dispatchTrialButton" minWidth="-1.0" mnemonicParsing="false"

@@ -181,21 +181,3 @@ def append_structured(
             )
         except Exception:
             pass
-
-
-def bootstrap_child_debug_log(component: str = "python_child") -> None:
-    """段階2子プロセス起動直後に 1 行書き、NDJSON 経路が有効か確認する。"""
-    append_structured(
-        "H-LOG",
-        "agent_debug_ndjson.bootstrap_child_debug_log",
-        "Python 子プロセス NDJSON ブートストラップ",
-        {
-            "component": component,
-            "cwd": os.getcwd(),
-            "repo_root_candidates": [str(p) for p in _repo_root_candidates()],
-            "resolved_ndjson_path": resolve_ndjson_path(),
-            "pm_ai_debug_log": (os.environ.get("PM_AI_DEBUG_LOG") or "").strip(),
-            "pm_ai_debug_log_mirror": (os.environ.get(_ENV_MIRROR) or "").strip(),
-            "pm_ai_repo_root": (os.environ.get(_ENV_REPO_ROOT) or "").strip(),
-        },
-    )

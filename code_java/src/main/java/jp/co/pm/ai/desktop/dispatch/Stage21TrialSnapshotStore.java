@@ -52,6 +52,7 @@ public final class Stage21TrialSnapshotStore {
 
     public record Stage21TrialMeta(
             boolean stage21Applied,
+            boolean stage21Promoted,
             String stage21ResultDispatchJson,
             String overtimeOverridesJson,
             OverrideSummary overrideSummary,
@@ -59,11 +60,35 @@ public final class Stage21TrialSnapshotStore {
             Map<String, Double> entries) {
 
         public static Stage21TrialMeta empty() {
-            return new Stage21TrialMeta(false, "", "", OverrideSummary.empty(), "", Map.of());
+            return new Stage21TrialMeta(
+                    false, false, "", "", OverrideSummary.empty(), "", Map.of());
+        }
+
+        /** 段階2.1 試行の (段階2後)/(段階2.1後) 比較用 baseline がある。 */
+        public boolean hasComparisonBaseline() {
+            return entries != null && !entries.isEmpty();
+        }
+
+        /** メイン output へ段階2.1 成果を正本反映済み。 */
+        public boolean hasPromotedToMain() {
+            return stage21Promoted;
+        }
+
+        /** 勤怠適用パネル等: 段階2.1 の適用記録がある。 */
+        public boolean hasAttendanceMeta() {
+            if (stage21Promoted) {
+                return true;
+            }
+            OverrideSummary summary =
+                    overrideSummary != null ? overrideSummary : OverrideSummary.empty();
+            if (summary.totalChanges() > 0) {
+                return true;
+            }
+            return hasComparisonBaseline();
         }
 
         public boolean hasTrialApplied() {
-            return stage21Applied || (entries != null && !entries.isEmpty());
+            return stage21Applied || hasComparisonBaseline() || stage21Promoted;
         }
 
         public Path overtimeOverridesPath() {
@@ -132,6 +157,42 @@ public final class Stage21TrialSnapshotStore {
                 day.toString());
     }
 
+    /** 段階2.1 をメイン output 正本へ反映したあとの勤怠メタ（比較 baseline は持たない）。 */
+    public static void writePromotedMeta(
+            Path mainResultDispatchJson,
+            Path overtimeOverridesJson,
+            OverrideSummary overrideSummary) {
+        Path sidecar = sidecarPathFor(mainResultDispatchJson);
+        if (sidecar == null) {
+            return;
+        }
+        try {
+            ObjectNode root = JSON.createObjectNode();
+            root.put(
+                    "source_json",
+                    mainResultDispatchJson.toAbsolutePath().normalize().toString());
+            root.put("stage21_applied", true);
+            root.put("stage21_promoted", true);
+            if (overtimeOverridesJson != null) {
+                root.put(
+                        "overtime_overrides_json",
+                        overtimeOverridesJson.toAbsolutePath().normalize().toString());
+            }
+            ObjectNode summary = JSON.createObjectNode();
+            OverrideSummary s =
+                    overrideSummary != null ? overrideSummary : OverrideSummary.empty();
+            summary.put("work_on", s.workOn());
+            summary.put("work_off", s.workOff());
+            summary.put("overtime_cells", s.overtimeCells());
+            root.set("override_summary", summary);
+            root.put("applied_at", LocalDateTime.now().format(APPLIED_AT_FMT));
+            root.set("entries", JSON.createObjectNode());
+            Files.createDirectories(sidecar.getParent());
+            JSON.writerWithDefaultPrettyPrinter().writeValue(sidecar.toFile(), root);
+        } catch (Exception ignored) {
+        }
+    }
+
     public static void writeWithMeta(
             Path mainResultDispatchJson,
             Map<String, Double> snapshot,
@@ -148,6 +209,7 @@ public final class Stage21TrialSnapshotStore {
                     "source_json",
                     mainResultDispatchJson.toAbsolutePath().normalize().toString());
             root.put("stage21_applied", true);
+            root.put("stage21_promoted", false);
             if (stage21ResultDispatchJson != null) {
                 root.put(
                         "stage21_result_dispatch_json",
@@ -199,16 +261,18 @@ public final class Stage21TrialSnapshotStore {
                 return Stage21TrialMeta.empty();
             }
             boolean stage21Applied = root.path("stage21_applied").asBoolean(false);
+            boolean stage21Promoted = root.path("stage21_promoted").asBoolean(false);
             String stage21Json = root.path("stage21_result_dispatch_json").asText("");
             String overridesJson = root.path("overtime_overrides_json").asText("");
             OverrideSummary summary = parseOverrideSummary(root.path("override_summary"));
             String appliedAt = root.path("applied_at").asText("");
             Map<String, Double> entries = parseEntries(root.get("entries"));
-            if (!stage21Applied && entries.isEmpty()) {
+            if (!stage21Applied && !stage21Promoted && entries.isEmpty()) {
                 return Stage21TrialMeta.empty();
             }
             return new Stage21TrialMeta(
-                    stage21Applied || !entries.isEmpty(),
+                    stage21Applied || !entries.isEmpty() || stage21Promoted,
+                    stage21Promoted,
                     stage21Json,
                     overridesJson,
                     summary,

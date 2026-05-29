@@ -77,6 +77,11 @@ public final class ResultDispatchStage3Support {
         if (detectStage3FromDispatchJsonPath(jsonPath)) {
             return PlanningStage.STAGE3;
         }
+        Stage21TrialSnapshotStore.Stage21TrialMeta meta =
+                Stage21TrialSnapshotStore.tryLoadMeta(jsonPath);
+        if (meta.hasPromotedToMain()) {
+            return PlanningStage.STAGE21;
+        }
         return PlanningStage.STAGE2;
     }
 

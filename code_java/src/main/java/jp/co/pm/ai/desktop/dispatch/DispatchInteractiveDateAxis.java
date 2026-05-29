@@ -22,11 +22,14 @@ public final class DispatchInteractiveDateAxis {
      */
     public static final int SLIDE_CUSHION_CALENDAR_DAYS = 7;
 
+    /** 日付列の開始を {@code today.minusDays(n)} まで広げる既定 n（UI 未設定時）。 */
+    public static final int DEFAULT_DATE_AXIS_PAST_DAYS = 1;
+
     /**
-     * 配台計画手動修正「タスク×日付」表: データの最小配台日が今日より後でも、列の開始を今日から
-     * この暦日数だけ過去まで広げる（当日を含めず「14日前」＝ {@code today.minusDays(14)} から）。
+     * @deprecated {@link #DEFAULT_DATE_AXIS_PAST_DAYS} を使用。
      */
-    public static final int DISPATCH_WIDE_DATE_AXIS_PAST_DAYS = 14;
+    @Deprecated
+    public static final int DISPATCH_WIDE_DATE_AXIS_PAST_DAYS = DEFAULT_DATE_AXIS_PAST_DAYS;
 
     private static final String COL_PROCESS_START = "加工開始日時";
     private static final String COL_PROCESS_COMPLETE = "加工完了日";
@@ -44,6 +47,15 @@ public final class DispatchInteractiveDateAxis {
             ResultDispatchDocument doc,
             Map<String, Map<String, Map<String, Map<String, Double>>>> aladdinLookup,
             List<DispatchTrialShortages.DispatchQtyShortfallRow> trialShortfalls) {
+        return computeInclusiveRange(
+                doc, aladdinLookup, trialShortfalls, DEFAULT_DATE_AXIS_PAST_DAYS);
+    }
+
+    public static List<LocalDate> computeInclusiveRange(
+            ResultDispatchDocument doc,
+            Map<String, Map<String, Map<String, Map<String, Double>>>> aladdinLookup,
+            List<DispatchTrialShortages.DispatchQtyShortfallRow> trialShortfalls,
+            int pastDaysFromToday) {
         if (doc == null || doc.rows().isEmpty()) {
             return List.of();
         }
@@ -59,11 +71,11 @@ public final class DispatchInteractiveDateAxis {
                         DispatchTimelineMetaMissShortfalls.detectFromDocument(doc));
         collectSlideCushionInto(ds, doc, mergedShortfalls);
         if (ds.isEmpty()) {
-            return defaultAxisWhenNoDataDates();
+            return defaultAxisWhenNoDataDates(pastDaysFromToday);
         }
         return extendAxisMinToPastDays(
                 ResultDispatchPivot.dateRangeInclusive(new ArrayList<>(ds)),
-                DISPATCH_WIDE_DATE_AXIS_PAST_DAYS);
+                pastDaysFromToday);
     }
 
     /**
@@ -81,10 +93,14 @@ public final class DispatchInteractiveDateAxis {
         return ResultDispatchPivot.dateRangeInclusive(List.of(floor, axis.getLast()));
     }
 
-    /** JSON 等に配台日が無いときの既定軸（過去 {@link #DISPATCH_WIDE_DATE_AXIS_PAST_DAYS} 日〜先の余白）。 */
+    /** JSON 等に配台日が無いときの既定軸（過去 {@link #DEFAULT_DATE_AXIS_PAST_DAYS} 日〜先の余白）。 */
     public static List<LocalDate> defaultAxisWhenNoDataDates() {
+        return defaultAxisWhenNoDataDates(DEFAULT_DATE_AXIS_PAST_DAYS);
+    }
+
+    public static List<LocalDate> defaultAxisWhenNoDataDates(int pastDaysFromToday) {
         LocalDate today = LocalDate.now();
-        LocalDate start = today.minusDays(DISPATCH_WIDE_DATE_AXIS_PAST_DAYS);
+        LocalDate start = today.minusDays(Math.max(0, pastDaysFromToday));
         LocalDate end = today.plusDays(SLIDE_CUSHION_CALENDAR_DAYS);
         return ResultDispatchPivot.dateRangeInclusive(List.of(start, end));
     }

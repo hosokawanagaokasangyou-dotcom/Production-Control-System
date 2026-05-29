@@ -22,7 +22,7 @@ public final class Stage21AttendanceApplyStatusPanel {
             Stage21TrialSnapshotStore.Stage21TrialMeta meta,
             Path dispatchJsonPath,
             String shortagesNote) {
-        if (meta == null || !meta.hasTrialApplied()) {
+        if (meta == null || !meta.hasAttendanceMeta()) {
             return hidden();
         }
         Stage21TrialSnapshotStore.OverrideSummary summary =
@@ -37,8 +37,10 @@ public final class Stage21AttendanceApplyStatusPanel {
                 shortagesNote != null && shortagesNote.contains("残業シミュレーション適用:");
         String pythonLine =
                 pythonApplied
-                        ? "Python 段階2.1: 残業/休出シミュ JSON を適用済み（output/stage21/ へフル再配台）"
-                        : "Python 段階2.1: 適用記録なし";
+                        ? "Python 段階2.1: 残業/休出シミュ JSON を適用済み（メイン output へ正本反映）"
+                        : meta.hasPromotedToMain()
+                                ? "Python 段階2.1: メイン output へ正本反映済み"
+                                : "Python 段階2.1: 適用記録なし";
         String appliedAt =
                 meta.appliedAt() != null && !meta.appliedAt().isBlank()
                         ? "試行日時: " + meta.appliedAt()

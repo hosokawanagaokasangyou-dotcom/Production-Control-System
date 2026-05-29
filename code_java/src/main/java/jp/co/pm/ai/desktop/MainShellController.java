@@ -3993,30 +3993,6 @@ public final class MainShellController {
                 refreshNetworkSourceDirListingSkipsBeforeStageRun(uiRun);
             }
             Map<String, String> childEnv = childEnvForPython(uiRun);
-            if (STAGE2.equals(script)) {
-                String dbgLog = childEnv.get("PM_AI_DEBUG_LOG");
-                String dbgSid = childEnv.get("PM_AI_AGENT_DEBUG_SESSION");
-                appendLog(
-                        "[stage2-debug] NDJSON session="
-                                + (dbgSid != null ? dbgSid : "")
-                                + " log="
-                                + (dbgLog != null ? dbgLog : "（未解決）"));
-                AgentDebugLog.appendStructured(
-                        collectUiEnv(),
-                        dbgSid != null && !dbgSid.isBlank()
-                                ? dbgSid
-                                : AgentDebugLog.DEFAULT_SESSION_ID,
-                        "H-LOG",
-                        "MainShellController.runStage",
-                        "段階2子プロセス起動直前",
-                        Map.of(
-                                "script",
-                                script,
-                                "pm_ai_debug_log",
-                                dbgLog != null ? dbgLog : "",
-                                "pm_ai_agent_debug_session",
-                                dbgSid != null ? dbgSid : ""));
-            }
             if (lastNetworkSourceResolution != null) {
                 for (String line : lastNetworkSourceResolution.logLines()) {
                     appendLog(line);
@@ -4265,26 +4241,64 @@ public final class MainShellController {
                 if (c == 0) {
                     Platform.runLater(
                             () -> {
-                                refreshEquipmentGanttGraphicAfterPipelineRun();
-                                refreshOperatorCardAfterPipelineRun();
+                                Map<String, String> ui = collectUiEnv();
                                 java.nio.file.Path mainJson =
-                                        AppPaths.resolveResultDispatchTableJsonPath(
-                                                collectUiEnv());
-                                java.nio.file.Path stage21Json =
-                                        AppPaths.resolveStage21ResultDispatchJsonPath(
-                                                collectUiEnv());
-                                if (dispatchInteractiveTabController != null) {
-                                    dispatchInteractiveTabController
-                                            .finalizeStage21TrialAfterRunSuccess(
+                                        AppPaths.resolveResultDispatchTableStage2JsonPath(ui);
+                                java.nio.file.Path overtimeJson =
+                                        pendingStage21OvertimeJsonPath;
+                                try {
+                                    jp.co.pm.ai.desktop.dispatch.Stage21OutputPromoter.Result promoted =
+                                            jp.co.pm.ai.desktop.dispatch.Stage21OutputPromoter
+                                                    .promoteToMainOutput(ui);
+                                    appendLog(
+                                            "[stage2.1] メイン output へ "
+                                                    + promoted.filesCopied()
+                                                    + " 件を正本反映しました");
+                                    java.nio.file.Path mainOvertime =
+                                            AppPaths.resolveResultDispatchTableDir(ui)
+                                                    .resolve("overtime_simulation_overrides.json");
+                                    java.nio.file.Path overridesForMeta =
+                                            java.nio.file.Files.isRegularFile(mainOvertime)
+                                                    ? mainOvertime
+                                                    : overtimeJson;
+                                    jp.co.pm.ai.desktop.dispatch.Stage21TrialSnapshotStore
+                                            .writePromotedMeta(
                                                     mainJson,
-                                                    stage21Json,
-                                                    pendingStage21OvertimeJsonPath);
-                                    dispatchInteractiveTabController
-                                            .reloadTableFromDiskAfterStage21Success(
-                                                    () ->
-                                                            notifyStage21OvertimeSimulationSuccess());
-                                } else {
-                                    notifyStage21OvertimeSimulationSuccess();
+                                                    overridesForMeta,
+                                                    jp.co.pm.ai.desktop.dispatch
+                                                            .OvertimeSimulationOverridesReader
+                                                            .summarize(overridesForMeta));
+                                    refreshStage2OutputArtifacts();
+                                    refreshEquipmentGanttGraphicAfterPipelineRun();
+                                    refreshOperatorCardAfterPipelineRun();
+                                    if (dispatchInteractiveTabController != null) {
+                                        dispatchInteractiveTabController
+                                                .applyStage21PromotedMetaAfterRunSuccess(mainJson);
+                                        dispatchInteractiveTabController
+                                                .reloadTableFromDiskAfterStage21PromotedSuccess(
+                                                        () ->
+                                                                notifyStage21OvertimeSimulationSuccess(
+                                                                        promoted));
+                                    } else {
+                                        notifyStage21OvertimeSimulationSuccess(promoted);
+                                    }
+                                } catch (Exception ex) {
+                                    appendLog(
+                                            "[stage2.1] 正本への反映に失敗: "
+                                                    + (ex.getMessage() != null
+                                                            ? ex.getMessage()
+                                                            : ex));
+                                    showErrorDialog(
+                                            "段階2.1 反映エラー",
+                                            "段階2.1 は正常終了しましたが、メイン output への正本反映に失敗しました。\n\n"
+                                                    + (ex.getMessage() != null
+                                                            ? ex.getMessage()
+                                                            : ex.toString())
+                                                    + "\n\noutput/stage21/ の成果物を手動で確認してください。");
+                                    if (dispatchInteractiveTabController != null) {
+                                        dispatchInteractiveTabController
+                                                .reloadTableFromDiskAfterExternalUpdate();
+                                    }
                                 }
                             });
                 } else if (dispatchInteractiveTabController != null) {
@@ -5778,8 +5792,13 @@ public final class MainShellController {
 
     /** 段階2.1 正常終了後: 勤怠適用サマリ付き完了通知。 */
     void notifyStage21OvertimeSimulationSuccess() {
+        notifyStage21OvertimeSimulationSuccess(null);
+    }
+
+    /** 段階2.1 正常終了後: 勤怠適用サマリ付き完了通知。 */
+    void notifyStage21OvertimeSimulationSuccess(
+            jp.co.pm.ai.desktop.dispatch.Stage21OutputPromoter.Result promoted) {
         appendLog("[end] 段階2.1（残業/休出シミュ）正常終了");
-        refreshOperatorCardAfterPipelineRun();
         MacroCompleteChime.playIfAvailable(collectUiEnv());
         selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
         java.nio.file.Path jsonPath =
@@ -5788,12 +5807,19 @@ public final class MainShellController {
                 jp.co.pm.ai.desktop.dispatch.Stage21TrialSnapshotStore.tryLoadMeta(jsonPath);
         StringBuilder body = new StringBuilder();
         body.append("段階2.1（残業/休出シミュ）の処理が正常終了しました。\n\n");
-        if (meta.hasTrialApplied() && meta.overrideSummary() != null) {
+        if (meta.hasAttendanceMeta() && meta.overrideSummary() != null) {
             body.append(meta.overrideSummary().formatSummaryLine()).append('\n');
         }
-        body.append(
-                "\n成果物は output/stage21/ に出力しました。メインの結果_配台表.json は変更していません。"
-                        + " 配台計画手動修正タブで (段階2後) と (段階2.1後) を比較できます。");
+        if (promoted != null && promoted.filesCopied() > 0) {
+            body.append("\nメイン output へ ")
+                    .append(promoted.filesCopied())
+                    .append(" 件の成果物を正本反映しました。");
+            if (promoted.mainDispatchJson() != null) {
+                body.append("\n配台表: ").append(promoted.mainDispatchJson());
+            }
+        } else {
+            body.append("\nメイン output（結果_配台表.json・計画 JSON 等）へ正本反映済みです。");
+        }
         showStageCompletionDialog("段階2.1 完了", body.toString());
     }
 
