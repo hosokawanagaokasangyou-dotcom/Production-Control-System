@@ -148,16 +148,20 @@ public final class AppPaths {
     /** 現場向け Word 手順書（リポジトリ直下・{@link #resolveDispatchUsageGuideDocx(Map)}）。 */
     public static final String DISPATCH_USAGE_GUIDE_DOCX = "配台システム使い方（整理版）.docx";
 
-    /** Absolute path to master workbook ({@code master.xlsm}); overrides basename-only {@code MASTER_WORKBOOK_FILE}. */
+    /** マスタブック（{@code master.xlsm} 等）の絶対パスまたは {@code code/} 相対。planning_core 子プロセスの必須 env。 */
     public static final String KEY_PM_AI_MASTER_WORKBOOK = "PM_AI_MASTER_WORKBOOK";
 
-    /** Basename or relative master workbook filename (same as {@code MASTER_WORKBOOK_FILE} / planning_core). */
+    /**
+     * @deprecated {@link #KEY_PM_AI_MASTER_WORKBOOK} に一本化。セッション移行・除去用のキー名のみ。
+     */
+    @Deprecated
     public static final String KEY_MASTER_WORKBOOK_FILE = "MASTER_WORKBOOK_FILE";
 
     /**
-     * {@code 実行・ログ} タブの「開く」が開くサマリ用ブック（
-     * 絶対パス、または {@code code/} からの相対）。空で
-     * {@link #SUMMARY_AI_DISPATCH_XLSX}（{@code code/} 直下の既定名）。
+     * サマリ AI 配台 Excel（{@link #SUMMARY_AI_DISPATCH_XLSX} 等）の絶対パス、または {@code code/} 相対。
+     * 空で {@code code/} 既定名。親フォルダは工場共有 DATA の根（操作者 bin、配台除外 JSON、ルックアップ CSV、
+     * 実行時間履歴、設備ガント PDF、サマリ世代退避等の sibling 解決基準）。{@link #summaryAiDispatchXlsxPathForFactory}
+     * で利用工場と不一致のとき工場既定 UNC へ切替。
      */
     public static final String KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK =
             "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK";
@@ -1000,45 +1004,56 @@ public final class AppPaths {
     }
 
     /**
-     * Same resolution as {@code planning_core._core._master_workbook_path_resolved} for the given env and
-     * effective macro-book path.
+     * {@link #KEY_PM_AI_MASTER_WORKBOOK} を基準にマスタブックパスを解決する（planning_core の cwd 基準 relative と整合）。
      *
-     * <p>{@link #KEY_MASTER_WORKBOOK_FILE} が空でないときは、既存の {@link #KEY_PM_AI_MASTER_WORKBOOK} が指すファイル名と
-     * 一致する場合に限り絶対パスを採用する（空のときは従来どおり絶対パス優先）。これにより、ブートストラップで残った
-     * {@code master.xlsm} の絶対パスが {@code 国分master.xlsm} 指定を潰さない。
+     * <p>PM_AI 未設定時は {@code master.xlsm} を {@link #resolveEffectivePlanningCwd} 基準の relative として解決する。
      */
     public static Path resolveMasterWorkbookPathResolved(Map<String, String> ui, String taskInputWorkbookPath) {
         Map<String, String> u = ui != null ? ui : Map.of();
-        String mfRaw = trim(u.get(KEY_MASTER_WORKBOOK_FILE));
-        String mf = mfRaw.isEmpty() ? "master.xlsm" : mfRaw;
         String alt = trim(u.get(KEY_PM_AI_MASTER_WORKBOOK));
         if (!alt.isEmpty()) {
-            Path ap = Path.of(alt).toAbsolutePath().normalize();
-            if (Files.isRegularFile(ap)) {
-                /*
-                 * MASTER が未指定のときは従来どおり絶対パスをそのまま採用。
-                 * MASTER を明示したのに PM_AI が別名（例: master.xlsm）のまま残っていると、
-                 * ブートストラップの候補が優先されて国分 master 等が無視されるため、ファイル名が一致するときだけ PM_AI を採用する。
-                 */
-                if (mfRaw.isEmpty()) {
-                    return ap;
-                }
-                String mBase = Path.of(mf).getFileName().toString();
-                String aBase = ap.getFileName().toString();
-                if (aBase.equalsIgnoreCase(mBase)) {
-                    return ap;
-                }
+            if (alt.startsWith("\\\\")) {
+                return Path.of(alt);
             }
+            Path p = Path.of(alt);
+            if (p.isAbsolute()) {
+                return p.normalize();
+            }
+            Path cwd = resolveEffectivePlanningCwd(u, taskInputWorkbookPath);
+            return cwd.resolve(alt).normalize().toAbsolutePath();
         }
         Path cwd = resolveEffectivePlanningCwd(u, taskInputWorkbookPath);
-        if (mf.startsWith("\\\\")) {
-            return Path.of(mf);
+        return cwd.resolve("master.xlsm").normalize().toAbsolutePath();
+    }
+
+    /**
+     * 廃止した {@link #KEY_MASTER_WORKBOOK_FILE} を {@link #KEY_PM_AI_MASTER_WORKBOOK} へ移行する値を返す。
+     *
+     * <p>PM_AI が既に非空のときは empty（上書きしない）。
+     */
+    public static Optional<String> migrateLegacyMasterWorkbookFileToPmAi(
+            Map<String, String> ui, String legacyMasterWorkbookFile) {
+        if (legacyMasterWorkbookFile == null || legacyMasterWorkbookFile.isBlank()) {
+            return Optional.empty();
         }
-        Path mfPath = Path.of(mf);
-        if (mfPath.isAbsolute()) {
-            return mfPath.normalize();
+        Map<String, String> u = ui != null ? new java.util.HashMap<>(ui) : new java.util.HashMap<>();
+        if (!trim(u.get(KEY_PM_AI_MASTER_WORKBOOK)).isEmpty()) {
+            return Optional.empty();
         }
-        return cwd.resolve(mf).normalize().toAbsolutePath();
+        String legacy = legacyMasterWorkbookFile.trim();
+        u.put(KEY_PM_AI_MASTER_WORKBOOK, legacy);
+        Path resolved = resolveMasterWorkbookPathForDesktopOpen(u, "");
+        if (Files.isRegularFile(resolved)) {
+            return Optional.of(resolved.toAbsolutePath().normalize().toString());
+        }
+        if (legacy.startsWith("\\\\")) {
+            return Optional.of(legacy);
+        }
+        Path leg = Path.of(legacy);
+        if (leg.isAbsolute()) {
+            return Optional.of(leg.normalize().toString());
+        }
+        return Optional.of(legacy);
     }
 
     /**
@@ -1055,13 +1070,8 @@ public final class AppPaths {
             return primary;
         }
         Map<String, String> u = ui != null ? ui : Map.of();
-        if (!trim(u.get(KEY_PM_AI_MASTER_WORKBOOK)).isEmpty()) {
-            return primary;
-        }
-        String mf = trim(u.get(KEY_MASTER_WORKBOOK_FILE));
-        if (mf.isEmpty()) {
-            mf = "master.xlsm";
-        }
+        String alt = trim(u.get(KEY_PM_AI_MASTER_WORKBOOK));
+        String mf = alt.isEmpty() ? "master.xlsm" : Path.of(alt).getFileName().toString();
         if (mf.startsWith("\\\\")) {
             return primary;
         }

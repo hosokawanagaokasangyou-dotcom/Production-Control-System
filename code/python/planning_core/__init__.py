@@ -11,7 +11,7 @@ planning_core は 工場向け「配台計画」シミュレーションの中�
     ``import planning_core`` より前に ``workbook_env_bootstrap`` で内容を ``os.environ`` に反映する。
     運用上は **本シートにキーを集約**し、OS のユーザー環境変数に触れなくてよい（VBA が必ず設定する
     ``TASK_INPUT_WORKBOOK`` だけは従来どおりプロセス環境で渡す）。
-    マスタブックのファイル名は ``MASTER_WORKBOOK_FILE``（空なら ``master.xlsm``。``planning_core.master_workbook_filename``）。
+    マスタブックのパスは ``PM_AI_MASTER_WORKBOOK``（絶対パス・必須。``planning_core._master_workbook_path_resolved``）。
     環境構築 ``setup_environment`` は pip で依存が入ったあと同シートを読み、``PM_AI_CMD_PAUSE_ON_ERROR`` / ``PM_AI_SETUP_COMPLETION_MSGBOX`` 等も反映する（前者は終了時 pause の成功・失敗共通の無効化にも使う）。
     ブックに ``配台_配台不要工程``
     があり openpyxl でブックを開けない場合はシートを読めない（そのときは OS 環境または既定値）。

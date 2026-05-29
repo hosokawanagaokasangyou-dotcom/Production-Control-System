@@ -46,7 +46,6 @@ def apply_env() -> None:
     master_local = ROOT / "code" / "master.xlsm"
     if master_local.is_file():
         os.environ["PM_AI_MASTER_WORKBOOK"] = str(master_local)
-    os.environ["MASTER_WORKBOOK_FILE"] = "master.xlsm"
     for key in (
         "RAW_FABRIC_WIDTH_TABLE_PATH",
         "ROLL_UNIT_BY_USED_RAW_TABLE_PATH",

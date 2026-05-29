@@ -17,7 +17,10 @@ public final class Stage2PythonChildEnv {
 
     /** 環境タブから廃止されたが OS に残り得るキー。Python 子には渡さない。 */
     public static final Set<String> LEGACY_WORKBOOK_KEYS_STRIPPED_FOR_PYTHON_CHILD =
-            Set.of("TASK_INPUT_WORKBOOK", "PM_AI_TASK_INPUT_WORKBOOK");
+            Set.of(
+                    "TASK_INPUT_WORKBOOK",
+                    "PM_AI_TASK_INPUT_WORKBOOK",
+                    AppPaths.KEY_MASTER_WORKBOOK_FILE);
 
     private Stage2PythonChildEnv() {}
 

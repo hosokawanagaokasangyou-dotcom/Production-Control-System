@@ -44,7 +44,7 @@
   }, {
     "key" : "PM_AI_MASTER_WORKBOOK",
     "value" : "",
-    "description" : "マスタブック（master.xlsm 等）のフルパス。MASTER_WORKBOOK_FILE より優先。環境変数タブの「ファイル...」で .xlsm/.xlsx を選択可。内容の要約は「マスタ読込サマリ」タブの「サマリを更新」で planning_core 基準の JSON を表示（人が読みやすい形に整形）。"
+    "description" : "マスタブック（master.xlsm / 国分master.xlsm 等）のフルパス（UNC 可）。空のときは code/ 等から master.xlsm を探索して補完。ファイル名のみは planning cwd（通常 code/）相対。planning_core 子プロセス必須。環境変数タブ「ファイル...」で選択可。「マスタ読込サマリ」タブで内容確認可。"
   }, {
     "key" : "PM_AI_COLUMN_CONFIG_WORKBOOK",
     "value" : "",
@@ -60,7 +60,7 @@
   }, {
     "key" : "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK",
     "value" : "",
-    "description" : "実行・ログタブの「開く」で開くサマリ用ブック（.xlsx 等）のフルパス。空のときは PM_AI_REPO_ROOT 下 code/サマリ_AI配台.xlsx。ファイル名のみのときは code/ からの相対として解決。"
+    "description" : "サマリ AI 配台 Excel（通常 サマリ_AI配台.xlsx）のフルパス。空は PM_AI_REPO_ROOT/code/ 既定名、ファイル名のみは code/ 相対。親フォルダは工場共有 DATA の根として扱い、操作者 bin・PIN PDF、stage1_exclude_rules.json、材料・製品ルックアップ CSV、実行時間履歴 JSON、設備ガント PDF、サマリ世代退避等が同階層または配下に置かれる。実行・ログ・納期管理からの Excel 出力先。詳細は EnvVarDocs。"
   }, {
     "key" : "PM_AI_SKIP_WORKBOOK_ENV_SHEET",
     "value" : "1",
@@ -69,10 +69,6 @@
     "key" : "PM_AI_SKIP_GEMINI_API",
     "value" : "0",
     "description" : "1/true/yes/on のとき Gemini generateContent を呼ばない（開発用）。JavaFX 実行・ログタブ「その他」内のチェックが子プロセス起動時に上書きする。"
-  }, {
-    "key" : "MASTER_WORKBOOK_FILE",
-    "value" : "",
-    "description" : "マスタブックのファイル名（空なら master.xlsm）。マクロブック所在フォルダ基準の相対可（basename のみ推奨）。planning_core と VBA のマスタ参照で共通。PM_AI_MASTER_WORKBOOK 未指定時の解決に使う。マスタ読込サマリタブの表示と一致確認に利用。"
   }, {
     "key" : "TASK_PLAN_SHEET",
     "value" : "",

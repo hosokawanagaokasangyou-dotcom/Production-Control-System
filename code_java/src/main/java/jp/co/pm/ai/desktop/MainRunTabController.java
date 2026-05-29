@@ -859,8 +859,7 @@ public final class MainRunTabController {
             if (!alt.isEmpty()) {
                 masterWorkbookOpenHintLabel.setText(Path.of(alt).getFileName().toString());
             } else {
-                String mf = ui.getOrDefault(AppPaths.KEY_MASTER_WORKBOOK_FILE, "").trim();
-                masterWorkbookOpenHintLabel.setText(mf.isEmpty() ? "master.xlsm" : mf);
+                masterWorkbookOpenHintLabel.setText("master.xlsm");
             }
         }
         if (summaryWorkbookOpenHintLabel != null) {
@@ -978,8 +977,6 @@ public final class MainRunTabController {
                             + p
                             + " (set "
                             + AppPaths.KEY_PM_AI_MASTER_WORKBOOK
-                            + " / "
-                            + AppPaths.KEY_MASTER_WORKBOOK_FILE
                             + ", or check "
                             + AppPaths.KEY_PM_AI_REPO_ROOT
                             + ")");

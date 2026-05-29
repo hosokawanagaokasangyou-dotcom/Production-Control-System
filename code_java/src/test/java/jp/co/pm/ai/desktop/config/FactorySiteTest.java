@@ -144,8 +144,8 @@ class FactorySiteTest {
                                 Map.of(
                                         AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR,
                                         FactorySite.KONAN.portableBundleSourceDir(),
-                                        AppPaths.KEY_MASTER_WORKBOOK_FILE,
-                                        FactorySite.KOKUBU.masterWorkbookFileBasename()))
+                                        AppPaths.KEY_PM_AI_MASTER_WORKBOOK,
+                                        FactorySite.KOKUBU.pmAiMasterWorkbookEnvValue(Map.of())))
                         .isPresent());
     }
 }

@@ -497,7 +497,7 @@ public final class GanttPersonBadgeDesignTabController {
                 alert(
                         Alert.AlertType.WARNING,
                         "マスタブックが見つかりません",
-                        "環境変数 PM_AI_MASTER_WORKBOOK / MASTER_WORKBOOK_FILE と、実行タブのブックパスを確認してください。");
+                        "環境変数 PM_AI_MASTER_WORKBOOK と、実行タブのブックパスを確認してください。");
             }
             return;
         }

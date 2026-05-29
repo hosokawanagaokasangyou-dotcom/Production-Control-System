@@ -255,14 +255,11 @@ def _gemini_client(api_key: str) -> genai.Client:
 # ---------------------------------------------------------------------------
 
 def master_workbook_filename() -> str:
-    """マスタブックのファイル名（通常は basename。カレントは bootstrap でマクロブック所在に寄せられる）。
-
-    環境変数 ``MASTER_WORKBOOK_FILE``（VBA ``MASTER_WORKBOOK_FILE`` / シート「設定_環境変数」と同名。
-    ``workbook_env_bootstrap`` が ``import planning_core`` より前に反映）が空でなければ採用。
-    空なら ``master.xlsm``。
-    """
-    v = (os.environ.get("MASTER_WORKBOOK_FILE") or "").strip()
-    return v if v else "master.xlsm"
+    """マスタブックの basename。環境変数 ``PM_AI_MASTER_WORKBOOK`` から取得（空なら ``master.xlsm``）。"""
+    alt = (os.environ.get("PM_AI_MASTER_WORKBOOK") or "").strip()
+    if alt:
+        return os.path.basename(alt)
+    return "master.xlsm"
 
 
 # import 時点で解決（bootstrap 済みの後で本モジュールが読まれる想定）。公開名は従来どおり。
@@ -273,7 +270,7 @@ def _master_workbook_path_resolved() -> str:
     """
     マスタブックの絶対パス。環境変数 ``PM_AI_MASTER_WORKBOOK`` のみ（必須・実在ファイル）。
 
-    ``MASTER_WORKBOOK_FILE`` やカレントの ``master.xlsm`` へのフォールバックは行わない。
+    ``PM_AI_MASTER_WORKBOOK`` 未設定・未存在時は ``PlanningValidationError``。
     """
     alt = (os.environ.get("PM_AI_MASTER_WORKBOOK") or "").strip()
     if not alt:

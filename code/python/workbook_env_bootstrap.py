@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 マクロブック内「設定_環境変数」シートを読み、planning_core 取り込み前に os.environ を上書きする。
-（例: ``MASTER_WORKBOOK_FILE`` でマスタブックのファイル名を既定 ``master.xlsm`` から変更可）
+（例: ``PM_AI_MASTER_WORKBOOK`` でマスタブックの絶対パスを指定）
 
 **JavaFX ランチャー**: 子プロセスに ``PM_AI_SKIP_WORKBOOK_ENV_SHEET=1`` を付けると本シートは読まず、
 環境変数は **JavaFX のタブのみ**（OS の恒久環境変数は変更しない方針）。VBA／CLI 単体実行では未設定のとき従来どおりシートを読む。

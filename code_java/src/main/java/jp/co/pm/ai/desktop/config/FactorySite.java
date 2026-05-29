@@ -39,7 +39,7 @@ public enum FactorySite {
     private final String portableBundleSourceDir;
     private final String taskInputSourceDir;
     private final String actualDetailSourceDir;
-    /** {@link AppPaths#KEY_MASTER_WORKBOOK_FILE}。空のとき planning_core 側は {@code master.xlsm} 相当。 */
+    /** {@link AppPaths#KEY_PM_AI_MASTER_WORKBOOK} 未設定時の basename ヒント（工場プリセット識別用）。 */
     private final String masterWorkbookFileBasename;
     /** {@code code/} 直下の {@link AppPaths#KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK} 用ファイル名。 */
     private final String summaryAiDispatchWorkbookCodeFilename;
@@ -85,7 +85,7 @@ public enum FactorySite {
         return actualDetailSourceDir;
     }
 
-    /** {@link AppPaths#KEY_MASTER_WORKBOOK_FILE}（basename）。 */
+    /** 工場別マスタ basename（{@link #pmAiMasterWorkbookEnvValue} の UNC ファイル名と対応）。 */
     public String masterWorkbookFileBasename() {
         return masterWorkbookFileBasename;
     }
@@ -207,8 +207,7 @@ public enum FactorySite {
                         AppPaths.KEY_PM_AI_MASTER_WORKBOOK,
                         AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK,
                         AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR,
-                        AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE,
-                        AppPaths.KEY_MASTER_WORKBOOK_FILE);
+                        AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE);
         for (String key : keys) {
             int weight =
                     AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR.equals(key)

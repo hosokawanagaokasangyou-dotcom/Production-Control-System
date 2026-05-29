@@ -494,11 +494,6 @@ public final class MasterReadSummaryTabController {
         addGridRow(
                 envGrid,
                 row++,
-                "MASTER_WORKBOOK_FILE",
-                root.path("master_workbook_file_env").asText(""));
-        addGridRow(
-                envGrid,
-                row++,
                 "PM_AI_MASTER_WORKBOOK",
                 root.path("pm_ai_master_workbook_env").asText(""));
         addGridRow(

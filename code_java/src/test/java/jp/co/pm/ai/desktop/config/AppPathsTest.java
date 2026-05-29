@@ -466,7 +466,7 @@ class AppPathsTest {
     }
 
     @Test
-    void resolveMasterWorkbookPathResolved_explicitMasterBasenameIgnoresStalePmAiAbsolute(@TempDir Path tmp)
+    void resolveMasterWorkbookPathResolved_pmAiMasterWinsOverOtherBasenames(@TempDir Path tmp)
             throws Exception {
         Path code = tmp.resolve("code");
         Path py = code.resolve("python");
@@ -481,11 +481,9 @@ class AppPathsTest {
                         AppPaths.KEY_PM_AI_REPO_ROOT,
                         tmp.toString(),
                         AppPaths.KEY_PM_AI_MASTER_WORKBOOK,
-                        masterDefault.toString(),
-                        AppPaths.KEY_MASTER_WORKBOOK_FILE,
-                        "国分master.xlsm");
+                        masterDefault.toString());
         Path p = AppPaths.resolveMasterWorkbookPathResolved(ui, "");
-        assertEquals(kokubu.toAbsolutePath().normalize(), p);
+        assertEquals(masterDefault.toAbsolutePath().normalize(), p);
     }
 
     @Test
@@ -505,7 +503,7 @@ class AppPathsTest {
                 Map.of(
                         AppPaths.KEY_PM_AI_REPO_ROOT,
                         tmp.toString(),
-                        AppPaths.KEY_MASTER_WORKBOOK_FILE,
+                        AppPaths.KEY_PM_AI_MASTER_WORKBOOK,
                         "国分master.xlsm");
         Path wrong = AppPaths.resolveMasterWorkbookPathResolved(ui, planInOutput.toString());
         assertEquals(out.resolve("国分master.xlsm").normalize().toAbsolutePath(), wrong);
@@ -659,6 +657,34 @@ class AppPathsTest {
     }
 
     @Test
+    void migrateLegacyMasterWorkbookFileToPmAi_resolvesRelativeBasename(@TempDir Path tmp) throws Exception {
+        Path code = tmp.resolve("code");
+        Path py = code.resolve("python");
+        Files.createDirectories(py);
+        Files.createFile(py.resolve("task_extract_stage1.py"));
+        Path kokubu = code.resolve("国分master.xlsm");
+        Files.createFile(kokubu);
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, tmp.toString());
+        Optional<String> migrated =
+                AppPaths.migrateLegacyMasterWorkbookFileToPmAi(ui, "国分master.xlsm");
+        assertTrue(migrated.isPresent());
+        assertEquals(kokubu.toAbsolutePath().normalize().toString(), migrated.get());
+    }
+
+    @Test
+    void migrateLegacyMasterWorkbookFileToPmAi_skipsWhenPmAiAlreadySet(@TempDir Path tmp) throws Exception {
+        Path master = tmp.resolve("m.xlsm");
+        Files.createFile(master);
+        Map<String, String> ui =
+                Map.of(
+                        AppPaths.KEY_PM_AI_MASTER_WORKBOOK,
+                        master.toString(),
+                        AppPaths.KEY_MASTER_WORKBOOK_FILE,
+                        "国分master.xlsm");
+        assertTrue(AppPaths.migrateLegacyMasterWorkbookFileToPmAi(ui, "国分master.xlsm").isEmpty());
+    }
+
+    @Test
     void resolveMasterWorkbookPathResolved_relativeUsesCodeFolder(@TempDir Path tmp) throws Exception {
         Path code = tmp.resolve("code");
         Path py = code.resolve("python");
@@ -670,7 +696,7 @@ class AppPathsTest {
                 Map.of(
                         AppPaths.KEY_PM_AI_REPO_ROOT,
                         tmp.toString(),
-                        AppPaths.KEY_MASTER_WORKBOOK_FILE,
+                        AppPaths.KEY_PM_AI_MASTER_WORKBOOK,
                         "master.xlsm");
         assertEquals(
                 master.toAbsolutePath().normalize(),

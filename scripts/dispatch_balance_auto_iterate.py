@@ -47,7 +47,6 @@ def apply_env() -> None:
     master = ROOT / "code" / "master.xlsm"
     if master.is_file():
         os.environ["PM_AI_MASTER_WORKBOOK"] = str(master)
-    os.environ["MASTER_WORKBOOK_FILE"] = "master.xlsm"
     os.environ["PM_AI_EXCLUDE_RULES_JSON"] = str(ROOT / "code" / "json" / "stage1_exclude_rules.json")
     for key, rel in {
         "RAW_FABRIC_WIDTH_TABLE_PATH": "code/使用原反, 加工幅.txt",

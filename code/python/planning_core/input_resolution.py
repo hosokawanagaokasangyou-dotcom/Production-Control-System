@@ -74,9 +74,9 @@ EXCEL_IO_INVENTORY: list[dict[str, str]] = [
     {
         "area": "master_skills_need",
         "function": "load_skills_and_needs / pd.ExcelFile(master)",
-        "default": "read_excel master workbook (cwd + MASTER_WORKBOOK_FILE)",
-        "env": "MASTER_WORKBOOK_FILE | PM_AI_MASTER_WORKBOOK",
-        "note": "PM_AI_MASTER_WORKBOOK: absolute path to .xlsm when not beside cwd",
+        "default": "read_excel master workbook (PM_AI_MASTER_WORKBOOK)",
+        "env": "PM_AI_MASTER_WORKBOOK",
+        "note": "absolute path to .xlsm (required for stage1/2 child)",
     },
     {
         "area": "exclude_rules",

@@ -249,20 +249,23 @@ public final class EnvVarDocs {
                         + "JavaFX 環境変数タブの「ファイル...」で選択可。");
         put(
                 "PM_AI_MASTER_WORKBOOK",
-                "master 系 .xlsm の絶対パス（実在ファイルのとき"
-                        + " MASTER_WORKBOOK_FILE より優先。planning_core の"
-                        + " マスタ読込・機械カレンダー等に使用。"
+                "master 系 .xlsm / .xlsx の絶対パス（UNC 可）。"
+                        + " planning_core 子プロセスの必須 env。"
+                        + " ファイル名のみのときは planning cwd（通常 code/）相対。"
+                        + " 空のとき resolveMasterWorkbookCandidate 等で補完。"
                         + " JavaFX の「マスタ読込サマリ」タブで内容を確認可。");
         put(
                 "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK",
-                "実行・ログタブの「開く」（サマリ AI 配台"
-                        + " 等）が開くブックの絶対パス（.xlsx 等）。"
-                        + " 空で code/ 下の"
-                        + " サマリ_AI配台.xlsx（"
-                        + "PM_AI_REPO_ROOT 準拠）。"
-                        + " ファイル名のみのときは code/ からの相対パス"
-                        + "として解決。"
-                        + " UI の「エクセルを開く」は読み取り専用で起動する。");
+                "利用工場と本パスが別工場を指すとき"
+                        + " summaryAiDispatchXlsxPathForFactory が工場既定 UNC へ切替"
+                        + "（操作者 bin・PDF・バックアップと整合）。"
+                        + " 段階1（run_stage1_extract）は同フォルダへ"
+                        + " stage1_exclude_rules.json を書出し"
+                        + " PM_AI_EXCLUDE_RULES_JSON を自動設定。"
+                        + " 特別ルール JSON は dispatch_special_rules/ 配下。"
+                        + " SummaryAiDispatchWorkbookExporter・納期管理ビュー・"
+                        + " 実行・ログ「開く」の出力先。"
+                        + " UI から Excel を開く操作は読取専用。");
         put(
                 "PM_AI_SKIP_WORKBOOK_ENV_SHEET",
                 "1/true 等で workbook_env_bootstrap がマクロブックの"
@@ -341,12 +344,6 @@ public final class EnvVarDocs {
                         + "（列設定シート図形複製等、Excel COM/アドイン連携用）"
                         + " をスキップ。openpyxl の xlsx 保存は從来通り。"
                         + "JavaFX からの段階2のみなら本条は実質無関係となることが多い。");
-        put(
-                "MASTER_WORKBOOK_FILE",
-                "master.xlsm のファイル名（空で master.xlsm）。"
-                        + "マクロブック階層からの相対パス可。"
-                        + " PM_AI_MASTER_WORKBOOK 未指定時の解決に使用。"
-                        + " 「マスタ読込サマリ」タブと連動。");
         put(
                 "MASTER_USE_SPEED_SHEET",
                 "master 内 speed シートによる加工速度上書きを有効化。");

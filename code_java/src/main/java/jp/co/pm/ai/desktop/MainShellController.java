@@ -162,7 +162,6 @@ public final class MainShellController {
                     AppPaths.KEY_PM_AI_ACTUAL_DETAIL_SHEET,
                     AppPaths.KEY_PM_AI_PLAN_INPUT_PATH,
                     AppPaths.KEY_PM_AI_MASTER_WORKBOOK,
-                    AppPaths.KEY_MASTER_WORKBOOK_FILE,
                     AppPaths.KEY_PM_AI_EXCLUDE_RULES_JSON,
                     AppPaths.KEY_PM_AI_OUTPUT_DIR,
                     AppPaths.KEY_PM_AI_REPO_ROOT,
@@ -178,7 +177,6 @@ public final class MainShellController {
                     AppPaths.KEY_PM_AI_PLAN_INPUT_PATH,
                     PlanInputTabController.ENV_TASK_PLAN_SHEET,
                     AppPaths.KEY_PM_AI_MASTER_WORKBOOK,
-                    AppPaths.KEY_MASTER_WORKBOOK_FILE,
                     AppPaths.KEY_PM_AI_OUTPUT_DIR,
                     AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH,
                     AppPaths.KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK,
@@ -207,6 +205,7 @@ public final class MainShellController {
      */
     private static final Set<String> DROPPED_ENV_TAB_ROW_KEYS =
             Set.of(
+                    AppPaths.KEY_MASTER_WORKBOOK_FILE,
                     "DEBUG_TASK_ID",
                     "TRACE_TEAM_ASSIGN_TASK_ID",
                     "EXCLUDE_RULES_TEST_E1234",
@@ -3275,6 +3274,7 @@ public final class MainShellController {
             restored.add(row);
         }
         envRows.setAll(restored);
+        migrateLegacyMasterWorkbookFileEnvRows();
         stripRemovedEnvVarRows(envRows);
         mergeMissingBootstrapEnvRows();
         ensureBootstrapDefaultValuesVisible(collectUiEnv());
@@ -4472,8 +4472,6 @@ public final class MainShellController {
                             + PlanInputTabController.ENV_TASK_PLAN_SHEET
                             + "。マスタは "
                             + AppPaths.KEY_PM_AI_MASTER_WORKBOOK
-                            + " / "
-                            + AppPaths.KEY_MASTER_WORKBOOK_FILE
                             + "。");
         }
     }
@@ -4874,7 +4872,6 @@ public final class MainShellController {
         String task = site.taskInputSourceDir();
         String actual = site.actualDetailSourceDir();
         String portable = site.portableBundleSourceDir();
-        String masterBasename = site.masterWorkbookFileBasename();
         String pmAiMaster = site.pmAiMasterWorkbookEnvValue(collectUiEnv());
         String pmAiSummary = site.pmAiSummaryAiDispatchWorkbookEnvValue(collectUiEnv());
         for (EnvVarRow r : envRows) {
@@ -4885,8 +4882,6 @@ public final class MainShellController {
                 r.setValue(actual);
             } else if (AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR.equals(name)) {
                 r.setValue(portable);
-            } else if (AppPaths.KEY_MASTER_WORKBOOK_FILE.equals(name)) {
-                r.setValue(masterBasename != null ? masterBasename : "");
             } else if (AppPaths.KEY_PM_AI_MASTER_WORKBOOK.equals(name)) {
                 r.setValue(pmAiMaster != null ? pmAiMaster : "");
             } else if (AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK.equals(name)) {
@@ -7237,12 +7232,6 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
             if (cur != null && !cur.isBlank()) {
                 continue;
             }
-            if (AppPaths.KEY_PM_AI_MASTER_WORKBOOK.equals(k)) {
-                String mf = envTabValueTrimmed(AppPaths.KEY_MASTER_WORKBOOK_FILE);
-                if (!mf.isEmpty()) {
-                    continue;
-                }
-            }
             String v = bootstrapDefaultValueForKey(k, ctx);
             if (!v.isBlank()) {
                 row.setValue(v);
@@ -7263,6 +7252,32 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
             }
         }
         return "";
+    }
+
+    /** 廃止した {@link AppPaths#KEY_MASTER_WORKBOOK_FILE} を {@link AppPaths#KEY_PM_AI_MASTER_WORKBOOK} へ移行する。 */
+    private void migrateLegacyMasterWorkbookFileEnvRows() {
+        if (envRows == null) {
+            return;
+        }
+        String legacy = envTabValueTrimmed(AppPaths.KEY_MASTER_WORKBOOK_FILE);
+        if (legacy.isEmpty()) {
+            return;
+        }
+        Optional<String> migrated =
+                AppPaths.migrateLegacyMasterWorkbookFileToPmAi(collectUiEnv(), legacy);
+        if (migrated.isEmpty()) {
+            return;
+        }
+        for (EnvVarRow row : envRows) {
+            String name = row.getName() != null ? row.getName().trim() : "";
+            if (!AppPaths.KEY_PM_AI_MASTER_WORKBOOK.equals(name)) {
+                continue;
+            }
+            if (envTabValueTrimmed(AppPaths.KEY_PM_AI_MASTER_WORKBOOK).isEmpty()) {
+                row.setValue(migrated.get());
+            }
+            break;
+        }
     }
 
     /**
@@ -7300,7 +7315,6 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         }
         AppPaths.ensureAllDispatchLookupTablesFromRepoIfMissing(u);
         return switch (k) {
-            case AppPaths.KEY_MASTER_WORKBOOK_FILE -> "master.xlsm";
             case PlanInputTabController.ENV_TASK_PLAN_SHEET ->
                     PlanInputTabController.DEFAULT_PLAN_INPUT_SHEET_NAME;
             case "MASTER_SPEED_SHEET_NAME" -> "speed";
