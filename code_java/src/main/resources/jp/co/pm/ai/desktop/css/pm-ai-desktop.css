@@ -415,8 +415,108 @@
 
 /* 段階3.5 残業シミュ表: 配色の正本は delivery-calendar-spreadsheet.css の .pm-ai-readable-table */
 .overtime-simulation-grid {
-    -fx-border-color: #cccccc;
+    -fx-border-color: #d7dde3;
     -fx-border-width: 1;
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+}
+
+/* ===== 段階3.5 残業シミュレーション ダイアログ ===== */
+.overtime-sim-dialog {
+    -fx-background-color: #f4f6f8;
+}
+
+.overtime-sim-header {
+    -fx-background-color: #0f766e;
+    -fx-padding: 14 18 14 18;
+}
+
+.overtime-sim-header .overtime-sim-eyebrow {
+    -fx-text-fill: #99f6e4;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+
+.overtime-sim-header .overtime-sim-title {
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+}
+
+.overtime-sim-step-badge {
+    -fx-background-color: rgba(255, 255, 255, 0.18);
+    -fx-background-radius: 12;
+    -fx-padding: 4 12 4 12;
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+
+.overtime-sim-intro {
+    -fx-background-color: #ecfdf5;
+    -fx-border-color: #0f766e;
+    -fx-border-width: 0 0 0 4;
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+    -fx-padding: 10 14 10 14;
+    -fx-text-fill: #115e59;
+    -fx-font-size: 12px;
+}
+
+.overtime-sim-summary {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d7dde3;
+    -fx-border-width: 1;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-padding: 16;
+    -fx-font-size: 13px;
+    -fx-text-fill: #1f2933;
+}
+
+.overtime-sim-footer {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d7dde3;
+    -fx-border-width: 1 0 0 0;
+    -fx-padding: 12 18 12 18;
+}
+
+.overtime-sim-footer .button {
+    -fx-font-size: 13px;
+    -fx-padding: 7 18 7 18;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-cursor: hand;
+}
+
+.overtime-sim-footer .overtime-sim-secondary-button {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #c2cad2;
+    -fx-border-width: 1;
+    -fx-text-fill: #334155;
+}
+
+.overtime-sim-footer .overtime-sim-secondary-button:hover {
+    -fx-background-color: #f1f5f9;
+}
+
+.overtime-sim-footer .overtime-sim-secondary-button:disabled {
+    -fx-opacity: 0.45;
+}
+
+.overtime-sim-footer .overtime-sim-primary-button {
+    -fx-background-color: #0f766e;
+    -fx-text-fill: #ffffff;
+    -fx-font-weight: bold;
+}
+
+.overtime-sim-footer .overtime-sim-primary-button:hover {
+    -fx-background-color: #14b8a6;
+}
+
+.overtime-sim-footer .overtime-sim-primary-button:pressed {
+    -fx-background-color: #134e4a;
 }
 
 .button.pm-stage-run-button:disabled {

@@ -89,8 +89,20 @@ public final class OvertimeSimulationWizard {
         stage.initModality(Modality.WINDOW_MODAL);
         stage.setTitle("段階3.5 — 残業シミュレーション");
 
+        Label eyebrow = new Label("段階3.5");
+        eyebrow.getStyleClass().add("overtime-sim-eyebrow");
+        Label titleLabel = new Label("残業シミュレーション");
+        titleLabel.getStyleClass().add("overtime-sim-title");
+        VBox headerTitles = new VBox(2, eyebrow, titleLabel);
+
         Label stepLabel = new Label("ステップ 1 / 2");
-        stepLabel.setStyle("-fx-font-weight: bold;");
+        stepLabel.getStyleClass().add("overtime-sim-step-badge");
+
+        Region headerSpacer = new Region();
+        HBox.setHgrow(headerSpacer, Priority.ALWAYS);
+        HBox header = new HBox(12, headerTitles, headerSpacer, stepLabel);
+        header.setAlignment(Pos.CENTER_LEFT);
+        header.getStyleClass().add("overtime-sim-header");
 
         Label intro =
                 new Label(
@@ -101,25 +113,32 @@ public final class OvertimeSimulationWizard {
                                 + " 勤怠行はダブルクリックで ○（出勤）とグレー（休み）を切り替えられます（休日出勤シミュレーション）。"
                                 + " 確定後、変更内容を反映して段階3（配台試行）を実行します。");
         intro.setWrapText(true);
+        intro.setMaxWidth(Double.MAX_VALUE);
+        intro.getStyleClass().add("overtime-sim-intro");
 
         Node gridPanel = buildGridPanel(state);
         VBox.setVgrow(gridPanel, Priority.ALWAYS);
 
-        VBox step1 = new VBox(10, intro, gridPanel);
-        step1.setPadding(new Insets(0, 0, 8, 0));
+        VBox step1 = new VBox(12, intro, gridPanel);
 
         Label summaryLabel = new Label();
         summaryLabel.setWrapText(true);
-        VBox step2 = new VBox(10, summaryLabel);
-        step2.setPadding(new Insets(0, 0, 8, 0));
+        summaryLabel.setMaxWidth(Double.MAX_VALUE);
+        summaryLabel.getStyleClass().add("overtime-sim-summary");
+        VBox.setVgrow(summaryLabel, Priority.ALWAYS);
+        VBox step2 = new VBox(12, summaryLabel);
 
         BorderPane center = new BorderPane();
-        center.setPadding(new Insets(12));
+        center.setPadding(new Insets(16, 18, 16, 18));
 
         Button backBtn = new Button("戻る");
+        backBtn.getStyleClass().add("overtime-sim-secondary-button");
         backBtn.setDisable(true);
         Button nextBtn = new Button("次へ");
+        nextBtn.getStyleClass().add("overtime-sim-primary-button");
+        nextBtn.setDefaultButton(true);
         Button cancelBtn = new Button("キャンセル");
+        cancelBtn.getStyleClass().add("overtime-sim-secondary-button");
 
         Runnable showStep1 =
                 () -> {
@@ -166,19 +185,19 @@ public final class OvertimeSimulationWizard {
         backBtn.setOnAction(ev -> showStep1.run());
         cancelBtn.setOnAction(ev -> stage.close());
 
-        HBox buttons = new HBox(8, backBtn, nextBtn, cancelBtn);
-        buttons.setAlignment(Pos.CENTER_RIGHT);
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox topBar = new HBox(12, stepLabel, spacer);
+        Region footerSpacer = new Region();
+        HBox.setHgrow(footerSpacer, Priority.ALWAYS);
+        HBox footer = new HBox(8, cancelBtn, footerSpacer, backBtn, nextBtn);
+        footer.setAlignment(Pos.CENTER_LEFT);
+        footer.getStyleClass().add("overtime-sim-footer");
 
         BorderPane root = new BorderPane();
-        root.setTop(new VBox(8, topBar));
+        root.getStyleClass().add("overtime-sim-dialog");
+        root.setTop(header);
         root.setCenter(center);
-        root.setBottom(buttons);
-        BorderPane.setMargin(buttons, new Insets(8, 12, 12, 12));
+        root.setBottom(footer);
 
-        Scene scene = new Scene(root, 1024, 560);
+        Scene scene = new Scene(root, 1024, 600);
         if (shell != null) {
             shell.registerThemeTrackedScene(scene);
             stage.setOnHidden(ev -> shell.unregisterThemeTrackedScene(scene));
