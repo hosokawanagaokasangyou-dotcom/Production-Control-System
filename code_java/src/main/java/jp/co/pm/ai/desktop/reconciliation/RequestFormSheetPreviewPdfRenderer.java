@@ -33,7 +33,7 @@ import jp.co.pm.ai.desktop.reconciliation.RequestFormSheetShapeOverlay.OverlaySh
  */
 final class RequestFormSheetPreviewPdfRenderer {
 
-    private static final String RENDERER_SPEC_BASE = "pdfbox-v2-text-fit";
+    private static final String RENDERER_SPEC_BASE = "pdfbox-v3-text-fit";
 
     private static final float PX_TO_PT = 72f / 96f;
     private static volatile float cjkMetricsScale =
@@ -328,6 +328,7 @@ final class RequestFormSheetPreviewPdfRenderer {
                         default -> x + padX;
                     };
             writeTextLine(stream, font, fontSizePt, textX, cursorY, line);
+            drawTextStrike(stream, style, textX, cursorY, textWidth, fontSizePt);
             cursorY -= lineHeight;
             if (cursorY < y + padY) {
                 break;
@@ -396,9 +397,47 @@ final class RequestFormSheetPreviewPdfRenderer {
             float[] rgb = hexToRgb(style != null ? style.foreground() : "#000000");
             stream.setNonStrokingColor(rgb[0], rgb[1], rgb[2]);
             String text = run.text() != null ? run.text() : "";
+            float runWidth = stringWidth(runFont, text, runSize);
             writeTextLine(stream, runFont, runSize, cursorX, textY, text);
-            cursorX += stringWidth(runFont, text, runSize);
+            drawTextStrike(stream, style, cursorX, textY, runWidth, runSize);
+            cursorX += runWidth;
         }
+    }
+
+    /**
+     * 取り消し線（単線・二重線）をテキスト上に描画する。
+     * Excel フォントの strikeout を PDF プレビューでも再現するため、文字描画の直後に呼ぶ。
+     * {@code baselineY} は {@link #writeTextLine} に渡したベースライン（PDF 座標で下が小）。
+     */
+    private static void drawTextStrike(
+            PDPageContentStream stream,
+            RequestFormPreviewCellStyle style,
+            float x,
+            float baselineY,
+            float textWidth,
+            float fontSizePt)
+            throws IOException {
+        if (style == null || textWidth <= 0f || !(style.strike() || style.doubleStrike())) {
+            return;
+        }
+        float[] rgb = hexToRgb(style.foreground());
+        stream.setStrokingColor(rgb[0], rgb[1], rgb[2]);
+        stream.setLineWidth(Math.max(0.4f, fontSizePt * 0.06f));
+        float center = baselineY + fontSizePt * 0.28f;
+        if (style.doubleStrike()) {
+            float gap = Math.max(0.6f, fontSizePt * 0.09f);
+            drawHLine(stream, x, center + gap, x + textWidth);
+            drawHLine(stream, x, center - gap, x + textWidth);
+        } else {
+            drawHLine(stream, x, center, x + textWidth);
+        }
+    }
+
+    private static void drawHLine(PDPageContentStream stream, float x1, float y, float x2)
+            throws IOException {
+        stream.moveTo(x1, y);
+        stream.lineTo(x2, y);
+        stream.stroke();
     }
 
     private static void writeTextLine(
