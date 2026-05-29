@@ -124,6 +124,30 @@ class RequestFormOriginalExtractorTest {
     }
 
     @Test
+    void buildRawMapFromSheet_strikethroughWidthUsesCorrectionBelow() throws Exception {
+        File file = new File("sample.xlsm");
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            XSSFSheet sheet = wb.createSheet("W6-6");
+            sheet.createRow(4).createCell(17).setCellValue("W6-6");
+            fillProductRow(sheet, 9, "6783", "20020", "AP17", "1120", "300");
+
+            // 原反行 22: 幅セルに取り消し線。訂正値 1310 はすぐ下の行 23 の同じ列。
+            fillRawRow(sheet, 22, "6780", "20020", "AP17", "1330", "300", "湖南");
+            int widthCol = RequestFormOriginalCellLayout.RawColumn.WIDTH.columnIndex();
+
+            org.apache.poi.xssf.usermodel.XSSFFont strikeFont = wb.createFont();
+            strikeFont.setStrikeout(true);
+            org.apache.poi.xssf.usermodel.XSSFCellStyle strikeStyle = wb.createCellStyle();
+            strikeStyle.setFont(strikeFont);
+            sheet.getRow(22).getCell(widthCol).setCellStyle(strikeStyle);
+            sheet.createRow(23).createCell(widthCol).setCellValue("1310");
+
+            Map<String, String> raw = RequestFormOriginalExtractor.buildRawMapFromSheet(file, "W6-6", sheet);
+            assertEquals("20020-AP17-1310X300", raw.get("原反"));
+        }
+    }
+
+    @Test
     void resolveContractNoFromOriginalCell_takesValueAfterArrow() {
         assertEquals("A22222", RequestFormOriginalExtractor.resolveContractNoFromOriginalCell("A655440 → A22222"));
         assertEquals("A22222", RequestFormOriginalExtractor.resolveContractNoFromOriginalCell("A655440→A22222"));

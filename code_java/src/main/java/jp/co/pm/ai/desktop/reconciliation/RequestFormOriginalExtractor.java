@@ -9,10 +9,13 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.util.CellRangeAddress;
 
 /** 加工依頼書原本シートから受注フォーム向けの値を抽出・正規化する。 */
@@ -325,16 +328,73 @@ final class RequestFormOriginalExtractor {
         return (row, col) -> cellString(sheet, row, col);
     }
 
+    /** 取り消し線セルの訂正値を下方向へ何行まで辿るかの上限（無限ループ防止）。 */
+    private static final int MAX_STRIKE_CORRECTION_DEPTH = 10;
+
     private static String cellString(Sheet sheet, int rowIndex, int colIndex) {
         if (sheet == null) {
             return "";
         }
         int[] anchor = mergeAnchor(sheet, rowIndex, colIndex);
-        Row row = sheet.getRow(anchor[0]);
-        if (row == null) {
-            return "";
+        return resolveCorrectedCellValue(sheet, anchor[0], anchor[1], 0);
+    }
+
+    /**
+     * セル値を返す。取り消し線（strikeout）が付いたセルは、訂正値がすぐ下のセルに
+     * 書かれていることが多いため、下のセルに非空の値があればそれを採用する。
+     * 下のセルも取り消し線ならさらに下へ辿る（{@link #MAX_STRIKE_CORRECTION_DEPTH} 回まで）。
+     * 下が空のときは取り消し線セルの値をそのまま返す。
+     */
+    private static String resolveCorrectedCellValue(
+            Sheet sheet, int rowIndex, int colIndex, int depth) {
+        Row row = sheet.getRow(rowIndex);
+        Cell cell = row != null ? row.getCell(colIndex) : null;
+        String value = getCellValueAsString(cell);
+        if (depth >= MAX_STRIKE_CORRECTION_DEPTH || !cellHasStrikethrough(cell)) {
+            return value;
         }
-        return getCellValueAsString(row.getCell(anchor[1]));
+        int belowRowIndex = rowBelow(sheet, rowIndex, colIndex);
+        Row belowRow = sheet.getRow(belowRowIndex);
+        Cell belowCell = belowRow != null ? belowRow.getCell(colIndex) : null;
+        String belowValue = getCellValueAsString(belowCell);
+        if (belowValue.isBlank()) {
+            return value;
+        }
+        if (cellHasStrikethrough(belowCell)) {
+            return resolveCorrectedCellValue(sheet, belowRowIndex, colIndex, depth + 1);
+        }
+        return belowValue;
+    }
+
+    /** {@code (rowIndex, colIndex)} の直下行。縦結合セルのときは結合範囲の下の行。 */
+    private static int rowBelow(Sheet sheet, int rowIndex, int colIndex) {
+        if (sheet != null) {
+            for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
+                CellRangeAddress region = sheet.getMergedRegion(i);
+                if (region.isInRange(rowIndex, colIndex)) {
+                    return region.getLastRow() + 1;
+                }
+            }
+        }
+        return rowIndex + 1;
+    }
+
+    /** セルのフォントに取り消し線が設定されているか。 */
+    private static boolean cellHasStrikethrough(Cell cell) {
+        if (cell == null) {
+            return false;
+        }
+        try {
+            CellStyle style = cell.getCellStyle();
+            if (style == null) {
+                return false;
+            }
+            Workbook wb = cell.getSheet().getWorkbook();
+            Font font = wb.getFontAt(style.getFontIndexAsInt());
+            return font != null && font.getStrikeout();
+        } catch (RuntimeException ex) {
+            return false;
+        }
     }
 
     private static String getCellValueAsString(Cell cell) {
