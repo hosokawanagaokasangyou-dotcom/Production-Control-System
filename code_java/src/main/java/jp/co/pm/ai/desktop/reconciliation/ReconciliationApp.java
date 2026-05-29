@@ -5373,6 +5373,21 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         runWithSuppressedCandidateEditorFilter(combo, () -> combo.getEditor().clear());
     }
 
+    /**
+     * 候補確定でエディタに入った完全ラベル（{@code " | "} を含む）は、次回ドロップダウンを開いたときの
+     * 絞り込み条件になってしまい「それ以外の候補が表示されない」原因になる。確定ラベルのときだけ消す
+     * （ユーザーが途中まで打ったクエリは {@code " | "} を含まないため残す）。
+     */
+    private static void clearConfirmedCandidateEditorText(ComboBox<String> combo) {
+        if (combo == null) {
+            return;
+        }
+        String text = combo.getEditor().getText();
+        if (text != null && text.contains(" | ")) {
+            clearMasterCandidateEditor(combo);
+        }
+    }
+
     private static void runWithSuppressedCandidateEditorFilter(ComboBox<String> combo, Runnable action) {
         combo.getProperties().put(MASTER_CANDIDATE_SUPPRESS_EDITOR_FILTER_PROP, Boolean.TRUE);
         try {
@@ -5542,6 +5557,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (isLoadingRecord && !fromDropdownOpen) {
             return;
         }
+        if (fromDropdownOpen) {
+            clearConfirmedCandidateEditorText(pRow.cmbSearch);
+        }
         // 「商品」欄（商品コード）は候補選択の出力先のため、候補フィルタの条件には使わない
         String kwItem = "";
         String kwPart = normalize_text(pRow.txtPart.getText());
@@ -5585,6 +5603,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     private void updateRowRawCandidates(RawMaterialRow rRow, boolean fromDropdownOpen, boolean autoOpenPopup) {
         if (isLoadingRecord && !fromDropdownOpen) {
             return;
+        }
+        if (fromDropdownOpen) {
+            clearConfirmedCandidateEditorText(rRow.cmbSearch);
         }
         // 「商品」欄（商品コード）は候補選択の出力先のため、候補フィルタの条件には使わない
         String kwItem = "";
