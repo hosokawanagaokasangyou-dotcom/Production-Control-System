@@ -31,4 +31,9 @@ pm-ai-package-release/
 *.hprof.*
 *.lock
 stage1_task_input_table.xlsx
-output/plan_input_tasks.xlsx
+
+# 生成物の実行出力（段階1/2/3 の xlsx・json）。再生成可能なためコミットしない
+/output/
+
+# 操作者名・PIN ストア（個人情報を含む可能性。コミットしない）
+**/factory-operator-users.bin
