@@ -164,7 +164,10 @@ final class RequestFormSheetPreviewRenderer {
                         cell = row != null ? row.getCell(c) : null;
                     }
                     texts[gridR][gridC] =
-                            cell != null ? formatter.formatCellValue(cell, evaluator) : "";
+                            cell != null
+                                    ? RequestFormCellTextUtil.stripFormatLiteralQuotes(
+                                            cell, formatter.formatCellValue(cell, evaluator))
+                                    : "";
                     CellStyle cellStyle = cell != null ? cell.getCellStyle() : null;
                     styles[gridR][gridC] =
                             RequestFormPreviewStyleHelper.cellStyle(wb, cellStyle, fontCache);

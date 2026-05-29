@@ -404,10 +404,14 @@ final class RequestFormOriginalExtractor {
         try {
             FormulaEvaluator evaluator =
                     cell.getSheet().getWorkbook().getCreationHelper().createFormulaEvaluator();
-            String formatted = CELL_FORMATTER.formatCellValue(cell, evaluator);
+            String formatted =
+                    RequestFormCellTextUtil.stripFormatLiteralQuotes(
+                            cell, CELL_FORMATTER.formatCellValue(cell, evaluator));
             return formatted != null ? formatted.trim() : "";
         } catch (RuntimeException ex) {
-            String formatted = CELL_FORMATTER.formatCellValue(cell);
+            String formatted =
+                    RequestFormCellTextUtil.stripFormatLiteralQuotes(
+                            cell, CELL_FORMATTER.formatCellValue(cell));
             return formatted != null ? formatted.trim() : "";
         }
     }

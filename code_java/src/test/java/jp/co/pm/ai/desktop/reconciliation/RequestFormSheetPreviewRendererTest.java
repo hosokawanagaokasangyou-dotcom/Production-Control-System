@@ -100,6 +100,26 @@ class RequestFormSheetPreviewRendererTest {
     }
 
     @Test
+    void loadPreviewData_dateFormatLiteralQuotesStripped(@TempDir Path tmp) throws Exception {
+        File excel = tmp.resolve("date-format.xlsx").toFile();
+        try (Workbook wb = new XSSFWorkbook();
+                FileOutputStream out = new FileOutputStream(excel)) {
+            Sheet sheet = wb.createSheet("E5-1");
+            var cell = sheet.createRow(0).createCell(0);
+            cell.setCellValue(new java.util.GregorianCalendar(2026, 5, 3));
+            var style = wb.createCellStyle();
+            style.setDataFormat(wb.createDataFormat().getFormat("m\"月\"d\"日\""));
+            cell.setCellStyle(style);
+            wb.write(out);
+        }
+
+        RequestFormSheetPreviewRenderer.PreviewData data =
+                RequestFormSheetPreviewRenderer.loadPreviewData(excel, "E5-1");
+
+        assertEquals("6月3日", data.texts()[0][0]);
+    }
+
+    @Test
     void loadPreviewData_readsMergedAnchorValue(@TempDir Path tmp) throws Exception {
         File excel = tmp.resolve("merge-anchor.xlsx").toFile();
         try (Workbook wb = new XSSFWorkbook();
