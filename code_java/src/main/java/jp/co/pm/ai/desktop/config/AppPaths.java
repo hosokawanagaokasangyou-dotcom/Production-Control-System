@@ -277,6 +277,12 @@ public final class AppPaths {
             "PM_AI_OVERTIME_SIMULATION_JSON";
 
     /**
+     * 段階3.5: 段階3試行後の実配台数量（暦日×m）下限 JSON。Python は定時帯の再配台をやり直さず残業帯のみ追加する。
+     */
+    public static final String KEY_PM_AI_STAGE35_STAGE3_METERS_FLOOR_JSON =
+            "PM_AI_STAGE35_STAGE3_METERS_FLOOR_JSON";
+
+    /**
      * 段階2の実行エンジン（互換用キー）。JavaFX 実行タブから段階2を起動するときは常に Python 子プロセス（{@code
      * plan_simulation_stage2.py}）のみ。未設定・空・{@code python}（大小無視）で従来どおり。{@code java} が指定されていても無視され Python
      * が起動する（旧 JVM 段階2は撤去済み）。
@@ -918,15 +924,63 @@ public final class AppPaths {
     public static final String RESULT_DISPATCH_TABLE_JSON_BASENAME =
             "結果_配台表.json";
 
-    /**
-     * {@link #RESULT_DISPATCH_TABLE_JSON_BASENAME} under {@link #resolveResultDispatchTableDir(Map)} (override via
-     * {@link #KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR}).
-     */
-    public static Path resolveResultDispatchTableJsonPath(Map<String, String> ui) {
+    /** 段階2.5 整列後の配台表 JSON（段階2 出力は上書きしない）。 */
+    public static final String RESULT_DISPATCH_TABLE_STAGE25_JSON_BASENAME =
+            "結果_配台表.after_stage2_5.json";
+
+    /** 配台表の正本: {@code stage2}（既定）または {@code stage2_5}。 */
+    public static final String KEY_PM_AI_DISPATCH_TABLE_ACTIVE_SOURCE =
+            "PM_AI_DISPATCH_TABLE_ACTIVE_SOURCE";
+
+    /** 段階2 出力の {@link #RESULT_DISPATCH_TABLE_JSON_BASENAME}。 */
+    public static Path resolveResultDispatchTableStage2JsonPath(Map<String, String> ui) {
         return resolveResultDispatchTableDir(ui != null ? ui : Map.of())
                 .resolve(RESULT_DISPATCH_TABLE_JSON_BASENAME)
                 .toAbsolutePath()
                 .normalize();
+    }
+
+    /** 段階2.5 整列後の {@link #RESULT_DISPATCH_TABLE_STAGE25_JSON_BASENAME}。 */
+    public static Path resolveResultDispatchTableStage25JsonPath(Map<String, String> ui) {
+        return resolveResultDispatchTableDir(ui != null ? ui : Map.of())
+                .resolve(RESULT_DISPATCH_TABLE_STAGE25_JSON_BASENAME)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    public static DispatchTableActiveSource parseDispatchTableActiveSource(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String raw = trim(u.get(KEY_PM_AI_DISPATCH_TABLE_ACTIVE_SOURCE));
+        return DispatchTableActiveSource.fromEnvToken(raw);
+    }
+
+    public static DispatchStage25LearningMode parseStage25LearningMode(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String raw = trim(u.get(KEY_PM_AI_STAGE2_5_LEARNING_MODE));
+        return DispatchStage25LearningMode.fromEnvToken(raw);
+    }
+
+    /**
+     * ユーザー選択の配台表正本。段階2.5 を選んでもファイルが無いときは段階2 にフォールバック。
+     */
+    public static Path resolveActiveResultDispatchTableJsonPath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        if (parseDispatchTableActiveSource(u) == DispatchTableActiveSource.STAGE2_5) {
+            Path stage25 = resolveResultDispatchTableStage25JsonPath(u);
+            if (Files.isRegularFile(stage25)) {
+                return stage25;
+            }
+        }
+        return resolveResultDispatchTableStage2JsonPath(u);
+    }
+
+    /**
+     * {@link #resolveActiveResultDispatchTableJsonPath(Map)}（手動修正・納期ビュー等の作業正本）。
+     *
+     * <p>段階2 の Python 出力先は {@link #resolveResultDispatchTableStage2JsonPath(Map)} を用いる。
+     */
+    public static Path resolveResultDispatchTableJsonPath(Map<String, String> ui) {
+        return resolveActiveResultDispatchTableJsonPath(ui);
     }
 
     /** Basename for the shaped Aladdin-plan cache JSON (colocated with the dispatch JSON). */
@@ -1241,6 +1295,69 @@ public final class AppPaths {
             p = resolveRepoRoot(u).resolve("code").resolve(override);
         }
         return p.toAbsolutePath().normalize();
+    }
+
+    /** 学習アーカイブのサブフォルダ名（親は {@link #summaryAiDispatchXlsxPath} と同一）。 */
+    public static final String KEY_PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR =
+            "PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR";
+
+    public static final String DEFAULT_PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR =
+            "dispatch-learning-archive";
+
+    /** 段階2成功後に段階2.5(AI)を自動実行（配台計画_タスク入力タブ）。 */
+    public static final String KEY_PM_AI_STAGE2_5_AUTO_AFTER_STAGE2 =
+            "PM_AI_STAGE2_5_AUTO_AFTER_STAGE2";
+
+    /** 段階2.5 背景の学習アーカイブを有効化。 */
+    public static final String KEY_PM_AI_LEARNING_ARCHIVE_ENABLED =
+            "PM_AI_LEARNING_ARCHIVE_ENABLED";
+
+    /** 段階2.5 整列を翌暦日以降から開始（当日除外）。 */
+    public static final String KEY_PM_AI_STAGE2_5_ALIGN_FROM_TOMORROW =
+            "PM_AI_STAGE2_5_ALIGN_FROM_TOMORROW";
+
+    /** 段階2.5 前景ジョブ ID（Java が子プロセスへ渡す）。 */
+    public static final String KEY_PM_AI_STAGE2_5_JOB_ID = "PM_AI_STAGE2_5_JOB_ID";
+
+    /** 段階2.5 整列前の結果_配台表.json 退避パス。 */
+    public static final String KEY_PM_AI_STAGE2_5_STAGE2_RAW_JSON =
+            "PM_AI_STAGE2_5_STAGE2_RAW_JSON";
+
+    /** 実績由来学習速度を配台計画に適用。 */
+    public static final String KEY_PM_AI_LEARNED_SPEED_ENABLED = "PM_AI_LEARNED_SPEED_ENABLED";
+
+    /** 学習速度適用に必要な (工程,機械) 別最小観測数。 */
+    public static final String KEY_PM_AI_LEARNED_SPEED_MIN_SAMPLES =
+            "PM_AI_LEARNED_SPEED_MIN_SAMPLES";
+
+    /** 学習速度のパーセンタイル（既定 50）。 */
+    public static final String KEY_PM_AI_LEARNED_SPEED_PERCENTILE = "PM_AI_LEARNED_SPEED_PERCENTILE";
+
+    /** 速度ヒストグラムのビン幅（m/分）。 */
+    public static final String KEY_PM_AI_LEARNED_SPEED_HISTOGRAM_BIN_WIDTH =
+            "PM_AI_LEARNED_SPEED_HISTOGRAM_BIN_WIDTH";
+
+    /** 段階2.5 学習モード: accumulate（蓄積）または inference_only（推論のみ）。 */
+    public static final String KEY_PM_AI_STAGE2_5_LEARNING_MODE = "PM_AI_STAGE2_5_LEARNING_MODE";
+
+    /** 段階2.5 ML モード: off / hint / suggest / apply（MVP は off）。 */
+    public static final String KEY_PM_AI_STAGE2_5_ML_MODE = "PM_AI_STAGE2_5_ML_MODE";
+
+    /**
+     * 学習データ蓄積ルート: {@link #summaryAiDispatchXlsxPath(Map)} の親 +
+     * {@link #DEFAULT_PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR}（サブフォルダ名は環境変数で上書き可）。
+     */
+    public static Path resolveDispatchLearningArchiveRoot(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        Path parent = summaryAiDispatchXlsxPath(u).getParent();
+        if (parent == null) {
+            parent = resolveRepoRoot(u).resolve("code");
+        }
+        String sub = trim(u.get(KEY_PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR));
+        if (sub.isEmpty()) {
+            sub = DEFAULT_PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR;
+        }
+        return parent.resolve(sub).toAbsolutePath().normalize();
     }
 
     /** 設備ガント PDF（{@link #summaryAiDispatchXlsxPath} と同一フォルダ）。VBA スナップショット名に合わせる。 */

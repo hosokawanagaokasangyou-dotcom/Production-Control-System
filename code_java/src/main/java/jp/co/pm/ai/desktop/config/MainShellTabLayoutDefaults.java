@@ -29,6 +29,7 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.PLAN_INPUT.key(),
                     MainShellTabId.REQUEST_FORM_INPUT.key(),
                     MainShellTabId.DISPATCH_INTERACTIVE.key(),
+                    MainShellTabId.LEARNED_SPEED_DATA.key(),
                     MainShellTabId.EQUIPMENT_GANTT_GRAPHIC.key(),
                     MainShellTabId.DELIVERY_CALENDAR_VIEW.key(),
                     MainShellTabId.OPERATOR_CARD.key(),
@@ -78,6 +79,7 @@ public final class MainShellTabLayoutDefaults {
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_INPUT.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.REQUEST_FORM_INPUT.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.DISPATCH_INTERACTIVE.key(), ""));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.LEARNED_SPEED_DATA.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.EQUIPMENT_GANTT_GRAPHIC.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.DELIVERY_CALENDAR_VIEW.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.OPERATOR_CARD.key(), ""));

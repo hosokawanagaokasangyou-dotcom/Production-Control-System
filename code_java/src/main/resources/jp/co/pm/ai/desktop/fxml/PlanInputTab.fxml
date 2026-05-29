@@ -56,6 +56,8 @@
                     </HBox>
                     <CheckBox fx:id="stage2InProgressNextDayPromptCheckBox" mnemonicParsing="false" selected="true"
                             text="加工途中タスクの翌日配台量を設定してから段階2を実行" />
+                    <CheckBox fx:id="stage25AutoAfterStage2CheckBox" mnemonicParsing="false" selected="true"
+                            text="段階2成功後に段階2.5(AI)を自動実行" />
                 </VBox>
                 <HBox alignment="CENTER_LEFT" spacing="8.0">
                     <Button mnemonicParsing="false" onAction="#onRowUpAction" prefWidth="40.0" text="↑" />

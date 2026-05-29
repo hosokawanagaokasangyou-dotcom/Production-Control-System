@@ -75,3 +75,14 @@ PM_AI_PORTABLE_BUNDLE_SOURCE_DIR	\\192.168.0.101\共有フォルダ\湖南工場
 PM_AI_TASK_INPUT_SOURCE_DIR	\\192.168.0.101\共有フォルダ\湖南工場\湖南共有\生産管理システム\管理システム\●DATA\生産計画問合せ	段階1・加工計画DATA相当の探索元フォルダ（AppPaths 既定と同じ）。空なら Java/Python が同 UNC を既定に使用。
 PM_AI_ACTUAL_DETAIL_SOURCE_DIR	\\192.168.0.101\共有フォルダ\湖南工場\湖南共有\002  加工G\●検査表作成\加工実績明細DATA	加工実績明細の探索元フォルダ（AppPaths 既定と同じ）。PM_AI_ACTUAL_DETAIL_WORKBOOK 優先。
 PM_AI_ACTUAL_DETAIL_RAW_MAX_BYTES		JavaFX 加工実績明細タブ: 元ファイル読込前のサイズ上限（バイト）。空で 20971520（20MiB）。0 で無制限。16M 等。
+PM_AI_STAGE2_5_AUTO_AFTER_STAGE2	1	段階2成功後に段階2.5(AI)を自動実行（配台計画タブのチェックと連動）。
+PM_AI_DISPATCH_TABLE_ACTIVE_SOURCE	stage2	配台表の正本: stage2 または stage2_5（配台手動修正タブのコンボと連動）。
+PM_AI_STAGE2_5_ALIGN_FROM_TOMORROW	1	段階2.5のアラジン整列を翌暦日以降のみ適用。
+PM_AI_LEARNING_ARCHIVE_ENABLED	1	段階2.5前景成功後の学習アーカイブ背景実行。
+PM_AI_STAGE2_5_LEARNING_MODE	accumulate	段階2.5: accumulate（蓄積）または inference_only（推論のみ・蓄積しない）。
+PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR	dispatch-learning-archive	サマリ Excel 同フォルダ内の学習蓄積サブフォルダ名。
+PM_AI_LEARNED_SPEED_ENABLED	1	実績由来学習速度を段階1/配台計画読込に適用。
+PM_AI_LEARNED_SPEED_MIN_SAMPLES	5	学習速度適用の最小観測数（工程+機械別）。
+PM_AI_LEARNED_SPEED_PERCENTILE	50	学習速度のパーセンタイル（p50=中央値）。
+PM_AI_LEARNED_SPEED_HISTOGRAM_BIN_WIDTH	1.0	速度ヒストグラムのビン幅（m/分）。
+PM_AI_STAGE2_5_ML_MODE	off	段階2.5 ML モード（off/hint/suggest/apply。MVP は off）。

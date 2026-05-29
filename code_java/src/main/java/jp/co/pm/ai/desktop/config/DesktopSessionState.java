@@ -30,6 +30,10 @@ import java.util.Map;
  *     (UI checkbox is on 配台計画_タスク入力 tab; session key name unchanged)
  * @param planInputStage2InProgressNextDayPrompt when true, stage-2 shows the in-progress next-day dispatch dialog
  *     (配台計画_タスク入力 tab; default on)
+ * @param planInputStage25AutoAfterStage2 when true, stage-2.5(AI) runs automatically after successful stage-2
+ *     (配台計画_タスク入力 tab; default on)
+ * @param dispatchTableActiveSource active dispatch JSON source token: {@code stage2} or {@code stage2_5}
+ * @param dispatchStage25InferenceOnly when true, stage-2.5 uses existing learning archive only (no new accumulation)
  * @param mainRunStage2ResultBookFont stage-2 result Excel font family; empty with system default in UI means Python
  *     built-in default
  * @param mainRunSkipGeminiApi when true, skip Gemini generateContent calls (development; run tab checkbox)
@@ -121,6 +125,9 @@ public record DesktopSessionState(
         String mainRunStage2MemberSchedule,
         boolean mainRunStage2SkipTodayDispatch,
         boolean planInputStage2InProgressNextDayPrompt,
+        boolean planInputStage25AutoAfterStage2,
+        String dispatchTableActiveSource,
+        boolean dispatchStage25InferenceOnly,
         String mainRunStage2ResultBookFont,
         boolean mainRunSkipGeminiApi,
         boolean mainRunStage1MarkAllExcludeAfterRun,
@@ -415,6 +422,9 @@ public record DesktopSessionState(
                 "",
                 false,
                 true,
+                true,
+                DispatchTableActiveSource.STAGE2.envToken(),
+                false,
                 "",
                 false,
                 false,
@@ -509,6 +519,9 @@ public record DesktopSessionState(
                 bootstrap.mainRunStage2MemberSchedule(),
                 bootstrap.mainRunStage2SkipTodayDispatch(),
                 bootstrap.planInputStage2InProgressNextDayPrompt(),
+                bootstrap.planInputStage25AutoAfterStage2(),
+                bootstrap.dispatchTableActiveSource(),
+                bootstrap.dispatchStage25InferenceOnly(),
                 bootstrap.mainRunStage2ResultBookFont(),
                 bootstrap.mainRunSkipGeminiApi(),
                 bootstrap.mainRunStage1MarkAllExcludeAfterRun(),

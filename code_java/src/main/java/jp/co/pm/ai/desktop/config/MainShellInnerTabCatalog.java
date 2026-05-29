@@ -58,6 +58,7 @@ public final class MainShellInnerTabCatalog {
                     List.of(
                             "\u30bf\u30b9\u30af\u00d7\u65e5\u4ed8",
                             "\u5de5\u7a0b+\u6a5f\u68b0\u00d7\u65e5");
+            case LEARNED_SPEED_DATA -> List.of("\u6982\u8981", "\u30ad\u30fc\u4e00\u89a7", "\u30d2\u30b9\u30c8\u30b0\u30e9\u30e0");
             case ENV ->
                     List.of(
                             "\u74b0\u5883\u5909\u6570\u4e00\u89a7",

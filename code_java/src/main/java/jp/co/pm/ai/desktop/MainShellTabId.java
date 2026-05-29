@@ -38,6 +38,8 @@ public enum MainShellTabId {
     REQUEST_FORM_PREVIEW_BADGE_DESIGN("requestFormPreviewBadgeDesign"),
     OPERATOR_CARD("operatorCard"),
     DISPATCH_INTERACTIVE("dispatchInteractive"),
+    /** 実績由来の学習速度分布・ML 有効化進捗。 */
+    LEARNED_SPEED_DATA("learnedSpeedData"),
     /** 配台ワークスペースのスナップショット履歴（結果 JSON・ガント表示・列順の復元）。 */
     PLAN_WORKSPACE_HISTORY("planWorkspaceHistory"),
     /** 段階1キャッシュ等の退避履歴（クリア前退避・復元）。 */

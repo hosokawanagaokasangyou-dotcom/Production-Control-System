@@ -436,8 +436,18 @@ class AppPathsTest {
         Map<String, String> ui =
                 Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.resolve("Production-Control-System").toString());
         Path dir = AppPaths.resolveResultDispatchTableDir(ui);
+        Files.createDirectories(dir);
         Path json = AppPaths.resolveResultDispatchTableJsonPath(ui);
         assertEquals(dir.resolve(AppPaths.RESULT_DISPATCH_TABLE_JSON_BASENAME), json);
+        Path stage25 = dir.resolve(AppPaths.RESULT_DISPATCH_TABLE_STAGE25_JSON_BASENAME);
+        Files.writeString(stage25, "{}");
+        Map<String, String> ui25 =
+                Map.of(
+                        AppPaths.KEY_PM_AI_REPO_ROOT,
+                        fakeRepo.resolve("Production-Control-System").toString(),
+                        AppPaths.KEY_PM_AI_DISPATCH_TABLE_ACTIVE_SOURCE,
+                        "stage2_5");
+        assertEquals(stage25, AppPaths.resolveActiveResultDispatchTableJsonPath(ui25));
     }
 
     @Test

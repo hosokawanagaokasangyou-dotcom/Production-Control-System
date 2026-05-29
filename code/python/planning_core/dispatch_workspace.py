@@ -36,6 +36,10 @@ ENV_ACTUAL_DETAIL_WORKBOOK = "PM_AI_ACTUAL_DETAIL_WORKBOOK"
 ENV_RESULT_DISPATCH_TABLE_DIR = "PM_AI_RESULT_DISPATCH_TABLE_DIR"
 ENV_PM_AI_REPO_ROOT = "PM_AI_REPO_ROOT"
 ENV_TASK_INPUT_SOURCE_DIR = "PM_AI_TASK_INPUT_SOURCE_DIR"
+ENV_SUMMARY_AI_DISPATCH_WORKBOOK = "PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK"
+ENV_DISPATCH_LEARNING_ARCHIVE_SUBDIR = "PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR"
+DEFAULT_DISPATCH_LEARNING_ARCHIVE_SUBDIR = "dispatch-learning-archive"
+SUMMARY_AI_DISPATCH_XLSX = "サマリ_AI配台.xlsx"
 
 _LOG = logging.getLogger(__name__)
 
@@ -220,6 +224,37 @@ def resolve_actual_detail_workbook_path(task_input_workbook: str) -> str | None:
     if tw and os.path.isfile(tw):
         return tw
     return None
+
+
+def _resolve_summary_ai_dispatch_workbook_path() -> str:
+    """Java AppPaths.summaryAiDispatchXlsxPath と同じ解決。"""
+    override = (os.environ.get(ENV_SUMMARY_AI_DISPATCH_WORKBOOK) or "").strip()
+    if override:
+        if os.path.isabs(override):
+            return os.path.normpath(os.path.abspath(override))
+        repo = (os.environ.get(ENV_PM_AI_REPO_ROOT) or "").strip()
+        if repo:
+            return os.path.normpath(os.path.join(repo, "code", override))
+        return os.path.normpath(os.path.join(os.getcwd(), "code", override))
+    repo = (os.environ.get(ENV_PM_AI_REPO_ROOT) or "").strip()
+    if repo:
+        return os.path.normpath(os.path.join(repo, "code", SUMMARY_AI_DISPATCH_XLSX))
+    return os.path.normpath(os.path.join(os.getcwd(), "code", SUMMARY_AI_DISPATCH_XLSX))
+
+
+def resolve_dispatch_learning_archive_root() -> str:
+    """サマリ Excel 同フォルダ + dispatch-learning-archive（サブフォルダ名は環境変数で上書き可）。"""
+    summary = _resolve_summary_ai_dispatch_workbook_path()
+    parent = os.path.dirname(summary)
+    if not parent:
+        repo = (os.environ.get(ENV_PM_AI_REPO_ROOT) or "").strip()
+        parent = os.path.join(repo or os.getcwd(), "code")
+    sub = (os.environ.get(ENV_DISPATCH_LEARNING_ARCHIVE_SUBDIR) or "").strip()
+    if not sub:
+        sub = DEFAULT_DISPATCH_LEARNING_ARCHIVE_SUBDIR
+    root = os.path.normpath(os.path.join(parent, sub))
+    os.makedirs(root, exist_ok=True)
+    return root
 
 
 def resolve_result_dispatch_table_output_dir(task_input_workbook: str) -> str:

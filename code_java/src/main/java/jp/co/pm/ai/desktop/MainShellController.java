@@ -89,6 +89,8 @@ import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.Stage1AiCacheClearer;
 import jp.co.pm.ai.desktop.config.WorkspaceCacheArchiveStore;
 import jp.co.pm.ai.desktop.debug.AgentDebugLog;
+import jp.co.pm.ai.desktop.config.DispatchTableActiveSource;
+import jp.co.pm.ai.desktop.config.DispatchStage25LearningMode;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.EquipmentStatusDashboardAppearancePrefs;
@@ -124,6 +126,8 @@ import jp.co.pm.ai.desktop.ui.Stage2UnknownMasterCombinationDialog;
 import jp.co.pm.ai.desktop.ui.ButtonPressFeedback;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
+import jp.co.pm.ai.desktop.dispatch.DispatchLearningArchiveBackgroundService;
+import jp.co.pm.ai.desktop.dispatch.DispatchLearningArchiveBackgroundService.ArchiveJobDescriptor;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
@@ -328,6 +332,9 @@ public final class MainShellController {
     private DispatchInteractiveTabController dispatchInteractiveTabController;
 
     @FXML
+    private LearnedSpeedDataTabController learnedSpeedDataTabController;
+
+    @FXML
     private PlanResultViewerTabController planResultViewerTabController;
 
     @FXML
@@ -432,6 +439,9 @@ public final class MainShellController {
     private Tab mainShellTabDispatchInteractive;
 
     @FXML
+    private Tab mainShellTabLearnedSpeedData;
+
+    @FXML
     private Tab mainShellTabPlanResultViewer;
 
     @FXML
@@ -481,6 +491,8 @@ public final class MainShellController {
 
     private final PipelineExecutionTimingHistoryStore pipelineExecutionTimingHistory =
             new PipelineExecutionTimingHistoryStore();
+
+    private volatile DispatchLearningArchiveBackgroundService learningArchiveBackgroundService;
 
     /** Non-null while a stage script is running; equals {@link #STAGE1} or {@link #STAGE2}. */
     private volatile String activeRunStageScript;
@@ -662,6 +674,9 @@ public final class MainShellController {
         deliveryCalendarViewTabController.bindShell(this);
         resultDispatchTableTabController.bindShell(this);
         dispatchInteractiveTabController.bindShell(this);
+        if (learnedSpeedDataTabController != null) {
+            learnedSpeedDataTabController.bindShell(this);
+        }
         if (planWorkspaceHistoryTabController != null) {
             planWorkspaceHistoryTabController.bindShell(this);
         }
@@ -827,6 +842,10 @@ public final class MainShellController {
                                     && dispatchInteractiveTabController != null) {
                                 dispatchInteractiveTabController.onMainShellDispatchTabSelected();
                             }
+                            if (newTab == mainShellTabLearnedSpeedData
+                                    && learnedSpeedDataTabController != null) {
+                                learnedSpeedDataTabController.onMainShellTabSelected();
+                            }
                             if (newTab == mainShellTabOrganizer
                                     && mainShellTabOrganizerPaneController != null) {
                                 mainShellTabOrganizerPaneController.refreshFromShell();
@@ -974,6 +993,13 @@ public final class MainShellController {
         planInputTabController.applyStage2SkipTodayDispatchFromSession(s.mainRunStage2SkipTodayDispatch());
         planInputTabController.applyStage2InProgressNextDayPromptFromSession(
                 s.planInputStage2InProgressNextDayPrompt());
+        planInputTabController.applyStage25AutoAfterStage2FromSession(s.planInputStage25AutoAfterStage2());
+        if (dispatchInteractiveTabController != null) {
+            dispatchInteractiveTabController.applyDispatchTableActiveSourceFromSession(
+                    s.dispatchTableActiveSource());
+            dispatchInteractiveTabController.applyDispatchStage25InferenceOnlyFromSession(
+                    s.dispatchStage25InferenceOnly());
+        }
         mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
         // 開発用チェックは通常 OFF。段階1実行後も OFF に戻し、セッション復元しない。
         /*
@@ -1085,6 +1111,12 @@ public final class MainShellController {
                 mainRunTabController.snapshotStage2MemberSchedulePath(),
                 planInputTabController.snapshotStage2SkipTodayDispatch(),
                 planInputTabController.snapshotStage2InProgressNextDayPrompt(),
+                planInputTabController.snapshotStage25AutoAfterStage2(),
+                dispatchInteractiveTabController != null
+                        ? dispatchInteractiveTabController.snapshotDispatchTableActiveSourceEnv()
+                        : DispatchTableActiveSource.STAGE2.envToken(),
+                dispatchInteractiveTabController != null
+                        && dispatchInteractiveTabController.snapshotDispatchStage25InferenceOnly(),
                 mainRunTabController.snapshotStage2ResultBookFont(),
                 false,
                 false,
@@ -1365,7 +1397,7 @@ public final class MainShellController {
         JsonNode colPart = PlanWorkspaceSnapshotStore.readColumnOrderPartial(entry);
         TableColumnOrderPersistence.mergePlanWorkspaceColumnOrderPartial(colPart);
 
-        Path canonical = AppPaths.resolveResultDispatchTableJsonPath(collectUiEnv());
+        Path canonical = AppPaths.resolveResultDispatchTableStage2JsonPath(collectUiEnv());
         Path parent = canonical.getParent();
         if (parent != null) {
             Files.createDirectories(parent);
@@ -1725,6 +1757,9 @@ public final class MainShellController {
         if (t == mainShellTabDispatchInteractive) {
             return MainShellTabId.DISPATCH_INTERACTIVE;
         }
+        if (t == mainShellTabLearnedSpeedData) {
+            return MainShellTabId.LEARNED_SPEED_DATA;
+        }
         if (t == mainShellTabPlanWorkspaceHistory) {
             return MainShellTabId.PLAN_WORKSPACE_HISTORY;
         }
@@ -1783,6 +1818,7 @@ public final class MainShellController {
             case DELIVERY_CALENDAR_VIEW -> mainShellTabDeliveryCalendar;
             case RESULT_DISPATCH -> mainShellTabResultDispatch;
             case DISPATCH_INTERACTIVE -> mainShellTabDispatchInteractive;
+            case LEARNED_SPEED_DATA -> mainShellTabLearnedSpeedData;
             case PLAN_WORKSPACE_HISTORY -> mainShellTabPlanWorkspaceHistory;
             case CACHE_HISTORY -> mainShellTabCacheHistory;
             case API_MODEL_BENCHMARK -> mainShellTabApiModelBenchmark;
@@ -4136,6 +4172,13 @@ public final class MainShellController {
                                             }
                                             showStageCompletionDialog(
                                                     "段階2 完了", "段階2 の処理が正常終了しました。");
+                                            if (planInputTabController != null
+                                                    && planInputTabController
+                                                            .snapshotStage25AutoAfterStage2()
+                                                    && dispatchInteractiveTabController != null) {
+                                                dispatchInteractiveTabController
+                                                        .startStage25AiAfterStage2AutoChain();
+                                            }
                                         };
                                 if (dispatchInteractiveTabController != null) {
                                     dispatchInteractiveTabController.reloadTableFromDiskAfterStage2Success(
@@ -4226,7 +4269,8 @@ public final class MainShellController {
      */
     boolean tryBeginDispatchTrialGating(PipelineExecutionTimingKind kind) {
         if (kind != PipelineExecutionTimingKind.STAGE3
-                && kind != PipelineExecutionTimingKind.STAGE3_5) {
+                && kind != PipelineExecutionTimingKind.STAGE3_5
+                && kind != PipelineExecutionTimingKind.STAGE2_5) {
             return true;
         }
         if (!runLock.compareAndSet(false, true)) {
@@ -4329,6 +4373,8 @@ public final class MainShellController {
                     shellStageProgressLabel.setText("段階2 実行中…");
                 } else if (dispatchTrialKind == PipelineExecutionTimingKind.STAGE3_5) {
                     shellStageProgressLabel.setText("段階3.5 実行中…");
+                } else if (dispatchTrialKind == PipelineExecutionTimingKind.STAGE2_5) {
+                    shellStageProgressLabel.setText("段階2.5(AI) 実行中…");
                 } else if (dispatchTrialKind == PipelineExecutionTimingKind.STAGE3) {
                     shellStageProgressLabel.setText("段階3 実行中…");
                 } else {
@@ -5064,13 +5110,20 @@ public final class MainShellController {
 
     Map<String, String> snapshotUiEnv() {
         Map<String, String> base = collectUiEnv();
-        String operator = FactoryOperatorUserStore.sessionOperatorName();
-        if (operator.isBlank()) {
-            return base;
-        }
         Map<String, String> merged = new HashMap<>(base);
-        merged.put(AppPaths.KEY_PM_AI_OPERATOR_USER, operator);
-        return Map.copyOf(merged);
+        if (dispatchInteractiveTabController != null) {
+            merged.put(
+                    AppPaths.KEY_PM_AI_DISPATCH_TABLE_ACTIVE_SOURCE,
+                    dispatchInteractiveTabController.snapshotDispatchTableActiveSourceEnv());
+            merged.put(
+                    AppPaths.KEY_PM_AI_STAGE2_5_LEARNING_MODE,
+                    dispatchInteractiveTabController.snapshotDispatchStage25LearningModeEnv());
+        }
+        String operator = FactoryOperatorUserStore.sessionOperatorName();
+        if (!operator.isBlank()) {
+            merged.put(AppPaths.KEY_PM_AI_OPERATOR_USER, operator);
+        }
+        return merged.equals(base) ? base : Map.copyOf(merged);
     }
 
     /** 実行・ログタブの操作者表示を更新する。 */
@@ -5538,13 +5591,21 @@ public final class MainShellController {
      * {@link AppPaths#KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH} は常に無効（加工途中はタスク入力タブで翌日配台量を設定）。
      */
     public Map<String, String> snapshotDispatchTrialPythonEnv() {
-        return snapshotDispatchTrialPythonEnv(null);
+        return snapshotDispatchTrialPythonEnv(null, null);
     }
 
     /**
      * {@link #snapshotDispatchTrialPythonEnv()} に加え、段階3.5 残業シミュレーション JSON パスを載せる。
      */
     public Map<String, String> snapshotDispatchTrialPythonEnv(java.nio.file.Path overtimeSimulationJson) {
+        return snapshotDispatchTrialPythonEnv(overtimeSimulationJson, null);
+    }
+
+    /**
+     * 段階3.5: 残業シミュレーション JSON と段階3実績メートル下限 JSON を子プロセス環境へ載せる。
+     */
+    public Map<String, String> snapshotDispatchTrialPythonEnv(
+            java.nio.file.Path overtimeSimulationJson, java.nio.file.Path stage3MetersFloorJson) {
         Map<String, String> ui = new HashMap<>(collectUiEnv());
         ui.put(AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL, "1");
         ui.put(
@@ -5563,8 +5624,17 @@ public final class MainShellController {
             ui.put(
                     AppPaths.KEY_PM_AI_OVERTIME_SIMULATION_JSON,
                     overtimeSimulationJson.toAbsolutePath().normalize().toString());
+            ui.put("PM_AI_AGENT_DEBUG_SESSION", "0f46bc");
+            if (stage3MetersFloorJson != null) {
+                ui.put(
+                        AppPaths.KEY_PM_AI_STAGE35_STAGE3_METERS_FLOOR_JSON,
+                        stage3MetersFloorJson.toAbsolutePath().normalize().toString());
+            } else {
+                ui.remove(AppPaths.KEY_PM_AI_STAGE35_STAGE3_METERS_FLOOR_JSON);
+            }
         } else {
             ui.remove(AppPaths.KEY_PM_AI_OVERTIME_SIMULATION_JSON);
+            ui.remove(AppPaths.KEY_PM_AI_STAGE35_STAGE3_METERS_FLOOR_JSON);
         }
         return childEnvForPython(ui);
     }
@@ -5598,8 +5668,8 @@ public final class MainShellController {
             body.append(meta.overrideSummary().formatSummaryLine()).append('\n');
         }
         body.append(
-                "\n勤怠は適用済みですが、配台数量に差が出ない場合があります"
-                        + "（対象メンバーが当該日に割当されない等）。");
+                "\n勤怠は適用済みです。段階3.5 試行では定時帯は段階3と同じ暦日キャップを維持し、超過分のみ残業帯（17:00以降）に配台します。"
+                        + " 数量に差が出ない場合は機械稼働・割当メンバー・工程制約を確認してください。");
         showStageCompletionDialog("段階3.5 完了", body.toString());
     }
 
@@ -6389,6 +6459,73 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
     /** {@link #resolveStagePythonExecutablePath(Map)} を現在の環境変数タブの値で解決する。 */
     public Path resolveStagePythonExecutablePath() {
         return resolveStagePythonExecutablePath(collectUiEnv());
+    }
+
+    private DispatchLearningArchiveBackgroundService learningArchiveBackgroundService() {
+        if (learningArchiveBackgroundService == null) {
+            learningArchiveBackgroundService =
+                    new DispatchLearningArchiveBackgroundService(this::appendLog);
+        }
+        return learningArchiveBackgroundService;
+    }
+
+    /**
+     * 段階2.5 前景成功後: 背景アーカイブを enqueue（UI はブロックしない）。
+     */
+    public void onStage25ForegroundSuccess(
+            String jobId,
+            Path descriptorJson,
+            Path afterStage25Json,
+            Path pythonExe,
+            Map<String, String> uiEnv) {
+        if (!AppPaths.isTruthyUiEnv(uiEnv, AppPaths.KEY_PM_AI_LEARNING_ARCHIVE_ENABLED, true)) {
+            appendLog("[bg] 学習アーカイブは PM_AI_LEARNING_ARCHIVE_ENABLED=0 のためスキップ");
+            return;
+        }
+        if (AppPaths.parseStage25LearningMode(uiEnv) == DispatchStage25LearningMode.INFERENCE_ONLY) {
+            appendLog("[bg] 学習アーカイブは学習推論のみモードのためスキップ");
+            return;
+        }
+        Path archiveRoot = AppPaths.resolveDispatchLearningArchiveRoot(uiEnv);
+        Path aladdin =
+                AppPaths.resolveShapedAladdinPlanJsonPath(uiEnv != null ? uiEnv : Map.of());
+        String planInput = uiEnv != null ? uiEnv.get(AppPaths.KEY_PM_AI_PLAN_INPUT_PATH) : "";
+        Path planPath =
+                planInput != null && !planInput.isBlank() ? Path.of(planInput.trim()) : null;
+        Path raw = null;
+        if (descriptorJson != null && Files.isRegularFile(descriptorJson)) {
+            try {
+                com.fasterxml.jackson.databind.JsonNode node =
+                        new com.fasterxml.jackson.databind.ObjectMapper()
+                                .readTree(descriptorJson.toFile());
+                String rawText = node.path("stage2_raw").asText("");
+                if (!rawText.isBlank()) {
+                    raw = Path.of(rawText);
+                }
+            } catch (Exception ignored) {
+                // descriptor から復元できなければ after のみで背景実行
+            }
+        }
+        learningArchiveBackgroundService()
+                .enqueue(
+                        new ArchiveJobDescriptor(
+                                jobId,
+                                descriptorJson,
+                                archiveRoot,
+                                raw,
+                                afterStage25Json,
+                                aladdin,
+                                planPath,
+                                pythonExe,
+                                uiEnv));
+        appendLog("[bg] 学習アーカイブをキューに追加 job_id=" + jobId);
+        Platform.runLater(this::refreshLearnedSpeedDataQuietly);
+    }
+
+    void refreshLearnedSpeedDataQuietly() {
+        if (learnedSpeedDataTabController != null) {
+            learnedSpeedDataTabController.refreshFromArchive();
+        }
     }
 
     /**

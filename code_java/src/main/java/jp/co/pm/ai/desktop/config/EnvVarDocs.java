@@ -329,6 +329,42 @@ public final class EnvVarDocs {
                         + " working_overrides（休日出勤○/グレー）と overtime_minutes（分）を段階3 配台試行にのみ適用する。"
                         + " master.xlsm は変更しない。段階3 単独実行時は未設定。");
         put(
+                "PM_AI_STAGE2_5_AUTO_AFTER_STAGE2",
+                "1/true/yes/on のとき段階2正常終了後に段階2.5(AI)を自動実行。"
+                        + " 配台計画_タスク入力タブのチェックが参照される。");
+        put(
+                "PM_AI_DISPATCH_TABLE_ACTIVE_SOURCE",
+                "配台手動修正・段階3 が参照する配台表 JSON。stage2（既定）または stage2_5。"
+                        + " 配台手動修正タブのコンボとセッションに保存。段階2.5 は別ファイルへ出力。");
+        put(
+                "PM_AI_STAGE2_5_ALIGN_FROM_TOMORROW",
+                "1/true/yes/on（既定）のとき段階2.5のアラジン整列を翌暦日以降のみ適用。");
+        put(
+                "PM_AI_LEARNING_ARCHIVE_ENABLED",
+                "1/true/yes/on（既定）のとき段階2.5前景成功後に学習アーカイブを背景実行。");
+        put(
+                "PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR",
+                "サマリ Excel 同フォルダ内の学習アーカイブサブフォルダ名（既定 dispatch-learning-archive）。");
+        put(
+                "PM_AI_LEARNED_SPEED_ENABLED",
+                "1/true/yes/on（既定）のとき実績由来学習速度を段階1/配台計画読込時に適用。");
+        put(
+                "PM_AI_LEARNED_SPEED_MIN_SAMPLES",
+                "学習速度適用に必要な (工程名,機械名) 別最小観測数（既定 5）。");
+        put(
+                "PM_AI_LEARNED_SPEED_PERCENTILE",
+                "学習速度のパーセンタイル（既定 50 = p50）。");
+        put(
+                "PM_AI_LEARNED_SPEED_HISTOGRAM_BIN_WIDTH",
+                "速度ヒストグラムのビン幅 m/分（既定 1.0）。");
+        put(
+                "PM_AI_STAGE2_5_LEARNING_MODE",
+                "段階2.5の学習モード: accumulate（既定・新規蓄積）または inference_only（既存アーカイブ参照のみ）。"
+                        + " 配台手動修正タブの「学習推論のみ」チェックと連動。");
+        put(
+                "PM_AI_STAGE2_5_ML_MODE",
+                "段階2.5 ML モード: off / hint / suggest / apply（MVP は off）。");
+        put(
                 "PM_AI_DEBUG_STAGE3_PLAN_ACTUAL_SINGLE_LINE",
                 "配台計画手動修正タブ: 段階3試行後の日付セル表示。"
                         + " 1/true/yes/on で（段階3前）（段階3後）を1行（スペース区切り）。"

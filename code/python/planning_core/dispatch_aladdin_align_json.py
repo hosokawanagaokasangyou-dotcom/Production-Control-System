@@ -79,7 +79,14 @@ def _allocate_rolls_by_weight(total_rolls: int, weights: list[float]) -> list[in
     return rolls
 
 
-def _align_row(current: list[float], aladdin: list[float], unit_m: float, uses_conv: bool) -> list[float]:
+def _align_row(
+    current: list[float],
+    aladdin: list[float],
+    unit_m: float,
+    uses_conv: bool,
+    *,
+    aladdin_weight_scale: float = 1.0,
+) -> list[float]:
     n = len(current)
     if n == 0 or n != len(aladdin) or unit_m <= _EPS:
         return current[:]
@@ -89,10 +96,14 @@ def _align_row(current: list[float], aladdin: list[float], unit_m: float, uses_c
     total_rolls = int(round(total / unit_m))
     if total_rolls < 1 or abs(total_rolls * unit_m - total) > _EPS:
         return current[:]
+    scale = max(1.0, float(aladdin_weight_scale))
     weights: list[float] = []
     for a in aladdin:
         a = max(0.0, a)
-        weights.append(1.0 if (uses_conv and a > _EPS) else a)
+        w = 1.0 if (uses_conv and a > _EPS) else a
+        if a > _EPS and scale > 1.0:
+            w *= scale
+        weights.append(w)
     if sum(weights) <= _EPS:
         return current[:]
     rolls = _allocate_rolls_by_weight(total_rolls, weights)
@@ -162,6 +173,7 @@ def align_dispatch_json_from_aladdin(
     aladdin_path: Path,
     *,
     align_from_day: date | None = None,
+    aladdin_weight_boost_profiles: set[tuple[str, str, str]] | None = None,
 ) -> tuple[dict[str, Any], int]:
     """
     ワイド行ごとに当日配台数量を再配分。align_from_day 以降の暦日のみ（None=全日）。
@@ -219,7 +231,17 @@ def align_dispatch_json_from_aladdin(
         prefix = current[:align_from_idx]
         suffix_cur = current[align_from_idx:]
         suffix_ala = aladdin[align_from_idx:]
-        aligned_suffix = _align_row(suffix_cur, suffix_ala, unit_m, uses_conv)
+        boost = (
+            aladdin_weight_boost_profiles is not None
+            and (proc, mk, tid) in aladdin_weight_boost_profiles
+        )
+        aligned_suffix = _align_row(
+            suffix_cur,
+            suffix_ala,
+            unit_m,
+            uses_conv,
+            aladdin_weight_scale=2.0 if boost else 1.0,
+        )
         target = prefix + aligned_suffix
         if all(abs(a - b) <= _EPS for a, b in zip(current, target)):
             continue

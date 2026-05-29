@@ -49,6 +49,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.control.TitledPane;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
@@ -86,6 +87,8 @@ import org.controlsfx.control.spreadsheet.SpreadsheetColumn;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.DispatchTableActiveSource;
+import jp.co.pm.ai.desktop.config.DispatchStage25LearningMode;
 import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinSystemDispatchDisplayQty;
 import jp.co.pm.ai.desktop.dispatch.DispatchAladdinPlanAligner;
@@ -99,6 +102,7 @@ import jp.co.pm.ai.desktop.dispatch.DispatchTimelineCalendarMetersIndex;
 import jp.co.pm.ai.desktop.dispatch.DispatchTimelineMetaMissShortfalls;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck.TaskKey;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreview;
 import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreviewPython;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
@@ -113,8 +117,12 @@ import jp.co.pm.ai.desktop.dispatch.Stage35AttendanceApplyStatusPanel;
 import jp.co.pm.ai.desktop.dispatch.Stage35BaselineActualSnapshotStore;
 import jp.co.pm.ai.desktop.dispatch.Stage3DispatchQtyBalanceCheck;
 import jp.co.pm.ai.desktop.ui.TabularCellHighlight;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage35InputSupport;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage2ColumnSupport;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage25InputSupport;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage25Python;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchTrialPython;
+import jp.co.pm.ai.desktop.dispatch.Stage25AppliedSidecarStore;
 import jp.co.pm.ai.desktop.dispatch.ResultTaskUnassignedLoader;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
@@ -243,6 +251,9 @@ public final class DispatchInteractiveTabController {
     /** 日付セル表示: アラジン加工計画の計画数量（納期管理ビューと同じ {@code (アラ計画)} 表記）。 */
     static final String LABEL_ALADDIN_PLAN = "(\u30a2\u30e9\u8a08\u753b)";
 
+    /** 日付セル表示: 段階2.5(AI) 整列後の配台数量。 */
+    static final String LABEL_STAGE25_PLAN = "(\u6bb5\u968e2.5\u5f8c)";
+
     /** 日付セル表示: 段階2成果の配台数量（段階3試行前・当日配台数量）。 */
     static final String LABEL_STAGE2_PLAN = "(\u6bb5\u968e2\u5f8c)";
 
@@ -337,6 +348,21 @@ public final class DispatchInteractiveTabController {
     private Button dispatchTrialButton;
 
     @FXML
+    private Button stage25AiButton;
+
+    @FXML
+    private ComboBox<DispatchTableActiveSource> dispatchTableActiveSourceCombo;
+
+    @FXML
+    private CheckBox stage25InferenceOnlyCheck;
+
+    private static final String STAGE25_AI_BUTTON_TEXT_DEFAULT = "段階2.5(AI)";
+
+    private static final String STAGE25_AI_BUTTON_SUBTITLE_ACCUMULATE = "アラジン整列（学習記録は背景）";
+
+    private static final String STAGE25_AI_BUTTON_SUBTITLE_INFERENCE = "アラジン整列（学習推論のみ）";
+
+    @FXML
     private Button overtimeSimulationButton;
 
     private static final String DISPATCH_TRIAL_BUTTON_TEXT_DEFAULT = "段階3";
@@ -395,6 +421,9 @@ public final class DispatchInteractiveTabController {
 
     @FXML
     private VBox stage35AttendanceApplyPanel;
+
+    private Stage25AppliedSidecarStore.Stage25Meta stage25TrialMeta =
+            Stage25AppliedSidecarStore.Stage25Meta.empty();
 
     @FXML
     private Label stage35AttendanceHeadlineLabel;
@@ -456,6 +485,11 @@ public final class DispatchInteractiveTabController {
     private final Map<String, Double> stage3TrialPlanQtySnapshot = new HashMap<>();
 
     /**
+     * 段階3試行直前の結果_配台表（段階2後＋手動修正）。段階3.5 の Python 入力の正とする。
+     */
+    private ResultDispatchDocument stage3TrialInputDocumentSnapshot;
+
+    /**
      * 段階3.5試行直前の実配台数量（プロファイル×配台日）。sidecar {@code stage35_applied} 時は
      * (段階3後) と (段階3.5後) を併記する。
      */
@@ -514,6 +548,8 @@ public final class DispatchInteractiveTabController {
 
     private final AtomicBoolean suppressDateQtyLineFilterUi = new AtomicBoolean(false);
 
+    private final AtomicBoolean suppressDispatchTableSourceUi = new AtomicBoolean(false);
+
     @FXML
     private void initialize() {
         StackPane.setAlignment(wideSpreadsheet, Pos.TOP_LEFT);
@@ -555,6 +591,56 @@ public final class DispatchInteractiveTabController {
             wireDispatchShortfallSelectionToWideGrid();
         }
         wireDateQtyLineFilterControls();
+        if (stage25AiButton != null) {
+            refreshStage25AiButtonLabel();
+        }
+        if (dispatchTableActiveSourceCombo != null) {
+            dispatchTableActiveSourceCombo.getItems().setAll(DispatchTableActiveSource.values());
+            dispatchTableActiveSourceCombo.setCellFactory(
+                    lv -> new ListCell<>() {
+                        @Override
+                        protected void updateItem(DispatchTableActiveSource item, boolean empty) {
+                            super.updateItem(item, empty);
+                            setText(empty || item == null ? null : item.displayLabel());
+                        }
+                    });
+            dispatchTableActiveSourceCombo.setButtonCell(
+                    new ListCell<>() {
+                        @Override
+                        protected void updateItem(DispatchTableActiveSource item, boolean empty) {
+                            super.updateItem(item, empty);
+                            setText(empty || item == null ? null : item.displayLabel());
+                        }
+                    });
+            dispatchTableActiveSourceCombo.setValue(DispatchTableActiveSource.STAGE2);
+            dispatchTableActiveSourceCombo
+                    .getSelectionModel()
+                    .selectedItemProperty()
+                    .addListener(
+                            (o, prev, cur) -> {
+                                if (suppressDispatchTableSourceUi.get()
+                                        || cur == null
+                                        || prev == null
+                                        || cur == prev
+                                        || shell == null) {
+                                    return;
+                                }
+                                shell.scheduleDesktopSessionSave();
+                                reloadFromDiskQuiet(null, false, false, false);
+                            });
+        }
+        if (stage25InferenceOnlyCheck != null) {
+            stage25InferenceOnlyCheck
+                    .selectedProperty()
+                    .addListener(
+                            (o, prev, cur) -> {
+                                if (shell == null) {
+                                    return;
+                                }
+                                refreshStage25AiButtonLabel();
+                                shell.scheduleDesktopSessionSave();
+                            });
+        }
     }
 
     private void wireDateQtyLineFilterControls() {
@@ -1334,6 +1420,24 @@ public final class DispatchInteractiveTabController {
                 || dispatchDocDirtySinceSave) {
             return;
         }
+        if (stage35) {
+            if (stage3TrialInputDocumentSnapshot == null) {
+                shell.showErrorDialog(
+                        "段階3.5",
+                        "段階3.5 を実行する前に、配台試行（段階3）を1回実行してください。\n"
+                                + "段階3試行前の表スナップショットが無いと、段階3の実績を下限として"
+                                + "残業のみ追加できません。");
+                return;
+            }
+            if (!docHasActualDispatchQtyColumn()
+                    || !documentHasPositiveActualDispatchQty(doc)) {
+                shell.showErrorDialog(
+                        "段階3.5",
+                        "段階3試行後の実配台数量がありません。\n"
+                                + "先に配台試行（段階3）を実行し、実績が載ってから段階3.5 を実行してください。");
+                return;
+            }
+        }
         if (!shell.tryBeginDispatchTrialGating(timingKind)) {
             return;
         }
@@ -1350,7 +1454,11 @@ public final class DispatchInteractiveTabController {
 
         shell.selectMainShellTab(MainShellTabId.RUN);
         if (stage35) {
-            shell.appendLog("--- start: 段階3.5（残業シミュ→段階3） ---");
+            shell.appendLog("--- start: 段階3.5（残業シミュ→配台試行） ---");
+            shell.appendLog(
+                    "[stage3.5] Python入力: 段階3試行前の表（段階2後＋手動修正）。段階3試行後のタイムライン実績は使いません。");
+            shell.appendLog(
+                    "[stage3.5] 段階3試行後の実配台数量は meters_floor として下限シードし、定時帯の再配台はやり直しません。");
             shell.appendLog(
                     "[stage3.5] 残業シミュレーション適用: "
                             + overtimeSimulationJson.toAbsolutePath().normalize());
@@ -1364,6 +1472,9 @@ public final class DispatchInteractiveTabController {
         final Path simJson = overtimeSimulationJson;
         captureStage3TrialPlanQtySnapshotFromDocument(
                 trialInputSnapshot, snapshotDateAxisForTrialPlanQtyCapture(trialInputSnapshot));
+        if (!stage35) {
+            stage3TrialInputDocumentSnapshot = trialInputSnapshot.copy();
+        }
         if (stage35) {
             captureStage35BaselineActualQtySnapshotFromDocument(
                     trialInputSnapshot,
@@ -1381,14 +1492,35 @@ public final class DispatchInteractiveTabController {
                     protected String call() throws Exception {
                         shell.beginPipelineExecutionTiming(timingKind);
                         try {
-                            ResultDispatchJsonIo.write(jsonPath, doc.copy());
+                            Path floorJson = null;
+                            if (stage35) {
+                                floorJson =
+                                        ResultDispatchStage35InputSupport.writeStage3MetersFloorJson(
+                                                trialInputSnapshot, jsonPath);
+                                shell.appendLog(
+                                        "[stage3.5] 段階3 meters_floor: "
+                                                + floorJson.toAbsolutePath().normalize());
+                            }
+                            ResultDispatchDocument writeDoc =
+                                    stage35
+                                            ? ResultDispatchStage35InputSupport
+                                                    .prepareTrialInputForPython(
+                                                            stage3TrialInputDocumentSnapshot,
+                                                            doc)
+                                            : doc.copy();
+                            if (stage35 && stage3TrialInputDocumentSnapshot == null) {
+                                shell.appendLog(
+                                        "[stage3.5] 警告: 段階3試行前スナップショットが無いため、"
+                                                + "現在表から段階3実績列のみ除去して入力します。");
+                            }
+                            ResultDispatchJsonIo.write(jsonPath, writeDoc);
                             shell.appendLog(
                                     "[dispatch-editor] trial: 試行前にメモリ上の表を JSON に同期 "
                                             + jsonPath.toAbsolutePath().normalize());
                             Path pyExe = trialPythonExe;
                             Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
                             Map<String, String> pyEnv =
-                                    shell.snapshotDispatchTrialPythonEnv(simJson);
+                                    shell.snapshotDispatchTrialPythonEnv(simJson, floorJson);
                             return ResultDispatchTrialPython.runTrial(
                                     jsonPath,
                                     pyExe,
@@ -1556,6 +1688,188 @@ public final class DispatchInteractiveTabController {
     }
 
     @FXML
+    private void onStage25AiAction() {
+        startStage25AiInternal(false);
+    }
+
+    /** 段階2成功後の自動連鎖（配台計画タブのチェックボックス）。 */
+    void startStage25AiAfterStage2AutoChain() {
+        startStage25AiInternal(true);
+    }
+
+    private void startStage25AiInternal(boolean autoChain) {
+        if (shell == null) {
+            return;
+        }
+        String blockLabel = autoChain ? "段階2.5(AI) 自動連鎖" : "段階2.5(AI)";
+        if (shell.blockIfSummaryAiDispatchExportLocked(blockLabel)) {
+            return;
+        }
+        if (shell.blockIfMaterialLookupTablesHaveBlankValues(blockLabel)) {
+            return;
+        }
+        if (reloadInteractionDisabled
+                || deliveryCalendarReloadBlocking
+                || dispatchDocDirtySinceSave) {
+            return;
+        }
+        if (!shell.tryBeginDispatchTrialGating(PipelineExecutionTimingKind.STAGE2_5)) {
+            return;
+        }
+        if (stage25AiButton != null) {
+            stage25AiButton.setDisable(true);
+        }
+        showReloadProgress();
+        final Path stage2Json =
+                AppPaths.resolveResultDispatchTableStage2JsonPath(shell.snapshotUiEnv());
+        final Path afterStage25Json =
+                AppPaths.resolveResultDispatchTableStage25JsonPath(shell.snapshotUiEnv());
+        final Path pyExe = resolvePythonExe();
+        final String jobId = java.util.UUID.randomUUID().toString();
+        shell.selectMainShellTab(MainShellTabId.RUN);
+        shell.appendLog("--- start: 段階2.5(AI) ---");
+        if (autoChain) {
+            shell.appendLog("[stage2.5] 段階2成功後の自動連鎖で起動しました。");
+        }
+        if (snapshotDispatchStage25InferenceOnly()) {
+            shell.appendLog("[stage2.5] 学習推論のみモード（新規蓄積なし）。");
+        }
+        Task<String> task =
+                new Task<>() {
+                    @Override
+                    protected String call() throws Exception {
+                        shell.beginPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE2_5);
+                        Path raw =
+                                ResultDispatchStage25InputSupport.copyDispatchJsonBeforeAlign(
+                                        stage2Json);
+                        Map<String, String> ui = new java.util.HashMap<>(shell.snapshotUiEnv());
+                        ui.put(AppPaths.KEY_PM_AI_STAGE2_5_JOB_ID, jobId);
+                        ui.put(
+                                AppPaths.KEY_PM_AI_STAGE2_5_LEARNING_MODE,
+                                snapshotDispatchStage25LearningModeEnv());
+                        ui.put(
+                                AppPaths.KEY_PM_AI_STAGE2_5_STAGE2_RAW_JSON,
+                                raw.toAbsolutePath().normalize().toString());
+                        Path scriptDir = AppPaths.resolvePythonScriptDir(ui);
+                        return ResultDispatchStage25Python.runStage25(
+                                stage2Json,
+                                raw,
+                                jobId,
+                                pyExe,
+                                scriptDir,
+                                ui,
+                                shell::appendLog);
+                    }
+                };
+        task.setOnSucceeded(
+                ev -> {
+                    shell.endPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE2_5);
+                    shell.endDispatchTrialGating(PipelineExecutionTimingKind.STAGE2_5);
+                    shell.appendLog("--- end: 段階2.5(AI) ---");
+                    Path archiveRoot =
+                            AppPaths.resolveDispatchLearningArchiveRoot(shell.snapshotUiEnv());
+                    Path descriptor =
+                            archiveRoot.resolve("pending").resolve(jobId + ".json");
+                    shell.onStage25ForegroundSuccess(
+                            jobId, descriptor, afterStage25Json, pyExe, shell.snapshotUiEnv());
+                    reloadFromDiskQuiet(null, false, false, false);
+                    if (statusLabel != null) {
+                        String modeNote =
+                                snapshotDispatchStage25InferenceOnly()
+                                        ? "（学習推論のみ・蓄積なし）"
+                                        : "（学習記録: 処理中…）";
+                        statusLabel.setText(
+                                "段階2.5(AI) 完了 — "
+                                        + afterStage25Json.getFileName()
+                                        + modeNote);
+                    }
+                    hideReloadProgress();
+                    if (stage25AiButton != null) {
+                        stage25AiButton.setDisable(false);
+                    }
+                    applyDispatchTrialButtonEnabledState();
+                });
+        task.setOnFailed(
+                ev -> {
+                    shell.endPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE2_5);
+                    shell.endDispatchTrialGating(PipelineExecutionTimingKind.STAGE2_5);
+                    shell.appendLog("--- end: 段階2.5(AI) エラー ---");
+                    Throwable ex = task.getException();
+                    shell.showErrorDialog(
+                            "段階2.5(AI)",
+                            ex != null && ex.getMessage() != null
+                                    ? ex.getMessage()
+                                    : "段階2.5(AI) に失敗しました。");
+                    hideReloadProgress();
+                    if (stage25AiButton != null) {
+                        stage25AiButton.setDisable(false);
+                    }
+                    applyDispatchTrialButtonEnabledState();
+                });
+        new Thread(task, "dispatch-stage25-ai").start();
+    }
+
+    void applyDispatchTableActiveSourceFromSession(String envToken) {
+        if (dispatchTableActiveSourceCombo != null) {
+            suppressDispatchTableSourceUi.set(true);
+            try {
+                dispatchTableActiveSourceCombo.setValue(
+                        DispatchTableActiveSource.fromEnvToken(envToken));
+            } finally {
+                suppressDispatchTableSourceUi.set(false);
+            }
+        }
+    }
+
+    String snapshotDispatchTableActiveSourceEnv() {
+        if (dispatchTableActiveSourceCombo == null || dispatchTableActiveSourceCombo.getValue() == null) {
+            return DispatchTableActiveSource.STAGE2.envToken();
+        }
+        return dispatchTableActiveSourceCombo.getValue().envToken();
+    }
+
+    void applyDispatchStage25InferenceOnlyFromSession(boolean inferenceOnly) {
+        if (stage25InferenceOnlyCheck != null) {
+            stage25InferenceOnlyCheck.setSelected(inferenceOnly);
+        }
+        refreshStage25AiButtonLabel();
+    }
+
+    boolean snapshotDispatchStage25InferenceOnly() {
+        return stage25InferenceOnlyCheck != null && stage25InferenceOnlyCheck.isSelected();
+    }
+
+    String snapshotDispatchStage25LearningModeEnv() {
+        return snapshotDispatchStage25InferenceOnly()
+                ? DispatchStage25LearningMode.INFERENCE_ONLY.envToken()
+                : DispatchStage25LearningMode.ACCUMULATE.envToken();
+    }
+
+    private void refreshStage25AiButtonLabel() {
+        if (stage25AiButton == null) {
+            return;
+        }
+        String sub =
+                snapshotDispatchStage25InferenceOnly()
+                        ? STAGE25_AI_BUTTON_SUBTITLE_INFERENCE
+                        : STAGE25_AI_BUTTON_SUBTITLE_ACCUMULATE;
+        stage25AiButton.setText(STAGE25_AI_BUTTON_TEXT_DEFAULT + "\n" + sub);
+        stage25AiButton.setWrapText(true);
+    }
+
+    private void loadStage25MetaFromDisk(Path jsonPath) {
+        stage25TrialMeta = Stage25AppliedSidecarStore.tryLoadMeta(jsonPath);
+        if (statusLabel != null && stage25TrialMeta.stage25Applied()) {
+            String arch = stage25TrialMeta.learningArchiveStatus();
+            if ("done".equalsIgnoreCase(arch)) {
+                statusLabel.setText("段階2.5適用済（学習記録: 保存済）");
+            } else if ("pending".equalsIgnoreCase(arch)) {
+                statusLabel.setText("段階2.5適用済（学習記録: 処理中…）");
+            }
+        }
+    }
+
+    @FXML
     private void onOvertimeSimulationAction() {
         launchOvertimeSimulationWizard();
     }
@@ -1678,10 +1992,27 @@ public final class DispatchInteractiveTabController {
             boolean applyDispatchTrialShortfallJson,
             boolean userCompletionDialog,
             boolean validatePlanInputCoverage) {
+        reloadFromDiskQuiet(
+                afterSuccessOnFxThread,
+                applyDispatchTrialShortfallJson,
+                userCompletionDialog,
+                validatePlanInputCoverage,
+                null);
+    }
+
+    private void reloadFromDiskQuiet(
+            Runnable afterSuccessOnFxThread,
+            boolean applyDispatchTrialShortfallJson,
+            boolean userCompletionDialog,
+            boolean validatePlanInputCoverage,
+            Path jsonOverride) {
         if (shell == null) {
             return;
         }
-        Path p = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
+        Path p =
+                jsonOverride != null
+                        ? jsonOverride
+                        : AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
         jsonPathLabel.setText(p.toString());
         bumpDispatchSpreadsheetLayoutGeneration();
         if (!Files.isRegularFile(p)) {
@@ -1740,12 +2071,15 @@ public final class DispatchInteractiveTabController {
                             scheduleStage3TrialPlanQtySnapshotCapture();
                         }
                         loadStage35BaselineActualQtySnapshotFromDiskIfNeeded(jsonPath);
+                        logStage35QtyCompareDebug(jsonPath);
                     } else {
                         clearDispatchShortfallUi();
                         clearStage35BaselineActualQtySnapshot(jsonPath);
-                        // 段階2直後も plan スナップショットを取り、日付セル内 (段階2後) 表示の基準にする
                         scheduleStage3TrialPlanQtySnapshotCapture();
                     }
+                    loadStage25MetaFromDisk(
+                            AppPaths.resolveResultDispatchTableStage25JsonPath(shell.snapshotUiEnv()));
+                    shell.refreshLearnedSpeedDataQuietly();
                     clearDispatchDocDirty();
                     if (shell != null) {
                         shell.ensureDispatchInteractiveOnSceneForGridRebuild(userCompletionDialog);
@@ -1817,7 +2151,12 @@ public final class DispatchInteractiveTabController {
      * 段階2 正常終了直後: 表を JSON から再構築し、成功後に {@code afterSuccessOnFxThread} を FX スレッドで実行する。
      */
     void reloadTableFromDiskAfterStage2Success(Runnable afterSuccessOnFxThread) {
-        reloadFromDiskQuiet(afterSuccessOnFxThread, false, false, true);
+        reloadFromDiskQuiet(
+                afterSuccessOnFxThread,
+                false,
+                false,
+                true,
+                AppPaths.resolveResultDispatchTableStage2JsonPath(shell.snapshotUiEnv()));
     }
 
     /** 再読込や段階2開始の直前に、メモリ上の表を空表示へ戻す（JSON パスラベルは維持）。 */
@@ -1955,6 +2294,15 @@ public final class DispatchInteractiveTabController {
         }
         if (overtimeSimulationButton != null) {
             overtimeSimulationButton.setDisable(blockTrial);
+        }
+        if (stage25AiButton != null) {
+            boolean blockStage25 =
+                    reloadInteractionDisabled
+                            || deliveryCalendarReloadBlocking
+                            || dispatchDocDirtySinceSave
+                            || isSummaryExportLockedByLockFile()
+                            || docHasActualDispatchQtyColumn();
+            stage25AiButton.setDisable(blockStage25);
         }
         if (isSummaryExportLockedByLockFile() && !reloadInteractionDisabled && !deliveryCalendarReloadBlocking) {
             Tooltip t =
@@ -3281,6 +3629,26 @@ public final class DispatchInteractiveTabController {
         return doc.columns().contains(ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL);
     }
 
+    private static boolean documentHasPositiveActualDispatchQty(ResultDispatchDocument document) {
+        if (document == null || document.rows() == null) {
+            return false;
+        }
+        if (!document.columns().contains(ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL)) {
+            return false;
+        }
+        for (Map<String, String> row : document.rows()) {
+            if (row == null) {
+                continue;
+            }
+            if (ResultDispatchNormalizer.parseDouble(
+                            row.get(ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL))
+                    > 1e-6) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** 環境変数 {@link AppPaths#KEY_PM_AI_DEBUG_STAGE3_PLAN_ACTUAL_SINGLE_LINE}（未設定時は2行表示）。 */
     private boolean stage3PlanActualSingleLineDisplay() {
         if (shell == null) {
@@ -3606,6 +3974,140 @@ public final class DispatchInteractiveTabController {
             stage35BaselineActualQtySnapshot.putAll(meta.entries());
         }
         refreshStage35AttendanceApplyPanel(dispatchJsonPath);
+    }
+
+    /** 段階3.5 試行後: (段階3後) baseline と (段階3.5後) actual の数量差分を NDJSON に記録（Q2）。 */
+    private void logStage35QtyCompareDebug(Path dispatchJsonPath) {
+        if (!stage35TrialApplied || shell == null || !docHasActualDispatchQtyColumn()) {
+            return;
+        }
+        LocalDate probe = LocalDate.of(2026, 6, 1);
+        int sameCount = 0;
+        int diffCount = 0;
+        int probeSame = 0;
+        int probeDiff = 0;
+        double probeAddedM = 0.0;
+        List<String> probeDiffs = new ArrayList<>();
+        List<Map<String, String>> profiles =
+                ResultDispatchPivot.distinctWideTaskProfiles(
+                        doc.columns(),
+                        doc.rows(),
+                        ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+        for (Map<String, String> profile : profiles) {
+            for (LocalDate day : dateAxis) {
+                double actual =
+                        ResultDispatchPivot.sumActualQuantityForProfileAndDateForWideMerge(
+                                doc.rows(),
+                                profile,
+                                day,
+                                ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+                double baseline = stage35BaselineActualForCell(profile, day);
+                if (Math.abs(actual - baseline) > 1e-3) {
+                    diffCount++;
+                    if (probe.equals(day)) {
+                        probeDiff++;
+                        probeAddedM += actual - baseline;
+                        if (probeDiffs.size() < 8) {
+                            probeDiffs.add(
+                                    profile.getOrDefault("依頼NO", "")
+                                            + "|"
+                                            + profile.get(ResultDispatchSchema.COL_MACHINE)
+                                            + " b="
+                                            + baseline
+                                            + " a="
+                                            + actual
+                                            + " d="
+                                            + (actual - baseline));
+                        }
+                    }
+                } else if (actual > 1e-3 || baseline > 1e-3) {
+                    sameCount++;
+                    if (probe.equals(day)) {
+                        probeSame++;
+                    }
+                }
+            }
+        }
+        Map<String, Object> dbg = new LinkedHashMap<>();
+        dbg.put("dispatchJson", dispatchJsonPath != null ? dispatchJsonPath.toString() : "");
+        dbg.put("cellsSameQty", sameCount);
+        dbg.put("cellsDiffQty", diffCount);
+        dbg.put("on2026-06-01_same", probeSame);
+        dbg.put("on2026-06-01_diff", probeDiff);
+        dbg.put("on2026-06-01_added_m", probeAddedM);
+        dbg.put("on2026-06-01_diff_samples", probeDiffs);
+        dbg.put(
+                "overrideSummary",
+                stage35TrialMeta != null && stage35TrialMeta.overrideSummary() != null
+                        ? stage35TrialMeta.overrideSummary().totalChanges()
+                        : 0);
+        dbg.put("shortagesNoteHasSim", lastShortagesNote.contains("残業シミュレーション適用:"));
+        dbg.put("usedPreStage3PythonInput", stage3TrialInputDocumentSnapshot != null);
+        // #region agent log
+        AgentDebugLog.appendStructured(
+                shell.snapshotUiEnv(),
+                "0f46bc",
+                "Q2",
+                "DispatchInteractiveTabController.logStage35QtyCompareDebug",
+                "stage35 qty compare after reload",
+                dbg);
+        logStage35UnassignedDebug(dispatchJsonPath);
+        // #endregion
+    }
+
+    /** 段階3.5 試行後: 配台不可・配台残タスクを NDJSON に記録（U2）。 */
+    private void logStage35UnassignedDebug(Path dispatchJsonPath) {
+        if (shell == null || dispatchJsonPath == null) {
+            return;
+        }
+        try {
+            Path shortagePath = dispatchJsonPath.resolveSibling("dispatch_trial_shortages.json");
+            List<DispatchTrialShortages.ShortageHint> hints = List.of();
+            String productionPlan = "";
+            if (java.nio.file.Files.isRegularFile(shortagePath)) {
+                DispatchTrialShortages.FullBundle bundle =
+                        DispatchTrialShortages.readFull(shortagePath);
+                hints = bundle.shortageHints();
+                if (bundle.paths().productionPlan() != null) {
+                    productionPlan = bundle.paths().productionPlan();
+                }
+            }
+            List<ResultTaskUnassignedLoader.UnassignedRow> rows =
+                    ResultTaskUnassignedLoader.loadUnassigned(
+                            shell.snapshotUiEnv(), productionPlan, hints, true);
+            List<String> samples = new ArrayList<>();
+            for (ResultTaskUnassignedLoader.UnassignedRow r : rows) {
+                if (samples.size() < 12) {
+                    String memo = r.situationMemo() != null ? r.situationMemo() : "";
+                    samples.add(
+                            r.taskId()
+                                    + "|"
+                                    + r.processName()
+                                    + "|"
+                                    + r.machineName()
+                                    + " "
+                                    + (memo.length() > 80 ? memo.substring(0, 80) : memo));
+                }
+            }
+            Map<String, Object> u2 = new LinkedHashMap<>();
+            List<DispatchTrialShortages.DispatchQtyShortfallRow> metaMiss =
+                    DispatchTimelineMetaMissShortfalls.detectFromDocument(doc);
+            u2.put("unassignedTotal", rows.size());
+            u2.put("shortfallTotal", lastDispatchShortfallRows.size());
+            u2.put("shortfallMetaMiss", metaMiss.size());
+            u2.put("shortageHints", lastDispatchShortageHints.size());
+            u2.put("samples", samples);
+            u2.put("shortagesJson", shortagePath.toString());
+            AgentDebugLog.appendStructured(
+                    shell.snapshotUiEnv(),
+                    "0f46bc",
+                    "U2",
+                    "DispatchInteractiveTabController.logStage35UnassignedDebug",
+                    "stage35 unassigned tasks after reload",
+                    u2);
+        } catch (Exception ignored) {
+            // debug only
+        }
     }
 
     private void captureStage35BaselineActualQtySnapshotFromDocument(

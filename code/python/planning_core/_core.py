@@ -40,6 +40,9 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from .dispatch_workspace import (
     ENV_PLAN_INPUT_PATH,
     ENV_PROCESSING_PLAN_PATH,
+    _read_excel_tabular,
+    _resolve_tabular_excel_header_row_0based,
+    _resolve_tabular_sheet_name_calamine,
     plan_input_workbook_path_for_excel_ops,
     read_tabular_dataframe,
     resolve_actual_detail_workbook_path,
@@ -6084,6 +6087,12 @@ def load_planning_tasks_df():
         compile_exclude_rules_d_to_e_with_ai=False,
     )
     _apply_master_speed_sheet_to_plan_df(df, log_prefix="配台シート読込")
+    try:
+        from .actual_speed_apply import apply_learned_speed_to_plan_df
+
+        apply_learned_speed_to_plan_df(df, log_prefix="配台シート読込")
+    except Exception as ex:
+        logging.warning("配台シート読込: 学習速度適用をスキップ（%s）", ex)
     _fill_plan_dispatch_remaining_qty_column(df)
     logging.info("計画タスク入力: PM_AI_PLAN_INPUT_PATH='%s' を読み込みました。", _plan_alt)
     return df
@@ -9636,6 +9645,38 @@ def _coerce_actual_sheet_datetime(val):
         return None
 
 
+def _compose_hm_to_time(hour_val, minute_val) -> time | None:
+    """問合せ export の「開始時間」「開始分」等から time を組み立てる。"""
+    if hour_val is None or minute_val is None:
+        return None
+    if isinstance(hour_val, float) and pd.isna(hour_val):
+        return None
+    if isinstance(minute_val, float) and pd.isna(minute_val):
+        return None
+    try:
+        h = int(float(str(hour_val).strip()))
+        m = int(float(str(minute_val).strip()))
+    except (TypeError, ValueError):
+        return None
+    if 0 <= h <= 23 and 0 <= m <= 59:
+        return time(h, m)
+    return None
+
+
+def _normalize_actual_detail_workbook_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """NO(ロット)別問合せ xlsx 等の列名を加工実績明細DATA 正規名へ寄せる。"""
+    if df is None or getattr(df, "empty", True):
+        return df
+    rename: dict[str, str] = {}
+    if "加工日" in df.columns and ACT_COL_DAY not in df.columns:
+        rename["加工日"] = ACT_COL_DAY
+    if "停機時間分換算" in df.columns and ACT_COL_STOP_MIN_CONVERTED not in df.columns:
+        rename["停機時間分換算"] = ACT_COL_STOP_MIN_CONVERTED
+    if rename:
+        df = df.rename(columns=rename)
+    return df
+
+
 def _actual_row_time_bounds(row):
     """加工実績DATA／加工実績明細DATA の1行から (開始, 終了) を得る。解けなければ (None, None)。"""
     s_dt = _coerce_actual_sheet_datetime(row.get(ACT_COL_START_DT))
@@ -9661,13 +9702,26 @@ def _actual_row_time_bounds(row):
 
     d_date = parse_optional_date(row.get(ACT_COL_DAY))
     if not d_date:
+        d_date = parse_optional_date(row.get("加工日"))
+    if not d_date:
         cd = _coerce_actual_sheet_datetime(row.get(ACT_COL_DAY))
         if isinstance(cd, datetime):
             d_date = cd.date()
         elif isinstance(cd, date):
             d_date = cd
     if not d_date:
+        cd = _coerce_actual_sheet_datetime(row.get("加工日"))
+        if isinstance(cd, datetime):
+            d_date = cd.date()
+        elif isinstance(cd, date):
+            d_date = cd
+    if not d_date:
         return None, None
+
+    t0 = _compose_hm_to_time(row.get("開始時間"), row.get("開始分"))
+    t1 = _compose_hm_to_time(row.get("終了時間"), row.get("終了分"))
+    if t0 is not None and t1 is not None and t0 < t1:
+        return datetime.combine(d_date, t0), datetime.combine(d_date, t1)
 
     ts_s = row.get(ACT_COL_TIME_START)
     ts_e = row.get(ACT_COL_TIME_END)
@@ -9794,21 +9848,19 @@ def load_machining_actual_detail_df():
 
     def _load_once():
         try:
-            try:
-                out = pd.read_excel(_src_wb, sheet_name=_sn, engine="calamine")
-            except ImportError:
-                out = pd.read_excel(_src_wb, sheet_name=_sn)
-            except ValueError:
-                raise
-            except Exception:
-                out = pd.read_excel(_src_wb, sheet_name=_sn)
+            resolved = _resolve_tabular_sheet_name_calamine(_src_wb, _sn)
+            hdr = _resolve_tabular_excel_header_row_0based(_src_wb, resolved)
+            out = _read_excel_tabular(_src_wb, resolved, header=hdr)
         except ValueError:
             logging.info(
                 "シート「%s」は無いため、実績明細ガントは出力しません。",
                 _lbl,
             )
             return pd.DataFrame()
+        if out is None or getattr(out, "empty", True):
+            return pd.DataFrame()
         out.columns = out.columns.str.strip()
+        out = _normalize_actual_detail_workbook_columns(out)
         if ACT_DETAIL_COL_ROLL not in out.columns:
             for alias in ("ロール番号", "ロール", "巻番"):
                 if alias in out.columns:
@@ -17282,6 +17334,12 @@ def run_stage1_extract():
         raise
     out_df = _merge_plan_sheet_user_overrides(out_df)
     _apply_master_speed_sheet_to_plan_df(out_df, log_prefix="段階1")
+    try:
+        from .actual_speed_apply import apply_learned_speed_to_plan_df
+
+        apply_learned_speed_to_plan_df(out_df, log_prefix="段階1")
+    except Exception as ex:
+        logging.warning("段階1: 学習速度適用をスキップ（%s）", ex)
     _heal_stage1_roll_unit_no_dim_when_roll_matches_qty_mistake(out_df)
     _heal_stage1_roll_unit_if_width_ceiling_merge_spurious(out_df)
     _refresh_plan_reference_columns(out_df, req_map, need_rules)
@@ -19908,6 +19966,7 @@ def _attendance_overtime_minutes_from_raw(
 
 
 ENV_OVERTIME_SIMULATION_JSON = "PM_AI_OVERTIME_SIMULATION_JSON"
+ENV_STAGE35_STAGE3_METERS_FLOOR_JSON = "PM_AI_STAGE35_STAGE3_METERS_FLOOR_JSON"
 
 
 def _overtime_simulation_json_path() -> "Path | None":
@@ -26927,6 +26986,69 @@ def _interactive_dispatch_resolve_cap_key(
     return past[0][1]
 
 
+def _interactive_earliest_positive_target_date(
+    interactive_dispatch_targets: dict | None,
+    tid: str,
+    proc: str,
+    mach: str,
+) -> date | None:
+    """同一 (依頼NO, 工程, 機械) で正の JSON 目標がある最も早い配台暦日。"""
+    if not interactive_dispatch_targets:
+        return None
+    tid_n = _interactive_norm_cell(tid) or ""
+    proc_n = _interactive_dispatch_target_process_key(proc)
+    mach_n = _interactive_norm_cell(mach) or ""
+    if not tid_n or not mach_n:
+        return None
+    min_dd: date | None = None
+    for kk, val in interactive_dispatch_targets.items():
+        if not isinstance(kk, tuple) or len(kk) != 4:
+            continue
+        if kk[0] != tid_n or kk[1] != proc_n or kk[2] != mach_n:
+            continue
+        try:
+            qty = float(val or 0.0)
+        except (TypeError, ValueError):
+            qty = 0.0
+        if qty <= 1e-9:
+            continue
+        d = kk[3]
+        if not isinstance(d, date):
+            continue
+        if min_dd is None or d < min_dd:
+            min_dd = d
+    return min_dd
+
+
+def _interactive_cap_schedule_blocked_before_earliest_target(
+    interactive_dispatch_targets: dict | None,
+    tid: str,
+    proc: str,
+    mach: str,
+    current_date,
+) -> bool:
+    """
+    JSON 目標の最古暦日より前には暦日キャップ割当を開始しない。
+    6/5 目標の接続が 6/2 に載り (段階3前) と (段階3後) がずれるのを防ぐ。
+    """
+    if not _interactive_dispatch_cap_enforced_in_schedule_loop():
+        return False
+    if not interactive_dispatch_targets:
+        return False
+    min_d = _interactive_earliest_positive_target_date(
+        interactive_dispatch_targets, tid, proc, mach
+    )
+    if min_d is None:
+        return False
+    if isinstance(current_date, datetime):
+        cur_d = current_date.date()
+    elif isinstance(current_date, date):
+        cur_d = current_date
+    else:
+        return False
+    return cur_d < min_d
+
+
 def _interactive_fallback_meter_target_key_for_recompute(
     tid: str,
     proc: str,
@@ -27277,18 +27399,38 @@ def _interactive_row_needs_dispatch_date_slide(
     return True
 
 
-def _interactive_zero_actual_qty_without_timeline_meta(df: pd.DataFrame) -> pd.DataFrame:
+def _interactive_zero_actual_qty_without_timeline_meta(
+    df: pd.DataFrame,
+    *,
+    preserve_meters_done: dict | None = None,
+) -> pd.DataFrame:
     """
     タイムライン未割付（加工開始日時が空）の暦日行は実配台数量を 0 にする。
     cap_key 解決で別日実績が計画日キーへ載った見かけ上の「配台済」を防ぐ。
+    段階3.5 floor があるキーは 0 クリアしない。
     """
     actual_col = INTERACTIVE_DISPATCH_ACTUAL_QTY_COL
     if df is None or getattr(df, "empty", True) or actual_col not in df.columns:
         return df
     out = df.copy()
     for pos in range(len(out)):
-        if _interactive_row_has_timeline_meta(out.iloc[pos].to_dict()):
+        row = out.iloc[pos].to_dict()
+        if _interactive_row_has_timeline_meta(row):
             continue
+        if preserve_meters_done and _overtime_simulation_dispatch_trial_active():
+            tid = _interactive_norm_cell(row.get(TASK_COL_TASK_ID))
+            proc = _interactive_dispatch_target_process_key(row.get(TASK_COL_MACHINE))
+            mach = _interactive_norm_cell(row.get(TASK_COL_MACHINE_NAME))
+            dd = _interactive_parse_dispatch_date_cell(row.get("配台日"))
+            if tid and mach and dd is not None:
+                try:
+                    keep_m = float(
+                        preserve_meters_done.get((tid, proc, mach, dd), 0.0) or 0.0
+                    )
+                except (TypeError, ValueError):
+                    keep_m = 0.0
+                if keep_m > 1e-9:
+                    continue
         try:
             out.at[out.index[pos], actual_col] = 0.0
         except Exception:
@@ -28540,6 +28682,185 @@ def _interactive_stage2_parity_active() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
+def _stage35_stage3_meters_floor_json_path() -> "Path | None":
+    from pathlib import Path
+
+    raw = (os.environ.get(ENV_STAGE35_STAGE3_METERS_FLOOR_JSON) or "").strip()
+    if not raw:
+        return None
+    p = Path(raw)
+    return p if p.is_file() else None
+
+
+_STAGE35_FLOOR_APPLY_META: dict = {}
+_STAGE35_FLOOR_METERS_SNAPSHOT: dict[tuple[str, str, str, date], float] = {}
+
+
+def _stage35_merge_floor_into_meters_done(
+    meters_done: dict[tuple[str, str, str, date], float] | None,
+) -> dict[tuple[str, str, str, date], float]:
+    """段階3.5: タイムライン再集計 m に段階3 floor を足し合わせる（max キーごと）。"""
+    merged: dict[tuple[str, str, str, date], float] = {}
+    for src in (_STAGE35_FLOOR_METERS_SNAPSHOT or {}, meters_done or {}):
+        for k, v in src.items():
+            if not isinstance(k, tuple) or len(k) != 4:
+                continue
+            try:
+                fv = float(v or 0.0)
+            except (TypeError, ValueError):
+                continue
+            if fv <= 1e-18:
+                continue
+            prev = float(merged.get(k, 0.0) or 0.0)
+            if fv > prev:
+                merged[k] = fv
+    return merged
+
+
+def _apply_stage35_stage3_meters_floor(
+    task_queue: list,
+    meters_done: dict[tuple[str, str, str, date], float],
+) -> dict:
+    """
+    段階3.5: 段階3試行後の実配台 m を下限として meters_done と remaining_units に反映する。
+    定時帯の再配台をゼロからやり直さず、残業帯での追加分のみ試行する。
+    """
+    global _STAGE35_FLOOR_APPLY_META, _STAGE35_FLOOR_METERS_SNAPSHOT
+    _STAGE35_FLOOR_METERS_SNAPSHOT = {}
+    p = _stage35_stage3_meters_floor_json_path()
+    if p is None:
+        _STAGE35_FLOOR_APPLY_META = {
+            "applied": False,
+            "reason": "missing_floor_json",
+        }
+        return _STAGE35_FLOOR_APPLY_META
+    try:
+        payload = json.loads(p.read_text(encoding="utf-8"))
+    except Exception as ex:
+        _STAGE35_FLOOR_APPLY_META = {
+            "applied": False,
+            "reason": f"read_failed:{ex}",
+        }
+        return _STAGE35_FLOOR_APPLY_META
+    cells = payload.get("cells") if isinstance(payload, dict) else None
+    if not isinstance(cells, list):
+        _STAGE35_FLOOR_APPLY_META = {
+            "applied": False,
+            "reason": "invalid_cells",
+        }
+        return _STAGE35_FLOOR_APPLY_META
+
+    triple_meters: dict[tuple[str, str, str], float] = defaultdict(float)
+    triple_hist_dd: dict[tuple[str, str, str], dict[date, float]] = defaultdict(
+        lambda: defaultdict(float)
+    )
+    applied_cells = 0
+    applied_m = 0.0
+    for cell in cells:
+        if not isinstance(cell, dict):
+            continue
+        tid = _interactive_norm_cell(cell.get("task_id"))
+        proc = _interactive_dispatch_target_process_key(cell.get("process"))
+        mach = _interactive_norm_cell(cell.get("machine_name"))
+        dd = parse_optional_date(str(cell.get("date") or "").strip())
+        try:
+            m = float(cell.get("meters") or 0.0)
+        except (TypeError, ValueError):
+            m = 0.0
+        if not tid or not mach or dd is None or m <= 1e-9:
+            continue
+        key4 = (tid, proc, mach, dd)
+        prev = float(meters_done.get(key4, 0.0) or 0.0)
+        if m > prev:
+            meters_done[key4] = m
+        _STAGE35_FLOOR_METERS_SNAPSHOT[key4] = float(meters_done.get(key4, 0.0) or 0.0)
+        t3 = (tid, proc, mach)
+        triple_meters[t3] += m
+        triple_hist_dd[t3][dd] += float(m)
+        applied_cells += 1
+        applied_m += float(m)
+
+    credited_tasks = 0
+    for t in task_queue or []:
+        tid = _interactive_norm_cell(str(t.get("task_id") or ""))
+        proc = _interactive_dispatch_target_process_key(t.get("machine"))
+        mach = _interactive_norm_cell(str(t.get("machine_name") or ""))
+        t3 = (tid, proc, mach)
+        floor_m = float(triple_meters.get(t3, 0.0) or 0.0)
+        if floor_m <= 1e-9:
+            continue
+        try:
+            um = float(t.get("unit_m") or 0.0)
+        except (TypeError, ValueError):
+            um = 0.0
+        if um <= 1e-12:
+            continue
+        floor_units = floor_m / um
+        try:
+            initial = float(t.get("initial_remaining_units") or 0.0)
+        except (TypeError, ValueError):
+            initial = float(t.get("remaining_units") or 0.0)
+        new_rem = max(0.0, initial - floor_units)
+        t["remaining_units"] = new_rem
+        if new_rem <= 1e-9:
+            day_map = triple_hist_dd.get(t3) or {}
+            hist = [
+                {"date": d.strftime("%m/%d"), "done_m": float(v)}
+                for d, v in sorted(day_map.items(), key=lambda kv: kv[0])
+            ]
+            t["assigned_history"] = hist
+            credited_tasks += 1
+
+    _STAGE35_FLOOR_APPLY_META = {
+        "applied": applied_cells > 0,
+        "floor_json": str(p),
+        "cells": applied_cells,
+        "meters": applied_m,
+        "tasks_credited": credited_tasks,
+        "floor_keys": len(_STAGE35_FLOOR_METERS_SNAPSHOT),
+    }
+    return _STAGE35_FLOOR_APPLY_META
+
+
+def _overtime_simulation_dispatch_trial_active() -> bool:
+    """段階3.5: 残業シミュ JSON が有効な配台試行。"""
+    return _overtime_simulation_json_path() is not None
+
+
+_STAGE35_OT_QTY_DBG: dict = {}
+
+
+def _stage35_ot_qty_dbg_reset() -> None:
+    global _STAGE35_OT_QTY_DBG
+    _STAGE35_OT_QTY_DBG = {
+        "ot_mode_activations": 0,
+        "ot_rolls_ok": 0,
+        "ot_rolls_fail": 0,
+        "ot_meters_m": 0.0,
+        "ot_samples": [],
+    }
+
+
+def _stage35_overtime_regular_end_floor(
+    team: tuple,
+    daily_status: dict,
+    current_date: date,
+) -> datetime | None:
+    """段階3.5 残業帯: 全員の定時終了（base_end_dt）以降から開始。"""
+    if not team:
+        return None
+    reg_ends: list[datetime] = []
+    for m in team:
+        st = daily_status.get(m)
+        if not st:
+            return None
+        base = st.get("base_end_dt")
+        if not isinstance(base, datetime):
+            base = datetime.combine(current_date, DEFAULT_END_TIME)
+        reg_ends.append(base)
+    return max(reg_ends) if reg_ends else None
+
+
 def _interactive_dispatch_cap_enforced_in_schedule_loop() -> bool:
     """
     段階3配台ループ内で JSON 暦日×数量（interactive_dispatch_targets）を割当上限とするか。
@@ -28547,6 +28868,9 @@ def _interactive_dispatch_cap_enforced_in_schedule_loop() -> bool:
     手動修正タブ由来の targets があるときは **段階2同一パリティでも True**（暦日4200m等の
     計画を守り、早期暦日への過剰割付で後日 plan が空振りになるのを防ぐ）。
     targets が無い従来試行のみ、パリティ時は False（段階2ブロック条件と同一）。
+
+    段階3.5（残業シミュ）でも定時帯は暦日キャップを維持する。超過分は
+    _drain_rolls_for_task 内の残業帯ドレイン（17:00 以降）で追加する。
     """
     if not _interactive_dispatch_trial_env_active():
         return False
@@ -29372,9 +29696,11 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
     df_out = _overlay_timeline_meta_onto_interactive_dispatch_df(df_out, df_sim)
     df_out = _interactive_merge_actual_dispatch_qty_from_timeline_table(df_out, df_sim)
     if interactive_dispatch_targets and timeline_events is not None and task_queue is not None:
-        _md_reco = _interactive_trial_meters_done_by_timeline_calendar_date(
-            timeline_events,
-            task_queue,
+        _md_reco = _stage35_merge_floor_into_meters_done(
+            _interactive_trial_meters_done_by_timeline_calendar_date(
+                timeline_events,
+                task_queue,
+            )
         )
         df_out = _interactive_apply_recomputed_actual_qty_to_dispatch_df(df_out, _md_reco)
         logging.info(
@@ -29383,7 +29709,9 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
         )
     else:
         _md_reco = None
-    df_out = _interactive_zero_actual_qty_without_timeline_meta(df_out)
+    df_out = _interactive_zero_actual_qty_without_timeline_meta(
+        df_out, preserve_meters_done=_md_reco
+    )
     df_out = _interactive_slide_unassigned_plan_dispatch_dates(
         df_out,
         df_sim,
@@ -29403,19 +29731,25 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
         )
     if _md_reco is not None:
         df_out = _interactive_apply_recomputed_actual_qty_to_dispatch_df(df_out, _md_reco)
-    df_out = _interactive_zero_actual_qty_without_timeline_meta(df_out)
+    df_out = _interactive_zero_actual_qty_without_timeline_meta(
+        df_out, preserve_meters_done=_md_reco
+    )
     df_out = _interactive_prune_orphan_zero_plan_dispatch_rows(df_out)
     if timeline_events is not None and task_queue is not None:
         _plan_want = _interactive_aggregate_plan_dispatch_targets_from_df(df_out)
         if _plan_want:
-            _md_post_slide = _interactive_trial_meters_done_by_timeline_calendar_date(
-                timeline_events,
-                task_queue,
+            _md_post_slide = _stage35_merge_floor_into_meters_done(
+                _interactive_trial_meters_done_by_timeline_calendar_date(
+                    timeline_events,
+                    task_queue,
+                )
             )
             df_out = _interactive_apply_recomputed_actual_qty_to_dispatch_df(
                 df_out, _md_post_slide
             )
-            df_out = _interactive_zero_actual_qty_without_timeline_meta(df_out)
+            df_out = _interactive_zero_actual_qty_without_timeline_meta(
+                df_out, preserve_meters_done=_md_post_slide
+            )
             try:
                 _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT.clear()
                 _LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT.update(_md_post_slide)
@@ -31646,6 +31980,7 @@ def _assign_one_roll_trial_order_flow(
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
     machine_handoff: dict | None = None,
     timeline_events: list | None = None,
+    stage35_overtime_only: bool = False,
 ) -> dict | None:
     """
     1ロール分の最良フォームを決定れる。設備空し・日開始下限を team_start に織り込む。
@@ -31985,10 +32320,24 @@ def _assign_one_roll_trial_order_flow(
             and team_start < _sec_pair_gate_floor_dt
         ):
             team_start = _sec_pair_gate_floor_dt
-        team_end_limit = min(daily_status[m]["end_dt"] for m in team)
-        team_end_limit = _interactive_trial_relax_team_end_limit_to_eod(
-            team_end_limit, current_date
-        )
+        if stage35_overtime_only:
+            ot_floor = _stage35_overtime_regular_end_floor(
+                team, daily_status, current_date
+            )
+            if ot_floor is None:
+                _trace_assign(
+                    "候補棄却: 残業帯開始下限なし team=%s",
+                    ",".join(str(x) for x in team),
+                )
+                return None
+            if team_start < ot_floor:
+                team_start = ot_floor
+            team_end_limit = min(daily_status[m]["end_dt"] for m in team)
+        else:
+            team_end_limit = min(daily_status[m]["end_dt"] for m in team)
+            team_end_limit = _interactive_trial_relax_team_end_limit_to_eod(
+                team_end_limit, current_date
+            )
         if team_start >= team_end_limit:
             _trace_assign(
                 "候補坴下: 開始>=終業 team=%s start=%s end_limit=%s",
@@ -32031,6 +32380,12 @@ def _assign_one_roll_trial_order_flow(
                 and ts < _sec_pair_gate_floor_dt
             ):
                 ts = _sec_pair_gate_floor_dt
+            if stage35_overtime_only:
+                ot_fl = _stage35_overtime_regular_end_floor(
+                    team, daily_status, current_date
+                )
+                if ot_fl is not None and ts < ot_fl:
+                    ts = ot_fl
             return ts
 
         team_start_d = _defer_team_start_past_prebreak_and_end_of_day(
@@ -33140,7 +33495,7 @@ def _trial_order_first_schedule_pass(
             interactive_trial_meters_done=interactive_trial_meters_done,
         )
         if _interactive_stage2_parity_active():
-            # 段階2同一パリティ: 未達 m 降順は試行順より優先すると段階2と乖離するため試行順のみ。
+            # 段階2同一パリティ: 未達 m 降順は試行順 3(W6-7)より 10(W6-2)を先にし段階2と乖離するため試行順のみ。
             return base
         if unmet <= 1e-9:
             return (1, 0.0) + base
@@ -33155,6 +33510,7 @@ def _trial_order_first_schedule_pass(
         while float(task.get("remaining_units") or 0) > 1e-12:
             if max_rolls is not None and rolls_done >= max_rolls:
                 break
+            stage35_overtime_only = False
             _iv_cap = (
                 _interactive_dispatch_cap_enforced_in_schedule_loop()
                 and interactive_dispatch_targets is not None
@@ -33163,6 +33519,14 @@ def _trial_order_first_schedule_pass(
             _tid_iv = _interactive_norm_cell(str(task.get("task_id") or ""))
             _proc_iv = _interactive_dispatch_target_process_key(task.get("machine"))
             _mach_iv = _interactive_norm_cell(str(task.get("machine_name") or ""))
+            if _interactive_cap_schedule_blocked_before_earliest_target(
+                interactive_dispatch_targets,
+                _tid_iv,
+                _proc_iv,
+                _mach_iv,
+                current_date,
+            ):
+                break
             _raw_cap_key = (_tid_iv, _proc_iv, _mach_iv, current_date)
             _cap_key = _raw_cap_key
             if _iv_cap and _raw_cap_key not in interactive_dispatch_targets:
@@ -33184,39 +33548,47 @@ def _trial_order_first_schedule_pass(
                     _cap_m = 0.0
                     _done_m = 0.0
                 if _done_m >= _cap_m - 1e-5:
-                    break
-                try:
-                    _um_lim = float(task.get("unit_m") or 0)
-                except (TypeError, ValueError):
-                    _um_lim = 0.0
-                if _um_lim > 1e-12:
-                    _rem_key_m = max(0.0, _cap_m - _done_m)
-                    _rem_m = _rem_key_m
-                    _tot_task = float(parse_float_safe(task.get("total_qty_m"), 0.0))
-                    if (
-                        _tot_task > 1e-12
-                        and interactive_dispatch_targets is not None
-                        and interactive_trial_meters_done is not None
-                    ):
-                        _glob_done_m = 0.0
-                        for _gk in interactive_dispatch_targets:
-                            if (
-                                isinstance(_gk, tuple)
-                                and len(_gk) == 4
-                                and _gk[0] == _tid_iv
-                                and _gk[1] == _proc_iv
-                                and _gk[2] == _mach_iv
-                            ):
-                                try:
-                                    _glob_done_m += float(
-                                        interactive_trial_meters_done.get(_gk, 0.0)
-                                    )
-                                except (TypeError, ValueError):
-                                    pass
-                        _rem_task_m = max(0.0, _tot_task - _glob_done_m)
-                        _rem_m = min(_rem_key_m, _rem_task_m)
-                    if _rem_m + 1e-9 < _um_lim:
+                    if _overtime_simulation_dispatch_trial_active():
+                        if not stage35_overtime_only:
+                            _STAGE35_OT_QTY_DBG["ot_mode_activations"] = (
+                                int(_STAGE35_OT_QTY_DBG.get("ot_mode_activations") or 0) + 1
+                            )
+                        stage35_overtime_only = True
+                    else:
                         break
+                if not stage35_overtime_only:
+                    try:
+                        _um_lim = float(task.get("unit_m") or 0)
+                    except (TypeError, ValueError):
+                        _um_lim = 0.0
+                    if _um_lim > 1e-12:
+                        _rem_key_m = max(0.0, _cap_m - _done_m)
+                        _rem_m = _rem_key_m
+                        _tot_task = float(parse_float_safe(task.get("total_qty_m"), 0.0))
+                        if (
+                            _tot_task > 1e-12
+                            and interactive_dispatch_targets is not None
+                            and interactive_trial_meters_done is not None
+                        ):
+                            _glob_done_m = 0.0
+                            for _gk in interactive_dispatch_targets:
+                                if (
+                                    isinstance(_gk, tuple)
+                                    and len(_gk) == 4
+                                    and _gk[0] == _tid_iv
+                                    and _gk[1] == _proc_iv
+                                    and _gk[2] == _mach_iv
+                                ):
+                                    try:
+                                        _glob_done_m += float(
+                                            interactive_trial_meters_done.get(_gk, 0.0)
+                                        )
+                                    except (TypeError, ValueError):
+                                        pass
+                            _rem_task_m = max(0.0, _tot_task - _glob_done_m)
+                            _rem_m = min(_rem_key_m, _rem_task_m)
+                        if _rem_m + 1e-9 < _um_lim:
+                            break
             res = _assign_one_roll_trial_order_flow(
                 task,
                 current_date,
@@ -33238,8 +33610,13 @@ def _trial_order_first_schedule_pass(
                 dispatch_interval_mirror=dispatch_interval_mirror,
                 machine_handoff=machine_handoff,
                 timeline_events=timeline_events,
+                stage35_overtime_only=stage35_overtime_only,
             )
             if res is None:
+                if stage35_overtime_only and _overtime_simulation_dispatch_trial_active():
+                    _STAGE35_OT_QTY_DBG["ot_rolls_fail"] = (
+                        int(_STAGE35_OT_QTY_DBG.get("ot_rolls_fail") or 0) + 1
+                    )
                 break
             done_units = 1
             if task.get("roll_pipeline_inspection") or task.get(
@@ -33260,6 +33637,29 @@ def _trial_order_first_schedule_pass(
             sub_members = [m for m in best_team if m != lead_op]
             best_start = res["team_start"]
             best_end = res["actual_end_dt"]
+            if stage35_overtime_only and _overtime_simulation_dispatch_trial_active():
+                _STAGE35_OT_QTY_DBG["ot_rolls_ok"] = (
+                    int(_STAGE35_OT_QTY_DBG.get("ot_rolls_ok") or 0) + 1
+                )
+                try:
+                    _ot_um = float(task.get("unit_m") or 0)
+                except (TypeError, ValueError):
+                    _ot_um = 0.0
+                _STAGE35_OT_QTY_DBG["ot_meters_m"] = float(
+                    _STAGE35_OT_QTY_DBG.get("ot_meters_m") or 0.0
+                ) + _ot_um * float(done_units)
+                _ot_samps = _STAGE35_OT_QTY_DBG.setdefault("ot_samples", [])
+                if len(_ot_samps) < 10:
+                    _ot_samps.append(
+                        {
+                            "task_id": str(task.get("task_id") or ""),
+                            "date": str(current_date),
+                            "start": best_start.isoformat(sep=" ", timespec="minutes")
+                            if isinstance(best_start, datetime)
+                            else str(best_start),
+                            "m": _ot_um * float(done_units),
+                        }
+                    )
             best_breaks = res["team_breaks"]
             best_eff = res["avg_eff"]
             rq_base = res["rq_base"]
@@ -36308,6 +36708,9 @@ def _generate_plan_impl(
         else None
     )
     _PLAN_IMPL_INTERACTIVE_TRIAL_METERS_DONE = _interactive_trial_meters_done
+    if _overtime_simulation_dispatch_trial_active():
+        _stage35_ot_qty_dbg_reset()
+        _apply_stage35_stage3_meters_floor(task_queue, _interactive_trial_meters_done)
     if (
         _interactive_dispatch_trial_env_active()
         and not _interactive_stage2_parity_active()
@@ -38580,9 +38983,11 @@ def _generate_plan_impl(
         # 未達一覧はタイムライン上の暦日×依頼×工程×機械で再集計し、短い検証（dispatch_qty_shortfall）と整合させる。
         if interactive_dispatch_targets:
             try:
-                _reco_md = _interactive_trial_meters_done_by_timeline_calendar_date(
-                    timeline_events,
-                    task_queue,
+                _reco_md = _stage35_merge_floor_into_meters_done(
+                    _interactive_trial_meters_done_by_timeline_calendar_date(
+                        timeline_events,
+                        task_queue,
+                    )
                 )
                 _interactive_trial_meters_done.clear()
                 _interactive_trial_meters_done.update(_reco_md)
@@ -38662,6 +39067,127 @@ def _generate_plan_impl(
     _interactive_append_machining_end_after_member_shift_shortages(
         timeline_events, attendance_data
     )
+    # #region agent log
+    if _overtime_simulation_dispatch_trial_active():
+        try:
+            from planning_core import agent_debug_ndjson as _agent_dbg
+
+            _probe = date(2026, 6, 1)
+            _reg_end = datetime.combine(_probe, DEFAULT_END_TIME)
+            _before17 = 0
+            _after17 = 0
+            _tl_m_reg = 0.0
+            _tl_m_ot = 0.0
+            for _ev in timeline_events or []:
+                if not _is_machining_timeline_event(_ev):
+                    continue
+                _st = _ev.get("start_dt")
+                if not isinstance(_st, datetime) or _st.date() != _probe:
+                    continue
+                try:
+                    _ud = float(_ev.get("units_done") or 0)
+                    _um = float(_ev.get("unit_m") or 0)
+                    _add_m = _ud * _um
+                except (TypeError, ValueError):
+                    _add_m = 0.0
+                if _st < _reg_end:
+                    _before17 += 1
+                    _tl_m_reg += _add_m
+                else:
+                    _after17 += 1
+                    _tl_m_ot += _add_m
+            _md_snap = dict(_LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT or {})
+            _tgt_snap = dict(_LAST_INTERACTIVE_TRIAL_PLAN_TARGETS_SNAPSHOT or {})
+            if not _tgt_snap and interactive_dispatch_targets:
+                _tgt_snap = dict(interactive_dispatch_targets)
+            _over_cap_keys: list[dict] = []
+            for _k, _cap_m in _tgt_snap.items():
+                if not isinstance(_k, tuple) or len(_k) != 4 or _k[3] != _probe:
+                    continue
+                try:
+                    _done_m = float(_md_snap.get(_k, 0.0))
+                    _cap_f = float(_cap_m)
+                except (TypeError, ValueError):
+                    continue
+                if _done_m > _cap_f + 1e-3:
+                    _over_cap_keys.append(
+                        {
+                            "key": "|".join(str(x) for x in _k),
+                            "cap_m": _cap_f,
+                            "done_m": _done_m,
+                            "over_m": _done_m - _cap_f,
+                        }
+                    )
+            _over_cap_keys.sort(key=lambda x: -float(x.get("over_m") or 0))
+            _unassigned_samples: list[dict] = []
+            for _t_u in task_queue or []:
+                try:
+                    _rem_u = float(_t_u.get("remaining_units") or 0.0)
+                except (TypeError, ValueError):
+                    _rem_u = 0.0
+                if _rem_u <= 1e-9:
+                    continue
+                try:
+                    _um_u = float(_t_u.get("unit_m") or 0.0)
+                except (TypeError, ValueError):
+                    _um_u = 0.0
+                _unassigned_samples.append(
+                    {
+                        "task_id": str(_t_u.get("task_id") or ""),
+                        "process": str(_t_u.get("machine") or ""),
+                        "machine_name": str(_t_u.get("machine_name") or ""),
+                        "remaining_units": _rem_u,
+                        "remaining_m": _rem_u * _um_u if _um_u > 1e-12 else 0.0,
+                        "has_hist": bool(_t_u.get("assigned_history")),
+                    }
+                )
+            _unassigned_samples.sort(
+                key=lambda x: -float(x.get("remaining_m") or 0.0)
+            )
+            _agent_dbg.append_structured(
+                "U1",
+                "planning_core/_core.py:generate_plan:stage35_unassigned_summary",
+                "stage35 unassigned tasks summary",
+                {
+                    "floor_meta": dict(_STAGE35_FLOOR_APPLY_META or {}),
+                    "floor_snapshot_keys": len(_STAGE35_FLOOR_METERS_SNAPSHOT or {}),
+                    "merged_meters_keys": len(
+                        _stage35_merge_floor_into_meters_done(
+                            _interactive_trial_meters_done
+                        )
+                    ),
+                    "pending_remaining_count": len(_unassigned_samples),
+                    "pending_remaining_samples": _unassigned_samples[:12],
+                    "remaining_at_calendar_end": list(
+                        _LAST_INTERACTIVE_REMAINING_TASKS_AT_CALENDAR_END or []
+                    )[:12],
+                },
+            )
+            _agent_dbg.append_structured(
+                "Q1",
+                "planning_core/_core.py:generate_plan:stage35_overtime_qty_summary",
+                "stage35 overtime qty summary",
+                {
+                    "cap_enforced_in_loop": _interactive_dispatch_cap_enforced_in_schedule_loop(),
+                    "ot_mode_activations": int(
+                        _STAGE35_OT_QTY_DBG.get("ot_mode_activations") or 0
+                    ),
+                    "ot_rolls_ok": int(_STAGE35_OT_QTY_DBG.get("ot_rolls_ok") or 0),
+                    "ot_rolls_fail": int(_STAGE35_OT_QTY_DBG.get("ot_rolls_fail") or 0),
+                    "ot_meters_from_loop": float(
+                        _STAGE35_OT_QTY_DBG.get("ot_meters_m") or 0.0
+                    ),
+                    "ot_samples": list(_STAGE35_OT_QTY_DBG.get("ot_samples") or [])[:10],
+                    "events_before_17": _before17,
+                    "events_after_17": _after17,
+                    "timeline_m_before_17": _tl_m_reg,
+                    "timeline_m_after_17": _tl_m_ot,
+                    "over_cap_on_2026_06_01": _over_cap_keys[:12],
+                },
+            )
+        except Exception:
+            pass
+    # #endregion
     df_ai_log = pd.DataFrame(list(ai_log_data.items()), columns=["項目", "内容"])
 
     from planning_core.workbook_payload import (
