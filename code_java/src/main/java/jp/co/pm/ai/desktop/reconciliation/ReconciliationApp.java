@@ -120,7 +120,10 @@ public class ReconciliationApp {
     private Label embeddedTabPollStatusLabel;
     private Supplier<RequestFormPreviewBadgeConfig> previewBadgeConfigSupplier =
             RequestFormPreviewBadgeConfig::defaults;
-    
+    private Supplier<Boolean> planningPipelineStageBusyChecker = () -> false;
+    private static final String PDF_SUPPRESSED_PIPELINE_MSG =
+            "段階1～段階3.5 実行中のため PDF プレビュー生成を一時停止しています。";
+
     // Loading overlay components
     private StackPane mainStackPane;
     private VBox loadingOverlay;
@@ -248,6 +251,19 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         this.previewBadgeConfigSupplier =
                 supplier != null ? supplier : RequestFormPreviewBadgeConfig::defaults;
         Platform.runLater(this::refreshPreviewFileHeader);
+    }
+
+    /** 段階1～段階3.5 実行中は PDF プレビュー生成を抑制するための判定（メインシェルから注入）。 */
+    public void setPlanningPipelineStageBusyChecker(Supplier<Boolean> checker) {
+        this.planningPipelineStageBusyChecker = checker != null ? checker : () -> false;
+    }
+
+    private boolean isPlanningPipelineStageBusy() {
+        try {
+            return Boolean.TRUE.equals(planningPipelineStageBusyChecker.get());
+        } catch (RuntimeException | Error ex) {
+            return false;
+        }
     }
 
     /** デザインタブ変更後にプレビュー上部バッジの見た目を再描画する。 */
@@ -2688,6 +2704,15 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     }
                 }
 
+                if (isPlanningPipelineStageBusy()) {
+                    try {
+                        Thread.sleep(500);
+                        continue;
+                    } catch (InterruptedException e) {
+                        break;
+                    }
+                }
+
                 if (RequestFormSourceCache.isPreviewCacheValid(task.outputFile, task.excelFile)) {
                     synchronized (cacheQueue) {
                         cacheQueue.poll();
@@ -3008,6 +3033,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (RequestFormSourceCache.isPreviewCacheValid(cachedPdf, f)) {
             acknowledgePreviewForCurrentOriginalFile();
             displayPreviewPdf(cachedPdf);
+        } else if (isPlanningPipelineStageBusy()) {
+            Label lblPaused = new Label(PDF_SUPPRESSED_PIPELINE_MSG);
+            lblPaused.getStyleClass().add("excel-grid-label-info");
+            sheetGrid.add(lblPaused, 0, 0);
         } else {
             RequestFormSourceCache.deletePreviewCache(cachedPdf);
             Label lblLoading = new Label("原本の PDF プレビューを生成しています... (しばらくお待ちください)");

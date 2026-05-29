@@ -16,6 +16,7 @@
 <?import javafx.scene.chart.NumberAxis?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.control.TableView?>
@@ -23,107 +24,120 @@
 
 <VBox xmlns="http://javafx.com/javafx/26" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="jp.co.pm.ai.desktop.DispatchInteractiveTabController"
-      fillWidth="true" spacing="8.0">
+      fillWidth="true" spacing="8.0" styleClass="pm-dispatch-interactive-tab">
     <padding>
         <Insets bottom="12.0" left="12.0" right="12.0" top="12.0"/>
     </padding>
-    <HBox alignment="CENTER_LEFT" spacing="8.0">
-        <Button fx:id="loadButton" mnemonicParsing="false" text="再読み"
-                onAction="#onLoadAction"/>
-        <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
-                onAction="#onClearColumnFiltersAction"/>
-        <Button mnemonicParsing="false" text="列の並べ替え"
-                onAction="#onColumnReorderAction"/>
-        <Button mnemonicParsing="false" text="列の表示"
-                onAction="#onColumnVisibilityAction"/>
-        <Label text="数量表示:"/>
-        <CheckBox fx:id="showAladdinPlanQtyLineCheck" mnemonicParsing="false" selected="true"
-                  text="(アラ計画)">
-            <tooltip>
-                <Tooltip text="日付セル内の (アラ計画) 行の表示/非表示"/>
-            </tooltip>
-        </CheckBox>
-        <CheckBox fx:id="showStage3PlanQtyLineCheck" mnemonicParsing="false" selected="true"
-                  text="(段階3前)">
-            <tooltip>
-                <Tooltip text="日付セル内の (段階3前) 行の表示/非表示"/>
-            </tooltip>
-        </CheckBox>
-        <CheckBox fx:id="showStage3AfterQtyLineCheck" mnemonicParsing="false" selected="true"
-                  text="(段階3後)">
-            <tooltip>
-                <Tooltip text="日付セル内の (段階3後)/(段階3改) 行の表示/非表示（段階3.5試行後は段階3.5前の実配台）"/>
-            </tooltip>
-        </CheckBox>
-        <CheckBox fx:id="showStage35AfterQtyLineCheck" mnemonicParsing="false" selected="true"
-                  text="(段階3.5後)">
-            <tooltip>
-                <Tooltip text="日付セル内の (段階3.5後) 行の表示/非表示（段階3.5試行後の実配台）"/>
-            </tooltip>
-        </CheckBox>
-        <Button fx:id="alignToAladdinPlanButton" mnemonicParsing="false" text="アラジン計画に合わせる"
-                styleClass="pm-align-aladdin-plan-button"
-                onAction="#onAlignToAladdinPlanAction">
-            <tooltip>
-                <Tooltip text="段階3前: タスク×日付の (段階3前) 数量を (アラ計画) に沿うようロール単位で再配分する"/>
-            </tooltip>
-        </Button>
-        <ComboBox fx:id="dispatchTableActiveSourceCombo" prefWidth="156.0"
-                promptText="配台表の正本">
-            <tooltip>
-                <Tooltip text="手動修正・段階3 が参照する配台表 JSON。段階2.5 は学習用に別ファイルへ出力し、ここで正本を切り替えます。"/>
-            </tooltip>
-        </ComboBox>
-        <CheckBox fx:id="stage25InferenceOnlyCheck" mnemonicParsing="false"
-                text="学習推論のみ">
-            <tooltip>
-                <Tooltip text="オン: 既存の学習アーカイブを参照して段階2.5を実行し、新規の学習データ蓄積は行いません。"/>
-            </tooltip>
-        </CheckBox>
-        <Button fx:id="stage25AiButton" mnemonicParsing="false" text="段階2.5(AI)"
-                styleClass="pm-stage-run-button,pm-stage-run-2-5" wrapText="true"
-                onAction="#onStage25AiAction">
-            <tooltip>
-                <Tooltip text="アラジン整列（学習記録は背景で蓄積）"/>
-            </tooltip>
-        </Button>
-        <Button fx:id="saveButton" mnemonicParsing="false" text="保存 (JSON+xlsx)"
-                styleClass="pm-dispatch-save-button"
-                onAction="#onSaveAction"/>
-        <Button fx:id="dispatchTrialButton" mnemonicParsing="false" text="段階3"
-                styleClass="pm-stage-run-button,pm-stage-run-3"
-                onAction="#onDispatchTrialAction"/>
-        <Button fx:id="overtimeSimulationButton" mnemonicParsing="false" text="段階3.5&#10;(残業/休出シュミ)"
-                styleClass="pm-stage-run-button,pm-stage-run-3-5"
-                wrapText="true"
-                onAction="#onOvertimeSimulationAction"/>
-        <Button fx:id="wideRowUpButton" mnemonicParsing="false" text="↑"
-                onAction="#onWideRowUpAction">
-            <tooltip>
-                <Tooltip text="選択行を上へ（試行順）"/>
-            </tooltip>
-        </Button>
-        <Button fx:id="wideRowDownButton" mnemonicParsing="false" text="↓"
-                onAction="#onWideRowDownAction">
-            <tooltip>
-                <Tooltip text="選択行を下へ（試行順）"/>
-            </tooltip>
-        </Button>
-        <Label fx:id="statusLabel"/>
-        <ProgressIndicator fx:id="busyIndicator" prefHeight="22.0" prefWidth="22.0"
-                           visible="false" managed="false"/>
-        <ProgressBar fx:id="reloadProgressBar" maxWidth="Infinity" prefWidth="220.0"
-                     visible="false" managed="false"/>
-    </HBox>
+    <VBox spacing="6.0">
+        <HBox alignment="CENTER_LEFT" fillHeight="false" spacing="8.0" styleClass="pm-dispatch-toolbar-row">
+            <Button fx:id="loadButton" minWidth="-1.0" mnemonicParsing="false" text="再読み"
+                    onAction="#onLoadAction"/>
+            <Button minWidth="-1.0" mnemonicParsing="false" text="列フィルタ・並べ替え解除"
+                    onAction="#onClearColumnFiltersAction"/>
+            <Button minWidth="-1.0" mnemonicParsing="false" text="列の並べ替え"
+                    onAction="#onColumnReorderAction"/>
+            <Button minWidth="-1.0" mnemonicParsing="false" text="列の表示"
+                    onAction="#onColumnVisibilityAction"/>
+            <Label minWidth="-1.0" text="数量表示:"/>
+            <CheckBox fx:id="showAladdinPlanQtyLineCheck" minWidth="-1.0" mnemonicParsing="false"
+                      selected="true" text="(アラ計画)">
+                <tooltip>
+                    <Tooltip text="日付セル内の (アラ計画) 行の表示/非表示"/>
+                </tooltip>
+            </CheckBox>
+            <CheckBox fx:id="showStage3PlanQtyLineCheck" minWidth="-1.0" mnemonicParsing="false"
+                      selected="true" text="(段階3前)">
+                <tooltip>
+                    <Tooltip text="日付セル内の (段階3前) 行の表示/非表示"/>
+                </tooltip>
+            </CheckBox>
+            <CheckBox fx:id="showStage3AfterQtyLineCheck" minWidth="-1.0" mnemonicParsing="false"
+                      selected="true" text="(段階3後)">
+                <tooltip>
+                    <Tooltip text="日付セル内の (段階3後)/(段階3改) 行の表示/非表示"/>
+                </tooltip>
+            </CheckBox>
+            <CheckBox fx:id="showStage21AfterQtyLineCheck" minWidth="-1.0" mnemonicParsing="false"
+                      selected="true" text="(段階2.1後)">
+                <tooltip>
+                    <Tooltip text="日付セル内の (段階2.1後) 行の表示/非表示（段階2.1残業シミュ試行後）"/>
+                </tooltip>
+            </CheckBox>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label fx:id="statusLabel" minWidth="-1.0" wrapText="true"/>
+            <ProgressIndicator fx:id="busyIndicator" prefHeight="22.0" prefWidth="22.0"
+                               visible="false" managed="false"/>
+            <ProgressBar fx:id="reloadProgressBar" maxWidth="Infinity" prefWidth="220.0"
+                         visible="false" managed="false"/>
+        </HBox>
+        <HBox alignment="CENTER_LEFT" fillHeight="false" spacing="8.0" styleClass="pm-dispatch-toolbar-row">
+            <Button fx:id="alignToAladdinPlanButton" minWidth="-1.0" mnemonicParsing="false"
+                    text="アラジン計画に合わせる"
+                    styleClass="pm-align-aladdin-plan-button"
+                    onAction="#onAlignToAladdinPlanAction">
+                <tooltip>
+                    <Tooltip text="段階3前: タスク×日付の (段階3前) 数量を (アラ計画) に沿うようロール単位で再配分する"/>
+                </tooltip>
+            </Button>
+            <ComboBox fx:id="dispatchTableActiveSourceCombo" minWidth="-1.0" prefWidth="168.0"
+                    promptText="配台表の正本">
+                <tooltip>
+                    <Tooltip text="手動修正・段階3 が参照する配台表 JSON。段階2.5 は学習用に別ファイルへ出力し、ここで正本を切り替えます。"/>
+                </tooltip>
+            </ComboBox>
+            <CheckBox fx:id="stage25InferenceOnlyCheck" minWidth="-1.0" mnemonicParsing="false"
+                    text="学習推論のみ">
+                <tooltip>
+                    <Tooltip text="オン: 既存の学習アーカイブを参照して段階2.5を実行し、新規の学習データ蓄積は行いません。"/>
+                </tooltip>
+            </CheckBox>
+            <Button fx:id="stage25AiButton" minWidth="-1.0" mnemonicParsing="false"
+                    text="段階2.5(AI)"
+                    styleClass="pm-stage-run-button,pm-stage-run-2-5"
+                    onAction="#onStage25AiAction">
+                <tooltip>
+                    <Tooltip text="アラジン整列（学習記録は背景で蓄積）"/>
+                </tooltip>
+            </Button>
+            <Button fx:id="saveButton" minWidth="-1.0" mnemonicParsing="false"
+                    text="保存 (JSON+xlsx)"
+                    styleClass="pm-dispatch-save-button"
+                    onAction="#onSaveAction"/>
+            <Button fx:id="stage21RunButton" minWidth="-1.0" mnemonicParsing="false"
+                    text="段階2.1"
+                    styleClass="pm-stage-run-button,pm-stage-run-2-1"
+                    onAction="#onStage21RunAction">
+                <tooltip>
+                    <Tooltip text="残業/休出シミュ付きフル再配台（成果物は output/stage21/。メイン JSON は上書きしない）"/>
+                </tooltip>
+            </Button>
+            <Button fx:id="dispatchTrialButton" minWidth="-1.0" mnemonicParsing="false"
+                    text="段階3"
+                    styleClass="pm-stage-run-button,pm-stage-run-3"
+                    onAction="#onDispatchTrialAction"/>
+            <Button fx:id="wideRowUpButton" minWidth="-1.0" mnemonicParsing="false" text="↑"
+                    onAction="#onWideRowUpAction">
+                <tooltip>
+                    <Tooltip text="選択行を上へ（試行順）"/>
+                </tooltip>
+            </Button>
+            <Button fx:id="wideRowDownButton" minWidth="-1.0" mnemonicParsing="false" text="↓"
+                    onAction="#onWideRowDownAction">
+                <tooltip>
+                    <Tooltip text="選択行を下へ（試行順）"/>
+                </tooltip>
+            </Button>
+        </HBox>
+    </VBox>
     <Label fx:id="jsonPathLabel" wrapText="true"/>
-    <VBox fx:id="stage35AttendanceApplyPanel" fillWidth="true" spacing="4.0" visible="false" managed="false"
-          styleClass="stage35-attendance-apply-panel">
-        <Label fx:id="stage35AttendanceHeadlineLabel" styleClass="stage35-attendance-apply-headline"
-               text="段階3.5 勤怠適用済"/>
-        <Label fx:id="stage35AttendanceSummaryLabel" wrapText="true"/>
-        <Label fx:id="stage35AttendanceOverridesLabel" wrapText="true" style="-fx-font-size: 11px;"/>
-        <Label fx:id="stage35AttendancePythonLabel" wrapText="true" style="-fx-font-size: 11px;"/>
-        <Label fx:id="stage35AttendanceAppliedAtLabel" wrapText="true" style="-fx-font-size: 11px;"/>
+    <VBox fx:id="stage21AttendanceApplyPanel" fillWidth="true" spacing="4.0" visible="false" managed="false"
+          styleClass="stage21-attendance-apply-panel">
+        <Label fx:id="stage21AttendanceHeadlineLabel" styleClass="stage21-attendance-apply-headline"
+               text="段階2.1 勤怠適用済"/>
+        <Label fx:id="stage21AttendanceSummaryLabel" wrapText="true"/>
+        <Label fx:id="stage21AttendanceOverridesLabel" wrapText="true" style="-fx-font-size: 11px;"/>
+        <Label fx:id="stage21AttendancePythonLabel" wrapText="true" style="-fx-font-size: 11px;"/>
+        <Label fx:id="stage21AttendanceAppliedAtLabel" wrapText="true" style="-fx-font-size: 11px;"/>
     </VBox>
     <VBox fx:id="dispatchShortfallPanel" fillWidth="true" spacing="6.0" visible="false" managed="false">
         <Label style="-fx-font-weight: bold;" text="配台数量未達（タイムライン実績）"/>

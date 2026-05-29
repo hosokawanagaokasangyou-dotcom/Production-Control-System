@@ -40,11 +40,11 @@
     -fx-text-fill: black;
 }
 
-.pm-ai-readable-spreadsheet .spreadsheet-cell .label:not(.dispatch-stage3-revised-line):not(.dispatch-stage3-after-line):not(.dispatch-stage35-after-line) {
+.pm-ai-readable-spreadsheet .spreadsheet-cell .label:not(.dispatch-stage3-revised-line):not(.dispatch-stage3-after-line):not(.dispatch-stage35-after-line):not(.dispatch-stage21-after-line) {
     -fx-text-fill: black;
 }
 
-.pm-ai-readable-spreadsheet .spreadsheet-cell .text:not(.dispatch-stage3-revised-line):not(.dispatch-stage3-after-line):not(.dispatch-stage35-after-line) {
+.pm-ai-readable-spreadsheet .spreadsheet-cell .text:not(.dispatch-stage3-revised-line):not(.dispatch-stage3-after-line):not(.dispatch-stage35-after-line):not(.dispatch-stage21-after-line) {
     -fx-fill: black;
 }
 
@@ -181,7 +181,9 @@
 }
 
 .pm-ai-readable-spreadsheet .spreadsheet-cell.dispatch-stage35-qty-changed-cell,
-.pm-ai-readable-spreadsheet .spreadsheet-cell.dispatch-stage35-qty-changed-cell:filled:selected {
+.pm-ai-readable-spreadsheet .spreadsheet-cell.dispatch-stage35-qty-changed-cell:filled:selected,
+.pm-ai-readable-spreadsheet .spreadsheet-cell.dispatch-stage21-qty-changed-cell,
+.pm-ai-readable-spreadsheet .spreadsheet-cell.dispatch-stage21-qty-changed-cell:filled:selected {
     -fx-background-color: #ccfbf1;
     -fx-text-fill: #111111;
 }
@@ -189,12 +191,17 @@
 .pm-ai-readable-spreadsheet .spreadsheet-cell .label.dispatch-stage35-after-line,
 .pm-ai-readable-spreadsheet .spreadsheet-cell .dispatch-stage35-after-line,
 .pm-ai-readable-spreadsheet .spreadsheet-cell.dispatch-date-qty-graphic-only .label.dispatch-stage35-after-line,
-.pm-ai-readable-spreadsheet .spreadsheet-cell.dispatch-date-qty-graphic-only:filled:selected .label.dispatch-stage35-after-line {
+.pm-ai-readable-spreadsheet .spreadsheet-cell.dispatch-date-qty-graphic-only:filled:selected .label.dispatch-stage35-after-line,
+.pm-ai-readable-spreadsheet .spreadsheet-cell .label.dispatch-stage21-after-line,
+.pm-ai-readable-spreadsheet .spreadsheet-cell .dispatch-stage21-after-line,
+.pm-ai-readable-spreadsheet .spreadsheet-cell.dispatch-date-qty-graphic-only .label.dispatch-stage21-after-line,
+.pm-ai-readable-spreadsheet .spreadsheet-cell.dispatch-date-qty-graphic-only:filled:selected .label.dispatch-stage21-after-line {
     -fx-font-weight: bold;
     -fx-text-fill: #2e7d32;
 }
 
-.stage35-attendance-apply-panel {
+.stage35-attendance-apply-panel,
+.stage21-attendance-apply-panel {
     -fx-background-color: #ecfdf5;
     -fx-border-color: #0f766e;
     -fx-border-width: 1;
@@ -203,7 +210,8 @@
     -fx-padding: 8 10 8 10;
 }
 
-.label.stage35-attendance-apply-headline {
+.label.stage35-attendance-apply-headline,
+.label.stage21-attendance-apply-headline {
     -fx-font-weight: bold;
     -fx-text-fill: #0f766e;
     -fx-font-size: 13px;

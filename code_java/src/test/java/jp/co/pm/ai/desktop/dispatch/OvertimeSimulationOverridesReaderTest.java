@@ -32,7 +32,7 @@ class OvertimeSimulationOverridesReaderTest {
                 """,
                 StandardCharsets.UTF_8);
 
-        Stage35BaselineActualSnapshotStore.OverrideSummary s =
+        Stage21TrialSnapshotStore.OverrideSummary s =
                 OvertimeSimulationOverridesReader.summarize(json);
         assertEquals(2, s.workOn());
         assertEquals(1, s.workOff());

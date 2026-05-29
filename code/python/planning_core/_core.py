@@ -28822,8 +28822,20 @@ def _apply_stage35_stage3_meters_floor(
     return _STAGE35_FLOOR_APPLY_META
 
 
+def _stage2_1_overtime_active() -> bool:
+    """段階2.1: 残業/休出シミュのフル再配台（配台試行の段階3.5経路ではない）。"""
+    return (os.environ.get("PM_AI_STAGE2_1_OVERTIME") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
 def _overtime_simulation_dispatch_trial_active() -> bool:
-    """段階3.5: 残業シミュ JSON が有効な配台試行。"""
+    """残業シミュ JSON が有効な段階3配台試行（段階2.1フル再配台は含まない）。"""
+    if _stage2_1_overtime_active():
+        return False
     return _overtime_simulation_json_path() is not None
 
 

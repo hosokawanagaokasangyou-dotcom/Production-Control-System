@@ -22,12 +22,12 @@ public final class ResultDispatchStage3Support {
 
     public static final String BADGE_STAGE3 = "\u6bb5\u968e3";
 
-    public static final String BADGE_STAGE35 = "\u6bb5\u968e3.5";
+    public static final String BADGE_STAGE21 = "\u6bb5\u968e2.1";
 
     public enum PlanningStage {
         STAGE2,
         STAGE3,
-        STAGE35
+        STAGE21
     }
 
     private static final double EPS = 1e-6;
@@ -63,14 +63,17 @@ public final class ResultDispatchStage3Support {
         return false;
     }
 
+    public static boolean detectStage21TrialFromDispatchJsonPath(Path jsonPath) {
+        return Stage21TrialSnapshotStore.tryLoadMeta(jsonPath).hasTrialApplied();
+    }
+
+    /** @deprecated 段階3.5 廃止。{@link #detectStage21TrialFromDispatchJsonPath} を使用。 */
+    @Deprecated
     public static boolean detectStage35FromDispatchJsonPath(Path jsonPath) {
-        return Stage35BaselineActualSnapshotStore.tryLoadMeta(jsonPath).hasTrialApplied();
+        return detectStage21TrialFromDispatchJsonPath(jsonPath);
     }
 
     public static PlanningStage detectPlanningStage(Path jsonPath) {
-        if (detectStage35FromDispatchJsonPath(jsonPath)) {
-            return PlanningStage.STAGE35;
-        }
         if (detectStage3FromDispatchJsonPath(jsonPath)) {
             return PlanningStage.STAGE3;
         }
@@ -149,7 +152,7 @@ public final class ResultDispatchStage3Support {
         PlanningStage s = stage != null ? stage : PlanningStage.STAGE2;
         badge.setText(
                 switch (s) {
-                    case STAGE35 -> BADGE_STAGE35;
+                    case STAGE21 -> BADGE_STAGE21;
                     case STAGE3 -> BADGE_STAGE3;
                     case STAGE2 -> BADGE_STAGE2;
                 });
@@ -157,11 +160,12 @@ public final class ResultDispatchStage3Support {
                 .removeAll(
                         "pm-planning-stage-badge-stage2",
                         "pm-planning-stage-badge-stage3",
+                        "pm-planning-stage-badge-stage21",
                         "pm-planning-stage-badge-stage35");
         badge.getStyleClass()
                 .add(
                         switch (s) {
-                            case STAGE35 -> "pm-planning-stage-badge-stage35";
+                            case STAGE21 -> "pm-planning-stage-badge-stage21";
                             case STAGE3 -> "pm-planning-stage-badge-stage3";
                             case STAGE2 -> "pm-planning-stage-badge-stage2";
                         });

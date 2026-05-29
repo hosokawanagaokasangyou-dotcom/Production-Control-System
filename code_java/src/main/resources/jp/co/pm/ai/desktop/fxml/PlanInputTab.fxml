@@ -62,6 +62,12 @@
                 <HBox alignment="CENTER_LEFT" spacing="8.0">
                     <Button mnemonicParsing="false" onAction="#onRowUpAction" prefWidth="40.0" text="↑" />
                     <Button mnemonicParsing="false" onAction="#onRowDownAction" prefWidth="40.0" text="↓" />
+                    <Button fx:id="shiftRawInputDateMinusOneButton" mnemonicParsing="false"
+                            onAction="#onShiftRawInputDateMinusOneAction"
+                            text="原反投入日を1日前倒し"/>
+                    <Button fx:id="clearRawInputDateOverrideButton" mnemonicParsing="false"
+                            onAction="#onClearRawInputDateOverrideAction"
+                            text="原反投入日上書きをクリア"/>
                     <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
                             onAction="#onClearColumnFiltersAction"/>
                 </HBox>

@@ -4,10 +4,13 @@ import java.util.Optional;
 
 import javafx.application.Platform;
 import javafx.geometry.Rectangle2D;
+import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.DatePicker;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
@@ -77,6 +80,62 @@ public final class SpreadsheetPlanInputCellEditDialog {
         Optional<ButtonType> r = dialog.showAndWait();
         if (r.isPresent() && r.get() == ButtonType.OK) {
             return Optional.of(area.getText());
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * 日付列向け: {@link DatePicker} で暦日を選ぶ（空にする「クリア」付き）。
+     */
+    public static Optional<String> editDate(
+            Window owner,
+            String columnTitle,
+            String initialValue,
+            double anchorScreenX,
+            double anchorScreenY) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.initModality(Modality.WINDOW_MODAL);
+        String title =
+                columnTitle != null && !columnTitle.isBlank()
+                        ? columnTitle.strip()
+                        : "日付の選択";
+        dialog.setTitle(title);
+        dialog.setHeaderText(null);
+
+        DatePicker picker = new DatePicker();
+        PlanInputDateColumnSupport.parseCellValue(initialValue).ifPresent(picker::setValue);
+
+        Button clearButton = new Button("クリア");
+        clearButton.setOnAction(ev -> picker.setValue(null));
+
+        Label hint =
+                new Label(
+                        columnTitle != null && !columnTitle.isBlank()
+                                ? "列: " + columnTitle.strip()
+                                : "日付を選択してください");
+        hint.setStyle("-fx-font-size: 11px; -fx-text-fill: derive(-fx-text-inner-color, 18%);");
+
+        HBox pickerRow = new HBox(8, picker, clearButton);
+        pickerRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+
+        VBox box = new VBox(10, hint, pickerRow);
+        dialog.getDialogPane().setContent(box);
+        dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
+        dialog.getDialogPane().setPrefWidth(320);
+
+        dialog.setOnShown(
+                e ->
+                        Platform.runLater(
+                                () ->
+                                        positionNearAnchor(
+                                                dialog.getDialogPane().getScene().getWindow(),
+                                                anchorScreenX,
+                                                anchorScreenY)));
+
+        Optional<ButtonType> r = dialog.showAndWait();
+        if (r.isPresent() && r.get() == ButtonType.OK) {
+            return Optional.of(PlanInputDateColumnSupport.formatCellValue(picker.getValue()));
         }
         return Optional.empty();
     }

@@ -137,10 +137,20 @@ public final class TableColumnOrderPersistence {
             boolean showAladdinPlan,
             boolean showStage3Plan,
             boolean showStage3After,
-            boolean showStage35After) {
+            boolean showStage21After) {
         public DispatchInteractiveDateQtyLineFilterPrefs(
                 boolean showAladdinPlan, boolean showStage3Plan, boolean showStage3After) {
             this(showAladdinPlan, showStage3Plan, showStage3After, true);
+        }
+
+        public boolean showStage21After() {
+            return showStage21After;
+        }
+
+        /** @deprecated {@link #showStage21After()} */
+        @Deprecated
+        public boolean showStage35After() {
+            return showStage21After;
         }
 
         public static DispatchInteractiveDateQtyLineFilterPrefs defaults() {
@@ -206,7 +216,7 @@ public final class TableColumnOrderPersistence {
             root.put(KEY_DISPATCH_INTERACTIVE_SHOW_ALADDIN_PLAN_QTY_LINE, prefs.showAladdinPlan());
             root.put(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_PLAN_QTY_LINE, prefs.showStage3Plan());
             root.put(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_AFTER_QTY_LINE, prefs.showStage3After());
-            root.put(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE35_AFTER_QTY_LINE, prefs.showStage35After());
+            root.put(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE35_AFTER_QTY_LINE, prefs.showStage21After());
             JSON.writerWithDefaultPrettyPrinter().writeValue(STORE.toFile(), root);
         } catch (IOException ignored) {
         }

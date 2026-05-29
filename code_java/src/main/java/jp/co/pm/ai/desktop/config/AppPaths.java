@@ -270,17 +270,17 @@ public final class AppPaths {
             "PM_AI_STAGE2_IN_PROGRESS_NEXT_DAY_DISPATCH_JSON";
 
     /**
-     * 段階3.5 残業シミュレーション: JavaFX が書く UTF-8 JSON（working_overrides / overtime_minutes）。
-     * 段階3 子プロセス起動時のみ載せ、master.xlsm は変更しない。
+     * 段階2.1 残業シミュレーション: JavaFX が書く UTF-8 JSON（working_overrides / overtime_minutes）。
+     * 段階2.1 子プロセス起動時のみ載せ、master.xlsm は変更しない。
      */
     public static final String KEY_PM_AI_OVERTIME_SIMULATION_JSON =
             "PM_AI_OVERTIME_SIMULATION_JSON";
 
-    /**
-     * 段階3.5: 段階3試行後の実配台数量（暦日×m）下限 JSON。Python は定時帯の再配台をやり直さず残業帯のみ追加する。
-     */
-    public static final String KEY_PM_AI_STAGE35_STAGE3_METERS_FLOOR_JSON =
-            "PM_AI_STAGE35_STAGE3_METERS_FLOOR_JSON";
+    /** 段階2.1: 残業/休出シミュのフル再配台（段階2 成果物は上書きしない）。 */
+    public static final String KEY_PM_AI_STAGE2_1_OVERTIME = "PM_AI_STAGE2_1_OVERTIME";
+
+    /** {@code output/stage21/} 配下の段階2.1 成果物ディレクトリ名。 */
+    public static final String STAGE21_OUTPUT_SUBDIR = "stage21";
 
     /**
      * 段階2の実行エンジン（互換用キー）。JavaFX 実行タブから段階2を起動するときは常に Python 子プロセス（{@code
@@ -944,6 +944,22 @@ public final class AppPaths {
     public static Path resolveResultDispatchTableStage25JsonPath(Map<String, String> ui) {
         return resolveResultDispatchTableDir(ui != null ? ui : Map.of())
                 .resolve(RESULT_DISPATCH_TABLE_STAGE25_JSON_BASENAME)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /** 段階2.1 残業シミュの出力ディレクトリ（段階2 の {@link #resolveResultDispatchTableDir} 配下）。 */
+    public static Path resolveStage21OutputDir(Map<String, String> ui) {
+        return resolveResultDispatchTableDir(ui != null ? ui : Map.of())
+                .resolve(STAGE21_OUTPUT_SUBDIR)
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    /** 段階2.1 の {@link #RESULT_DISPATCH_TABLE_JSON_BASENAME}。 */
+    public static Path resolveStage21ResultDispatchJsonPath(Map<String, String> ui) {
+        return resolveStage21OutputDir(ui != null ? ui : Map.of())
+                .resolve(RESULT_DISPATCH_TABLE_JSON_BASENAME)
                 .toAbsolutePath()
                 .normalize();
     }

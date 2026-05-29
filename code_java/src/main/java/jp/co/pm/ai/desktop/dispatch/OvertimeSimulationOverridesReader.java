@@ -7,58 +7,50 @@ import java.nio.file.Path;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-/** 段階3.5 残業シミュレーション上書き JSON の読取り。 */
+/** 残業シミュレーション JSON の変更セル数サマリ。 */
 public final class OvertimeSimulationOverridesReader {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private OvertimeSimulationOverridesReader() {}
 
-    public static Stage35BaselineActualSnapshotStore.OverrideSummary summarize(Path overridesJson) {
+    public static Stage21TrialSnapshotStore.OverrideSummary summarize(Path overridesJson) {
         if (overridesJson == null || !Files.isRegularFile(overridesJson)) {
-            return Stage35BaselineActualSnapshotStore.OverrideSummary.empty();
+            return Stage21TrialSnapshotStore.OverrideSummary.empty();
         }
         try {
-            JsonNode root =
-                    JSON.readTree(Files.readString(overridesJson, StandardCharsets.UTF_8));
-            int workOn = countMemberDateCells(root.path("working_overrides"), true);
-            int workOff = countMemberDateCells(root.path("working_overrides"), false);
-            int overtime = countOvertimeCells(root.path("overtime_minutes"));
-            return new Stage35BaselineActualSnapshotStore.OverrideSummary(workOn, workOff, overtime);
-        } catch (Exception ignored) {
-            return Stage35BaselineActualSnapshotStore.OverrideSummary.empty();
-        }
-    }
-
-    private static int countMemberDateCells(JsonNode workingOverrides, boolean flag) {
-        if (workingOverrides == null || !workingOverrides.isObject()) {
-            return 0;
-        }
-        int count = 0;
-        for (JsonNode memMap : workingOverrides) {
-            if (memMap == null || !memMap.isObject()) {
-                continue;
-            }
-            for (JsonNode v : memMap) {
-                if (v != null && v.isBoolean() && v.booleanValue() == flag) {
-                    count++;
+            JsonNode root = JSON.readTree(Files.readString(overridesJson, StandardCharsets.UTF_8));
+            int workOn = 0;
+            int workOff = 0;
+            JsonNode working = root.path("working_overrides");
+            if (working.isObject()) {
+                for (JsonNode dateNode : working) {
+                    if (!dateNode.isObject()) {
+                        continue;
+                    }
+                    var it = dateNode.fields();
+                    while (it.hasNext()) {
+                        var f = it.next();
+                        if (f.getValue().asBoolean(false)) {
+                            workOn++;
+                        } else {
+                            workOff++;
+                        }
+                    }
                 }
             }
-        }
-        return count;
-    }
-
-    private static int countOvertimeCells(JsonNode overtimeMinutes) {
-        if (overtimeMinutes == null || !overtimeMinutes.isObject()) {
-            return 0;
-        }
-        int count = 0;
-        for (JsonNode memMap : overtimeMinutes) {
-            if (memMap == null || !memMap.isObject()) {
-                continue;
+            int overtime = 0;
+            JsonNode ot = root.path("overtime_minutes");
+            if (ot.isObject()) {
+                for (JsonNode dateNode : ot) {
+                    if (dateNode.isObject()) {
+                        overtime += dateNode.size();
+                    }
+                }
             }
-            count += memMap.size();
+            return new Stage21TrialSnapshotStore.OverrideSummary(workOn, workOff, overtime);
+        } catch (Exception ignored) {
+            return Stage21TrialSnapshotStore.OverrideSummary.empty();
         }
-        return count;
     }
 }

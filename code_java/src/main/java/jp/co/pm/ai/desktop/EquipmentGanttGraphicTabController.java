@@ -1991,6 +1991,14 @@ public final class EquipmentGanttGraphicTabController {
     }
 
     private void runEquipmentGanttPdfExport() {
+        if (shell != null && shell.isPlanningPipelineStageRunning()) {
+            if (statusLabel != null) {
+                statusLabel.setText("段階1～段階3.5 実行中のため PDF 作成を一時停止しています。");
+            }
+            shell.appendLog(
+                    "[equipment-gantt-graphic] pdf export suppressed: planning pipeline stage running");
+            return;
+        }
         PreparedGanttPrintJob prepared = prepareGanttPrintJob();
         if (prepared == null) {
             return;

@@ -6,7 +6,7 @@ public enum PipelineExecutionTimingKind {
     STAGE2("段階2"),
     STAGE2_5("段階2.5(AI)"),
     STAGE3("段階3"),
-    STAGE3_5("段階3.5"),
+    STAGE2_1("段階2.1"),
     SUMMARY_EXCEL("サマリ Excel"),
     DELIVERY_CALENDAR_VIEW("納期管理ビュー");
 

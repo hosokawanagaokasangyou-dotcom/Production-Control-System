@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDate;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -128,7 +129,10 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
 import jp.co.pm.ai.desktop.dispatch.DispatchLearningArchiveBackgroundService;
 import jp.co.pm.ai.desktop.dispatch.DispatchLearningArchiveBackgroundService.ArchiveJobDescriptor;
+import jp.co.pm.ai.desktop.dispatch.RawInputMorningDispatchRateAnalyzer;
+import jp.co.pm.ai.desktop.dispatch.RawInputMorningDispatchRateWarning;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
+import jp.co.pm.ai.desktop.io.Stage2EquipmentGanttContractPaths;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.io.DesktopFileOpener;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
@@ -153,6 +157,7 @@ public final class MainShellController {
 
     private static final String STAGE1 = "task_extract_stage1.py";
     private static final String STAGE2 = "plan_simulation_stage2.py";
+    private static final String STAGE2_1 = "plan_simulation_stage2_1.py";
 
     /** 段階1実行前ログに出す「入力解決に関わる」環境変数キー（子プロセスへ渡る値）。 */
     private static final List<String> STAGE1_CHILD_INPUT_ENV_KEYS =
@@ -1591,6 +1596,42 @@ public final class MainShellController {
     /** ファイルなし・部分成功などの注意ダイアログ。 */
     public void showWarningDialog(String title, String message) {
         showThemedAlert(AlertType.WARNING, title, null, message);
+    }
+
+    /** 段階2正常終了後: 原反投入日制約で午前配台率が 50% 未満の暦日があれば警告。 */
+    void showRawInputMorningDispatchRateWarningAfterStage2() {
+        if (planInputTabController == null) {
+            return;
+        }
+        Map<String, LocalDate> rawDates = planInputTabController.collectEffectiveRawInputDateByTaskId();
+        if (rawDates.isEmpty()) {
+            return;
+        }
+        Path json = AppPaths.resolveResultDispatchTableJsonPath(collectUiEnv());
+        logRawInputMorningDispatchRateWarningIfAny(json, rawDates);
+        RawInputMorningDispatchRateWarning.showIfNeeded(this, primaryStage, json, rawDates);
+    }
+
+    private void logRawInputMorningDispatchRateWarningIfAny(
+            Path resultDispatchJson, Map<String, LocalDate> rawInputByTaskId) {
+        Path contract = Stage2EquipmentGanttContractPaths.resolveNearResultDispatchJson(resultDispatchJson);
+        if (contract == null) {
+            return;
+        }
+        try {
+            var result = RawInputMorningDispatchRateAnalyzer.analyze(contract, rawInputByTaskId);
+            if (!result.hasWarnings()) {
+                return;
+            }
+            appendLog(
+                    "[原反投入日・午前配台率] 警告: "
+                            + result.lowRateDays().size()
+                            + " 暦日で午前配台率が "
+                            + (int) (RawInputMorningDispatchRateAnalyzer.RATE_THRESHOLD * 100)
+                            + "% 未満");
+        } catch (Exception ignored) {
+            // ダイアログ側で再分析する
+        }
     }
 
     /** 失敗時のエラーダイアログ。 */
@@ -3829,17 +3870,29 @@ public final class MainShellController {
 
     private void runStage(String script) {
         if (isDeliveryCalendarReloadBlockingStageRuns()) {
-            String stageJa = STAGE1.equals(script) ? "段階1" : "段階2";
+            String stageJa =
+                    STAGE1.equals(script)
+                            ? "段階1"
+                            : (STAGE2_1.equals(script) ? "段階2.1" : "段階2");
             appendLog("[busy] 納期管理ビュー再読み込み中のため " + stageJa + " を開始できません。");
             return;
         }
         if (STAGE2.equals(script) && blockIfSummaryAiDispatchExportLocked("段階2")) {
             return;
         }
+        if (STAGE2_1.equals(script) && blockIfSummaryAiDispatchExportLocked("段階2.1")) {
+            return;
+        }
         if (STAGE2.equals(script) && blockIfMaterialLookupTablesHaveBlankValues("段階2")) {
             return;
         }
+        if (STAGE2_1.equals(script) && blockIfMaterialLookupTablesHaveBlankValues("段階2.1")) {
+            return;
+        }
         if (STAGE2.equals(script) && !confirmStage2UnknownMasterCombinationsBeforeRun()) {
+            return;
+        }
+        if (STAGE2_1.equals(script) && !confirmStage2UnknownMasterCombinationsBeforeRun()) {
             return;
         }
         if (!runLock.compareAndSet(false, true)) {
@@ -3879,6 +3932,11 @@ public final class MainShellController {
                 } else {
                     uiRun.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
                 }
+            }
+            if (STAGE2_1.equals(script)) {
+                java.nio.file.Path ot = pendingStage21OvertimeJsonPath;
+                Map<String, String> stage21Snap = snapshotStage21PythonEnv(ot);
+                uiRun.putAll(stage21Snap);
             }
             String wb = effectiveTaskInputWorkbookPath();
             appendLog("--- start: " + script + " ---");
@@ -3931,7 +3989,7 @@ public final class MainShellController {
                     }
                 }
             }
-            if (STAGE1.equals(script) || STAGE2.equals(script)) {
+            if (STAGE1.equals(script) || STAGE2.equals(script) || STAGE2_1.equals(script)) {
                 refreshNetworkSourceDirListingSkipsBeforeStageRun(uiRun);
             }
             Map<String, String> childEnv = childEnvForPython(uiRun);
@@ -4023,6 +4081,8 @@ public final class MainShellController {
                 beginPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE1);
             } else if (STAGE2.equals(script)) {
                 beginPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE2);
+            } else if (STAGE2_1.equals(script)) {
+                beginPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE2_1);
             }
 
             ArrayDeque<String> recentChildLines = new ArrayDeque<>(STAGE_CHILD_LOG_TAIL_MAX + 4);
@@ -4098,6 +4158,8 @@ public final class MainShellController {
             endPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE1);
         } else if (STAGE2.equals(script)) {
             endPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE2);
+        } else if (STAGE2_1.equals(script)) {
+            endPipelineExecutionTiming(PipelineExecutionTimingKind.STAGE2_1);
         }
         applyRunTabGating();
         if (err != null) {
@@ -4110,6 +4172,9 @@ public final class MainShellController {
                     "[end] exceptional exit: "
                             + (err.getMessage() != null ? err.getMessage() : err.toString()));
             if (STAGE2.equals(script) && dispatchInteractiveTabController != null) {
+                dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
+            }
+            if (STAGE2_1.equals(script) && dispatchInteractiveTabController != null) {
                 dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
             }
         } else {
@@ -4172,6 +4237,7 @@ public final class MainShellController {
                                             }
                                             showStageCompletionDialog(
                                                     "段階2 完了", "段階2 の処理が正常終了しました。");
+                                            showRawInputMorningDispatchRateWarningAfterStage2();
                                             if (planInputTabController != null
                                                     && planInputTabController
                                                             .snapshotStage25AutoAfterStage2()
@@ -4195,8 +4261,39 @@ public final class MainShellController {
                     dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
                 }
             }
+            if (STAGE2_1.equals(script)) {
+                if (c == 0) {
+                    Platform.runLater(
+                            () -> {
+                                refreshEquipmentGanttGraphicAfterPipelineRun();
+                                refreshOperatorCardAfterPipelineRun();
+                                java.nio.file.Path mainJson =
+                                        AppPaths.resolveResultDispatchTableJsonPath(
+                                                collectUiEnv());
+                                java.nio.file.Path stage21Json =
+                                        AppPaths.resolveStage21ResultDispatchJsonPath(
+                                                collectUiEnv());
+                                if (dispatchInteractiveTabController != null) {
+                                    dispatchInteractiveTabController
+                                            .finalizeStage21TrialAfterRunSuccess(
+                                                    mainJson,
+                                                    stage21Json,
+                                                    pendingStage21OvertimeJsonPath);
+                                    dispatchInteractiveTabController
+                                            .reloadTableFromDiskAfterStage21Success(
+                                                    () ->
+                                                            notifyStage21OvertimeSimulationSuccess());
+                                } else {
+                                    notifyStage21OvertimeSimulationSuccess();
+                                }
+                            });
+                } else if (dispatchInteractiveTabController != null) {
+                    dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
+                }
+            }
         }
-        boolean stage12 = STAGE1.equals(script) || STAGE2.equals(script);
+        boolean stage12 =
+                STAGE1.equals(script) || STAGE2.equals(script) || STAGE2_1.equals(script);
         boolean failed = err != null || (code != null && code.intValue() != 0);
         if (stage12 && failed) {
             appendLog("[ui] 段階処理が異常終了しました。エラーダイアログを表示します。");
@@ -4269,7 +4366,6 @@ public final class MainShellController {
      */
     boolean tryBeginDispatchTrialGating(PipelineExecutionTimingKind kind) {
         if (kind != PipelineExecutionTimingKind.STAGE3
-                && kind != PipelineExecutionTimingKind.STAGE3_5
                 && kind != PipelineExecutionTimingKind.STAGE2_5) {
             return true;
         }
@@ -4302,12 +4398,26 @@ public final class MainShellController {
     }
 
     /**
+     * 段階1・段階2スクリプト、または段階2.5／段階3／段階3.5 の配台試行が実行中か。
+     * 実行中は PDF 生成（依頼書プレビュー・設備ガント等）を抑制する。
+     */
+    public boolean isPlanningPipelineStageRunning() {
+        String script = activeRunStageScript;
+        if (STAGE1.equals(script) || STAGE2.equals(script) || STAGE2_1.equals(script)) {
+            return true;
+        }
+        PipelineExecutionTimingKind kind = activeDispatchTrialKind;
+        return kind == PipelineExecutionTimingKind.STAGE2_5
+                || kind == PipelineExecutionTimingKind.STAGE3;
+    }
+
+    /**
      * 段階1／段階2／配台試行 実行中は「実行・ログ」以外のタブを無効化し、タブ切り替えを禁止する（ツールバーに進捗・中断）。
      */
     private void applyRunTabGating() {
         String script = activeRunStageScript;
         boolean stage1Running = STAGE1.equals(script);
-        boolean stage2Running = STAGE2.equals(script);
+        boolean stage2Running = STAGE2.equals(script) || STAGE2_1.equals(script);
         boolean dispatchTrialBusy = activeDispatchTrialKind != null;
         boolean pipelineBusy = stage1Running || stage2Running || dispatchTrialBusy;
         if (mainRunTabController != null) {
@@ -4369,10 +4479,10 @@ public final class MainShellController {
             if (shellStageProgressLabel != null) {
                 if (stage1Running) {
                     shellStageProgressLabel.setText("段階1 実行中…");
+                } else if (stage2Running && STAGE2_1.equals(activeRunStageScript)) {
+                    shellStageProgressLabel.setText("段階2.1 実行中…");
                 } else if (stage2Running) {
                     shellStageProgressLabel.setText("段階2 実行中…");
-                } else if (dispatchTrialKind == PipelineExecutionTimingKind.STAGE3_5) {
-                    shellStageProgressLabel.setText("段階3.5 実行中…");
                 } else if (dispatchTrialKind == PipelineExecutionTimingKind.STAGE2_5) {
                     shellStageProgressLabel.setText("段階2.5(AI) 実行中…");
                 } else if (dispatchTrialKind == PipelineExecutionTimingKind.STAGE3) {
@@ -5601,11 +5711,9 @@ public final class MainShellController {
         return snapshotDispatchTrialPythonEnv(overtimeSimulationJson, null);
     }
 
-    /**
-     * 段階3.5: 残業シミュレーション JSON と段階3実績メートル下限 JSON を子プロセス環境へ載せる。
-     */
+    /** 段階3 配台試行用の子プロセス環境（残業 JSON は段階2.1 では使わない）。 */
     public Map<String, String> snapshotDispatchTrialPythonEnv(
-            java.nio.file.Path overtimeSimulationJson, java.nio.file.Path stage3MetersFloorJson) {
+            java.nio.file.Path overtimeSimulationJson, java.nio.file.Path unusedFloorJson) {
         Map<String, String> ui = new HashMap<>(collectUiEnv());
         ui.put(AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL, "1");
         ui.put(
@@ -5620,69 +5728,85 @@ public final class MainShellController {
         } else {
             ui.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
         }
+        ui.remove(AppPaths.KEY_PM_AI_OVERTIME_SIMULATION_JSON);
+        ui.remove(AppPaths.KEY_PM_AI_STAGE2_1_OVERTIME);
+        return childEnvForPython(ui);
+    }
+
+    /** 段階2.1: 残業シミュ付きフル再配台。成果物は {@code output/stage21/} へ。 */
+    public Map<String, String> snapshotStage21PythonEnv(java.nio.file.Path overtimeSimulationJson) {
+        Map<String, String> ui = new HashMap<>(collectUiEnv());
+        ui.put(AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL, "1");
+        ui.put(
+                AppPaths.KEY_PM_AI_STAGE2_SKIP_TODAY_DISPATCH,
+                planInputTabController.snapshotStage2SkipTodayDispatch() ? "1" : "0");
+        ui.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
+        applyStage2InProgressNextDayDispatchEnv(ui);
+        overlayMainRunSkipGeminiApiEnv(ui);
+        String resultFont = mainRunTabController.snapshotStage2ResultBookFont();
+        if (resultFont != null && !resultFont.isBlank()) {
+            ui.put(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT, resultFont.trim());
+        } else {
+            ui.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
+        }
+        java.nio.file.Path stage21Dir =
+                AppPaths.resolveStage21OutputDir(ui).toAbsolutePath().normalize();
+        ui.put(AppPaths.KEY_PM_AI_OUTPUT_DIR, stage21Dir.toString());
+        ui.put(AppPaths.KEY_PM_AI_RESULT_DISPATCH_TABLE_DIR, stage21Dir.toString());
+        ui.put(AppPaths.KEY_PM_AI_STAGE2_1_OVERTIME, "1");
         if (overtimeSimulationJson != null) {
             ui.put(
                     AppPaths.KEY_PM_AI_OVERTIME_SIMULATION_JSON,
                     overtimeSimulationJson.toAbsolutePath().normalize().toString());
-            ui.put("PM_AI_AGENT_DEBUG_SESSION", "0f46bc");
-            if (stage3MetersFloorJson != null) {
-                ui.put(
-                        AppPaths.KEY_PM_AI_STAGE35_STAGE3_METERS_FLOOR_JSON,
-                        stage3MetersFloorJson.toAbsolutePath().normalize().toString());
-            } else {
-                ui.remove(AppPaths.KEY_PM_AI_STAGE35_STAGE3_METERS_FLOOR_JSON);
-            }
         } else {
             ui.remove(AppPaths.KEY_PM_AI_OVERTIME_SIMULATION_JSON);
-            ui.remove(AppPaths.KEY_PM_AI_STAGE35_STAGE3_METERS_FLOOR_JSON);
         }
         return childEnvForPython(ui);
     }
 
-    /** 段階3.5: 残業シミュレーション上書き JSON を結果_配台表と同階層に書く。 */
-    public java.nio.file.Path writeOvertimeSimulationOverridesJson(
+    /** 段階2.1: 残業シミュレーション上書き JSON を stage21 出力ディレクトリへ書く。 */
+    public java.nio.file.Path writeStage21OvertimeSimulationOverridesJson(
             jp.co.pm.ai.desktop.dispatch.OvertimeSimulationOverridesWriter.OverridesPayload payload)
             throws Exception {
-        java.nio.file.Path dir = AppPaths.resolveResultDispatchTableDir(collectUiEnv());
+        java.nio.file.Path dir = AppPaths.resolveStage21OutputDir(collectUiEnv());
         java.nio.file.Files.createDirectories(dir);
         java.nio.file.Path target = dir.resolve("overtime_simulation_overrides.json");
         jp.co.pm.ai.desktop.dispatch.OvertimeSimulationOverridesWriter.write(target, payload);
-        appendLog("[stage3.5] 残業シミュレーション JSON: " + target.toAbsolutePath().normalize());
+        appendLog("[stage2.1] 残業シミュレーション JSON: " + target.toAbsolutePath().normalize());
         return target;
     }
 
-    /** 段階3.5 正常終了後: 勤怠適用サマリ付き完了通知。 */
-    void notifyStage35OvertimeSimulationSuccess() {
-        appendLog("[end] 段階3.5（残業シミュ→配台試行）正常終了");
+    /** 段階2.1 正常終了後: 勤怠適用サマリ付き完了通知。 */
+    void notifyStage21OvertimeSimulationSuccess() {
+        appendLog("[end] 段階2.1（残業/休出シミュ）正常終了");
         refreshOperatorCardAfterPipelineRun();
         MacroCompleteChime.playIfAvailable(collectUiEnv());
         selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
         java.nio.file.Path jsonPath =
                 AppPaths.resolveResultDispatchTableJsonPath(collectUiEnv());
-        jp.co.pm.ai.desktop.dispatch.Stage35BaselineActualSnapshotStore.Stage35TrialMeta meta =
-                jp.co.pm.ai.desktop.dispatch.Stage35BaselineActualSnapshotStore.tryLoadMeta(
-                        jsonPath);
+        jp.co.pm.ai.desktop.dispatch.Stage21TrialSnapshotStore.Stage21TrialMeta meta =
+                jp.co.pm.ai.desktop.dispatch.Stage21TrialSnapshotStore.tryLoadMeta(jsonPath);
         StringBuilder body = new StringBuilder();
-        body.append("段階3.5（残業シミュ→配台試行）の処理が正常終了しました。\n\n");
+        body.append("段階2.1（残業/休出シミュ）の処理が正常終了しました。\n\n");
         if (meta.hasTrialApplied() && meta.overrideSummary() != null) {
             body.append(meta.overrideSummary().formatSummaryLine()).append('\n');
         }
         body.append(
-                "\n勤怠は適用済みです。段階3.5 試行では定時帯は段階3と同じ暦日キャップを維持し、超過分のみ残業帯（17:00以降）に配台します。"
-                        + " 数量に差が出ない場合は機械稼働・割当メンバー・工程制約を確認してください。");
-        showStageCompletionDialog("段階3.5 完了", body.toString());
+                "\n成果物は output/stage21/ に出力しました。メインの結果_配台表.json は変更していません。"
+                        + " 配台計画手動修正タブで (段階2後) と (段階2.1後) を比較できます。");
+        showStageCompletionDialog("段階2.1 完了", body.toString());
     }
 
-    /** 段階3.5 異常終了後: 段階3 失敗と同趣旨（タイトルのみ段階3.5）。 */
-    void notifyStage35OvertimeSimulationFailure(String detailMessage) {
+    /** 段階2.1 異常終了後。 */
+    void notifyStage21OvertimeSimulationFailure(String detailMessage) {
         selectMainShellTab(MainShellTabId.RUN);
         Alert alert = new Alert(AlertType.ERROR);
         alert.initOwner(primaryStage);
         applyAlertStylesheetsFromOwner(alert);
-        alert.setTitle("段階3.5 失敗");
+        alert.setTitle("段階2.1 失敗");
         alert.setHeaderText(null);
         StringBuilder body = new StringBuilder();
-        body.append("段階3.5（残業シミュ→配台試行）が異常終了しました。\n");
+        body.append("段階2.1（残業/休出シミュ）が異常終了しました。\n");
         if (detailMessage != null && !detailMessage.isBlank()) {
             body.append(detailMessage.trim()).append('\n');
         }
@@ -5778,6 +5902,53 @@ public final class MainShellController {
         }
         runStage(STAGE2);
     }
+
+    /** 段階2.1（残業/休出シミュ）: ウィザード確定後にフル再配台（output/stage21/）。 */
+    void triggerStage21(java.nio.file.Path overtimeSimulationJson) {
+        if (blockIfSummaryAiDispatchExportLocked("段階2.1")) {
+            return;
+        }
+        if (blockIfMaterialLookupTablesHaveBlankValues("段階2.1")) {
+            return;
+        }
+        java.nio.file.Path mainJson =
+                AppPaths.resolveResultDispatchTableJsonPath(collectUiEnv());
+        if (!java.nio.file.Files.isRegularFile(mainJson)) {
+            appendLog(
+                    "[stage2.1] 段階2 の成果物（結果_配台表.json）がありません。先に段階2を実行してください。");
+            showErrorDialog(
+                    "段階2.1",
+                    "段階2.1 を実行する前に段階2を実行し、結果_配台表.json を生成してください。");
+            return;
+        }
+        if (dispatchInteractiveTabController != null
+                && dispatchInteractiveTabController.isDispatchDocDirtySinceSave()) {
+            appendLog(
+                    "[stage2.1] 配台計画手動修正に未保存の変更があります。JSON を「保存」するか「再読み」後に実行してください。");
+            return;
+        }
+        if (planInputTabController != null
+                && planInputTabController.isPlanInputTableDirtySinceSave()) {
+            appendLog(
+                    "[stage2.1] 配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
+            return;
+        }
+        if (overtimeSimulationJson == null
+                || !java.nio.file.Files.isRegularFile(overtimeSimulationJson)) {
+            appendLog("[stage2.1] 残業シミュレーション JSON が無効です。");
+            return;
+        }
+        pendingStage21OvertimeJsonPath =
+                overtimeSimulationJson.toAbsolutePath().normalize();
+        if (dispatchInteractiveTabController != null) {
+            dispatchInteractiveTabController.captureStage21BaselineBeforeRun(
+                    mainJson, pendingStage21OvertimeJsonPath);
+        }
+        runStage(STAGE2_1);
+    }
+
+    /** 段階2.1 実行時のみ子プロセスへ渡す残業 JSON。 */
+    private java.nio.file.Path pendingStage21OvertimeJsonPath;
 
     /** 直前の段階2ダイアログで確定した JSON。{@link #runStage} の段階2のみで子プロセスへ渡す。 */
     private java.nio.file.Path pendingStage2InProgressNextDayJsonPath;
@@ -6092,7 +6263,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
 
     private void overlayDispatchSpecialRulesForStageTrial(PipelineExecutionTimingKind kind) {
         Map<String, String> uiRun = collectUiEnv();
-        String stage = kind == PipelineExecutionTimingKind.STAGE3_5 ? "stage3_5" : "stage3";
+        String stage = "stage3";
         overlayDispatchSpecialRulesForStageRun(uiRun, stage);
     }
 

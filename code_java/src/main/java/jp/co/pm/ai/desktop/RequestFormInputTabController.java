@@ -139,6 +139,8 @@ public final class RequestFormInputTabController {
                         shell != null
                                 ? shell.requestFormPreviewBadgeConfig()
                                 : RequestFormPreviewBadgeConfig.defaults());
+        reconciliationApp.setPlanningPipelineStageBusyChecker(
+                () -> shell != null && shell.isPlanningPipelineStageRunning());
         contentHost.getChildren().setAll(root);
         embeddedBuilt = true;
         contentHost

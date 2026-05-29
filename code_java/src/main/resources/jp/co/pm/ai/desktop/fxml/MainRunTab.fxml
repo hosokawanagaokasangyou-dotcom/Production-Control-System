@@ -27,9 +27,9 @@
     <top>
         <VBox fillWidth="true" spacing="10.0">
             <HBox alignment="CENTER_LEFT" spacing="10.0" styleClass="pm-run-header-bar">
-                <StackPane fx:id="factoryLogoHost" alignment="CENTER" maxHeight="40.0" minHeight="36.0" minWidth="140.0" prefHeight="36.0" prefWidth="140.0" styleClass="pm-run-factory-logo-host">
-                    <ImageView fx:id="factoryLogoImageView" fitHeight="30.0" fitWidth="126.0" mouseTransparent="true" preserveRatio="true" />
-                    <Label fx:id="factoryLogoCaptionLabel" alignment="CENTER" contentDisplay="CENTER" maxWidth="132.0" mouseTransparent="true" styleClass="pm-run-factory-logo-caption" text="" textAlignment="CENTER" wrapText="false" />
+                <StackPane fx:id="factoryLogoHost" alignment="CENTER" maxHeight="24.0" minHeight="22.0" minWidth="-1.0" prefHeight="22.0" prefWidth="-1.0" styleClass="pm-run-factory-logo-host">
+                    <ImageView fx:id="factoryLogoImageView" fitHeight="18.0" fitWidth="72.0" mouseTransparent="true" preserveRatio="true" />
+                    <Label fx:id="factoryLogoCaptionLabel" alignment="CENTER" contentDisplay="CENTER" maxWidth="80.0" mouseTransparent="true" styleClass="pm-run-factory-logo-caption" text="" textAlignment="CENTER" wrapText="false" />
                 </StackPane>
                 <Label fx:id="operatorUserLabel" styleClass="pm-muted-label" text="操作者: （未選択）" />
                 <Button fx:id="changeOperatorPinButton" mnemonicParsing="false" onAction="#onChangeOperatorPinAction" text="PIN変更" />

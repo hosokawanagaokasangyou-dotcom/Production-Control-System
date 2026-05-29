@@ -63,18 +63,22 @@ class ResultDispatchStage3SupportTest {
     }
 
     @Test
-    void detectStage35FromSidecar() throws Exception {
-        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("stage35-badge");
+    void detectStage21TrialFromSidecar() throws Exception {
+        java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("stage21-badge");
         java.nio.file.Path dispatchJson = dir.resolve("結果_配台表.json");
         java.nio.file.Files.writeString(dispatchJson, "{}", java.nio.charset.StandardCharsets.UTF_8);
-        Stage35BaselineActualSnapshotStore.writeWithMeta(
+        java.nio.file.Path stage21Json = dir.resolve("stage21").resolve("結果_配台表.json");
+        java.nio.file.Files.createDirectories(stage21Json.getParent());
+        java.nio.file.Files.writeString(stage21Json, "{}", java.nio.charset.StandardCharsets.UTF_8);
+        Stage21TrialSnapshotStore.writeWithMeta(
                 dispatchJson,
                 java.util.Map.of(),
-                dir.resolve("overtime_simulation_overrides.json"),
-                new Stage35BaselineActualSnapshotStore.OverrideSummary(1, 0, 0));
-        assertTrue(ResultDispatchStage3Support.detectStage35FromDispatchJsonPath(dispatchJson));
+                stage21Json,
+                dir.resolve("stage21").resolve("overtime_simulation_overrides.json"),
+                new Stage21TrialSnapshotStore.OverrideSummary(1, 0, 0));
+        assertTrue(ResultDispatchStage3Support.detectStage21TrialFromDispatchJsonPath(dispatchJson));
         assertEquals(
-                ResultDispatchStage3Support.PlanningStage.STAGE35,
+                ResultDispatchStage3Support.PlanningStage.STAGE2,
                 ResultDispatchStage3Support.detectPlanningStage(dispatchJson));
     }
 }

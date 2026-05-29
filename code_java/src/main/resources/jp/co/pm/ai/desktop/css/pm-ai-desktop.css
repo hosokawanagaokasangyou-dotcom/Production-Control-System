@@ -147,37 +147,36 @@
 
 .pm-run-factory-logo-host {
     -fx-alignment: center;
-    -fx-padding: 0 8 0 0;
-    -fx-min-width: 140;
-    -fx-pref-width: 140;
-    -fx-max-width: 140;
-    -fx-min-height: 36;
-    -fx-pref-height: 36;
-    -fx-max-height: 36;
-    -fx-background-radius: 5;
-    -fx-border-radius: 5;
-    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.55), 4, 0, 0, 1);
+    -fx-padding: 1 8 1 10;
+    -fx-min-width: -1;
+    -fx-pref-width: -1;
+    -fx-max-width: -1;
+    -fx-min-height: 22;
+    -fx-pref-height: 22;
+    -fx-max-height: 22;
+    -fx-background-radius: 3;
+    -fx-border-radius: 3;
+    -fx-cursor: default;
 }
 
 .pm-factory-logo-konan.pm-run-factory-logo-host {
-    -fx-background-color: linear-gradient(to bottom, #3d6a9e 0%, #1e3a5f 48%, #142a45 100%);
-    -fx-border-color: #5a8ec8 #1a3050 #0f2038 #356090;
-    -fx-border-width: 1 1 2 1;
+    -fx-background-color: rgba(30, 58, 95, 0.55);
+    -fx-border-color: transparent transparent transparent #5a8ec8;
+    -fx-border-width: 0 0 0 3;
 }
 
 .pm-factory-logo-kokubu.pm-run-factory-logo-host {
-    -fx-background-color: linear-gradient(to bottom, #3d9a62 0%, #1a6b3a 48%, #0f4d28 100%);
-    -fx-border-color: #5ec48a #0f4d28 #083820 #2d8a52;
-    -fx-border-width: 1 1 2 1;
+    -fx-background-color: rgba(26, 107, 58, 0.55);
+    -fx-border-color: transparent transparent transparent #5ec48a;
+    -fx-border-width: 0 0 0 3;
 }
 
 .pm-run-factory-logo-caption {
-    -fx-font-size: 13px;
-    -fx-font-weight: bold;
-    -fx-text-fill: white;
+    -fx-font-size: 10px;
+    -fx-font-weight: normal;
+    -fx-text-fill: #d8e4f2;
     -fx-alignment: center;
     -fx-text-alignment: center;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 3, 0, 0, 1);
 }
 
 .pm-run-tab .pm-run-execution-timings {
@@ -551,6 +550,59 @@
 .button.pm-align-aladdin-plan-button:focused {
     -fx-focus-color: transparent;
     -fx-faint-focus-color: transparent;
+}
+
+/* 配台計画手動修正タブ: ツールバーは2行。段階ボタンは実行タブよりコンパクトに。 */
+.pm-dispatch-interactive-tab .pm-dispatch-toolbar-row .button,
+.pm-dispatch-interactive-tab .pm-dispatch-toolbar-row .check-box,
+.pm-dispatch-interactive-tab .pm-dispatch-toolbar-row .label {
+    -fx-min-width: -1;
+}
+
+.pm-dispatch-interactive-tab .pm-dispatch-toolbar-row .button.pm-stage-run-button {
+    -fx-min-width: -1;
+    -fx-pref-width: -1;
+    -fx-min-height: -1;
+    -fx-pref-height: -1;
+    -fx-padding: 6 14;
+    -fx-font-size: 12px;
+}
+
+.pm-dispatch-interactive-tab .pm-dispatch-toolbar-row .button.pm-stage-run-button.pm-stage-run-2-5 {
+    -fx-min-width: -1;
+    -fx-pref-width: -1;
+    -fx-background-color: #7c3aed;
+    -fx-border-color: #6d28d9;
+}
+
+.pm-dispatch-interactive-tab .pm-dispatch-toolbar-row .button.pm-stage-run-button.pm-stage-run-2-5:hover {
+    -fx-background-color: #8b5cf6;
+}
+
+.pm-dispatch-interactive-tab .pm-dispatch-toolbar-row .button.pm-stage-run-button.pm-stage-run-2-1 {
+    -fx-background-color: #c2410c;
+    -fx-border-color: #9a3412;
+}
+
+.pm-dispatch-interactive-tab .pm-dispatch-toolbar-row .button.pm-stage-run-button.pm-stage-run-2-1:hover {
+    -fx-background-color: #9a3412;
+}
+
+.pm-dispatch-interactive-tab .pm-dispatch-toolbar-row .button.pm-stage-run-button.pm-stage-run-2-1:pressed {
+    -fx-background-color: #7c2d12;
+}
+
+.pm-dispatch-interactive-tab .pm-dispatch-toolbar-row .button.pm-stage-run-button.pm-stage-run-2-5:pressed {
+    -fx-background-color: #5b21b6;
+}
+
+.pm-dispatch-interactive-tab .pm-dispatch-toolbar-row .button.pm-dispatch-save-button {
+    -fx-min-width: -1;
+    -fx-pref-width: -1;
+    -fx-min-height: -1;
+    -fx-pref-height: -1;
+    -fx-padding: 6 14;
+    -fx-font-size: 12px;
 }
 
 .button.pm-dispatch-save-button {

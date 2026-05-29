@@ -325,9 +325,12 @@ public final class EnvVarDocs {
                         + " 未設定・ファイル無しのときはシートの配台使用残数量を用いる。");
         put(
                 "PM_AI_OVERTIME_SIMULATION_JSON",
-                "段階3.5 残業シミュレーション: ウィザード確定時に JavaFX が書く UTF-8 JSON。"
-                        + " working_overrides（休日出勤○/グレー）と overtime_minutes（分）を段階3 配台試行にのみ適用する。"
-                        + " master.xlsm は変更しない。段階3 単独実行時は未設定。");
+                "段階2.1 残業/休出シミュ: ウィザード確定時に JavaFX が書く UTF-8 JSON。"
+                        + " working_overrides（休日出勤○/グレー）と overtime_minutes（分）を段階2.1 フル再配台に適用する。"
+                        + " master.xlsm は変更しない。成果物は output/stage21/ へ出力。");
+        put(
+                "PM_AI_STAGE2_1_OVERTIME",
+                "1/true/yes/on のとき段階2.1（残業/休出シミュ）のフル再配台。output/stage21/ へ成果物を分離出力する。");
         put(
                 "PM_AI_STAGE2_5_AUTO_AFTER_STAGE2",
                 "1/true/yes/on のとき段階2正常終了後に段階2.5(AI)を自動実行。"

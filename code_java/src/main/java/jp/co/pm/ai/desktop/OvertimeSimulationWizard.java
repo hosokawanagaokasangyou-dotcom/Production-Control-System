@@ -36,7 +36,7 @@ import jp.co.pm.ai.desktop.dispatch.OvertimeSimulationOverridesWriter;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 
 /**
- * 段階3.5 残業シミュレーション: 勤怠表（○/グレー）と残業時間（分）を編集し、段階3実行へ進むウィザード。
+ * 段階2.1 残業シミュレーション: 勤怠表（○/グレー）と残業時間（分）を編集し、段階2.1実行へ進むウィザード。
  */
 public final class OvertimeSimulationWizard {
 
@@ -62,34 +62,34 @@ public final class OvertimeSimulationWizard {
     /**
      * プレビュー取得済みの状態でウィザードを表示する。
      *
-     * @param onRunStage3 確定時に overrides JSON パスを渡す（段階3 起動は呼び出し側）
+     * @param onRunStage21 確定時に overrides JSON パスを渡す（段階2.1 起動は呼び出し側）
      */
     public static void show(
             Stage owner,
             MainShellController shell,
             AttendanceOvertimePreview.Preview preview,
-            Consumer<Path> onRunStage3) {
+            Consumer<Path> onRunStage21) {
         Objects.requireNonNull(preview, "preview");
-        Objects.requireNonNull(onRunStage3, "onRunStage3");
+        Objects.requireNonNull(onRunStage21, "onRunStage21");
         AttendanceOvertimePreview.Preview windowed =
                 AttendanceOvertimePreview.limitToDefaultOvertimeSimWindow(preview);
         OvertimeSimulationEditState state = new OvertimeSimulationEditState(windowed);
-        showDialog(owner, shell, state, onRunStage3);
+        showDialog(owner, shell, state, onRunStage21);
     }
 
     private static void showDialog(
             Stage owner,
             MainShellController shell,
             OvertimeSimulationEditState state,
-            Consumer<Path> onRunStage3) {
+            Consumer<Path> onRunStage21) {
         Stage stage = new Stage();
         if (owner != null) {
             stage.initOwner(owner);
         }
         stage.initModality(Modality.WINDOW_MODAL);
-        stage.setTitle("段階3.5 — 残業シミュレーション");
+        stage.setTitle("段階2.1 — 残業/休出シミュ");
 
-        Label eyebrow = new Label("段階3.5");
+        Label eyebrow = new Label("段階2.1");
         eyebrow.getStyleClass().add("overtime-sim-eyebrow");
         Label titleLabel = new Label("残業シミュレーション");
         titleLabel.getStyleClass().add("overtime-sim-title");
@@ -111,7 +111,7 @@ public final class OvertimeSimulationWizard {
                                 + AttendanceOvertimePreview.OVERTIME_SIM_DATE_WINDOW_DAYS_AFTER_TODAY
                                 + " 日後まで（当日を含む）に限定しています。"
                                 + " 勤怠行はダブルクリックで ○（出勤）とグレー（休み）を切り替えられます（休日出勤シミュレーション）。"
-                                + " 確定後、変更内容を反映して段階3（配台試行）を実行します。");
+                                + " 確定後、変更内容を反映して段階2.1（残業/休出シミュ）を実行します。");
         intro.setWrapText(true);
         intro.setMaxWidth(Double.MAX_VALUE);
         intro.getStyleClass().add("overtime-sim-intro");
@@ -154,7 +154,7 @@ public final class OvertimeSimulationWizard {
                     summaryLabel.setText(state.buildSummaryText());
                     center.setCenter(step2);
                     backBtn.setDisable(false);
-                    nextBtn.setText("段階3を実行");
+                    nextBtn.setText("段階2.1を実行");
                 };
 
         showStep1.run();
@@ -166,14 +166,14 @@ public final class OvertimeSimulationWizard {
                     } else {
                         try {
                             Path overrides =
-                                    shell.writeOvertimeSimulationOverridesJson(
+                                    shell.writeStage21OvertimeSimulationOverridesJson(
                                             OvertimeSimulationOverridesWriter.buildFromEditState(
                                                     state));
                             stage.close();
-                            onRunStage3.accept(overrides);
+                            onRunStage21.accept(overrides);
                         } catch (Exception ex) {
                             shell.showErrorDialog(
-                                    "段階3.5",
+                                    "段階2.1",
                                     "シミュレーション JSON の書き込みに失敗しました。\n"
                                             + (ex.getMessage() != null
                                                     ? ex.getMessage()

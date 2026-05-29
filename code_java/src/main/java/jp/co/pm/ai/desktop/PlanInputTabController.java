@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -29,10 +30,10 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.layout.HBox;
-import javafx.scene.paint.Color;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
@@ -47,6 +48,8 @@ import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck.Ta
 import jp.co.pm.ai.desktop.io.ExcelCellReadSupport;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
+import jp.co.pm.ai.desktop.ui.PlanInputDateColumnSupport;
+import jp.co.pm.ai.desktop.ui.PlanInputRawInputDateShift;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
 import jp.co.pm.ai.desktop.ui.SpreadsheetMultiColumnFilterCoordinator;
@@ -72,10 +75,6 @@ public final class PlanInputTabController {
 
     /** planning_core の {@code RESULT_TASK_COL_DISPATCH_TRIAL_ORDER} 相当（段階1タスク入力の並び順）。 */
     private static final String COL_DISPATCH_TRIAL_ORDER = "配台試行順番";
-
-    /** 表示は日付のみ（Excel/CSV の {@code 00:00:00} 付きを除く）。 */
-    private static final Set<String> PLAN_INPUT_DATE_ONLY_COLUMNS =
-            Set.of("回答納期", "指定納期", "原反投入日");
 
     public static final String ENV_PM_AI_PLAN_INPUT_PATH = AppPaths.KEY_PM_AI_PLAN_INPUT_PATH;
     public static final String ENV_TASK_PLAN_SHEET = "TASK_PLAN_SHEET";
@@ -112,6 +111,12 @@ public final class PlanInputTabController {
 
     @FXML
     private Button removeRowsButton;
+
+    @FXML
+    private Button shiftRawInputDateMinusOneButton;
+
+    @FXML
+    private Button clearRawInputDateOverrideButton;
 
     @FXML
     private Button stage2RunButton;
@@ -537,6 +542,48 @@ public final class PlanInputTabController {
     /**
      * 段階2後の整合確認用: 配台不要オフ（かつ配台計画除外・完了でない）行の (依頼NO, 工程名, 機械名)。
      */
+    /**
+     * 配台対象行の依頼NO → 実効原反投入日（{@code 原反投入日_上書き} 優先）。
+     * 段階2／3 後の午前配台率警告分析用。
+     */
+    Map<String, LocalDate> collectEffectiveRawInputDateByTaskId() {
+        Map<String, String> rowMap = new LinkedHashMap<>();
+        int colTask = headersRef.indexOf("依頼NO");
+        LinkedHashMap<String, LocalDate> out = new LinkedHashMap<>();
+        for (ObservableList<String> cells : rows) {
+            rowMap.clear();
+            for (int c = 0; c < headersRef.size(); c++) {
+                String h = headersRef.get(c);
+                String v = c < cells.size() && cells.get(c) != null ? cells.get(c) : "";
+                rowMap.put(h, v);
+            }
+            if (!DispatchPlanInputInteractiveCoverageCheck.isEligiblePlanInputRow(rowMap)) {
+                continue;
+            }
+            String taskId = colTask >= 0 ? cellAt(cells, colTask) : rowMap.getOrDefault("依頼NO", "");
+            if (taskId.isBlank()) {
+                continue;
+            }
+            LocalDate effective = effectiveRawInputDate(rowMap);
+            if (effective != null) {
+                out.putIfAbsent(taskId.strip(), effective);
+            }
+        }
+        return Map.copyOf(out);
+    }
+
+    private static LocalDate effectiveRawInputDate(Map<String, String> rowMap) {
+        Optional<LocalDate> override =
+                PlanInputDateColumnSupport.parseCellValue(
+                        rowMap.get(PlanInputRawInputDateShift.COL_RAW_INPUT_DATE_OVERRIDE));
+        if (override.isPresent()) {
+            return override.get();
+        }
+        return PlanInputDateColumnSupport.parseCellValue(
+                        rowMap.get(PlanInputRawInputDateShift.COL_RAW_INPUT_DATE))
+                .orElse(null);
+    }
+
     List<TaskKey> collectEligibleTaskKeysForDispatchCoverage() {
         Map<String, String> rowMap = new LinkedHashMap<>();
         int colTask = headersRef.indexOf("依頼NO");
@@ -656,6 +703,68 @@ public final class PlanInputTabController {
         if (shell != null) {
             shell.triggerStage2();
         }
+    }
+
+    @FXML
+    private void onShiftRawInputDateMinusOneAction() {
+        if (shell == null || headersRef.isEmpty()) {
+            return;
+        }
+        int updated = PlanInputRawInputDateShift.applyMinusOneDayToAllOverrides(headersRef, rows);
+        if (updated == PlanInputRawInputDateShift.MISSING_OVERRIDE_COLUMN) {
+            shell.showErrorDialog(
+                    "原反投入日の前倒し",
+                    "列「"
+                            + PlanInputRawInputDateShift.COL_RAW_INPUT_DATE_OVERRIDE
+                            + "」がありません。表を読み込んでから実行してください。");
+            return;
+        }
+        if (updated == 0) {
+            shell.showInformationDialog(
+                    "原反投入日の前倒し",
+                    "原反投入日（または上書き）を解釈できる行がありませんでした。");
+            return;
+        }
+        markPlanInputTableDirtySinceSave();
+        rebuildSpreadsheet();
+        shell.appendLog(
+                "[plan-input] 原反投入日を1日前倒し: "
+                        + updated
+                        + " 行の「"
+                        + PlanInputRawInputDateShift.COL_RAW_INPUT_DATE_OVERRIDE
+                        + "」を更新しました。");
+    }
+
+    @FXML
+    private void onClearRawInputDateOverrideAction() {
+        if (shell == null || headersRef.isEmpty()) {
+            return;
+        }
+        int cleared = PlanInputRawInputDateShift.clearAllOverrides(headersRef, rows);
+        if (cleared == PlanInputRawInputDateShift.MISSING_OVERRIDE_COLUMN) {
+            shell.showErrorDialog(
+                    "原反投入日上書きのクリア",
+                    "列「"
+                            + PlanInputRawInputDateShift.COL_RAW_INPUT_DATE_OVERRIDE
+                            + "」がありません。表を読み込んでから実行してください。");
+            return;
+        }
+        if (cleared == 0) {
+            shell.showInformationDialog(
+                    "原反投入日上書きのクリア",
+                    "「"
+                            + PlanInputRawInputDateShift.COL_RAW_INPUT_DATE_OVERRIDE
+                            + "」に値がある行がありませんでした。");
+            return;
+        }
+        markPlanInputTableDirtySinceSave();
+        rebuildSpreadsheet();
+        shell.appendLog(
+                "[plan-input] 原反投入日上書きをクリア: "
+                        + cleared
+                        + " 行の「"
+                        + PlanInputRawInputDateShift.COL_RAW_INPUT_DATE_OVERRIDE
+                        + "」を空にしました。");
     }
 
     @FXML
@@ -1185,14 +1294,14 @@ public final class PlanInputTabController {
         return s != null ? s.trim() : "";
     }
 
-    /** {@link #PLAN_INPUT_DATE_ONLY_COLUMNS} のセルから深夜時刻サフィックスを除く。 */
+    /** 日付列のセルから深夜時刻サフィックスを除く。 */
     private void normalizePlanInputDateOnlyColumns() {
         if (headersRef.isEmpty() || rows == null || rows.isEmpty()) {
             return;
         }
         List<Integer> colIdx = new ArrayList<>();
         for (int c = 0; c < headersRef.size(); c++) {
-            if (PLAN_INPUT_DATE_ONLY_COLUMNS.contains(headersRef.get(c))) {
+            if (PlanInputDateColumnSupport.isEditableDateColumn(headersRef.get(c))) {
                 colIdx.add(c);
             }
         }

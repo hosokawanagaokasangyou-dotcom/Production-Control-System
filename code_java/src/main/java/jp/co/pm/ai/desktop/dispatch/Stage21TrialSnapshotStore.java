@@ -16,19 +16,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
- * 段階3.5 試行直前の {@link ResultDispatchSchema#COL_DISPATCH_QTY_ACTUAL} 合計（プロファイル×配台日）と
- * 勤怠上書きメタ。配台計画手動修正タブの (段階3後)/(段階3.5後) 行・勤怠適用バナー用。
- * 結果_配台表.json 隣の sidecar に永続化する。
+ * 段階2.1 試行直前の段階2配台数量（プロファイル×配台日）と勤怠上書きメタ。
+ * 配台計画手動修正タブの (段階2後)/(段階2.1後) 比較・勤怠適用バナー用。
  */
-public final class Stage35BaselineActualSnapshotStore {
+public final class Stage21TrialSnapshotStore {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private static final DateTimeFormatter APPLIED_AT_FMT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
-    private static final String SIDEcar_SUFFIX = ".stage35_baseline_actual.json";
+    private static final String SIDECAR_SUFFIX = ".stage21_trial_meta.json";
 
-    private Stage35BaselineActualSnapshotStore() {}
+    private Stage21TrialSnapshotStore() {}
 
     public record OverrideSummary(int workOn, int workOff, int overtimeCells) {
 
@@ -51,20 +50,20 @@ public final class Stage35BaselineActualSnapshotStore {
         }
     }
 
-    public record Stage35TrialMeta(
-            boolean stage35Applied,
+    public record Stage21TrialMeta(
+            boolean stage21Applied,
+            String stage21ResultDispatchJson,
             String overtimeOverridesJson,
             OverrideSummary overrideSummary,
             String appliedAt,
             Map<String, Double> entries) {
 
-        public static Stage35TrialMeta empty() {
-            return new Stage35TrialMeta(
-                    false, "", OverrideSummary.empty(), "", Map.of());
+        public static Stage21TrialMeta empty() {
+            return new Stage21TrialMeta(false, "", "", OverrideSummary.empty(), "", Map.of());
         }
 
         public boolean hasTrialApplied() {
-            return stage35Applied || (entries != null && !entries.isEmpty());
+            return stage21Applied || (entries != null && !entries.isEmpty());
         }
 
         public Path overtimeOverridesPath() {
@@ -73,27 +72,32 @@ public final class Stage35BaselineActualSnapshotStore {
             }
             return Path.of(overtimeOverridesJson);
         }
+
+        public Path stage21ResultDispatchPath() {
+            if (stage21ResultDispatchJson == null || stage21ResultDispatchJson.isBlank()) {
+                return null;
+            }
+            return Path.of(stage21ResultDispatchJson);
+        }
     }
 
-    public static Path sidecarPathFor(Path resultDispatchJson) {
-        if (resultDispatchJson == null) {
+    public static Path sidecarPathFor(Path mainResultDispatchJson) {
+        if (mainResultDispatchJson == null) {
             return null;
         }
-        String fileName = resultDispatchJson.getFileName().toString();
+        String fileName = mainResultDispatchJson.getFileName().toString();
         if (!fileName.endsWith(".json")) {
-            return resultDispatchJson.resolveSibling(fileName + SIDEcar_SUFFIX);
+            return mainResultDispatchJson.resolveSibling(fileName + SIDECAR_SUFFIX);
         }
-        return resultDispatchJson.resolveSibling(
-                fileName.substring(0, fileName.length() - 5) + SIDEcar_SUFFIX);
+        return mainResultDispatchJson.resolveSibling(
+                fileName.substring(0, fileName.length() - 5) + SIDECAR_SUFFIX);
     }
 
-    public static Map<String, Double> captureFromDocument(
+    /** 段階2 正本表の当日配台数量（暦日×m）を baseline として記録する。 */
+    public static Map<String, Double> captureStage2PlanFromDocument(
             ResultDispatchDocument sourceDoc, List<LocalDate> axis) {
         Map<String, Double> out = new LinkedHashMap<>();
         if (sourceDoc == null || axis == null || axis.isEmpty()) {
-            return out;
-        }
-        if (!sourceDoc.columns().contains(ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL)) {
             return out;
         }
         List<Map<String, String>> profiles =
@@ -103,15 +107,15 @@ public final class Stage35BaselineActualSnapshotStore {
                         ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
         for (Map<String, String> profile : profiles) {
             for (LocalDate day : axis) {
-                double actual =
-                        ResultDispatchPivot.sumActualQuantityForProfileAndDateForWideMerge(
+                double plan =
+                        ResultDispatchPivot.sumQuantityForProfileAndDateForWideMerge(
                                 sourceDoc.rows(),
                                 profile,
                                 day,
                                 ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
                 String key = cellKey(profile, day);
-                if (actual > 1e-3) {
-                    out.put(key, actual);
+                if (plan > 1e-3) {
+                    out.put(key, plan);
                 }
             }
         }
@@ -128,29 +132,27 @@ public final class Stage35BaselineActualSnapshotStore {
                 day.toString());
     }
 
-    /** @deprecated {@link #writeWithMeta(Path, Map, Path, OverrideSummary)} を使用 */
-    @Deprecated
-    public static void write(Path resultDispatchJson, Map<String, Double> snapshot) {
-        writeWithMeta(
-                resultDispatchJson,
-                snapshot,
-                null,
-                OverrideSummary.empty());
-    }
-
     public static void writeWithMeta(
-            Path resultDispatchJson,
+            Path mainResultDispatchJson,
             Map<String, Double> snapshot,
+            Path stage21ResultDispatchJson,
             Path overtimeOverridesJson,
             OverrideSummary overrideSummary) {
-        Path sidecar = sidecarPathFor(resultDispatchJson);
+        Path sidecar = sidecarPathFor(mainResultDispatchJson);
         if (sidecar == null) {
             return;
         }
         try {
             ObjectNode root = JSON.createObjectNode();
-            root.put("source_json", resultDispatchJson.toAbsolutePath().normalize().toString());
-            root.put("stage35_applied", true);
+            root.put(
+                    "source_json",
+                    mainResultDispatchJson.toAbsolutePath().normalize().toString());
+            root.put("stage21_applied", true);
+            if (stage21ResultDispatchJson != null) {
+                root.put(
+                        "stage21_result_dispatch_json",
+                        stage21ResultDispatchJson.toAbsolutePath().normalize().toString());
+            }
             if (overtimeOverridesJson != null) {
                 root.put(
                         "overtime_overrides_json",
@@ -177,42 +179,43 @@ public final class Stage35BaselineActualSnapshotStore {
         }
     }
 
-    /** 旧 sidecar（entries のみ）互換。 */
-    public static Map<String, Double> tryLoad(Path resultDispatchJson) {
-        return tryLoadMeta(resultDispatchJson).entries();
+    public static Map<String, Double> tryLoadEntries(Path mainResultDispatchJson) {
+        return tryLoadMeta(mainResultDispatchJson).entries();
     }
 
-    public static Stage35TrialMeta tryLoadMeta(Path resultDispatchJson) {
-        Path sidecar = sidecarPathFor(resultDispatchJson);
+    public static Stage21TrialMeta tryLoadMeta(Path mainResultDispatchJson) {
+        Path sidecar = sidecarPathFor(mainResultDispatchJson);
         if (sidecar == null || !Files.isRegularFile(sidecar)) {
-            return Stage35TrialMeta.empty();
+            return Stage21TrialMeta.empty();
         }
         try {
             JsonNode root = JSON.readTree(Files.readString(sidecar, StandardCharsets.UTF_8));
             String expected =
-                    resultDispatchJson != null
-                            ? resultDispatchJson.toAbsolutePath().normalize().toString()
+                    mainResultDispatchJson != null
+                            ? mainResultDispatchJson.toAbsolutePath().normalize().toString()
                             : "";
             String stored = root.path("source_json").asText("");
             if (!expected.isEmpty() && !stored.isEmpty() && !expected.equals(stored)) {
-                return Stage35TrialMeta.empty();
+                return Stage21TrialMeta.empty();
             }
-            boolean stage35Applied = root.path("stage35_applied").asBoolean(false);
+            boolean stage21Applied = root.path("stage21_applied").asBoolean(false);
+            String stage21Json = root.path("stage21_result_dispatch_json").asText("");
             String overridesJson = root.path("overtime_overrides_json").asText("");
             OverrideSummary summary = parseOverrideSummary(root.path("override_summary"));
             String appliedAt = root.path("applied_at").asText("");
             Map<String, Double> entries = parseEntries(root.get("entries"));
-            if (!stage35Applied && entries.isEmpty()) {
-                return Stage35TrialMeta.empty();
+            if (!stage21Applied && entries.isEmpty()) {
+                return Stage21TrialMeta.empty();
             }
-            return new Stage35TrialMeta(
-                    stage35Applied || !entries.isEmpty(),
+            return new Stage21TrialMeta(
+                    stage21Applied || !entries.isEmpty(),
+                    stage21Json,
                     overridesJson,
                     summary,
                     appliedAt,
                     entries);
         } catch (Exception ignored) {
-            return Stage35TrialMeta.empty();
+            return Stage21TrialMeta.empty();
         }
     }
 
@@ -242,8 +245,8 @@ public final class Stage35BaselineActualSnapshotStore {
         return Map.copyOf(out);
     }
 
-    public static void deleteSidecar(Path resultDispatchJson) {
-        Path sidecar = sidecarPathFor(resultDispatchJson);
+    public static void deleteSidecar(Path mainResultDispatchJson) {
+        Path sidecar = sidecarPathFor(mainResultDispatchJson);
         if (sidecar == null) {
             return;
         }

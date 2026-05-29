@@ -157,23 +157,21 @@ class DispatchInteractiveStage3QtyDisplayTest {
     }
 
     @Test
-    void fixedSlots_stage35Compare_showsBaselineAndCurrent() {
+    void fixedSlots_stage21Append_showsStage21Line() {
         List<DispatchInteractiveTabController.Stage3QtyLineSlot> slots =
                 DispatchInteractiveTabController.buildStage3QtyFixedLineSlots(
-                        3900, 6000, 6100, false, 1e-3, true, 6000);
+                        3900, 6000, 6100, false, 1e-3, true, 6200);
         assertEquals(4, slots.size());
-        assertTrue(slots.get(0).lineText().startsWith(DispatchInteractiveTabController.LABEL_ALADDIN_PLAN));
-        assertTrue(slots.get(1).lineText().startsWith(DispatchInteractiveTabController.LABEL_STAGE3_PLAN));
         assertEquals(
-                DispatchInteractiveTabController.LABEL_STAGE3_ACTUAL + "6000",
+                DispatchInteractiveTabController.LABEL_STAGE3_ACTUAL + "6100",
                 slots.get(2).lineText());
         assertEquals(
-                DispatchInteractiveTabController.LABEL_STAGE35_ACTUAL + "6100",
+                DispatchInteractiveTabController.LABEL_STAGE21_ACTUAL + "6200",
                 slots.get(3).lineText());
     }
 
     @Test
-    void dateQtyLineFilter_hidesStage35After() {
+    void dateQtyLineFilter_hidesStage21After() {
         List<DispatchInteractiveTabController.Stage3QtyLineSlot> slots =
                 DispatchInteractiveTabController.buildStage3QtyFixedLineSlots(
                         4000, 7600, 7700, false, 1e-3, true, 7600);
@@ -187,28 +185,27 @@ class DispatchInteractiveStage3QtyDisplayTest {
     }
 
     @Test
-    void fixedSlots_stage35Compare_zeroBaselineStillShowsStage35Line() {
+    void fixedSlots_stage21Append_zeroStage21StillShowsLine() {
         List<DispatchInteractiveTabController.Stage3QtyLineSlot> slots =
                 DispatchInteractiveTabController.buildStage3QtyFixedLineSlots(
                         0, 0, 400, false, 1e-3, true, 0.0);
         assertEquals(4, slots.size());
-        assertEquals(
-                DispatchInteractiveTabController.LABEL_STAGE35_ACTUAL + "400",
-                slots.get(3).lineText());
+        assertFalse(slots.get(3).visible());
     }
 
     @Test
-    void formatStage35CompletionStatus_includesChangeCount() {
+    void formatStage21CompletionStatus_includesChangeCount() {
         var meta =
-                new jp.co.pm.ai.desktop.dispatch.Stage35BaselineActualSnapshotStore.Stage35TrialMeta(
+                new jp.co.pm.ai.desktop.dispatch.Stage21TrialSnapshotStore.Stage21TrialMeta(
                         true,
                         "",
-                        new jp.co.pm.ai.desktop.dispatch.Stage35BaselineActualSnapshotStore
+                        "",
+                        new jp.co.pm.ai.desktop.dispatch.Stage21TrialSnapshotStore
                                 .OverrideSummary(2, 1, 3),
                         "",
                         java.util.Map.of());
         assertTrue(
-                DispatchInteractiveTabController.formatStage35CompletionStatus(meta)
+                DispatchInteractiveTabController.formatStage21CompletionStatus(meta)
                         .contains("6 件適用"));
     }
 
