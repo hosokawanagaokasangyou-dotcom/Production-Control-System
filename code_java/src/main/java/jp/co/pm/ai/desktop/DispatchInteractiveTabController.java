@@ -2097,12 +2097,9 @@ public final class DispatchInteractiveTabController {
      * 段階2 正常終了直後: 表を JSON から再構築し、成功後に {@code afterSuccessOnFxThread} を FX スレッドで実行する。
      */
     void reloadTableFromDiskAfterStage2Success(Runnable afterSuccessOnFxThread) {
-        reloadFromDiskQuiet(
-                afterSuccessOnFxThread,
-                false,
-                false,
-                true,
-                AppPaths.resolveResultDispatchTableStage2JsonPath(shell.snapshotUiEnv()));
+        Path jsonPath = AppPaths.resolveResultDispatchTableStage2JsonPath(shell.snapshotUiEnv());
+        clearStage3PlanningMeta(jsonPath);
+        reloadFromDiskQuiet(afterSuccessOnFxThread, false, false, true, jsonPath);
     }
 
     /** 段階2.1 正常終了直後: 正本反映済み。比較 baseline を保持してメイン JSON を再読込する。 */
@@ -2258,6 +2255,10 @@ public final class DispatchInteractiveTabController {
      * 段階2パイプライン開始時に、古い行を誤認しないよう表の表示を空にする（JSON パスラベルは維持）。
      */
     void resetTableDisplayForStage2Run() {
+        if (shell != null) {
+            clearStage3PlanningMeta(
+                    AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv()));
+        }
         resetTableDisplayBeforeReload("段階2実行中（表示をクリア）");
     }
 
@@ -4206,6 +4207,16 @@ public final class DispatchInteractiveTabController {
     private void clearStage3TrialPlanQtySnapshot() {
         stage3TrialPlanQtySnapshot.clear();
         pendingStage3TrialSnapshotCapture = false;
+    }
+
+    /** 段階2再実行時: 古い段階3 sidecar と比較用スナップショットを破棄し、表示を段階2モードへ戻す。 */
+    private void clearStage3PlanningMeta(Path dispatchJsonPath) {
+        clearStage3TrialPlanQtySnapshot();
+        stage3PlanningVariant = ResultDispatchStage3Support.Stage3PlanningVariant.NONE;
+        if (dispatchJsonPath != null) {
+            Stage3PlanningMetaStore.deleteSidecar(dispatchJsonPath);
+        }
+        refreshDispatchPlanningStageBadge(dispatchJsonPath);
     }
 
     private boolean hasStage21TrialApplied() {

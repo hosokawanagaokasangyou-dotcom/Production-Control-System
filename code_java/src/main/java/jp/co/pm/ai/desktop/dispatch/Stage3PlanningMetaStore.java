@@ -232,6 +232,18 @@ public final class Stage3PlanningMetaStore {
         return ResultDispatchStage3Support.Stage3PlanningVariant.NONE;
     }
 
+    /** 段階2再実行などで古い段階3メタが残らないよう sidecar を削除する。 */
+    public static void deleteSidecar(Path dispatchJson) {
+        Path sidecar = sidecarPath(dispatchJson);
+        if (sidecar == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(sidecar);
+        } catch (Exception ignored) {
+        }
+    }
+
     private static String text(JsonNode node, String field) {
         JsonNode v = node != null ? node.get(field) : null;
         return v != null && !v.isNull() ? v.asText("") : "";
