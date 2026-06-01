@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -130,6 +131,7 @@ import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence.DispatchInteractiveDateAxisPastDaysPrefs;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence.DispatchInteractiveDateQtyLineFilterPrefs;
 import jp.co.pm.ai.planning.stage2.core.Stage2PlanRowDispatchQtyMetrics;
+import jp.co.pm.ai.planning.stage2.input.Stage2MasterFactoryHoursReader;
 import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
 
 /**
@@ -1243,13 +1245,24 @@ public final class DispatchInteractiveTabController {
         if (shell != null) {
             confirm.initOwner(shell.primaryStageForDialogs());
         }
+        LocalDate operationDate = LocalDate.now();
+        LocalDate alignFromDate = aladdinAlignFromDate(operationDate);
+        boolean includesToday = alignFromDate.equals(operationDate);
         confirm.setTitle("アラジン計画に合わせる");
-        confirm.setHeaderText("翌日以降の数量をアラジン計画に沿って再配分します");
+        confirm.setHeaderText(
+                includesToday
+                        ? "定常開始前のため、本日を含めアラジン計画に沿って再配分します"
+                        : "翌日以降の数量をアラジン計画に沿って再配分します");
         confirm.setContentText(
-                "操作日（"
-                        + LocalDate.now()
-                        + "）以前の暦日は変更しません。"
-                        + "翌日以降のみ、各タスク行の合計数量を維持したままロール単位で日付間に移動します。"
+                (includesToday
+                                ? "操作日（"
+                                        + operationDate
+                                        + "）より前の暦日は変更しません。"
+                                        + "本日を含む以降のみ、各タスク行の合計数量を維持したままロール単位で日付間に移動します。"
+                                : "操作日（"
+                                        + operationDate
+                                        + "）以前の暦日は変更しません。"
+                                        + "翌日以降のみ、各タスク行の合計数量を維持したままロール単位で日付間に移動します。")
                         + "\n換算数量が原反ロール長より小さい行は、表示上 20 m 等でも 1 ロール単位で移動します。");
         if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
             return;
@@ -1257,13 +1270,11 @@ public final class DispatchInteractiveTabController {
 
         aladdinAlignMoveHighlights.clear();
 
-        final int alignFromDayIndex = aladdinAlignFromDayIndexOnAxis();
+        final int alignFromDayIndex = aladdinAlignFromDayIndexOnAxis(alignFromDate);
         if (alignFromDayIndex >= dateAxis.size()) {
             if (statusLabel != null) {
                 statusLabel.setText(
-                        "翌日以降（"
-                                + LocalDate.now().plusDays(1)
-                                + "）以降の日付列がありません");
+                        "整列対象日（" + alignFromDate + "）以降の日付列がありません");
             }
             return;
         }
@@ -1485,18 +1496,35 @@ public final class DispatchInteractiveTabController {
         return sum;
     }
 
-    /** アラジン整列: 操作日の翌日に対応する日付軸 index（該当列が無ければ {@code dateAxis.size()}）。 */
-    private int aladdinAlignFromDayIndexOnAxis() {
+    /** アラジン整列: 整列開始暦日に対応する日付軸 index（該当列が無ければ {@code dateAxis.size()}）。 */
+    private int aladdinAlignFromDayIndexOnAxis(LocalDate fromDate) {
         if (dateAxis == null || dateAxis.isEmpty()) {
             return 0;
         }
-        LocalDate fromDate = LocalDate.now().plusDays(1);
         for (int j = 0; j < dateAxis.size(); j++) {
             if (!dateAxis.get(j).isBefore(fromDate)) {
                 return j;
             }
         }
         return dateAxis.size();
+    }
+
+    private LocalDate aladdinAlignFromDate(LocalDate operationDate) {
+        return DispatchAladdinPlanAligner.resolveAlignFromDate(
+                operationDate, LocalTime.now(), resolveRegularShiftStartForAladdinAlign());
+    }
+
+    private Optional<LocalTime> resolveRegularShiftStartForAladdinAlign() {
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        Path master = AppPaths.resolveMasterWorkbookPathResolved(ui, "");
+        if (master == null || !Files.isRegularFile(master)) {
+            return Optional.empty();
+        }
+        try {
+            return Stage2MasterFactoryHoursReader.readRegularShift(master).start();
+        } catch (IOException ignored) {
+            return Optional.empty();
+        }
     }
 
     private AladdinSystemDispatchDisplayQty.TaskQtyContext taskQtyContextForWideProfile(

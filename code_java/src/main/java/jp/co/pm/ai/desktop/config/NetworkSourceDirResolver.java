@@ -28,8 +28,8 @@ public final class NetworkSourceDirResolver {
             List.of(".csv", ".parquet", ".pq", ".xlsx", ".xlsm", ".xltx", ".xltm");
 
     /**
-     * @param taskInputFromCache {@code true} iff effective task-input file is read from local cache
-     * @param actualDetailFromCache {@code true} iff effective actual-detail workbook is read from local cache
+     * @param taskInputFromCache {@code true} iff ネットワークソース未到達などでキャッシュへフォールバックした
+     * @param actualDetailFromCache 同上（実績明細）
      */
     public record Result(
             Optional<Path> taskInputPath,
@@ -37,6 +37,9 @@ public final class NetworkSourceDirResolver {
             Optional<Path> actualDetailPath,
             boolean actualDetailFromCache,
             List<String> logLines) {}
+
+    /** 解決パスと、ネットワーク未到達によるキャッシュフォールバックかどうか。 */
+    private record ResolvedNetworkSource(Optional<Path> path, boolean cacheFallback) {}
 
     private NetworkSourceDirResolver() {}
 
@@ -52,17 +55,11 @@ public final class NetworkSourceDirResolver {
             boolean skipTaskInputSourceDirListing,
             boolean skipActualDetailSourceDirListing) {
         List<String> logs = new ArrayList<>();
-        Optional<Path> task = resolveTaskInput(m, logs, skipTaskInputSourceDirListing);
-        Optional<Path> actual = resolveActualDetail(m, logs, skipActualDetailSourceDirListing);
-        boolean tCache =
-                task.isPresent()
-                        && task.get().startsWith(cacheRoot(m))
-                        && Files.isRegularFile(task.get());
-        boolean aCache =
-                actual.isPresent()
-                        && actual.get().startsWith(cacheRoot(m))
-                        && Files.isRegularFile(actual.get());
-        return new Result(task, tCache, actual, aCache, List.copyOf(logs));
+        ResolvedNetworkSource task = resolveTaskInput(m, logs, skipTaskInputSourceDirListing);
+        ResolvedNetworkSource actual = resolveActualDetail(m, logs, skipActualDetailSourceDirListing);
+        boolean tCache = task.cacheFallback();
+        boolean aCache = actual.cacheFallback();
+        return new Result(task.path(), tCache, actual.path(), aCache, List.copyOf(logs));
     }
 
     /** フォルダ一覧まで試す通常解決（後方互換）。 */
@@ -125,7 +122,7 @@ public final class NetworkSourceDirResolver {
                 .normalize();
     }
 
-    private static Optional<Path> resolveTaskInput(
+    private static ResolvedNetworkSource resolveTaskInput(
             Map<String, String> ui, List<String> logs, boolean skipSourceDirListing) {
         Map<String, String> u = ui != null ? ui : Map.of();
         String explicit = trim(u.get(AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH));
@@ -140,10 +137,10 @@ public final class NetworkSourceDirResolver {
                                     + " （ローカルキャッシュ読込: "
                                     + cached.get()
                                     + "）");
-                    return cached;
+                    return new ResolvedNetworkSource(cached, false);
                 }
                 logs.add("[network-source] 加工計画DATA相当: 参照 OK → " + p);
-                return Optional.of(p);
+                return new ResolvedNetworkSource(Optional.of(p), false);
             }
             logs.add(
                     "[network-source] PM_AI_PROCESSING_PLAN_PATH が参照できません: "
@@ -154,7 +151,7 @@ public final class NetworkSourceDirResolver {
             logs.add(
                     "[network-source] PM_AI_TASK_INPUT_SOURCE_DIR は起動時チェックで未到達のため一覧せずキャッシュを試行: "
                             + AppPaths.resolveTaskInputSourceDir(u));
-            return loadTaskInputFromCache(u, logs);
+            return cacheFallbackResult(loadTaskInputFromCache(u, logs));
         }
         Path dir = AppPaths.resolveTaskInputSourceDir(u);
         Optional<Path> live = pickNewestTaskInputInDir(dir);
@@ -165,18 +162,18 @@ public final class NetworkSourceDirResolver {
                 logs.add(
                         "[network-source] PM_AI_TASK_INPUT_SOURCE_DIR 最新（ローカルキャッシュ）: "
                                 + cached.get());
-                return cached;
+                return new ResolvedNetworkSource(cached, false);
             }
             logs.add("[network-source] PM_AI_TASK_INPUT_SOURCE_DIR 最新: " + live.get());
-            return live;
+            return new ResolvedNetworkSource(live, false);
         }
         logs.add(
                 "[network-source] PM_AI_TASK_INPUT_SOURCE_DIR を参照できないか空です: "
                         + dir);
-        return loadTaskInputFromCache(u, logs);
+        return cacheFallbackResult(loadTaskInputFromCache(u, logs));
     }
 
-    private static Optional<Path> resolveActualDetail(
+    private static ResolvedNetworkSource resolveActualDetail(
             Map<String, String> ui, List<String> logs, boolean skipSourceDirListing) {
         Map<String, String> u = ui != null ? ui : Map.of();
         String wb = trim(u.get(AppPaths.KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK));
@@ -191,10 +188,10 @@ public final class NetworkSourceDirResolver {
                                     + " （ローカルキャッシュ読込: "
                                     + cached.get()
                                     + "）");
-                    return cached;
+                    return new ResolvedNetworkSource(cached, false);
                 }
                 logs.add("[network-source] 実績明細: 単一ファイル参照 OK → " + p);
-                return Optional.of(p);
+                return new ResolvedNetworkSource(Optional.of(p), false);
             }
             logs.add(
                     "[network-source] PM_AI_ACTUAL_DETAIL_WORKBOOK が参照できません: "
@@ -205,7 +202,7 @@ public final class NetworkSourceDirResolver {
             logs.add(
                     "[network-source] PM_AI_ACTUAL_DETAIL_SOURCE_DIR は起動時チェックで未到達のため一覧せずキャッシュを試行: "
                             + AppPaths.resolveActualDetailSourceDir(u));
-            return loadActualDetailFromCache(u, logs);
+            return cacheFallbackResult(loadActualDetailFromCache(u, logs));
         }
         Path dir = AppPaths.resolveActualDetailSourceDir(u);
         Optional<Path> live = pickNewestExcelInDir(dir);
@@ -216,15 +213,19 @@ public final class NetworkSourceDirResolver {
                 logs.add(
                         "[network-source] PM_AI_ACTUAL_DETAIL_SOURCE_DIR 最新（ローカルキャッシュ）: "
                                 + cached.get());
-                return cached;
+                return new ResolvedNetworkSource(cached, false);
             }
             logs.add("[network-source] PM_AI_ACTUAL_DETAIL_SOURCE_DIR 最新: " + live.get());
-            return live;
+            return new ResolvedNetworkSource(live, false);
         }
         logs.add(
                 "[network-source] PM_AI_ACTUAL_DETAIL_SOURCE_DIR を参照できないか空です: "
                         + dir);
-        return loadActualDetailFromCache(u, logs);
+        return cacheFallbackResult(loadActualDetailFromCache(u, logs));
+    }
+
+    private static ResolvedNetworkSource cacheFallbackResult(Optional<Path> path) {
+        return new ResolvedNetworkSource(path, path.isPresent());
     }
 
     private static String cacheFileStemTaskInput() {

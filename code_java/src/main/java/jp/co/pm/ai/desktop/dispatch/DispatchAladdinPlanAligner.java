@@ -1,5 +1,10 @@
 package jp.co.pm.ai.desktop.dispatch;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.Objects;
+import java.util.Optional;
+
 import jp.co.pm.ai.planning.stage2.core.Stage2PlanRowDispatchQtyMetrics;
 
 /**
@@ -30,8 +35,24 @@ public final class DispatchAladdinPlanAligner {
     }
 
     /**
+     * 手動修正「アラジン計画に合わせる」の整列開始暦日。
+     *
+     * <p>定常開始（master A15）が読め、かつ現在時刻が定常開始前なら操作日（当日）から整列する。
+     * それ以外（定常開始以降、または定常開始が不明）は翌日から整列する。
+     */
+    public static LocalDate resolveAlignFromDate(
+            LocalDate operationDate, LocalTime now, Optional<LocalTime> regularShiftStart) {
+        Objects.requireNonNull(operationDate, "operationDate");
+        Objects.requireNonNull(now, "now");
+        if (regularShiftStart.isPresent() && now.isBefore(regularShiftStart.get())) {
+            return operationDate;
+        }
+        return operationDate.plusDays(1);
+    }
+
+    /**
      * {@link #alignRow} と同様だが、{@code alignFromDayIndex} より前の暦日は {@code current} を変更しない。
-     * 翌日以降のみアラジン計画に沿って再配分する用途（手動修正タブのボタン操作日基準）。
+     * 手動修正タブのボタン: 定常開始前は当日から、それ以外は翌日以降のみ再配分する。
      *
      * @param alignFromDayIndex 再配分を開始する日付軸 index（この index 以降のみ対象）。0 で全日。
      */

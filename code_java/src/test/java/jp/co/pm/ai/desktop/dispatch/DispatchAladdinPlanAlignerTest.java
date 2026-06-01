@@ -5,9 +5,44 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.Optional;
+
 import org.junit.jupiter.api.Test;
 
 class DispatchAladdinPlanAlignerTest {
+
+    @Test
+    void resolveAlignFromDate_beforeRegularShiftStart_includesToday() {
+        LocalDate op = LocalDate.of(2026, 6, 2);
+        assertEquals(
+                op,
+                DispatchAladdinPlanAligner.resolveAlignFromDate(
+                        op, LocalTime.of(7, 30), Optional.of(LocalTime.of(8, 0))));
+    }
+
+    @Test
+    void resolveAlignFromDate_atOrAfterRegularShiftStart_startsTomorrow() {
+        LocalDate op = LocalDate.of(2026, 6, 2);
+        assertEquals(
+                op.plusDays(1),
+                DispatchAladdinPlanAligner.resolveAlignFromDate(
+                        op, LocalTime.of(8, 0), Optional.of(LocalTime.of(8, 0))));
+        assertEquals(
+                op.plusDays(1),
+                DispatchAladdinPlanAligner.resolveAlignFromDate(
+                        op, LocalTime.of(9, 0), Optional.of(LocalTime.of(8, 0))));
+    }
+
+    @Test
+    void resolveAlignFromDate_withoutRegularShiftStart_startsTomorrow() {
+        LocalDate op = LocalDate.of(2026, 6, 2);
+        assertEquals(
+                op.plusDays(1),
+                DispatchAladdinPlanAligner.resolveAlignFromDate(
+                        op, LocalTime.of(7, 0), Optional.empty()));
+    }
 
     @Test
     void alignRowFromDayIndex_preservesPrefixAndAlignsSuffix() {

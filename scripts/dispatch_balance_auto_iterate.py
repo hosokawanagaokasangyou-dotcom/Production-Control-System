@@ -81,13 +81,21 @@ def run_stage2() -> int:
     return 0 if DISPATCH_JSON.is_file() else 5
 
 
-def run_aladdin_align(*, from_tomorrow: bool) -> int:
-    from planning_core.dispatch_aladdin_align_json import align_dispatch_json_from_aladdin
+def run_aladdin_align(*, from_tomorrow: bool = False, align_all_days: bool = False) -> int:
+    from planning_core.dispatch_aladdin_align_json import (
+        align_dispatch_json_from_aladdin,
+        resolve_align_from_day,
+    )
 
     if not DISPATCH_JSON.is_file():
         return 5
     payload = json.loads(DISPATCH_JSON.read_text(encoding="utf-8"))
-    align_from = date.today() + timedelta(days=1) if from_tomorrow else None
+    if align_all_days:
+        align_from = None
+    elif from_tomorrow:
+        align_from = date.today() + timedelta(days=1)
+    else:
+        align_from = resolve_align_from_day()
     new_payload, n_changed = align_dispatch_json_from_aladdin(
         payload, ALADDIN_JSON, align_from_day=align_from
     )
@@ -174,7 +182,16 @@ def main() -> int:
     parser.add_argument("--skip-stage2", action="store_true")
     parser.add_argument("--skip-align", action="store_true")
     parser.add_argument("--skip-stage3", action="store_true")
-    parser.add_argument("--align-from-tomorrow", action="store_true", default=True)
+    parser.add_argument(
+        "--align-from-tomorrow",
+        action="store_true",
+        help="アラジン整列を翌日以降に限定（既定は定常開始前なら当日含む）",
+    )
+    parser.add_argument(
+        "--align-all-days",
+        action="store_true",
+        help="アラジン整列を全日（操作日以前も含む）対象にする",
+    )
     args = parser.parse_args()
 
     apply_env()
@@ -210,7 +227,10 @@ def main() -> int:
         return 2
 
     if not args.skip_align:
-        run_aladdin_align(from_tomorrow=args.align_from_tomorrow)
+        run_aladdin_align(
+            from_tomorrow=args.align_from_tomorrow,
+            align_all_days=args.align_all_days,
+        )
         summary["steps"].append("align:ok")
 
     if not args.skip_stage3:

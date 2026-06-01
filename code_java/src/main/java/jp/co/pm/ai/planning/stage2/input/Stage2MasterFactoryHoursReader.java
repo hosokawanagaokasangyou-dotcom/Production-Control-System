@@ -23,7 +23,8 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
 import jp.co.pm.ai.desktop.io.ExcelCellReadSupport;
 
 /**
- * master の「メイン」シート A12/B12（稼働開始・終了）を読む。Python {@code _read_master_main_factory_operating_times}
+ * master の「メイン」シート A12/B12（稼働開始・終了）・A15/B15（定常開始・終了）を読む。
+ * Python {@code _read_master_main_factory_operating_times} / {@code _read_master_main_regular_shift_times}
  * に概ね整合。
  */
 public final class Stage2MasterFactoryHoursReader {
@@ -31,6 +32,8 @@ public final class Stage2MasterFactoryHoursReader {
     private Stage2MasterFactoryHoursReader() {}
 
     public record FactoryHours(Optional<LocalTime> start, Optional<LocalTime> end) {}
+
+    public record RegularShiftHours(Optional<LocalTime> start, Optional<LocalTime> end) {}
 
     public static FactoryHours read(Path masterPath) throws IOException {
         if (masterPath == null || !Files.isRegularFile(masterPath)) {
@@ -59,6 +62,37 @@ public final class Stage2MasterFactoryHoursReader {
                 return new FactoryHours(Optional.empty(), Optional.empty());
             }
             return new FactoryHours(st, et);
+        }
+    }
+
+    /** master メイン A15/B15（定常開始・終了）。 */
+    public static RegularShiftHours readRegularShift(Path masterPath) throws IOException {
+        if (masterPath == null || !Files.isRegularFile(masterPath)) {
+            return new RegularShiftHours(Optional.empty(), Optional.empty());
+        }
+        DataFormatter fmt = new DataFormatter(Locale.ROOT);
+        try (Workbook wb = WorkbookFactory.create(masterPath.toFile())) {
+            String sheetName = pickMainSheetName(wb);
+            if (sheetName == null) {
+                return new RegularShiftHours(Optional.empty(), Optional.empty());
+            }
+            Sheet sh = wb.getSheet(sheetName);
+            if (sh == null) {
+                return new RegularShiftHours(Optional.empty(), Optional.empty());
+            }
+            Row r = sh.getRow(14);
+            if (r == null) {
+                return new RegularShiftHours(Optional.empty(), Optional.empty());
+            }
+            Optional<LocalTime> st = cellToTimeOptional(r.getCell(0), fmt);
+            Optional<LocalTime> et = cellToTimeOptional(r.getCell(1), fmt);
+            if (st.isEmpty() || et.isEmpty()) {
+                return new RegularShiftHours(Optional.empty(), Optional.empty());
+            }
+            if (!st.get().isBefore(et.get())) {
+                return new RegularShiftHours(Optional.empty(), Optional.empty());
+            }
+            return new RegularShiftHours(st, et);
         }
     }
 

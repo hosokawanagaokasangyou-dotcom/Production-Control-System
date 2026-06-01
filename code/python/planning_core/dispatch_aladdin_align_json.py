@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import math
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -166,6 +166,32 @@ def _roll_unit_m_for_profile(profile: dict[str, Any]) -> float:
     if plan_total > _EPS:
         return plan_total
     return conv if conv > _EPS else 0.0
+
+
+def resolve_align_from_day(
+    *,
+    operation_date: date | None = None,
+    now: datetime | None = None,
+    master_path: Path | str | None = None,
+) -> date:
+    """手動修正「アラジン計画に合わせる」と同じ整列開始暦日。
+
+    定常開始（master A15）が読め、かつ現在時刻が定常開始前なら操作日（当日）。
+    それ以外（定常開始以降、または定常開始が不明）は翌日。
+    """
+    op = operation_date or date.today()
+    dt = now or datetime.now()
+    shift_start = None
+    try:
+        import planning_core as pc
+
+        mp = master_path or pc._master_workbook_path_resolved()
+        shift_start, _ = pc._read_master_main_regular_shift_times(str(mp))
+    except Exception:
+        shift_start = None
+    if shift_start is not None and dt.time() < shift_start:
+        return op
+    return op + timedelta(days=1)
 
 
 def align_dispatch_json_from_aladdin(
