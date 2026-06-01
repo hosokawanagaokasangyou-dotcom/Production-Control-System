@@ -158,6 +158,13 @@ public final class MainShellController {
     private static final String STAGE1 = "task_extract_stage1.py";
     private static final String STAGE2 = "plan_simulation_stage2.py";
     private static final String STAGE2_1 = "plan_simulation_stage2_1.py";
+    private static final String STAGE3_0 = "plan_simulation_stage3_0.py";
+    private static final String STAGE3_1 = "plan_simulation_stage3_1.py";
+    private static final String STAGE3_2 = "plan_simulation_stage3_2.py";
+
+    private static boolean isStage3Script(String script) {
+        return STAGE3_0.equals(script) || STAGE3_1.equals(script) || STAGE3_2.equals(script);
+    }
 
     /** 段階1実行前ログに出す「入力解決に関わる」環境変数キー（子プロセスへ渡る値）。 */
     private static final List<String> STAGE1_CHILD_INPUT_ENV_KEYS =
@@ -310,6 +317,9 @@ public final class MainShellController {
     private PlanInputTabController planInputTabController;
 
     @FXML
+    private PlanInputStage3TabController planInputStage3TabController;
+
+    @FXML
     private RequestFormInputTabController requestFormInputTabController;
 
     @FXML
@@ -418,6 +428,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabPlanInput;
+
+    @FXML
+    private Tab mainShellTabPlanInputStage3;
 
     @FXML
     private Tab mainShellTabRequestFormInput;
@@ -666,6 +679,9 @@ public final class MainShellController {
                 .setPromptText("code/python (未設定時は環境変数 PM_AI_CODE_PYTHON_DIR)");
 
         planInputTabController.bindShell(this);
+        if (planInputStage3TabController != null) {
+            planInputStage3TabController.bindShell(this);
+        }
         if (requestFormInputTabController != null) {
             requestFormInputTabController.bindShell(this);
         }
@@ -1771,6 +1787,9 @@ public final class MainShellController {
         if (t == mainShellTabPlanInput) {
             return MainShellTabId.PLAN_INPUT;
         }
+        if (t == mainShellTabPlanInputStage3) {
+            return MainShellTabId.PLAN_INPUT_STAGE3;
+        }
         if (t == mainShellTabRequestFormInput) {
             return MainShellTabId.REQUEST_FORM_INPUT;
         }
@@ -1850,6 +1869,7 @@ public final class MainShellController {
             case OPERATOR_USER_MANAGEMENT -> mainShellTabOperatorUserManagement;
             case MASTER_SUMMARY -> mainShellTabMasterSummary;
             case PLAN_INPUT -> mainShellTabPlanInput;
+            case PLAN_INPUT_STAGE3 -> mainShellTabPlanInputStage3;
             case REQUEST_FORM_INPUT -> mainShellTabRequestFormInput;
             case STAGE1_PREVIEW -> mainShellTabStage1Preview;
             case CODE_LOOKUP_TABLES -> mainShellTabCodeLookupTables;
@@ -3873,7 +3893,13 @@ public final class MainShellController {
             String stageJa =
                     STAGE1.equals(script)
                             ? "段階1"
-                            : (STAGE2_1.equals(script) ? "段階2.1" : "段階2");
+                            : (STAGE2_1.equals(script)
+                                    ? "段階2.1"
+                                    : (STAGE3_0.equals(script)
+                                            ? "段階3.0"
+                                            : (STAGE3_1.equals(script)
+                                                    ? "段階3.1"
+                                                    : (STAGE3_2.equals(script) ? "段階3.2" : "段階2"))));
             appendLog("[busy] 納期管理ビュー再読み込み中のため " + stageJa + " を開始できません。");
             return;
         }
@@ -3932,6 +3958,10 @@ public final class MainShellController {
                 } else {
                     uiRun.remove(AppPaths.KEY_PM_AI_RESULT_BOOK_FONT);
                 }
+            }
+            if (isStage3Script(script)) {
+                uiRun.put(AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL, "1");
+                uiRun.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
             }
             if (STAGE2_1.equals(script)) {
                 java.nio.file.Path ot = pendingStage21OvertimeJsonPath;
@@ -4153,6 +4183,9 @@ public final class MainShellController {
             if (STAGE2_1.equals(script) && dispatchInteractiveTabController != null) {
                 dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
             }
+            if (isStage3Script(script) && dispatchInteractiveTabController != null) {
+                dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
+            }
         } else {
             int c = code != null ? code : -1;
             mainRunTabController.getStatusLabel().setText(exitCodeLegend(c));
@@ -4321,9 +4354,37 @@ public final class MainShellController {
                     dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
                 }
             }
+            if (isStage3Script(script)) {
+                if (c == 0) {
+                    Platform.runLater(
+                            () -> {
+                                refreshStage2OutputArtifacts();
+                                refreshEquipmentGanttGraphicAfterPipelineRun();
+                                refreshOperatorCardAfterPipelineRun();
+                                if (dispatchInteractiveTabController != null) {
+                                    dispatchInteractiveTabController
+                                            .reloadTableFromDiskAfterExternalUpdate();
+                                }
+                                if (planInputStage3TabController != null) {
+                                    planInputStage3TabController.reloadFromDisk();
+                                }
+                                invalidateDeliveryCalendarAfterPipelineRun();
+                                MacroCompleteChime.playIfAvailable(collectUiEnv());
+                                selectMainShellTab(MainShellTabId.DISPATCH_INTERACTIVE);
+                                showStageCompletionDialog(
+                                        "段階3 完了",
+                                        "段階3 の配台と枝番統合が正常終了しました。");
+                            });
+                } else if (dispatchInteractiveTabController != null) {
+                    dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
+                }
+            }
         }
         boolean stage12 =
-                STAGE1.equals(script) || STAGE2.equals(script) || STAGE2_1.equals(script);
+                STAGE1.equals(script)
+                        || STAGE2.equals(script)
+                        || STAGE2_1.equals(script)
+                        || isStage3Script(script);
         boolean failed = err != null || (code != null && code.intValue() != 0);
         if (stage12 && failed) {
             appendLog("[ui] 段階処理が異常終了しました。エラーダイアログを表示します。");
@@ -5989,6 +6050,52 @@ public final class MainShellController {
                     mainJson, pendingStage21OvertimeJsonPath);
         }
         runStage(STAGE2_1);
+    }
+
+    /** 入力3表（配台計画_タスク入力3.0）の元ブックパス（段階2.0 入力タブと同じワークブック）。 */
+    String stage3PlanInputWorkbookPath() {
+        return planInputTabController != null ? planInputTabController.snapshotPlanInputPath() : "";
+    }
+
+    private boolean blockStage3IfNoInput3Workbook(String stageJa) {
+        String p = stage3PlanInputWorkbookPath();
+        if (p == null || p.isBlank() || !java.nio.file.Files.isRegularFile(java.nio.file.Path.of(p.trim()))) {
+            appendLog(
+                    "[" + stageJa + "] 入力3表の元ブックがありません。配台計画手動修正タブで「入力3表を生成」してから実行してください。");
+            showErrorDialog(
+                    stageJa,
+                    stageJa + " を実行する前に、配台計画手動修正タブで「入力3表を生成」してください。");
+            return true;
+        }
+        return false;
+    }
+
+    /** 段階3.0: 入力3表（枝番）で配台A→枝番統合。 */
+    void triggerStage30() {
+        if (blockIfSummaryAiDispatchExportLocked("段階3.0")
+                || blockIfMaterialLookupTablesHaveBlankValues("段階3.0")
+                || blockStage3IfNoInput3Workbook("段階3.0")) {
+            return;
+        }
+        runStage(STAGE3_0);
+    }
+
+    /** 段階3.2: 数量厳守（同日完走・定常外人ブロック無視）で入力3表を配台→枝番統合。 */
+    void triggerStage32() {
+        if (blockIfSummaryAiDispatchExportLocked("段階3.2")
+                || blockIfMaterialLookupTablesHaveBlankValues("段階3.2")
+                || blockStage3IfNoInput3Workbook("段階3.2")) {
+            return;
+        }
+        runStage(STAGE3_2);
+    }
+
+    /** 段階3.1(時間外): 時間外ウィザード hybrid はフェーズ7で実装予定。 */
+    void triggerStage31() {
+        appendLog("[段階3.1] 時間外（hybrid）はフェーズ7で実装予定です。");
+        showErrorDialog(
+                "段階3.1(時間外)",
+                "段階3.1(時間外) は現在準備中です（時間外ウィザードの入力3表対応はフェーズ7で実装します）。");
     }
 
     /** 段階2.1 実行時のみ子プロセスへ渡す残業 JSON。 */
