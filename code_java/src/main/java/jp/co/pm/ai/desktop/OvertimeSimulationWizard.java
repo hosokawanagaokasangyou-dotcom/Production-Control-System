@@ -36,11 +36,43 @@ import jp.co.pm.ai.desktop.dispatch.OvertimeSimulationOverridesWriter;
 import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 
 /**
- * 段階2.1 残業シミュレーション: 勤怠表（○/グレー）と残業時間（分）を編集し、段階2.1実行へ進むウィザード。
+ * 段階2.1 / 段階3.1 残業シミュレーション: 勤怠表（○/グレー）と残業時間（分）を編集し、確定後に各段階を実行するウィザード。
  */
 public final class OvertimeSimulationWizard {
 
     private OvertimeSimulationWizard() {}
+
+    /** ウィザード確定後に起動するパイプライン段階。 */
+    public enum Target {
+        STAGE21("段階2.1"),
+        STAGE31("段階3.1");
+
+        private final String label;
+
+        Target(String label) {
+            this.label = label;
+        }
+
+        String label() {
+            return label;
+        }
+
+        String windowTitle() {
+            return label + " — 残業/休出シミュ";
+        }
+
+        String executeButtonText() {
+            return label + "を実行";
+        }
+
+        String introConfirmLine() {
+            return "確定後、変更内容を反映して" + label + "（残業/休出シミュ）を実行します。";
+        }
+
+        String noChangeSummarySuffix() {
+            return "\n（変更なし — master 勤怠のまま" + label + "を実行します）";
+        }
+    }
 
     public enum RowKind {
         ATTENDANCE("勤怠"),
@@ -62,34 +94,51 @@ public final class OvertimeSimulationWizard {
     /**
      * プレビュー取得済みの状態でウィザードを表示する。
      *
-     * @param onRunStage21 確定時に overrides JSON パスを渡す（段階2.1 起動は呼び出し側）
+     * @param onConfirm 確定時に overrides JSON パスを渡す（段階起動は呼び出し側）
+     * @param onDismissWithoutRun キャンセル／×で閉じたとき（確定前のみ）。省略可。
      */
     public static void show(
             Stage owner,
             MainShellController shell,
             AttendanceOvertimePreview.Preview preview,
-            Consumer<Path> onRunStage21) {
+            Target target,
+            Consumer<Path> onConfirm,
+            Runnable onDismissWithoutRun) {
         Objects.requireNonNull(preview, "preview");
-        Objects.requireNonNull(onRunStage21, "onRunStage21");
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(onConfirm, "onConfirm");
         AttendanceOvertimePreview.Preview windowed =
                 AttendanceOvertimePreview.limitToDefaultOvertimeSimWindow(preview);
         OvertimeSimulationEditState state = new OvertimeSimulationEditState(windowed);
-        showDialog(owner, shell, state, onRunStage21);
+        showDialog(owner, shell, state, target, onConfirm, onDismissWithoutRun);
+    }
+
+    public static void show(
+            Stage owner,
+            MainShellController shell,
+            AttendanceOvertimePreview.Preview preview,
+            Target target,
+            Consumer<Path> onConfirm) {
+        show(owner, shell, preview, target, onConfirm, null);
     }
 
     private static void showDialog(
             Stage owner,
             MainShellController shell,
             OvertimeSimulationEditState state,
-            Consumer<Path> onRunStage21) {
+            Target target,
+            Consumer<Path> onConfirm,
+            Runnable onDismissWithoutRun) {
         Stage stage = new Stage();
         if (owner != null) {
             stage.initOwner(owner);
         }
         stage.initModality(Modality.WINDOW_MODAL);
-        stage.setTitle("段階2.1 — 残業/休出シミュ");
+        stage.setTitle(target.windowTitle());
 
-        Label eyebrow = new Label("段階2.1");
+        final boolean[] confirmed = {false};
+
+        Label eyebrow = new Label(target.label());
         eyebrow.getStyleClass().add("overtime-sim-eyebrow");
         Label titleLabel = new Label("残業シミュレーション");
         titleLabel.getStyleClass().add("overtime-sim-title");
@@ -111,7 +160,8 @@ public final class OvertimeSimulationWizard {
                                 + AttendanceOvertimePreview.OVERTIME_SIM_DATE_WINDOW_DAYS_AFTER_TODAY
                                 + " 日後まで（当日を含む）に限定しています。"
                                 + " 勤怠行はダブルクリックで ○（出勤）とグレー（休み）を切り替えられます（休日出勤シミュレーション）。"
-                                + " 確定後、変更内容を反映して段階2.1（残業/休出シミュ）を実行します。");
+                                + " "
+                                + target.introConfirmLine());
         intro.setWrapText(true);
         intro.setMaxWidth(Double.MAX_VALUE);
         intro.getStyleClass().add("overtime-sim-intro");
@@ -151,10 +201,10 @@ public final class OvertimeSimulationWizard {
         Runnable showStep2 =
                 () -> {
                     stepLabel.setText("ステップ 2 / 2");
-                    summaryLabel.setText(state.buildSummaryText());
+                    summaryLabel.setText(state.buildSummaryText(target.noChangeSummarySuffix()));
                     center.setCenter(step2);
                     backBtn.setDisable(false);
-                    nextBtn.setText("段階2.1を実行");
+                    nextBtn.setText(target.executeButtonText());
                 };
 
         showStep1.run();
@@ -169,11 +219,12 @@ public final class OvertimeSimulationWizard {
                                     shell.writeStage21OvertimeSimulationOverridesJson(
                                             OvertimeSimulationOverridesWriter.buildFromEditState(
                                                     state));
+                            confirmed[0] = true;
                             stage.close();
-                            onRunStage21.accept(overrides);
+                            onConfirm.accept(overrides);
                         } catch (Exception ex) {
                             shell.showErrorDialog(
-                                    "段階2.1",
+                                    target.label(),
                                     "シミュレーション JSON の書き込みに失敗しました。\n"
                                             + (ex.getMessage() != null
                                                     ? ex.getMessage()
@@ -184,6 +235,13 @@ public final class OvertimeSimulationWizard {
 
         backBtn.setOnAction(ev -> showStep1.run());
         cancelBtn.setOnAction(ev -> stage.close());
+
+        stage.setOnHidden(
+                ev -> {
+                    if (!confirmed[0] && onDismissWithoutRun != null) {
+                        onDismissWithoutRun.run();
+                    }
+                });
 
         Region footerSpacer = new Region();
         HBox.setHgrow(footerSpacer, Priority.ALWAYS);

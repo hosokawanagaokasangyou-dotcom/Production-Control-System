@@ -185,10 +185,22 @@ public final class MainRunTabController {
     private Label pipelineTimingStage1Label;
 
     @FXML
-    private Label pipelineTimingStage2Label;
+    private Label pipelineTimingStage20Label;
 
     @FXML
-    private Label pipelineTimingStage3Label;
+    private Label pipelineTimingStage21Label;
+
+    @FXML
+    private Label pipelineTimingStage30Label;
+
+    @FXML
+    private Label pipelineTimingStage31Label;
+
+    @FXML
+    private Label pipelineTimingStage32Label;
+
+    @FXML
+    private Label pipelineTimingDispatchTrialLabel;
 
     @FXML
     private Label pipelineTimingSummaryExcelLabel;
@@ -1113,6 +1125,31 @@ public final class MainRunTabController {
     }
 
     @FXML
+    private void onOpenDispatchRulesHtmlAction() {
+        if (shell == null) {
+            return;
+        }
+        Path p = AppPaths.resolveDispatchRulesHtml(shell.snapshotUiEnv());
+        if (!Files.isRegularFile(p)) {
+            appendLog(
+                    "[dispatch-rules-html] file not found: "
+                            + p
+                            + " (expected "
+                            + AppPaths.DISPATCH_RULES_HTML_REL
+                            + " under "
+                            + AppPaths.KEY_PM_AI_REPO_ROOT
+                            + ")");
+            return;
+        }
+        try {
+            DesktopFileOpener.openFile(p);
+            appendLog("[dispatch-rules-html] opened: " + p.toAbsolutePath().normalize());
+        } catch (Exception e) {
+            appendLog("[dispatch-rules-html] open failed: " + e.getMessage());
+        }
+    }
+
+    @FXML
     private void onOpenManualAction() {
         if (shell == null) {
             return;
@@ -1319,9 +1356,12 @@ public final class MainRunTabController {
         Label target =
                 switch (kind) {
                     case STAGE1 -> pipelineTimingStage1Label;
-                    case STAGE2, STAGE2_0 -> pipelineTimingStage2Label;
-                    case STAGE2_5, STAGE3, STAGE2_1, STAGE3_0, STAGE3_1, STAGE3_2 ->
-                            pipelineTimingStage3Label;
+                    case STAGE2_0 -> pipelineTimingStage20Label;
+                    case STAGE2_1 -> pipelineTimingStage21Label;
+                    case STAGE3_0 -> pipelineTimingStage30Label;
+                    case STAGE3_1 -> pipelineTimingStage31Label;
+                    case STAGE3_2 -> pipelineTimingStage32Label;
+                    case STAGE3 -> pipelineTimingDispatchTrialLabel;
                     case SUMMARY_EXCEL -> pipelineTimingSummaryExcelLabel;
                     case DELIVERY_CALENDAR_VIEW -> pipelineTimingDeliveryCalendarLabel;
                 };

@@ -58,6 +58,7 @@ import jp.co.pm.ai.desktop.dispatch.AladdinShapedPlanQtyLookup;
 import jp.co.pm.ai.desktop.dispatch.AladdinSystemDispatchDisplayQty;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support;
+import jp.co.pm.ai.desktop.dispatch.Stage3PlanningMetaStore;
 import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
 import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
@@ -1783,18 +1784,20 @@ public final class DeliveryCalendarViewTabController {
 
         DispatchTableSnapshot dispatchSnap = loadDispatchTableSnapshot(ui);
         refreshCompareStageFlagsFromDispatch(dispatchSnap);
+        Map<String, Map<String, Map<String, Double>>> baselineLookup =
+                loadStage3BaselineDispatchLookup(ui);
+        Map<String, Map<String, Map<String, Double>>> dispatchPlanLookup =
+                buildDispatchQtyLookup(dispatchSnap.headers(), dispatchSnap.rows(), COL_DIS_QTY);
+        Map<String, Map<String, Map<String, Double>>> stage3Lookup =
+                buildStage3AfterDispatchLookup(dispatchSnap, ui);
+
+        Map<String, AladdinSystemDispatchDisplayQty.TaskQtyContext> dispatchQtyCtx =
+                buildDispatchQtyContext(ui, dispatchSnap.headers(), dispatchSnap.rows());
 
         Map<String, Map<String, Map<String, Map<String, Double>>>> planLookup =
                 AladdinShapedPlanQtyLookup.buildLookup(planHeaders, planRows);
         Map<String, Map<String, Map<String, Double>>> actualLookup =
                 buildActualLookup(actHeaders, actRows);
-        Map<String, Map<String, Map<String, Double>>> dispatchLookup =
-                buildDispatchQtyLookup(dispatchSnap.headers(), dispatchSnap.rows(), COL_DIS_QTY);
-        Map<String, Map<String, Map<String, Double>>> stage3Lookup =
-                buildDispatchQtyLookup(dispatchSnap.headers(), dispatchSnap.rows(), COL_DIS_QTY_STAGE3);
-
-        Map<String, AladdinSystemDispatchDisplayQty.TaskQtyContext> dispatchQtyCtx =
-                buildDispatchQtyContext(ui, dispatchSnap.headers(), dispatchSnap.rows());
 
         List<Map.Entry<Integer, String>> calColsByDate = new ArrayList<>(calDateByIdx.entrySet());
         calColsByDate.sort(Map.Entry.comparingByValue());
@@ -1834,7 +1837,10 @@ public final class DeliveryCalendarViewTabController {
                 String dateStr = e.getValue();
                 double p = AladdinShapedPlanQtyLookup.lookup(planLookup, mk, tid, dateStr, procRawForPlan);
                 double a = lookupQty(actualLookup, mk, tid, dateStr);
-                double dRaw = lookupQty(dispatchLookup, mk, tid, dateStr);
+                double dRaw =
+                        !baselineLookup.isEmpty()
+                                ? lookupQty(baselineLookup, mk, tid, dateStr)
+                                : lookupQty(dispatchPlanLookup, mk, tid, dateStr);
                 double d = dRaw;
                 if (!compareHideStage3PlanLine && dispatchCtx != null) {
                     AladdinSystemDispatchDisplayQty.DayDisplay day =
@@ -1890,9 +1896,11 @@ public final class DeliveryCalendarViewTabController {
         Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
         DispatchTableSnapshot dispatchSnap = loadDispatchTableSnapshot(ui);
         refreshCompareStageFlagsFromDispatch(dispatchSnap);
+        Map<String, Map<String, Map<String, Double>>> baselineLookup =
+                loadStage3BaselineDispatchLookup(ui);
         Map<String, Map<String, Map<String, Double>>> stage3Lookup =
-                buildDispatchQtyLookup(dispatchSnap.headers(), dispatchSnap.rows(), COL_DIS_QTY_STAGE3);
-        Map<String, Map<String, Map<String, Double>>> dispatchLookup =
+                buildStage3AfterDispatchLookup(dispatchSnap, ui);
+        Map<String, Map<String, Map<String, Double>>> dispatchPlanLookup =
                 compareHideStage3PlanLine
                         ? Map.of()
                         : buildDispatchQtyLookup(
@@ -1934,7 +1942,10 @@ public final class DeliveryCalendarViewTabController {
                 String ss3 = Math.abs(s3) > 1e-12 ? formatQtyShort(s3) : "";
                 String sd = "";
                 if (!compareHideStage3PlanLine) {
-                    double dRaw = lookupQty(dispatchLookup, mk, tid, dateStr);
+                    double dRaw =
+                            !baselineLookup.isEmpty()
+                                    ? lookupQty(baselineLookup, mk, tid, dateStr)
+                                    : lookupQty(dispatchPlanLookup, mk, tid, dateStr);
                     double d = dRaw;
                     if (dispatchCtx != null) {
                         AladdinSystemDispatchDisplayQty.DayDisplay day =
@@ -1958,11 +1969,10 @@ public final class DeliveryCalendarViewTabController {
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
         ResultDispatchStage3Support.PlanningStage stage =
                 ResultDispatchStage3Support.detectPlanningStage(jsonPath);
-        if (dispatchSnap != null
-                && !ResultDispatchStage3Support.hasStage3ActualColumn(dispatchSnap.headers())) {
-            stage = ResultDispatchStage3Support.PlanningStage.STAGE2;
-        }
-        compareHideStage3PlanLine = stage != ResultDispatchStage3Support.PlanningStage.STAGE2;
+        compareHideStage3PlanLine =
+                stage == ResultDispatchStage3Support.PlanningStage.STAGE3
+                        && dispatchSnap != null
+                        && ResultDispatchStage3Support.hasStage3ActualColumn(dispatchSnap.headers());
         ResultDispatchStage3Support.applyPlanningStageBadge(dataStageBadgeLabel, stage);
     }
 
@@ -1972,8 +1982,37 @@ public final class DeliveryCalendarViewTabController {
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
         ResultDispatchStage3Support.PlanningStage stage =
                 ResultDispatchStage3Support.detectPlanningStage(jsonPath);
-        compareHideStage3PlanLine = stage != ResultDispatchStage3Support.PlanningStage.STAGE2;
+        compareHideStage3PlanLine =
+                stage == ResultDispatchStage3Support.PlanningStage.STAGE3
+                        && ResultDispatchStage3Support.detectStage3FromDispatchJsonPath(jsonPath);
         ResultDispatchStage3Support.applyPlanningStageBadge(dataStageBadgeLabel, stage);
+    }
+
+    private static Map<String, Map<String, Map<String, Double>>> loadStage3BaselineDispatchLookup(
+            Map<String, String> ui) {
+        Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        if (!Stage3PlanningMetaStore.hasPipelinePlanningVariant(jsonPath)) {
+            return Map.of();
+        }
+        return Stage3PlanningMetaStore.buildBaselineDispatchLookup(
+                Stage3PlanningMetaStore.readBaselineEntries(jsonPath));
+    }
+
+    private static Map<String, Map<String, Map<String, Double>>> buildStage3AfterDispatchLookup(
+            DispatchTableSnapshot dispatchSnap, Map<String, String> ui) {
+        if (dispatchSnap == null) {
+            return Map.of();
+        }
+        Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        if (ResultDispatchStage3Support.hasStage3ActualColumn(dispatchSnap.headers())) {
+            return buildDispatchQtyLookup(
+                    dispatchSnap.headers(), dispatchSnap.rows(), COL_DIS_QTY_STAGE3);
+        }
+        if (Stage3PlanningMetaStore.hasPipelinePlanningVariant(jsonPath)) {
+            return buildDispatchQtyLookup(
+                    dispatchSnap.headers(), dispatchSnap.rows(), COL_DIS_QTY);
+        }
+        return Map.of();
     }
 
     /** 既存 Triple の plan/actual を維持し (段階3前) と (段階3後) だけ差し替える。 */

@@ -83,6 +83,7 @@ public class PlanInputStage3TabController {
     @FXML private Label hintLabel;
     @FXML private TextField rowSearchField;
     @FXML private TextField colWidthField;
+    @FXML private HBox tableOperationBar;
     @FXML private HBox columnStripHost;
     @FXML private StackPane spreadsheetHost;
 
@@ -101,6 +102,9 @@ public class PlanInputStage3TabController {
     private EventHandler<GridChange> gridChangeHandler;
     private boolean cellEditHooksInstalled;
     private boolean stageRunPipelineBusy;
+
+    /** 段階3.0/3.1/3.2 ボタン押下〜完了まで（3.1 ウィザード表示中を含む）。 */
+    private boolean stage3RunButtonsLocked;
     private boolean tableDirtySinceSave;
 
     private MainShellController shell;
@@ -196,6 +200,16 @@ public class PlanInputStage3TabController {
     void setStageRunProgressVisible(boolean stage1Running, boolean pipelineBusy) {
         stageRunPipelineBusy = stage1Running || pipelineBusy;
         applyStageRunButtonEnabledState();
+        applyPipelineBusyControlsState();
+    }
+
+    void setStage3RunButtonsLocked(boolean locked) {
+        stage3RunButtonsLocked = locked;
+        applyStageRunButtonEnabledState();
+    }
+
+    boolean isStage3RunButtonsLocked() {
+        return stage3RunButtonsLocked;
     }
 
     boolean isTableDirtySinceSave() {
@@ -211,21 +225,21 @@ public class PlanInputStage3TabController {
 
     @FXML
     private void onStage30RunButtonAction() {
-        if (shell != null) {
+        if (shell != null && !stage3RunButtonsLocked && !stageRunPipelineBusy) {
             shell.triggerStage30();
         }
     }
 
     @FXML
     private void onStage31RunButtonAction() {
-        if (shell != null) {
+        if (shell != null && !stage3RunButtonsLocked && !stageRunPipelineBusy) {
             shell.triggerStage31();
         }
     }
 
     @FXML
     private void onStage32RunButtonAction() {
-        if (shell != null) {
+        if (shell != null && !stage3RunButtonsLocked && !stageRunPipelineBusy) {
             shell.triggerStage32();
         }
     }
@@ -257,7 +271,7 @@ public class PlanInputStage3TabController {
                     STAGE3_SHEET_NAME,
                     new PlanInputTabularIo.TabularSheet(headersRef, dataRows));
             clearTableDirtySinceSave();
-            setStatus("保存しました: " + workbook + " （" + dataRows.size() + " 行）");
+            setStatus("保存済み " + dataRows.size() + " 行");
             if (shell != null) {
                 shell.appendLog("[plan-input-stage3] saved " + workbook);
                 shell.showInformationDialog(
@@ -412,7 +426,7 @@ public class PlanInputStage3TabController {
                     PlanInputTabularIo.read(workbook, STAGE3_SHEET_NAME);
             applyLoadedSheet(sheet);
             clearTableDirtySinceSave();
-            setStatus("入力3表: " + sheet.rows().size() + " 行（" + workbook + "）");
+            setStatus(sheet.rows().size() + " 行");
         } catch (Exception ex) {
             clearTableData();
             setStatus(
@@ -511,7 +525,9 @@ public class PlanInputStage3TabController {
     }
 
     private void applyStageRunButtonEnabledState() {
-        boolean disable = stageRunPipelineBusy || tableDirtySinceSave;
+        boolean disable = stageRunPipelineBusy || stage3RunButtonsLocked || tableDirtySinceSave;
+        Tooltip runningTip =
+                new Tooltip("段階3の処理が実行中です。完了までお待ちください。");
         Tooltip dirtyTip =
                 new Tooltip(
                         "入力3表に未保存の変更があります。「保存」または「入力3表を再読込」で確定してから実行してください。");
@@ -520,7 +536,36 @@ public class PlanInputStage3TabController {
                 continue;
             }
             b.setDisable(disable);
-            b.setTooltip(tableDirtySinceSave && !stageRunPipelineBusy ? dirtyTip : null);
+            if (stage3RunButtonsLocked || stageRunPipelineBusy) {
+                b.setTooltip(runningTip);
+            } else if (tableDirtySinceSave) {
+                b.setTooltip(dirtyTip);
+            } else {
+                b.setTooltip(null);
+            }
+        }
+    }
+
+    /** 段階1／2／3 パイプライン実行中は表操作・再読込を無効化する。 */
+    private void applyPipelineBusyControlsState() {
+        boolean disable = stageRunPipelineBusy;
+        if (reloadButton != null) {
+            reloadButton.setDisable(disable);
+        }
+        if (saveButton != null) {
+            saveButton.setDisable(disable);
+        }
+        if (tableOperationBar != null) {
+            tableOperationBar.setDisable(disable);
+        }
+        if (colWidthField != null) {
+            colWidthField.setDisable(disable);
+        }
+        if (rowSearchField != null) {
+            rowSearchField.setDisable(disable);
+        }
+        if (columnStripHost != null) {
+            columnStripHost.setDisable(disable);
         }
     }
 

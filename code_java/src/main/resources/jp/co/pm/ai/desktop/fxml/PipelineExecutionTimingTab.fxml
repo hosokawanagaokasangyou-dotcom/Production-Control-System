@@ -29,7 +29,7 @@
         <VBox fillWidth="true" spacing="10.0">
             <Label styleClass="pm-section-title" text="実行時間分析"/>
             <Label fx:id="hintLabel" styleClass="pm-pipeline-timing-hint" wrapText="true"
-                   text="段階1～3・サマリ Excel・納期管理ビューの所要時間を記録・表示します。"/>
+                   text="段階1・2.0～3.2・配台試行・サマリ Excel・納期管理ビューの所要時間を記録・表示します。"/>
             <HBox alignment="CENTER_LEFT" spacing="12.0" styleClass="pm-pipeline-timing-toolbar">
                 <Label text="対象"/>
                 <ComboBox fx:id="kindFilterCombo" prefWidth="220.0"/>

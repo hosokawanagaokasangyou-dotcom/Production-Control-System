@@ -1,6 +1,6 @@
 ---
 name: 特別ルールノードUI
-overview: §B 特別ルールを独立パッケージで実装。各Phase/全体完了時に内部テスト→不具合修正を自動反復。段階1～3.5実行中編集可・試走ラボ・履歴・衝突・トレース・legacy併存。
+overview: §B 特別ルール DSL/ビルダーは Phase1〜3 実装済み。2026-06 時点で段階2.5(AI)削除・段階2.0/2.1/3.0/3.1/3.2 パイプライン確立に伴い、run_snapshot・overlay・rule scope・試走・トレースのロジック再整合が次フェーズ。legacy 併存は維持。
 todos:
   - id: dsl-schema
     content: dispatch_special_rules.json v1 スキーマ定義（schemaVersion・ノード型カタログ・RulePhase・段階マイグレーション骨格）
@@ -30,7 +30,7 @@ todos:
     content: 配台時ルール適用トレース（trace_recorder・sidecar JSON・適用トレース UI・手動修正タブバッジ・グラフハイライト連動）
     status: completed
   - id: rule-run-snapshot
-    content: 段階1～3.5開始時ルールJSONスナップショット固定・実行中編集可・タブgating例外・適用タイミングUI
+    content: 段階1～3.2 開始時ルールJSONスナップショット固定・実行中編集可・タブgating例外・適用タイミングUI（→ rework-snapshot-overlay で再整合）
     status: completed
   - id: rule-edit-history
     content: history/ スナップショット・index.json・履歴パネル UI・ワンクリック復元（復元前自動退避）
@@ -53,6 +53,24 @@ todos:
   - id: verify-fix-loop
     content: 各Phase/全体完了時に自動テスト実行→失敗修正→再実行ループ。verify_dispatch_rules スクリプト＋完了報告に結果記載
     status: completed
+  - id: rework-snapshot-overlay
+    content: run_snapshots の stage キーを stage2_0/2_1/3_0/3_1/3_2 に拡張。MainShell overlay を全 PipelineExecutionTimingKind + STAGE2_1 子プロセスに接続
+    status: pending
+  - id: rework-rule-task-id
+    content: RuleContext・WIP 集計・trace task_id を rule_task_id（親依頼）ベースに（段階1-3.2 計画 rule-task-id-refactor と連動）
+    status: pending
+  - id: rework-test-lab-input3
+    content: 試走ラボで入力3表・枝番行選択。preview/simulation に parent_task_id コンテキストを渡す
+    status: pending
+  - id: rework-trace-stage3
+    content: 適用トレース sidecar に stage3_x・branch_task_id・pipeline meta を記録。手動修正バッジは段階3 パイプライン成果と整合
+    status: pending
+  - id: rework-banner-terminology
+    content: DispatchRuleBuilderRunContext バナー・プラン文言を「段階1～3.2」体系に更新（3.5/2.5 表記削除）
+    status: pending
+  - id: rework-stage25-docs-gap
+    content: 段階2.5(AI) は製品から削除済み。再設計時まで DSL/ビルダーは 2.5 整列・アラジン整列専用ノードを持たない（学習アーカイブは手動/別経路）
+    status: pending
 isProject: false
 ---
 
@@ -77,8 +95,85 @@ flowchart LR
     JsonFile --> Engine
     Engine --> Dispatch[配台実行]
   end
-  before -->|置き換え| after
+  before -->|DSL化| after
 ```
+
+---
+
+## 2026-06 ロジック再検討（製品変更との整合）
+
+**関連プラン**: [`段階1-3.2配台計画_e8b94f80.plan.md`](.cursor/plans/段階1-3.2配台計画_e8b94f80.plan.md)
+
+### 製品側で確定した変更（ビルダー前提の更新）
+
+| 項目 | 旧前提（本プラン初版） | 現状（2026-06） |
+|------|------------------------|-----------------|
+| 配台表 JSON 正本 | 段階2 と段階2.5 で切替（`PM_AI_DISPATCH_TABLE_ACTIVE_SOURCE`） | **常に** [`結果_配台表.json`](code_java/src/main/java/jp/co/pm/ai/desktop/config/AppPaths.java)（段階2 出力）。段階2.5(AI) **削除済み** |
+| 段階2.5 | アラジン整列 + 学習アーカイブ自動 enqueue | **未実装（再設計待ち）**。学習アーカイブ基盤（`dispatch-learning-archive/`）は残置・手動更新可 |
+| パイプライン段階 | 段階1／2／3／**3.5** | 段階1／**2.0**／**2.1**／**3.0**／**3.1**／**3.2**（[`PipelineExecutionTimingKind`](code_java/src/main/java/jp/co/pm/ai/desktop/PipelineExecutionTimingKind.java)） |
+| 段階3 | 手動修正タブの単体「配台試行」 | **入力3表生成 → 枝番分解 → 配台A → 枝番統合**のパイプライン（手動修正は前処理） |
+| 特別ルールの task キー | `task_id` = 依頼NO | 枝番行では **`rule_task_id`（親依頼）** で L10/L11/L13・§A を集計（段階1-3.2 計画 `rule-task-id-refactor`） |
+
+### 実装済みだが **ロジックが古い** 箇所（次フェーズで直す）
+
+| 箇所 | 現状 | あるべき姿 |
+|------|------|------------|
+| [`DispatchRuleStageRunOverlay.captureForStage`](code_java/src/main/java/jp/co/pm/ai/desktop/dispatch/rules/stage/DispatchRuleStageRunOverlay.java) | `stage1` / `stage2` / 汎用 `stage` の3値 | `stage1`, `stage2_0`, `stage2_1`, `stage3_0`, `stage3_1`, `stage3_2`（`PipelineExecutionTimingKind.name()` 小文字化でも可） |
+| [`MainShellController.overlayDispatchSpecialRulesForStageRun`](code_java/src/main/java/jp/co/pm/ai/desktop/MainShellController.java) | `STAGE1`/`STAGE2` script のみ capture | **2.1 子プロセス**・**3.0/3.1/3.2 パイプライン**開始前にも capture |
+| [`overlayDispatchSpecialRulesForStageTrial`](code_java/src/main/java/jp/co/pm/ai/desktop/MainShellController.java) | 常に `"stage3"` | `STAGE3_0`/`STAGE3_1`/`STAGE3_2` を区別（trace の `run_snapshot_id` と一致） |
+| [`DispatchRuleBuilderRunContext`](code_java/src/main/java/jp/co/pm/ai/desktop/dispatch/rules/stage/DispatchRuleBuilderRunContext.java) バナー | 「段階1～3.2」表記 | 「段階1～3.2」+ 実行中は **PipelineExecutionTimingKind.label()** を表示 |
+| 試走ラボ | plan_input **入力1表**の行のみ | 入力3表・枝番行も選択可。`rule_task_id` を simulation へ渡す |
+| 適用トレース sidecar | `task_id` のみ | 枝番実行時は `branch_task_id` + `rule_task_id` + `pipeline_stage`（3.0/3.1/3.2） |
+| `tryBeginDispatchTrialGating` | `STAGE3` のみ gating | 現状維持でよい（2.5 削除済み）。段階3.x は **パイプライン busy** と runLock の両方でバナー連動を確認 |
+
+### 再検討して **変えない** 方針
+
+1. **legacy 併存 + executionMode** — 現場の保険。段階2.5 削除とは無関係に維持。
+2. **run_snapshots 凍結モデル** — 「実行中は開始 snapshot のみ」「編集は次回開始から」は有効。段階キーの粒度だけ更新。
+3. **特別ルールタブ gating 例外** — パイプライン実行中もビルダー編集可は維持。
+4. **段階2.5 用 DSL ノード** — 再設計プランが出るまで **追加しない**（アラジン整列は手動修正「アラジン計画に合わせる」と段階3 前処理の責務）。
+
+### 段階ごとのルール評価（更新版）
+
+| 段階 | 特別ルール評価 | snapshot 必須 | 備考 |
+|------|----------------|---------------|------|
+| 段階1 | 通常 **しない** | 推奨（次段階2.0 用 id 連鎖） | タスク抽出のみ |
+| 段階2.0 | **する** | **必須** | `plan_simulation_stage2.py` → `_core` フック |
+| 段階2.1 | **する** | **必須**（現状未 capture → **要修正**） | 時間外 hybrid、成果物は正本へ promote |
+| 段階3.0 | **する** | **必須** | 入力3表・枝番分解後の配台A |
+| 段階3.1 | **する** | **必須** | 時間外 + 配台A（2.1 と同型） |
+| 段階3.2 | **する** | **必須** | 数量厳守モード（env 分岐） |
+| ~~段階2.5~~ | — | — | **削除済み** |
+| ~~段階3.5~~ | — | — | **3.1/3.2 に分解**。旧表記はプランから排除 |
+
+```mermaid
+flowchart LR
+  subgraph snap [run_snapshots 凍結]
+    S20[stage2_0]
+    S21[stage2_1]
+    S30[stage3_0]
+    S31[stage3_1]
+    S32[stage3_2]
+  end
+  Work[dispatch_special_rules.json 作業正本] --> S20
+  Work --> S21
+  Work --> S30
+  Work --> S31
+  Work --> S32
+  S20 --> Py20[段階2.0 Python]
+  S21 --> Py21[段階2.1 Python]
+  S30 --> Py30[段階3.0 Python]
+  S31 --> Py31[段階3.1 Python]
+  S32 --> Py32[段階3.2 Python]
+```
+
+### 次フェーズ作業順（推奨）
+
+1. **`rework-snapshot-overlay`** — overlay 配線 + stage キー + バナー文言（Java のみ、回帰小）
+2. **`rework-rule-task-id`** — Python engine + hook_adapter + conflict/trace（段階1-3.2 と同一 PR 単位が望ましい）
+3. **`rework-trace-stage3`** — sidecar スキーマ拡張 + 手動修正バッジ + 適用トレース UI フィルタ
+4. **`rework-test-lab-input3`** — 試走 UX
+5. **`rework-stage25-docs-gap`** — 2.5 再設計プラン確定後にのみ DSL ノード追加を検討
 
 **ユーザーが触るもの**: コードや Markdown ではなく、**左から右に流れる色付きブロック**でルールを組み立てる。
 
@@ -108,8 +203,8 @@ flowchart LR
 ├──────────┴──┴──────────────┴──┴──────────────────────────┴──┴───────────────────┤
 │ ルール: [L13 接続→SEC WIP ▼]  schema v1  │ [履歴▼][検証][衝突][試走][保存]      │
 │ 編集履歴: 2026-05-26 14:30 保存 …  [この版に戻す]                              │
-│ ┌─ 実行中バナー（段階2実行中のとき表示）────────────────────────────────────┐ │
-│ │ ⏳ 段階2実行中 │ 適用中ルール: 14:30:01 スナップショット │ 編集は次回から │ │
+│ ┌─ 実行中バナー（段階2.0 等 実行中）──────────────────────────────────────────┐ │
+│ │ ⏳ 段階2.0 実行中 │ 適用中ルール: 14:30:01 スナップショット │ 編集は次回から │ │
 │ │ 未保存の変更あり → 次回実行にも未反映。保存してください。                  │ │
 │ └──────────────────────────────────────────────────────────────────────────┘ │
 │ ⚠ 衝突 1 件: L4 ↔ L6（同一SEC・速度上書き競合） [詳細]                      │
@@ -225,7 +320,7 @@ sequenceDiagram
   User->>UI: ノード編集・保存
   UI->>Folder: dispatch_special_rules.json
   Note over Folder: backups/ に旧版退避
-  User->>Core: 段階2実行
+  User->>Core: 段階2.0 実行
   Core->>Py: load_rules + migrate
   Py->>Core: run_phase で候補除外等
 ```
@@ -271,7 +366,7 @@ flowchart LR
 9. **ルール間のロジック衝突を検出** — 有効ルール同士の矛盾を保存前／検証時にチェック
 10. **適用順をユーザーが制御** — 有効ルールは **`applyOrder` 昇順**で評価。UI で **ドラッグ並べ替え**＋**一括 ON/OFF**
 11. **編集履歴と復元** — 保存のたびに **スナップショット**を残し、一覧から **ワンクリックで過去状態に戻せる**
-12. **段階1～3.5 実行中も編集可** — 実行中の子プロセスは **開始時点のルールスナップショット**で固定。UI の編集・保存は **次回実行から**反映（タイミングを常時表示）
+12. **段階1～3.2 実行中も編集可** — 実行中の子プロセスは **開始時点のルールスナップショット**で固定。UI の編集・保存は **次回実行から**反映（タイミングを常時表示）
 13. **ルールは試走で検証** — **実タスク**を選び engine に流し込み、**グラフ上をアニメーション**で通過させて効果を確認。段階2 未実行・未保存ルールでも可（本番配台とは独立）
 14. **実装完了＝テスト合格** — 各 Phase および全体完了時、**内部テストを十分実行**し、不具合があれば **修正→再テストを同一作業内で反復**してから完了報告する
 
@@ -308,7 +403,7 @@ flowchart LR
 
 **Python**: パス解決は **新パッケージ** [`dispatch_rules/paths.py`](code/python/planning_core/dispatch_rules/paths.py) に実装。`_core.py` へ sibling 関数を増やさず、`hook_adapter` または子プロセス env 設定から参照。
 
-**段階1～3.5 実行前（ルール凍結）**: overlay ロジックは [`DispatchRuleStageRunOverlay.java`](code_java/src/main/java/jp/co/pm/ai/desktop/dispatch/rules/stage/DispatchRuleStageRunOverlay.java) に集約。`MainShellController` から **capture 1 呼び出し**のみ。詳細は下記 **「段階1～3.5 実行中も編集可」**。
+**段階1～3.2 実行前（ルール凍結）**: overlay ロジックは [`DispatchRuleStageRunOverlay.java`](code_java/src/main/java/jp/co/pm/ai/desktop/dispatch/rules/stage/DispatchRuleStageRunOverlay.java) に集約。`MainShellController` から **capture 呼び出し**（現状は段階1/2.0 と汎用 stage3 のみ → **Phase 4 rework**）。詳細は **「2026-06 ロジック再検討」** と **「段階1～3.2 実行中も編集可」**。
 
 ```json
 {
@@ -462,7 +557,7 @@ flowchart TD
 
 **変換トリガ（3 経路）**
 
-1. **自動（読込時）** — ビルダー読込、または **段階1～3.5 開始時 capture 後**の `load_rules` が旧版を検出 → メモリ上で最新版に変換して評価。**ディスクは触らない**（安全側）。**実行中の子プロセスは凍結ファイルを再読込しない**
+1. **自動（読込時）** — ビルダー読込、または **段階1～3.2 開始時 capture 後**の `load_rules` が旧版を検出 → メモリ上で最新版に変換して評価。**ディスクは触らない**（安全側）。**実行中の子プロセスは凍結ファイルを再読込しない**
 2. **明示（UI）** — 旧版検出時にステータス表示「schemaVersion 1 → 2 に変換可能」＋ **「変換して保存」** ボタン → `backups/` 退避後、作業正本を最新版で上書き
 3. **CLI / 一括** — 工場共有フォルダ内の JSON をアップデート前に `migrate_dispatch_special_rules.py` で変換
 
@@ -553,13 +648,13 @@ flowchart LR
 | **2** | manual スナップショット（メモ付き）+ diff summary 強化 |
 | **3** | セッション内 Undo/Redo スタック（任意・履歴とは別） |
 
-### 段階1～3.5 実行中も編集可（ルール適用タイミング）
+### 段階1～3.2 実行中も編集可（ルール適用タイミング）
 
-**目的**: 長時間の段階1／2 や配台試行（段階3／3.5）中も **特別ルールを編集・保存できる**。一方で **実行中の子プロセスが参照するルールは開始時点で固定**し、途中変更が配台結果を汚さない。
+**目的**: 長時間の段階1／2.0／2.1 や段階3.0/3.1/3.2 パイプライン中も **特別ルールを編集・保存できる**。一方で **実行中の子プロセスが参照するルールは開始時点で固定**し、途中変更が配台結果を汚さない。
 
 **現状の制約**（[`MainShellController.applyRunTabGating`](code_java/src/main/java/jp/co/pm/ai/desktop/MainShellController.java)）:
 
-- `runLock` 取得中（段階1／2 Python 実行、または `activeDispatchTrialKind != null` の段階3／3.5）は **「実行・ログ」以外のメインタブを `setDisable(true)`** し、強制的に実行タブへ戻す
+- `runLock` 取得中（段階1／2.0 Python 実行、または `activeDispatchTrialKind == STAGE3` の旧配台試行、または **段階3.x パイプライン busy**）は **「実行・ログ」以外のメインタブを `setDisable(true)`** し、強制的に実行タブへ戻す（**特別ルールタブのみ例外**）
 - 特別ルールタブ（`MainShellTabId.SPECIAL_RULES`）も現状は **編集不可**
 
 **変更方針**
@@ -567,7 +662,7 @@ flowchart LR
 | 項目 | 方針 |
 |------|------|
 | **タブ gating** | `pipelineBusy` 中も **`SPECIAL_RULES` のみ `setDisable(false)`**。ユーザーがビルダーへ切替えても **強制で実行タブへ戻さない**（他タブは従来どおり無効） |
-| **再実行ロック** | `runLock` は維持 — 実行中の **段階1～3.5 の再開始**は不可（二重起動防止） |
+| **再実行ロック** | `runLock` は維持 — 実行中の **段階1～3.2 の再開始**は不可（二重起動防止） |
 | **ルール凍結** | 各段階 **開始直前**に作業正本を **`run_snapshots/` へコピー**。子プロセス env `PM_AI_DISPATCH_SPECIAL_RULES_JSON` は **凍結パスのみ**（実行中に作業正本を再読込しない） |
 | **編集の効力** | 実行中の UI 編集・「保存」は **作業正本 + `history/` のみ更新**。**現在走っている処理には反映されない** |
 | **次回への反映** | **次にその段階を開始した瞬間**の capture が新ルールを使う（段階2 保存 → 同じ段階2 実行中は旧 snapshot のまま → **次の段階2 開始**で新 snapshot） |
@@ -593,18 +688,20 @@ sequenceDiagram
   Snap->>Child: 新凍結パス（T1 の内容）
 ```
 
-**段階ごとの「ルールが効くタイミング」**
+**段階ごとの「ルールが効くタイミング」**（詳細は上記 **「2026-06 ロジック再検討」** の表を正とする）
 
 | 段階 | 実行中に DSL/legacy が評価されるか | 凍結 snapshot の意味 |
 |------|-----------------------------------|---------------------|
-| **段階1** | **通常は評価しない**（タスク抽出のみ） | 編集可の一貫性 + **直後の段階2** 用に「開始時点の正本」を記録。sidecar の `run_snapshot_id` も段階1 run に紐付け |
-| **段階2** | **評価する**（`plan_simulation_stage2` → `_core` フック） | **必須**。実行中編集は **当該段階2 結果に無効** |
-| **段階3** | **評価する**（配台試行） | 段階2 結果を入力に試行するが、試行中の再評価は **開始 snapshot 固定** |
-| **段階3.5** | **評価する**（残業シミュ → 段階3 再試行） | 3.5 開始時に **別 snapshot**（3.5 用 run_id）。3 実行中の編集は 3.5 開始まで反映されない |
+| **段階1** | **通常は評価しない**（タスク抽出のみ） | 編集可の一貫性 + **直後の段階2.0** 用に「開始時点の正本」を記録 |
+| **段階2.0** | **評価する** | **必須**。実行中編集は **当該段階2.0 結果に無効** |
+| **段階2.1** | **評価する** | **必須**（overlay 未接続 → **rework-snapshot-overlay**） |
+| **段階3.0** | **評価する** | 枝番分解後の配台A。開始 snapshot 固定 |
+| **段階3.1** | **評価する** | 時間外 hybrid + 配台A。3.0 とは **別 run_id** |
+| **段階3.2** | **評価する** | 数量厳守モード。3.0/3.1 とは **別 run_id** |
 
 **注意（適用タイミングの UX 必須表示）**
 
-1. **idle**: 「編集は **次回** 段階1～3.5 実行開始時に適用」
+1. **idle**: 「編集は **次回** 段階1～3.2 実行開始時に適用」
 2. **pipeline 実行中**: バナーに **段階名** + **凍結時刻** + **snapshot id** + 「**今保存してもこの実行には反映されません**」
 3. **dirty（未保存）**: 「未保存 — 次回実行にも **未反映**。保存してください」
 4. **保存直後（実行中）**: 「保存済み — **次回** 段階○ 開始から適用（**今の実行は {時刻} snapshot**）」
@@ -617,8 +714,9 @@ dispatch_special_rules/
   dispatch_special_rules.json     ← 作業正本（常時編集・保存先）
   history/                        ← 編集履歴（ユーザー復元用）
   run_snapshots/                  ← 実行開始時凍結（子プロセス専用・上書きしない）
-    stage2_20260526-143001_a1b2.json
-    stage3_20260526-150512_c3d4.json
+    stage2_0_20260526-143001_a1b2.json
+    stage3_0_20260526-150512_c3d4.json
+    stage3_1_20260526-151200_d5e6.json
   run_snapshots/index.json        ← run_id, stage, capturedAt, sourceHash, path
 ```
 
@@ -636,7 +734,7 @@ dispatch_special_rules/
 
 **`MainShellController` 配線（最小）**
 
-1. 段階1／2 起動直前・`beginDispatchTrialGating` 直前 → `stageRunOverlay.captureForStage(kind, ui)`
+1. 段階1／2.0／2.1 起動直前・段階3.0/3.1/3.2 パイプライン開始直前・`beginDispatchTrialGating(STAGE3)` 直前 → `stageRunOverlay.captureForStage(stageKey, ui)`（**rework-snapshot-overlay**）
 2. `applyRunTabGating` → `t.getId()` が `specialRules` の Tab は **disable 除外**；選択強制も **SPECIAL_RULES 選択中はスキップ**
 3. 正常／異常終了 → `builderRunContext.clearActiveRun()`（バナーを idle に）
 
@@ -652,8 +750,8 @@ dispatch_special_rules/
 
 | Phase | 内容 |
 |-------|------|
-| **1** | タブ gating 例外 + 段階2／3／3.5 の capture + バナー + `run_snapshots/index.json` + sidecar `run_snapshot_id` |
-| **1 後半** | 段階1 開始時 capture（評価はしないが id 連鎖・UI 一貫性） |
+| **1** | タブ gating 例外 + 段階2.0／3.0 の capture + バナー + `run_snapshots/index.json` + sidecar `run_snapshot_id` |
+| **1 後半** | 段階1 開始時 capture + **2.1/3.1/3.2 overlay 接続**（rework-snapshot-overlay） |
 | **2** | 実行中ドライラン（**現 run には非適用**の明示付き）+ 適用トレースで snapshot 版フィルタ |
 
 **将来の版アップ例（設計メモ）**
@@ -733,7 +831,7 @@ planning_core/dispatch_rules/
   conflict_schema.py       # ConflictReport / ConflictKind
   history_store.py         # 編集履歴スナップショット・復元・prune
   history_diff.py          # スナップショット間 diff 要約
-  run_snapshot.py          # 段階1～3.5 開始時凍結・index・active run_id
+  run_snapshot.py          # 段階1～3.2 開始時凍結・index・active run_id
   legacy_bridge.py         # 従来 _core 関数への委譲（移動せずラップ）
   context.py               # RuleContext
   phases.py                # RulePhase enum
@@ -855,7 +953,7 @@ B-2/B-3 の **完全二相・設備占有** は最も複雑なため、**Phase 2
 | **凡例** | 6 色カテゴリを常時表示 |
 | **ルール一覧** | **適用順列・ON/OFF・DnD 並べ替え**・実行元 Combo・一括 ON/OFF |
 | **ステータス** | schema バッジ、検証 OK/NG、**実行元バッジ**（DSL / Legacy / OFF）、保存パス |
-| **実行状態バナー** | 段階1～3.5 実行中: 凍結 snapshot 時刻・id・「次回から反映」。idle/dirty 時も適用タイミングを常時表示 |
+| **実行状態バナー** | 段階1～3.2 実行中: 凍結 snapshot 時刻・id・「次回から反映」。idle/dirty 時も適用タイミングを常時表示 |
 
 ### Java パッケージ（独立）
 
@@ -947,14 +1045,14 @@ code_java/src/test/java/jp/co/pm/ai/desktop/dispatch/rules/
 
 ## 3.4 ルール試走ラボ（実タスク投入・アニメーション検証）
 
-**目的**: 段階2 を回さなくても、**実際の plan_input タスク**を選び、編集中ルール（**未保存可**）を **視覚的に面白く**通して「どこで止まる／変わるか」を理解できる **サンドボックス**。適用トレース（3.5）が **本番実行の記録**なのに対し、試走は **what-if シミュレーション**。
+**目的**: 段階2.0 を回さなくても、**実際の plan_input タスク**を選び、編集中ルール（**未保存可**）を **視覚的に面白く**通して「どこで止まる／変わるか」を理解できる **サンドボックス**。**適用トレース**（本番 sidecar）が **実実行の記録**なのに対し、試走は **what-if シミュレーション**。
 
 **3 つの画面の役割分担**
 
 | 画面 | いつ使う | データ源 |
 |------|----------|----------|
 | **ルール試走**（本節） | ルール編集直後・現場説明・閾値調整 | 選択 task + **エディタ上のルール JSON** |
-| **適用トレース**（3.5） | 段階2/3 実行後の事後確認 | sidecar `dispatch_rule_applications.json` |
+| **適用トレース**（本番） | 段階2.0/3.x 実行後の事後確認 | sidecar `dispatch_rule_applications.json` |
 | **Inspector ライブ要約** | 1 行だけ素早く確認 | `preview.py`（試走タブへ誘導） |
 
 ```mermaid
@@ -1082,7 +1180,7 @@ fxml/dispatch/rules/
 | 状況 | 試走の挙動 |
 |------|------------|
 | **通常** | エディタ上のルール（未保存含む）で即試走 |
-| **段階1～3.5 実行中** | 試走 **可能**（特別ルールタブ gating 例外と同様）。バナー「**試走はシミュレーションのみ。実行中の配台には影響しません**」 |
+| **段階1～3.2 実行中** | 試走 **可能**（特別ルールタブ gating 例外と同様）。バナー「**試走はシミュレーションのみ。実行中の配台には影響しません**」 |
 | **run_snapshots 凍結版との比較** | Phase 2: 「**本番 snapshot 版で試走**」トグル — 次回実行に効くルール vs 今エディタ上の差分を並べて確認 |
 
 ### Phase 割当
@@ -1107,7 +1205,9 @@ fxml/dispatch/rules/
 
 ## 3.5 ルール適用の可視化（配台・タスク割当時）
 
-**目的**: 段階2 や手動修正で **実際にタスクへ割当／除外**されたとき、**どの特別ルール（L13 等）が効いたか**をコードやログを読まずに把握する。
+> **注**: 節番号 3.5 はドキュメント構成上の番号。**旧「段階3.5」パイプラインとは無関係**（時間外再配台は **段階3.1**）。
+
+**目的**: 段階2.0 や段階3.x・手動修正で **実際にタスクへ割当／除外**されたとき、**どの特別ルール（L13 等）が効いたか**をコードやログを読まずに把握する。
 
 ### データ（sidecar・独立ファイル）
 
@@ -1130,7 +1230,10 @@ dispatch_special_rules/
   "rule_id": "L13",
   "apply_order": 40,
   "sequence_in_run": 3,
-  "run_snapshot_id": "stage2_20260526-143001_a1b2",
+  "run_snapshot_id": "stage2_0_20260526-143001_a1b2",
+  "pipeline_stage": "stage2_0",
+  "rule_task_id": "Y6-3",
+  "branch_task_id": "",
   "execution_source": "dsl",
   "phase": "eligible_filter",
   "effect": "block_candidate",
@@ -1162,7 +1265,7 @@ flowchart LR
 
 ```
 ┌─ 適用トレース ─────────────────────────────────────────────────────────┐
-│ ソース: [最新段階2 ▼]  依頼NO [Y6-3 ▼]  日付 [2026-05-26 ▼]  [再読込] │
+│ ソース: [最新段階2.0 ▼]  依頼NO [Y6-3 ▼]  日付 [2026-05-26 ▼]  [再読込] │
 ├────────────────────────────────────────────────────────────────────────┤
 │ タイムライン（横）  08:00 ──●L13除外──●L4速度20──●割当OK──────── 19:00 │
 ├───────────────────────────────┬────────────────────────────────────────┤
@@ -1338,7 +1441,7 @@ Java [`DispatchRuleConflictChecker`](code_java/src/main/java/jp/co/pm/ai/desktop
 - L4（速度 1 件）で QUEUE_BUILD 経路を証明
 - `conflict_checker` 骨格 + UI 衝突パネル MVP
 - **編集履歴**: 保存時 snapshot + 履歴パネル + ワンクリック復元
-- **実行中編集**: `applyRunTabGating` 特別ルール例外 + `run_snapshots/` 凍結 + `DispatchRuleRunStatusBanner` + 段階2／3／3.5 capture
+- **実行中編集**: `applyRunTabGating` 特別ルール例外 + `run_snapshots/` 凍結 + `DispatchRuleRunStatusBanner` + 段階2.0～3.2 capture（**rework-snapshot-overlay** で 2.1/3.1/3.2 接続）
 - Java: **視覚優先ビルダー MVP** + **適用トレース一覧**（L13 イベント）+ **試走タブ MVP**（ステップ手動・L13/L4）
 - `trace_recorder` + sidecar JSON 書き出し（`run_snapshot_id` 付与）
 - サマリ同階層サブフォルダ・`DispatchRulePaths` / `dispatch_rules/paths.py`・`StageRunOverlay`
@@ -1510,7 +1613,36 @@ scripts/verify_dispatch_rules.sh --full      # 全体完了時
 | **実行中編集で配台が途中変わる** | run_snapshots 凍結 + バナー + 次回実行から反映の明示 |
 | **実行中タブが開けない** | `applyRunTabGating` で特別ルールタブのみ例外 |
 | **スキーマ版アップで設定が壊れる** | `schemaVersion` + 段階 migrate + backups/ + UI「変換して保存」+ golden テスト |
+| **段階2.5 再設計との混同** | 2.5 用ノード・正本切替は **追加しない**。整列は手動修正＋段階3 前処理。2.5 再設計は **別プラン** |
+| **snapshot キーが粗い** | rework-snapshot-overlay: `stage2_0`…`stage3_2` + trace `pipeline_stage` 一致 |
+| **枝番タスクで WIP が狂う** | rework-rule-task-id: `rule_task_id` 集計（段階1-3.2 と同 PR） |
 | **実装だけしてテスト不足** | §8 必須ループ + `verify_dispatch_rules.sh` + Phase 完了条件 + 10 反復上限で blocker 報告 |
+
+---
+
+## 9. Phase 4 — パイプライン整合（rework todos）
+
+Phase 1〜3 で **DSL・ビルダー・試走・トレースの MVP は完了**。2026-06 の製品変更（段階2.5 削除・段階1〜3.2 再編）に合わせ、**実行タイミングと rule scope** を直すフェーズ。
+
+| todo id | 完了条件（要約） |
+|---------|------------------|
+| `rework-snapshot-overlay` | 全 `PipelineExecutionTimingKind` + STAGE2_1 起動前に capture。`run_snapshots/index.json` の `stage` が `stage2_0` 等。バナーが 3.2 表記 |
+| `rework-rule-task-id` | L10/L11/L13 の WIP・同一依頼差が **枝番行でも親依頼で集計**。golden 回帰更新 |
+| `rework-trace-stage3` | sidecar に `pipeline_stage` / `rule_task_id` / `branch_task_id`。適用トレース UI で 3.0/3.1/3.2 フィルタ |
+| `rework-test-lab-input3` | 試走タスクピッカーが **入力3表**行を選択可。simulation リクエストに parent コンテキスト |
+| `rework-banner-terminology` | プラン・Java 文言から 3.5/2.5 を排除（本更新でプラン側は概ね完了） |
+| `rework-stage25-docs-gap` | 2.5 **再設計プラン**確定まで DSL ノード追加なし（ドキュメントは依頼時のみ [`配台ルール.md`](code/要件定義/配台ルール.md) 同期） |
+
+**検証**: `verify_dispatch_rules.sh --phase rework`（将来追加）または既存 full + 手動 S2/S6/S7 を **段階2.0/3.0** で再実施。
+
+**段階1-3.2 計画との分担**
+
+| 領域 | 段階1-3.2 計画 | 本プラン rework |
+|------|----------------|-----------------|
+| 配台可能日時・段階2.0 開始 | `stage2-dispatch-start` 等 | 触らない（hook は既存） |
+| 枝番分解・入力3表 | `stage3-input-builder` | 触らない |
+| `rule_task_id` / 親ID集計 | `rule-task-id-refactor` | **同一実装**（engine + trace + 試走） |
+| run_snapshot overlay | 記載薄 | **本プラン rework-snapshot-overlay** |
 
 ---
 
@@ -1530,7 +1662,7 @@ scripts/verify_dispatch_rules.sh --full      # 全体完了時
 
 - [`SpecialRulesTabController.java`](code_java/src/main/java/jp/co/pm/ai/desktop/SpecialRulesTabController.java) / [`.fxml`](code_java/src/main/resources/jp/co/pm/ai/desktop/fxml/SpecialRulesTab.fxml)
 - [`AppPaths.java`](code_java/src/main/java/jp/co/pm/ai/desktop/config/AppPaths.java) — 委譲
-- [`MainShellController.java`](code_java/src/main/java/jp/co/pm/ai/desktop/MainShellController.java) — overlay 1 呼び出し
+- [`MainShellController.java`](code_java/src/main/java/jp/co/pm/ai/desktop/MainShellController.java) — overlay capture（**Phase 4 で 2.1/3.x 拡張**）
 - [`MainShellInnerTabCatalog.java`](code_java/src/main/java/jp/co/pm/ai/desktop/config/MainShellInnerTabCatalog.java)
 - [`Stage2PythonChildEnv.java`](code_java/src/main/java/jp/co/pm/ai/desktop/Stage2PythonChildEnv.java)
 - [`ui_ref_env_defaults.json`](code_java/src/main/resources/jp/co/pm/ai/desktop/ui_ref_env_defaults.json)

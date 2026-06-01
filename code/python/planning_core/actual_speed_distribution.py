@@ -383,7 +383,7 @@ def write_ml_readiness(archive_root: str | Path) -> None:
     )
     payload = {
         "updated_at": _utc_now_iso(),
-        "ml_mode_active": (os.environ.get("PM_AI_STAGE2_5_ML_MODE") or "off").strip() or "off",
+        "ml_mode_active": "off",
         "archive_job_count": job_count,
         "strong_teacher_count": 0,
         "speed_key_count": len(speed_store),

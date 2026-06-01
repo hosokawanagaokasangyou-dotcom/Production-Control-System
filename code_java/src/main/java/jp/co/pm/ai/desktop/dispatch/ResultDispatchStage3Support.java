@@ -12,7 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import javafx.scene.control.Label;
 
 /**
- * 結果_配台表 JSON の段階2/3/3.5 試行有無と、配台結果タブ／納期管理比較の表示方針。
+ * 結果_配台表 JSON の段階2/2.1/3.0～3.2 試行有無と、配台結果タブ／納期管理比較の表示方針。
  */
 public final class ResultDispatchStage3Support {
 
@@ -23,6 +23,83 @@ public final class ResultDispatchStage3Support {
     public static final String BADGE_STAGE3 = "\u6bb5\u968e3";
 
     public static final String BADGE_STAGE21 = "\u6bb5\u968e2.1";
+
+    /** 配台手動修正の日付セル数量行: 段階3.0/3.1/3.2 または旧配台試行。 */
+    public enum Stage3PlanningVariant {
+        NONE,
+        /** 旧 {@code dispatch_interactive_trial} 等（sidecar 無し・実配台数量列あり）。 */
+        LEGACY,
+        STAGE3_0,
+        STAGE3_1,
+        STAGE3_2;
+
+        public static Stage3PlanningVariant fromMetaVariant(Stage3PlanningMetaStore.Variant variant) {
+            if (variant == null) {
+                return LEGACY;
+            }
+            return switch (variant) {
+                case STAGE3_0 -> STAGE3_0;
+                case STAGE3_1 -> STAGE3_1;
+                case STAGE3_2 -> STAGE3_2;
+            };
+        }
+
+        public String actualQtyLabel() {
+            return switch (this) {
+                case STAGE3_0 -> "(段階3.0後)";
+                case STAGE3_1 -> "(段階3.1後)";
+                case STAGE3_2 -> "(段階3.2後)";
+                case LEGACY -> "(段階3後)";
+                case NONE -> "";
+            };
+        }
+
+        public String revisedQtyLabel() {
+            return switch (this) {
+                case STAGE3_0 -> "(段階3.0改)";
+                case STAGE3_1 -> "(段階3.1改)";
+                case STAGE3_2 -> "(段階3.2改)";
+                case LEGACY -> "(段階3改)";
+                case NONE -> "";
+            };
+        }
+
+        public String badgeText() {
+            return switch (this) {
+                case STAGE3_0 -> "段階3.0";
+                case STAGE3_1 -> "段階3.1";
+                case STAGE3_2 -> "段階3.2";
+                case LEGACY -> BADGE_STAGE3;
+                case NONE -> BADGE_STAGE2;
+            };
+        }
+    }
+
+    /** 旧ラベル {@code (段階3後)} および 3.0～3.2 実績行。 */
+    public static boolean isStage3AfterQtyLine(String line) {
+        if (line == null || line.isBlank()) {
+            return false;
+        }
+        if (line.startsWith("(段階3後)")) {
+            return true;
+        }
+        return line.startsWith("(段階3.0後)")
+                || line.startsWith("(段階3.1後)")
+                || line.startsWith("(段階3.2後)");
+    }
+
+    /** 旧ラベル {@code (段階3改)} および 3.0～3.2 手修正行。 */
+    public static boolean isStage3RevisedQtyLine(String line) {
+        if (line == null || line.isBlank()) {
+            return false;
+        }
+        if (line.startsWith("(段階3改)")) {
+            return true;
+        }
+        return line.startsWith("(段階3.0改)")
+                || line.startsWith("(段階3.1改)")
+                || line.startsWith("(段階3.2改)");
+    }
 
     public enum PlanningStage {
         STAGE2,
@@ -75,6 +152,9 @@ public final class ResultDispatchStage3Support {
 
     public static PlanningStage detectPlanningStage(Path jsonPath) {
         if (detectStage3FromDispatchJsonPath(jsonPath)) {
+            return PlanningStage.STAGE3;
+        }
+        if (Stage3PlanningMetaStore.hasPipelinePlanningVariant(jsonPath)) {
             return PlanningStage.STAGE3;
         }
         Stage21TrialSnapshotStore.Stage21TrialMeta meta =
@@ -151,14 +231,21 @@ public final class ResultDispatchStage3Support {
     }
 
     public static void applyPlanningStageBadge(Label badge, PlanningStage stage) {
+        applyPlanningStageBadge(badge, stage, Stage3PlanningVariant.NONE);
+    }
+
+    public static void applyPlanningStageBadge(
+            Label badge, PlanningStage stage, Stage3PlanningVariant stage3Variant) {
         if (badge == null) {
             return;
         }
         PlanningStage s = stage != null ? stage : PlanningStage.STAGE2;
+        Stage3PlanningVariant v =
+                stage3Variant != null ? stage3Variant : Stage3PlanningVariant.NONE;
         badge.setText(
                 switch (s) {
                     case STAGE21 -> BADGE_STAGE21;
-                    case STAGE3 -> BADGE_STAGE3;
+                    case STAGE3 -> v.badgeText();
                     case STAGE2 -> BADGE_STAGE2;
                 });
         badge.getStyleClass()

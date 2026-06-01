@@ -227,9 +227,6 @@ public final class DesktopSessionStateStore {
         root.put(
                 "planInputStage2InProgressNextDayPrompt",
                 state.planInputStage2InProgressNextDayPrompt());
-        root.put("planInputStage25AutoAfterStage2", state.planInputStage25AutoAfterStage2());
-        put(root, "dispatchTableActiveSource", state.dispatchTableActiveSource());
-        root.put("dispatchStage25InferenceOnly", state.dispatchStage25InferenceOnly());
         put(root, "mainRunStage2ResultBookFont", state.mainRunStage2ResultBookFont());
         root.put("mainRunSkipGeminiApi", state.mainRunSkipGeminiApi());
         root.put("mainRunStage1MarkAllExcludeAfterRun", state.mainRunStage1MarkAllExcludeAfterRun());
@@ -373,11 +370,6 @@ public final class DesktopSessionStateStore {
                 text(root, "mainRunStage2MemberSchedule"),
                 optionalBoolean(root, "mainRunStage2SkipTodayDispatch", false),
                 optionalBoolean(root, "planInputStage2InProgressNextDayPrompt", true),
-                optionalBoolean(root, "planInputStage25AutoAfterStage2", true),
-                nzStored(
-                        text(root, "dispatchTableActiveSource"),
-                        DispatchTableActiveSource.STAGE2.envToken()),
-                optionalBoolean(root, "dispatchStage25InferenceOnly", false),
                 text(root, "mainRunStage2ResultBookFont"),
                 optionalBoolean(root, "mainRunSkipGeminiApi", false),
                 optionalBoolean(root, "mainRunStage1MarkAllExcludeAfterRun", false),

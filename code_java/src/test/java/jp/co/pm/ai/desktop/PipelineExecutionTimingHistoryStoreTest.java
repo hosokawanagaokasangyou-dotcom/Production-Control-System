@@ -33,17 +33,30 @@ class PipelineExecutionTimingHistoryStoreTest {
         List<PipelineExecutionTimingSample> samples =
                 List.of(
                         new PipelineExecutionTimingSample(
-                                PipelineExecutionTimingKind.STAGE2, 1L, 1_000L, "pc-a", "10.0.0.1"),
+                                PipelineExecutionTimingKind.STAGE2_0, 1L, 1_000L, "pc-a", "10.0.0.1"),
                         new PipelineExecutionTimingSample(
-                                PipelineExecutionTimingKind.STAGE2, 2L, 2_000L, "pc-a", "10.0.0.1"),
+                                PipelineExecutionTimingKind.STAGE2_0, 2L, 2_000L, "pc-a", "10.0.0.1"),
                         new PipelineExecutionTimingSample(
-                                PipelineExecutionTimingKind.STAGE2, 3L, 9_000L, "pc-b", "10.0.0.2"));
+                                PipelineExecutionTimingKind.STAGE2_0, 3L, 9_000L, "pc-b", "10.0.0.2"));
         List<PipelineExecutionTimingHistoryStore.HistogramBin> bins =
                 PipelineExecutionTimingHistoryStore.computeHistogram(samples, 3);
         assertEquals(3, bins.size());
         int total = bins.stream().mapToInt(PipelineExecutionTimingHistoryStore.HistogramBin::count).sum();
         assertEquals(3, total);
         assertTrue(bins.stream().allMatch(b -> b.count() >= 0));
+    }
+
+    @Test
+    void parseKindMigratesLegacyStage2ToStage20() throws Exception {
+        var parseKind =
+                PipelineExecutionTimingHistoryStore.class.getDeclaredMethod("parseKind", String.class);
+        parseKind.setAccessible(true);
+        assertEquals(
+                PipelineExecutionTimingKind.STAGE2_0,
+                parseKind.invoke(null, "STAGE2"));
+        assertEquals(
+                PipelineExecutionTimingKind.STAGE2_0,
+                parseKind.invoke(null, "STAGE2_0"));
     }
 
     @Test

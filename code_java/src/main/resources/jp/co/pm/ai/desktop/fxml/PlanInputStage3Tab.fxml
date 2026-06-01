@@ -5,10 +5,8 @@
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.control.TitledPane?>
-<?import javafx.scene.layout.ColumnConstraints?>
-<?import javafx.scene.layout.GridPane?>
 <?import javafx.scene.layout.HBox?>
-<?import javafx.scene.layout.RowConstraints?>
+<?import javafx.scene.layout.Region?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
@@ -20,55 +18,43 @@
     </padding>
     <TitledPane animated="true" expanded="true" text="操作・段階3">
         <content>
-            <VBox fillWidth="true" spacing="8.0">
-                <Label wrapText="true"
-                       text="配台計画手動修正タブで「入力3表を生成」した枝番タスク（配台計画_タスク入力3.0 シート）を表示します。段階3.0/3.2 は入力3表を配台し、結果を元依頼NO単位へ統合します。" />
-                <HBox alignment="CENTER_LEFT" spacing="12.0">
+            <VBox fillWidth="true" spacing="6.0">
+                <HBox alignment="CENTER_LEFT" spacing="8.0">
                     <Button fx:id="stage30RunButton" mnemonicParsing="false" onAction="#onStage30RunButtonAction"
                             styleClass="pm-stage-run-button,pm-stage-run-3" text="段階3.0 実行" />
                     <Button fx:id="stage31RunButton" mnemonicParsing="false" onAction="#onStage31RunButtonAction"
                             styleClass="pm-stage-run-button,pm-stage-run-3" text="段階3.1(時間外)" />
                     <Button fx:id="stage32RunButton" mnemonicParsing="false" onAction="#onStage32RunButtonAction"
                             styleClass="pm-stage-run-button,pm-stage-run-3" text="段階3.2(数量厳守)" />
+                    <Region HBox.hgrow="ALWAYS" />
+                    <Button fx:id="reloadButton" mnemonicParsing="false" onAction="#onReloadButtonAction" text="入力3表を再読込" />
+                    <Button fx:id="saveButton" mnemonicParsing="false" onAction="#onSaveButtonAction" text="保存" />
                 </HBox>
-                <GridPane hgap="8.0" vgap="8.0">
-                    <columnConstraints>
-                        <ColumnConstraints hgrow="NEVER" minWidth="-Infinity" />
-                        <ColumnConstraints hgrow="ALWAYS" minWidth="100.0" />
-                        <ColumnConstraints hgrow="NEVER" />
-                        <ColumnConstraints hgrow="NEVER" />
-                        <ColumnConstraints hgrow="NEVER" />
-                        <ColumnConstraints hgrow="NEVER" />
-                    </columnConstraints>
-                    <Label text="ファイル" GridPane.columnIndex="0" GridPane.rowIndex="0" />
-                    <Label fx:id="pathLabel" wrapText="true" GridPane.columnIndex="1" GridPane.rowIndex="0" />
-                    <Button fx:id="reloadButton" mnemonicParsing="false" onAction="#onReloadButtonAction" text="入力3表を再読込" GridPane.columnIndex="2" GridPane.rowIndex="0" />
-                    <Button fx:id="saveButton" mnemonicParsing="false" onAction="#onSaveButtonAction" text="保存" GridPane.columnIndex="3" GridPane.rowIndex="0" />
-                    <Label text="既定列幅(px)" GridPane.columnIndex="4" GridPane.rowIndex="1" />
-                    <TextField fx:id="colWidthField" maxWidth="72.0" prefWidth="72.0" promptText="112" GridPane.columnIndex="5" GridPane.rowIndex="1" />
-                    <Button fx:id="addRowButton" mnemonicParsing="false" onAction="#onAddRowButtonAction" text="行追加" GridPane.columnIndex="2" GridPane.rowIndex="1" />
-                    <Button fx:id="removeRowsButton" mnemonicParsing="false" onAction="#onRemoveRowsButtonAction" text="行削除" GridPane.columnIndex="3" GridPane.rowIndex="1" />
-                    <rowConstraints>
-                        <RowConstraints />
-                        <RowConstraints />
-                    </rowConstraints>
-                </GridPane>
                 <HBox alignment="CENTER_LEFT" spacing="8.0">
-                    <Button mnemonicParsing="false" onAction="#onRowUpAction" prefWidth="40.0" text="↑" />
-                    <Button mnemonicParsing="false" onAction="#onRowDownAction" prefWidth="40.0" text="↓" />
+                    <Label minWidth="-Infinity" text="ファイル" />
+                    <Label fx:id="pathLabel" maxWidth="Infinity" wrapText="true" HBox.hgrow="ALWAYS" />
+                    <Label fx:id="statusLabel" wrapText="true" />
+                </HBox>
+                <HBox alignment="CENTER_LEFT" fx:id="tableOperationBar" spacing="6.0">
+                    <Button mnemonicParsing="false" onAction="#onRowUpAction" prefWidth="36.0" text="↑" />
+                    <Button mnemonicParsing="false" onAction="#onRowDownAction" prefWidth="36.0" text="↓" />
+                    <Button fx:id="addRowButton" mnemonicParsing="false" onAction="#onAddRowButtonAction" text="行追加" />
+                    <Button fx:id="removeRowsButton" mnemonicParsing="false" onAction="#onRemoveRowsButtonAction" text="行削除" />
                     <Button fx:id="shiftRawInputDateMinusOneButton" mnemonicParsing="false"
                             onAction="#onShiftRawInputDateMinusOneAction"
-                            text="原反投入日を1日前倒し"/>
+                            text="原反投入日を1日前倒し" />
                     <Button fx:id="clearRawInputDateOverrideButton" mnemonicParsing="false"
                             onAction="#onClearRawInputDateOverrideAction"
-                            text="原反投入日上書きをクリア"/>
-                    <Button mnemonicParsing="false" text="列フィルタ・並べ替え解除"
-                            onAction="#onClearColumnFiltersAction"/>
+                            text="原反投入日上書きをクリア" />
+                    <Button mnemonicParsing="false" onAction="#onClearColumnFiltersAction"
+                            text="列フィルタ・並べ替え解除" />
+                    <Region HBox.hgrow="ALWAYS" />
+                    <Label text="既定列幅(px)" />
+                    <TextField fx:id="colWidthField" maxWidth="72.0" prefWidth="72.0" promptText="112" />
                 </HBox>
-                <HBox fx:id="columnStripHostRow" alignment="CENTER_LEFT" spacing="8.0" style="-fx-alignment: CENTER_LEFT;">
-                    <HBox fx:id="columnStripHost" spacing="0.0" />
+                <HBox alignment="CENTER_LEFT" spacing="8.0">
+                    <HBox fx:id="columnStripHost" alignment="CENTER_LEFT" spacing="0.0" HBox.hgrow="ALWAYS" />
                 </HBox>
-                <Label fx:id="statusLabel" wrapText="true" />
             </VBox>
         </content>
     </TitledPane>

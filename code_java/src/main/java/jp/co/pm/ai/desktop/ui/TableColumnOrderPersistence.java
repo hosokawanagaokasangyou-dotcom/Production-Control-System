@@ -131,16 +131,25 @@ public final class TableColumnOrderPersistence {
     }
 
     /**
-     * 配台計画手動修正タブの日付セル内数量行フィルタ（(アラ計画)/(段階3前)/(段階3後)/(段階3.5後) および (段階3改)）。
+     * 配台計画手動修正タブの日付セル内数量行フィルタ（(アラ計画)/(段階2後)/(段階3前)/(段階3.x後)/(段階2.1後) 等）。
      */
     public record DispatchInteractiveDateQtyLineFilterPrefs(
             boolean showAladdinPlan,
+            boolean showStage2Plan,
             boolean showStage3Plan,
             boolean showStage3After,
             boolean showStage21After) {
         public DispatchInteractiveDateQtyLineFilterPrefs(
                 boolean showAladdinPlan, boolean showStage3Plan, boolean showStage3After) {
-            this(showAladdinPlan, showStage3Plan, showStage3After, true);
+            this(showAladdinPlan, true, showStage3Plan, showStage3After, true);
+        }
+
+        public DispatchInteractiveDateQtyLineFilterPrefs(
+                boolean showAladdinPlan,
+                boolean showStage3Plan,
+                boolean showStage3After,
+                boolean showStage21After) {
+            this(showAladdinPlan, true, showStage3Plan, showStage3After, showStage21After);
         }
 
         public boolean showStage21After() {
@@ -154,12 +163,15 @@ public final class TableColumnOrderPersistence {
         }
 
         public static DispatchInteractiveDateQtyLineFilterPrefs defaults() {
-            return new DispatchInteractiveDateQtyLineFilterPrefs(true, true, true, true);
+            return new DispatchInteractiveDateQtyLineFilterPrefs(true, true, true, true, true);
         }
     }
 
     private static final String KEY_DISPATCH_INTERACTIVE_SHOW_ALADDIN_PLAN_QTY_LINE =
             "dispatchInteractive_ui_showAladdinPlanQtyLine";
+
+    private static final String KEY_DISPATCH_INTERACTIVE_SHOW_STAGE2_PLAN_QTY_LINE =
+            "dispatchInteractive_ui_showStage2PlanQtyLine";
 
     private static final String KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_PLAN_QTY_LINE =
             "dispatchInteractive_ui_showStage3PlanQtyLine";
@@ -183,13 +195,16 @@ public final class TableColumnOrderPersistence {
             }
             boolean aladdin =
                     root.path(KEY_DISPATCH_INTERACTIVE_SHOW_ALADDIN_PLAN_QTY_LINE).asBoolean(true);
+            boolean stage2 =
+                    root.path(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE2_PLAN_QTY_LINE).asBoolean(true);
             boolean plan =
                     root.path(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_PLAN_QTY_LINE).asBoolean(true);
             boolean after =
                     root.path(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_AFTER_QTY_LINE).asBoolean(true);
             boolean stage35After =
                     root.path(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE35_AFTER_QTY_LINE).asBoolean(true);
-            return new DispatchInteractiveDateQtyLineFilterPrefs(aladdin, plan, after, stage35After);
+            return new DispatchInteractiveDateQtyLineFilterPrefs(
+                    aladdin, stage2, plan, after, stage35After);
         } catch (IOException e) {
             return DispatchInteractiveDateQtyLineFilterPrefs.defaults();
         }
@@ -214,6 +229,7 @@ public final class TableColumnOrderPersistence {
                 root = JSON.createObjectNode();
             }
             root.put(KEY_DISPATCH_INTERACTIVE_SHOW_ALADDIN_PLAN_QTY_LINE, prefs.showAladdinPlan());
+            root.put(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE2_PLAN_QTY_LINE, prefs.showStage2Plan());
             root.put(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_PLAN_QTY_LINE, prefs.showStage3Plan());
             root.put(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE3_AFTER_QTY_LINE, prefs.showStage3After());
             root.put(KEY_DISPATCH_INTERACTIVE_SHOW_STAGE35_AFTER_QTY_LINE, prefs.showStage21After());

@@ -107,7 +107,7 @@ public final class OvertimeSimulationEditState {
         return false;
     }
 
-    public String buildSummaryText() {
+    public String buildSummaryText(String noChangeSuffix) {
         StringBuilder sb = new StringBuilder();
         int workOn = 0;
         int workOff = 0;
@@ -131,8 +131,8 @@ public final class OvertimeSimulationEditState {
         sb.append("休日出勤（○化）: ").append(workOn).append(" セル\n");
         sb.append("休日扱い（グレー化）: ").append(workOff).append(" セル\n");
         sb.append("残業時間の変更: ").append(otCount).append(" セル\n");
-        if (!hasChanges()) {
-            sb.append("\n（変更なし — master 勤怠のまま段階3を実行します）");
+        if (!hasChanges() && noChangeSuffix != null && !noChangeSuffix.isBlank()) {
+            sb.append(noChangeSuffix);
         }
         return sb.toString();
     }

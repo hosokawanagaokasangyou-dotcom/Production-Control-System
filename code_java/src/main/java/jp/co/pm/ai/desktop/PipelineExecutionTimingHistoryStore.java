@@ -29,7 +29,7 @@ import jp.co.pm.ai.desktop.io.PipelineExecutionTimingHistoryLock.AcquiredLock;
 import jp.co.pm.ai.desktop.io.PipelineExecutionTimingHistoryLock.LockInfo;
 
 /**
- * 段階1～3・サマリ Excel・納期管理ビューの実行時間履歴。永続化先は
+ * 段階1／2.0～3.2・配台試行・サマリ Excel・納期管理ビューの実行時間履歴。永続化先は
  * {@link AppPaths#pipelineExecutionTimingHistoryPath}（サマリ Excel と同一フォルダ）。
  * 保存前に {@link PipelineExecutionTimingHistoryLock} を取得し、他 PC 更新時はマージして排他保存する。
  */
@@ -533,8 +533,12 @@ public final class PipelineExecutionTimingHistoryStore {
         if (name == null || name.isBlank()) {
             return null;
         }
+        String trimmed = name.trim();
+        if ("STAGE2".equals(trimmed)) {
+            return PipelineExecutionTimingKind.STAGE2_0;
+        }
         try {
-            return PipelineExecutionTimingKind.valueOf(name.trim());
+            return PipelineExecutionTimingKind.valueOf(trimmed);
         } catch (IllegalArgumentException ex) {
             return null;
         }

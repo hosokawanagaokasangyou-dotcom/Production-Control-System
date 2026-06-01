@@ -139,9 +139,6 @@ public final class PlanInputTabController {
     private CheckBox stage2InProgressNextDayPromptCheckBox;
 
     @FXML
-    private CheckBox stage25AutoAfterStage2CheckBox;
-
-    @FXML
     private HBox columnStripHost;
 
     @FXML
@@ -220,18 +217,6 @@ public final class PlanInputTabController {
                                 }
                             });
         }
-        if (stage25AutoAfterStage2CheckBox != null) {
-            stage25AutoAfterStage2CheckBox.setSelected(true);
-            stage25AutoAfterStage2CheckBox
-                    .selectedProperty()
-                    .addListener(
-                            (o, a, b) -> {
-                                if (shell != null) {
-                                    shell.scheduleDesktopSessionSave();
-                                }
-                            });
-        }
-
         StackPane.setAlignment(spreadsheetView, Pos.CENTER_LEFT);
         spreadsheetHost.getChildren().add(spreadsheetView);
         VBox.setVgrow(spreadsheetHost, Priority.ALWAYS);
@@ -496,16 +481,6 @@ public final class PlanInputTabController {
     void applyStage2InProgressNextDayPromptFromSession(boolean prompt) {
         if (stage2InProgressNextDayPromptCheckBox != null) {
             stage2InProgressNextDayPromptCheckBox.setSelected(prompt);
-        }
-    }
-
-    boolean snapshotStage25AutoAfterStage2() {
-        return stage25AutoAfterStage2CheckBox == null || stage25AutoAfterStage2CheckBox.isSelected();
-    }
-
-    void applyStage25AutoAfterStage2FromSession(boolean enabled) {
-        if (stage25AutoAfterStage2CheckBox != null) {
-            stage25AutoAfterStage2CheckBox.setSelected(enabled);
         }
     }
 

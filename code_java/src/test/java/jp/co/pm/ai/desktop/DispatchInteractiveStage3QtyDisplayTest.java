@@ -11,6 +11,28 @@ import org.junit.jupiter.api.Test;
 class DispatchInteractiveStage3QtyDisplayTest {
 
     @Test
+    void format_stage3_0Variant_usesStage30Labels() {
+        var variant = jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support.Stage3PlanningVariant.STAGE3_0;
+        String s =
+                DispatchInteractiveTabController.formatDispatchPlanActualQtyDisplay(
+                        900, 100, 80, true, 1e-3, false, false, false, 0.0, variant);
+        String[] lines = s.split("\n", -1);
+        assertEquals(DispatchInteractiveTabController.LABEL_ALADDIN_PLAN + "900", lines[0]);
+        assertEquals(DispatchInteractiveTabController.LABEL_STAGE3_PLAN + "100", lines[1]);
+        assertEquals("(段階3.0後)80", lines[2]);
+    }
+
+    @Test
+    void format_stage3_0Revised_usesStage30RevisedLabel() {
+        var variant = jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support.Stage3PlanningVariant.STAGE3_0;
+        String s =
+                DispatchInteractiveTabController.formatDispatchPlanActualQtyDisplay(
+                        4000, 7600, 7600, true, 1e-3, false, true, false, 0.0, variant);
+        String[] lines = s.split("\n", -1);
+        assertEquals("(段階3.0改)7600", lines[2]);
+    }
+
+    @Test
     void format_twoLinesWhenPlanAndActualAfterStage3() {
         String s =
                 DispatchInteractiveTabController.formatDispatchPlanActualQtyDisplay(
