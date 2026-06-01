@@ -17814,6 +17814,7 @@ def _defer_team_start_past_prebreak_and_end_of_day(
         rem_ceil = math.ceil(float(task.get("remaining_units") or 0))
         if (
             not eod_same_request_continuation_exempt
+            and not _stage3_qty_strict_active()
             and gap_end > 0
             and (team_end_limit - ts) <= timedelta(minutes=gap_end)
             and rem_ceil <= ASSIGN_EOD_DEFER_MAX_REMAINING_ROLLS
@@ -29018,6 +29019,18 @@ def _interactive_trial_calendar_legacy_active() -> bool:
     return _interactive_dispatch_trial_env_active() and not _interactive_stage2_parity_active()
 
 
+def _stage3_qty_strict_active() -> bool:
+    """
+    段階3.2（数量厳守）モード。env ``PM_AI_STAGE3_2_QTY_STRICT`` が真のとき True。
+
+    定常終了（A15/B15）による終業直前デファー・小残デファーを無効化し、
+    工場枠終業を当日 23:59 まで拡張する（設備占有・機械カレンダーは尊重）。
+    既定 off のため段階1/2.0/3.0 の挙動は不変。
+    """
+    v = (os.environ.get("PM_AI_STAGE3_2_QTY_STRICT") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
 def _interactive_machine_calendar_gap_blocks(day_d: date) -> list[tuple[datetime, datetime]]:
     """
     インタラクティブ配台試行: 機械カレンダーにスロット行が無い時刻（工場計画窓内）は配台不可。
@@ -29077,7 +29090,7 @@ def _interactive_trial_relax_team_end_limit_to_eod(
     デスクトップ配台試行のみ: 出勤簿の終業より遅く機械が空く場合でも同日ロールを試せるよう、
     チーム終業上限を当日 23:59 まで引き上げる（暦日跨ぎ加工は別チェックでエラー）。
     """
-    if not _interactive_trial_calendar_legacy_active():
+    if not (_interactive_trial_calendar_legacy_active() or _stage3_qty_strict_active()):
         return team_end_limit
     cap = datetime.combine(current_date, time(23, 59))
     return cap if team_end_limit < cap else team_end_limit
