@@ -1,0 +1,9 @@
+{
+  "version" : 1,
+  "entries" : [ {
+    "task_id" : "JR260602",
+    "process" : "スリット",
+    "machine_name" : "スリット機1　湖南",
+    "next_day_dispatch_m" : 2755.0
+  } ]
+}

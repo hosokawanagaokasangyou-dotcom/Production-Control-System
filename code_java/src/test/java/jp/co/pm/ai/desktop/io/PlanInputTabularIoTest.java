@@ -63,4 +63,28 @@ class PlanInputTabularIoTest {
         assertEquals("", r.resolvedSheetName());
         assertEquals("1", r.tabular().rows().get(0).get(0));
     }
+
+    @Test
+    void writeExcelSheetPreservingOthers_replacesTargetOnly(@TempDir Path root) throws Exception {
+        Path xlsx = root.resolve("book.xlsx");
+        PlanInputTabularIo.write(
+                xlsx,
+                "配台計画_タスク入力",
+                new PlanInputTabularIo.TabularSheet(
+                        List.of("依頼NO"), List.of(List.of("P1"))));
+        PlanInputTabularIo.writeExcelSheetPreservingOthers(
+                xlsx,
+                "配台計画_タスク入力3.0",
+                new PlanInputTabularIo.TabularSheet(
+                        List.of("依頼NO", "枝番"), List.of(List.of("B1", "1"))));
+
+        PlanInputTabularIo.TabularSheet sheet1 =
+                PlanInputTabularIo.read(xlsx, "配台計画_タスク入力");
+        assertEquals("P1", sheet1.rows().get(0).get(0));
+
+        PlanInputTabularIo.TabularSheet sheet3 =
+                PlanInputTabularIo.read(xlsx, "配台計画_タスク入力3.0");
+        assertEquals("B1", sheet3.rows().get(0).get(0));
+        assertEquals("1", sheet3.rows().get(0).get(1));
+    }
 }

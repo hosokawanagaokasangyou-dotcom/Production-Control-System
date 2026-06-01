@@ -51,6 +51,8 @@
                     <HBox alignment="CENTER_LEFT" spacing="12.0">
                         <Button fx:id="stage2RunButton" mnemonicParsing="false" onAction="#onStage2RunButtonAction"
                                 styleClass="pm-stage-run-button,pm-stage-run-2" text="段階2.0 実行" />
+                        <Button fx:id="stage21RunButton" mnemonicParsing="false" onAction="#onStage21RunButtonAction"
+                                styleClass="pm-stage-run-button,pm-stage-run-2-1" text="段階2.1(時間外)" />
                         <CheckBox fx:id="stage2SkipTodayDispatchCheckBox" mnemonicParsing="false"
                                 text="当日は配台しない（翌日以降から計画）" />
                     </HBox>

@@ -102,8 +102,6 @@ import jp.co.pm.ai.desktop.dispatch.DispatchTimelineCalendarMetersIndex;
 import jp.co.pm.ai.desktop.dispatch.DispatchTimelineMetaMissShortfalls;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck.TaskKey;
-import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreview;
-import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreviewPython;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDocument;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveGridModel;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchJsonIo;
@@ -187,6 +185,14 @@ public final class DispatchInteractiveTabController {
     private static final String DATE_CELL_STYLE_SHORTFALL =
             "-fx-background-color: #b71c1c; -fx-text-fill: #ffffff; -fx-font-weight: bold;";
 
+    /** アラジン整列: 数量が減った（移動元）日付セル。 */
+    private static final String DATE_CELL_STYLE_ALADDIN_ALIGN_SOURCE =
+            "-fx-background-color: #fef3c7; -fx-text-fill: #92400e;";
+
+    /** アラジン整列: 数量が増えた（移動先）日付セル。 */
+    private static final String DATE_CELL_STYLE_ALADDIN_ALIGN_DEST =
+            "-fx-background-color: #bfdbfe; -fx-text-fill: #111111;";
+
     private static final String DISPATCH_DATE_QTY_CELL_STYLE_CLASS = "dispatch-date-qty-cell";
 
     private static final String DISPATCH_DATE_QTY_SHORTFALL_CELL_STYLE_CLASS = "dispatch-date-qty-shortfall-cell";
@@ -250,6 +256,12 @@ public final class DispatchInteractiveTabController {
      * 段階3数量セルの固定行スロット。{@link #visible} が false の行は {@code \u00a0} で行位置だけ確保する。
      */
     record Stage3QtyLineSlot(String lineText, boolean visible) {}
+
+    /** 「アラジン計画に合わせる」直後のセル移動ハイライト（再読み・次回整列で消える）。 */
+    private enum AladdinAlignMoveHighlight {
+        SOURCE,
+        DEST
+    }
 
     private static final DateTimeFormatter ALADDIN_PLAN_DATE_FMT =
             DateTimeFormatter.ofPattern("yyyy/MM/dd");
@@ -339,6 +351,9 @@ public final class DispatchInteractiveTabController {
     /** 段階1／段階2／段階2.1 パイプライン実行中。 */
     private boolean stagePipelineBusy;
 
+    /** 入力3表生成 Python 実行中（ボタン無効・プログレス表示）。 */
+    private boolean stage3InputBuildBusy;
+
     /** Avoid treating programmatic grid updates as user edits ({@link #onWideGridChange}). */
     private final AtomicBoolean suppressDispatchGridDirty = new AtomicBoolean(false);
 
@@ -369,9 +384,6 @@ public final class DispatchInteractiveTabController {
     private Button stage25AiButton;
 
     @FXML
-    private Button stage21RunButton;
-
-    @FXML
     private ComboBox<DispatchTableActiveSource> dispatchTableActiveSourceCombo;
 
     @FXML
@@ -396,6 +408,12 @@ public final class DispatchInteractiveTabController {
 
     private static final String ALIGN_TO_ALADDIN_PLAN_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD =
             "納期管理ビュー更新中";
+
+    private static final String BUILD_STAGE3_INPUT_BUTTON_TEXT_DEFAULT = "入力3表を生成";
+
+    private static final String BUILD_STAGE3_INPUT_BUTTON_TEXT_BUSY = "生成中…";
+
+    private static final String BUILD_STAGE3_INPUT_STATUS_BUSY = "入力3表を生成中…";
 
     @FXML
     private Button wideRowUpButton;
@@ -527,6 +545,12 @@ public final class DispatchInteractiveTabController {
      * (段階2後) と (段階2.1後) を比較表示する。
      */
     private final Map<String, Double> stage21BaselinePlanQtySnapshot = new HashMap<>();
+
+    /**
+     * 「アラジン計画に合わせる」で数量が変わったセル（キーは {@link DispatchTrialShortages#wideShortfallKey}）。
+     */
+    private final Map<String, AladdinAlignMoveHighlight> aladdinAlignMoveHighlights =
+            new HashMap<>();
 
     private boolean stage21TrialApplied;
 
@@ -1275,6 +1299,8 @@ public final class DispatchInteractiveTabController {
             return;
         }
 
+        aladdinAlignMoveHighlights.clear();
+
         final int alignFromDayIndex = aladdinAlignFromDayIndexOnAxis();
         if (alignFromDayIndex >= dateAxis.size()) {
             if (statusLabel != null) {
@@ -1341,6 +1367,8 @@ public final class DispatchInteractiveTabController {
             }
             changedRows++;
             rollMoves += aligned.rollMoves();
+            recordAladdinAlignMoveHighlights(
+                    profile, current, aligned.newByDayIndex(), alignFromDayIndex);
             // 該当 profile に identity マッチする行を「全日付」一括削除してから target で再追加する。
             // upsertAllocationForWideMerge は「同日付 かつ identity マッチ」両方が必要なため、
             // 配台日カラムの表記揺れ（"2026-05-26" / "2026/05/26" / "2026-5-26" 等）が混在すると
@@ -1394,9 +1422,100 @@ public final class DispatchInteractiveTabController {
                                 + changedRows
                                 + " 行・約 "
                                 + rollMoves
-                                + " ロール移動");
+                                + " ロール移動（黄=移動元・青=移動先）");
             }
         }
+    }
+
+    private void clearAladdinAlignMoveHighlights() {
+        aladdinAlignMoveHighlights.clear();
+    }
+
+    private static String aladdinAlignMoveCellKey(Map<String, String> profile, LocalDate day) {
+        if (profile == null || day == null) {
+            return "";
+        }
+        return DispatchTrialShortages.wideShortfallKey(
+                profile.get("依頼NO"),
+                profile.get(ResultDispatchSchema.COL_MACHINE),
+                day.toString());
+    }
+
+    private void recordAladdinAlignMoveHighlights(
+            Map<String, String> profile,
+            double[] before,
+            double[] after,
+            int fromDayIndex) {
+        if (profile == null || before == null || after == null || dateAxis == null) {
+            return;
+        }
+        int n = Math.min(before.length, Math.min(after.length, dateAxis.size()));
+        for (int j = Math.max(0, fromDayIndex); j < n; j++) {
+            double b = Math.max(0.0, before[j]);
+            double a = Math.max(0.0, after[j]);
+            if (Math.abs(b - a) <= 1e-3) {
+                continue;
+            }
+            String key = aladdinAlignMoveCellKey(profile, dateAxis.get(j));
+            if (key.isEmpty()) {
+                continue;
+            }
+            if (a > b + 1e-3) {
+                aladdinAlignMoveHighlights.put(key, AladdinAlignMoveHighlight.DEST);
+            } else if (a < b - 1e-3) {
+                aladdinAlignMoveHighlights.put(key, AladdinAlignMoveHighlight.SOURCE);
+            }
+        }
+    }
+
+    private AladdinAlignMoveHighlight aladdinAlignMoveHighlightForCell(
+            Map<String, String> profile, LocalDate day) {
+        if (profile == null || day == null || aladdinAlignMoveHighlights.isEmpty()) {
+            return null;
+        }
+        return aladdinAlignMoveHighlights.get(aladdinAlignMoveCellKey(profile, day));
+    }
+
+    private AladdinAlignMoveHighlight aladdinAlignMoveHighlightForWideRow(WideRow wr, int dateIdx) {
+        if (wr == null || dateIdx < 0 || dateIdx >= dateAxis.size()) {
+            return null;
+        }
+        return aladdinAlignMoveHighlightForCell(wr.profileMap(), dateAxis.get(dateIdx));
+    }
+
+    private AladdinAlignMoveHighlight aladdinAlignMoveHighlightForByDay(ByDayRow br, int dateIdx) {
+        if (br == null || dateIdx < 0 || dateIdx >= dateAxis.size() || aladdinAlignMoveHighlights.isEmpty()) {
+            return null;
+        }
+        LocalDate day = dateAxis.get(dateIdx);
+        String process = br.process() != null ? br.process().strip() : "";
+        String machine = br.machine() != null ? br.machine().strip() : "";
+        boolean anySource = false;
+        for (Map<String, String> profile : wideProfiles) {
+            String p = profile.getOrDefault(ResultDispatchSchema.COL_PROCESS, "").strip();
+            String m = profile.getOrDefault(ResultDispatchSchema.COL_MACHINE, "").strip();
+            if (!process.equals(p) || !machine.equals(m)) {
+                continue;
+            }
+            AladdinAlignMoveHighlight h = aladdinAlignMoveHighlightForCell(profile, day);
+            if (h == AladdinAlignMoveHighlight.DEST) {
+                return AladdinAlignMoveHighlight.DEST;
+            }
+            if (h == AladdinAlignMoveHighlight.SOURCE) {
+                anySource = true;
+            }
+        }
+        return anySource ? AladdinAlignMoveHighlight.SOURCE : null;
+    }
+
+    private static String aladdinAlignMoveCellStyle(AladdinAlignMoveHighlight move) {
+        if (move == AladdinAlignMoveHighlight.SOURCE) {
+            return DATE_CELL_STYLE_ALADDIN_ALIGN_SOURCE;
+        }
+        if (move == AladdinAlignMoveHighlight.DEST) {
+            return DATE_CELL_STYLE_ALADDIN_ALIGN_DEST;
+        }
+        return null;
     }
 
     private static double sumArray(double[] values) {
@@ -1745,71 +1864,49 @@ public final class DispatchInteractiveTabController {
 
     @FXML
     private void onBuildStage3InputAction() {
-        if (shell != null) {
-            shell.triggerBuildStage3Input();
+        if (shell == null || stage3InputBuildBusy) {
+            return;
         }
+        shell.triggerBuildStage3Input();
     }
 
-    @FXML
-    private void onStage21RunAction() {
-        launchStage21OvertimeSimulationWizard();
+    /** 入力3表生成の実行中フラグ（二重起動防止・UI 連動用）。 */
+    boolean isStage3InputBuildBusy() {
+        return stage3InputBuildBusy;
     }
 
-    private void launchStage21OvertimeSimulationWizard() {
-        if (shell == null) {
-            return;
+    /**
+     * 入力3表生成中のプログレス表示とボタン状態を切り替える。
+     * ツールバー右の {@link #reloadProgressBar} / {@link #busyIndicator} を不定プログレスで表示する。
+     */
+    void setStage3InputBuildProgressVisible(boolean visible) {
+        Runnable apply =
+                () -> {
+                    stage3InputBuildBusy = visible;
+                    if (reloadProgressBar != null) {
+                        reloadProgressBar.setManaged(visible);
+                        reloadProgressBar.setVisible(visible);
+                        reloadProgressBar.setProgress(
+                                visible ? ProgressBar.INDETERMINATE_PROGRESS : 0);
+                    }
+                    if (busyIndicator != null) {
+                        busyIndicator.setManaged(visible);
+                        busyIndicator.setVisible(visible);
+                    }
+                    if (statusLabel != null) {
+                        if (visible) {
+                            statusLabel.setText(BUILD_STAGE3_INPUT_STATUS_BUSY);
+                        } else if (BUILD_STAGE3_INPUT_STATUS_BUSY.equals(statusLabel.getText())) {
+                            statusLabel.setText("");
+                        }
+                    }
+                    applyDispatchTrialButtonEnabledState();
+                };
+        if (Platform.isFxApplicationThread()) {
+            apply.run();
+        } else {
+            Platform.runLater(apply);
         }
-        if (shell.blockIfSummaryAiDispatchExportLocked("段階2.1")) {
-            return;
-        }
-        if (shell.blockIfMaterialLookupTablesHaveBlankValues("段階2.1")) {
-            return;
-        }
-        if (reloadInteractionDisabled
-                || deliveryCalendarReloadBlocking
-                || dispatchDocDirtySinceSave
-                || stagePipelineBusy) {
-            return;
-        }
-        Path mainJson = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
-        if (!Files.isRegularFile(mainJson)) {
-            shell.showErrorDialog(
-                    "段階2.1",
-                    "段階2.1 を実行する前に段階2を実行し、結果_配台表.json を生成してください。");
-            return;
-        }
-        final Path pyExe = resolvePythonExe();
-        final Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
-        final Map<String, String> pyEnv = shell.snapshotDispatchTrialPythonEnv();
-        final Stage owner = shell.getPrimaryStage();
-        Thread worker =
-                new Thread(
-                        () -> {
-                            try {
-                                AttendanceOvertimePreview.Preview preview =
-                                        AttendanceOvertimePreviewPython.load(
-                                                pyExe, pyDir, pyEnv, shell::appendLog);
-                                Platform.runLater(
-                                        () ->
-                                                OvertimeSimulationWizard.show(
-                                                        owner,
-                                                        shell,
-                                                        preview,
-                                                        shell::triggerStage21));
-                            } catch (Exception ex) {
-                                Platform.runLater(
-                                        () ->
-                                                shell.showErrorDialog(
-                                                        "段階2.1",
-                                                        "勤怠プレビューの取得に失敗しました。\n"
-                                                                + (ex.getMessage() != null
-                                                                        ? ex.getMessage()
-                                                                        : ex)));
-                            }
-                        },
-                        "dispatch-stage21-preview");
-        worker.setDaemon(true);
-        worker.start();
     }
 
     @FXML
@@ -2089,6 +2186,7 @@ public final class DispatchInteractiveTabController {
             statusLabel.setText("ファイルなし");
             doc = ResultDispatchDocument.empty();
             timelineCalendarMeters = DispatchTimelineCalendarMetersIndex.empty();
+            clearAladdinAlignMoveHighlights();
             clearDispatchShortfallUi();
             rebuildGrids(this::hideReloadProgress);
             clearDispatchDocDirty();
@@ -2123,6 +2221,7 @@ public final class DispatchInteractiveTabController {
                     ReloadBundle b = task.getValue();
                     doc = b.doc();
                     timelineCalendarMeters = b.timelineMeters();
+                    clearAladdinAlignMoveHighlights();
                     if (validatePlanInputCoverage) {
                         showPlanInputCoverageGapErrorIfNeeded(jsonPath);
                     }
@@ -2489,8 +2588,19 @@ public final class DispatchInteractiveTabController {
         if (dispatchTrialButton != null) {
             dispatchTrialButton.setDisable(blockTrial);
         }
-        if (stage21RunButton != null) {
-            stage21RunButton.setDisable(blockTrial);
+        if (buildStage3InputButton != null) {
+            boolean blockBuild3Input =
+                    reloadInteractionDisabled
+                            || deliveryCalendarReloadBlocking
+                            || dispatchDocDirtySinceSave
+                            || isSummaryExportLockedByLockFile()
+                            || stagePipelineBusy
+                            || stage3InputBuildBusy;
+            buildStage3InputButton.setDisable(blockBuild3Input);
+            buildStage3InputButton.setText(
+                    stage3InputBuildBusy
+                            ? BUILD_STAGE3_INPUT_BUTTON_TEXT_BUSY
+                            : BUILD_STAGE3_INPUT_BUTTON_TEXT_DEFAULT);
         }
         if (stage25AiButton != null) {
             boolean blockStage25 =
@@ -2509,8 +2619,8 @@ public final class DispatchInteractiveTabController {
             if (dispatchTrialButton != null) {
                 dispatchTrialButton.setTooltip(t);
             }
-            if (stage21RunButton != null) {
-                stage21RunButton.setTooltip(t);
+            if (buildStage3InputButton != null) {
+                buildStage3InputButton.setTooltip(t);
             }
         } else if (deliveryCalendarReloadBlocking && !reloadInteractionDisabled) {
             Tooltip t =
@@ -2518,8 +2628,9 @@ public final class DispatchInteractiveTabController {
             if (dispatchTrialButton != null) {
                 dispatchTrialButton.setTooltip(t);
             }
-            if (stage21RunButton != null) {
-                stage21RunButton.setTooltip(t);
+            if (buildStage3InputButton != null) {
+                buildStage3InputButton.setTooltip(
+                        new Tooltip("納期管理ビューを再読み込み中です。完了後に入力3表を生成してください。"));
             }
         } else if (dispatchDocDirtySinceSave && !reloadInteractionDisabled) {
             Tooltip t =
@@ -2528,17 +2639,24 @@ public final class DispatchInteractiveTabController {
             if (dispatchTrialButton != null) {
                 dispatchTrialButton.setTooltip(t);
             }
-            if (stage21RunButton != null) {
-                stage21RunButton.setTooltip(t);
+            if (buildStage3InputButton != null) {
+                buildStage3InputButton.setTooltip(
+                        new Tooltip(
+                                "未保存の編集があります。「保存 (JSON+xlsx)」で確定してから入力3表を生成してください。"));
+            }
+        } else if (stage3InputBuildBusy) {
+            Tooltip t = new Tooltip("入力3表を生成しています。完了までお待ちください。");
+            if (buildStage3InputButton != null) {
+                buildStage3InputButton.setTooltip(t);
             }
         } else {
             if (dispatchTrialButton != null) {
                 dispatchTrialButton.setTooltip(null);
             }
-            if (stage21RunButton != null) {
-                stage21RunButton.setTooltip(
+            if (buildStage3InputButton != null) {
+                buildStage3InputButton.setTooltip(
                         new Tooltip(
-                                "残業/休出シミュ付きフル再配台（成功時はメイン output へ正本反映）"));
+                                "保存済み 結果_配台表.json を枝番分解し『配台計画_タスク入力3.0』タブへ書き出す（段階3.0 の前処理）"));
             }
         }
         refreshStage25AiButtonLabel();
@@ -3489,6 +3607,11 @@ public final class DispatchInteractiveTabController {
             cell.setStyle(DATE_CELL_STYLE_SHORTFALL);
             return;
         }
+        String alignStyle = aladdinAlignMoveCellStyle(aladdinAlignMoveHighlightForWideRow(wr, dateIdx));
+        if (alignStyle != null) {
+            cell.setStyle(alignStyle);
+            return;
+        }
         double planQ = wr.getAmount(dateIdx);
         double actualQ = wr.getActualAmount(dateIdx);
         if (planQ > 1e-9 || actualQ > 1e-9) {
@@ -3830,6 +3953,11 @@ public final class DispatchInteractiveTabController {
     private void applyByDayCellStyle(ByDayRow br, int dateIdx, SpreadsheetCell cell) {
         if (isByDayDispatchShortfall(br, dateIdx)) {
             cell.setStyle(DATE_CELL_STYLE_SHORTFALL);
+            return;
+        }
+        String alignStyle = aladdinAlignMoveCellStyle(aladdinAlignMoveHighlightForByDay(br, dateIdx));
+        if (alignStyle != null) {
+            cell.setStyle(alignStyle);
             return;
         }
         double planQ = br.getAmount(dateIdx);

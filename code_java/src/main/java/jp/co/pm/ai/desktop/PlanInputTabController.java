@@ -121,6 +121,9 @@ public final class PlanInputTabController {
     @FXML
     private Button stage2RunButton;
 
+    @FXML
+    private Button stage21RunButton;
+
     private static final String STAGE2_RUN_BUTTON_TEXT_DEFAULT = "段階2 実行";
 
     private static final String STAGE2_RUN_BUTTON_TEXT_SUMMARY_LOCKED =
@@ -195,6 +198,7 @@ public final class PlanInputTabController {
         hintLabel.setText(HINT_TEXT);
 
         installStageRunButtonDepth(stage2RunButton, Color.rgb(194, 65, 12, 0.35));
+        installStageRunButtonDepth(stage21RunButton, Color.rgb(194, 65, 12, 0.35));
         if (stage2SkipTodayDispatchCheckBox != null) {
             stage2SkipTodayDispatchCheckBox
                     .selectedProperty()
@@ -394,9 +398,6 @@ public final class PlanInputTabController {
     }
 
     private void applyStage2RunButtonEnabledState() {
-        if (stage2RunButton == null) {
-            return;
-        }
         boolean disable =
                 stage2RunPipelineBusy
                         || deliveryCalendarReloadBlocking
@@ -406,15 +407,24 @@ public final class PlanInputTabController {
         if (stage2RunButton != null) {
             stage2RunButton.setDisable(disable);
         }
+        if (stage21RunButton != null) {
+            stage21RunButton.setDisable(disable);
+        }
         if (stage2RunPipelineBusy) {
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(null);
+            }
+            if (stage21RunButton != null) {
+                stage21RunButton.setTooltip(null);
             }
         } else if (deliveryCalendarReloadBlocking) {
             Tooltip blockedTip =
                     new Tooltip("納期管理ビューを再読み込み中です。完了後に実行してください。");
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(blockedTip);
+            }
+            if (stage21RunButton != null) {
+                stage21RunButton.setTooltip(blockedTip);
             }
         } else if (isSummaryExportLockedByLockFile()) {
             Tooltip blockedTip =
@@ -423,12 +433,18 @@ public final class PlanInputTabController {
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(blockedTip);
             }
+            if (stage21RunButton != null) {
+                stage21RunButton.setTooltip(blockedTip);
+            }
         } else if (stage2BlockedByDispatchUnsavedEdit) {
             Tooltip blockedTip =
                     new Tooltip(
                             "配台計画手動修正タブに未保存の変更があります。「保存 (JSON+xlsx)」または「再読み」で確定してから実行してください。");
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(blockedTip);
+            }
+            if (stage21RunButton != null) {
+                stage21RunButton.setTooltip(blockedTip);
             }
         } else if (stage2BlockedByUnsavedPlanInputTableEdit) {
             Tooltip blockedTip =
@@ -437,17 +453,27 @@ public final class PlanInputTabController {
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(blockedTip);
             }
+            if (stage21RunButton != null) {
+                stage21RunButton.setTooltip(blockedTip);
+            }
         } else {
             if (stage2RunButton != null) {
                 stage2RunButton.setTooltip(null);
             }
+            if (stage21RunButton != null) {
+                stage21RunButton.setTooltip(
+                        new Tooltip(
+                                "残業/休出シミュ付きフル再配台（成功時はメイン output へ正本反映）"));
+            }
         }
-        if (deliveryCalendarReloadBlocking) {
-            stage2RunButton.setText(STAGE2_RUN_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD);
-        } else if (isSummaryExportLockedByLockFile()) {
-            stage2RunButton.setText(STAGE2_RUN_BUTTON_TEXT_SUMMARY_LOCKED);
-        } else {
-            stage2RunButton.setText(STAGE2_RUN_BUTTON_TEXT_DEFAULT);
+        if (stage2RunButton != null) {
+            if (deliveryCalendarReloadBlocking) {
+                stage2RunButton.setText(STAGE2_RUN_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD);
+            } else if (isSummaryExportLockedByLockFile()) {
+                stage2RunButton.setText(STAGE2_RUN_BUTTON_TEXT_SUMMARY_LOCKED);
+            } else {
+                stage2RunButton.setText(STAGE2_RUN_BUTTON_TEXT_DEFAULT);
+            }
         }
     }
 
@@ -702,6 +728,13 @@ public final class PlanInputTabController {
     private void onStage2RunButtonAction() {
         if (shell != null) {
             shell.triggerStage2();
+        }
+    }
+
+    @FXML
+    private void onStage21RunButtonAction() {
+        if (shell != null) {
+            shell.launchStage21OvertimeSimulationWizard();
         }
     }
 

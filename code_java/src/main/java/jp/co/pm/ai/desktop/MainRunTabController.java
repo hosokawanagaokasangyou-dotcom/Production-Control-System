@@ -124,6 +124,9 @@ public final class MainRunTabController {
     private CheckBox skipGeminiApiCheckBox;
 
     @FXML
+    private CheckBox applyLearnedSpeedFromActualsCheckBox;
+
+    @FXML
     private CheckBox stage1MarkAllExcludeAfterRunCheckBox;
 
     @FXML
@@ -206,6 +209,7 @@ public final class MainRunTabController {
     private final AtomicBoolean suppressStage2ResultFontEvents = new AtomicBoolean(false);
 
     private final AtomicBoolean suppressSkipGeminiApiEvents = new AtomicBoolean(false);
+    private final AtomicBoolean suppressApplyLearnedSpeedFromActualsEvents = new AtomicBoolean(false);
 
     private final AtomicBoolean suppressStage1MarkAllExcludeAfterRunEvents = new AtomicBoolean(false);
 
@@ -229,6 +233,13 @@ public final class MainRunTabController {
 
     /** この割合以上で末尾にいるときだけ自動 scrollTo（ユーザーが上へスクロール中は追従しない）。 */
     private static final double LOG_AUTO_SCROLL_BOTTOM_THRESHOLD = 0.92;
+
+    /** {@code true} のとき新規ログ行で末尾へ追従する（段階実行開始時は強制オン）。 */
+    private boolean logTailFollowEnabled = true;
+
+    private final AtomicBoolean suppressLogTailFollowListener = new AtomicBoolean(false);
+
+    private boolean logTailFollowScrollListenerInstalled;
 
     @FXML
     private void initialize() {
@@ -359,6 +370,17 @@ public final class MainRunTabController {
                                 }
                             });
         }
+        if (applyLearnedSpeedFromActualsCheckBox != null) {
+            applyLearnedSpeedFromActualsCheckBox
+                    .selectedProperty()
+                    .addListener(
+                            (o, a, b) -> {
+                                if (!suppressApplyLearnedSpeedFromActualsEvents.get()
+                                        && shell != null) {
+                                    shell.scheduleDesktopSessionSave();
+                                }
+                            });
+        }
         if (stage1MarkAllExcludeAfterRunCheckBox != null) {
             stage1MarkAllExcludeAfterRunCheckBox
                     .selectedProperty()
@@ -430,6 +452,45 @@ public final class MainRunTabController {
         logListView.widthProperty().addListener((o, a, b) -> scheduleDebouncedLogListRefresh());
         logListView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         installLogClipboardSupport();
+        logListView.sceneProperty()
+                .addListener(
+                        (obs, oldScene, scene) -> {
+                            if (scene != null) {
+                                Platform.runLater(this::installLogTailFollowScrollListener);
+                            }
+                        });
+        if (logListView.getScene() != null) {
+            Platform.runLater(this::installLogTailFollowScrollListener);
+        }
+    }
+
+    private void installLogTailFollowScrollListener() {
+        if (logListView == null || logTailFollowScrollListenerInstalled) {
+            return;
+        }
+        ScrollBar sb = (ScrollBar) logListView.lookup(".scroll-bar:vertical");
+        if (sb == null) {
+            Platform.runLater(this::installLogTailFollowScrollListener);
+            return;
+        }
+        logTailFollowScrollListenerInstalled = true;
+        sb.valueProperty()
+                .addListener(
+                        (obs, oldVal, newVal) -> {
+                            if (suppressLogTailFollowListener.get()) {
+                                return;
+                            }
+                            double proportion = readVerticalScrollProportion(logListView);
+                            if (!Double.isFinite(proportion)) {
+                                return;
+                            }
+                            if (proportion >= LOG_AUTO_SCROLL_BOTTOM_THRESHOLD) {
+                                logTailFollowEnabled = true;
+                            } else if (proportion
+                                    <= LOG_AUTO_SCROLL_BOTTOM_THRESHOLD - 0.08) {
+                                logTailFollowEnabled = false;
+                            }
+                        });
     }
 
     /**
@@ -474,6 +535,9 @@ public final class MainRunTabController {
     }
 
     private boolean shouldAutoScrollLogToEnd() {
+        if (logTailFollowEnabled) {
+            return true;
+        }
         if (logListView == null) {
             return true;
         }
@@ -482,13 +546,46 @@ public final class MainRunTabController {
                 || proportion >= LOG_AUTO_SCROLL_BOTTOM_THRESHOLD;
     }
 
+    /** 段階実行・配台試行開始時: ログ末尾追従をオンにし、最新行へスクロールする。 */
+    void beginLogTailFollowForRun() {
+        if (!Platform.isFxApplicationThread()) {
+            Platform.runLater(this::beginLogTailFollowForRun);
+            return;
+        }
+        logTailFollowEnabled = true;
+        scrollLogListToEnd(true);
+    }
+
     private void scrollLogListToLastVisibleRowIfNeeded() {
-        if (logListView == null || !shouldAutoScrollLogToEnd()) {
+        scrollLogListToEnd(false);
+    }
+
+    private void scrollLogListToEnd(boolean force) {
+        if (logListView == null || (!force && !shouldAutoScrollLogToEnd())) {
             return;
         }
         int n = logLinesVisible.size();
-        if (n > 0) {
-            logListView.scrollTo(n - 1);
+        if (n <= 0) {
+            return;
+        }
+        Runnable scroll =
+                () -> {
+                    suppressLogTailFollowListener.set(true);
+                    try {
+                        logListView.scrollTo(n - 1);
+                        ScrollBar sb = (ScrollBar) logListView.lookup(".scroll-bar:vertical");
+                        if (sb != null && sb.getMax() > sb.getMin()) {
+                            sb.setValue(sb.getMax());
+                        }
+                    } finally {
+                        suppressLogTailFollowListener.set(false);
+                    }
+                };
+        if (Platform.isFxApplicationThread()) {
+            scroll.run();
+            Platform.runLater(scroll);
+        } else {
+            Platform.runLater(scroll);
         }
     }
 
@@ -1405,6 +1502,24 @@ public final class MainRunTabController {
         }
     }
 
+    /** 子プロセスへ渡す {@code PM_AI_LEARNED_SPEED_ENABLED}（実行・ログタブ「その他」内チェック）。 */
+    boolean snapshotApplyLearnedSpeedFromActuals() {
+        return applyLearnedSpeedFromActualsCheckBox != null
+                && applyLearnedSpeedFromActualsCheckBox.isSelected();
+    }
+
+    void applyApplyLearnedSpeedFromActualsFromSession(boolean enabled) {
+        if (applyLearnedSpeedFromActualsCheckBox == null) {
+            return;
+        }
+        suppressApplyLearnedSpeedFromActualsEvents.set(true);
+        try {
+            applyLearnedSpeedFromActualsCheckBox.setSelected(enabled);
+        } finally {
+            suppressApplyLearnedSpeedFromActualsEvents.set(false);
+        }
+    }
+
     /** 段階1正常終了後に全依頼を配台不要 yes にする（開発用チェック）。 */
     boolean snapshotStage1MarkAllExcludeAfterRun() {
         return stage1MarkAllExcludeAfterRunCheckBox != null
@@ -1492,6 +1607,7 @@ public final class MainRunTabController {
         if (!Double.isFinite(p)) {
             return;
         }
+        logTailFollowEnabled = p >= LOG_AUTO_SCROLL_BOTTOM_THRESHOLD;
         applyLogScrollProportion(p);
         Platform.runLater(() -> applyLogScrollProportion(p));
     }
@@ -1525,7 +1641,7 @@ public final class MainRunTabController {
         double max = sb.getMax();
         double v = sb.getValue();
         if (max <= min) {
-            return 0d;
+            return 1d;
         }
         return (v - min) / (max - min);
     }
@@ -1535,14 +1651,19 @@ public final class MainRunTabController {
             return;
         }
         double p = Math.max(0d, Math.min(1d, proportion));
-        ScrollBar sb = (ScrollBar) logListView.lookup(".scroll-bar:vertical");
-        if (sb == null) {
-            return;
-        }
-        double min = sb.getMin();
-        double max = sb.getMax();
-        if (max > min) {
-            sb.setValue(min + p * (max - min));
+        suppressLogTailFollowListener.set(true);
+        try {
+            ScrollBar sb = (ScrollBar) logListView.lookup(".scroll-bar:vertical");
+            if (sb == null) {
+                return;
+            }
+            double min = sb.getMin();
+            double max = sb.getMax();
+            if (max > min) {
+                sb.setValue(min + p * (max - min));
+            }
+        } finally {
+            suppressLogTailFollowListener.set(false);
         }
     }
 

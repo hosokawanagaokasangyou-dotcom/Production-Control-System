@@ -6,10 +6,13 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.text.Normalizer;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
@@ -64,6 +67,83 @@ public final class PlanInputTabularIo {
             return;
         }
         throw new IOException("unsupported extension (use .csv, .xlsx, .xlsm): " + path);
+    }
+
+    /**
+     * 指定シートだけ差し替え、他シートは維持する（入力3表保存用）。Python
+     * {@code stage3_input_builder._write_sheet_preserving_others} に整合。
+     */
+    public static void writeExcelSheetPreservingOthers(
+            Path path, String sheetName, TabularSheet data) throws IOException {
+        if (data == null || data.headers() == null) {
+            throw new IOException("no data");
+        }
+        String low = path.getFileName().toString().toLowerCase(Locale.ROOT);
+        if (!low.endsWith(".xlsx") && !low.endsWith(".xlsm")) {
+            throw new IOException("sheet-preserving write requires .xlsx or .xlsm: " + path);
+        }
+        String target = sheetName != null ? sheetName.strip() : "";
+        if (target.isEmpty()) {
+            throw new IOException("sheet name is empty");
+        }
+
+        LinkedHashMap<String, TabularSheet> ordered = new LinkedHashMap<>();
+        if (Files.isRegularFile(path)) {
+            try (Workbook wb = WorkbookFactory.create(path.toFile())) {
+                for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+                    Sheet sh = wb.getSheetAt(i);
+                    String name = sh.getSheetName();
+                    if (sheetNamesMatch(name, target)) {
+                        continue;
+                    }
+                    ordered.put(name, tabularFromExcelSheet(sh));
+                }
+            }
+        }
+        ordered.put(target, data);
+
+        Path parent = path.getParent();
+        if (parent != null && !Files.isDirectory(parent)) {
+            Files.createDirectories(parent);
+        }
+        Path tmp =
+                Files.createTempFile(
+                        parent != null ? parent : path.toAbsolutePath().getParent(),
+                        "plan-input-preserve-",
+                        ".xlsx");
+        try {
+            try (Workbook wb = new XSSFWorkbook()) {
+                for (Map.Entry<String, TabularSheet> e : ordered.entrySet()) {
+                    populateExcelSheet(wb.createSheet(e.getKey()), e.getValue());
+                }
+                try (var out = Files.newOutputStream(tmp)) {
+                    wb.write(out);
+                }
+            }
+            Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException ex) {
+            try {
+                Files.deleteIfExists(tmp);
+            } catch (IOException ignored) {
+            }
+            throw ex;
+        } catch (RuntimeException ex) {
+            try {
+                Files.deleteIfExists(tmp);
+            } catch (IOException ignored) {
+            }
+            throw ex;
+        }
+    }
+
+    static boolean sheetNamesMatch(String existing, String requested) {
+        if (existing == null || requested == null) {
+            return false;
+        }
+        if (existing.equals(requested)) {
+            return true;
+        }
+        return normSheetKey(existing).equals(normSheetKey(requested));
     }
 
     private static TabularSheet readCsv(Path path) throws IOException {
@@ -233,49 +313,56 @@ public final class PlanInputTabularIo {
                                 + "段階1出力の plan_input_tasks.xlsx 等を PM_AI_PLAN_INPUT_PATH に指定してください。");
             }
             String usedSheetName = sh.getSheetName();
-            Row h = sh.getRow(0);
-            if (h == null) {
-                return new TabularRead(usedSheetName, new TabularSheet(List.of(), List.of()));
-            }
-            List<String> headers = new ArrayList<>();
-            short last = h.getLastCellNum();
-            for (int c = 0; c < last; c++) {
-                headers.add(cellToString(h.getCell(c)));
-            }
-            trimTrailingBlankHeaders(headers);
-            List<List<String>> rows = new ArrayList<>();
-            for (int r = 1; r <= sh.getLastRowNum(); r++) {
-                Row row = sh.getRow(r);
-                List<String> line = new ArrayList<>(headers.size());
-                for (int c = 0; c < headers.size(); c++) {
-                    line.add(row == null ? "" : cellToString(row.getCell(c)));
-                }
-                rows.add(line);
-            }
-            return new TabularRead(usedSheetName, new TabularSheet(headers, rows));
+            return new TabularRead(usedSheetName, tabularFromExcelSheet(sh));
         }
+    }
+
+    private static TabularSheet tabularFromExcelSheet(Sheet sh) {
+        Row h = sh.getRow(0);
+        if (h == null) {
+            return new TabularSheet(List.of(), List.of());
+        }
+        List<String> headers = new ArrayList<>();
+        short last = h.getLastCellNum();
+        for (int c = 0; c < last; c++) {
+            headers.add(cellToString(h.getCell(c)));
+        }
+        trimTrailingBlankHeaders(headers);
+        List<List<String>> rows = new ArrayList<>();
+        for (int r = 1; r <= sh.getLastRowNum(); r++) {
+            Row row = sh.getRow(r);
+            List<String> line = new ArrayList<>(headers.size());
+            for (int c = 0; c < headers.size(); c++) {
+                line.add(row == null ? "" : cellToString(row.getCell(c)));
+            }
+            rows.add(line);
+        }
+        return new TabularSheet(headers, rows);
     }
 
     private static void writeExcel(Path path, String sheetName, TabularSheet data) throws IOException {
         try (Workbook wb = new XSSFWorkbook()) {
-            Sheet sh = wb.createSheet(sheetName);
-            Row hr = sh.createRow(0);
-            for (int c = 0; c < data.headers().size(); c++) {
-                Cell cell = hr.createCell(c);
-                String v = data.headers().get(c);
-                cell.setCellValue(v != null ? v : "");
-            }
-            int r = 1;
-            for (List<String> rowVals : data.rows()) {
-                Row rr = sh.createRow(r++);
-                for (int c = 0; c < data.headers().size(); c++) {
-                    Cell cell = rr.createCell(c);
-                    String v = c < rowVals.size() && rowVals.get(c) != null ? rowVals.get(c) : "";
-                    cell.setCellValue(v);
-                }
-            }
+            populateExcelSheet(wb.createSheet(sheetName), data);
             try (var out = Files.newOutputStream(path)) {
                 wb.write(out);
+            }
+        }
+    }
+
+    private static void populateExcelSheet(Sheet sh, TabularSheet data) {
+        Row hr = sh.createRow(0);
+        for (int c = 0; c < data.headers().size(); c++) {
+            Cell cell = hr.createCell(c);
+            String v = data.headers().get(c);
+            cell.setCellValue(v != null ? v : "");
+        }
+        int r = 1;
+        for (List<String> rowVals : data.rows()) {
+            Row rr = sh.createRow(r++);
+            for (int c = 0; c < data.headers().size(); c++) {
+                Cell cell = rr.createCell(c);
+                String v = c < rowVals.size() && rowVals.get(c) != null ? rowVals.get(c) : "";
+                cell.setCellValue(v);
             }
         }
     }

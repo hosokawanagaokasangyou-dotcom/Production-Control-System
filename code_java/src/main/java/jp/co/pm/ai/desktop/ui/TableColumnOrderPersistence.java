@@ -677,6 +677,7 @@ public final class TableColumnOrderPersistence {
 
     public enum TableId {
         PLAN_INPUT("planInput"),
+        PLAN_INPUT_STAGE3("planInputStage3"),
         STAGE1_PREVIEW("stage1Preview"),
         ACTUALS_STATUS("actualsStatus"),
         ENV_VARS("envVars"),

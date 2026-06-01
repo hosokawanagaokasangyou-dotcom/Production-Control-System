@@ -81,7 +81,7 @@ PM_AI_STAGE2_5_ALIGN_FROM_TOMORROW	1	段階2.5のアラジン整列を翌暦日�
 PM_AI_LEARNING_ARCHIVE_ENABLED	1	段階2.5前景成功後の学習アーカイブ背景実行。
 PM_AI_STAGE2_5_LEARNING_MODE	accumulate	段階2.5: accumulate（蓄積）または inference_only（推論のみ・蓄積しない）。
 PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR	dispatch-learning-archive	サマリ Excel 同フォルダ内の学習蓄積サブフォルダ名。
-PM_AI_LEARNED_SPEED_ENABLED	1	実績由来学習速度を段階1/配台計画読込に適用。
+PM_AI_LEARNED_SPEED_ENABLED	0	実績由来学習速度を段階1/配台計画読込に適用（既定 off。実行・ログタブのチェックが子プロセス起動時に上書き）。
 PM_AI_LEARNED_SPEED_MIN_SAMPLES	5	学習速度適用の最小観測数（工程+機械別）。
 PM_AI_LEARNED_SPEED_PERCENTILE	50	学習速度のパーセンタイル（p50=中央値）。
 PM_AI_LEARNED_SPEED_HISTOGRAM_BIN_WIDTH	1.0	速度ヒストグラムのビン幅（m/分）。

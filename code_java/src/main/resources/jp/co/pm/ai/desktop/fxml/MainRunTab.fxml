@@ -109,6 +109,12 @@
                                         <RowConstraints />
                                     </rowConstraints>
                                 </GridPane>
+                                <Label styleClass="pm-section-title" text="加工速度" />
+                                <VBox spacing="4.0">
+                                    <CheckBox fx:id="applyLearnedSpeedFromActualsCheckBox" mnemonicParsing="false" selected="false"
+                                              text="加工実績から収集した速度で「加工速度」列を上書きする" />
+                                    <Label wrapText="true" text="OFF（既定）のとき master 等の速度のみ使用します。速度収集の不具合修正まで OFF 推奨。" />
+                                </VBox>
                                 <Label styleClass="pm-section-title" text="開発用" />
                                 <VBox spacing="4.0">
                                     <CheckBox fx:id="skipGeminiApiCheckBox" mnemonicParsing="false" selected="false" text="AI API 呼び出しをスキップ（開発用）" />

@@ -350,7 +350,8 @@ public final class EnvVarDocs {
                 "サマリ Excel 同フォルダ内の学習アーカイブサブフォルダ名（既定 dispatch-learning-archive）。");
         put(
                 "PM_AI_LEARNED_SPEED_ENABLED",
-                "1/true/yes/on（既定）のとき実績由来学習速度を段階1/配台計画読込時に適用。");
+                "1/true/yes/on のとき実績由来学習速度を段階1/配台計画読込時に適用。"
+                        + " 既定は off。JavaFX 実行・ログタブのチェックが子プロセス起動時に上書きする。");
         put(
                 "PM_AI_LEARNED_SPEED_MIN_SAMPLES",
                 "学習速度適用に必要な (工程名,機械名) 別最小観測数（既定 5）。");

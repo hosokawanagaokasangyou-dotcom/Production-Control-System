@@ -199,6 +199,7 @@ public record PlanWorkspaceSessionFragment(
                 base.mainRunStage2ResultBookFont(),
                 base.mainRunSkipGeminiApi(),
                 base.mainRunStage1MarkAllExcludeAfterRun(),
+                base.mainRunApplyLearnedSpeedFromActuals(),
                 base.uiEnvRows(),
                 base.mainShellTabOrder(),
                 base.mainShellTabLayout(),

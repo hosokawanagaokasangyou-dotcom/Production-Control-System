@@ -1024,6 +1024,8 @@ public final class MainShellController {
                     s.dispatchStage25InferenceOnly());
         }
         mainRunTabController.applyStage2ResultBookFontFromSession(s.mainRunStage2ResultBookFont());
+        mainRunTabController.applyApplyLearnedSpeedFromActualsFromSession(
+                s.mainRunApplyLearnedSpeedFromActuals());
         // 開発用チェックは通常 OFF。段階1実行後も OFF に戻し、セッション復元しない。
         /*
          * 設備ガントの apply は末尾で Canvas を再構築し personBadgeStyleResolverForGantt を参照する。
@@ -1143,6 +1145,7 @@ public final class MainShellController {
                 mainRunTabController.snapshotStage2ResultBookFont(),
                 false,
                 false,
+                mainRunTabController.snapshotApplyLearnedSpeedFromActuals(),
                 snapshotUiEnvRows(),
                 snapshotMainShellTabOrder(),
                 snapshotMainShellTabLayout(),
@@ -3929,6 +3932,7 @@ public final class MainShellController {
         }
         activeRunStageScript = script;
         applyRunTabGating();
+        mainRunTabController.beginLogTailFollowForRun();
         if (STAGE2.equals(script) && dispatchInteractiveTabController != null) {
             Runnable clearDispatch =
                     () -> dispatchInteractiveTabController.resetTableDisplayForStage2Run();
@@ -3984,6 +3988,10 @@ public final class MainShellController {
             if (mainRunTabController.snapshotSkipGeminiApi()) {
                 appendLog(
                         "[dev] PM_AI_SKIP_GEMINI_API=1 — Gemini API 呼び出しをスキップします（開発用）。");
+            }
+            if (mainRunTabController.snapshotApplyLearnedSpeedFromActuals()) {
+                appendLog(
+                        "[run] PM_AI_LEARNED_SPEED_ENABLED=1 — 加工実績から収集した速度を配台計画読込時に適用します。");
             }
             if (STAGE1.equals(script)
                     && mainRunTabController.snapshotStage1MarkAllExcludeAfterRun()) {
@@ -4482,6 +4490,7 @@ public final class MainShellController {
         activeDispatchTrialKind = kind;
         overlayDispatchSpecialRulesForStageTrial(kind);
         applyRunTabGating();
+        mainRunTabController.beginLogTailFollowForRun();
         return true;
     }
 
@@ -4534,6 +4543,9 @@ public final class MainShellController {
         }
         if (planInputTabController != null) {
             planInputTabController.setStageRunProgressVisible(stage1Running, pipelineBusy);
+        }
+        if (planInputStage3TabController != null) {
+            planInputStage3TabController.setStageRunProgressVisible(stage1Running, pipelineBusy);
         }
         updateShellStageProgressOverlay(stage1Running, stage2Running, activeDispatchTrialKind);
         if (tabPane == null) {
@@ -4887,7 +4899,7 @@ public final class MainShellController {
         return new RunRequest(py, dir, "pm_ai_delivery_calendar_view.py", wb, childEnvForPython(uiRun));
     }
 
-    /** 実行・ログタブ「その他」の開発用チェックを子プロセス環境へ反映する。 */
+    /** 実行・ログタブ「その他」のチェックを子プロセス環境へ反映する。 */
     private void overlayMainRunSkipGeminiApiEnv(Map<String, String> ui) {
         if (mainRunTabController == null) {
             return;
@@ -4895,6 +4907,9 @@ public final class MainShellController {
         ui.put(
                 AppPaths.KEY_PM_AI_SKIP_GEMINI_API,
                 mainRunTabController.snapshotSkipGeminiApi() ? "1" : "0");
+        ui.put(
+                AppPaths.KEY_PM_AI_LEARNED_SPEED_ENABLED,
+                mainRunTabController.snapshotApplyLearnedSpeedFromActuals() ? "1" : "0");
     }
 
     /**
@@ -4906,6 +4921,7 @@ public final class MainShellController {
      */
     private Map<String, String> childEnvForPython(Map<String, String> ui) {
         Map<String, String> m = new HashMap<>(ui);
+        overlayMainRunSkipGeminiApiEnv(m);
         Stage2PythonChildEnv.stripLegacyWorkbookKeys(m);
         Stage2PythonChildEnv.ensureSkipWorkbookEnvSheetDefault(m);
         overlayPlanInputTabPathsForStage2(m);
@@ -6023,6 +6039,73 @@ public final class MainShellController {
         runStage(STAGE2);
     }
 
+    /** 段階2.1（残業/休出シミュ）: 時間外ウィザードを起動し、確定後に {@link #triggerStage21} へ進む。 */
+    void launchStage21OvertimeSimulationWizard() {
+        if (blockIfSummaryAiDispatchExportLocked("段階2.1")
+                || blockIfMaterialLookupTablesHaveBlankValues("段階2.1")) {
+            return;
+        }
+        if (planInputTabController != null
+                && planInputTabController.isPlanInputTableDirtySinceSave()) {
+            appendLog(
+                    "[stage2.1] 配台計画_タスク入力タブの表に未保存の変更があります。「保存」または「再読み」で確定してから実行してください。");
+            showErrorDialog(
+                    "段階2.1",
+                    "配台計画_タスク入力タブの変更を「保存」または「再読み」で確定してから段階2.1 を実行してください。");
+            return;
+        }
+        if (dispatchInteractiveTabController != null
+                && dispatchInteractiveTabController.isDispatchDocDirtySinceSave()) {
+            appendLog(
+                    "[stage2.1] 配台計画手動修正に未保存の変更があります。「保存」してから実行してください。");
+            showErrorDialog(
+                    "段階2.1",
+                    "配台計画手動修正タブの変更を「保存 (JSON+xlsx)」で確定してから段階2.1 を実行してください。");
+            return;
+        }
+        java.nio.file.Path mainJson = AppPaths.resolveResultDispatchTableJsonPath(collectUiEnv());
+        if (!java.nio.file.Files.isRegularFile(mainJson)) {
+            appendLog(
+                    "[stage2.1] 段階2 の成果物（結果_配台表.json）がありません。先に段階2を実行してください。");
+            showErrorDialog(
+                    "段階2.1",
+                    "段階2.1 を実行する前に段階2を実行し、結果_配台表.json を生成してください。");
+            return;
+        }
+        final java.nio.file.Path pyExe = resolveStagePythonExecutablePath(collectUiEnv());
+        final java.nio.file.Path pyDir = AppPaths.resolvePythonScriptDir(collectUiEnv());
+        final Map<String, String> pyEnv = snapshotDispatchTrialPythonEnv();
+        final Stage owner = primaryStage;
+        Thread worker =
+                new Thread(
+                        () -> {
+                            try {
+                                AttendanceOvertimePreview.Preview preview =
+                                        AttendanceOvertimePreviewPython.load(
+                                                pyExe, pyDir, pyEnv, this::appendLog);
+                                Platform.runLater(
+                                        () ->
+                                                OvertimeSimulationWizard.show(
+                                                        owner,
+                                                        this,
+                                                        preview,
+                                                        this::triggerStage21));
+                            } catch (Exception ex) {
+                                Platform.runLater(
+                                        () ->
+                                                showErrorDialog(
+                                                        "段階2.1",
+                                                        "勤怠プレビューの取得に失敗しました。\n"
+                                                                + (ex.getMessage() != null
+                                                                        ? ex.getMessage()
+                                                                        : ex)));
+                            }
+                        },
+                        "dispatch-stage21-preview");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
     /** 段階2.1（残業/休出シミュ）: ウィザード確定後にフル再配台（output/stage21/）。 */
     void triggerStage21(java.nio.file.Path overtimeSimulationJson) {
         if (blockIfSummaryAiDispatchExportLocked("段階2.1")) {
@@ -6085,12 +6168,32 @@ public final class MainShellController {
         return false;
     }
 
+    private boolean blockStage3IfUnsavedInput3Table(String stageJa) {
+        if (planInputStage3TabController != null
+                && planInputStage3TabController.isTableDirtySinceSave()) {
+            appendLog(
+                    "["
+                            + stageJa
+                            + "] 入力3表に未保存の変更があります。「保存」または「入力3表を再読込」で確定してから実行してください。");
+            showErrorDialog(
+                    stageJa,
+                    stageJa
+                            + " を実行する前に、入力3表タブの変更を「保存」または「入力3表を再読込」で確定してください。");
+            return true;
+        }
+        return false;
+    }
+
     /**
      * 入力3表を生成（配台計画手動修正タブから）: 保存済み 結果_配台表.json を枝番分解し
      * 入力3表シート（配台計画_タスク入力3.0）へ書き出して新タブを更新する。
      */
     void triggerBuildStage3Input() {
         if (blockIfSummaryAiDispatchExportLocked("入力3表生成")) {
+            return;
+        }
+        if (dispatchInteractiveTabController != null
+                && dispatchInteractiveTabController.isStage3InputBuildBusy()) {
             return;
         }
         if (dispatchInteractiveTabController != null
@@ -6117,6 +6220,9 @@ public final class MainShellController {
         java.nio.file.Path pyExe = resolveStagePythonExecutablePath(ui);
         java.nio.file.Path scriptDir = AppPaths.resolvePythonScriptDir(ui);
         Map<String, String> childEnv = childEnvForPython(ui);
+        if (dispatchInteractiveTabController != null) {
+            dispatchInteractiveTabController.setStage3InputBuildProgressVisible(true);
+        }
         appendLog("[入力3表] 生成を開始します… (" + resultJson + ")");
         Thread t =
                 new Thread(
@@ -6133,6 +6239,10 @@ public final class MainShellController {
                                                         this::appendLog);
                                 Platform.runLater(
                                         () -> {
+                                            if (dispatchInteractiveTabController != null) {
+                                                dispatchInteractiveTabController
+                                                        .setStage3InputBuildProgressVisible(false);
+                                            }
                                             appendLog("[入力3表] 生成完了: " + last);
                                             if (planInputStage3TabController != null) {
                                                 planInputStage3TabController.reloadFromDisk();
@@ -6142,6 +6252,10 @@ public final class MainShellController {
                             } catch (Exception ex) {
                                 Platform.runLater(
                                         () -> {
+                                            if (dispatchInteractiveTabController != null) {
+                                                dispatchInteractiveTabController
+                                                        .setStage3InputBuildProgressVisible(false);
+                                            }
                                             appendLog(
                                                     "[入力3表] 生成に失敗: "
                                                             + (ex.getMessage() != null
@@ -6165,7 +6279,8 @@ public final class MainShellController {
     void triggerStage30() {
         if (blockIfSummaryAiDispatchExportLocked("段階3.0")
                 || blockIfMaterialLookupTablesHaveBlankValues("段階3.0")
-                || blockStage3IfNoInput3Workbook("段階3.0")) {
+                || blockStage3IfNoInput3Workbook("段階3.0")
+                || blockStage3IfUnsavedInput3Table("段階3.0")) {
             return;
         }
         runStage(STAGE3_0);
@@ -6175,7 +6290,8 @@ public final class MainShellController {
     void triggerStage32() {
         if (blockIfSummaryAiDispatchExportLocked("段階3.2")
                 || blockIfMaterialLookupTablesHaveBlankValues("段階3.2")
-                || blockStage3IfNoInput3Workbook("段階3.2")) {
+                || blockStage3IfNoInput3Workbook("段階3.2")
+                || blockStage3IfUnsavedInput3Table("段階3.2")) {
             return;
         }
         runStage(STAGE3_2);
@@ -6191,7 +6307,8 @@ public final class MainShellController {
     void triggerStage31() {
         if (blockIfSummaryAiDispatchExportLocked("段階3.1")
                 || blockIfMaterialLookupTablesHaveBlankValues("段階3.1")
-                || blockStage3IfNoInput3Workbook("段階3.1")) {
+                || blockStage3IfNoInput3Workbook("段階3.1")
+                || blockStage3IfUnsavedInput3Table("段階3.1")) {
             return;
         }
         final java.nio.file.Path pyExe = resolveStagePythonExecutablePath(collectUiEnv());
@@ -6293,6 +6410,9 @@ public final class MainShellController {
     void invalidatePlanInputRollUnitHighlightCache() {
         if (planInputTabController != null) {
             planInputTabController.invalidateRollUnitHighlightCacheAndRefresh();
+        }
+        if (planInputStage3TabController != null) {
+            planInputStage3TabController.invalidateRollUnitHighlightCacheAndRefresh();
         }
     }
 

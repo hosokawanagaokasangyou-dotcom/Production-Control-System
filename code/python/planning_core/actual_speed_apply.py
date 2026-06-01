@@ -39,7 +39,7 @@ def apply_learned_speed_to_plan_df(
     """master 速度適用後に呼ぶ。加工速度_上書きが正の行はスキップ。"""
     if df is None or df.empty:
         return
-    if not _truthy_env(ENV_LEARNED_SPEED_ENABLED, True):
+    if not _truthy_env(ENV_LEARNED_SPEED_ENABLED, False):
         return
     from ._core import PLAN_COL_SPEED_OVERRIDE, TASK_COL_MACHINE, TASK_COL_MACHINE_NAME, TASK_COL_SPEED
 

@@ -5,7 +5,9 @@
 - 出力: ``plan_input_tasks.xlsx`` の第2シート（``PLAN_INPUT_STAGE3_SHEET_NAME``）に枝番行のみを書き出す
 
 枝番行は元行（入力1表）を複製し、依頼NO=``{元依頼NO}-{枝番2桁}``、換算数量=セル数量、
-原反投入日=配台日、配台可能日時=配台日+定常始業 とする。元タスク行は入力3表に含めない。
+原反投入日=配台日、配台可能日時=配台日+DISPATCHABLE_FROM_TIME（12:45）、
+配台可能日時_上書き=移動先セル暦日+定常開始時刻（master 定常始業）とする。
+元タスク行は入力3表に含めない。
 特別ルール scope は列「元依頼NO」で親に紐付ける（配台 task_id は枝番依頼NOのまま）。
 """
 from __future__ import annotations
@@ -49,16 +51,52 @@ def _aggregate_targets(pc, rows):
 
 
 def _write_sheet_preserving_others(pc, xlsx_path: Path, sheet: str, df) -> None:
+    """指定シートだけ差し替え、他シートは維持する。
+
+    ``pd.ExcelWriter(..., mode=\"a\")`` は xl/sharedStrings.xml 欠落ブックや
+    2 回目の ``if_sheet_exists=\"replace\"`` で openpyxl が読めず落ちることがある。
+    既存ブックは calamine で全シート読込 → openpyxl で全書き戻し（正規 OOXML）とする。
+    """
+    import os
+    import shutil
+    import tempfile
+
     import pandas as pd
 
-    if xlsx_path.exists():
-        with pd.ExcelWriter(
-            xlsx_path, engine="openpyxl", mode="a", if_sheet_exists="replace"
-        ) as w:
-            df.to_excel(w, sheet_name=sheet, index=False)
-    else:
+    xlsx_path = Path(xlsx_path)
+    target = str(sheet)[:31]
+
+    if not xlsx_path.exists():
         with pd.ExcelWriter(xlsx_path, engine="openpyxl", mode="w") as w:
-            df.to_excel(w, sheet_name=sheet, index=False)
+            df.to_excel(w, sheet_name=target, index=False)
+        return
+
+    pc.normalize_ooxml_shared_strings_if_missing(str(xlsx_path))
+
+    xf = pd.ExcelFile(xlsx_path, engine="calamine")
+    fd, tmp = tempfile.mkstemp(suffix=".xlsx")
+    os.close(fd)
+    try:
+        replaced = False
+        with pd.ExcelWriter(tmp, engine="openpyxl", mode="w") as w:
+            for name in xf.sheet_names:
+                safe = str(name)[:31] if name else "Sheet1"
+                if safe == target or str(name).strip() == str(sheet).strip():
+                    df.to_excel(w, sheet_name=target, index=False)
+                    replaced = True
+                else:
+                    other = pd.read_excel(xf, sheet_name=name, header=0)
+                    other.to_excel(w, sheet_name=safe, index=False)
+            if not replaced:
+                df.to_excel(w, sheet_name=target, index=False)
+        shutil.move(tmp, str(xlsx_path))
+    except Exception:
+        if os.path.isfile(tmp):
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+        raise
 
 
 def build_stage3_input_sheet(
@@ -163,11 +201,13 @@ def build_stage3_input_sheet(
 
         rec[pc.TASK_COL_RAW_INPUT_DATE] = dd.strftime("%Y/%m/%d")
         rec[pc.PLAN_COL_RAW_INPUT_DATE_OVERRIDE] = ""
-        disp_dt = datetime.combine(dd, shift_start)
         rec[pc.PLAN_COL_DISPATCHABLE_DATETIME] = pc.format_dispatchable_datetime_cell(
-            disp_dt
+            pc.compute_dispatchable_datetime(dd)
         )
-        rec[pc.PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE] = ""
+        # 手動修正で移した配台日セル: 上書き列はその暦日 + 定常開始時刻（段階2 解決時は上書き優先）
+        rec[pc.PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE] = pc.format_dispatchable_datetime_cell(
+            datetime.combine(dd, shift_start)
+        )
         rec[pc.RESULT_TASK_COL_DISPATCH_TRIAL_ORDER] = ""
         records.append(rec)
 

@@ -75,13 +75,73 @@ def test_branch_decomposition(tmp_path):
     # 数量合計が保存される（300 + 300 = 600）
     assert abs(float(out[pc.TASK_COL_QTY].sum()) - 600.0) < 1e-6
 
-    # 配台可能日時は配台日 + 既定始業（DEFAULT_START_TIME, master 無し）
-    disp = sorted(str(v) for v in out[pc.PLAN_COL_DISPATCHABLE_DATETIME].tolist())
-    hhmm = pc.DEFAULT_START_TIME.strftime("%-H:%M") if hasattr(pc.DEFAULT_START_TIME, "strftime") else "8:45"
-    assert disp[0].startswith("2026/6/10") or disp[0].startswith("2026/06/10")
+    # 配台可能日時は配台日 + 12:45、上書きは配台日 + 定常開始時刻（master 無し時 DEFAULT_START_TIME）
+    disp_vals = [str(v) for v in out[pc.PLAN_COL_DISPATCHABLE_DATETIME].tolist()]
+    ov_vals = [str(v) for v in out[pc.PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE].tolist()]
+    assert len(disp_vals) == 2 and len(ov_vals) == 2
+    for v in disp_vals:
+        assert "12:45" in v
+    start_hhmm = pc.DEFAULT_START_TIME.strftime("%H:%M").lstrip("0")
+    for v in ov_vals:
+        assert start_hhmm in v or pc.DEFAULT_START_TIME.strftime("%H:%M") in v
+    assert any(v.startswith("2026/6/10") or v.startswith("2026/06/10") for v in ov_vals)
+    assert any(v.startswith("2026/6/11") or v.startswith("2026/06/11") for v in ov_vals)
 
     # 特記が元行からコピーされる
     assert all("特記コピー確認" == str(v) for v in out[pc.PLAN_COL_SPECIAL_REMARK].tolist())
+
+
+def test_build_twice_replaces_stage3_sheet(tmp_path):
+    """2 回連続生成（初回成功→再生成）で openpyxl append が落ちないこと。"""
+    xlsx = tmp_path / "plan_input_tasks.xlsx"
+    rdj = tmp_path / "結果_配台表.json"
+    _write_input1(xlsx)
+    _result_json(rdj)
+
+    res1 = builder.build_stage3_input_sheet(rdj, xlsx, master_path="")
+    res2 = builder.build_stage3_input_sheet(rdj, xlsx, master_path="")
+    assert res1["branch_rows"] == 2
+    assert res2["branch_rows"] == 2
+
+    out = pd.read_excel(xlsx, sheet_name=pc.PLAN_INPUT_STAGE3_SHEET_NAME)
+    out.columns = out.columns.str.strip()
+    assert len(out) == 2
+
+
+def _strip_shared_strings_xml(xlsx_path: Path) -> None:
+    """段階1出力等で xl/sharedStrings.xml が欠ける OOXML を模倣する。"""
+    import os
+    import shutil
+    import tempfile
+    import zipfile
+
+    fd, tmp = tempfile.mkstemp(suffix=".xlsx")
+    os.close(fd)
+    with zipfile.ZipFile(xlsx_path, "r") as zin, zipfile.ZipFile(tmp, "w") as zout:
+        for item in zin.infolist():
+            if item.filename == "xl/sharedStrings.xml":
+                continue
+            zout.writestr(item, zin.read(item.filename))
+    shutil.move(tmp, xlsx_path)
+
+
+def test_build_twice_after_shared_strings_stripped(tmp_path):
+    """初回書込後に sharedStrings 欠落でも 2 回目生成が成功すること。"""
+    xlsx = tmp_path / "plan_input_tasks.xlsx"
+    rdj = tmp_path / "結果_配台表.json"
+    _write_input1(xlsx)
+    _result_json(rdj)
+
+    builder.build_stage3_input_sheet(rdj, xlsx, master_path="")
+    _strip_shared_strings_xml(xlsx)
+    assert pc._ooxml_workbook_missing_shared_strings(str(xlsx))
+
+    res2 = builder.build_stage3_input_sheet(rdj, xlsx, master_path="")
+    assert res2["branch_rows"] == 2
+    # 2 回目後も openpyxl で読める（sharedStrings 欠落 KeyError の再発防止）
+    pd.read_excel(
+        xlsx, sheet_name=pc.PLAN_INPUT_STAGE3_SHEET_NAME, engine="openpyxl"
+    )
 
 
 def test_missing_rows_raises(tmp_path):

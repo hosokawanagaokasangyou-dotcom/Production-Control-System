@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>段階別配台入出力リファレンス</title>
+  <style>
+    :root {
+      --bg: #f6f4f0;
+      --card: #fffef9;
+      --accent: #1a5f4a;
+      --accent2: #c45c26;
+      --text: #1e1e1e;
+      --muted: #5c5c5c;
+      --border: #d8d0c4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      margin: 0;
+      padding: 2rem clamp(1rem, 3vw, 2rem) 3rem;
+      max-width: min(1280px, 96vw);
+      margin-left: auto;
+      margin-right: auto;
+    }
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 0.35rem;
+    }
+    .sub { color: var(--muted); font-size: 0.95rem; margin-bottom: 2rem; }
+    h2 {
+      font-size: 1.25rem;
+      color: var(--accent2);
+      margin-top: 0;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.35rem;
+      border-bottom: 2px solid var(--border);
+    }
+    h3 {
+      font-size: 1.05rem;
+      color: var(--accent);
+      margin-top: 1.25rem;
+      margin-bottom: 0.5rem;
+    }
+    section.card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem 1.35rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,.04);
+    }
+    ul, ol { padding-left: 1.35rem; margin: 0.5rem 0; }
+    li { margin: 0.35rem 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+      margin: 0.75rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.6rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #eef5f2; }
+    code, .file {
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 0.88em;
+      background: #ebe6dc;
+      padding: 0.12rem 0.35rem;
+      border-radius: 4px;
+    }
+    nav.toc {
+      background: #e8f0ec;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 2rem;
+    }
+    nav.toc strong { color: var(--accent); }
+    nav.toc ol { margin: 0.5rem 0 0; padding-left: 1.25rem; }
+    nav.toc a { color: var(--accent2); text-decoration: none; }
+    nav.toc a:hover { text-decoration: underline; }
+    .warn {
+      background: #fff8e6;
+      border: 1px solid #e6c200;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin: 1rem 0;
+      font-size: 0.95rem;
+    }
+    .flow {
+      background: #f0ebe3;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      overflow-x: auto;
+      white-space: pre;
+      font-family: ui-monospace, Consolas, monospace;
+    }
+    footer { margin-top: 2.5rem; font-size: 0.85rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <h1>段階別配台入出力リファレンス</h1>
+  <p class="sub">JavaFX デスクトップの <strong>段階1〜段階3.2</strong> および関連操作について、入力・配台処理・出力を整理した文書です。<strong>詳細の正</strong>は <span class="file">段階別配台入出力.md</span>、<strong>実装の正</strong>はソースコード（<span class="file">MainShellController.java</span>、<span class="file">planning_core/_core.py</span> 等）です。</p>
+
+  <div class="warn">
+    <strong>「段階3」の二系統に注意</strong><br />
+    (1) <strong>配台試行</strong>（旧 UI「段階3」ボタン・非表示）＝ 手動修正 JSON から <span class="file">dispatch_interactive_trial.py</span> で再配台。<br />
+    (2) <strong>段階3.0 / 3.1 / 3.2</strong> ＝ 入力3表（枝番）から <span class="file">plan_simulation_stage3_*.py</span> で配台A → 枝番統合。
+  </div>
+
+  <nav class="toc" aria-label="目次">
+    <strong>目次</strong>
+    <ol>
+      <li><a href="#terms">用語</a></li>
+      <li><a href="#flow">全体パイプライン</a></li>
+      <li><a href="#stage1">段階1 — タスク抽出</a></li>
+      <li><a href="#stage20">段階2.0 — 初回フル配台</a></li>
+      <li><a href="#stage21">段階2.1 — 時間外再配台</a></li>
+      <li><a href="#stage25">段階2.5(AI) — アラジン整列</a></li>
+      <li><a href="#manual">手動修正・関連操作</a></li>
+      <li><a href="#input3gen">入力3表生成</a></li>
+      <li><a href="#stage30">段階3.0 / 3.1 / 3.2</a></li>
+      <li><a href="#trial">配台試行（インタラクティブ）</a></li>
+      <li><a href="#json">結果_配台表 JSON</a></li>
+      <li><a href="#files">主要ファイル</a></li>
+      <li><a href="#env">環境変数</a></li>
+      <li><a href="#order">推奨実行順</a></li>
+    </ol>
+  </nav>
+
+  <section id="terms" class="card">
+    <h2>用語</h2>
+    <table>
+      <thead><tr><th>用語</th><th>意味</th></tr></thead>
+      <tbody>
+        <tr><td><strong>配台A</strong></td><td><code>_generate_plan_impl()</code> による本配台エンジン。段階2.0 / 2.1 / 3.0〜3.2 / 配台試行が共通利用。</td></tr>
+        <tr><td><strong>入力1表</strong></td><td>Excel シート <strong>配台計画_タスク入力</strong>（<code>PM_AI_PLAN_INPUT_PATH</code>）。段階2.0・2.1 の正本。</td></tr>
+        <tr><td><strong>入力3表</strong></td><td>シート <strong>配台計画_タスク入力3.0</strong>。枝番分解後のみ。段階3.0〜3.2 の入力。</td></tr>
+        <tr><td><strong>結果_配台表</strong></td><td><code>結果_配台表.json</code> および同名 Excel。タスク×配台日×数量の正本。</td></tr>
+        <tr><td><strong>正本 output</strong></td><td>既定 <code>{リポジトリ}/output/</code>（<code>PM_AI_OUTPUT_DIR</code> で上書き可）。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="flow" class="card">
+    <h2>全体パイプライン</h2>
+    <div class="flow">段階1 → 入力1表編集
+  ↓
+段階2.0（配台A）→ 結果_配台表.json
+  ↓
+（任意）段階2.1 時間外 / 段階2.5 整列 / 手動修正・アラジン合わせ
+  ↓
+入力3表を生成 → 入力3表タブ
+  ↓
+段階3.0 / 3.1 / 3.2（配台A + 枝番統合）
+
+※ 別系統: 配台試行 = 手動 JSON から再配台（入力3 パイプライン不使用）</div>
+  </section>
+
+  <section id="stage1" class="card">
+    <h2>段階1 — タスク抽出（配台前処理）</h2>
+    <table>
+      <tr><th>UI</th><td>実行・ログタブ → <strong>段階1 実行</strong></td></tr>
+      <tr><th>Python</th><td><span class="file">code/python/task_extract_stage1.py</span></td></tr>
+      <tr><th>配台</th><td><strong>行わない</strong>（計画入力行の生成のみ）</td></tr>
+    </table>
+    <h3>主な入力</h3>
+    <ul>
+      <li>加工計画DATA・実績明細（ネットワーク / <code>.pm-ai-cache/</code>）</li>
+      <li>受注ファイル（シート「受注ﾌｧｲﾙ」）</li>
+      <li><code>master.xlsm</code>、アラジン加工計画</li>
+    </ul>
+    <h3>主な出力</h3>
+    <ul>
+      <li><code>plan_input_tasks.xlsx</code> / 入力1表シート</li>
+      <li><code>stage1_task_input_table.xlsx</code>（プレビュー）</li>
+      <li><code>stage1_exclude_rules.json</code></li>
+      <li><code>shaped_aladdin_plan.json</code></li>
+      <li>列 <strong>配台可能日時</strong> / <strong>配台可能日時_上書き</strong></li>
+    </ul>
+  </section>
+
+  <section id="stage20" class="card">
+    <h2>段階2.0 — 初回フル配台（配台A）</h2>
+    <table>
+      <tr><th>UI</th><td>配台計画_タスク入力タブ → <strong>段階2.0 実行</strong></td></tr>
+      <tr><th>Python</th><td><span class="file">plan_simulation_stage2.py</span> → <code>run_stage2_generate_plan()</code></td></tr>
+      <tr><th>配台</th><td>入力1表全タスクを配台Aで日次割付（need/surplus、納期リトライ、特別ルール L 系、§A/§B）</td></tr>
+    </table>
+    <h3>主な入力</h3>
+    <ul>
+      <li><strong>入力1表</strong>（<code>PM_AI_PLAN_INPUT_PATH</code>）</li>
+      <li><code>master.xlsm</code>、<code>stage1_exclude_rules.json</code>、<code>dispatch_special_rules.json</code></li>
+      <li><code>code/</code> ルックアップ表（原反・ロール単位長さ等）</li>
+      <li>任意: 加工途中翌日配台 JSON、<code>PM_AI_STAGE2_SKIP_TODAY_DISPATCH</code>、実績速度</li>
+    </ul>
+    <h3>主な出力（<code>output/</code>）</h3>
+    <ul>
+      <li><strong><code>結果_配台表.json</code></strong> / xlsx</li>
+      <li><code>計画*.xlsx</code>、<code>人員*.xlsx</code>（および JSON）</li>
+      <li><code>shaped_aladdin_plan.json</code>、<code>shaped_processing_actuals.json</code></li>
+    </ul>
+  </section>
+
+  <section id="stage21" class="card">
+    <h2>段階2.1（時間外）— 入力1表フル再配台</h2>
+    <table>
+      <tr><th>UI</th><td>配台計画_タスク入力 → <strong>段階2.1(時間外)</strong> → 残業ウィザード</td></tr>
+      <tr><th>Python</th><td><span class="file">plan_simulation_stage2_1.py</span>（<code>PM_AI_STAGE2_1_OVERTIME=1</code>）</td></tr>
+      <tr><th>配台</th><td>段階2.0 と同一配台A + <code>overtime_simulation_overrides.json</code> で勤怠一時上書き</td></tr>
+    </table>
+    <h3>入出力</h3>
+    <ul>
+      <li><strong>入力</strong>: 入力1表、master、ルール、残業 JSON（ウィザード確定）</li>
+      <li><strong>出力</strong>: 一旦 <code>output/stage21/結果_配台表.json</code> → 成功時 Java が <strong>メイン output 正本へ反映</strong></li>
+    </ul>
+  </section>
+
+  <section id="stage25" class="card">
+    <h2>段階2.5(AI) — アラジン整列（再配台ではない）</h2>
+    <table>
+      <tr><th>UI</th><td>段階2 後自動実行可（手動ボタンは UI 停止中）</td></tr>
+      <tr><th>Python</th><td><span class="file">plan_simulation_stage2_5_ai.py</span></td></tr>
+      <tr><th>処理</th><td><code>shaped_aladdin_plan.json</code> に沿い JSON 日別数量をロール単位再配分（配台A は実行しない）</td></tr>
+    </table>
+    <ul>
+      <li><strong>入力</strong>: <code>結果_配台表.json</code>、<code>shaped_aladdin_plan.json</code></li>
+      <li><strong>出力</strong>: <code>結果_配台表.after_stage2_5.json</code>（正本 <code>stage2</code> / <code>stage2_5</code> 切替可）</li>
+    </ul>
+  </section>
+
+  <section id="manual" class="card">
+    <h2>配台計画手動修正（段階スクリプト外）</h2>
+    <table>
+      <tr><th>UI</th><td><strong>配台計画手動修正</strong> タブ</td></tr>
+      <tr><th>入力</th><td><code>結果_配台表.json</code>（段階2 以降の正本）</td></tr>
+      <tr><th>操作</th><td>当日配台数量の編集・セル移動、試行順、保存 → JSON + xlsx</td></tr>
+    </table>
+    <h3>関連ボタン</h3>
+    <table>
+      <thead><tr><th>ボタン</th><th>処理</th></tr></thead>
+      <tbody>
+        <tr><td>アラジン計画に合わせる</td><td>Java: 翌日以降を (アラ計画) に沿いロール単位移動（<code>shaped_aladdin_plan.json</code>）</td></tr>
+        <tr><td>入力3表を生成</td><td>枝番分解 → 入力3表シート（後述）</td></tr>
+        <tr><td>配台リプレイ</td><td>可視化のみ（再配台なし）</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="input3gen" class="card">
+    <h2>入力3表生成 — 段階3.0 前処理</h2>
+    <table>
+      <tr><th>UI</th><td>手動修正タブ → <strong>入力3表を生成</strong></td></tr>
+      <tr><th>Python</th><td><span class="file">build_stage3_input.py</span> → <span class="file">stage3_input_builder.py</span></td></tr>
+      <tr><th>配台</th><td><strong>しない</strong>（枝番行の Excel 書込のみ）</td></tr>
+    </table>
+    <ul>
+      <li><strong>入力</strong>: 保存済み <code>結果_配台表.json</code>、入力1表ブック（元行複製元）</li>
+      <li><strong>出力</strong>: シート <strong>配台計画_タスク入力3.0</strong>（枝番依頼NO、元依頼NO、配台枝番、配台可能日時 等）</li>
+    </ul>
+  </section>
+
+  <section id="stage30" class="card">
+    <h2>段階3.0 / 3.1 / 3.2 — 枝番配台 + 統合</h2>
+    <table>
+      <thead><tr><th>段階</th><th>UI</th><th>Python</th><th>配台の違い</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>3.0</strong></td>
+          <td>入力3表タブ → 段階3.0 実行</td>
+          <td><span class="file">plan_simulation_stage3_0.py</span></td>
+          <td>入力3表 + 配台A → 枝番統合</td>
+        </tr>
+        <tr>
+          <td><strong>3.1</strong></td>
+          <td>段階3.1(時間外) → ウィザード</td>
+          <td><span class="file">plan_simulation_stage3_1.py</span></td>
+          <td>3.0 + 残業 JSON（段階2.1 同様）</td>
+        </tr>
+        <tr>
+          <td><strong>3.2</strong></td>
+          <td>段階3.2(数量厳守)</td>
+          <td><span class="file">plan_simulation_stage3_2.py</span></td>
+          <td>同日完走必須・定常外人ブロック無視（<code>PM_AI_STAGE3_2_QTY_STRICT=1</code>）</td>
+        </tr>
+      </tbody>
+    </table>
+    <p><strong>共通入力</strong>: 入力3表、master、ルール、ルックアップ<br />
+    <strong>共通出力</strong>: <code>結果_配台表.json</code>（枝番統合後が正本）、xlsx、production_plan / member_schedule</p>
+  </section>
+
+  <section id="trial" class="card">
+    <h2>配台試行（インタラクティブ・旧「段階3」）</h2>
+    <table>
+      <tr><th>UI</th><td>手動修正タブ（ボタン非表示・プログラム起動）</td></tr>
+      <tr><th>Python</th><td><span class="file">dispatch_interactive_trial.py</span></td></tr>
+      <tr><th>配台</th><td>入力1表 + 手動 JSON rows をマージし、段階2同一条件で配台A（セル指定数量あり）</td></tr>
+    </table>
+    <ul>
+      <li><strong>出力</strong>: <code>結果_配台表.json</code>、<code>dispatch_trial_shortages.json</code></li>
+      <li><strong>段階3.0 系との差</strong>: 枝番分解・入力3表・枝番統合 <strong>なし</strong></li>
+    </ul>
+    <p>詳細ルールは <a href="配台ルール.html#interactive-stage3">配台ルール — インタラクティブ配台試行</a> を参照。</p>
+  </section>
+
+  <section id="json" class="card">
+    <h2>結果_配台表 JSON の読み方</h2>
+    <p>1 行 ≒ <strong>1 タスク × 1 配台日</strong> の割付。</p>
+    <table>
+      <thead><tr><th>列（代表）</th><th>意味</th></tr></thead>
+      <tbody>
+        <tr><td>依頼NO</td><td>タスク ID（枝番時 <code>12345-01</code>）</td></tr>
+        <tr><td>工程 / 機械名</td><td>割付先</td></tr>
+        <tr><td><strong>配台日</strong></td><td>暦日</td></tr>
+        <tr><td><strong>当日配台数量</strong></td><td>その日の配台 m（手動修正・段階3前表示の正）</td></tr>
+        <tr><td>実配台数量</td><td>配台試行後のタイムライン実績（試行後 UI）</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="files" class="card">
+    <h2>主要ファイル（既定 <code>output/</code>）</h2>
+    <table>
+      <thead><tr><th>ファイル</th><th>生成</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td><code>plan_input_tasks.xlsx</code></td><td>段階1</td><td>計画入力ブック</td></tr>
+        <tr><td><code>stage1_exclude_rules.json</code></td><td>段階1</td><td>配台不要</td></tr>
+        <tr><td><code>shaped_aladdin_plan.json</code></td><td>段階1/2</td><td>(アラ計画) 数量</td></tr>
+        <tr><td><code>結果_配台表.json</code></td><td>2.0/2.1/3.x/試行</td><td><strong>配台表正本</strong></td></tr>
+        <tr><td><code>結果_配台表.after_stage2_5.json</code></td><td>2.5</td><td>整列後（任意正本）</td></tr>
+        <tr><td><code>output/stage21/…</code></td><td>2.1</td><td>正本反映前</td></tr>
+        <tr><td><code>dispatch_trial_shortages.json</code></td><td>配台試行</td><td>不足一覧</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="env" class="card">
+    <h2>環境変数（代表）</h2>
+    <table>
+      <thead><tr><th>変数</th><th>段階</th><th>意味</th></tr></thead>
+      <tbody>
+        <tr><td><code>PM_AI_PLAN_INPUT_PATH</code></td><td>2〜3</td><td>計画入力 Excel</td></tr>
+        <tr><td><code>PM_AI_OUTPUT_DIR</code></td><td>全般</td><td>出力 dir（既定 output/）</td></tr>
+        <tr><td><code>PM_AI_MASTER_WORKBOOK</code></td><td>1〜3</td><td>master.xlsm</td></tr>
+        <tr><td><code>PM_AI_STAGE2_SKIP_TODAY_DISPATCH</code></td><td>2.0</td><td>1=当日配台しない</td></tr>
+        <tr><td><code>PM_AI_STAGE2_1_OVERTIME</code></td><td>2.1/3.1</td><td>1=残業シミュ</td></tr>
+        <tr><td><code>PM_AI_STAGE3_2_QTY_STRICT</code></td><td>3.2</td><td>1=数量厳守</td></tr>
+        <tr><td><code>PM_AI_DISPATCH_TABLE_ACTIVE_SOURCE</code></td><td>UI</td><td>stage2 / stage2_5 正本</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="order" class="card">
+    <h2>推奨実行順</h2>
+    <ol>
+      <li>段階1 → 入力1表編集</li>
+      <li>段階2.0 → <code>結果_配台表.json</code></li>
+      <li>（任意）段階2.1 / 2.5 / アラジン合わせ</li>
+      <li>手動修正 → 保存</li>
+      <li>入力3表を生成 → 入力3表確認</li>
+      <li>段階3.0（必要なら 3.1 / 3.2）</li>
+      <li>（別系統）配台試行 — 入力3 を使わず手動表から再配台</li>
+    </ol>
+  </section>
+
+  <footer>
+    <p>最終更新: 2026-06-01 — ペア: <span class="file">段階別配台入出力.md</span></p>
+    <p>業務ルール詳細: <a href="配台ルール.html">配台ルール.html</a> / <a href="配台ルール.md">配台ルール.md</a></p>
+  </footer>
+</body>
+</html>
