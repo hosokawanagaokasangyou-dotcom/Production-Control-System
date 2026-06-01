@@ -13151,6 +13151,19 @@ def build_task_queue_from_planning_df(
             else None
         )
 
+        # 段階2.0: 配台開始の下限は「配台可能日時」列（上書き列 → 算出列 → 原反投入日+12:45）を正とする。
+        # 列・上書きが指定されていれば原反投入日由来の下限より優先し、開始日（暦日）と同日開始時刻を上書きする。
+        # 原反投入日が無く列も空の行は dispatchable_dt=None となり、従来どおり run_date 起点のまま。
+        dispatchable_dt = resolve_dispatchable_datetime_from_plan_row(row, run_date=run_date)
+        if dispatchable_dt is not None:
+            disp_date = dispatchable_dt.date()
+            effective_start_date = max(run_date, disp_date)
+            if start_date_ov is not None and start_date_ov > effective_start_date:
+                effective_start_date = start_date_ov
+            same_day_raw_start_limit = (
+                dispatchable_dt.time() if effective_start_date == disp_date else None
+            )
+
         calc_time_val = qty * speed
         ai_note = ""
         if ai_used:
@@ -13199,6 +13212,7 @@ def build_task_queue_from_planning_df(
                 "due_source_rank": due_source_rank,
                 "due_urgent": due_urgent,
                 "raw_input_date": raw_input_date,
+                "dispatchable_datetime": dispatchable_dt,
                 "same_day_raw_start_limit": same_day_raw_start_limit,
                 "total_qty_m": int(qty_total),
                 "unit_m": float(unit),
