@@ -1147,6 +1147,10 @@ STAGE1_TASK_INPUT_PREVIEW_FILENAME = "stage1_task_input_table.xlsx"
 STAGE1_TASK_INPUT_PREVIEW_SHEET = "タスク入力整形"
 # 既定は段階1出力 plan_input_tasks.xlsx のシート名「タスク一覧」。マクロブック利用時は TASK_PLAN_SHEET=配台計画_タスク入力。
 PLAN_INPUT_SHEET_NAME = os.environ.get("TASK_PLAN_SHEET", "").strip() or STAGE1_PLAN_OUTPUT_SHEET
+# 段階3 入力3表（枝番分解後）のシート名。plan_input_tasks.xlsx の第2シートとして書き出す。
+PLAN_INPUT_STAGE3_SHEET_NAME = (
+    os.environ.get("PM_AI_PLAN_INPUT_STAGE3_SHEET", "").strip() or "配台計画_タスク入力3.0"
+)
 # 配台試行順の比較用パターン一覧（マクロブック向けに作成）。環境変数 DISPATCH_TRIAL_PATTERN_LIST_SHEET で上書き可。
 DISPATCH_TRIAL_PATTERN_LIST_SHEET_NAME = (
     os.environ.get("DISPATCH_TRIAL_PATTERN_LIST_SHEET", "").strip()
@@ -1343,6 +1347,9 @@ PLAN_COL_DISPATCHABLE_DATETIME = "配台可能日時"
 PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE = "配台可能日時_上書き"
 # 原反投入日と同一暦日に開始する場合の時刻下限（旧 13:00 → 業務見直しで 12:45）。配台可能日時の時刻もこれを既定とする。
 DISPATCHABLE_FROM_TIME = time(12, 45)
+# 段階3 入力3表（枝番）専用列。枝番タスクの親（元依頼NO）と表示用連番。特別ルール scope は元依頼NOで判定する。
+PLAN_COL_PARENT_TASK_ID = "元依頼NO"
+PLAN_COL_BRANCH_SEQ = "配台枝番"
 PLAN_COL_PREFERRED_OP = "担当OP_指定"
 PLAN_COL_SPECIAL_REMARK = "特別指定_備考"
 # 参照列「（元）配台不要」は置かない（元データに相当するマスタ列が無いため）。
@@ -1877,6 +1884,11 @@ def plan_input_sheet_column_order():
             cols.append(plan_reference_column_name(c))
             cols.append(c)
     return cols
+
+
+def plan_input_stage3_sheet_column_order():
+    """段階3 入力3表の列順。入力1表の列順の先頭に枝番識別列（元依頼NO・配台枝番）を足したもの。"""
+    return [PLAN_COL_PARENT_TASK_ID, PLAN_COL_BRANCH_SEQ] + plan_input_sheet_column_order()
 
 
 def _format_paren_ref_scalar(val):
