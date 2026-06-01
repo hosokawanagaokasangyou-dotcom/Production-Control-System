@@ -113,15 +113,23 @@
                     styleClass="pm-dispatch-save-button"
                     onAction="#onSaveAction"/>
             <Button fx:id="stage21RunButton" minWidth="-1.0" mnemonicParsing="false"
-                    text="段階2.1"
+                    text="段階2.1(時間外)"
                     styleClass="pm-stage-run-button,pm-stage-run-2-1"
                     onAction="#onStage21RunAction">
                 <tooltip>
                     <Tooltip text="残業/休出シミュ付きフル再配台（成功時はメイン output へ正本反映）"/>
                 </tooltip>
             </Button>
+            <Button fx:id="buildStage3InputButton" minWidth="-1.0" mnemonicParsing="false"
+                    text="入力3表を生成"
+                    styleClass="pm-stage-run-button,pm-stage-run-3"
+                    onAction="#onBuildStage3InputAction">
+                <tooltip>
+                    <Tooltip text="保存済み 結果_配台表.json を枝番分解し『配台計画_タスク入力3.0』タブへ書き出す（段階3.0 の前処理）"/>
+                </tooltip>
+            </Button>
             <Button fx:id="dispatchTrialButton" minWidth="-1.0" mnemonicParsing="false"
-                    text="段階3"
+                    text="段階3" visible="false" managed="false"
                     styleClass="pm-stage-run-button,pm-stage-run-3"
                     onAction="#onDispatchTrialAction"/>
             <Button fx:id="wideRowUpButton" minWidth="-1.0" mnemonicParsing="false" text="↑"

@@ -6070,6 +6070,82 @@ public final class MainShellController {
         return false;
     }
 
+    /**
+     * 入力3表を生成（配台計画手動修正タブから）: 保存済み 結果_配台表.json を枝番分解し
+     * 入力3表シート（配台計画_タスク入力3.0）へ書き出して新タブを更新する。
+     */
+    void triggerBuildStage3Input() {
+        if (blockIfSummaryAiDispatchExportLocked("入力3表生成")) {
+            return;
+        }
+        if (dispatchInteractiveTabController != null
+                && dispatchInteractiveTabController.isDispatchDocDirtySinceSave()) {
+            appendLog("[入力3表] 配台計画手動修正に未保存の変更があります。「保存」してから生成してください。");
+            showErrorDialog(
+                    "入力3表を生成",
+                    "配台計画手動修正タブの変更を「保存 (JSON+xlsx)」で確定してから「入力3表を生成」してください。");
+            return;
+        }
+        Map<String, String> ui = collectUiEnv();
+        java.nio.file.Path resultJson = AppPaths.resolveResultDispatchTableJsonPath(ui);
+        if (!java.nio.file.Files.isRegularFile(resultJson)) {
+            appendLog("[入力3表] 結果_配台表.json がありません。先に段階2.0 を実行してください。");
+            showErrorDialog("入力3表を生成", "結果_配台表.json がありません。先に段階2.0 を実行してください。");
+            return;
+        }
+        String wbStr = stage3PlanInputWorkbookPath();
+        if (wbStr == null || wbStr.isBlank()) {
+            appendLog("[入力3表] 配台計画_タスク入力タブのファイルパスが未設定です。");
+            return;
+        }
+        java.nio.file.Path workbook = java.nio.file.Path.of(wbStr.trim());
+        java.nio.file.Path pyExe = resolveStagePythonExecutablePath(ui);
+        java.nio.file.Path scriptDir = AppPaths.resolvePythonScriptDir(ui);
+        Map<String, String> childEnv = childEnvForPython(ui);
+        appendLog("[入力3表] 生成を開始します… (" + resultJson + ")");
+        Thread t =
+                new Thread(
+                        () -> {
+                            try {
+                                String last =
+                                        jp.co.pm.ai.desktop.dispatch.Stage3InputBuilderPython
+                                                .buildInput3Sheet(
+                                                        resultJson,
+                                                        workbook,
+                                                        pyExe,
+                                                        scriptDir,
+                                                        childEnv,
+                                                        this::appendLog);
+                                Platform.runLater(
+                                        () -> {
+                                            appendLog("[入力3表] 生成完了: " + last);
+                                            if (planInputStage3TabController != null) {
+                                                planInputStage3TabController.reloadFromDisk();
+                                            }
+                                            selectMainShellTab(MainShellTabId.PLAN_INPUT_STAGE3);
+                                        });
+                            } catch (Exception ex) {
+                                Platform.runLater(
+                                        () -> {
+                                            appendLog(
+                                                    "[入力3表] 生成に失敗: "
+                                                            + (ex.getMessage() != null
+                                                                    ? ex.getMessage()
+                                                                    : ex));
+                                            showErrorDialog(
+                                                    "入力3表を生成",
+                                                    "入力3表の生成に失敗しました。\n\n"
+                                                            + (ex.getMessage() != null
+                                                                    ? ex.getMessage()
+                                                                    : ex.toString()));
+                                        });
+                            }
+                        },
+                        "build-stage3-input");
+        t.setDaemon(true);
+        t.start();
+    }
+
     /** 段階3.0: 入力3表（枝番）で配台A→枝番統合。 */
     void triggerStage30() {
         if (blockIfSummaryAiDispatchExportLocked("段階3.0")

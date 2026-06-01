@@ -363,6 +363,9 @@ public final class DispatchInteractiveTabController {
     private Button dispatchTrialButton;
 
     @FXML
+    private Button buildStage3InputButton;
+
+    @FXML
     private Button stage25AiButton;
 
     @FXML
@@ -1725,6 +1728,13 @@ public final class DispatchInteractiveTabController {
     @FXML
     private void onDispatchTrialAction() {
         startDispatchTrial();
+    }
+
+    @FXML
+    private void onBuildStage3InputAction() {
+        if (shell != null) {
+            shell.triggerBuildStage3Input();
+        }
     }
 
     @FXML
