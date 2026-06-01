@@ -12882,6 +12882,20 @@ def _load_stage2_in_progress_next_day_dispatch_overrides() -> dict[str, float]:
     return out
 
 
+def _rule_task_id(task) -> str:
+    """特別ルール・WIP・同一依頼工程依存の集計キー。
+
+    枝番タスク（入力3表）は ``rule_task_id``（元依頼NO）を、通常タスクは ``task_id`` を返す。
+    配台の出力キー（``task_id``＝枝番依頼NO）と区別し、ルールは親単位で集計する。
+    """
+    if not isinstance(task, dict):
+        return ""
+    rid = str(task.get("rule_task_id") or "").strip()
+    if rid:
+        return rid
+    return str(task.get("task_id") or "").strip()
+
+
 def build_task_queue_from_planning_df(
     tasks_df,
     run_date,
@@ -12910,6 +12924,13 @@ def build_task_queue_from_planning_df(
 
     for planning_df_iloc, (row_idx, row) in enumerate(tasks_df.iterrows()):
         task_id = planning_task_id_str_from_plan_row(row)
+        # 枝番タスク（入力3表）の親。列「元依頼NO」が空なら自身を親とする。
+        # 配台 task_id は枝番依頼NO（例 Y3-24-01）のままで、特別ルール・WIP・工程依存は rule_task_id=親で集計する。
+        parent_task_id = str(
+            _planning_df_cell_scalar(row, PLAN_COL_PARENT_TASK_ID) or ""
+        ).strip()
+        if not parent_task_id:
+            parent_task_id = task_id
         if row_has_completion_keyword(row):
             continue
         if _plan_row_exclude_as_completed_mikan_unprocessed_zero_actual_done_rule(row):
@@ -13225,6 +13246,8 @@ def build_task_queue_from_planning_df(
                 "due_urgent": due_urgent,
                 "raw_input_date": raw_input_date,
                 "dispatchable_datetime": dispatchable_dt,
+                "parent_task_id": parent_task_id,
+                "rule_task_id": parent_task_id,
                 "same_day_raw_start_limit": same_day_raw_start_limit,
                 "total_qty_m": int(qty_total),
                 "unit_m": float(unit),
@@ -13284,7 +13307,8 @@ def _sync_roll_pipeline_start_date_req_min_for_same_request(task_queue: list) ->
     """
     by_tid: dict[str, list[tuple[dict, date]]] = {}
     for t in task_queue or []:
-        tid = str(t.get("task_id") or "").strip()
+        # 枝番タスクは元依頼NO（rule_task_id）でまとめ、同一親の EC/検査/巻返しを同期する。
+        tid = _rule_task_id(t)
         if not tid:
             continue
         sdr = t.get("start_date_req")
@@ -21094,7 +21118,8 @@ def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
     剝進配台では ``_trial_order_flow_eligible_tasks`` は EC 完走まで検査を外れため、
     EC 残はある間は本分岝に到靔しない。リワインド等で検査は載る局面との整合用。
     """
-    tid = str(task.get("task_id", "") or "").strip()
+    # §A は同一依頼NO（枝番は元依頼NO=rule_task_id）の異工程依存。枝番が無いとき rule_task_id==task_id。
+    tid = _rule_task_id(task)
     if not tid:
         return False
     try:
@@ -21104,7 +21129,7 @@ def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
     my_r = _task_rank_int_or_none(task)
 
     for t2 in task_queue:
-        if str(t2.get("task_id", "") or "").strip() != tid:
+        if _rule_task_id(t2) != tid:
             continue
         if float(t2.get("remaining_units") or 0) <= 1e-9:
             continue
@@ -32113,11 +32138,13 @@ def _assign_one_roll_trial_order_flow(
 
     plan_ro = _plan_sheet_required_op_optional(task)
     need_src_line = ""
+    # need 条件は元依頼NO（rule_task_id）で照合する（枝番タスクは親で判定）。
+    _need_tid = _rule_task_id(task)
     if TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY:
         req_num, need_src_line = resolve_need_required_op_explain(
             machine,
             machine_name,
-            task["task_id"],
+            _need_tid,
             req_map,
             need_rules,
         )
@@ -32132,7 +32159,7 @@ def _assign_one_roll_trial_order_flow(
             req_num, need_src_line = resolve_need_required_op_explain(
                 machine,
                 machine_name,
-                task["task_id"],
+                _need_tid,
                 req_map,
                 need_rules,
             )
@@ -34715,7 +34742,8 @@ def append_surplus_staff_after_main_dispatch(
             continue
         machine = task.get("machine")
         machine_name = str(task.get("machine_name") or "").strip()
-        tid = str(task.get("task_id") or "").strip()
+        # need/surplus 条件は元依頼NO（rule_task_id）で照合する（枝番タスクは親で判定）。
+        tid = _rule_task_id(task)
 
         if TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY:
             req_num = resolve_need_required_op(
@@ -37217,11 +37245,13 @@ def _generate_plan_impl(
                         machine_proc = str(machine or "").strip()
                         plan_ro = _plan_sheet_required_op_optional(task)
                         need_src_line = ""
+                        # need 条件は元依頼NO（rule_task_id）で照合する（枝番タスクは親で判定）。
+                        _need_tid = _rule_task_id(task)
                         if TEAM_ASSIGN_HEADCOUNT_FROM_NEED_ONLY:
                             req_num, need_src_line = resolve_need_required_op_explain(
                                 machine,
                                 machine_name,
-                                task["task_id"],
+                                _need_tid,
                                 req_map,
                                 need_rules,
                             )
@@ -37240,7 +37270,7 @@ def _generate_plan_impl(
                                 req_num, need_src_line = resolve_need_required_op_explain(
                                     machine,
                                     machine_name,
-                                    task["task_id"],
+                                    _need_tid,
                                     req_map,
                                     need_rules,
                                 )
