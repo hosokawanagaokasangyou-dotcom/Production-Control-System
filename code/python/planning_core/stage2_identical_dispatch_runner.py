@@ -50,6 +50,99 @@ def run_stage2_generate_plan() -> None:
         _flush_dispatch_rule_trace_sidecar()
 
 
+def _load_stage3_input_tasks_df(pc):
+    """入力3表（第2シート ``PLAN_INPUT_STAGE3_SHEET_NAME``）を tasks_df として読み込む。
+
+    列構成は入力1表 + ``元依頼NO`` / ``配台枝番``。読込後の正規化・速度適用は
+    ``load_planning_tasks_df`` と同等を最小限で行う（特別ルール scope は build_task_queue が
+    ``元依頼NO`` から rule_task_id を解決する）。
+    """
+    import os
+
+    plan_path = (os.environ.get(pc.ENV_PLAN_INPUT_PATH) or "").strip()
+    if not plan_path or not os.path.isfile(plan_path):
+        raise FileNotFoundError(
+            f"段階3: {pc.ENV_PLAN_INPUT_PATH} が実在しません: {plan_path!r}。"
+        )
+    sheet = pc.PLAN_INPUT_STAGE3_SHEET_NAME
+    df = pc.read_tabular_dataframe(plan_path, sheet_name=sheet)
+    df.columns = df.columns.str.strip()
+    df = pc._align_dataframe_headers_to_canonical(df, pc.plan_input_stage3_sheet_column_order())
+    for c in pc.plan_input_stage3_sheet_column_order():
+        if c not in df.columns:
+            df[c] = ""
+    df = pc._coalesce_plan_plain_remark_into_special(df)
+    pc._apply_master_speed_sheet_to_plan_df(df, log_prefix="入力3表読込")
+    try:
+        from planning_core.actual_speed_apply import apply_learned_speed_to_plan_df
+
+        apply_learned_speed_to_plan_df(df, log_prefix="入力3表読込")
+    except Exception:
+        pass
+    pc._fill_plan_dispatch_remaining_qty_column(df)
+    return df
+
+
+def run_stage3_generate_plan(*, qty_strict: bool = False) -> dict:
+    """段階3.0/3.2: 入力3表（枝番）で配台Aを実行し、枝番統合まで行う。
+
+    Args:
+        qty_strict: True で段階3.2（同日完走必須・定常外人ブロック無視）。
+
+    Returns:
+        枝番統合の結果 dict（``merge_branch_result_dispatch`` の戻り）または ``{}``。
+    """
+    import os
+
+    from planning_core import _core as pc
+    from planning_core.dispatch_rules import trace_recorder
+
+    trace_recorder.reset_trace()
+    os.environ["PM_AI_PLAN_INPUT_STAGE3"] = "1"
+    if qty_strict:
+        os.environ["PM_AI_STAGE3_2_QTY_STRICT"] = "1"
+
+    master_abs = pc._master_workbook_path_resolved()
+    try:
+        tasks_df = _load_stage3_input_tasks_df(pc)
+        with pc._override_default_factory_hours_from_master(master_abs):
+            pc._generate_plan_impl(tasks_df_override=tasks_df)
+        return _merge_stage3_branches(pc)
+    finally:
+        if qty_strict:
+            os.environ.pop("PM_AI_STAGE3_2_QTY_STRICT", None)
+        os.environ.pop("PM_AI_PLAN_INPUT_STAGE3", None)
+        _flush_dispatch_rule_trace_sidecar()
+
+
+def _merge_stage3_branches(pc) -> dict:
+    """配台出力（結果_配台表.json）を元依頼NO単位へ統合し正本へ上書きする。"""
+    import os
+
+    try:
+        from planning_core.dispatch_workspace import resolve_result_dispatch_table_output_dir
+        from planning_core import stage3_branch_merge
+
+        plan_path = (os.environ.get(pc.ENV_PLAN_INPUT_PATH) or "").strip()
+        out_dir = resolve_result_dispatch_table_output_dir(plan_path)
+        if not out_dir:
+            return {}
+        from pathlib import Path
+
+        json_path = Path(out_dir) / pc.RESULT_DISPATCH_TABLE_JSON_FILENAME
+        if not json_path.is_file():
+            return {}
+        res = stage3_branch_merge.merge_branch_result_dispatch(json_path, plan_path)
+        print(
+            f"[stage3-merge] 枝番統合: {res.get('source_rows')} 行 → {res.get('merged_rows')} 行",
+            flush=True,
+        )
+        return res
+    except Exception as ex:
+        print(f"[stage3-merge] 枝番統合スキップ: {ex}", flush=True)
+        return {}
+
+
 def run_interactive_dispatch_trial_from_result_dispatch_json(
     path: Path,
 ) -> tuple[int, Path | None]:
