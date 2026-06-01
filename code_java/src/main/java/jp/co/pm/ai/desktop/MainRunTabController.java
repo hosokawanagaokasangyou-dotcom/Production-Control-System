@@ -1222,8 +1222,9 @@ public final class MainRunTabController {
         Label target =
                 switch (kind) {
                     case STAGE1 -> pipelineTimingStage1Label;
-                    case STAGE2 -> pipelineTimingStage2Label;
-                    case STAGE2_5, STAGE3, STAGE2_1 -> pipelineTimingStage3Label;
+                    case STAGE2, STAGE2_0 -> pipelineTimingStage2Label;
+                    case STAGE2_5, STAGE3, STAGE2_1, STAGE3_0, STAGE3_1, STAGE3_2 ->
+                            pipelineTimingStage3Label;
                     case SUMMARY_EXCEL -> pipelineTimingSummaryExcelLabel;
                     case DELIVERY_CALENDAR_VIEW -> pipelineTimingDeliveryCalendarLabel;
                 };
