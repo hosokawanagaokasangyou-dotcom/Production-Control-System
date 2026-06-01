@@ -1,6 +1,8 @@
 package jp.co.pm.ai.desktop.ui;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Optional;
@@ -34,6 +36,23 @@ public final class PlanInputDateColumnSupport {
 
     /** Excel / 計画シート表示に合わせた出力（{@code 2026/6/15} 形式）。 */
     private static final DateTimeFormatter OUTPUT_FORMAT = DateTimeFormatter.ofPattern("yyyy/M/d");
+
+    /** 段階2.0 配台開始下限に使う日時列（時刻まで保持）。 */
+    private static final Set<String> EXACT_DATETIME_COLUMNS =
+            Set.of("配台可能日時", "配台可能日時_上書き");
+
+    private static final DateTimeFormatter[] DATETIME_PARSE_FORMATTERS =
+            new DateTimeFormatter[] {
+                DateTimeFormatter.ofPattern("yyyy/M/d H:mm"),
+                DateTimeFormatter.ofPattern("yyyy/M/d HH:mm"),
+                DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm"),
+                DateTimeFormatter.ofPattern("yyyy-M-d H:mm"),
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"),
+            };
+
+    /** 配台可能日時の出力（{@code 2026/6/15 12:45} 形式）。 */
+    private static final DateTimeFormatter DATETIME_OUTPUT_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy/M/d H:mm");
 
     private PlanInputDateColumnSupport() {}
 
@@ -108,5 +127,51 @@ public final class PlanInputDateColumnSupport {
             return "";
         }
         return OUTPUT_FORMAT.format(date);
+    }
+
+    /**
+     * 日時として編集する列か（配台可能日時 / 配台可能日時_上書き）。
+     *
+     * <p>（元）… 参照列は除外する。日付列（{@link #isEditableDateColumn}）とは排他。
+     */
+    public static boolean isEditableDateTimeColumn(String columnTitle) {
+        if (columnTitle == null) {
+            return false;
+        }
+        String h = columnTitle.strip();
+        if (h.isEmpty()) {
+            return false;
+        }
+        if (h.startsWith("(元)") || h.startsWith("（元）")) {
+            return false;
+        }
+        return EXACT_DATETIME_COLUMNS.contains(h);
+    }
+
+    /** セル文字列を {@link LocalDateTime} に解釈する（時刻欠落時は {@code 12:45} 補完）。 */
+    public static Optional<LocalDateTime> parseDateTimeCellValue(String raw) {
+        if (raw == null) {
+            return Optional.empty();
+        }
+        String t = raw.strip();
+        if (t.isEmpty()) {
+            return Optional.empty();
+        }
+        for (DateTimeFormatter fmt : DATETIME_PARSE_FORMATTERS) {
+            try {
+                return Optional.of(LocalDateTime.parse(t, fmt));
+            } catch (DateTimeParseException ignored) {
+            }
+        }
+        // 時刻が無い日付だけの入力は配台開始既定時刻 12:45 を補う。
+        return parseCellValue(t).map(d -> d.atTime(LocalTime.of(12, 45)));
+    }
+
+    /** 編集結果を計画シート向け文字列へ（{@code 2026/6/15 12:45} 形式）。 */
+    public static String formatDateTimeCellValue(LocalDateTime dateTime) {
+        if (dateTime == null) {
+            return "";
+        }
+        return DATETIME_OUTPUT_FORMAT.format(dateTime);
     }
 }

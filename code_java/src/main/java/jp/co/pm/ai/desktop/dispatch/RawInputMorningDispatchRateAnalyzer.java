@@ -23,16 +23,16 @@ import jp.co.pm.ai.desktop.io.gantt.GanttContractValueDecoder;
 /**
  * 設備ガント契約 {@code timeline_events} と原反投入日から、暦日ごとの午前配台率を算出する。
  *
- * <p>午前帯は Python {@code same_day_raw_start_limit}（13:00）と揃え {@code 08:45}～{@code 13:00}。
- * 原反投入日＝当暦日の依頼が同日 13:00 以降にしか加工できないことが、当該日の午前配台率低下の原因とみなす。
+ * <p>午前帯は Python {@code same_day_raw_start_limit}（12:45）と揃え {@code 08:45}～{@code 12:45}。
+ * 原反投入日＝当暦日の依頼が同日 12:45 以降にしか加工できないことが、当該日の午前配台率低下の原因とみなす。
  */
 public final class RawInputMorningDispatchRateAnalyzer {
 
     /** Python {@code DEFAULT_START_TIME} と同一。 */
     public static final LocalTime MORNING_WINDOW_START = LocalTime.of(8, 45);
 
-    /** Python {@code same_day_raw_start_limit}（13:00）と同一。 */
-    public static final LocalTime MORNING_WINDOW_END = LocalTime.of(13, 0);
+    /** Python {@code same_day_raw_start_limit}（DISPATCHABLE_FROM_TIME=12:45）と同一。 */
+    public static final LocalTime MORNING_WINDOW_END = LocalTime.of(12, 45);
 
     public static final double RATE_THRESHOLD = 0.5;
 

@@ -93,6 +93,22 @@ public final class SpreadsheetPlanInputCellEditSupport {
                     TableColumn col = tc.getTableColumn();
                     double colW = col != null ? col.getWidth() : 0;
 
+                    if (PlanInputDateColumnSupport.isEditableDateTimeColumn(columnTitle)) {
+                        SpreadsheetPlanInputCellEditDialog.editDateTime(
+                                        owner,
+                                        columnTitle,
+                                        cur,
+                                        e.getScreenX(),
+                                        e.getScreenY())
+                                .ifPresent(
+                                        newVal -> {
+                                            row.set(colIndex, newVal);
+                                            rebuildSpreadsheet.run();
+                                        });
+                        e.consume();
+                        return;
+                    }
+
                     if (PlanInputDateColumnSupport.isEditableDateColumn(columnTitle)) {
                         SpreadsheetPlanInputCellEditDialog.editDate(
                                         owner,

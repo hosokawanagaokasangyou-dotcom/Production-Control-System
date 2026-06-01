@@ -1336,6 +1336,13 @@ def _write_dispatch_pattern_stage2_jobs_meta(batch_root: str, pattern_jobs: list
 PLAN_COL_SPEED_OVERRIDE = "加工速度_上書き"
 # 空白のときは列「原反投入日」（加工計画DATA 由来）をそのまま使う。日付ありのときは配台の原反制約・結果_タスク一覧表示の両方でこの日付を採用。
 PLAN_COL_RAW_INPUT_DATE_OVERRIDE = "原反投入日_上書き"
+# 段階1で算出する「配台可能日時」（datetime 文字列 YYYY/MM/DD HH:MM）。原反投入日（上書き優先）の日付 + DISPATCHABLE_FROM_TIME。
+# 段階2.0 はこの列（上書き優先）を配台開始日時の下限に用いる。原反投入日が空の行は空欄（従来どおり run_date 起点）。
+PLAN_COL_DISPATCHABLE_DATETIME = "配台可能日時"
+# 配台可能日時の手動上書き列（空白時は列「配台可能日時」を使用）。PLAN_OVERRIDE_COLUMNS に含め「（元）…」参照列を持つ。
+PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE = "配台可能日時_上書き"
+# 原反投入日と同一暦日に開始する場合の時刻下限（旧 13:00 → 業務見直しで 12:45）。配台可能日時の時刻もこれを既定とする。
+DISPATCHABLE_FROM_TIME = time(12, 45)
 PLAN_COL_PREFERRED_OP = "担当OP_指定"
 PLAN_COL_SPECIAL_REMARK = "特別指定_備考"
 # 参照列「（元）配台不要」は置かない（元データに相当するマスタ列が無いため）。
@@ -1802,6 +1809,7 @@ PLAN_OVERRIDE_COLUMNS = [
     PLAN_COL_EXCLUDE_FROM_ASSIGNMENT,
     PLAN_COL_SPEED_OVERRIDE,
     PLAN_COL_RAW_INPUT_DATE_OVERRIDE,
+    PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE,
     PLAN_COL_PREFERRED_OP,
     PLAN_COL_SPECIAL_REMARK,
     PLAN_COL_AI_PARSE,
@@ -1858,6 +1866,8 @@ def plan_input_sheet_column_order():
             cols.append(PLAN_COL_RAW_ROLL_UNIT_LENGTH)
             cols.append(PLAN_COL_RAW_FABRIC_WIDTH)
     cols.append(PLAN_COL_PROCESS_FACTOR)
+    # 段階1算出の「配台可能日時」（表示列）。上書き列は下の PLAN_OVERRIDE_COLUMNS ループで「（元）…」参照付きで出力。
+    cols.append(PLAN_COL_DISPATCHABLE_DATETIME)
     for c in PLAN_OVERRIDE_COLUMNS:
         if c == PLAN_COL_EXCLUDE_FROM_ASSIGNMENT:
             continue
@@ -1905,6 +1915,14 @@ def _reference_text_for_override_row(row, override_col: str, req_map: dict, need
         return _format_paren_ref_scalar(
             parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE))
         )
+    if override_col == PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE:
+        raw = parse_optional_date(
+            _planning_df_cell_scalar(row, PLAN_COL_RAW_INPUT_DATE_OVERRIDE)
+        ) or parse_optional_date(
+            _planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE)
+        )
+        dt = compute_dispatchable_datetime(raw)
+        return f"（{format_dispatchable_datetime_cell(dt)}）" if dt is not None else "（―）"
     return "（―）"
 
 
@@ -4436,6 +4454,62 @@ def _parse_env_optional_date(env_key: str):
     if not raw:
         return None
     return parse_optional_date(raw)
+
+
+def parse_optional_datetime(val):
+    """配台可能日時など datetime 文字列を解釈。空・解釈不能は None。"""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    s = str(val).strip()
+    if not s or s.lower() in ("nan", "none", "null"):
+        return None
+    try:
+        return pd.to_datetime(val).to_pydatetime()
+    except Exception:
+        return None
+
+
+def compute_dispatchable_datetime(raw_input_date, run_date=None):
+    """原反投入日（上書き優先で解決済みの date）から配台可能日時を算出。
+
+    日付 = max(run_date, raw_input_date)（run_date 指定時のみ）、時刻 = DISPATCHABLE_FROM_TIME。
+    raw_input_date が None のときは None（原反投入日が無い行は配台可能日時を持たない）。
+    """
+    if raw_input_date is None:
+        return None
+    base_date = raw_input_date
+    if run_date is not None and run_date > base_date:
+        base_date = run_date
+    return datetime.combine(base_date, DISPATCHABLE_FROM_TIME)
+
+
+def format_dispatchable_datetime_cell(dt) -> str:
+    """配台可能日時セルの出力文字列（YYYY/MM/DD HH:MM）。None は空文字。"""
+    if dt is None:
+        return ""
+    return dt.strftime("%Y/%m/%d %H:%M")
+
+
+def resolve_dispatchable_datetime_from_plan_row(row, run_date=None):
+    """配台計画1行から配台可能日時を解決（上書き列 → 算出列 → 原反投入日から算出 の順）。"""
+    ov = parse_optional_datetime(
+        _planning_df_cell_scalar(row, PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE)
+    )
+    if ov is not None:
+        return ov
+    col = parse_optional_datetime(
+        _planning_df_cell_scalar(row, PLAN_COL_DISPATCHABLE_DATETIME)
+    )
+    if col is not None:
+        return col
+    raw = parse_optional_date(
+        _planning_df_cell_scalar(row, PLAN_COL_RAW_INPUT_DATE_OVERRIDE)
+    )
+    if raw is None:
+        raw = parse_optional_date(
+            _planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE)
+        )
+    return compute_dispatchable_datetime(raw, run_date=run_date)
 
 
 def _planning_df_cell_scalar(row, col_name):
@@ -13048,8 +13122,8 @@ def build_task_queue_from_planning_df(
             due_urgent = due_basis <= run_date
 
         # 開始日ルール:
-        # 1) 原反投入日があるときは「原反投入日 13:00 以降」を開始可能日時の下限にする。
-        #    （日付下限: max(run_date, raw_input_date)」同日時間下限: 13:00）
+        # 1) 原反投入日があるときは「原反投入日 12:45 以降」を開始可能日時の下限にする。
+        #    （日付下限: max(run_date, raw_input_date)」同日時間下限: DISPATCHABLE_FROM_TIME=12:45）
         # 2) 特別指定（セル/AI）の開始日があっても原反投入日より前倒しにはしない（date 下限を維持）
         # 3) 原反投入日が無いときは run_date
         if raw_input_date:
@@ -13072,7 +13146,7 @@ def build_task_queue_from_planning_df(
                 )
 
         same_day_raw_start_limit = (
-            time(13, 0)
+            DISPATCHABLE_FROM_TIME
             if (raw_input_date and effective_start_date == raw_input_date)
             else None
         )
@@ -17296,6 +17370,11 @@ def run_stage1_extract():
             rec[PLAN_COL_PROCESS_FACTOR] = f"{machine}+"
         rec[PLAN_COL_SPEED_OVERRIDE] = ""
         rec[PLAN_COL_RAW_INPUT_DATE_OVERRIDE] = ""
+        rec[PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE] = ""
+        _raw_for_dispatch = parse_optional_date(rec.get(TASK_COL_RAW_INPUT_DATE))
+        rec[PLAN_COL_DISPATCHABLE_DATETIME] = format_dispatchable_datetime_cell(
+            compute_dispatchable_datetime(_raw_for_dispatch)
+        )
         rec[PLAN_COL_PREFERRED_OP] = ""
         rec[PLAN_COL_SPECIAL_REMARK] = ""
         rec[PLAN_COL_EXCLUDE_FROM_ASSIGNMENT] = ""
@@ -20784,7 +20863,7 @@ STAGE2_SERIAL_DISPATCH_BY_TASK_ID = (
 )
 
 # True: ①残タスクのごう配台試行順は最尝の1タスクの値を保ち」1ロールうつ割付。
-# ②原板投入日と同一日に開始れる場合は 13:00 以降（same_day_raw_start_limit も 13:00）。
+# ②原板投入日と同一日に開始れる場合は 12:45 以降（same_day_raw_start_limit も 12:45）。
 # ③④設備空しを max で繰り上き（日内。翌日は日付ループでタイムラインシード）。
 # ⑤⑥⑦⑧人の空しでフォームを決ゝ」ロールごとに avail を更新（同日は剝ロールと同一フォームを優先）。
 # 無効化: 環境変数 STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST=0
@@ -31410,13 +31489,13 @@ def _trial_order_flow_day_start_floor(
     macro_now_dt: datetime,
     task_queue: list | None = None,
 ) -> datetime:
-    """原板投入日を起点に」しの日の加工開始の下限時刻（同日は 13:00 以降を含む）。"""
+    """原板投入日を起点に」しの日の加工開始の下限時刻（同日は 12:45 以降を含む）。"""
     floor = datetime.combine(current_date, DEFAULT_START_TIME)
     # §B-2 検査 / §B-3 巻返しは EC 完了を待って開始でしるため、
-    # 原板投入日（=同日13:00以降）の制約をしのまま適用すると後続は丝必須に後ゝへ倒れる。
+    # 原板投入日（=同日12:45以降）の制約をしのまま適用すると後続は丝必須に後ゝへ倒れる。
     # EC完了時刻下限（_roll_pipeline_b2_inspection_ec_completion_floor_dt）で整合を得る。
     # EC 行がキューに無い（完走後に行欠落）場合も後続フラグが付いていれば B2 後続として扱い、
-    # 原板同日の 13:00 下限を付けない（EC 行が残っている完走ケースと整合。L10 スリット欠落と同趣旨）。
+    # 原板同日の 12:45 下限を付けない（EC 行が残っている完走ケースと整合。L10 スリット欠落と同趣旨）。
     _tid_floor = str(task.get("task_id", "") or "").strip()
     is_b2_follower_delayed = bool(
         (task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind"))
@@ -31425,7 +31504,7 @@ def _trial_order_flow_day_start_floor(
     )
     rid = task.get("raw_input_date")
     if not is_b2_follower_delayed and isinstance(rid, date) and rid == current_date:
-        floor = max(floor, datetime.combine(current_date, time(13, 0)))
+        floor = max(floor, datetime.combine(current_date, DISPATCHABLE_FROM_TIME))
     sdl = task.get("same_day_raw_start_limit")
     s_req = task.get("start_date_req")
     if (
@@ -37452,7 +37531,7 @@ def _generate_plan_impl(
                                     machine_free_dt = _mach_floor_legacy
                                     if team_start < machine_free_dt:
                                         team_start = machine_free_dt
-                                    # 原板投入日と同日の開始は 13:00 以降（試行順優先フローと一致）
+                                    # 原板投入日と同日の開始は 12:45 以降（試行順優先フローと一致）
                                     if task.get("same_day_raw_start_limit") and current_date == task["start_date_req"]:
                                         min_start_dt = datetime.combine(
                                             current_date, task["same_day_raw_start_limit"]

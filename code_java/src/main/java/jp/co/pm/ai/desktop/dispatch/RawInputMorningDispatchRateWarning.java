@@ -74,7 +74,7 @@ public final class RawInputMorningDispatchRateWarning {
         cCap.setCellValueFactory(new PropertyValueFactory<>("capacityText"));
         cCap.setPrefWidth(100);
 
-        TableColumn<DayRow, String> cTasks = new TableColumn<>("原反同日依頼（13:00以降開始）");
+        TableColumn<DayRow, String> cTasks = new TableColumn<>("原反同日依頼（12:45以降開始）");
         cTasks.setCellValueFactory(new PropertyValueFactory<>("tasksText"));
 
         tv.getColumns().addAll(cDate, cRate, cUsed, cCap, cTasks);
@@ -99,8 +99,8 @@ public final class RawInputMorningDispatchRateWarning {
 
         Label head =
                 new Label(
-                        "原反投入日と同日の加工は 13:00 以降にしか開始できないため、"
-                                + "午前帯（08:45～13:00）の設備稼働率が "
+                        "原反投入日と同日の加工は 12:45 以降にしか開始できないため、"
+                                + "午前帯（08:45～12:45）の設備稼働率が "
                                 + (int) (RawInputMorningDispatchRateAnalyzer.RATE_THRESHOLD * 100)
                                 + "% 未満の暦日があります。"
                                 + " 原反投入日の前倒し（タスク入力タブ）を検討してください。");

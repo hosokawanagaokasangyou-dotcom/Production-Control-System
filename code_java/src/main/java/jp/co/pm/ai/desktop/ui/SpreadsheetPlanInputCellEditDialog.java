@@ -140,6 +140,101 @@ public final class SpreadsheetPlanInputCellEditDialog {
         return Optional.empty();
     }
 
+    /**
+     * 日時列向け（配台可能日時 / 配台可能日時_上書き）: 暦日 + 時刻（HH:mm、既定 12:45）。
+     */
+    public static Optional<String> editDateTime(
+            Window owner,
+            String columnTitle,
+            String initialValue,
+            double anchorScreenX,
+            double anchorScreenY) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.initModality(Modality.WINDOW_MODAL);
+        String title =
+                columnTitle != null && !columnTitle.isBlank()
+                        ? columnTitle.strip()
+                        : "日時の選択";
+        dialog.setTitle(title);
+        dialog.setHeaderText(null);
+
+        DatePicker picker = new DatePicker();
+        javafx.scene.control.TextField timeField = new javafx.scene.control.TextField();
+        timeField.setPromptText("12:45");
+        timeField.setPrefColumnCount(6);
+        PlanInputDateColumnSupport.parseDateTimeCellValue(initialValue)
+                .ifPresentOrElse(
+                        dt -> {
+                            picker.setValue(dt.toLocalDate());
+                            timeField.setText(
+                                    String.format("%d:%02d", dt.getHour(), dt.getMinute()));
+                        },
+                        () -> timeField.setText("12:45"));
+
+        Button clearButton = new Button("クリア");
+        clearButton.setOnAction(
+                ev -> {
+                    picker.setValue(null);
+                    timeField.clear();
+                });
+
+        Label hint =
+                new Label(
+                        columnTitle != null && !columnTitle.isBlank()
+                                ? "列: " + columnTitle.strip() + "（日付＋時刻 HH:mm）"
+                                : "日付と時刻を選択してください");
+        hint.setStyle("-fx-font-size: 11px; -fx-text-fill: derive(-fx-text-inner-color, 18%);");
+
+        HBox pickerRow = new HBox(8, picker, timeField, clearButton);
+        pickerRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+
+        VBox box = new VBox(10, hint, pickerRow);
+        dialog.getDialogPane().setContent(box);
+        dialog.getDialogPane().getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
+        dialog.getDialogPane().setPrefWidth(360);
+
+        dialog.setOnShown(
+                e ->
+                        Platform.runLater(
+                                () ->
+                                        positionNearAnchor(
+                                                dialog.getDialogPane().getScene().getWindow(),
+                                                anchorScreenX,
+                                                anchorScreenY)));
+
+        Optional<ButtonType> r = dialog.showAndWait();
+        if (r.isPresent() && r.get() == ButtonType.OK) {
+            java.time.LocalDate d = picker.getValue();
+            if (d == null) {
+                return Optional.of("");
+            }
+            java.time.LocalTime t = parseTimeOrDefault(timeField.getText());
+            return Optional.of(
+                    PlanInputDateColumnSupport.formatDateTimeCellValue(d.atTime(t)));
+        }
+        return Optional.empty();
+    }
+
+    private static java.time.LocalTime parseTimeOrDefault(String raw) {
+        if (raw != null) {
+            String s = raw.strip();
+            if (!s.isEmpty()) {
+                try {
+                    String[] hm = s.split(":");
+                    int hh = Integer.parseInt(hm[0].strip());
+                    int mm = hm.length > 1 ? Integer.parseInt(hm[1].strip()) : 0;
+                    if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+                        return java.time.LocalTime.of(hh, mm);
+                    }
+                } catch (RuntimeException ignored) {
+                    // 解釈不能は既定 12:45。
+                }
+            }
+        }
+        return java.time.LocalTime.of(12, 45);
+    }
+
     private static void positionNearAnchor(Window win, double anchorScreenX, double anchorScreenY) {
         if (win == null) {
             return;
