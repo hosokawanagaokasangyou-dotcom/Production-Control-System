@@ -4261,19 +4261,35 @@ public final class MainShellController {
                                             java.nio.file.Files.isRegularFile(mainOvertime)
                                                     ? mainOvertime
                                                     : overtimeJson;
-                                    jp.co.pm.ai.desktop.dispatch.Stage21TrialSnapshotStore
-                                            .writePromotedMeta(
-                                                    mainJson,
-                                                    overridesForMeta,
-                                                    jp.co.pm.ai.desktop.dispatch
-                                                            .OvertimeSimulationOverridesReader
-                                                            .summarize(overridesForMeta));
-                                    refreshStage2OutputArtifacts();
-                                    refreshEquipmentGanttGraphicAfterPipelineRun();
-                                    refreshOperatorCardAfterPipelineRun();
+                                    java.nio.file.Path stage21Json =
+                                            AppPaths.resolveStage21ResultDispatchJsonPath(ui);
                                     if (dispatchInteractiveTabController != null) {
                                         dispatchInteractiveTabController
-                                                .applyStage21PromotedMetaAfterRunSuccess(mainJson);
+                                                .finalizeStage21PromotedWithComparisonAfterRunSuccess(
+                                                        mainJson,
+                                                        stage21Json,
+                                                        overridesForMeta);
+                                    } else {
+                                        jp.co.pm.ai.desktop.dispatch.Stage21TrialSnapshotStore
+                                                .writePromotedWithComparison(
+                                                        mainJson,
+                                                        java.util.Map.of(),
+                                                        stage21Json,
+                                                        overridesForMeta,
+                                                        jp.co.pm.ai.desktop.dispatch
+                                                                .OvertimeSimulationOverridesReader
+                                                                .summarize(overridesForMeta));
+                                    }
+                                    refreshStage2OutputArtifacts();
+                                    if (promoted.mainPlanJson() != null
+                                            && equipmentGanttGraphicTabController != null) {
+                                        equipmentGanttGraphicTabController.syncPlanJsonPathAndReload(
+                                                promoted.mainPlanJson(), false);
+                                    } else {
+                                        refreshEquipmentGanttGraphicAfterPipelineRun();
+                                    }
+                                    refreshOperatorCardAfterPipelineRun();
+                                    if (dispatchInteractiveTabController != null) {
                                         dispatchInteractiveTabController
                                                 .reloadTableFromDiskAfterStage21PromotedSuccess(
                                                         () ->
@@ -5817,6 +5833,8 @@ public final class MainShellController {
             if (promoted.mainDispatchJson() != null) {
                 body.append("\n配台表: ").append(promoted.mainDispatchJson());
             }
+            body.append(
+                    "\n配台計画手動修正タブで (段階2後) と (段階2.1後) を比較できます。");
         } else {
             body.append("\nメイン output（結果_配台表.json・計画 JSON 等）へ正本反映済みです。");
         }

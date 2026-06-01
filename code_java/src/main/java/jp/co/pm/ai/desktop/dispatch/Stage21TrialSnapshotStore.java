@@ -157,7 +157,57 @@ public final class Stage21TrialSnapshotStore {
                 day.toString());
     }
 
-    /** 段階2.1 をメイン output 正本へ反映したあとの勤怠メタ（比較 baseline は持たない）。 */
+    /** 段階2.1 をメイン output 正本へ反映したあとのメタ（比較 baseline 付き）。 */
+    public static void writePromotedWithComparison(
+            Path mainResultDispatchJson,
+            Map<String, Double> snapshot,
+            Path stage21ResultDispatchJson,
+            Path overtimeOverridesJson,
+            OverrideSummary overrideSummary) {
+        Path sidecar = sidecarPathFor(mainResultDispatchJson);
+        if (sidecar == null) {
+            return;
+        }
+        try {
+            ObjectNode root = JSON.createObjectNode();
+            root.put(
+                    "source_json",
+                    mainResultDispatchJson.toAbsolutePath().normalize().toString());
+            root.put("stage21_applied", true);
+            root.put("stage21_promoted", true);
+            if (stage21ResultDispatchJson != null) {
+                root.put(
+                        "stage21_result_dispatch_json",
+                        stage21ResultDispatchJson.toAbsolutePath().normalize().toString());
+            }
+            if (overtimeOverridesJson != null) {
+                root.put(
+                        "overtime_overrides_json",
+                        overtimeOverridesJson.toAbsolutePath().normalize().toString());
+            }
+            ObjectNode summary = JSON.createObjectNode();
+            OverrideSummary s =
+                    overrideSummary != null ? overrideSummary : OverrideSummary.empty();
+            summary.put("work_on", s.workOn());
+            summary.put("work_off", s.workOff());
+            summary.put("overtime_cells", s.overtimeCells());
+            root.set("override_summary", summary);
+            root.put("applied_at", LocalDateTime.now().format(APPLIED_AT_FMT));
+            ObjectNode entries = JSON.createObjectNode();
+            if (snapshot != null) {
+                for (Map.Entry<String, Double> e : snapshot.entrySet()) {
+                    entries.put(e.getKey(), e.getValue());
+                }
+            }
+            root.set("entries", entries);
+            Files.createDirectories(sidecar.getParent());
+            JSON.writerWithDefaultPrettyPrinter().writeValue(sidecar.toFile(), root);
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** @deprecated {@link #writePromotedWithComparison} を使用（比較 baseline なし）。 */
+    @Deprecated
     public static void writePromotedMeta(
             Path mainResultDispatchJson,
             Path overtimeOverridesJson,

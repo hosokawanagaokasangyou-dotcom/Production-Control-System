@@ -16,6 +16,30 @@ class Stage21TrialSnapshotStoreTest {
     @TempDir Path tempDir;
 
     @Test
+    void writePromotedWithComparison_persistsBaselineAndPromotedFlag() throws Exception {
+        Path dispatchJson = tempDir.resolve("結果_配台表.json");
+        Files.writeString(dispatchJson, "{\"columns\":[],\"rows\":[]}");
+        Path stage21Json = tempDir.resolve("stage21").resolve("結果_配台表.json");
+        Files.createDirectories(stage21Json.getParent());
+        Files.writeString(stage21Json, "{}");
+        Path overrides = tempDir.resolve("overtime_simulation_overrides.json");
+        Files.writeString(overrides, "{\"working_overrides\":{\"work_on\":[]}}");
+
+        Stage21TrialSnapshotStore.writePromotedWithComparison(
+                dispatchJson,
+                Map.of("k1", 100.0),
+                stage21Json,
+                overrides,
+                new Stage21TrialSnapshotStore.OverrideSummary(2, 1, 3));
+
+        Stage21TrialSnapshotStore.Stage21TrialMeta meta =
+                Stage21TrialSnapshotStore.tryLoadMeta(dispatchJson);
+        assertTrue(meta.hasPromotedToMain());
+        assertTrue(meta.hasComparisonBaseline());
+        assertEquals(100.0, meta.entries().get("k1"), 1e-3);
+    }
+
+    @Test
     void writePromotedMeta_persistsPromotedFlagWithoutComparisonBaseline() throws Exception {
         Path dispatchJson = tempDir.resolve("結果_配台表.json");
         Files.writeString(dispatchJson, "{\"columns\":[],\"rows\":[]}");

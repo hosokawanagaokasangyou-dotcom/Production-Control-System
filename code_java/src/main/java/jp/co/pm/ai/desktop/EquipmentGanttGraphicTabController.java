@@ -1271,6 +1271,29 @@ public final class EquipmentGanttGraphicTabController {
     }
 
     /**
+     * 段階2.1 正本反映後: 指定した計画 JSON でガントを再読込する。無効なら出力フォルダ最新にフォールバック。
+     */
+    void syncPlanJsonPathAndReload(Path planJson, boolean userCompletionDialog) {
+        if (shell == null) {
+            return;
+        }
+        try {
+            if (planJson != null && Files.isRegularFile(planJson) && planJsonField != null) {
+                planJsonField.setText(planJson.toAbsolutePath().normalize().toString());
+                reloadFromFields(userCompletionDialog);
+                return;
+            }
+        } catch (Exception ex) {
+            if (shell != null) {
+                shell.appendLog(
+                        "[equipment-gantt-graphic] 段階2.1 計画 JSON 同期エラー: "
+                                + (ex.getMessage() != null ? ex.getMessage() : ex));
+            }
+        }
+        syncLatestPlanJsonFromOutputDirAndReload(userCompletionDialog);
+    }
+
+    /**
      * 実行タブの計画ブックパスと同じステムの .json があればフィールドに反映し再読み。
      */
     void tryAutofillJsonFromStage2Xlsx(String productionPlanPath, String memberSchedulePath) {

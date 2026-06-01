@@ -198,6 +198,7 @@ class DispatchInteractiveStage3QtyDisplayTest {
         var meta =
                 new jp.co.pm.ai.desktop.dispatch.Stage21TrialSnapshotStore.Stage21TrialMeta(
                         true,
+                        false,
                         "",
                         "",
                         new jp.co.pm.ai.desktop.dispatch.Stage21TrialSnapshotStore

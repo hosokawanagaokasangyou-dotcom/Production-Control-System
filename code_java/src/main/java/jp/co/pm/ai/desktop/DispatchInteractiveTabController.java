@@ -113,6 +113,7 @@ import jp.co.pm.ai.desktop.dispatch.ResultDispatchPythonExport;
 import jp.co.pm.ai.desktop.dispatch.RawInputMorningDispatchRateWarning;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.OvertimeSimulationOverridesReader;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support;
 import jp.co.pm.ai.desktop.dispatch.Stage21AttendanceApplyStatusPanel;
 import jp.co.pm.ai.desktop.dispatch.Stage21TrialSnapshotStore;
 import jp.co.pm.ai.desktop.dispatch.Stage3DispatchQtyBalanceCheck;
@@ -274,6 +275,12 @@ public final class DispatchInteractiveTabController {
     /** 日付セル内の (段階2.1後) 行用。 */
     private static final String DISPATCH_STAGE21_AFTER_LINE_STYLE_CLASS = "dispatch-stage21-after-line";
 
+    /** 段階2.5(AI) ボタンの手動実行を UI から止める（再有効化は本フラグを true に変更）。 */
+    private static final boolean STAGE25_MANUAL_RUN_UI_ENABLED = false;
+
+    private static final String STAGE25_MANUAL_RUN_DISABLED_TOOLTIP =
+            "段階2.5(AI) は現在、手動実行を停止しています。";
+
     private static final String STAGE21_AFTER_LINE_INLINE_STYLE =
             "-fx-font-weight: bold; -fx-text-fill: #2E7D32;";
 
@@ -419,6 +426,9 @@ public final class DispatchInteractiveTabController {
 
     @FXML
     private Label jsonPathLabel;
+
+    @FXML
+    private Label dispatchPlanningStageBadgeLabel;
 
     @FXML
     private VBox stage21AttendanceApplyPanel;
@@ -818,6 +828,7 @@ public final class DispatchInteractiveTabController {
         ensureInnerTabPersistenceWired();
         shell.syncPlanInputStage2ButtonFromDispatchDirty();
         reloadSpecialRuleBadges();
+        refreshDispatchPlanningStageBadge(null);
     }
 
     void reloadSpecialRuleBadges() {
@@ -1780,6 +1791,9 @@ public final class DispatchInteractiveTabController {
 
     @FXML
     private void onStage25AiAction() {
+        if (!STAGE25_MANUAL_RUN_UI_ENABLED) {
+            return;
+        }
         startStage25AiInternal(false);
     }
 
@@ -1875,9 +1889,6 @@ public final class DispatchInteractiveTabController {
                                         + modeNote);
                     }
                     hideReloadProgress();
-                    if (stage25AiButton != null) {
-                        stage25AiButton.setDisable(false);
-                    }
                     applyDispatchTrialButtonEnabledState();
                 });
         task.setOnFailed(
@@ -1892,9 +1903,6 @@ public final class DispatchInteractiveTabController {
                                     ? ex.getMessage()
                                     : "段階2.5(AI) に失敗しました。");
                     hideReloadProgress();
-                    if (stage25AiButton != null) {
-                        stage25AiButton.setDisable(false);
-                    }
                     applyDispatchTrialButtonEnabledState();
                 });
         new Thread(task, "dispatch-stage25-ai").start();
@@ -1940,10 +1948,6 @@ public final class DispatchInteractiveTabController {
         if (stage25AiButton == null) {
             return;
         }
-        String sub =
-                snapshotDispatchStage25InferenceOnly()
-                        ? STAGE25_AI_BUTTON_SUBTITLE_INFERENCE
-                        : STAGE25_AI_BUTTON_SUBTITLE_ACCUMULATE;
         stage25AiButton.setText(STAGE25_AI_BUTTON_TEXT_DEFAULT);
         stage25AiButton.setWrapText(false);
         Tooltip tooltip = stage25AiButton.getTooltip();
@@ -1951,6 +1955,14 @@ public final class DispatchInteractiveTabController {
             tooltip = new Tooltip();
             stage25AiButton.setTooltip(tooltip);
         }
+        if (!STAGE25_MANUAL_RUN_UI_ENABLED) {
+            tooltip.setText(STAGE25_MANUAL_RUN_DISABLED_TOOLTIP);
+            return;
+        }
+        String sub =
+                snapshotDispatchStage25InferenceOnly()
+                        ? STAGE25_AI_BUTTON_SUBTITLE_INFERENCE
+                        : STAGE25_AI_BUTTON_SUBTITLE_ACCUMULATE;
         tooltip.setText(sub);
     }
 
@@ -2200,8 +2212,9 @@ public final class DispatchInteractiveTabController {
                 AppPaths.resolveResultDispatchTableStage2JsonPath(shell.snapshotUiEnv()));
     }
 
-    /** 段階2.1 正常終了直後: stage21 成果物を正本へ反映済み。メイン JSON を再読込する。 */
+    /** 段階2.1 正常終了直後: 正本反映済み。比較 baseline を保持してメイン JSON を再読込する。 */
     void reloadTableFromDiskAfterStage21PromotedSuccess(Runnable afterSuccessOnFxThread) {
+        retainStage21TrialMetaOnNextReload = true;
         reloadFromDiskQuiet(afterSuccessOnFxThread, false, false, false);
     }
 
@@ -2220,17 +2233,42 @@ public final class DispatchInteractiveTabController {
         captureStage21BaselineFromDocument(doc, dateAxis, mainJsonPath, overtimeOverridesJson, null);
     }
 
-    /** 段階2.1 正常終了後: 正本反映済みメタを UI に載せる（比較 baseline はクリア）。 */
-    void applyStage21PromotedMetaAfterRunSuccess(Path mainJsonPath) {
-        stage21TrialApplied = false;
-        stage21BaselinePlanQtySnapshot.clear();
-        stage21TimelineCalendarMeters = DispatchTimelineCalendarMetersIndex.empty();
-        if (mainJsonPath != null) {
-            stage21TrialMeta = Stage21TrialSnapshotStore.tryLoadMeta(mainJsonPath);
-        } else {
-            stage21TrialMeta = Stage21TrialSnapshotStore.Stage21TrialMeta.empty();
+    /**
+     * 段階2.1 正本反映後: (段階2後)/(段階2.1後) 比較用 sidecar・タイムライン・バッジを更新する。
+     */
+    void finalizeStage21PromotedWithComparisonAfterRunSuccess(
+            Path mainJsonPath, Path stage21ResultJson, Path overtimeOverridesJson) {
+        Stage21TrialSnapshotStore.OverrideSummary summary =
+                OvertimeSimulationOverridesReader.summarize(overtimeOverridesJson);
+        if (stage21BaselinePlanQtySnapshot.isEmpty() && mainJsonPath != null) {
+            stage21BaselinePlanQtySnapshot.putAll(
+                    Stage21TrialSnapshotStore.tryLoadMeta(mainJsonPath).entries());
         }
+        if (mainJsonPath != null) {
+            Stage21TrialSnapshotStore.writePromotedWithComparison(
+                    mainJsonPath,
+                    stage21BaselinePlanQtySnapshot,
+                    stage21ResultJson,
+                    overtimeOverridesJson,
+                    summary);
+        }
+        stage21TrialApplied = !stage21BaselinePlanQtySnapshot.isEmpty();
+        stage21TrialMeta =
+                mainJsonPath != null
+                        ? Stage21TrialSnapshotStore.tryLoadMeta(mainJsonPath)
+                        : Stage21TrialSnapshotStore.Stage21TrialMeta.empty();
+        loadStage21TimelineFromDisk();
         refreshStage21AttendanceApplyPanel(mainJsonPath);
+        refreshDispatchPlanningStageBadge(mainJsonPath);
+        if (statusLabel != null && stage21TrialApplied) {
+            statusLabel.setText(formatStage21CompletionStatus(stage21TrialMeta));
+        }
+    }
+
+    /** @deprecated {@link #finalizeStage21PromotedWithComparisonAfterRunSuccess} を使用。 */
+    @Deprecated
+    void applyStage21PromotedMetaAfterRunSuccess(Path mainJsonPath) {
+        finalizeStage21PromotedWithComparisonAfterRunSuccess(mainJsonPath, null, null);
     }
 
     /** @deprecated 試行のみ（正本未反映）の旧フロー。 */
@@ -2272,11 +2310,24 @@ public final class DispatchInteractiveTabController {
             return;
         }
         Path stage21Json = AppPaths.resolveStage21ResultDispatchJsonPath(shell.snapshotUiEnv());
+        Path fromMeta =
+                stage21TrialMeta != null ? stage21TrialMeta.stage21ResultDispatchPath() : null;
+        if (fromMeta != null && Files.isRegularFile(fromMeta)) {
+            stage21Json = fromMeta;
+        }
         stage21TimelineCalendarMeters =
                 DispatchTimelineCalendarMetersIndex.tryLoadNearResultDispatchJson(stage21Json);
+        if (!stage21TimelineCalendarMeters.isLoaded()) {
+            Path mainJson = AppPaths.resolveResultDispatchTableStage2JsonPath(shell.snapshotUiEnv());
+            if (Files.isRegularFile(mainJson)) {
+                stage21TimelineCalendarMeters =
+                        DispatchTimelineCalendarMetersIndex.tryLoadNearResultDispatchJson(
+                                mainJson);
+            }
+        }
         if (!stage21TimelineCalendarMeters.isLoaded() && shell != null) {
             shell.appendLog(
-                    "[stage2.1] 警告: stage21 設備ガント契約が読めないため (段階2.1後) は 0 表示になります: "
+                    "[stage2.1] 警告: 設備ガント契約が読めないため (段階2.1後) は 0 表示になります: "
                             + stage21Json);
         }
     }
@@ -2426,7 +2477,7 @@ public final class DispatchInteractiveTabController {
                             || isSummaryExportLockedByLockFile()
                             || docHasActualDispatchQtyColumn()
                             || stagePipelineBusy;
-            stage25AiButton.setDisable(blockStage25);
+            stage25AiButton.setDisable(blockStage25 || !STAGE25_MANUAL_RUN_UI_ENABLED);
         }
         if (isSummaryExportLockedByLockFile() && !reloadInteractionDisabled && !deliveryCalendarReloadBlocking) {
             Tooltip t =
@@ -2467,6 +2518,7 @@ public final class DispatchInteractiveTabController {
                                 "残業/休出シミュ付きフル再配台（成功時はメイン output へ正本反映）"));
             }
         }
+        refreshStage25AiButtonLabel();
         if (dispatchTrialButton != null) {
             if (deliveryCalendarReloadBlocking && !reloadInteractionDisabled) {
                 dispatchTrialButton.setText(DISPATCH_TRIAL_BUTTON_TEXT_DELIVERY_CALENDAR_RELOAD);
@@ -4109,13 +4161,31 @@ public final class DispatchInteractiveTabController {
             stage21TrialApplied = true;
             stage21BaselinePlanQtySnapshot.clear();
             stage21BaselinePlanQtySnapshot.putAll(meta.entries());
-            loadStage21TimelineFromDisk();
         } else {
             stage21TrialApplied = false;
             stage21BaselinePlanQtySnapshot.clear();
             stage21TimelineCalendarMeters = DispatchTimelineCalendarMetersIndex.empty();
         }
+        if (meta.hasPromotedToMain() || meta.hasComparisonBaseline()) {
+            loadStage21TimelineFromDisk();
+        }
         refreshStage21AttendanceApplyPanel(dispatchJsonPath);
+        refreshDispatchPlanningStageBadge(dispatchJsonPath);
+    }
+
+    private void refreshDispatchPlanningStageBadge(Path dispatchJsonPath) {
+        if (dispatchPlanningStageBadgeLabel == null) {
+            return;
+        }
+        Path jsonPath =
+                dispatchJsonPath != null
+                        ? dispatchJsonPath
+                        : (shell != null
+                                ? AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv())
+                                : null);
+        ResultDispatchStage3Support.applyPlanningStageBadge(
+                dispatchPlanningStageBadgeLabel,
+                ResultDispatchStage3Support.detectPlanningStage(jsonPath));
     }
 
     private void captureStage21BaselineFromDocument(

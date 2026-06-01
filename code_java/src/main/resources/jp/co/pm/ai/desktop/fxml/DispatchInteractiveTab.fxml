@@ -8,6 +8,7 @@
 <?import javafx.scene.control.ProgressBar?>
 <?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
 <?import javafx.scene.control.Spinner?>
 <?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.control.Tooltip?>
@@ -99,12 +100,12 @@
                     <Tooltip text="オン: 既存の学習アーカイブを参照して段階2.5を実行し、新規の学習データ蓄積は行いません。"/>
                 </tooltip>
             </CheckBox>
-            <Button fx:id="stage25AiButton" minWidth="-1.0" mnemonicParsing="false"
+            <Button fx:id="stage25AiButton" disable="true" minWidth="-1.0" mnemonicParsing="false"
                     text="段階2.5(AI)"
                     styleClass="pm-stage-run-button,pm-stage-run-2-5"
                     onAction="#onStage25AiAction">
                 <tooltip>
-                    <Tooltip text="アラジン整列（学習記録は背景で蓄積）"/>
+                    <Tooltip text="段階2.5(AI) は現在、手動実行を停止しています。"/>
                 </tooltip>
             </Button>
             <Button fx:id="saveButton" minWidth="-1.0" mnemonicParsing="false"
@@ -137,7 +138,11 @@
             </Button>
         </HBox>
     </VBox>
-    <Label fx:id="jsonPathLabel" wrapText="true"/>
+    <HBox alignment="CENTER_LEFT" spacing="8.0">
+        <Label fx:id="dispatchPlanningStageBadgeLabel" styleClass="pm-planning-stage-badge"
+               visible="false" managed="false"/>
+        <Label fx:id="jsonPathLabel" wrapText="true" HBox.hgrow="ALWAYS"/>
+    </HBox>
     <VBox fx:id="stage21AttendanceApplyPanel" fillWidth="true" spacing="4.0" visible="false" managed="false"
           styleClass="stage21-attendance-apply-panel">
         <Label fx:id="stage21AttendanceHeadlineLabel" styleClass="stage21-attendance-apply-headline"
