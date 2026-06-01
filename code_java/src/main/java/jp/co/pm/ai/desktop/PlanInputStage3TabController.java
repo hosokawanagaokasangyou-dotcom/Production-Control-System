@@ -41,7 +41,7 @@ import jp.co.pm.ai.desktop.io.ExcelCellReadSupport;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.PlanInputDateColumnSupport;
-import jp.co.pm.ai.desktop.ui.PlanInputRawInputDateShift;
+import jp.co.pm.ai.desktop.ui.PlanInputStage3DispatchableViolationSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
 import jp.co.pm.ai.desktop.ui.SpreadsheetMultiColumnFilterCoordinator;
@@ -69,6 +69,10 @@ public class PlanInputStage3TabController {
                     + " シート）を表示・編集します。"
                     + " 保存は入力1表シートを維持したまま入力3表シートのみ上書きします。";
 
+    /** 段階3.0〜3.2 では配台可能日時列のみ使用（上書き列は入力3表に載せない）。 */
+    private static final Set<String> STAGE3_EXCLUDED_COLUMN_TITLES =
+            Set.of("配台可能日時_上書き", "（元）配台可能日時_上書き", "(元)配台可能日時_上書き");
+
     @FXML private Button stage30RunButton;
     @FXML private Button stage31RunButton;
     @FXML private Button stage32RunButton;
@@ -76,11 +80,10 @@ public class PlanInputStage3TabController {
     @FXML private Button saveButton;
     @FXML private Button addRowButton;
     @FXML private Button removeRowsButton;
-    @FXML private Button shiftRawInputDateMinusOneButton;
-    @FXML private Button clearRawInputDateOverrideButton;
     @FXML private Label pathLabel;
     @FXML private Label statusLabel;
     @FXML private Label hintLabel;
+    @FXML private Label stage3ValidationWarningLabel;
     @FXML private TextField rowSearchField;
     @FXML private TextField colWidthField;
     @FXML private HBox tableOperationBar;
@@ -329,56 +332,6 @@ public class PlanInputStage3TabController {
     }
 
     @FXML
-    private void onShiftRawInputDateMinusOneAction() {
-        if (shell == null || headersRef.isEmpty()) {
-            return;
-        }
-        int updated = PlanInputRawInputDateShift.applyMinusOneDayToAllOverrides(headersRef, rows);
-        if (updated == PlanInputRawInputDateShift.MISSING_OVERRIDE_COLUMN) {
-            shell.showErrorDialog(
-                    "原反投入日の前倒し",
-                    "列「"
-                            + PlanInputRawInputDateShift.COL_RAW_INPUT_DATE_OVERRIDE
-                            + "」がありません。表を読み込んでから実行してください。");
-            return;
-        }
-        if (updated == 0) {
-            shell.showInformationDialog(
-                    "原反投入日の前倒し",
-                    "原反投入日（または上書き）を解釈できる行がありませんでした。");
-            return;
-        }
-        markTableDirtySinceSave();
-        rebuildSpreadsheet();
-    }
-
-    @FXML
-    private void onClearRawInputDateOverrideAction() {
-        if (shell == null || headersRef.isEmpty()) {
-            return;
-        }
-        int cleared = PlanInputRawInputDateShift.clearAllOverrides(headersRef, rows);
-        if (cleared == PlanInputRawInputDateShift.MISSING_OVERRIDE_COLUMN) {
-            shell.showErrorDialog(
-                    "原反投入日上書きのクリア",
-                    "列「"
-                            + PlanInputRawInputDateShift.COL_RAW_INPUT_DATE_OVERRIDE
-                            + "」がありません。表を読み込んでから実行してください。");
-            return;
-        }
-        if (cleared == 0) {
-            shell.showInformationDialog(
-                    "原反投入日上書きのクリア",
-                    "「"
-                            + PlanInputRawInputDateShift.COL_RAW_INPUT_DATE_OVERRIDE
-                            + "」に値がある行がありませんでした。");
-            return;
-        }
-        markTableDirtySinceSave();
-        rebuildSpreadsheet();
-    }
-
-    @FXML
     private void onRowUpAction() {
         int i = selectedDataRowIndex();
         if (i <= 0) {
@@ -452,23 +405,25 @@ public class PlanInputStage3TabController {
             }
             rows.add(r);
         }
+        dropStage3ExcludedColumns();
         normalizePlanInputDateOnlyColumns();
         List<TableColumnOrderPersistence.ColumnSpec> lay =
                 TableColumnOrderPersistence.loadLayout(
                         TableColumnOrderPersistence.TableId.PLAN_INPUT_STAGE3);
         persistedLayout.set(lay);
-        List<String> beforeHeaders = new ArrayList<>(headersRef);
-        boolean[] visBefore =
-                TableColumnOrderPersistence.loadColumnVisibility(
-                        TableColumnOrderPersistence.TableId.PLAN_INPUT_STAGE3, beforeHeaders.size());
+        List<String> fileHeaders = new ArrayList<>(headersRef);
         List<String> titleOrder =
                 lay.stream().map(TableColumnOrderPersistence.ColumnSpec::title).toList();
         TableColumnOrderPersistence.applyLogicalColumnOrder(headersRef, rows, titleOrder);
-        boolean[] visAfter =
-                TableColumnOrderPersistence.permuteVisibilityForLogicalReorder(
-                        beforeHeaders, visBefore, titleOrder);
+        boolean[] visForHeaders =
+                TableColumnOrderPersistence.resolveVisibilityAfterSheetLoad(
+                        TableColumnOrderPersistence.TableId.PLAN_INPUT_STAGE3,
+                        fileHeaders,
+                        titleOrder,
+                        headersRef);
         TableColumnOrderPersistence.saveColumnVisibility(
-                TableColumnOrderPersistence.TableId.PLAN_INPUT_STAGE3, visAfter);
+                TableColumnOrderPersistence.TableId.PLAN_INPUT_STAGE3, visForHeaders);
+        renumberDispatchTrialOrderColumn();
         rebuildSpreadsheet(false);
     }
 
@@ -608,6 +563,7 @@ public class PlanInputStage3TabController {
             spreadsheetView.getSelectionModel().clearSelection();
             spreadsheetView.setGrid(empty);
             currentGrid = empty;
+            updateStage3DispatchableViolationWarning();
             return;
         }
         final Map<Integer, Set<String>> columnFilterSnapshot =
@@ -637,11 +593,17 @@ public class PlanInputStage3TabController {
                             headerColumnCount.get(),
                             rollUnitHighlightTablesCached());
             int firstDataRow = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+            PlanInputStage3DispatchableViolationSupport.applyViolationHighlights(
+                    grid, headersRef, rows, firstDataRow);
+            updateStage3DispatchableViolationWarning();
             var rowSync =
                     SpreadsheetTabularSupport.newRowsSyncHandler(rows, headersRef, firstDataRow);
             gridChangeHandler =
                     ev -> {
                         rowSync.handle(ev);
+                        PlanInputStage3DispatchableViolationSupport.applyViolationHighlights(
+                                currentGrid, headersRef, rows, firstDataRow);
+                        updateStage3DispatchableViolationWarning();
                         if (!suppressDirtyFromGridEvents.get()) {
                             markTableDirtySinceSave();
                         }
@@ -841,6 +803,30 @@ public class PlanInputStage3TabController {
                         });
     }
 
+    private void dropStage3ExcludedColumns() {
+        if (headersRef.isEmpty()) {
+            return;
+        }
+        List<Integer> dropIdx = new ArrayList<>();
+        for (int c = 0; c < headersRef.size(); c++) {
+            if (STAGE3_EXCLUDED_COLUMN_TITLES.contains(headersRef.get(c))) {
+                dropIdx.add(c);
+            }
+        }
+        if (dropIdx.isEmpty()) {
+            return;
+        }
+        for (int i = dropIdx.size() - 1; i >= 0; i--) {
+            int col = dropIdx.get(i);
+            headersRef.remove(col);
+            for (ObservableList<String> row : rows) {
+                if (col < row.size()) {
+                    row.remove(col);
+                }
+            }
+        }
+    }
+
     private void normalizePlanInputDateOnlyColumns() {
         if (headersRef.isEmpty() || rows == null || rows.isEmpty()) {
             return;
@@ -863,6 +849,22 @@ public class PlanInputStage3TabController {
                     }
                 }
             }
+        }
+    }
+
+    private void updateStage3DispatchableViolationWarning() {
+        if (stage3ValidationWarningLabel == null) {
+            return;
+        }
+        int violations = PlanInputStage3DispatchableViolationSupport.countViolations(headersRef, rows);
+        boolean show = violations > 0;
+        stage3ValidationWarningLabel.setVisible(show);
+        stage3ValidationWarningLabel.setManaged(show);
+        if (show) {
+            stage3ValidationWarningLabel.setText(
+                    PlanInputStage3DispatchableViolationSupport.warningMessage(violations));
+        } else {
+            stage3ValidationWarningLabel.setText("");
         }
     }
 

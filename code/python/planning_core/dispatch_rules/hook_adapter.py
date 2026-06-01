@@ -56,17 +56,28 @@ def apply_speed_special_rules(
     return legacy()
 
 
-def eligible_l13_connection_skip(
-    task: dict,
-    wip_connection_before_sec: float | None,
-    task_queue: list,
-) -> bool:
-    """ELIGIBLE_FILTER L13 — True => exclude task (continue in eligible loop)."""
+def build_eligible_l13_context() -> dict:
+    """eligible 1 回あたり 1 度だけ rules/plan を読む（タスクループ内の load_rules 回避）。"""
     ensure_rules_env()
     load_rules()
     plan = get_plan()
     entry = next((e for e in plan.entries if e.rule_id == "L13"), None)
-    if entry and entry.source == "dsl" and engine_globally_enabled():
+    use_dsl = bool(
+        entry is not None
+        and entry.source == "dsl"
+        and engine_globally_enabled()
+    )
+    return {"plan": plan, "use_dsl": use_dsl}
+
+
+def eligible_l13_connection_skip_with_context(
+    task: dict,
+    wip_connection_before_sec: float | None,
+    task_queue: list,
+    l13_ctx: dict,
+) -> bool:
+    """ELIGIBLE_FILTER L13 — True => exclude task (continue in eligible loop)."""
+    if l13_ctx.get("use_dsl"):
         metrics = {"wip_connection_sec": float(wip_connection_before_sec or 0)}
         ctx = RuleContext(
             phase=RulePhase.ELIGIBLE_FILTER.value,
@@ -74,7 +85,7 @@ def eligible_l13_connection_skip(
             task_queue=task_queue,
             metrics=metrics,
         )
-        result = run_phase(RulePhase.ELIGIBLE_FILTER, ctx, plan)
+        result = run_phase(RulePhase.ELIGIBLE_FILTER, ctx, l13_ctx["plan"])
         if ctx.blocked:
             return True
         if result.modified:
@@ -94,6 +105,20 @@ def eligible_l13_connection_skip(
             summary_ja="WIP上限により接続を当日候補から除外（従来）",
         )
     return legacy_skip
+
+
+def eligible_l13_connection_skip(
+    task: dict,
+    wip_connection_before_sec: float | None,
+    task_queue: list,
+) -> bool:
+    """ELIGIBLE_FILTER L13 — True => exclude task (continue in eligible loop)."""
+    return eligible_l13_connection_skip_with_context(
+        task,
+        wip_connection_before_sec,
+        task_queue,
+        build_eligible_l13_context(),
+    )
 
 
 def _legacy_l13_connection_skip(

@@ -89,6 +89,7 @@ import jp.co.pm.ai.desktop.dispatch.rules.stage.DispatchRuleStageRunOverlay;
 import jp.co.pm.ai.desktop.dispatch.rules.trace.DispatchRuleTraceLoader;
 import jp.co.pm.ai.desktop.bridge.StagePythonExecutable;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.PipelineDownstreamResultsClearer;
 import jp.co.pm.ai.desktop.config.Stage1AiCacheClearer;
 import jp.co.pm.ai.desktop.config.WorkspaceCacheArchiveStore;
 import jp.co.pm.ai.desktop.debug.AgentDebugLog;
@@ -542,6 +543,9 @@ public final class MainShellController {
 
     private final AtomicBoolean runLock = new AtomicBoolean(false);
 
+    /** {@link Platform#exit()} 等、確認なしで閉じる内部終了用。 */
+    private volatile boolean suppressCloseConfirmation;
+
     private final PipelineExecutionTimingHistoryStore pipelineExecutionTimingHistory =
             new PipelineExecutionTimingHistoryStore();
 
@@ -791,14 +795,11 @@ public final class MainShellController {
 
         primaryStage.setOnCloseRequest(
                 e -> {
-                    ProcessOwnedLockFiles.releaseAllOwnedQuietly();
-                    if (geminiFreeTierModelsRefreshService != null) {
-                        geminiFreeTierModelsRefreshService.shutdown();
+                    if (!confirmApplicationClose()) {
+                        e.consume();
+                        return;
                     }
-                    memorySettingsTabController.shutdown();
-                    JvmMemoryLogStore.persistSnapshot(
-                            MemoryJvmRingLog.getMaxLines(), MemoryJvmRingLog.snapshotLines());
-                    DesktopSessionStateStore.save(collectDesktopSession());
+                    performApplicationShutdownOnClose();
                 });
 
         primaryStage.setOnShown(
@@ -1676,6 +1677,40 @@ public final class MainShellController {
     /** 失敗時のエラーダイアログ。 */
     public void showErrorDialog(String title, String message) {
         showThemedAlert(AlertType.ERROR, title, null, message);
+    }
+
+    /** メインウィンドウの ✕ 閉じる前に確認する。キャンセル時は {@code false}。 */
+    private boolean confirmApplicationClose() {
+        if (suppressCloseConfirmation) {
+            return true;
+        }
+        Alert alert = new Alert(AlertType.CONFIRMATION);
+        alert.initOwner(primaryStage);
+        applyAlertStylesheetsFromOwner(alert);
+        alert.setTitle("終了確認");
+        alert.setHeaderText(null);
+        StringBuilder msg =
+                new StringBuilder("工程管理 AI 配台を終了します。よろしいですか？");
+        if (isPipelineRunLocked()) {
+            msg.append("\n\n段階処理が実行中です。終了すると処理は中断されます。");
+        }
+        alert.setContentText(msg.toString());
+        Optional<ButtonType> ans = alert.showAndWait();
+        return ans.isPresent() && ans.get() == ButtonType.OK;
+    }
+
+    /** 終了確認後、または内部終了時のクリーンアップ（セッション保存・ロック解放）。 */
+    private void performApplicationShutdownOnClose() {
+        ProcessOwnedLockFiles.releaseAllOwnedQuietly();
+        if (geminiFreeTierModelsRefreshService != null) {
+            geminiFreeTierModelsRefreshService.shutdown();
+        }
+        if (memorySettingsTabController != null) {
+            memorySettingsTabController.shutdown();
+        }
+        JvmMemoryLogStore.persistSnapshot(
+                MemoryJvmRingLog.getMaxLines(), MemoryJvmRingLog.snapshotLines());
+        DesktopSessionStateStore.save(collectDesktopSession());
     }
 
     private void showThemedAlert(AlertType type, String title, String headerText, String message) {
@@ -3971,6 +4006,18 @@ public final class MainShellController {
             overlayMainRunSkipGeminiApiEnv(uiRun);
             if (STAGE1.equals(script)) {
                 uiRun.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
+                PipelineDownstreamResultsClearer.ClearResult downstreamClear =
+                        PipelineDownstreamResultsClearer.clearStage2ThroughStage32(uiRun);
+                for (String line : downstreamClear.detailLines()) {
+                    appendLog(line);
+                }
+                if (downstreamClear.anyFailed()) {
+                    appendLog("[stage1] 段階2〜3.2 成果物の一部を削除できませんでした。");
+                }
+                pendingStage21OvertimeJsonPath = null;
+                pendingStage31OvertimeJsonPath = null;
+                pendingStage2InProgressNextDayJsonPath = null;
+                syncUiAfterDownstreamPipelineResultsCleared();
             }
             if (STAGE2.equals(script)) {
                 uiRun.put(AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL, "1");
@@ -4124,6 +4171,37 @@ public final class MainShellController {
                 }
             }
             appendStageChildResolvedEnvForRun(script, childEnv);
+            if (STAGE2.equals(script)) {
+                // #region agent log
+                String dbgSid = AgentDebugLog.resolveDispatchTrialSessionId(childEnv);
+                Map<String, Object> stage2Start = new LinkedHashMap<>();
+                stage2Start.put("runId", "stage2-perf");
+                stage2Start.put(
+                        "pmAiOutputDir",
+                        childEnv.getOrDefault(AppPaths.KEY_PM_AI_OUTPUT_DIR, ""));
+                stage2Start.put(
+                        "processingPlanPath",
+                        childEnv.getOrDefault(AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH, ""));
+                stage2Start.put(
+                        "taskInputSourceDir",
+                        childEnv.getOrDefault(AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR, ""));
+                stage2Start.put(
+                        "planInputPath",
+                        childEnv.getOrDefault(PlanInputTabController.ENV_PM_AI_PLAN_INPUT_PATH, ""));
+                if (lastNetworkSourceResolution != null) {
+                    stage2Start.put("taskInputFromCache", lastNetworkSourceResolution.taskInputFromCache());
+                    stage2Start.put(
+                            "actualDetailFromCache", lastNetworkSourceResolution.actualDetailFromCache());
+                }
+                AgentDebugLog.appendStructured(
+                        collectUiEnv(),
+                        dbgSid,
+                        "H0",
+                        "MainShellController.runStage",
+                        "stage2_jvm_child_start",
+                        stage2Start);
+                // #endregion
+            }
             RunRequest req = new RunRequest(py, dir, script, wb, childEnv);
             mainRunTabController.getStatusLabel().setText("実行中…");
             PipelineExecutionTimingKind stageTimingKind = pipelineTimingKindForStageScript(script);
@@ -4207,6 +4285,24 @@ public final class MainShellController {
         PipelineExecutionTimingKind stageTimingKind = pipelineTimingKindForStageScript(script);
         if (stageTimingKind != null) {
             endPipelineExecutionTiming(stageTimingKind);
+        }
+        if (STAGE2.equals(script)) {
+            // #region agent log
+            String dbgSid = AgentDebugLog.resolveDispatchTrialSessionId(collectUiEnv());
+            Map<String, Object> stage2End = new LinkedHashMap<>();
+            stage2End.put("runId", "stage2-perf");
+            stage2End.put("exitCode", code != null ? code : -1);
+            if (err != null) {
+                stage2End.put("error", err.getClass().getSimpleName());
+            }
+            AgentDebugLog.appendStructured(
+                    collectUiEnv(),
+                    dbgSid,
+                    "H0",
+                    "MainShellController.completeStageRunOnFx",
+                    "stage2_jvm_child_end",
+                    stage2End);
+            // #endregion
         }
         if (isStage3Script(script)) {
             endStage3RunButtonLock();
@@ -6023,6 +6119,25 @@ public final class MainShellController {
         }
     }
 
+    /** 段階1開始時: 段階2〜3.2 成果物削除後に関連タブの表示を初期化する。 */
+    private void syncUiAfterDownstreamPipelineResultsCleared() {
+        if (dispatchInteractiveTabController != null) {
+            dispatchInteractiveTabController.resetTableDisplayForStage2Run();
+        }
+        if (planInputStage3TabController != null) {
+            planInputStage3TabController.reloadFromDisk();
+        }
+        if (mainRunTabController != null) {
+            mainRunTabController.setStage2ArtifactPaths("", "");
+        }
+        if (specialRulesTabController != null) {
+            specialRulesTabController.reloadTraceFromDisk();
+        }
+        invalidateDeliveryCalendarAfterPipelineRun();
+        refreshEquipmentGanttGraphicAfterPipelineRun();
+        refreshOperatorCardAfterPipelineRun();
+    }
+
     void acceptReloadAfterStage1Preview(Runnable r) {
         this.reloadAfterStage1Preview = r;
     }
@@ -7571,6 +7686,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                             if (fileLog != null) {
                                 fileLog.close(true, "deferred desktop apply");
                             }
+                            suppressCloseConfirmation = true;
                             Platform.exit();
                         } catch (IOException ex) {
                             appendLog(

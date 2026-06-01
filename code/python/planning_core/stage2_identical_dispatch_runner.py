@@ -38,8 +38,44 @@ def run_stage2_generate_plan() -> None:
     """
     段階2標準: マスタの工場時間オーバーライドのうえで ``_generate_plan_impl()`` を 1 回実行する。
     """
+    import time
+
     from planning_core import _core as pc
     from planning_core.dispatch_rules import trace_recorder
+
+    # #region agent log
+    _t_run0 = time.perf_counter()
+    try:
+        from planning_core import agent_debug_ndjson as _agent_dbg
+
+        _agent_dbg.append_structured(
+            "H0",
+            "stage2_identical_dispatch_runner.run_stage2_generate_plan",
+            "stage2_run_start",
+            {
+                "runId": "stage2-perf",
+                "output_dir": pc._stage2_path_debug_meta(
+                    (os.environ.get("PM_AI_OUTPUT_DIR") or "").strip()
+                    or getattr(pc, "output_dir", "")
+                ),
+                "processing_plan_path": pc._stage2_path_debug_meta(
+                    (os.environ.get("PM_AI_PROCESSING_PLAN_PATH") or "").strip()
+                ),
+                "plan_input_path": pc._stage2_path_debug_meta(
+                    (os.environ.get(pc.ENV_PLAN_INPUT_PATH) or "").strip()
+                ),
+            },
+        )
+    except Exception:
+        pass
+    # #endregion
+
+    try:
+        from planning_core.stage2_network_localize import localize_unc_paths_for_stage2
+
+        localize_unc_paths_for_stage2()
+    except Exception as ex:
+        print(f"[stage2-localize] スキップ: {ex}", flush=True)
 
     trace_recorder.reset_trace()
     master_abs = pc._master_workbook_path_resolved()
@@ -48,6 +84,23 @@ def run_stage2_generate_plan() -> None:
             pc._generate_plan_impl()
     finally:
         _flush_dispatch_rule_trace_sidecar()
+        # #region agent log
+        try:
+            from planning_core import agent_debug_ndjson as _agent_dbg
+
+            _agent_dbg.append_structured(
+                "H0",
+                "stage2_identical_dispatch_runner.run_stage2_generate_plan",
+                "stage2_run_end",
+                {
+                    "runId": "stage2-perf",
+                    "elapsed_sec": round(time.perf_counter() - _t_run0, 3),
+                    "master_workbook": pc._stage2_path_debug_meta(master_abs),
+                },
+            )
+        except Exception:
+            pass
+        # #endregion
 
 
 def _load_stage3_input_tasks_df(pc):
@@ -68,9 +121,11 @@ def _load_stage3_input_tasks_df(pc):
     df = pc.read_tabular_dataframe(plan_path, sheet_name=sheet)
     df.columns = df.columns.str.strip()
     df = pc._align_dataframe_headers_to_canonical(df, pc.plan_input_stage3_sheet_column_order())
-    for c in pc.plan_input_stage3_sheet_column_order():
+    order = pc.plan_input_stage3_sheet_column_order()
+    for c in order:
         if c not in df.columns:
             df[c] = ""
+    df = df.reindex(columns=order).fillna("")
     df = pc._coalesce_plan_plain_remark_into_special(df)
     pc._apply_master_speed_sheet_to_plan_df(df, log_prefix="入力3表読込")
     try:

@@ -85,6 +85,10 @@ from .bootstrap import (
 # region stage2 cache helpers
 _STAGE2_GLOBAL_COMMENT_CACHE: dict | None = None
 _STAGE2_MACHINE_CALENDAR_CACHE: dict | None = None
+_MH_HANDOFF_TIMELINE_CACHE_KEY: tuple[int, date] | None = None
+_MH_HANDOFF_TIMELINE_CACHE_STATE: dict | None = None
+_MH_HANDOFF_TIMELINE_CACHE_STATS: dict[str, int] = {"hit": 0, "miss": 0, "incremental": 0}
+_STAGE2_DISPATCH_EVENTS_BY_DATE: dict | None = None
 # endregion stage2 cache helpers
 
 # JavaFX 結果_配台表.json からのインタラクティブ配台試行（dispatch_interactive_trial.py）。
@@ -523,10 +527,181 @@ def _cached_tabular_dataframe(
     return df
 
 
-def _log_stage2_phase_timing(label: str, t_prev: float) -> float:
+def _stage2_path_debug_meta(path: str | None) -> dict:
+    """段階2計測用: パス種別（UNC/ローカル等）のみ。秘密情報は含めない。"""
+    p = (path or "").strip()
+    if not p:
+        return {"path": "", "kind": "empty"}
+    try:
+        ap = os.path.abspath(p)
+    except OSError:
+        return {"path": p[:200], "kind": "invalid"}
+    norm = ap.replace("/", "\\")
+    kind = "local"
+    if norm.startswith("\\\\") or norm.startswith("//"):
+        kind = "unc"
+    elif len(ap) >= 2 and ap[1] == ":":
+        kind = "drive"
+    meta: dict = {"path": ap, "kind": kind}
+    parent = os.path.dirname(ap)
+    if parent:
+        meta["parent_kind"] = (
+            "unc"
+            if parent.replace("/", "\\").startswith("\\\\")
+            else "drive"
+            if len(parent) >= 2 and parent[1] == ":"
+            else "local"
+        )
+    try:
+        if os.path.isfile(ap):
+            st = os.stat(ap)
+            meta["size_bytes"] = int(st.st_size)
+    except OSError as ex:
+        meta["stat_error"] = type(ex).__name__
+    return meta
+
+
+def _log_stage2_phase_timing(
+    label: str, t_prev: float, *, extra: dict | None = None
+) -> float:
     now = time_module.perf_counter()
-    logging.info("段階2 計測: %s %.2f秒", label, now - t_prev)
+    elapsed = now - t_prev
+    logging.info("段階2 計測: %s %.2f秒", label, elapsed)
+    # #region agent log
+    try:
+        from planning_core import agent_debug_ndjson as _agent_dbg
+
+        payload: dict = {
+            "label": label,
+            "elapsed_sec": round(elapsed, 3),
+            "runId": "stage2-perf",
+        }
+        if extra:
+            payload.update(extra)
+        _agent_dbg.append_structured(
+            "timing",
+            "_core._log_stage2_phase_timing",
+            label,
+            payload,
+        )
+    except Exception:
+        pass
+    # #endregion
     return now
+
+
+# region stage2 dispatch loop profiler
+_STAGE2_DISPATCH_LOOP_PROFILE_DAY: dict | None = None
+_STAGE2_DISPATCH_LOOP_PROFILE_RUN: dict = {}
+
+
+def _reset_dispatch_loop_profile() -> None:
+    global _STAGE2_DISPATCH_LOOP_PROFILE_DAY, _STAGE2_DISPATCH_LOOP_PROFILE_RUN
+    _STAGE2_DISPATCH_LOOP_PROFILE_DAY = None
+    _STAGE2_DISPATCH_LOOP_PROFILE_RUN = {
+        "day_records": [],
+        "run_buckets": {},
+    }
+
+
+def _dispatch_loop_profile_begin_day(iso_date: str) -> None:
+    global _STAGE2_DISPATCH_LOOP_PROFILE_DAY
+    _STAGE2_DISPATCH_LOOP_PROFILE_DAY = {
+        "date": iso_date,
+        "buckets": {},
+        "trial_pass_count": 0,
+        "sched_pass_secs": [],
+    }
+
+
+def _dispatch_loop_profile_add(bucket: str, sec: float, count: int = 1) -> None:
+    if sec < 0.0:
+        sec = 0.0
+    day = _STAGE2_DISPATCH_LOOP_PROFILE_DAY
+    if day is not None:
+        ent = day["buckets"].setdefault(bucket, {"sec": 0.0, "count": 0})
+        ent["sec"] += sec
+        ent["count"] += int(count)
+
+
+def _dispatch_loop_profile_top_buckets(
+    buckets: dict, limit: int = 8
+) -> list[dict]:
+    rows = [
+        {"bucket": k, "sec": round(v.get("sec", 0.0), 3), "count": v.get("count", 0)}
+        for k, v in buckets.items()
+        if v.get("sec", 0.0) > 1e-6 or v.get("count", 0) > 0
+    ]
+    rows.sort(key=lambda r: r["sec"], reverse=True)
+    return rows[:limit]
+
+
+def _dispatch_loop_profile_finish_day(
+    day_elapsed_sec: float, **meta
+) -> dict:
+    """暦日計測を run 集計にマージし、日別サマリ dict を返す。"""
+    global _STAGE2_DISPATCH_LOOP_PROFILE_DAY
+    day = _STAGE2_DISPATCH_LOOP_PROFILE_DAY
+    _STAGE2_DISPATCH_LOOP_PROFILE_DAY = None
+    if day is None:
+        return {}
+    buckets = day.get("buckets") or {}
+    run = _STAGE2_DISPATCH_LOOP_PROFILE_RUN
+    for k, v in buckets.items():
+        ent = run["run_buckets"].setdefault(k, {"sec": 0.0, "count": 0})
+        ent["sec"] += v.get("sec", 0.0)
+        ent["count"] += v.get("count", 0)
+    pass_secs = day.get("sched_pass_secs") or []
+    summary = {
+        "date": day.get("date"),
+        "elapsed_sec": round(day_elapsed_sec, 3),
+        "trial_pass_count": day.get("trial_pass_count", 0),
+        "top_buckets": _dispatch_loop_profile_top_buckets(buckets, 8),
+        **meta,
+    }
+    if pass_secs:
+        summary["sched_pass_count"] = len(pass_secs)
+        summary["sched_pass_sec_max"] = round(max(pass_secs), 3)
+        summary["sched_pass_sec_sum"] = round(sum(pass_secs), 3)
+        if len(pass_secs) > 1:
+            summary["sched_pass_sec_avg"] = round(
+                sum(pass_secs) / len(pass_secs), 3
+            )
+    run["day_records"].append(summary)
+    return summary
+
+
+def _dispatch_loop_profile_emit_run_summary() -> None:
+    run = _STAGE2_DISPATCH_LOOP_PROFILE_RUN
+    day_records = run.get("day_records") or []
+    # #region agent log
+    try:
+        from planning_core import agent_debug_ndjson as _agent_dbg
+
+        _agent_dbg.append_structured(
+            "timing",
+            "_core._dispatch_loop_profile_emit_run_summary",
+            "dispatch_loop_profile",
+            {
+                "runId": "stage2-perf",
+                "label": "dispatch_loop_profile",
+                "run_buckets_top12": _dispatch_loop_profile_top_buckets(
+                    run.get("run_buckets") or {}, 12
+                ),
+                "day_top5_by_elapsed": sorted(
+                    day_records,
+                    key=lambda d: d.get("elapsed_sec") or 0,
+                    reverse=True,
+                )[:5],
+                "day_count": len(day_records),
+            },
+        )
+    except Exception:
+        pass
+    # #endregion
+
+
+# endregion stage2 dispatch loop profiler
 
 
 def _stage2_skip_actual_detail_gantt_prep(
@@ -1887,8 +2062,17 @@ def plan_input_sheet_column_order():
 
 
 def plan_input_stage3_sheet_column_order():
-    """段階3 入力3表の列順。入力1表の列順の先頭に枝番識別列（元依頼NO・配台枝番）を足したもの。"""
-    return [PLAN_COL_PARENT_TASK_ID, PLAN_COL_BRANCH_SEQ] + plan_input_sheet_column_order()
+    """段階3 入力3表の列順。入力1表の列順の先頭に枝番識別列（元依頼NO・配台枝番）を足したもの。
+
+    段階3.0〜3.2 では配台開始下限に ``配台可能日時`` 列のみを用いるため、
+    ``配台可能日時_上書き`` と ``（元）配台可能日時_上書き`` は含めない。
+    """
+    excluded = {
+        PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE,
+        plan_reference_column_name(PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE),
+    }
+    base = [c for c in plan_input_sheet_column_order() if c not in excluded]
+    return [PLAN_COL_PARENT_TASK_ID, PLAN_COL_BRANCH_SEQ] + base
 
 
 def _format_paren_ref_scalar(val):
@@ -2260,7 +2444,15 @@ def _extract_data_extraction_datetime(sheet_name: str | None = None):
         if not _xwb or not os.path.exists(_xwb):
             return None, None
         sn = (sheet_name or "").strip() or TASKS_SHEET_NAME
-        df = pd.read_excel(_xwb, sheet_name=sn)
+        _dt_cols = [
+            TASK_COL_DATA_EXTRACTION_TIME,
+            TASK_COL_EXTRACTION_TIME,
+            TASK_COL_DATA_EXTRACTION_DT,
+        ]
+        try:
+            df = pd.read_excel(_xwb, sheet_name=sn, usecols=_dt_cols)
+        except (ValueError, KeyError):
+            df = pd.read_excel(_xwb, sheet_name=sn, nrows=512)
         df.columns = df.columns.str.strip()
         for col_name in (
             TASK_COL_DATA_EXTRACTION_TIME,
@@ -19226,32 +19418,49 @@ def load_team_combination_presets_from_master() -> dict[
         str,
         list[tuple[int, int, int | None, tuple[str, ...], int | None]],
     ] = defaultdict(list)
-    for row_i, (_, row) in enumerate(df.iterrows()):
-        proc = norm_cell(row.get(proc_c)) if proc_c else ""
-        mach = norm_cell(row.get(mach_c)) if mach_c else ""
-        combo_cell = norm_cell(row.get(combo_c)) if combo_c else ""
+    _cols = list(df.columns)
+    _ix = {
+        "proc": _cols.index(proc_c) if proc_c and proc_c in _cols else -1,
+        "mach": _cols.index(mach_c) if mach_c and mach_c in _cols else -1,
+        "combo": _cols.index(combo_c) if combo_c and combo_c in _cols else -1,
+        "prio": _cols.index(prio_c) if prio_c and prio_c in _cols else -1,
+        "req": _cols.index(req_c) if req_c and req_c in _cols else -1,
+        "id": _cols.index(id_c) if id_c and id_c in _cols else -1,
+        "mem": [_cols.index(mc) for mc in mem_keys if mc in _cols],
+    }
+
+    def _cell_at(row_tuple, col_index: int):
+        if col_index < 0:
+            return ""
+        return norm_cell(row_tuple[1 + col_index])
+
+    for row in df.itertuples(index=True, name=None):
+        row_i = int(row[0])
+        proc = _cell_at(row, _ix["proc"])
+        mach = _cell_at(row, _ix["mach"])
+        combo_cell = _cell_at(row, _ix["combo"])
         if proc and mach:
             key = f"{proc}+{mach}"
         elif combo_cell:
             key = combo_cell
         else:
             continue
-        pr = parse_optional_int(row.get(prio_c)) if prio_c else None
+        pr = parse_optional_int(_cell_at(row, _ix["prio"])) if _ix["prio"] >= 0 else None
         if pr is None:
             pr = 10**9
         sheet_req: int | None = None
-        if req_c:
-            sheet_req = parse_optional_int(row.get(req_c))
+        if _ix["req"] >= 0:
+            sheet_req = parse_optional_int(_cell_at(row, _ix["req"]))
             if sheet_req is not None and sheet_req < 1:
                 sheet_req = None
         sheet_combo_id: int | None = None
-        if id_c:
-            sheet_combo_id = parse_optional_int(row.get(id_c))
+        if _ix["id"] >= 0:
+            sheet_combo_id = parse_optional_int(_cell_at(row, _ix["id"]))
             if sheet_combo_id is not None and sheet_combo_id < 1:
                 sheet_combo_id = None
         team: list[str] = []
-        for mc in mem_keys:
-            s = norm_cell(row.get(mc))
+        for mc_ix in _ix["mem"]:
+            s = _cell_at(row, mc_ix)
             if not s or s.lower() in ("nan", "none", "null"):
                 continue
             team.append(s)
@@ -20440,7 +20649,12 @@ def _task_on_slit_sec_process_path(task: dict) -> bool:
         return False
 
 
-def _l10_slit_done_minus_sec_done_for_task_id(task_queue: list, task_id: str) -> float:
+def _l10_slit_done_minus_sec_done_for_task_id(
+    task_queue: list,
+    task_id: str,
+    *,
+    rows_by_tid: dict[str, list[dict]] | None = None,
+) -> float:
     tid = (task_id or "").strip()
     if not tid:
         return 0.0
@@ -20450,8 +20664,11 @@ def _l10_slit_done_minus_sec_done_for_task_id(task_queue: list, task_id: str) ->
     _sec_mach = _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
     slit_done = 0.0
     sec_done = 0.0
-    for _t in task_queue:
-        if str(_t.get("task_id") or "").strip() != tid:
+    _iter_rows = (
+        rows_by_tid.get(tid) if rows_by_tid is not None else task_queue
+    )
+    for _t in _iter_rows:
+        if rows_by_tid is None and str(_t.get("task_id") or "").strip() != tid:
             continue
         proc = _normalize_process_name_for_rule_match(_t.get("machine"))
         mach = _normalize_equipment_match_key(_t.get("machine_name"))
@@ -20469,7 +20686,12 @@ def _l10_slit_done_minus_sec_done_for_task_id(task_queue: list, task_id: str) ->
     return max(0.0, slit_done - sec_done)
 
 
-def _l10_task_queue_has_special_slit_row_for_tid(task_queue: list, task_id: str) -> bool:
+def _l10_task_queue_has_special_slit_row_for_tid(
+    task_queue: list,
+    task_id: str,
+    *,
+    rows_by_tid: dict[str, list[dict]] | None = None,
+) -> bool:
     """同一依頼に L10 対象（スリット機1　湖南）の行が task_queue に存在するか。
 
     スリット完走後に行がキューから落ちると slit_done が集計されず pair_gap=0 のままになる。
@@ -20480,8 +20702,11 @@ def _l10_task_queue_has_special_slit_row_for_tid(task_queue: list, task_id: str)
         return False
     _slit_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
     _slit_mach = _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
-    for _t in task_queue:
-        if str(_t.get("task_id") or "").strip() != tid:
+    _iter_rows = (
+        rows_by_tid.get(tid) if rows_by_tid is not None else task_queue
+    )
+    for _t in _iter_rows:
+        if rows_by_tid is None and str(_t.get("task_id") or "").strip() != tid:
             continue
         proc = _normalize_process_name_for_rule_match(_t.get("machine"))
         mach = _normalize_equipment_match_key(_t.get("machine_name"))
@@ -20492,7 +20717,10 @@ def _l10_task_queue_has_special_slit_row_for_tid(task_queue: list, task_id: str)
 
 # B-6.1: 同一依頼内の 接続完了ロール − SEC 完了ロール（接続が先・SEC が後の依頼のみ集計に使用）
 def _b6_connection_done_minus_sec_done_for_task_id(
-    task_queue: list, task_id: str
+    task_queue: list,
+    task_id: str,
+    *,
+    rows_by_tid: dict[str, list[dict]] | None = None,
 ) -> float:
     tid = (task_id or "").strip()
     if not tid:
@@ -20505,8 +20733,11 @@ def _b6_connection_done_minus_sec_done_for_task_id(
     _sec_mach = _normalize_equipment_match_key(SPECIAL_WIP_SEC_MACHINE)
     conn_done = 0.0
     sec_done = 0.0
-    for _t in task_queue:
-        if str(_t.get("task_id") or "").strip() != tid:
+    _iter_rows = (
+        rows_by_tid.get(tid) if rows_by_tid is not None else task_queue
+    )
+    for _t in _iter_rows:
+        if rows_by_tid is None and str(_t.get("task_id") or "").strip() != tid:
             continue
         proc = _normalize_process_name_for_rule_match(_t.get("machine"))
         mach = _normalize_equipment_match_key(_t.get("machine_name"))
@@ -20525,7 +20756,10 @@ def _b6_connection_done_minus_sec_done_for_task_id(
 
 
 def _b6_task_queue_has_special_connection_row_for_tid(
-    task_queue: list, task_id: str
+    task_queue: list,
+    task_id: str,
+    *,
+    rows_by_tid: dict[str, list[dict]] | None = None,
 ) -> bool:
     """同一依頼に B-6 対象（接続×熱融着機　湖南）の行が task_queue に存在するか。"""
     tid = (task_id or "").strip()
@@ -20535,8 +20769,11 @@ def _b6_task_queue_has_special_connection_row_for_tid(
         SPECIAL_WIP_CONNECTION_PROCESS
     )
     _conn_mach = _normalize_equipment_match_key(SPECIAL_WIP_CONNECTION_MACHINE)
-    for _t in task_queue:
-        if str(_t.get("task_id") or "").strip() != tid:
+    _iter_rows = (
+        rows_by_tid.get(tid) if rows_by_tid is not None else task_queue
+    )
+    for _t in _iter_rows:
+        if rows_by_tid is None and str(_t.get("task_id") or "").strip() != tid:
             continue
         proc = _normalize_process_name_for_rule_match(_t.get("machine"))
         mach = _normalize_equipment_match_key(_t.get("machine_name"))
@@ -20545,7 +20782,12 @@ def _b6_task_queue_has_special_connection_row_for_tid(
     return False
 
 
-def _b6_initial_connection_roll_capacity_for_tid(task_queue: list, task_id: str) -> float:
+def _b6_initial_connection_roll_capacity_for_tid(
+    task_queue: list,
+    task_id: str,
+    *,
+    rows_by_tid: dict[str, list[dict]] | None = None,
+) -> float:
     """同一依頼の接続（熱融着機　湖南）行の initial_remaining_units 合計（ロール）。"""
     tid = (task_id or "").strip()
     if not tid:
@@ -20555,8 +20797,11 @@ def _b6_initial_connection_roll_capacity_for_tid(task_queue: list, task_id: str)
     )
     _conn_mach = _normalize_equipment_match_key(SPECIAL_WIP_CONNECTION_MACHINE)
     s = 0.0
-    for _t in task_queue:
-        if str(_t.get("task_id") or "").strip() != tid:
+    _iter_rows = (
+        rows_by_tid.get(tid) if rows_by_tid is not None else task_queue
+    )
+    for _t in _iter_rows:
+        if rows_by_tid is None and str(_t.get("task_id") or "").strip() != tid:
             continue
         proc = _normalize_process_name_for_rule_match(_t.get("machine"))
         mach = _normalize_equipment_match_key(_t.get("machine_name"))
@@ -20565,7 +20810,12 @@ def _b6_initial_connection_roll_capacity_for_tid(task_queue: list, task_id: str)
     return s
 
 
-def _l10_initial_slit_roll_capacity_for_tid(task_queue: list, task_id: str) -> float:
+def _l10_initial_slit_roll_capacity_for_tid(
+    task_queue: list,
+    task_id: str,
+    *,
+    rows_by_tid: dict[str, list[dict]] | None = None,
+) -> float:
     """同一依頼のスリット（スリット機1　湖南）行の initial_remaining_units 合計（ロール）。"""
     tid = (task_id or "").strip()
     if not tid:
@@ -20573,8 +20823,11 @@ def _l10_initial_slit_roll_capacity_for_tid(task_queue: list, task_id: str) -> f
     _slit_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
     _slit_mach = _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
     s = 0.0
-    for _t in task_queue:
-        if str(_t.get("task_id") or "").strip() != tid:
+    _iter_rows = (
+        rows_by_tid.get(tid) if rows_by_tid is not None else task_queue
+    )
+    for _t in _iter_rows:
+        if rows_by_tid is None and str(_t.get("task_id") or "").strip() != tid:
             continue
         proc = _normalize_process_name_for_rule_match(_t.get("machine"))
         mach = _normalize_equipment_match_key(_t.get("machine_name"))
@@ -20583,25 +20836,44 @@ def _l10_initial_slit_roll_capacity_for_tid(task_queue: list, task_id: str) -> f
     return s
 
 
-def _l10_b41_threshold_unreachable(task_queue: list, task_id: str) -> bool:
+def _l10_b41_threshold_unreachable(
+    task_queue: list,
+    task_id: str,
+    *,
+    rows_by_tid: dict[str, list[dict]] | None = None,
+) -> bool:
     """当該依頼のスリット総ロールが B-4.1 閾値未満なら、閾値到達不能（ゲートを掛けない）。"""
     thr = float(SLIT_BEFORE_SEC_MIN_SLIT_ROLLS)
     if thr <= 1e-9:
         return False
-    cap = _l10_initial_slit_roll_capacity_for_tid(task_queue, task_id)
+    cap = _l10_initial_slit_roll_capacity_for_tid(
+        task_queue, task_id, rows_by_tid=rows_by_tid
+    )
     return cap + 1e-9 < thr
 
 
-def _b61_threshold_unreachable(task_queue: list, task_id: str) -> bool:
+def _b61_threshold_unreachable(
+    task_queue: list,
+    task_id: str,
+    *,
+    rows_by_tid: dict[str, list[dict]] | None = None,
+) -> bool:
     """当該依頼の接続総ロールが B-6.1 閾値未満なら、閾値到達不能（ゲートを掛けない）。"""
     thr = float(CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS)
     if thr <= 1e-9:
         return False
-    cap = _b6_initial_connection_roll_capacity_for_tid(task_queue, task_id)
+    cap = _b6_initial_connection_roll_capacity_for_tid(
+        task_queue, task_id, rows_by_tid=rows_by_tid
+    )
     return cap + 1e-9 < thr
 
 
-def _b6_connection_has_remaining_units(task_queue: list, task_id: str) -> bool:
+def _b6_connection_has_remaining_units(
+    task_queue: list,
+    task_id: str,
+    *,
+    rows_by_tid: dict[str, list[dict]] | None = None,
+) -> bool:
     """当該依頼の接続（熱融着機　湖南）行に未割当ロールが残るか。"""
     tid = (task_id or "").strip()
     if not tid:
@@ -20610,8 +20882,11 @@ def _b6_connection_has_remaining_units(task_queue: list, task_id: str) -> bool:
         SPECIAL_WIP_CONNECTION_PROCESS
     )
     _conn_mach = _normalize_equipment_match_key(SPECIAL_WIP_CONNECTION_MACHINE)
-    for _t in task_queue:
-        if str(_t.get("task_id") or "").strip() != tid:
+    _iter_rows = (
+        rows_by_tid.get(tid) if rows_by_tid is not None else task_queue
+    )
+    for _t in _iter_rows:
+        if rows_by_tid is None and str(_t.get("task_id") or "").strip() != tid:
             continue
         proc = _normalize_process_name_for_rule_match(_t.get("machine"))
         mach = _normalize_equipment_match_key(_t.get("machine_name"))
@@ -20620,15 +20895,23 @@ def _b6_connection_has_remaining_units(task_queue: list, task_id: str) -> bool:
     return False
 
 
-def _l10_slit_has_remaining_units(task_queue: list, task_id: str) -> bool:
+def _l10_slit_has_remaining_units(
+    task_queue: list,
+    task_id: str,
+    *,
+    rows_by_tid: dict[str, list[dict]] | None = None,
+) -> bool:
     """当該依頼のスリット（スリット機1　湖南）行に未割当ロールが残るか。"""
     tid = (task_id or "").strip()
     if not tid:
         return False
     _slit_proc = _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
     _slit_mach = _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
-    for _t in task_queue:
-        if str(_t.get("task_id") or "").strip() != tid:
+    _iter_rows = (
+        rows_by_tid.get(tid) if rows_by_tid is not None else task_queue
+    )
+    for _t in _iter_rows:
+        if rows_by_tid is None and str(_t.get("task_id") or "").strip() != tid:
             continue
         proc = _normalize_process_name_for_rule_match(_t.get("machine"))
         mach = _normalize_equipment_match_key(_t.get("machine_name"))
@@ -20637,18 +20920,29 @@ def _l10_slit_has_remaining_units(task_queue: list, task_id: str) -> bool:
     return False
 
 
-def _b61_sec_blocked_by_connection_min_rolls(task: dict, task_queue: list) -> bool:
+def _b61_sec_blocked_by_connection_min_rolls(
+    task: dict,
+    task_queue: list,
+    *,
+    rows_by_tid: dict[str, list[dict]] | None = None,
+) -> bool:
     """
     B-6.1: 接続→SEC の SEC を候補から外すか。
     接続行に残ロールが無い（接続完走後）はゲートしない（SEC 残ロールを完走できる）。
     """
     tid = str(task.get("task_id") or "").strip()
-    if not tid or _b61_threshold_unreachable(task_queue, tid):
+    if not tid or _b61_threshold_unreachable(
+        task_queue, tid, rows_by_tid=rows_by_tid
+    ):
         return False
-    if not _b6_connection_has_remaining_units(task_queue, tid):
+    if not _b6_connection_has_remaining_units(
+        task_queue, tid, rows_by_tid=rows_by_tid
+    ):
         return False
     if (
-        _b6_connection_done_minus_sec_done_for_task_id(task_queue, tid)
+        _b6_connection_done_minus_sec_done_for_task_id(
+            task_queue, tid, rows_by_tid=rows_by_tid
+        )
         >= float(CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS) - 1e-9
     ):
         return False
@@ -20668,20 +20962,33 @@ def _b61_sec_blocked_by_connection_min_rolls(task: dict, task_queue: list) -> bo
         and _norm.index(_cp) < _norm.index(_sc)
     ):
         return False
-    if not _b6_task_queue_has_special_connection_row_for_tid(task_queue, tid):
+    if not _b6_task_queue_has_special_connection_row_for_tid(
+        task_queue, tid, rows_by_tid=rows_by_tid
+    ):
         return False
     return True
 
 
-def _l10_b41_sec_blocked_by_slit_min_rolls(task: dict, task_queue: list) -> bool:
+def _l10_b41_sec_blocked_by_slit_min_rolls(
+    task: dict,
+    task_queue: list,
+    *,
+    rows_by_tid: dict[str, list[dict]] | None = None,
+) -> bool:
     """B-4.1: スリット→SEC の SEC を候補から外すか（スリット完走後はゲートしない）。"""
     tid = str(task.get("task_id") or "").strip()
-    if not tid or _l10_b41_threshold_unreachable(task_queue, tid):
+    if not tid or _l10_b41_threshold_unreachable(
+        task_queue, tid, rows_by_tid=rows_by_tid
+    ):
         return False
-    if not _l10_slit_has_remaining_units(task_queue, tid):
+    if not _l10_slit_has_remaining_units(
+        task_queue, tid, rows_by_tid=rows_by_tid
+    ):
         return False
     if (
-        _l10_slit_done_minus_sec_done_for_task_id(task_queue, tid)
+        _l10_slit_done_minus_sec_done_for_task_id(
+            task_queue, tid, rows_by_tid=rows_by_tid
+        )
         >= float(SLIT_BEFORE_SEC_MIN_SLIT_ROLLS) - 1e-9
     ):
         return False
@@ -20700,7 +21007,9 @@ def _l10_b41_sec_blocked_by_slit_min_rolls(task: dict, task_queue: list) -> bool
         < _norm.index(_normalize_process_name_for_rule_match("SEC"))
     ):
         return False
-    return _l10_task_queue_has_special_slit_row_for_tid(task_queue, tid)
+    return _l10_task_queue_has_special_slit_row_for_tid(
+        task_queue, tid, rows_by_tid=rows_by_tid
+    )
 
 
 def _l10_sec_start_floor_from_slit_timeline(
@@ -21108,7 +21417,13 @@ def _plan_sheet_priority_sort_value(t: dict) -> int:
         return 999
 
 
-def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
+def _task_blocked_by_same_request_dependency(
+    task,
+    task_queue,
+    *,
+    rows_by_rule_tid: dict[str, list[dict]] | None = None,
+    pipeline_room_cache: dict[str, float] | None = None,
+) -> bool:
     """
     同一依頼NOの異なる工程を坌時刻に回さない（配台ルール §A-1・§A-2）。
     - 両行に加工内容由来の rank はあるとしは rank のみで剝後（§A-1）。
@@ -21129,8 +21444,13 @@ def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
         my_seq = 0
     my_r = _task_rank_int_or_none(task)
 
-    for t2 in task_queue:
-        if _rule_task_id(t2) != tid:
+    _peer_rows = (
+        rows_by_rule_tid.get(tid) if rows_by_rule_tid is not None else None
+    )
+    if _peer_rows is None:
+        _peer_rows = task_queue
+    for t2 in _peer_rows:
+        if rows_by_rule_tid is None and _rule_task_id(t2) != tid:
             continue
         if float(t2.get("remaining_units") or 0) <= 1e-9:
             continue
@@ -21154,7 +21474,13 @@ def _task_blocked_by_same_request_dependency(task, task_queue) -> bool:
                     or task.get("roll_pipeline_rewind")
                 )
                 and t2.get("roll_pipeline_ec")
-                and _roll_pipeline_inspection_assign_room(task_queue, tid) > 1e-12
+                and (
+                    pipeline_room_cache.get(tid)
+                    if pipeline_room_cache is not None
+                    and tid in pipeline_room_cache
+                    else _roll_pipeline_inspection_assign_room(task_queue, tid)
+                )
+                > 1e-12
             ):
                 continue
             return True
@@ -24405,6 +24731,8 @@ def _equipment_line_lower_dispatch_trial_still_pending(
     abolish_all_scheduling_limits: bool = False,
     dispatch_interval_mirror: DispatchIntervalMirror | None = None,
     assign_probe_ctx: dict | None = None,
+    pending_by_occ: dict[str, list[tuple[int, dict]]] | None = None,
+    window_left_cache: dict | None = None,
 ) -> bool:
     """
     同一実機械（machine 占有キー）上で」より尝さい配台試行順の行はまて残量を挝つか。
@@ -24431,6 +24759,45 @@ def _equipment_line_lower_dispatch_trial_still_pending(
         my_o = int(my_dispatch_order)
     except (TypeError, ValueError):
         my_o = 10**9
+
+    def _lower_order_blocks(t: dict, o: int) -> bool:
+        if o >= my_o:
+            return False
+        if float(t.get("remaining_units") or 0) <= 1e-12:
+            return False
+        if _task_not_yet_schedulable_due_to_dependency_or_b2_room(t, task_queue):
+            return False
+        if _task_fully_machine_calendar_blocked_on_date(
+            t, current_date, daily_status, members
+        ):
+            return False
+        if _task_no_machining_window_left_from_avail_floor_cached(
+            t,
+            current_date,
+            daily_status,
+            members,
+            machine_avail_dt,
+            machine_day_start,
+            machine_handoff=machine_handoff,
+            skills_dict=skills_dict,
+            abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+            dispatch_interval_mirror=dispatch_interval_mirror,
+            window_left_cache=window_left_cache,
+        ):
+            return False
+        if assign_probe_ctx is not None and _trial_order_assign_probe_fails(
+            t, current_date, daily_status, assign_probe_ctx
+        ):
+            return False
+        return True
+
+    if pending_by_occ is not None:
+        for o, t in pending_by_occ.get(line, ()):
+            if o >= my_o:
+                break
+            if _lower_order_blocks(t, o):
+                return True
+        return False
     for t in task_queue:
         if float(t.get("remaining_units") or 0) <= 1e-12:
             continue
@@ -24446,30 +24813,7 @@ def _equipment_line_lower_dispatch_trial_still_pending(
             o = int(t.get("dispatch_trial_order") or 10**9)
         except (TypeError, ValueError):
             o = 10**9
-        if o < my_o:
-            if _task_not_yet_schedulable_due_to_dependency_or_b2_room(t, task_queue):
-                continue
-            if _task_fully_machine_calendar_blocked_on_date(
-                t, current_date, daily_status, members
-            ):
-                continue
-            if _task_no_machining_window_left_from_avail_floor(
-                t,
-                current_date,
-                daily_status,
-                members,
-                machine_avail_dt,
-                machine_day_start,
-                machine_handoff=machine_handoff,
-                skills_dict=skills_dict,
-                abolish_all_scheduling_limits=abolish_all_scheduling_limits,
-                dispatch_interval_mirror=dispatch_interval_mirror,
-            ):
-                continue
-            if assign_probe_ctx is not None and _trial_order_assign_probe_fails(
-                t, current_date, daily_status, assign_probe_ctx
-            ):
-                continue
+        if _lower_order_blocks(t, o):
             return True
     return False
 
@@ -24625,22 +24969,20 @@ def _seed_avail_from_timeline_for_date(
     machine_avail_dt: dict,
     avail_dt: dict,
     machine_day_start: datetime,
+    *,
+    events_today: list | None = None,
 ) -> None:
     """同一日内の既存 timeline から設備空し・メンバー空しの下限を反映れる（部分再配台用）。"""
-    for e in timeline_events:
-        if e.get("date") != current_date:
-            continue
+    _iter = (
+        events_today
+        if events_today is not None
+        else (e for e in timeline_events if e.get("date") == current_date)
+    )
+    for e in _iter:
         end_dt = e.get("end_dt")
         if end_dt is None or not hasattr(end_dt, "replace"):
             continue
-        occ = str(e.get("machine_occupancy_key") or "").strip()
-        if not occ:
-            mraw = str(e.get("machine") or "").strip()
-            occ = (
-                _normalize_equipment_match_key(mraw.split("+", 1)[1])
-                if "+" in mraw
-                else _normalize_equipment_match_key(mraw)
-            )
+        occ = _machine_occupancy_key_from_timeline_event(e)
         if occ:
             prev = machine_avail_dt.get(occ, machine_day_start)
             if end_dt > prev:
@@ -31434,6 +31776,7 @@ def _append_changeover_segments_to_timeline(
             "event_kind": ek,
         }
         timeline_events.append(ev)
+        _stage2_dispatch_track_timeline_event(ev, len(timeline_events))
         if dispatch_interval_mirror is not None:
             dispatch_interval_mirror.register_from_event(ev)
         for nm in (op, *[_p.strip() for _p in sub.split(",") if _p.strip()]):
@@ -31473,6 +31816,93 @@ def _normalize_timeline_task_id(ev: dict) -> str:
     return str(ev.get("task_id", "") or "").strip()
 
 
+def _machine_occupancy_key_from_timeline_event(e: dict) -> str:
+    occ = str(e.get("machine_occupancy_key") or "").strip()
+    if occ:
+        return occ
+    mraw = str(e.get("machine") or "").strip()
+    if not mraw:
+        return ""
+    if "+" in mraw:
+        return _normalize_equipment_match_key(mraw.split("+", 1)[1])
+    return _normalize_equipment_match_key(mraw)
+
+
+def _snapshot_machine_handoff_state(template: dict) -> dict:
+    return {
+        "last_tid": dict(template["last_tid"]),
+        "last_eq": dict(template["last_eq"]),
+        "last_machining_dt": dict(template["last_machining_dt"]),
+        "last_machining_date": dict(template["last_machining_date"]),
+        "last_lead_op": dict(template["last_lead_op"]),
+        "last_machining_sub": dict(template["last_machining_sub"]),
+        "machining_today_occ": set(template["machining_today_occ"]),
+        "started_today": set(template["started_today"]),
+    }
+
+
+def _reset_machine_handoff_timeline_cache() -> None:
+    global _MH_HANDOFF_TIMELINE_CACHE_KEY, _MH_HANDOFF_TIMELINE_CACHE_STATE
+    global _STAGE2_DISPATCH_EVENTS_BY_DATE
+    _MH_HANDOFF_TIMELINE_CACHE_KEY = None
+    _MH_HANDOFF_TIMELINE_CACHE_STATE = None
+    _MH_HANDOFF_TIMELINE_CACHE_STATS["hit"] = 0
+    _MH_HANDOFF_TIMELINE_CACHE_STATS["miss"] = 0
+    _MH_HANDOFF_TIMELINE_CACHE_STATS["incremental"] = 0
+    _STAGE2_DISPATCH_EVENTS_BY_DATE = defaultdict(list)
+
+
+def _stage2_dispatch_track_timeline_event(ev: dict, timeline_len: int) -> None:
+    """段階2配台ループ中: 暦日別インデックスと手札キャッシュの増分更新。"""
+    global _MH_HANDOFF_TIMELINE_CACHE_KEY, _STAGE2_DISPATCH_EVENTS_BY_DATE
+    d = ev.get("date")
+    if _STAGE2_DISPATCH_EVENTS_BY_DATE is not None and isinstance(d, date):
+        _STAGE2_DISPATCH_EVENTS_BY_DATE[d].append(ev)
+    if (
+        _MH_HANDOFF_TIMELINE_CACHE_STATE is not None
+        and _MH_HANDOFF_TIMELINE_CACHE_KEY is not None
+        and isinstance(d, date)
+        and _MH_HANDOFF_TIMELINE_CACHE_KEY[1] == d
+    ):
+        _machine_handoff_merge_machining_event(_MH_HANDOFF_TIMELINE_CACHE_STATE, ev, d)
+        _MH_HANDOFF_TIMELINE_CACHE_KEY = (timeline_len, d)
+        _MH_HANDOFF_TIMELINE_CACHE_STATS["incremental"] += 1
+
+
+def _machine_handoff_merge_machining_event(
+    state: dict, e: dict, current_date: date
+) -> None:
+    """``_machine_handoff_state_from_timeline`` と同趣旨で 1 イベントだけ state に反映（in-place）。"""
+    if not _is_machining_timeline_event(e):
+        return
+    ed = e.get("date")
+    if not isinstance(ed, date):
+        return
+    occ = _machine_occupancy_key_from_timeline_event(e)
+    if not occ:
+        return
+    end_dt = e.get("end_dt")
+    if end_dt is None or not hasattr(end_dt, "replace"):
+        return
+    if ed == current_date:
+        state["machining_today_occ"].add(occ)
+        state["started_today"].add(occ)
+    if ed > current_date:
+        return
+    eq_line = str(e.get("machine") or "").strip()
+    tid = _normalize_timeline_task_id(e)
+    lead_op = str(e.get("op") or "").strip()
+    sub_csv = str(e.get("sub") or "").strip()
+    prev_dt = state["last_machining_dt"].get(occ)
+    if prev_dt is None or end_dt > prev_dt:
+        state["last_machining_dt"][occ] = end_dt
+        state["last_tid"][occ] = tid
+        state["last_eq"][occ] = eq_line
+        state["last_machining_date"][occ] = ed
+        state["last_lead_op"][occ] = lead_op
+        state["last_machining_sub"][occ] = sub_csv
+
+
 def _machine_handoff_state_from_timeline(
     timeline_events: list,
     current_date: date,
@@ -31483,23 +31913,19 @@ def _machine_handoff_state_from_timeline(
     セットアップ系 event_kind は last_tid 等の復元に含まない。
     """
     best: dict[str, tuple[datetime, str, str, date, str, str]] = {}
+    machining_today_occ: set[str] = set()
     for e in timeline_events:
         if not _is_machining_timeline_event(e):
             continue
         ed = e.get("date")
         if not isinstance(ed, date):
             continue
-        if ed > current_date:
+        occ = _machine_occupancy_key_from_timeline_event(e)
+        if not occ:
             continue
-        occ = str(e.get("machine_occupancy_key") or "").strip()
-        if not occ:
-            mraw = str(e.get("machine") or "").strip()
-            occ = (
-                _normalize_equipment_match_key(mraw.split("+", 1)[1])
-                if "+" in mraw
-                else _normalize_equipment_match_key(mraw)
-            )
-        if not occ:
+        if ed == current_date:
+            machining_today_occ.add(occ)
+        if ed > current_date:
             continue
         end_dt = e.get("end_dt")
         if end_dt is None or not hasattr(end_dt, "replace"):
@@ -31517,22 +31943,6 @@ def _machine_handoff_state_from_timeline(
     last_machining_date = {k: v[3] for k, v in best.items()}
     last_lead_op = {k: v[4] for k, v in best.items()}
     last_machining_sub = {k: v[5] for k, v in best.items()}
-    machining_today_occ: set[str] = set()
-    for e in timeline_events:
-        if not _is_machining_timeline_event(e):
-            continue
-        if e.get("date") != current_date:
-            continue
-        occ = str(e.get("machine_occupancy_key") or "").strip()
-        if not occ:
-            mraw = str(e.get("machine") or "").strip()
-            occ = (
-                _normalize_equipment_match_key(mraw.split("+", 1)[1])
-                if "+" in mraw
-                else _normalize_equipment_match_key(mraw)
-            )
-        if occ:
-            machining_today_occ.add(occ)
     started_today = set(machining_today_occ)
     return {
         "last_tid": last_tid,
@@ -31544,6 +31954,33 @@ def _machine_handoff_state_from_timeline(
         "machining_today_occ": machining_today_occ,
         "started_today": started_today,
     }
+
+
+def _machine_handoff_state_from_timeline_cached(
+    timeline_events: list,
+    current_date: date,
+) -> dict:
+    """同一暦日でタイムラインが 1 件だけ増えたときは全件再スキャンを避ける。"""
+    global _MH_HANDOFF_TIMELINE_CACHE_KEY, _MH_HANDOFF_TIMELINE_CACHE_STATE
+    _t_mh0 = time_module.perf_counter()
+    key = (len(timeline_events), current_date)
+    if (
+        _MH_HANDOFF_TIMELINE_CACHE_KEY == key
+        and _MH_HANDOFF_TIMELINE_CACHE_STATE is not None
+    ):
+        _MH_HANDOFF_TIMELINE_CACHE_STATS["hit"] += 1
+        _dispatch_loop_profile_add(
+            "mh_handoff_cached_hit", time_module.perf_counter() - _t_mh0
+        )
+        return _snapshot_machine_handoff_state(_MH_HANDOFF_TIMELINE_CACHE_STATE)
+    _MH_HANDOFF_TIMELINE_CACHE_STATS["miss"] += 1
+    state = _machine_handoff_state_from_timeline(timeline_events, current_date)
+    _MH_HANDOFF_TIMELINE_CACHE_KEY = key
+    _MH_HANDOFF_TIMELINE_CACHE_STATE = state
+    _dispatch_loop_profile_add(
+        "mh_handoff_cached_miss", time_module.perf_counter() - _t_mh0
+    )
+    return _snapshot_machine_handoff_state(state)
 
 
 def _trial_order_flow_day_start_floor(
@@ -31594,35 +32031,17 @@ def _trial_order_flow_day_start_floor(
     return floor
 
 
-def _trial_order_flow_eligible_tasks(
-    tasks_today: list,
-    task_queue: list,
-    current_date: date,
-    *,
-    daily_status: dict | None = None,
-    members: list | None = None,
-    machine_avail_dt: dict | None = None,
-    machine_day_start: datetime | None = None,
-    machine_handoff: dict | None = None,
-    skills_dict: dict | None = None,
-    abolish_all_scheduling_limits: bool = False,
-    dispatch_interval_mirror: DispatchIntervalMirror | None = None,
-    min_dispatch_effective: int | None = None,
-    assign_probe_ctx: dict | None = None,
-    interactive_trial_pair_dates: dict | None = None,
-) -> list:
-    # 特別ルール（工程間WIP上限）: L11 は EC→（検査＋巻返し）の前段 WIP が上限以上なら EC を配台しない。
-    # 集計は WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE（既定 task_id＝当該依頼NO行、head＝接頭辞、global）。
-    # - L10: スリット→SEC の前段WIPが上限以上なら スリット を配台しない（SECは優先して進める）
-    # - B-6 / L13: 接続→SEC の前段WIPが上限以上なら 接続 を配台しない（SECは優先して進める）
-    # remaining_units はロール本数（1ロール完了で 1 減）である前提。
-    _wip_l11_global_val: float | None = None
-    _wip_l11_by_bucket: dict[str, float] = {}
+def _stage2_eligible_wip_snapshot(task_queue: list) -> dict:
+    """``_trial_order_flow_eligible_tasks`` 用 WIP 集計（1 パスあたり 1 回）。"""
+    snap: dict = {
+        "l11_global": None,
+        "l11_by_bucket": {},
+        "wip_slit_before_sec": None,
+        "wip_connection_before_sec": None,
+    }
     if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
         if _wip_ec_l11_aggregate_is_global():
-            _wip_l11_global_val = _wip_ec_before_insp_roll_count(task_queue)
-
-    wip_slit_before_sec = None
+            snap["l11_global"] = _wip_ec_before_insp_roll_count(task_queue)
     if (
         isinstance(WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS, int)
         and WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS > 0
@@ -31647,9 +32066,7 @@ def _trial_order_flow_eligible_tasks(
                 slit_done_total += done
             elif proc == _sec_proc and mach == _sec_mach:
                 sec_done_total += done
-        wip_slit_before_sec = max(0.0, slit_done_total - sec_done_total)
-
-    wip_connection_before_sec = None
+        snap["wip_slit_before_sec"] = max(0.0, slit_done_total - sec_done_total)
     if (
         isinstance(WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS, int)
         and WIP_LIMIT_CONNECTION_BEFORE_SEC_ROLLS > 0
@@ -31676,93 +32093,290 @@ def _trial_order_flow_eligible_tasks(
                 connection_done_total += done
             elif proc == _sec_proc_c and mach == _sec_mach_c:
                 sec_done_c += done
-        wip_connection_before_sec = max(0.0, connection_done_total - sec_done_c)
+        snap["wip_connection_before_sec"] = max(
+            0.0, connection_done_total - sec_done_c
+        )
+    return snap
 
-    out = []
-    for task in tasks_today:
-        if float(task.get("remaining_units") or 0) <= 1e-12:
-            continue
-        if (
-            _interactive_dispatch_trial_env_active()
-            and interactive_trial_pair_dates is not None
-        ):
-            tid_n = _interactive_norm_cell(str(task.get("task_id") or ""))
-            mach_n = _interactive_norm_cell(str(task.get("machine_name") or ""))
-            _pd = interactive_trial_pair_dates.get((tid_n, mach_n))
-            if _pd is not None and current_date not in _pd:
-                continue
-        # L11: 検査前WIPが限界以上なら EC をブロック（集計は AGGREGATE_MODE）
-        if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
-            if task.get("roll_pipeline_ec"):
-                if _wip_ec_l11_aggregate_is_global():
-                    _wip_use = _wip_l11_global_val
-                    _wip_cache_key = "global"
-                else:
-                    _m = WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE
-                    if _m == "task_id":
-                        _wip_bk = str(task.get("task_id") or "").strip()
-                    else:
-                        _wip_bk = _wip_l11_bucket_key_for_task_id(str(task.get("task_id") or ""))
-                    _wip_cache_key = f"{_m}:{_wip_bk}"
-                    if _wip_cache_key not in _wip_l11_by_bucket:
-                        if _m == "task_id":
-                            _wip_l11_by_bucket[_wip_cache_key] = _wip_ec_before_insp_roll_count(
-                                task_queue, task_id_exact=_wip_bk
-                            )
-                        else:
-                            _wip_l11_by_bucket[_wip_cache_key] = _wip_ec_before_insp_roll_count(
-                                task_queue, task_id_head=_wip_bk
-                            )
-                    _wip_use = _wip_l11_by_bucket[_wip_cache_key]
-                if (
-                    _wip_use is not None
-                    and _wip_use >= float(WIP_LIMIT_EC_BEFORE_INSP_ROLLS)
-                ):
-                    continue
-        # L10: SEC前WIPが限界以上ならスリットをブロック（SECは進めてWIP解消）
-        # 対象は加工内容がスリット→SEC の依頼のみ（例: W6-4 スリット,EC,検査 は対象外）
-        if wip_slit_before_sec is not None and wip_slit_before_sec >= float(
-            WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS
-        ):
-            proc = _normalize_process_name_for_rule_match(task.get("machine"))
-            mach = _normalize_equipment_match_key(task.get("machine_name"))
-            if (
-                proc == _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
-                and mach == _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
-                and _task_on_slit_sec_process_path(task)
-            ):
-                continue
 
-        # B-6: SEC 前の接続ロールが上限以上なら接続を止めて SEC を進める（総ロール・スリット経路と同趣旨）
-        from planning_core.dispatch_rules.hook_adapter import eligible_l13_connection_skip
+def _stage2_rows_by_task_id(task_queue: list) -> dict[str, list[dict]]:
+    """依頼NO（表示 task_id）ごとの行リスト（eligible 内の task_queue 全走査を避ける）。"""
+    idx: dict[str, list[dict]] = defaultdict(list)
+    for t in task_queue:
+        tid = str(t.get("task_id") or "").strip()
+        if tid:
+            idx[tid].append(t)
+    return idx
 
-        if eligible_l13_connection_skip(task, wip_connection_before_sec, task_queue):
-            continue
 
-        # L10 B-4.1: 加工内容が「スリット,SEC」の依頼では、**当該依頼**でスリットが SLIT_BEFORE_SEC_MIN_SLIT_ROLLS ロール以上終わるまで SEC を開始しない
-        if _l10_b41_sec_blocked_by_slit_min_rolls(task, task_queue):
-            continue
-        # B-6.1: 加工内容が「接続→SEC」の依頼では、当該依頼で接続が
-        # CONNECTION_BEFORE_SEC_MIN_CONNECTION_ROLLS ロール以上終わるまで SEC を開始しない
-        if _b61_sec_blocked_by_connection_min_rolls(task, task_queue):
-            continue
-        if _task_blocked_by_same_request_dependency(task, task_queue):
-            continue
-        if _task_blocked_by_global_dispatch_trial_order(
-            task,
-            task_queue,
+def _stage2_rows_by_rule_task_id(task_queue: list) -> dict[str, list[dict]]:
+    """``_rule_task_id`` ごとの行リスト（§A 依存判定用）。"""
+    idx: dict[str, list[dict]] = defaultdict(list)
+    for t in task_queue:
+        tid = _rule_task_id(t)
+        if tid:
+            idx[tid].append(t)
+    return idx
+
+
+def _task_no_machining_window_left_from_avail_floor_cached(
+    t: dict,
+    current_date: date,
+    daily_status: dict | None,
+    members: list | None,
+    machine_avail_dt: dict | None,
+    machine_day_start: datetime | None,
+    *,
+    machine_handoff: dict | None = None,
+    skills_dict: dict | None = None,
+    abolish_all_scheduling_limits: bool = False,
+    dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    window_left_cache: dict | None = None,
+) -> bool:
+    if window_left_cache is None:
+        return _task_no_machining_window_left_from_avail_floor(
+            t,
             current_date,
-            daily_status=daily_status,
-            members=members,
-            machine_avail_dt=machine_avail_dt,
-            machine_day_start=machine_day_start,
+            daily_status,
+            members,
+            machine_avail_dt,
+            machine_day_start,
             machine_handoff=machine_handoff,
             skills_dict=skills_dict,
             abolish_all_scheduling_limits=abolish_all_scheduling_limits,
             dispatch_interval_mirror=dispatch_interval_mirror,
-            min_dispatch_effective=min_dispatch_effective,
-        ):
+        )
+    _tm = t.get("machine")
+    _eqt = str(t.get("equipment_line_key") or _tm or "").strip() or (_tm or "")
+    occ = (_machine_occupancy_key_resolve(t, _eqt) or "").strip()
+    if not occ:
+        return _task_no_machining_window_left_from_avail_floor(
+            t,
+            current_date,
+            daily_status,
+            members,
+            machine_avail_dt,
+            machine_day_start,
+            machine_handoff=machine_handoff,
+            skills_dict=skills_dict,
+            abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+            dispatch_interval_mirror=dispatch_interval_mirror,
+        )
+    _avail_floor = machine_avail_dt.get(occ) if machine_avail_dt is not None else None
+    key = (id(t), current_date, occ, _avail_floor)
+    hit = window_left_cache.get(key)
+    if hit is not None:
+        return hit
+    v = _task_no_machining_window_left_from_avail_floor(
+        t,
+        current_date,
+        daily_status,
+        members,
+        machine_avail_dt,
+        machine_day_start,
+        machine_handoff=machine_handoff,
+        skills_dict=skills_dict,
+        abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+        dispatch_interval_mirror=dispatch_interval_mirror,
+    )
+    window_left_cache[key] = v
+    return v
+
+
+def _stage2_pending_by_machine_occ_index(
+    task_queue: list, current_date: date
+) -> dict[str, list[tuple[int, dict]]]:
+    """start_date_req<=当日・残量ありを設備占有キー別・試行順昇順に索引（eligible 高速化）。"""
+    idx: dict[str, list[tuple[int, dict]]] = defaultdict(list)
+    for t in task_queue:
+        if float(t.get("remaining_units") or 0) <= 1e-12:
             continue
+        _sdr = t.get("start_date_req")
+        if not isinstance(_sdr, date) or _sdr > current_date:
+            continue
+        _tm = t.get("machine")
+        _eqt = str(t.get("equipment_line_key") or _tm or "").strip() or (_tm or "")
+        t_occ = _machine_occupancy_key_resolve(t, _eqt)
+        if not t_occ:
+            continue
+        try:
+            o = int(t.get("dispatch_trial_order") or 10**9)
+        except (TypeError, ValueError):
+            o = 10**9
+        idx[t_occ].append((o, t))
+    for occ in idx:
+        idx[occ].sort(key=lambda x: x[0])
+    return idx
+
+
+def _trial_order_flow_eligible_tasks(
+    tasks_today: list,
+    task_queue: list,
+    current_date: date,
+    *,
+    daily_status: dict | None = None,
+    members: list | None = None,
+    machine_avail_dt: dict | None = None,
+    machine_day_start: datetime | None = None,
+    machine_handoff: dict | None = None,
+    skills_dict: dict | None = None,
+    abolish_all_scheduling_limits: bool = False,
+    dispatch_interval_mirror: DispatchIntervalMirror | None = None,
+    min_dispatch_effective: int | None = None,
+    assign_probe_ctx: dict | None = None,
+    interactive_trial_pair_dates: dict | None = None,
+    wip_snapshot: dict | None = None,
+    pending_by_occ: dict[str, list[tuple[int, dict]]] | None = None,
+    rows_by_tid: dict[str, list[dict]] | None = None,
+    rows_by_rule_tid: dict[str, list[dict]] | None = None,
+    window_left_cache: dict | None = None,
+    pipeline_room_cache: dict[str, float] | None = None,
+) -> list:
+    # 特別ルール（工程間WIP上限）: L11 は EC→（検査＋巻返し）の前段 WIP が上限以上なら EC を配台しない。
+    if wip_snapshot is not None:
+        _wip_l11_global_val = wip_snapshot.get("l11_global")
+        _wip_l11_by_bucket = wip_snapshot.setdefault("l11_by_bucket", {})
+        wip_slit_before_sec = wip_snapshot.get("wip_slit_before_sec")
+        wip_connection_before_sec = wip_snapshot.get("wip_connection_before_sec")
+    else:
+        _wip_snap = _stage2_eligible_wip_snapshot(task_queue)
+        _wip_l11_global_val = _wip_snap.get("l11_global")
+        _wip_l11_by_bucket = _wip_snap["l11_by_bucket"]
+        wip_slit_before_sec = _wip_snap.get("wip_slit_before_sec")
+        wip_connection_before_sec = _wip_snap.get("wip_connection_before_sec")
+
+    from planning_core.dispatch_rules.hook_adapter import (
+        build_eligible_l13_context,
+        eligible_l13_connection_skip_with_context,
+    )
+
+    out = []
+    _elig_acc_early = 0.0
+    _elig_acc_rules = 0.0
+    _elig_acc_window = 0.0
+    _elig_acc_equip = 0.0
+    _l13_ctx = build_eligible_l13_context()
+    _b41_gate_cache: dict[str, bool] = {}
+    _b61_gate_cache: dict[str, bool] = {}
+    for task in tasks_today:
+        if float(task.get("remaining_units") or 0) <= 1e-12:
+            continue
+        _t_task0 = time_module.perf_counter()
+        try:
+            if (
+                _interactive_dispatch_trial_env_active()
+                and interactive_trial_pair_dates is not None
+            ):
+                tid_n = _interactive_norm_cell(str(task.get("task_id") or ""))
+                mach_n = _interactive_norm_cell(str(task.get("machine_name") or ""))
+                _pd = interactive_trial_pair_dates.get((tid_n, mach_n))
+                if _pd is not None and current_date not in _pd:
+                    continue
+            # L11: 検査前WIPが限界以上なら EC をブロック（集計は AGGREGATE_MODE）
+            if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
+                if task.get("roll_pipeline_ec"):
+                    if _wip_ec_l11_aggregate_is_global():
+                        _wip_use = _wip_l11_global_val
+                        _wip_cache_key = "global"
+                    else:
+                        _m = WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE
+                        if _m == "task_id":
+                            _wip_bk = str(task.get("task_id") or "").strip()
+                        else:
+                            _wip_bk = _wip_l11_bucket_key_for_task_id(
+                                str(task.get("task_id") or "")
+                            )
+                        _wip_cache_key = f"{_m}:{_wip_bk}"
+                        if _wip_cache_key not in _wip_l11_by_bucket:
+                            if _m == "task_id":
+                                _wip_l11_by_bucket[_wip_cache_key] = (
+                                    _wip_ec_before_insp_roll_count(
+                                        task_queue, task_id_exact=_wip_bk
+                                    )
+                                )
+                            else:
+                                _wip_l11_by_bucket[_wip_cache_key] = (
+                                    _wip_ec_before_insp_roll_count(
+                                        task_queue, task_id_head=_wip_bk
+                                    )
+                                )
+                        _wip_use = _wip_l11_by_bucket[_wip_cache_key]
+                    if (
+                        _wip_use is not None
+                        and _wip_use >= float(WIP_LIMIT_EC_BEFORE_INSP_ROLLS)
+                    ):
+                        continue
+            # L10: SEC前WIPが限界以上ならスリットをブロック（SECは進めてWIP解消）
+            if wip_slit_before_sec is not None and wip_slit_before_sec >= float(
+                WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS
+            ):
+                proc = _normalize_process_name_for_rule_match(task.get("machine"))
+                mach = _normalize_equipment_match_key(task.get("machine_name"))
+                if (
+                    proc
+                    == _normalize_process_name_for_rule_match(SPECIAL_WIP_SLIT_PROCESS)
+                    and mach
+                    == _normalize_equipment_match_key(SPECIAL_WIP_SLIT_MACHINE)
+                    and _task_on_slit_sec_process_path(task)
+                ):
+                    continue
+
+            # B-6 / L13: 接続 WIP 上限（rules/plan は eligible 1 回あたり 1 度だけ読込）
+            if eligible_l13_connection_skip_with_context(
+                task, wip_connection_before_sec, task_queue, _l13_ctx
+            ):
+                continue
+
+            _tid_gate = str(task.get("task_id") or "").strip()
+            if _tid_gate:
+                if _tid_gate not in _b41_gate_cache:
+                    _b41_gate_cache[_tid_gate] = _l10_b41_sec_blocked_by_slit_min_rolls(
+                        task, task_queue, rows_by_tid=rows_by_tid
+                    )
+                if _b41_gate_cache[_tid_gate]:
+                    continue
+                if _tid_gate not in _b61_gate_cache:
+                    _b61_gate_cache[_tid_gate] = _b61_sec_blocked_by_connection_min_rolls(
+                        task, task_queue, rows_by_tid=rows_by_tid
+                    )
+                if _b61_gate_cache[_tid_gate]:
+                    continue
+            else:
+                if _l10_b41_sec_blocked_by_slit_min_rolls(
+                    task, task_queue, rows_by_tid=rows_by_tid
+                ):
+                    continue
+                if _b61_sec_blocked_by_connection_min_rolls(
+                    task, task_queue, rows_by_tid=rows_by_tid
+                ):
+                    continue
+            if _task_blocked_by_same_request_dependency(
+                task,
+                task_queue,
+                rows_by_rule_tid=rows_by_rule_tid,
+                pipeline_room_cache=pipeline_room_cache,
+            ):
+                continue
+            if _task_blocked_by_global_dispatch_trial_order(
+                task,
+                task_queue,
+                current_date,
+                daily_status=daily_status,
+                members=members,
+                machine_avail_dt=machine_avail_dt,
+                machine_day_start=machine_day_start,
+                machine_handoff=machine_handoff,
+                skills_dict=skills_dict,
+                abolish_all_scheduling_limits=abolish_all_scheduling_limits,
+                dispatch_interval_mirror=dispatch_interval_mirror,
+                min_dispatch_effective=min_dispatch_effective,
+            ):
+                continue
+        finally:
+            _elig_acc_early += time_module.perf_counter() - _t_task0
+
+        _t_er0 = time_module.perf_counter()
+        _t_ew0 = time_module.perf_counter()
         # min_dto から全日カレンダー占有は除外済みでも」同日試行順の「ブロック」は my_o>m のみのため、
         # 試行順=min の占有行は残り」他試行順は永久坜止し得る。当日スロットゼロの行は候補外にれる。
         if daily_status is not None and members is not None:
@@ -31770,7 +32384,7 @@ def _trial_order_flow_eligible_tasks(
                 task, current_date, daily_status, members
             ):
                 continue
-            if _task_no_machining_window_left_from_avail_floor(
+            if _task_no_machining_window_left_from_avail_floor_cached(
                 task,
                 current_date,
                 daily_status,
@@ -31781,17 +32395,23 @@ def _trial_order_flow_eligible_tasks(
                 skills_dict=skills_dict,
                 abolish_all_scheduling_limits=abolish_all_scheduling_limits,
                 dispatch_interval_mirror=dispatch_interval_mirror,
+                window_left_cache=window_left_cache,
             ):
                 continue
+        _tid_rp = str(task.get("task_id") or "").strip()
         if (
             task.get("roll_pipeline_inspection") or task.get("roll_pipeline_rewind")
         ) and (
-            _roll_pipeline_inspection_assign_room(
-                task_queue, str(task.get("task_id", "") or "").strip()
+            (
+                pipeline_room_cache.get(_tid_rp)
+                if pipeline_room_cache is not None and _tid_rp in pipeline_room_cache
+                else _roll_pipeline_inspection_assign_room(task_queue, _tid_rp)
             )
             <= 1e-12
         ):
             continue
+        _elig_acc_window += time_module.perf_counter() - _t_ew0
+        _t_ee0 = time_module.perf_counter()
         machine = task["machine"]
         eq_line = str(
             task.get("equipment_line_key") or machine or ""
@@ -31822,9 +32442,16 @@ def _trial_order_flow_eligible_tasks(
             abolish_all_scheduling_limits=abolish_all_scheduling_limits,
             dispatch_interval_mirror=dispatch_interval_mirror,
             assign_probe_ctx=assign_probe_ctx,
+            pending_by_occ=pending_by_occ,
+            window_left_cache=window_left_cache,
         ):
             continue
+        _elig_acc_equip += time_module.perf_counter() - _t_ee0
         out.append(task)
+    _dispatch_loop_profile_add("eligible_early", _elig_acc_early)
+    _dispatch_loop_profile_add("eligible_rules", _elig_acc_rules)
+    _dispatch_loop_profile_add("eligible_window", _elig_acc_window)
+    _dispatch_loop_profile_add("eligible_equip_line", _elig_acc_equip)
     return out
 
 
@@ -33176,6 +33803,7 @@ def _trial_order_assign_probe_fails(
     if _trial_order_hard_precheck_blocks_assign_probe(task, ctx["task_queue"]):
         return True
     try:
+        _t_probe0 = time_module.perf_counter()
         r = _assign_one_roll_trial_order_flow(
             task,
             current_date,
@@ -33196,6 +33824,9 @@ def _trial_order_assign_probe_fails(
             team_combo_presets=ctx.get("team_combo_presets"),
             dispatch_interval_mirror=ctx.get("dispatch_interval_mirror"),
             machine_handoff=ctx["machine_handoff"],
+        )
+        _dispatch_loop_profile_add(
+            "assign_probe", time_module.perf_counter() - _t_probe0
         )
     except Exception as ex:
         logging.warning(
@@ -33456,8 +34087,14 @@ def _trial_order_first_schedule_pass(
     試行順最尝の行の値は当日入らない場合でも」**坌もフェーズ内で次の試行順へ進み**他設備を埋ゝる。
     機械・人の空しはロールごとに更新れる（⑦⑧）。
     """
+    _t_trial_pass0 = time_module.perf_counter()
     _mc_w0 = datetime.combine(current_date, DEFAULT_START_TIME)
-    _mh_init = _machine_handoff_state_from_timeline(timeline_events, current_date)
+    _t_mh_init0 = time_module.perf_counter()
+    _mh_init = _machine_handoff_state_from_timeline_cached(timeline_events, current_date)
+    _dispatch_loop_profile_add(
+        "trial_pass_mh_init",
+        time_module.perf_counter() - _t_mh_init0,
+    )
     _gpo = global_priority_override or {}
     _assign_probe_ctx: dict | None = None
     if STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT:
@@ -33479,6 +34116,7 @@ def _trial_order_first_schedule_pass(
         }
     _min_dispatch_eff: int | None = None
     _pool_min: list = []
+    _t_pool0 = time_module.perf_counter()
     if STAGE2_GLOBAL_DISPATCH_TRIAL_ORDER_STRICT and _assign_probe_ctx:
         _pool_min = _tasks_in_min_pending_dispatch_pool(
             task_queue,
@@ -33498,6 +34136,27 @@ def _trial_order_first_schedule_pass(
         _min_dispatch_eff = _effective_min_dispatch_trial_order_from_pool(
             _pool_min, current_date, daily_status, _assign_probe_ctx
         )
+    _dispatch_loop_profile_add(
+        "trial_pass_pool_min", time_module.perf_counter() - _t_pool0
+    )
+    _t_elig_pre0 = time_module.perf_counter()
+    _wip_snap_pass = _stage2_eligible_wip_snapshot(task_queue)
+    _pbo_index = _stage2_pending_by_machine_occ_index(task_queue, current_date)
+    _rows_by_tid = _stage2_rows_by_task_id(task_queue)
+    _rows_by_rule_tid = _stage2_rows_by_rule_task_id(task_queue)
+    _window_left_cache: dict = {}
+    _pipeline_room_cache: dict[str, float] = {}
+    for _pt in tasks_today:
+        _ptid = str(_pt.get("task_id") or "").strip()
+        if _ptid and _ptid not in _pipeline_room_cache:
+            _pipeline_room_cache[_ptid] = _roll_pipeline_inspection_assign_room(
+                task_queue, _ptid
+            )
+    _dispatch_loop_profile_add(
+        "trial_pass_eligible_precompute",
+        time_module.perf_counter() - _t_elig_pre0,
+    )
+    _t_elig0 = time_module.perf_counter()
     eligible = _trial_order_flow_eligible_tasks(
         tasks_today,
         task_queue,
@@ -33513,6 +34172,12 @@ def _trial_order_first_schedule_pass(
         min_dispatch_effective=_min_dispatch_eff,
         assign_probe_ctx=_assign_probe_ctx,
         interactive_trial_pair_dates=interactive_trial_pair_dates,
+        wip_snapshot=_wip_snap_pass,
+        pending_by_occ=_pbo_index,
+        rows_by_tid=_rows_by_tid,
+        rows_by_rule_tid=_rows_by_rule_tid,
+        window_left_cache=_window_left_cache,
+        pipeline_room_cache=_pipeline_room_cache,
     )
     if not eligible:
         if (
@@ -33526,7 +34191,13 @@ def _trial_order_first_schedule_pass(
                 if float(t.get("remaining_units") or 0) > 1e-12
             ]
         if not eligible:
+            _dispatch_loop_profile_add(
+                "trial_pass_total", time_module.perf_counter() - _t_trial_pass0
+            )
             return False
+    _dispatch_loop_profile_add(
+        "trial_pass_eligible", time_module.perf_counter() - _t_elig0
+    )
     eligible_sorted = sorted(
         eligible,
         key=lambda t: (
@@ -33728,6 +34399,7 @@ def _trial_order_first_schedule_pass(
                             _rem_m = min(_rem_key_m, _rem_task_m)
                         if _rem_m + 1e-9 < _um_lim:
                             break
+            _t_assign0 = time_module.perf_counter()
             res = _assign_one_roll_trial_order_flow(
                 task,
                 current_date,
@@ -33750,6 +34422,9 @@ def _trial_order_first_schedule_pass(
                 machine_handoff=machine_handoff,
                 timeline_events=timeline_events,
                 stage35_overtime_only=stage35_overtime_only,
+            )
+            _dispatch_loop_profile_add(
+                "assign_one_roll", time_module.perf_counter() - _t_assign0
             )
             if res is None:
                 break
@@ -33803,6 +34478,7 @@ def _trial_order_first_schedule_pass(
                 str(s).strip() for s in sub_members if s and str(s).strip()
             )
             _co_append = list(res.get("changeover_segments") or [])
+            _t_timeline0 = time_module.perf_counter()
             _append_changeover_segments_to_timeline(
                 timeline_events,
                 dispatch_interval_mirror,
@@ -33819,31 +34495,36 @@ def _trial_order_first_schedule_pass(
                 machine_name_for_startup=str(res.get("machine_name") or "").strip()
                 or None,
             )
-            timeline_events.append(
-                {
-                    "date": current_date,
-                    "task_id": task["task_id"],
-                    "machine": eq_line,
-                    "machine_occupancy_key": machine_occ_key,
-                    "op": lead_op,
-                    "sub": ", ".join(sub_members),
-                    "start_dt": best_start,
-                    "end_dt": best_end,
-                    "breaks": best_breaks,
-                    "units_done": done_units,
-                    "already_done_units": already_done,
-                    "total_units": total_u,
-                    "pct_macro": pct_macro,
-                    "eff_time_per_unit": task["base_time_per_unit"]
-                    / best_eff
-                    / _te_disp
-                    * _surplus_team_time_factor(
-                        rq_base, len(best_team), extra_max
-                    ),
-                    "unit_m": task["unit_m"],
-                    "total_qty_m": float(parse_float_safe(task.get("total_qty_m"), 0.0)),
-                    "event_kind": TIMELINE_EVENT_MACHINING,
-                }
+            _mach_timeline_ev = {
+                "date": current_date,
+                "task_id": task["task_id"],
+                "machine": eq_line,
+                "machine_occupancy_key": machine_occ_key,
+                "op": lead_op,
+                "sub": ", ".join(sub_members),
+                "start_dt": best_start,
+                "end_dt": best_end,
+                "breaks": best_breaks,
+                "units_done": done_units,
+                "already_done_units": already_done,
+                "total_units": total_u,
+                "pct_macro": pct_macro,
+                "eff_time_per_unit": task["base_time_per_unit"]
+                / best_eff
+                / _te_disp
+                * _surplus_team_time_factor(
+                    rq_base, len(best_team), extra_max
+                ),
+                "unit_m": task["unit_m"],
+                "total_qty_m": float(parse_float_safe(task.get("total_qty_m"), 0.0)),
+                "event_kind": TIMELINE_EVENT_MACHINING,
+            }
+            timeline_events.append(_mach_timeline_ev)
+            _stage2_dispatch_track_timeline_event(
+                _mach_timeline_ev, len(timeline_events)
+            )
+            _dispatch_loop_profile_add(
+                "timeline_commit", time_module.perf_counter() - _t_timeline0
             )
             if dispatch_interval_mirror is not None:
                 dispatch_interval_mirror.register_from_event(timeline_events[-1])
@@ -34040,6 +34721,9 @@ def _trial_order_first_schedule_pass(
             ]
             phase1_rest = [t for t in phase1_rest if id(t) not in _cap_drain_ids]
             phase1_tasks = [t for t in phase1_tasks if id(t) not in _cap_drain_ids]
+        _dispatch_loop_profile_add(
+            "trial_pass_total", time_module.perf_counter() - _t_trial_pass0
+        )
         return pass_made
     if phase2_tasks:
         if (
@@ -34093,6 +34777,9 @@ def _trial_order_first_schedule_pass(
         for task in sorted(phase1_tasks, key=_phase1_sort_key):
             if _drain_rolls_for_task(task):
                 pass_made = True
+    _dispatch_loop_profile_add(
+        "trial_pass_total", time_module.perf_counter() - _t_trial_pass0
+    )
     return pass_made
 
 
@@ -36774,7 +37461,13 @@ def _generate_plan_impl(
             logging.info("DEBUG[task=%s] task_queueに存在しません（完了/残量0/依頼NO厳密一致の可能性）。", DEBUG_TASK_ID)
     timeline_events = []
 
-    _log_stage2_phase_timing("build_task_queue_and_prepare_dispatch", _t_tq0)
+    _t_dispatch0 = _log_stage2_phase_timing(
+        "build_task_queue_and_prepare_dispatch", _t_tq0
+    )
+    _reset_machine_handoff_timeline_cache()
+    _reset_dispatch_loop_profile()
+    _dispatch_sched_pass_total = 0
+    _dispatch_day_timing: list[dict] = []
 
     # ---------------------------------------------------------
     # 日毎のスケジューリングループ
@@ -36865,6 +37558,9 @@ def _generate_plan_impl(
         )
         _full_calendar_without_deadline_restart = True
         for current_date in _plan_day_iter:
+            _t_day0 = time_module.perf_counter()
+            _dispatch_loop_profile_begin_day(current_date.isoformat())
+            _day_sched_passes = 0
             daily_status = attendance_data[current_date]
             # 設備ととの空し時刻（同一設備の坌時並行割当を防止）
             machine_avail_dt = {}
@@ -36882,13 +37578,24 @@ def _generate_plan_impl(
                 current_date, daily_status, members
             )
             if avail_dt:
+                _day_timeline_ev = (
+                    _STAGE2_DISPATCH_EVENTS_BY_DATE.get(current_date)
+                    if _STAGE2_DISPATCH_EVENTS_BY_DATE is not None
+                    else None
+                )
+                _t_seed0 = time_module.perf_counter()
                 _seed_avail_from_timeline_for_date(
                     timeline_events,
                     current_date,
                     machine_avail_dt,
                     avail_dt,
                     _machine_day_start,
+                    events_today=_day_timeline_ev,
                 )
+                _dispatch_loop_profile_add(
+                    "day_seed_avail", time_module.perf_counter() - _t_seed0
+                )
+                _t_mcal0 = time_module.perf_counter()
                 _apply_machine_calendar_floor_for_date(
                     current_date,
                     machine_avail_dt,
@@ -36896,9 +37603,28 @@ def _generate_plan_impl(
                     _machine_day_start,
                     machine_calendar_plan_end=_machine_calendar_plan_end,
                 )
+                _dispatch_loop_profile_add(
+                    "day_machine_calendar", time_module.perf_counter() - _t_mcal0
+                )
 
             if not avail_dt:
                 logging.info("DEBUG[day=%s] 稼働メンバー0のため、割付スキップ", current_date)
+                _dispatch_day_timing.append(
+                    {
+                        "date": current_date.isoformat(),
+                        "elapsed_sec": round(
+                            time_module.perf_counter() - _t_day0, 3
+                        ),
+                        "sched_passes": 0,
+                        "sched_max_passes": 0,
+                        "tasks_today": 0,
+                        "skipped_no_members": True,
+                        "profile": _dispatch_loop_profile_finish_day(
+                            time_module.perf_counter() - _t_day0,
+                            skipped_no_members=True,
+                        ),
+                    }
+                )
                 continue
     
             tasks_today = [t for t in task_queue if t['remaining_units'] > 0 and t['start_date_req'] <= current_date]
@@ -36948,6 +37674,23 @@ def _generate_plan_impl(
                     pending_total,
                     earliest_wait,
                 )
+                _day_elapsed_skip = time_module.perf_counter() - _t_day0
+                _dispatch_day_timing.append(
+                    {
+                        "date": current_date.isoformat(),
+                        "elapsed_sec": round(_day_elapsed_skip, 3),
+                        "sched_passes": 0,
+                        "sched_max_passes": 0,
+                        "tasks_today": 0,
+                        "skipped_empty_tasks": True,
+                        "profile": _dispatch_loop_profile_finish_day(
+                            _day_elapsed_skip,
+                            skipped_empty_tasks=True,
+                            pending_total=pending_total,
+                        ),
+                    }
+                )
+                continue
             elif DEBUG_TASK_ID:
                 has_dbg_today = any(str(t.get("task_id", "")).strip() == DEBUG_TASK_ID for t in tasks_today)
                 if current_date.isoformat() == "2026-04-03" or has_dbg_today:
@@ -36966,6 +37709,7 @@ def _generate_plan_impl(
                 and interactive_dispatch_targets
                 and STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST
             ):
+                _t_cap_pass0 = time_module.perf_counter()
                 _trial_order_first_schedule_pass(
                     current_date,
                     tasks_today,
@@ -36990,10 +37734,20 @@ def _generate_plan_impl(
                     interactive_trial_meters_done=_interactive_trial_meters_done,
                     cap_drain_only=True,
                 )
+                _cap_pass_sec = time_module.perf_counter() - _t_cap_pass0
+                _dispatch_loop_profile_add("trial_pass_wall_cap", _cap_pass_sec)
+                if _STAGE2_DISPATCH_LOOP_PROFILE_DAY is not None:
+                    _STAGE2_DISPATCH_LOOP_PROFILE_DAY["trial_pass_count"] = (
+                        _STAGE2_DISPATCH_LOOP_PROFILE_DAY.get("trial_pass_count", 0)
+                        + 1
+                    )
             _sched_pi = 0
             while _sched_pi < _sched_max_passes:
                 _sched_pi += 1
+                _day_sched_passes += 1
+                _dispatch_sched_pass_total += 1
                 _sched_made_progress = False
+                _t_sched_pass0 = time_module.perf_counter()
                 if STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST:
                     _sched_made_progress = _trial_order_first_schedule_pass(
                         current_date,
@@ -37018,7 +37772,18 @@ def _generate_plan_impl(
                         interactive_trial_pair_dates=_interactive_trial_pair_dates,
                         interactive_trial_meters_done=_interactive_trial_meters_done,
                     )
+                    _sched_pass_sec = time_module.perf_counter() - _t_sched_pass0
+                    _dispatch_loop_profile_add("trial_pass_wall", _sched_pass_sec)
+                    if _STAGE2_DISPATCH_LOOP_PROFILE_DAY is not None:
+                        _STAGE2_DISPATCH_LOOP_PROFILE_DAY["trial_pass_count"] = (
+                            _STAGE2_DISPATCH_LOOP_PROFILE_DAY.get("trial_pass_count", 0)
+                            + 1
+                        )
+                        _STAGE2_DISPATCH_LOOP_PROFILE_DAY.setdefault(
+                            "sched_pass_secs", []
+                        ).append(_sched_pass_sec)
                 if not STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST:
+                    _t_legacy0 = time_module.perf_counter()
                     _mh_legacy_day = _machine_handoff_state_from_timeline(
                         timeline_events, current_date
                     )
@@ -38058,7 +38823,7 @@ def _generate_plan_impl(
                                 machine_name_for_startup=str(machine_name or "").strip()
                                 or None,
                             )
-                            timeline_events.append({
+                            _legacy_mach_ev = {
                                 "date": current_date, "task_id": task['task_id'], "machine": eq_line,
                                 "machine_occupancy_key": machine_occ_key,
                                 "op": best_info["op"], "sub": ", ".join(sub_members),
@@ -38074,7 +38839,11 @@ def _generate_plan_impl(
                                 "unit_m": task['unit_m'],
                                 "total_qty_m": float(parse_float_safe(task.get("total_qty_m"), 0.0)),
                                 "event_kind": TIMELINE_EVENT_MACHINING,
-                            })
+                            }
+                            timeline_events.append(_legacy_mach_ev)
+                            _stage2_dispatch_track_timeline_event(
+                                _legacy_mach_ev, len(timeline_events)
+                            )
                             if _dispatch_interval_mirror is not None:
                                 _dispatch_interval_mirror.register_from_event(
                                     timeline_events[-1]
@@ -38218,9 +38987,32 @@ def _generate_plan_impl(
                                     current_date,
                                     task.get("remaining_units"),
                                 )
-    
+                if not STAGE2_DISPATCH_FLOW_TRIAL_ORDER_FIRST:
+                    _legacy_pass_sec = time_module.perf_counter() - _t_legacy0
+                    _dispatch_loop_profile_add("legacy_pass_wall", _legacy_pass_sec)
+                    if _STAGE2_DISPATCH_LOOP_PROFILE_DAY is not None:
+                        _STAGE2_DISPATCH_LOOP_PROFILE_DAY.setdefault(
+                            "sched_pass_secs", []
+                        ).append(_legacy_pass_sec)
+
                 if not _sched_made_progress:
                     break
+
+            _day_elapsed = time_module.perf_counter() - _t_day0
+            _dispatch_day_timing.append(
+                {
+                    "date": current_date.isoformat(),
+                    "elapsed_sec": round(_day_elapsed, 3),
+                    "sched_passes": _day_sched_passes,
+                    "sched_max_passes": _sched_max_passes,
+                    "tasks_today": len(tasks_today),
+                    "profile": _dispatch_loop_profile_finish_day(
+                        _day_elapsed,
+                        sched_passes=_day_sched_passes,
+                        sched_max_passes=_sched_max_passes,
+                    ),
+                }
+            )
 
             if TRACE_SCHEDULE_TASK_IDS:
                 for _tt in TRACE_SCHEDULE_TASK_IDS:
@@ -38351,6 +39143,7 @@ def _generate_plan_impl(
                                 )
 
         if _full_calendar_without_deadline_restart:
+            _t_b2rew0 = time_module.perf_counter()
             _rewind_made = _run_b2_inspection_rewind_pass(
                 sorted_dates,
                 attendance_data,
@@ -38371,6 +39164,10 @@ def _generate_plan_impl(
                 interactive_dispatch_targets=interactive_dispatch_targets,
                 interactive_trial_pair_dates=_interactive_trial_pair_dates,
                 interactive_trial_meters_done=_interactive_trial_meters_done,
+            )
+            _dispatch_loop_profile_add(
+                "b2_inspection_rewind_pass",
+                time_module.perf_counter() - _t_b2rew0,
             )
             if _rewind_made:
                 logging.info(
@@ -38482,6 +39279,32 @@ def _generate_plan_impl(
     if _dispatch_interval_mirror is not None:
         _dispatch_interval_mirror.rebuild_from_timeline(timeline_events)
 
+    _dispatch_loop_profile_emit_run_summary()
+
+    _t_stage2_perf = _log_stage2_phase_timing(
+        "dispatch_daily_loop",
+        _t_dispatch0,
+        extra={
+            "timeline_events": len(timeline_events),
+            "task_queue_rows": len(task_queue),
+            "sched_pass_total": _dispatch_sched_pass_total,
+            "mh_handoff_cache_hit": _MH_HANDOFF_TIMELINE_CACHE_STATS.get("hit", 0),
+            "mh_handoff_cache_miss": _MH_HANDOFF_TIMELINE_CACHE_STATS.get("miss", 0),
+            "mh_handoff_cache_incremental": _MH_HANDOFF_TIMELINE_CACHE_STATS.get(
+                "incremental", 0
+            ),
+            "dispatch_days": len(_dispatch_day_timing),
+            "dispatch_day_top3": sorted(
+                _dispatch_day_timing,
+                key=lambda d: d.get("elapsed_sec") or 0,
+                reverse=True,
+            )[:3],
+            "dispatch_loop_buckets_top12": _dispatch_loop_profile_top_buckets(
+                _STAGE2_DISPATCH_LOOP_PROFILE_RUN.get("run_buckets") or {}, 12
+            ),
+        },
+    )
+
     # タイムラインを日付別にインデックス化し、サブメンバー一覧を事剝解析（以降の出力ループを高速化）
     for e in timeline_events:
         e["subs_list"] = [s.strip() for s in e["sub"].split(",")] if e.get("sub") else []
@@ -38501,14 +39324,37 @@ def _generate_plan_impl(
             logging.error("段階2: 出力先ディレクトリを作成できません: %s (%s)", stage2_output_root, e)
             _try_write_main_sheet_gemini_usage_summary("段階2")
             return
+    _t_rm_prior0 = time_module.perf_counter()
     if not skip_remove_prior_stage2_workbooks:
         _remove_prior_stage2_workbooks_and_prune_empty_dirs(_stage2_out_root)
+    _t_stage2_perf = _log_stage2_phase_timing(
+        "remove_prior_stage2_workbooks",
+        _t_rm_prior0,
+        extra={"output_root": _stage2_path_debug_meta(_stage2_out_root)},
+    )
     # ファイル名は短い日本語接頭辞＋時刻（本体ベース名は 20 文字以内）。同一抽出の再実行でも
     # パスがぶつからないよう実行時刻のマイクロ秒下位を含める（Excel 占有で旧ファイル削除失敗時の上書き不能を回避）。
     _stage2_run_now = datetime.now()
     _stage2_stamp = format_stage2_stamp(base_now_dt, _stage2_run_now)
     plan_xlsx_final = os.path.join(_stage2_out_root, plan_workbook_filename(_stage2_stamp))
-    _publish_plan_xlsx = _stage2_publish_excel_enabled(stage2_output_root)
+    _t_stage2_perf = _log_stage2_phase_timing(
+        "stage2_output_paths_resolved",
+        _t_stage2_perf,
+        extra={
+            "output_root": _stage2_path_debug_meta(_stage2_out_root),
+            "plan_xlsx_final": _stage2_path_debug_meta(plan_xlsx_final),
+            "pm_ai_output_dir": _stage2_path_debug_meta(
+                (os.environ.get("PM_AI_OUTPUT_DIR") or "").strip()
+            ),
+            "processing_plan_path": _stage2_path_debug_meta(
+                (os.environ.get("PM_AI_PROCESSING_PLAN_PATH") or "").strip()
+            ),
+            "plan_input_path": _stage2_path_debug_meta(
+                (os.environ.get(ENV_PLAN_INPUT_PATH) or "").strip()
+            ),
+            "publish_plan_xlsx": bool(_publish_plan_xlsx := _stage2_publish_excel_enabled(stage2_output_root)),
+        },
+    )
     if _publish_plan_xlsx:
         output_filename = plan_xlsx_final
     else:
@@ -38519,6 +39365,7 @@ def _generate_plan_impl(
         )
         os.close(_fd_plan_tmp)
     # タスクID → 結果_設備毎の時間割で当該タスクは最初に睾れるセル（例 B12）。結果_タスク一覧のリンク用。
+    _t_build0 = time_module.perf_counter()
     first_eq_schedule_cell_by_task_id: dict[str, str] = {}
     df_eq_schedule = _build_equipment_schedule_dataframe(
         sorted_dates,
@@ -39087,11 +39934,25 @@ def _generate_plan_impl(
             "表示": vis_list_dedup,
         }
     )
+    _t_ldf0 = time_module.perf_counter()
     try:
         df_src_for_dispatch = load_tasks_df()
     except Exception as e:
         logging.warning("結果_配台表: 加工計画DATA 読込に失敗したため空欄補完をスキップ: %s", e)
         df_src_for_dispatch = None
+    _t_stage2_perf = _log_stage2_phase_timing(
+        "load_tasks_df",
+        _t_ldf0,
+        extra={
+            "ok": df_src_for_dispatch is not None,
+            "processing_plan_path": _stage2_path_debug_meta(
+                (os.environ.get("PM_AI_PROCESSING_PLAN_PATH") or "").strip()
+            ),
+            "task_input_source_dir": _stage2_path_debug_meta(
+                (os.environ.get("PM_AI_TASK_INPUT_SOURCE_DIR") or "").strip()
+            ),
+        },
+    )
     if _interactive_dispatch_trial_env_active():
         # 試行中の meters_done は _cap_key 解決で「JSON の配台日」と異なるキーへ載ることがある。
         # 未達一覧はタイムライン上の暦日×依頼×工程×機械で再集計し、短い検証（dispatch_qty_shortfall）と整合させる。
@@ -39182,6 +40043,14 @@ def _generate_plan_impl(
         timeline_events, attendance_data
     )
     df_ai_log = pd.DataFrame(list(ai_log_data.items()), columns=["項目", "内容"])
+    _t_stage2_perf = _log_stage2_phase_timing(
+        "build_result_sheet_dataframes",
+        _t_build0,
+        extra={
+            "dispatch_rows": len(df_dispatch) if df_dispatch is not None else 0,
+            "task_rows": len(df_tasks) if df_tasks is not None else 0,
+        },
+    )
 
     from planning_core.workbook_payload import (
         build_workbook_payload_from_dataframes,
@@ -39217,6 +40086,7 @@ def _generate_plan_impl(
             "excel_tabular_sheets_rendered_from_this_payload": True,
         },
     )
+    _t_tab_json0 = time_module.perf_counter()
     try:
         _tabular_json_path, _tabular_json_strat = write_tabular_source_json_file(
             plan_xlsx_final, _stage2_tabular_payload
@@ -39229,7 +40099,13 @@ def _generate_plan_impl(
             )
     except Exception as e:
         logging.warning("段階2: 表シート正本 JSON の出力に失敗しました: %s", e)
+    _t_stage2_perf = _log_stage2_phase_timing(
+        "write_tabular_source_json",
+        _t_tab_json0,
+        extra={"plan_xlsx_final": _stage2_path_debug_meta(plan_xlsx_final)},
+    )
 
+    _t_xlw0 = time_module.perf_counter()
     try:
         with pd.ExcelWriter(output_filename, engine="openpyxl") as writer:
             write_tabular_sheets_from_payload_to_excel_writer(
@@ -39507,7 +40383,6 @@ def _generate_plan_impl(
                     writer.sheets[RESULT_DISPATCH_TABLE_SHEET_NAME]
                 )
 
-
     except OSError as e:
         logging.error(
             "段階2: 結果ブックの作成・保存に失敗しました: %s（%s）。"
@@ -39516,6 +40391,14 @@ def _generate_plan_impl(
             e,
         )
         raise
+    _t_stage2_perf = _log_stage2_phase_timing(
+        "write_plan_workbook_excel",
+        _t_xlw0,
+        extra={
+            "output_filename": _stage2_path_debug_meta(output_filename),
+            "write_excel_gantt_sheets": _stage2_write_excel_gantt_sheets_enabled(),
+        },
+    )
 
     try:
         _sj = write_result_task_json_sidecar(
@@ -39629,11 +40512,15 @@ def _generate_plan_impl(
     # ---------------------------------------------------------
     # 追加出力: Power Query 用「結果_配台表.xlsx」＋同一データの JSON（既定は repo の code/output など）
     # ---------------------------------------------------------
+    _t_dispatch_out0 = time_module.perf_counter()
+    _dispatch_table_out_dir: str | None = None
     try:
         _wb_path = _excel_plan_input_wb()
         _out_dir = resolve_result_dispatch_table_output_dir(_wb_path)
+        _dispatch_table_out_dir = _out_dir
         if not _out_dir:
             _out_dir = _stage2_out_root or output_dir
+            _dispatch_table_out_dir = _out_dir
             logging.info(
                 "結果_配台表: 専用出力先が解決できなかったため、段階2成果物フォルダへ出します → %s",
                 _out_dir,
@@ -39650,6 +40537,13 @@ def _generate_plan_impl(
             logging.info("段階2: 結果_配台表 JSON を '%s' に出力しました。", _jwrote)
     except Exception as e:
         logging.warning("段階2: 結果_配台表.xlsx / .json の出力をスキップしました: %s", e)
+    _t_stage2_perf = _log_stage2_phase_timing(
+        "write_result_dispatch_table_outputs",
+        _t_dispatch_out0,
+        extra={
+            "out_dir": _stage2_path_debug_meta(_dispatch_table_out_dir),
+        },
+    )
 
     # =========================================================
     # 5. ★追加: メンバー毎の行動スケジュール (別ファイル) 出力
@@ -39690,6 +40584,7 @@ def _generate_plan_impl(
             "段階2: メンバー別スケジュールを作成しした → %s",
             os.path.basename(member_xlsx_final),
         )
+        _t_member_xlw0 = time_module.perf_counter()
         try:
             with pd.ExcelWriter(member_output_filename, engine="openpyxl") as member_writer:
                 for m in members:
@@ -39772,6 +40667,14 @@ def _generate_plan_impl(
                 e,
             )
             raise
+        _t_stage2_perf = _log_stage2_phase_timing(
+            "write_member_schedule_excel",
+            _t_member_xlw0,
+            extra={
+                "member_output": _stage2_path_debug_meta(member_output_filename),
+                "member_count": len(members),
+            },
+        )
 
         if _publish_plan_xlsx:
             logging.info(

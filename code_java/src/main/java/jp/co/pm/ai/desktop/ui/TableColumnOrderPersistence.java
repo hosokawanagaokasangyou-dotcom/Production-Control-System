@@ -689,6 +689,69 @@ public final class TableColumnOrderPersistence {
         return out;
     }
 
+    /**
+     * 永続化された列表示フラグ（{@code visibilityIndexTitles} の並びに対応）を、
+     * {@code targetHeaders} の並びへ見出しタイトルで写す。未知列は表示（{@code true}）。
+     *
+     * <p>{@code visibilityIndexTitles} が空のときは index 対応（短い配列は true で埋める）にフォールバックする。
+     */
+    public static boolean[] alignVisibilityToHeaders(
+            List<String> visibilityIndexTitles,
+            boolean[] visibility,
+            List<String> targetHeaders) {
+        if (targetHeaders == null || targetHeaders.isEmpty()) {
+            return new boolean[0];
+        }
+        boolean[] out = visibilityDefaults(targetHeaders.size());
+        if (visibilityIndexTitles == null || visibilityIndexTitles.isEmpty()) {
+            if (visibility != null) {
+                for (int i = 0; i < out.length && i < visibility.length; i++) {
+                    out[i] = visibility[i];
+                }
+            }
+            return out;
+        }
+        Map<String, Boolean> byTitle = new HashMap<>();
+        for (int i = 0; i < visibilityIndexTitles.size(); i++) {
+            String title = visibilityIndexTitles.get(i);
+            if (title == null || title.isEmpty()) {
+                continue;
+            }
+            byTitle.putIfAbsent(title, visibility != null && i < visibility.length ? visibility[i] : true);
+        }
+        for (int j = 0; j < targetHeaders.size(); j++) {
+            String title = targetHeaders.get(j);
+            if (title != null && byTitle.containsKey(title)) {
+                out[j] = byTitle.get(title);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * シート読込後: 保存済みレイアウト順に index づけされた表示設定を、
+     * {@code applyLogicalColumnOrder} 後の {@code headersRef} へ見出し名で合わせる。
+     */
+    public static boolean[] resolveVisibilityAfterSheetLoad(
+            TableId id,
+            List<String> fileHeaders,
+            List<String> savedLayoutTitles,
+            List<String> headersAfterReorder) {
+        if (headersAfterReorder == null || headersAfterReorder.isEmpty()) {
+            return new boolean[0];
+        }
+        if (savedLayoutTitles != null && !savedLayoutTitles.isEmpty()) {
+            boolean[] stored = loadColumnVisibility(id, savedLayoutTitles.size());
+            return alignVisibilityToHeaders(savedLayoutTitles, stored, headersAfterReorder);
+        }
+        int loadCount =
+                fileHeaders != null && !fileHeaders.isEmpty()
+                        ? fileHeaders.size()
+                        : headersAfterReorder.size();
+        boolean[] stored = loadColumnVisibility(id, loadCount);
+        return alignVisibilityToHeaders(List.of(), stored, headersAfterReorder);
+    }
+
     public record ColumnSpec(String title, double width) {}
 
     public enum TableId {

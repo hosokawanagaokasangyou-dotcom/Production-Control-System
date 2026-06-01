@@ -40,12 +40,6 @@
                     <Button mnemonicParsing="false" onAction="#onRowDownAction" prefWidth="36.0" text="↓" />
                     <Button fx:id="addRowButton" mnemonicParsing="false" onAction="#onAddRowButtonAction" text="行追加" />
                     <Button fx:id="removeRowsButton" mnemonicParsing="false" onAction="#onRemoveRowsButtonAction" text="行削除" />
-                    <Button fx:id="shiftRawInputDateMinusOneButton" mnemonicParsing="false"
-                            onAction="#onShiftRawInputDateMinusOneAction"
-                            text="原反投入日を1日前倒し" />
-                    <Button fx:id="clearRawInputDateOverrideButton" mnemonicParsing="false"
-                            onAction="#onClearRawInputDateOverrideAction"
-                            text="原反投入日上書きをクリア" />
                     <Button mnemonicParsing="false" onAction="#onClearColumnFiltersAction"
                             text="列フィルタ・並べ替え解除" />
                     <Region HBox.hgrow="ALWAYS" />
@@ -62,6 +56,8 @@
         <content>
             <VBox fillWidth="true">
                 <Label fx:id="hintLabel" wrapText="true" />
+                <Label fx:id="stage3ValidationWarningLabel" managed="false" visible="false" wrapText="true"
+                       style="-fx-text-fill: #b71c1c; -fx-font-weight: bold;" />
                 <HBox alignment="CENTER_LEFT" spacing="8.0">
                     <Label text="行検索" />
                     <TextField fx:id="rowSearchField" maxWidth="Infinity" prefWidth="320.0" promptText="いずれかの列に含まれる文字列（部分一致）。空欄で列フィルタのみに戻る" HBox.hgrow="ALWAYS" />

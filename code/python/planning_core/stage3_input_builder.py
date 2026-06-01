@@ -5,8 +5,8 @@
 - 出力: ``plan_input_tasks.xlsx`` の第2シート（``PLAN_INPUT_STAGE3_SHEET_NAME``）に枝番行のみを書き出す
 
 枝番行は元行（入力1表）を複製し、依頼NO=``{元依頼NO}-{枝番2桁}``、換算数量=セル数量、
-原反投入日=配台日、配台可能日時=配台日+DISPATCHABLE_FROM_TIME（12:45）、
-配台可能日時_上書き=移動先セル暦日+定常開始時刻（master 定常始業）とする。
+原反投入日=配台日、配台可能日時=手動修正表の配台日セル暦日+定常開始時刻（master 定常始業）とする。
+段階3.0〜3.2 では ``配台可能日時_上書き`` 列は使わない。
 元タスク行は入力3表に含めない。
 特別ルール scope は列「元依頼NO」で親に紐付ける（配台 task_id は枝番依頼NOのまま）。
 """
@@ -161,6 +161,7 @@ def build_stage3_input_sheet(
     records: list[dict] = []
     seq_by_parent: dict[str, int] = {}
     n_unmatched = 0
+    trial_order = 0
 
     for key in sorted(targets.keys(), key=lambda k: (k[0], k[3], k[1], k[2])):
         tid, proc, mach, dd = key
@@ -201,14 +202,12 @@ def build_stage3_input_sheet(
 
         rec[pc.TASK_COL_RAW_INPUT_DATE] = dd.strftime("%Y/%m/%d")
         rec[pc.PLAN_COL_RAW_INPUT_DATE_OVERRIDE] = ""
+        # 手動修正表の配台日セル暦日 + 定常開始時刻（段階3.0〜3.2 の配台開始下限）
         rec[pc.PLAN_COL_DISPATCHABLE_DATETIME] = pc.format_dispatchable_datetime_cell(
-            pc.compute_dispatchable_datetime(dd)
-        )
-        # 手動修正で移した配台日セル: 上書き列はその暦日 + 定常開始時刻（段階2 解決時は上書き優先）
-        rec[pc.PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE] = pc.format_dispatchable_datetime_cell(
             datetime.combine(dd, shift_start)
         )
-        rec[pc.RESULT_TASK_COL_DISPATCH_TRIAL_ORDER] = ""
+        trial_order += 1
+        rec[pc.RESULT_TASK_COL_DISPATCH_TRIAL_ORDER] = trial_order
         records.append(rec)
 
     out_df = pd.DataFrame(records)

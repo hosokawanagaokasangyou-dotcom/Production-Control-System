@@ -34,6 +34,11 @@ public final class TabularCellHighlight {
             "-fx-background-color: #c62828; -fx-control-inner-background: #c62828;"
                     + " -fx-text-fill: white; -fx-font-weight: bold;";
 
+    /** 入力3表: 原反投入日+12:45 が配台可能日時より後のときの {@code 配台可能日時} セル。 */
+    public static final String PLAN_INPUT_DISPATCHABLE_DATETIME_VIOLATION_STYLE =
+            "-fx-background-color: #ffcdd2; -fx-control-inner-background: #ffcdd2;"
+                    + " -fx-text-fill: #b71c1c; -fx-font-weight: bold;";
+
     /** Column title is a calendar date only, e.g. {@code 2026/04/30} （{@code yyyy/MM/dd} 形式の日付列のみ）。 */
     private static final Pattern HEADER_YMD_SLASH = Pattern.compile("^\\d{4}/\\d{1,2}/\\d{1,2}$");
 

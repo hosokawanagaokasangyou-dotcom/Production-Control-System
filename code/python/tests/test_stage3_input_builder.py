@@ -75,20 +75,27 @@ def test_branch_decomposition(tmp_path):
     # 数量合計が保存される（300 + 300 = 600）
     assert abs(float(out[pc.TASK_COL_QTY].sum()) - 600.0) < 1e-6
 
-    # 配台可能日時は配台日 + 12:45、上書きは配台日 + 定常開始時刻（master 無し時 DEFAULT_START_TIME）
+    # 配台可能日時は配台日 + 定常開始時刻（master 無し時 DEFAULT_START_TIME）。上書き列は出力しない。
+    assert pc.PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE not in out.columns
+    assert pc.plan_reference_column_name(
+        pc.PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE
+    ) not in out.columns
     disp_vals = [str(v) for v in out[pc.PLAN_COL_DISPATCHABLE_DATETIME].tolist()]
-    ov_vals = [str(v) for v in out[pc.PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE].tolist()]
-    assert len(disp_vals) == 2 and len(ov_vals) == 2
+    assert len(disp_vals) == 2
+    start_hhmm = pc.DEFAULT_START_TIME.strftime("%H:%M")
+    start_hhmm_alt = start_hhmm.lstrip("0")
     for v in disp_vals:
-        assert "12:45" in v
-    start_hhmm = pc.DEFAULT_START_TIME.strftime("%H:%M").lstrip("0")
-    for v in ov_vals:
-        assert start_hhmm in v or pc.DEFAULT_START_TIME.strftime("%H:%M") in v
-    assert any(v.startswith("2026/6/10") or v.startswith("2026/06/10") for v in ov_vals)
-    assert any(v.startswith("2026/6/11") or v.startswith("2026/06/11") for v in ov_vals)
+        assert start_hhmm in v or start_hhmm_alt in v
+        assert "12:45" not in v
+    assert any(v.startswith("2026/6/10") or v.startswith("2026/06/10") for v in disp_vals)
+    assert any(v.startswith("2026/6/11") or v.startswith("2026/06/11") for v in disp_vals)
 
     # 特記が元行からコピーされる
     assert all("特記コピー確認" == str(v) for v in out[pc.PLAN_COL_SPECIAL_REMARK].tolist())
+
+    # 配台試行順番は出力行順に 1..n
+    orders = [int(v) for v in out[pc.RESULT_TASK_COL_DISPATCH_TRIAL_ORDER].tolist()]
+    assert orders == [1, 2]
 
 
 def test_build_twice_replaces_stage3_sheet(tmp_path):
@@ -141,6 +148,15 @@ def test_build_twice_after_shared_strings_stripped(tmp_path):
     # 2 回目後も openpyxl で読める（sharedStrings 欠落 KeyError の再発防止）
     pd.read_excel(
         xlsx, sheet_name=pc.PLAN_INPUT_STAGE3_SHEET_NAME, engine="openpyxl"
+    )
+
+
+def test_stage3_column_order_excludes_dispatchable_override():
+    order = pc.plan_input_stage3_sheet_column_order()
+    assert pc.PLAN_COL_DISPATCHABLE_DATETIME in order
+    assert pc.PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE not in order
+    assert (
+        pc.plan_reference_column_name(pc.PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE) not in order
     )
 
 

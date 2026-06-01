@@ -137,8 +137,12 @@ public final class NetworkSourceDirResolver {
                     logs.add(
                             "[network-source] 加工計画DATA相当: 参照 OK → "
                                     + p
-                                    + " （キャッシュ更新）");
+                                    + " （ローカルキャッシュ読込: "
+                                    + cached.get()
+                                    + "）");
+                    return cached;
                 }
+                logs.add("[network-source] 加工計画DATA相当: 参照 OK → " + p);
                 return Optional.of(p);
             }
             logs.add(
@@ -155,7 +159,14 @@ public final class NetworkSourceDirResolver {
         Path dir = AppPaths.resolveTaskInputSourceDir(u);
         Optional<Path> live = pickNewestTaskInputInDir(dir);
         if (live.isPresent() && isReadableFile(live.get())) {
-            refreshCacheFromLive(live.get(), cacheFileStemTaskInput(), u, logs);
+            Optional<Path> cached =
+                    refreshCacheFromLive(live.get(), cacheFileStemTaskInput(), u, logs);
+            if (cached.isPresent()) {
+                logs.add(
+                        "[network-source] PM_AI_TASK_INPUT_SOURCE_DIR 最新（ローカルキャッシュ）: "
+                                + cached.get());
+                return cached;
+            }
             logs.add("[network-source] PM_AI_TASK_INPUT_SOURCE_DIR 最新: " + live.get());
             return live;
         }
@@ -172,7 +183,16 @@ public final class NetworkSourceDirResolver {
         if (!wb.isEmpty()) {
             Path p = Path.of(wb).toAbsolutePath().normalize();
             if (isReadableFile(p)) {
-                refreshCacheFromLive(p, cacheFileStemActualDetail(), u, logs);
+                Optional<Path> cached = refreshCacheFromLive(p, cacheFileStemActualDetail(), u, logs);
+                if (cached.isPresent()) {
+                    logs.add(
+                            "[network-source] 実績明細: 単一ファイル参照 OK → "
+                                    + p
+                                    + " （ローカルキャッシュ読込: "
+                                    + cached.get()
+                                    + "）");
+                    return cached;
+                }
                 logs.add("[network-source] 実績明細: 単一ファイル参照 OK → " + p);
                 return Optional.of(p);
             }
@@ -190,7 +210,14 @@ public final class NetworkSourceDirResolver {
         Path dir = AppPaths.resolveActualDetailSourceDir(u);
         Optional<Path> live = pickNewestExcelInDir(dir);
         if (live.isPresent() && isReadableFile(live.get())) {
-            refreshCacheFromLive(live.get(), cacheFileStemActualDetail(), u, logs);
+            Optional<Path> cached =
+                    refreshCacheFromLive(live.get(), cacheFileStemActualDetail(), u, logs);
+            if (cached.isPresent()) {
+                logs.add(
+                        "[network-source] PM_AI_ACTUAL_DETAIL_SOURCE_DIR 最新（ローカルキャッシュ）: "
+                                + cached.get());
+                return cached;
+            }
             logs.add("[network-source] PM_AI_ACTUAL_DETAIL_SOURCE_DIR 最新: " + live.get());
             return live;
         }
