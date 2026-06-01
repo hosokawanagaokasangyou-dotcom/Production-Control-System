@@ -9,6 +9,7 @@
 <?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.control.Tab?>
 <?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.Slider?>
 <?import javafx.scene.control.Spinner?>
 <?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.control.Tooltip?>
@@ -144,6 +145,21 @@
                     <Tooltip text="選択行を下へ（試行順）"/>
                 </tooltip>
             </Button>
+            <Button fx:id="dispatchReplayButton" minWidth="-1.0" mnemonicParsing="false"
+                    text="配台リプレイ" onAction="#onDispatchReplayAction">
+                <tooltip>
+                    <Tooltip text="配台完了後、結果_配台表.json を加工開始日時順に並べ、ワイド表のセルを順次ハイライト再生する"/>
+                </tooltip>
+            </Button>
+            <Button fx:id="dispatchReplayStopButton" minWidth="-1.0" mnemonicParsing="false"
+                    text="停止" disable="true" onAction="#onDispatchReplayStopAction"/>
+            <Label text="速度"/>
+            <Slider fx:id="dispatchReplaySpeedSlider" min="60.0" max="800.0" value="300.0"
+                    prefWidth="120.0" majorTickUnit="200.0" blockIncrement="40.0">
+                <tooltip>
+                    <Tooltip text="1ステップの間隔(ms)。小さいほど速い"/>
+                </tooltip>
+            </Slider>
         </HBox>
     </VBox>
     <HBox alignment="CENTER_LEFT" spacing="8.0">

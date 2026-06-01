@@ -404,6 +404,19 @@ public final class DispatchInteractiveTabController {
     private Button wideRowDownButton;
 
     @FXML
+    private Button dispatchReplayButton;
+
+    @FXML
+    private Button dispatchReplayStopButton;
+
+    @FXML
+    private javafx.scene.control.Slider dispatchReplaySpeedSlider;
+
+    /** 配台リプレイ（プラン B）。グリッドモデルは触らず、ワイド表のセル選択/スクロールのみで再生する。 */
+    private final jp.co.pm.ai.desktop.dispatch.DispatchReplayController dispatchReplay =
+            new jp.co.pm.ai.desktop.dispatch.DispatchReplayController();
+
+    @FXML
     private CheckBox showAladdinPlanQtyLineCheck;
 
     @FXML
@@ -2632,6 +2645,10 @@ public final class DispatchInteractiveTabController {
      * になることがある。
      */
     private void rebuildGrids(Runnable afterLayoutsReady) {
+        if (dispatchReplay.isRunning()) {
+            dispatchReplay.stop();
+            setReplayButtonsRunning(false);
+        }
                 int layoutGen = bumpDispatchSpreadsheetLayoutGeneration();
         FullGridRebuild bundle = buildFullGridRebuild();
         applyFullGridRebuild(bundle, afterLayoutsReady, layoutGen);
@@ -3571,6 +3588,90 @@ public final class DispatchInteractiveTabController {
     /**
      * 未達サマリ表で選択した依頼NO・機械・配台日に対応するワイドグリッドのセルを選択・フォーカスする。
      */
+    /** 「配台リプレイ」ボタン: 表示中の配台結果を加工開始日時順にワイド表で順次ハイライト再生する。 */
+    @FXML
+    private void onDispatchReplayAction() {
+        if (dispatchReplay.isRunning()) {
+            return;
+        }
+        if (doc == null || doc.rows().isEmpty() || wideProfiles.isEmpty() || dateAxis.isEmpty()) {
+            setStatusSafe("配台リプレイ: 表示中の配台結果がありません。先に配台結果を読み込んでください。");
+            return;
+        }
+        List<jp.co.pm.ai.desktop.dispatch.DispatchReplayController.Step> steps =
+                jp.co.pm.ai.desktop.dispatch.DispatchReplayController.buildStepsFromRows(doc.rows());
+        if (steps.isEmpty()) {
+            setStatusSafe("配台リプレイ: 再生対象（当日配台数量 > 0）がありません。");
+            return;
+        }
+        applyInnerTabSelectedIndex(0);
+        if (dispatchReplaySpeedSlider != null) {
+            dispatchReplay.setIntervalMillis(dispatchReplaySpeedSlider.getValue());
+        }
+        dispatchReplay.load(steps);
+        setReplayButtonsRunning(true);
+        dispatchReplay.play(
+                this::visitDispatchReplayStep,
+                () -> {
+                    setReplayButtonsRunning(false);
+                    setStatusSafe("配台リプレイ完了（" + steps.size() + " ステップ）。");
+                });
+    }
+
+    /** 「停止」ボタン: 配台リプレイを中止する。 */
+    @FXML
+    private void onDispatchReplayStopAction() {
+        dispatchReplay.stop();
+        setReplayButtonsRunning(false);
+        setStatusSafe("配台リプレイを停止しました。");
+    }
+
+    private void setReplayButtonsRunning(boolean running) {
+        if (dispatchReplayButton != null) {
+            dispatchReplayButton.setDisable(running);
+        }
+        if (dispatchReplayStopButton != null) {
+            dispatchReplayStopButton.setDisable(!running);
+        }
+    }
+
+    private void setStatusSafe(String msg) {
+        if (statusLabel != null) {
+            statusLabel.setText(msg);
+        }
+    }
+
+    /** 1 ステップ再生: 対応するワイド表セルへフォーカス・スクロールし、ステータスへ進捗を出す。 */
+    private void visitDispatchReplayStep(
+            jp.co.pm.ai.desktop.dispatch.DispatchReplayController.Step step, int index, int total) {
+        int profileIdx = findWideProfileIndexForRequestMachine(step.requestNo(), step.machine());
+        int dateIdx = dateAxis.indexOf(step.dispatchDate());
+        if (profileIdx >= 0 && dateIdx >= 0) {
+            int modelCol = WIDE_STATIC_HEADERS.size() + dateIdx * DAY_SLOT_COLUMNS;
+            focusWideProfileCellAfterReorder(profileIdx, modelCol);
+        }
+        setStatusSafe("配台リプレイ " + (index + 1) + "/" + total + ": " + step.label());
+    }
+
+    /** {@link #wideProfiles} を (依頼NO, 機械名) で照合する。見つからなければ -1。 */
+    private int findWideProfileIndexForRequestMachine(String requestNo, String machine) {
+        if (wideProfiles.isEmpty()) {
+            return -1;
+        }
+        String req = requestNo == null ? "" : requestNo.trim();
+        String mac = machine == null ? "" : machine.trim();
+        for (int i = 0; i < wideProfiles.size(); i++) {
+            Map<String, String> p = wideProfiles.get(i);
+            String pReq = p.get("依頼NO"); // Literal Japanese key
+            String pMac = p.get(ResultDispatchSchema.COL_MACHINE);
+            if (req.equals(pReq == null ? "" : pReq.trim())
+                    && mac.equals(pMac == null ? "" : pMac.trim())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     private void wireDispatchShortfallSelectionToWideGrid() {
         if (dispatchShortfallTable == null) {
             return;
