@@ -81,6 +81,8 @@ import jp.co.pm.ai.desktop.audio.UiClickSound;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner.RunRequest;
 import jp.co.pm.ai.desktop.bridge.Stage2PythonChildEnv;
+import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreview;
+import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreviewPython;
 import jp.co.pm.ai.desktop.dispatch.rules.paths.DispatchRulePaths;
 import jp.co.pm.ai.desktop.dispatch.rules.stage.DispatchRuleBuilderRunContext;
 import jp.co.pm.ai.desktop.dispatch.rules.stage.DispatchRuleStageRunOverlay;
@@ -3963,6 +3965,15 @@ public final class MainShellController {
                 uiRun.put(AppPaths.KEY_PM_AI_STAGE2_WRITE_EXCEL, "1");
                 uiRun.put(AppPaths.KEY_PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH, "0");
             }
+            if (STAGE3_1.equals(script)) {
+                uiRun.put(AppPaths.KEY_PM_AI_STAGE2_1_OVERTIME, "1");
+                java.nio.file.Path ot31 = pendingStage31OvertimeJsonPath;
+                if (ot31 != null) {
+                    uiRun.put(
+                            AppPaths.KEY_PM_AI_OVERTIME_SIMULATION_JSON,
+                            ot31.toAbsolutePath().normalize().toString());
+                }
+            }
             if (STAGE2_1.equals(script)) {
                 java.nio.file.Path ot = pendingStage21OvertimeJsonPath;
                 Map<String, String> stage21Snap = snapshotStage21PythonEnv(ot);
@@ -4379,6 +4390,10 @@ public final class MainShellController {
                     dispatchInteractiveTabController.reloadTableFromDiskAfterExternalUpdate();
                 }
             }
+        }
+        if (STAGE3_1.equals(script)) {
+            deleteOvertimeSimulationJsonQuietly(pendingStage31OvertimeJsonPath);
+            pendingStage31OvertimeJsonPath = null;
         }
         boolean stage12 =
                 STAGE1.equals(script)
@@ -6166,12 +6181,78 @@ public final class MainShellController {
         runStage(STAGE3_2);
     }
 
-    /** 段階3.1(時間外): 時間外ウィザード hybrid はフェーズ7で実装予定。 */
+    /** 段階3.1 実行時のみ子プロセスへ渡す残業 JSON。 */
+    private java.nio.file.Path pendingStage31OvertimeJsonPath;
+
+    /**
+     * 段階3.1(時間外): 入力3表に対して段階2.1 と同じ時間外ウィザード（hybrid）を起動し、
+     * 確定した残業 JSON を適用して入力3表を配台→枝番統合する。
+     */
     void triggerStage31() {
-        appendLog("[段階3.1] 時間外（hybrid）はフェーズ7で実装予定です。");
-        showErrorDialog(
-                "段階3.1(時間外)",
-                "段階3.1(時間外) は現在準備中です（時間外ウィザードの入力3表対応はフェーズ7で実装します）。");
+        if (blockIfSummaryAiDispatchExportLocked("段階3.1")
+                || blockIfMaterialLookupTablesHaveBlankValues("段階3.1")
+                || blockStage3IfNoInput3Workbook("段階3.1")) {
+            return;
+        }
+        final java.nio.file.Path pyExe = resolveStagePythonExecutablePath(collectUiEnv());
+        final java.nio.file.Path pyDir = AppPaths.resolvePythonScriptDir(collectUiEnv());
+        final Map<String, String> pyEnv = snapshotDispatchTrialPythonEnv();
+        final Stage owner = primaryStage;
+        Thread worker =
+                new Thread(
+                        () -> {
+                            try {
+                                AttendanceOvertimePreview.Preview preview =
+                                        AttendanceOvertimePreviewPython.load(
+                                                pyExe, pyDir, pyEnv, this::appendLog);
+                                Platform.runLater(
+                                        () ->
+                                                OvertimeSimulationWizard.show(
+                                                        owner,
+                                                        this,
+                                                        preview,
+                                                        this::triggerStage31Run));
+                            } catch (Exception ex) {
+                                Platform.runLater(
+                                        () ->
+                                                showErrorDialog(
+                                                        "段階3.1",
+                                                        "勤怠プレビューの取得に失敗しました。\n"
+                                                                + (ex.getMessage() != null
+                                                                        ? ex.getMessage()
+                                                                        : ex)));
+                            }
+                        },
+                        "dispatch-stage31-preview");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    /** 段階3.1 実行後に残業シミュレーション JSON を物理削除（「書き戻し」相当・次回実行へ漏らさない）。 */
+    private void deleteOvertimeSimulationJsonQuietly(java.nio.file.Path overtimeSimulationJson) {
+        if (overtimeSimulationJson == null) {
+            return;
+        }
+        try {
+            if (java.nio.file.Files.deleteIfExists(overtimeSimulationJson)) {
+                appendLog("[段階3.1] 残業シミュレーション JSON を削除しました: " + overtimeSimulationJson);
+            }
+        } catch (Exception ex) {
+            appendLog(
+                    "[段階3.1] 残業シミュレーション JSON の削除に失敗（無視）: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex));
+        }
+    }
+
+    /** 時間外ウィザード確定後の段階3.1 実行（残業 JSON は子プロセスへ env 経由で渡す）。 */
+    private void triggerStage31Run(java.nio.file.Path overtimeSimulationJson) {
+        if (overtimeSimulationJson == null
+                || !java.nio.file.Files.isRegularFile(overtimeSimulationJson)) {
+            appendLog("[段階3.1] 残業シミュレーション JSON が無効です。");
+            return;
+        }
+        pendingStage31OvertimeJsonPath = overtimeSimulationJson.toAbsolutePath().normalize();
+        runStage(STAGE3_1);
     }
 
     /** 段階2.1 実行時のみ子プロセスへ渡す残業 JSON。 */
