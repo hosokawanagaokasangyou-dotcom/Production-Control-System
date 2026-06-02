@@ -1227,6 +1227,8 @@ public final class MainShellController {
                         : PushButtonDesignPrefs.inactiveDefaults(),
                 memorySettingsTabController.snapshotMemoryMonitorEnabled(),
                 memorySettingsTabController.snapshotMemoryMonitorIntervalSec(),
+                memorySettingsTabController.snapshotNextLaunchHeapFixed(),
+                memorySettingsTabController.snapshotNextLaunchHeapMinMiB(),
                 memorySettingsTabController.snapshotNextLaunchHeapMaxMiB(),
                 equipmentStatusDashboardTabController != null
                         ? equipmentStatusDashboardTabController.snapshotActualDateIso()

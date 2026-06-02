@@ -32,8 +32,6 @@ public final class Stage2UnknownMasterCombinationDialog {
 
     private Stage2UnknownMasterCombinationDialog() {}
 
-    public record Result(List<UnknownPair> markExclude) {}
-
     public static final class Row {
         private final String process;
         private final String machine;
@@ -67,7 +65,8 @@ public final class Stage2UnknownMasterCombinationDialog {
         }
     }
 
-    public static Optional<Result> prompt(Window owner, PromptBundle bundle) {
+    public static Optional<Stage2UnknownMasterCombinationDialogResult> prompt(
+            Window owner, PromptBundle bundle) {
         if (bundle == null || bundle.empty()) {
             return Optional.empty();
         }
@@ -136,6 +135,6 @@ public final class Stage2UnknownMasterCombinationDialog {
                 marked.add(r.toPair());
             }
         }
-        return Optional.of(new Result(marked));
+        return Optional.of(new Stage2UnknownMasterCombinationDialogResult(marked));
     }
 }

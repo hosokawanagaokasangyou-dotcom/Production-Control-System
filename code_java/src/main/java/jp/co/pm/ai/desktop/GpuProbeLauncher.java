@@ -196,6 +196,7 @@ final class GpuProbeLauncher {
             cmd.add("javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.swing");
             cmd.add("--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED");
             cmd.add("--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED");
+            cmd.add("--add-opens=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED");
             cmd.add("--add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED");
             cmd.add("--enable-native-access=javafx.graphics");
             cmd.add("-classpath");

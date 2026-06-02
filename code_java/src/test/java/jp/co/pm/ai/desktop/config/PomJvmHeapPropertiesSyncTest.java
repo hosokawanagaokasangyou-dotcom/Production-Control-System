@@ -30,16 +30,16 @@ class PomJvmHeapPropertiesSyncTest {
         String bat =
                 "\"%JAVA_EXE%\" -Dfile.encoding=UTF-8 -Xms4g -Xmx4g -XX:+HeapDumpOnOutOfMemoryError";
         assertEquals(
-                "\"%JAVA_EXE%\" -Dfile.encoding=UTF-8 -Xms8g -Xmx8g -XX:+HeapDumpOnOutOfMemoryError",
-                PomJvmHeapPropertiesSync.patchHeapFlagsInText(bat, "8g"));
+                "\"%JAVA_EXE%\" -Dfile.encoding=UTF-8 -Xms2g -Xmx8g -XX:+HeapDumpOnOutOfMemoryError",
+                PomJvmHeapPropertiesSync.patchHeapFlagsInText(bat, "2g", "8g"));
 
         String cfg =
                 "[JavaOptions]\r\n"
                         + "java-options=-Dfile.encoding=UTF-8\r\n"
                         + "java-options=-Xms4g\r\n"
                         + "java-options=-Xmx4g\r\n";
-        String patched = PomJvmHeapPropertiesSync.patchHeapFlagsInText(cfg, "8g");
-        assertTrue(patched.contains("java-options=-Xms8g"));
+        String patched = PomJvmHeapPropertiesSync.patchHeapFlagsInText(cfg, "2g", "8g");
+        assertTrue(patched.contains("java-options=-Xms2g"));
         assertTrue(patched.contains("java-options=-Xmx8g"));
         assertFalse(patched.contains("-Xmx4g"));
     }
@@ -59,7 +59,7 @@ class PomJvmHeapPropertiesSyncTest {
     }
 
     @Test
-    void writeJvmHeapFromDesiredMiB_patchesPortableLauncherBat(@TempDir Path temp) throws Exception {
+    void writeJvmHeapFromLaunchPrefs_fixedMode_patchesPortableLauncherBat(@TempDir Path temp) throws Exception {
         Path install = temp.resolve("bundle");
         Files.createDirectories(install.resolve("app"));
         Files.createDirectories(install.resolve("runtime").resolve("bin"));
@@ -83,8 +83,10 @@ class PomJvmHeapPropertiesSyncTest {
         Path prevUserDir = Path.of(System.getProperty("user.dir"));
         System.setProperty("user.dir", install.toString());
         try {
-            PomJvmHeapPropertiesSync.writeJvmHeapFromDesiredMiB(
+            PomJvmHeapPropertiesSync.writeJvmHeapFromLaunchPrefs(
                     Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, install.resolve("pm-ai-data").toString()),
+                    true,
+                    6144,
                     8192);
         } finally {
             System.setProperty("user.dir", prevUserDir.toString());
@@ -92,13 +94,49 @@ class PomJvmHeapPropertiesSyncTest {
 
         String bat = Files.readString(install.resolve("launch-pm-ai-desktop.bat"), StandardCharsets.UTF_8);
         assertTrue(bat.contains("-Xmx8g"));
-        assertTrue(bat.contains("-Xms8g"));
+        assertTrue(bat.contains("-Xms6g"));
 
         String pom =
                 Files.readString(
                         install.resolve("pm-ai-data").resolve("code_java").resolve("pom.xml"),
                         StandardCharsets.UTF_8);
         assertTrue(pom.contains("<jvm.max.heap>8g</jvm.max.heap>"));
-        assertTrue(pom.contains("<jvm.initial.heap>8g</jvm.initial.heap>"));
+        assertTrue(pom.contains("<jvm.initial.heap>6g</jvm.initial.heap>"));
+    }
+
+    @Test
+    void writeJvmHeapFromLaunchPrefs_variableMode_usesMinFloorForInitial(@TempDir Path temp) throws Exception {
+        Path install = temp.resolve("bundle");
+        Files.createDirectories(install.resolve("pm-ai-data").resolve("code_java"));
+        Files.writeString(
+                install.resolve("pm-ai-data").resolve("code_java").resolve("pom.xml"),
+                """
+                <project>
+                  <properties>
+                    <jvm.max.heap>4g</jvm.max.heap>
+                    <jvm.initial.heap>4g</jvm.initial.heap>
+                  </properties>
+                </project>
+                """,
+                StandardCharsets.UTF_8);
+
+        Path prevUserDir = Path.of(System.getProperty("user.dir"));
+        System.setProperty("user.dir", install.toString());
+        try {
+            PomJvmHeapPropertiesSync.writeJvmHeapFromLaunchPrefs(
+                    Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, install.resolve("pm-ai-data").toString()),
+                    false,
+                    0,
+                    6144);
+        } finally {
+            System.setProperty("user.dir", prevUserDir.toString());
+        }
+
+        String pom =
+                Files.readString(
+                        install.resolve("pm-ai-data").resolve("code_java").resolve("pom.xml"),
+                        StandardCharsets.UTF_8);
+        assertTrue(pom.contains("<jvm.max.heap>6g</jvm.max.heap>"));
+        assertTrue(pom.contains("<jvm.initial.heap>2g</jvm.initial.heap>"));
     }
 }

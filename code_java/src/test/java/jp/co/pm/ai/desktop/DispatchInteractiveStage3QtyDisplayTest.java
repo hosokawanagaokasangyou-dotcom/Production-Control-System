@@ -18,18 +18,18 @@ class DispatchInteractiveStage3QtyDisplayTest {
                         900, 100, 80, true, 1e-3, false, false, false, 0.0, variant);
         String[] lines = s.split("\n", -1);
         assertEquals(DispatchInteractiveTabController.LABEL_ALADDIN_PLAN + "900", lines[0]);
-        assertEquals(DispatchInteractiveTabController.LABEL_STAGE3_PLAN + "100", lines[1]);
+        assertEquals(DispatchInteractiveTabController.LABEL_STAGE2_PLAN + "100", lines[1]);
         assertEquals("(段階3.0後)80", lines[2]);
     }
 
     @Test
-    void format_stage3_0Revised_usesStage30RevisedLabel() {
+    void format_stage3_0Revised_usesStage30AfterLabel() {
         var variant = jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support.Stage3PlanningVariant.STAGE3_0;
         String s =
                 DispatchInteractiveTabController.formatDispatchPlanActualQtyDisplay(
                         4000, 7600, 7600, true, 1e-3, false, true, false, 0.0, variant);
         String[] lines = s.split("\n", -1);
-        assertEquals("(段階3.0改)7600", lines[2]);
+        assertEquals("(段階3.0後)7600", lines[2]);
     }
 
     @Test
@@ -40,7 +40,7 @@ class DispatchInteractiveStage3QtyDisplayTest {
         String[] lines = s.split("\n", -1);
         assertEquals(3, lines.length);
         assertEquals("", lines[0]);
-        assertEquals(DispatchInteractiveTabController.LABEL_STAGE3_PLAN + "100", lines[1]);
+        assertEquals(DispatchInteractiveTabController.LABEL_STAGE2_PLAN + "100", lines[1]);
         assertEquals(DispatchInteractiveTabController.LABEL_STAGE3_ACTUAL + "80", lines[2]);
     }
 
@@ -52,7 +52,7 @@ class DispatchInteractiveStage3QtyDisplayTest {
         assertFalse(s.contains("\n"));
         assertTrue(
                 s.contains(
-                        DispatchInteractiveTabController.LABEL_STAGE3_PLAN
+                        DispatchInteractiveTabController.LABEL_STAGE2_PLAN
                                 + "100 "
                                 + DispatchInteractiveTabController.LABEL_STAGE3_ACTUAL
                                 + "80"));
@@ -107,7 +107,7 @@ class DispatchInteractiveStage3QtyDisplayTest {
         String[] lines = s.split("\n", -1);
         assertEquals(3, lines.length);
         assertEquals(DispatchInteractiveTabController.LABEL_ALADDIN_PLAN + "900", lines[0]);
-        assertEquals(DispatchInteractiveTabController.LABEL_STAGE3_PLAN + "100", lines[1]);
+        assertEquals(DispatchInteractiveTabController.LABEL_STAGE2_PLAN + "100", lines[1]);
         assertEquals(DispatchInteractiveTabController.LABEL_STAGE3_ACTUAL + "80", lines[2]);
     }
 
@@ -118,7 +118,7 @@ class DispatchInteractiveStage3QtyDisplayTest {
                         4000, 7600, 7600, false, 1e-3);
         assertEquals(3, slots.size());
         assertTrue(slots.get(0).lineText().startsWith(DispatchInteractiveTabController.LABEL_ALADDIN_PLAN));
-        assertTrue(slots.get(1).lineText().startsWith(DispatchInteractiveTabController.LABEL_STAGE3_PLAN));
+        assertTrue(slots.get(1).lineText().startsWith(DispatchInteractiveTabController.LABEL_STAGE2_PLAN));
         assertTrue(slots.get(2).lineText().startsWith(DispatchInteractiveTabController.LABEL_STAGE3_ACTUAL));
     }
 
@@ -129,7 +129,8 @@ class DispatchInteractiveStage3QtyDisplayTest {
                         4000, 7600, 7600, false, 1e-3);
         var filter =
                 new jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence
-                        .DispatchInteractiveDateQtyLineFilterPrefs(true, false, true);
+                        .DispatchInteractiveDateQtyLineFilterPrefs(
+                                true, false, true, true, true);
         List<DispatchInteractiveTabController.Stage3QtyLineSlot> filtered =
                 DispatchInteractiveTabController.applyDateQtyLineFilterToSlots(slots, filter);
         assertTrue(filtered.get(0).visible());
@@ -239,11 +240,12 @@ class DispatchInteractiveStage3QtyDisplayTest {
                         900, 100, 80, true, 1e-3, false);
         var filter =
                 new jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence
-                        .DispatchInteractiveDateQtyLineFilterPrefs(false, true, false);
+                        .DispatchInteractiveDateQtyLineFilterPrefs(
+                                false, true, true, false, true);
         String filtered =
                 DispatchInteractiveTabController.filterDispatchQtyDisplayText(raw, filter, false);
         assertFalse(filtered.contains(DispatchInteractiveTabController.LABEL_ALADDIN_PLAN));
-        assertTrue(filtered.contains(DispatchInteractiveTabController.LABEL_STAGE3_PLAN + "100"));
+        assertTrue(filtered.contains(DispatchInteractiveTabController.LABEL_STAGE2_PLAN + "100"));
         assertFalse(filtered.contains(DispatchInteractiveTabController.LABEL_STAGE3_ACTUAL));
     }
 }

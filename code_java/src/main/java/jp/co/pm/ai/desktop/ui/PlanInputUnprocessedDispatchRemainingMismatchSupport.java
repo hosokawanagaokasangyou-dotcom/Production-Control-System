@@ -16,6 +16,7 @@ import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
  * 配台計画タスク入力: 「未加工」が 0 より大きく、列「配台使用残数量」と数値が一致しない行を検出する。
  *
  * <p>スリット等で段階1の配台使用残数量が未加工と乖離するケース（例: JR260602）向け。
+ * 不一致行は {@code 配台使用残数量} と {@code 配台ロール数} を赤系で強調する。
  */
 public final class PlanInputUnprocessedDispatchRemainingMismatchSupport {
 
@@ -24,6 +25,8 @@ public final class PlanInputUnprocessedDispatchRemainingMismatchSupport {
     public static final String COL_UNPROCESSED = "未加工";
 
     public static final String COL_DISPATCH_REMAINING = "配台使用残数量";
+
+    public static final String COL_DISPATCH_ROLLS = "配台ロール数";
 
     public static final String COL_TASK_ID = "依頼NO";
 
@@ -86,7 +89,7 @@ public final class PlanInputUnprocessedDispatchRemainingMismatchSupport {
                 + " の未加工と配台使用残数量が異なります、手動修正してください。";
     }
 
-    /** 違反行の {@code 配台使用残数量} セル背景を赤系で強調する。 */
+    /** 違反行の {@code 配台使用残数量}・{@code 配台ロール数} セル背景を赤系で強調する。 */
     public static void applyViolationHighlights(
             GridBase grid,
             List<String> headers,
@@ -96,26 +99,33 @@ public final class PlanInputUnprocessedDispatchRemainingMismatchSupport {
             return;
         }
         int idxRem = headers.indexOf(COL_DISPATCH_REMAINING);
-        if (idxRem < 0) {
+        int idxRolls = headers.indexOf(COL_DISPATCH_ROLLS);
+        if (idxRem < 0 && idxRolls < 0) {
             return;
         }
         var gridRows = grid.getRows();
         for (int r = 0; r < rows.size(); r++) {
+            if (!isMismatch(headers, rows.get(r))) {
+                continue;
+            }
             int gridRow = firstDataRowIndex + r;
             if (gridRow < 0 || gridRow >= gridRows.size()) {
                 continue;
             }
             var rowCells = gridRows.get(gridRow);
-            if (idxRem >= rowCells.size()) {
-                continue;
-            }
-            SpreadsheetCell cell = rowCells.get(idxRem);
-            if (cell == null) {
-                continue;
-            }
-            if (isMismatch(headers, rows.get(r))) {
-                cell.setStyle(TabularCellHighlight.PLAN_INPUT_DISPATCH_REMAINING_MISMATCH_STYLE);
-            }
+            highlightCellIfPresent(rowCells, idxRem);
+            highlightCellIfPresent(rowCells, idxRolls);
+        }
+    }
+
+    private static void highlightCellIfPresent(
+            ObservableList<SpreadsheetCell> rowCells, int colIndex) {
+        if (colIndex < 0 || colIndex >= rowCells.size()) {
+            return;
+        }
+        SpreadsheetCell cell = rowCells.get(colIndex);
+        if (cell != null) {
+            cell.setStyle(TabularCellHighlight.PLAN_INPUT_DISPATCH_REMAINING_MISMATCH_STYLE);
         }
     }
 

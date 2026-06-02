@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.ui;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
@@ -11,6 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
 
@@ -21,6 +23,7 @@ import javafx.scene.Scene;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
+import javafx.collections.WeakListChangeListener;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.Parent;
@@ -38,8 +41,10 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TablePosition;
+import javafx.scene.control.TablePositionBase;
 import javafx.scene.control.TableView;
 import javafx.scene.control.Tooltip;
+import javafx.scene.control.Skin;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Text;
@@ -314,6 +319,81 @@ public final class SpreadsheetTabularSupport {
         return sb.toString();
     }
 
+    private static final Field SPREADSHEET_COLUMN_INNER_FIELD = resolveSpreadsheetColumnInnerField();
+
+    private static Field resolveSpreadsheetColumnInnerField() {
+        try {
+            Field f = SpreadsheetColumn.class.getDeclaredField("column");
+            f.setAccessible(true);
+            return f;
+        } catch (ReflectiveOperationException ex) {
+            return null;
+        }
+    }
+
+    /** ControlsFX {@link SpreadsheetColumn} が包む内側 {@link TableColumn}（列非表示・並び替えの正本）。 */
+    public static TableColumn<?, ?> innerTableColumnOf(SpreadsheetColumn wrapper) {
+        if (wrapper == null || SPREADSHEET_COLUMN_INNER_FIELD == null) {
+            return null;
+        }
+        try {
+            Object tc = SPREADSHEET_COLUMN_INNER_FIELD.get(wrapper);
+            if (tc instanceof TableColumn<?, ?> col) {
+                return col;
+            }
+        } catch (ReflectiveOperationException ignored) {
+            // fall through
+        }
+        return null;
+    }
+
+    /**
+     * {@link TableCell} が属する view 列 index（{@link SpreadsheetView#getColumns()} 上の位置）。
+     * 固定列分割・列非表示・ヘッダ D&amp;D 並び替え後も、内側 {@link TableColumn} の同一参照で解決する。
+     */
+    public static int viewColumnIndexFromTableCell(SpreadsheetView view, TableCell<?, ?> tc) {
+        if (view == null || tc == null || tc.getTableColumn() == null) {
+            return -1;
+        }
+        TableColumn<?, ?> clicked = tc.getTableColumn();
+        ObservableList<SpreadsheetColumn> cols = view.getColumns();
+        for (int i = 0; i < cols.size(); i++) {
+            if (clicked == innerTableColumnOf(cols.get(i))) {
+                return i;
+            }
+        }
+        return viewColumnIndexFromTableCellFixedPaneFallback(view, tc);
+    }
+
+    /** 内側列参照が取れないときのみ、固定ペイン + ローカル index の近似。 */
+    private static int viewColumnIndexFromTableCellFixedPaneFallback(
+            SpreadsheetView view, TableCell<?, ?> tc) {
+        TableView<?> tv = tc.getTableView();
+        int localCol = tv.getColumns().indexOf(tc.getTableColumn());
+        if (localCol < 0) {
+            return -1;
+        }
+        int fixedCount = view.getFixedColumns().size();
+        if (fixedCount <= 0) {
+            return localCol;
+        }
+        if (tv.getColumns().size() <= fixedCount) {
+            return localCol;
+        }
+        return fixedCount + localCol;
+    }
+
+    /**
+     * グリッド上の model 列 index（{@link SpreadsheetView#getColumns()} の index と同一）。
+     *
+     * <p>ControlsFX {@link SpreadsheetView#getModelColumn(int)} は<strong>表示中 leaf 列</strong>の index を
+     * 受け取る API であり、{@link #viewColumnIndexFromTableCell} の戻り値（全列リスト上の index）とは異なる。
+     * 列非表示時に {@code getModelColumn(viewCol)} を呼ぶと 1 列ずれて DnD 判定が空セルになる。
+     */
+    public static int modelColumnIndexFromTableCell(SpreadsheetView view, TableCell<?, ?> tc) {
+        return viewColumnIndexFromTableCell(view, tc);
+    }
+
     private static String spreadsheetCellPlainText(SpreadsheetView view, int viewRow, int viewCol) {
         Grid grid = view.getGrid();
         if (grid == null) {
@@ -501,10 +581,51 @@ public final class SpreadsheetTabularSupport {
         view.requestLayout();
     }
 
+    /**
+     * {@code setGrid} 後に column=-1 の {@link TablePosition} が残ると、セルクリック時の
+     * {@code TableViewSpanSelectionModel#clearAndSelect} で {@link IndexOutOfBoundsException} になり得る。
+     */
+    public static boolean hasStaleSpreadsheetSelection(SpreadsheetView view) {
+        if (view == null) {
+            return false;
+        }
+        ObservableList<? extends TablePosition> selected = view.getSelectionModel().getSelectedCells();
+        if (selected == null || selected.isEmpty()) {
+            TablePosition focus = view.getSelectionModel().getFocusedCell();
+            return focus != null && (focus.getRow() < 0 || focus.getColumn() < 0);
+        }
+        for (TablePosition pos : selected) {
+            if (pos == null || pos.getRow() < 0 || pos.getColumn() < 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 選択モデルと列数が一時的にずれているときも落とさない {@code clearSelection}。 */
+    public static void safeClearSpreadsheetSelection(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        try {
+            view.getSelectionModel().clearSelection();
+        } catch (RuntimeException ignored) {
+            // ControlsFX span selection: stale TablePosition after setGrid / column filter
+        }
+    }
+
+    /** 無効な TablePosition が残っているときだけ選択をクリアする（通常クリック前の予防）。 */
+    public static void sanitizeSpreadsheetSelectionIfStale(SpreadsheetView view) {
+        if (view != null && hasStaleSpreadsheetSelection(view)) {
+            safeClearSpreadsheetSelection(view);
+        }
+    }
+
     public static void detachAndSetGrid(SpreadsheetView view, Grid grid) {
         if (view == null || grid == null) {
             return;
         }
+        safeClearSpreadsheetSelection(view);
         clearAllFiltersAndSort(view);
         clearFixedRowsExceptFilterRow(view);
         view.setGrid(newSingleCellScratchGrid());
@@ -749,6 +870,140 @@ public final class SpreadsheetTabularSupport {
     }
 
     /**
+     * ControlsFX {@code TableViewSpanSelectionModel} が {@code fromIndex=-1} の変更を発行し、
+     * JavaFX {@code TableViewBehaviorBase} の selectedCells リスナが {@link IndexOutOfBoundsException} になる。
+     * 内側 {@link TableView} から当該リスナのみ外し、セルクリック・DnD を通常どおり動かす。
+     *
+     * <p>スキン再構築後は {@link #guardControlsFxSpanSelectionMousePressAfterSkinSettles} を再実行すること。
+     */
+    public static void guardControlsFxSpanSelectionMousePress(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        removeSpanSelectionChangeListenerOnEmbeddedTableViews(view, 0);
+    }
+
+    private static final WeakHashMap<SpreadsheetView, Boolean> SPAN_DND_GUARD_SKIN_LISTENERS =
+            new WeakHashMap<>();
+
+    /** {@link #guardControlsFxSpanSelectionMousePress} を即時と次のレイアウトパルス後にも適用する。 */
+    public static void guardControlsFxSpanSelectionMousePressAfterSkinSettles(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        guardControlsFxSpanSelectionMousePress(view);
+        if (!SPAN_DND_GUARD_SKIN_LISTENERS.containsKey(view)) {
+            SPAN_DND_GUARD_SKIN_LISTENERS.put(view, Boolean.TRUE);
+            view.skinProperty()
+                    .addListener(
+                            (obs, oldSkin, newSkin) -> {
+                                if (newSkin != null) {
+                                    Platform.runLater(
+                                            () -> guardControlsFxSpanSelectionMousePress(view));
+                                }
+                            });
+        }
+        Platform.runLater(
+                () -> {
+                    guardControlsFxSpanSelectionMousePress(view);
+                    Platform.runLater(() -> guardControlsFxSpanSelectionMousePress(view));
+                });
+    }
+
+    private static void removeSpanSelectionChangeListenerOnEmbeddedTableViews(Node n, int depth) {
+        if (n == null || depth > 24) {
+            return;
+        }
+        if (n instanceof TableView<?> tv) {
+            removeTableViewBehaviorSelectedCellsListener(tv);
+            neutralizeControlsFxSpanMouseDragOnGridView(tv);
+        }
+        if (n instanceof Parent p) {
+            for (Node c : p.getChildrenUnmodifiable()) {
+                removeSpanSelectionChangeListenerOnEmbeddedTableViews(c, depth + 1);
+            }
+        }
+    }
+
+    private static void removeTableViewBehaviorSelectedCellsListener(TableView<?> tv) {
+        if (tv == null || tv.getSkin() == null) {
+            return;
+        }
+        Object behavior = resolveTableViewBehavior(tv);
+        if (behavior == null) {
+            return;
+        }
+        try {
+            Field weakField =
+                    findDeclaredFieldInHierarchy(behavior.getClass(), "weakSelectedCellsListener");
+            if (weakField == null) {
+                return;
+            }
+            weakField.setAccessible(true);
+            Object weakObj = weakField.get(behavior);
+            if (!(weakObj instanceof WeakListChangeListener<?> weak)) {
+                return;
+            }
+            @SuppressWarnings("unchecked")
+            WeakListChangeListener<? super TablePositionBase> typed =
+                    (WeakListChangeListener<? super TablePositionBase>) weak;
+            tv.getSelectionModel().getSelectedCells().removeListener(typed);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            // JVM 起動時 --add-opens=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED 必須
+        }
+    }
+
+    /**
+     * ControlsFX {@code TableViewSpanSelectionModel} が {@code SpreadsheetGridView} に付ける
+     * {@code setOnMouseDragged} 矩形選択を外し、日付セル数量 DnD の {@code DRAG_DETECTED} を通す。
+     */
+    private static void neutralizeControlsFxSpanMouseDragOnGridView(TableView<?> tv) {
+        if (tv == null) {
+            return;
+        }
+        if (!"impl.org.controlsfx.spreadsheet.SpreadsheetGridView".equals(tv.getClass().getName())) {
+            return;
+        }
+        tv.setOnMouseDragged(null);
+    }
+
+    private static Object resolveTableViewBehavior(TableView<?> tv) {
+        Skin<?> skin = tv.getSkin();
+        if (skin == null) {
+            return null;
+        }
+        if ("impl.org.controlsfx.spreadsheet.GridViewSkin".equals(skin.getClass().getName())) {
+            try {
+                Method getBehavior = skin.getClass().getMethod("getBehavior");
+                return getBehavior.invoke(skin);
+            } catch (ReflectiveOperationException ex) {
+                return null;
+            }
+        }
+        Field behaviorField = findDeclaredFieldInHierarchy(skin.getClass(), "behavior");
+        if (behaviorField == null) {
+            return null;
+        }
+        try {
+            behaviorField.setAccessible(true);
+            return behaviorField.get(skin);
+        } catch (ReflectiveOperationException ex) {
+            return null;
+        }
+    }
+
+    private static Field findDeclaredFieldInHierarchy(Class<?> type, String name) {
+        for (Class<?> c = type; c != null; c = c.getSuperclass()) {
+            try {
+                return c.getDeclaredField(name);
+            } catch (NoSuchFieldException ignored) {
+                // try superclass
+            }
+        }
+        return null;
+    }
+
+    /**
      * ControlsFX {@link SpreadsheetView} の内側 {@link TableView}（行＝グリッドの1行）を返す。
      */
     @SuppressWarnings("unchecked")
@@ -893,7 +1148,7 @@ public final class SpreadsheetTabularSupport {
 
                                     guard[0] = true;
                                     try {
-                                        sm.clearSelection();
+                                        safeClearSpreadsheetSelection(view);
                                         SpreadsheetColumn firstCol = cols.get(0);
                                         SpreadsheetColumn lastCol = cols.get(cols.size() - 1);
                                         ArrayList<Integer> sorted = new ArrayList<>(rows);
@@ -903,6 +1158,8 @@ public final class SpreadsheetTabularSupport {
                                         }
                                         int fc = Math.min(Math.max(focusCol, 0), cols.size() - 1);
                                         sm.focus(focusRow, cols.get(fc));
+                                    } catch (RuntimeException ex) {
+                                        safeClearSpreadsheetSelection(view);
                                     } finally {
                                         guard[0] = false;
                                     }

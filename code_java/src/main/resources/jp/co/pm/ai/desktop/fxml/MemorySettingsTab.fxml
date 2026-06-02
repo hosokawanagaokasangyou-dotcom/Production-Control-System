@@ -6,6 +6,8 @@
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.RadioButton?>
+<?import javafx.scene.control.ToggleGroup?>
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.Spinner?>
 <?import javafx.scene.control.TextArea?>
@@ -22,8 +24,21 @@
         <VBox fillWidth="true" spacing="12.0">
             <Label fx:id="heapSectionTitleLabel" style="-fx-font-weight: bold" text=""/>
             <Label fx:id="heapExplainLabel" wrapText="true"/>
+            <HBox alignment="CENTER_LEFT" spacing="16.0">
+                <RadioButton fx:id="heapModeFixedRadio" mnemonicParsing="false" text="">
+                    <toggleGroup>
+                        <ToggleGroup fx:id="heapModeToggleGroup"/>
+                    </toggleGroup>
+                </RadioButton>
+                <RadioButton fx:id="heapModeVariableRadio" mnemonicParsing="false"
+                             text="" toggleGroup="$heapModeToggleGroup"/>
+            </HBox>
+            <HBox fx:id="heapMinRow" alignment="CENTER_LEFT" spacing="8.0">
+                <Label fx:id="desiredHeapMinLabel" text=""/>
+                <Spinner fx:id="nextLaunchHeapMinMiBSpinner" editable="true" prefWidth="120.0"/>
+            </HBox>
             <HBox alignment="CENTER_LEFT" spacing="8.0">
-                <Label fx:id="desiredHeapLabel" text=""/>
+                <Label fx:id="desiredHeapMaxLabel" text=""/>
                 <Spinner fx:id="nextLaunchHeapMiBSpinner" editable="true" prefWidth="120.0"/>
                 <Button fx:id="syncHeapToCurrentButton" mnemonicParsing="false"
                         onAction="#onSyncHeapToCurrentAction" text=""/>

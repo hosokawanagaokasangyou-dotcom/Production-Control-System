@@ -21,6 +21,7 @@ def _write_input1(xlsx_path: Path) -> None:
     rec[pc.TASK_COL_UNPROCESSED] = 1000.0
     rec[pc.PLAN_COL_ROLL_UNIT_LENGTH] = 100.0
     rec[pc.PLAN_COL_SPECIAL_REMARK] = "特記コピー確認"
+    rec[pc.TASK_COL_RAW_INPUT_DATE] = "2026/06/02"
     df = pd.DataFrame([rec]).reindex(columns=order).fillna("")
     with pd.ExcelWriter(xlsx_path, engine="openpyxl", mode="w") as w:
         df.to_excel(w, sheet_name=pc.PLAN_INPUT_SHEET_NAME, index=False)
@@ -93,6 +94,12 @@ def test_branch_decomposition(tmp_path):
     # 特記が元行からコピーされる
     assert all("特記コピー確認" == str(v) for v in out[pc.PLAN_COL_SPECIAL_REMARK].tolist())
 
+    # 原反投入日は入力1表の値（配台日で上書きしない）
+    raw_dates = [str(v).strip() for v in out[pc.TASK_COL_RAW_INPUT_DATE].tolist()]
+    assert all(d.startswith("2026/6/2") or d.startswith("2026/06/02") for d in raw_dates)
+    assert not any(d.startswith("2026/6/10") or d.startswith("2026/06/10") for d in raw_dates)
+    assert not any(d.startswith("2026/6/11") or d.startswith("2026/06/11") for d in raw_dates)
+
     # 配台試行順番は出力行順に 1..n
     orders = [int(v) for v in out[pc.RESULT_TASK_COL_DISPATCH_TRIAL_ORDER].tolist()]
     assert orders == [1, 2]
@@ -158,6 +165,14 @@ def test_stage3_column_order_excludes_dispatchable_override():
     assert (
         pc.plan_reference_column_name(pc.PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE) not in order
     )
+    assert not any(pc._plan_column_is_original_reference(c) for c in order)
+
+
+def test_plan_input_sheet_column_order_excludes_original_reference_columns():
+    order = pc.plan_input_sheet_column_order()
+    assert pc.PLAN_COL_PREFERRED_OP in order
+    assert pc.PLAN_COL_SPECIAL_REMARK in order
+    assert not any(pc._plan_column_is_original_reference(c) for c in order)
 
 
 def test_missing_rows_raises(tmp_path):

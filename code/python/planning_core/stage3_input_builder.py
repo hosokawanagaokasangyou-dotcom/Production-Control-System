@@ -5,7 +5,8 @@
 - 出力: ``plan_input_tasks.xlsx`` の第2シート（``PLAN_INPUT_STAGE3_SHEET_NAME``）に枝番行のみを書き出す
 
 枝番行は元行（入力1表）を複製し、依頼NO=``{元依頼NO}-{枝番2桁}``、換算数量=セル数量、
-原反投入日=配台日、配台可能日時=手動修正表の配台日セル暦日+定常開始時刻（master 定常始業）とする。
+原反投入日=入力1表の当該行（配台計画_タスク入力と同一）、
+配台可能日時=手動修正表の配台日セル暦日+定常開始時刻（master 定常始業）とする。
 段階3.0〜3.2 では ``配台可能日時_上書き`` 列は使わない。
 元タスク行は入力3表に含めない。
 特別ルール scope は列「元依頼NO」で親に紐付ける（配台 task_id は枝番依頼NOのまま）。
@@ -200,8 +201,7 @@ def build_stage3_input_sheet(
             int(math.ceil(qty / unit)) if unit > 1e-9 else ""
         )
 
-        rec[pc.TASK_COL_RAW_INPUT_DATE] = dd.strftime("%Y/%m/%d")
-        rec[pc.PLAN_COL_RAW_INPUT_DATE_OVERRIDE] = ""
+        # 原反投入日は入力1表から複製済み（配台日で上書きしない）。
         # 手動修正表の配台日セル暦日 + 定常開始時刻（段階3.0〜3.2 の配台開始下限）
         rec[pc.PLAN_COL_DISPATCHABLE_DATETIME] = pc.format_dispatchable_datetime_cell(
             datetime.combine(dd, shift_start)

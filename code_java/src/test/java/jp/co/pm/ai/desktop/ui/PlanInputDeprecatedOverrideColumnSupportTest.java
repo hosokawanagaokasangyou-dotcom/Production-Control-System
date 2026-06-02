@@ -20,11 +20,33 @@ class PlanInputDeprecatedOverrideColumnSupportTest {
                 PlanInputDeprecatedOverrideColumnSupport.isDeprecatedOverrideColumn(
                         "原反投入日_上書き"));
         assertTrue(
+                PlanInputDeprecatedOverrideColumnSupport.isOriginalReferenceColumn(
+                        "（元）原反投入日_上書き"));
+        assertTrue(
+                PlanInputDeprecatedOverrideColumnSupport.isOriginalReferenceColumn(
+                        "（元）担当OP_指定"));
+        assertTrue(
                 PlanInputDeprecatedOverrideColumnSupport.isDeprecatedReferenceOverrideColumn(
                         "（元）原反投入日_上書き"));
         assertFalse(
                 PlanInputDeprecatedOverrideColumnSupport.isDeprecatedOverrideColumn(
                         "担当OP_指定"));
+    }
+
+    @Test
+    void migrateAndDrop_removesOriginalReferenceColumns() {
+        List<String> headers =
+                new ArrayList<>(
+                        List.of("依頼NO", "（元）担当OP_指定", "担当OP_指定", "（元）特別指定_備考", "特別指定_備考"));
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        rows.add(FXCollections.observableArrayList("A", "（OP1）", "OP1", "（備考）", "備考"));
+        int dropped =
+                PlanInputDeprecatedOverrideColumnSupport.migrateAndDropDeprecatedOverrideColumns(
+                        headers, rows);
+        assertEquals(2, dropped);
+        assertEquals(List.of("依頼NO", "担当OP_指定", "特別指定_備考"), headers);
+        assertEquals("OP1", rows.get(0).get(1));
+        assertEquals("備考", rows.get(0).get(2));
     }
 
     @Test

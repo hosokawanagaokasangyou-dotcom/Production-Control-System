@@ -88,7 +88,9 @@ import java.util.Map;
  * @param pushButtonDesignPrefs プッシュボタン見た目のユーザー上書き
  * @param memoryMonitorEnabled メモリ設定タブのヒープ監視（トレンドグラフ）を有効にするか
  * @param memoryMonitorIntervalSec 監視間隔（秒、1〜3600）
- * @param nextLaunchHeapMaxMiB 次回 JVM 起動時に希望するヒープ上限（MiB、{@code 0} は未設定として UI で現在値を参照）
+ * @param nextLaunchHeapFixed 次回 JVM 起動時のヒープを固定（-Xms/-Xmx 両方指定）にするか。{@code false} は上限のみ指定して変動
+ * @param nextLaunchHeapMinMiB 固定時の希望ヒープ下限（MiB）
+ * @param nextLaunchHeapMaxMiB 次回 JVM 起動時に希望するヒープ上限（MiB、{@code 0} は未設定として UI で既定を参照）
  * @param equipmentStatusDashboardActualDate ダッシュボード実績表示日（{@code yyyy-MM-dd}、空は起動時当日）
  * @param equipmentStatusDashboardPlanDate ダッシュボード予定表示日（{@code yyyy-MM-dd}、空は起動時当日）
  * @param equipmentStatusDashboardActualDayOffset 旧セッション互換（読込のみ・日付未保存時）
@@ -177,6 +179,8 @@ public record DesktopSessionState(
         PushButtonDesignPrefs pushButtonDesignPrefs,
         boolean memoryMonitorEnabled,
         long memoryMonitorIntervalSec,
+        boolean nextLaunchHeapFixed,
+        long nextLaunchHeapMinMiB,
         long nextLaunchHeapMaxMiB,
         String equipmentStatusDashboardActualDate,
         String equipmentStatusDashboardPlanDate,
@@ -188,6 +192,15 @@ public record DesktopSessionState(
         boolean equipmentStatusDashboardShowDispatchPlans,
         EquipmentStatusDashboardAppearancePrefs equipmentStatusDashboardAppearance,
         jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices requestFormComboChoices) {
+
+    /** 次回起動ヒープ: 変動（上限のみ）が既定。 */
+    public static final boolean DEFAULT_NEXT_LAUNCH_HEAP_FIXED = false;
+
+    /** 次回起動ヒープ上限の既定（6 GiB）。 */
+    public static final long DEFAULT_NEXT_LAUNCH_HEAP_MAX_MIB = 6144L;
+
+    /** 固定モード切替時のヒープ下限の UI 既定（MiB）。 */
+    public static final long DEFAULT_NEXT_LAUNCH_HEAP_MIN_MIB = 6144L;
 
     /** 設備ガント・担当バッジ横方向固定間隔（px）の既定、およびスライダー上限の目安。 */
     public static final double DEFAULT_EQUIPMENT_GANTT_PERSON_BADGE_GAP_PX = 4.0;
@@ -472,7 +485,9 @@ public record DesktopSessionState(
                 PushButtonDesignPrefs.inactiveDefaults(),
                 false,
                 5L,
-                0L,
+                DEFAULT_NEXT_LAUNCH_HEAP_FIXED,
+                DEFAULT_NEXT_LAUNCH_HEAP_MIN_MIB,
+                DEFAULT_NEXT_LAUNCH_HEAP_MAX_MIB,
                 "",
                 "",
                 0,
@@ -567,6 +582,8 @@ public record DesktopSessionState(
                 pushButtonDesignPrefs(),
                 memoryMonitorEnabled(),
                 memoryMonitorIntervalSec(),
+                nextLaunchHeapFixed(),
+                nextLaunchHeapMinMiB(),
                 nextLaunchHeapMaxMiB(),
                 equipmentStatusDashboardActualDate(),
                 equipmentStatusDashboardPlanDate(),

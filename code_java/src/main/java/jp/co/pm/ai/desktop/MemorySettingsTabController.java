@@ -24,9 +24,12 @@ import javafx.scene.chart.XYChart;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.RadioButton;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.ToggleGroup;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 
@@ -78,7 +81,25 @@ public final class MemorySettingsTabController {
     private Label heapExplainLabel;
 
     @FXML
-    private Label desiredHeapLabel;
+    private RadioButton heapModeFixedRadio;
+
+    @FXML
+    private RadioButton heapModeVariableRadio;
+
+    @FXML
+    private ToggleGroup heapModeToggleGroup;
+
+    @FXML
+    private HBox heapMinRow;
+
+    @FXML
+    private Label desiredHeapMinLabel;
+
+    @FXML
+    private Label desiredHeapMaxLabel;
+
+    @FXML
+    private Spinner<Integer> nextLaunchHeapMinMiBSpinner;
 
     @FXML
     private Spinner<Integer> nextLaunchHeapMiBSpinner;
@@ -166,7 +187,9 @@ public final class MemorySettingsTabController {
     private void initialize() {
         heapSectionTitleLabel.setText(txt("heap.section.title"));
         heapExplainLabel.setText(txt("heap.explain"));
-        desiredHeapLabel.setText(txt("heap.desired.label"));
+        heapModeFixedRadio.setText(txt("heap.mode.fixed"));
+        heapModeVariableRadio.setText(txt("heap.mode.variable"));
+        desiredHeapMinLabel.setText(txt("heap.desired.min.label"));
         monitorSectionTitleLabel.setText(txt("monitor.section.title"));
         monitorEnabledCheck.setText(txt("monitor.enabled"));
         intervalCaptionLabel.setText(txt("interval.caption"));
@@ -187,10 +210,17 @@ public final class MemorySettingsTabController {
         NumberAxis yAxis = (NumberAxis) heapChart.getYAxis();
         yAxis.setLabel(txt("axis.usage_mib"));
 
-        int curMaxMiB = readHeapMaxMiBOrFallback();
+        int defaultMaxMiB = (int) DesktopSessionState.DEFAULT_NEXT_LAUNCH_HEAP_MAX_MIB;
+        int defaultMinMiB = (int) DesktopSessionState.DEFAULT_NEXT_LAUNCH_HEAP_MIN_MIB;
+        nextLaunchHeapMinMiBSpinner.setValueFactory(
+                new SpinnerValueFactory.IntegerSpinnerValueFactory(
+                        PomJvmHeapPropertiesSync.MIN_HEAP_MIB, 65_536, defaultMinMiB, 256));
         nextLaunchHeapMiBSpinner.setValueFactory(
                 new SpinnerValueFactory.IntegerSpinnerValueFactory(
-                        PomJvmHeapPropertiesSync.MIN_HEAP_MIB, 65_536, curMaxMiB, 256));
+                        PomJvmHeapPropertiesSync.MIN_HEAP_MIB, 65_536, defaultMaxMiB, 256));
+
+        heapModeVariableRadio.setSelected(true);
+        applyHeapModeUi(false);
 
         intervalSpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 3600, 5));
 
@@ -216,10 +246,29 @@ public final class MemorySettingsTabController {
         refreshRuntimeHeapLabels();
         updateHeapArgHint();
 
+        nextLaunchHeapMinMiBSpinner
+                .valueProperty()
+                .addListener(
+                        (obs, o, n) -> {
+                            clampMinNotAboveMax();
+                            updateHeapArgHint();
+                            persistIfReady();
+                        });
+
         nextLaunchHeapMiBSpinner
                 .valueProperty()
                 .addListener(
                         (obs, o, n) -> {
+                            clampMinNotAboveMax();
+                            updateHeapArgHint();
+                            persistIfReady();
+                        });
+
+        heapModeToggleGroup
+                .selectedToggleProperty()
+                .addListener(
+                        (obs, o, n) -> {
+                            applyHeapModeUi(true);
                             updateHeapArgHint();
                             persistIfReady();
                         });
@@ -264,16 +313,31 @@ public final class MemorySettingsTabController {
             int iv = (int) clamp(s.memoryMonitorIntervalSec(), 1, 3600);
             intervalSpinner.getValueFactory().setValue(iv);
 
-            long saved = s.nextLaunchHeapMaxMiB();
-            int cur = readHeapMaxMiBOrFallback();
-            int target =
-                    saved > 0
-                            ? (int) clamp(saved, PomJvmHeapPropertiesSync.MIN_HEAP_MIB, 65_536)
-                            : cur;
-            nextLaunchHeapMiBSpinner.getValueFactory().setValue(target);
+            boolean fixed = s.nextLaunchHeapFixed();
+            if (fixed) {
+                heapModeFixedRadio.setSelected(true);
+            } else {
+                heapModeVariableRadio.setSelected(true);
+            }
+
+            int savedMin =
+                    (int)
+                            clamp(
+                                    s.nextLaunchHeapMinMiB(),
+                                    PomJvmHeapPropertiesSync.MIN_HEAP_MIB,
+                                    65_536);
+            int savedMax =
+                    (int)
+                            clamp(
+                                    s.nextLaunchHeapMaxMiB(),
+                                    PomJvmHeapPropertiesSync.MIN_HEAP_MIB,
+                                    65_536);
+            nextLaunchHeapMinMiBSpinner.getValueFactory().setValue(savedMin);
+            nextLaunchHeapMiBSpinner.getValueFactory().setValue(savedMax);
 
             memoryJvmLogMaxLinesSpinner.getValueFactory().setValue(MemoryJvmRingLog.getMaxLines());
 
+            applyHeapModeUi(false);
             updateHeapArgHint();
         } finally {
             suppressPersist.set(false);
@@ -288,6 +352,15 @@ public final class MemorySettingsTabController {
 
     long snapshotMemoryMonitorIntervalSec() {
         return clamp(intervalSpinner.getValue(), 1, 3600);
+    }
+
+    boolean snapshotNextLaunchHeapFixed() {
+        return heapModeFixedRadio.isSelected();
+    }
+
+    long snapshotNextLaunchHeapMinMiB() {
+        int v = nextLaunchHeapMinMiBSpinner.getValue();
+        return v <= 0 ? 0L : v;
     }
 
     long snapshotNextLaunchHeapMaxMiB() {
@@ -305,6 +378,9 @@ public final class MemorySettingsTabController {
     private void onSyncHeapToCurrentAction() {
         int cur = readHeapMaxMiBOrFallback();
         nextLaunchHeapMiBSpinner.getValueFactory().setValue(cur);
+        if (heapModeFixedRadio.isSelected()) {
+            nextLaunchHeapMinMiBSpinner.getValueFactory().setValue(cur);
+        }
         updateHeapArgHint();
         persistIfReady();
     }
@@ -319,10 +395,39 @@ public final class MemorySettingsTabController {
             return;
         }
         shell.persistDesktopSessionNow();
-        PomJvmHeapPropertiesSync.writeJvmHeapFromDesiredMiB(
-                shell.snapshotUiEnv(), nextLaunchHeapMiBSpinner.getValue());
+        boolean fixed = heapModeFixedRadio.isSelected();
+        PomJvmHeapPropertiesSync.writeJvmHeapFromLaunchPrefs(
+                shell.snapshotUiEnv(),
+                fixed,
+                nextLaunchHeapMinMiBSpinner.getValue(),
+                nextLaunchHeapMiBSpinner.getValue());
         JvmMemoryLogStore.persistSnapshot(
                 memoryJvmLogMaxLinesSpinner.getValue(), MemoryJvmRingLog.snapshotLines());
+    }
+
+    private void applyHeapModeUi(boolean clampMinToMaxOnFixedSwitch) {
+        boolean fixed = heapModeFixedRadio.isSelected();
+        heapMinRow.setManaged(fixed);
+        heapMinRow.setVisible(fixed);
+        desiredHeapMaxLabel.setText(
+                fixed ? txt("heap.desired.max.label") : txt("heap.desired.limit.label"));
+        if (clampMinToMaxOnFixedSwitch && fixed) {
+            int max = nextLaunchHeapMiBSpinner.getValue();
+            if (nextLaunchHeapMinMiBSpinner.getValue() > max) {
+                nextLaunchHeapMinMiBSpinner.getValueFactory().setValue(max);
+            }
+        }
+    }
+
+    private void clampMinNotAboveMax() {
+        if (!heapModeFixedRadio.isSelected()) {
+            return;
+        }
+        int max = nextLaunchHeapMiBSpinner.getValue();
+        int min = nextLaunchHeapMinMiBSpinner.getValue();
+        if (min > max) {
+            nextLaunchHeapMinMiBSpinner.getValueFactory().setValue(max);
+        }
     }
 
     private void restartMonitorFromUiState() {
@@ -382,8 +487,17 @@ public final class MemorySettingsTabController {
     }
 
     private void updateHeapArgHint() {
-        int mib = nextLaunchHeapMiBSpinner.getValue();
-        heapArgHintLabel.setText(txtFmt("heap.arg.hint", mib));
+        int maxMib = nextLaunchHeapMiBSpinner.getValue();
+        if (heapModeFixedRadio.isSelected()) {
+            int minMib = nextLaunchHeapMinMiBSpinner.getValue();
+            heapArgHintLabel.setText(txtFmt("heap.arg.hint.fixed", minMib, maxMib));
+        } else {
+            heapArgHintLabel.setText(
+                    txtFmt(
+                            "heap.arg.hint.variable",
+                            PomJvmHeapPropertiesSync.MIN_HEAP_MIB,
+                            maxMib));
+        }
     }
 
     private static String formatMiB(long bytes) {
@@ -403,7 +517,7 @@ public final class MemorySettingsTabController {
     private static int readHeapMaxMiBOrFallback() {
         long max = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getMax();
         if (max <= 0) {
-            return 2048;
+            return (int) DesktopSessionState.DEFAULT_NEXT_LAUNCH_HEAP_MAX_MIB;
         }
         return (int)
                 Math.min(

@@ -92,8 +92,13 @@ _SINGLE_MOJIBAKE: tuple[tuple[str, str], ...] = ()
 
 
 def _normalize_log_line(text: str) -> str:
-    """execution_log / コンソール向け（互換のため残置。現状は変換なし）。"""
-    return text
+    """execution_log / コンソール向け。U+3000 と repr 由来の \\u3000 文字列を半角スペースに統一。"""
+    if not text:
+        return text
+    t = text.replace("\u3000", " ")
+    if "\\u3000" in t:
+        t = t.replace("\\u3000", " ")
+    return t
 
 
 class _MojibakeFormatter(logging.Formatter):

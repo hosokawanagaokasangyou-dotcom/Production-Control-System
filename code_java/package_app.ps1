@@ -350,7 +350,7 @@ function Build-PmAiDesktopLauncherBatContent {
     $lines.Add('set "PM_AI_JFX_MODPATH=' + ($modPathSegments -join ';') + '"')
     $lines.Add('')
     # Must match jpackage --java-options ($javaOpts): JavaFX --module-path/--add-modules + ControlsFX (internal JavaFX) opens/exports.
-    $compatJvm = '--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED --add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED --add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED --enable-native-access=javafx.graphics'
+    $compatJvm = '--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED --add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED --add-opens=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED --add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED --enable-native-access=javafx.graphics'
     $javaLine = '"%JAVA_EXE%" -Dfile.encoding=UTF-8 -Xms' + $xms + ' -Xmx' + $xmx + ' -XX:+HeapDumpOnOutOfMemoryError -XX:+UseStringDeduplication -Dprism.order=sw ' + $compatJvm + ' --module-path "!PM_AI_JFX_MODPATH!" --add-modules javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.media,javafx.swing -classpath "%ROOT%\app\*" jp.co.pm.ai.desktop.PmAiFxApp %*'
     $lines.Add($javaLine)
     $lines.Add('')
@@ -705,6 +705,7 @@ $javaOpts = @(
     '--add-modules=javafx.controls,javafx.fxml,javafx.graphics,javafx.base,javafx.media,javafx.swing',
     '--add-opens=javafx.base/com.sun.javafx.event=ALL-UNNAMED',
     '--add-opens=javafx.controls/javafx.scene.control.skin=ALL-UNNAMED',
+    '--add-opens=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED',
     '--add-exports=javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED',
     '--enable-native-access=javafx.graphics'
 )

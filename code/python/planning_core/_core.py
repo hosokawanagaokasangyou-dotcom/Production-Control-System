@@ -2032,8 +2032,16 @@ PLAN_SHEET_GLOBAL_PARSE_MAX_ROWS = 42
 
 
 def plan_reference_column_name(override_col: str) -> str:
-    """上書き列の左隣に置し参照列の見出し（セル値は括弧付しで元データを表示）。"""
+    """上書き列の左隣に置く参照列の見出し（廃止・読込時に削除）。互換のため関数は残す。"""
     return f"（元）{override_col}"
+
+
+def _plan_column_is_original_reference(col_name: str) -> bool:
+    """見出しが ``（元）`` / ``(元)`` で始まる参照列なら True。"""
+    if not col_name or not str(col_name).strip():
+        return False
+    s = str(col_name).strip()
+    return s.startswith("（元）") or s.startswith("(元)")
 
 
 def plan_input_sheet_column_order():
@@ -2045,7 +2053,7 @@ def plan_input_sheet_column_order():
     2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量→配台ロール数、製品名の直後に(製品)ロール単位長さ・製品幅、原反投入日の直後に在庫場所・使用原反の直後に(原反)ロール単位長さ・原反幅）
        （(製品)ロール単位長さは製品名テーブル→製品名寸法のみ。(原反)ロール単位長さは使用原反テーブル→使用原反文字列の寸法→いずれも不可なら「不明」）
     3. 加工工程の決定プロセスの因孝
-    4. 手入力列… 担当OP_指定・特別指定_備考・AI特別指定_解析 等（*_上書き 列は廃止し基底列を直接編集）
+    4. 手入力列… 担当OP_指定・特別指定_備考・AI特別指定_解析 等（{@code （元）…} 参照列・*_上書き 列は廃止）
 
     「加工速度」列は master.xlsm「speed」（基本速度×実稼働比率）で埋め、配台の実効速度は列「加工速度」のみ。
     global_speed_rules 等で変える実効速度は計画シート列には出ないが、配台で確定した値は結果_タスク一覧の「加工速度」列に出力される。
@@ -2072,11 +2080,7 @@ def plan_input_sheet_column_order():
             continue
         if c in PLAN_DEPRECATED_OVERRIDE_COLUMNS:
             continue
-        if c == PLAN_COL_AI_PARSE:
-            cols.append(c)
-        else:
-            cols.append(plan_reference_column_name(c))
-            cols.append(c)
+        cols.append(c)
     return cols
 
 
@@ -2086,7 +2090,9 @@ def plan_input_stage3_sheet_column_order():
     段階3.0〜3.2 では配台開始下限に ``配台可能日時`` 列のみを用いる（*_上書き 列は廃止）。
     """
     excluded = set(PLAN_DEPRECATED_OVERRIDE_COLUMNS) | {
-        plan_reference_column_name(c) for c in PLAN_DEPRECATED_OVERRIDE_COLUMNS
+        plan_reference_column_name(c)
+        for c in PLAN_OVERRIDE_COLUMNS
+        if c not in (PLAN_COL_EXCLUDE_FROM_ASSIGNMENT, PLAN_COL_AI_PARSE)
     }
     base = [c for c in plan_input_sheet_column_order() if c not in excluded]
     return [PLAN_COL_PARENT_TASK_ID, PLAN_COL_BRANCH_SEQ] + base
@@ -2140,24 +2146,7 @@ def _reference_text_for_override_row(row, override_col: str, req_map: dict, need
 
 
 def _refresh_plan_reference_columns(df, req_map: dict, need_rules: list):
-    """加工計画DATA＝need に基るし「（元）…」列を再計算（マージ後に必う呼め）。"""
-    if df is None or df.empty:
-        return df
-    need_rules = need_rules or []
-    req_map = req_map or {}
-    for i in df.index:
-        row = df.loc[i]
-        for oc in PLAN_OVERRIDE_COLUMNS:
-            if oc == PLAN_COL_AI_PARSE:
-                continue
-            if oc == PLAN_COL_EXCLUDE_FROM_ASSIGNMENT:
-                continue
-            if oc in PLAN_DEPRECATED_OVERRIDE_COLUMNS:
-                continue
-            ref_col = plan_reference_column_name(oc)
-            if ref_col not in df.columns:
-                continue
-            df.at[i, ref_col] = _reference_text_for_override_row(row, oc, req_map, need_rules)
+    """廃止: （元）参照列は UI から削除済み。互換のため呼び出しは残す。"""
     return df
 
 
@@ -6347,6 +6336,9 @@ def _migrate_deprecated_plan_override_columns(df: "pd.DataFrame") -> "pd.DataFra
     present = [c for c in drop if c in df.columns]
     if present:
         df = df.drop(columns=present)
+    ref_drop = [c for c in df.columns if _plan_column_is_original_reference(str(c).strip())]
+    if ref_drop:
+        df = df.drop(columns=ref_drop)
     return df
 
 
@@ -13206,10 +13198,10 @@ def build_task_queue_from_planning_df(
                 qty = _sanitize_dispatch_qty_m(float(in_progress_next_day_m[ov_key]))
                 qty_from_in_progress_next_day_dialog = True
                 logging.info(
-                    "段階2: 加工途中の翌日配台量を適用 依頼NO=%s 工程=%r 機械名=%r → %s m（シート残量 %s m、1ロール固定）",
+                    "段階2: 加工途中の翌日配台量を適用 依頼NO=%s 工程=%s 機械名=%s → %s m（シート残量 %s m、1ロール固定）",
                     task_id,
-                    machine,
-                    machine_name,
+                    _log_plain_label(machine),
+                    _log_plain_label(machine_name),
                     qty,
                     dispatch_m,
                 )
@@ -13280,10 +13272,10 @@ def build_task_queue_from_planning_df(
             if speed <= 0:
                 speed = 1.0
             logging.info(
-                "メイングローバル: 依頼NO=%s 工程=%r 機械名=%r に speed_multiplier 累穝=%s を適用（速度 %s → %s）",
+                "メイングローバル: 依頼NO=%s 工程=%s 機械名=%s に speed_multiplier 累穝=%s を適用（速度 %s → %s）",
                 task_id,
-                machine,
-                machine_name,
+                _log_plain_label(machine),
+                _log_plain_label(machine_name),
                 gsm,
                 speed_before_g,
                 speed,
@@ -18277,10 +18269,14 @@ def parse_need_sheet_special_rules(needs_df, label_col, equipment_list, cond_col
     return rules
 
 
+def _log_plain_label(val) -> str:
+    """ログ用プレーン文字列。U+3000/NBSP 等を正規化（repr/%r による \\u3000 逃逸を避ける）。"""
+    return _normalize_equipment_match_key(val)
+
+
 def _log_map_key_label(key: str) -> str:
     """ログ用 map キー表示。repr だと U+3000 が \\u3000 と逃逸するため正規化して引用。"""
-    s = _normalize_equipment_match_key(key)
-    return f"'{s}'"
+    return f"'{_log_plain_label(key)}'"
 
 
 def resolve_need_required_op(process: str, machine_name: str, task_id: str, req_map: dict, need_rules: list) -> int:
@@ -27050,11 +27046,11 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
         ):
             logging.info(
                 "段階2: 加工途中・翌日追補を省略（run_date=%s にタイムライン配台済 "
-                "依頼NO=%s 工程=%r 機械名=%r → %s m）",
+                "依頼NO=%s 工程=%s 機械名=%s → %s m）",
                 run_date.isoformat(),
                 tid,
-                proc,
-                mach,
+                _log_plain_label(proc),
+                _log_plain_label(mach),
                 m,
             )
             skipped_timeline_covered += 1
@@ -27081,10 +27077,10 @@ def append_in_progress_next_day_dialog_rows_to_dispatch_table(
         if plan_ref is None:
             logging.warning(
                 "結果_配台表: 加工途中・翌日配台 JSON の行を計画入力から解決できませんでした "
-                "(依頼NO=%s 工程=%r 機械名=%r)",
+                "(依頼NO=%s 工程=%s 機械名=%s)",
                 tid,
-                proc,
-                mach,
+                _log_plain_label(proc),
+                _log_plain_label(mach),
             )
             continue
         src_row = _resolve_dispatch_table_src_row_for_plan(
@@ -32921,10 +32917,10 @@ def _assign_one_roll_trial_order_flow(
     )
     if _gdp_must:
         logging.info(
-            "メイングローバル(日付×工程): task=%s date=%s 工程=%r フォーム必須=%s",
+            "メイングローバル(日付×工程): task=%s date=%s 工程=%s フォーム必須=%s",
             task.get("task_id"),
             current_date,
-            machine,
+            _log_plain_label(machine),
             ",".join(_gdp_must),
         )
     if fixed_team_anchor:
@@ -32980,8 +32976,8 @@ def _assign_one_roll_trial_order_flow(
             "req_num=%s [%s] extra_max=%s [%s] max_team候補=%s capable=%s人",
             _dto_head,
             task["task_id"],
-            machine,
-            machine_name,
+            _log_plain_label(machine),
+            _log_plain_label(machine_name),
             req_num,
             need_src_line,
             extra_max,
@@ -33566,8 +33562,8 @@ def _assign_one_roll_trial_order_flow(
                     "参考: changeover剝の設備空し下限=%s 占有キー=%s",
                     task.get("task_id"),
                     current_date,
-                    machine,
-                    machine_name,
+                    _log_plain_label(machine),
+                    _log_plain_label(machine_name),
                     len(capable_members),
                     _mach_floor_eff.strftime("%Y-%m-%d %H:%M"),
                     _mem_max_end.strftime("%H:%M"),
@@ -33594,8 +33590,8 @@ def _assign_one_roll_trial_order_flow(
                         " master「skills」で当該工程×機械に OP を設定するか、"
                         " OP 担当の勤怠（休暇・公休等）を確認してください。",
                         task.get("task_id"),
-                        machine,
-                        machine_name,
+                        _log_plain_label(machine),
+                        _log_plain_label(machine_name),
                         len(capable_members),
                         "、".join(_as_only[:8])
                         + (f" 他{len(_as_only) - 8}人" if len(_as_only) > 8 else ""),
@@ -36450,11 +36446,11 @@ def _aggregate_actual_qty_for_aladdin_compare_from_detail_df(
         _preview = _tvals[:15]
         _suffix = " …" if _n > 15 else ""
         logging.info(
-            "計画実績比較ガント[トレース] 明細→日次按分 依頼NO=%s 日=%s 機械キー=%r "
+            "計画実績比較ガント[トレース] 明細→日次按分 依頼NO=%s 日=%s 機械キー=%s "
             "按分値件数=%s 畳み込み適用=%s minmax差(m,4桁丸め)=%s 閾値(件>=%s 幅<=%s) 按分値先頭=%s%s 最終実績(m)=%s",
             _ttid,
             _td.isoformat() if isinstance(_td, date) else str(_td),
-            _tmk,
+            _log_plain_label(_tmk),
             _n,
             _collapsed,
             _mm_r,
@@ -36493,9 +36489,9 @@ def _compare_aladdin_plan_buckets_vs_actual(
             if _compare_gantt_trace_should_log_btid(tid):
                 _k_mk, _k_dt = key
                 logging.info(
-                    "計画実績比較ガント[トレース] アラジン比較 機械キー=%r 日=%s 依頼NO=%s "
+                    "計画実績比較ガント[トレース] アラジン比較 機械キー=%s 日=%s 依頼NO=%s "
                     "計画(m)=%s 実績(m)=%s isclose=%s",
-                    _k_mk,
+                    _log_plain_label(_k_mk),
                     _k_dt.isoformat() if isinstance(_k_dt, date) else str(_k_dt),
                     tid,
                     _format_qty_short(pq),
@@ -38149,10 +38145,10 @@ def _generate_plan_impl(
                         )
                         if _gdp_must:
                             logging.info(
-                                "メイングローバル(日付×工程): task=%s date=%s 工程=%r フォーム必須=%s",
+                                "メイングローバル(日付×工程): task=%s date=%s 工程=%s フォーム必須=%s",
                                 task.get("task_id"),
                                 current_date,
-                                machine,
+                                _log_plain_label(machine),
                                 ",".join(_gdp_must),
                             )
                         if fixed_team_anchor:
@@ -38213,8 +38209,8 @@ def _generate_plan_impl(
                                 "req_num=%s [%s] extra_max=%s [%s] max_team候補=%s capable=%s人",
                                 _dto_head,
                                 task["task_id"],
-                                machine,
-                                machine_name,
+                                _log_plain_label(machine),
+                                _log_plain_label(machine_name),
                                 req_num,
                                 need_src_line,
                                 extra_max,
@@ -38229,11 +38225,11 @@ def _generate_plan_impl(
                         if trace_assign:
                             logging.info(
                                 "TRACE配台[%s] %s 工程/機械=%s / %s req_num=%s extra_max=%s → max_team=%s "
-                                "capable(n=%s)=%s ignore_need1=%s ignore_skill=%s abolish=%s 担当OP指定=%r→%s",
+                                "capable(n=%s)=%s ignore_need1=%s ignore_skill=%s abolish=%s 担当OP指定=%s→%s",
                                 task["task_id"],
                                 current_date,
-                                machine,
-                                machine_name,
+                                _log_plain_label(machine),
+                                _log_plain_label(machine_name),
                                 req_num,
                                 extra_max,
                                 max_team_size,
@@ -38720,8 +38716,8 @@ def _generate_plan_impl(
                                     task["task_id"],
                                     current_date,
                                     task.get("dispatch_trial_order"),
-                                    machine,
-                                    machine_name,
+                                    _log_plain_label(machine),
+                                    _log_plain_label(machine_name),
                                     len(best_team),
                                     req_num,
                                     extra_max,

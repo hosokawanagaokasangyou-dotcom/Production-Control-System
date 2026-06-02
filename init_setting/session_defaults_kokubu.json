@@ -1011,6 +1011,7 @@
   },
   "memoryMonitorEnabled" : true,
   "memoryMonitorIntervalSec" : 5,
+  "nextLaunchHeapFixed" : false,
   "nextLaunchHeapMaxMiB" : 6144,
   "equipmentStatusDashboardActualDate" : "2026-05-24",
   "equipmentStatusDashboardPlanDate" : "2026-05-24",

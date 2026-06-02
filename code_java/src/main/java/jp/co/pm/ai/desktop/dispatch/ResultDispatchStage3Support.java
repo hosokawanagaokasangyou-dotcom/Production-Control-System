@@ -54,11 +54,10 @@ public final class ResultDispatchStage3Support {
             };
         }
 
+        /** 手修正行。3.0～3.2 は実績行と同じ {@code (段階3.x後)} 表記（旧 {@code 改} は {@link #isStage3RevisedQtyLine} で読取）。 */
         public String revisedQtyLabel() {
             return switch (this) {
-                case STAGE3_0 -> "(段階3.0改)";
-                case STAGE3_1 -> "(段階3.1改)";
-                case STAGE3_2 -> "(段階3.2改)";
+                case STAGE3_0, STAGE3_1, STAGE3_2 -> actualQtyLabel();
                 case LEGACY -> "(段階3改)";
                 case NONE -> "";
             };

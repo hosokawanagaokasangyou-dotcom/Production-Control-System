@@ -25,16 +25,31 @@ public final class PomJvmHeapPropertiesSync {
     private PomJvmHeapPropertiesSync() {}
 
     /**
-     * Updates JVM heap properties in {@code code_java/pom.xml} and packaged launchers when present.
+     * Updates JVM heap properties from memory settings (fixed or variable mode).
      *
+     * @param heapFixed {@code true}: both -Xms/-Xmx use {@code heapMinMiB}/{@code heapMaxMiB}; {@code false}: -Xms is
+     *     {@link #MIN_HEAP_MIB} and -Xmx is {@code heapMaxMiB}
+     * @param heapMinMiB desired min heap MiB (fixed mode only)
      * @param heapMaxMiB desired max heap MiB; values below {@link #MIN_HEAP_MIB} are clamped upward
      */
-    public static void writeJvmHeapFromDesiredMiB(Map<String, String> ui, int heapMaxMiB) {
-        int mib = Math.max(MIN_HEAP_MIB, heapMaxMiB);
-        String token = formatJvmHeapToken(mib);
+    public static void writeJvmHeapFromLaunchPrefs(
+            Map<String, String> ui, boolean heapFixed, int heapMinMiB, int heapMaxMiB) {
+        int maxMib = Math.max(MIN_HEAP_MIB, heapMaxMiB);
+        int minMib =
+                heapFixed
+                        ? Math.max(MIN_HEAP_MIB, Math.min(Math.max(heapMinMiB, MIN_HEAP_MIB), maxMib))
+                        : MIN_HEAP_MIB;
+        String minToken = formatJvmHeapToken(minMib);
+        String maxToken = formatJvmHeapToken(maxMib);
         Map<String, String> env = ui != null ? ui : Map.of();
-        syncPomXml(env, token);
-        resolveDesktopInstallRoot(env).ifPresent(root -> syncPortableLaunchers(root, token));
+        syncPomXml(env, minToken, maxToken);
+        resolveDesktopInstallRoot(env).ifPresent(root -> syncPortableLaunchers(root, minToken, maxToken));
+    }
+
+    /** @deprecated use {@link #writeJvmHeapFromLaunchPrefs} */
+    @Deprecated
+    public static void writeJvmHeapFromDesiredMiB(Map<String, String> ui, int heapMaxMiB) {
+        writeJvmHeapFromLaunchPrefs(ui, true, heapMaxMiB, heapMaxMiB);
     }
 
     /** Same convention as JVM flags: whole GiB as {@code Ng}, otherwise {@code Nm}. */
@@ -46,12 +61,12 @@ public final class PomJvmHeapPropertiesSync {
     }
 
     /** Replaces {@code -Xms}/{@code -Xmx} tokens in launcher text (BAT or jpackage cfg). */
-    static String patchHeapFlagsInText(String content, String token) {
+    static String patchHeapFlagsInText(String content, String minToken, String maxToken) {
         if (content == null || content.isEmpty()) {
             return content;
         }
-        String updated = XMS_FLAG.matcher(content).replaceAll("-Xms" + Matcher.quoteReplacement(token));
-        return XMX_FLAG.matcher(updated).replaceAll("-Xmx" + Matcher.quoteReplacement(token));
+        String updated = XMS_FLAG.matcher(content).replaceAll("-Xms" + Matcher.quoteReplacement(minToken));
+        return XMX_FLAG.matcher(updated).replaceAll("-Xmx" + Matcher.quoteReplacement(maxToken));
     }
 
     static Optional<Path> resolveDesktopInstallRoot(Map<String, String> ui) {
@@ -82,7 +97,7 @@ public final class PomJvmHeapPropertiesSync {
         return Files.isDirectory(dir.resolve("app")) && Files.isDirectory(dir.resolve("runtime"));
     }
 
-    private static void syncPomXml(Map<String, String> ui, String token) {
+    private static void syncPomXml(Map<String, String> ui, String minToken, String maxToken) {
         Path root = AppPaths.resolveRepoRoot(ui);
         Path pom = root.resolve("code_java").resolve("pom.xml");
         if (!Files.isRegularFile(pom)) {
@@ -95,8 +110,8 @@ public final class PomJvmHeapPropertiesSync {
             System.err.println("[PM-AI] Failed to read code_java/pom.xml: " + pom + " : " + e.getMessage());
             return;
         }
-        String updated = replaceProperty(content, "jvm.max.heap", token);
-        updated = replaceProperty(updated, "jvm.initial.heap", token);
+        String updated = replaceProperty(content, "jvm.max.heap", maxToken);
+        updated = replaceProperty(updated, "jvm.initial.heap", minToken);
         if (updated.equals(content)) {
             return;
         }
@@ -107,9 +122,9 @@ public final class PomJvmHeapPropertiesSync {
         }
     }
 
-    private static void syncPortableLaunchers(Path installRoot, String token) {
+    private static void syncPortableLaunchers(Path installRoot, String minToken, String maxToken) {
         Path bat = installRoot.resolve(PortableBundleSelfUpdater.PORTABLE_LAUNCHER_BAT_NAME);
-        patchLauncherFileIfPresent(bat, token);
+        patchLauncherFileIfPresent(bat, minToken, maxToken);
 
         Path appDir = installRoot.resolve("app");
         if (!Files.isDirectory(appDir)) {
@@ -117,12 +132,12 @@ public final class PomJvmHeapPropertiesSync {
         }
         Path namedCfg = appDir.resolve("PMD.cfg");
         if (Files.isRegularFile(namedCfg)) {
-            patchLauncherFileIfPresent(namedCfg, token);
+            patchLauncherFileIfPresent(namedCfg, minToken, maxToken);
             return;
         }
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(appDir, "*.cfg")) {
             for (Path cfg : stream) {
-                patchLauncherFileIfPresent(cfg, token);
+                patchLauncherFileIfPresent(cfg, minToken, maxToken);
             }
         } catch (IOException e) {
             System.err.println(
@@ -133,7 +148,7 @@ public final class PomJvmHeapPropertiesSync {
         }
     }
 
-    private static void patchLauncherFileIfPresent(Path file, String token) {
+    private static void patchLauncherFileIfPresent(Path file, String minToken, String maxToken) {
         if (!Files.isRegularFile(file)) {
             return;
         }
@@ -144,7 +159,7 @@ public final class PomJvmHeapPropertiesSync {
             System.err.println("[PM-AI] Failed to read launcher file " + file + " : " + e.getMessage());
             return;
         }
-        String updated = patchHeapFlagsInText(content, token);
+        String updated = patchHeapFlagsInText(content, minToken, maxToken);
         if (updated.equals(content)) {
             return;
         }

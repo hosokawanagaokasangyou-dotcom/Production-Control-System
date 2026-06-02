@@ -248,6 +248,8 @@ public record PlanWorkspaceSessionFragment(
                 base.pushButtonDesignPrefs(),
                 base.memoryMonitorEnabled(),
                 base.memoryMonitorIntervalSec(),
+                base.nextLaunchHeapFixed(),
+                base.nextLaunchHeapMinMiB(),
                 base.nextLaunchHeapMaxMiB(),
                 base.equipmentStatusDashboardActualDate(),
                 base.equipmentStatusDashboardPlanDate(),

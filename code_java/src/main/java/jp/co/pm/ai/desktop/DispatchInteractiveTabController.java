@@ -157,6 +157,9 @@ public final class DispatchInteractiveTabController {
     /** Drag payload for reordering wide-grid profile rows (leading columns only). */
     private static final String DND_ROW_PREFIX = "pm-dispatch-dnd|wide|row|v2|";
 
+    private TableCell<?, ?> wideQtyDragSourceCell;
+    private boolean wideQtyDragGestureStarted;
+
     /** One spreadsheet column per calendar day (wide grid date axis). */
     private static final int DAY_SLOT_COLUMNS = 1;
 
@@ -242,7 +245,7 @@ public final class DispatchInteractiveTabController {
     /** 段階2.1試行後（段階3未実行）: (アラ計画)+(段階2後)+(段階2.1後) の3行。 */
     private static final double DISPATCH_ALADDIN_STAGE21_PRE_STAGE3_MULTILINE_ROW_HEIGHT_PX = 66.0;
 
-    /** 段階3日付セル: 1行目=(アラ計画)、2行目=(段階3前)、3行目=(段階3後)または(段階3改)。 */
+    /** 段階3日付セル: 1行目=(アラ計画)、2行目=(段階2後)、3行目=(段階3.x後) 等。 */
     private static final int STAGE3_QTY_FIXED_LINE_COUNT = 3;
 
     /** 段階2.1試行後（段階3実行済）: 4行目=(段階2.1後)。 */
@@ -609,10 +612,13 @@ public final class DispatchInteractiveTabController {
         SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome(wideSpreadsheet);
         SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome(byDaySpreadsheet);
 
-        wideSpreadsheet.getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
+        wideSpreadsheet.getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.SINGLE);
         byDaySpreadsheet.getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
-        SpreadsheetTabularSupport.installFullRowDataSelection(wideSpreadsheet);
+        // タスク×日付: 日付セル単位 DnD のため行全体選択は付けない（ControlsFX span selection と競合）
         SpreadsheetTabularSupport.installFullRowDataSelection(byDaySpreadsheet);
+
+        SpreadsheetTabularSupport.guardControlsFxSpanSelectionMousePressAfterSkinSettles(wideSpreadsheet);
+        SpreadsheetTabularSupport.guardControlsFxSpanSelectionMousePressAfterSkinSettles(byDaySpreadsheet);
 
         SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
                 wideSpreadsheetHost, this::resolvedWideLeadingColumnCount);
@@ -3138,14 +3144,7 @@ public final class DispatchInteractiveTabController {
     }
 
     private static void clearSpreadsheetSelectionForRebuild(SpreadsheetView view) {
-        if (view == null) {
-            return;
-        }
-        try {
-            view.getSelectionModel().clearSelection();
-        } catch (RuntimeException ignored) {
-            // setGrid 直後など、選択モデルと列数が一時的にずれているときは無視する
-        }
+        SpreadsheetTabularSupport.safeClearSpreadsheetSelection(view);
     }
 
     /** グリッド再構築後: 列フィルタは維持し、固定列・UNCONSTRAINED 列幅ポリシーを再適用する。 */
@@ -3154,6 +3153,8 @@ public final class DispatchInteractiveTabController {
                 wideSpreadsheet, resolvedWideLeadingColumnCount());
         SpreadsheetTabularSupport.reapplySpreadsheetColumnChrome(
                 byDaySpreadsheet, resolvedByDayLeadingColumnCount());
+        SpreadsheetTabularSupport.guardControlsFxSpanSelectionMousePressAfterSkinSettles(wideSpreadsheet);
+        SpreadsheetTabularSupport.guardControlsFxSpanSelectionMousePressAfterSkinSettles(byDaySpreadsheet);
     }
 
     private void refreshDispatchSpreadsheetForView(SpreadsheetView view) {
@@ -3540,9 +3541,13 @@ public final class DispatchInteractiveTabController {
                         return;
                     }
                     var sm = wideSpreadsheet.getSelectionModel();
-                    sm.clearSelection();
-                    sm.clearAndSelect(viewRow, scol);
-                    sm.focus(viewRow, scol);
+                    SpreadsheetTabularSupport.safeClearSpreadsheetSelection(wideSpreadsheet);
+                    try {
+                        sm.clearAndSelect(viewRow, scol);
+                        sm.focus(viewRow, scol);
+                    } catch (RuntimeException ex) {
+                        SpreadsheetTabularSupport.safeClearSpreadsheetSelection(wideSpreadsheet);
+                    }
                     scrollWideSpreadsheetCellIntoView(viewRow, scol);
                 });
     }
@@ -3776,17 +3781,34 @@ public final class DispatchInteractiveTabController {
     }
 
     /**
-     * Maps a {@link TableCell}'s column to model column index (accounts for hidden columns / ControlsFX mapping).
+     * Maps a {@link TableCell}'s column to model column index (fixed leading columns + hidden columns).
      */
     private int wideModelColumnFromTableCell(TableCell<?, ?> tc) {
-        if (tc == null || tc.getTableColumn() == null) {
-            return -1;
+        return SpreadsheetTabularSupport.modelColumnIndexFromTableCell(wideSpreadsheet, tc);
+    }
+
+    /** 日付列クリック時: span 矩形選択のずれを抑え、クリックしたセルへ選択・フォーカスを合わせる。 */
+    private void synchronizeWideDateCellSelection(TableCell<?, ?> tc) {
+        if (tc == null) {
+            return;
         }
-        int viewCol = tc.getTableView().getColumns().indexOf(tc.getTableColumn());
-        if (viewCol < 0) {
-            return -1;
+        int modelCol = wideModelColumnFromTableCell(tc);
+        if (modelCol < WIDE_STATIC_HEADERS.size()) {
+            return;
         }
-        return wideSpreadsheet.getModelColumn(viewCol);
+        int viewCol = SpreadsheetTabularSupport.viewColumnIndexFromTableCell(wideSpreadsheet, tc);
+        int viewRow = tc.getIndex();
+        if (viewCol < 0 || viewRow < 0 || viewCol >= wideSpreadsheet.getColumns().size()) {
+            return;
+        }
+        SpreadsheetColumn sc = wideSpreadsheet.getColumns().get(viewCol);
+        SpreadsheetTabularSupport.safeClearSpreadsheetSelection(wideSpreadsheet);
+        try {
+            wideSpreadsheet.getSelectionModel().clearAndSelect(viewRow, sc);
+            wideSpreadsheet.getSelectionModel().focus(viewRow, sc);
+        } catch (RuntimeException ignored) {
+            // stale row/column after rebuild
+        }
     }
 
     private void applyByDayCellStyle(ByDayRow br, int dateIdx, SpreadsheetCell cell) {
@@ -4693,7 +4715,7 @@ public final class DispatchInteractiveTabController {
         setDispatchQtyCellDisplay(cell, qtxt, singleLineDisplay);
     }
 
-    /** 段階3: 1=(アラ計画)、2=(段階3前)、3=(段階3後)または(段階3改)。 */
+    /** 段階3試行済み: 1=(アラ計画)、2=(段階2後)、3=(段階3.x後)（手修正時も 3.0～3.2 は同ラベル）。 */
     private static void setDispatchQtyCellDisplay(
             SpreadsheetCell cell, List<Stage3QtyLineSlot> slots, boolean singleLineDisplay) {
         if (slots == null || slots.stream().noneMatch(Stage3QtyLineSlot::visible)) {
@@ -4794,7 +4816,7 @@ public final class DispatchInteractiveTabController {
             slots.add(stage3QtyEmptyLineSlot());
             slots.add(stage3QtyLineSlot(revisedLabel, planAmt, eps));
         } else {
-            slots.add(stage3QtyLineSlot(LABEL_STAGE3_PLAN, planAmt, eps));
+            slots.add(stage3QtyLineSlot(LABEL_STAGE2_PLAN, planAmt, eps));
             slots.add(stage3QtyLineSlot(actualLabel, actualAmt, eps));
         }
         if (appendStage21Line) {
@@ -4810,7 +4832,7 @@ public final class DispatchInteractiveTabController {
     }
 
     /**
-     * 配台日スライド後: 旧日付は (段階2後)、新日付は (段階3後) のみ（(段階3前) は出さない）。
+     * 配台日スライド後: 旧日付は (段階2後)、新日付は (段階3後) のみ（段階3試行済みセルと同趣旨）。
      */
     static List<Stage3QtyLineSlot> buildStage3QtyFixedLineSlotsWithPlanSlide(
             double aladdinPlanAmt,
@@ -5792,7 +5814,7 @@ public final class DispatchInteractiveTabController {
         st.showAndWait();
     }
 
-    /** タスク×日付: 日付列ダブルクリックで {@link #LABEL_STAGE3_PLAN} のみ編集（{@link #LABEL_STAGE3_ACTUAL} は固定）。 */
+    /** タスク×日付: 日付列ダブルクリックで編集目標（段階3試行後は {@link #LABEL_STAGE2_PLAN}）を更新。 */
     private void installWideDoubleClickHandler() {
         wideSpreadsheet.addEventFilter(
                 MouseEvent.MOUSE_CLICKED,
@@ -5804,87 +5826,126 @@ public final class DispatchInteractiveTabController {
                     if (tc == null || !isUnderSpreadsheet(wideSpreadsheet, tc)) {
                         return;
                     }
-                    int modelCol = wideModelColumnFromTableCell(tc);
-                    int staticCols = WIDE_STATIC_HEADERS.size();
-                    if (modelCol < staticCols) {
-                        return;
-                    }
-                    int slot = modelCol - staticCols;
-                    int dateIdx = slot / DAY_SLOT_COLUMNS;
-                    int profIdx = wideProfileIndexFromTableCell(tc);
-                    if (profIdx < 0
-                            || profIdx >= wideRowItems.size()
-                            || dateIdx < 0
-                            || dateIdx >= dateAxis.size()) {
-                        return;
-                    }
-                    WideRow wr = wideRowItems.get(profIdx);
-                    double planQ = wr.getAmount(dateIdx);
-                    double actualQ = wr.getActualAmount(dateIdx);
-                    boolean hasActual = docHasActualDispatchQtyColumn() && actualQ > 1e-9;
-                    TextInputDialog dialog =
-                            new TextInputDialog(
-                                    planQ > 1e-9 ? ResultDispatchNormalizer.formatQty(planQ) : "");
-                    if (shell != null) {
-                        dialog.initOwner(shell.primaryStageForDialogs());
-                    }
-                    dialog.setTitle("当日配台数量（段階3前）");
-                    String profileHint = rollUnitProfileHint(wr, dateAxis.get(dateIdx));
-                    Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM unitInfo =
-                            resolveRollUnitForWideRow(wr);
-                    StringBuilder header = new StringBuilder(profileHint);
-                    if (hasActual) {
-                        String actualLabel =
-                                effectiveStage3PlanningVariant().actualQtyLabel();
-                        header.append('\n')
-                                .append(actualLabel)
-                                .append(ResultDispatchNormalizer.formatQty(actualQ))
-                                .append("（固定・ドラッグ移動不可）");
-                    }
-                    header.append('\n')
-                            .append(
-                                    DispatchInteractiveRollUnitSupport.rollUnitDialogHeader(
-                                            Math.max(planQ, 0.0), unitInfo, null));
-                    dialog.setHeaderText(header.toString());
-                    dialog.setContentText(
-                            (hasActual ? LABEL_STAGE3_PLAN : "数量")
-                                    + " (m) — 配台ロール単位の整数倍のみ:");
-                    Optional<String> ov = dialog.showAndWait();
-                    ov.filter(s -> !s.isBlank())
-                            .flatMap(
-                                    s ->
-                                            DispatchInteractiveRollUnitSupport
-                                                    .parseRollAlignedTotalQuantity(
-                                                            shell != null
-                                                                    ? shell.primaryStageForDialogs()
-                                                                    : null,
-                                                            s,
-                                                            unitInfo,
-                                                            rollUnitProfileHint(
-                                                                    wr, dateAxis.get(dateIdx))))
-                            .ifPresent(
-                                    newTotal -> {
-                                        ResultDispatchPivot.upsertAllocationForWideMerge(
-                                                doc.columns(),
-                                                doc.rows(),
-                                                wr.profileMap(),
-                                                dateAxis.get(dateIdx),
-                                                newTotal,
-                                                ResultDispatchPivot
-                                                        .DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
-                                        ResultDispatchNormalizer.normalizeInPlace(
-                                                doc.columns(), doc.rows());
-                                        rebuildGrids();
-                                        markDispatchDocDirty();
-                                    });
+                    handleWideDateColumnDoubleClick(tc);
                 });
+    }
+
+    private void handleWideDateColumnDoubleClick(TableCell<?, ?> tc) {
+        if (tc == null) {
+            return;
+        }
+        int modelCol = wideModelColumnFromTableCell(tc);
+        int staticCols = WIDE_STATIC_HEADERS.size();
+        if (modelCol < staticCols) {
+            return;
+        }
+        int slot = modelCol - staticCols;
+        int dateIdx = slot / DAY_SLOT_COLUMNS;
+        int profIdx = wideProfileIndexFromTableCell(tc);
+        if (profIdx < 0
+                || profIdx >= wideRowItems.size()
+                || dateIdx < 0
+                || dateIdx >= dateAxis.size()) {
+            return;
+        }
+        WideRow wr = wideRowItems.get(profIdx);
+        double planQ = wr.getAmount(dateIdx);
+        double actualQ = wr.getActualAmount(dateIdx);
+        boolean hasActual = docHasActualDispatchQtyColumn() && actualQ > 1e-9;
+        TextInputDialog dialog =
+                new TextInputDialog(planQ > 1e-9 ? ResultDispatchNormalizer.formatQty(planQ) : "");
+        if (shell != null) {
+            dialog.initOwner(shell.primaryStageForDialogs());
+        }
+        dialog.setTitle(hasActual ? "当日配台数量（段階2後）" : "当日配台数量（段階3前）");
+        String profileHint = rollUnitProfileHint(wr, dateAxis.get(dateIdx));
+        Stage2PlanRowDispatchQtyMetrics.DispatchSimulatorUnitM unitInfo =
+                resolveRollUnitForWideRow(wr);
+        StringBuilder header = new StringBuilder(profileHint);
+        if (hasActual) {
+            String actualLabel = effectiveStage3PlanningVariant().actualQtyLabel();
+            header.append('\n')
+                    .append(actualLabel)
+                    .append(ResultDispatchNormalizer.formatQty(actualQ))
+                    .append("（固定・ドラッグ移動不可）");
+        }
+        header.append('\n')
+                .append(
+                        DispatchInteractiveRollUnitSupport.rollUnitDialogHeader(
+                                Math.max(planQ, 0.0), unitInfo, null));
+        dialog.setHeaderText(header.toString());
+        dialog.setContentText(
+                (hasActual ? LABEL_STAGE2_PLAN : "数量") + " (m) — 配台ロール単位の整数倍のみ:");
+        Optional<String> ov = dialog.showAndWait();
+        ov.filter(s -> !s.isBlank())
+                .flatMap(
+                        s ->
+                                DispatchInteractiveRollUnitSupport.parseRollAlignedTotalQuantity(
+                                        shell != null ? shell.primaryStageForDialogs() : null,
+                                        s,
+                                        unitInfo,
+                                        rollUnitProfileHint(wr, dateAxis.get(dateIdx))))
+                .ifPresent(
+                        newTotal -> {
+                            ResultDispatchPivot.upsertAllocationForWideMerge(
+                                    doc.columns(),
+                                    doc.rows(),
+                                    wr.profileMap(),
+                                    dateAxis.get(dateIdx),
+                                    newTotal,
+                                    ResultDispatchPivot
+                                            .DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+                            ResultDispatchNormalizer.normalizeInPlace(doc.columns(), doc.rows());
+                            rebuildGrids();
+                            markDispatchDocDirty();
+                        });
     }
 
     private void installWideDnDHandlers() {
         wideSpreadsheet.addEventFilter(
+                MouseEvent.MOUSE_PRESSED,
+                e -> {
+                    if (!e.isPrimaryButtonDown()) {
+                        return;
+                    }
+                    wideQtyDragGestureStarted = false;
+                    wideQtyDragSourceCell = null;
+                    TableCell<?, ?> tc = findTableCell(e.getPickResult().getIntersectedNode());
+                    if (tc == null || !isUnderSpreadsheet(wideSpreadsheet, tc)) {
+                        return;
+                    }
+                    SpreadsheetTabularSupport.guardControlsFxSpanSelectionMousePress(wideSpreadsheet);
+                    synchronizeWideDateCellSelection(tc);
+                    if (!wideDateQtyDragSourceEligible(tc)) {
+                        return;
+                    }
+                    wideQtyDragSourceCell = tc;
+                });
+
+        wideSpreadsheet.addEventFilter(
+                MouseEvent.MOUSE_RELEASED,
+                e -> {
+                    if (!wideQtyDragGestureStarted) {
+                        wideQtyDragSourceCell = null;
+                    }
+                });
+
+        wideSpreadsheet.addEventFilter(
+                DragEvent.DRAG_DONE,
+                e -> {
+                    wideQtyDragSourceCell = null;
+                    wideQtyDragGestureStarted = false;
+                });
+
+        wideSpreadsheet.addEventFilter(
                 MouseEvent.DRAG_DETECTED,
                 e -> {
                     TableCell<?, ?> tc = findTableCell(e.getPickResult().getIntersectedNode());
+                    if ((tc == null || !wideDateQtyDragSourceEligible(tc))
+                            && wideQtyDragSourceCell != null
+                            && wideDateQtyDragSourceEligible(wideQtyDragSourceCell)) {
+                        tc = wideQtyDragSourceCell;
+                    }
                     if (tc == null || !isUnderSpreadsheet(wideSpreadsheet, tc)) {
                         return;
                     }
@@ -5915,28 +5976,10 @@ public final class DispatchInteractiveTabController {
                         return;
                     }
 
-                    int slot = modelCol - staticCols;
-                    int dateIdx = slot / DAY_SLOT_COLUMNS;
-                    int profIdx = wideProfileIndexFromTableCell(tc);
-                    if (profIdx < 0 || profIdx >= wideRowItems.size() || dateIdx < 0 || dateIdx >= dateAxis.size()) {
-                        return;
+                    if (tryStartWideDateQtyDrag(tc, e)) {
+                        wideQtyDragGestureStarted = true;
+                        e.consume();
                     }
-                    WideRow wr = wideRowItems.get(profIdx);
-                    double qty = wr.getAmount(dateIdx);
-                    if (qty <= 1e-9) {
-                        return;
-                    }
-                    Dragboard db = tc.startDragAndDrop(TransferMode.MOVE);
-                    ClipboardContent cc = new ClipboardContent();
-                    List<String> cols = doc.columns();
-                    String gk = ResultDispatchNormalizer.staticGroupKey(cols, wr.profileMap());
-                    String b64 =
-                            Base64.getUrlEncoder()
-                                    .withoutPadding()
-                                    .encodeToString(gk.getBytes(StandardCharsets.UTF_8));
-                    cc.putString(DND_PREFIX + DND_V2_MARKER + b64 + ":" + dateIdx + ":" + qty);
-                    db.setContent(cc);
-                    e.consume();
                 });
 
         wideSpreadsheet.addEventFilter(
@@ -6006,11 +6049,118 @@ public final class DispatchInteractiveTabController {
                     if (profIdx < 0 || profIdx >= wideRowItems.size()) {
                         return;
                     }
-                    WideRow tgt = wideRowItems.get(profIdx);
-                    boolean ok = handleWideDrop(e.getDragboard().getString(), tgt, dateIdx);
+                    String payload = e.getDragboard().getString();
+                    boolean ok = handleWideDrop(payload, wideRowItems.get(profIdx), dateIdx);
                     e.setDropCompleted(ok);
                     e.consume();
                 });
+    }
+
+    /**
+     * DnD・ダブルクリック編集と同一: 操作対象の当日配台数量（段階2後）m。
+     * {@link #wideDisplayPlanMetersForDate} と表示セルの (段階2後) 行を正本とする（実配台数量は対象外）。
+     */
+    private double wideDragSourcePlanMeters(WideRow wr, int dateIdx) {
+        if (wr == null || dateIdx < 0 || dateIdx >= dateAxis.size()) {
+            return 0.0;
+        }
+        final double eps = 1e-3;
+        Map<String, String> profile = wr.profileMap();
+        LocalDate day = dateAxis.get(dateIdx);
+
+        double planAmt = wr.getAmount(dateIdx);
+        double displayPlan = wideDisplayPlanMetersForDate(profile, day);
+        planAmt = Math.max(planAmt, displayPlan);
+
+        double pivotPlan = 0.0;
+        if (doc != null) {
+            pivotPlan =
+                    ResultDispatchPivot.sumQuantityForProfileAndDateForWideMerge(
+                            doc.rows(),
+                            profile,
+                            day,
+                            ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+            planAmt = Math.max(planAmt, pivotPlan);
+        }
+
+        double actualAmt = wr.getActualAmount(dateIdx);
+        if (docHasActualDispatchQtyColumn()) {
+            actualAmt = Math.max(actualAmt, wideDisplayActualMetersForDate(profile, day));
+        }
+
+        double snapPlan = stage3TrialSnapPlanForCell(profile, day);
+
+        boolean planSlidAway =
+                docHasActualDispatchQtyColumn()
+                        && snapPlan > eps
+                        && planAmt <= eps
+                        && actualAmt <= eps;
+        if (planSlidAway) {
+            return 0.0;
+        }
+
+        if (hasPipelineStage3PlanningApplied() && !docHasActualDispatchQtyColumn()) {
+            return snapPlan > eps ? snapPlan : planAmt;
+        }
+
+        return planAmt > eps ? planAmt : 0.0;
+    }
+
+    private boolean wideDateQtyDragSourceEligible(TableCell<?, ?> tc) {
+        if (tc == null) {
+            return false;
+        }
+        int modelCol = wideModelColumnFromTableCell(tc);
+        int staticCols = WIDE_STATIC_HEADERS.size();
+        if (modelCol < staticCols) {
+            return false;
+        }
+        int slot = modelCol - staticCols;
+        int dateIdx = slot / DAY_SLOT_COLUMNS;
+        int profIdx = wideProfileIndexFromTableCell(tc);
+        if (profIdx < 0 || profIdx >= wideRowItems.size() || dateIdx < 0 || dateIdx >= dateAxis.size()) {
+            return false;
+        }
+        WideRow wr = wideRowItems.get(profIdx);
+        return wideDragSourcePlanMeters(wr, dateIdx) > 1e-9;
+    }
+
+    private boolean tryStartWideDateQtyDrag(TableCell<?, ?> tc, MouseEvent e) {
+        if (tc == null || !isUnderSpreadsheet(wideSpreadsheet, tc)) {
+            return false;
+        }
+        int modelCol = wideModelColumnFromTableCell(tc);
+        int staticCols = WIDE_STATIC_HEADERS.size();
+        if (modelCol < staticCols) {
+            return false;
+        }
+        int slot = modelCol - staticCols;
+        int dateIdx = slot / DAY_SLOT_COLUMNS;
+        int profIdx = wideProfileIndexFromTableCell(tc);
+        if (profIdx < 0 || profIdx >= wideRowItems.size() || dateIdx < 0 || dateIdx >= dateAxis.size()) {
+            return false;
+        }
+        WideRow wr = wideRowItems.get(profIdx);
+        double qty = wideDragSourcePlanMeters(wr, dateIdx);
+        if (qty <= 1e-9) {
+            return false;
+        }
+        try {
+            Dragboard db = tc.startDragAndDrop(TransferMode.MOVE);
+            ClipboardContent cc = new ClipboardContent();
+            List<String> cols = doc.columns();
+            String gk = ResultDispatchNormalizer.staticGroupKey(cols, wr.profileMap());
+            String b64 =
+                    Base64.getUrlEncoder()
+                            .withoutPadding()
+                            .encodeToString(gk.getBytes(StandardCharsets.UTF_8));
+            String payload = DND_PREFIX + DND_V2_MARKER + b64 + ":" + dateIdx + ":" + qty;
+            cc.putString(payload);
+            db.setContent(cc);
+            return true;
+        } catch (IllegalStateException ex) {
+            return false;
+        }
     }
 
     private void installByDayDoubleClickHandler() {
@@ -6137,7 +6287,7 @@ public final class DispatchInteractiveTabController {
     }
 
     private boolean handleWideDrop(String payload, WideRow targetRow, int targetDateIdx) {
-        if (!payload.startsWith(DND_PREFIX)) {
+        if (payload == null || !payload.startsWith(DND_PREFIX)) {
             return false;
         }
         String rest = payload.substring(DND_PREFIX.length());
@@ -6222,18 +6372,8 @@ public final class DispatchInteractiveTabController {
         LocalDate fromDay = dateAxis.get(fromDateIdx);
         LocalDate toDay = dateAxis.get(targetDateIdx);
 
-        double fromSum =
-                ResultDispatchPivot.sumQuantityForProfileAndDateForWideMerge(
-                        doc.rows(),
-                        fromProfile,
-                        fromDay,
-                        ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
-        double toSum =
-                ResultDispatchPivot.sumQuantityForProfileAndDateForWideMerge(
-                        doc.rows(),
-                        toProfile,
-                        toDay,
-                        ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+        double fromSum = wideDragSourcePlanMeters(fromWr, fromDateIdx);
+        double toSum = wideDragSourcePlanMeters(wideRowItems.get(toIdx), targetDateIdx);
         ResultDispatchPivot.upsertAllocationForWideMerge(
                 cols,
                 doc.rows(),

@@ -432,7 +432,9 @@ public final class DesktopSessionStateStore {
                 loadPushButtonDesignPrefs(root),
                 optionalBoolean(root, "memoryMonitorEnabled", false),
                 optionalLongClamped(root, "memoryMonitorIntervalSec", 5L, 1L, 3600L),
-                optionalNonNegativeLong(root, "nextLaunchHeapMaxMiB", 0L),
+                loadNextLaunchHeapFixed(root),
+                loadNextLaunchHeapMinMiB(root),
+                loadNextLaunchHeapMaxMiB(root),
                 text(root, "equipmentStatusDashboardActualDate"),
                 text(root, "equipmentStatusDashboardPlanDate"),
                 optionalIntClamped(root, "equipmentStatusDashboardActualDayOffset", 0, -366, 366),
@@ -517,10 +519,50 @@ public final class DesktopSessionStateStore {
         root.put("memoryMonitorEnabled", state.memoryMonitorEnabled());
         long iv = state.memoryMonitorIntervalSec();
         root.put("memoryMonitorIntervalSec", Math.max(1L, Math.min(3600L, iv <= 0 ? 5L : iv)));
+        root.put("nextLaunchHeapFixed", state.nextLaunchHeapFixed());
+        long nMin = state.nextLaunchHeapMinMiB();
+        if (nMin > 0) {
+            root.put("nextLaunchHeapMinMiB", nMin);
+        }
         long nx = state.nextLaunchHeapMaxMiB();
         if (nx > 0) {
             root.put("nextLaunchHeapMaxMiB", nx);
         }
+    }
+
+    /**
+     * 旧セッション（{@code nextLaunchHeapFixed} 無し）: 上限が保存されていれば固定（-Xms=-Xmx）、未設定なら変動既定。
+     */
+    private static boolean loadNextLaunchHeapFixed(JsonNode root) {
+        JsonNode n = root.get("nextLaunchHeapFixed");
+        if (n != null && !n.isNull() && n.isBoolean()) {
+            return n.asBoolean();
+        }
+        long savedMax = optionalNonNegativeLong(root, "nextLaunchHeapMaxMiB", 0L);
+        return savedMax > 0;
+    }
+
+    private static long loadNextLaunchHeapMinMiB(JsonNode root) {
+        JsonNode n = root.get("nextLaunchHeapMinMiB");
+        if (n != null && !n.isNull() && n.isNumber()) {
+            long v = n.asLong();
+            if (v > 0) {
+                return Math.min(v, 65536L);
+            }
+        }
+        long savedMax = optionalNonNegativeLong(root, "nextLaunchHeapMaxMiB", 0L);
+        if (savedMax > 0) {
+            return savedMax;
+        }
+        return DesktopSessionState.DEFAULT_NEXT_LAUNCH_HEAP_MIN_MIB;
+    }
+
+    private static long loadNextLaunchHeapMaxMiB(JsonNode root) {
+        long saved = optionalNonNegativeLong(root, "nextLaunchHeapMaxMiB", 0L);
+        if (saved > 0) {
+            return saved;
+        }
+        return DesktopSessionState.DEFAULT_NEXT_LAUNCH_HEAP_MAX_MIB;
     }
 
     private static void putEquipmentStatusDashboardPrefs(ObjectNode root, DesktopSessionState state) {

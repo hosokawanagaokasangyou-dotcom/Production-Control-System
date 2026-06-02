@@ -44,9 +44,9 @@ public final class Stage3PlanningMetaStore {
             return "(段階" + id + "後)";
         }
 
-        /** 日付セル内の手修正行ラベル（例: {@code (段階3.0改)}）。 */
+        /** 日付セル内の手修正行ラベル（3.0～3.2 は実績行と同じ {@code (段階3.x後)}）。 */
         public String revisedQtyLabel() {
-            return "(段階" + id + "改)";
+            return actualQtyLabel();
         }
 
         /** 配台表バッジ（例: {@code 段階3.0}）。 */

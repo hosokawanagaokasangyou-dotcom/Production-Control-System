@@ -9,7 +9,7 @@ import java.util.Map;
 import javafx.collections.ObservableList;
 
 /**
- * 配台計画タスク入力: 廃止した {@code *_上書き} / {@code （元）*_上書き} 列の読込マージと UI からの除去。
+ * 配台計画タスク入力: 廃止した {@code *_上書き} / {@code （元）…} 参照列の読込マージと UI からの除去。
  *
  * <p>基底列（例: {@code 原反投入日}）を直接編集する運用に統一する。
  */
@@ -25,13 +25,22 @@ public final class PlanInputDeprecatedOverrideColumnSupport {
 
     private PlanInputDeprecatedOverrideColumnSupport() {}
 
-    /** {@code （元）加工速度_上書き} 等の参照列。 */
+    /** {@code （元）加工速度_上書き} 等の参照列（{@link #isOriginalReferenceColumn} の部分集合）。 */
     public static boolean isDeprecatedReferenceOverrideColumn(String columnTitle) {
         if (columnTitle == null) {
             return false;
         }
         String h = normalize(columnTitle);
-        return (h.startsWith("(元)") || h.startsWith("（元）")) && h.endsWith(OVERRIDE_SUFFIX);
+        return isOriginalReferenceColumn(h) && h.endsWith(OVERRIDE_SUFFIX);
+    }
+
+    /** {@code （元）担当OP_指定} 等、見出しが {@code （元）} / {@code (元)} で始まる参照列。 */
+    public static boolean isOriginalReferenceColumn(String columnTitle) {
+        if (columnTitle == null) {
+            return false;
+        }
+        String h = normalize(columnTitle);
+        return h.startsWith("(元)") || h.startsWith("（元）");
     }
 
     /** {@code 加工速度_上書き} 等の上書き列（参照列は {@link #isDeprecatedReferenceOverrideColumn}）。 */
@@ -48,7 +57,7 @@ public final class PlanInputDeprecatedOverrideColumnSupport {
 
     public static boolean isDeprecatedOverrideOrReferenceColumn(String columnTitle) {
         return isDeprecatedOverrideColumn(columnTitle)
-                || isDeprecatedReferenceOverrideColumn(columnTitle);
+                || isOriginalReferenceColumn(columnTitle);
     }
 
     /**

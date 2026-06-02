@@ -39,7 +39,7 @@ public final class TabularCellHighlight {
             "-fx-background-color: #ffcdd2; -fx-control-inner-background: #ffcdd2;"
                     + " -fx-text-fill: #b71c1c; -fx-font-weight: bold;";
 
-    /** 配台計画タスク入力: 未加工 &gt; 0 かつ {@code 配台使用残数量} が未加工と不一致のとき。 */
+    /** 配台計画タスク入力: 未加工 &gt; 0 かつ {@code 配台使用残数量} が未加工と不一致のとき（{@code 配台ロール数} も同色）。 */
     public static final String PLAN_INPUT_DISPATCH_REMAINING_MISMATCH_STYLE =
             PLAN_INPUT_DISPATCHABLE_DATETIME_VIOLATION_STYLE;
 
