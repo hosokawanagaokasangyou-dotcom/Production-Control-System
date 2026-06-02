@@ -247,9 +247,7 @@ public final class DesktopSessionStateStore {
         putMemorySettingsPrefs(root, state);
         putEquipmentStatusDashboardPrefs(root, state);
         putWindowGeometry(root, state);
-        if (state.requestFormComboChoices() != null && !state.requestFormComboChoices().isEmpty()) {
-            state.requestFormComboChoices().writeToObjectNode(root);
-        }
+        // 依頼書 ComboBox 候補の正本はサマリ Excel 同フォルダの request_form_input_settings.json
         return root;
     }
 

@@ -125,6 +125,7 @@ import jp.co.pm.ai.desktop.config.UiEnvRowSnapshot;
 import jp.co.pm.ai.desktop.config.UiRefEnvDefaults;
 import jp.co.pm.ai.desktop.ui.Stage1NewMaterialLookupDialog;
 import jp.co.pm.ai.desktop.ui.Stage2UnknownMasterCombinationDialog;
+import jp.co.pm.ai.desktop.ui.Stage2UnknownMasterCombinationDialogResult;
 import jp.co.pm.ai.desktop.ui.ButtonPressFeedback;
 import jp.co.pm.ai.desktop.ui.TableColumnOrderPersistence;
 import jp.co.pm.ai.desktop.runtime.MemoryJvmRingLog;
@@ -1391,6 +1392,9 @@ public final class MainShellController {
 
     /** 現在の UI 状態を直ちに session-state.json に保存する（タブ内の微調整の自動保存用）。 */
     public void persistDesktopSessionNow() {
+        if (requestFormInputTabController != null) {
+            requestFormInputTabController.persistInputSettings();
+        }
         DesktopSessionStateStore.save(collectDesktopSession());
     }
 
@@ -1526,14 +1530,21 @@ public final class MainShellController {
 
     private jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices resolveRequestFormComboChoices(
             DesktopSessionState session) {
+        jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices fromSummary =
+                jp.co.pm.ai.desktop.reconciliation.RequestFormInputSettingsStore.loadComboChoices(
+                        collectUiEnv(), GlobalInitSettingTarget.load());
+        if (fromSummary != null && !fromSummary.isEmpty()) {
+            return fromSummary;
+        }
         jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices saved =
                 session != null
                         ? session.requestFormComboChoices()
                         : jp.co.pm.ai.desktop.reconciliation.RequestFormComboChoices.empty();
         if (saved != null && !saved.isEmpty()) {
-            return saved;
+            return saved.mergedWithDefaults();
         }
-        return DesktopSessionStateStore.loadFactoryRequestFormComboChoices(collectUiEnv());
+        return DesktopSessionStateStore.loadFactoryRequestFormComboChoices(collectUiEnv())
+                .mergedWithDefaults();
     }
 
     /**
@@ -6741,7 +6752,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                     "[stage2] 組み合わせ表に無い工程+機械 "
                             + bundle.pairs().size()
                             + " 件 — 配台不要確認ダイアログを表示します。");
-            Optional<Stage2UnknownMasterCombinationDialog.Result> entered =
+            Optional<Stage2UnknownMasterCombinationDialogResult> entered =
                     Stage2UnknownMasterCombinationDialog.prompt(primaryStageForDialogs(), bundle);
             if (entered.isEmpty()) {
                 appendLog("[stage2] マスタ未登録工程+機械の確認をキャンセルしたため段階2を中止します。");
@@ -6766,7 +6777,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
     }
 
     private void applyStage2UnknownMasterCombinationSelections(
-            Stage2UnknownMasterCombinationDialog.Result result) throws IOException {
+            Stage2UnknownMasterCombinationDialogResult result) throws IOException {
         if (result == null || result.markExclude() == null || result.markExclude().isEmpty()) {
             appendLog("[stage2] マスタ未登録工程+機械: 配台不要への更新はありません。");
             return;
@@ -6928,7 +6939,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                 alert.getButtonTypes().setAll(retry, ButtonType.OK);
                 Optional<ButtonType> ans = alert.showAndWait();
                 if (ans.isPresent() && ans.get() == retry) {
-                    Optional<Stage2UnknownMasterCombinationDialog.Result> entered =
+                    Optional<Stage2UnknownMasterCombinationDialogResult> entered =
                             Stage2UnknownMasterCombinationDialog.prompt(
                                     primaryStageForDialogs(), bundle);
                     if (entered.isPresent()) {

@@ -54,8 +54,6 @@ public class ReconciliationApp {
     private static final String COL_MASTER_BASE_SHOHIN_RAW = "masterBase商品(原反)";
     /** 受注ﾌｧｲﾙ: POI lastRowNum が書式だけで膨らんだときの最大走査行数。 */
     private static final int JUCHU_SHEET_MAX_SCAN_ROWS = 20_000;
-    private static final Path SETTINGS_FILE =
-            Path.of(System.getProperty("user.home"), ".pm-ai-desktop", "request-form-reconciliation.properties");
     private static final double SETTINGS_CARD_WIDTH = 300.0;
     /** 従来 100% 設計からの UI 幅倍率（現状 = 120%）。 */
     private static final double UI_WIDTH_SCALE = 1.2;
@@ -301,10 +299,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     public Parent buildEmbeddedRoot(Window hostWindow, Path repoRootHint, Map<String, String> uiEnv) {
         this.hostWindow = hostWindow;
         this.repoRootHint = repoRootHint;
-        // Load saved settings（UI 個人設定。環境変数はこの後に上書き）
-        loadSettings();
         applyRepoRootAsWorkspaceIfPresent(repoRootHint);
         configureFromUiEnv(uiEnv);
+        loadSettings();
         ensureJuchuPathDefault();
 
         // --- TOP MENU BAR ---
@@ -1228,6 +1225,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         items.add(v);
                         listView.setPrefHeight(Math.min(Math.max(items.size(), 2) * 26 + 2, 140));
                         tfNew.clear();
+                        saveSettings();
                     }
                 });
         tfNew.setOnAction(btnAdd.getOnAction());
@@ -1241,6 +1239,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     if (sel != null) {
                         items.remove(sel);
                         listView.setPrefHeight(Math.min(Math.max(items.size(), 2) * 26 + 2, 140));
+                        saveSettings();
                     }
                 });
 
@@ -1307,6 +1306,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         nextDefaults.put(key, value.strip());
         comboChoicesState =
                 RequestFormComboChoices.of(comboChoicesState.asMap(), nextDefaults);
+        saveSettings();
+    }
+
+    /** サマリ Excel 同フォルダへ依頼書入力設定を書き出す（ComboBox 候補・パス）。 */
+    public void persistInputSettings() {
+        saveSettings();
     }
 
     private void syncFieldDefaultSelectorCombos() {
@@ -4887,37 +4892,35 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void loadSettings() {
-        Properties props = new Properties();
-        Path settingsPath = SETTINGS_FILE;
-        if (Files.isRegularFile(settingsPath)) {
-            try (FileInputStream fis = new FileInputStream(settingsPath.toFile())) {
-                props.load(fis);
-                String folder = props.getProperty("targetFolder");
-                if (folder != null && new File(folder).exists()) {
-                    targetFolder = folder;
-                }
-                String juchuPath = props.getProperty("juchuFilePath");
-                if (juchuPath != null && new File(juchuPath).exists()) {
-                    juchuFilePath = juchuPath;
-                }
-            } catch (Exception e) {
-                System.err.println("Could not load settings: " + e.getMessage());
-            }
-        }
+        RequestFormInputSettingsStore.load(uiEnvSnapshot)
+                .ifPresent(
+                        settings -> {
+                            RequestFormInputSettingsStore.ReconciliationPaths paths =
+                                    settings.paths();
+                            if (paths != null) {
+                                String folder = paths.targetFolder();
+                                if (folder != null
+                                        && !folder.isBlank()
+                                        && new File(folder).isDirectory()) {
+                                    targetFolder = folder;
+                                }
+                                String juchuPath = paths.juchuFilePath();
+                                if (juchuPath != null
+                                        && !juchuPath.isBlank()
+                                        && new File(juchuPath).isFile()) {
+                                    juchuFilePath = juchuPath;
+                                }
+                            }
+                            if (settings.comboChoices() != null
+                                    && !settings.comboChoices().isEmpty()) {
+                                applyComboChoices(settings.comboChoices().mergedWithDefaults());
+                            }
+                        });
     }
 
     private void saveSettings() {
-        Properties props = new Properties();
-        props.setProperty("targetFolder", targetFolder);
-        props.setProperty("juchuFilePath", juchuFilePath != null ? juchuFilePath : "");
-        try {
-            Files.createDirectories(SETTINGS_FILE.getParent());
-            try (FileOutputStream fos = new FileOutputStream(SETTINGS_FILE.toFile())) {
-                props.store(fos, "Request form reconciliation settings");
-            }
-        } catch (Exception e) {
-            System.err.println("Could not save settings: " + e.getMessage());
-        }
+        RequestFormInputSettingsStore.save(
+                uiEnvSnapshot, snapshotComboChoices(), targetFolder, juchuFilePath);
     }
 
     public static class InteractiveImageViewer extends Pane {

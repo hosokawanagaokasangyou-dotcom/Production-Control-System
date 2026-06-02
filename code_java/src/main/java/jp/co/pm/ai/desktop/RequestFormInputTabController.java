@@ -215,6 +215,13 @@ public final class RequestFormInputTabController {
                 : RequestFormComboChoices.empty();
     }
 
+    /** 依頼書入力設定をサマリ Excel 同フォルダへ保存する。 */
+    void persistInputSettings() {
+        if (reconciliationApp != null) {
+            reconciliationApp.persistInputSettings();
+        }
+    }
+
     JuchuHeaderAliasRegistry snapshotJuchuHeaderAliasRegistry() {
         if (reconciliationApp != null) {
             return reconciliationApp.juchuHeaderAliasRegistry();

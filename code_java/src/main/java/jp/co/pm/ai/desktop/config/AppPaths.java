@@ -1512,6 +1512,18 @@ public final class AppPaths {
     }
 
     /**
+     * 依頼書入力タブの ComboBox 候補・受注ファイルパス等（{@link
+     * jp.co.pm.ai.desktop.reconciliation.RequestFormInputSettingsStore}）。
+     */
+    public static final String REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME =
+            "request_form_input_settings.json";
+
+    /** {@link #summaryAiDispatchXlsxPath(Map)} と同一フォルダの依頼書入力設定 JSON。 */
+    public static Path requestFormInputSettingsJsonPath(Map<String, String> ui) {
+        return siblingOfSummaryAiDispatchWorkbook(ui, REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME);
+    }
+
+    /**
      * リポジトリ同梱の {@code code/json/stage1_exclude_rules.json}（作業コピー元・読込フォールバック）。
      */
     public static Path stage1ExcludeRulesJsonPathLegacyUnderCodeJson(Map<String, String> ui) {
