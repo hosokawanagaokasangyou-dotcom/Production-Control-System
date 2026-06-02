@@ -385,16 +385,15 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         txtRecordFilter.setPromptText("依頼No / ユーザー...");
         txtRecordFilter.setPrefWidth(160 * UI_WIDTH_SCALE);
         txtRecordFilter.textProperty().addListener((obs, oldVal, newVal) -> applyRecordFilter());
-        HBox filterModeBox = new HBox(10);
-        filterModeBox.setAlignment(Pos.CENTER_LEFT);
+        String radioStyle = "-fx-font-size: 11px;";
         rbAllRecordsFilter = new RadioButton("全部");
-        rbAllRecordsFilter.setStyle("-fx-font-size: 11px;");
+        rbAllRecordsFilter.setStyle(radioStyle);
         rbExistingOnlyFilter = new RadioButton("既存のみ");
-        rbExistingOnlyFilter.setStyle("-fx-font-size: 11px;");
+        rbExistingOnlyFilter.setStyle(radioStyle);
         rbNewOnlyFilter = new RadioButton("新規のみ");
-        rbNewOnlyFilter.setStyle("-fx-font-size: 11px;");
+        rbNewOnlyFilter.setStyle(radioStyle);
         rbJuchuWithoutOriginalFilter = new RadioButton("原本なし（受注のみ）");
-        rbJuchuWithoutOriginalFilter.setStyle("-fx-font-size: 11px;");
+        rbJuchuWithoutOriginalFilter.setStyle(radioStyle);
         rbJuchuWithoutOriginalFilter.setTooltip(
                 new Tooltip("依頼書原本にないが受注ファイルには存在するタスクのみを表示（入力日が新しい順）"));
         ToggleGroup recordListFilterGroup = new ToggleGroup();
@@ -405,19 +404,23 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         rbNewOnlyFilter,
                         rbJuchuWithoutOriginalFilter)) {
             rb.setToggleGroup(recordListFilterGroup);
+            rb.setMinWidth(Region.USE_PREF_SIZE);
+            rb.setMaxWidth(Double.MAX_VALUE);
             installRecordFilterRadioDeselectOnReselect(recordListFilterGroup, rb);
         }
         recordListFilterGroup.selectedToggleProperty().addListener((obs, oldT, newT) -> applyRecordFilter());
-        filterModeBox
-                .getChildren()
-                .addAll(
-                        rbAllRecordsFilter,
-                        rbExistingOnlyFilter,
-                        rbNewOnlyFilter,
-                        rbJuchuWithoutOriginalFilter);
-        filterRowPrimary.getChildren().addAll(lblSearch, txtRecordFilter, filterModeBox);
+        HBox filterModeRow1 = new HBox(12);
+        filterModeRow1.setAlignment(Pos.CENTER_LEFT);
+        filterModeRow1.getChildren().addAll(rbAllRecordsFilter, rbExistingOnlyFilter);
+        HBox filterModeRow2 = new HBox(12);
+        filterModeRow2.setAlignment(Pos.CENTER_LEFT);
+        filterModeRow2.getChildren().addAll(rbNewOnlyFilter, rbJuchuWithoutOriginalFilter);
+        VBox filterModePanel = new VBox(4);
+        filterModePanel.setFillWidth(true);
+        filterModePanel.getChildren().addAll(filterModeRow1, filterModeRow2);
+        filterRowPrimary.getChildren().addAll(lblSearch, txtRecordFilter);
         VBox filterPanel = new VBox(4);
-        filterPanel.getChildren().add(filterRowPrimary);
+        filterPanel.getChildren().addAll(filterRowPrimary, filterModePanel);
         
         comboRecord = new ComboBox<>();
         comboRecord.setMaxWidth(Double.MAX_VALUE);
