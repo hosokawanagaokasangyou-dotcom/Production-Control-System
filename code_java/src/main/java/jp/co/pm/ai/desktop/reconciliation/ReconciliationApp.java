@@ -99,6 +99,8 @@ public class ReconciliationApp {
     private ComboBox<OrderRecord> comboRecord;
     private TextField txtRecordFilter;
     private CheckBox chkNewOnlyFilter;
+    /** 依頼書原本なし・受注ファイルのみの一覧（入力日降順）。 */
+    private CheckBox chkJuchuWithoutOriginalFilter;
     private ObservableList<OrderRecord> orderRecords = FXCollections.observableArrayList();
     
     private GridPane sheetGrid;
@@ -363,8 +365,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         Label lblLeftTitle = new Label("受注データベース & 選択フィルタ");
         lblLeftTitle.getStyleClass().add("pane-title-left");
         
-        HBox filterBox = new HBox(5);
-        filterBox.setAlignment(Pos.CENTER_LEFT);
+        VBox filterPanel = new VBox(4);
+        HBox filterRowPrimary = new HBox(5);
+        filterRowPrimary.setAlignment(Pos.CENTER_LEFT);
         Label lblSearch = new Label("検索・絞り込み:");
         lblSearch.setStyle("-fx-font-weight: bold;");
         txtRecordFilter = new TextField();
@@ -373,8 +376,32 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         txtRecordFilter.textProperty().addListener((obs, oldVal, newVal) -> applyRecordFilter());
         chkNewOnlyFilter = new CheckBox("新規のみ");
         chkNewOnlyFilter.setStyle("-fx-font-size: 11px;");
-        chkNewOnlyFilter.selectedProperty().addListener((obs, oldV, newV) -> applyRecordFilter());
-        filterBox.getChildren().addAll(lblSearch, txtRecordFilter, chkNewOnlyFilter);
+        chkNewOnlyFilter
+                .selectedProperty()
+                .addListener(
+                        (obs, oldV, selected) -> {
+                            if (selected
+                                    && chkJuchuWithoutOriginalFilter != null
+                                    && chkJuchuWithoutOriginalFilter.isSelected()) {
+                                chkJuchuWithoutOriginalFilter.setSelected(false);
+                            }
+                            applyRecordFilter();
+                        });
+        filterRowPrimary.getChildren().addAll(lblSearch, txtRecordFilter, chkNewOnlyFilter);
+        chkJuchuWithoutOriginalFilter = new CheckBox("原本なし（受注ファイルのみ）");
+        chkJuchuWithoutOriginalFilter.setStyle("-fx-font-size: 11px;");
+        chkJuchuWithoutOriginalFilter.setTooltip(
+                new Tooltip("依頼書原本にないが受注ファイルには存在するタスクのみを表示（入力日が新しい順）"));
+        chkJuchuWithoutOriginalFilter
+                .selectedProperty()
+                .addListener(
+                        (obs, oldV, selected) -> {
+                            if (selected && chkNewOnlyFilter != null && chkNewOnlyFilter.isSelected()) {
+                                chkNewOnlyFilter.setSelected(false);
+                            }
+                            applyRecordFilter();
+                        });
+        filterPanel.getChildren().addAll(filterRowPrimary, chkJuchuWithoutOriginalFilter);
         
         comboRecord = new ComboBox<>();
         comboRecord.setMaxWidth(Double.MAX_VALUE);
@@ -408,7 +435,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
         });
         
-        leftContainer.getChildren().addAll(lblLeftTitle, filterBox, comboRecord);
+        leftContainer.getChildren().addAll(lblLeftTitle, filterPanel, comboRecord);
         
         // --- 1.1 BASIC INFO SECTION ---
         lblFormTitle = new Label("【基本情報・手修正フォーム】");
@@ -2607,9 +2634,18 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 if (finalSuccess) {
                     orderRecords.clear();
                     orderRecords.addAll(finalLoaded);
-                    applyRecordFilter();  // ファイルが存在するレコードのみ表示
-                    int visibleCount = (int) orderRecords.stream().filter(r -> hasExistingFile(r)).count();
-                    statusLabel.setText(String.format("読込完了: 全 %d 件中 %d 件 (依頼書あり)", orderRecords.size(), visibleCount));
+                    applyRecordFilter();
+                    int withOriginalCount =
+                            (int) orderRecords.stream().filter(this::hasExistingFile).count();
+                    int juchuOnlyCount =
+                            (int)
+                                    orderRecords.stream()
+                                            .filter(this::isJuchuRowWithoutRequestFormOriginal)
+                                            .count();
+                    statusLabel.setText(
+                            String.format(
+                                    "読込完了: 全 %d 件 / 依頼書あり %d 件 / 原本なし・受注のみ %d 件",
+                                    orderRecords.size(), withOriginalCount, juchuOnlyCount));
                     if (!finalHeaderWarnings.isEmpty()) {
                         statusLabel.setText(
                                 statusLabel.getText()
@@ -2773,9 +2809,15 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (comboRecord == null) {
             return;
         }
+        boolean juchuWithoutOriginal =
+                chkJuchuWithoutOriginalFilter != null && chkJuchuWithoutOriginalFilter.isSelected();
         ObservableList<OrderRecord> base = FXCollections.observableArrayList();
         for (OrderRecord rec : orderRecords) {
-            if (hasExistingFile(rec)) {
+            if (juchuWithoutOriginal) {
+                if (isJuchuRowWithoutRequestFormOriginal(rec)) {
+                    base.add(rec);
+                }
+            } else if (hasExistingFile(rec)) {
                 base.add(rec);
             }
         }
@@ -2792,7 +2834,72 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
             filtered.add(rec);
         }
+        if (juchuWithoutOriginal && filtered.size() > 1) {
+            FXCollections.sort(filtered, ReconciliationApp::compareRecordByInputDateDesc);
+        }
         comboRecord.setItems(filtered);
+    }
+
+    /**
+     * 依頼書原本が無い（または未検出）が受注ファイル行として存在するレコード。
+     * 「新規自動追加」は原本由来のため除外する。
+     */
+    boolean isJuchuRowWithoutRequestFormOriginal(OrderRecord rec) {
+        return isJuchuRowWithoutRequestFormOriginal(rec, this::hasExistingFile);
+    }
+
+    static boolean isJuchuRowWithoutRequestFormOriginal(
+            OrderRecord rec, java.util.function.Predicate<OrderRecord> hasOriginalFile) {
+        if (rec == null || hasOriginalFile.test(rec)) {
+            return false;
+        }
+        Map<String, String> db = rec.getDbValues();
+        if (db == null || db.isEmpty()) {
+            return false;
+        }
+        String status = rec.getStatus();
+        if (status != null && status.contains("新規")) {
+            return false;
+        }
+        return true;
+    }
+
+    static int compareRecordByInputDateDesc(OrderRecord a, OrderRecord b) {
+        return resolveRecordInputDate(b).compareTo(resolveRecordInputDate(a));
+    }
+
+    static java.time.LocalDate resolveRecordInputDate(OrderRecord rec) {
+        if (rec == null || rec.getDbValues() == null) {
+            return java.time.LocalDate.MIN;
+        }
+        return parseInputDateForSort(rec.getDbValues().get("入力日"));
+    }
+
+    static java.time.LocalDate parseInputDateForSort(String val) {
+        if (val == null || val.strip().isEmpty()) {
+            return java.time.LocalDate.MIN;
+        }
+        String text = val.strip();
+        java.util.List<String> fmts =
+                java.util.Arrays.asList(
+                        "yyyy-MM-dd HH:mm:ss",
+                        "yyyy/MM/dd HH:mm:ss",
+                        "yyyy-MM-dd",
+                        "yyyy/MM/dd",
+                        "yyyyMMdd");
+        for (String fmt : fmts) {
+            try {
+                java.time.format.DateTimeFormatter dtf =
+                        java.time.format.DateTimeFormatter.ofPattern(fmt);
+                if (fmt.contains("HH")) {
+                    return java.time.LocalDateTime.parse(text, dtf).toLocalDate();
+                }
+                return java.time.LocalDate.parse(text, dtf);
+            } catch (Exception ignored) {
+                // try next
+            }
+        }
+        return java.time.LocalDate.MIN;
     }
 
     /** 依頼一覧の検索文字列・新規のみチェックに合致するか。 */
