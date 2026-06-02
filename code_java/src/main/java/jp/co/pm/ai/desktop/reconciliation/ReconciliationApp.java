@@ -1337,24 +1337,43 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void applyWorkInstructionDefaultsToFormCombos() {
+        applyWorkInstructionDefaultsToFormCombos(false);
+    }
+
+    /** 依頼一覧から新規・未登録行を選んだとき、区分が空なら設定タブの既定値を入れる。 */
+    private void applyWorkInstructionDefaultsToFormCombosIfBlank() {
+        applyWorkInstructionDefaultsToFormCombos(true);
+    }
+
+    private void applyWorkInstructionDefaultsToFormCombos(boolean onlyIfBlank) {
         String inputKbn = defaultInputKbnForNewRow();
         if (!inputKbn.isBlank()) {
-            if (newCmbFormInputKbn != null) {
+            if (newCmbFormInputKbn != null
+                    && (!onlyIfBlank || isComboValueBlank(newCmbFormInputKbn))) {
                 newCmbFormInputKbn.setValue(inputKbn);
             }
-            if (newCmbInputKbn != null) {
+            if (newCmbInputKbn != null && (!onlyIfBlank || isComboValueBlank(newCmbInputKbn))) {
                 newCmbInputKbn.setValue(inputKbn);
             }
         }
         String kakoKbn = defaultKakoKbnForNewRow();
         if (!kakoKbn.isBlank()) {
-            if (newCmbFormKakoKbn != null) {
+            if (newCmbFormKakoKbn != null
+                    && (!onlyIfBlank || isComboValueBlank(newCmbFormKakoKbn))) {
                 newCmbFormKakoKbn.setValue(kakoKbn);
             }
-            if (newCmbKakoKbn != null) {
+            if (newCmbKakoKbn != null && (!onlyIfBlank || isComboValueBlank(newCmbKakoKbn))) {
                 newCmbKakoKbn.setValue(kakoKbn);
             }
         }
+    }
+
+    private static boolean isComboValueBlank(ComboBox<String> combo) {
+        if (combo == null) {
+            return true;
+        }
+        String value = combo.getValue();
+        return value == null || value.isBlank();
     }
 
     /** セッション／プロファイル保存用: 現在の ComboBox 候補リストと入力既定値。 */
@@ -3039,6 +3058,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         newCmbFormYoto.setValue(activeVals.getOrDefault("用途", ""));
         newCmbFormInputKbn.setValue(activeVals.getOrDefault("入力区分", ""));
         newCmbFormKakoKbn.setValue(activeVals.getOrDefault("加工区分", ""));
+        applyWorkInstructionDefaultsToFormCombosIfBlank();
         refreshFormInputTantoLabel();
         newTxtFormTokki1.setText(activeVals.getOrDefault("特記事項1", ""));
         newTxtFormTokki2.setText(activeVals.getOrDefault("特記事項2", ""));
