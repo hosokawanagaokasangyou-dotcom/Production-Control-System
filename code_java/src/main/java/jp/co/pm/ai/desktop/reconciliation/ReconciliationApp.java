@@ -98,9 +98,8 @@ public class ReconciliationApp {
 
     private ComboBox<OrderRecord> comboRecord;
     private TextField txtRecordFilter;
-    private CheckBox chkNewOnlyFilter;
-    /** 依頼書原本なし・受注ファイルのみの一覧（入力日降順）。 */
-    private CheckBox chkJuchuWithoutOriginalFilter;
+    private RadioButton rbNewOnlyFilter;
+    private RadioButton rbJuchuWithoutOriginalFilter;
     private ObservableList<OrderRecord> orderRecords = FXCollections.observableArrayList();
     
     private GridPane sheetGrid;
@@ -365,8 +364,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         Label lblLeftTitle = new Label("受注データベース & 選択フィルタ");
         lblLeftTitle.getStyleClass().add("pane-title-left");
         
-        VBox filterPanel = new VBox(4);
-        HBox filterRowPrimary = new HBox(5);
+        HBox filterRowPrimary = new HBox(8);
         filterRowPrimary.setAlignment(Pos.CENTER_LEFT);
         Label lblSearch = new Label("検索・絞り込み:");
         lblSearch.setStyle("-fx-font-weight: bold;");
@@ -374,34 +372,24 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         txtRecordFilter.setPromptText("依頼No / ユーザー...");
         txtRecordFilter.setPrefWidth(160 * UI_WIDTH_SCALE);
         txtRecordFilter.textProperty().addListener((obs, oldVal, newVal) -> applyRecordFilter());
-        chkNewOnlyFilter = new CheckBox("新規のみ");
-        chkNewOnlyFilter.setStyle("-fx-font-size: 11px;");
-        chkNewOnlyFilter
-                .selectedProperty()
-                .addListener(
-                        (obs, oldV, selected) -> {
-                            if (selected
-                                    && chkJuchuWithoutOriginalFilter != null
-                                    && chkJuchuWithoutOriginalFilter.isSelected()) {
-                                chkJuchuWithoutOriginalFilter.setSelected(false);
-                            }
-                            applyRecordFilter();
-                        });
-        filterRowPrimary.getChildren().addAll(lblSearch, txtRecordFilter, chkNewOnlyFilter);
-        chkJuchuWithoutOriginalFilter = new CheckBox("原本なし（受注ファイルのみ）");
-        chkJuchuWithoutOriginalFilter.setStyle("-fx-font-size: 11px;");
-        chkJuchuWithoutOriginalFilter.setTooltip(
+        HBox filterModeBox = new HBox(12);
+        filterModeBox.setAlignment(Pos.CENTER_LEFT);
+        rbNewOnlyFilter = new RadioButton("新規のみ");
+        rbNewOnlyFilter.setStyle("-fx-font-size: 11px;");
+        rbJuchuWithoutOriginalFilter = new RadioButton("原本なし（受注ファイルのみ）");
+        rbJuchuWithoutOriginalFilter.setStyle("-fx-font-size: 11px;");
+        rbJuchuWithoutOriginalFilter.setTooltip(
                 new Tooltip("依頼書原本にないが受注ファイルには存在するタスクのみを表示（入力日が新しい順）"));
-        chkJuchuWithoutOriginalFilter
-                .selectedProperty()
-                .addListener(
-                        (obs, oldV, selected) -> {
-                            if (selected && chkNewOnlyFilter != null && chkNewOnlyFilter.isSelected()) {
-                                chkNewOnlyFilter.setSelected(false);
-                            }
-                            applyRecordFilter();
-                        });
-        filterPanel.getChildren().addAll(filterRowPrimary, chkJuchuWithoutOriginalFilter);
+        ToggleGroup recordListFilterGroup = new ToggleGroup();
+        rbNewOnlyFilter.setToggleGroup(recordListFilterGroup);
+        rbJuchuWithoutOriginalFilter.setToggleGroup(recordListFilterGroup);
+        recordListFilterGroup.selectedToggleProperty().addListener((obs, oldT, newT) -> applyRecordFilter());
+        installRecordFilterRadioDeselectOnReselect(recordListFilterGroup, rbNewOnlyFilter);
+        installRecordFilterRadioDeselectOnReselect(recordListFilterGroup, rbJuchuWithoutOriginalFilter);
+        filterModeBox.getChildren().addAll(rbNewOnlyFilter, rbJuchuWithoutOriginalFilter);
+        filterRowPrimary.getChildren().addAll(lblSearch, txtRecordFilter, filterModeBox);
+        VBox filterPanel = new VBox(4);
+        filterPanel.getChildren().add(filterRowPrimary);
         
         comboRecord = new ComboBox<>();
         comboRecord.setMaxWidth(Double.MAX_VALUE);
@@ -2805,12 +2793,26 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         return new File(targetFolder + "\\" + fName).exists();
     }
 
+    /**
+     * 選択中のラジオを再クリックしたときは選択解除し、依頼書あり一覧（既定）へ戻す。
+     */
+    private static void installRecordFilterRadioDeselectOnReselect(
+            ToggleGroup group, RadioButton radio) {
+        radio.addEventFilter(
+                javafx.scene.input.MouseEvent.MOUSE_PRESSED,
+                e -> {
+                    if (radio.isSelected()) {
+                        Platform.runLater(() -> group.selectToggle(null));
+                    }
+                });
+    }
+
     private void applyRecordFilter() {
         if (comboRecord == null) {
             return;
         }
         boolean juchuWithoutOriginal =
-                chkJuchuWithoutOriginalFilter != null && chkJuchuWithoutOriginalFilter.isSelected();
+                rbJuchuWithoutOriginalFilter != null && rbJuchuWithoutOriginalFilter.isSelected();
         ObservableList<OrderRecord> base = FXCollections.observableArrayList();
         for (OrderRecord rec : orderRecords) {
             if (juchuWithoutOriginal) {
@@ -2821,7 +2823,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 base.add(rec);
             }
         }
-        boolean newOnly = chkNewOnlyFilter != null && chkNewOnlyFilter.isSelected();
+        boolean newOnly = rbNewOnlyFilter != null && rbNewOnlyFilter.isSelected();
         String query =
                 txtRecordFilter != null && txtRecordFilter.getText() != null
                         ? txtRecordFilter.getText().strip()
