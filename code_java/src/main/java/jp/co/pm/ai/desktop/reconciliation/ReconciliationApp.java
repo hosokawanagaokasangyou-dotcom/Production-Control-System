@@ -97,6 +97,8 @@ public class ReconciliationApp {
     private volatile boolean juchuTransferInProgress = false;
 
     private ComboBox<OrderRecord> comboRecord;
+    private TextField txtRecordFilter;
+    private CheckBox chkNewOnlyFilter;
     private ObservableList<OrderRecord> orderRecords = FXCollections.observableArrayList();
     
     private GridPane sheetGrid;
@@ -365,11 +367,14 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         filterBox.setAlignment(Pos.CENTER_LEFT);
         Label lblSearch = new Label("検索・絞り込み:");
         lblSearch.setStyle("-fx-font-weight: bold;");
-        TextField txtSearch = new TextField();
-        txtSearch.setPromptText("依頼No / ユーザー...");
-        txtSearch.setPrefWidth(160 * UI_WIDTH_SCALE);
-        txtSearch.textProperty().addListener((obs, oldVal, newVal) -> filterTable(newVal));
-        filterBox.getChildren().addAll(lblSearch, txtSearch);
+        txtRecordFilter = new TextField();
+        txtRecordFilter.setPromptText("依頼No / ユーザー...");
+        txtRecordFilter.setPrefWidth(160 * UI_WIDTH_SCALE);
+        txtRecordFilter.textProperty().addListener((obs, oldVal, newVal) -> applyRecordFilter());
+        chkNewOnlyFilter = new CheckBox("新規のみ");
+        chkNewOnlyFilter.setStyle("-fx-font-size: 11px;");
+        chkNewOnlyFilter.selectedProperty().addListener((obs, oldV, newV) -> applyRecordFilter());
+        filterBox.getChildren().addAll(lblSearch, txtRecordFilter, chkNewOnlyFilter);
         
         comboRecord = new ComboBox<>();
         comboRecord.setMaxWidth(Double.MAX_VALUE);
@@ -2111,7 +2116,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             return;
         }
         OrderRecord selected = comboRecord.getSelectionModel().getSelectedItem();
-        filterTable("");
+        applyRecordFilter();
         if (selected != null) {
             comboRecord.getSelectionModel().select(selected);
         }
@@ -2602,7 +2607,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 if (finalSuccess) {
                     orderRecords.clear();
                     orderRecords.addAll(finalLoaded);
-                    filterTable("");  // ファイルが存在するレコードのみ表示
+                    applyRecordFilter();  // ファイルが存在するレコードのみ表示
                     int visibleCount = (int) orderRecords.stream().filter(r -> hasExistingFile(r)).count();
                     statusLabel.setText(String.format("読込完了: 全 %d 件中 %d 件 (依頼書あり)", orderRecords.size(), visibleCount));
                     if (!finalHeaderWarnings.isEmpty()) {
@@ -2764,25 +2769,49 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         return new File(targetFolder + "\\" + fName).exists();
     }
 
-    private void filterTable(String query) {
-        ObservableList<OrderRecord> base = FXCollections.observableArrayList();
-        for (OrderRecord rec : orderRecords) {
-            if (hasExistingFile(rec)) base.add(rec);
-        }
-        
-        if (query == null || query.isEmpty()) {
-            comboRecord.setItems(base);
+    private void applyRecordFilter() {
+        if (comboRecord == null) {
             return;
         }
-        
-        ObservableList<OrderRecord> filtered = FXCollections.observableArrayList();
-        String q = query.toLowerCase();
-        for (OrderRecord rec : base) {
-            if (rec.getReqNo().toLowerCase().contains(q) || rec.getUser().toLowerCase().contains(q)) {
-                filtered.add(rec);
+        ObservableList<OrderRecord> base = FXCollections.observableArrayList();
+        for (OrderRecord rec : orderRecords) {
+            if (hasExistingFile(rec)) {
+                base.add(rec);
             }
         }
+        boolean newOnly = chkNewOnlyFilter != null && chkNewOnlyFilter.isSelected();
+        String query =
+                txtRecordFilter != null && txtRecordFilter.getText() != null
+                        ? txtRecordFilter.getText().strip()
+                        : "";
+        String q = query.toLowerCase(Locale.ROOT);
+        ObservableList<OrderRecord> filtered = FXCollections.observableArrayList();
+        for (OrderRecord rec : base) {
+            if (!recordMatchesFilter(rec, q, newOnly)) {
+                continue;
+            }
+            filtered.add(rec);
+        }
         comboRecord.setItems(filtered);
+    }
+
+    /** 依頼一覧の検索文字列・新規のみチェックに合致するか。 */
+    static boolean recordMatchesFilter(OrderRecord rec, String queryLower, boolean newOnly) {
+        if (rec == null) {
+            return false;
+        }
+        if (newOnly) {
+            String status = rec.getStatus();
+            if (status == null || !status.contains("新規")) {
+                return false;
+            }
+        }
+        if (queryLower == null || queryLower.isEmpty()) {
+            return true;
+        }
+        String reqNo = rec.getReqNo() != null ? rec.getReqNo().toLowerCase(Locale.ROOT) : "";
+        String user = rec.getUser() != null ? rec.getUser().toLowerCase(Locale.ROOT) : "";
+        return reqNo.contains(queryLower) || user.contains(queryLower);
     }
 
     // --- LOGIC: RENDER ORIGINAL SHEET VIEW AND FILL FORM ---
