@@ -47,13 +47,12 @@ class PlanInputStage3DispatchableViolationSupportTest {
     }
 
     @Test
-    void usesOverrideRawInputDateWhenPresent() {
+    void usesBaseRawInputDateColumn() {
         List<String> headers =
                 List.of(
                         PlanInputRawInputDateShift.COL_RAW_INPUT_DATE,
-                        PlanInputRawInputDateShift.COL_RAW_INPUT_DATE_OVERRIDE,
                         PlanInputStage3DispatchableViolationSupport.COL_DISPATCHABLE_DATETIME);
-        List<String> row = List.of("2026/6/8", "2026/6/10", "2026/6/10 8:45");
+        List<String> row = List.of("2026/6/10", "2026/6/10 8:45");
         assertTrue(
                 PlanInputStage3DispatchableViolationSupport.isDispatchableBeforeRawInputLimit(
                         headers, row));

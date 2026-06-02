@@ -12,7 +12,7 @@ import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetCell;
 
 /**
- * 入力3表: 原反投入日（上書き優先）+ {@link #RAW_INPUT_SAME_DAY_START} が {@code 配台可能日時} より後かを判定する。
+ * 入力3表: 原反投入日 + {@link #RAW_INPUT_SAME_DAY_START} が {@code 配台可能日時} より後かを判定する。
  *
  * <p>Python {@code DISPATCHABLE_FROM_TIME}（12:45）と整合。
  */
@@ -25,17 +25,13 @@ public final class PlanInputStage3DispatchableViolationSupport {
 
     private PlanInputStage3DispatchableViolationSupport() {}
 
-    /** 実効原反投入日（{@link PlanInputRawInputDateShift#COL_RAW_INPUT_DATE_OVERRIDE} 優先）。 */
+    /** 原反投入日（列 {@link PlanInputRawInputDateShift#COL_RAW_INPUT_DATE}）。 */
     public static Optional<LocalDate> effectiveRawInputDate(List<String> headers, List<String> row) {
         if (headers == null || row == null) {
             return Optional.empty();
         }
-        int idxOverride = headers.indexOf(PlanInputRawInputDateShift.COL_RAW_INPUT_DATE_OVERRIDE);
         int idxBase = headers.indexOf(PlanInputRawInputDateShift.COL_RAW_INPUT_DATE);
-        String override = cellAt(row, idxOverride);
-        String base = cellAt(row, idxBase);
-        String source = !override.isBlank() ? override : base;
-        return PlanInputDateColumnSupport.parseCellValue(source);
+        return PlanInputDateColumnSupport.parseCellValue(cellAt(row, idxBase));
     }
 
     /**

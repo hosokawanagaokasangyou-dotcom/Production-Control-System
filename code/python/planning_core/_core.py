@@ -1996,10 +1996,29 @@ PLAN_OVERRIDE_COLUMNS = [
     PLAN_COL_SPECIAL_REMARK,
     PLAN_COL_AI_PARSE,
 ]
+# UI・段階1/2 では廃止。旧シート読込時に基底列へマージして列削除する。
+PLAN_DEPRECATED_OVERRIDE_COLUMNS = frozenset(
+    {
+        PLAN_COL_SPEED_OVERRIDE,
+        PLAN_COL_RAW_INPUT_DATE_OVERRIDE,
+        PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE,
+    }
+)
+PLAN_OVERRIDE_TO_BASE_COLUMN = {
+    PLAN_COL_SPEED_OVERRIDE: TASK_COL_SPEED,
+    PLAN_COL_RAW_INPUT_DATE_OVERRIDE: TASK_COL_RAW_INPUT_DATE,
+    PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE: PLAN_COL_DISPATCHABLE_DATETIME,
+}
 # 矛盾検出でリセット対象にれる列（見出し行の文言と一致すること）
 PLAN_CONFLICT_STYLABLE_COLS = tuple(PLAN_OVERRIDE_COLUMNS)
 # 段階1再抽出時」既存「配台計画_タスク入力」から継承れる列（AIの解析結果列は毎回空に戻れ）
-PLAN_STAGE1_MERGE_COLUMNS = tuple(c for c in PLAN_OVERRIDE_COLUMNS if c != PLAN_COL_AI_PARSE)
+PLAN_STAGE1_MERGE_COLUMNS = tuple(
+    PLAN_OVERRIDE_TO_BASE_COLUMN[c]
+    if c in PLAN_DEPRECATED_OVERRIDE_COLUMNS
+    else c
+    for c in PLAN_OVERRIDE_COLUMNS
+    if c != PLAN_COL_AI_PARSE
+)
 # 上書き以外で」再抽出時に旧シートから引き継ぎ列（セルは空でないとしのみ）
 # 配台試行順番は毎回空クリア後に fill_plan_dispatch_trial_order_column_stage1 で付け直すが対象外。
 PLAN_STAGE1_MERGE_EXTRA_COLUMNS = (PLAN_COL_ROLL_UNIT_LENGTH,)
@@ -2026,11 +2045,9 @@ def plan_input_sheet_column_order():
     2. 加工計画DATA 由来（SOURCE_BASE_COLUMNS）… 依頼NO〜実出来高まで（換算数量の次に未加工→配台使用残数量→配台ロール数、製品名の直後に(製品)ロール単位長さ・製品幅、原反投入日の直後に在庫場所・使用原反の直後に(原反)ロール単位長さ・原反幅）
        （(製品)ロール単位長さは製品名テーブル→製品名寸法のみ。(原反)ロール単位長さは使用原反テーブル→使用原反文字列の寸法→いずれも不可なら「不明」）
     3. 加工工程の決定プロセスの因孝
-    4. 上書き列… 複数列の直後に「（元）…」参照列。AI特別指定_解析のみ参照列なし。
-       （日付系上書きに 原反投入日_上書き を含む。空白時は列「原反投入日」を配台に使用）
+    4. 手入力列… 担当OP_指定・特別指定_備考・AI特別指定_解析 等（*_上書き 列は廃止し基底列を直接編集）
 
-    「加工速度」列は master.xlsm「speed」（基本速度×実稼働比率）で埋め、配台の実効速度は
-    「加工速度_上書き」→「加工速度」の列のみ（備考 AI の speed_override は速度に使わない）。
+    「加工速度」列は master.xlsm「speed」（基本速度×実稼働比率）で埋め、配台の実効速度は列「加工速度」のみ。
     global_speed_rules 等で変える実効速度は計画シート列には出ないが、配台で確定した値は結果_タスク一覧の「加工速度」列に出力される。
     """
     cols = [RESULT_TASK_COL_DISPATCH_TRIAL_ORDER, PLAN_COL_EXCLUDE_FROM_ASSIGNMENT]
@@ -2053,6 +2070,8 @@ def plan_input_sheet_column_order():
     for c in PLAN_OVERRIDE_COLUMNS:
         if c == PLAN_COL_EXCLUDE_FROM_ASSIGNMENT:
             continue
+        if c in PLAN_DEPRECATED_OVERRIDE_COLUMNS:
+            continue
         if c == PLAN_COL_AI_PARSE:
             cols.append(c)
         else:
@@ -2064,12 +2083,10 @@ def plan_input_sheet_column_order():
 def plan_input_stage3_sheet_column_order():
     """段階3 入力3表の列順。入力1表の列順の先頭に枝番識別列（元依頼NO・配台枝番）を足したもの。
 
-    段階3.0〜3.2 では配台開始下限に ``配台可能日時`` 列のみを用いるため、
-    ``配台可能日時_上書き`` と ``（元）配台可能日時_上書き`` は含めない。
+    段階3.0〜3.2 では配台開始下限に ``配台可能日時`` 列のみを用いる（*_上書き 列は廃止）。
     """
-    excluded = {
-        PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE,
-        plan_reference_column_name(PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE),
+    excluded = set(PLAN_DEPRECATED_OVERRIDE_COLUMNS) | {
+        plan_reference_column_name(c) for c in PLAN_DEPRECATED_OVERRIDE_COLUMNS
     }
     base = [c for c in plan_input_sheet_column_order() if c not in excluded]
     return [PLAN_COL_PARENT_TASK_ID, PLAN_COL_BRANCH_SEQ] + base
@@ -2135,6 +2152,8 @@ def _refresh_plan_reference_columns(df, req_map: dict, need_rules: list):
                 continue
             if oc == PLAN_COL_EXCLUDE_FROM_ASSIGNMENT:
                 continue
+            if oc in PLAN_DEPRECATED_OVERRIDE_COLUMNS:
+                continue
             ref_col = plan_reference_column_name(oc)
             if ref_col not in df.columns:
                 continue
@@ -2165,6 +2184,8 @@ def _apply_plan_input_visual_format(path: str, sheet_name: str = "タスク一�
             return
         for oc in PLAN_OVERRIDE_COLUMNS:
             if oc == PLAN_COL_AI_PARSE:
+                continue
+            if oc in PLAN_DEPRECATED_OVERRIDE_COLUMNS:
                 continue
             ci = col_1based.get(oc)
             if not ci:
@@ -4695,24 +4716,13 @@ def format_dispatchable_datetime_cell(dt) -> str:
 
 
 def resolve_dispatchable_datetime_from_plan_row(row, run_date=None):
-    """配台計画1行から配台可能日時を解決（上書き列 → 算出列 → 原反投入日から算出 の順）。"""
-    ov = parse_optional_datetime(
-        _planning_df_cell_scalar(row, PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE)
-    )
-    if ov is not None:
-        return ov
+    """配台計画1行から配台可能日時を解決（列「配台可能日時」→ 原反投入日から算出 の順）。"""
     col = parse_optional_datetime(
         _planning_df_cell_scalar(row, PLAN_COL_DISPATCHABLE_DATETIME)
     )
     if col is not None:
         return col
-    raw = parse_optional_date(
-        _planning_df_cell_scalar(row, PLAN_COL_RAW_INPUT_DATE_OVERRIDE)
-    )
-    if raw is None:
-        raw = parse_optional_date(
-            _planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE)
-        )
+    raw = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE))
     return compute_dispatchable_datetime(raw, run_date=run_date)
 
 
@@ -6310,6 +6320,36 @@ def _apply_planning_sheet_post_load_mutations(
             )
 
 
+def _migrate_deprecated_plan_override_columns(df: "pd.DataFrame") -> "pd.DataFrame":
+    """廃止した *_上書き 列の値を基底列へ移し、参照列・上書き列を削除する。"""
+    if df is None or df.empty:
+        return df
+    for oc, base in PLAN_OVERRIDE_TO_BASE_COLUMN.items():
+        if oc not in df.columns:
+            continue
+        if base not in df.columns:
+            df[base] = ""
+        for i in df.index:
+            ov = df.at[i, oc]
+            if ov is None or (isinstance(ov, float) and pd.isna(ov)):
+                continue
+            if isinstance(ov, str) and not str(ov).strip():
+                continue
+            cur = df.at[i, base]
+            if cur is None or (isinstance(cur, float) and pd.isna(cur)):
+                df.at[i, base] = ov
+                continue
+            if isinstance(cur, str) and not str(cur).strip():
+                df.at[i, base] = ov
+    drop = list(PLAN_DEPRECATED_OVERRIDE_COLUMNS) + [
+        plan_reference_column_name(c) for c in PLAN_DEPRECATED_OVERRIDE_COLUMNS
+    ]
+    present = [c for c in drop if c in df.columns]
+    if present:
+        df = df.drop(columns=present)
+    return df
+
+
 def load_planning_tasks_df():
     """
     2段階目用: 環境変数 ``PM_AI_PLAN_INPUT_PATH`` の表（CSV / Parquet / xlsx）を読み込む。
@@ -6347,6 +6387,7 @@ def load_planning_tasks_df():
     else:
         df = read_tabular_dataframe(_plan_alt, sheet_name=PLAN_INPUT_SHEET_NAME)
     df.columns = df.columns.str.strip()
+    df = _migrate_deprecated_plan_override_columns(df)
     df = _align_dataframe_headers_to_canonical(
         df, plan_input_sheet_column_order()
     )
@@ -12296,13 +12337,7 @@ def _global_override_preferred_operator_for_task(tpref, task_id) -> str | None:
 
 
 def _planning_speed_override_sheet_column_only(row) -> float | None:
-    """
-    配台シミュレーションの実効速度のうち、列「加工速度」を上書きする値（m/分）。
-    列「加工速度_上書き」に正の数があるときのみ返す。無いときは None（列「加工速度」を採用）。
-    """
-    cv = parse_float_safe(row.get(PLAN_COL_SPEED_OVERRIDE), None)
-    if cv is not None and cv > 0:
-        return float(cv)
+    """廃止: 加工速度は列「加工速度」のみ。互換のため常に None。"""
     return None
 
 
@@ -12392,12 +12427,12 @@ def detect_planning_remark_ai_conflicts(row, ai_for_tid):
         return set()
     out = set()
 
-    if _plan_row_cell_nonempty(row, PLAN_COL_SPEED_OVERRIDE):
-        cv = parse_float_safe(row.get(PLAN_COL_SPEED_OVERRIDE), None)
+    if _plan_row_cell_nonempty(row, TASK_COL_SPEED):
+        cv = parse_float_safe(row.get(TASK_COL_SPEED), None)
         if cv is not None and cv > 0:
             av = _ai_float_for_conflict(ai, "speed_override")
             if av is not None and abs(cv - av) > 1e-5:
-                out.add(PLAN_COL_SPEED_OVERRIDE)
+                out.add(TASK_COL_SPEED)
 
     if _plan_row_cell_nonempty(row, PLAN_COL_PREFERRED_OP):
         cv = _normalize_person_name_for_match(row.get(PLAN_COL_PREFERRED_OP))
@@ -13155,23 +13190,7 @@ def build_task_queue_from_planning_df(
         raw_input_sheet = parse_optional_date(
             _planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE)
         )
-        raw_input_date_ov = parse_optional_date(
-            _planning_df_cell_scalar(row, PLAN_COL_RAW_INPUT_DATE_OVERRIDE)
-        )
-        raw_input_date = (
-            raw_input_date_ov if raw_input_date_ov is not None else raw_input_sheet
-        )
-        if (
-            raw_input_date_ov is not None
-            and raw_input_sheet is not None
-            and raw_input_date_ov != raw_input_sheet
-        ):
-            logging.info(
-                "原反投入日_上書きを採用: 依頼NO=%s シート原反投入日=%s 上書き=%s",
-                task_id,
-                raw_input_sheet,
-                raw_input_date_ov,
-            )
+        raw_input_date = raw_input_sheet
 
         in_progress = done_qty > 0.0
         if in_progress and _stage2_truthy_env("PM_AI_STAGE2_SKIP_IN_PROGRESS_DISPATCH"):
@@ -13694,6 +13713,7 @@ def _merge_plan_sheet_user_overrides(out_df):
         logging.info("段階1: 既存の配台シートを読めないため上書き継承をスキップ (%s)", e)
         return out_df
     df_old.columns = df_old.columns.str.strip()
+    df_old = _migrate_deprecated_plan_override_columns(df_old)
     df_old = _align_dataframe_headers_to_canonical(
         df_old,
         plan_input_sheet_column_order(),
@@ -17610,9 +17630,6 @@ def run_stage1_extract():
             rec[PLAN_COL_PROCESS_FACTOR] = f"{machine}+{machine_name}"
         else:
             rec[PLAN_COL_PROCESS_FACTOR] = f"{machine}+"
-        rec[PLAN_COL_SPEED_OVERRIDE] = ""
-        rec[PLAN_COL_RAW_INPUT_DATE_OVERRIDE] = ""
-        rec[PLAN_COL_DISPATCHABLE_DATETIME_OVERRIDE] = ""
         _raw_for_dispatch = parse_optional_date(rec.get(TASK_COL_RAW_INPUT_DATE))
         rec[PLAN_COL_DISPATCHABLE_DATETIME] = format_dispatchable_datetime_cell(
             compute_dispatchable_datetime(_raw_for_dispatch)
@@ -22386,44 +22403,43 @@ def _dataframe_shift_raw_input_dates_minus_one_day_for_task_ids(
     task_ids: set[str],
 ) -> int:
     """
-    依頼NO が task_ids に含まれる行について、原反投入日・原反投入日_上書きを解釈できたセルのみ 1 暦日前にずらす。
+    依頼NO が task_ids に含まれる行について、原反投入日を解釈できたセルのみ 1 暦日前にずらす。
     変更したセル数を返す。
     """
     if not task_ids:
         return 0
     n_changed = 0
-    for col in (TASK_COL_RAW_INPUT_DATE, PLAN_COL_RAW_INPUT_DATE_OVERRIDE):
-        if col not in df.columns:
+    col = TASK_COL_RAW_INPUT_DATE
+    if col not in df.columns:
+        return 0
+    ci = df.columns.get_loc(col)
+    if isinstance(ci, slice):
+        return 0
+    try:
+        col_idx = ci.__index__()
+    except (AttributeError, TypeError):
+        return 0
+    try:
+        col_dtype = df.dtypes.iloc[col_idx]
+    except Exception:
+        col_dtype = None
+    for ri in range(len(df)):
+        tid = planning_task_id_str_from_plan_row(df.iloc[ri])
+        if tid not in task_ids:
             continue
-        ci = df.columns.get_loc(col)
-        if isinstance(ci, slice):
+        val = df.iat[ri, col_idx]
+        d = parse_optional_date(val)
+        if d is None:
             continue
-        try:
-            col_idx = ci.__index__()
-        except (AttributeError, TypeError):
-            continue
-        try:
-            col_dtype = df.dtypes.iloc[col_idx]
-        except Exception:
-            col_dtype = None
-        for ri in range(len(df)):
-            tid = planning_task_id_str_from_plan_row(df.iloc[ri])
-            if tid not in task_ids:
-                continue
-            val = df.iat[ri, col_idx]
-            d = parse_optional_date(val)
-            if d is None:
-                continue
-            new_d = d - timedelta(days=1)
-            # datetime64 列には python の date を直接入れられない（pandas 3.x で TypeError）
-            _cell_val = (
-                pd.Timestamp(new_d)
-                if col_dtype is not None
-                and pd.api.types.is_datetime64_any_dtype(col_dtype)
-                else new_d
-            )
-            df.iat[ri, col_idx] = _cell_val
-            n_changed += 1
+        new_d = d - timedelta(days=1)
+        _cell_val = (
+            pd.Timestamp(new_d)
+            if col_dtype is not None
+            and pd.api.types.is_datetime64_any_dtype(col_dtype)
+            else new_d
+        )
+        df.iat[ri, col_idx] = _cell_val
+        n_changed += 1
     return n_changed
 
 
@@ -22445,11 +22461,6 @@ def _build_result_sheet_effective_raw_input_date_by_line(
         if not _tid or not _mach:
             continue
         _rid = parse_optional_date(_planning_df_cell_scalar(_r, TASK_COL_RAW_INPUT_DATE))
-        _rid_ov = parse_optional_date(
-            _planning_df_cell_scalar(_r, PLAN_COL_RAW_INPUT_DATE_OVERRIDE)
-        )
-        if _rid_ov is not None:
-            _rid = _rid_ov
         if isinstance(_rid, datetime):
             _rid = _rid.date()
         out[(_tid, _mach)] = _rid if isinstance(_rid, date) else None

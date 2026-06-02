@@ -596,6 +596,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         btnNewRecord.getStyleClass().add("btn-new-record");
         btnNewRecord.setOnAction(e -> {
             selectedRecord = null;
+            if (comboRecord != null) {
+                comboRecord.getSelectionModel().clearSelection();
+            }
+            clearOriginalSheetPreview();
+            resetDiscrepancyLabelForNewEntry();
             txtReqNo.clear();
             txtReqNo.setEditable(true);
             txtReqNo.setPromptText("新規の依頼Noを入力");
@@ -1444,7 +1449,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         newTxtFormTokki1.setText("");
         newTxtFormTokki2.setText("");
         newTxtFormTokki3.setText("");
-        if (!optYoto.isEmpty()) newCmbFormYoto.setValue(optYoto.get(0));
+        if (newCmbFormYoto != null) {
+            newCmbFormYoto.setValue(null);
+        }
         if (!optUser.isEmpty()) newCmbFormUser.setValue(optUser.get(0));
         applyWorkInstructionDefaultsToFormCombos();
         refreshFormInputTantoLabel();
@@ -2978,11 +2985,33 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (selectedRecord != null) {
             renderOriginalSheetInGrid(selectedRecord);
         } else {
-            sheetGrid.getChildren().clear();
-            currentPreviewOriginalFile = null;
-            refreshPreviewFileHeader();
+            clearOriginalSheetPreview();
         }
         enqueueBackgroundCacheTasks();
+    }
+
+    /** 依頼レコード未選択・新規追加時: プレビュー領域を空にする。 */
+    private void clearOriginalSheetPreview() {
+        if (sheetGrid != null) {
+            sheetGrid.getChildren().clear();
+        }
+        currentPreviewOriginalFile = null;
+        refreshPreviewFileHeader();
+    }
+
+    private void resetDiscrepancyLabelForNewEntry() {
+        if (discrepancyLabel == null) {
+            return;
+        }
+        discrepancyLabel.setText("依頼を選択するか、新規の依頼Noを入力して登録してください。");
+        discrepancyLabel
+                .getStyleClass()
+                .removeAll(
+                        "discrepancy-label-info",
+                        "discrepancy-label-matched",
+                        "discrepancy-label-discrepancy",
+                        "discrepancy-label-unregistered");
+        discrepancyLabel.getStyleClass().add("discrepancy-label-info");
     }
 
     private void openOriginalExcel() {

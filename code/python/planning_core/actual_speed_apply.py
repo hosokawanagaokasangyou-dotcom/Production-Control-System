@@ -36,12 +36,12 @@ def apply_learned_speed_to_plan_df(
     *,
     log_prefix: str,
 ) -> None:
-    """master 速度適用後に呼ぶ。加工速度_上書きが正の行はスキップ。"""
+    """master 速度適用後に呼ぶ。列「加工速度」が正の行のみ更新（手入力済みは上書きしない）。"""
     if df is None or df.empty:
         return
     if not _truthy_env(ENV_LEARNED_SPEED_ENABLED, False):
         return
-    from ._core import PLAN_COL_SPEED_OVERRIDE, TASK_COL_MACHINE, TASK_COL_MACHINE_NAME, TASK_COL_SPEED
+    from ._core import TASK_COL_MACHINE, TASK_COL_MACHINE_NAME, TASK_COL_SPEED
 
     if TASK_COL_SPEED not in df.columns:
         return
@@ -55,9 +55,9 @@ def apply_learned_speed_to_plan_df(
     min_samples = _env_int(ENV_LEARNED_SPEED_MIN_SAMPLES, 5)
     n_hit = 0
     for i, row in df.iterrows():
-        override = row.get(PLAN_COL_SPEED_OVERRIDE) if PLAN_COL_SPEED_OVERRIDE in df.columns else None
+        cur = row.get(TASK_COL_SPEED)
         try:
-            if override is not None and float(override) > 0:
+            if cur is not None and float(cur) > 0:
                 continue
         except (TypeError, ValueError):
             pass

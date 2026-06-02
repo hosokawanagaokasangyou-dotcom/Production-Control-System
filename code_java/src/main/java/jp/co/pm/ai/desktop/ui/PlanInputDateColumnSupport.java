@@ -20,7 +20,6 @@ public final class PlanInputDateColumnSupport {
                     "回答納期",
                     "指定納期",
                     "原反投入日",
-                    "原反投入日_上書き",
                     "計画基準納期",
                     "加工開始日",
                     "受注日",
@@ -38,8 +37,7 @@ public final class PlanInputDateColumnSupport {
     private static final DateTimeFormatter OUTPUT_FORMAT = DateTimeFormatter.ofPattern("yyyy/M/d");
 
     /** 段階2.0 配台開始下限に使う日時列（時刻まで保持）。 */
-    private static final Set<String> EXACT_DATETIME_COLUMNS =
-            Set.of("配台可能日時", "配台可能日時_上書き");
+    private static final Set<String> EXACT_DATETIME_COLUMNS = Set.of("配台可能日時");
 
     private static final DateTimeFormatter[] DATETIME_PARSE_FORMATTERS =
             new DateTimeFormatter[] {
@@ -77,10 +75,6 @@ public final class PlanInputDateColumnSupport {
         }
         if (EXACT_DATE_COLUMNS.contains(h)) {
             return true;
-        }
-        if (h.endsWith("_上書き")) {
-            String base = h.substring(0, h.length() - "_上書き".length());
-            return isDateColumnBase(base);
         }
         return isDateColumnBase(h);
     }
@@ -130,7 +124,7 @@ public final class PlanInputDateColumnSupport {
     }
 
     /**
-     * 日時として編集する列か（配台可能日時 / 配台可能日時_上書き）。
+     * 日時として編集する列か（配台可能日時）。
      *
      * <p>（元）… 参照列は除外する。日付列（{@link #isEditableDateColumn}）とは排他。
      */

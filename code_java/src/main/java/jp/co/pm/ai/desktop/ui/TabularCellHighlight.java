@@ -39,6 +39,14 @@ public final class TabularCellHighlight {
             "-fx-background-color: #ffcdd2; -fx-control-inner-background: #ffcdd2;"
                     + " -fx-text-fill: #b71c1c; -fx-font-weight: bold;";
 
+    /** 配台計画タスク入力: 未加工 &gt; 0 かつ {@code 配台使用残数量} が未加工と不一致のとき。 */
+    public static final String PLAN_INPUT_DISPATCH_REMAINING_MISMATCH_STYLE =
+            PLAN_INPUT_DISPATCHABLE_DATETIME_VIOLATION_STYLE;
+
+    /** 配台計画タスク入力: 読込時の元の値から手で書き換えたセル（薄黄、旧上書き列の着色に相当）。 */
+    public static final String PLAN_INPUT_EDITED_CELL_STYLE =
+            "-fx-background-color: #fff2cc; -fx-control-inner-background: #fff2cc;";
+
     /** Column title is a calendar date only, e.g. {@code 2026/04/30} （{@code yyyy/MM/dd} 形式の日付列のみ）。 */
     private static final Pattern HEADER_YMD_SLASH = Pattern.compile("^\\d{4}/\\d{1,2}/\\d{1,2}$");
 

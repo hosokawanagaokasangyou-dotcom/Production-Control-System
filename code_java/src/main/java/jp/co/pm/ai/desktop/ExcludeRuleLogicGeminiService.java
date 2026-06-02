@@ -44,10 +44,8 @@ public final class ExcludeRuleLogicGeminiService {
         u.add("加工完了区分");
         u.add("加工工程の決定プロセスの因子");
         u.add("加工速度");
-        u.add("加工速度_上書き");
         u.add("原反幅");
         u.add("原反投入日");
-        u.add("原反投入日_上書き");
         u.add("受注数");
         u.add("回答納期");
         u.add("在庫場所");

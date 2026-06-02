@@ -4,6 +4,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,6 +42,8 @@ import org.controlsfx.control.spreadsheet.SpreadsheetView;
 import jp.co.pm.ai.desktop.io.ExcelCellReadSupport;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
+import jp.co.pm.ai.desktop.ui.PlanInputDeprecatedOverrideColumnSupport;
+import jp.co.pm.ai.desktop.ui.PlanInputEditedCellMarks;
 import jp.co.pm.ai.desktop.ui.PlanInputDateColumnSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputStage3DispatchableViolationSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
@@ -69,10 +73,6 @@ public class PlanInputStage3TabController {
                     + " シート）を表示・編集します。"
                     + " 保存は入力1表シートを維持したまま入力3表シートのみ上書きします。";
 
-    /** 段階3.0〜3.2 では配台可能日時列のみ使用（上書き列は入力3表に載せない）。 */
-    private static final Set<String> STAGE3_EXCLUDED_COLUMN_TITLES =
-            Set.of("配台可能日時_上書き", "（元）配台可能日時_上書き", "(元)配台可能日時_上書き");
-
     @FXML private Button stage30RunButton;
     @FXML private Button stage31RunButton;
     @FXML private Button stage32RunButton;
@@ -100,6 +100,12 @@ public class PlanInputStage3TabController {
     private final AtomicInteger headerColumnCount = new AtomicInteger(0);
     private final AtomicReference<Stage2RollUnitLengthTables> cachedRollUnitHighlightTables =
             new AtomicReference<>();
+
+    /** sidecar 名前空間（入力3表シート専用。入力1表のマークと混ざらないよう分ける）。 */
+    private static final String EDIT_MARKS_NAMESPACE = "stage3";
+    private final Map<String, String> editBaselineByMarkKey = new LinkedHashMap<>();
+    private final Set<String> editMarksPersistedAtLoad = new LinkedHashSet<>();
+    private final Set<String> editedCellMarks = new LinkedHashSet<>();
 
     private GridBase currentGrid;
     private EventHandler<GridChange> gridChangeHandler;
@@ -273,6 +279,7 @@ public class PlanInputStage3TabController {
                     workbook,
                     STAGE3_SHEET_NAME,
                     new PlanInputTabularIo.TabularSheet(headersRef, dataRows));
+            PlanInputEditedCellMarks.save(workbook, editedCellMarks, EDIT_MARKS_NAMESPACE);
             clearTableDirtySinceSave();
             setStatus("保存済み " + dataRows.size() + " 行");
             if (shell != null) {
@@ -405,7 +412,8 @@ public class PlanInputStage3TabController {
             }
             rows.add(r);
         }
-        dropStage3ExcludedColumns();
+        PlanInputDeprecatedOverrideColumnSupport.migrateAndDropDeprecatedOverrideColumns(
+                headersRef, rows);
         normalizePlanInputDateOnlyColumns();
         List<TableColumnOrderPersistence.ColumnSpec> lay =
                 TableColumnOrderPersistence.loadLayout(
@@ -424,7 +432,33 @@ public class PlanInputStage3TabController {
         TableColumnOrderPersistence.saveColumnVisibility(
                 TableColumnOrderPersistence.TableId.PLAN_INPUT_STAGE3, visForHeaders);
         renumberDispatchTrialOrderColumn();
+        loadPlanInputEditMarks(resolveWorkbookPath());
         rebuildSpreadsheet(false);
+    }
+
+    /** 読込時: 編集差分の基準値を記録し、sidecar JSON のマークを取り込む。 */
+    private void loadPlanInputEditMarks(Path workbook) {
+        editBaselineByMarkKey.clear();
+        editBaselineByMarkKey.putAll(PlanInputEditedCellMarks.captureBaseline(headersRef, rows));
+        Set<String> loaded =
+                PlanInputEditedCellMarks.filterToPresentRows(
+                        headersRef,
+                        rows,
+                        PlanInputEditedCellMarks.load(workbook, EDIT_MARKS_NAMESPACE));
+        editMarksPersistedAtLoad.clear();
+        editMarksPersistedAtLoad.addAll(loaded);
+        editedCellMarks.clear();
+        editedCellMarks.addAll(loaded);
+    }
+
+    /** 現在の表から編集マークを再計算し、変化があれば sidecar JSON へ保存する。 */
+    private void refreshAndPersistPlanInputEditMarks() {
+        PlanInputEditedCellMarks.recompute(
+                headersRef, rows, editBaselineByMarkKey, editMarksPersistedAtLoad, editedCellMarks);
+        Path workbook = resolveWorkbookPath();
+        if (workbook != null) {
+            PlanInputEditedCellMarks.save(workbook, editedCellMarks, EDIT_MARKS_NAMESPACE);
+        }
     }
 
     private void clearTableData() {
@@ -593,6 +627,9 @@ public class PlanInputStage3TabController {
                             headerColumnCount.get(),
                             rollUnitHighlightTablesCached());
             int firstDataRow = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+            refreshAndPersistPlanInputEditMarks();
+            PlanInputEditedCellMarks.applyHighlights(
+                    grid, headersRef, rows, firstDataRow, editedCellMarks);
             PlanInputStage3DispatchableViolationSupport.applyViolationHighlights(
                     grid, headersRef, rows, firstDataRow);
             updateStage3DispatchableViolationWarning();
@@ -601,6 +638,9 @@ public class PlanInputStage3TabController {
             gridChangeHandler =
                     ev -> {
                         rowSync.handle(ev);
+                        refreshAndPersistPlanInputEditMarks();
+                        PlanInputEditedCellMarks.applyHighlights(
+                                currentGrid, headersRef, rows, firstDataRow, editedCellMarks);
                         PlanInputStage3DispatchableViolationSupport.applyViolationHighlights(
                                 currentGrid, headersRef, rows, firstDataRow);
                         updateStage3DispatchableViolationWarning();
@@ -801,30 +841,6 @@ public class PlanInputStage3TabController {
                             markTableDirtySinceSave();
                             rebuildSpreadsheet(false);
                         });
-    }
-
-    private void dropStage3ExcludedColumns() {
-        if (headersRef.isEmpty()) {
-            return;
-        }
-        List<Integer> dropIdx = new ArrayList<>();
-        for (int c = 0; c < headersRef.size(); c++) {
-            if (STAGE3_EXCLUDED_COLUMN_TITLES.contains(headersRef.get(c))) {
-                dropIdx.add(c);
-            }
-        }
-        if (dropIdx.isEmpty()) {
-            return;
-        }
-        for (int i = dropIdx.size() - 1; i >= 0; i--) {
-            int col = dropIdx.get(i);
-            headersRef.remove(col);
-            for (ObservableList<String> row : rows) {
-                if (col < row.size()) {
-                    row.remove(col);
-                }
-            }
-        }
     }
 
     private void normalizePlanInputDateOnlyColumns() {

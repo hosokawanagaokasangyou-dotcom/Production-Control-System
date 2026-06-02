@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,9 +48,13 @@ import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck.TaskKey;
 import jp.co.pm.ai.desktop.io.ExcelCellReadSupport;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
+import jp.co.pm.ai.desktop.ui.PlanInputDeprecatedOverrideColumnSupport;
+import jp.co.pm.ai.desktop.ui.PlanInputEditedCellMarks;
 import jp.co.pm.ai.desktop.ui.PlanInputDateColumnSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputRawInputDateShift;
+import jp.co.pm.ai.desktop.ui.PlanInputUnprocessedDispatchRemainingMismatchSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
 import jp.co.pm.ai.desktop.ui.SpreadsheetMultiColumnFilterCoordinator;
@@ -87,6 +92,8 @@ public final class PlanInputTabController {
                     + "Excel のときはシート名も指定（TASK_PLAN_SHEET / この欄）。"
                     + " .xlsx 保存はデータのみ（マクロは含みません）。";
 
+    private static final String DEBUG_SESSION_ID = "5a9d50";
+
     private Stage ownerStage;
 
     private MainShellController shell;
@@ -114,9 +121,6 @@ public final class PlanInputTabController {
 
     @FXML
     private Button shiftRawInputDateMinusOneButton;
-
-    @FXML
-    private Button clearRawInputDateOverrideButton;
 
     @FXML
     private Button stage2RunButton;
@@ -148,6 +152,9 @@ public final class PlanInputTabController {
     private Label hintLabel;
 
     @FXML
+    private Label planInputValidationWarningLabel;
+
+    @FXML
     private TextField rowSearchField;
 
     @FXML
@@ -165,6 +172,13 @@ public final class PlanInputTabController {
 
     private final AtomicReference<Stage2RollUnitLengthTables> cachedRollUnitHighlightTables =
             new AtomicReference<>();
+
+    /** 読込直後の全セル値（markKey→値）。編集差分判定の基準。 */
+    private final Map<String, String> editBaselineByMarkKey = new LinkedHashMap<>();
+    /** 読込時に sidecar JSON にあったマーク（基準値に戻しても保持する集合）。 */
+    private final Set<String> editMarksPersistedAtLoad = new LinkedHashSet<>();
+    /** 元の値から書き換えたセルのマーク（行キー\u0001列見出し）。 */
+    private final Set<String> editedCellMarks = new LinkedHashSet<>();
 
     private GridBase currentGrid;
     private EventHandler<GridChange> gridChangeHandler;
@@ -544,7 +558,7 @@ public final class PlanInputTabController {
      * 段階2後の整合確認用: 配台不要オフ（かつ配台計画除外・完了でない）行の (依頼NO, 工程名, 機械名)。
      */
     /**
-     * 配台対象行の依頼NO → 実効原反投入日（{@code 原反投入日_上書き} 優先）。
+     * 配台対象行の依頼NO → 原反投入日。
      * 段階2／3 後の午前配台率警告分析用。
      */
     Map<String, LocalDate> collectEffectiveRawInputDateByTaskId() {
@@ -574,12 +588,6 @@ public final class PlanInputTabController {
     }
 
     private static LocalDate effectiveRawInputDate(Map<String, String> rowMap) {
-        Optional<LocalDate> override =
-                PlanInputDateColumnSupport.parseCellValue(
-                        rowMap.get(PlanInputRawInputDateShift.COL_RAW_INPUT_DATE_OVERRIDE));
-        if (override.isPresent()) {
-            return override.get();
-        }
         return PlanInputDateColumnSupport.parseCellValue(
                         rowMap.get(PlanInputRawInputDateShift.COL_RAW_INPUT_DATE))
                 .orElse(null);
@@ -718,19 +726,19 @@ public final class PlanInputTabController {
         if (shell == null || headersRef.isEmpty()) {
             return;
         }
-        int updated = PlanInputRawInputDateShift.applyMinusOneDayToAllOverrides(headersRef, rows);
-        if (updated == PlanInputRawInputDateShift.MISSING_OVERRIDE_COLUMN) {
+        int updated = PlanInputRawInputDateShift.applyMinusOneDayToAllRows(headersRef, rows);
+        if (updated == PlanInputRawInputDateShift.MISSING_RAW_INPUT_DATE_COLUMN) {
             shell.showErrorDialog(
                     "原反投入日の前倒し",
                     "列「"
-                            + PlanInputRawInputDateShift.COL_RAW_INPUT_DATE_OVERRIDE
+                            + PlanInputRawInputDateShift.COL_RAW_INPUT_DATE
                             + "」がありません。表を読み込んでから実行してください。");
             return;
         }
         if (updated == 0) {
             shell.showInformationDialog(
                     "原反投入日の前倒し",
-                    "原反投入日（または上書き）を解釈できる行がありませんでした。");
+                    "原反投入日を解釈できる行がありませんでした。");
             return;
         }
         markPlanInputTableDirtySinceSave();
@@ -739,40 +747,8 @@ public final class PlanInputTabController {
                 "[plan-input] 原反投入日を1日前倒し: "
                         + updated
                         + " 行の「"
-                        + PlanInputRawInputDateShift.COL_RAW_INPUT_DATE_OVERRIDE
+                        + PlanInputRawInputDateShift.COL_RAW_INPUT_DATE
                         + "」を更新しました。");
-    }
-
-    @FXML
-    private void onClearRawInputDateOverrideAction() {
-        if (shell == null || headersRef.isEmpty()) {
-            return;
-        }
-        int cleared = PlanInputRawInputDateShift.clearAllOverrides(headersRef, rows);
-        if (cleared == PlanInputRawInputDateShift.MISSING_OVERRIDE_COLUMN) {
-            shell.showErrorDialog(
-                    "原反投入日上書きのクリア",
-                    "列「"
-                            + PlanInputRawInputDateShift.COL_RAW_INPUT_DATE_OVERRIDE
-                            + "」がありません。表を読み込んでから実行してください。");
-            return;
-        }
-        if (cleared == 0) {
-            shell.showInformationDialog(
-                    "原反投入日上書きのクリア",
-                    "「"
-                            + PlanInputRawInputDateShift.COL_RAW_INPUT_DATE_OVERRIDE
-                            + "」に値がある行がありませんでした。");
-            return;
-        }
-        markPlanInputTableDirtySinceSave();
-        rebuildSpreadsheet();
-        shell.appendLog(
-                "[plan-input] 原反投入日上書きをクリア: "
-                        + cleared
-                        + " 行の「"
-                        + PlanInputRawInputDateShift.COL_RAW_INPUT_DATE_OVERRIDE
-                        + "」を空にしました。");
     }
 
     @FXML
@@ -1006,6 +982,7 @@ public final class PlanInputTabController {
                             ? DEFAULT_PLAN_INPUT_SHEET_NAME
                             : sheetField.getText().trim(),
                     new PlanInputTabularIo.TabularSheet(headersRef, dataRows));
+            PlanInputEditedCellMarks.save(path, editedCellMarks);
             shell.appendLog("[plan-input] saved " + path);
             clearPlanInputTableDirtySinceSave();
             shell.showInformationDialog(
@@ -1116,6 +1093,7 @@ public final class PlanInputTabController {
             spreadsheetView.getSelectionModel().clearSelection();
             spreadsheetView.setGrid(empty);
             currentGrid = empty;
+            updatePlanInputUnprocessedDispatchRemainingWarning();
             return;
         }
         final Map<Integer, Set<String>> columnFilterSnapshot =
@@ -1145,11 +1123,23 @@ public final class PlanInputTabController {
                             headerColumnCount.get(),
                             rollUnitHighlightTablesCached());
             int firstDataRow = SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex();
+            refreshAndPersistPlanInputEditMarks();
+            PlanInputEditedCellMarks.applyHighlights(
+                    grid, headersRef, rows, firstDataRow, editedCellMarks);
+            PlanInputUnprocessedDispatchRemainingMismatchSupport.applyViolationHighlights(
+                    grid, headersRef, rows, firstDataRow);
+            updatePlanInputUnprocessedDispatchRemainingWarning();
             var rowSync =
                     SpreadsheetTabularSupport.newRowsSyncHandler(rows, headersRef, firstDataRow);
             gridChangeHandler =
                     ev -> {
                         rowSync.handle(ev);
+                        refreshAndPersistPlanInputEditMarks();
+                        PlanInputEditedCellMarks.applyHighlights(
+                                currentGrid, headersRef, rows, firstDataRow, editedCellMarks);
+                        PlanInputUnprocessedDispatchRemainingMismatchSupport.applyViolationHighlights(
+                                currentGrid, headersRef, rows, firstDataRow);
+                        updatePlanInputUnprocessedDispatchRemainingWarning();
                         if (!suppressPlanInputDirtyFromGridEvents.get()) {
                             markPlanInputTableDirtySinceSave();
                         }
@@ -1207,8 +1197,87 @@ public final class PlanInputTabController {
         currentGrid = null;
     }
 
+    private void updatePlanInputUnprocessedDispatchRemainingWarning() {
+        if (planInputValidationWarningLabel == null) {
+            return;
+        }
+        List<String> mismatchTaskIds =
+                PlanInputUnprocessedDispatchRemainingMismatchSupport.collectMismatchTaskIds(
+                        headersRef, rows);
+        boolean show = !mismatchTaskIds.isEmpty();
+        planInputValidationWarningLabel.setVisible(show);
+        planInputValidationWarningLabel.setManaged(show);
+        if (show) {
+            planInputValidationWarningLabel.setText(
+                    PlanInputUnprocessedDispatchRemainingMismatchSupport.warningMessage(
+                            mismatchTaskIds));
+        } else {
+            planInputValidationWarningLabel.setText("");
+        }
+        // #region agent log
+        if (shell != null) {
+            AgentDebugLog.appendStructured(
+                    shell.snapshotUiEnv(),
+                    DEBUG_SESSION_ID,
+                    "A",
+                    "PlanInputTabController.updatePlanInputUnprocessedDispatchRemainingWarning",
+                    "plan-input unprocessed vs dispatch-remaining mismatch scan",
+                    Map.of(
+                            "mismatchCount",
+                            mismatchTaskIds.size(),
+                            "mismatchTaskIds",
+                            mismatchTaskIds,
+                            "headersHasUnprocessed",
+                            headersRef.contains(
+                                    PlanInputUnprocessedDispatchRemainingMismatchSupport
+                                            .COL_UNPROCESSED),
+                            "headersHasDispatchRemaining",
+                            headersRef.contains(
+                                    PlanInputUnprocessedDispatchRemainingMismatchSupport
+                                            .COL_DISPATCH_REMAINING),
+                            "warningVisible",
+                            show));
+        }
+        // #endregion
+    }
+
     private void applyLoaded() {
         rebuildSpreadsheet(false);
+    }
+
+    /** 読込時: 編集差分の基準値を記録し、sidecar JSON のマークを取り込む。 */
+    private void loadPlanInputEditMarks(Path path) {
+        editBaselineByMarkKey.clear();
+        editBaselineByMarkKey.putAll(PlanInputEditedCellMarks.captureBaseline(headersRef, rows));
+        Set<String> loaded =
+                PlanInputEditedCellMarks.filterToPresentRows(
+                        headersRef, rows, PlanInputEditedCellMarks.load(path));
+        editMarksPersistedAtLoad.clear();
+        editMarksPersistedAtLoad.addAll(loaded);
+        editedCellMarks.clear();
+        editedCellMarks.addAll(loaded);
+    }
+
+    /** 現在の表から編集マークを再計算し、変化があれば sidecar JSON へ保存する。 */
+    private void refreshAndPersistPlanInputEditMarks() {
+        PlanInputEditedCellMarks.recompute(
+                headersRef, rows, editBaselineByMarkKey, editMarksPersistedAtLoad, editedCellMarks);
+        Path path = currentPlanInputPathOrNull();
+        if (path != null) {
+            PlanInputEditedCellMarks.save(path, editedCellMarks);
+        }
+    }
+
+    private Path currentPlanInputPathOrNull() {
+        String p = pathField.getText() != null ? pathField.getText().trim() : "";
+        if (p.isEmpty()) {
+            return null;
+        }
+        try {
+            return Path.of(p);
+        } catch (RuntimeException ex) {
+            return null;
+        }
     }
 
     private void syncFromEnv() {
@@ -1253,6 +1322,8 @@ public final class PlanInputTabController {
                 }
                 rows.add(r);
             }
+            PlanInputDeprecatedOverrideColumnSupport.migrateAndDropDeprecatedOverrideColumns(
+                    headersRef, rows);
             normalizePlanInputDateOnlyColumns();
             List<TableColumnOrderPersistence.ColumnSpec> lay =
                     TableColumnOrderPersistence.loadLayout(TableColumnOrderPersistence.TableId.PLAN_INPUT);
@@ -1269,6 +1340,7 @@ public final class PlanInputTabController {
                             beforeHeaders, visBefore, titleOrder);
             TableColumnOrderPersistence.saveColumnVisibility(
                     TableColumnOrderPersistence.TableId.PLAN_INPUT, visAfter);
+            loadPlanInputEditMarks(path);
             applyLoaded();
             clearPlanInputTableDirtySinceSave();
             shell.appendLog(
