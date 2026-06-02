@@ -617,8 +617,9 @@ public final class JuchuSheetColumnLayout {
             return 0.0;
         }
         String trimmed = text.strip();
+        String withoutGrouping = trimmed.replace(",", "").replace("，", "");
         java.util.regex.Matcher m =
-                java.util.regex.Pattern.compile("[-+]?\\d*\\.\\d+|\\d+").matcher(trimmed);
+                java.util.regex.Pattern.compile("[-+]?\\d*\\.\\d+|\\d+").matcher(withoutGrouping);
         if (m.find()) {
             return Double.parseDouble(m.group());
         }

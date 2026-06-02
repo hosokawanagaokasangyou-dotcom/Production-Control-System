@@ -280,6 +280,8 @@ class JuchuSheetColumnLayoutTest {
         assertEquals(1, JuchuSheetColumnLayout.computeRawRollCountFromQtyAndLength("250", "250").orElse(-1));
         assertEquals(0, JuchuSheetColumnLayout.computeRawRollCountFromQtyAndLength("249", "250").orElse(-1));
         assertEquals(2, JuchuSheetColumnLayout.computeRawRollCountFromQtyAndLength("500", "250").orElse(-1));
+        assertEquals(27, JuchuSheetColumnLayout.computeRawRollCountFromQtyAndLength("8,100", "300").orElse(-1));
+        assertEquals(27, JuchuSheetColumnLayout.computeRawRollCountFromQtyAndLength("8，100", "300").orElse(-1));
         assertTrue(JuchuSheetColumnLayout.computeRawRollCountFromQtyAndLength("", "250").isEmpty());
         assertTrue(JuchuSheetColumnLayout.computeRawRollCountFromQtyAndLength("250", "0").isEmpty());
         assertEquals(35, JuchuSheetColumnLayout.columnLetterToIndex("AJ"));

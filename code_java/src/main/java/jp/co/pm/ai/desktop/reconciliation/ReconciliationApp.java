@@ -2918,6 +2918,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             } else {
                 updateRawRowSpecDisplay(rRow);
             }
+            rRow.rollCountManualOverride = false;
             updateRawRowRollCountDisplay(rRow);
         }
         
@@ -4187,13 +4188,35 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private static void updateRawRowRollCountDisplay(RawMaterialRow rRow) {
-        if (rRow == null || rRow.txtRollCount == null) {
+        if (rRow == null || rRow.txtRollCount == null || rRow.rollCountManualOverride) {
             return;
         }
         java.util.OptionalInt rollCount =
                 JuchuSheetColumnLayout.computeRawRollCountFromQtyAndLength(
                         rRow.txtQty.getText(), rRow.txtLength.getText());
-        rRow.txtRollCount.setText(rollCount.isPresent() ? String.valueOf(rollCount.getAsInt()) : "");
+        rRow.suppressRollCountAutoListener = true;
+        try {
+            rRow.txtRollCount.setText(rollCount.isPresent() ? String.valueOf(rollCount.getAsInt()) : "");
+        } finally {
+            rRow.suppressRollCountAutoListener = false;
+        }
+    }
+
+    private static void bindRawRowRollCountManualEdit(RawMaterialRow rRow) {
+        if (rRow == null || rRow.txtRollCount == null) {
+            return;
+        }
+        rRow.txtRollCount.textProperty().addListener((obs, oldV, newV) -> {
+            if (rRow.suppressRollCountAutoListener) {
+                return;
+            }
+            if (newV == null || newV.isBlank()) {
+                rRow.rollCountManualOverride = false;
+                updateRawRowRollCountDisplay(rRow);
+                return;
+            }
+            rRow.rollCountManualOverride = true;
+        });
     }
 
     private static String firstNonBlank(String... values) {
@@ -5079,6 +5102,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         public ComboBox<String> cmbStorageLoc;
         public DatePicker dpInputDate;
         public TextField txtRollCount;
+        /** 原反ロール数を手入力したときは数量・長さ変更での自動上書きを抑止する。 */
+        public boolean rollCountManualOverride;
+        /** {@link #updateRawRowRollCountDisplay} による setText 中は手入力フラグを立てない。 */
+        public boolean suppressRollCountAutoListener;
         public Button btnDelete;
         public GridPane grid;
     }
@@ -5845,8 +5872,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         styleFormLabel(lblRollCount);
         rRow.txtRollCount = new TextField();
         rRow.txtRollCount.setStyle("-fx-font-size: 11px;");
-        rRow.txtRollCount.setEditable(false);
-        rRow.txtRollCount.setFocusTraversable(false);
+        rRow.rollCountManualOverride = false;
+        rRow.suppressRollCountAutoListener = false;
+        bindRawRowRollCountManualEdit(rRow);
         rRow.grid.add(lblRollCount, 2, 8);
         addFormField(rRow.grid, rRow.txtRollCount, 3, 8);
 
