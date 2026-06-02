@@ -98,9 +98,25 @@ public class ReconciliationApp {
 
     private ComboBox<OrderRecord> comboRecord;
     private TextField txtRecordFilter;
+    private RadioButton rbAllRecordsFilter;
+    private RadioButton rbExistingOnlyFilter;
     private RadioButton rbNewOnlyFilter;
     private RadioButton rbJuchuWithoutOriginalFilter;
     private ObservableList<OrderRecord> orderRecords = FXCollections.observableArrayList();
+
+    /** 依頼一覧コンボの表示範囲（ラジオ未選択時は {@link #WITH_ORIGINAL}）。 */
+    enum RecordListFilterMode {
+        /** 依頼書原本ファイルがある行（既定）。 */
+        WITH_ORIGINAL,
+        /** 読込済みの全行。 */
+        ALL,
+        /** ステータスに「既存」を含む行。 */
+        EXISTING_ONLY,
+        /** 依頼書ありかつステータスに「新規」を含む行。 */
+        NEW_ONLY,
+        /** 受注ファイルのみ（原本なし）、入力日降順。 */
+        JUCHU_WITHOUT_ORIGINAL
+    }
     
     private GridPane sheetGrid;
     private ScrollPane sheetScrollPane;
@@ -372,21 +388,36 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         txtRecordFilter.setPromptText("依頼No / ユーザー...");
         txtRecordFilter.setPrefWidth(160 * UI_WIDTH_SCALE);
         txtRecordFilter.textProperty().addListener((obs, oldVal, newVal) -> applyRecordFilter());
-        HBox filterModeBox = new HBox(12);
+        HBox filterModeBox = new HBox(10);
         filterModeBox.setAlignment(Pos.CENTER_LEFT);
+        rbAllRecordsFilter = new RadioButton("全部");
+        rbAllRecordsFilter.setStyle("-fx-font-size: 11px;");
+        rbExistingOnlyFilter = new RadioButton("既存のみ");
+        rbExistingOnlyFilter.setStyle("-fx-font-size: 11px;");
         rbNewOnlyFilter = new RadioButton("新規のみ");
         rbNewOnlyFilter.setStyle("-fx-font-size: 11px;");
-        rbJuchuWithoutOriginalFilter = new RadioButton("原本なし（受注ファイルのみ）");
+        rbJuchuWithoutOriginalFilter = new RadioButton("原本なし（受注のみ）");
         rbJuchuWithoutOriginalFilter.setStyle("-fx-font-size: 11px;");
         rbJuchuWithoutOriginalFilter.setTooltip(
                 new Tooltip("依頼書原本にないが受注ファイルには存在するタスクのみを表示（入力日が新しい順）"));
         ToggleGroup recordListFilterGroup = new ToggleGroup();
-        rbNewOnlyFilter.setToggleGroup(recordListFilterGroup);
-        rbJuchuWithoutOriginalFilter.setToggleGroup(recordListFilterGroup);
+        for (RadioButton rb :
+                List.of(
+                        rbAllRecordsFilter,
+                        rbExistingOnlyFilter,
+                        rbNewOnlyFilter,
+                        rbJuchuWithoutOriginalFilter)) {
+            rb.setToggleGroup(recordListFilterGroup);
+            installRecordFilterRadioDeselectOnReselect(recordListFilterGroup, rb);
+        }
         recordListFilterGroup.selectedToggleProperty().addListener((obs, oldT, newT) -> applyRecordFilter());
-        installRecordFilterRadioDeselectOnReselect(recordListFilterGroup, rbNewOnlyFilter);
-        installRecordFilterRadioDeselectOnReselect(recordListFilterGroup, rbJuchuWithoutOriginalFilter);
-        filterModeBox.getChildren().addAll(rbNewOnlyFilter, rbJuchuWithoutOriginalFilter);
+        filterModeBox
+                .getChildren()
+                .addAll(
+                        rbAllRecordsFilter,
+                        rbExistingOnlyFilter,
+                        rbNewOnlyFilter,
+                        rbJuchuWithoutOriginalFilter);
         filterRowPrimary.getChildren().addAll(lblSearch, txtRecordFilter, filterModeBox);
         VBox filterPanel = new VBox(4);
         filterPanel.getChildren().add(filterRowPrimary);
@@ -2807,23 +2838,34 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 });
     }
 
+    private RecordListFilterMode resolveRecordListFilterMode() {
+        if (rbAllRecordsFilter != null && rbAllRecordsFilter.isSelected()) {
+            return RecordListFilterMode.ALL;
+        }
+        if (rbExistingOnlyFilter != null && rbExistingOnlyFilter.isSelected()) {
+            return RecordListFilterMode.EXISTING_ONLY;
+        }
+        if (rbNewOnlyFilter != null && rbNewOnlyFilter.isSelected()) {
+            return RecordListFilterMode.NEW_ONLY;
+        }
+        if (rbJuchuWithoutOriginalFilter != null && rbJuchuWithoutOriginalFilter.isSelected()) {
+            return RecordListFilterMode.JUCHU_WITHOUT_ORIGINAL;
+        }
+        return RecordListFilterMode.WITH_ORIGINAL;
+    }
+
     private void applyRecordFilter() {
         if (comboRecord == null) {
             return;
         }
-        boolean juchuWithoutOriginal =
-                rbJuchuWithoutOriginalFilter != null && rbJuchuWithoutOriginalFilter.isSelected();
+        RecordListFilterMode mode = resolveRecordListFilterMode();
         ObservableList<OrderRecord> base = FXCollections.observableArrayList();
         for (OrderRecord rec : orderRecords) {
-            if (juchuWithoutOriginal) {
-                if (isJuchuRowWithoutRequestFormOriginal(rec)) {
-                    base.add(rec);
-                }
-            } else if (hasExistingFile(rec)) {
+            if (recordIncludedInListFilter(rec, mode, this::hasExistingFile)) {
                 base.add(rec);
             }
         }
-        boolean newOnly = rbNewOnlyFilter != null && rbNewOnlyFilter.isSelected();
+        boolean newOnly = mode == RecordListFilterMode.NEW_ONLY;
         String query =
                 txtRecordFilter != null && txtRecordFilter.getText() != null
                         ? txtRecordFilter.getText().strip()
@@ -2836,10 +2878,35 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
             filtered.add(rec);
         }
-        if (juchuWithoutOriginal && filtered.size() > 1) {
+        if (mode == RecordListFilterMode.JUCHU_WITHOUT_ORIGINAL && filtered.size() > 1) {
             FXCollections.sort(filtered, ReconciliationApp::compareRecordByInputDateDesc);
         }
         comboRecord.setItems(filtered);
+    }
+
+    static boolean recordIncludedInListFilter(
+            OrderRecord rec,
+            RecordListFilterMode mode,
+            java.util.function.Predicate<OrderRecord> hasOriginalFile) {
+        if (rec == null || mode == null) {
+            return false;
+        }
+        return switch (mode) {
+            case ALL -> true;
+            case EXISTING_ONLY -> recordStatusContainsExisting(rec);
+            case NEW_ONLY -> hasOriginalFile.test(rec);
+            case JUCHU_WITHOUT_ORIGINAL ->
+                    isJuchuRowWithoutRequestFormOriginal(rec, hasOriginalFile);
+            case WITH_ORIGINAL -> hasOriginalFile.test(rec);
+        };
+    }
+
+    static boolean recordStatusContainsExisting(OrderRecord rec) {
+        if (rec == null) {
+            return false;
+        }
+        String status = rec.getStatus();
+        return status != null && status.contains("既存");
     }
 
     /**

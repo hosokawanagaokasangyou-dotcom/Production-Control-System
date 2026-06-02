@@ -74,6 +74,39 @@ class ReconciliationAppRecordFilterTest {
     }
 
     @Test
+    void recordIncludedInListFilter_modes() {
+        OrderRecord existing = record("Y5-5", "既存登録 (相違あり)", "A");
+        OrderRecord neu = record("Y6-1", "新規自動追加 (未登録)", "A");
+        OrderRecord juchuOnly =
+                recordWithDb("Y5-9", "既存登録 (原本未確認)", "A", Map.of("入力日", "2026-05-01"));
+        assertTrue(
+                ReconciliationApp.recordIncludedInListFilter(
+                        existing, ReconciliationApp.RecordListFilterMode.ALL, HAS_ORIGINAL));
+        assertTrue(
+                ReconciliationApp.recordIncludedInListFilter(
+                        neu, ReconciliationApp.RecordListFilterMode.ALL, NO_ORIGINAL));
+        assertTrue(
+                ReconciliationApp.recordIncludedInListFilter(
+                        existing,
+                        ReconciliationApp.RecordListFilterMode.EXISTING_ONLY,
+                        NO_ORIGINAL));
+        assertFalse(
+                ReconciliationApp.recordIncludedInListFilter(
+                        neu, ReconciliationApp.RecordListFilterMode.EXISTING_ONLY, NO_ORIGINAL));
+        assertTrue(
+                ReconciliationApp.recordIncludedInListFilter(
+                        juchuOnly,
+                        ReconciliationApp.RecordListFilterMode.EXISTING_ONLY,
+                        NO_ORIGINAL));
+        assertTrue(
+                ReconciliationApp.recordIncludedInListFilter(
+                        existing, ReconciliationApp.RecordListFilterMode.NEW_ONLY, HAS_ORIGINAL));
+        assertFalse(
+                ReconciliationApp.recordIncludedInListFilter(
+                        existing, ReconciliationApp.RecordListFilterMode.NEW_ONLY, NO_ORIGINAL));
+    }
+
+    @Test
     void compareRecordByInputDateDesc_newestFirst() {
         OrderRecord older =
                 recordWithDb("A", "既存登録 (原本未確認)", "", Map.of("入力日", "2026-01-01"));
