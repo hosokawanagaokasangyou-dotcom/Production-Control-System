@@ -33,7 +33,7 @@ import jp.co.pm.ai.desktop.reconciliation.RequestFormSheetShapeOverlay.OverlaySh
  */
 final class RequestFormSheetPreviewPdfRenderer {
 
-    private static final String RENDERER_SPEC_BASE = "pdfbox-v4-text-fit";
+    private static final String RENDERER_SPEC_BASE = "pdfbox-v5-unformatted-date";
 
     private static final float PX_TO_PT = 72f / 96f;
     private static volatile float cjkMetricsScale =

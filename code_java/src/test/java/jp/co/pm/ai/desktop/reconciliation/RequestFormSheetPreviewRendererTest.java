@@ -82,6 +82,23 @@ class RequestFormSheetPreviewRendererTest {
     }
 
     @Test
+    void loadPreviewData_unformattedDateSerial_formatsAsYmd(@TempDir Path tmp) throws Exception {
+        File excel = tmp.resolve("date-serial.xlsx").toFile();
+        try (Workbook wb = new XSSFWorkbook();
+                FileOutputStream out = new FileOutputStream(excel)) {
+            Sheet sheet = wb.createSheet("E5-1");
+            // 2026-05-29 の Excel シリアル（書式 General）
+            sheet.createRow(19).createCell(8).setCellValue(46171.0);
+            wb.write(out);
+        }
+
+        RequestFormSheetPreviewRenderer.PreviewData data =
+                RequestFormSheetPreviewRenderer.loadPreviewData(excel, "E5-1");
+
+        assertEquals("2026/05/29", data.texts()[19][8]);
+    }
+
+    @Test
     void loadPreviewData_numericCell_doesNotThrow(@TempDir Path tmp) throws Exception {
         File excel = tmp.resolve("numeric.xlsx").toFile();
         try (Workbook wb = new XSSFWorkbook();

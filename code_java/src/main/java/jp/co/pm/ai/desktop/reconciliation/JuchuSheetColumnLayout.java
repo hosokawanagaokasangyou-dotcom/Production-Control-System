@@ -527,6 +527,12 @@ public final class JuchuSheetColumnLayout {
                     yield new java.text.SimpleDateFormat("yyyy-MM-dd").format(d);
                 }
                 double n = cell.getNumericCellValue();
+                if (org.apache.poi.ss.usermodel.DateUtil.isValidExcelDate(n)
+                        && n >= 25000.0
+                        && n == Math.rint(n)) {
+                    java.util.Date d = org.apache.poi.ss.usermodel.DateUtil.getJavaDate(n);
+                    yield new java.text.SimpleDateFormat("yyyy-MM-dd").format(d);
+                }
                 if (n == Math.rint(n)) {
                     yield String.valueOf((long) n);
                 }
@@ -543,6 +549,12 @@ public final class JuchuSheetColumnLayout {
                             yield new java.text.SimpleDateFormat("yyyy-MM-dd").format(d);
                         }
                         double n = cell.getNumericCellValue();
+                        if (org.apache.poi.ss.usermodel.DateUtil.isValidExcelDate(n)
+                                && n >= 25000.0
+                                && n == Math.rint(n)) {
+                            java.util.Date d = org.apache.poi.ss.usermodel.DateUtil.getJavaDate(n);
+                            yield new java.text.SimpleDateFormat("yyyy-MM-dd").format(d);
+                        }
                         if (n == Math.rint(n)) {
                             yield String.valueOf((long) n);
                         }

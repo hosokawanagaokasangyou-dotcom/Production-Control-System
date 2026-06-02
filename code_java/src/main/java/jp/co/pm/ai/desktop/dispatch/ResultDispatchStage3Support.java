@@ -233,6 +233,19 @@ public final class ResultDispatchStage3Support {
         applyPlanningStageBadge(badge, stage, Stage3PlanningVariant.NONE);
     }
 
+    /** {@code 結果_配台表.json} と sidecar から段階バッジを解決して適用する。 */
+    public static void applyPlanningStageBadgeFromDispatchJson(Label badge, Path jsonPath) {
+        if (badge == null) {
+            return;
+        }
+        PlanningStage stage = detectPlanningStage(jsonPath);
+        Stage3PlanningVariant variant = Stage3PlanningMetaStore.readPlanningVariant(jsonPath);
+        applyPlanningStageBadge(
+                badge,
+                stage,
+                stage == PlanningStage.STAGE3 ? variant : Stage3PlanningVariant.NONE);
+    }
+
     public static void applyPlanningStageBadge(
             Label badge, PlanningStage stage, Stage3PlanningVariant stage3Variant) {
         if (badge == null) {
@@ -244,7 +257,8 @@ public final class ResultDispatchStage3Support {
         badge.setText(
                 switch (s) {
                     case STAGE21 -> BADGE_STAGE21;
-                    case STAGE3 -> v.badgeText();
+                    case STAGE3 ->
+                            v == Stage3PlanningVariant.NONE ? BADGE_STAGE3 : v.badgeText();
                     case STAGE2 -> BADGE_STAGE2;
                 });
         badge.getStyleClass()

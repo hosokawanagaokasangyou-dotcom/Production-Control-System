@@ -8,6 +8,12 @@ import java.util.Map;
 /** 段階3.5 ウィザード内の編集状態（master 基準値と現在値）。 */
 public final class OvertimeSimulationEditState {
 
+    /** 残業時間入力の刻み（分）。 */
+    public static final int OVERTIME_MINUTES_STEP = 15;
+
+    /** 残業時間の上限（分）。 */
+    public static final int OVERTIME_MINUTES_MAX = 720;
+
     public record CellState(
             boolean baselineWorking,
             boolean currentWorking,
@@ -78,7 +84,7 @@ public final class OvertimeSimulationEditState {
         if (cs == null || !cs.currentWorking()) {
             return;
         }
-        int clamped = Math.max(0, Math.min(720, minutes));
+        int clamped = snapOvertimeMinutes(minutes);
         row.put(
                 member,
                 new CellState(
@@ -135,5 +141,14 @@ public final class OvertimeSimulationEditState {
             sb.append(noChangeSuffix);
         }
         return sb.toString();
+    }
+
+    /** ウィザード入力: 0 または {@link #OVERTIME_MINUTES_STEP} 分刻みで {@link #OVERTIME_MINUTES_MAX} まで。 */
+    public static int snapOvertimeMinutes(int minutes) {
+        if (minutes <= 0) {
+            return 0;
+        }
+        int snapped = (int) Math.round(minutes / (double) OVERTIME_MINUTES_STEP) * OVERTIME_MINUTES_STEP;
+        return Math.min(OVERTIME_MINUTES_MAX, Math.max(0, snapped));
     }
 }

@@ -996,6 +996,20 @@ public final class MainShellController {
         themeTrackedSecondaryScenes.remove(scene);
     }
 
+    /**
+     * 残業シミュレーションウィザード用。グローバル {@link DesktopTheme} は適用せず、紙面風の固定 CSS のみ載せる
+     * （ダークテーマ時に TableView が紺色化するのを防ぐ）。
+     */
+    public void registerOvertimeWizardScene(Scene scene) {
+        if (scene == null) {
+            return;
+        }
+        if (!scene.getStylesheets().contains(PM_AI_DESKTOP_CSS)) {
+            scene.getStylesheets().add(PM_AI_DESKTOP_CSS);
+        }
+        ButtonPressFeedback.installOnScene(scene);
+    }
+
     private void refreshThemeTrackedSecondaryScenes() {
         DesktopTheme t = currentDesktopTheme();
         for (Scene s : themeTrackedSecondaryScenes) {

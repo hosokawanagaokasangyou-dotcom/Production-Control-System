@@ -405,13 +405,11 @@ final class RequestFormOriginalExtractor {
             FormulaEvaluator evaluator =
                     cell.getSheet().getWorkbook().getCreationHelper().createFormulaEvaluator();
             String formatted =
-                    RequestFormCellTextUtil.stripFormatLiteralQuotes(
-                            cell, CELL_FORMATTER.formatCellValue(cell, evaluator));
+                    RequestFormCellTextUtil.formatCellDisplayText(
+                            cell, CELL_FORMATTER, evaluator);
             return formatted != null ? formatted.trim() : "";
         } catch (RuntimeException ex) {
-            String formatted =
-                    RequestFormCellTextUtil.stripFormatLiteralQuotes(
-                            cell, CELL_FORMATTER.formatCellValue(cell));
+            String formatted = RequestFormCellTextUtil.formatCellDisplayText(cell, CELL_FORMATTER);
             return formatted != null ? formatted.trim() : "";
         }
     }

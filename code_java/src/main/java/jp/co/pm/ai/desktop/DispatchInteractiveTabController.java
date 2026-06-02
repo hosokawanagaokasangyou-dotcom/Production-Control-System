@@ -619,6 +619,7 @@ public final class DispatchInteractiveTabController {
 
         SpreadsheetTabularSupport.guardControlsFxSpanSelectionMousePressAfterSkinSettles(wideSpreadsheet);
         SpreadsheetTabularSupport.guardControlsFxSpanSelectionMousePressAfterSkinSettles(byDaySpreadsheet);
+        SpreadsheetTabularSupport.installSpreadsheetClickSelectionAlign(wideSpreadsheet);
 
         SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
                 wideSpreadsheetHost, this::resolvedWideLeadingColumnCount);
@@ -3809,28 +3810,9 @@ public final class DispatchInteractiveTabController {
         return SpreadsheetTabularSupport.modelColumnIndexFromTableCell(wideSpreadsheet, tc);
     }
 
-    /** 日付列クリック時: span 矩形選択のずれを抑え、クリックしたセルへ選択・フォーカスを合わせる。 */
+    /** DnD 開始前: ControlsFX span 選択のずれを抑え、クリックしたセルへ選択を合わせる。 */
     private void synchronizeWideDateCellSelection(TableCell<?, ?> tc) {
-        if (tc == null) {
-            return;
-        }
-        int modelCol = wideModelColumnFromTableCell(tc);
-        if (modelCol < WIDE_STATIC_HEADERS.size()) {
-            return;
-        }
-        int viewCol = SpreadsheetTabularSupport.viewColumnIndexFromTableCell(wideSpreadsheet, tc);
-        int viewRow = tc.getIndex();
-        if (viewCol < 0 || viewRow < 0 || viewCol >= wideSpreadsheet.getColumns().size()) {
-            return;
-        }
-        SpreadsheetColumn sc = wideSpreadsheet.getColumns().get(viewCol);
-        SpreadsheetTabularSupport.safeClearSpreadsheetSelection(wideSpreadsheet);
-        try {
-            wideSpreadsheet.getSelectionModel().clearAndSelect(viewRow, sc);
-            wideSpreadsheet.getSelectionModel().focus(viewRow, sc);
-        } catch (RuntimeException ignored) {
-            // stale row/column after rebuild
-        }
+        SpreadsheetTabularSupport.alignSpreadsheetSelectionToClickedCell(wideSpreadsheet, tc);
     }
 
     private void applyByDayCellStyle(ByDayRow br, int dateIdx, SpreadsheetCell cell) {

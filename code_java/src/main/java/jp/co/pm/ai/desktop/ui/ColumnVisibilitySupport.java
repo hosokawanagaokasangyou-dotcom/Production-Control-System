@@ -1,8 +1,8 @@
 package jp.co.pm.ai.desktop.ui;
 
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
@@ -29,12 +29,17 @@ public final class ColumnVisibilitySupport {
         }
         List<SpreadsheetColumn> cols = view.getColumns();
         int n = Math.min(headersAlignedToColumns.size(), Math.min(cols.size(), visible.length));
+        /*
+         * ControlsFX の選択枠（RectangleSelection）は hiddenColumns BitSet と columnMap（getViewColumn）で
+         * X 位置を計算する。TableColumn#setVisible だけだと非表示列幅が枠計算に残り、固定列・日付列で黒枠がずれる。
+         */
+        BitSet hidden = new BitSet(Math.max(cols.size(), visible.length));
         for (int i = 0; i < n; i++) {
-            setSpreadsheetColumnInnerVisible(cols.get(i), visible[i]);
+            if (!visible[i]) {
+                hidden.set(i);
+            }
         }
-        for (int i = n; i < cols.size(); i++) {
-            setSpreadsheetColumnInnerVisible(cols.get(i), true);
-        }
+        view.setHiddenColumns(hidden);
         refreshSpreadsheetColumnReorderAfterVisibility(view);
         /*
          * 内側 TableColumn の可視性変更でスキンが組み替わると、既定の CONSTRAINED_RESIZE_POLICY に戻り
@@ -50,23 +55,6 @@ public final class ColumnVisibilitySupport {
         Object v = view.getProperties().get(SpreadsheetColumnDragReorderSupport.PROP_LEADING_FIXED);
         if (v instanceof Integer ix && ix >= 0) {
             SpreadsheetColumnDragReorderSupport.updateColumnReorderFlags(view, ix);
-        }
-    }
-
-    /** ControlsFX {@link SpreadsheetColumn} wraps a {@link TableColumn}; visibility is set on the inner column. */
-    private static void setSpreadsheetColumnInnerVisible(SpreadsheetColumn wrapper, boolean visible) {
-        if (wrapper == null) {
-            return;
-        }
-        try {
-            Field f = SpreadsheetColumn.class.getDeclaredField("column");
-            f.setAccessible(true);
-            Object tc = f.get(wrapper);
-            if (tc instanceof TableColumn<?, ?> col) {
-                col.setVisible(visible);
-            }
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("SpreadsheetColumn.column", e);
         }
     }
 

@@ -38,6 +38,8 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TablePosition;
@@ -71,6 +73,10 @@ public final class SpreadsheetTabularSupport {
      */
     private static final String SPREADSHEET_HOST_RELAYOUT_HOOK =
             "jp.co.pm.ai.desktop.spreadsheetHostRelayoutHook";
+
+    /** {@link #installSpreadsheetClickSelectionAlign(SpreadsheetView)} の二重適用防止。 */
+    private static final String SPREADSHEET_CLICK_SELECTION_ALIGN =
+            "jp.co.pm.ai.desktop.spreadsheetClickSelectionAlign";
 
     /** 納期管理: フィルタ行（列見出しと同じ薄いグレー） */
     private static final String DC_STYLE_HEADER_ROW =
@@ -392,6 +398,108 @@ public final class SpreadsheetTabularSupport {
      */
     public static int modelColumnIndexFromTableCell(SpreadsheetView view, TableCell<?, ?> tc) {
         return viewColumnIndexFromTableCell(view, tc);
+    }
+
+    /**
+     * ControlsFX {@code TableViewSpanSelectionModel} は {@code MOUSE_PRESSED} で span 選択を更新する。
+     * 固定列分割・列非表示後はクリック位置と黒枠がずれることがあるため、{@code MOUSE_CLICKED} フィルタから
+     * {@link SpreadsheetCell} 正本で選択・フォーカスを合わせる。
+     */
+    public static void installSpreadsheetClickSelectionAlign(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        if (Boolean.TRUE.equals(view.getProperties().get(SPREADSHEET_CLICK_SELECTION_ALIGN))) {
+            return;
+        }
+        view.getProperties().put(SPREADSHEET_CLICK_SELECTION_ALIGN, Boolean.TRUE);
+        view.addEventFilter(
+                MouseEvent.MOUSE_CLICKED,
+                e -> {
+                    if (e.getButton() != MouseButton.PRIMARY) {
+                        return;
+                    }
+                    TableCell<?, ?> tc =
+                            findTableCellUnderNode(
+                                    e.getPickResult() != null
+                                            ? e.getPickResult().getIntersectedNode()
+                                            : null);
+                    if (tc == null || !isNodeUnderSpreadsheetView(view, tc)) {
+                        return;
+                    }
+                    alignSpreadsheetSelectionToClickedCell(view, tc);
+                    Object item = tc.getItem();
+                    if (item instanceof SpreadsheetCell cell) {
+                        int viewRowHint = tc.getIndex();
+                        Platform.runLater(
+                                () -> alignSpreadsheetSelectionToGridCell(view, cell, viewRowHint));
+                    }
+                });
+    }
+
+    /**
+     * クリックした {@link TableCell} の {@link SpreadsheetCell} へ選択・フォーカスを合わせる。
+     * {@link #installSpreadsheetClickSelectionAlign} および DnD 開始前の予防呼び出し向け。
+     */
+    public static void alignSpreadsheetSelectionToClickedCell(
+            SpreadsheetView view, TableCell<?, ?> tc) {
+        if (view == null || tc == null || tc.isEmpty()) {
+            return;
+        }
+        Object item = tc.getItem();
+        if (!(item instanceof SpreadsheetCell cell)) {
+            return;
+        }
+        alignSpreadsheetSelectionToGridCell(view, cell, tc.getIndex());
+    }
+
+    private static void alignSpreadsheetSelectionToGridCell(
+            SpreadsheetView view, SpreadsheetCell cell, int viewRowHint) {
+        int firstData = spreadsheetFirstDataRowIndex();
+        if (cell.getRow() < firstData) {
+            return;
+        }
+        int viewRow = view.getViewRow(cell.getRow());
+        if (viewRow < 0) {
+            viewRow = viewRowHint;
+        }
+        if (viewRow < 0) {
+            return;
+        }
+        ObservableList<SpreadsheetColumn> cols = view.getColumns();
+        int modelCol = cell.getColumn();
+        if (modelCol < 0 || modelCol >= cols.size()) {
+            return;
+        }
+        SpreadsheetColumn scol = cols.get(modelCol);
+        safeClearSpreadsheetSelection(view);
+        try {
+            view.getSelectionModel().clearAndSelect(cell);
+            view.getSelectionModel().focus(viewRow, scol);
+        } catch (RuntimeException ignored) {
+            safeClearSpreadsheetSelection(view);
+        }
+    }
+
+    private static TableCell<?, ?> findTableCellUnderNode(Node n) {
+        while (n != null) {
+            if (n instanceof TableCell<?, ?> tc) {
+                return tc;
+            }
+            n = n.getParent();
+        }
+        return null;
+    }
+
+    private static boolean isNodeUnderSpreadsheetView(SpreadsheetView view, Node node) {
+        Node n = node;
+        while (n != null) {
+            if (n == view) {
+                return true;
+            }
+            n = n.getParent();
+        }
+        return false;
     }
 
     private static String spreadsheetCellPlainText(SpreadsheetView view, int viewRow, int viewCol) {

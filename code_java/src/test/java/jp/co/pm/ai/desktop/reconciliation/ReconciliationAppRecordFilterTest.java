@@ -81,29 +81,29 @@ class ReconciliationAppRecordFilterTest {
                 recordWithDb("Y5-9", "既存登録 (原本未確認)", "A", Map.of("入力日", "2026-05-01"));
         assertTrue(
                 ReconciliationApp.recordIncludedInListFilter(
-                        existing, ReconciliationApp.RecordListFilterMode.ALL, HAS_ORIGINAL));
+                        existing, RecordListFilterMode.ALL, HAS_ORIGINAL));
         assertTrue(
                 ReconciliationApp.recordIncludedInListFilter(
-                        neu, ReconciliationApp.RecordListFilterMode.ALL, NO_ORIGINAL));
+                        neu, RecordListFilterMode.ALL, NO_ORIGINAL));
         assertTrue(
                 ReconciliationApp.recordIncludedInListFilter(
                         existing,
-                        ReconciliationApp.RecordListFilterMode.EXISTING_ONLY,
+                        RecordListFilterMode.EXISTING_ONLY,
                         NO_ORIGINAL));
         assertFalse(
                 ReconciliationApp.recordIncludedInListFilter(
-                        neu, ReconciliationApp.RecordListFilterMode.EXISTING_ONLY, NO_ORIGINAL));
+                        neu, RecordListFilterMode.EXISTING_ONLY, NO_ORIGINAL));
         assertTrue(
                 ReconciliationApp.recordIncludedInListFilter(
                         juchuOnly,
-                        ReconciliationApp.RecordListFilterMode.EXISTING_ONLY,
+                        RecordListFilterMode.EXISTING_ONLY,
                         NO_ORIGINAL));
         assertTrue(
                 ReconciliationApp.recordIncludedInListFilter(
-                        existing, ReconciliationApp.RecordListFilterMode.NEW_ONLY, HAS_ORIGINAL));
+                        existing, RecordListFilterMode.NEW_ONLY, HAS_ORIGINAL));
         assertFalse(
                 ReconciliationApp.recordIncludedInListFilter(
-                        existing, ReconciliationApp.RecordListFilterMode.NEW_ONLY, NO_ORIGINAL));
+                        existing, RecordListFilterMode.NEW_ONLY, NO_ORIGINAL));
     }
 
     @Test

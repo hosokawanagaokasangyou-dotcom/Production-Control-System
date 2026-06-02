@@ -24,7 +24,7 @@ final class RequestFormSourceCache {
      * {@link RequestFormOriginalCellLayout} ベースのセル読取に合わせて上げる。
      * 抽出ロジック変更時は必ずインクリメントし、古い parse キャッシュを無効化する。
      */
-    static final String PARSE_SCHEMA_VERSION = "request-form-cell-layout-v3";
+    static final String PARSE_SCHEMA_VERSION = "request-form-cell-layout-v4";
 
     private RequestFormSourceCache() {}
 

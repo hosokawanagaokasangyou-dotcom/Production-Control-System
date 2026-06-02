@@ -9,7 +9,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class ResultDispatchStage3SupportTest {
 
@@ -88,5 +93,23 @@ class ResultDispatchStage3SupportTest {
         assertEquals(
                 ResultDispatchStage3Support.PlanningStage.STAGE21,
                 ResultDispatchStage3Support.detectPlanningStage(dispatchJson));
+    }
+
+    @Test
+    void stage32Sidecar_resolvesStage3PlanningVariantForBadge(@TempDir Path dir) throws Exception {
+        Path dispatchJson = dir.resolve("結果_配台表.json");
+        Files.writeString(dispatchJson, "{\"columns\":[],\"rows\":[]}", StandardCharsets.UTF_8);
+        Stage3PlanningMetaStore.writeVariant(
+                dispatchJson, Stage3PlanningMetaStore.Variant.STAGE3_2);
+
+        assertEquals(
+                ResultDispatchStage3Support.PlanningStage.STAGE3,
+                ResultDispatchStage3Support.detectPlanningStage(dispatchJson));
+        assertEquals(
+                ResultDispatchStage3Support.Stage3PlanningVariant.STAGE3_2,
+                Stage3PlanningMetaStore.readPlanningVariant(dispatchJson));
+        assertEquals(
+                "段階3.2",
+                Stage3PlanningMetaStore.readPlanningVariant(dispatchJson).badgeText());
     }
 }

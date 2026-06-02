@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop;
 
 import java.nio.file.Path;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -9,19 +10,19 @@ import java.util.function.Consumer;
 
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TableView;
-import javafx.scene.control.TextField;
-import javafx.scene.control.Tooltip;
-import javafx.scene.input.MouseButton;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -34,10 +35,9 @@ import javafx.stage.StageStyle;
 import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreview;
 import jp.co.pm.ai.desktop.dispatch.OvertimeSimulationEditState;
 import jp.co.pm.ai.desktop.dispatch.OvertimeSimulationOverridesWriter;
-import jp.co.pm.ai.desktop.ui.SpreadsheetTabularSupport;
 
 /**
- * 段階2.1 / 段階3.1 残業シミュレーション: 勤怠表（○/グレー）と残業時間（分）を編集し、確定後に各段階を実行するウィザード。
+ * 段階2.1 / 段階3.1 残業シミュレーション: 勤怠（チェック）と残業時間（分）を編集し、確定後に各段階を実行するウィザード。
  */
 public final class OvertimeSimulationWizard {
 
@@ -75,22 +75,7 @@ public final class OvertimeSimulationWizard {
         }
     }
 
-    public enum RowKind {
-        ATTENDANCE("勤怠"),
-        OVERTIME("残業時間");
-
-        private final String label;
-
-        RowKind(String label) {
-            this.label = label;
-        }
-
-        String label() {
-            return label;
-        }
-    }
-
-    public record GridRow(String member, RowKind kind) {}
+    public record GridRow(String member) {}
 
     /**
      * プレビュー取得済みの状態でウィザードを表示する。
@@ -159,21 +144,23 @@ public final class OvertimeSimulationWizard {
 
         Label intro =
                 new Label(
-                        "メンバー勤怠を確認し、残業時間（分）を入力してください。"
-                                + " 日付列は本日から "
+                        "各行: 出勤にチェックを入れ、残業時間（分・15分刻み）を入力。"
+                                + " 日付は本日〜"
                                 + AttendanceOvertimePreview.OVERTIME_SIM_DATE_WINDOW_DAYS_AFTER_TODAY
-                                + " 日後まで（当日を含む）に限定しています。"
-                                + " 勤怠行はダブルクリックで ○（出勤）とグレー（休み）を切り替えられます（休日出勤シミュレーション）。"
+                                + "日後まで。"
                                 + " "
                                 + target.introConfirmLine());
         intro.setWrapText(true);
         intro.setMaxWidth(Double.MAX_VALUE);
         intro.getStyleClass().add("overtime-sim-intro");
 
+        Label gridHint = new Label("□＝出勤　右＝残業（分・15分刻み、▲▼または直接入力）");
+        gridHint.getStyleClass().add("overtime-sim-grid-hint");
+
         Node gridPanel = buildGridPanel(state);
         VBox.setVgrow(gridPanel, Priority.ALWAYS);
 
-        VBox step1 = new VBox(12, intro, gridPanel);
+        VBox step1 = new VBox(10, intro, gridHint, gridPanel);
 
         Label summaryLabel = new Label();
         summaryLabel.setWrapText(true);
@@ -264,15 +251,12 @@ public final class OvertimeSimulationWizard {
         root.setCenter(center);
         root.setBottom(footer);
 
-        Scene scene = new Scene(root, 1024, 600);
+        Scene scene = new Scene(root, 960, 560);
         if (shell != null) {
-            shell.registerThemeTrackedScene(scene);
+            shell.registerOvertimeWizardScene(scene);
         }
         stage.setOnHidden(
                 ev -> {
-                    if (shell != null) {
-                        shell.unregisterThemeTrackedScene(scene);
-                    }
                     if (!confirmed[0] && onDismissWithoutRun != null) {
                         onDismissWithoutRun.run();
                     }
@@ -282,46 +266,49 @@ public final class OvertimeSimulationWizard {
     }
 
     private static Node buildGridPanel(OvertimeSimulationEditState state) {
-        List<String> members = state.members();
         List<GridRow> rows = new ArrayList<>();
-        for (String m : members) {
-            rows.add(new GridRow(m, RowKind.ATTENDANCE));
-            rows.add(new GridRow(m, RowKind.OVERTIME));
+        for (String m : state.members()) {
+            rows.add(new GridRow(m));
         }
 
         TableView<GridRow> table = new TableView<>(FXCollections.observableArrayList(rows));
         table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
-        table.getStyleClass().add("overtime-simulation-grid");
-        SpreadsheetTabularSupport.installPmAiReadableTableChrome(table);
+        table.getStyleClass().addAll("overtime-simulation-grid", "overtime-sim-simple-table");
+        table.setPlaceholder(new Label("表示するメンバーがありません"));
         table.getColumns().add(buildNameColumn());
-        table.getColumns().add(buildKindColumn());
         for (TableColumn<GridRow, String> dc : buildDateColumns(state)) {
             table.getColumns().add(dc);
         }
 
-        double rowHeight = 28.0;
+        double rowHeight = 34.0;
         table.setFixedCellSize(rowHeight);
-        table.setPrefHeight(Math.min(420, rows.size() * rowHeight + 32));
-        VBox.setVgrow(table, Priority.ALWAYS);
-        return table;
+        double tableBodyHeight = Math.min(400, rows.size() * rowHeight + 36);
+        table.setMinHeight(tableBodyHeight);
+        table.setPrefHeight(tableBodyHeight);
+        double tableMinWidth = 120.0 + state.dates().size() * 100.0;
+        table.setMinWidth(tableMinWidth);
+        table.setPrefWidth(tableMinWidth);
+
+        ScrollPane scroll = new ScrollPane(table);
+        scroll.getStyleClass().add("overtime-sim-table-scroll");
+        scroll.setFitToHeight(true);
+        scroll.setFitToWidth(false);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setPannable(true);
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        return scroll;
     }
 
     private static TableColumn<GridRow, String> buildNameColumn() {
         TableColumn<GridRow, String> nameCol = new TableColumn<>("氏名");
-        nameCol.setCellValueFactory(
-                cd -> {
-                    GridRow row = cd.getValue();
-                    if (row == null) {
-                        return new SimpleStringProperty("");
-                    }
-                    // 2行ブロックの先頭（勤怠）行だけ氏名を表示
-                    if (row.kind() == RowKind.ATTENDANCE) {
-                        return new SimpleStringProperty(row.member());
-                    }
-                    return new SimpleStringProperty("");
-                });
-        nameCol.setPrefWidth(130);
-        nameCol.setMinWidth(100);
+        nameCol.getStyleClass().add("overtime-sim-name-column");
+        nameCol.setCellValueFactory(cd -> new SimpleStringProperty(cd.getValue().member()));
+        nameCol.setMinWidth(96);
+        nameCol.setPrefWidth(120);
+        nameCol.setMaxWidth(160);
+        nameCol.setResizable(true);
+        nameCol.setSortable(false);
         nameCol.setCellFactory(
                 col ->
                         new TableCell<>() {
@@ -333,18 +320,10 @@ public final class OvertimeSimulationWizard {
                                 } else {
                                     setText(item);
                                 }
+                                setAlignment(Pos.CENTER_LEFT);
                             }
                         });
         return nameCol;
-    }
-
-    private static TableColumn<GridRow, String> buildKindColumn() {
-        TableColumn<GridRow, String> kindCol = new TableColumn<>("区分");
-        kindCol.setCellValueFactory(
-                cd -> new SimpleStringProperty(cd.getValue().kind().label()));
-        kindCol.setPrefWidth(72);
-        kindCol.setMinWidth(64);
-        return kindCol;
     }
 
     private static List<TableColumn<GridRow, String>> buildDateColumns(
@@ -356,68 +335,146 @@ public final class OvertimeSimulationWizard {
         return cols;
     }
 
+    private static String formatCompactDateHeader(LocalDate d) {
+        String dow =
+                switch (d.getDayOfWeek()) {
+                    case SATURDAY -> "土";
+                    case SUNDAY -> "日";
+                    case MONDAY -> "月";
+                    case TUESDAY -> "火";
+                    case WEDNESDAY -> "水";
+                    case THURSDAY -> "木";
+                    case FRIDAY -> "金";
+                };
+        return d.getMonthValue() + "/" + d.getDayOfMonth() + "(" + dow + ")";
+    }
+
     private static TableColumn<GridRow, String> buildDateColumn(
             OvertimeSimulationEditState state, LocalDate date) {
-        TableColumn<GridRow, String> dateCol =
-                new TableColumn<>(AttendanceOvertimePreview.formatDateHeader(date));
-        dateCol.setPrefWidth(88);
-        dateCol.setMinWidth(72);
+        TableColumn<GridRow, String> dateCol = new TableColumn<>(formatCompactDateHeader(date));
+        DayOfWeek dow = date.getDayOfWeek();
+        if (dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY) {
+            dateCol.getStyleClass().add("overtime-sim-weekend-column");
+        }
+        dateCol.setSortable(false);
+        dateCol.setMinWidth(96);
+        dateCol.setPrefWidth(100);
         dateCol.setCellFactory(
                 col ->
                         new TableCell<>() {
-                            private final Label attendanceLabel = new Label();
-                            private final TextField overtimeField = new TextField();
+                            private final CheckBox workingCheck = new CheckBox();
+                            private final Spinner<Integer> minutesSpinner = new Spinner<>();
+                            private final HBox cellBox = new HBox(5, workingCheck, minutesSpinner);
+                            private boolean syncing;
 
                             {
-                                attendanceLabel.setMaxWidth(Double.MAX_VALUE);
-                                attendanceLabel.setAlignment(Pos.CENTER);
-                                attendanceLabel.setOnMouseClicked(
-                                        ev -> {
-                                            if (ev.getButton() != MouseButton.PRIMARY
-                                                    || ev.getClickCount() != 2) {
-                                                return;
-                                            }
-                                            GridRow row = getTableRow().getItem();
-                                            if (row == null || row.kind() != RowKind.ATTENDANCE) {
-                                                return;
-                                            }
-                                            String member = row.member();
-                                            if (member == null || member.isBlank()) {
-                                                return;
-                                            }
-                                            state.toggleWorking(date, member);
-                                            refresh();
-                                            getTableView().refresh();
-                                        });
-                                overtimeField.setPrefWidth(64);
-                                overtimeField.setMaxWidth(Double.MAX_VALUE);
-                                overtimeField
-                                        .textProperty()
+                                cellBox.getStyleClass().add("overtime-sim-day-cell-box");
+                                cellBox.setAlignment(Pos.CENTER_LEFT);
+                                cellBox.setPadding(new Insets(2, 4, 2, 4));
+                                cellBox.setFillHeight(false);
+                                minutesSpinner.setEditable(true);
+                                minutesSpinner.getStyleClass().add("overtime-sim-minutes-spinner");
+                                minutesSpinner.setMinWidth(56);
+                                minutesSpinner.setPrefWidth(58);
+                                minutesSpinner.setMaxWidth(64);
+                                HBox.setHgrow(minutesSpinner, Priority.NEVER);
+                                HBox.setHgrow(workingCheck, Priority.NEVER);
+                                resetMinutesSpinnerValueFactory(0);
+                                workingCheck.getStyleClass().add("overtime-sim-working-check");
+                                workingCheck
+                                        .selectedProperty()
                                         .addListener(
-                                                (obs, o, n) -> {
-                                                    GridRow row =
-                                                            getTableRow() != null
-                                                                    ? getTableRow().getItem()
-                                                                    : null;
-                                                    if (row == null
-                                                            || row.kind() != RowKind.OVERTIME) {
+                                                (obs, was, on) -> {
+                                                    if (syncing) {
+                                                        return;
+                                                    }
+                                                    GridRow row = getTableRow().getItem();
+                                                    if (row == null) {
                                                         return;
                                                     }
                                                     String member = row.member();
                                                     if (member == null || member.isBlank()) {
                                                         return;
                                                     }
-                                                    String t = n != null ? n.trim() : "";
-                                                    if (t.isEmpty()) {
+                                                    OvertimeSimulationEditState.CellState cs =
+                                                            state.cell(date, member);
+                                                    if (cs == null
+                                                            || cs.currentWorking() == on) {
                                                         return;
                                                     }
-                                                    try {
-                                                        state.setOvertimeMinutes(
-                                                                date, member, Integer.parseInt(t));
-                                                    } catch (NumberFormatException ignored) {
-                                                        // 入力途中
-                                                    }
+                                                    state.toggleWorking(date, member);
+                                                    syncFromState();
                                                 });
+                                minutesSpinner
+                                        .valueProperty()
+                                        .addListener(
+                                                (obs, oldVal, newVal) -> {
+                                                    if (syncing || newVal == null) {
+                                                        return;
+                                                    }
+                                                    commitSpinnerMinutes(newVal);
+                                                });
+                                minutesSpinner
+                                        .focusedProperty()
+                                        .addListener(
+                                                (obs, wasFocused, focused) -> {
+                                                    if (focused || syncing) {
+                                                        return;
+                                                    }
+                                                    Integer v = minutesSpinner.getValue();
+                                                    if (v == null) {
+                                                        return;
+                                                    }
+                                                    int snapped =
+                                                            OvertimeSimulationEditState
+                                                                    .snapOvertimeMinutes(v);
+                                                    if (snapped != v) {
+                                                        syncing = true;
+                                                        try {
+                                                            minutesSpinner.getValueFactory()
+                                                                    .setValue(snapped);
+                                                        } finally {
+                                                            syncing = false;
+                                                        }
+                                                    }
+                                                    commitSpinnerMinutes(snapped);
+                                                });
+                            }
+
+                            private void resetMinutesSpinnerValueFactory(int initial) {
+                                minutesSpinner.setValueFactory(
+                                        new SpinnerValueFactory.IntegerSpinnerValueFactory(
+                                                0,
+                                                OvertimeSimulationEditState.OVERTIME_MINUTES_MAX,
+                                                OvertimeSimulationEditState.snapOvertimeMinutes(
+                                                        initial),
+                                                OvertimeSimulationEditState
+                                                        .OVERTIME_MINUTES_STEP));
+                            }
+
+                            private void commitSpinnerMinutes(int minutes) {
+                                if (syncing) {
+                                    return;
+                                }
+                                GridRow row = getTableRow().getItem();
+                                if (row == null) {
+                                    return;
+                                }
+                                String member = row.member();
+                                if (member == null || member.isBlank()) {
+                                    return;
+                                }
+                                OvertimeSimulationEditState.CellState cs =
+                                        state.cell(date, member);
+                                if (cs == null || !cs.currentWorking()) {
+                                    return;
+                                }
+                                int snapped =
+                                        OvertimeSimulationEditState.snapOvertimeMinutes(minutes);
+                                if (snapped == cs.currentOvertimeMinutes()) {
+                                    return;
+                                }
+                                state.setOvertimeMinutes(date, member, snapped);
                             }
 
                             @Override
@@ -425,9 +482,7 @@ public final class OvertimeSimulationWizard {
                                 super.updateItem(item, empty);
                                 if (empty) {
                                     setGraphic(null);
-                                    setText(null);
                                     getStyleClass().remove("overtime-sim-cell-off");
-                                    getStyleClass().remove("pm-ai-readable-date-cell");
                                     return;
                                 }
                                 GridRow row = getTableRow().getItem();
@@ -440,69 +495,46 @@ public final class OvertimeSimulationWizard {
                                     setGraphic(null);
                                     return;
                                 }
-                                OvertimeSimulationEditState.CellState cs =
-                                        state.cell(date, member);
-                                if (cs == null) {
-                                    setGraphic(null);
-                                    return;
-                                }
-                                if (row.kind() == RowKind.ATTENDANCE) {
-                                    setGraphic(attendanceLabel);
-                                    attendanceLabel.setText(cs.currentWorking() ? "○" : "");
-                                    applyDateCellStyleClasses(cs.currentWorking());
-                                    setTooltip(
-                                            new Tooltip(
-                                                    "ダブルクリック: "
-                                                            + (cs.currentWorking()
-                                                                    ? "○を解除してグレーアウト"
-                                                                    : "グレーを解除して○（休日出勤）")));
-                                } else {
-                                    if (cs.currentWorking()) {
-                                        applyDateCellStyleClasses(true);
-                                        overtimeField.setDisable(false);
-                                        int show = cs.currentOvertimeMinutes();
-                                        String want = show > 0 ? String.valueOf(show) : "";
-                                        if (!overtimeField.isFocused()
-                                                && !want.equals(overtimeField.getText().trim())) {
-                                            overtimeField.setText(want);
-                                        }
-                                        setGraphic(overtimeField);
-                                        setTooltip(new Tooltip("残業時間（分）1〜720"));
-                                    } else {
-                                        applyDateCellStyleClasses(false);
-                                        overtimeField.setDisable(true);
-                                        overtimeField.clear();
-                                        setGraphic(null);
-                                        setText("");
-                                    }
-                                }
+                                setGraphic(cellBox);
+                                setAlignment(Pos.CENTER);
+                                setClip(null);
+                                syncFromState();
                             }
 
-                            private void refresh() {
+                            private void syncFromState() {
                                 GridRow row = getTableRow().getItem();
-                                if (row == null || row.kind() != RowKind.ATTENDANCE) {
+                                if (row == null) {
                                     return;
                                 }
                                 String member = row.member();
-                                if (member == null) {
-                                    return;
-                                }
                                 OvertimeSimulationEditState.CellState cs =
                                         state.cell(date, member);
                                 if (cs == null) {
                                     return;
                                 }
-                                attendanceLabel.setText(cs.currentWorking() ? "○" : "");
-                                applyDateCellStyleClasses(cs.currentWorking());
-                            }
-
-                            private void applyDateCellStyleClasses(boolean working) {
-                                // 出勤セルは薄緑にせず白地のまま。休みセルのみグレーで区別する。
-                                getStyleClass().remove("pm-ai-readable-date-cell");
-                                if (working) {
-                                    getStyleClass().remove("overtime-sim-cell-off");
-                                } else if (!getStyleClass().contains("overtime-sim-cell-off")) {
-                                    getStyleClass().add("overtime-sim-cell-off");
+                                syncing = true;
+                                try {
+                                    workingCheck.setSelected(cs.currentWorking());
+                                    if (cs.currentWorking()) {
+                                        getStyleClass().remove("overtime-sim-cell-off");
+                                        minutesSpinner.setDisable(false);
+                                        int show =
+                                                OvertimeSimulationEditState.snapOvertimeMinutes(
+                                                        cs.currentOvertimeMinutes());
+                                        Integer current = minutesSpinner.getValue();
+                                        if (!minutesSpinner.isFocused()
+                                                && (current == null || current != show)) {
+                                            resetMinutesSpinnerValueFactory(show);
+                                        }
+                                    } else {
+                                        if (!getStyleClass().contains("overtime-sim-cell-off")) {
+                                            getStyleClass().add("overtime-sim-cell-off");
+                                        }
+                                        minutesSpinner.setDisable(true);
+                                        resetMinutesSpinnerValueFactory(0);
+                                    }
+                                } finally {
+                                    syncing = false;
                                 }
                             }
                         });

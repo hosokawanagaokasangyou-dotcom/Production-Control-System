@@ -1973,7 +1973,8 @@ public final class DeliveryCalendarViewTabController {
                 stage == ResultDispatchStage3Support.PlanningStage.STAGE3
                         && dispatchSnap != null
                         && ResultDispatchStage3Support.hasStage3ActualColumn(dispatchSnap.headers());
-        ResultDispatchStage3Support.applyPlanningStageBadge(dataStageBadgeLabel, stage);
+        ResultDispatchStage3Support.applyPlanningStageBadgeFromDispatchJson(
+                dataStageBadgeLabel, jsonPath);
     }
 
     /** 配台 JSON の段階表示バッジを更新（子タブ再読込後にも呼ぶ）。 */
@@ -1985,7 +1986,8 @@ public final class DeliveryCalendarViewTabController {
         compareHideStage3PlanLine =
                 stage == ResultDispatchStage3Support.PlanningStage.STAGE3
                         && ResultDispatchStage3Support.detectStage3FromDispatchJsonPath(jsonPath);
-        ResultDispatchStage3Support.applyPlanningStageBadge(dataStageBadgeLabel, stage);
+        ResultDispatchStage3Support.applyPlanningStageBadgeFromDispatchJson(
+                dataStageBadgeLabel, jsonPath);
     }
 
     private static Map<String, Map<String, Map<String, Double>>> loadStage3BaselineDispatchLookup(

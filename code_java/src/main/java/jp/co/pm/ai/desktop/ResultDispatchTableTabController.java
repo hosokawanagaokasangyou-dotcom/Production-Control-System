@@ -454,8 +454,8 @@ public final class ResultDispatchTableTabController {
                 ResultDispatchStage3Support.applyStage3DisplayQuantities(headerOrder, rowMaps);
                 ResultDispatchStage3Support.removeRedundantActualColumnFromMaps(headerOrder, rowMaps);
             }
-            ResultDispatchStage3Support.applyPlanningStageBadge(
-                    dataStageBadgeLabel, ResultDispatchStage3Support.detectPlanningStage(path));
+            ResultDispatchStage3Support.applyPlanningStageBadgeFromDispatchJson(
+                    dataStageBadgeLabel, path);
             statusLabel.setText(rowMaps.size() + " 行");
 
             headersRef.clear();
