@@ -424,6 +424,8 @@
 /* ===== 段階3.5 残業シミュレーション ダイアログ ===== */
 .overtime-sim-dialog {
     -fx-background-color: #f4f6f8;
+    -fx-border-color: #0f766e;
+    -fx-border-width: 2;
 }
 
 .overtime-sim-header {

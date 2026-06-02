@@ -29,6 +29,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.stage.StageStyle;
 
 import jp.co.pm.ai.desktop.dispatch.AttendanceOvertimePreview;
 import jp.co.pm.ai.desktop.dispatch.OvertimeSimulationEditState;
@@ -95,7 +96,7 @@ public final class OvertimeSimulationWizard {
      * プレビュー取得済みの状態でウィザードを表示する。
      *
      * @param onConfirm 確定時に overrides JSON パスを渡す（段階起動は呼び出し側）
-     * @param onDismissWithoutRun キャンセル／×で閉じたとき（確定前のみ）。省略可。
+     * @param onDismissWithoutRun キャンセルで閉じたとき（確定前のみ）。省略可。
      */
     public static void show(
             Stage owner,
@@ -134,9 +135,12 @@ public final class OvertimeSimulationWizard {
             stage.initOwner(owner);
         }
         stage.initModality(Modality.WINDOW_MODAL);
+        // タイトルバーの×で閉じると onHidden が不整合になり段階ボタンがロックされたままになるため、枠なし＋キャンセルのみで閉じる。
+        stage.initStyle(StageStyle.UNDECORATED);
         stage.setTitle(target.windowTitle());
 
         final boolean[] confirmed = {false};
+        final boolean[] closeAllowed = {false};
 
         Label eyebrow = new Label(target.label());
         eyebrow.getStyleClass().add("overtime-sim-eyebrow");
@@ -220,6 +224,7 @@ public final class OvertimeSimulationWizard {
                                             OvertimeSimulationOverridesWriter.buildFromEditState(
                                                     state));
                             confirmed[0] = true;
+                            closeAllowed[0] = true;
                             stage.close();
                             onConfirm.accept(overrides);
                         } catch (Exception ex) {
@@ -234,12 +239,16 @@ public final class OvertimeSimulationWizard {
                 });
 
         backBtn.setOnAction(ev -> showStep1.run());
-        cancelBtn.setOnAction(ev -> stage.close());
-
-        stage.setOnHidden(
+        cancelBtn.setOnAction(
                 ev -> {
-                    if (!confirmed[0] && onDismissWithoutRun != null) {
-                        onDismissWithoutRun.run();
+                    closeAllowed[0] = true;
+                    stage.close();
+                });
+
+        stage.setOnCloseRequest(
+                ev -> {
+                    if (!closeAllowed[0]) {
+                        ev.consume();
                     }
                 });
 
@@ -258,8 +267,16 @@ public final class OvertimeSimulationWizard {
         Scene scene = new Scene(root, 1024, 600);
         if (shell != null) {
             shell.registerThemeTrackedScene(scene);
-            stage.setOnHidden(ev -> shell.unregisterThemeTrackedScene(scene));
         }
+        stage.setOnHidden(
+                ev -> {
+                    if (shell != null) {
+                        shell.unregisterThemeTrackedScene(scene);
+                    }
+                    if (!confirmed[0] && onDismissWithoutRun != null) {
+                        onDismissWithoutRun.run();
+                    }
+                });
         stage.setScene(scene);
         stage.showAndWait();
     }
