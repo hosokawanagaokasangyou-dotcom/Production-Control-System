@@ -45,6 +45,26 @@ class DispatchAladdinPlanAlignerTest {
     }
 
     @Test
+    void resolveAlignFromDate_includeTodayFlag() {
+        LocalDate op = LocalDate.of(2026, 6, 2);
+        assertEquals(op, DispatchAladdinPlanAligner.resolveAlignFromDate(op, true));
+        assertEquals(op.plusDays(1), DispatchAladdinPlanAligner.resolveAlignFromDate(op, false));
+    }
+
+    @Test
+    void defaultIncludeTodayForAlign() {
+        assertTrue(
+                DispatchAladdinPlanAligner.defaultIncludeTodayForAlign(
+                        LocalTime.of(7, 30), Optional.of(LocalTime.of(8, 0))));
+        assertFalse(
+                DispatchAladdinPlanAligner.defaultIncludeTodayForAlign(
+                        LocalTime.of(8, 0), Optional.of(LocalTime.of(8, 0))));
+        assertFalse(
+                DispatchAladdinPlanAligner.defaultIncludeTodayForAlign(
+                        LocalTime.of(7, 0), Optional.empty()));
+    }
+
+    @Test
     void alignRowFromDayIndex_preservesPrefixAndAlignsSuffix() {
         var result =
                 DispatchAladdinPlanAligner.alignRowFromDayIndex(

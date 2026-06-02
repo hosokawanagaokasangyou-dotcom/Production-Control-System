@@ -37,22 +37,36 @@ public final class DispatchAladdinPlanAligner {
     /**
      * 手動修正「アラジン計画に合わせる」の整列開始暦日。
      *
-     * <p>定常開始（master A15）が読め、かつ現在時刻が定常開始前なら操作日（当日）から整列する。
-     * それ以外（定常開始以降、または定常開始が不明）は翌日から整列する。
+     * @param includeToday {@code true} なら操作日（当日）から、{@code false} なら翌日から
+     */
+    public static LocalDate resolveAlignFromDate(LocalDate operationDate, boolean includeToday) {
+        Objects.requireNonNull(operationDate, "operationDate");
+        return includeToday ? operationDate : operationDate.plusDays(1);
+    }
+
+    /**
+     * 確認ダイアログのチェックボックス初期値用。定常開始（master A15）が読め、かつ現在時刻が定常開始前なら
+     * {@code true}（当日を含める）。
+     */
+    public static boolean defaultIncludeTodayForAlign(
+            LocalTime now, Optional<LocalTime> regularShiftStart) {
+        Objects.requireNonNull(now, "now");
+        return regularShiftStart.isPresent() && now.isBefore(regularShiftStart.get());
+    }
+
+    /**
+     * {@link #defaultIncludeTodayForAlign(LocalTime, Optional)} の結果で {@link #resolveAlignFromDate(LocalDate, boolean)} を呼ぶ。
      */
     public static LocalDate resolveAlignFromDate(
             LocalDate operationDate, LocalTime now, Optional<LocalTime> regularShiftStart) {
         Objects.requireNonNull(operationDate, "operationDate");
-        Objects.requireNonNull(now, "now");
-        if (regularShiftStart.isPresent() && now.isBefore(regularShiftStart.get())) {
-            return operationDate;
-        }
-        return operationDate.plusDays(1);
+        return resolveAlignFromDate(
+                operationDate, defaultIncludeTodayForAlign(now, regularShiftStart));
     }
 
     /**
      * {@link #alignRow} と同様だが、{@code alignFromDayIndex} より前の暦日は {@code current} を変更しない。
-     * 手動修正タブのボタン: 定常開始前は当日から、それ以外は翌日以降のみ再配分する。
+     * 手動修正タブのボタン: {@code alignFromDayIndex} より前の暦日は変更しない（当日含むかは UI で選択）。
      *
      * @param alignFromDayIndex 再配分を開始する日付軸 index（この index 以降のみ対象）。0 で全日。
      */

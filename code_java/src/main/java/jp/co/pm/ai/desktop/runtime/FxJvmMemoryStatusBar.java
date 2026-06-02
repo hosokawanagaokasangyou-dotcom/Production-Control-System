@@ -102,6 +102,7 @@ public final class FxJvmMemoryStatusBar {
     private static MemorySample readSample(MemoryMXBean memoryBean, MemoryPoolMXBean metaspacePool) {
         MemoryUsage heap = memoryBean.getHeapMemoryUsage();
         long heapUsed = heap.getUsed();
+        long heapInit = heap.getInit();
         long heapMax = heap.getMax();
         double heapPct = heapMax > 0 ? 100.0 * heapUsed / (double) heapMax : Double.NaN;
 
@@ -112,7 +113,7 @@ public final class FxJvmMemoryStatusBar {
             metaUsed = u.getUsed();
             metaMax = u.getMax();
         }
-        return new MemorySample(heapUsed, heapMax, heapPct, metaUsed, metaMax);
+        return new MemorySample(heapUsed, heapInit, heapMax, heapPct, metaUsed, metaMax);
     }
 
     private static String formatUiText(MemorySample s) {
@@ -120,8 +121,12 @@ public final class FxJvmMemoryStatusBar {
                 !Double.isNaN(s.heapPct)
                         ? String.format(Locale.ROOT, "%.1f%%", s.heapPct)
                         : "n/a";
-        return "Heap "
-                + formatMiPair(s.heapUsed, s.heapMax)
+        return "Heap used "
+                + formatMiB(s.heapUsed)
+                + " | min "
+                + formatMiB(s.heapInit)
+                + " max "
+                + formatMiB(s.heapMax)
                 + " ("
                 + heapPctStr
                 + ") | Metaspace "
@@ -132,6 +137,8 @@ public final class FxJvmMemoryStatusBar {
     private static String formatLogLine(MemorySample s) {
         return "heap_used_MiB="
                 + toMiB(s.heapUsed)
+                + " heap_min_MiB="
+                + formatMaxMiB(s.heapInit)
                 + " heap_max_MiB="
                 + formatMaxMiB(s.heapMax)
                 + " heap_pct="
@@ -140,6 +147,10 @@ public final class FxJvmMemoryStatusBar {
                 + (s.metaUsed >= 0 ? toMiB(s.metaUsed) : "n/a")
                 + " metaspace_max_MiB="
                 + formatMaxMiB(s.metaMax);
+    }
+
+    private static String formatMiB(long bytes) {
+        return bytes >= 0 ? toMiB(bytes) + " MiB" : "n/a";
     }
 
     private static String formatMiPair(long usedBytes, long maxBytes) {
@@ -162,5 +173,10 @@ public final class FxJvmMemoryStatusBar {
     }
 
     private record MemorySample(
-            long heapUsed, long heapMax, double heapPct, long metaUsed, long metaMax) {}
+            long heapUsed,
+            long heapInit,
+            long heapMax,
+            double heapPct,
+            long metaUsed,
+            long metaMax) {}
 }

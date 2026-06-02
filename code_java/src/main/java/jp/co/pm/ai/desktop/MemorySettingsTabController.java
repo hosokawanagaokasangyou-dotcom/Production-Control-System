@@ -195,7 +195,6 @@ public final class MemorySettingsTabController {
         intervalCaptionLabel.setText(txt("interval.caption"));
         chartCaptionLabel.setText(txt("chart.caption"));
         runtimeCaptionLabel.setText(txt("runtime.caption"));
-        runtimeSlashLabel.setText("/");
         runtimeOpenParenLabel.setText(txt("runtime.open_paren"));
         runtimeCloseParenLabel.setText(txt("runtime.close_paren"));
         monitorHintLabel.setText(txt("monitor.hint"));
@@ -479,10 +478,12 @@ public final class MemorySettingsTabController {
         MemoryMXBean bean = ManagementFactory.getMemoryMXBean();
         MemoryUsage heap = bean.getHeapMemoryUsage();
         long used = heap.getUsed();
+        long init = heap.getInit();
         long max = heap.getMax();
         long committed = heap.getCommitted();
-        runtimeHeapUsedLabel.setText(formatMiB(used));
-        runtimeHeapMaxLabel.setText(formatMiBMax(max));
+        runtimeHeapUsedLabel.setText(formatMiB(used) + txt("runtime.used.suffix"));
+        runtimeSlashLabel.setText(txt("runtime.min.sep") + formatMiBMax(init) + " MiB");
+        runtimeHeapMaxLabel.setText(txt("runtime.max.sep") + formatMiBMax(max) + " MiB");
         runtimeHeapCommittedLabel.setText(formatMiB(committed));
     }
 

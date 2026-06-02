@@ -1250,29 +1250,38 @@ public final class DispatchInteractiveTabController {
         Alert confirm = new Alert(AlertType.CONFIRMATION);
         if (shell != null) {
             confirm.initOwner(shell.primaryStageForDialogs());
+            shell.prepareDialogForMainTheme(confirm);
         }
         LocalDate operationDate = LocalDate.now();
-        LocalDate alignFromDate = aladdinAlignFromDate(operationDate);
-        boolean includesToday = alignFromDate.equals(operationDate);
+        boolean defaultIncludeToday =
+                DispatchAladdinPlanAligner.defaultIncludeTodayForAlign(
+                        LocalTime.now(), resolveRegularShiftStartForAladdinAlign());
+        CheckBox includeTodayCheck =
+                new CheckBox("当日を含める（操作日 " + operationDate + " から再配分）");
+        includeTodayCheck.setSelected(defaultIncludeToday);
+        Label detailLabel = new Label();
+        detailLabel.setWrapText(true);
+        Runnable refreshConfirmText =
+                () -> {
+                    boolean includesToday = includeTodayCheck.isSelected();
+                    confirm.setHeaderText(aladdinAlignConfirmHeader(includesToday));
+                    detailLabel.setText(aladdinAlignConfirmDetail(operationDate, includesToday));
+                };
+        includeTodayCheck.selectedProperty().addListener((o, a, b) -> refreshConfirmText.run());
+        refreshConfirmText.run();
+        Label rollHintLabel =
+                new Label(
+                        "換算数量が原反ロール長より小さい行は、表示上 20 m 等でも 1 ロール単位で移動します。");
+        rollHintLabel.setWrapText(true);
         confirm.setTitle("アラジン計画に合わせる");
-        confirm.setHeaderText(
-                includesToday
-                        ? "定常開始前のため、本日を含めアラジン計画に沿って再配分します"
-                        : "翌日以降の数量をアラジン計画に沿って再配分します");
-        confirm.setContentText(
-                (includesToday
-                                ? "操作日（"
-                                        + operationDate
-                                        + "）より前の暦日は変更しません。"
-                                        + "本日を含む以降のみ、各タスク行の合計数量を維持したままロール単位で日付間に移動します。"
-                                : "操作日（"
-                                        + operationDate
-                                        + "）以前の暦日は変更しません。"
-                                        + "翌日以降のみ、各タスク行の合計数量を維持したままロール単位で日付間に移動します。")
-                        + "\n換算数量が原反ロール長より小さい行は、表示上 20 m 等でも 1 ロール単位で移動します。");
+        confirm.setContentText(null);
+        confirm.getDialogPane().setContent(new VBox(10, detailLabel, includeTodayCheck, rollHintLabel));
         if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
             return;
         }
+        LocalDate alignFromDate =
+                DispatchAladdinPlanAligner.resolveAlignFromDate(
+                        operationDate, includeTodayCheck.isSelected());
 
         aladdinAlignMoveHighlights.clear();
 
@@ -1515,9 +1524,22 @@ public final class DispatchInteractiveTabController {
         return dateAxis.size();
     }
 
-    private LocalDate aladdinAlignFromDate(LocalDate operationDate) {
-        return DispatchAladdinPlanAligner.resolveAlignFromDate(
-                operationDate, LocalTime.now(), resolveRegularShiftStartForAladdinAlign());
+    private static String aladdinAlignConfirmHeader(boolean includesToday) {
+        return includesToday
+                ? "本日を含め、アラジン計画に沿って再配分します"
+                : "翌日以降の数量をアラジン計画に沿って再配分します";
+    }
+
+    private static String aladdinAlignConfirmDetail(LocalDate operationDate, boolean includesToday) {
+        return includesToday
+                ? "操作日（"
+                        + operationDate
+                        + "）より前の暦日は変更しません。"
+                        + "本日を含む以降のみ、各タスク行の合計数量を維持したままロール単位で日付間に移動します。"
+                : "操作日（"
+                        + operationDate
+                        + "）以前の暦日は変更しません。"
+                        + "翌日以降のみ、各タスク行の合計数量を維持したままロール単位で日付間に移動します。";
     }
 
     private Optional<LocalTime> resolveRegularShiftStartForAladdinAlign() {
