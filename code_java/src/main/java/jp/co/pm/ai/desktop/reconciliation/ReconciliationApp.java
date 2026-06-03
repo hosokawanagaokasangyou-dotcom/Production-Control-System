@@ -94,6 +94,13 @@ public class ReconciliationApp {
     /** 受注ファイル転記中（UI スレッドをブロックしないようバックグラウンド実行）。 */
     private volatile boolean juchuTransferInProgress = false;
 
+    /**
+     * 自動転記中は数式セルをフォーム値で置換する（既存行の手修正を反映するため）。
+     * バックグラウンド転記スレッドでのみ {@code true} にする。
+     */
+    private static final ThreadLocal<Boolean> JUCHU_TRANSFER_REPLACE_FORMULA =
+            ThreadLocal.withInitial(() -> Boolean.FALSE);
+
     private ComboBox<OrderRecord> comboRecord;
     private TextField txtRecordFilter;
     private RadioButton rbAllRecordsFilter;
@@ -2042,6 +2049,17 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     private void transferRecordFromDbValues(
             Workbook wb, Sheet sheet, Map<String, Integer> colMap, OrderRecord record)
             throws Exception {
+        JUCHU_TRANSFER_REPLACE_FORMULA.set(Boolean.TRUE);
+        try {
+            transferRecordFromDbValuesBody(wb, sheet, colMap, record);
+        } finally {
+            JUCHU_TRANSFER_REPLACE_FORMULA.remove();
+        }
+    }
+
+    private void transferRecordFromDbValuesBody(
+            Workbook wb, Sheet sheet, Map<String, Integer> colMap, OrderRecord record)
+            throws Exception {
         Map<String, String> db = record.getDbValues();
         if (db == null || db.isEmpty()) {
             throw new IllegalStateException("一時保存データが空です");
@@ -2117,9 +2135,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     /**
-     * 受注ファイル側の契約Ｎｏが空、または依頼書原本（E21/L21/S21 連結）と異なるとき、原本値で上書きする。
+     * 契約Ｎｏがフォーム／受注側で空のときだけ、依頼書原本（E21/L21/S21 連結）の値を補完する。
+     * 手入力済みの契約Ｎｏは上書きしない（転記・一覧表示の双方で同じルール）。
      */
-    private static void mergeJuchuContractNoFromRawWhenBlankOrDifferent(
+    static void mergeJuchuContractNoFromRawWhenBlankOrDifferent(
             Map<String, String> db, Map<String, String> raw) {
         if (db == null || raw == null || raw.isEmpty()) {
             return;
@@ -2129,21 +2148,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             return;
         }
         String dbContract = firstNonBlank(db.get("契約Ｎｏ"), db.get("契約No"));
-        if (dbContract.isBlank()
-                || !normalizeJuchuContractText(dbContract).equals(normalizeJuchuContractText(rawContract))) {
+        if (dbContract.isBlank()) {
             db.put("契約Ｎｏ", rawContract);
         }
-    }
-
-    private static String normalizeJuchuContractText(String val) {
-        if (val == null) {
-            return "";
-        }
-        String text = val.strip();
-        text = java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFKC);
-        text = text.replaceAll("\\s+", "");
-        text = text.replace("－", "-").replace("ー", "-").replace("―", "-").replace("‐", "-");
-        return text.toUpperCase(java.util.Locale.ROOT);
     }
 
     private static void putIfBlank(Map<String, String> db, String key, String value) {
@@ -2458,19 +2465,24 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             setJuchuSheetReqNoIfIncluded(wb, sheet, targetRow, reqNo);
 
             Map<String, String> db = buildJuchuDbValuesFromForm();
-            writeJuchuRowFromValues(
-                    targetRow,
-                    db,
-                    true,
-                    db.get("入力区分"),
-                    db.get("加工区分"),
-                    db.get("入力担当"),
-                    db.get("特記事項1"),
-                    db.get("特記事項2"),
-                    db.get("特記事項3"),
-                    true,
-                    true);
-            
+            JUCHU_TRANSFER_REPLACE_FORMULA.set(Boolean.TRUE);
+            try {
+                writeJuchuRowFromValues(
+                        targetRow,
+                        db,
+                        true,
+                        db.get("入力区分"),
+                        db.get("加工区分"),
+                        db.get("入力担当"),
+                        db.get("特記事項1"),
+                        db.get("特記事項2"),
+                        db.get("特記事項3"),
+                        true,
+                        true);
+            } finally {
+                JUCHU_TRANSFER_REPLACE_FORMULA.remove();
+            }
+
             fis.close();
             FileOutputStream fos = new FileOutputStream(file);
             wb.write(fos);
@@ -3521,6 +3533,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         db.putAll(buildJuchuDbValuesFromForm());
         
         selectedRecord.setStatus(STATUS_LOCAL_SAVE_PENDING);
+        syncOrderRecordSummaryFromDb(selectedRecord, db);
         
         // ComboBox表示のリフレッシュ
         comboRecord.setItems(null);
@@ -3528,6 +3541,35 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         comboRecord.getSelectionModel().select(selectedRecord);
         
         statusLabel.setText("修正をローカル保存しました（受注ファイルに反映させるには転記ボタンを押してください）");
+    }
+
+    /** 転記・一時保存後に {@link OrderRecord} の db と一覧表示用サマリをフォーム内容へ揃える。 */
+    private void syncOrderRecordDbFromCurrentForm(OrderRecord record) {
+        if (record == null) {
+            return;
+        }
+        Map<String, String> db = record.getDbValues();
+        if (db == null) {
+            return;
+        }
+        Map<String, String> fromForm = buildJuchuDbValuesFromForm();
+        db.clear();
+        db.putAll(fromForm);
+        syncOrderRecordSummaryFromDb(record, fromForm);
+    }
+
+    private static void syncOrderRecordSummaryFromDb(
+            OrderRecord record, Map<String, String> db) {
+        if (record == null || db == null) {
+            return;
+        }
+        record.setUser(db.getOrDefault("ユーザー", ""));
+        String product = db.getOrDefault("製品", "");
+        int nl = product.indexOf('\n');
+        if (nl >= 0) {
+            product = product.substring(0, nl);
+        }
+        record.setProduct(product.trim());
     }
 
     private void transferToExcel() {
@@ -3603,6 +3645,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                                             if (recordRef != null) {
                                                 recordRef.setStatus("一致 (転記完了)");
                                                 recordRef.setDiscrepancy("一致 (受注ファイルへ転記完了)");
+                                                syncOrderRecordDbFromCurrentForm(recordRef);
 
                                                 ObservableList<OrderRecord> currentItems =
                                                         comboRecord.getItems();
@@ -3682,6 +3725,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         progress.accept(
                 "受注ファイルへ転記しています…\n(1/5) 受注ファイルを開いています…\n依頼No: " + form.reqNo());
 
+        JUCHU_TRANSFER_REPLACE_FORMULA.set(Boolean.TRUE);
         try (FileInputStream fis = new FileInputStream(file);
                 Workbook wb = PoiWorkbookOpener.open(fis)) {
             wb.setForceFormulaRecalculation(false);
@@ -3770,6 +3814,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 wb.write(fos);
             }
             return undoState;
+        } finally {
+            JUCHU_TRANSFER_REPLACE_FORMULA.remove();
         }
     }
 
@@ -3905,6 +3951,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     private void performJuchuTransferUndo(
             File file, JuchuTransferUndoState undo, Consumer<String> progress) throws Exception {
         progress.accept("自動転記の取り消し…\n(1/3) 受注ファイルを開いています…");
+        JUCHU_TRANSFER_REPLACE_FORMULA.set(Boolean.TRUE);
         try (FileInputStream fis = new FileInputStream(file);
                 Workbook wb = PoiWorkbookOpener.open(fis)) {
             Sheet sheet = wb.getSheet("受注ﾌｧｲﾙ");
@@ -3942,6 +3989,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             try (FileOutputStream fos = new FileOutputStream(file)) {
                 wb.write(fos);
             }
+        } finally {
+            JUCHU_TRANSFER_REPLACE_FORMULA.remove();
         }
     }
 
@@ -4183,11 +4232,21 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         cellReqNo.setCellStyle(yellowStyle);
     }
 
-    /** 数式セルは上書きしない。 */
+    private static boolean juchuTransferReplaceFormulaCells() {
+        return Boolean.TRUE.equals(JUCHU_TRANSFER_REPLACE_FORMULA.get());
+    }
+
+    /** 通常は数式セルを触らない。自動転記中は数式を値セルへ置換してフォーム内容を反映する。 */
     private static Cell writableJuchuCell(Row row, int col) {
         Cell existing = row.getCell(col);
         if (isJuchuFormulaCell(existing)) {
-            return null;
+            if (!juchuTransferReplaceFormulaCells()) {
+                return null;
+            }
+            if (existing != null) {
+                row.removeCell(existing);
+            }
+            return row.createCell(col);
         }
         return existing != null ? existing : row.createCell(col);
     }
