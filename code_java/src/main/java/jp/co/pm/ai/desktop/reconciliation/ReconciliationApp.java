@@ -1108,10 +1108,32 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         Tab tab = new Tab("後加工商品マスタ");
         tab.setClosable(false);
 
+        StackPane lazyHost = new StackPane();
+        lazyHost.setAlignment(Pos.CENTER);
+        Label hint = new Label("このタブを開くとマスタ編集画面を読み込みます");
+        hint.getStyleClass().add("request-form-tab-loading-label");
+        lazyHost.getChildren().add(hint);
+        tab.setContent(lazyHost);
+
+        java.util.concurrent.atomic.AtomicBoolean contentMounted =
+                new java.util.concurrent.atomic.AtomicBoolean(false);
+        tab.selectedProperty()
+                .addListener(
+                        (obs, wasSelected, selected) -> {
+                            if (!selected || !contentMounted.compareAndSet(false, true)) {
+                                return;
+                            }
+                            ProgressIndicator busy = new ProgressIndicator();
+                            lazyHost.getChildren().setAll(busy);
+                            Platform.runLater(() -> mountPostProcessingProductMasterContent(lazyHost));
+                        });
+        return tab;
+    }
+
+    private void mountPostProcessingProductMasterContent(StackPane host) {
         ScrollPane sp = new ScrollPane();
         sp.setFitToWidth(true);
         sp.getStyleClass().add("form-scroll-pane");
-
         VBox content =
                 PostProcessingProductMasterEditorPane.buildTabContent(
                         hostWindow,
@@ -1124,8 +1146,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                                 PostProcessingProductMasterReferenceCache::invalidate,
                                 msg -> System.out.println(msg)));
         sp.setContent(content);
-        tab.setContent(sp);
-        return tab;
+        host.getChildren().setAll(sp);
     }
 
     /**

@@ -36,6 +36,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
 
+import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.PostProcessingProductMasterIo;
 
 /**
@@ -69,9 +70,9 @@ public final class PostProcessingProductMasterEditorPane {
 
     private PostProcessingProductMasterEditorPane() {}
 
-    /** 依頼書入力の専用タブ用（横幅いっぱい）。 */
+    /** 依頼書入力の専用タブ用（横幅いっぱい）。ディスク読込はバックグラウンド。 */
     public static VBox buildTabContent(Window owner, Context ctx) {
-        VBox content = buildContent(owner, ctx, false);
+        VBox content = buildContent(owner, ctx, false, true);
         content.getStyleClass().add("form-tab-container");
         content.setFillWidth(true);
         content.setMaxWidth(Double.MAX_VALUE);
@@ -81,14 +82,15 @@ public final class PostProcessingProductMasterEditorPane {
 
     /** 【設定】タブ内カード用（幅上限あり）。 */
     public static VBox buildCard(Window owner, Context ctx, double maxCardWidth) {
-        VBox card = buildContent(owner, ctx, true);
+        VBox card = buildContent(owner, ctx, true, true);
         card.getStyleClass().add("settings-card");
         card.setMaxWidth(maxCardWidth);
         card.setPrefWidth(maxCardWidth);
         return card;
     }
 
-    private static VBox buildContent(Window owner, Context ctx, boolean compactCardTitle) {
+    private static VBox buildContent(
+            Window owner, Context ctx, boolean compactCardTitle, boolean deferInitialLoad) {
         Supplier<Map<String, String>> uiEnv = ctx.uiEnv();
         Consumer<String> log = ctx.log() != null ? ctx.log() : s -> {};
 
@@ -229,20 +231,11 @@ public final class PostProcessingProductMasterEditorPane {
                         if (referenceHeaders.isEmpty()) {
                             loadReferenceHeaders.run();
                         }
-                        var sheet = PostProcessingProductMasterIo.readUploadWorkbook(up);
-                        PostProcessingProductMasterColumnGroups.validateHeadersMatch(
-                                referenceHeaders, sheet.headers());
-                        uploadRows.clear();
-                        for (List<String> row : sheet.rows()) {
-                            uploadRows.add(
-                                    new LinkedHashMap<>(
-                                            PostProcessingProductMasterIo.rowToMap(
-                                                    sheet.headers(), row)));
-                        }
-                        statusLabel.setText(
-                                "アップロード用 "
-                                        + uploadRows.size()
-                                        + " 行を読み込みました。");
+                        applyUploadSheet(
+                                PostProcessingProductMasterIo.readUploadWorkbook(up),
+                                referenceHeaders,
+                                uploadRows,
+                                statusLabel);
                     } catch (Exception ex) {
                         showError("読込エラー", ex.getMessage());
                         log.accept("[postproc-master] upload read: " + ex.getMessage());
@@ -491,26 +484,22 @@ public final class PostProcessingProductMasterEditorPane {
                 new Tooltip("create_integrated_master.py を実行し、依頼書候補を更新します。"));
         btnIntegrated.setOnAction(e -> ctx.runIntegratedMaster().run());
 
-        Runnable warmReferenceCache =
-                () -> {
-                    try {
-                        Path ref =
-                                PostProcessingProductMasterIo.resolveReferencePath(
-                                        uiEnv.get());
-                        if (Files.isRegularFile(ref)) {
-                            PostProcessingProductMasterReferenceCache.snapshot(ref);
-                        }
-                    } catch (Exception ex) {
-                        log.accept("[postproc-master] warm cache: " + ex.getMessage());
-                    }
-                };
         refreshPathsFromEnv.run();
-        loadReferenceHeaders.run();
-        loadUploadFile.run();
-        Thread warm =
-                new Thread(warmReferenceCache, "postproc-master-warm-cache");
-        warm.setDaemon(true);
-        warm.start();
+        if (deferInitialLoad) {
+            statusLabel.setText("マスタデータを読み込んでいます…");
+            startDeferredInitialization(
+                    uiEnv,
+                    statusLabel,
+                    referenceHeaders,
+                    editorModelRef,
+                    uploadRows,
+                    rebuildForm,
+                    loadUploadFile,
+                    log);
+        } else {
+            loadReferenceHeaders.run();
+            loadUploadFile.run();
+        }
 
         Label note =
                 new Label(
@@ -579,6 +568,113 @@ public final class PostProcessingProductMasterEditorPane {
                         actionRow);
         VBox.setVgrow(mainRow, Priority.ALWAYS);
         return root;
+    }
+
+    /**
+     * 参照マスタ見出し・キャッシュ・アップロード用ファイルをバックグラウンドで読み、
+     * フォーム構築（{@code rebuildForm}）だけ UI スレッドで行う。
+     */
+    private static void startDeferredInitialization(
+            Supplier<Map<String, String>> uiEnv,
+            Label statusLabel,
+            List<String> referenceHeaders,
+            AtomicReference<PostProcessingProductMasterEditorModel> editorModelRef,
+            ObservableList<Map<String, String>> uploadRows,
+            Runnable rebuildForm,
+            Runnable loadUploadFile,
+            Consumer<String> log) {
+        Thread worker =
+                new Thread(
+                        () -> {
+                            List<String> headers = new ArrayList<>();
+                            PlanInputTabularIo.TabularSheet uploadSheet = null;
+                            boolean refOk = false;
+                            boolean uploadOk = false;
+                            try {
+                                Path ref =
+                                        PostProcessingProductMasterIo.resolveReferencePath(
+                                                uiEnv.get());
+                                if (Files.isRegularFile(ref)) {
+                                    headers =
+                                            PostProcessingProductMasterIo.readHeaders(ref);
+                                    PostProcessingProductMasterReferenceCache.snapshot(ref);
+                                    refOk = true;
+                                }
+                                Path up =
+                                        PostProcessingProductMasterIo.resolveUploadPath(
+                                                uiEnv.get());
+                                if (Files.isRegularFile(up)) {
+                                    uploadSheet =
+                                            PostProcessingProductMasterIo.readUploadWorkbook(
+                                                    up);
+                                    uploadOk = true;
+                                }
+                            } catch (Exception ex) {
+                                Platform.runLater(
+                                        () ->
+                                                statusLabel.setText(
+                                                        "マスタ読込失敗: " + ex.getMessage()));
+                                log.accept("[postproc-master] deferred init: " + ex.getMessage());
+                            }
+                            boolean finalRefOk = refOk;
+                            boolean finalUploadOk = uploadOk;
+                            List<String> loadedHeaders = List.copyOf(headers);
+                            PlanInputTabularIo.TabularSheet loadedUpload = uploadSheet;
+                            Platform.runLater(
+                                    () -> {
+                                        if (finalRefOk && !loadedHeaders.isEmpty()) {
+                                            referenceHeaders.clear();
+                                            referenceHeaders.addAll(loadedHeaders);
+                                            editorModelRef.set(
+                                                    new PostProcessingProductMasterEditorModel(
+                                                            referenceHeaders));
+                                            rebuildForm.run();
+                                        }
+                                        if (finalUploadOk && loadedUpload != null) {
+                                            try {
+                                                applyUploadSheet(
+                                                        loadedUpload,
+                                                        referenceHeaders,
+                                                        uploadRows,
+                                                        statusLabel);
+                                            } catch (IllegalArgumentException ex) {
+                                                statusLabel.setText(ex.getMessage());
+                                            }
+                                        } else if (finalRefOk) {
+                                            statusLabel.setText(
+                                                    "参照マスタ準備完了。"
+                                                            + "アップロード用ファイルがありません（新規作成可）");
+                                        } else {
+                                            statusLabel.setText(
+                                                    "参照マスタを確認してください。");
+                                        }
+                                    });
+                        },
+                        "postproc-master-deferred-init");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private static void applyUploadSheet(
+            PlanInputTabularIo.TabularSheet sheet,
+            List<String> referenceHeaders,
+            ObservableList<Map<String, String>> uploadRows,
+            Label statusLabel)
+            throws IllegalArgumentException {
+        if (sheet == null || sheet.headers() == null) {
+            uploadRows.clear();
+            statusLabel.setText("アップロード用ファイルがありません（新規作成可）");
+            return;
+        }
+        PostProcessingProductMasterColumnGroups.validateHeadersMatch(
+                referenceHeaders, sheet.headers());
+        uploadRows.clear();
+        for (List<String> row : sheet.rows()) {
+            uploadRows.add(
+                    new LinkedHashMap<>(
+                            PostProcessingProductMasterIo.rowToMap(sheet.headers(), row)));
+        }
+        statusLabel.setText("アップロード用 " + uploadRows.size() + " 行を読み込みました。");
     }
 
     private record SearchResultColumn(
