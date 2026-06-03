@@ -73,6 +73,7 @@ import javafx.util.Duration;
 import javafx.util.StringConverter;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jp.co.pm.ai.desktop.runtime.FxJvmMemoryStatusBar;
 
@@ -5099,6 +5100,44 @@ public final class MainShellController {
     }
 
     /**
+     * 入力3表生成: 段階2暦日別 baseline を Python へ渡す（sidecar または手動修正タブのスナップショット）。
+     */
+    private void applyStage3BaselineEntriesToPythonEnv(
+            Map<String, String> childEnv, java.nio.file.Path resultJson) {
+        Map<String, Double> baseline = java.util.Map.of();
+        if (dispatchInteractiveTabController != null) {
+            baseline =
+                    dispatchInteractiveTabController.snapshotStage3BaselineEntriesForInput3Build(
+                            resultJson);
+        }
+        if (baseline.isEmpty()) {
+            baseline = Stage3PlanningMetaStore.readBaselineEntries(resultJson);
+        }
+        if (baseline.isEmpty()) {
+            appendLog(
+                    "[入力3表] baseline 未設定（段階2直後に配台手動修正タブを開くか、段階2を再実行してください）");
+            return;
+        }
+        try {
+            childEnv.put(
+                    "PM_AI_STAGE3_BASELINE_ENTRIES_JSON",
+                    new ObjectMapper().writeValueAsString(baseline));
+            long v62 =
+                    baseline.keySet().stream().filter(k -> k != null && k.startsWith("V6-2")).count();
+            appendLog(
+                    "[入力3表] baseline 渡し: "
+                            + baseline.size()
+                            + " セル（V6-2 含む "
+                            + v62
+                            + " 件）");
+        } catch (Exception ex) {
+            appendLog(
+                    "[入力3表] baseline env 構築失敗: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex));
+        }
+    }
+
+    /**
      * Env tab keys passed to Python; strips legacy workbook keys（{@link
      * jp.co.pm.ai.desktop.bridge.Stage2PythonChildEnv#LEGACY_WORKBOOK_KEYS_STRIPPED_FOR_PYTHON_CHILD}）。
      * If {@code PM_AI_PLAN_INPUT_PATH} / {@code TASK_PLAN_SHEET} are unset in the env tab, values from
@@ -6419,6 +6458,7 @@ public final class MainShellController {
         java.nio.file.Path pyExe = resolveStagePythonExecutablePath(ui);
         java.nio.file.Path scriptDir = AppPaths.resolvePythonScriptDir(ui);
         Map<String, String> childEnv = childEnvForPython(ui);
+        applyStage3BaselineEntriesToPythonEnv(childEnv, resultJson);
         if (dispatchInteractiveTabController != null) {
             dispatchInteractiveTabController.setStage3InputBuildProgressVisible(true);
         }

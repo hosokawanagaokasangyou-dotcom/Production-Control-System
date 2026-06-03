@@ -203,6 +203,33 @@ public final class ResultDispatchPivot {
                 ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL);
     }
 
+    /**
+     * ワイド行プロファイルに一致する全暦日の {@link ResultDispatchSchema#COL_DISPATCH_QTY_ACTUAL} 合計。
+     * 段階3.0 後の照合は暦日軸＋旧タイムラインの合算ではなく JSON 行の正本に揃える。
+     */
+    public static double sumActualQuantityForProfileForWideMerge(
+            List<Map<String, String>> rows,
+            Map<String, String> taskProfile,
+            List<String> mergeIdentityHeaders) {
+        return sumQtyColumnForProfileForWideMerge(
+                rows, taskProfile, mergeIdentityHeaders, ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL);
+    }
+
+    private static double sumQtyColumnForProfileForWideMerge(
+            List<Map<String, String>> rows,
+            Map<String, String> taskProfile,
+            List<String> mergeIdentityHeaders,
+            String qtyColumn) {
+        double sum = 0;
+        for (Map<String, String> row : rows) {
+            if (!matchesWideMergeIdentity(taskProfile, row, mergeIdentityHeaders)) {
+                continue;
+            }
+            sum += ResultDispatchNormalizer.parseDouble(row.get(qtyColumn));
+        }
+        return sum;
+    }
+
     private static double sumQtyColumnForProfileAndDateForWideMerge(
             List<Map<String, String>> rows,
             Map<String, String> taskProfile,

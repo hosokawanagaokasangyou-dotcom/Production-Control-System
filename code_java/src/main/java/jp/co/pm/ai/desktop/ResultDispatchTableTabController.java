@@ -34,7 +34,9 @@ import org.controlsfx.control.spreadsheet.GridBase;
 import org.controlsfx.control.spreadsheet.SpreadsheetView;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchDeadlineJudgment;
+import jp.co.pm.ai.desktop.dispatch.ResultDispatchNormalizer;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchInteractiveConsolidator;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchSchema;
 import jp.co.pm.ai.desktop.dispatch.ResultDispatchStage3Support;
@@ -447,13 +449,22 @@ public final class ResultDispatchTableTabController {
                 }
                 rowMaps.add(row);
             }
+            // #region agent log
+            logV62DispatchQtyDebug(shell, "raw_json", headerOrder, rowMaps, false);
+            // #endregion
             ResultDispatchInteractiveConsolidator.consolidatePlanAndTimelineRowsInPlace(
                     headerOrder, rowMaps);
+            // #region agent log
+            logV62DispatchQtyDebug(shell, "after_consolidate", headerOrder, rowMaps, false);
+            // #endregion
             boolean stage3 = ResultDispatchStage3Support.hasStage3ActualColumn(headerOrder);
             if (stage3) {
                 ResultDispatchStage3Support.applyStage3DisplayQuantities(headerOrder, rowMaps);
                 ResultDispatchStage3Support.removeRedundantActualColumnFromMaps(headerOrder, rowMaps);
             }
+            // #region agent log
+            logV62DispatchQtyDebug(shell, "after_stage3_display", headerOrder, rowMaps, stage3);
+            // #endregion
             ResultDispatchStage3Support.applyPlanningStageBadgeFromDispatchJson(
                     dataStageBadgeLabel, path);
             statusLabel.setText(rowMaps.size() + " 行");
@@ -517,6 +528,62 @@ public final class ResultDispatchTableTabController {
         persistedLayout.set(List.of());
         spreadsheetView.setGrid(new GridBase(0, 0));
     }
+
+    // #region agent log
+    private static void logV62DispatchQtyDebug(
+            MainShellController shell,
+            String phase,
+            List<String> columns,
+            List<Map<String, String>> rowMaps,
+            boolean stage3) {
+        if (shell == null || rowMaps == null) {
+            return;
+        }
+        final String sessionId = AgentDebugLog.resolveDispatchTrialSessionId(shell.snapshotUiEnv());
+        Map<String, String> ui = shell.snapshotUiEnv();
+        int rowIndex = 0;
+        for (Map<String, String> row : rowMaps) {
+            String tid = row.getOrDefault("依頼NO", "");
+            if (tid == null || !tid.contains("V6-2")) {
+                rowIndex++;
+                continue;
+            }
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("phase", phase);
+            data.put("rowIndex", rowIndex);
+            data.put("依頼NO", tid);
+            data.put("工程名", row.get("工程名"));
+            data.put("機械名", row.get("機械名"));
+            data.put("配台日", row.get(ResultDispatchSchema.COL_DISPATCH_DATE));
+            data.put("換算数量", row.get("換算数量"));
+            data.put(
+                    "当日配台数量",
+                    row.get(ResultDispatchSchema.COL_DISPATCH_QTY));
+            data.put(
+                    "実配台数量",
+                    row.get(ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL));
+            data.put("加工開始日時", row.get("加工開始日時"));
+            data.put("加工終了日時", row.get("加工終了日時"));
+            data.put("stage3ActualColumn", stage3);
+            double conv = ResultDispatchNormalizer.parseDouble(row.get("換算数量"));
+            double plan = ResultDispatchNormalizer.parseDouble(
+                    row.get(ResultDispatchSchema.COL_DISPATCH_QTY));
+            double actual = ResultDispatchNormalizer.parseDouble(
+                    row.get(ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL));
+            data.put("parsedConv", conv);
+            data.put("parsedPlan", plan);
+            data.put("parsedActual", actual);
+            AgentDebugLog.appendStructured(
+                    ui,
+                    sessionId,
+                    "H2",
+                    "ResultDispatchTableTabController.reloadResultDispatchTableFromDisk",
+                    "v6_row_qty",
+                    data);
+            rowIndex++;
+        }
+    }
+    // #endregion
 
     private void injectDeadlineJudgmentColumnIfNeeded() {
         if (!embeddedInDeliveryCalendar || headersRef.isEmpty()) {

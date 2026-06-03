@@ -3,6 +3,8 @@ package jp.co.pm.ai.desktop.dispatch;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -113,6 +115,31 @@ public final class ResultDispatchStage3Support {
     public static boolean hasStage3ActualColumn(List<String> columns) {
         return columns != null
                 && columns.contains(ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL);
+    }
+
+    /**
+     * 配台計画手動修正タブ用: 段階2の孤立目標行（タイムライン無しの旧 配台日 行）を除き、配台結果タブと同じ行構成にする。
+     * {@link ResultDispatchSchema#COL_DISPATCH_QTY_ACTUAL} 列は維持（ワイド表の (段階3.x後) 表示用）。
+     */
+    public static ResultDispatchDocument prepareForDispatchInteractiveWideGrid(
+            ResultDispatchDocument doc) {
+        if (doc == null) {
+            return ResultDispatchDocument.empty();
+        }
+        if (!hasStage3ActualColumn(doc.columns())) {
+            return doc;
+        }
+        List<String> cols = new ArrayList<>(doc.columns());
+        List<Map<String, String>> rows = new ArrayList<>();
+        for (Map<String, String> r : doc.rows()) {
+            rows.add(new LinkedHashMap<>(r));
+        }
+        ResultDispatchInteractiveConsolidator.consolidatePlanAndTimelineRowsInPlace(cols, rows);
+        ResultDispatchDocument out = new ResultDispatchDocument(cols, rows);
+        out.setFormatVersion(doc.formatVersion());
+        out.setSheetName(doc.sheetName());
+        out.setExcelTableName(doc.excelTableName());
+        return out;
     }
 
     public static boolean detectStage3FromDispatchJsonPath(Path jsonPath) {

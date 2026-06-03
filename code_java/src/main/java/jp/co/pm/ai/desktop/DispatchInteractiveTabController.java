@@ -538,6 +538,9 @@ public final class DispatchInteractiveTabController {
 
     private boolean pendingStage3TrialSnapshotCapture;
 
+    /** 段階2 直後の再読込で baseline sidecar を必ず書き直す。 */
+    private boolean forceStage3BaselineWriteOnNextCapture;
+
     /** 段階3.0/3.1/3.2 直後の再読込で baseline snapshot を上書きしない。 */
     private boolean retainStage3TrialSnapshotOnNextReload;
 
@@ -1386,9 +1389,6 @@ public final class DispatchInteractiveTabController {
             }
         }
         ResultDispatchNormalizer.normalizeInPlace(cols, doc.rows());
-        if (changedRows > 0) {
-            captureStage3TrialPlanQtySnapshotFromDocument(doc, dateAxis);
-        }
         rebuildGrids();
         markDispatchDocDirty();
         if (statusLabel != null) {
@@ -1589,7 +1589,8 @@ public final class DispatchInteractiveTabController {
             return;
         }
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
-        ResultDispatchDocument toWrite = doc.copy();
+        ResultDispatchDocument toWrite =
+                ResultDispatchStage3Support.prepareForDispatchInteractiveWideGrid(doc.copy());
         Path pyExe = resolvePythonExe();
         Path pyDir = AppPaths.resolvePythonScriptDir(shell.snapshotUiEnv());
 
@@ -1610,6 +1611,7 @@ public final class DispatchInteractiveTabController {
                 e -> {
                     try {
                         DispatchSaveOutcome r = task.getValue();
+                        doc = toWrite.copy();
                         clearDispatchDocDirty();
                         statusLabel.setText("保存しました");
                         shell.appendLog("[dispatch-editor] saved json: " + r.jsonPath());
@@ -1707,8 +1709,17 @@ public final class DispatchInteractiveTabController {
         shell.appendLog("[配台試行] Python 実行ファイル: " + trialPythonExe.toAbsolutePath().normalize());
 
         final ResultDispatchDocument trialInputSnapshot = doc.copy();
-        captureStage3TrialPlanQtySnapshotFromDocument(
-                trialInputSnapshot, snapshotDateAxisForTrialPlanQtyCapture(trialInputSnapshot));
+        Map<String, Double> stage3BaselineOnDisk =
+                Stage3PlanningMetaStore.readBaselineEntries(jsonPath);
+        if (!stage3BaselineOnDisk.isEmpty()) {
+            stage3TrialPlanQtySnapshot.clear();
+            stage3TrialPlanQtySnapshot.putAll(stage3BaselineOnDisk);
+        } else {
+            captureStage3TrialPlanQtySnapshotFromDocument(
+                    trialInputSnapshot,
+                    snapshotDateAxisForTrialPlanQtyCapture(trialInputSnapshot));
+            persistStage3BaselineSidecarIfAbsent(jsonPath);
+        }
         stage3TrialInputDocumentSnapshot = trialInputSnapshot.copy();
         Stage owner = shell.getPrimaryStage();
 
@@ -1718,7 +1729,9 @@ public final class DispatchInteractiveTabController {
                     protected String call() throws Exception {
                         shell.beginPipelineExecutionTiming(timingKind);
                         try {
-                            ResultDispatchDocument writeDoc = doc.copy();
+                            ResultDispatchDocument writeDoc =
+                                    ResultDispatchStage3Support.prepareForDispatchInteractiveWideGrid(
+                                            doc.copy());
                             ResultDispatchJsonIo.write(jsonPath, writeDoc);
                             shell.appendLog(
                                     "[dispatch-editor] trial: 試行前にメモリ上の表を JSON に同期 "
@@ -2034,6 +2047,16 @@ public final class DispatchInteractiveTabController {
                     @Override
                     protected ReloadBundle call() throws Exception {
                         ResultDispatchDocument d = ResultDispatchJsonIo.read(jsonPath);
+                        int rowsBefore = d.rows().size();
+                        d = ResultDispatchStage3Support.prepareForDispatchInteractiveWideGrid(d);
+                        if (shell != null && rowsBefore != d.rows().size()) {
+                            shell.appendLog(
+                                    "[dispatch-editor] 段階3: 孤立目標行を除去 "
+                                            + rowsBefore
+                                            + " → "
+                                            + d.rows().size()
+                                            + " 行（配台結果タブと同じ正規化）");
+                        }
                         DispatchTimelineCalendarMetersIndex timeline =
                                 DispatchTimelineCalendarMetersIndex.tryLoadNearResultDispatchJson(
                                         jsonPath);
@@ -2156,7 +2179,22 @@ public final class DispatchInteractiveTabController {
     void reloadTableFromDiskAfterStage2Success(Runnable afterSuccessOnFxThread) {
         Path jsonPath = AppPaths.resolveResultDispatchTableStage2JsonPath(shell.snapshotUiEnv());
         clearStage3PlanningMeta(jsonPath);
+        forceStage3BaselineWriteOnNextCapture = true;
         reloadFromDiskQuiet(afterSuccessOnFxThread, false, false, true, jsonPath);
+    }
+
+    /**
+     * 入力3表生成用: sidecar baseline を優先し、無ければタブ上の (段階3前) スナップショットを返す。
+     */
+    Map<String, Double> snapshotStage3BaselineEntriesForInput3Build(Path dispatchJsonPath) {
+        Map<String, Double> fromDisk = Stage3PlanningMetaStore.readBaselineEntries(dispatchJsonPath);
+        if (!fromDisk.isEmpty()) {
+            return fromDisk;
+        }
+        if (stage3TrialPlanQtySnapshot.isEmpty()) {
+            return Map.of();
+        }
+        return Map.copyOf(stage3TrialPlanQtySnapshot);
     }
 
     /** 段階2.1 正常終了直後: 正本反映済み。比較 baseline を保持してメイン JSON を再読込する。 */
@@ -2339,6 +2377,13 @@ public final class DispatchInteractiveTabController {
         }
         Path jsonPath = AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
         try {
+            Map<String, Double> existing =
+                    Stage3PlanningMetaStore.readBaselineEntries(jsonPath);
+            if (!existing.isEmpty()) {
+                stage3TrialPlanQtySnapshot.clear();
+                stage3TrialPlanQtySnapshot.putAll(existing);
+                return;
+            }
             ResultDispatchDocument sourceDoc =
                     Files.isRegularFile(jsonPath)
                             ? ResultDispatchJsonIo.read(jsonPath)
@@ -2356,6 +2401,23 @@ public final class DispatchInteractiveTabController {
                     "[stage3] baseline 保存失敗: "
                             + (ex.getMessage() != null ? ex.getMessage() : ex));
         }
+    }
+
+    /**
+     * 段階2直後の暦日別配台を sidecar に一度だけ保存する。アラジン整列で JSON が1日化されても入力3表生成で参照できる。
+     */
+    private void persistStage3BaselineSidecarIfAbsent(Path dispatchJsonPath) {
+        if (dispatchJsonPath == null || stage3TrialPlanQtySnapshot.isEmpty()) {
+            return;
+        }
+        if (!Stage3PlanningMetaStore.readBaselineEntries(dispatchJsonPath).isEmpty()) {
+            return;
+        }
+        if (Stage3PlanningMetaStore.hasPipelinePlanningVariant(dispatchJsonPath)) {
+            return;
+        }
+        Stage3PlanningMetaStore.writeBaselineEntries(
+                dispatchJsonPath, stage3TrialPlanQtySnapshot);
     }
 
     private void loadStage3BaselineFromSidecarIfNeeded(Path dispatchJsonPath) {
@@ -2863,6 +2925,19 @@ public final class DispatchInteractiveTabController {
         if (pendingStage3TrialSnapshotCapture) {
             captureStage3TrialPlanQtySnapshot(profiles, axis);
             pendingStage3TrialSnapshotCapture = false;
+            if (shell != null) {
+                Path dispatchJson =
+                        AppPaths.resolveResultDispatchTableJsonPath(shell.snapshotUiEnv());
+                if (forceStage3BaselineWriteOnNextCapture) {
+                    forceStage3BaselineWriteOnNextCapture = false;
+                    if (!stage3TrialPlanQtySnapshot.isEmpty()) {
+                        Stage3PlanningMetaStore.writeBaselineEntries(
+                                dispatchJson, stage3TrialPlanQtySnapshot);
+                    }
+                } else {
+                    persistStage3BaselineSidecarIfAbsent(dispatchJson);
+                }
+            }
         }
 
         int staticCols = WIDE_STATIC_HEADERS.size();
@@ -3969,20 +4044,63 @@ public final class DispatchInteractiveTabController {
     }
 
     /**
-     * 段階3配台数・照合の合計。段階3試行後（実配台数量列あり）はタイムライン実績（段階3後）の日別合計。
-     * 未試行時は当日配台数量の合計にフォールバック。
+     * 段階3配台数・照合の合計。段階3.0/3.1/3.2 後は {@code 結果_配台表.json} 行の実配台のみ（暦日軸の旧ガント合算を除く）。
+     * 試行中のみ暦日セル合計（タイムライン優先）にフォールバック。
      */
     private double stage3DispatchQtyTotalForWideRow(WideRow wr) {
         if (docHasActualDispatchQtyColumn()) {
+            if (preferResultDispatchJsonMetersOverTimeline()) {
+                return ResultDispatchPivot.sumActualQuantityForProfileForWideMerge(
+                        doc.rows(),
+                        wr.profileMap(),
+                        ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+            }
             return wr.sumActualAmounts();
         }
         return wr.sumPlanAmounts();
+    }
+
+    /** 当該暦日に配台表 JSON 行（当日または実配台 &gt; 0）があるか。 */
+    private boolean profileHasDispatchQtyOnDate(Map<String, String> profile, LocalDate day) {
+        if (profile == null || day == null) {
+            return false;
+        }
+        final double eps = 1e-3;
+        return ResultDispatchPivot.sumActualQuantityForProfileAndDateForWideMerge(
+                        doc.rows(),
+                        profile,
+                        day,
+                        ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS)
+                        > eps
+                || ResultDispatchPivot.sumQuantityForProfileAndDateForWideMerge(
+                        doc.rows(),
+                        profile,
+                        day,
+                        ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS)
+                        > eps;
+    }
+
+    /**
+     * 段階3.0/3.1/3.2 実行後は {@code 結果_配台表.json} の暦日行を正とする。
+     * 段階2の設備ガント契約は未更新のまま残り得るため、タイムライン優先は試行中のみとする。
+     */
+    private boolean preferResultDispatchJsonMetersOverTimeline() {
+        return hasPipelineStage3PlanningApplied();
     }
 
     /**
      * 段階3試行後は設備ガント契約の暦日別 m を優先（配台表1行集約とガントの差を解消）。未読込時は配台表。
      */
     private double wideDisplayPlanMetersForDate(Map<String, String> profile, LocalDate day) {
+        double fromDoc =
+                ResultDispatchPivot.sumQuantityForProfileAndDateForWideMerge(
+                        doc.rows(),
+                        profile,
+                        day,
+                        ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+        if (preferResultDispatchJsonMetersOverTimeline() && fromDoc > 1e-3) {
+            return fromDoc;
+        }
         if (docHasActualDispatchQtyColumn() && timelineCalendarMeters.isLoaded()) {
             Optional<Double> tl =
                     timelineCalendarMeters.metersForTaskProfile(
@@ -3994,14 +4112,19 @@ public final class DispatchInteractiveTabController {
                 return tl.get();
             }
         }
-        return ResultDispatchPivot.sumQuantityForProfileAndDateForWideMerge(
-                doc.rows(),
-                profile,
-                day,
-                ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+        return fromDoc;
     }
 
     private double wideDisplayActualMetersForDate(Map<String, String> profile, LocalDate day) {
+        double fromDoc =
+                ResultDispatchPivot.sumActualQuantityForProfileAndDateForWideMerge(
+                        doc.rows(),
+                        profile,
+                        day,
+                        ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+        if (preferResultDispatchJsonMetersOverTimeline() && fromDoc > 1e-3) {
+            return fromDoc;
+        }
         if (docHasActualDispatchQtyColumn() && timelineCalendarMeters.isLoaded()) {
             Optional<Double> tl =
                     timelineCalendarMeters.metersForTaskProfile(
@@ -4013,14 +4136,16 @@ public final class DispatchInteractiveTabController {
                 return tl.get();
             }
         }
-        return ResultDispatchPivot.sumActualQuantityForProfileAndDateForWideMerge(
-                doc.rows(),
-                profile,
-                day,
-                ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
+        return fromDoc;
     }
 
     private double byDayDisplayPlanMetersForDate(String process, String machine, LocalDate day) {
+        double fromDoc =
+                ResultDispatchPivot.sumQuantityForProcessMachineDate(
+                        doc.rows(), process, machine, day);
+        if (preferResultDispatchJsonMetersOverTimeline() && fromDoc > 1e-3) {
+            return fromDoc;
+        }
         if (docHasActualDispatchQtyColumn() && timelineCalendarMeters.isLoaded()) {
             Optional<Double> tl =
                     timelineCalendarMeters.metersForProcessMachine(process, machine, day);
@@ -4028,11 +4153,16 @@ public final class DispatchInteractiveTabController {
                 return tl.get();
             }
         }
-        return ResultDispatchPivot.sumQuantityForProcessMachineDate(
-                doc.rows(), process, machine, day);
+        return fromDoc;
     }
 
     private double byDayDisplayActualMetersForDate(String process, String machine, LocalDate day) {
+        double fromDoc =
+                ResultDispatchPivot.sumActualQuantityForProcessMachineDate(
+                        doc.rows(), process, machine, day);
+        if (preferResultDispatchJsonMetersOverTimeline() && fromDoc > 1e-3) {
+            return fromDoc;
+        }
         if (docHasActualDispatchQtyColumn() && timelineCalendarMeters.isLoaded()) {
             Optional<Double> tl =
                     timelineCalendarMeters.metersForProcessMachine(process, machine, day);
@@ -4040,8 +4170,7 @@ public final class DispatchInteractiveTabController {
                 return tl.get();
             }
         }
-        return ResultDispatchPivot.sumActualQuantityForProcessMachineDate(
-                doc.rows(), process, machine, day);
+        return fromDoc;
     }
 
     private double stage3DispatchQtyTotalForByDayRow(ByDayRow br) {
@@ -4146,11 +4275,15 @@ public final class DispatchInteractiveTabController {
             return;
         }
         // 段階3試行後のみ旧配分を (段階2後) 表示。段階2のみのとき古い snapshot で planSlidAway すると幽霊行が出る。
+        // 段階3.0 後は JSON に無い暦日の baseline のみ (段階2後) を出さない（6/11=4000 等の幽霊表示を防ぐ）。
         boolean planSlidAway =
                 docHasActualDispatchQtyColumn()
                         && snapPlan > eps
                         && planAmt <= eps
-                        && actualAmt <= eps;
+                        && actualAmt <= eps
+                        && !(preferResultDispatchJsonMetersOverTimeline()
+                                && !profileHasDispatchQtyOnDate(
+                                        wr.profileMap(), axis.get(dateIdx)));
         boolean planMovedToDate =
                 snapPlan <= eps && (planAmt > eps || actualAmt > eps) && docHasActualDispatchQtyColumn();
         if (planSlidAway || planMovedToDate) {

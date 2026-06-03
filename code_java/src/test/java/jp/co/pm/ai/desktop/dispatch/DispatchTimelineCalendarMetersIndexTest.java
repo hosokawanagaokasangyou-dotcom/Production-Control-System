@@ -70,4 +70,55 @@ class DispatchTimelineCalendarMetersIndexTest {
                         .orElseThrow(),
                 1e-9);
     }
+
+    @Test
+    void aggregatesBranchTaskIdUnderParentRequestNo() throws Exception {
+        String json =
+                """
+                {
+                  "kwargs_packed": {
+                    "timeline_events": [
+                      {
+                        "date": {"__t": "date", "v": "2026-06-12"},
+                        "task_id": "V6-2-01",
+                        "machine": "分割+スリット機1　湖南",
+                        "event_kind": "machining",
+                        "units_done": 72,
+                        "unit_m": 100.0
+                      },
+                      {
+                        "date": {"__t": "date", "v": "2026-06-15"},
+                        "task_id": "V6-2-01",
+                        "machine": "分割+スリット機1　湖南",
+                        "event_kind": "machining",
+                        "units_done": 28,
+                        "unit_m": 100.0
+                      }
+                    ]
+                  }
+                }
+                """;
+        Path contract = tempDir.resolve("v62_branch.json");
+        Files.writeString(contract, json);
+        DispatchTimelineCalendarMetersIndex idx =
+                DispatchTimelineCalendarMetersIndex.loadFromContractPath(contract);
+        assertEquals(
+                7200.0,
+                idx.metersForTaskProfile(
+                                "V6-2", "分割", "スリット機1　湖南", LocalDate.of(2026, 6, 12))
+                        .orElseThrow(),
+                1e-6);
+        assertEquals(
+                2800.0,
+                idx.metersForTaskProfile(
+                                "V6-2", "分割", "スリット機1　湖南", LocalDate.of(2026, 6, 15))
+                        .orElseThrow(),
+                1e-6);
+        assertEquals(
+                0.0,
+                idx.metersForTaskProfile(
+                                "V6-2", "分割", "スリット機1　湖南", LocalDate.of(2026, 6, 11))
+                        .orElseThrow(),
+                1e-6);
+    }
 }

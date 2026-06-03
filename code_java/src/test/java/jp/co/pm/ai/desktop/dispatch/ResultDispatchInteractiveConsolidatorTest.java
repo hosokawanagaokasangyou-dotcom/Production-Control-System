@@ -95,6 +95,61 @@ class ResultDispatchInteractiveConsolidatorTest {
     }
 
     @Test
+    void removesV62Stage2OrphanPlanRowsWhenTimelineRowsExist() {
+        List<String> cols = new ArrayList<>(ResultDispatchSchema.canonicalColumnOrder());
+        cols.add(ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL);
+        List<Map<String, String>> rows = new ArrayList<>();
+        rows.add(
+                row(
+                        cols,
+                        "V6-2",
+                        "分割",
+                        "スリット機1　湖南",
+                        "2026/06/11",
+                        "4000",
+                        "0",
+                        ""));
+        rows.add(
+                row(
+                        cols,
+                        "V6-2",
+                        "分割",
+                        "スリット機1　湖南",
+                        "2026/06/12",
+                        "6000",
+                        "0",
+                        ""));
+        rows.add(
+                row(
+                        cols,
+                        "V6-2",
+                        "分割",
+                        "スリット機1　湖南",
+                        "2026/06/12",
+                        "0",
+                        "7200",
+                        "2026/06/12 08:55"));
+        rows.add(
+                row(
+                        cols,
+                        "V6-2",
+                        "分割",
+                        "スリット機1　湖南",
+                        "2026/06/15",
+                        "0",
+                        "2800",
+                        "2026/06/15 08:55"));
+
+        ResultDispatchInteractiveConsolidator.consolidatePlanAndTimelineRowsInPlace(cols, rows);
+
+        assertEquals(2, rows.size());
+        assertEquals("7200", rows.get(0).get(ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL));
+        assertEquals("2026/06/12", rows.get(0).get(ResultDispatchSchema.COL_DISPATCH_DATE));
+        assertEquals("2800", rows.get(1).get(ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL));
+        assertEquals("2026/06/15", rows.get(1).get(ResultDispatchSchema.COL_DISPATCH_DATE));
+    }
+
+    @Test
     void keepsOrphanPlanWhenNoTimelineRowsInGroup() {
         List<String> cols = new ArrayList<>(ResultDispatchSchema.canonicalColumnOrder());
         cols.add(ResultDispatchSchema.COL_DISPATCH_QTY_ACTUAL);

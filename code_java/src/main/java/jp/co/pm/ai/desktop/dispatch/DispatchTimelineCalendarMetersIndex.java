@@ -104,12 +104,41 @@ public final class DispatchTimelineCalendarMetersIndex {
         if (day == null || metersByProfileKey.isEmpty()) {
             return Optional.empty();
         }
-        String key = profileKey(taskId, process, machine);
-        Map<LocalDate, Double> byDay = metersByProfileKey.get(key);
-        if (byDay == null) {
-            return Optional.empty();
+        String procNorm = normalizeEquipmentMatchKey(process);
+        String machNorm = normalizeEquipmentMatchKey(machine);
+        double sum = 0.0;
+        boolean hit = false;
+        for (Map.Entry<String, Map<LocalDate, Double>> en : metersByProfileKey.entrySet()) {
+            String[] parts = en.getKey().split("\\|", 3);
+            if (parts.length < 3) {
+                continue;
+            }
+            if (!procNorm.equals(parts[1]) || !machNorm.equals(parts[2])) {
+                continue;
+            }
+            if (!taskIdMatchesFamily(parts[0], taskId)) {
+                continue;
+            }
+            hit = true;
+            sum += en.getValue().getOrDefault(day, 0.0);
         }
-        return Optional.of(byDay.getOrDefault(day, 0.0));
+        return hit ? Optional.of(sum) : Optional.empty();
+    }
+
+    /** 枝番依頼NO（例 V6-2-01）を親依頼NO（V6-2）へ集約してガント契約と手動修正ワイド表を揃える。 */
+    static boolean taskIdMatchesFamily(String eventTaskId, String queryTaskId) {
+        String ev = normalizeEquipmentMatchKey(eventTaskId);
+        String q = normalizeEquipmentMatchKey(queryTaskId);
+        if (ev.isEmpty() || q.isEmpty()) {
+            return false;
+        }
+        if (ev.equals(q)) {
+            return true;
+        }
+        if (!ev.startsWith(q) || ev.length() <= q.length()) {
+            return false;
+        }
+        return ev.charAt(q.length()) == '-';
     }
 
     /** 工程×機械×暦日で全依頼のタイムライン加工量を合算（工程＋機械×日付用）。 */

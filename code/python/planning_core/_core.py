@@ -4704,15 +4704,44 @@ def format_dispatchable_datetime_cell(dt) -> str:
     return dt.strftime("%Y/%m/%d %H:%M")
 
 
-def resolve_dispatchable_datetime_from_plan_row(row, run_date=None):
-    """配台計画1行から配台可能日時を解決（列「配台可能日時」→ 原反投入日から算出 の順）。"""
+def resolve_dispatchable_datetime_from_plan_row(
+    row, run_date=None, *, regular_shift_start: time | None = None
+):
+    """配台計画1行から配台可能日時を解決。
+
+    優先順: 列「配台可能日時」（入力3表・入力1表とも）→ 未設定時のフォールバック。
+    列に値があるとき原反投入日は暦日・時刻の下限に使わない。
+
+    ``regular_shift_start`` を渡したとき（段階3配台読込）は、未設定時に
+    原反投入日+12:45 ではなく ``max(run_date, 原反投入日)`` の暦日 + 定常開始時刻（A15）とする。
+    """
     col = parse_optional_datetime(
         _planning_df_cell_scalar(row, PLAN_COL_DISPATCHABLE_DATETIME)
     )
     if col is not None:
         return col
+    if regular_shift_start is not None:
+        raw = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE))
+        if raw is None:
+            if run_date is None:
+                return None
+            base_d = run_date
+        else:
+            base_d = max(run_date, raw) if run_date is not None else raw
+        return datetime.combine(base_d, regular_shift_start)
     raw = parse_optional_date(_planning_df_cell_scalar(row, TASK_COL_RAW_INPUT_DATE))
     return compute_dispatchable_datetime(raw, run_date=run_date)
+
+
+def stage3_regular_shift_start_time() -> time:
+    """段階3: master メイン A15（定常開始）。読めないときは ``DEFAULT_START_TIME``。"""
+    try:
+        st, _et = _read_master_main_regular_shift_times(_master_workbook_path_resolved())
+        if st is not None:
+            return st
+    except Exception:
+        pass
+    return DEFAULT_START_TIME
 
 
 def _planning_df_cell_scalar(row, col_name):
@@ -13131,6 +13160,9 @@ def build_task_queue_from_planning_df(
     """
     if ai_by_tid is None:
         ai_by_tid = analyze_task_special_remarks(tasks_df, reference_year=run_date.year)
+    _stage3_reg_shift_start: time | None = None
+    if (os.environ.get("PM_AI_PLAN_INPUT_STAGE3") or "").strip() == "1":
+        _stage3_reg_shift_start = stage3_regular_shift_start_time()
     in_progress_next_day_m = _load_stage2_in_progress_next_day_dispatch_overrides()
     task_queue = []
     n_exclude_plan = 0
@@ -13390,7 +13422,11 @@ def build_task_queue_from_planning_df(
         # 段階2.0: 配台開始の下限は「配台可能日時」列（上書き列 → 算出列 → 原反投入日+12:45）を正とする。
         # 列・上書きが指定されていれば原反投入日由来の下限より優先し、開始日（暦日）と同日開始時刻を上書きする。
         # 原反投入日が無く列も空の行は dispatchable_dt=None となり、従来どおり run_date 起点のまま。
-        dispatchable_dt = resolve_dispatchable_datetime_from_plan_row(row, run_date=run_date)
+        dispatchable_dt = resolve_dispatchable_datetime_from_plan_row(
+            row,
+            run_date=run_date,
+            regular_shift_start=_stage3_reg_shift_start,
+        )
         if dispatchable_dt is not None:
             disp_date = dispatchable_dt.date()
             effective_start_date = max(run_date, disp_date)
@@ -27879,6 +27915,38 @@ def _interactive_row_needs_dispatch_date_slide(
     return True
 
 
+def _stage3_attach_actual_dispatch_qty_from_timeline_plan_rows(
+    df_dispatch: pd.DataFrame,
+) -> pd.DataFrame:
+    """段階3.0（編集JSON無し）: タイムライン行へ実配台数量列を載せ、JSON 正本を配台結果タブと揃える。"""
+    if df_dispatch is None or getattr(df_dispatch, "empty", True):
+        return df_dispatch
+    actual_col = INTERACTIVE_DISPATCH_ACTUAL_QTY_COL
+    plan_col = "当日配台数量"
+    out = df_dispatch.copy()
+    if actual_col not in out.columns:
+        out[actual_col] = 0.0
+    for pos in range(len(out)):
+        row = out.iloc[pos].to_dict()
+        if not _interactive_row_has_timeline_meta(row):
+            continue
+        try:
+            plan_q = float(row.get(plan_col) or 0.0)
+        except (TypeError, ValueError):
+            plan_q = 0.0
+        try:
+            out.at[out.index[pos], actual_col] = plan_q
+        except Exception:
+            pass
+    try:
+        out[actual_col] = (
+            pd.to_numeric(out[actual_col], errors="coerce").fillna(0.0).astype(float)
+        )
+    except Exception:
+        pass
+    return out
+
+
 def _interactive_zero_actual_qty_without_timeline_meta(
     df: pd.DataFrame,
     *,
@@ -29156,6 +29224,72 @@ def _interactive_dispatch_trial_env_active() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
+def _agent_log_v62_dispatch_rows(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    *,
+    phase: str,
+    df: "pd.DataFrame | None" = None,
+    json_rows: list | None = None,
+    extra: dict | None = None,
+) -> None:
+    """配台試行デバッグ: V6-2 行の暦日・換算・当日配台を NDJSON へ（session 947ce0 等）。"""
+    try:
+        from planning_core import agent_debug_ndjson as _adn
+
+        entries: list[dict] = []
+        if df is not None and not getattr(df, "empty", True):
+            for pos in range(len(df)):
+                tid = _interactive_norm_cell(df.iloc[pos].get(TASK_COL_TASK_ID))
+                if "V6-2" not in tid:
+                    continue
+                row = df.iloc[pos]
+                entries.append(
+                    {
+                        "pos": pos,
+                        "依頼NO": tid,
+                        "工程名": row.get(TASK_COL_MACHINE),
+                        "機械名": row.get(TASK_COL_MACHINE_NAME),
+                        "配台日": str(row.get("配台日")),
+                        "換算数量": row.get(TASK_COL_QTY),
+                        "当日配台数量": row.get("当日配台数量"),
+                        "実配台数量": row.get(INTERACTIVE_DISPATCH_ACTUAL_QTY_COL),
+                        "加工開始日時": row.get("加工開始日時"),
+                    }
+                )
+        if json_rows:
+            for i, r in enumerate(json_rows):
+                if not isinstance(r, dict):
+                    continue
+                tid = _interactive_norm_cell(r.get(TASK_COL_TASK_ID)) or _interactive_norm_cell(
+                    r.get("タスクID")
+                )
+                if "V6-2" not in tid:
+                    continue
+                entries.append(
+                    {
+                        "jsonIndex": i,
+                        "依頼NO": tid,
+                        "工程名": r.get(TASK_COL_MACHINE),
+                        "機械名": r.get(TASK_COL_MACHINE_NAME),
+                        "配台日": str(r.get("配台日")),
+                        "換算数量": r.get(TASK_COL_QTY),
+                        "当日配台数量": r.get("当日配台数量"),
+                        "実配台数量": r.get(INTERACTIVE_DISPATCH_ACTUAL_QTY_COL),
+                        "加工開始日時": r.get("加工開始日時"),
+                    }
+                )
+        payload: dict = {"phase": phase, "v62_count": len(entries), "v62_rows": entries}
+        if extra:
+            payload.update(extra)
+        if not entries and not extra:
+            return
+        _adn.append_structured(hypothesis_id, location, message, payload)
+    except Exception:
+        pass
+
+
 def _interactive_stage2_parity_active() -> bool:
     """段階3を段階2と同一の機械カレンダー・工場枠（終業延長を含む）で回す（runner が設定）。"""
     v = (os.environ.get("PM_AI_INTERACTIVE_TRIAL_STAGE2_PARITY") or "").strip().lower()
@@ -29686,12 +29820,8 @@ def _overlay_timeline_meta_onto_interactive_dispatch_df(
             except Exception:
                 dd_st = None
         if dd_out is not None and dd_st is not None and dd_st != dd_out:
-            try:
-                ci_dd = out.columns.get_loc("配台日")
-                if not isinstance(ci_dd, slice):
-                    out.iloc[pos, ci_dd] = _norm_ymd(dd_st)
-            except Exception:
-                _clear_meta_at_pos(pos)
+            # 手動修正 JSON の配台日（暦日別行）を加工開始暦日へ寄せない。メタだけ落とす。
+            _clear_meta_at_pos(pos)
     return out
 
 
@@ -29787,6 +29917,38 @@ def _interactive_merge_actual_dispatch_qty_from_timeline_table(
         out[actual_col] = pd.to_numeric(out[actual_col], errors="coerce").fillna(0.0).astype(float)
     except Exception:
         pass
+    # #region agent log
+    try:
+        from planning_core import agent_debug_ndjson as _adn
+
+        for pos in range(len(out)):
+            tid = _interactive_norm_cell(out.iloc[pos].get(TASK_COL_TASK_ID))
+            if "V6-2" not in tid:
+                continue
+            row = out.iloc[pos].to_dict()
+            spd = row.get("加工速度") or row.get(TASK_COL_SPEED)
+            st = row.get("加工開始日時")
+            en = row.get("加工終了日時")
+            _adn.append_structured(
+                "H4",
+                "_core.py:_interactive_merge_actual_dispatch_qty_from_timeline_table",
+                "v6_timeline_merge_row",
+                {
+                    "依頼NO": tid,
+                    "工程名": row.get(TASK_COL_MACHINE),
+                    "機械名": row.get(TASK_COL_MACHINE_NAME),
+                    "配台日": str(row.get("配台日")),
+                    "当日配台数量": row.get(plan_col),
+                    "実配台数量": row.get(actual_col),
+                    "換算数量": row.get(TASK_COL_QTY),
+                    "加工速度": spd,
+                    "加工開始日時": st,
+                    "加工終了日時": en,
+                },
+            )
+    except Exception:
+        pass
+    # #endregion
     return out
 
 
@@ -29972,6 +30134,24 @@ def _interactive_consolidate_duplicate_plan_dispatch_rows(
         for p in positions:
             if p != keeper:
                 drop.add(p)
+        # #region agent log
+        tid0 = _interactive_norm_cell(df_out.iloc[keeper].get(TASK_COL_TASK_ID))
+        if "V6-2" in tid0:
+            _agent_log_v62_dispatch_rows(
+                "H-C",
+                "_core.py:_interactive_consolidate_duplicate_plan_dispatch_rows",
+                "same_day_key_merge",
+                phase="consolidate_group",
+                df=df_out,
+                extra={
+                    "group_key": str(_k),
+                    "positions": positions,
+                    "keeper": keeper,
+                    "total_plan": total_plan,
+                    "keeper_conv": df_out.iloc[keeper].get(TASK_COL_QTY),
+                },
+            )
+        # #endregion
     if not drop:
         return df_out
     keep_idx = [i for i in range(len(df_out)) if i not in drop]
@@ -30021,12 +30201,142 @@ def _interactive_resolve_slide_target_dispatch_date(
     return None
 
 
+def _interactive_editor_plan_calendar_index(
+    json_rows: list,
+) -> tuple[
+    dict[tuple[str, str, str, date], float],
+    set[tuple[str, str, str]],
+    dict[tuple[str, str, str], set[date]],
+]:
+    """手動修正 JSON から (依頼NO, 工程, 機械, 配台日)→目標 m と暦日集合を構築する。"""
+    plan_by_key: dict[tuple[str, str, str, date], float] = {}
+    tasks: set[tuple[str, str, str]] = set()
+    days_by_task: dict[tuple[str, str, str], set[date]] = defaultdict(set)
+    for r in json_rows or []:
+        if not isinstance(r, dict):
+            continue
+        tid = _interactive_norm_cell(r.get(TASK_COL_TASK_ID)) or _interactive_norm_cell(
+            r.get("タスクID")
+        )
+        proc = _interactive_dispatch_target_process_key(r.get(TASK_COL_MACHINE))
+        mach = _interactive_norm_cell(r.get(TASK_COL_MACHINE_NAME))
+        dd = _interactive_parse_dispatch_date_cell(r.get("配台日"))
+        try:
+            qty = (
+                float(str(r.get("当日配台数量")).replace(",", "").strip())
+                if r.get("当日配台数量") not in (None, "")
+                else 0.0
+            )
+        except (TypeError, ValueError):
+            qty = 0.0
+        if not tid or not mach or dd is None or qty <= 1e-9:
+            continue
+        triple = (tid, proc, mach)
+        k = (tid, proc, mach, dd)
+        plan_by_key[k] = plan_by_key.get(k, 0.0) + float(qty)
+        tasks.add(triple)
+        days_by_task[triple].add(dd)
+    return plan_by_key, tasks, days_by_task
+
+
+def _interactive_dispatch_row_calendar_key(
+    row,
+) -> tuple[str, str, str, date] | None:
+    tid = _interactive_norm_cell(row.get(TASK_COL_TASK_ID))
+    proc = _interactive_dispatch_target_process_key(row.get(TASK_COL_MACHINE))
+    mach = _interactive_norm_cell(row.get(TASK_COL_MACHINE_NAME))
+    dd = _interactive_parse_dispatch_date_cell(row.get("配台日"))
+    if not tid or not mach or dd is None:
+        return None
+    return (tid, proc, mach, dd)
+
+
+def _interactive_restore_editor_plan_calendar_rows(
+    df_out: pd.DataFrame,
+    json_rows: list,
+    json_columns: list | None,
+    *,
+    plan_by_key: dict[tuple[str, str, str, date], float] | None = None,
+    editor_tasks: set[tuple[str, str, str]] | None = None,
+) -> pd.DataFrame:
+    """
+    配台試行の後処理（スライド・統合・枝刈り）後も、手動修正 JSON の暦日別行を正とする。
+    タイムライン由来の実配台数量・加工開始終了は同一暦日キーで引き継ぐ。
+    """
+    if df_out is None or getattr(df_out, "empty", True) or not json_rows:
+        return df_out
+    if plan_by_key is None or editor_tasks is None:
+        plan_by_key, editor_tasks, _ = _interactive_editor_plan_calendar_index(json_rows)
+    if not plan_by_key or not editor_tasks:
+        return df_out
+
+    plan_col = "当日配台数量"
+    actual_col = INTERACTIVE_DISPATCH_ACTUAL_QTY_COL
+    meta_cols = ("加工開始日時", "加工終了日時", "メンバー名")
+
+    lookup: dict[tuple[str, str, str, date], dict] = {}
+    for pos in range(len(df_out)):
+        k = _interactive_dispatch_row_calendar_key(df_out.iloc[pos].to_dict())
+        if k is not None:
+            lookup[k] = df_out.iloc[pos].to_dict()
+
+    df_json = _dataframe_from_interactive_dispatch_json_rows(
+        json_rows,
+        json_columns,
+        fallback_columns_from=df_out,
+    )
+    restored_records: list[dict] = []
+    for pos in range(len(df_json)):
+        row = df_json.iloc[pos].to_dict()
+        k = _interactive_dispatch_row_calendar_key(row)
+        if k is None or k not in plan_by_key:
+            continue
+        tid, proc, mach, dd = k
+        if (tid, proc, mach) not in editor_tasks:
+            continue
+        out_row = dict(row)
+        out_row["配台日"] = _norm_ymd(dd)
+        out_row[plan_col] = float(plan_by_key[k])
+        src = lookup.get(k)
+        if src:
+            if actual_col in out_row and actual_col in src:
+                try:
+                    out_row[actual_col] = float(src.get(actual_col) or 0.0)
+                except (TypeError, ValueError):
+                    out_row[actual_col] = 0.0
+            for mc in meta_cols:
+                sv = src.get(mc)
+                if sv is not None and str(sv).strip():
+                    out_row[mc] = sv
+        restored_records.append(out_row)
+
+    other_records: list[dict] = []
+    for pos in range(len(df_out)):
+        row = df_out.iloc[pos].to_dict()
+        tid = _interactive_norm_cell(row.get(TASK_COL_TASK_ID))
+        proc = _interactive_dispatch_target_process_key(row.get(TASK_COL_MACHINE))
+        mach = _interactive_norm_cell(row.get(TASK_COL_MACHINE_NAME))
+        if (tid, proc, mach) in editor_tasks:
+            continue
+        other_records.append(row)
+
+    if not restored_records:
+        return df_out
+    combined = restored_records + other_records
+    df_new = pd.DataFrame(combined)
+    for c in df_out.columns:
+        if c not in df_new.columns:
+            df_new[c] = ""
+    return df_new.reindex(columns=list(df_out.columns))
+
+
 def _interactive_slide_unassigned_plan_dispatch_dates(
     df_out: pd.DataFrame,
     df_sim: pd.DataFrame | None,
     *,
     meters_done: dict[tuple[str, str, str, date], float] | None = None,
     working_days: list[date] | None = None,
+    editor_days_by_task: dict[tuple[str, str, str], set[date]] | None = None,
 ) -> pd.DataFrame:
     """
     計画暦日にタイムライン未割付、または実績が別暦日にある行について、
@@ -30059,6 +30369,8 @@ def _interactive_slide_unassigned_plan_dispatch_dates(
         except (TypeError, ValueError):
             plan_qty = 0.0
         if not tid or not mach or plan_dd is None or plan_qty <= 1e-9:
+            continue
+        if editor_days_by_task and len(editor_days_by_task.get((tid, proc, mach), ())) >= 2:
             continue
         needs_slide = _interactive_row_needs_dispatch_date_slide(
             row,
@@ -30119,22 +30431,26 @@ def _interactive_prune_orphan_zero_plan_dispatch_rows(df_out: pd.DataFrame) -> p
     if plan_col not in df_out.columns:
         return df_out
     eps = 1e-9
-    has_positive: set[tuple[str, str]] = set()
+    has_positive: set[tuple[str, str, str]] = set()
     for pos in range(len(df_out)):
         tid = _interactive_norm_cell(df_out.iloc[pos].get(TASK_COL_TASK_ID))
+        proc = _interactive_dispatch_target_process_key(
+            df_out.iloc[pos].get(TASK_COL_MACHINE)
+        )
         mach = _interactive_norm_cell(df_out.iloc[pos].get(TASK_COL_MACHINE_NAME))
         try:
             q = float(df_out.iloc[pos].get(plan_col) or 0.0)
         except (TypeError, ValueError):
             q = 0.0
-        if tid and mach and q > eps:
-            has_positive.add((tid, mach))
+        if tid and proc and mach and q > eps:
+            has_positive.add((tid, proc, mach))
     if not has_positive:
         return df_out
     keep: list[int] = []
     for pos in range(len(df_out)):
         row = df_out.iloc[pos]
         tid = _interactive_norm_cell(row.get(TASK_COL_TASK_ID))
+        proc = _interactive_dispatch_target_process_key(row.get(TASK_COL_MACHINE))
         mach = _interactive_norm_cell(row.get(TASK_COL_MACHINE_NAME))
         try:
             q = float(row.get(plan_col) or 0.0)
@@ -30143,7 +30459,7 @@ def _interactive_prune_orphan_zero_plan_dispatch_rows(df_out: pd.DataFrame) -> p
         if q > eps:
             keep.append(pos)
             continue
-        if tid and mach and (tid, mach) in has_positive:
+        if tid and proc and mach and (tid, proc, mach) in has_positive:
             if actual_col in df_out.columns:
                 try:
                     act_q = float(row.get(actual_col) or 0.0)
@@ -30178,6 +30494,19 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
         return df_sim
     if not _interactive_dispatch_trial_env_active():
         return df_sim
+    # #region agent log
+    _agent_log_v62_dispatch_rows(
+        "H-A",
+        "_core.py:_interactive_dispatch_trial_use_editor_rows",
+        "trial_editor_input_json",
+        phase="input_json",
+        json_rows=json_rows,
+        extra={"df_sim_rows": int(len(df_sim)) if df_sim is not None else 0},
+    )
+    # #endregion
+    editor_plan_by_key, editor_tasks, editor_days_by_task = (
+        _interactive_editor_plan_calendar_index(json_rows)
+    )
     df_out = _dataframe_from_interactive_dispatch_json_rows(
         json_rows,
         json_columns,
@@ -30207,18 +30536,42 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
         df_sim,
         meters_done=_md_reco,
         working_days=working_days,
+        editor_days_by_task=editor_days_by_task,
     )
     df_out = _overlay_timeline_meta_onto_interactive_dispatch_df(df_out, df_sim)
     df_out = _interactive_merge_actual_dispatch_qty_from_timeline_table(
         df_out, df_sim, append_missing_timeline_days=True
     )
     _before_cons = len(df_out)
+    # #region agent log
+    _agent_log_v62_dispatch_rows(
+        "H-B",
+        "_core.py:_interactive_dispatch_trial_use_editor_rows",
+        "trial_before_same_day_consolidate",
+        phase="before_consolidate",
+        df=df_out,
+    )
+    # #endregion
     df_out = _interactive_consolidate_duplicate_plan_dispatch_rows(df_out)
     if len(df_out) != _before_cons:
         logging.info(
             "インタラクティブ配台試行: 同一暦日キーの重複行を %s 行に集約しました。",
             _before_cons - len(df_out),
         )
+        # #region agent log
+        _agent_log_v62_dispatch_rows(
+            "H-C",
+            "_core.py:_interactive_dispatch_trial_use_editor_rows",
+            "trial_after_same_day_consolidate",
+            phase="after_consolidate",
+            df=df_out,
+            extra={
+                "rows_before": _before_cons,
+                "rows_after": int(len(df_out)),
+                "rows_merged": _before_cons - len(df_out),
+            },
+        )
+        # #endregion
     if _md_reco is not None:
         df_out = _interactive_apply_recomputed_actual_qty_to_dispatch_df(df_out, _md_reco)
     df_out = _interactive_zero_actual_qty_without_timeline_meta(
@@ -30249,10 +30602,27 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
                 "インタラクティブ配台試行: 配台日スライド後 plan キーで meters_done を %s 件再集計しました。",
                 len(_md_post_slide),
             )
+    df_out = _interactive_restore_editor_plan_calendar_rows(
+        df_out,
+        json_rows,
+        json_columns,
+        plan_by_key=editor_plan_by_key,
+        editor_tasks=editor_tasks,
+    )
     logging.info(
         "インタラクティブ配台試行: 結果_配台表は入力 JSON rows を採用しました（%s 行）。",
         len(df_out),
     )
+    # #region agent log
+    _agent_log_v62_dispatch_rows(
+        "H-D",
+        "_core.py:_interactive_dispatch_trial_use_editor_rows",
+        "trial_editor_output_df",
+        phase="final_df",
+        df=df_out,
+        extra={"runId": "post-fix-restore-v1"},
+    )
+    # #endregion
     return df_out
 
 
@@ -30285,6 +30655,17 @@ def _write_dispatch_table_standalone_json(df_dispatch: pd.DataFrame, target_dir:
         rows = json.loads(
             df_dispatch.to_json(orient="records", date_format="iso", double_precision=15)
         )
+        # #region agent log
+        if _interactive_dispatch_trial_env_active():
+            _agent_log_v62_dispatch_rows(
+                "H-D",
+                "_core.py:_write_dispatch_table_standalone_json",
+                "trial_json_write",
+                phase="json_write",
+                df=df_dispatch,
+                extra={"target_dir": target_dir},
+            )
+        # #endregion
         payload = {
             "format_version": 1,
             "sheet_name": RESULT_DISPATCH_TABLE_SHEET_NAME,
@@ -30297,6 +30678,16 @@ def _write_dispatch_table_standalone_json(df_dispatch: pd.DataFrame, target_dir:
         p_out.parent.mkdir(parents=True, exist_ok=True)
         text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
         p_out.write_text(text, encoding="utf-8", newline="\n")
+        try:
+            from planning_core.stage3_input_builder import write_stage3_baseline_sidecar_if_absent
+
+            if write_stage3_baseline_sidecar_if_absent(p_out, rows):
+                logging.info(
+                    "段階2 baseline: %s.stage3_planning_meta.json を保存しました。",
+                    p_out.name,
+                )
+        except Exception as _bl_ex:
+            logging.debug("段階2 baseline sidecar 保存スキップ: %s", _bl_ex)
         return str(p_out)
     except Exception as e:
         logging.warning("結果_配台表.json: 出力に失敗しました: %s", e)
@@ -31997,7 +32388,7 @@ def _trial_order_flow_day_start_floor(
     macro_now_dt: datetime,
     task_queue: list | None = None,
 ) -> datetime:
-    """原板投入日を起点に」しの日の加工開始の下限時刻（同日は 12:45 以降を含む）。"""
+    """当該暦日の加工開始下限。配台可能日時（列）があれば原反投入日+12:45 より優先。"""
     floor = datetime.combine(current_date, DEFAULT_START_TIME)
     # §B-2 検査 / §B-3 巻返しは EC 完了を待って開始でしるため、
     # 原板投入日（=同日12:45以降）の制約をしのまま適用すると後続は丝必須に後ゝへ倒れる。
@@ -32010,8 +32401,15 @@ def _trial_order_flow_day_start_floor(
         and _tid_floor
         and task_queue is not None
     )
+    _disp_dt = task.get("dispatchable_datetime")
+    _has_disp_col = isinstance(_disp_dt, datetime)
     rid = task.get("raw_input_date")
-    if not is_b2_follower_delayed and isinstance(rid, date) and rid == current_date:
+    if (
+        not is_b2_follower_delayed
+        and isinstance(rid, date)
+        and rid == current_date
+        and not _has_disp_col
+    ):
         floor = max(floor, datetime.combine(current_date, DISPATCHABLE_FROM_TIME))
     sdl = task.get("same_day_raw_start_limit")
     s_req = task.get("start_date_req")
@@ -40006,6 +40404,14 @@ def _generate_plan_impl(
     df_dispatch = _apply_dispatch_table_timeline_meta_from_events(
         df_dispatch, timeline_events, sorted_tasks_for_result
     )
+    if (
+        _interactive_dispatch_trial_env_active()
+        and interactive_dispatch_targets
+        and not interactive_result_dispatch_json_rows
+    ):
+        df_dispatch = _stage3_attach_actual_dispatch_qty_from_timeline_plan_rows(
+            df_dispatch
+        )
     df_dispatch = _interactive_dispatch_trial_use_editor_rows_for_result_table(
         df_dispatch,
         interactive_result_dispatch_json_rows,
