@@ -19,9 +19,8 @@ import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.ListCell;
-import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TableColumn;
@@ -53,6 +52,18 @@ public final class PostProcessingProductMasterEditorPane {
 
     private static final List<String> UPLOAD_TABLE_COLUMNS =
             List.of("商品コード", "商品名1", "発泡体品番", "発泡体幅", "発泡体長さ");
+
+    /** 参照マスタ検索結果テーブルの列（依頼書候補表示に近い並び）。 */
+    private static final List<SearchResultColumn> SEARCH_RESULT_COLUMNS =
+            List.of(
+                    new SearchResultColumn("商品コード", 128, PostProcessingProductMasterEditorPane::shohinCode),
+                    new SearchResultColumn("商品名1", 200, PostProcessingProductMasterEditorPane::shohinName1),
+                    new SearchResultColumn("品番", 72, PostProcessingProductMasterEditorPane::foamPartNo),
+                    new SearchResultColumn("品名", 56, PostProcessingProductMasterEditorPane::foamName),
+                    new SearchResultColumn("タイプ", 64, h -> rowColumn(h, "発泡体タイプ")),
+                    new SearchResultColumn("幅", 64, h -> rowColumn(h, "発泡体幅")),
+                    new SearchResultColumn("長さ", 64, h -> rowColumn(h, "発泡体長さ")),
+                    new SearchResultColumn("色", 48, h -> rowColumn(h, "発泡体色")));
 
     private PostProcessingProductMasterEditorPane() {}
 
@@ -98,27 +109,8 @@ public final class PostProcessingProductMasterEditorPane {
             tf.setStyle("-fx-font-size: 11px;");
         }
 
-        ListView<PostProcessingProductMasterIo.SearchHit> searchResults = new ListView<>();
-        searchResults.setPrefHeight(compactCardTitle ? 140 : 200);
-        searchResults.setCellFactory(
-                lv ->
-                        new ListCell<>() {
-                            @Override
-                            protected void updateItem(
-                                    PostProcessingProductMasterIo.SearchHit item, boolean empty) {
-                                super.updateItem(item, empty);
-                                if (empty || item == null) {
-                                    setText(null);
-                                    return;
-                                }
-                                setText(
-                                        item.shohinCode()
-                                                + " | "
-                                                + item.shohinName1()
-                                                + " | "
-                                                + item.foamPartNo());
-                            }
-                        });
+        TableView<PostProcessingProductMasterIo.SearchHit> searchResults =
+                buildSearchResultTable(compactCardTitle);
 
         Map<String, TextField> fieldByColumn = new LinkedHashMap<>();
         TabPane formTabs = new TabPane();
@@ -321,16 +313,28 @@ public final class PostProcessingProductMasterEditorPane {
                     t.start();
                 });
 
+        Runnable applySelectedSearchHit =
+                () -> {
+                    PostProcessingProductMasterIo.SearchHit hit =
+                            searchResults.getSelectionModel().getSelectedItem();
+                    if (hit != null) {
+                        templateRow.clear();
+                        templateRow.putAll(hit.rowByColumn());
+                    }
+                };
         searchResults
                 .getSelectionModel()
                 .selectedItemProperty()
-                .addListener(
-                        (obs, old, hit) -> {
-                            if (hit != null) {
-                                templateRow.clear();
-                                templateRow.putAll(hit.rowByColumn());
-                            }
-                        });
+                .addListener((obs, old, hit) -> applySelectedSearchHit.run());
+        searchResults.setOnMouseClicked(
+                e -> {
+                    if (e.getClickCount() == 2) {
+                        applySelectedSearchHit.run();
+                        editorModelRef.get().applyTemplateRow(templateRow);
+                        syncFormFromModel.run();
+                        statusLabel.setText("雛形をフォームに反映しました（商品コードは手修正）。");
+                    }
+                });
 
         Button btnTemplateToForm = new Button("雛形をフォームへ");
         btnTemplateToForm.getStyleClass().add("btn-reload");
@@ -530,9 +534,11 @@ public final class PostProcessingProductMasterEditorPane {
         HBox mainRow = new HBox(12, filterBox, formTabs);
         HBox.setHgrow(formTabs, Priority.ALWAYS);
         HBox.setHgrow(mainRow, Priority.ALWAYS);
-        filterBox.setMinWidth(220);
-        filterBox.setPrefWidth(compactCardTitle ? 240 : 260);
+        filterBox.setMinWidth(compactCardTitle ? 300 : 440);
+        filterBox.setPrefWidth(compactCardTitle ? 300 : 480);
+        filterBox.setMaxWidth(compactCardTitle ? 340 : 560);
         filterBox.setMaxHeight(Double.MAX_VALUE);
+        VBox.setVgrow(searchResults, Priority.ALWAYS);
 
         VBox root = new VBox(10);
         root.setMaxWidth(Double.MAX_VALUE);
@@ -550,6 +556,60 @@ public final class PostProcessingProductMasterEditorPane {
                         actionRow);
         VBox.setVgrow(mainRow, Priority.ALWAYS);
         return root;
+    }
+
+    private record SearchResultColumn(
+            String title, double prefWidth, java.util.function.Function<
+                            PostProcessingProductMasterIo.SearchHit, String>
+                    extractor) {}
+
+    private static TableView<PostProcessingProductMasterIo.SearchHit> buildSearchResultTable(
+            boolean compactCardTitle) {
+        TableView<PostProcessingProductMasterIo.SearchHit> table = new TableView<>();
+        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
+        table.setPrefHeight(compactCardTitle ? 180 : 340);
+        table.setMinHeight(140);
+        table.setPlaceholder(new Label("「検索」で雛形一覧を表示（最大200件）"));
+        table.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
+        for (SearchResultColumn spec : SEARCH_RESULT_COLUMNS) {
+            TableColumn<PostProcessingProductMasterIo.SearchHit, String> col =
+                    new TableColumn<>(spec.title());
+            col.setPrefWidth(spec.prefWidth());
+            col.setMinWidth(Math.min(spec.prefWidth(), 48));
+            col.setCellValueFactory(
+                    cd ->
+                            new javafx.beans.property.SimpleStringProperty(
+                                    spec.extractor().apply(cd.getValue())));
+            table.getColumns().add(col);
+        }
+        return table;
+    }
+
+    private static String shohinCode(PostProcessingProductMasterIo.SearchHit h) {
+        return h != null ? nullToEmpty(h.shohinCode()) : "";
+    }
+
+    private static String shohinName1(PostProcessingProductMasterIo.SearchHit h) {
+        return h != null ? nullToEmpty(h.shohinName1()) : "";
+    }
+
+    private static String foamPartNo(PostProcessingProductMasterIo.SearchHit h) {
+        return h != null ? nullToEmpty(h.foamPartNo()) : "";
+    }
+
+    private static String foamName(PostProcessingProductMasterIo.SearchHit h) {
+        return h != null ? nullToEmpty(h.foamName()) : "";
+    }
+
+    private static String rowColumn(PostProcessingProductMasterIo.SearchHit h, String key) {
+        if (h == null || h.rowByColumn() == null) {
+            return "";
+        }
+        return nullToEmpty(h.rowByColumn().get(key));
+    }
+
+    private static String nullToEmpty(String s) {
+        return s != null ? s.trim() : "";
     }
 
     private static HBox gridFilterRow(String label, TextField field) {
