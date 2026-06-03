@@ -78,6 +78,13 @@ public final class AppPaths {
      */
     public static final String KEY_PM_AI_ALADDIN_MASTER_DIR = "PM_AI_ALADDIN_MASTER_DIR";
 
+    /**
+     * 後加工商品マスタのアップロード用 xlsx（フルパス）。空のときは
+     * {@link #resolveAladdinMasterDir(Map)}/{@link jp.co.pm.ai.desktop.io.PostProcessingProductMasterIo#DEFAULT_UPLOAD_FILE_NAME}。
+     */
+    public static final String KEY_PM_AI_POSTPROC_PRODUCT_MASTER_UPLOAD =
+            "PM_AI_POSTPROC_PRODUCT_MASTER_UPLOAD";
+
     /** {@link #KEY_PM_AI_ALADDIN_MASTER_DIR} 未設定時、{@link #resolveRepoRoot(Map)} 直下のサブフォルダ名。 */
     public static final String ALADDIN_MASTER_DIR_LEAF_NAME = "アラジンマスタ";
 

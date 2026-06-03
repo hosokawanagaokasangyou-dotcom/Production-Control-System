@@ -183,6 +183,13 @@ public final class EnvVarDocs {
                         + "環境変数タブのフォルダ選択可。"
                         + "統合スクリプト create_integrated_master.py にも渡される。");
         put(
+                "PM_AI_POSTPROC_PRODUCT_MASTER_UPLOAD",
+                "後加工商品マスタのアップロード用 xlsx（フルパス）。"
+                        + "依頼書入力【設定】タブのマスタ編集カードが読み書きする。"
+                        + "空のときは PM_AI_ALADDIN_MASTER_DIR 直下の"
+                        + "アップロード用_後加工商品マスタ.xlsx。"
+                        + "見出し行は参照の後加工商品マスタ.xlsx と同一である必要がある。");
+        put(
                 "PM_AI_REQUEST_FORM_JUCHU_FILE",
                 "依頼書入力タブの受注データベース Excel（受注ﾌｧｲﾙ シート）のフルパス。"
                         + "例: 加工依頼書入力.xlsm。"

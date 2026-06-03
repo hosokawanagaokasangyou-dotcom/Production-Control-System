@@ -1091,92 +1091,25 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         Label lblToolStatus = new Label("待機中...");
         lblToolStatus.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: inherit;");
         
-        btnRunTool.setOnAction(e -> {
-            lblToolStatus.setText("生成実行中...");
-            btnRunTool.setDisable(true);
-            
-            Thread thread = new Thread(() -> {
-                try {
-                    String scriptPath = resolveIntegratedMasterScript();
-                    Path pythonExe = StagePythonExecutable.resolve(uiEnvSnapshot);
-                    Map<String, String> childEnv = new HashMap<>(uiEnvSnapshot);
-                    childEnv.put("PM_AI_REQUEST_FORM_WORKSPACE", targetFolder);
-                    childEnv.put(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, targetFolder);
-                    childEnv.put(
-                            AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR,
-                            aladdinMasterDirectory().getAbsolutePath());
-                    ProcessBuilder pb =
-                            new ProcessBuilder(pythonExe.toString(), scriptPath);
-                    pb.directory(new File(targetFolder));
-                    pb.redirectErrorStream(true);
-                    PythonProcessRunner.mergeUiEnvIntoProcess(pb, childEnv, null);
-                    Process process = pb.start();
-                    StringBuilder childOut = new StringBuilder();
-                    try (BufferedReader br =
-                            new BufferedReader(
-                                    new InputStreamReader(
-                                            process.getInputStream(), StandardCharsets.UTF_8))) {
-                        String line;
-                        while ((line = br.readLine()) != null) {
-                            if (childOut.length() > 0) {
-                                childOut.append('\n');
-                            }
-                            childOut.append(line);
-                        }
-                    }
-                    int exitCode = process.waitFor();
-                    String outputTail = tailOfChildOutput(childOut.toString(), 1200);
-
-                    javafx.application.Platform.runLater(() -> {
-                        btnRunTool.setDisable(false);
-                        if (exitCode == 0) {
-                            reloadMasterProductListFromDisk();
-                            lblToolStatus.setText("成功！「マスタリレーション統合結果.xlsx」が生成されました。");
-                            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                            alert.setTitle("統合成功");
-                            alert.setHeaderText(null);
-                            alert.setContentText("マスタリレーションの統合が完了し、「マスタリレーション統合結果.xlsx」を更新しました！");
-                            alert.showAndWait();
-                        } else {
-                            lblToolStatus.setText("失敗 (終了コード: " + exitCode + ")");
-                            Alert alert = new Alert(Alert.AlertType.ERROR);
-                            alert.setTitle("統合失敗");
-                            alert.setHeaderText(null);
-                            String detail =
-                                    "統合処理中にエラーが発生しました。"
-                                            + "\nPython: "
-                                            + pythonExe
-                                            + "\nマスタフォルダ: "
-                                            + aladdinMasterDirectory().getAbsolutePath();
-                            if (!outputTail.isBlank()) {
-                                detail += "\n\n--- スクリプト出力（末尾） ---\n" + outputTail;
-                            } else {
-                                detail +=
-                                        "\n\nPythonスクリプト、3つのマスタ xlsx、"
-                                                + "環境変数 PM_AI_PYTHON を確認してください。";
-                            }
-                            alert.setContentText(detail);
-                            alert.showAndWait();
-                        }
-                    });
-                } catch (Exception ex) {
-                    javafx.application.Platform.runLater(() -> {
-                        btnRunTool.setDisable(false);
-                        lblToolStatus.setText("エラー: " + ex.getMessage());
-                        Alert alert = new Alert(Alert.AlertType.ERROR);
-                        alert.setTitle("実行エラー");
-                        alert.setHeaderText(null);
-                        alert.setContentText("プロセスの実行中に例外が発生しました: " + ex.getMessage());
-                        alert.showAndWait();
-                    });
-                }
-            });
-            thread.setDaemon(true);
-            thread.start();
-        });
+        btnRunTool.setOnAction(
+                e -> runIntegratedMasterGeneration(lblToolStatus, btnRunTool, true));
         
         toolCard.getChildren().addAll(lblToolTitle, lblToolDesc, btnRunTool, lblToolStatus);
         root.getChildren().add(toolCard);
+
+        VBox postProcMasterCard =
+                PostProcessingProductMasterEditorPane.buildCard(
+                        hostWindow,
+                        new PostProcessingProductMasterEditorPane.Context(
+                                () -> uiEnvSnapshot,
+                                this::snapshotFirstProductRowForMaster,
+                                this::snapshotFormKakoKbnLabel,
+                                () ->
+                                        runIntegratedMasterGeneration(
+                                                null, null, true),
+                                msg -> System.out.println(msg)),
+                        SETTINGS_CARD_WIDTH * 2 + 12);
+        root.getChildren().add(postProcMasterCard);
 
         sp.setContent(root);
         tab.setContent(sp);
@@ -5335,6 +5268,150 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             newTxtRawWidth.setText("");
             newTxtRawLength.setText("");
         }
+    }
+
+    /** 後加工商品マスタ編集: 先頭の依頼書製品行（無ければ {@code null}）。 */
+    public ProductRow snapshotFirstProductRowForMaster() {
+        return productRows.isEmpty() ? null : productRows.get(0);
+    }
+
+    /** 依頼書フォームの加工区分ラベル（マスタ {@code 自社後加工区分} 転記用）。 */
+    public String snapshotFormKakoKbnLabel() {
+        if (newCmbFormKakoKbn != null && newCmbFormKakoKbn.getValue() != null) {
+            String v = newCmbFormKakoKbn.getValue().trim();
+            if (!v.isEmpty()) {
+                return v;
+            }
+        }
+        return defaultKakoKbnForNewRow();
+    }
+
+    /**
+     * {@code create_integrated_master.py} を実行する。
+     *
+     * @param statusLabel 進捗表示（任意）
+     * @param disableWhileRunning 実行中に無効化するボタン（任意）
+     * @param showResultDialog 完了時にダイアログを出すか
+     */
+    private void runIntegratedMasterGeneration(
+            Label statusLabel, Button disableWhileRunning, boolean showResultDialog) {
+        if (statusLabel != null) {
+            statusLabel.setText("生成実行中...");
+        }
+        if (disableWhileRunning != null) {
+            disableWhileRunning.setDisable(true);
+        }
+
+        Thread thread =
+                new Thread(
+                        () -> {
+                            try {
+                                String scriptPath = resolveIntegratedMasterScript();
+                                Path pythonExe = StagePythonExecutable.resolve(uiEnvSnapshot);
+                                Map<String, String> childEnv = new HashMap<>(uiEnvSnapshot);
+                                childEnv.put("PM_AI_REQUEST_FORM_WORKSPACE", targetFolder);
+                                childEnv.put(
+                                        AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR, targetFolder);
+                                childEnv.put(
+                                        AppPaths.KEY_PM_AI_ALADDIN_MASTER_DIR,
+                                        aladdinMasterDirectory().getAbsolutePath());
+                                ProcessBuilder pb =
+                                        new ProcessBuilder(pythonExe.toString(), scriptPath);
+                                pb.directory(new File(targetFolder));
+                                pb.redirectErrorStream(true);
+                                PythonProcessRunner.mergeUiEnvIntoProcess(pb, childEnv, null);
+                                Process process = pb.start();
+                                StringBuilder childOut = new StringBuilder();
+                                try (BufferedReader br =
+                                        new BufferedReader(
+                                                new InputStreamReader(
+                                                        process.getInputStream(),
+                                                        StandardCharsets.UTF_8))) {
+                                    String line;
+                                    while ((line = br.readLine()) != null) {
+                                        if (childOut.length() > 0) {
+                                            childOut.append('\n');
+                                        }
+                                        childOut.append(line);
+                                    }
+                                }
+                                int exitCode = process.waitFor();
+                                String outputTail = tailOfChildOutput(childOut.toString(), 1200);
+
+                                Platform.runLater(
+                                        () -> {
+                                            if (disableWhileRunning != null) {
+                                                disableWhileRunning.setDisable(false);
+                                            }
+                                            if (exitCode == 0) {
+                                                reloadMasterProductListFromDisk();
+                                                if (statusLabel != null) {
+                                                    statusLabel.setText(
+                                                            "成功！「マスタリレーション統合結果.xlsx」が生成されました。");
+                                                }
+                                                if (showResultDialog) {
+                                                    Alert alert =
+                                                            new Alert(Alert.AlertType.INFORMATION);
+                                                    alert.setTitle("統合成功");
+                                                    alert.setHeaderText(null);
+                                                    alert.setContentText(
+                                                            "マスタリレーションの統合が完了し、「マスタリレーション統合結果.xlsx」を更新しました！");
+                                                    alert.showAndWait();
+                                                }
+                                            } else {
+                                                if (statusLabel != null) {
+                                                    statusLabel.setText(
+                                                            "失敗 (終了コード: " + exitCode + ")");
+                                                }
+                                                if (showResultDialog) {
+                                                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                                                    alert.setTitle("統合失敗");
+                                                    alert.setHeaderText(null);
+                                                    String detail =
+                                                            "統合処理中にエラーが発生しました。"
+                                                                    + "\nPython: "
+                                                                    + pythonExe
+                                                                    + "\nマスタフォルダ: "
+                                                                    + aladdinMasterDirectory()
+                                                                            .getAbsolutePath();
+                                                    if (!outputTail.isBlank()) {
+                                                        detail +=
+                                                                "\n\n--- スクリプト出力（末尾） ---\n"
+                                                                        + outputTail;
+                                                    } else {
+                                                        detail +=
+                                                                "\n\nPythonスクリプト、3つのマスタ xlsx、"
+                                                                        + "環境変数 PM_AI_PYTHON を確認してください。";
+                                                    }
+                                                    alert.setContentText(detail);
+                                                    alert.showAndWait();
+                                                }
+                                            }
+                                        });
+                            } catch (Exception ex) {
+                                Platform.runLater(
+                                        () -> {
+                                            if (disableWhileRunning != null) {
+                                                disableWhileRunning.setDisable(false);
+                                            }
+                                            if (statusLabel != null) {
+                                                statusLabel.setText("エラー: " + ex.getMessage());
+                                            }
+                                            if (showResultDialog) {
+                                                Alert alert = new Alert(Alert.AlertType.ERROR);
+                                                alert.setTitle("実行エラー");
+                                                alert.setHeaderText(null);
+                                                alert.setContentText(
+                                                        "プロセスの実行中に例外が発生しました: "
+                                                                + ex.getMessage());
+                                                alert.showAndWait();
+                                            }
+                                        });
+                            }
+                        },
+                        "integrated-master-gen");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     // --- STYLISH DYNAMIC MULTIPLE ROWS HELPERS & CLASSES ---

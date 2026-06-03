@@ -183,7 +183,7 @@ final class RequestFormMasterProductCandidateMatcher {
         return hinmeiMatchesProduct(hinmei, product) ? 100 : 0;
     }
 
-    private static String normalizeLengthKeyword(String val) {
+    static String normalizeLengthKeyword(String val) {
         return normalize(val).replaceAll("\\.0$", "");
     }
 
