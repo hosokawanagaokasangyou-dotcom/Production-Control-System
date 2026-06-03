@@ -4098,7 +4098,7 @@ public final class DispatchInteractiveTabController {
                         profile,
                         day,
                         ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
-        if (preferResultDispatchJsonMetersOverTimeline() && fromDoc > 1e-3) {
+        if (preferResultDispatchJsonMetersOverTimeline()) {
             return fromDoc;
         }
         if (docHasActualDispatchQtyColumn() && timelineCalendarMeters.isLoaded()) {
@@ -4122,7 +4122,7 @@ public final class DispatchInteractiveTabController {
                         profile,
                         day,
                         ResultDispatchPivot.DISPATCH_INTERACTIVE_WIDE_MERGE_IDENTITY_HEADERS);
-        if (preferResultDispatchJsonMetersOverTimeline() && fromDoc > 1e-3) {
+        if (preferResultDispatchJsonMetersOverTimeline()) {
             return fromDoc;
         }
         if (docHasActualDispatchQtyColumn() && timelineCalendarMeters.isLoaded()) {
@@ -4143,7 +4143,7 @@ public final class DispatchInteractiveTabController {
         double fromDoc =
                 ResultDispatchPivot.sumQuantityForProcessMachineDate(
                         doc.rows(), process, machine, day);
-        if (preferResultDispatchJsonMetersOverTimeline() && fromDoc > 1e-3) {
+        if (preferResultDispatchJsonMetersOverTimeline()) {
             return fromDoc;
         }
         if (docHasActualDispatchQtyColumn() && timelineCalendarMeters.isLoaded()) {
@@ -4160,7 +4160,7 @@ public final class DispatchInteractiveTabController {
         double fromDoc =
                 ResultDispatchPivot.sumActualQuantityForProcessMachineDate(
                         doc.rows(), process, machine, day);
-        if (preferResultDispatchJsonMetersOverTimeline() && fromDoc > 1e-3) {
+        if (preferResultDispatchJsonMetersOverTimeline()) {
             return fromDoc;
         }
         if (docHasActualDispatchQtyColumn() && timelineCalendarMeters.isLoaded()) {
