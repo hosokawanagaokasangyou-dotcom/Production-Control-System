@@ -44,6 +44,7 @@ import jp.co.pm.ai.desktop.bridge.StagePythonExecutable;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.io.PoiWorkbookOpener;
+import jp.co.pm.ai.desktop.io.PoiWorkbookSaver;
 import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
 
 public class ReconciliationApp {
@@ -1947,7 +1948,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                                     updateLoadingOverlayText(
                                             "一時保存分を受注ファイルへ一括転記しています…\n(3/4) ファイルを保存しています…");
                                     try (FileOutputStream fos = new FileOutputStream(file)) {
-                                        wb.write(fos);
+                                        PoiWorkbookSaver.write(wb, fos);
                                     }
                                 }
                                 updateLoadingOverlayText(
@@ -2485,7 +2486,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
             fis.close();
             FileOutputStream fos = new FileOutputStream(file);
-            wb.write(fos);
+            PoiWorkbookSaver.write(wb, fos);
             fos.close();
             wb.close();
             
@@ -3728,7 +3729,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         JUCHU_TRANSFER_REPLACE_FORMULA.set(Boolean.TRUE);
         try (FileInputStream fis = new FileInputStream(file);
                 Workbook wb = PoiWorkbookOpener.open(fis)) {
-            wb.setForceFormulaRecalculation(false);
             Sheet sheet = wb.getSheet("受注ﾌｧｲﾙ");
 
             Map<String, Integer> colMap = buildJuchuColumnMap(sheet, file.getAbsolutePath());
@@ -3811,7 +3811,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     "受注ファイルへ転記しています…\n(5/5) ファイルを保存しています…\n依頼No: "
                             + form.reqNo());
             try (FileOutputStream fos = new FileOutputStream(file)) {
-                wb.write(fos);
+                PoiWorkbookSaver.write(wb, fos);
             }
             return undoState;
         } finally {
@@ -3987,7 +3987,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
             progress.accept("自動転記の取り消し…\n(3/3) ファイルを保存しています…");
             try (FileOutputStream fos = new FileOutputStream(file)) {
-                wb.write(fos);
+                PoiWorkbookSaver.write(wb, fos);
             }
         } finally {
             JUCHU_TRANSFER_REPLACE_FORMULA.remove();
@@ -4242,6 +4242,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (isJuchuFormulaCell(existing)) {
             if (!juchuTransferReplaceFormulaCells()) {
                 return null;
+            }
+            if (existing instanceof org.apache.poi.xssf.usermodel.XSSFCell xssfCell) {
+                xssfCell.setBlank();
+                return xssfCell;
             }
             if (existing != null) {
                 row.removeCell(existing);
