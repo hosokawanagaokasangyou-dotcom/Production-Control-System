@@ -56,7 +56,26 @@ public final class PostProcessingProductMasterEditorPane {
 
     private PostProcessingProductMasterEditorPane() {}
 
+    /** 依頼書入力の専用タブ用（横幅いっぱい）。 */
+    public static VBox buildTabContent(Window owner, Context ctx) {
+        VBox content = buildContent(owner, ctx, false);
+        content.getStyleClass().add("form-tab-container");
+        content.setFillWidth(true);
+        content.setMaxWidth(Double.MAX_VALUE);
+        VBox.setVgrow(content, Priority.ALWAYS);
+        return content;
+    }
+
+    /** 【設定】タブ内カード用（幅上限あり）。 */
     public static VBox buildCard(Window owner, Context ctx, double maxCardWidth) {
+        VBox card = buildContent(owner, ctx, true);
+        card.getStyleClass().add("settings-card");
+        card.setMaxWidth(maxCardWidth);
+        card.setPrefWidth(maxCardWidth);
+        return card;
+    }
+
+    private static VBox buildContent(Window owner, Context ctx, boolean compactCardTitle) {
         Supplier<Map<String, String>> uiEnv = ctx.uiEnv();
         Consumer<String> log = ctx.log() != null ? ctx.log() : s -> {};
 
@@ -80,7 +99,7 @@ public final class PostProcessingProductMasterEditorPane {
         }
 
         ListView<PostProcessingProductMasterIo.SearchHit> searchResults = new ListView<>();
-        searchResults.setPrefHeight(140);
+        searchResults.setPrefHeight(compactCardTitle ? 140 : 200);
         searchResults.setCellFactory(
                 lv ->
                         new ListCell<>() {
@@ -104,6 +123,8 @@ public final class PostProcessingProductMasterEditorPane {
         Map<String, TextField> fieldByColumn = new LinkedHashMap<>();
         TabPane formTabs = new TabPane();
         formTabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        formTabs.setMinHeight(compactCardTitle ? 280 : 360);
+        VBox.setVgrow(formTabs, Priority.ALWAYS);
 
         List<String> referenceHeaders = new ArrayList<>();
         AtomicReference<PostProcessingProductMasterEditorModel> editorModelRef =
@@ -112,7 +133,7 @@ public final class PostProcessingProductMasterEditorPane {
 
         ObservableList<Map<String, String>> uploadRows = FXCollections.observableArrayList();
         TableView<Map<String, String>> uploadTable = new TableView<>(uploadRows);
-        uploadTable.setPrefHeight(120);
+        uploadTable.setPrefHeight(compactCardTitle ? 120 : 160);
         uploadTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         for (String col : UPLOAD_TABLE_COLUMNS) {
             TableColumn<Map<String, String>, String> tc = new TableColumn<>(col);
@@ -508,16 +529,16 @@ public final class PostProcessingProductMasterEditorPane {
         VBox topPaths = new VBox(4, pathRow1, pathRow2);
         HBox mainRow = new HBox(12, filterBox, formTabs);
         HBox.setHgrow(formTabs, Priority.ALWAYS);
+        HBox.setHgrow(mainRow, Priority.ALWAYS);
         filterBox.setMinWidth(220);
-        filterBox.setPrefWidth(240);
+        filterBox.setPrefWidth(compactCardTitle ? 240 : 260);
+        filterBox.setMaxHeight(Double.MAX_VALUE);
 
-        VBox card = new VBox(10);
-        card.getStyleClass().add("settings-card");
-        card.setMaxWidth(maxCardWidth);
-        card.setPrefWidth(maxCardWidth);
+        VBox root = new VBox(10);
+        root.setMaxWidth(Double.MAX_VALUE);
         Label title = new Label("後加工商品マスタ編集");
-        title.getStyleClass().add("settings-card-title");
-        card.getChildren()
+        title.getStyleClass().add(compactCardTitle ? "settings-card-title" : "paper-main-title");
+        root.getChildren()
                 .addAll(
                         title,
                         note,
@@ -527,7 +548,8 @@ public final class PostProcessingProductMasterEditorPane {
                         new Label("アップロード用ファイルの行"),
                         uploadTable,
                         actionRow);
-        return card;
+        VBox.setVgrow(mainRow, Priority.ALWAYS);
+        return root;
     }
 
     private static HBox gridFilterRow(String label, TextField field) {

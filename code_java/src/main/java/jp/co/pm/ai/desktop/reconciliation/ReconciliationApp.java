@@ -797,10 +797,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         verificationLayout.setCenter(splitPane);
         tabVerification.setContent(verificationLayout);
         
-        // Tab 3: Settings - edit ComboBox option lists
+        // Tab 2: Settings - edit ComboBox option lists
         Tab tabSettings = createSettingsTab();
-        
-        tabPane.getTabs().addAll(tabVerification, tabSettings);
+        // Tab 3: Post-processing product master editor (right of settings)
+        Tab tabPostProcMaster = createPostProcessingProductMasterTab();
+
+        tabPane.getTabs().addAll(tabVerification, tabSettings, tabPostProcMaster);
         root.setCenter(tabPane);
 
         mainStackPane = new StackPane();
@@ -1097,21 +1099,29 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         toolCard.getChildren().addAll(lblToolTitle, lblToolDesc, btnRunTool, lblToolStatus);
         root.getChildren().add(toolCard);
 
-        VBox postProcMasterCard =
-                PostProcessingProductMasterEditorPane.buildCard(
+        sp.setContent(root);
+        tab.setContent(sp);
+        return tab;
+    }
+
+    private Tab createPostProcessingProductMasterTab() {
+        Tab tab = new Tab("後加工商品マスタ");
+        tab.setClosable(false);
+
+        ScrollPane sp = new ScrollPane();
+        sp.setFitToWidth(true);
+        sp.getStyleClass().add("form-scroll-pane");
+
+        VBox content =
+                PostProcessingProductMasterEditorPane.buildTabContent(
                         hostWindow,
                         new PostProcessingProductMasterEditorPane.Context(
                                 () -> uiEnvSnapshot,
                                 this::snapshotFirstProductRowForMaster,
                                 this::snapshotFormKakoKbnLabel,
-                                () ->
-                                        runIntegratedMasterGeneration(
-                                                null, null, true),
-                                msg -> System.out.println(msg)),
-                        SETTINGS_CARD_WIDTH * 2 + 12);
-        root.getChildren().add(postProcMasterCard);
-
-        sp.setContent(root);
+                                () -> runIntegratedMasterGeneration(null, null, true),
+                                msg -> System.out.println(msg)));
+        sp.setContent(content);
         tab.setContent(sp);
         return tab;
     }
