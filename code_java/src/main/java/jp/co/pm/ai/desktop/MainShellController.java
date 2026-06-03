@@ -4199,37 +4199,6 @@ public final class MainShellController {
                 }
             }
             appendStageChildResolvedEnvForRun(script, childEnv);
-            if (STAGE2.equals(script)) {
-                // #region agent log
-                String dbgSid = AgentDebugLog.resolveDispatchTrialSessionId(childEnv);
-                Map<String, Object> stage2Start = new LinkedHashMap<>();
-                stage2Start.put("runId", "stage2-perf");
-                stage2Start.put(
-                        "pmAiOutputDir",
-                        childEnv.getOrDefault(AppPaths.KEY_PM_AI_OUTPUT_DIR, ""));
-                stage2Start.put(
-                        "processingPlanPath",
-                        childEnv.getOrDefault(AppPaths.KEY_PM_AI_PROCESSING_PLAN_PATH, ""));
-                stage2Start.put(
-                        "taskInputSourceDir",
-                        childEnv.getOrDefault(AppPaths.KEY_PM_AI_TASK_INPUT_SOURCE_DIR, ""));
-                stage2Start.put(
-                        "planInputPath",
-                        childEnv.getOrDefault(PlanInputTabController.ENV_PM_AI_PLAN_INPUT_PATH, ""));
-                if (lastNetworkSourceResolution != null) {
-                    stage2Start.put("taskInputFromCache", lastNetworkSourceResolution.taskInputFromCache());
-                    stage2Start.put(
-                            "actualDetailFromCache", lastNetworkSourceResolution.actualDetailFromCache());
-                }
-                AgentDebugLog.appendStructured(
-                        collectUiEnv(),
-                        dbgSid,
-                        "H0",
-                        "MainShellController.runStage",
-                        "stage2_jvm_child_start",
-                        stage2Start);
-                // #endregion
-            }
             RunRequest req = new RunRequest(py, dir, script, wb, childEnv);
             mainRunTabController.getStatusLabel().setText("実行中…");
             PipelineExecutionTimingKind stageTimingKind = pipelineTimingKindForStageScript(script);
@@ -4313,24 +4282,6 @@ public final class MainShellController {
         PipelineExecutionTimingKind stageTimingKind = pipelineTimingKindForStageScript(script);
         if (stageTimingKind != null) {
             endPipelineExecutionTiming(stageTimingKind);
-        }
-        if (STAGE2.equals(script)) {
-            // #region agent log
-            String dbgSid = AgentDebugLog.resolveDispatchTrialSessionId(collectUiEnv());
-            Map<String, Object> stage2End = new LinkedHashMap<>();
-            stage2End.put("runId", "stage2-perf");
-            stage2End.put("exitCode", code != null ? code : -1);
-            if (err != null) {
-                stage2End.put("error", err.getClass().getSimpleName());
-            }
-            AgentDebugLog.appendStructured(
-                    collectUiEnv(),
-                    dbgSid,
-                    "H0",
-                    "MainShellController.completeStageRunOnFx",
-                    "stage2_jvm_child_end",
-                    stage2End);
-            // #endregion
         }
         if (isStage3Script(script)) {
             endStage3RunButtonLock();

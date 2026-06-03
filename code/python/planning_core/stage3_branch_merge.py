@@ -290,32 +290,6 @@ def merge_branch_rows(rows, columns, branch_parent_map: dict) -> list:
                 wide_date_columns=wide_date_columns,
             )
         )
-    # #region agent log
-    try:
-        from planning_core import agent_debug_ndjson as _adn
-
-        for row in merged:
-            tid = _norm(row.get("依頼NO"))
-            if "V6-2" not in tid:
-                continue
-            _adn.append_structured(
-                "H-merge-parent-skip",
-                "stage3_branch_merge.py:merge_branch_rows",
-                "branch_merge_output_row",
-                {
-                    "runId": "post-fix-v3",
-                    "依頼NO": tid,
-                    "工程名": row.get("工程名"),
-                    "換算数量": row.get("換算数量"),
-                    "当日配台数量": row.get("当日配台数量"),
-                    "配台日": row.get("配台日"),
-                    "実配台数量": row.get("実配台数量"),
-                    "skippedParentKeys": len(branch_group_keys),
-                },
-            )
-    except Exception:
-        pass
-    # #endregion
     return merged
 
 

@@ -38,37 +38,8 @@ def run_stage2_generate_plan() -> None:
     """
     段階2標準: マスタの工場時間オーバーライドのうえで ``_generate_plan_impl()`` を 1 回実行する。
     """
-    import time
-
     from planning_core import _core as pc
     from planning_core.dispatch_rules import trace_recorder
-
-    # #region agent log
-    _t_run0 = time.perf_counter()
-    try:
-        from planning_core import agent_debug_ndjson as _agent_dbg
-
-        _agent_dbg.append_structured(
-            "H0",
-            "stage2_identical_dispatch_runner.run_stage2_generate_plan",
-            "stage2_run_start",
-            {
-                "runId": "stage2-perf",
-                "output_dir": pc._stage2_path_debug_meta(
-                    (os.environ.get("PM_AI_OUTPUT_DIR") or "").strip()
-                    or getattr(pc, "output_dir", "")
-                ),
-                "processing_plan_path": pc._stage2_path_debug_meta(
-                    (os.environ.get("PM_AI_PROCESSING_PLAN_PATH") or "").strip()
-                ),
-                "plan_input_path": pc._stage2_path_debug_meta(
-                    (os.environ.get(pc.ENV_PLAN_INPUT_PATH) or "").strip()
-                ),
-            },
-        )
-    except Exception:
-        pass
-    # #endregion
 
     try:
         from planning_core.stage2_network_localize import localize_unc_paths_for_stage2
@@ -84,23 +55,6 @@ def run_stage2_generate_plan() -> None:
             pc._generate_plan_impl()
     finally:
         _flush_dispatch_rule_trace_sidecar()
-        # #region agent log
-        try:
-            from planning_core import agent_debug_ndjson as _agent_dbg
-
-            _agent_dbg.append_structured(
-                "H0",
-                "stage2_identical_dispatch_runner.run_stage2_generate_plan",
-                "stage2_run_end",
-                {
-                    "runId": "stage2-perf",
-                    "elapsed_sec": round(time.perf_counter() - _t_run0, 3),
-                    "master_workbook": pc._stage2_path_debug_meta(master_abs),
-                },
-            )
-        except Exception:
-            pass
-        # #endregion
 
 
 def _load_stage3_input_tasks_df(pc):
@@ -179,70 +133,11 @@ def run_stage3_generate_plan(*, qty_strict: bool = False) -> dict:
             + (f" (V6-2系: {v62})" if v62 else ""),
             flush=True,
         )
-        # #region agent log
-        try:
-            from planning_core import agent_debug_ndjson as _adn
-
-            _adn.append_structured(
-                "H-stage3-cap-targets",
-                "stage2_identical_dispatch_runner.run_stage3_generate_plan",
-                "stage3 dispatch targets from input3",
-                {
-                    "runId": "stage3-parent-collapse-v1",
-                    "input3Rows": int(len(tasks_df)),
-                    "targetCount": len(dispatch_targets),
-                    "v62": v62,
-                },
-            )
-        except Exception:
-            pass
-        # #endregion
         with pc._override_default_factory_hours_from_master(master_abs):
             pc._generate_plan_impl(
                 tasks_df_override=tasks_df,
                 interactive_dispatch_targets=dispatch_targets or None,
             )
-        # #region agent log
-        try:
-            from planning_core import agent_debug_ndjson as _adn
-
-            snap = dict(getattr(pc, "_LAST_INTERACTIVE_TRIAL_METERS_DONE_SNAPSHOT", {}) or {})
-            v62_m = {
-                str(k): float(v)
-                for k, v in snap.items()
-                if isinstance(k, tuple) and str(k[0]).startswith("V6-2")
-            }
-            v62_disp = ""
-            v62_reg_start = ""
-            for _, row in tasks_df.iterrows():
-                tid = pc._interactive_norm_cell(
-                    pc.planning_task_id_str_from_plan_row(row)
-                )
-                if not tid.startswith("V6-2"):
-                    continue
-                dt = pc.resolve_dispatchable_datetime_from_plan_row(
-                    row, regular_shift_start=pc.stage3_regular_shift_start_time()
-                )
-                v62_disp = dt.isoformat() if dt is not None else ""
-                v62_reg_start = pc.stage3_regular_shift_start_time().strftime("%H:%M")
-                break
-            _adn.append_structured(
-                "H-S3-timeline-meters",
-                "stage2_identical_dispatch_runner.run_stage3_generate_plan",
-                "stage3 timeline meters vs cap",
-                {
-                    "runId": "stage3-parent-collapse-v1",
-                    "capTargets": v62,
-                    "metersDone": v62_m,
-                    "dispatchableIso": v62_disp,
-                    "regularShiftStart": v62_reg_start,
-                    "capSum": sum(float(v) for v in (dispatch_targets or {}).values()),
-                    "metersSum": sum(v62_m.values()),
-                },
-            )
-        except Exception:
-            pass
-        # #endregion
         return _merge_stage3_branches(pc)
     finally:
         if qty_strict:
@@ -283,35 +178,6 @@ def _merge_stage3_branches(pc) -> dict:
             refresh_post_stage3_dispatch_entries_sidecar(json_path, pc=pc)
         except Exception:
             pass
-        # #region agent log
-        try:
-            import json as _json
-            from planning_core import agent_debug_ndjson as _adn
-
-            raw = _json.loads(json_path.read_text(encoding="utf-8"))
-            for row in raw.get("rows") or []:
-                tid = str(row.get("依頼NO") or "").strip()
-                if "V6-2" not in tid:
-                    continue
-                _adn.append_structured(
-                    "H1",
-                    "stage2_identical_dispatch_runner.py:_merge_stage3_branches",
-                    "merged_result_row",
-                    {
-                        "依頼NO": tid,
-                        "工程名": row.get("工程名"),
-                        "機械名": row.get("機械名"),
-                        "換算数量": row.get("換算数量"),
-                        "当日配台数量": row.get("当日配台数量"),
-                        "実配台数量": row.get("実配台数量"),
-                        "加工開始日時": row.get("加工開始日時"),
-                        "加工終了日時": row.get("加工終了日時"),
-                        "branch_merged": raw.get("branch_merged"),
-                    },
-                )
-        except Exception:
-            pass
-        # #endregion
         return res
     except Exception as ex:
         print(f"[stage3-merge] 枝番統合スキップ: {ex}", flush=True)
@@ -370,36 +236,6 @@ def run_interactive_dispatch_trial_from_result_dispatch_json(
         )
         if n_fill:
             print(f"[dispatch trial] 計画入力・加工計画DATA から {n_fill} セルを補完しました。", flush=True)
-        # #region agent log
-        try:
-            from planning_core import agent_debug_ndjson as _adn
-
-            v62_in = [
-                {
-                    "配台日": str(r.get("配台日")),
-                    "換算数量": r.get(pc.TASK_COL_QTY),
-                    "当日配台数量": r.get("当日配台数量"),
-                    "工程名": r.get(pc.TASK_COL_MACHINE),
-                    "機械名": r.get(pc.TASK_COL_MACHINE_NAME),
-                }
-                for r in rows
-                if isinstance(r, dict)
-                and "V6-2" in str(r.get(pc.TASK_COL_TASK_ID) or r.get("タスクID") or "")
-            ]
-            _adn.append_structured(
-                "H-A",
-                "stage2_identical_dispatch_runner.run_interactive_dispatch_trial",
-                "trial_input_json_v62",
-                {
-                    "phase": "after_fill",
-                    "total_json_rows": len(rows),
-                    "v62_count": len(v62_in),
-                    "v62_rows": v62_in,
-                },
-            )
-        except Exception:
-            pass
-        # #endregion
         merged_df, targets = pc.merge_interactive_result_dispatch_json_into_tasks_df(
             tasks_df, rows
         )

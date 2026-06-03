@@ -404,28 +404,6 @@ def collapse_stage3_plan_df_by_parent(pc, tasks_df):
             rec[pc.PLAN_COL_DISPATCHABLE_DATETIME] = pc.format_dispatchable_datetime_cell(
                 best_dt
             )
-        # #region agent log
-        if parent == "V6-2":
-            try:
-                from planning_core import agent_debug_ndjson as _adn
-
-                _adn.append_structured(
-                    "H-S3-collapse-dd",
-                    "stage3_input_builder.collapse_stage3_plan_df_by_parent",
-                    "collapse chose latest dispatchable",
-                    {
-                        "runId": "stage3-collapse-max-dd-v1",
-                        "parent": parent,
-                        "minDispatchable": min_dt.isoformat() if min_dt else "",
-                        "maxDispatchable": best_dt.isoformat() if best_dt else "",
-                        "written": rec.get(pc.PLAN_COL_DISPATCHABLE_DATETIME, ""),
-                        "totalQty": total_qty,
-                        "branchCount": len(rows),
-                    },
-                )
-            except Exception:
-                pass
-        # #endregion
         out_records.append(rec)
 
     if not collapsed:
@@ -436,24 +414,6 @@ def collapse_stage3_plan_df_by_parent(pc, tasks_df):
         f"[stage3-input] 段階2暦日枝番を統合: {collapsed} → 各1行（計 {len(collapsed)} 親）",
         flush=True,
     )
-    # #region agent log
-    try:
-        from planning_core import agent_debug_ndjson as _adn
-
-        _adn.append_structured(
-            "H-S3-collapse-parent",
-            "stage3_input_builder.collapse_stage3_plan_df_by_parent",
-            "collapsed multi-branch input3 rows",
-            {
-                "runId": "stage3-parent-collapse-v1",
-                "parents": collapsed,
-                "rowsBefore": int(len(tasks_df)),
-                "rowsAfter": int(len(out_df)),
-            },
-        )
-    except Exception:
-        pass
-    # #endregion
     return out_df
 
 
@@ -513,24 +473,6 @@ def build_stage3_dispatch_targets_from_plan_df(pc, tasks_df) -> dict[tuple, floa
     for (_parent, proc, mach), slot in by_parent.items():
         targets[(slot["tid"], proc, mach, slot["dd"])] = float(slot["qty"])
 
-    # #region agent log
-    try:
-        from planning_core import agent_debug_ndjson as _adn
-
-        v62 = {str(k): targets[k] for k in targets if k[0].startswith("V6-2")}
-        _adn.append_structured(
-            "H-S3-cap-targets",
-            "stage3_input_builder.build_stage3_dispatch_targets_from_plan_df",
-            "stage3 cap targets built",
-            {
-                "runId": "stage3-parent-collapse-v1",
-                "targetCount": len(targets),
-                "v62": v62,
-            },
-        )
-    except Exception:
-        pass
-    # #endregion
     return targets
 
 
@@ -640,31 +582,6 @@ def build_stage3_input_sheet(
             targets_baseline[k] = v
     targets = _merge_json_targets_with_baseline(targets_json, targets_baseline)
 
-    v62_keys = [k for k in targets if k[0] == "V6-2"]
-    # #region agent log
-    try:
-        from planning_core import agent_debug_ndjson as _adn
-
-        _adn.append_structured(
-            "H-input3-baseline",
-            "stage3_input_builder.py:build_stage3_input_sheet",
-            "stage3 input targets merged",
-            {
-                "runId": "aladdin-input3-prefer-json-v1",
-                "jsonTargetDays": len(targets_json),
-                "sidecarTargetDays": len(targets_sidecar),
-                "envTargetDays": len(targets_env),
-                "mergedTargetDays": len(targets),
-                "v62BranchDays": len(v62_keys),
-                "v62QtyByDay": {str(k[3]): targets[k] for k in v62_keys},
-                "baselineSidecar": str(_stage3_planning_meta_sidecar_path(json_path)),
-                "sidecarExists": _stage3_planning_meta_sidecar_path(json_path).is_file(),
-            },
-        )
-    except Exception:
-        pass
-    # #endregion
-
     shift_start = None
     try:
         mp = master_path or pc._master_workbook_path_resolved()
@@ -726,26 +643,6 @@ def build_stage3_input_sheet(
         rec[pc.PLAN_COL_DISPATCHABLE_DATETIME] = pc.format_dispatchable_datetime_cell(
             dt_disp
         )
-        if tid == "V6-2":
-            # #region agent log
-            try:
-                from planning_core import agent_debug_ndjson as _adn
-
-                _adn.append_structured(
-                    "H-input3-dispatchable-dt",
-                    "stage3_input_builder.build_stage3_input_sheet",
-                    "input3 dispatchable datetime written",
-                    {
-                        "runId": "input3-dispatch-date-shift-v1",
-                        "branchId": branch_id,
-                        "dispatchDate": str(dd),
-                        "shiftStart": shift_start.strftime("%H:%M"),
-                        "written": rec[pc.PLAN_COL_DISPATCHABLE_DATETIME],
-                    },
-                )
-            except Exception:
-                pass
-            # #endregion
         trial_order += 1
         rec[pc.RESULT_TASK_COL_DISPATCH_TRIAL_ORDER] = trial_order
         records.append(rec)

@@ -567,26 +567,6 @@ def _log_stage2_phase_timing(
     now = time_module.perf_counter()
     elapsed = now - t_prev
     logging.info("段階2 計測: %s %.2f秒", label, elapsed)
-    # #region agent log
-    try:
-        from planning_core import agent_debug_ndjson as _agent_dbg
-
-        payload: dict = {
-            "label": label,
-            "elapsed_sec": round(elapsed, 3),
-            "runId": "stage2-perf",
-        }
-        if extra:
-            payload.update(extra)
-        _agent_dbg.append_structured(
-            "timing",
-            "_core._log_stage2_phase_timing",
-            label,
-            payload,
-        )
-    except Exception:
-        pass
-    # #endregion
     return now
 
 
@@ -674,31 +654,6 @@ def _dispatch_loop_profile_finish_day(
 def _dispatch_loop_profile_emit_run_summary() -> None:
     run = _STAGE2_DISPATCH_LOOP_PROFILE_RUN
     day_records = run.get("day_records") or []
-    # #region agent log
-    try:
-        from planning_core import agent_debug_ndjson as _agent_dbg
-
-        _agent_dbg.append_structured(
-            "timing",
-            "_core._dispatch_loop_profile_emit_run_summary",
-            "dispatch_loop_profile",
-            {
-                "runId": "stage2-perf",
-                "label": "dispatch_loop_profile",
-                "run_buckets_top12": _dispatch_loop_profile_top_buckets(
-                    run.get("run_buckets") or {}, 12
-                ),
-                "day_top5_by_elapsed": sorted(
-                    day_records,
-                    key=lambda d: d.get("elapsed_sec") or 0,
-                    reverse=True,
-                )[:5],
-                "day_count": len(day_records),
-            },
-        )
-    except Exception:
-        pass
-    # #endregion
 
 
 # endregion stage2 dispatch loop profiler
@@ -29224,72 +29179,6 @@ def _interactive_dispatch_trial_env_active() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
-def _agent_log_v62_dispatch_rows(
-    hypothesis_id: str,
-    location: str,
-    message: str,
-    *,
-    phase: str,
-    df: "pd.DataFrame | None" = None,
-    json_rows: list | None = None,
-    extra: dict | None = None,
-) -> None:
-    """配台試行デバッグ: V6-2 行の暦日・換算・当日配台を NDJSON へ（session 947ce0 等）。"""
-    try:
-        from planning_core import agent_debug_ndjson as _adn
-
-        entries: list[dict] = []
-        if df is not None and not getattr(df, "empty", True):
-            for pos in range(len(df)):
-                tid = _interactive_norm_cell(df.iloc[pos].get(TASK_COL_TASK_ID))
-                if "V6-2" not in tid:
-                    continue
-                row = df.iloc[pos]
-                entries.append(
-                    {
-                        "pos": pos,
-                        "依頼NO": tid,
-                        "工程名": row.get(TASK_COL_MACHINE),
-                        "機械名": row.get(TASK_COL_MACHINE_NAME),
-                        "配台日": str(row.get("配台日")),
-                        "換算数量": row.get(TASK_COL_QTY),
-                        "当日配台数量": row.get("当日配台数量"),
-                        "実配台数量": row.get(INTERACTIVE_DISPATCH_ACTUAL_QTY_COL),
-                        "加工開始日時": row.get("加工開始日時"),
-                    }
-                )
-        if json_rows:
-            for i, r in enumerate(json_rows):
-                if not isinstance(r, dict):
-                    continue
-                tid = _interactive_norm_cell(r.get(TASK_COL_TASK_ID)) or _interactive_norm_cell(
-                    r.get("タスクID")
-                )
-                if "V6-2" not in tid:
-                    continue
-                entries.append(
-                    {
-                        "jsonIndex": i,
-                        "依頼NO": tid,
-                        "工程名": r.get(TASK_COL_MACHINE),
-                        "機械名": r.get(TASK_COL_MACHINE_NAME),
-                        "配台日": str(r.get("配台日")),
-                        "換算数量": r.get(TASK_COL_QTY),
-                        "当日配台数量": r.get("当日配台数量"),
-                        "実配台数量": r.get(INTERACTIVE_DISPATCH_ACTUAL_QTY_COL),
-                        "加工開始日時": r.get("加工開始日時"),
-                    }
-                )
-        payload: dict = {"phase": phase, "v62_count": len(entries), "v62_rows": entries}
-        if extra:
-            payload.update(extra)
-        if not entries and not extra:
-            return
-        _adn.append_structured(hypothesis_id, location, message, payload)
-    except Exception:
-        pass
-
-
 def _interactive_stage2_parity_active() -> bool:
     """段階3を段階2と同一の機械カレンダー・工場枠（終業延長を含む）で回す（runner が設定）。"""
     v = (os.environ.get("PM_AI_INTERACTIVE_TRIAL_STAGE2_PARITY") or "").strip().lower()
@@ -29917,38 +29806,6 @@ def _interactive_merge_actual_dispatch_qty_from_timeline_table(
         out[actual_col] = pd.to_numeric(out[actual_col], errors="coerce").fillna(0.0).astype(float)
     except Exception:
         pass
-    # #region agent log
-    try:
-        from planning_core import agent_debug_ndjson as _adn
-
-        for pos in range(len(out)):
-            tid = _interactive_norm_cell(out.iloc[pos].get(TASK_COL_TASK_ID))
-            if "V6-2" not in tid:
-                continue
-            row = out.iloc[pos].to_dict()
-            spd = row.get("加工速度") or row.get(TASK_COL_SPEED)
-            st = row.get("加工開始日時")
-            en = row.get("加工終了日時")
-            _adn.append_structured(
-                "H4",
-                "_core.py:_interactive_merge_actual_dispatch_qty_from_timeline_table",
-                "v6_timeline_merge_row",
-                {
-                    "依頼NO": tid,
-                    "工程名": row.get(TASK_COL_MACHINE),
-                    "機械名": row.get(TASK_COL_MACHINE_NAME),
-                    "配台日": str(row.get("配台日")),
-                    "当日配台数量": row.get(plan_col),
-                    "実配台数量": row.get(actual_col),
-                    "換算数量": row.get(TASK_COL_QTY),
-                    "加工速度": spd,
-                    "加工開始日時": st,
-                    "加工終了日時": en,
-                },
-            )
-    except Exception:
-        pass
-    # #endregion
     return out
 
 
@@ -30134,24 +29991,6 @@ def _interactive_consolidate_duplicate_plan_dispatch_rows(
         for p in positions:
             if p != keeper:
                 drop.add(p)
-        # #region agent log
-        tid0 = _interactive_norm_cell(df_out.iloc[keeper].get(TASK_COL_TASK_ID))
-        if "V6-2" in tid0:
-            _agent_log_v62_dispatch_rows(
-                "H-C",
-                "_core.py:_interactive_consolidate_duplicate_plan_dispatch_rows",
-                "same_day_key_merge",
-                phase="consolidate_group",
-                df=df_out,
-                extra={
-                    "group_key": str(_k),
-                    "positions": positions,
-                    "keeper": keeper,
-                    "total_plan": total_plan,
-                    "keeper_conv": df_out.iloc[keeper].get(TASK_COL_QTY),
-                },
-            )
-        # #endregion
     if not drop:
         return df_out
     keep_idx = [i for i in range(len(df_out)) if i not in drop]
@@ -30494,16 +30333,6 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
         return df_sim
     if not _interactive_dispatch_trial_env_active():
         return df_sim
-    # #region agent log
-    _agent_log_v62_dispatch_rows(
-        "H-A",
-        "_core.py:_interactive_dispatch_trial_use_editor_rows",
-        "trial_editor_input_json",
-        phase="input_json",
-        json_rows=json_rows,
-        extra={"df_sim_rows": int(len(df_sim)) if df_sim is not None else 0},
-    )
-    # #endregion
     editor_plan_by_key, editor_tasks, editor_days_by_task = (
         _interactive_editor_plan_calendar_index(json_rows)
     )
@@ -30543,35 +30372,12 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
         df_out, df_sim, append_missing_timeline_days=True
     )
     _before_cons = len(df_out)
-    # #region agent log
-    _agent_log_v62_dispatch_rows(
-        "H-B",
-        "_core.py:_interactive_dispatch_trial_use_editor_rows",
-        "trial_before_same_day_consolidate",
-        phase="before_consolidate",
-        df=df_out,
-    )
-    # #endregion
     df_out = _interactive_consolidate_duplicate_plan_dispatch_rows(df_out)
     if len(df_out) != _before_cons:
         logging.info(
             "インタラクティブ配台試行: 同一暦日キーの重複行を %s 行に集約しました。",
             _before_cons - len(df_out),
         )
-        # #region agent log
-        _agent_log_v62_dispatch_rows(
-            "H-C",
-            "_core.py:_interactive_dispatch_trial_use_editor_rows",
-            "trial_after_same_day_consolidate",
-            phase="after_consolidate",
-            df=df_out,
-            extra={
-                "rows_before": _before_cons,
-                "rows_after": int(len(df_out)),
-                "rows_merged": _before_cons - len(df_out),
-            },
-        )
-        # #endregion
     if _md_reco is not None:
         df_out = _interactive_apply_recomputed_actual_qty_to_dispatch_df(df_out, _md_reco)
     df_out = _interactive_zero_actual_qty_without_timeline_meta(
@@ -30613,16 +30419,6 @@ def _interactive_dispatch_trial_use_editor_rows_for_result_table(
         "インタラクティブ配台試行: 結果_配台表は入力 JSON rows を採用しました（%s 行）。",
         len(df_out),
     )
-    # #region agent log
-    _agent_log_v62_dispatch_rows(
-        "H-D",
-        "_core.py:_interactive_dispatch_trial_use_editor_rows",
-        "trial_editor_output_df",
-        phase="final_df",
-        df=df_out,
-        extra={"runId": "post-fix-restore-v1"},
-    )
-    # #endregion
     return df_out
 
 
@@ -30655,17 +30451,6 @@ def _write_dispatch_table_standalone_json(df_dispatch: pd.DataFrame, target_dir:
         rows = json.loads(
             df_dispatch.to_json(orient="records", date_format="iso", double_precision=15)
         )
-        # #region agent log
-        if _interactive_dispatch_trial_env_active():
-            _agent_log_v62_dispatch_rows(
-                "H-D",
-                "_core.py:_write_dispatch_table_standalone_json",
-                "trial_json_write",
-                phase="json_write",
-                df=df_dispatch,
-                extra={"target_dir": target_dir},
-            )
-        # #endregion
         payload = {
             "format_version": 1,
             "sheet_name": RESULT_DISPATCH_TABLE_SHEET_NAME,
