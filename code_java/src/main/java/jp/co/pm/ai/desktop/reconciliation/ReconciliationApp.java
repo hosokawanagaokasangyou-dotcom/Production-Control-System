@@ -1117,9 +1117,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         hostWindow,
                         new PostProcessingProductMasterEditorPane.Context(
                                 () -> uiEnvSnapshot,
+                                this::snapshotMasterProductCatalog,
                                 this::snapshotFirstProductRowForMaster,
                                 this::snapshotFormKakoKbnLabel,
                                 () -> runIntegratedMasterGeneration(null, null, true),
+                                PostProcessingProductMasterReferenceCache::invalidate,
                                 msg -> System.out.println(msg)));
         sp.setContent(content);
         tab.setContent(sp);
@@ -5280,6 +5282,13 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
     }
 
+    /** 依頼書候補と同じメモリ上商品一覧（統合マスタ②由来）。 */
+    public List<ProductInfo> snapshotMasterProductCatalog() {
+        synchronized (this) {
+            return List.copyOf(masterProductList);
+        }
+    }
+
     /** 後加工商品マスタ編集: 先頭の依頼書製品行（無ければ {@code null}）。 */
     public ProductRow snapshotFirstProductRowForMaster() {
         return productRows.isEmpty() ? null : productRows.get(0);
@@ -5354,6 +5363,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                                                 disableWhileRunning.setDisable(false);
                                             }
                                             if (exitCode == 0) {
+                                                PostProcessingProductMasterReferenceCache
+                                                        .invalidate();
                                                 reloadMasterProductListFromDisk();
                                                 if (statusLabel != null) {
                                                     statusLabel.setText(

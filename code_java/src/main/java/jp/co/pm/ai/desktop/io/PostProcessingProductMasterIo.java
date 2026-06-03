@@ -63,27 +63,23 @@ public final class PostProcessingProductMasterIo {
     }
 
     public static List<SearchHit> searchReference(
+            Path referencePath,
+            SearchFilter filter,
+            int limit,
+            java.util.List<jp.co.pm.ai.desktop.reconciliation.ProductInfo> integratedCatalog)
+            throws IOException {
+        return PostProcessingProductMasterSearch.searchReference(
+                referencePath, filter, limit, integratedCatalog);
+    }
+
+    public static List<SearchHit> searchReference(
             Path referencePath, SearchFilter filter, int limit) throws IOException {
-        return PostProcessingProductMasterSearch.searchReference(referencePath, filter, limit);
+        return searchReference(referencePath, filter, limit, java.util.List.of());
     }
 
     public static Map<String, String> loadRowByShohinCode(Path path, String shohinCode)
             throws IOException {
-        String target = PostProcessingProductMasterSearch.normalize(shohinCode);
-        if (target.isEmpty() || !Files.isRegularFile(path)) {
-            return Map.of();
-        }
-        PlanInputTabularIo.TabularSheet sheet = PlanInputTabularIo.read(path, DEFAULT_SHEET_NAME);
-        List<String> headers = sheet.headers();
-        for (List<String> row : sheet.rows()) {
-            Map<String, String> map = rowToMap(headers, row);
-            if (target.equals(
-                    PostProcessingProductMasterSearch.normalize(
-                            map.getOrDefault("商品コード", "")))) {
-                return map;
-            }
-        }
-        return Map.of();
+        return PostProcessingProductMasterSearch.loadRowByShohinCode(path, shohinCode);
     }
 
     public static PlanInputTabularIo.TabularSheet readUploadWorkbook(Path path) throws IOException {

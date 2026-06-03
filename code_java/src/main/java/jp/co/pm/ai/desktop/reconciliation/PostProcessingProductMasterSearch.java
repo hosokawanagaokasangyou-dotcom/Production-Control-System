@@ -1,33 +1,31 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.PostProcessingProductMasterIo;
 
-/** 参照マスタ xlsx のフィルタ検索（{@link RequestFormMasterProductCandidateMatcher} 再利用）。 */
+/** 参照マスタのフィルタ検索（{@link RequestFormMasterProductCandidateMatcher} と同一スコアリング）。 */
 public final class PostProcessingProductMasterSearch {
 
     private PostProcessingProductMasterSearch() {}
 
+    /**
+     * 検索実行。
+     *
+     * @param referencePath 雛形の全154列を得る {@code 後加工商品マスタ.xlsx}
+     * @param integratedCatalog 依頼書と同じメモリ上リスト（統合マスタ②）。空でなければ検索はこれを使い高速化する。
+     */
     public static List<PostProcessingProductMasterIo.SearchHit> searchReference(
-            Path referencePath, PostProcessingProductMasterIo.SearchFilter filter, int limit)
+            Path referencePath,
+            PostProcessingProductMasterIo.SearchFilter filter,
+            int limit,
+            List<ProductInfo> integratedCatalog)
             throws IOException {
-        if (!Files.isRegularFile(referencePath)) {
-            return List.of();
-        }
         int cap = limit > 0 ? limit : PostProcessingProductMasterIo.DEFAULT_SEARCH_LIMIT;
-        PlanInputTabularIo.TabularSheet sheet =
-                PlanInputTabularIo.read(referencePath, PostProcessingProductMasterIo.DEFAULT_SHEET_NAME);
-        List<String> headers = sheet.headers();
-        if (headers.isEmpty()) {
-            return List.of();
-        }
         PostProcessingProductMasterIo.SearchFilter f =
                 filter != null ? filter : PostProcessingProductMasterIo.SearchFilter.empty();
 
@@ -44,74 +42,108 @@ public final class PostProcessingProductMasterSearch {
                         || !kwLength.isEmpty()
                         || !kwName.isEmpty();
 
-        List<ProductInfo> catalog = new ArrayList<>();
-        List<Map<String, String>> rowMaps = new ArrayList<>();
-        for (List<String> row : sheet.rows()) {
-            Map<String, String> map = PostProcessingProductMasterIo.rowToMap(headers, row);
-            String code = map.getOrDefault("商品コード", "").trim();
-            if (code.isEmpty()) {
-                continue;
-            }
-            rowMaps.add(map);
-            catalog.add(toProductInfo(map));
+        List<ProductInfo> catalogForScore;
+        if (integratedCatalog != null && !integratedCatalog.isEmpty()) {
+            catalogForScore = integratedCatalog;
+        } else {
+            catalogForScore = PostProcessingProductMasterReferenceCache.snapshot(referencePath).catalog();
         }
+
+        PostProcessingProductMasterReferenceCache.Snapshot refSnap =
+                PostProcessingProductMasterReferenceCache.snapshot(referencePath);
+        Map<String, Map<String, String>> rowsByCode = refSnap.rowByShohinCode();
 
         List<PostProcessingProductMasterIo.SearchHit> hits = new ArrayList<>();
         if (!anyKeyword) {
-            for (int i = 0; i < rowMaps.size() && hits.size() < cap; i++) {
-                hits.add(toHit(rowMaps.get(i)));
+            for (int i = 0; i < catalogForScore.size() && hits.size() < cap; i++) {
+                hits.add(toHit(catalogForScore.get(i), rowsByCode));
             }
             return hits;
         }
 
         List<String> labels =
                 RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
-                        catalog, kwCode, kwPart, kwType, kwLength, kwName, cap);
+                        catalogForScore, kwCode, kwPart, kwType, kwLength, kwName, cap);
         for (String label : labels) {
             String code = labelCodeFromCandidateLabel(label);
-            for (Map<String, String> map : rowMaps) {
-                if (code.equals(normalize(map.getOrDefault("商品コード", "")))) {
-                    hits.add(toHit(map));
-                    break;
+            Map<String, String> row = rowsByCode.get(code);
+            if (row != null && !row.isEmpty()) {
+                hits.add(
+                        new PostProcessingProductMasterIo.SearchHit(
+                                row.getOrDefault("商品コード", ""),
+                                row.getOrDefault("商品名1", ""),
+                                row.getOrDefault("発泡体品番", ""),
+                                row.getOrDefault("発泡体品名", ""),
+                                Map.copyOf(row)));
+            } else {
+                ProductInfo p = findByCode(catalogForScore, code);
+                if (p != null) {
+                    hits.add(toHit(p, rowsByCode));
                 }
             }
         }
         return hits;
     }
 
+    public static List<PostProcessingProductMasterIo.SearchHit> searchReference(
+            Path referencePath, PostProcessingProductMasterIo.SearchFilter filter, int limit)
+            throws IOException {
+        return searchReference(referencePath, filter, limit, List.of());
+    }
+
     public static String normalize(String val) {
         return RequestFormMasterProductCandidateMatcher.normalize(val);
+    }
+
+    public static Map<String, String> loadRowByShohinCode(Path referencePath, String shohinCode)
+            throws IOException {
+        return PostProcessingProductMasterReferenceCache.rowByCode(referencePath, shohinCode);
     }
 
     private static String normalizeLength(String val) {
         return RequestFormMasterProductCandidateMatcher.normalizeLengthKeyword(val);
     }
 
-    private static ProductInfo toProductInfo(Map<String, String> map) {
-        return new ProductInfo(
-                map.getOrDefault("商品コード", ""),
-                map.getOrDefault("製品コード", ""),
-                map.getOrDefault("商品名1", ""),
-                map.getOrDefault("商品名2", ""),
-                map.getOrDefault("単位名", ""),
-                map.getOrDefault("入数", ""),
-                map.getOrDefault("自社後加工区分", ""),
-                map.getOrDefault("発泡体品名", ""),
-                map.getOrDefault("発泡体品番", ""),
-                map.getOrDefault("発泡体幅", ""),
-                map.getOrDefault("発泡体長さ", ""),
-                map.getOrDefault("発泡体色", ""),
-                map.getOrDefault("発泡体厚み", ""),
-                "");
+    private static PostProcessingProductMasterIo.SearchHit toHit(
+            ProductInfo p, Map<String, Map<String, String>> rowsByCode) {
+        if (p == null) {
+            return new PostProcessingProductMasterIo.SearchHit("", "", "", "", Map.of());
+        }
+        String code = normalize(p.getShohinCode());
+        Map<String, String> row = rowsByCode.get(code);
+        if (row != null && !row.isEmpty()) {
+            return new PostProcessingProductMasterIo.SearchHit(
+                    row.getOrDefault("商品コード", ""),
+                    row.getOrDefault("商品名1", ""),
+                    row.getOrDefault("発泡体品番", ""),
+                    row.getOrDefault("発泡体品名", ""),
+                    Map.copyOf(row));
+        }
+        Map<String, String> sparse =
+                Map.of(
+                        "商品コード", p.getShohinCode(),
+                        "商品名1", p.getShohinName1(),
+                        "発泡体品番", p.getFoamPartNo(),
+                        "発泡体品名", p.getFoamName(),
+                        "発泡体タイプ", "",
+                        "発泡体幅", p.getFoamWidth(),
+                        "発泡体長さ", p.getFoamLength(),
+                        "発泡体色", p.getFoamColor());
+        return new PostProcessingProductMasterIo.SearchHit(
+                p.getShohinCode(),
+                p.getShohinName1(),
+                p.getFoamPartNo(),
+                p.getFoamName(),
+                sparse);
     }
 
-    private static PostProcessingProductMasterIo.SearchHit toHit(Map<String, String> map) {
-        return new PostProcessingProductMasterIo.SearchHit(
-                map.getOrDefault("商品コード", ""),
-                map.getOrDefault("商品名1", ""),
-                map.getOrDefault("発泡体品番", ""),
-                map.getOrDefault("発泡体品名", ""),
-                Map.copyOf(map));
+    private static ProductInfo findByCode(List<ProductInfo> catalog, String normCode) {
+        for (ProductInfo p : catalog) {
+            if (normCode.equals(normalize(p.getShohinCode()))) {
+                return p;
+            }
+        }
+        return null;
     }
 
     private static String labelCodeFromCandidateLabel(String label) {

@@ -45,9 +45,11 @@ public final class PostProcessingProductMasterEditorPane {
 
     public record Context(
             Supplier<Map<String, String>> uiEnv,
+            Supplier<java.util.List<ProductInfo>> integratedProductCatalog,
             Supplier<ReconciliationApp.ProductRow> firstProductRow,
             Supplier<String> formKakoKbnLabel,
             Runnable runIntegratedMaster,
+            Runnable invalidateReferenceCache,
             Consumer<String> log) {}
 
     private static final List<String> UPLOAD_TABLE_COLUMNS =
@@ -285,9 +287,13 @@ public final class PostProcessingProductMasterEditorPane {
                             new Thread(
                                     () -> {
                                         try {
+                                            List<ProductInfo> catalog =
+                                                    ctx.integratedProductCatalog() != null
+                                                            ? ctx.integratedProductCatalog().get()
+                                                            : List.of();
                                             List<PostProcessingProductMasterIo.SearchHit> hits =
                                                     PostProcessingProductMasterIo.searchReference(
-                                                            ref, filter, 200);
+                                                            ref, filter, 200, catalog);
                                             Platform.runLater(
                                                     () -> {
                                                         searchResults
@@ -485,9 +491,26 @@ public final class PostProcessingProductMasterEditorPane {
                 new Tooltip("create_integrated_master.py を実行し、依頼書候補を更新します。"));
         btnIntegrated.setOnAction(e -> ctx.runIntegratedMaster().run());
 
+        Runnable warmReferenceCache =
+                () -> {
+                    try {
+                        Path ref =
+                                PostProcessingProductMasterIo.resolveReferencePath(
+                                        uiEnv.get());
+                        if (Files.isRegularFile(ref)) {
+                            PostProcessingProductMasterReferenceCache.snapshot(ref);
+                        }
+                    } catch (Exception ex) {
+                        log.accept("[postproc-master] warm cache: " + ex.getMessage());
+                    }
+                };
         refreshPathsFromEnv.run();
         loadReferenceHeaders.run();
         loadUploadFile.run();
+        Thread warm =
+                new Thread(warmReferenceCache, "postproc-master-warm-cache");
+        warm.setDaemon(true);
+        warm.start();
 
         Label note =
                 new Label(
