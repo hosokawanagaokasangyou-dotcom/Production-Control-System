@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -1368,6 +1369,23 @@ public final class AppPaths {
      */
     public static Path factoryOperatorUsersStorePath(Map<String, String> ui, FactorySite site) {
         return siblingOfSummaryAiDispatchWorkbookForFactory(ui, site, FACTORY_OPERATOR_USERS_BIN);
+    }
+
+    /**
+     * 操作者名・PIN のローカル退避（{@code ~/.pm-ai-desktop/factory-operator-users-<site>.bin}）。
+     *
+     * <p>工場別 UNC の共有 DATA に書き込み権限が無い／別工場パスを参照しているときのフォールバック。
+     * 複数 PC で一覧を共有する正本は引き続き {@link #factoryOperatorUsersStorePath(Map, FactorySite)}（ネットワーク側）。
+     */
+    public static Path localFactoryOperatorUsersStorePath(FactorySite site) {
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        String suffix = effective.name().toLowerCase(Locale.ROOT);
+        return Paths.get(
+                        System.getProperty("user.home"),
+                        ".pm-ai-desktop",
+                        "factory-operator-users-" + suffix + ".bin")
+                .toAbsolutePath()
+                .normalize();
     }
 
     /** 工場別ユーザー管理 PDF のファイル名（{@link FactorySite#name()} を含む）。 */

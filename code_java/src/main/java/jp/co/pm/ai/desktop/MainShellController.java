@@ -755,7 +755,7 @@ public final class MainShellController {
         primaryStage.setMinHeight(480);
 
             applyDesktopSession(DesktopSessionStateStore.load());
-            FactorySite effectiveFactory = GlobalInitSettingTarget.loadEffective(collectUiEnv());
+            FactorySite effectiveFactory = GlobalInitSettingTarget.load();
             FactoryOperatorUserStore.configureFromUi(collectUiEnv(), effectiveFactory);
             if (globalSettingsTabController != null) {
                 globalSettingsTabController.refreshInitSettingTargetComboFromStore();
@@ -3626,7 +3626,7 @@ public final class MainShellController {
                     }
                     pipelineExecutionTimingHistory.configureFromUi(collectUiEnv());
                     FactoryOperatorUserStore.configureFromUi(
-                            collectUiEnv(), GlobalInitSettingTarget.loadEffective(collectUiEnv()));
+                            collectUiEnv(), GlobalInitSettingTarget.load());
                 });
         Runnable schedule = () -> uiEnvSaveDebounce.playFromStart();
         this.uiEnvPersistSchedule = schedule;
@@ -5843,7 +5843,14 @@ public final class MainShellController {
     }
 
     private void maybePromptOperatorUserAtStartup() {
-        FactorySite factory = GlobalInitSettingTarget.loadEffective(collectUiEnv());
+        FactorySite factory = GlobalInitSettingTarget.load();
+        FactoryOperatorUserStore.configureFromUi(collectUiEnv(), factory);
+        if (FactoryOperatorUserStore.usingLocalStoreFallback()) {
+            appendLog(
+                    "[startup] 操作者設定: 共有フォルダに書き込めないためローカルに退避しています（"
+                            + FactoryOperatorUserStore.storePath()
+                            + "）。グローバル設定の工場と環境変数のサマリパスを確認してください。");
+        }
         requireOperatorSelectionForFactory(factory, true);
     }
 
@@ -7811,6 +7818,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
             appendLog("[startup] 工場既定の選択をキャンセルしたため湖南工場の既定を適用します。");
         }
         applyFactorySitePortableAndNetworkDefaults(siteAfterUpgrade);
+        FactoryOperatorUserStore.configureFromUi(collectUiEnv(), siteAfterUpgrade);
         ensureBootstrapDefaultValuesVisible(collectUiEnv());
         ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
         applyRepoFolderPathNormalization();

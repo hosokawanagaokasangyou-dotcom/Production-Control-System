@@ -247,6 +247,25 @@ class FactoryOperatorUserStoreTest {
     }
 
     @Test
+    void configureFromUiUsesLocalFallbackWhenNetworkStoreNotWritable() throws Exception {
+        System.clearProperty("pm.ai.test.factoryOperatorUserStore");
+        // 親が通常ファイルのとき共有 DATA 相当のパスへは書けない（UNC 権限不足の近似）
+        Path blockedParent = tmp.resolve("blocked-not-dir");
+        Files.writeString(blockedParent, "x");
+        Path summary = blockedParent.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Path networkBin = blockedParent.resolve(AppPaths.FACTORY_OPERATOR_USERS_BIN);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, summary.toString());
+        FactoryOperatorUserStore.configureFromUi(ui, FactorySite.KONAN);
+        Path local = AppPaths.localFactoryOperatorUsersStorePath(FactorySite.KONAN);
+        assertEquals(local, FactoryOperatorUserStore.storePath());
+        assertTrue(FactoryOperatorUserStore.usingLocalStoreFallback());
+        FactoryOperatorUserStore.addName(FactorySite.KONAN, "ローカル");
+        assertTrue(Files.isRegularFile(local));
+        assertTrue(!Files.isRegularFile(networkBin));
+    }
+
+    @Test
     void configureFromUiUsesEffectiveFactoryWhenSummaryPointsToOtherFactory() throws Exception {
         System.clearProperty("pm.ai.test.factoryOperatorUserStore");
         Path konanSummary =

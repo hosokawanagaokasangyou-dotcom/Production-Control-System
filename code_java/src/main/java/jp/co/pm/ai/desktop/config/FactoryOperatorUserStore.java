@@ -46,7 +46,9 @@ public final class FactoryOperatorUserStore {
             Paths.get(System.getProperty("user.home"), ".pm-ai-desktop", "factory-operator-users.json");
 
     private static volatile Path configuredStorePath;
+    private static volatile Path configuredNetworkStorePath;
     private static volatile boolean storeConfigured;
+    private static volatile boolean usingLocalStoreFallback;
 
     public static final int SCHEMA_VERSION = 5;
     public static final int MAX_NAMES_PER_FACTORY = 50;
@@ -140,13 +142,32 @@ public final class FactoryOperatorUserStore {
      */
     public static synchronized void configureFromUi(Map<String, String> ui, FactorySite site) {
         Map<String, String> u = ui != null ? ui : Map.of();
-        FactorySite effective = site != null ? site : GlobalInitSettingTarget.loadEffective(u);
-        Path next = AppPaths.factoryOperatorUsersStorePath(u, effective);
-        if (storeConfigured && next.equals(configuredStorePath)) {
+        FactorySite effective = site != null ? site : GlobalInitSettingTarget.load();
+        Path network = AppPaths.factoryOperatorUsersStorePath(u, effective);
+        Path local = AppPaths.localFactoryOperatorUsersStorePath(effective);
+        Path next = resolveWritableStorePath(network, local);
+        if (storeConfigured
+                && next.equals(configuredStorePath)
+                && Objects.equals(network, configuredNetworkStorePath)) {
             return;
         }
         configuredStorePath = next;
+        configuredNetworkStorePath = network;
+        usingLocalStoreFallback = next.equals(local);
         storeConfigured = true;
+        if (usingLocalStoreFallback) {
+            seedLocalStoreFromNetworkIfNeeded(network, local);
+        }
+    }
+
+    /** ネットワーク共有ではなくローカル退避を使っているとき true。 */
+    public static boolean usingLocalStoreFallback() {
+        return usingLocalStoreFallback;
+    }
+
+    /** 工場別 UNC 上の正本パス（アクセス可否は問わない）。 */
+    public static Path networkStorePath() {
+        return configuredNetworkStorePath;
     }
 
     public static Path storePath() {
@@ -676,6 +697,18 @@ public final class FactoryOperatorUserStore {
         Path path = storePath();
         migrateLegacyStoreIfNeeded(path);
         if (!Files.isRegularFile(path)) {
+            Path network = configuredNetworkStorePath;
+            if (network != null
+                    && !network.equals(path)
+                    && Files.isRegularFile(network)
+                    && Files.isReadable(network)) {
+                JsonNode root = readStoreRoot(network);
+                if (root != null && root.isObject()) {
+                    Document doc = parseDocumentRoot(root);
+                    saveDocumentToPath(path, doc);
+                    return doc;
+                }
+            }
             return defaultDocument();
         }
         JsonNode root = readStoreRoot(path);
@@ -922,7 +955,86 @@ public final class FactoryOperatorUserStore {
     }
 
     private static void saveDocument(Document doc) throws IOException {
-        saveDocumentToPath(storePath(), doc);
+        Path path = storePath();
+        try {
+            saveDocumentToPath(path, doc);
+        } catch (IOException primary) {
+            Path local =
+                    configuredNetworkStorePath != null
+                            ? AppPaths.localFactoryOperatorUsersStorePath(
+                                    factorySiteForConfiguredStore())
+                            : null;
+            if (local != null && !local.equals(path)) {
+                configuredStorePath = local;
+                usingLocalStoreFallback = true;
+                saveDocumentToPath(local, doc);
+                return;
+            }
+            throw primary;
+        }
+    }
+
+    private static FactorySite factorySiteForConfiguredStore() {
+        Path network = configuredNetworkStorePath;
+        if (network != null) {
+            Optional<FactorySite> inferred = FactorySite.inferFromPortableBundleSourceValue(network.toString());
+            if (inferred.isPresent()) {
+                return inferred.get();
+            }
+        }
+        return GlobalInitSettingTarget.load();
+    }
+
+    private static Path resolveWritableStorePath(Path network, Path local) {
+        if (isOperatorStorePathWritable(network)) {
+            return network;
+        }
+        return local;
+    }
+
+    /**
+     * 共有 DATA フォルダへ bin を置けるか（親の作成・書込・既存ファイルの更新）。
+     */
+    static boolean isOperatorStorePathWritable(Path path) {
+        if (path == null) {
+            return false;
+        }
+        try {
+            Path parent = path.getParent();
+            if (parent == null) {
+                return false;
+            }
+            if (!Files.isDirectory(parent)) {
+                if (!Files.exists(parent)) {
+                    Files.createDirectories(parent);
+                }
+                if (!Files.isDirectory(parent)) {
+                    return false;
+                }
+            }
+            if (!Files.isWritable(parent)) {
+                return false;
+            }
+            if (Files.exists(path) && !Files.isWritable(path)) {
+                return false;
+            }
+            return true;
+        } catch (IOException | SecurityException ignored) {
+            return false;
+        }
+    }
+
+    private static void seedLocalStoreFromNetworkIfNeeded(Path network, Path local) {
+        if (!Files.isRegularFile(network) || !Files.isReadable(network) || Files.isRegularFile(local)) {
+            return;
+        }
+        try {
+            if (local.getParent() != null) {
+                Files.createDirectories(local.getParent());
+            }
+            Files.copy(network, local);
+        } catch (IOException ignored) {
+        }
     }
 
     private static void saveDocumentToPath(Path path, Document doc) throws IOException {
@@ -1033,6 +1145,8 @@ public final class FactoryOperatorUserStore {
     public static void resetStoreForTests() throws IOException {
         sessionOperatorName = "";
         configuredStorePath = null;
+        configuredNetworkStorePath = null;
+        usingLocalStoreFallback = false;
         storeConfigured = false;
         Path path = storePath();
         Files.deleteIfExists(path);
