@@ -32,6 +32,7 @@ $requiredRelativePaths = @(
     "target\classes\jp\co\pm\ai\desktop\ui\EquipmentGraphicGanttPane`$VerticalScrollBand.class",
     "target\classes\jp\co\pm\ai\desktop\ui\EquipmentGraphicGanttPane`$LazyBadgeLayoutRequest.class",
     "target\classes\jp\co\pm\ai\desktop\ui\SpreadsheetMultiColumnFilterCoordinator.class",
+    "target\classes\jp\co\pm\ai\desktop\ui\TableColumnOrderPersistence.class",
     "target\classes\jp\co\pm\ai\desktop\reconciliation\ReconciliationApp.class",
     # comboRecord button cell (NoClassDefFoundError: ReconciliationApp$2)
     "target\classes\jp\co\pm\ai\desktop\reconciliation\ReconciliationApp`$2.class",

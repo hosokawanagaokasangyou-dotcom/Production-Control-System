@@ -25,7 +25,10 @@ call "!MVN!" !ARGS!
 exit /b !ERRORLEVEL!
 
 :pm_ai_javafx_run
-call "!MVN!" compile
+set "COMPILE_GOALS=compile"
+echo !ARGS!| findstr /I /C:"clean" >nul
+if !ERRORLEVEL! equ 0 set "COMPILE_GOALS=clean compile"
+call "!MVN!" !COMPILE_GOALS!
 if !ERRORLEVEL! neq 0 exit /b !ERRORLEVEL!
 call :pm_ai_verify_classes
 if !ERRORLEVEL! neq 0 (

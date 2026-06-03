@@ -172,6 +172,7 @@ pm_ai_verify_classes() {
     "target/classes/jp/co/pm/ai/desktop/io/NetworkSourceFileReloadCache.class" \
     "target/classes/jp/co/pm/ai/desktop/dispatch/ResultDispatchInteractiveConsolidator.class" \
     "target/classes/jp/co/pm/ai/desktop/ui/EquipmentGraphicGanttPane.class" \
+    "target/classes/jp/co/pm/ai/desktop/ui/TableColumnOrderPersistence.class" \
     "target/classes/jp/co/pm/ai/desktop/reconciliation/ReconciliationApp.class" \
     "target/classes/jp/co/pm/ai/desktop/css/pm-ai-desktop.css" \
     "target/classes/jp/co/pm/ai/desktop/css/theme-midnight-blue.css"
@@ -185,7 +186,12 @@ pm_ai_verify_classes() {
 }
 
 pm_ai_javafx_run() {
-  "$MAVEN_HOME/bin/$MVN_CMD" compile || die "cannot exec $MAVEN_HOME/bin/$MVN_CMD compile"
+  _pm_ai_compile_goals="compile"
+  case "$_pm_ai_mvn_args" in
+    *clean*) _pm_ai_compile_goals="clean compile" ;;
+  esac
+  # shellcheck disable=SC2086
+  "$MAVEN_HOME/bin/$MVN_CMD" $_pm_ai_compile_goals || die "cannot exec $MAVEN_HOME/bin/$MVN_CMD $_pm_ai_compile_goals"
   if ! pm_ai_verify_classes; then
     printf '%s\n' "[pm-ai-desktop] target/classes が不完全です。clean compile を実行します..." >&2
     "$MAVEN_HOME/bin/$MVN_CMD" clean compile || die "cannot exec $MAVEN_HOME/bin/$MVN_CMD clean compile"
