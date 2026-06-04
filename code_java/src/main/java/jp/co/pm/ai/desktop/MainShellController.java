@@ -755,7 +755,7 @@ public final class MainShellController {
         primaryStage.setMinHeight(480);
 
             applyDesktopSession(DesktopSessionStateStore.load());
-            FactorySite effectiveFactory = GlobalInitSettingTarget.load();
+            FactorySite effectiveFactory = GlobalInitSettingTarget.loadEffective(collectUiEnv());
             FactoryOperatorUserStore.configureFromUi(collectUiEnv(), effectiveFactory);
             if (globalSettingsTabController != null) {
                 globalSettingsTabController.refreshInitSettingTargetComboFromStore();
@@ -1089,7 +1089,7 @@ public final class MainShellController {
             requestFormInputTabController.applyComboChoicesFromSession(
                     resolveRequestFormComboChoices(s));
             requestFormInputTabController.reloadJuchuHeaderAliasRegistry(
-                    GlobalInitSettingTarget.load(), collectUiEnv(), false);
+                    GlobalInitSettingTarget.loadEffective(collectUiEnv()), collectUiEnv(), false);
         }
         if (pushButtonDesignTabController != null) {
             pushButtonDesignTabController.applyPushButtonSession(s);
@@ -1642,10 +1642,18 @@ public final class MainShellController {
         if (dialog == null) {
             return;
         }
-        if (primaryStage != null) {
+        initDialogOwnerIfSceneReady(dialog);
+        applyAlertStylesheetsFromOwner(dialog);
+    }
+
+    /** {@link Dialog#initOwner} はオーナー Stage に Scene が無いと JavaFX 26 で NPE になる。 */
+    private void initDialogOwnerIfSceneReady(Dialog<?> dialog) {
+        if (dialog == null || primaryStage == null) {
+            return;
+        }
+        if (primaryStage.getScene() != null) {
             dialog.initOwner(primaryStage);
         }
-        applyAlertStylesheetsFromOwner(dialog);
     }
 
     /** ダイアログ表示直後に入力欄へフォーカスし、すぐタイピングできるようにする。 */
@@ -1713,7 +1721,7 @@ public final class MainShellController {
             return true;
         }
         Alert alert = new Alert(AlertType.CONFIRMATION);
-        alert.initOwner(primaryStage);
+        initDialogOwnerIfSceneReady(alert);
         applyAlertStylesheetsFromOwner(alert);
         alert.setTitle("終了確認");
         alert.setHeaderText(null);
@@ -1759,9 +1767,7 @@ public final class MainShellController {
      */
     public void performGlobalUiFactoryReset() {
         TextInputDialog dialog = new TextInputDialog();
-        if (primaryStage != null) {
-            dialog.initOwner(primaryStage);
-        }
+        initDialogOwnerIfSceneReady(dialog);
         dialog.setTitle("確認");
         dialog.setHeaderText(null);
         dialog.setContentText(
@@ -1775,7 +1781,7 @@ public final class MainShellController {
         performGlobalUiFactoryResetWithoutConfirmation();
 
         Alert done = new Alert(AlertType.INFORMATION);
-        done.initOwner(primaryStage);
+        initDialogOwnerIfSceneReady(done);
         applyAlertStylesheetsFromOwner(done);
         done.setTitle("完了");
         done.setHeaderText(null);
@@ -3680,7 +3686,7 @@ public final class MainShellController {
      */
     void confirmAndResetEnvRowsToDefaults() {
         Alert alert = new Alert(AlertType.CONFIRMATION);
-        alert.initOwner(primaryStage);
+        initDialogOwnerIfSceneReady(alert);
         applyAlertStylesheetsFromOwner(alert);
         alert.setTitle("環境変数を初期値に戻す");
         alert.setHeaderText(null);
@@ -3711,9 +3717,9 @@ public final class MainShellController {
         if (primaryStage == null) {
             return Optional.of(FactorySite.KONAN);
         }
-        FactorySite pref = GlobalInitSettingTarget.load();
+        FactorySite pref = GlobalInitSettingTarget.loadEffective(collectUiEnv());
         ChoiceDialog<FactorySite> d = new ChoiceDialog<>(pref, List.of(FactorySite.values()));
-        d.initOwner(primaryStage);
+        initDialogOwnerIfSceneReady(d);
         applyAlertStylesheetsFromOwner(d);
         d.setTitle(title);
         d.setHeaderText(null);
@@ -3828,7 +3834,7 @@ public final class MainShellController {
         while (envTabValueTrimmed(AppPaths.KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR).isEmpty()) {
             if (firstPrompt) {
                 Alert intro = new Alert(AlertType.INFORMATION);
-                intro.initOwner(primaryStage);
+                initDialogOwnerIfSceneReady(intro);
                 applyAlertStylesheetsFromOwner(intro);
                 intro.setTitle("依頼書原本フォルダ");
                 intro.setHeaderText(null);
@@ -4780,7 +4786,7 @@ public final class MainShellController {
      */
     private void showStageCompletionDialog(String title, String contentText) {
         Alert alert = new Alert(AlertType.INFORMATION);
-        alert.initOwner(primaryStage);
+        initDialogOwnerIfSceneReady(alert);
         applyAlertStylesheetsFromOwner(alert);
         alert.setTitle(title);
         alert.setHeaderText(null);
@@ -4801,7 +4807,7 @@ public final class MainShellController {
     void notifyStage3DispatchTrialFailure(String detailMessage) {
         selectMainShellTab(MainShellTabId.RUN);
         Alert alert = new Alert(AlertType.ERROR);
-        alert.initOwner(primaryStage);
+        initDialogOwnerIfSceneReady(alert);
         applyAlertStylesheetsFromOwner(alert);
         alert.setTitle("段階3 失敗");
         alert.setHeaderText(null);
@@ -4907,7 +4913,7 @@ public final class MainShellController {
             String script, Integer code, Throwable err, List<String> tailLines) {
         String stageJa = STAGE1.equals(script) ? "段階1" : "段階2";
         Alert alert = new Alert(AlertType.ERROR);
-        alert.initOwner(primaryStage);
+        initDialogOwnerIfSceneReady(alert);
         applyAlertStylesheetsFromOwner(alert);
         alert.setTitle(stageJa + " 失敗");
         alert.setHeaderText(null);
@@ -5372,7 +5378,7 @@ public final class MainShellController {
     /** デスクトップ本体の終了後更新の直前: ユーザーへ再起動を明示する。 */
     private void showPortableUpgradeDeferredRestartDialog(String versionLabel) {
         Alert a = new Alert(AlertType.INFORMATION);
-        a.initOwner(primaryStage);
+        initDialogOwnerIfSceneReady(a);
         applyAlertStylesheetsFromOwner(a);
         a.setTitle("自動バージョンアップ");
         a.setHeaderText("再起動します");
@@ -5549,10 +5555,11 @@ public final class MainShellController {
      * @param startup true のとき起動直後の案内文
      */
     void requireOperatorSelectionForFactory(FactorySite site, boolean startup) {
-        if (primaryStage == null) {
+        if (primaryStage == null || primaryStage.getScene() == null) {
             return;
         }
-        FactorySite factory = site != null ? site : GlobalInitSettingTarget.load();
+        FactorySite factory =
+                site != null ? site : GlobalInitSettingTarget.loadEffective(collectUiEnv());
         FactoryOperatorUserStore.configureFromUi(collectUiEnv(), factory);
         FactoryOperatorUserStore.clearSessionOperatorName();
         while (FactoryOperatorUserStore.sessionOperatorName().isBlank()) {
@@ -5843,7 +5850,7 @@ public final class MainShellController {
     }
 
     private void maybePromptOperatorUserAtStartup() {
-        FactorySite factory = GlobalInitSettingTarget.load();
+        FactorySite factory = GlobalInitSettingTarget.loadEffective(collectUiEnv());
         FactoryOperatorUserStore.configureFromUi(collectUiEnv(), factory);
         if (FactoryOperatorUserStore.usingLocalStoreFallback()) {
             appendLog(
@@ -5877,8 +5884,7 @@ public final class MainShellController {
             pref = names.get(0);
         }
         ChoiceDialog<String> d = new ChoiceDialog<>(pref, names);
-        d.initOwner(primaryStage);
-        applyAlertStylesheetsFromOwner(d);
+        prepareDialogForMainTheme(d);
         d.setTitle("操作者名の選択");
         d.setHeaderText(null);
         d.setContentText(
@@ -6113,7 +6119,7 @@ public final class MainShellController {
     void notifyStage21OvertimeSimulationFailure(String detailMessage) {
         selectMainShellTab(MainShellTabId.RUN);
         Alert alert = new Alert(AlertType.ERROR);
-        alert.initOwner(primaryStage);
+        initDialogOwnerIfSceneReady(alert);
         applyAlertStylesheetsFromOwner(alert);
         alert.setTitle("段階2.1 失敗");
         alert.setHeaderText(null);
@@ -6938,7 +6944,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                     Stage2UnknownMasterCombinationPrompt.collectUnknownPairs(collectUiEnv());
             if (!bundle.empty()) {
                 Alert alert = new Alert(AlertType.ERROR);
-                alert.initOwner(primaryStage);
+                initDialogOwnerIfSceneReady(alert);
                 applyAlertStylesheetsFromOwner(alert);
                 alert.setTitle("段階2 失敗");
                 alert.setHeaderText("計画データの検証エラーです。マスタ未登録の工程+機械が残っています。");
@@ -7375,7 +7381,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         String raw = ui.get(AppPaths.KEY_PM_AI_PORTABLE_BUNDLE_SOURCE_DIR);
         if (raw == null || raw.isBlank()) {
             Alert a = new Alert(AlertType.INFORMATION);
-            a.initOwner(primaryStage);
+            initDialogOwnerIfSceneReady(a);
             applyAlertStylesheetsFromOwner(a);
             a.setTitle("自動バージョンアップ");
             a.setHeaderText(null);
@@ -7397,7 +7403,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                     "[startup] 正本パスにアクセスできません: "
                             + PortableBundleSelfUpdater.safePathForLog(canonical));
             Alert w = new Alert(AlertType.WARNING);
-            w.initOwner(primaryStage);
+            initDialogOwnerIfSceneReady(w);
             applyAlertStylesheetsFromOwner(w);
             w.setTitle("自動バージョンアップ");
             w.setHeaderText(null);
@@ -7442,7 +7448,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                                 + "本体更新後は自動的にアプリを再起動します。"
                         : "正本から pm-ai-data を同期します（ZIP が無い場合はデスクトップ本体は更新しません）。";
         Alert confirm = new Alert(AlertType.CONFIRMATION);
-        confirm.initOwner(primaryStage);
+        initDialogOwnerIfSceneReady(confirm);
         applyAlertStylesheetsFromOwner(confirm);
         confirm.setTitle("自動バージョンアップ");
         confirm.setHeaderText(null);
@@ -7501,7 +7507,9 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         final boolean zipUpgradeMode = upgradeZip.isPresent();
         Stage wait = new Stage();
         wait.initModality(Modality.APPLICATION_MODAL);
-        wait.initOwner(primaryStage);
+        if (primaryStage != null && primaryStage.getScene() != null) {
+            wait.initOwner(primaryStage);
+        }
         wait.setTitle("自動バージョンアップ");
         wait.setMinWidth(580);
         wait.setMinHeight(zipUpgradeMode ? 420 : 320);
@@ -7768,7 +7776,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                         fileLog.close(false, errorDetail);
                     }
                     Alert er = new Alert(AlertType.WARNING);
-                    er.initOwner(primaryStage);
+                    initDialogOwnerIfSceneReady(er);
                     applyAlertStylesheetsFromOwner(er);
                     er.setTitle("自動バージョンアップ");
                     er.setHeaderText(null);

@@ -24,6 +24,104 @@ final class RequestFormMasterProductCandidateMatcher {
 
     private RequestFormMasterProductCandidateMatcher() {}
 
+    /**
+     * 商品コード先頭が {@code prefixes} のいずれかと一致する行だけ残す。空リストはフィルタなし（入力そのまま返す）。
+     */
+    static List<ProductInfo> filterCatalogByShohinCodePrefixes(
+            List<ProductInfo> catalog, List<String> prefixes) {
+        if (catalog == null || catalog.isEmpty()) {
+            return List.of();
+        }
+        if (prefixes == null || prefixes.isEmpty()) {
+            return catalog;
+        }
+        List<String> normalizedPrefixes = new ArrayList<>();
+        for (String prefix : prefixes) {
+            if (prefix == null) {
+                continue;
+            }
+            String normalized = normalize(prefix);
+            if (!normalized.isEmpty() && !normalizedPrefixes.contains(normalized)) {
+                normalizedPrefixes.add(normalized);
+            }
+        }
+        if (normalizedPrefixes.isEmpty()) {
+            return catalog;
+        }
+        List<ProductInfo> filtered = new ArrayList<>();
+        for (ProductInfo product : catalog) {
+            String code = normalize(product.getShohinCode());
+            if (code.isEmpty()) {
+                continue;
+            }
+            for (String prefix : normalizedPrefixes) {
+                if (code.startsWith(prefix)) {
+                    filtered.add(product);
+                    break;
+                }
+            }
+        }
+        return filtered;
+    }
+
+    /**
+     * 後加工商品マスタ参照検索向け。製品側・原反側の先頭フィルタを別々に評価する。
+     * 片方だけ指定されているとき、未指定側は無制限（製品と原反の両方が検索対象に残る）。
+     * 両方指定時は、いずれかの先頭に一致する行のみ残す。
+     */
+    static List<ProductInfo> filterCatalogForMasterReferenceSearch(
+            List<ProductInfo> catalog, List<String> productPrefixes, List<String> rawPrefixes) {
+        if (catalog == null || catalog.isEmpty()) {
+            return List.of();
+        }
+        List<String> normalizedProduct = normalizePrefixList(productPrefixes);
+        List<String> normalizedRaw = normalizePrefixList(rawPrefixes);
+        if (normalizedProduct.isEmpty() && normalizedRaw.isEmpty()) {
+            return catalog;
+        }
+        boolean productOpen = normalizedProduct.isEmpty();
+        boolean rawOpen = normalizedRaw.isEmpty();
+        List<ProductInfo> filtered = new ArrayList<>();
+        for (ProductInfo product : catalog) {
+            String code = normalize(product.getShohinCode());
+            if (code.isEmpty()) {
+                continue;
+            }
+            boolean matchesProduct = productOpen || matchesAnyPrefix(code, normalizedProduct);
+            boolean matchesRaw = rawOpen || matchesAnyPrefix(code, normalizedRaw);
+            if (matchesProduct || matchesRaw) {
+                filtered.add(product);
+            }
+        }
+        return filtered;
+    }
+
+    private static List<String> normalizePrefixList(List<String> prefixes) {
+        if (prefixes == null || prefixes.isEmpty()) {
+            return List.of();
+        }
+        List<String> normalizedPrefixes = new ArrayList<>();
+        for (String prefix : prefixes) {
+            if (prefix == null) {
+                continue;
+            }
+            String normalized = normalize(prefix);
+            if (!normalized.isEmpty() && !normalizedPrefixes.contains(normalized)) {
+                normalizedPrefixes.add(normalized);
+            }
+        }
+        return List.copyOf(normalizedPrefixes);
+    }
+
+    private static boolean matchesAnyPrefix(String normalizedCode, List<String> normalizedPrefixes) {
+        for (String prefix : normalizedPrefixes) {
+            if (normalizedCode.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static List<String> buildRankedCandidateLabels(
             List<ProductInfo> catalog,
             String kwItem,

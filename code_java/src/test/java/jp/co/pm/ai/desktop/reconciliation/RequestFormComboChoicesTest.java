@@ -81,4 +81,25 @@ class RequestFormComboChoicesTest {
                 RequestFormComboChoices.bundledDefaults().optionsFor(RequestFormComboChoices.KEY_USER),
                 empty.optionsFor(RequestFormComboChoices.KEY_USER));
     }
+
+    @Test
+    void masterCandidatePrefixFilters_roundTrip() throws Exception {
+        RequestFormComboChoices original =
+                RequestFormComboChoices.of(
+                        Map.of(
+                                RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT,
+                                List.of("A2", "B1"),
+                                RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW,
+                                List.of("R1")));
+        ObjectNode root = JSON.createObjectNode();
+        original.writeToObjectNode(root);
+
+        RequestFormComboChoices loaded = RequestFormComboChoices.fromJson(root);
+        assertEquals(
+                List.of("A2", "B1"),
+                loaded.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT));
+        assertEquals(
+                List.of("R1"),
+                loaded.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW));
+    }
 }

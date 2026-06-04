@@ -203,6 +203,11 @@ public final class FactoryOperatorUserStore {
         return !isGuestSession();
     }
 
+    /** 依頼書入力の転記・一時保存・設定変更を行えるか。 */
+    public static boolean sessionMayMutateRequestFormInput() {
+        return !isGuestSession();
+    }
+
     /** 起動時ログイン選択肢（登録操作者＋ゲスト）。 */
     public static List<String> loginChoicesForFactory(FactorySite site) throws IOException {
         List<String> choices = new ArrayList<>(namesForFactory(site));

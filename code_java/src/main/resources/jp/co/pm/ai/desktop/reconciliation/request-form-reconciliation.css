@@ -429,3 +429,35 @@
 .pm-request-form-reconciliation-root .excel-grid-label-error {
     -fx-text-fill: #f87171;
 }
+
+.pm-request-form-reconciliation-root .postproc-master-workflow-hint {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-text-fill: derive(-fx-accent, 10%);
+}
+
+.pm-request-form-reconciliation-root .postproc-master-toolbar {
+    -fx-padding: 2px 0 4px 0;
+    -fx-alignment: center-left;
+}
+
+.pm-request-form-reconciliation-root .postproc-master-toolbar-caption {
+    -fx-font-size: 11px;
+    -fx-text-fill: #94a3b8;
+    -fx-min-width: 40px;
+    -fx-alignment: center-left;
+}
+
+.pm-request-form-reconciliation-root .btn-request-form-reserved {
+    -fx-background-color: derive(-fx-base, 12%);
+    -fx-text-fill: derive(-fx-text-background-color, -25%);
+    -fx-border-color: derive(-fx-text-box-border, 20%);
+    -fx-border-width: 1px;
+    -fx-border-style: dashed;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}
+
+.pm-request-form-reconciliation-root .btn-request-form-reserved:hover {
+    -fx-background-color: derive(-fx-base, 18%);
+}

@@ -24,17 +24,43 @@ public final class PoiWorkbookSaver {
     /**
      * {@link Workbook#write(OutputStream)} の直前に呼ぶ。xlsm/xlsx の {@link XSSFWorkbook} のみ処理。
      */
-    public static void prepareBeforeWrite(Workbook workbook) {
+    public static void write(Workbook workbook, OutputStream out) throws IOException {
+        prepareBeforeWrite(workbook, true);
+        workbook.write(out);
+    }
+
+    /**
+     * calcChain パーツ削除を行わず保存する（{@code partName} 等で標準保存が失敗する修復済みブック向け）。
+     */
+    public static void writeLenient(Workbook workbook, OutputStream out) throws IOException {
+        prepareBeforeWrite(workbook, false);
+        workbook.write(out);
+    }
+
+    static boolean isPartNameFailure(Throwable ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t instanceof IllegalArgumentException ia && "partName".equals(ia.getMessage())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void prepareBeforeWrite(Workbook workbook, boolean removeCalcChain) {
         if (!(workbook instanceof XSSFWorkbook xssf)) {
             return;
         }
-        removeCalculationChain(xssf);
+        if (removeCalcChain) {
+            removeCalculationChain(xssf);
+        }
         requestFullRecalculationOnLoad(xssf);
+        xssf.setForceFormulaRecalculation(true);
     }
 
-    public static void write(Workbook workbook, OutputStream out) throws IOException {
-        prepareBeforeWrite(workbook);
-        workbook.write(out);
+    /** @deprecated 互換のため残す。{@link #write(Workbook, OutputStream)} と同等。 */
+    @Deprecated
+    public static void prepareBeforeWrite(Workbook workbook) {
+        prepareBeforeWrite(workbook, true);
     }
 
     private static void removeCalculationChain(XSSFWorkbook workbook) {
@@ -43,10 +69,24 @@ public final class PoiWorkbookSaver {
             return;
         }
         try {
-            workbook.getPackage().removePart(chain.getPackagePart());
-        } catch (Exception ex) {
-            // パーツが既に無い・参照のみ残る場合は無視（保存は続行）
+            detachCalculationChainRelation(workbook, chain);
+        } catch (Exception ignored) {
+            // calcChain 参照のみ残るブックは無視（保存は続行）
         }
+    }
+
+    /**
+     * {@link XSSFWorkbook} 内部の calcChain 参照を外す（{@code onSheetDelete} と同様に
+     * {@code removeRelation} のみ。{@code removePart} 直叩きは {@code write()} 時の二重削除で
+     * {@code partName} になる）。
+     */
+    private static void detachCalculationChainRelation(XSSFWorkbook workbook, CalculationChain chain)
+            throws ReflectiveOperationException {
+        java.lang.reflect.Method removeRelation =
+                org.apache.poi.ooxml.POIXMLDocumentPart.class.getDeclaredMethod(
+                        "removeRelation", org.apache.poi.ooxml.POIXMLDocumentPart.class);
+        removeRelation.setAccessible(true);
+        removeRelation.invoke(workbook, chain);
     }
 
     private static void requestFullRecalculationOnLoad(XSSFWorkbook workbook) {

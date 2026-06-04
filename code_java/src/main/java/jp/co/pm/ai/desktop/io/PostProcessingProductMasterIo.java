@@ -68,8 +68,23 @@ public final class PostProcessingProductMasterIo {
             int limit,
             java.util.List<jp.co.pm.ai.desktop.reconciliation.ProductInfo> integratedCatalog)
             throws IOException {
+        return searchReference(
+                referencePath,
+                filter,
+                limit,
+                integratedCatalog,
+                PostProcessingProductMasterSearch.MasterReferencePrefixFilters.none());
+    }
+
+    public static List<SearchHit> searchReference(
+            Path referencePath,
+            SearchFilter filter,
+            int limit,
+            java.util.List<jp.co.pm.ai.desktop.reconciliation.ProductInfo> integratedCatalog,
+            PostProcessingProductMasterSearch.MasterReferencePrefixFilters prefixFilters)
+            throws IOException {
         return PostProcessingProductMasterSearch.searchReference(
-                referencePath, filter, limit, integratedCatalog);
+                referencePath, filter, limit, integratedCatalog, prefixFilters);
     }
 
     public static List<SearchHit> searchReference(

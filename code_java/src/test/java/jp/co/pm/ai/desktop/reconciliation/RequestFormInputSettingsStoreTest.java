@@ -43,4 +43,37 @@ class RequestFormInputSettingsStoreTest {
         assertEquals("C:\\work\\originals", loaded.paths().targetFolder());
         assertEquals("C:\\work\\juchu.xlsm", loaded.paths().juchuFilePath());
     }
+
+    @Test
+    void saveAndLoad_masterCandidatePrefixFilters() throws Exception {
+        Path summaryXlsx = tempDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summaryXlsx);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, summaryXlsx.toString());
+
+        RequestFormComboChoices combo =
+                RequestFormComboChoices.of(
+                        Map.of(
+                                RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT,
+                                List.of("A2", "B1"),
+                                RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW,
+                                List.of("G1")),
+                        Map.of());
+        RequestFormInputSettingsStore.save(ui, combo, "", "");
+
+        Path storePath = RequestFormInputSettingsStore.resolveStorePath(ui);
+        assertEquals(summaryXlsx.getParent(), storePath.getParent());
+        assertTrue(Files.readString(storePath).contains("masterCandidatePrefixProduct"));
+        assertTrue(Files.readString(storePath).contains("masterCandidatePrefixRaw"));
+
+        RequestFormComboChoices loaded =
+                RequestFormInputSettingsStore.loadComboChoices(
+                        ui, jp.co.pm.ai.desktop.config.GlobalInitSettingTarget.load());
+        assertEquals(
+                List.of("A2", "B1"),
+                loaded.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT));
+        assertEquals(
+                List.of("G1"),
+                loaded.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW));
+    }
 }

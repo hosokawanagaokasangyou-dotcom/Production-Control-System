@@ -1,0 +1,9 @@
+{
+  "version" : 1,
+  "entries" : [ {
+    "task_id" : "E6-1",
+    "process" : "スリット",
+    "machine_name" : "スリット機1　湖南",
+    "next_day_dispatch_m" : 12300.0
+  } ]
+}

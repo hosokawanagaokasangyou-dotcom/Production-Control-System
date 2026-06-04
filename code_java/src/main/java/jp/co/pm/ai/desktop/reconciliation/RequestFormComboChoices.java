@@ -31,6 +31,10 @@ public final class RequestFormComboChoices {
     public static final String KEY_STORAGE_LOC = "storageLoc";
     public static final String KEY_YOTO = "yoto";
     public static final String KEY_USER = "user";
+    /** 依頼書フォーム製品行マスタ候補コンボ: 商品コード先頭フィルタ（空なら無制限）。 */
+    public static final String KEY_MASTER_CANDIDATE_PREFIX_PRODUCT = "masterCandidatePrefixProduct";
+    /** 依頼書フォーム原反行マスタ候補コンボ: 商品コード先頭フィルタ（空なら無制限）。 */
+    public static final String KEY_MASTER_CANDIDATE_PREFIX_RAW = "masterCandidatePrefixRaw";
 
     private static final List<String> ALL_KEYS =
             List.of(
@@ -42,7 +46,9 @@ public final class RequestFormComboChoices {
                     KEY_FEED_LOC,
                     KEY_STORAGE_LOC,
                     KEY_YOTO,
-                    KEY_USER);
+                    KEY_USER,
+                    KEY_MASTER_CANDIDATE_PREFIX_PRODUCT,
+                    KEY_MASTER_CANDIDATE_PREFIX_RAW);
 
     private static final List<String> FIELD_DEFAULT_KEYS = List.of(KEY_INPUT_KBN, KEY_KAKO_KBN);
 

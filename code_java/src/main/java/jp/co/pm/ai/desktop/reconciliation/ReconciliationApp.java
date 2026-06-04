@@ -34,6 +34,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -43,8 +46,12 @@ import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.StagePythonExecutable;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
+import jp.co.pm.ai.desktop.config.FactorySite;
+import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
+import jp.co.pm.ai.desktop.io.PoiWorkbookFileWriter;
 import jp.co.pm.ai.desktop.io.PoiWorkbookOpener;
 import jp.co.pm.ai.desktop.io.PoiWorkbookSaver;
+import jp.co.pm.ai.desktop.io.RequestFormJuchuFileBackupStore;
 import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
 
 public class ReconciliationApp {
@@ -80,12 +87,20 @@ public class ReconciliationApp {
     private Path repoRootHint;
     private Path aladdinMasterDir;
     private Map<String, String> uiEnvSnapshot = Map.of();
+    private Label embeddedTitleLabel;
     private Consumer<String> originalDirChangeHandler;
     private Consumer<String> juchuFileChangeHandler;
     private TextField txtJuchuPathDisplay;
+    private ListView<RequestFormJuchuFileBackupStore.RequestFormJuchuFileBackupEntry>
+            juchuBackupListView;
+    private Label juchuBackupHintLabel;
     private Button btnTransfer;
     private Button btnUndoLastTransfer;
     private Button btnBulkTransferPending;
+    private Button btnSaveLocal;
+    private Button btnOpenJuchuSide;
+    private Button btnJuchuColumnWizardSide;
+    private final List<Node> guestMutableControls = new ArrayList<>();
     private Label transferBlockedReasonLabel;
     /** 直前の単票自動転記を受注ファイルで取り消すためのスナップショット（1 件のみ）。 */
     private JuchuTransferUndoState lastJuchuTransferUndo;
@@ -224,6 +239,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     private final ObservableList<String> optStorageLoc  = FXCollections.observableArrayList("滋賀","湖南","滋賀/湖南","湖南/中央","山田","中山","中央湖東","湖南/滋賀","奥田");
     private final ObservableList<String> optYoto        = FXCollections.observableArrayList("W（自動車）","B（輸出）","Y（工材）","V（TPI）","A（TPI）","JR（屋根）","P（TPI）");
     private final ObservableList<String> optUser        = FXCollections.observableArrayList("自動転記","ｵｶﾓﾄ","ﾀﾂﾀ","共和ﾚｻﾞｰ","Scientex","共和興","ｻｶｲﾅｺﾞﾔ","ﾀﾞｲｳﾚ","在ｴﾙ","U4059","U5001","張家港","ｲｽﾞﾐ","盟和","高山産業","中央物産");
+    /** 製品行マスタ候補コンボ: 商品コード先頭フィルタ（空なら無制限）。 */
+    private final ObservableList<String> optMasterCandidatePrefixProduct = FXCollections.observableArrayList();
+    /** 原反行マスタ候補コンボ: 商品コード先頭フィルタ（空なら無制限）。 */
+    private final ObservableList<String> optMasterCandidatePrefixRaw = FXCollections.observableArrayList();
 
     private RequestFormComboChoices comboChoicesState = RequestFormComboChoices.bundledDefaults();
 
@@ -306,8 +325,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         topBar.getStyleClass().add("top-bar");
         topBar.setAlignment(Pos.CENTER_LEFT);
         
-        Label titleLabel = new Label("湖南工場 統合管理データベース (JavaFX版)");
-        titleLabel.getStyleClass().add("top-title");
+        embeddedTitleLabel = new Label(embeddedWindowTitle(uiEnv));
+        embeddedTitleLabel.getStyleClass().add("top-title");
         
         Button btnReload = new Button("データを再読込");
         btnReload.setOnAction(
@@ -346,7 +365,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         HBox.setHgrow(embeddedTabPollStatusLabel, Priority.ALWAYS);
 
         topBar.getChildren().addAll(
-                titleLabel, btnSelectFolder, btnReload, embeddedTabPollStatusLabel, statusLabel);
+                embeddedTitleLabel,
+                btnSelectFolder,
+                btnReload,
+                embeddedTabPollStatusLabel,
+                statusLabel);
         root.setTop(topBar);
 
         // --- SPLIT WORKSPACE (Tab 1 Content) ---
@@ -663,37 +686,43 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             lblFormTitle.getStyleClass().add("section-title-new-mode");
         });
         
-        Button btnSaveLocal = new Button("手修正を一時保存");
+        btnSaveLocal = new Button("手修正を一時保存");
         configureSideActionButton(btnSaveLocal);
         btnSaveLocal.getStyleClass().add("btn-save-local");
         btnSaveLocal.setOnAction(e -> saveLocalForm());
+        registerGuestMutableControl(btnSaveLocal);
         
         btnTransfer = new Button("受注ファイルへ自動転記・更新");
         configureSideActionButton(btnTransfer);
         btnTransfer.getStyleClass().add("btn-transfer");
         btnTransfer.setOnAction(e -> transferToExcel());
+        registerGuestMutableControl(btnTransfer);
 
         btnUndoLastTransfer = new Button("直前の自動転記を取り消し");
         configureSideActionButton(btnUndoLastTransfer);
         btnUndoLastTransfer.getStyleClass().add("btn-undo-transfer");
         btnUndoLastTransfer.setDisable(true);
         btnUndoLastTransfer.setOnAction(e -> undoLastJuchuTransfer());
+        registerGuestMutableControl(btnUndoLastTransfer);
 
         btnBulkTransferPending = new Button("一時保存分一括転記");
         configureSideActionButton(btnBulkTransferPending);
         btnBulkTransferPending.getStyleClass().add("btn-transfer");
         btnBulkTransferPending.setOnAction(e -> transferAllPendingLocalSaves());
+        registerGuestMutableControl(btnBulkTransferPending);
         updateTransferButtonState();
 
-        Button btnOpenJuchu = new Button("受注エクセルを開く");
-        configureSideActionButton(btnOpenJuchu);
-        btnOpenJuchu.getStyleClass().add("btn-reload");
-        btnOpenJuchu.setOnAction(evt -> openJuchuExcelExternally());
+        btnOpenJuchuSide = new Button("受注エクセルを開く");
+        configureSideActionButton(btnOpenJuchuSide);
+        btnOpenJuchuSide.getStyleClass().add("btn-reload");
+        btnOpenJuchuSide.setOnAction(evt -> openJuchuExcelExternally());
+        registerGuestMutableControl(btnOpenJuchuSide);
 
-        Button btnJuchuColumnWizardSide = new Button("列定義ウィザード");
+        btnJuchuColumnWizardSide = new Button("列定義ウィザード");
         configureSideActionButton(btnJuchuColumnWizardSide);
         btnJuchuColumnWizardSide.getStyleClass().add("btn-reload");
         btnJuchuColumnWizardSide.setOnAction(evt -> openJuchuColumnDefinitionWizard());
+        registerGuestMutableControl(btnJuchuColumnWizardSide);
 
         FlowPane sideBtns =
                 new FlowPane(
@@ -703,7 +732,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         btnTransfer,
                         btnUndoLastTransfer,
                         btnBulkTransferPending,
-                        btnOpenJuchu,
+                        btnOpenJuchuSide,
                         btnJuchuColumnWizardSide);
         sideBtns.getStyleClass().add("request-form-action-flow");
         sideBtns.setAlignment(javafx.geometry.Pos.CENTER);
@@ -801,8 +830,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         Tab tabSettings = createSettingsTab();
         // Tab 3: Post-processing product master editor (right of settings)
         Tab tabPostProcMaster = createPostProcessingProductMasterTab();
+        Tab tabPlanMachineDb = createPlanMachineCatalogTab();
 
-        tabPane.getTabs().addAll(tabVerification, tabSettings, tabPostProcMaster);
+        tabPane.getTabs().addAll(tabVerification, tabSettings, tabPostProcMaster, tabPlanMachineDb);
         root.setCenter(tabPane);
 
         mainStackPane = new StackPane();
@@ -834,6 +864,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         originalUpdateMonitor.setOnUpdatedKeysChanged(
                 keys -> Platform.runLater(this::refreshPreviewFileHeader));
 
+        applyGuestSessionRestrictions();
         loadMasterProductListAsync(null);
         reloadData();
         return mainStackPane;
@@ -842,6 +873,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     /** 依頼書入力タブ選択時: 環境変数反映と、変更があったときだけマスタを非同期再読込。 */
     public void onEmbeddedTabActivated(Map<String, String> uiEnv) {
         configureFromUiEnv(uiEnv);
+        reloadComboChoicesFromSummarySettings();
         reloadMasterProductListFromDiskIfStale(null);
         startEmbeddedTabPolling();
     }
@@ -957,10 +989,19 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         return textField;
     }
 
+    private static final DateTimeFormatter JUCHU_BACKUP_LIST_TS =
+            DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss").withZone(ZoneId.systemDefault());
+
     // --- TAB 3: SETTINGS (Edit ComboBox option lists) ---
     private Tab createSettingsTab() {
         Tab tab = new Tab("【設定】");
         tab.setClosable(false);
+        tab.setOnSelectionChanged(
+                evt -> {
+                    if (tab.isSelected()) {
+                        refreshJuchuBackupList();
+                    }
+                });
 
         ScrollPane sp = new ScrollPane();
         sp.setFitToWidth(true);
@@ -978,6 +1019,41 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         subtitle.setWrapText(true);
         subtitle.setMaxWidth(SETTINGS_CARD_WIDTH * 2 + 12);
         root.getChildren().addAll(title, subtitle);
+
+        Label prefixTitle = new Label("マスタ候補コンボ 先頭文字フィルタ");
+        prefixTitle.getStyleClass().add("paper-main-title");
+        Label prefixSubtitle =
+                new Label(
+                        "品番横のマスタ候補コンボに表示する商品コードの先頭文字列を指定します。"
+                                + " 複数指定可（いずれかに一致するもののみ表示）。空ならフィルタなし。"
+                                + " 製品側と原反側で別々に設定できます。"
+                                + " 後加工商品マスタタブの参照検索には製品側・原反側をそれぞれ適用します"
+                                + "（片方だけ設定時は、もう片方は無制限。両方設定時はいずれかの先頭一致）。"
+                                + " 保存先: サマリ Excel と同じフォルダの "
+                                + AppPaths.REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME
+                                + "（追加・削除のたびに自動保存）。");
+        prefixSubtitle.getStyleClass().add("paper-main-subtitle");
+        prefixSubtitle.setWrapText(true);
+        prefixSubtitle.setMaxWidth(SETTINGS_CARD_WIDTH * 2 + 12);
+        GridPane prefixEditorsGrid = new GridPane();
+        prefixEditorsGrid.setHgap(12);
+        prefixEditorsGrid.setVgap(12);
+        prefixEditorsGrid.setAlignment(Pos.TOP_LEFT);
+        prefixEditorsGrid.add(
+                buildListEditor(
+                        "製品側（商品コード先頭）",
+                        optMasterCandidatePrefixProduct,
+                        this::refreshAllMasterCandidateCombos),
+                0,
+                0);
+        prefixEditorsGrid.add(
+                buildListEditor(
+                        "原反側（商品コード先頭）",
+                        optMasterCandidatePrefixRaw,
+                        this::refreshAllMasterCandidateCombos),
+                1,
+                0);
+        root.getChildren().addAll(prefixTitle, prefixSubtitle, prefixEditorsGrid);
 
         GridPane editorsGrid = new GridPane();
         editorsGrid.setHgap(12);
@@ -1031,10 +1107,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         Button btnSelectJuchuFile = new Button("ファイル選択");
         btnSelectJuchuFile.setStyle("-fx-font-size: 11px; -fx-padding: 6px 12px;");
         btnSelectJuchuFile.getStyleClass().add("btn-reload");
+        registerGuestMutableControl(btnSelectJuchuFile);
         
         Button btnOpenJuchuFile = new Button("Excelで開く");
         btnOpenJuchuFile.setStyle("-fx-font-size: 11px; -fx-padding: 6px 12px;");
         btnOpenJuchuFile.getStyleClass().add("btn-transfer");
+        registerGuestMutableControl(btnOpenJuchuFile);
         
         btnSelectJuchuFile.setOnAction(evt -> {
             javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
@@ -1061,17 +1139,93 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         
         btnOpenJuchuFile.setOnAction(evt -> openJuchuExcelExternally());
 
+        Button btnOpenJuchuBackupFolder = new Button("バックアップフォルダを開く");
+        btnOpenJuchuBackupFolder.setStyle("-fx-font-size: 11px; -fx-padding: 6px 12px;");
+        btnOpenJuchuBackupFolder.getStyleClass().add("btn-reload");
+        registerGuestMutableControl(btnOpenJuchuBackupFolder);
+        btnOpenJuchuBackupFolder.setTooltip(
+                new Tooltip(
+                        "受注ファイル書き込み前のローカル世代バックアップ（15 分間隔）の保存先フォルダを開きます。"));
+        btnOpenJuchuBackupFolder.setOnAction(evt -> openJuchuBackupFolderExternally());
+
         Button btnJuchuColumnWizard = new Button("列定義ウィザード");
         btnJuchuColumnWizard.setStyle("-fx-font-size: 11px; -fx-padding: 6px 12px;");
         btnJuchuColumnWizard.getStyleClass().add("btn-reload");
         btnJuchuColumnWizard.setOnAction(evt -> openJuchuColumnDefinitionWizard());
+        registerGuestMutableControl(btnJuchuColumnWizard);
 
         HBox juchuBtnBox =
                 new HBox(10, btnSelectJuchuFile, btnOpenJuchuFile, btnJuchuColumnWizard);
         juchuBtnBox.setAlignment(Pos.CENTER_LEFT);
-        
-        juchuCard.getChildren().addAll(lblJuchuCardTitle, lblJuchuDesc, txtJuchuPathDisplay, juchuBtnBox);
+
+        Label lblJuchuBackupTitle = new Label("受注ファイル ローカル世代バックアップ");
+        lblJuchuBackupTitle.getStyleClass().add("settings-card-subtitle");
+        lblJuchuBackupTitle.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
+
+        juchuBackupHintLabel = new Label();
+        juchuBackupHintLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: inherit;");
+        juchuBackupHintLabel.setWrapText(true);
+
+        juchuBackupListView =
+                new ListView<>(
+                        FXCollections.observableArrayList(
+                                List.<RequestFormJuchuFileBackupStore.RequestFormJuchuFileBackupEntry>of()));
+        juchuBackupListView.setPrefHeight(140);
+        juchuBackupListView.setMaxHeight(180);
+        juchuBackupListView.setStyle("-fx-font-size: 11px;");
+        juchuBackupListView.setCellFactory(
+                lv ->
+                        new ListCell<>() {
+                            @Override
+                            protected void updateItem(
+                                    RequestFormJuchuFileBackupStore.RequestFormJuchuFileBackupEntry item,
+                                    boolean empty) {
+                                super.updateItem(item, empty);
+                                if (empty || item == null) {
+                                    setText(null);
+                                    return;
+                                }
+                                String ts =
+                                        item.createdAtMillis() > 0L
+                                                ? JUCHU_BACKUP_LIST_TS.format(
+                                                        Instant.ofEpochMilli(item.createdAtMillis()))
+                                                : "";
+                                String reason =
+                                        RequestFormJuchuFileBackupStore.reasonLabelJa(item.reason());
+                                setText(ts + "  " + reason + "  " + item.displayLabel());
+                            }
+                        });
+
+        Button btnRefreshJuchuBackup = new Button("一覧更新");
+        btnRefreshJuchuBackup.setStyle("-fx-font-size: 11px; -fx-padding: 6px 12px;");
+        btnRefreshJuchuBackup.getStyleClass().add("btn-reload");
+        btnRefreshJuchuBackup.setOnAction(evt -> refreshJuchuBackupList());
+
+        Button btnRestoreJuchuBackup = new Button("選択した世代を復元");
+        btnRestoreJuchuBackup.setStyle("-fx-font-size: 11px; -fx-padding: 6px 12px;");
+        btnRestoreJuchuBackup.getStyleClass().add("btn-transfer");
+        registerGuestMutableControl(btnRestoreJuchuBackup);
+        btnRestoreJuchuBackup.setTooltip(
+                new Tooltip(
+                        "選択したバックアップで現在の受注ファイルを上書きします（復元前に現行ファイルを退避）。"));
+        btnRestoreJuchuBackup.setOnAction(evt -> restoreSelectedJuchuBackupFromList());
+
+        HBox juchuBackupBtnBox =
+                new HBox(10, btnRefreshJuchuBackup, btnRestoreJuchuBackup, btnOpenJuchuBackupFolder);
+        juchuBackupBtnBox.setAlignment(Pos.CENTER_LEFT);
+
+        juchuCard.getChildren()
+                .addAll(
+                        lblJuchuCardTitle,
+                        lblJuchuDesc,
+                        txtJuchuPathDisplay,
+                        juchuBtnBox,
+                        lblJuchuBackupTitle,
+                        juchuBackupHintLabel,
+                        juchuBackupListView,
+                        juchuBackupBtnBox);
         root.getChildren().add(juchuCard);
+        refreshJuchuBackupList();
 
         // --- アラジンマスタ一括統合ツールカードの追加 ---
         VBox toolCard = new VBox(10);
@@ -1089,6 +1243,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         Button btnRunTool = new Button("マスタリレーション統合結果を生成");
         btnRunTool.setMaxWidth(Region.USE_PREF_SIZE);
         btnRunTool.getStyleClass().add("btn-transfer"); // 緑系のボタンスタイルを適用
+        registerGuestMutableControl(btnRunTool);
         
         Label lblToolStatus = new Label("待機中...");
         lblToolStatus.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: inherit;");
@@ -1123,30 +1278,171 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                             if (!selected || !contentMounted.compareAndSet(false, true)) {
                                 return;
                             }
-                            ProgressIndicator busy = new ProgressIndicator();
-                            lazyHost.getChildren().setAll(busy);
-                            Platform.runLater(() -> mountPostProcessingProductMasterContent(lazyHost));
+                            scheduleLazyTabMount(
+                                    lazyHost,
+                                    "後加工商品マスタ",
+                                    () -> {
+                                        ScrollPane sp = new ScrollPane();
+                                        sp.setFitToWidth(true);
+                                        sp.getStyleClass().add("form-scroll-pane");
+                                        VBox content =
+                                                PostProcessingProductMasterEditorPane
+                                                        .buildTabContent(
+                                                                hostWindow,
+                                                                new PostProcessingProductMasterEditorPane
+                                                                        .Context(
+                                                                        () -> uiEnvSnapshot,
+                                                                        this
+                                                                                ::snapshotMasterProductCatalog,
+                                                                        this
+                                                                                ::snapshotMasterCandidatePrefixFilters,
+                                                                        () -> {
+                                                                            PostProcessingProductMasterReferenceCache
+                                                                                    .invalidate();
+                                                                            PostProcessingKouteiNaiyoMasterLookup
+                                                                                    .invalidate();
+                                                                            PostProcessingShuruiMasterLookup
+                                                                                    .invalidate();
+                                                                            PostProcessingKeiriBunruiMasterLookup
+                                                                                    .invalidate();
+                                                                            PostProcessingYotoMasterLookup
+                                                                                    .invalidate();
+                                                                            PostProcessingShohinBunrui4MasterLookup
+                                                                                    .invalidate();
+                                                                            PostProcessingZaikoBunruiMasterLookup
+                                                                                    .invalidate();
+                                                                            PostProcessingPlanMachineLookup
+                                                                                    .invalidate();
+                                                                        },
+                                                                        msg ->
+                                                                                System.out
+                                                                                        .println(
+                                                                                                msg)));
+                                        sp.setContent(content);
+                                        lazyHost.getChildren().setAll(sp);
+                                    });
                         });
         return tab;
     }
 
-    private void mountPostProcessingProductMasterContent(StackPane host) {
-        ScrollPane sp = new ScrollPane();
-        sp.setFitToWidth(true);
-        sp.getStyleClass().add("form-scroll-pane");
-        VBox content =
-                PostProcessingProductMasterEditorPane.buildTabContent(
-                        hostWindow,
-                        new PostProcessingProductMasterEditorPane.Context(
-                                () -> uiEnvSnapshot,
-                                this::snapshotMasterProductCatalog,
-                                this::snapshotFirstProductRowForMaster,
-                                this::snapshotFormKakoKbnLabel,
-                                () -> runIntegratedMasterGeneration(null, null, true),
-                                PostProcessingProductMasterReferenceCache::invalidate,
-                                msg -> System.out.println(msg)));
-        sp.setContent(content);
-        host.getChildren().setAll(sp);
+    private Tab createPlanMachineCatalogTab() {
+        Tab tab = new Tab("機械コード（加工計画）");
+        tab.setClosable(false);
+
+        StackPane lazyHost = new StackPane();
+        lazyHost.setAlignment(Pos.CENTER);
+        Label hint = new Label("このタブを開くと機械コード一覧を読み込みます");
+        hint.getStyleClass().add("request-form-tab-loading-label");
+        lazyHost.getChildren().add(hint);
+        tab.setContent(lazyHost);
+
+        java.util.concurrent.atomic.AtomicBoolean contentMounted =
+                new java.util.concurrent.atomic.AtomicBoolean(false);
+        tab.selectedProperty()
+                .addListener(
+                        (obs, wasSelected, selected) -> {
+                            if (!selected || !contentMounted.compareAndSet(false, true)) {
+                                return;
+                            }
+                            scheduleLazyTabMount(
+                                    lazyHost,
+                                    "機械コード（加工計画）",
+                                    () -> {
+                                        ScrollPane sp = new ScrollPane();
+                                        sp.setFitToWidth(true);
+                                        sp.getStyleClass().add("form-scroll-pane");
+                                        VBox content =
+                                                PostProcessingPlanMachineCatalogPane.build(
+                                                        () -> uiEnvSnapshot,
+                                                        msg -> System.out.println(msg));
+                                        sp.setContent(content);
+                                        VBox.setVgrow(
+                                                content, javafx.scene.layout.Priority.ALWAYS);
+                                        lazyHost.getChildren().setAll(sp);
+                                    });
+                        });
+        return tab;
+    }
+
+    /**
+     * 遅延タブ: スピナー表示 → バックグラウンドで class preload → FX スレッドでマウント。
+     * Windows 増分 compile で inner class が欠けると {@link NoClassDefFoundError} になり得る。
+     */
+    private void scheduleLazyTabMount(StackPane lazyHost, String tabTitle, Runnable mount) {
+        lazyHost.getChildren().setAll(new ProgressIndicator());
+        Thread preload =
+                new Thread(
+                        () -> {
+                            String preloadError = preloadLazyTabClasses(tabTitle);
+                            Platform.runLater(
+                                    () -> {
+                                        if (preloadError != null) {
+                                            showLazyTabMountError(
+                                                    lazyHost, tabTitle, preloadError);
+                                            return;
+                                        }
+                                        mountLazyTabContent(lazyHost, tabTitle, mount);
+                                    });
+                        },
+                        "pm-ai-lazy-tab-" + tabTitle);
+        preload.setDaemon(true);
+        preload.start();
+    }
+
+    private static String preloadLazyTabClasses(String tabTitle) {
+        try {
+            if ("後加工商品マスタ".equals(tabTitle)) {
+                Class.forName(
+                        "jp.co.pm.ai.desktop.reconciliation.PostProcessingProductMasterEditorPane");
+                Class.forName("jp.co.pm.ai.desktop.reconciliation.ReconciliationApp$ProductRow");
+            } else if ("機械コード（加工計画）".equals(tabTitle)) {
+                Class.forName(
+                        "jp.co.pm.ai.desktop.reconciliation.PostProcessingPlanMachineCatalogPane");
+            }
+            return null;
+        } catch (Throwable ex) {
+            return ex.getMessage() != null ? ex.getMessage() : ex.toString();
+        }
+    }
+
+    private static void showLazyTabMountError(
+            StackPane host, String tabTitle, String detail) {
+        System.err.println(
+                "[request-form] lazy tab preload failed (" + tabTitle + "): " + detail);
+        Label err =
+                new Label(
+                        tabTitle
+                                + " の読み込みに失敗しました。\n"
+                                + detail
+                                + "\n\n対処: code_java で .\\mvnw.cmd clean compile を実行してから再起動してください。");
+        err.setWrapText(true);
+        err.setMaxWidth(560);
+        err.getStyleClass().add("request-form-tab-loading-label");
+        host.getChildren().setAll(err);
+    }
+
+    /**
+     * 遅延タブのマウント失敗時にスピナーが残らないよう、エラーパネルへ切り替える。
+     */
+    private static void mountLazyTabContent(StackPane host, String tabTitle, Runnable mount) {
+        try {
+            mount.run();
+        } catch (Throwable ex) {
+            String detail = ex.getMessage() != null ? ex.getMessage() : ex.toString();
+            System.err.println(
+                    "[request-form] lazy tab mount failed (" + tabTitle + "): " + detail);
+            ex.printStackTrace();
+            Label err =
+                    new Label(
+                            tabTitle
+                                    + " の読み込みに失敗しました。\n"
+                                    + detail
+                                    + "\n\n対処: code_java で .\\mvnw.cmd clean compile を実行してから再起動してください。");
+            err.setWrapText(true);
+            err.setMaxWidth(560);
+            err.getStyleClass().add("request-form-tab-loading-label");
+            host.getChildren().setAll(err);
+        }
     }
 
     /**
@@ -1154,6 +1450,10 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
      * Changes here update the ComboBoxes live (shared reference).
      */
     private VBox buildListEditor(String fieldName, ObservableList<String> items) {
+        return buildListEditor(fieldName, items, null);
+    }
+
+    private VBox buildListEditor(String fieldName, ObservableList<String> items, Runnable afterChange) {
         VBox card = new VBox(6);
         card.getStyleClass().add("settings-card");
         card.setMinWidth(SETTINGS_CARD_WIDTH);
@@ -1181,6 +1481,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         Button btnAdd = new Button("+ \u8ffd\u52a0");
         btnAdd.getStyleClass().add("btn-settings-add");
         btnAdd.setMinWidth(Region.USE_PREF_SIZE);
+        registerGuestMutableControl(tfNew);
+        registerGuestMutableControl(btnAdd);
         btnAdd.setOnAction(
                 e -> {
                     String v = tfNew.getText().trim();
@@ -1189,6 +1491,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         listView.setPrefHeight(Math.min(Math.max(items.size(), 2) * 26 + 2, 140));
                         tfNew.clear();
                         saveSettings();
+                        if (afterChange != null) {
+                            afterChange.run();
+                        }
                     }
                 });
         tfNew.setOnAction(btnAdd.getOnAction());
@@ -1196,6 +1501,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         Button btnDel = new Button("\u524a\u9664");
         btnDel.getStyleClass().add("btn-settings-del");
         btnDel.setMinWidth(Region.USE_PREF_SIZE);
+        registerGuestMutableControl(btnDel);
         btnDel.setOnAction(
                 e -> {
                     String sel = listView.getSelectionModel().getSelectedItem();
@@ -1203,6 +1509,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         items.remove(sel);
                         listView.setPrefHeight(Math.min(Math.max(items.size(), 2) * 26 + 2, 140));
                         saveSettings();
+                        if (afterChange != null) {
+                            afterChange.run();
+                        }
                     }
                 });
 
@@ -1225,6 +1534,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         lblInput.getStyleClass().add("settings-card-title");
         cmbSettingsDefaultInputKbn = new ComboBox<>(optInputKbn);
         cmbSettingsDefaultInputKbn.setMaxWidth(Double.MAX_VALUE);
+        registerGuestMutableControl(cmbSettingsDefaultInputKbn);
         cmbSettingsDefaultInputKbn
                 .valueProperty()
                 .addListener(
@@ -1239,6 +1549,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         lblKako.getStyleClass().add("settings-card-title");
         cmbSettingsDefaultKakoKbn = new ComboBox<>(optKakoKbn);
         cmbSettingsDefaultKakoKbn.setMaxWidth(Double.MAX_VALUE);
+        registerGuestMutableControl(cmbSettingsDefaultKakoKbn);
         cmbSettingsDefaultKakoKbn
                 .valueProperty()
                 .addListener(
@@ -1348,6 +1659,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         map.put(RequestFormComboChoices.KEY_STORAGE_LOC, java.util.List.copyOf(optStorageLoc));
         map.put(RequestFormComboChoices.KEY_YOTO, java.util.List.copyOf(optYoto));
         map.put(RequestFormComboChoices.KEY_USER, java.util.List.copyOf(optUser));
+        map.put(
+                RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT,
+                java.util.List.copyOf(optMasterCandidatePrefixProduct));
+        map.put(
+                RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW,
+                java.util.List.copyOf(optMasterCandidatePrefixRaw));
         java.util.LinkedHashMap<String, String> defaults = new java.util.LinkedHashMap<>();
         if (cmbSettingsDefaultInputKbn != null && cmbSettingsDefaultInputKbn.getValue() != null) {
             defaults.put(
@@ -1388,7 +1705,14 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 comboChoicesState.optionsFor(RequestFormComboChoices.KEY_STORAGE_LOC));
         replaceOptList(optYoto, comboChoicesState.optionsFor(RequestFormComboChoices.KEY_YOTO));
         replaceOptList(optUser, comboChoicesState.optionsFor(RequestFormComboChoices.KEY_USER));
+        replaceOptListOrClear(
+                optMasterCandidatePrefixProduct,
+                comboChoicesState.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT));
+        replaceOptListOrClear(
+                optMasterCandidatePrefixRaw,
+                comboChoicesState.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW));
         refreshDynamicRowComboItems();
+        refreshAllMasterCandidateCombos();
         syncFieldDefaultSelectorCombos();
     }
 
@@ -1450,6 +1774,41 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         target.setAll(values);
     }
 
+    private static void replaceOptListOrClear(
+            ObservableList<String> target, java.util.List<String> values) {
+        if (target == null) {
+            return;
+        }
+        if (values == null || values.isEmpty()) {
+            target.clear();
+        } else {
+            target.setAll(values);
+        }
+    }
+
+    private void refreshAllMasterCandidateCombos() {
+        for (ProductRow pRow : productRows) {
+            if (pRow.cmbSearch != null) {
+                updateRowProdCandidates(pRow, false, false);
+            }
+        }
+        for (RawMaterialRow rRow : rawRows) {
+            if (rRow.cmbSearch != null) {
+                updateRowRawCandidates(rRow, false, false);
+            }
+        }
+    }
+
+    private List<ProductInfo> filteredMasterCatalogForProduct() {
+        return RequestFormMasterProductCandidateMatcher.filterCatalogByShohinCodePrefixes(
+                masterProductList, List.copyOf(optMasterCandidatePrefixProduct));
+    }
+
+    private List<ProductInfo> filteredMasterCatalogForRaw() {
+        return RequestFormMasterProductCandidateMatcher.filterCatalogByShohinCodePrefixes(
+                masterProductList, List.copyOf(optMasterCandidatePrefixRaw));
+    }
+
     private void refreshDynamicRowComboItems() {
         for (ProductRow pRow : productRows) {
             if (pRow.cmbEcSide != null) {
@@ -1503,7 +1862,33 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
     /** 操作者変更後に依頼書フォームの入力担当表示を更新する。 */
     public void refreshSessionInputTantoLabel() {
-        Platform.runLater(this::refreshFormInputTantoLabel);
+        Platform.runLater(
+                () -> {
+                    refreshFormInputTantoLabel();
+                    applyGuestSessionRestrictions();
+                });
+    }
+
+    private void registerGuestMutableControl(Node node) {
+        if (node != null) {
+            guestMutableControls.add(node);
+        }
+    }
+
+    private boolean rejectGuestMutation(String featureLabel) {
+        if (FactoryOperatorUserStore.sessionMayMutateRequestFormInput()) {
+            return false;
+        }
+        showAlert("操作不可", featureLabel + "\n\nゲストユーザーはこの操作を実行できません。");
+        return true;
+    }
+
+    private void applyGuestSessionRestrictions() {
+        boolean guest = !FactoryOperatorUserStore.sessionMayMutateRequestFormInput();
+        for (Node node : guestMutableControls) {
+            node.setDisable(guest);
+        }
+        updateTransferButtonState();
     }
 
     private void refreshFormInputTantoLabel() {
@@ -1521,12 +1906,25 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     /** 環境変数タブの依頼書入力向けパスを反映する（タブ再選択時も可）。 */
     public void configureFromUiEnv(Map<String, String> uiEnv) {
         uiEnvSnapshot = uiEnv != null ? Map.copyOf(uiEnv) : Map.of();
+        refreshEmbeddedWindowTitle();
         RequestFormSheetPreviewPdfRenderer.applyCjkMetricsScaleFromUi(uiEnvSnapshot);
         aladdinMasterDir = AppPaths.resolveAladdinMasterDir(uiEnvSnapshot);
         applyRequestFormOriginalDirFromUiEnv();
         applyJuchuFilePathFromUiEnv();
         refreshJuchuPathDisplay();
-        updateTransferButtonState();
+        applyGuestSessionRestrictions();
+    }
+
+    /** 依頼書入力タブ上部タイトル（工場は環境変数／グローバル設定から解決）。 */
+    static String embeddedWindowTitle(Map<String, String> uiEnv) {
+        FactorySite site = GlobalInitSettingTarget.loadEffective(uiEnv != null ? uiEnv : Map.of());
+        return site.displayLabelJa() + " 統合管理データベース (JavaFX版)";
+    }
+
+    private void refreshEmbeddedWindowTitle() {
+        if (embeddedTitleLabel != null) {
+            embeddedTitleLabel.setText(embeddedWindowTitle(uiEnvSnapshot));
+        }
     }
 
     private void applyRequestFormOriginalDirFromUiEnv() {
@@ -1553,6 +1951,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (juchuFileChangeHandler != null) {
             juchuFileChangeHandler.accept(absolutePath);
         }
+        refreshJuchuBackupList();
     }
 
     private void applyJuchuFilePathFromUiEnv() {
@@ -1627,6 +2026,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
      * 転記不可の理由（転記処理中フラグは含めない）。転記可能なら {@code null}。
      */
     private String describeJuchuWriteBlockExcludingTransfer() {
+        if (!FactoryOperatorUserStore.sessionMayMutateRequestFormInput()) {
+            return "ゲストユーザーは受注ファイルへの転記・更新はできません。";
+        }
         if (juchuFilePath == null || juchuFilePath.isBlank()) {
             return "受注ファイルが未設定です。設定タブまたは環境変数 PM_AI_REQUEST_FORM_JUCHU_FILE を指定してください。";
         }
@@ -1887,8 +2289,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                             try {
                                 updateLoadingOverlayText(
                                         "一時保存分を受注ファイルへ一括転記しています…\n(1/4) 受注ファイルを開いています…");
-                                try (FileInputStream fis = new FileInputStream(file);
-                                        Workbook wb = PoiWorkbookOpener.open(fis)) {
+                                try (Workbook wb = PoiWorkbookOpener.open(file)) {
                                     Sheet sheet = wb.getSheet("受注ﾌｧｲﾙ");
                                     Map<String, Integer> colMap =
                                             buildJuchuColumnMap(sheet, file.getAbsolutePath());
@@ -1913,9 +2314,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                                     }
                                     updateLoadingOverlayText(
                                             "一時保存分を受注ファイルへ一括転記しています…\n(3/4) ファイルを保存しています…");
-                                    try (FileOutputStream fos = new FileOutputStream(file)) {
-                                        PoiWorkbookSaver.write(wb, fos);
-                                    }
+                                    saveJuchuWorkbookWithLocalBackup(file, wb, "bulk-transfer");
                                 }
                                 updateLoadingOverlayText(
                                         "一時保存分を受注ファイルへ一括転記しています…\n(4/4) 画面を更新しています…");
@@ -1995,6 +2394,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void transferAllPendingLocalSaves() {
+        if (rejectGuestMutation("一時保存分の一括転記")) {
+            return;
+        }
         transferAllPendingLocalSavesAsync(true, null);
     }
 
@@ -2292,6 +2694,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         } else {
             invalidateMasterProductListCache();
         }
+        refreshAllMasterCandidateCombos();
     }
 
     private List<ProductInfo> loadMasterProductListFromFile() {
@@ -2403,58 +2806,54 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 return;
             }
             
-            FileInputStream fis = new FileInputStream(file);
-            Workbook wb = PoiWorkbookOpener.open(fis);
-            Sheet sheet = wb.getSheet("受注ﾌｧｲﾙ");
-            
-            Row hRow = sheet.getRow(2);
-            Map<String, Integer> colMap = new HashMap<>();
-            for (int c = 0; c < hRow.getLastCellNum(); c++) {
-                Cell cell = hRow.getCell(c);
-                if (cell != null) {
-                    colMap.put(cell.getStringCellValue().trim(), c);
+            try (Workbook wb = PoiWorkbookOpener.open(file)) {
+                Sheet sheet = wb.getSheet("受注ﾌｧｲﾙ");
+
+                Row hRow = sheet.getRow(2);
+                Map<String, Integer> colMap = new HashMap<>();
+                for (int c = 0; c < hRow.getLastCellNum(); c++) {
+                    Cell cell = hRow.getCell(c);
+                    if (cell != null) {
+                        colMap.put(cell.getStringCellValue().trim(), c);
+                    }
                 }
-            }
-            
-            String normKey = normalize_key(reqNo);
-            int lastDataRowIndex = findJuchuSheetLastPopulatedDataRowIndex(sheet);
-            if (findJuchuDataRowIndexByReqNo(sheet, normKey, lastDataRowIndex) >= 0) {
-                    showAlert("エラー", "この依頼Ｎｏ（" + reqNo + "）は既に存在します。別の番号を指定してください。");
-                    wb.close();
-                    fis.close();
+
+                String normKey = normalize_key(reqNo);
+                int lastDataRowIndex = findJuchuSheetLastPopulatedDataRowIndex(sheet);
+                if (findJuchuDataRowIndexByReqNo(sheet, normKey, lastDataRowIndex) >= 0) {
+                    showAlert(
+                            "エラー",
+                            "この依頼Ｎｏ（" + reqNo + "）は既に存在します。別の番号を指定してください。");
                     return;
+                }
+
+                int destRowIdx = insertNewJuchuDataRowPreservingFormulas(sheet, lastDataRowIndex, null);
+                Row targetRow = sheet.getRow(destRowIdx);
+                applyDefaultJuchuFormulasIfMissing(targetRow, colMap, destRowIdx + 1);
+
+                setJuchuSheetReqNoIfIncluded(wb, sheet, targetRow, reqNo);
+
+                Map<String, String> db = buildJuchuDbValuesFromForm();
+                JUCHU_TRANSFER_REPLACE_FORMULA.set(Boolean.TRUE);
+                try {
+                    writeJuchuRowFromValues(
+                            targetRow,
+                            db,
+                            true,
+                            db.get("入力区分"),
+                            db.get("加工区分"),
+                            db.get("入力担当"),
+                            db.get("特記事項1"),
+                            db.get("特記事項2"),
+                            db.get("特記事項3"),
+                            true,
+                            true);
+                } finally {
+                    JUCHU_TRANSFER_REPLACE_FORMULA.remove();
+                }
+
+                saveJuchuWorkbookWithLocalBackup(file, wb, "new-order");
             }
-            
-            int destRowIdx = insertNewJuchuDataRowPreservingFormulas(sheet, lastDataRowIndex, null);
-            Row targetRow = sheet.getRow(destRowIdx);
-            applyDefaultJuchuFormulasIfMissing(targetRow, colMap, destRowIdx + 1);
-
-            setJuchuSheetReqNoIfIncluded(wb, sheet, targetRow, reqNo);
-
-            Map<String, String> db = buildJuchuDbValuesFromForm();
-            JUCHU_TRANSFER_REPLACE_FORMULA.set(Boolean.TRUE);
-            try {
-                writeJuchuRowFromValues(
-                        targetRow,
-                        db,
-                        true,
-                        db.get("入力区分"),
-                        db.get("加工区分"),
-                        db.get("入力担当"),
-                        db.get("特記事項1"),
-                        db.get("特記事項2"),
-                        db.get("特記事項3"),
-                        true,
-                        true);
-            } finally {
-                JUCHU_TRANSFER_REPLACE_FORMULA.remove();
-            }
-
-            fis.close();
-            FileOutputStream fos = new FileOutputStream(file);
-            PoiWorkbookSaver.write(wb, fos);
-            fos.close();
-            wb.close();
             
             statusLabel.setText("新規依頼の登録が完了しました。");
             showAlert("成功", "新規依頼データが受注ファイルに追加・登録されました！");
@@ -3490,6 +3889,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void saveLocalForm() {
+        if (rejectGuestMutation("手修正の一時保存")) {
+            return;
+        }
         if (selectedRecord == null) {
             showAlert("エラー", "修正するレコードを選択してください。");
             return;
@@ -3540,6 +3942,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void transferToExcel() {
+        if (rejectGuestMutation("受注ファイルへの自動転記")) {
+            return;
+        }
         if (juchuTransferInProgress) {
             return;
         }
@@ -3693,8 +4098,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 "受注ファイルへ転記しています…\n(1/5) 受注ファイルを開いています…\n依頼No: " + form.reqNo());
 
         JUCHU_TRANSFER_REPLACE_FORMULA.set(Boolean.TRUE);
-        try (FileInputStream fis = new FileInputStream(file);
-                Workbook wb = PoiWorkbookOpener.open(fis)) {
+        try (Workbook wb = PoiWorkbookOpener.open(file)) {
             Sheet sheet = wb.getSheet("受注ﾌｧｲﾙ");
 
             Map<String, Integer> colMap = buildJuchuColumnMap(sheet, file.getAbsolutePath());
@@ -3776,9 +4180,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             progress.accept(
                     "受注ファイルへ転記しています…\n(5/5) ファイルを保存しています…\n依頼No: "
                             + form.reqNo());
-            try (FileOutputStream fos = new FileOutputStream(file)) {
-                PoiWorkbookSaver.write(wb, fos);
-            }
+            saveJuchuWorkbookWithLocalBackup(file, wb, "single-transfer");
             return undoState;
         } finally {
             JUCHU_TRANSFER_REPLACE_FORMULA.remove();
@@ -3817,6 +4219,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void undoLastJuchuTransfer() {
+        if (rejectGuestMutation("直前の自動転記の取り消し")) {
+            return;
+        }
         if (juchuTransferInProgress || lastJuchuTransferUndo == null) {
             return;
         }
@@ -3918,8 +4323,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             File file, JuchuTransferUndoState undo, Consumer<String> progress) throws Exception {
         progress.accept("自動転記の取り消し…\n(1/3) 受注ファイルを開いています…");
         JUCHU_TRANSFER_REPLACE_FORMULA.set(Boolean.TRUE);
-        try (FileInputStream fis = new FileInputStream(file);
-                Workbook wb = PoiWorkbookOpener.open(fis)) {
+        try (Workbook wb = PoiWorkbookOpener.open(file)) {
             Sheet sheet = wb.getSheet("受注ﾌｧｲﾙ");
             if (sheet == null) {
                 throw new IllegalStateException("受注ﾌｧｲﾙ シートが見つかりません。");
@@ -3952,9 +4356,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         false);
             }
             progress.accept("自動転記の取り消し…\n(3/3) ファイルを保存しています…");
-            try (FileOutputStream fos = new FileOutputStream(file)) {
-                PoiWorkbookSaver.write(wb, fos);
-            }
+            saveJuchuWorkbookWithLocalBackup(file, wb, "undo-transfer");
         } finally {
             JUCHU_TRANSFER_REPLACE_FORMULA.remove();
         }
@@ -4484,6 +4886,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void openJuchuExcelExternally() {
+        if (rejectGuestMutation("受注 Excel を開く")) {
+            return;
+        }
         File currentFile = new File(juchuFilePath);
         if (!currentFile.isFile()) {
             showAlert("エラー", "指定された受注ファイルが見つかりません:\n" + juchuFilePath);
@@ -4501,7 +4906,143 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
     }
 
+    /** 受注ファイルのローカル世代バックアップフォルダをエクスプローラー等で開く。 */
+    private void openJuchuBackupFolderExternally() {
+        try {
+            Path dir;
+            if (juchuFilePath != null && !juchuFilePath.isBlank()) {
+                dir =
+                        RequestFormJuchuFileBackupStore.resolveSourceBackupsRoot(
+                                uiEnvSnapshot, Path.of(juchuFilePath.trim()));
+            } else {
+                dir = RequestFormJuchuFileBackupStore.resolveBackupsRoot(uiEnvSnapshot);
+            }
+            Files.createDirectories(dir);
+            if (!java.awt.Desktop.isDesktopSupported()
+                    || !java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.OPEN)) {
+                showAlert("エラー", "この環境ではフォルダを開けません。");
+                return;
+            }
+            java.awt.Desktop.getDesktop().open(dir.toFile());
+        } catch (Exception ex) {
+            showAlert("エラー", "バックアップフォルダを開けませんでした: " + ex.getMessage());
+        }
+    }
+
+    private void refreshJuchuBackupList() {
+        if (juchuBackupListView == null) {
+            return;
+        }
+        if (juchuFilePath == null || juchuFilePath.isBlank()) {
+            juchuBackupListView.getItems().clear();
+            if (juchuBackupHintLabel != null) {
+                juchuBackupHintLabel.setText("受注ファイルが未設定のため、バックアップ一覧を表示できません。");
+            }
+            return;
+        }
+        Path target = Path.of(juchuFilePath.trim());
+        List<RequestFormJuchuFileBackupStore.RequestFormJuchuFileBackupEntry> entries =
+                RequestFormJuchuFileBackupStore.loadIndexForSource(uiEnvSnapshot, target);
+        juchuBackupListView.getItems().setAll(entries);
+        if (juchuBackupHintLabel != null) {
+            Path root = RequestFormJuchuFileBackupStore.resolveSourceBackupsRoot(uiEnvSnapshot, target);
+            juchuBackupHintLabel.setText(
+                    "保存先: "
+                            + root
+                            + "　保持上限 "
+                            + RequestFormJuchuFileBackupStore.MAX_GENERATIONS_PER_SOURCE
+                            + " 世代（15 分間隔で自動退避）");
+        }
+    }
+
+    private void restoreSelectedJuchuBackupFromList() {
+        if (rejectGuestMutation("受注ファイルのバックアップ復元")) {
+            return;
+        }
+        if (juchuBackupListView == null) {
+            return;
+        }
+        RequestFormJuchuFileBackupStore.RequestFormJuchuFileBackupEntry sel =
+                juchuBackupListView.getSelectionModel().getSelectedItem();
+        if (sel == null) {
+            showAlert("復元", "復元するバックアップを一覧から選んでください。");
+            return;
+        }
+        if (juchuFilePath == null || juchuFilePath.isBlank()) {
+            showAlert("エラー", "受注ファイルが未設定です。");
+            return;
+        }
+        if (isJuchuFileLockedForWrite()) {
+            showJuchuWriteBlockedAlert();
+            return;
+        }
+        if (juchuTransferInProgress) {
+            showAlert("エラー", "受注ファイルへの転記処理を実行中です。完了までお待ちください。");
+            return;
+        }
+
+        File targetFile = new File(juchuFilePath);
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("復元の確認");
+        confirm.setHeaderText(null);
+        confirm.setContentText(
+                "選択したバックアップ（"
+                        + sel.displayLabel()
+                        + "）で受注ファイルを上書きします。\n"
+                        + "復元前に現行ファイルは自動で退避されます。\n\n"
+                        + "対象: "
+                        + targetFile.getAbsolutePath()
+                        + "\n\n続行しますか？");
+        if (hostWindow != null) {
+            confirm.initOwner(hostWindow);
+        }
+        Optional<ButtonType> ans = confirm.showAndWait();
+        if (ans.isEmpty() || ans.get() != ButtonType.OK) {
+            return;
+        }
+
+        statusLabel.setText("バックアップから受注ファイルを復元しています…");
+        Thread restoreThread =
+                new Thread(
+                        () -> {
+                            Exception error = null;
+                            try {
+                                RequestFormJuchuFileBackupStore.restoreToSourceWorkbook(
+                                        sel, uiEnvSnapshot, targetFile.toPath());
+                            } catch (Exception ex) {
+                                error = ex;
+                            }
+                            final Exception finalError = error;
+                            Platform.runLater(
+                                    () -> {
+                                        if (finalError != null) {
+                                            statusLabel.setText(
+                                                    "エラー: " + finalError.getMessage());
+                                            showAlert(
+                                                    "エラー",
+                                                    "バックアップからの復元に失敗しました:\n"
+                                                            + finalError.getMessage());
+                                            finalError.printStackTrace();
+                                            return;
+                                        }
+                                        statusLabel.setText("バックアップから受注ファイルを復元しました。");
+                                        refreshJuchuBackupList();
+                                        showAlert(
+                                                "成功",
+                                                "バックアップから受注ファイルを復元しました。\nデータを再読込します。");
+                                        requestReloadData(
+                                                "バックアップ復元後、データを再読込します。", null);
+                                    });
+                        },
+                        "request-form-juchu-restore");
+        restoreThread.setDaemon(true);
+        restoreThread.start();
+    }
+
     private void openJuchuColumnDefinitionWizard() {
+        if (rejectGuestMutation("列定義ウィザード")) {
+            return;
+        }
         if (juchuFilePath == null || juchuFilePath.isBlank()) {
             showAlert("エラー", "受注ファイルが未設定です。");
             return;
@@ -4957,8 +5498,22 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void saveSettings() {
+        if (!FactoryOperatorUserStore.sessionMayMutateRequestFormInput()) {
+            return;
+        }
+        comboChoicesState = snapshotComboChoices();
         RequestFormInputSettingsStore.save(
-                uiEnvSnapshot, snapshotComboChoices(), targetFolder, juchuFilePath);
+                uiEnvSnapshot, comboChoicesState, targetFolder, juchuFilePath);
+    }
+
+    /** サマリ Excel 同フォルダの {@link AppPaths#REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME} から候補を再読込。 */
+    private void reloadComboChoicesFromSummarySettings() {
+        RequestFormComboChoices fromSummary =
+                RequestFormInputSettingsStore.loadComboChoices(
+                        uiEnvSnapshot, GlobalInitSettingTarget.load());
+        if (fromSummary != null && !fromSummary.isEmpty()) {
+            applyComboChoices(fromSummary);
+        }
     }
 
     public static class InteractiveImageViewer extends Pane {
@@ -5119,6 +5674,34 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         juchuTransferInProgress = false;
         showLoadingOverlay(false, "");
         updateTransferButtonState();
+    }
+
+    /**
+     * 受注ファイル保存の直前にローカル世代バックアップを試行し、POI で上書き保存する。
+     * バックアップは転記スレッド上で同期的に行う（15 分以内の連続書き込みではスキップ）。
+     */
+    private void saveJuchuWorkbookWithLocalBackup(File file, Workbook wb, String backupReason)
+            throws Exception {
+        try {
+            RequestFormJuchuFileBackupStore.maybeBackupBeforeWrite(
+                            file.toPath(), uiEnvSnapshot, backupReason)
+                    .ifPresent(
+                            entry ->
+                                    System.out.println(
+                                            "[request-form-juchu-backup] 退避: "
+                                                    + entry.displayLabel()
+                                                    + " → "
+                                                    + entry.resolveArchivePath(
+                                                            RequestFormJuchuFileBackupStore
+                                                                    .resolveSourceBackupsRoot(
+                                                                            uiEnvSnapshot,
+                                                                            file.toPath()))));
+        } catch (Exception ex) {
+            System.err.println(
+                    "[request-form-juchu-backup] 退避に失敗しましたが保存は続行します: "
+                            + ex.getMessage());
+        }
+        PoiWorkbookFileWriter.writeReplacing(file.toPath(), wb, uiEnvSnapshot);
     }
 
     private void updateLoadingOverlayText(String text) {
@@ -5310,20 +5893,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         }
     }
 
-    /** 後加工商品マスタ編集: 先頭の依頼書製品行（無ければ {@code null}）。 */
-    public ProductRow snapshotFirstProductRowForMaster() {
-        return productRows.isEmpty() ? null : productRows.get(0);
-    }
-
-    /** 依頼書フォームの加工区分ラベル（マスタ {@code 自社後加工区分} 転記用）。 */
-    public String snapshotFormKakoKbnLabel() {
-        if (newCmbFormKakoKbn != null && newCmbFormKakoKbn.getValue() != null) {
-            String v = newCmbFormKakoKbn.getValue().trim();
-            if (!v.isEmpty()) {
-                return v;
-            }
-        }
-        return defaultKakoKbnForNewRow();
+    /** 後加工商品マスタ参照検索向け: 製品側・原反側の先頭フィルタ。 */
+    public PostProcessingProductMasterSearch.MasterReferencePrefixFilters
+            snapshotMasterCandidatePrefixFilters() {
+        return new PostProcessingProductMasterSearch.MasterReferencePrefixFilters(
+                List.copyOf(optMasterCandidatePrefixProduct),
+                List.copyOf(optMasterCandidatePrefixRaw));
     }
 
     /**
@@ -5335,6 +5910,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
      */
     private void runIntegratedMasterGeneration(
             Label statusLabel, Button disableWhileRunning, boolean showResultDialog) {
+        if (rejectGuestMutation("マスタリレーション統合結果の生成")) {
+            return;
+        }
         if (statusLabel != null) {
             statusLabel.setText("生成実行中...");
         }
@@ -5544,8 +6122,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         styleFormLabel(lblHinmei);
         pRow.txtHinmei = new TextField();
         pRow.txtHinmei.setStyle("-fx-font-size: 11px;");
-        pRow.txtHinmei.setEditable(false);
-        pRow.txtHinmei.setFocusTraversable(false);
         pRow.grid.add(lblHinmei, 0, 0);
         addFormField(pRow.grid, pRow.txtHinmei, 1, 0);
 
@@ -5698,6 +6274,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         GridPane.setHalignment(btnDelete, javafx.geometry.HPos.RIGHT);
 
         Runnable updateSpec = () -> updateProductRowSpecDisplay(pRow);
+        pRow.txtHinmei.textProperty().addListener((obs, oldV, newV) -> updateRowProdCandidates(pRow, false));
         pRow.txtPart.textProperty().addListener((obs, oldV, newV) -> {
             updateRowProdCandidates(pRow, false);
             updateSpec.run();
@@ -6065,14 +6642,20 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
             filtered =
                     RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
-                            masterProductList, "", "", "", "", "", 50);
+                            filteredMasterCatalogForProduct(), "", "", "", "", "", 50);
         } else {
             if (!fromDropdownOpen) {
                 clearMasterCandidateEditor(pRow.cmbSearch);
             }
             filtered =
                     RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
-                            masterProductList, kwItem, kwPart, kwType, kwLength, kwHinmei, 50);
+                            filteredMasterCatalogForProduct(),
+                            kwItem,
+                            kwPart,
+                            kwType,
+                            kwLength,
+                            kwHinmei,
+                            50);
         }
         setMasterCandidateAllItems(pRow.cmbSearch, filtered);
         if (autoOpenPopup && !fromDropdownOpen && !filtered.isEmpty() && !pRow.cmbSearch.isShowing()) {
@@ -6112,14 +6695,20 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             }
             filtered =
                     RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
-                            masterProductList, "", "", "", "", "", 50);
+                            filteredMasterCatalogForRaw(), "", "", "", "", "", 50);
         } else {
             if (!fromDropdownOpen) {
                 clearMasterCandidateEditor(rRow.cmbSearch);
             }
             filtered =
                     RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
-                            masterProductList, kwItem, kwPart, kwType, kwLength, kwHinmei, 50);
+                            filteredMasterCatalogForRaw(),
+                            kwItem,
+                            kwPart,
+                            kwType,
+                            kwLength,
+                            kwHinmei,
+                            50);
         }
         setMasterCandidateAllItems(rRow.cmbSearch, filtered);
         if (autoOpenPopup && !fromDropdownOpen && !filtered.isEmpty() && !rRow.cmbSearch.isShowing()) {
@@ -6139,8 +6728,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         styleFormLabel(lblHinmei);
         rRow.txtHinmei = new TextField();
         rRow.txtHinmei.setStyle("-fx-font-size: 11px;");
-        rRow.txtHinmei.setEditable(false);
-        rRow.txtHinmei.setFocusTraversable(false);
         rRow.grid.add(lblHinmei, 0, 0);
         addFormField(rRow.grid, rRow.txtHinmei, 1, 0);
 
@@ -6302,6 +6889,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         GridPane.setHalignment(btnDelete, javafx.geometry.HPos.RIGHT);
 
         Runnable updateSpec = () -> updateRawRowSpecDisplay(rRow);
+        rRow.txtHinmei.textProperty().addListener((obs, oldV, newV) -> updateRowRawCandidates(rRow, false));
         rRow.txtPart.textProperty().addListener((obs, oldV, newV) -> {
             updateRowRawCandidates(rRow, false);
             updateSpec.run();

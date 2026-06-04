@@ -29,6 +29,9 @@ public final class GlobalSettingsTabController {
 
     private MainShellController shell;
 
+    /** {@link ComboBox#setValue} によるリスナー発火を抑止（起動時の Scene 未設定ダイアログ回避）。 */
+    private boolean suppressInitSettingTargetComboEvents;
+
     void bindShell(MainShellController shell) {
         this.shell = shell;
         wireInitSettingTargetCombo();
@@ -41,7 +44,16 @@ public final class GlobalSettingsTabController {
         }
         FactorySite disk = GlobalInitSettingTarget.load();
         if (initSettingTargetCombo.getValue() != disk) {
-            initSettingTargetCombo.setValue(disk);
+            setInitSettingTargetComboValueSilently(disk);
+        }
+    }
+
+    private void setInitSettingTargetComboValueSilently(FactorySite site) {
+        suppressInitSettingTargetComboEvents = true;
+        try {
+            initSettingTargetCombo.setValue(site);
+        } finally {
+            suppressInitSettingTargetComboEvents = false;
         }
     }
 
@@ -50,20 +62,21 @@ public final class GlobalSettingsTabController {
             return;
         }
         initSettingTargetCombo.getItems().setAll(FactorySite.values());
-        initSettingTargetCombo.setValue(GlobalInitSettingTarget.load());
         initSettingTargetCombo
                 .valueProperty()
                 .addListener(
                         (obs, oldV, newV) -> {
-                            if (newV != null) {
-                                GlobalInitSettingTarget.save(newV);
-                                if (shell != null) {
-                                    shell.applyFactoryRequestFormGlobalSettings(newV, false);
-                                    shell.refreshMainRunTabFactoryLogo();
-                                    shell.requireOperatorSelectionForFactory(newV, false);
-                                }
+                            if (suppressInitSettingTargetComboEvents || newV == null) {
+                                return;
+                            }
+                            GlobalInitSettingTarget.save(newV);
+                            if (shell != null) {
+                                shell.applyFactoryRequestFormGlobalSettings(newV, false);
+                                shell.refreshMainRunTabFactoryLogo();
+                                shell.requireOperatorSelectionForFactory(newV, false);
                             }
                         });
+        setInitSettingTargetComboValueSilently(GlobalInitSettingTarget.load());
     }
 
     @FXML

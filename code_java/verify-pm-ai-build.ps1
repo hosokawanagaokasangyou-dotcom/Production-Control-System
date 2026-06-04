@@ -36,6 +36,10 @@ $requiredRelativePaths = @(
     "target\classes\jp\co\pm\ai\desktop\reconciliation\ReconciliationApp.class",
     # comboRecord button cell (NoClassDefFoundError: ReconciliationApp$2)
     "target\classes\jp\co\pm\ai\desktop\reconciliation\ReconciliationApp`$2.class",
+    # 後加工商品マスタ編集タブ（NoClassDefFoundError: ReconciliationApp$ProductRow）
+    "target\classes\jp\co\pm\ai\desktop\reconciliation\ReconciliationApp`$ProductRow.class",
+    # 依頼書プレビュー PDF（NoClassDefFoundError: RequestFormPreviewCellStyle）
+    "target\classes\jp\co\pm\ai\desktop\reconciliation\RequestFormPreviewCellStyle.class",
     "target\classes\jp\co\pm\ai\desktop\css\pm-ai-desktop.css",
     "target\classes\jp\co\pm\ai\desktop\css\theme-midnight-blue.css"
 )

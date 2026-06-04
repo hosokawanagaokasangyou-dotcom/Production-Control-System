@@ -1356,6 +1356,12 @@ public final class AppPaths {
     public static final String FACTORY_OPERATOR_USERS_BACKUPS_DIR = "factory-operator-users-backups";
 
     /**
+     * 依頼書入力・受注ファイル Excel のローカル世代バックアップ（{@link
+     * jp.co.pm.ai.desktop.io.RequestFormJuchuFileBackupStore}）。
+     */
+    public static final String REQUEST_FORM_JUCHU_FILE_BACKUPS_DIR = "request-form-juchu-backups";
+
+    /**
      * 操作者名・PIN 設定の絶対パス。親フォルダは {@link #summaryAiDispatchXlsxPath(Map)} と同一。
      */
     public static Path factoryOperatorUsersStorePath(Map<String, String> ui) {
@@ -1408,6 +1414,23 @@ public final class AppPaths {
      */
     public static Path factoryOperatorUsersBackupsRoot(Map<String, String> ui) {
         return factoryOperatorUsersBackupsRoot(ui, null);
+    }
+
+    /**
+     * 依頼書入力・受注ファイル Excel のローカル世代バックアップルート（{@code ~/.pm-ai-desktop/…}）。
+     *
+     * <p>ネットワーク上の受注ファイルを書き込む前に、同一 PC のローカルへ退避する。
+     */
+    public static Path requestFormJuchuFileBackupsRoot(Map<String, String> ui) {
+        FactorySite site = GlobalInitSettingTarget.loadEffective(ui != null ? ui : Map.of());
+        String suffix = site.name().toLowerCase(Locale.ROOT);
+        return Paths.get(
+                        System.getProperty("user.home"),
+                        ".pm-ai-desktop",
+                        REQUEST_FORM_JUCHU_FILE_BACKUPS_DIR,
+                        suffix)
+                .toAbsolutePath()
+                .normalize();
     }
 
     /** 利用工場に合わせた手動バックアップルート。 */

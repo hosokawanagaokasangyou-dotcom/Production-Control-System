@@ -12,9 +12,11 @@ public final class RequestFormReconciliationStandalone extends Application {
 
     @Override
     public void start(Stage primaryStage) {
-        primaryStage.setTitle("湖南工場 受注一括照合・対比型入力支援システム");
         ReconciliationApp app = new ReconciliationApp();
         Parent root = app.buildEmbeddedRoot(primaryStage, null, Map.of());
+        primaryStage.setTitle(
+                ReconciliationApp.embeddedWindowTitle(Map.of()).replace(
+                        "統合管理データベース (JavaFX版)", "受注一括照合・対比型入力支援システム"));
         Scene scene = new Scene(root, 1560, 700);
         primaryStage.setScene(scene);
         primaryStage.show();

@@ -1,120 +1,15 @@
 {
-  "processingActualsDetailRaw" : [ {
-    "title" : "対象NO",
-    "width" : 112.0
-  }, {
-    "title" : "倉庫名",
-    "width" : 112.0
-  }, {
-    "title" : "機械名",
-    "width" : 112.0
-  }, {
-    "title" : "工程名",
-    "width" : 112.0
-  }, {
-    "title" : "原反製品判定区分",
-    "width" : 112.0
-  }, {
-    "title" : "加工実績NO",
-    "width" : 112.0
-  }, {
-    "title" : "加工日",
-    "width" : 112.0
-  }, {
-    "title" : "依頼NO",
-    "width" : 112.0
-  }, {
-    "title" : "受注NO",
-    "width" : 112.0
-  }, {
-    "title" : "加工内容",
-    "width" : 112.0
-  }, {
-    "title" : "受注日",
-    "width" : 112.0
-  }, {
-    "title" : "指定納期",
-    "width" : 112.0
-  }, {
-    "title" : "出荷予定日",
-    "width" : 112.0
-  }, {
-    "title" : "回答納期",
-    "width" : 112.0
-  }, {
-    "title" : "開始時間",
-    "width" : 112.0
-  }, {
-    "title" : "開始分",
-    "width" : 112.0
-  }, {
-    "title" : "終了時間",
-    "width" : 112.0
-  }, {
-    "title" : "終了分",
-    "width" : 112.0
-  }, {
-    "title" : "停機時間",
-    "width" : 112.0
-  }, {
-    "title" : "停機分",
-    "width" : 112.0
-  }, {
-    "title" : "停機時間分",
-    "width" : 112.0
-  }, {
-    "title" : "休憩時間",
-    "width" : 112.0
-  }, {
-    "title" : "製造条件(内訳)",
-    "width" : 112.0
-  }, {
-    "title" : "加工担当者名1",
-    "width" : 112.0
-  }, {
-    "title" : "加工担当者名2",
-    "width" : 112.0
-  }, {
-    "title" : "加工担当者名3",
-    "width" : 112.0
-  }, {
-    "title" : "加工担当者名4",
-    "width" : 112.0
-  }, {
-    "title" : "加工担当者名5",
-    "width" : 112.0
-  }, {
-    "title" : "換算数量",
-    "width" : 112.0
-  }, {
-    "title" : "製品NO1",
-    "width" : 112.0
-  }, {
-    "title" : "製品NO2",
-    "width" : 112.0
-  }, {
-    "title" : "原反NO1",
-    "width" : 112.0
-  }, {
-    "title" : "実加工数",
-    "width" : 112.0
-  }, {
-    "title" : "加工開始日時",
-    "width" : 112.0
-  }, {
-    "title" : "加工終了日時",
-    "width" : 112.0
-  } ],
-  "planInput_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false, true, false, false, false, false, false ],
-  "stage1Preview_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
-  "aladdinProcessingPlanRaw_columnVisible" : [ true, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, false, false, true, false, true, true, false, false, true, true, true, true, true, true, true, true, true, true, true, false, false, true, false, true, true, true, true, true, false, true, false, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false, true, true, true, false, false, true, true, true, true, false, true, true, true, true, false, true, false, true, false, false, true, true, true, true, true, true, true, true, false, true, true, true, true, true, false, true, true, true, true, true, true, false, true, false, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true ],
+  "processingActualsDetailRaw" : [ ],
+  "planInput_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false ],
+  "stage1Preview_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "aladdinProcessingPlanRaw_columnVisible" : [ true, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, false, false, true, false, true, true, false, false, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, false, true, false, false, true, true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, true, false, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, true, false, false, true, false, true, true, true, true, true, false, false, true, false, true, true, true, true, true, true, true, false, false, true, true, false, true, true, true, true, true, true, true, true, false, true, true, true, true, true ],
   "resultDispatchTable_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false ],
   "envVars" : [ {
     "title" : "変数名",
     "width" : 265.3333333333333
   }, {
     "title" : "値",
-    "width" : 387.69010416666663
+    "width" : 607.6901041666666
   }, {
     "title" : "選択",
     "width" : 190.0
@@ -122,91 +17,7 @@
     "title" : "説明（シート+ロジック）",
     "width" : 1166.6666666666665
   } ],
-  "resultDispatchTable" : [ {
-    "title" : "配台試行順番",
-    "width" : 112.0
-  }, {
-    "title" : "工程名",
-    "width" : 112.0
-  }, {
-    "title" : "機械名",
-    "width" : 112.0
-  }, {
-    "title" : "受注日",
-    "width" : 112.0
-  }, {
-    "title" : "受注NO",
-    "width" : 112.0
-  }, {
-    "title" : "依頼NO",
-    "width" : 112.0
-  }, {
-    "title" : "品名(原反)",
-    "width" : 112.0
-  }, {
-    "title" : "使用原反",
-    "width" : 112.0
-  }, {
-    "title" : "原反数",
-    "width" : 112.0
-  }, {
-    "title" : "品名(製品)",
-    "width" : 112.0
-  }, {
-    "title" : "製品名",
-    "width" : 112.0
-  }, {
-    "title" : "換算数量",
-    "width" : 112.0
-  }, {
-    "title" : "実加工数",
-    "width" : 112.0
-  }, {
-    "title" : "加工内容",
-    "width" : 112.0
-  }, {
-    "title" : "在庫場所",
-    "width" : 112.0
-  }, {
-    "title" : "原反投入日",
-    "width" : 112.0
-  }, {
-    "title" : "指定納期",
-    "width" : 112.0
-  }, {
-    "title" : "回答納期",
-    "width" : 112.0
-  }, {
-    "title" : "加工完了日",
-    "width" : 112.0
-  }, {
-    "title" : "加工完了区分",
-    "width" : 112.0
-  }, {
-    "title" : "実出来高",
-    "width" : 112.0
-  }, {
-    "title" : "計画合計",
-    "width" : 112.0
-  }, {
-    "title" : "原反投入場所",
-    "width" : 112.0
-  }, {
-    "title" : "加工開始日時",
-    "width" : 112.0
-  }, {
-    "title" : "加工終了日時",
-    "width" : 112.0
-  }, {
-    "title" : "メンバー名",
-    "width" : 112.0
-  }, {
-    "title" : "配台日",
-    "width" : 112.0
-  }, {
-    "title" : "当日配台数量",
-    "width" : 112.0
-  } ],
+  "resultDispatchTable" : [ ],
   "stage1Preview" : [ {
     "title" : "依頼NO",
     "width" : 112.0
@@ -335,39 +146,6 @@
     "width" : 112.0
   }, {
     "title" : "範囲外後数",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/23",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/24",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/25",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/26",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/27",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/28",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/29",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/30",
-    "width" : 112.0
-  }, {
-    "title" : "2026/05/01",
-    "width" : 112.0
-  }, {
-    "title" : "2026/05/02",
-    "width" : 112.0
-  }, {
-    "title" : "2026/05/03",
     "width" : 112.0
   }, {
     "title" : "2026/05/04",
@@ -609,6 +387,45 @@
   }, {
     "title" : "2026/07/22",
     "width" : 112.0
+  }, {
+    "title" : "2026/07/23",
+    "width" : 112.0
+  }, {
+    "title" : "2026/07/24",
+    "width" : 112.0
+  }, {
+    "title" : "2026/07/25",
+    "width" : 112.0
+  }, {
+    "title" : "2026/07/26",
+    "width" : 112.0
+  }, {
+    "title" : "2026/07/27",
+    "width" : 112.0
+  }, {
+    "title" : "2026/07/28",
+    "width" : 112.0
+  }, {
+    "title" : "2026/07/29",
+    "width" : 112.0
+  }, {
+    "title" : "2026/07/30",
+    "width" : 112.0
+  }, {
+    "title" : "2026/07/31",
+    "width" : 112.0
+  }, {
+    "title" : "2026/08/01",
+    "width" : 112.0
+  }, {
+    "title" : "コア着予定日",
+    "width" : 112.0
+  }, {
+    "title" : "コア着日",
+    "width" : 112.0
+  }, {
+    "title" : "2026/08/02",
+    "width" : 112.0
   } ],
   "planInput" : [ {
     "title" : "配台試行順番",
@@ -648,7 +465,7 @@
     "width" : 112.0
   }, {
     "title" : "製品名",
-    "width" : 112.0
+    "width" : 168.0
   }, {
     "title" : "(製品)ロール単位長さ",
     "width" : 112.0
@@ -698,25 +515,10 @@
     "title" : "加工工程の決定プロセスの因子",
     "width" : 112.0
   }, {
-    "title" : "（元）加工速度_上書き",
-    "width" : 112.0
-  }, {
-    "title" : "加工速度_上書き",
-    "width" : 112.0
-  }, {
-    "title" : "（元）原反投入日_上書き",
-    "width" : 112.0
-  }, {
-    "title" : "原反投入日_上書き",
-    "width" : 112.0
-  }, {
-    "title" : "（元）担当OP_指定",
+    "title" : "配台可能日時",
     "width" : 112.0
   }, {
     "title" : "担当OP_指定",
-    "width" : 112.0
-  }, {
-    "title" : "（元）特別指定_備考",
     "width" : 112.0
   }, {
     "title" : "特別指定_備考",
@@ -855,39 +657,6 @@
     "title" : "範囲外後数",
     "width" : 112.0
   }, {
-    "title" : "2026/04/23",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/24",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/25",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/26",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/27",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/28",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/29",
-    "width" : 112.0
-  }, {
-    "title" : "2026/04/30",
-    "width" : 112.0
-  }, {
-    "title" : "2026/05/01",
-    "width" : 112.0
-  }, {
-    "title" : "2026/05/02",
-    "width" : 112.0
-  }, {
-    "title" : "2026/05/03",
-    "width" : 112.0
-  }, {
     "title" : "2026/05/04",
     "width" : 112.0
   }, {
@@ -1127,21 +896,54 @@
   }, {
     "title" : "2026/07/22",
     "width" : 112.0
+  }, {
+    "title" : "2026/07/23",
+    "width" : 112.0
+  }, {
+    "title" : "2026/07/24",
+    "width" : 112.0
+  }, {
+    "title" : "2026/07/25",
+    "width" : 112.0
+  }, {
+    "title" : "2026/07/26",
+    "width" : 112.0
+  }, {
+    "title" : "2026/07/27",
+    "width" : 112.0
+  }, {
+    "title" : "2026/07/28",
+    "width" : 112.0
+  }, {
+    "title" : "2026/04/29",
+    "width" : 112.0
+  }, {
+    "title" : "2026/04/30",
+    "width" : 112.0
+  }, {
+    "title" : "2026/05/01",
+    "width" : 112.0
+  }, {
+    "title" : "2026/05/02",
+    "width" : 112.0
+  }, {
+    "title" : "2026/05/03",
+    "width" : 112.0
   } ],
   "prvSh_plan_結果_設備毎の時間割_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
   "prvSh_plan_結果_設備毎の時間割_機械名毎_columnVisible" : [ true, true, true, true, true, true, true ],
   "prvSh_plan_結果_カレンダー(出勤簿)_columnVisible" : [ true, true, true, true, true, true ],
-  "prvSh_plan_結果_メンバー別作業割合_columnVisible" : [ true, true, true, true, true, true, true, true ],
+  "prvSh_plan_結果_メンバー別作業割合_columnVisible" : [ true, true, true, true, true, true, true ],
   "prvSh_plan_列設定_結果_タスク一覧_columnVisible" : [ true, true ],
-  "prvSh_plan_結果_タスク一覧_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
-  "prvSh_plan_結果_配台表_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "prvSh_plan_結果_タスク一覧_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "prvSh_plan_結果_配台表_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
   "prvSh_plan_結果_AIログ_columnVisible" : [ true, true ],
-  "prvSh_member_図司　智子_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
-  "prvSh_member_宮島　　剛_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
-  "prvSh_member_冨田　裕子_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
-  "prvSh_member_森岡　真由美_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
-  "prvSh_member_竹内　正美_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
-  "prvSh_member_菅沼　めぐみ_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "prvSh_member_図司　智子_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "prvSh_member_宮島　　剛_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "prvSh_member_冨田　裕子_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "prvSh_member_森岡　真由美_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "prvSh_member_竹内　正美_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
+  "prvSh_member_菅沼　めぐみ_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
   "prvSh_member_森下　　誠_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
   "deliveryCalendarMain_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ],
   "deliveryCalendarMain" : [ {
@@ -1209,33 +1011,6 @@
     "width" : 112.0
   }, {
     "title" : "受注NO",
-    "width" : 112.0
-  }, {
-    "title" : "2026年5月17日(日)",
-    "width" : 112.0
-  }, {
-    "title" : "2026年5月18日(月)",
-    "width" : 112.0
-  }, {
-    "title" : "2026年5月19日(火)",
-    "width" : 112.0
-  }, {
-    "title" : "2026年5月20日(水)",
-    "width" : 112.0
-  }, {
-    "title" : "2026年5月21日(木)",
-    "width" : 112.0
-  }, {
-    "title" : "2026年5月22日(金)",
-    "width" : 112.0
-  }, {
-    "title" : "2026年5月23日(土)",
-    "width" : 112.0
-  }, {
-    "title" : "2026年5月24日(日)",
-    "width" : 112.0
-  }, {
-    "title" : "2026年5月25日(月)",
     "width" : 112.0
   }, {
     "title" : "2026年5月26日(火)",
@@ -1326,6 +1101,33 @@
     "width" : 112.0
   }, {
     "title" : "2026年6月23日(火)",
+    "width" : 112.0
+  }, {
+    "title" : "2026年6月24日(水)",
+    "width" : 112.0
+  }, {
+    "title" : "2026年6月25日(木)",
+    "width" : 112.0
+  }, {
+    "title" : "2026年6月26日(金)",
+    "width" : 112.0
+  }, {
+    "title" : "2026年6月27日(土)",
+    "width" : 112.0
+  }, {
+    "title" : "2026年6月28日(日)",
+    "width" : 112.0
+  }, {
+    "title" : "2026年6月29日(月)",
+    "width" : 112.0
+  }, {
+    "title" : "2026年6月30日(火)",
+    "width" : 112.0
+  }, {
+    "title" : "2026年7月1日(水)",
+    "width" : 112.0
+  }, {
+    "title" : "2026年7月2日(木)",
     "width" : 112.0
   } ],
   "processingActualsDetailRaw_columnVisible" : [ true, true, true, true, false, false, true, true, true, false, true, false, false, true, true, true, true, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, true, true, true ],
@@ -1696,253 +1498,116 @@
   "dispatchInteractiveWide" : [ {
     "title" : "配台試行順番",
     "width" : 100.0
-  }, {
-    "title" : "工程名",
-    "width" : 60.0
-  }, {
-    "title" : "機械名",
-    "width" : 60.0
-  }, {
-    "title" : "加工内容",
-    "width" : 72.0
-  }, {
-    "title" : "受注NO",
-    "width" : 72.0
-  }, {
-    "title" : "依頼NO",
-    "width" : 66.275390625
-  }, {
-    "title" : "換算数量",
-    "width" : 72.0
-  }, {
-    "title" : "実加工数",
-    "width" : 72.0
-  }, {
-    "title" : "計画合計",
-    "width" : 72.0
-  }, {
-    "title" : "段階3配台数",
-    "width" : 90.662109375
-  }, {
-    "title" : "段階3配台照合",
-    "width" : 102.662109375
-  }, {
-    "title" : "2026-05-20",
-    "width" : 112.0
-  }, {
-    "title" : "2026-05-21",
-    "width" : 112.0
-  }, {
-    "title" : "2026-05-22",
-    "width" : 112.0
-  }, {
-    "title" : "2026-05-23",
-    "width" : 112.0
-  }, {
-    "title" : "2026-05-24",
-    "width" : 112.0
-  }, {
-    "title" : "2026-05-25",
-    "width" : 112.0
-  }, {
-    "title" : "2026-05-26",
-    "width" : 112.0
-  }, {
-    "title" : "2026-05-27",
-    "width" : 112.0
-  }, {
-    "title" : "2026-05-28",
-    "width" : 112.0
-  }, {
-    "title" : "2026-05-29",
-    "width" : 112.0
-  }, {
-    "title" : "2026-05-30",
-    "width" : 112.0
-  }, {
-    "title" : "2026-05-31",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-01",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-02",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-03",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-04",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-05",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-06",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-07",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-08",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-09",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-10",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-11",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-12",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-13",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-14",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-15",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-16",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-17",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-18",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-19",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-20",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-21",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-22",
-    "width" : 112.0
   } ],
   "dispatchInteractiveByDay" : [ {
     "title" : "工程名",
     "width" : 100.0
+  } ],
+  "dispatchInteractiveWide_headerColumnCount" : 3,
+  "dispatchInteractiveByDay_headerColumnCount" : 3,
+  "dispatchInteractive_ui_showStage35AfterQtyLine" : true,
+  "planInputStage3_columnVisible" : [ true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, false, true, false, false, true, true, true ],
+  "planInputStage3" : [ {
+    "title" : "配台試行順番",
+    "width" : 82.0
   }, {
-    "title" : "機械名",
-    "width" : 60.0
+    "title" : "依頼NO",
+    "width" : 74.0
   }, {
     "title" : "加工内容",
-    "width" : 72.0
-  }, {
-    "title" : "段階3配台数",
-    "width" : 90.662109375
-  }, {
-    "title" : "2026-05-20",
     "width" : 112.0
   }, {
-    "title" : "2026-05-21",
+    "title" : "機械名",
     "width" : 112.0
   }, {
-    "title" : "2026-05-22",
+    "title" : "工程名",
+    "width" : 68.0
+  }, {
+    "title" : "回答納期",
     "width" : 112.0
   }, {
-    "title" : "2026-05-23",
+    "title" : "指定納期",
     "width" : 112.0
   }, {
-    "title" : "2026-05-24",
+    "title" : "配台可能日時",
+    "width" : 134.0
+  }, {
+    "title" : "原反投入日",
     "width" : 112.0
   }, {
-    "title" : "2026-05-25",
+    "title" : "配台使用残数量",
     "width" : 112.0
   }, {
-    "title" : "2026-05-26",
+    "title" : "未加工",
     "width" : 112.0
   }, {
-    "title" : "2026-05-27",
+    "title" : "受注数",
     "width" : 112.0
   }, {
-    "title" : "2026-05-28",
+    "title" : "加工速度",
     "width" : 112.0
   }, {
-    "title" : "2026-05-29",
+    "title" : "配台不要",
+    "width" : 81.0
+  }, {
+    "title" : "受注NO",
     "width" : 112.0
   }, {
-    "title" : "2026-05-30",
+    "title" : "換算数量",
     "width" : 112.0
   }, {
-    "title" : "2026-05-31",
+    "title" : "製品名",
     "width" : 112.0
   }, {
-    "title" : "2026-06-01",
+    "title" : "(製品)ロール単位長さ",
     "width" : 112.0
   }, {
-    "title" : "2026-06-02",
+    "title" : "製品幅",
     "width" : 112.0
   }, {
-    "title" : "2026-06-03",
+    "title" : "在庫場所",
     "width" : 112.0
   }, {
-    "title" : "2026-06-04",
+    "title" : "使用原反",
     "width" : 112.0
   }, {
-    "title" : "2026-06-05",
+    "title" : "(原反)ロール単位長さ",
     "width" : 112.0
   }, {
-    "title" : "2026-06-06",
+    "title" : "原反幅",
     "width" : 112.0
   }, {
-    "title" : "2026-06-07",
+    "title" : "加工完了区分",
     "width" : 112.0
   }, {
-    "title" : "2026-06-08",
+    "title" : "実加工数",
     "width" : 112.0
   }, {
-    "title" : "2026-06-09",
+    "title" : "加工工程の決定プロセスの因子",
     "width" : 112.0
   }, {
-    "title" : "2026-06-10",
+    "title" : "担当OP_指定",
     "width" : 112.0
   }, {
-    "title" : "2026-06-11",
+    "title" : "特別指定_備考",
     "width" : 112.0
   }, {
-    "title" : "2026-06-12",
+    "title" : "実出来高",
     "width" : 112.0
   }, {
-    "title" : "2026-06-13",
+    "title" : "AI特別指定_解析",
     "width" : 112.0
   }, {
-    "title" : "2026-06-14",
+    "title" : "配台ロール数",
     "width" : 112.0
   }, {
-    "title" : "2026-06-15",
+    "title" : "製品長",
     "width" : 112.0
   }, {
-    "title" : "2026-06-16",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-17",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-18",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-19",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-20",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-21",
-    "width" : 112.0
-  }, {
-    "title" : "2026-06-22",
+    "title" : "製品厚み",
     "width" : 112.0
   } ],
-  "dispatchInteractiveWide_headerColumnCount" : 11
+  "planInputStage3_headerColumnCount" : 4,
+  "dispatchInteractive_ui_showStage2PlanQtyLine" : true,
+  "dispatchInteractiveWide_columnVisible" : [ true, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true ]
 }

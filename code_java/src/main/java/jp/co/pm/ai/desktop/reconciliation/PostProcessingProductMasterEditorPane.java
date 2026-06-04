@@ -7,6 +7,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -15,12 +17,15 @@ import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SelectionMode;
+import javafx.scene.control.SplitPane;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TableColumn;
@@ -47,9 +52,8 @@ public final class PostProcessingProductMasterEditorPane {
     public record Context(
             Supplier<Map<String, String>> uiEnv,
             Supplier<java.util.List<ProductInfo>> integratedProductCatalog,
-            Supplier<ReconciliationApp.ProductRow> firstProductRow,
-            Supplier<String> formKakoKbnLabel,
-            Runnable runIntegratedMaster,
+            Supplier<PostProcessingProductMasterSearch.MasterReferencePrefixFilters>
+                    masterCandidatePrefixFilters,
             Runnable invalidateReferenceCache,
             Consumer<String> log) {}
 
@@ -59,14 +63,14 @@ public final class PostProcessingProductMasterEditorPane {
     /** 参照マスタ検索結果テーブルの列（依頼書候補表示に近い並び）。 */
     private static final List<SearchResultColumn> SEARCH_RESULT_COLUMNS =
             List.of(
-                    new SearchResultColumn("商品コード", 128, PostProcessingProductMasterEditorPane::shohinCode),
-                    new SearchResultColumn("商品名1", 200, PostProcessingProductMasterEditorPane::shohinName1),
-                    new SearchResultColumn("品番", 72, PostProcessingProductMasterEditorPane::foamPartNo),
-                    new SearchResultColumn("品名", 56, PostProcessingProductMasterEditorPane::foamName),
-                    new SearchResultColumn("タイプ", 64, h -> rowColumn(h, "発泡体タイプ")),
-                    new SearchResultColumn("幅", 64, h -> rowColumn(h, "発泡体幅")),
-                    new SearchResultColumn("長さ", 64, h -> rowColumn(h, "発泡体長さ")),
-                    new SearchResultColumn("色", 48, h -> rowColumn(h, "発泡体色")));
+                    new SearchResultColumn("商品コード", 140, PostProcessingProductMasterEditorPane::shohinCode),
+                    new SearchResultColumn("商品名1", 220, PostProcessingProductMasterEditorPane::shohinName1),
+                    new SearchResultColumn("品番", 80, PostProcessingProductMasterEditorPane::foamPartNo),
+                    new SearchResultColumn("品名", 64, PostProcessingProductMasterEditorPane::foamName),
+                    new SearchResultColumn("タイプ", 72, h -> rowColumn(h, "発泡体タイプ")),
+                    new SearchResultColumn("幅", 72, h -> rowColumn(h, "発泡体幅")),
+                    new SearchResultColumn("長さ", 72, h -> rowColumn(h, "発泡体長さ")),
+                    new SearchResultColumn("色", 56, h -> rowColumn(h, "発泡体色")));
 
     private PostProcessingProductMasterEditorPane() {}
 
@@ -117,6 +121,22 @@ public final class PostProcessingProductMasterEditorPane {
                 buildSearchResultTable(compactCardTitle);
 
         Map<String, TextField> fieldByColumn = new LinkedHashMap<>();
+        Map<String, Label> codeNameLabelByColumn = new LinkedHashMap<>();
+        Map<String, ComboBox<String>> codeComboByColumn = new LinkedHashMap<>();
+        AtomicReference<PostProcessingKouteiNaiyoMasterLookup.Snapshot> kouteiNaiyoLookupRef =
+                new AtomicReference<>(PostProcessingKouteiNaiyoMasterLookup.Snapshot.empty());
+        AtomicReference<PostProcessingShuruiMasterLookup.Snapshot> shuruiLookupRef =
+                new AtomicReference<>(PostProcessingShuruiMasterLookup.Snapshot.empty());
+        AtomicReference<PostProcessingKeiriBunruiMasterLookup.Snapshot> keiriBunruiLookupRef =
+                new AtomicReference<>(PostProcessingKeiriBunruiMasterLookup.Snapshot.empty());
+        AtomicReference<PostProcessingYotoMasterLookup.Snapshot> yotoLookupRef =
+                new AtomicReference<>(PostProcessingYotoMasterLookup.Snapshot.empty());
+        AtomicReference<PostProcessingShohinBunrui4MasterLookup.Snapshot> bunrui4LookupRef =
+                new AtomicReference<>(PostProcessingShohinBunrui4MasterLookup.Snapshot.empty());
+        AtomicReference<PostProcessingZaikoBunruiMasterLookup.Snapshot> zaikoBunruiLookupRef =
+                new AtomicReference<>(PostProcessingZaikoBunruiMasterLookup.Snapshot.empty());
+        AtomicReference<PostProcessingPlanMachineLookup.Snapshot> planMachineLookupRef =
+                new AtomicReference<>(PostProcessingPlanMachineLookup.Snapshot.empty());
         TabPane formTabs = new TabPane();
         formTabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         formTabs.setMinHeight(compactCardTitle ? 280 : 360);
@@ -127,9 +147,22 @@ public final class PostProcessingProductMasterEditorPane {
                 new AtomicReference<>(new PostProcessingProductMasterEditorModel(List.of()));
         Map<String, String> templateRow = new LinkedHashMap<>();
 
+        AtomicBoolean suppressFormDirtyTracking = new AtomicBoolean(false);
+        AtomicBoolean formPreparing = new AtomicBoolean(deferInitialLoad);
+        AtomicBoolean formDirty = new AtomicBoolean(false);
+        LinkedHashMap<String, String> formBaseline = new LinkedHashMap<>();
+        AtomicReference<Runnable> refreshInteractionStateRef = new AtomicReference<>(() -> {});
+        AtomicReference<Runnable> captureFormBaselineRef = new AtomicReference<>(() -> {});
+        AtomicReference<Runnable> updateDirtyFromFormRef = new AtomicReference<>(() -> {});
+        AtomicReference<Runnable> wireFormDirtyTrackingRef = new AtomicReference<>(() -> {});
+        AtomicReference<Button> btnDuplicateCheckRef = new AtomicReference<>();
+
         ObservableList<Map<String, String>> uploadRows = FXCollections.observableArrayList();
         TableView<Map<String, String>> uploadTable = new TableView<>(uploadRows);
-        uploadTable.setPrefHeight(compactCardTitle ? 120 : 160);
+        double uploadTableHeight = compactCardTitle ? 120 : 160;
+        uploadTable.setPrefHeight(uploadTableHeight);
+        uploadTable.setMinHeight(uploadTableHeight);
+        uploadTable.setMaxHeight(uploadTableHeight);
         uploadTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         for (String col : UPLOAD_TABLE_COLUMNS) {
             TableColumn<Map<String, String>, String> tc = new TableColumn<>(col);
@@ -147,10 +180,83 @@ public final class PostProcessingProductMasterEditorPane {
                     uploadPathField.setText(up.toString());
                 };
 
+        Runnable runShohinCodeDuplicateCheck =
+                () -> {
+                    if (formPreparing.get()) {
+                        return;
+                    }
+                    TextField codeField = fieldByColumn.get("商品コード");
+                    if (codeField == null) {
+                        return;
+                    }
+                    String code = codeField.getText().trim();
+                    editorModelRef.get().set("商品コード", code);
+                    Path ref = Path.of(refPathField.getText().trim());
+                    Map<String, String> excludeUploadRow =
+                            uploadTable.getSelectionModel().getSelectedItem();
+                    statusLabel.setText("商品コードを確認中…");
+                    Thread worker =
+                            new Thread(
+                                    () -> {
+                                        try {
+                                            PostProcessingProductMasterDuplicateCheck.Result result =
+                                                    PostProcessingProductMasterDuplicateCheck.check(
+                                                            code,
+                                                            ref,
+                                                            uploadRows,
+                                                            excludeUploadRow);
+                                            Platform.runLater(
+                                                    () -> {
+                                                        if (result.usable()) {
+                                                            statusLabel.setText(
+                                                                    String.join(
+                                                                            " ",
+                                                                            result.messages()));
+                                                        } else {
+                                                            statusLabel.setText("重複あり");
+                                                            showError(
+                                                                    "重複チェック",
+                                                                    String.join(
+                                                                            "\n",
+                                                                            result.messages()));
+                                                        }
+                                                    });
+                                        } catch (Exception ex) {
+                                            Platform.runLater(
+                                                    () -> {
+                                                        statusLabel.setText(
+                                                                "重複チェック失敗: "
+                                                                        + ex.getMessage());
+                                                        showError(
+                                                                "重複チェック", ex.getMessage());
+                                                    });
+                                        }
+                                    },
+                                    "postproc-master-dup-check");
+                    worker.setDaemon(true);
+                    worker.start();
+                };
+
         Runnable rebuildForm =
                 () -> {
+                    formPreparing.set(true);
+                    refreshInteractionStateRef.get().run();
                     fieldByColumn.clear();
+                    codeNameLabelByColumn.clear();
+                    codeComboByColumn.clear();
                     formTabs.getTabs().clear();
+                    PostProcessingKouteiNaiyoMasterLookup.Snapshot kouteiNaiyo =
+                            kouteiNaiyoLookupRef.get();
+                    PostProcessingShuruiMasterLookup.Snapshot shurui = shuruiLookupRef.get();
+                    PostProcessingKeiriBunruiMasterLookup.Snapshot keiriBunrui =
+                            keiriBunruiLookupRef.get();
+                    PostProcessingYotoMasterLookup.Snapshot yoto = yotoLookupRef.get();
+                    PostProcessingShohinBunrui4MasterLookup.Snapshot bunrui4 =
+                            bunrui4LookupRef.get();
+                    PostProcessingZaikoBunruiMasterLookup.Snapshot zaikoBunrui =
+                            zaikoBunruiLookupRef.get();
+                    PostProcessingPlanMachineLookup.Snapshot planMachine =
+                            planMachineLookupRef.get();
                     for (PostProcessingProductMasterColumnGroups.TabGroup group :
                             PostProcessingProductMasterColumnGroups.tabGroups()) {
                         GridPane grid = new GridPane();
@@ -158,46 +264,174 @@ public final class PostProcessingProductMasterEditorPane {
                         grid.setVgap(6);
                         grid.setPadding(new Insets(8));
                         ColumnConstraints labelCol = new ColumnConstraints();
-                        labelCol.setMinWidth(140);
-                        labelCol.setPrefWidth(160);
+                        labelCol.setMinWidth(
+                                PostProcessingProductMasterCodeFieldRows.labelColumnPrefWidth());
+                        labelCol.setPrefWidth(
+                                PostProcessingProductMasterCodeFieldRows.labelColumnPrefWidth());
+                        labelCol.setMaxWidth(
+                                PostProcessingProductMasterCodeFieldRows.labelColumnPrefWidth()
+                                        + 16);
                         ColumnConstraints fieldCol = new ColumnConstraints();
-                        fieldCol.setHgrow(Priority.ALWAYS);
+                        fieldCol.setPrefWidth(
+                                PostProcessingProductMasterCodeFieldRows.fieldColumnPrefWidth());
+                        fieldCol.setMaxWidth(
+                                PostProcessingProductMasterCodeFieldRows.fieldColumnMaxWidth());
+                        fieldCol.setHgrow(Priority.NEVER);
                         grid.getColumnConstraints().addAll(labelCol, fieldCol);
+                        grid.setMaxWidth(
+                                PostProcessingProductMasterCodeFieldRows.fieldColumnMaxWidth()
+                                        + PostProcessingProductMasterCodeFieldRows
+                                                .labelColumnPrefWidth()
+                                        + 32);
                         int row = 0;
                         for (String colName : group.columnNames()) {
                             if (!editorModelRef.get().headers().contains(colName)) {
                                 continue;
                             }
-                            Label lbl = new Label(colName + ":");
-                            lbl.setStyle("-fx-font-size: 11px;");
-                            TextField tf = new TextField(editorModelRef.get().get(colName));
-                            tf.setStyle("-fx-font-size: 11px;");
-                            tf.textProperty()
-                                    .addListener(
-                                            (obs, o, n) ->
-                                                    editorModelRef
-                                                            .get()
-                                                            .set(colName, n != null ? n : ""));
-                            fieldByColumn.put(colName, tf);
-                            grid.add(lbl, 0, row);
-                            grid.add(tf, 1, row++);
+                            PostProcessingProductMasterCodeFieldRows.addColumnRow(
+                                    grid,
+                                    row++,
+                                    colName,
+                                    editorModelRef.get(),
+                                    kouteiNaiyo,
+                                    shurui,
+                                    keiriBunrui,
+                                    yoto,
+                                    bunrui4,
+                                    zaikoBunrui,
+                                    planMachine,
+                                    fieldByColumn,
+                                    codeNameLabelByColumn,
+                                    codeComboByColumn,
+                                    col -> updateDirtyFromFormRef.get().run(),
+                                    runShohinCodeDuplicateCheck,
+                                    btnDuplicateCheckRef);
                         }
                         ScrollPane sp = new ScrollPane(grid);
                         sp.setFitToWidth(true);
                         Tab tab = new Tab(group.tabTitle(), sp);
                         formTabs.getTabs().add(tab);
                     }
+                    wireFormDirtyTrackingRef.get().run();
+                    formPreparing.set(false);
+                    captureFormBaselineRef.get().run();
                 };
 
-        Runnable syncFormFromModel =
+        Runnable reloadKouteiNaiyoLookup =
                 () -> {
-                    for (Map.Entry<String, TextField> e : fieldByColumn.entrySet()) {
-                        e.getValue().setText(editorModelRef.get().get(e.getKey()));
+                    try {
+                        kouteiNaiyoLookupRef.set(
+                                PostProcessingKouteiNaiyoMasterLookup.snapshot(uiEnv.get()));
+                    } catch (IOException ex) {
+                        kouteiNaiyoLookupRef.set(
+                                PostProcessingKouteiNaiyoMasterLookup.Snapshot.empty());
+                        log.accept("[postproc-master] koutei/naiyo: " + ex.getMessage());
                     }
+                };
+
+        Runnable reloadShuruiLookup =
+                () -> {
+                    try {
+                        shuruiLookupRef.set(
+                                PostProcessingShuruiMasterLookup.snapshot(uiEnv.get()));
+                    } catch (IOException ex) {
+                        shuruiLookupRef.set(PostProcessingShuruiMasterLookup.Snapshot.empty());
+                        log.accept("[postproc-master] shurui: " + ex.getMessage());
+                    }
+                };
+
+        Runnable reloadKeiriBunruiLookup =
+                () -> {
+                    try {
+                        keiriBunruiLookupRef.set(
+                                PostProcessingKeiriBunruiMasterLookup.snapshot(uiEnv.get()));
+                    } catch (IOException ex) {
+                        keiriBunruiLookupRef.set(
+                                PostProcessingKeiriBunruiMasterLookup.Snapshot.empty());
+                        log.accept("[postproc-master] keiri: " + ex.getMessage());
+                    }
+                };
+
+        Runnable reloadYotoLookup =
+                () -> {
+                    try {
+                        yotoLookupRef.set(
+                                PostProcessingYotoMasterLookup.snapshot(uiEnv.get()));
+                    } catch (IOException ex) {
+                        yotoLookupRef.set(PostProcessingYotoMasterLookup.Snapshot.empty());
+                        log.accept("[postproc-master] yoto: " + ex.getMessage());
+                    }
+                };
+
+        Runnable reloadBunrui4Lookup =
+                () -> {
+                    try {
+                        bunrui4LookupRef.set(
+                                PostProcessingShohinBunrui4MasterLookup.snapshot(uiEnv.get()));
+                    } catch (IOException ex) {
+                        bunrui4LookupRef.set(
+                                PostProcessingShohinBunrui4MasterLookup.Snapshot.empty());
+                        log.accept("[postproc-master] bunrui4: " + ex.getMessage());
+                    }
+                };
+
+        Runnable reloadZaikoBunruiLookup =
+                () -> {
+                    try {
+                        zaikoBunruiLookupRef.set(
+                                PostProcessingZaikoBunruiMasterLookup.snapshot(uiEnv.get()));
+                    } catch (IOException ex) {
+                        zaikoBunruiLookupRef.set(
+                                PostProcessingZaikoBunruiMasterLookup.Snapshot.empty());
+                        log.accept("[postproc-master] zaiko: " + ex.getMessage());
+                    }
+                };
+
+        Runnable reloadPlanMachineLookup =
+                () -> {
+                    try {
+                        planMachineLookupRef.set(
+                                PostProcessingPlanMachineLookup.snapshot(uiEnv.get()));
+                    } catch (IOException ex) {
+                        planMachineLookupRef.set(
+                                PostProcessingPlanMachineLookup.Snapshot.empty());
+                        log.accept("[postproc-master] plan machine: " + ex.getMessage());
+                    }
+                };
+
+        Runnable reloadAllMasterLookups =
+                () -> {
+                    reloadKouteiNaiyoLookup.run();
+                    reloadShuruiLookup.run();
+                    reloadKeiriBunruiLookup.run();
+                    reloadYotoLookup.run();
+                    reloadBunrui4Lookup.run();
+                    reloadZaikoBunruiLookup.run();
+                    reloadPlanMachineLookup.run();
+                };
+
+        Runnable syncFormFieldsFromModel =
+                () -> {
+                    suppressFormDirtyTracking.set(true);
+                    try {
+                        for (Map.Entry<String, TextField> e : fieldByColumn.entrySet()) {
+                            e.getValue().setText(editorModelRef.get().get(e.getKey()));
+                        }
+                    } finally {
+                        suppressFormDirtyTracking.set(false);
+                    }
+                };
+
+        Runnable resetFormFromModel =
+                () -> {
+                    syncFormFieldsFromModel.run();
+                    captureFormBaselineRef.get().run();
                 };
 
         Runnable loadReferenceHeaders =
                 () -> {
+                    formPreparing.set(true);
+                    refreshInteractionStateRef.get().run();
                     try {
                         Path ref = Path.of(refPathField.getText().trim());
                         if (!Files.isRegularFile(ref)) {
@@ -208,12 +442,21 @@ public final class PostProcessingProductMasterEditorPane {
                         referenceHeaders.addAll(PostProcessingProductMasterIo.readHeaders(ref));
                         editorModelRef.set(
                                 new PostProcessingProductMasterEditorModel(referenceHeaders));
+                        reloadAllMasterLookups.run();
                         rebuildForm.run();
                         statusLabel.setText(
-                                "参照マスタ見出し "
-                                        + referenceHeaders.size()
-                                        + " 列を読み込みました。");
+                                masterLookupStatusMessage(
+                                        referenceHeaders.size(),
+                                        kouteiNaiyoLookupRef.get(),
+                                        shuruiLookupRef.get(),
+                                        keiriBunruiLookupRef.get(),
+                                        yotoLookupRef.get(),
+                                        bunrui4LookupRef.get(),
+                                        zaikoBunruiLookupRef.get(),
+                                        planMachineLookupRef.get()));
                     } catch (Exception ex) {
+                        formPreparing.set(false);
+                        refreshInteractionStateRef.get().run();
                         statusLabel.setText("参照マスタ読込失敗: " + ex.getMessage());
                         log.accept("[postproc-master] ref headers: " + ex.getMessage());
                     }
@@ -267,6 +510,9 @@ public final class PostProcessingProductMasterEditorPane {
         btnSearch.getStyleClass().add("btn-reload");
         btnSearch.setOnAction(
                 e -> {
+                    if (formPreparing.get() || formDirty.get()) {
+                        return;
+                    }
                     statusLabel.setText("検索中...");
                     Path ref = Path.of(refPathField.getText().trim());
                     PostProcessingProductMasterIo.SearchFilter filter =
@@ -284,11 +530,22 @@ public final class PostProcessingProductMasterEditorPane {
                                                     ctx.integratedProductCatalog() != null
                                                             ? ctx.integratedProductCatalog().get()
                                                             : List.of();
+                                            PostProcessingProductMasterSearch.MasterReferencePrefixFilters
+                                                    prefixes =
+                                                            ctx.masterCandidatePrefixFilters() != null
+                                                                    ? ctx.masterCandidatePrefixFilters()
+                                                                            .get()
+                                                                    : PostProcessingProductMasterSearch
+                                                                            .MasterReferencePrefixFilters
+                                                                            .none();
                                             List<PostProcessingProductMasterIo.SearchHit> hits =
                                                     PostProcessingProductMasterIo.searchReference(
-                                                            ref, filter, 200, catalog);
+                                                            ref, filter, 200, catalog, prefixes);
                                             Platform.runLater(
                                                     () -> {
+                                                        if (formPreparing.get() || formDirty.get()) {
+                                                            return;
+                                                        }
                                                         searchResults
                                                                 .setItems(
                                                                         FXCollections
@@ -312,81 +569,62 @@ public final class PostProcessingProductMasterEditorPane {
                     t.start();
                 });
 
-        Runnable applySelectedSearchHit =
+        Runnable applySearchHitToForm =
                 () -> {
+                    if (formPreparing.get() || formDirty.get()) {
+                        return;
+                    }
                     PostProcessingProductMasterIo.SearchHit hit =
                             searchResults.getSelectionModel().getSelectedItem();
-                    if (hit != null) {
-                        templateRow.clear();
-                        templateRow.putAll(hit.rowByColumn());
+                    if (hit == null) {
+                        return;
                     }
+                    templateRow.clear();
+                    templateRow.putAll(hit.rowByColumn());
+                    suppressFormDirtyTracking.set(true);
+                    try {
+                        editorModelRef.get().applyTemplateRow(templateRow);
+                        syncFormFieldsFromModel.run();
+                    } finally {
+                        suppressFormDirtyTracking.set(false);
+                    }
+                    captureFormBaselineRef.get().run();
+                    statusLabel.setText("雛形をフォームに反映しました（商品コードは手修正）。");
                 };
         searchResults
                 .getSelectionModel()
                 .selectedItemProperty()
-                .addListener((obs, old, hit) -> applySelectedSearchHit.run());
-        searchResults.setOnMouseClicked(
-                e -> {
-                    if (e.getClickCount() == 2) {
-                        applySelectedSearchHit.run();
-                        editorModelRef.get().applyTemplateRow(templateRow);
-                        syncFormFromModel.run();
-                        statusLabel.setText("雛形をフォームに反映しました（商品コードは手修正）。");
-                    }
-                });
+                .addListener((obs, old, hit) -> applySearchHitToForm.run());
 
-        Button btnTemplateToForm = new Button("雛形をフォームへ");
-        btnTemplateToForm.getStyleClass().add("btn-reload");
-        btnTemplateToForm.setOnAction(
+        Button btnCancelEdit = new Button("編集キャンセル");
+        btnCancelEdit.getStyleClass().add("btn-settings-del");
+        btnCancelEdit.setDisable(true);
+        btnCancelEdit.setTooltip(
+                new Tooltip("右側フォームの未保存の変更を破棄し、直前の確定状態に戻します。"));
+        btnCancelEdit.setOnAction(
                 e -> {
-                    if (templateRow.isEmpty()) {
-                        showError("雛形未選択", "検索結果から雛形行を選択してください。");
+                    if (formPreparing.get() || !formDirty.get()) {
                         return;
                     }
-                    editorModelRef.get().applyTemplateRow(templateRow);
-                    syncFormFromModel.run();
-                    statusLabel.setText("雛形をフォームに反映しました（商品コードは手修正）。");
+                    suppressFormDirtyTracking.set(true);
+                    try {
+                        for (Map.Entry<String, String> entry : formBaseline.entrySet()) {
+                            editorModelRef.get().set(entry.getKey(), entry.getValue());
+                        }
+                        syncFormFieldsFromModel.run();
+                    } finally {
+                        suppressFormDirtyTracking.set(false);
+                    }
+                    captureFormBaselineRef.get().run();
+                    statusLabel.setText("編集をキャンセルしました。");
                 });
 
-        Button btnNewFromTemplate = new Button("雛形から新規行");
-        btnNewFromTemplate.getStyleClass().add("btn-transfer");
-        btnNewFromTemplate.setOnAction(
-                e -> {
-                    if (templateRow.isEmpty()) {
-                        showError("雛形未選択", "検索結果から雛形行を選択してください。");
-                        return;
-                    }
-                    editorModelRef.get().applyTemplateRow(templateRow);
-                    syncFormFromModel.run();
-                    statusLabel.setText("雛形を適用しました。編集後「行追加」で一覧へ。");
-                });
-
-        Button btnTransfer = new Button("依頼書製品行から転記");
-        btnTransfer.getStyleClass().add("btn-transfer");
-        btnTransfer.setOnAction(
-                e -> {
-                    if (templateRow.isEmpty()) {
-                        showError(
-                                "雛形未選択",
-                                "転記前に検索結果から雛形行を選び「雛形をフォームへ」を実行するか、"
-                                        + "雛形から新規行で雛形を適用してください。");
-                        return;
-                    }
-                    ReconciliationApp.ProductRow row = ctx.firstProductRow().get();
-                    if (row == null) {
-                        showError("製品行なし", "依頼書フォームに製品行がありません。");
-                        return;
-                    }
-                    editorModelRef.get().applyTemplateRow(templateRow);
-                    editorModelRef
-                            .get()
-                            .applyRequestFormProductRow(row, ctx.formKakoKbnLabel().get());
-                    syncFormFromModel.run();
-                    statusLabel.setText("依頼書製品行を転記しました（商品コードは雛形ベース）。");
-                });
-
-        Button btnAddRow = new Button("行追加");
+        Button btnAddRow = new Button("③ 一覧へ追加");
         btnAddRow.getStyleClass().add("btn-settings-add");
+        btnAddRow.setTooltip(
+                new Tooltip(
+                        "右フォームの内容を下の一覧に1行追加します（未保存）。"
+                                + " Excel へ書き出すには「④ Excel保存」を押してください。"));
         btnAddRow.setOnAction(
                 e -> {
                     for (Map.Entry<String, TextField> ent : fieldByColumn.entrySet()) {
@@ -406,8 +644,9 @@ public final class PostProcessingProductMasterEditorPane {
                     statusLabel.setText("行を追加しました（未保存）。");
                 });
 
-        Button btnRemoveRow = new Button("行削除");
+        Button btnRemoveRow = new Button("削除");
         btnRemoveRow.getStyleClass().add("btn-settings-del");
+        btnRemoveRow.setTooltip(new Tooltip("一覧で選択した行を削除します（未保存）。"));
         btnRemoveRow.setOnAction(
                 e -> {
                     Map<String, String> sel = uploadTable.getSelectionModel().getSelectedItem();
@@ -416,8 +655,9 @@ public final class PostProcessingProductMasterEditorPane {
                     }
                 });
 
-        Button btnDupRow = new Button("行複製");
+        Button btnDupRow = new Button("複製");
         btnDupRow.getStyleClass().add("btn-reload");
+        btnDupRow.setTooltip(new Tooltip("一覧で選択した行を複製して末尾に追加します（未保存）。"));
         btnDupRow.setOnAction(
                 e -> {
                     Map<String, String> sel = uploadTable.getSelectionModel().getSelectedItem();
@@ -431,14 +671,18 @@ public final class PostProcessingProductMasterEditorPane {
                 .selectedItemProperty()
                 .addListener(
                         (obs, o, row) -> {
-                            if (row != null) {
-                                editorModelRef.get().loadFromRow(row);
-                                syncFormFromModel.run();
+                            if (row == null || formPreparing.get() || formDirty.get()) {
+                                return;
                             }
+                            editorModelRef.get().loadFromRow(row);
+                            resetFormFromModel.run();
                         });
 
-        Button btnNewUpload = new Button("アップロード用を新規作成");
+        Button btnNewUpload = new Button("① 空ファイル作成");
         btnNewUpload.getStyleClass().add("btn-reload");
+        btnNewUpload.setTooltip(
+                new Tooltip(
+                        "参照マスタと同じ見出しの空 xlsx を作成します（初回のみ。既存ファイルがある場合は不要）。"));
         btnNewUpload.setOnAction(
                 e -> {
                     try {
@@ -455,8 +699,9 @@ public final class PostProcessingProductMasterEditorPane {
                     }
                 });
 
-        Button btnBrowseUpload = new Button("参照…");
+        Button btnBrowseUpload = new Button("ファイルを選ぶ…");
         btnBrowseUpload.getStyleClass().add("btn-reload");
+        btnBrowseUpload.setTooltip(new Tooltip("アップロード用 Excel の保存先パスを選びます。"));
         btnBrowseUpload.setOnAction(
                 e -> {
                     FileChooser ch = new FileChooser();
@@ -470,45 +715,46 @@ public final class PostProcessingProductMasterEditorPane {
                     }
                 });
 
-        Button btnSave = new Button("保存");
+        Button btnSave = new Button("④ Excel保存");
         btnSave.getStyleClass().add("btn-transfer");
+        btnSave.setTooltip(
+                new Tooltip(
+                        "一覧の全行をアップロード用 Excel（"
+                                + PostProcessingProductMasterIo.DEFAULT_UPLOAD_FILE_NAME
+                                + " 等）に書き込みます。"));
         btnSave.setOnAction(e -> saveUpload.run());
+
+        Button btnReservedAladdinMasterUpsert =
+                RequestFormReservedButton.ALADDIN_MASTER_UPSERT.toButton(statusLabel);
 
         Button btnReloadUpload = new Button("再読込");
         btnReloadUpload.getStyleClass().add("btn-reload");
+        btnReloadUpload.setTooltip(new Tooltip("アップロード用 Excel から一覧を読み直します（未保存の変更は失われます）。"));
         btnReloadUpload.setOnAction(e -> loadUploadFile.run());
 
-        Button btnIntegrated = new Button("統合マスタ再生成");
-        btnIntegrated.getStyleClass().add("btn-transfer");
-        btnIntegrated.setTooltip(
-                new Tooltip("create_integrated_master.py を実行し、依頼書候補を更新します。"));
-        btnIntegrated.setOnAction(e -> ctx.runIntegratedMaster().run());
-
         refreshPathsFromEnv.run();
-        if (deferInitialLoad) {
-            statusLabel.setText("マスタデータを読み込んでいます…");
-            startDeferredInitialization(
-                    uiEnv,
-                    statusLabel,
-                    referenceHeaders,
-                    editorModelRef,
-                    uploadRows,
-                    rebuildForm,
-                    loadUploadFile,
-                    log);
-        } else {
-            loadReferenceHeaders.run();
-            loadUploadFile.run();
-        }
 
         Label note =
                 new Label(
                         "※ Aladdin の単価タブ（上代・販売・購買単価等）は本 xlsx に含まれません。"
-                                + " 本番マスタへの上書きは行わず、アップロード用ファイルを編集してください。");
+                                + " 本番マスタ（後加工商品マスタ.xlsx）への直接上書きはしません。");
         note.setWrapText(true);
         note.setStyle("-fx-font-size: 10px;");
 
+        Label uploadWorkflow =
+                new Label(
+                        "【手順】① 空ファイル作成（初回）"
+                                + " → ② 左で雛形検索・右フォーム入力"
+                                + " → ③ 一覧へ追加"
+                                + " → ④ Excel保存");
+        uploadWorkflow.setWrapText(true);
+        uploadWorkflow.getStyleClass().add("postproc-master-workflow-hint");
+
+        Region filterPaneSpacer = new Region();
+        VBox.setVgrow(filterPaneSpacer, Priority.ALWAYS);
+
         VBox filterBox = new VBox(6);
+        filterBox.setFillWidth(true);
         filterBox.getChildren()
                 .addAll(
                         new Label("参照マスタ検索（雛形）"),
@@ -519,38 +765,106 @@ public final class PostProcessingProductMasterEditorPane {
                         gridFilterRow("品名:", fName),
                         btnSearch,
                         searchResults,
-                        new HBox(6, btnTemplateToForm, btnNewFromTemplate));
+                        new HBox(6, btnCancelEdit),
+                        filterPaneSpacer);
+        filterBox.setMinWidth(260);
+        filterBox.setPrefWidth(Region.USE_COMPUTED_SIZE);
+        filterBox.setMaxWidth(Double.MAX_VALUE);
 
         HBox pathRow1 = new HBox(6, new Label("参照:"), refPathField);
         HBox.setHgrow(refPathField, Priority.ALWAYS);
-        HBox pathRow2 =
-                new HBox(
-                        6,
-                        new Label("アップロード用:"),
-                        uploadPathField,
-                        btnBrowseUpload,
-                        btnNewUpload,
-                        btnReloadUpload,
-                        btnSave);
-        HBox actionRow =
-                new HBox(
-                        8,
-                        btnTransfer,
-                        btnAddRow,
-                        btnRemoveRow,
-                        btnDupRow,
-                        btnIntegrated);
-        actionRow.setAlignment(Pos.CENTER_LEFT);
+        HBox pathRow2 = new HBox(6, new Label("アップロード用:"), uploadPathField, btnBrowseUpload);
+        HBox.setHgrow(uploadPathField, Priority.ALWAYS);
 
-        VBox topPaths = new VBox(4, pathRow1, pathRow2);
-        HBox mainRow = new HBox(12, filterBox, formTabs);
-        HBox.setHgrow(formTabs, Priority.ALWAYS);
-        HBox.setHgrow(mainRow, Priority.ALWAYS);
-        filterBox.setMinWidth(compactCardTitle ? 300 : 440);
-        filterBox.setPrefWidth(compactCardTitle ? 300 : 480);
-        filterBox.setMaxWidth(compactCardTitle ? 340 : 560);
-        filterBox.setMaxHeight(Double.MAX_VALUE);
-        VBox.setVgrow(searchResults, Priority.ALWAYS);
+        Label fileActionsCaption = new Label("ファイル");
+        fileActionsCaption.getStyleClass().add("postproc-master-toolbar-caption");
+        HBox fileActionRow =
+                new HBox(8, fileActionsCaption, btnNewUpload, btnReloadUpload);
+        fileActionRow.setAlignment(Pos.CENTER_LEFT);
+        fileActionRow.getStyleClass().add("postproc-master-toolbar");
+
+        Region tableActionSpacer = new Region();
+        HBox.setHgrow(tableActionSpacer, Priority.ALWAYS);
+        HBox tableActionRow =
+                new HBox(
+                        10,
+                        toolbarGroup("行", btnAddRow, btnRemoveRow, btnDupRow),
+                        tableActionSpacer,
+                        toolbarGroup("確定", btnSave, btnReservedAladdinMasterUpsert));
+        tableActionRow.setAlignment(Pos.CENTER_LEFT);
+        tableActionRow.getStyleClass().add("postproc-master-toolbar");
+
+        VBox topPaths = new VBox(4, pathRow1, pathRow2, fileActionRow);
+
+        VBox editorPane = new VBox(formTabs);
+        editorPane.setFillWidth(true);
+        editorPane.setMinWidth(280);
+        VBox.setVgrow(formTabs, Priority.ALWAYS);
+
+        Runnable refreshInteractionState =
+                () -> {
+                    boolean preparing = formPreparing.get();
+                    boolean dirty = formDirty.get();
+                    boolean searchLocked = preparing || dirty;
+
+                    for (TextField tf : List.of(fCode, fPart, fType, fLength, fName)) {
+                        tf.setDisable(searchLocked);
+                    }
+                    btnSearch.setDisable(searchLocked);
+                    searchResults.setDisable(searchLocked);
+                    btnCancelEdit.setDisable(preparing || !dirty);
+
+                    uploadTable.setDisable(preparing || dirty);
+                    btnAddRow.setDisable(preparing);
+                    btnRemoveRow.setDisable(preparing);
+                    btnDupRow.setDisable(preparing);
+                    btnNewUpload.setDisable(preparing);
+                    btnBrowseUpload.setDisable(preparing);
+                    btnReloadUpload.setDisable(preparing);
+                    btnSave.setDisable(preparing);
+                    btnReservedAladdinMasterUpsert.setDisable(preparing);
+                    formTabs.setDisable(preparing);
+                    editorPane.setDisable(preparing);
+                    filterBox.setDisable(preparing);
+                    topPaths.setDisable(preparing);
+                    tableActionRow.setDisable(preparing);
+                    Button dupBtn = btnDuplicateCheckRef.get();
+                    if (dupBtn != null) {
+                        dupBtn.setDisable(preparing);
+                    }
+                };
+
+        Runnable updateDirtyFromForm =
+                () -> {
+                    if (suppressFormDirtyTracking.get() || formPreparing.get()) {
+                        return;
+                    }
+                    Map<String, String> current = editorModelRef.get().snapshot();
+                    formDirty.set(!Objects.equals(current, formBaseline));
+                    refreshInteractionState.run();
+                };
+
+        Runnable captureFormBaseline =
+                () -> {
+                    for (Map.Entry<String, TextField> e : fieldByColumn.entrySet()) {
+                        editorModelRef.get().set(e.getKey(), e.getValue().getText());
+                    }
+                    formBaseline.clear();
+                    formBaseline.putAll(editorModelRef.get().snapshot());
+                    formDirty.set(false);
+                    refreshInteractionState.run();
+                };
+
+        refreshInteractionStateRef.set(refreshInteractionState);
+        captureFormBaselineRef.set(captureFormBaseline);
+        updateDirtyFromFormRef.set(updateDirtyFromForm);
+
+        SplitPane mainSplit = new SplitPane(filterBox, editorPane);
+        mainSplit.setOrientation(Orientation.HORIZONTAL);
+        SplitPane.setResizableWithParent(filterBox, Boolean.TRUE);
+        SplitPane.setResizableWithParent(editorPane, Boolean.TRUE);
+        mainSplit.setDividerPositions(0.4);
+        VBox.setVgrow(filterBox, Priority.ALWAYS);
 
         VBox root = new VBox(10);
         root.setMaxWidth(Double.MAX_VALUE);
@@ -560,13 +874,39 @@ public final class PostProcessingProductMasterEditorPane {
                 .addAll(
                         title,
                         note,
+                        uploadWorkflow,
                         topPaths,
-                        statusLabel,
-                        mainRow,
                         new Label("アップロード用ファイルの行"),
                         uploadTable,
-                        actionRow);
-        VBox.setVgrow(mainRow, Priority.ALWAYS);
+                        tableActionRow,
+                        statusLabel,
+                        mainSplit);
+        VBox.setVgrow(mainSplit, Priority.ALWAYS);
+
+        refreshInteractionStateRef.get().run();
+        if (deferInitialLoad) {
+            statusLabel.setText("マスタデータを読み込んでいます…");
+            startDeferredInitialization(
+                    uiEnv,
+                    statusLabel,
+                    referenceHeaders,
+                    editorModelRef,
+                    uploadRows,
+                    kouteiNaiyoLookupRef,
+                    shuruiLookupRef,
+                    keiriBunruiLookupRef,
+                    yotoLookupRef,
+                    bunrui4LookupRef,
+                    zaikoBunruiLookupRef,
+                    planMachineLookupRef,
+                    reloadAllMasterLookups,
+                    rebuildForm,
+                    loadUploadFile,
+                    log);
+        } else {
+            loadReferenceHeaders.run();
+            loadUploadFile.run();
+        }
         return root;
     }
 
@@ -580,6 +920,14 @@ public final class PostProcessingProductMasterEditorPane {
             List<String> referenceHeaders,
             AtomicReference<PostProcessingProductMasterEditorModel> editorModelRef,
             ObservableList<Map<String, String>> uploadRows,
+            AtomicReference<PostProcessingKouteiNaiyoMasterLookup.Snapshot> kouteiNaiyoLookupRef,
+            AtomicReference<PostProcessingShuruiMasterLookup.Snapshot> shuruiLookupRef,
+            AtomicReference<PostProcessingKeiriBunruiMasterLookup.Snapshot> keiriBunruiLookupRef,
+            AtomicReference<PostProcessingYotoMasterLookup.Snapshot> yotoLookupRef,
+            AtomicReference<PostProcessingShohinBunrui4MasterLookup.Snapshot> bunrui4LookupRef,
+            AtomicReference<PostProcessingZaikoBunruiMasterLookup.Snapshot> zaikoBunruiLookupRef,
+            AtomicReference<PostProcessingPlanMachineLookup.Snapshot> planMachineLookupRef,
+            Runnable reloadAllMasterLookups,
             Runnable rebuildForm,
             Runnable loadUploadFile,
             Consumer<String> log) {
@@ -588,9 +936,40 @@ public final class PostProcessingProductMasterEditorPane {
                         () -> {
                             List<String> headers = new ArrayList<>();
                             PlanInputTabularIo.TabularSheet uploadSheet = null;
+                            PostProcessingKouteiNaiyoMasterLookup.Snapshot kouteiNaiyo =
+                                    PostProcessingKouteiNaiyoMasterLookup.Snapshot.empty();
+                            PostProcessingShuruiMasterLookup.Snapshot shurui =
+                                    PostProcessingShuruiMasterLookup.Snapshot.empty();
+                            PostProcessingKeiriBunruiMasterLookup.Snapshot keiriBunrui =
+                                    PostProcessingKeiriBunruiMasterLookup.Snapshot.empty();
+                            PostProcessingYotoMasterLookup.Snapshot yoto =
+                                    PostProcessingYotoMasterLookup.Snapshot.empty();
+                            PostProcessingShohinBunrui4MasterLookup.Snapshot bunrui4 =
+                                    PostProcessingShohinBunrui4MasterLookup.Snapshot.empty();
+                            PostProcessingZaikoBunruiMasterLookup.Snapshot zaikoBunrui =
+                                    PostProcessingZaikoBunruiMasterLookup.Snapshot.empty();
+                            PostProcessingPlanMachineLookup.Snapshot planMachine =
+                                    PostProcessingPlanMachineLookup.Snapshot.empty();
                             boolean refOk = false;
                             boolean uploadOk = false;
                             try {
+                                kouteiNaiyo =
+                                        PostProcessingKouteiNaiyoMasterLookup.snapshot(
+                                                uiEnv.get());
+                                shurui =
+                                        PostProcessingShuruiMasterLookup.snapshot(uiEnv.get());
+                                keiriBunrui =
+                                        PostProcessingKeiriBunruiMasterLookup.snapshot(
+                                                uiEnv.get());
+                                yoto = PostProcessingYotoMasterLookup.snapshot(uiEnv.get());
+                                bunrui4 =
+                                        PostProcessingShohinBunrui4MasterLookup.snapshot(
+                                                uiEnv.get());
+                                zaikoBunrui =
+                                        PostProcessingZaikoBunruiMasterLookup.snapshot(
+                                                uiEnv.get());
+                                planMachine =
+                                        PostProcessingPlanMachineLookup.snapshot(uiEnv.get());
                                 Path ref =
                                         PostProcessingProductMasterIo.resolveReferencePath(
                                                 uiEnv.get());
@@ -620,8 +999,27 @@ public final class PostProcessingProductMasterEditorPane {
                             boolean finalUploadOk = uploadOk;
                             List<String> loadedHeaders = List.copyOf(headers);
                             PlanInputTabularIo.TabularSheet loadedUpload = uploadSheet;
+                            PostProcessingKouteiNaiyoMasterLookup.Snapshot loadedKouteiNaiyo =
+                                    kouteiNaiyo;
+                            PostProcessingShuruiMasterLookup.Snapshot loadedShurui = shurui;
+                            PostProcessingKeiriBunruiMasterLookup.Snapshot loadedKeiriBunrui =
+                                    keiriBunrui;
+                            PostProcessingYotoMasterLookup.Snapshot loadedYoto = yoto;
+                            PostProcessingShohinBunrui4MasterLookup.Snapshot loadedBunrui4 =
+                                    bunrui4;
+                            PostProcessingZaikoBunruiMasterLookup.Snapshot loadedZaikoBunrui =
+                                    zaikoBunrui;
+                            PostProcessingPlanMachineLookup.Snapshot loadedPlanMachine =
+                                    planMachine;
                             Platform.runLater(
                                     () -> {
+                                        kouteiNaiyoLookupRef.set(loadedKouteiNaiyo);
+                                        shuruiLookupRef.set(loadedShurui);
+                                        keiriBunruiLookupRef.set(loadedKeiriBunrui);
+                                        yotoLookupRef.set(loadedYoto);
+                                        bunrui4LookupRef.set(loadedBunrui4);
+                                        zaikoBunruiLookupRef.set(loadedZaikoBunrui);
+                                        planMachineLookupRef.set(loadedPlanMachine);
                                         if (finalRefOk && !loadedHeaders.isEmpty()) {
                                             referenceHeaders.clear();
                                             referenceHeaders.addAll(loadedHeaders);
@@ -643,6 +1041,14 @@ public final class PostProcessingProductMasterEditorPane {
                                         } else if (finalRefOk) {
                                             statusLabel.setText(
                                                     "参照マスタ準備完了。"
+                                                            + masterLookupSuffix(
+                                                                    loadedKouteiNaiyo,
+                                                                    loadedShurui,
+                                                                    loadedKeiriBunrui,
+                                                                    loadedYoto,
+                                                                    loadedBunrui4,
+                                                                    loadedZaikoBunrui,
+                                                                    loadedPlanMachine)
                                                             + "アップロード用ファイルがありません（新規作成可）");
                                         } else {
                                             statusLabel.setText(
@@ -677,6 +1083,84 @@ public final class PostProcessingProductMasterEditorPane {
         statusLabel.setText("アップロード用 " + uploadRows.size() + " 行を読み込みました。");
     }
 
+    private static String masterLookupStatusMessage(
+            int headerCount,
+            PostProcessingKouteiNaiyoMasterLookup.Snapshot kouteiNaiyo,
+            PostProcessingShuruiMasterLookup.Snapshot shurui,
+            PostProcessingKeiriBunruiMasterLookup.Snapshot keiriBunrui,
+            PostProcessingYotoMasterLookup.Snapshot yoto,
+            PostProcessingShohinBunrui4MasterLookup.Snapshot bunrui4,
+            PostProcessingZaikoBunruiMasterLookup.Snapshot zaikoBunrui,
+            PostProcessingPlanMachineLookup.Snapshot planMachine) {
+        return "参照マスタ見出し "
+                + headerCount
+                + " 列。"
+                + masterLookupSuffix(
+                        kouteiNaiyo,
+                        shurui,
+                        keiriBunrui,
+                        yoto,
+                        bunrui4,
+                        zaikoBunrui,
+                        planMachine);
+    }
+
+    private static String masterLookupSuffix(
+            PostProcessingKouteiNaiyoMasterLookup.Snapshot kouteiNaiyo,
+            PostProcessingShuruiMasterLookup.Snapshot shurui,
+            PostProcessingKeiriBunruiMasterLookup.Snapshot keiriBunrui,
+            PostProcessingYotoMasterLookup.Snapshot yoto,
+            PostProcessingShohinBunrui4MasterLookup.Snapshot bunrui4,
+            PostProcessingZaikoBunruiMasterLookup.Snapshot zaikoBunrui,
+            PostProcessingPlanMachineLookup.Snapshot planMachine) {
+        StringBuilder sb = new StringBuilder();
+        if (kouteiNaiyo != null && kouteiNaiyo.loaded()) {
+            sb.append(" 工程")
+                    .append(kouteiNaiyo.kouteiCodeToName().size())
+                    .append("件・加工内容")
+                    .append(kouteiNaiyo.naiyoCodeToEntry().size())
+                    .append("件。");
+        }
+        if (shurui != null && shurui.loaded()) {
+            sb.append(" 種類").append(shurui.codeToName().size()).append("件。");
+        }
+        if (keiriBunrui != null && keiriBunrui.loaded()) {
+            sb.append(" 経理分類").append(keiriBunrui.codeToName().size()).append("件。");
+        }
+        if (yoto != null && yoto.loaded()) {
+            sb.append(" 用途").append(yoto.codeToName().size()).append("件。");
+        }
+        if (bunrui4 != null && bunrui4.loaded()) {
+            sb.append(" 商品分類4").append(bunrui4.codeToName().size()).append("件。");
+        }
+        if (zaikoBunrui != null && zaikoBunrui.loaded()) {
+            sb.append(" 在庫分類").append(zaikoBunrui.codeToName().size()).append("件。");
+        }
+        if (planMachine != null && planMachine.loaded()) {
+            sb.append(" 機械")
+                    .append(planMachine.machineCodeToName().size())
+                    .append("件（加工計画）。");
+        } else if (planMachine != null
+                && !planMachine.hasCodeColumn()
+                && !planMachine.hasNameColumn()) {
+            sb.append(" 加工計画に機械/機械名列なし。");
+        } else if (planMachine != null && !planMachine.loaded()) {
+            sb.append(" 加工計画の機械一覧未構築。");
+        }
+        if ((kouteiNaiyo == null || !kouteiNaiyo.loaded())
+                && (shurui == null || !shurui.loaded())
+                && (keiriBunrui == null || !keiriBunrui.loaded())
+                && (yoto == null || !yoto.loaded())
+                && (bunrui4 == null || !bunrui4.loaded())
+                && (zaikoBunrui == null || !zaikoBunrui.loaded())
+                && (planMachine == null || !planMachine.loaded())) {
+            if (sb.isEmpty()) {
+                sb.append(" 連携マスタ未読込。");
+            }
+        }
+        return sb.toString();
+    }
+
     private record SearchResultColumn(
             String title, double prefWidth, java.util.function.Function<
                             PostProcessingProductMasterIo.SearchHit, String>
@@ -686,8 +1170,10 @@ public final class PostProcessingProductMasterEditorPane {
             boolean compactCardTitle) {
         TableView<PostProcessingProductMasterIo.SearchHit> table = new TableView<>();
         table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
-        table.setPrefHeight(compactCardTitle ? 180 : 340);
-        table.setMinHeight(140);
+        double searchTableHeight = compactCardTitle ? 180 : 280;
+        table.setPrefHeight(searchTableHeight);
+        table.setMinHeight(120);
+        table.setMaxHeight(searchTableHeight);
         table.setPlaceholder(new Label("「検索」で雛形一覧を表示（最大200件）"));
         table.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
         for (SearchResultColumn spec : SEARCH_RESULT_COLUMNS) {
@@ -736,6 +1222,15 @@ public final class PostProcessingProductMasterEditorPane {
         lbl.setMinWidth(72);
         HBox.setHgrow(field, Priority.ALWAYS);
         return new HBox(6, lbl, field);
+    }
+
+    private static HBox toolbarGroup(String caption, Button... buttons) {
+        Label lbl = new Label(caption);
+        lbl.getStyleClass().add("postproc-master-toolbar-caption");
+        HBox group = new HBox(6, lbl);
+        group.setAlignment(Pos.CENTER_LEFT);
+        group.getChildren().addAll(buttons);
+        return group;
     }
 
     private static void showError(String title, String message) {

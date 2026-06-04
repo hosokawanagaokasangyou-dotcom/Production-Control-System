@@ -365,6 +365,7 @@ class FactoryOperatorUserStoreTest {
         assertEquals(FactoryOperatorUserStore.GUEST_OPERATOR_NAME, FactoryOperatorUserStore.sessionOperatorName());
         assertTrue(FactoryOperatorUserStore.isGuestSession());
         assertTrue(!FactoryOperatorUserStore.sessionMayGenerateSummaryExcel());
+        assertTrue(!FactoryOperatorUserStore.sessionMayMutateRequestFormInput());
         assertTrue(!FactoryOperatorUserStore.hasPin(FactorySite.KONAN, FactoryOperatorUserStore.GUEST_OPERATOR_NAME));
         assertEquals(
                 FactoryOperatorUserStore.GUEST_OPERATOR_NAME,

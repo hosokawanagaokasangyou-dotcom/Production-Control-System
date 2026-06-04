@@ -11,6 +11,14 @@ import jp.co.pm.ai.desktop.io.PostProcessingProductMasterIo;
 /** 参照マスタのフィルタ検索（{@link RequestFormMasterProductCandidateMatcher} と同一スコアリング）。 */
 public final class PostProcessingProductMasterSearch {
 
+    /** 後加工商品マスタ参照検索の先頭文字フィルタ（製品側・原反側）。 */
+    public record MasterReferencePrefixFilters(List<String> productSide, List<String> rawSide) {
+
+        public static MasterReferencePrefixFilters none() {
+            return new MasterReferencePrefixFilters(List.of(), List.of());
+        }
+    }
+
     private PostProcessingProductMasterSearch() {}
 
     /**
@@ -25,9 +33,22 @@ public final class PostProcessingProductMasterSearch {
             int limit,
             List<ProductInfo> integratedCatalog)
             throws IOException {
+        return searchReference(
+                referencePath, filter, limit, integratedCatalog, MasterReferencePrefixFilters.none());
+    }
+
+    public static List<PostProcessingProductMasterIo.SearchHit> searchReference(
+            Path referencePath,
+            PostProcessingProductMasterIo.SearchFilter filter,
+            int limit,
+            List<ProductInfo> integratedCatalog,
+            MasterReferencePrefixFilters prefixFilters)
+            throws IOException {
         int cap = limit > 0 ? limit : PostProcessingProductMasterIo.DEFAULT_SEARCH_LIMIT;
         PostProcessingProductMasterIo.SearchFilter f =
                 filter != null ? filter : PostProcessingProductMasterIo.SearchFilter.empty();
+        MasterReferencePrefixFilters prefixes =
+                prefixFilters != null ? prefixFilters : MasterReferencePrefixFilters.none();
 
         String kwCode = normalize(filterKeyword(f.shohinCode()));
         String kwPart = normalize(filterKeyword(f.foamPartNo()));
@@ -42,12 +63,15 @@ public final class PostProcessingProductMasterSearch {
                         || !kwLength.isEmpty()
                         || !kwName.isEmpty();
 
-        List<ProductInfo> catalogForScore;
+        List<ProductInfo> rawCatalog;
         if (integratedCatalog != null && !integratedCatalog.isEmpty()) {
-            catalogForScore = integratedCatalog;
+            rawCatalog = integratedCatalog;
         } else {
-            catalogForScore = PostProcessingProductMasterReferenceCache.snapshot(referencePath).catalog();
+            rawCatalog = PostProcessingProductMasterReferenceCache.snapshot(referencePath).catalog();
         }
+        List<ProductInfo> catalogForScore =
+                RequestFormMasterProductCandidateMatcher.filterCatalogForMasterReferenceSearch(
+                        rawCatalog, prefixes.productSide(), prefixes.rawSide());
 
         PostProcessingProductMasterReferenceCache.Snapshot refSnap =
                 PostProcessingProductMasterReferenceCache.snapshot(referencePath);

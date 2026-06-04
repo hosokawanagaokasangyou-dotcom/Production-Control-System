@@ -3,7 +3,6 @@ package jp.co.pm.ai.desktop.ui;
 import javafx.geometry.Point2D;
 import javafx.scene.SnapshotParameters;
 import javafx.scene.control.TableCell;
-import javafx.scene.control.TableRow;
 import javafx.scene.effect.BlurType;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.image.Image;
@@ -14,7 +13,11 @@ import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 
 /**
- * Sets {@link Dragboard#setDragView} to a snapshot of the full {@link TableRow} with shadow (Spreadsheet row reorder).
+ * Sets {@link Dragboard#setDragView} for Spreadsheet row reorder.
+ *
+ * <p>既定はクリックした {@link TableCell} のみをスナップショットする。{@link TableRow} 全体の snapshot は
+ * ControlsFX {@link org.controlsfx.control.spreadsheet.SpreadsheetView} のレイアウトを揺らし、ホスト
+ * {@code layoutBounds} 経由で列固定 chrome の再適用が走ってウィンドウサイズが変わったように見えることがある。
  */
 public final class SpreadsheetRowReorderDragGhost {
 
@@ -22,56 +25,37 @@ public final class SpreadsheetRowReorderDragGhost {
 
     private SpreadsheetRowReorderDragGhost() {}
 
+    /** 行 DnD 用ドラッグイメージ（セル単位・レイアウト影響を最小化）。 */
     public static void apply(Dragboard db, TableCell<?, ?> tc, MouseEvent e) {
-        TableRow<?> row = tc.getTableRow();
-        if (row == null) {
+        applyCellGhost(db, tc, e);
+    }
+
+    private static void applyCellGhost(Dragboard db, TableCell<?, ?> tc, MouseEvent e) {
+        if (tc == null || tc.isEmpty()) {
             return;
         }
-        double rw = row.getWidth();
-        double rh = row.getHeight();
-        if (rw <= 1 || rh <= 1) {
+        double cw = tc.getWidth();
+        double ch = tc.getHeight();
+        if (cw <= 1 || ch <= 1) {
             return;
         }
         try {
-            SnapshotParameters rowParams = new SnapshotParameters();
-            rowParams.setFill(Color.TRANSPARENT);
-            Image base = row.snapshot(rowParams, null);
+            SnapshotParameters params = new SnapshotParameters();
+            params.setFill(Color.TRANSPARENT);
+            Image base = tc.snapshot(params, null);
             if (base == null) {
                 return;
             }
-
-            ImageView iv = new ImageView(base);
-            iv.setOpacity(1.0);
-            iv.setSmooth(true);
-
-            DropShadow shadow = new DropShadow();
-            shadow.setBlurType(BlurType.GAUSSIAN);
-            shadow.setRadius(12);
-            shadow.setSpread(0.12);
-            shadow.setOffsetX(2);
-            shadow.setOffsetY(5);
-            shadow.setColor(Color.color(0, 0, 0, 0.48));
-            iv.setEffect(shadow);
-
-            Pane plate = new Pane(iv);
-            iv.setLayoutX(PAD);
-            iv.setLayoutY(PAD);
-            double pw = base.getWidth() + 2 * PAD;
-            double ph = base.getHeight() + 2 * PAD;
-            plate.setMinSize(pw, ph);
-            plate.setPrefSize(pw, ph);
-            plate.setMaxSize(pw, ph);
-
-            SnapshotParameters outParams = new SnapshotParameters();
-            outParams.setFill(Color.TRANSPARENT);
-            Image ghost = plate.snapshot(outParams, null);
+            Image ghost = withShadowPlate(base);
             if (ghost == null) {
-                Point2D fb = row.sceneToLocal(e.getSceneX(), e.getSceneY());
-                db.setDragView(base, clamp(fb.getX(), 0, base.getWidth()), clamp(fb.getY(), 0, base.getHeight()));
+                Point2D local = tc.sceneToLocal(e.getSceneX(), e.getSceneY());
+                db.setDragView(
+                        base,
+                        clamp(local.getX(), 0, base.getWidth()),
+                        clamp(local.getY(), 0, base.getHeight()));
                 return;
             }
-
-            Point2D local = row.sceneToLocal(e.getSceneX(), e.getSceneY());
+            Point2D local = tc.sceneToLocal(e.getSceneX(), e.getSceneY());
             double ox = clamp(local.getX(), 0, base.getWidth()) + PAD;
             double oy = clamp(local.getY(), 0, base.getHeight()) + PAD;
             ox = clamp(ox, 0, ghost.getWidth());
@@ -80,6 +64,34 @@ public final class SpreadsheetRowReorderDragGhost {
         } catch (RuntimeException ignored) {
             // default drag appearance
         }
+    }
+
+    private static Image withShadowPlate(Image base) {
+        ImageView iv = new ImageView(base);
+        iv.setOpacity(1.0);
+        iv.setSmooth(true);
+
+        DropShadow shadow = new DropShadow();
+        shadow.setBlurType(BlurType.GAUSSIAN);
+        shadow.setRadius(12);
+        shadow.setSpread(0.12);
+        shadow.setOffsetX(2);
+        shadow.setOffsetY(5);
+        shadow.setColor(Color.color(0, 0, 0, 0.48));
+        iv.setEffect(shadow);
+
+        Pane plate = new Pane(iv);
+        iv.setLayoutX(PAD);
+        iv.setLayoutY(PAD);
+        double pw = base.getWidth() + 2 * PAD;
+        double ph = base.getHeight() + 2 * PAD;
+        plate.setMinSize(pw, ph);
+        plate.setPrefSize(pw, ph);
+        plate.setMaxSize(pw, ph);
+
+        SnapshotParameters outParams = new SnapshotParameters();
+        outParams.setFill(Color.TRANSPARENT);
+        return plate.snapshot(outParams, null);
     }
 
     private static double clamp(double v, double lo, double hi) {

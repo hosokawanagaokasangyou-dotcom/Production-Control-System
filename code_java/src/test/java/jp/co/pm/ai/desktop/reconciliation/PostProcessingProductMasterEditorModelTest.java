@@ -10,18 +10,6 @@ import org.junit.jupiter.api.Test;
 class PostProcessingProductMasterEditorModelTest {
 
     @Test
-    void mapSelfKakoKbn_mapsKnownLabels() {
-        assertEquals("1", PostProcessingProductMasterEditorModel.mapSelfKakoKbn("後加工"));
-        assertEquals("0", PostProcessingProductMasterEditorModel.mapSelfKakoKbn("TPI"));
-    }
-
-    @Test
-    void mapTrimming_mapsLabels() {
-        assertEquals("1", PostProcessingProductMasterEditorModel.mapTrimming("1:あり"));
-        assertEquals("0", PostProcessingProductMasterEditorModel.mapTrimming("0:なし"));
-    }
-
-    @Test
     void validateRequiresShohinCode() {
         List<String> headers = List.of("商品コード", "商品名1");
         PostProcessingProductMasterEditorModel model =

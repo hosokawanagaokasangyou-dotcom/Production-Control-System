@@ -432,7 +432,12 @@ public final class SpreadsheetTabularSupport {
                     if (item instanceof SpreadsheetCell cell) {
                         int viewRowHint = tc.getIndex();
                         Platform.runLater(
-                                () -> alignSpreadsheetSelectionToGridCell(view, cell, viewRowHint));
+                                () -> {
+                                    alignSpreadsheetSelectionToGridCell(view, cell, viewRowHint);
+                                    expandSpreadsheetToFullVisibleRows(view);
+                                });
+                    } else {
+                        Platform.runLater(() -> expandSpreadsheetToFullVisibleRows(view));
                     }
                 });
     }
@@ -629,6 +634,37 @@ public final class SpreadsheetTabularSupport {
     }
 
     /**
+     * 列ヘッダのダイアログ式フィルタ（{@link DialogExcelLikeSpreadsheetFilter}）と {@link #setFilteredRow} が
+     * 未設定のときだけ {@link #applyColumnFiltersWithDialog} を実行する。既に有効なときは {@link
+     * #pinSpreadsheetFilterRow} のみ。{@link #applyColumnFiltersWithDialog} 直前の許容値集合は内部で退避・復元する。
+     */
+    public static void ensureDialogColumnFiltersInstalled(SpreadsheetView view) {
+        if (view == null || view.getColumns().isEmpty()) {
+            return;
+        }
+        boolean installed =
+                Integer.valueOf(SPREADSHEET_FILTER_ROW).equals(view.getFilteredRow());
+        if (installed) {
+            for (SpreadsheetColumn col : view.getColumns()) {
+                if (!(col.getFilter() instanceof DialogExcelLikeSpreadsheetFilter)) {
+                    installed = false;
+                    break;
+                }
+            }
+        }
+        if (installed) {
+            pinSpreadsheetFilterRow(view);
+            return;
+        }
+        Map<Integer, Set<String>> snap =
+                SpreadsheetMultiColumnFilterCoordinator.copyColumnAllowedByIndex(view);
+        applyColumnFiltersWithDialog(view);
+        SpreadsheetMultiColumnFilterCoordinator.restoreColumnAllowedSnapshot(view, snap);
+        pinSpreadsheetFilterRow(view);
+        SpreadsheetMultiColumnFilterCoordinator.recomputeHiddenRows(view);
+    }
+
+    /**
      * Clears spreadsheet-wide row sort and per-column row filters (hidden rows), and resets filter menu sort labels.
      */
     public static void clearAllFiltersAndSort(SpreadsheetView view) {
@@ -746,6 +782,46 @@ public final class SpreadsheetTabularSupport {
          * setGrid 直後の refresh / 内側 TableView#refresh はレイアウトパルスと重なると
          * Parent.layout で IndexOutOfBoundsException になりやすい。列同期パイプライン側で後から整える。
          */
+    }
+
+    /**
+     * 行入替・セル編集反映など、行数・列数が変わらないグリッド差し替え。
+     * {@link #detachAndSetGrid} の 1×1 スクラッチ経由を避け、ホスト {@code layoutBounds} の跳ね（ウィンドウサイズ変化に見える揺れ）を抑える。
+     */
+    public static void replaceGridAfterInPlaceDataChange(SpreadsheetView view, Grid grid) {
+        if (view == null || grid == null) {
+            return;
+        }
+        safeClearSpreadsheetSelection(view);
+        view.setGrid(grid);
+        clearFixedRowsExceptFilterRow(view);
+        pinSpreadsheetFilterRow(view);
+    }
+
+    /** {@link #attachGridToSpreadsheetView(SpreadsheetView, Grid, GridAttachMode)} の差し替え方式。 */
+    public enum GridAttachMode {
+        /** ファイル読込等: 1×1 スクラッチ経由で旧セル文字列を確実に除去。 */
+        FULL_RESET,
+        /** 行入替: スクラッチなし（ホスト layoutBounds の跳ねを避ける）。 */
+        IN_PLACE,
+        /** 通常の再構築: 選択クリア後に {@code setGrid} のみ。 */
+        STANDARD
+    }
+
+    /** {@link GridAttachMode} に応じて {@link SpreadsheetView#setGrid} する。 */
+    public static void attachGridToSpreadsheetView(
+            SpreadsheetView view, Grid grid, GridAttachMode mode) {
+        if (view == null || grid == null) {
+            return;
+        }
+        switch (mode) {
+            case FULL_RESET -> detachAndSetGrid(view, grid);
+            case IN_PLACE -> replaceGridAfterInPlaceDataChange(view, grid);
+            case STANDARD -> {
+                safeClearSpreadsheetSelection(view);
+                view.setGrid(grid);
+            }
+        }
     }
 
     private static GridBase newSingleCellScratchGrid() {
@@ -890,7 +966,7 @@ public final class SpreadsheetTabularSupport {
         }
         clearSpreadsheetRowPresentationArtifacts(view);
         applyFixedLeadingColumns(view, headerColumnCount);
-        pinSpreadsheetFilterRow(view);
+        ensureDialogColumnFiltersInstalled(view);
         // 非表示行だけクリアするため、列フィルタ／行検索の許容状態は維持したまま hidden rows を再計算する。
         SpreadsheetMultiColumnFilterCoordinator.recomputeHiddenRows(view);
         applyUnconstrainedColumnResizePolicyAfterSkinSettles(view);
@@ -915,6 +991,15 @@ public final class SpreadsheetTabularSupport {
      */
     public static void installSpreadsheetChromeRelayoutDebouncerForHost(
             StackPane host, IntSupplier headerColumnCountSupplier) {
+        installSpreadsheetChromeRelayoutDebouncerForHost(host, headerColumnCountSupplier, null);
+    }
+
+    /**
+     * @param skipRelayout {@code true} の間は {@code layoutBounds} 変化で {@link #reapplySpreadsheetColumnChrome}
+     *     しない（行 DnD 中の snapshot 等でホスト bounds が揺れる場合向け）。
+     */
+    public static void installSpreadsheetChromeRelayoutDebouncerForHost(
+            StackPane host, IntSupplier headerColumnCountSupplier, BooleanSupplier skipRelayout) {
         Objects.requireNonNull(host, "host");
         if (Boolean.TRUE.equals(host.getProperties().get(SPREADSHEET_HOST_RELAYOUT_HOOK))) {
             return;
@@ -931,6 +1016,9 @@ public final class SpreadsheetTabularSupport {
                             () ->
                                     Platform.runLater(
                                             () -> {
+                                                if (skipRelayout != null && skipRelayout.getAsBoolean()) {
+                                                    return;
+                                                }
                                                 if (host.getChildren().isEmpty()) {
                                                     return;
                                                 }
@@ -952,6 +1040,9 @@ public final class SpreadsheetTabularSupport {
                     host.layoutBoundsProperty()
                             .addListener(
                                     (obs, o, n) -> {
+                                        if (skipRelayout != null && skipRelayout.getAsBoolean()) {
+                                            return;
+                                        }
                                         debounce.stop();
                                         debounce.playFromStart();
                                     });
@@ -1180,6 +1271,165 @@ public final class SpreadsheetTabularSupport {
         }
     }
 
+    /** {@link #installFullRowDataSelection(SpreadsheetView, BooleanSupplier)} の skip 述語を {@link SpreadsheetView#getProperties()} に格納するキー。 */
+    private static final String PROP_FULL_ROW_EXPANSION_SKIP = "pmAiSpreadsheetFullRowExpansionSkip";
+
+    private static boolean isSpreadsheetColumnHidden(SpreadsheetView view, int columnIndex) {
+        if (view == null || columnIndex < 0) {
+            return true;
+        }
+        BitSet hidden = view.getHiddenColumns();
+        return hidden != null
+                && columnIndex < hidden.length()
+                && hidden.get(columnIndex);
+    }
+
+    /** {@link SpreadsheetView#getHiddenColumns()} を除いた model 列 index（昇順）。 */
+    public static List<Integer> visibleSpreadsheetColumnIndices(SpreadsheetView view) {
+        if (view == null) {
+            return List.of();
+        }
+        ObservableList<SpreadsheetColumn> cols = view.getColumns();
+        List<Integer> visible = new ArrayList<>();
+        for (int i = 0; i < cols.size(); i++) {
+            if (!isSpreadsheetColumnHidden(view, i)) {
+                visible.add(i);
+            }
+        }
+        return visible;
+    }
+
+    /**
+     * データ行の選択を表示中列全体へ拡張する（黒枠の行選択）。列非表示・固定列分割後も {@link #installFullRowDataSelection} と
+     * {@link #installSpreadsheetClickSelectionAlign} から呼ぶ。
+     */
+    public static void expandSpreadsheetToFullVisibleRows(SpreadsheetView view) {
+        if (view == null) {
+            return;
+        }
+        Object skip = view.getProperties().get(PROP_FULL_ROW_EXPANSION_SKIP);
+        if (skip instanceof BooleanSupplier bs && bs.getAsBoolean()) {
+            return;
+        }
+        expandSpreadsheetToFullVisibleRows(view, null);
+    }
+
+    private static void expandSpreadsheetToFullVisibleRows(
+            SpreadsheetView view, boolean[] reentrancyGuard) {
+        if (view == null) {
+            return;
+        }
+        Object skip = view.getProperties().get(PROP_FULL_ROW_EXPANSION_SKIP);
+        if (skip instanceof BooleanSupplier bs && bs.getAsBoolean()) {
+            return;
+        }
+        var sm = view.getSelectionModel();
+        ObservableList<SpreadsheetColumn> cols = view.getColumns();
+        if (cols.isEmpty()) {
+            return;
+        }
+        ObservableList<? extends TablePosition> selected = sm.getSelectedCells();
+        if (selected.isEmpty()) {
+            return;
+        }
+        List<Integer> visibleCols = visibleSpreadsheetColumnIndices(view);
+        if (visibleCols.isEmpty()) {
+            return;
+        }
+        int firstData = spreadsheetFirstDataRowIndex();
+        Set<Integer> rows = new HashSet<>();
+        for (TablePosition p : selected) {
+            int r = p.getRow();
+            if (r >= firstData) {
+                rows.add(r);
+            }
+        }
+        if (rows.isEmpty()) {
+            return;
+        }
+        Set<Integer> visibleSet = new HashSet<>(visibleCols);
+        boolean allFull = true;
+        for (int r : rows) {
+            int cnt = 0;
+            for (TablePosition p : selected) {
+                if (p.getRow() == r && p.getColumn() >= 0 && visibleSet.contains(p.getColumn())) {
+                    cnt++;
+                }
+            }
+            if (cnt < visibleCols.size()) {
+                allFull = false;
+                break;
+            }
+        }
+        if (allFull) {
+            return;
+        }
+        TablePosition focus = sm.getFocusedCell();
+        int focusRow =
+                focus != null && focus.getRow() >= firstData
+                        ? focus.getRow()
+                        : Collections.min(rows);
+        int focusCol =
+                focus != null && focus.getColumn() >= 0 ? focus.getColumn() : visibleCols.get(0);
+        if (!visibleSet.contains(focusCol)) {
+            focusCol = visibleCols.get(0);
+        }
+
+        if (reentrancyGuard != null && reentrancyGuard[0]) {
+            return;
+        }
+        if (reentrancyGuard != null) {
+            reentrancyGuard[0] = true;
+        }
+        try {
+            safeClearSpreadsheetSelection(view);
+            int fixedCount = view.getFixedColumns().size();
+            ArrayList<Integer> sorted = new ArrayList<>(rows);
+            Collections.sort(sorted);
+            for (int r : sorted) {
+                selectFullVisibleRowForFixedAndScrollPanes(
+                        view, cols, visibleCols, fixedCount, r);
+            }
+            int fc = Math.min(Math.max(focusCol, 0), cols.size() - 1);
+            sm.focus(focusRow, cols.get(fc));
+        } catch (RuntimeException ex) {
+            safeClearSpreadsheetSelection(view);
+        } finally {
+            if (reentrancyGuard != null) {
+                reentrancyGuard[0] = false;
+            }
+        }
+    }
+
+    /** 固定列ペインとスクロールペインへ分けて {@code selectRange}（ControlsFX の行全体黒枠）。 */
+    private static void selectFullVisibleRowForFixedAndScrollPanes(
+            SpreadsheetView view,
+            ObservableList<SpreadsheetColumn> cols,
+            List<Integer> visibleCols,
+            int fixedColumnCount,
+            int viewRow) {
+        var sm = view.getSelectionModel();
+        Integer fixedFirst = null;
+        Integer fixedLast = null;
+        Integer scrollFirst = null;
+        Integer scrollLast = null;
+        for (int idx : visibleCols) {
+            if (idx < fixedColumnCount) {
+                fixedFirst = fixedFirst == null ? idx : fixedFirst;
+                fixedLast = idx;
+            } else {
+                scrollFirst = scrollFirst == null ? idx : scrollFirst;
+                scrollLast = idx;
+            }
+        }
+        if (fixedFirst != null && fixedLast != null) {
+            sm.selectRange(viewRow, cols.get(fixedFirst), viewRow, cols.get(fixedLast));
+        }
+        if (scrollFirst != null && scrollLast != null) {
+            sm.selectRange(viewRow, cols.get(scrollFirst), viewRow, cols.get(scrollLast));
+        }
+    }
+
     /**
      * After any cell selection change, expands selection to full grid rows (all columns) for each data row that
      * had at least one selected cell, so the active row is visually continuous. Skips the filter row at
@@ -1194,84 +1444,16 @@ public final class SpreadsheetTabularSupport {
         if (view == null) {
             return;
         }
+        if (skipFullRowExpansion != null) {
+            view.getProperties().put(PROP_FULL_ROW_EXPANSION_SKIP, skipFullRowExpansion);
+        }
         final boolean[] guard = {false};
         var sm = view.getSelectionModel();
         // SpreadsheetView exposes ObservableList<TablePosition> (raw); listener must accept TablePosition.
         sm.getSelectedCells()
                 .addListener(
                         (ListChangeListener<? super TablePosition>)
-                                change -> {
-                                    if (guard[0]) {
-                                        return;
-                                    }
-                                    if (skipFullRowExpansion != null && skipFullRowExpansion.getAsBoolean()) {
-                                        return;
-                                    }
-                                    ObservableList<SpreadsheetColumn> cols = view.getColumns();
-                                    if (cols.isEmpty()) {
-                                        return;
-                                    }
-                                    ObservableList<? extends TablePosition> selected =
-                                            sm.getSelectedCells();
-                                    if (selected.isEmpty()) {
-                                        return;
-                                    }
-                                    int firstData = spreadsheetFirstDataRowIndex();
-                                    Set<Integer> rows = new HashSet<>();
-                                    for (TablePosition p : selected) {
-                                        int r = p.getRow();
-                                        if (r >= firstData) {
-                                            rows.add(r);
-                                        }
-                                    }
-                                    if (rows.isEmpty()) {
-                                        return;
-                                    }
-                                    int colCount = cols.size();
-                                    boolean allFull = true;
-                                    for (int r : rows) {
-                                        int cnt = 0;
-                                        for (TablePosition p : selected) {
-                                            if (p.getRow() == r) {
-                                                cnt++;
-                                            }
-                                        }
-                                        if (cnt < colCount) {
-                                            allFull = false;
-                                            break;
-                                        }
-                                    }
-                                    if (allFull) {
-                                        return;
-                                    }
-                                    TablePosition focus = sm.getFocusedCell();
-                                    int focusRow;
-                                    if (focus != null && focus.getRow() >= firstData) {
-                                        focusRow = focus.getRow();
-                                    } else {
-                                        focusRow = Collections.min(rows);
-                                    }
-                                    int focusCol =
-                                            focus != null && focus.getColumn() >= 0 ? focus.getColumn() : 0;
-
-                                    guard[0] = true;
-                                    try {
-                                        safeClearSpreadsheetSelection(view);
-                                        SpreadsheetColumn firstCol = cols.get(0);
-                                        SpreadsheetColumn lastCol = cols.get(cols.size() - 1);
-                                        ArrayList<Integer> sorted = new ArrayList<>(rows);
-                                        Collections.sort(sorted);
-                                        for (int r : sorted) {
-                                            sm.selectRange(r, firstCol, r, lastCol);
-                                        }
-                                        int fc = Math.min(Math.max(focusCol, 0), cols.size() - 1);
-                                        sm.focus(focusRow, cols.get(fc));
-                                    } catch (RuntimeException ex) {
-                                        safeClearSpreadsheetSelection(view);
-                                    } finally {
-                                        guard[0] = false;
-                                    }
-                                });
+                                change -> expandSpreadsheetToFullVisibleRows(view, guard));
     }
 
     /** @see #installFullRowDataSelection(SpreadsheetView, BooleanSupplier) */

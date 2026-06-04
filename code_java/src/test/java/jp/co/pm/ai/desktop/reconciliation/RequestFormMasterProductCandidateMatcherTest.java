@@ -190,4 +190,97 @@ class RequestFormMasterProductCandidateMatcherTest {
         assertEquals(1, labels.size());
         assertTrue(labels.get(0).contains("X2"));
     }
+
+    @Test
+    void filterCatalogByShohinCodePrefixes_matchesAnyPrefix() {
+        List<ProductInfo> catalog =
+                List.of(
+                        new ProductInfo("A2F20AXD0250FN1", "", "", "", "", "", "", "", "", "", "", "", "", ""),
+                        new ProductInfo("B1TEST001", "", "", "", "", "", "", "", "", "", "", "", "", ""),
+                        new ProductInfo("C9OTHER", "", "", "", "", "", "", "", "", "", "", "", "", ""));
+
+        List<ProductInfo> filtered =
+                RequestFormMasterProductCandidateMatcher.filterCatalogByShohinCodePrefixes(
+                        catalog, List.of("A2", "B1"));
+
+        assertEquals(2, filtered.size());
+        assertEquals("A2F20AXD0250FN1", filtered.get(0).getShohinCode());
+        assertEquals("B1TEST001", filtered.get(1).getShohinCode());
+    }
+
+    @Test
+    void filterCatalogByShohinCodePrefixes_emptyPrefixes_returnsAll() {
+        List<ProductInfo> catalog =
+                List.of(new ProductInfo("X", "", "", "", "", "", "", "", "", "", "", "", "", ""));
+
+        assertEquals(
+                1,
+                RequestFormMasterProductCandidateMatcher.filterCatalogByShohinCodePrefixes(
+                                catalog, List.of())
+                        .size());
+    }
+
+    @Test
+    void filterCatalogForMasterReferenceSearch_bothSidesConfigured_usesUnion() {
+        List<ProductInfo> catalog =
+                List.of(
+                        new ProductInfo("A2CODE", "", "", "", "", "", "", "", "", "", "", "", "", ""),
+                        new ProductInfo("G1RAW", "", "", "", "", "", "", "", "", "", "", "", "", ""),
+                        new ProductInfo("Z9SKIP", "", "", "", "", "", "", "", "", "", "", "", "", ""));
+
+        List<ProductInfo> filtered =
+                RequestFormMasterProductCandidateMatcher.filterCatalogForMasterReferenceSearch(
+                        catalog, List.of("A2"), List.of("G1"));
+
+        assertEquals(2, filtered.size());
+        assertEquals("A2CODE", filtered.get(0).getShohinCode());
+        assertEquals("G1RAW", filtered.get(1).getShohinCode());
+    }
+
+    @Test
+    void buildRankedCandidateLabels_respectsPrefixFilterOnCatalog() {
+        List<ProductInfo> catalog =
+                List.of(
+                        new ProductInfo(
+                                "A2CODE",
+                                "",
+                                "15020-NP17",
+                                "",
+                                "",
+                                "",
+                                "",
+                                "6783",
+                                "15020",
+                                "1300",
+                                "250",
+                                "",
+                                "",
+                                ""),
+                        new ProductInfo(
+                                "Z9CODE",
+                                "",
+                                "15021-NP18",
+                                "",
+                                "",
+                                "",
+                                "",
+                                "6783",
+                                "15021",
+                                "1300",
+                                "250",
+                                "",
+                                "",
+                                ""));
+
+        List<ProductInfo> filtered =
+                RequestFormMasterProductCandidateMatcher.filterCatalogByShohinCodePrefixes(
+                        catalog, List.of("A2"));
+
+        List<String> labels =
+                RequestFormMasterProductCandidateMatcher.buildRankedCandidateLabels(
+                        filtered, "", "15020", "NP17", "250", "6783", 10);
+
+        assertEquals(1, labels.size());
+        assertTrue(labels.get(0).contains("A2CODE"));
+    }
 }
