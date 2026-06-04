@@ -13,6 +13,8 @@ import javafx.collections.ObservableList;
 
 /**
  * 配台計画_タスク入力／3.0: 行並べ替え後も同一依頼NO内の工程順（§A-1・加工内容のカンマ区切り）を維持する。
+ *
+ * <p>「配台不要」オン行はブロック集約・工程 rank の対象外（単独行の試行順で並ぶ）。
  */
 public final class PlanInputProcessSequenceRowOrder {
 
@@ -20,6 +22,7 @@ public final class PlanInputProcessSequenceRowOrder {
     public static final String COL_TASK_ID = "依頼NO";
     public static final String COL_PROCESS = "工程名";
     public static final String COL_PROCESS_CONTENT = "加工内容";
+    public static final String COL_EXCLUDE_FROM_ASSIGNMENT = "配台不要";
 
     private static final Pattern WS_COLLAPSE = Pattern.compile("[\\s　]+");
     private static final int RANK_MISSING = 1_000_000_000;
@@ -29,8 +32,6 @@ public final class PlanInputProcessSequenceRowOrder {
 
     /**
      * 現在の行順を §A-1 に沿って整え、{@link #COL_DISPATCH_TRIAL_ORDER} を 1..n で振り直す。
-     *
-     * <p>並べ替えキー: 依頼NOブロックの最小試行順 → 加工内容内の工程 rank → 同一依頼内の出現順 → 元行位置。
      */
     public static void stabilizeAndRenumberDispatchTrialOrder(
             List<String> headers, ObservableList<ObservableList<String>> rows) {
@@ -45,50 +46,49 @@ public final class PlanInputProcessSequenceRowOrder {
             return;
         }
 
+        int colExclude = headers.indexOf(COL_EXCLUDE_FROM_ASSIGNMENT);
+
         int n = rows.size();
         Map<String, List<String>> tokensByTaskId = collectProcessContentTokensByTaskId(rows, colTask, colContent);
-        Map<String, Double> blockDtoByTaskId = new HashMap<>();
-        Map<String, Integer> nextLineSeq = new HashMap<>();
+        Map<String, Double> eligibleBlockDtoByTaskId = new HashMap<>();
+        Map<String, Integer> nextEligibleLineSeq = new HashMap<>();
 
         List<RowMeta> metas = new ArrayList<>(n);
         for (int i = 0; i < n; i++) {
             ObservableList<String> row = rows.get(i);
             String taskId = colTask >= 0 ? cellAt(row, colTask) : "";
+            boolean excluded =
+                    colExclude >= 0
+                            && TabularCellHighlight.planInputExcludeFromAssignmentIsOn(
+                                    cellAt(row, colExclude));
             Double dto = parseTrialOrderSortKey(cellAt(row, colDto));
             List<String> tokens = tokensByTaskId.getOrDefault(taskId, List.of());
-            Integer rank =
-                    colProc >= 0 && !tokens.isEmpty()
-                            ? processSequenceRank(cellAt(row, colProc), tokens)
-                            : null;
+            Integer rank = null;
+            if (!excluded && colProc >= 0 && !tokens.isEmpty()) {
+                rank = processSequenceRank(cellAt(row, colProc), tokens);
+            }
             int lineSeq;
-            if (!taskId.isEmpty()) {
-                lineSeq = nextLineSeq.getOrDefault(taskId, 0);
-                nextLineSeq.put(taskId, lineSeq + 1);
+            if (!taskId.isEmpty() && !excluded) {
+                lineSeq = nextEligibleLineSeq.getOrDefault(taskId, 0);
+                nextEligibleLineSeq.put(taskId, lineSeq + 1);
                 if (dto != null) {
-                    blockDtoByTaskId.merge(taskId, dto, Double::min);
+                    eligibleBlockDtoByTaskId.merge(taskId, dto, Double::min);
                 }
             } else {
                 lineSeq = i;
             }
-            metas.add(new RowMeta(i, taskId, dto, rank, lineSeq));
+            metas.add(new RowMeta(i, taskId, dto, rank, lineSeq, excluded));
         }
 
         metas.sort(
                 Comparator.<RowMeta>comparingInt(m -> m.dto() == null ? 1 : 0)
-                        .thenComparingDouble(
-                                m -> {
-                                    if (m.dto() == null) {
-                                        return DTO_MISSING;
-                                    }
-                                    if (!m.taskId().isEmpty()) {
-                                        Double block = blockDtoByTaskId.get(m.taskId());
-                                        if (block != null) {
-                                            return block;
-                                        }
-                                    }
-                                    return m.dto();
-                                })
-                        .thenComparingInt(m -> m.rank() != null ? m.rank() : RANK_MISSING)
+                        .thenComparingDouble(m -> sortBlockKey(m, eligibleBlockDtoByTaskId))
+                        .thenComparingInt(m -> m.excluded() ? 1 : 0)
+                        .thenComparingInt(
+                                m ->
+                                        m.excluded()
+                                                ? m.originalIndex()
+                                                : (m.rank() != null ? m.rank() : RANK_MISSING))
                         .thenComparingInt(RowMeta::lineSeq)
                         .thenComparingInt(RowMeta::originalIndex));
 
@@ -103,6 +103,22 @@ public final class PlanInputProcessSequenceRowOrder {
             ensureSize(row, colDto + 1);
             row.set(colDto, Integer.toString(i + 1));
         }
+    }
+
+    private static double sortBlockKey(RowMeta m, Map<String, Double> eligibleBlockDtoByTaskId) {
+        if (m.dto() == null) {
+            return DTO_MISSING;
+        }
+        if (m.excluded()) {
+            return m.dto();
+        }
+        if (!m.taskId().isEmpty()) {
+            Double block = eligibleBlockDtoByTaskId.get(m.taskId());
+            if (block != null) {
+                return block;
+            }
+        }
+        return m.dto();
     }
 
     private static Map<String, List<String>> collectProcessContentTokensByTaskId(
@@ -193,5 +209,10 @@ public final class PlanInputProcessSequenceRowOrder {
     }
 
     private record RowMeta(
-            int originalIndex, String taskId, Double dto, Integer rank, int lineSeq) {}
+            int originalIndex,
+            String taskId,
+            Double dto,
+            Integer rank,
+            int lineSeq,
+            boolean excluded) {}
 }

@@ -42,6 +42,33 @@ class PlanInputProcessSequenceRowOrderTest {
     }
 
     @Test
+    void stabilize_excludeYesRowDoesNotFollowEligibleBlock() {
+        List<String> headers =
+                List.of(
+                        PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER,
+                        PlanInputProcessSequenceRowOrder.COL_TASK_ID,
+                        PlanInputProcessSequenceRowOrder.COL_PROCESS,
+                        PlanInputProcessSequenceRowOrder.COL_PROCESS_CONTENT,
+                        PlanInputProcessSequenceRowOrder.COL_EXCLUDE_FROM_ASSIGNMENT);
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        rows.add(row("1", "Y6-2", "スライス", "スライス", ""));
+        rows.add(row("2", "E6-1", "スリット", "スリット", ""));
+        rows.add(row("3", "T6-1", "分割", "分割,エンボス,巻返し", "yes"));
+        rows.add(row("4", "T6-1", "エンボス", "分割,エンボス,巻返し", ""));
+        rows.add(row("5", "T6-1", "巻返し", "分割,エンボス,巻返し", ""));
+        rows.add(row("20", "T6-1", "分割", "分割,エンボス,巻返し", "yes"));
+
+        PlanInputProcessSequenceRowOrder.stabilizeAndRenumberDispatchTrialOrder(headers, rows);
+
+        assertEquals("分割", cell(rows, 2, 2));
+        assertEquals("yes", cell(rows, 2, 4));
+        assertEquals("エンボス", cell(rows, 3, 2));
+        assertEquals("巻返し", cell(rows, 4, 2));
+        assertEquals("分割", cell(rows, 5, 2));
+        assertEquals("yes", cell(rows, 5, 4));
+    }
+
+    @Test
     void processSequenceRank_matchesNormalizedTokens() {
         List<String> tokens = List.of("スリット", "分割", "融着");
         assertEquals(0, PlanInputProcessSequenceRowOrder.processSequenceRank("スリット", tokens));
@@ -51,6 +78,11 @@ class PlanInputProcessSequenceRowOrderTest {
 
     private static ObservableList<String> row(String dto, String tid, String proc, String content) {
         return FXCollections.observableArrayList(dto, tid, proc, content);
+    }
+
+    private static ObservableList<String> row(
+            String dto, String tid, String proc, String content, String exclude) {
+        return FXCollections.observableArrayList(dto, tid, proc, content, exclude);
     }
 
     private static String cell(ObservableList<ObservableList<String>> rows, int r, int c) {

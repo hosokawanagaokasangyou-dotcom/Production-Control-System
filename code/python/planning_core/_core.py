@@ -8251,9 +8251,9 @@ def _plan_input_dispatch_trial_order_sort_tuples_for_active_rows(
     戻り値: (行 index → sort tuple, 依頼NO → ブロック最小 float キー) — ログ用。
     """
     seq_by_tid = _collect_process_content_order_by_task_id(df)
-    tid_block_float: dict[str, float] = {}
+    tid_eligible_block_float: dict[str, float] = {}
     tid_line_seq: dict[int, int] = {}
-    tid_next_line: dict[str, int] = defaultdict(int)
+    tid_next_eligible_line: dict[str, int] = defaultdict(int)
     proc_idx = df.columns.get_loc(TASK_COL_MACHINE) if TASK_COL_MACHINE in df.columns else None
     if isinstance(proc_idx, slice):
         proc_idx = None
@@ -8261,15 +8261,16 @@ def _plan_input_dispatch_trial_order_sort_tuples_for_active_rows(
     for i in active:
         row = df.iloc[i]
         tid = planning_task_id_str_from_plan_row(row)
-        if tid:
-            tid_line_seq[i] = tid_next_line[tid]
-            tid_next_line[tid] += 1
+        excluded = _plan_row_exclude_from_assignment(row)
+        if tid and not excluded:
+            tid_line_seq[i] = tid_next_eligible_line[tid]
+            tid_next_eligible_line[tid] += 1
         else:
             tid_line_seq[i] = i
         fk = _parse_dispatch_trial_order_float_sort_key(df.iat[i, dto_idx])
-        if tid and fk is not None:
-            prev = tid_block_float.get(tid)
-            tid_block_float[tid] = fk if prev is None else min(prev, fk)
+        if tid and fk is not None and not excluded:
+            prev = tid_eligible_block_float.get(tid)
+            tid_eligible_block_float[tid] = fk if prev is None else min(prev, fk)
 
     sort_tuple_by_row: dict[int, tuple] = {}
     for i in active:
@@ -8279,17 +8280,26 @@ def _plan_input_dispatch_trial_order_sort_tuples_for_active_rows(
             continue
         row = df.iloc[i]
         tid = planning_task_id_str_from_plan_row(row)
-        block = tid_block_float.get(tid, fk) if tid else fk
+        excluded = _plan_row_exclude_from_assignment(row)
+        if excluded:
+            block = fk
+        elif tid:
+            block = tid_eligible_block_float.get(tid, fk)
+        else:
+            block = fk
         rank = None
-        if proc_idx is not None:
+        if not excluded and proc_idx is not None:
             proc = df.iat[i, proc_idx]
             rank = _process_sequence_rank_for_machine(
                 proc, seq_by_tid.get(tid) or []
             )
-        rank_key = int(rank) if rank is not None else 10**9
-        line_key = tid_line_seq.get(i, i)
-        sort_tuple_by_row[i] = (0, block, rank_key, line_key, i)
-    return sort_tuple_by_row, tid_block_float
+        if excluded:
+            sort_tuple_by_row[i] = (0, block, 1, i, i)
+        else:
+            rank_key = int(rank) if rank is not None else 10**9
+            line_key = tid_line_seq.get(i, i)
+            sort_tuple_by_row[i] = (0, block, 0, rank_key, line_key, i)
+    return sort_tuple_by_row, tid_eligible_block_float
 
 
 def sort_plan_input_dispatch_trial_order_by_float_keys_via_openpyxl(
@@ -8299,8 +8309,8 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_openpyxl(
     「配台計画_タスク入力」の **現在のシート内容だけ** を使い、列「配台試行順番」を
     小数を含む並べ替えキーとして解釈して昇順に行を並べ替え、1..n に振り直す。
 
-    同一依頼NO内は §A-1（``加工内容`` のカンマ区切り順）で工程行を連続させる。
-    ブロック全体の位置は当該依頼NO行の試行順キーの **最小値** で決める。
+    同一依頼NO内の配台対象行は §A-1（``加工内容`` のカンマ区切り順）で工程行を連続させる。
+    ブロック位置は当該依頼NOの **配台不要オフ行** の試行順キー最小値。「配台不要」オン行は単独行のキーで並ぶ。
 
     - ``_apply_planning_sheet_post_load_mutations`` ・マスタ ・
       ``fill_plan_dispatch_trial_order_column_stage1`` は **呼ばない**。
