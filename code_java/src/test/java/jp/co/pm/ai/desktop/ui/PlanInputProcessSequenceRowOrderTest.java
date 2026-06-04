@@ -147,7 +147,7 @@ class PlanInputProcessSequenceRowOrderTest {
         rows.add(rowStage3("P", "1", "3", "T6-1", "巻返し", "エンボス,巻返し", ""));
         rows.add(rowStage3("V", "1", "4", "V6-3", "スライス", "スライス", ""));
 
-        PlanInputSpreadsheetRowReorder.moveAdjacentDataRows(headers, rows, 3, 1);
+        PlanInputSpreadsheetRowReorder.moveBlockDown(headers, rows, 1);
 
         assertEquals("V6-3", cell(rows, 0, 3));
         assertEquals("分割", cell(rows, 1, 4));
@@ -201,7 +201,7 @@ class PlanInputProcessSequenceRowOrderTest {
         rows.add(rowStage3("V5-5", "02", "3", "V5-5-02", "EC", "EC", ""));
         rows.add(rowStage3("V5-5", "03", "4", "V5-5-03", "EC", "EC", ""));
 
-        PlanInputProcessSequenceRowOrder.moveRowsForUserReorder(headers, rows, 1, 0);
+        PlanInputSpreadsheetRowReorder.moveBlockUp(headers, rows, 1);
 
         assertEquals("V5-5-01", cell(rows, 0, 3));
         assertEquals("V5-5-02", cell(rows, 1, 3));
@@ -209,6 +209,35 @@ class PlanInputProcessSequenceRowOrderTest {
         assertEquals("Y-1", cell(rows, 3, 3));
         assertEquals("01", cell(rows, 0, 1));
         assertEquals("03", cell(rows, 2, 1));
+    }
+
+    @Test
+    void moveBlockUp_multiProcessTask_swapsWithBlockAbove() {
+        List<String> headers =
+                List.of(
+                        PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER,
+                        PlanInputProcessSequenceRowOrder.COL_TASK_ID,
+                        PlanInputProcessSequenceRowOrder.COL_PROCESS,
+                        PlanInputProcessSequenceRowOrder.COL_PROCESS_CONTENT,
+                        PlanInputProcessSequenceRowOrder.COL_EXCLUDE_FROM_ASSIGNMENT);
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        rows.add(row("1", "Y6-2", "スライス", "スライス", ""));
+        rows.add(row("2", "E6-1", "スリット", "スリット", ""));
+        rows.add(row("3", "T6-1", "分割", "エンボス,巻返し", "yes"));
+        rows.add(row("4", "T6-1", "エンボス", "エンボス,巻返し", ""));
+        rows.add(row("5", "T6-1", "巻返し", "エンボス,巻返し", ""));
+
+        PlanInputSpreadsheetRowReorder.moveBlockUp(headers, rows, 4);
+
+        assertEquals("Y6-2", cell(rows, 0, 1));
+        assertEquals("T6-1", cell(rows, 1, 1));
+        assertEquals("分割", cell(rows, 1, 2));
+        assertEquals("yes", cell(rows, 1, 4));
+        assertEquals("T6-1", cell(rows, 2, 1));
+        assertEquals("エンボス", cell(rows, 2, 2));
+        assertEquals("T6-1", cell(rows, 3, 1));
+        assertEquals("巻返し", cell(rows, 3, 2));
+        assertEquals("E6-1", cell(rows, 4, 1));
     }
 
     @Test

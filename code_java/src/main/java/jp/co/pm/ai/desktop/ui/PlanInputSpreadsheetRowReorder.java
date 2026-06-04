@@ -10,6 +10,7 @@ import javafx.collections.ObservableList;
  * <ul>
  *   <li>入力3.0: 元依頼NO単位で全枝番を相対順のまま移動（枝番順・試行順連続を維持）
  *   <li>入力1表: 同一依頼NOの配台対象行をブロックで移動（配台不要=yes は追従しない）
+ *   <li>↑↓ は隣接行ではなく隣接<strong>ブロック</strong>と入れ替え（DnD と同じ単位）
  *   <li>整列後 {@link PlanInputProcessSequenceRowOrder#COL_DISPATCH_TRIAL_ORDER} を 1..n に振り直す
  *   <li>§A-1（加工内容のカンマ区切り順）を同一依頼NO内で維持
  * </ul>
@@ -25,24 +26,34 @@ public final class PlanInputSpreadsheetRowReorder {
     }
 
     /**
-     * ↑↓ 用。データ行 index {@code sourceDataIndex} を {@code targetDataIndex} へ移す（配台対象はブロック移動）。
+     * ↑ ボタン。選択データ行 index を 1 段上へ（複数工程・枝番はブロック単位）。
+     *
+     * @return 移動後のフォーカス行 index
      */
-    public static void moveAdjacentDataRows(
+    public static int moveBlockUp(
             List<String> headers,
             ObservableList<ObservableList<String>> rows,
-            int targetDataIndex,
-            int sourceDataIndex) {
-        if (headers == null
-                || rows == null
-                || targetDataIndex < 0
-                || sourceDataIndex < 0
-                || targetDataIndex >= rows.size()
-                || sourceDataIndex >= rows.size()
-                || targetDataIndex == sourceDataIndex) {
-            return;
-        }
-        PlanInputProcessSequenceRowOrder.moveRowsForUserReorder(
-                headers, rows, sourceDataIndex, targetDataIndex);
+            int selectedDataIndex) {
+        int focus =
+                PlanInputProcessSequenceRowOrder.moveBlockOneStepUp(
+                        headers, rows, selectedDataIndex);
         stabilizeAndRenumberDispatchTrialOrder(headers, rows);
+        return focus;
+    }
+
+    /**
+     * ↓ ボタン。選択データ行 index を 1 段下へ（複数工程・枝番はブロック単位）。
+     *
+     * @return 移動後のフォーカス行 index
+     */
+    public static int moveBlockDown(
+            List<String> headers,
+            ObservableList<ObservableList<String>> rows,
+            int selectedDataIndex) {
+        int focus =
+                PlanInputProcessSequenceRowOrder.moveBlockOneStepDown(
+                        headers, rows, selectedDataIndex);
+        stabilizeAndRenumberDispatchTrialOrder(headers, rows);
+        return focus;
     }
 }

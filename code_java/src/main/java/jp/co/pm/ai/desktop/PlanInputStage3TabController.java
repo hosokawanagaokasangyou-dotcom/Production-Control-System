@@ -134,6 +134,13 @@ public class PlanInputStage3TabController {
         installStageRunButtonDepth(stage30RunButton, Color.rgb(120, 81, 169, 0.35));
         installStageRunButtonDepth(stage31RunButton, Color.rgb(120, 81, 169, 0.35));
         installStageRunButtonDepth(stage32RunButton, Color.rgb(120, 81, 169, 0.35));
+        if (reloadButton != null) {
+            reloadButton.setTooltip(
+                    new Tooltip(
+                            "入力3表シート（"
+                                    + STAGE3_SHEET_NAME
+                                    + "）を元ブックから再読み込みします。未保存の編集は破棄されます。"));
+        }
 
         StackPane.setAlignment(spreadsheetView, Pos.TOP_LEFT);
         spreadsheetView.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
@@ -354,8 +361,8 @@ public class PlanInputStage3TabController {
         }
         int colIdx = focusedColumnIndex();
         markTableDirtySinceSave();
-        swapDataRowsInMemory(i - 1, i);
-        scheduleRowReorderPresentation(i - 1, colIdx);
+        int focus = PlanInputSpreadsheetRowReorder.moveBlockUp(headersRef, rows, i);
+        scheduleRowReorderPresentation(focus, colIdx);
     }
 
     @FXML
@@ -366,8 +373,8 @@ public class PlanInputStage3TabController {
         }
         int colIdx = focusedColumnIndex();
         markTableDirtySinceSave();
-        swapDataRowsInMemory(i, i + 1);
-        scheduleRowReorderPresentation(i + 1, colIdx);
+        int focus = PlanInputSpreadsheetRowReorder.moveBlockDown(headersRef, rows, i);
+        scheduleRowReorderPresentation(focus, colIdx);
     }
 
     @FXML
@@ -527,7 +534,7 @@ public class PlanInputStage3TabController {
                 new Tooltip("段階3の処理が実行中です。完了までお待ちください。");
         Tooltip dirtyTip =
                 new Tooltip(
-                        "入力3表に未保存の変更があります。「保存」または「入力3表を再読込」で確定してから実行してください。");
+                        "入力3表に未保存の変更があります。「保存」または「再読み込み」で確定してから実行してください。");
         for (Button b : List.of(stage30RunButton, stage31RunButton, stage32RunButton)) {
             if (b == null) {
                 continue;
@@ -793,13 +800,6 @@ public class PlanInputStage3TabController {
         if (focusDataRow >= 0) {
             focusCellAfterReorder(focusDataRow, focusColumn);
         }
-    }
-
-    private void swapDataRowsInMemory(int a, int b) {
-        if (a < 0 || b < 0 || a >= rows.size() || b >= rows.size() || a == b) {
-            return;
-        }
-        PlanInputSpreadsheetRowReorder.moveAdjacentDataRows(headersRef, rows, a, b);
     }
 
     private void focusCellAfterReorder(int dataRowIndex, int columnIndex) {

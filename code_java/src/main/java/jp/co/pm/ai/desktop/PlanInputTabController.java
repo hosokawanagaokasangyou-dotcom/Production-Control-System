@@ -748,8 +748,8 @@ public final class PlanInputTabController {
         }
         int colIdx = planInputFocusedColumnIndex();
         markPlanInputTableDirtySinceSave();
-        swapPlanInputDataRowsInMemory(i - 1, i);
-        schedulePlanInputRowReorderPresentation(i - 1, colIdx);
+        int focus = PlanInputSpreadsheetRowReorder.moveBlockUp(headersRef, rows, i);
+        schedulePlanInputRowReorderPresentation(focus, colIdx);
     }
 
     @FXML
@@ -760,8 +760,8 @@ public final class PlanInputTabController {
         }
         int colIdx = planInputFocusedColumnIndex();
         markPlanInputTableDirtySinceSave();
-        swapPlanInputDataRowsInMemory(i, i + 1);
-        schedulePlanInputRowReorderPresentation(i + 1, colIdx);
+        int focus = PlanInputSpreadsheetRowReorder.moveBlockDown(headersRef, rows, i);
+        schedulePlanInputRowReorderPresentation(focus, colIdx);
     }
 
     /** Selected data row index in {@link #rows}, or -1. Uses model row when filters/sort change view order. */
@@ -818,13 +818,6 @@ public final class PlanInputTabController {
         if (focusDataRow >= 0) {
             focusPlanInputCellAfterReorder(focusDataRow, focusColumn);
         }
-    }
-
-    private void swapPlanInputDataRowsInMemory(int a, int b) {
-        if (a < 0 || b < 0 || a >= rows.size() || b >= rows.size() || a == b) {
-            return;
-        }
-        PlanInputSpreadsheetRowReorder.moveAdjacentDataRows(headersRef, rows, a, b);
     }
 
     /**

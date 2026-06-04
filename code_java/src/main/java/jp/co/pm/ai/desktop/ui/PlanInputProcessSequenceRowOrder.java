@@ -52,33 +52,198 @@ public final class PlanInputProcessSequenceRowOrder {
         if (from >= rows.size() || to >= rows.size()) {
             return;
         }
+        List<Integer> block = rowIndicesForDragMoveBlock(headers, rows, from);
+        if (block.size() <= 1 || !block.contains(from)) {
+            moveSingleRow(rows, from, to);
+            return;
+        }
+        moveRowBlock(rows, block, from, to, false);
+    }
+
+    /**
+     * ↑ ボタン: 選択行が属する並べ替えブロックを、直上のブロックと入れ替える（DnD と同じ単位）。
+     *
+     * @return 移動後にフォーカスすべきデータ行 index。移動しなければ {@code selectedRow}
+     */
+    public static int moveBlockOneStepUp(
+            List<String> headers,
+            ObservableList<ObservableList<String>> rows,
+            int selectedRow) {
+        if (headers == null || rows == null || selectedRow < 0 || selectedRow >= rows.size()) {
+            return selectedRow;
+        }
+        List<Integer> block = rowIndicesForUserReorderBlock(headers, rows, selectedRow);
+        if (block.isEmpty()) {
+            return selectedRow;
+        }
+        int blockStart = block.get(0);
+        Integer target = targetRowIndexAboveReorderBlock(headers, rows, blockStart);
+        if (target == null) {
+            return selectedRow;
+        }
+        moveRowBlockForArrowReorder(rows, block, target);
+        return target;
+    }
+
+    /**
+     * ↓ ボタン: 選択行が属する並べ替えブロックを、直下のブロックと入れ替える（DnD と同じ単位）。
+     *
+     * @return 移動後にフォーカスすべきデータ行 index。移動しなければ {@code selectedRow}
+     */
+    public static int moveBlockOneStepDown(
+            List<String> headers,
+            ObservableList<ObservableList<String>> rows,
+            int selectedRow) {
+        if (headers == null || rows == null || selectedRow < 0 || selectedRow >= rows.size()) {
+            return selectedRow;
+        }
+        List<Integer> block = rowIndicesForUserReorderBlock(headers, rows, selectedRow);
+        if (block.isEmpty()) {
+            return selectedRow;
+        }
+        int blockStart = block.get(0);
+        int blockEnd = block.get(block.size() - 1);
+        Integer target = targetRowIndexBelowReorderBlock(headers, rows, blockEnd);
+        if (target == null) {
+            return selectedRow;
+        }
+        moveRowBlockForArrowReorder(rows, block, target);
+        if (blockStart < target) {
+            return target - block.size() + 1;
+        }
+        return blockStart;
+    }
+
+    /** ↑↓ 用: 選択行が属するブロック（入力1=同一依頼NOの全行、入力3.0=元依頼NOの全行）。 */
+    static List<Integer> rowIndicesForUserReorderBlock(
+            List<String> headers,
+            ObservableList<ObservableList<String>> rows,
+            int rowIndex) {
+        if (headers == null
+                || rows == null
+                || rowIndex < 0
+                || rowIndex >= rows.size()) {
+            return List.of();
+        }
         int colTask = headers.indexOf(COL_TASK_ID);
         int colParent = headers.indexOf(COL_PARENT_TASK_ID);
         int colExclude = headers.indexOf(COL_EXCLUDE_FROM_ASSIGNMENT);
-        if (isRowExcludedFromAssignment(rows.get(from), colExclude)) {
-            moveSingleRow(rows, from, to);
-            return;
+        ObservableList<String> row = rows.get(rowIndex);
+        if (isRowExcludedFromAssignment(row, colExclude)) {
+            return List.of(rowIndex);
         }
-        String blockKey = blockGroupKey(rows.get(from), colTask, colParent);
+        String blockKey = blockGroupKey(row, colTask, colParent);
         if (blockKey.isEmpty()) {
-            moveSingleRow(rows, from, to);
-            return;
+            return List.of(rowIndex);
         }
         if (isStage3Headers(headers)) {
-            List<Integer> blockIndices = parentBlockRowIndices(rows, blockKey, colTask, colParent);
-            if (blockIndices.size() <= 1 || !blockIndices.contains(from)) {
-                moveSingleRow(rows, from, to);
-                return;
+            List<Integer> parentBlock = parentBlockRowIndices(rows, blockKey, colTask, colParent);
+            if (parentBlock.size() > 1 && parentBlock.contains(rowIndex)) {
+                return parentBlock;
             }
-            moveRowBlock(rows, blockIndices, from, to);
+            return List.of(rowIndex);
+        }
+        String taskId = colTask >= 0 ? cellAt(row, colTask) : "";
+        if (!taskId.isEmpty()) {
+            List<Integer> taskRows = allRowIndicesForTaskId(rows, taskId, colTask);
+            if (taskRows.size() > 1 && taskRows.contains(rowIndex)) {
+                return taskRows;
+            }
+        }
+        return List.of(rowIndex);
+    }
+
+    /** DnD 用: 配台不要オフ時は配台対象行のみ／入力3.0 は元依頼NOの全行。 */
+    private static List<Integer> rowIndicesForDragMoveBlock(
+            List<String> headers,
+            ObservableList<ObservableList<String>> rows,
+            int rowIndex) {
+        if (headers == null
+                || rows == null
+                || rowIndex < 0
+                || rowIndex >= rows.size()) {
+            return List.of();
+        }
+        int colTask = headers.indexOf(COL_TASK_ID);
+        int colParent = headers.indexOf(COL_PARENT_TASK_ID);
+        int colExclude = headers.indexOf(COL_EXCLUDE_FROM_ASSIGNMENT);
+        ObservableList<String> row = rows.get(rowIndex);
+        if (isRowExcludedFromAssignment(row, colExclude)) {
+            return List.of(rowIndex);
+        }
+        String blockKey = blockGroupKey(row, colTask, colParent);
+        if (blockKey.isEmpty()) {
+            return List.of(rowIndex);
+        }
+        if (isStage3Headers(headers)) {
+            List<Integer> parentBlock = parentBlockRowIndices(rows, blockKey, colTask, colParent);
+            if (parentBlock.size() > 1 && parentBlock.contains(rowIndex)) {
+                return parentBlock;
+            }
+            return List.of(rowIndex);
+        }
+        List<Integer> eligible = eligibleRowIndices(rows, blockKey, colTask, colExclude);
+        if (eligible.size() > 1 && eligible.contains(rowIndex)) {
+            return eligible;
+        }
+        return List.of(rowIndex);
+    }
+
+    private static void moveRowBlockForArrowReorder(
+            ObservableList<ObservableList<String>> rows,
+            List<Integer> block,
+            int to) {
+        if (block.isEmpty()) {
             return;
         }
-        List<Integer> eligibleIndices = eligibleRowIndices(rows, blockKey, colTask, colExclude);
-        if (eligibleIndices.size() <= 1 || !eligibleIndices.contains(from)) {
+        int from = block.get(0);
+        if (block.size() <= 1) {
             moveSingleRow(rows, from, to);
             return;
         }
-        moveRowBlock(rows, eligibleIndices, from, to);
+        moveRowBlock(rows, block, from, to, true);
+    }
+
+    private static Integer targetRowIndexAboveReorderBlock(
+            List<String> headers,
+            ObservableList<ObservableList<String>> rows,
+            int blockStart) {
+        if (blockStart <= 0) {
+            return null;
+        }
+        for (int i = blockStart - 1; i >= 0; i--) {
+            if (!sameReorderGroup(headers, rows, blockStart, i)) {
+                return rowIndicesForUserReorderBlock(headers, rows, i).get(0);
+            }
+        }
+        return null;
+    }
+
+    private static Integer targetRowIndexBelowReorderBlock(
+            List<String> headers,
+            ObservableList<ObservableList<String>> rows,
+            int blockEnd) {
+        if (blockEnd >= rows.size() - 1) {
+            return null;
+        }
+        for (int i = blockEnd + 1; i < rows.size(); i++) {
+            if (!sameReorderGroup(headers, rows, blockEnd, i)) {
+                List<Integer> below = rowIndicesForUserReorderBlock(headers, rows, i);
+                return below.get(below.size() - 1) + 1;
+            }
+        }
+        return null;
+    }
+
+    private static boolean sameReorderGroup(
+            List<String> headers,
+            ObservableList<ObservableList<String>> rows,
+            int indexA,
+            int indexB) {
+        int colTask = headers.indexOf(COL_TASK_ID);
+        int colParent = headers.indexOf(COL_PARENT_TASK_ID);
+        return blockGroupKey(rows.get(indexA), colTask, colParent)
+                .equals(blockGroupKey(rows.get(indexB), colTask, colParent));
     }
 
     /**
@@ -229,6 +394,17 @@ public final class PlanInputProcessSequenceRowOrder {
         return out;
     }
 
+    private static List<Integer> allRowIndicesForTaskId(
+            ObservableList<ObservableList<String>> rows, String taskId, int colTask) {
+        List<Integer> out = new ArrayList<>();
+        for (int i = 0; i < rows.size(); i++) {
+            if (taskId.equals(cellAt(rows.get(i), colTask))) {
+                out.add(i);
+            }
+        }
+        return out;
+    }
+
     private static List<Integer> eligibleRowIndices(
             ObservableList<ObservableList<String>> rows,
             String taskId,
@@ -253,11 +429,16 @@ public final class PlanInputProcessSequenceRowOrder {
         rows.add(to, moved);
     }
 
+    /**
+     * @param toIsEndExclusive true のとき {@code to} は挿入先の「終端 index」（↑↓ 用）。
+     *     false のとき {@code to} は DnD ドロップ先のデータ行 index。
+     */
     private static void moveRowBlock(
             ObservableList<ObservableList<String>> rows,
             List<Integer> blockIndices,
             int from,
-            int to) {
+            int to,
+            boolean toIsEndExclusive) {
         List<ObservableList<String>> block = new ArrayList<>(blockIndices.size());
         for (int idx : blockIndices) {
             block.add(rows.get(idx));
@@ -267,7 +448,10 @@ public final class PlanInputProcessSequenceRowOrder {
         }
         int insertAt = to;
         if (from < to) {
-            insertAt = to - blockIndices.size() + 1;
+            insertAt =
+                    toIsEndExclusive
+                            ? to - blockIndices.size()
+                            : to - blockIndices.size() + 1;
         }
         rows.addAll(insertAt, block);
     }
