@@ -31,6 +31,40 @@ public final class PlanInputProcessSequenceRowOrder {
     private PlanInputProcessSequenceRowOrder() {}
 
     /**
+     * ユーザー操作（DnD・↑↓）による行移動。配台不要オフ行をドラッグしたときは、同一依頼NOの配台対象行を
+     * まとめて移す（配台不要=yes 行は追従しない）。
+     */
+    public static void moveRowsForUserReorder(
+            List<String> headers,
+            ObservableList<ObservableList<String>> rows,
+            int from,
+            int to) {
+        if (headers == null || rows == null || from == to || from < 0 || to < 0) {
+            return;
+        }
+        if (from >= rows.size() || to >= rows.size()) {
+            return;
+        }
+        int colTask = headers.indexOf(COL_TASK_ID);
+        int colExclude = headers.indexOf(COL_EXCLUDE_FROM_ASSIGNMENT);
+        if (isRowExcludedFromAssignment(rows.get(from), colExclude)) {
+            moveSingleRow(rows, from, to);
+            return;
+        }
+        String taskId = colTask >= 0 ? cellAt(rows.get(from), colTask) : "";
+        if (taskId.isEmpty()) {
+            moveSingleRow(rows, from, to);
+            return;
+        }
+        List<Integer> eligibleIndices = eligibleRowIndices(rows, taskId, colTask, colExclude);
+        if (eligibleIndices.size() <= 1 || !eligibleIndices.contains(from)) {
+            moveSingleRow(rows, from, to);
+            return;
+        }
+        moveEligibleBlock(rows, eligibleIndices, from, to);
+    }
+
+    /**
      * 現在の行順を §A-1 に沿って整え、{@link #COL_DISPATCH_TRIAL_ORDER} を 1..n で振り直す。
      */
     public static void stabilizeAndRenumberDispatchTrialOrder(
@@ -109,6 +143,55 @@ public final class PlanInputProcessSequenceRowOrder {
     /**
      * 並べ替え後の行順を試行順キーに反映する。以降のブロック集約はこの位置を基準にする（旧キー最小値へ戻さない）。
      */
+    private static boolean isRowExcludedFromAssignment(
+            ObservableList<String> row, int colExclude) {
+        return colExclude >= 0
+                && TabularCellHighlight.planInputExcludeFromAssignmentIsOn(cellAt(row, colExclude));
+    }
+
+    private static List<Integer> eligibleRowIndices(
+            ObservableList<ObservableList<String>> rows,
+            String taskId,
+            int colTask,
+            int colExclude) {
+        List<Integer> out = new ArrayList<>();
+        for (int i = 0; i < rows.size(); i++) {
+            ObservableList<String> row = rows.get(i);
+            if (!taskId.equals(cellAt(row, colTask))) {
+                continue;
+            }
+            if (!isRowExcludedFromAssignment(row, colExclude)) {
+                out.add(i);
+            }
+        }
+        return out;
+    }
+
+    private static void moveSingleRow(
+            ObservableList<ObservableList<String>> rows, int from, int to) {
+        ObservableList<String> moved = rows.remove(from);
+        rows.add(to, moved);
+    }
+
+    private static void moveEligibleBlock(
+            ObservableList<ObservableList<String>> rows,
+            List<Integer> blockIndices,
+            int from,
+            int to) {
+        List<ObservableList<String>> block = new ArrayList<>(blockIndices.size());
+        for (int idx : blockIndices) {
+            block.add(rows.get(idx));
+        }
+        for (int i = blockIndices.size() - 1; i >= 0; i--) {
+            rows.remove((int) blockIndices.get(i));
+        }
+        int insertAt = to;
+        if (from < to) {
+            insertAt = to - blockIndices.size() + 1;
+        }
+        rows.addAll(insertAt, block);
+    }
+
     private static void seedTrialOrderKeysFromCurrentRowOrder(
             ObservableList<ObservableList<String>> rows, int colDto, int n) {
         for (int i = 0; i < n; i++) {

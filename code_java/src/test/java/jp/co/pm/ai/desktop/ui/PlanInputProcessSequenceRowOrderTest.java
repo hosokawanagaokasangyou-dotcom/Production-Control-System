@@ -69,6 +69,42 @@ class PlanInputProcessSequenceRowOrderTest {
     }
 
     @Test
+    void moveRowsForUserReorder_movesEligibleBlockTogether_excludesStay() {
+        List<String> headers =
+                List.of(
+                        PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER,
+                        PlanInputProcessSequenceRowOrder.COL_TASK_ID,
+                        PlanInputProcessSequenceRowOrder.COL_PROCESS,
+                        PlanInputProcessSequenceRowOrder.COL_PROCESS_CONTENT,
+                        PlanInputProcessSequenceRowOrder.COL_EXCLUDE_FROM_ASSIGNMENT);
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        rows.add(row("1", "Y6-2", "スライス", "スライス", ""));
+        rows.add(row("2", "E6-1", "スリット", "スリット", ""));
+        rows.add(row("3", "T6-1", "分割", "エンボス,巻返し", "yes"));
+        rows.add(row("4", "T6-1", "エンボス", "エンボス,巻返し", ""));
+        rows.add(row("5", "T6-1", "巻返し", "エンボス,巻返し", ""));
+        rows.add(row("6", "V6-3", "スライス", "スライス", ""));
+
+        PlanInputProcessSequenceRowOrder.moveRowsForUserReorder(headers, rows, 3, 5);
+
+        assertEquals("分割", cell(rows, 2, 2));
+        assertEquals("yes", cell(rows, 2, 4));
+        assertEquals("V6-3", cell(rows, 3, 1));
+        assertEquals("T6-1", cell(rows, 4, 1));
+        assertEquals("エンボス", cell(rows, 4, 2));
+        assertEquals("T6-1", cell(rows, 5, 1));
+        assertEquals("巻返し", cell(rows, 5, 2));
+
+        PlanInputProcessSequenceRowOrder.stabilizeAndRenumberDispatchTrialOrder(headers, rows);
+
+        assertEquals("V6-3", cell(rows, 3, 1));
+        assertEquals("T6-1", cell(rows, 4, 1));
+        assertEquals("エンボス", cell(rows, 4, 2));
+        assertEquals("T6-1", cell(rows, 5, 1));
+        assertEquals("巻返し", cell(rows, 5, 2));
+    }
+
+    @Test
     void stabilize_preservesEligibleBlockPositionFromListOrder() {
         List<String> headers =
                 List.of(

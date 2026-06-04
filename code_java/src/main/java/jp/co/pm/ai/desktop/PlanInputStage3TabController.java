@@ -149,6 +149,7 @@ public class PlanInputStage3TabController {
                 spreadsheetView,
                 SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex(),
                 rows,
+                headersRef,
                 this::finishRowReorderAfterDnD);
         SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
                 spreadsheetHost,
@@ -792,9 +793,7 @@ public class PlanInputStage3TabController {
         if (a < 0 || b < 0 || a >= rows.size() || b >= rows.size() || a == b) {
             return;
         }
-        ObservableList<String> moved = rows.get(a);
-        rows.set(a, rows.get(b));
-        rows.set(b, moved);
+        PlanInputProcessSequenceRowOrder.moveRowsForUserReorder(headersRef, rows, b, a);
         renumberDispatchTrialOrderColumn();
     }
 

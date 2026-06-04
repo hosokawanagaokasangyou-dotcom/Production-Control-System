@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.ui;
 
 import java.util.BitSet;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javafx.application.Platform;
@@ -43,12 +44,14 @@ public final class SpreadsheetPlanInputRowDragSupport {
      * Installs spreadsheet-level filters for drag source (cell), drag-over acceptance, and drop.
      *
      * @param firstDataGridRow {@link SpreadsheetTabularSupport#spreadsheetFirstDataRowIndex()} (first data grid row)
+     * @param headers plan-input column headers (eligible block move for same 依頼NO)
      * @param afterReorder callback after model list + grid rebuild
      */
     public static void install(
             SpreadsheetView spreadsheetView,
             int firstDataGridRow,
             ObservableList<ObservableList<String>> dataRows,
+            List<String> headers,
             Runnable afterReorder) {
         spreadsheetView.addEventFilter(DragEvent.DRAG_DONE, e -> PLAN_INPUT_ROW_DRAG_ACTIVE.set(false));
 
@@ -152,7 +155,8 @@ public final class SpreadsheetPlanInputRowDragSupport {
                                 && srcData < dataRows.size()
                                 && tgtData < dataRows.size()) {
                             if (srcData != tgtData) {
-                                moveDataRow(dataRows, srcData, tgtData);
+                                PlanInputProcessSequenceRowOrder.moveRowsForUserReorder(
+                                        headers, dataRows, srcData, tgtData);
                                 spreadsheetView.setComparator(null);
                                 ExcelLikeSpreadsheetFilter.resetAllColumnSortMenus(spreadsheetView);
                                 DialogExcelLikeSpreadsheetFilter.resetAllColumnSortMenus(spreadsheetView);
@@ -212,11 +216,4 @@ public final class SpreadsheetPlanInputRowDragSupport {
         return modelRow >= firstDataGridRow && !isHidden(spv, modelRow);
     }
 
-    private static void moveDataRow(ObservableList<ObservableList<String>> rows, int from, int to) {
-        if (from == to || from < 0 || to < 0 || from >= rows.size() || to >= rows.size()) {
-            return;
-        }
-        ObservableList<String> moved = rows.remove(from);
-        rows.add(to, moved);
-    }
 }

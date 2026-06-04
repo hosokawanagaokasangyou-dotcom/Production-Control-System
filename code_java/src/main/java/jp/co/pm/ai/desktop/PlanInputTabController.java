@@ -249,6 +249,7 @@ public final class PlanInputTabController {
                 spreadsheetView,
                 SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex(),
                 rows,
+                headersRef,
                 this::finishPlanInputRowReorderAfterDnD);
 
         SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
@@ -302,7 +303,13 @@ public final class PlanInputTabController {
                     "H6",
                     "PlanInputTabController:renumberDispatchTrialOrderColumn:before",
                     "before stabilize",
-                    Map.of("rowCount", rows.size(), "orderHead", sample, "runId", "reorder-fix"));
+                    Map.of(
+                            "rowCount",
+                            rows.size(),
+                            "orderHead",
+                            sample,
+                            "runId",
+                            "eligible-block-fix"));
         }
         // #endregion
         PlanInputProcessSequenceRowOrder.stabilizeAndRenumberDispatchTrialOrder(headersRef, rows);
@@ -329,7 +336,13 @@ public final class PlanInputTabController {
                     "H6",
                     "PlanInputTabController:renumberDispatchTrialOrderColumn:after",
                     "after stabilize",
-                    Map.of("rowCount", rows.size(), "orderHead", sample, "runId", "reorder-fix"));
+                    Map.of(
+                            "rowCount",
+                            rows.size(),
+                            "orderHead",
+                            sample,
+                            "runId",
+                            "eligible-block-fix"));
         }
         // #endregion
     }
@@ -878,9 +891,7 @@ public final class PlanInputTabController {
         if (a < 0 || b < 0 || a >= rows.size() || b >= rows.size() || a == b) {
             return;
         }
-        ObservableList<String> moved = rows.get(a);
-        rows.set(a, rows.get(b));
-        rows.set(b, moved);
+        PlanInputProcessSequenceRowOrder.moveRowsForUserReorder(headersRef, rows, b, a);
         renumberDispatchTrialOrderColumn();
     }
 
