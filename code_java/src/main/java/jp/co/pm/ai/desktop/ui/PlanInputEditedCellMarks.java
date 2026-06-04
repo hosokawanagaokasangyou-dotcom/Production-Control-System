@@ -181,6 +181,10 @@ public final class PlanInputEditedCellMarks {
                 if (!editedMarks.contains(markKey(rk, headers.get(c)))) {
                     continue;
                 }
+                String columnTitle = headers.get(c);
+                if (shouldPreservePlanInputExcludeYesStyle(columnTitle, cellAt(row, c))) {
+                    continue;
+                }
                 SpreadsheetCell cell = rowCells.get(c);
                 if (cell != null) {
                     cell.setStyle(TabularCellHighlight.PLAN_INPUT_EDITED_CELL_STYLE);
@@ -242,6 +246,15 @@ public final class PlanInputEditedCellMarks {
         } catch (Exception ignored) {
             // sidecar 失敗で表編集は止めない
         }
+    }
+
+    /**
+     * 編集マークの薄黄は {@link TabularCellHighlight#PLAN_INPUT_EXCLUDE_YES_STYLE} より弱い。
+     * 「配台不要」オンセルは buildPlanInputGrid の赤を維持する。
+     */
+    static boolean shouldPreservePlanInputExcludeYesStyle(String columnTitle, String cellValue) {
+        return "配台不要".equals(columnTitle)
+                && TabularCellHighlight.planInputExcludeFromAssignmentIsOn(cellValue);
     }
 
     private static boolean equalsNorm(String a, String b) {

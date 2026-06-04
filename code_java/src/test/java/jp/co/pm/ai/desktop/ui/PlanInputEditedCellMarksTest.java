@@ -86,6 +86,17 @@ class PlanInputEditedCellMarksTest {
     }
 
     @Test
+    void shouldPreservePlanInputExcludeYesStyle_whenExcludeOn() {
+        assertTrue(
+                PlanInputEditedCellMarks.shouldPreservePlanInputExcludeYesStyle("配台不要", "yes"));
+        assertFalse(
+                PlanInputEditedCellMarks.shouldPreservePlanInputExcludeYesStyle("配台不要", ""));
+        assertFalse(
+                PlanInputEditedCellMarks.shouldPreservePlanInputExcludeYesStyle(
+                        "原反投入日", "yes"));
+    }
+
+    @Test
     void filterToPresentRows_dropsMissingRowKeys() {
         List<String> headers = headers();
         ObservableList<ObservableList<String>> rows = rows("2026/6/14");
