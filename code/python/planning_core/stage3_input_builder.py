@@ -28,6 +28,45 @@ def _norm(v) -> str:
     return str(v).strip() if v is not None else ""
 
 
+def _branch_seq_sort_key(rec: dict, *, branch_col: str) -> int:
+    """配台枝番（01, 02 …）を数値順に並べる。"""
+    raw = _norm(rec.get(branch_col, ""))
+    if not raw:
+        return 0
+    try:
+        return int(raw)
+    except ValueError:
+        return 0
+
+
+def _order_stage3_records_by_parent_branch(records: list[dict]) -> list[dict]:
+    """生成直後: 親（元依頼NO）ブロックの出現順は維持し、ブロック内だけ枝番昇順・試行順 1..n。"""
+    from planning_core import _core as pc
+
+    if not records:
+        return records
+    parent_col = pc.PLAN_COL_PARENT_TASK_ID
+    branch_col = pc.PLAN_COL_BRANCH_SEQ
+    task_col = pc.TASK_COL_TASK_ID
+    dto_col = pc.RESULT_TASK_COL_DISPATCH_TRIAL_ORDER
+    parent_order: list[str] = []
+    by_parent: dict[str, list[dict]] = defaultdict(list)
+    for rec in records:
+        parent = _norm(rec.get(parent_col, "")) or _norm(rec.get(task_col, ""))
+        if parent not in by_parent:
+            parent_order.append(parent)
+        by_parent[parent].append(rec)
+    ordered: list[dict] = []
+    trial = 0
+    for parent in parent_order:
+        group = sorted(by_parent[parent], key=lambda r: _branch_seq_sort_key(r, branch_col=branch_col))
+        for rec in group:
+            trial += 1
+            rec[dto_col] = trial
+            ordered.append(rec)
+    return ordered
+
+
 def _aggregate_targets(pc, rows):
     """結果_配台表 rows を (依頼NO, 工程key, 機械名, 配台日) -> 配台 m に集約。"""
     targets: dict[tuple, float] = {}
@@ -646,6 +685,8 @@ def build_stage3_input_sheet(
         trial_order += 1
         rec[pc.RESULT_TASK_COL_DISPATCH_TRIAL_ORDER] = trial_order
         records.append(rec)
+
+    records = _order_stage3_records_by_parent_branch(records)
 
     out_df = pd.DataFrame(records)
     if out_df.empty:

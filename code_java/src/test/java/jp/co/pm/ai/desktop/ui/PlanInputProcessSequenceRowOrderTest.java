@@ -145,16 +145,70 @@ class PlanInputProcessSequenceRowOrderTest {
         rows.add(rowStage3("P", "1", "1", "T6-1", "分割", "エンボス,巻返し", "yes"));
         rows.add(rowStage3("P", "1", "2", "T6-1", "エンボス", "エンボス,巻返し", ""));
         rows.add(rowStage3("P", "1", "3", "T6-1", "巻返し", "エンボス,巻返し", ""));
-        rows.add(rowStage3("P", "2", "4", "V6-3", "スライス", "スライス", ""));
+        rows.add(rowStage3("V", "1", "4", "V6-3", "スライス", "スライス", ""));
 
         PlanInputSpreadsheetRowReorder.moveAdjacentDataRows(headers, rows, 3, 1);
 
-        assertEquals("T6-1", cell(rows, 2, 3));
+        assertEquals("V6-3", cell(rows, 0, 3));
+        assertEquals("分割", cell(rows, 1, 4));
+        assertEquals("yes", cell(rows, 1, 6));
         assertEquals("エンボス", cell(rows, 2, 4));
-        assertEquals("T6-1", cell(rows, 3, 3));
         assertEquals("巻返し", cell(rows, 3, 4));
-        assertEquals("分割", cell(rows, 0, 4));
-        assertEquals("yes", cell(rows, 0, 6));
+        assertEquals("1", cell(rows, 1, 1));
+        assertEquals("1", cell(rows, 2, 1));
+        assertEquals("1", cell(rows, 3, 1));
+    }
+
+    @Test
+    void stabilize_stage3_keepsBranchSeqWithinParent() {
+        List<String> headers =
+                List.of(
+                        PlanInputProcessSequenceRowOrder.COL_PARENT_TASK_ID,
+                        PlanInputProcessSequenceRowOrder.COL_BRANCH_SEQ,
+                        PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER,
+                        PlanInputProcessSequenceRowOrder.COL_TASK_ID,
+                        PlanInputProcessSequenceRowOrder.COL_PROCESS,
+                        PlanInputProcessSequenceRowOrder.COL_PROCESS_CONTENT);
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        rows.add(rowStage3("V5-5", "03", "3", "V5-5-03", "EC", "EC", ""));
+        rows.add(rowStage3("V5-5", "01", "1", "V5-5-01", "EC", "EC", ""));
+        rows.add(rowStage3("V5-5", "05", "5", "V5-5-05", "EC", "EC", ""));
+        rows.add(rowStage3("V5-5", "02", "2", "V5-5-02", "EC", "EC", ""));
+        rows.add(rowStage3("V5-5", "04", "4", "V5-5-04", "EC", "EC", ""));
+
+        PlanInputProcessSequenceRowOrder.stabilizeAndRenumberDispatchTrialOrder(headers, rows);
+
+        for (int i = 0; i < 5; i++) {
+            assertEquals(String.format("%02d", i + 1), cell(rows, i, 1));
+            assertEquals("V5-5-" + String.format("%02d", i + 1), cell(rows, i, 3));
+            assertEquals(Integer.toString(i + 1), cell(rows, i, 2));
+        }
+    }
+
+    @Test
+    void moveRows_stage3_movesAllBranchesWithParent() {
+        List<String> headers =
+                List.of(
+                        PlanInputProcessSequenceRowOrder.COL_PARENT_TASK_ID,
+                        PlanInputProcessSequenceRowOrder.COL_BRANCH_SEQ,
+                        PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER,
+                        PlanInputProcessSequenceRowOrder.COL_TASK_ID,
+                        PlanInputProcessSequenceRowOrder.COL_PROCESS,
+                        PlanInputProcessSequenceRowOrder.COL_PROCESS_CONTENT);
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        rows.add(rowStage3("Y", "1", "1", "Y-1", "EC", "EC", ""));
+        rows.add(rowStage3("V5-5", "01", "2", "V5-5-01", "EC", "EC", ""));
+        rows.add(rowStage3("V5-5", "02", "3", "V5-5-02", "EC", "EC", ""));
+        rows.add(rowStage3("V5-5", "03", "4", "V5-5-03", "EC", "EC", ""));
+
+        PlanInputProcessSequenceRowOrder.moveRowsForUserReorder(headers, rows, 1, 0);
+
+        assertEquals("V5-5-01", cell(rows, 0, 3));
+        assertEquals("V5-5-02", cell(rows, 1, 3));
+        assertEquals("V5-5-03", cell(rows, 2, 3));
+        assertEquals("Y-1", cell(rows, 3, 3));
+        assertEquals("01", cell(rows, 0, 1));
+        assertEquals("03", cell(rows, 2, 1));
     }
 
     @Test

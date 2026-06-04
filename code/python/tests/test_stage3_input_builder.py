@@ -105,6 +105,23 @@ def test_branch_decomposition(tmp_path):
     assert orders == [1, 2]
 
 
+def test_order_stage3_records_by_parent_branch():
+    recs = [
+        {"元依頼NO": "V5-5", "配台枝番": "03", "依頼NO": "V5-5-03", "配台試行順番": 3},
+        {"元依頼NO": "V5-5", "配台枝番": "01", "依頼NO": "V5-5-01", "配台試行順番": 1},
+        {"元依頼NO": "Y3-24", "配台枝番": "02", "依頼NO": "Y3-24-02", "配台試行順番": 5},
+        {"元依頼NO": "Y3-24", "配台枝番": "01", "依頼NO": "Y3-24-01", "配台試行順番": 4},
+    ]
+    ordered = builder._order_stage3_records_by_parent_branch(recs)
+    assert [r["依頼NO"] for r in ordered] == [
+        "V5-5-01",
+        "V5-5-03",
+        "Y3-24-01",
+        "Y3-24-02",
+    ]
+    assert [int(r["配台試行順番"]) for r in ordered] == [1, 2, 3, 4]
+
+
 def test_build_twice_replaces_stage3_sheet(tmp_path):
     """2 回連続生成（初回成功→再生成）で openpyxl append が落ちないこと。"""
     xlsx = tmp_path / "plan_input_tasks.xlsx"

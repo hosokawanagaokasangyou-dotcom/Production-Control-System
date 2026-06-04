@@ -14,10 +14,15 @@ import javafx.collections.ObservableList;
 /**
  * 配台計画_タスク入力／3.0: 行並べ替え後も同一依頼NO内の工程順（§A-1・加工内容のカンマ区切り）を維持する。
  *
+ * <p>入力3.0（列「元依頼NO」「配台枝番」あり）では、配台対象行の DnD・↑↓ は
+ * <strong>元依頼NO単位</strong>で全枝番行をまとめて移し、枝番順と試行順の連続を維持する。
+ *
  * <p>「配台不要」オン行はブロック集約・工程 rank の対象外（単独行の試行順で並ぶ）。
  */
 public final class PlanInputProcessSequenceRowOrder {
 
+    public static final String COL_PARENT_TASK_ID = "元依頼NO";
+    public static final String COL_BRANCH_SEQ = "配台枝番";
     public static final String COL_DISPATCH_TRIAL_ORDER = "配台試行順番";
     public static final String COL_TASK_ID = "依頼NO";
     public static final String COL_PROCESS = "工程名";
@@ -31,8 +36,10 @@ public final class PlanInputProcessSequenceRowOrder {
     private PlanInputProcessSequenceRowOrder() {}
 
     /**
-     * ユーザー操作（DnD・↑↓）による行移動。配台不要オフ行をドラッグしたときは、同一依頼NOの配台対象行を
-     * まとめて移す（配台不要=yes 行は追従しない）。
+     * ユーザー操作（DnD・↑↓）による行移動。
+     *
+     * <p>入力3.0: 配台不要オフ行は同一 {@link #COL_PARENT_TASK_ID} の全行（全枝番）を相対順のまま移動。
+     * <p>入力1表: 同一 {@link #COL_TASK_ID} の配台対象行のみブロック移動（配台不要=yes は追従しない）。
      */
     public static void moveRowsForUserReorder(
             List<String> headers,
@@ -46,22 +53,32 @@ public final class PlanInputProcessSequenceRowOrder {
             return;
         }
         int colTask = headers.indexOf(COL_TASK_ID);
+        int colParent = headers.indexOf(COL_PARENT_TASK_ID);
         int colExclude = headers.indexOf(COL_EXCLUDE_FROM_ASSIGNMENT);
         if (isRowExcludedFromAssignment(rows.get(from), colExclude)) {
             moveSingleRow(rows, from, to);
             return;
         }
-        String taskId = colTask >= 0 ? cellAt(rows.get(from), colTask) : "";
-        if (taskId.isEmpty()) {
+        String blockKey = blockGroupKey(rows.get(from), colTask, colParent);
+        if (blockKey.isEmpty()) {
             moveSingleRow(rows, from, to);
             return;
         }
-        List<Integer> eligibleIndices = eligibleRowIndices(rows, taskId, colTask, colExclude);
+        if (isStage3Headers(headers)) {
+            List<Integer> blockIndices = parentBlockRowIndices(rows, blockKey, colTask, colParent);
+            if (blockIndices.size() <= 1 || !blockIndices.contains(from)) {
+                moveSingleRow(rows, from, to);
+                return;
+            }
+            moveRowBlock(rows, blockIndices, from, to);
+            return;
+        }
+        List<Integer> eligibleIndices = eligibleRowIndices(rows, blockKey, colTask, colExclude);
         if (eligibleIndices.size() <= 1 || !eligibleIndices.contains(from)) {
             moveSingleRow(rows, from, to);
             return;
         }
-        moveEligibleBlock(rows, eligibleIndices, from, to);
+        moveRowBlock(rows, eligibleIndices, from, to);
     }
 
     /**
@@ -74,6 +91,8 @@ public final class PlanInputProcessSequenceRowOrder {
         }
         int colDto = headers.indexOf(COL_DISPATCH_TRIAL_ORDER);
         int colTask = headers.indexOf(COL_TASK_ID);
+        int colParent = headers.indexOf(COL_PARENT_TASK_ID);
+        int colBranch = headers.indexOf(COL_BRANCH_SEQ);
         int colProc = headers.indexOf(COL_PROCESS);
         int colContent = headers.indexOf(COL_PROCESS_CONTENT);
         if (colDto < 0) {
@@ -81,51 +100,83 @@ public final class PlanInputProcessSequenceRowOrder {
         }
 
         int colExclude = headers.indexOf(COL_EXCLUDE_FROM_ASSIGNMENT);
+        boolean stage3 = isStage3Headers(headers);
 
         int n = rows.size();
         seedTrialOrderKeysFromCurrentRowOrder(rows, colDto, n);
-        Map<String, List<String>> tokensByTaskId = collectProcessContentTokensByTaskId(rows, colTask, colContent);
-        Map<String, Double> eligibleBlockDtoByTaskId = new HashMap<>();
+        Map<String, List<String>> tokensByBlockKey =
+                collectProcessContentTokensByBlockKey(rows, colTask, colParent, colContent);
+        Map<String, Double> eligibleBlockDtoByBlockKey = new HashMap<>();
         Map<String, Integer> nextEligibleLineSeq = new HashMap<>();
 
         List<RowMeta> metas = new ArrayList<>(n);
         for (int i = 0; i < n; i++) {
             ObservableList<String> row = rows.get(i);
             String taskId = colTask >= 0 ? cellAt(row, colTask) : "";
+            String blockKey = blockGroupKey(row, colTask, colParent);
+            int branchSeq =
+                    stage3 && colBranch >= 0
+                            ? parseBranchSeq(cellAt(row, colBranch), i)
+                            : 0;
             boolean excluded =
                     colExclude >= 0
                             && TabularCellHighlight.planInputExcludeFromAssignmentIsOn(
                                     cellAt(row, colExclude));
             Double dto = parseTrialOrderSortKey(cellAt(row, colDto));
-            List<String> tokens = tokensByTaskId.getOrDefault(taskId, List.of());
+            List<String> tokens = tokensByBlockKey.getOrDefault(blockKey, List.of());
             Integer rank = null;
             if (!excluded && colProc >= 0 && !tokens.isEmpty()) {
                 rank = processSequenceRank(cellAt(row, colProc), tokens);
             }
             int lineSeq;
-            if (!taskId.isEmpty() && !excluded) {
-                lineSeq = nextEligibleLineSeq.getOrDefault(taskId, 0);
-                nextEligibleLineSeq.put(taskId, lineSeq + 1);
+            if (!blockKey.isEmpty() && !excluded && !stage3) {
+                lineSeq = nextEligibleLineSeq.getOrDefault(blockKey, 0);
+                nextEligibleLineSeq.put(blockKey, lineSeq + 1);
                 if (dto != null) {
-                    eligibleBlockDtoByTaskId.merge(taskId, dto, Double::min);
+                    eligibleBlockDtoByBlockKey.merge(blockKey, dto, Double::min);
                 }
+            } else if (!blockKey.isEmpty() && !excluded && stage3) {
+                if (dto != null) {
+                    eligibleBlockDtoByBlockKey.merge(blockKey, dto, Double::min);
+                }
+                lineSeq = 0;
             } else {
                 lineSeq = i;
             }
-            metas.add(new RowMeta(i, taskId, dto, rank, lineSeq, excluded));
+            metas.add(
+                    new RowMeta(i, blockKey, taskId, branchSeq, dto, rank, lineSeq, excluded, stage3));
         }
 
-        metas.sort(
+        Comparator<RowMeta> cmp =
                 Comparator.<RowMeta>comparingInt(m -> m.dto() == null ? 1 : 0)
-                        .thenComparingDouble(m -> sortBlockKey(m, eligibleBlockDtoByTaskId))
-                        .thenComparingInt(m -> m.excluded() ? 1 : 0)
-                        .thenComparingInt(
-                                m ->
-                                        m.excluded()
-                                                ? m.originalIndex()
-                                                : (m.rank() != null ? m.rank() : RANK_MISSING))
-                        .thenComparingInt(RowMeta::lineSeq)
-                        .thenComparingInt(RowMeta::originalIndex));
+                        .thenComparingDouble(
+                                m -> sortBlockKey(m, eligibleBlockDtoByBlockKey));
+        if (stage3) {
+            cmp =
+                    cmp.thenComparingInt(RowMeta::branchSeq)
+                            .thenComparingInt(m -> m.excluded() ? 1 : 0)
+                            .thenComparingInt(
+                                    m ->
+                                            m.excluded()
+                                                    ? m.originalIndex()
+                                                    : (m.rank() != null
+                                                            ? m.rank()
+                                                            : RANK_MISSING))
+                            .thenComparingInt(RowMeta::originalIndex);
+        } else {
+            cmp =
+                    cmp.thenComparingInt(m -> m.excluded() ? 1 : 0)
+                            .thenComparingInt(
+                                    m ->
+                                            m.excluded()
+                                                    ? m.originalIndex()
+                                                    : (m.rank() != null
+                                                            ? m.rank()
+                                                            : RANK_MISSING))
+                            .thenComparingInt(RowMeta::lineSeq)
+                            .thenComparingInt(RowMeta::originalIndex);
+        }
+        metas.sort(cmp);
 
         List<ObservableList<String>> reordered = new ArrayList<>(n);
         for (RowMeta m : metas) {
@@ -140,13 +191,42 @@ public final class PlanInputProcessSequenceRowOrder {
         }
     }
 
-    /**
-     * 並べ替え後の行順を試行順キーに反映する。以降のブロック集約はこの位置を基準にする（旧キー最小値へ戻さない）。
-     */
+    static boolean isStage3Headers(List<String> headers) {
+        return headers != null
+                && headers.indexOf(COL_PARENT_TASK_ID) >= 0
+                && headers.indexOf(COL_BRANCH_SEQ) >= 0;
+    }
+
+    private static String blockGroupKey(
+            ObservableList<String> row, int colTask, int colParent) {
+        if (colParent >= 0) {
+            String parent = cellAt(row, colParent);
+            if (!parent.isEmpty()) {
+                return parent;
+            }
+        }
+        return colTask >= 0 ? cellAt(row, colTask) : "";
+    }
+
     private static boolean isRowExcludedFromAssignment(
             ObservableList<String> row, int colExclude) {
         return colExclude >= 0
                 && TabularCellHighlight.planInputExcludeFromAssignmentIsOn(cellAt(row, colExclude));
+    }
+
+    private static List<Integer> parentBlockRowIndices(
+            ObservableList<ObservableList<String>> rows,
+            String parentTaskId,
+            int colTask,
+            int colParent) {
+        List<Integer> out = new ArrayList<>();
+        for (int i = 0; i < rows.size(); i++) {
+            ObservableList<String> row = rows.get(i);
+            if (parentTaskId.equals(blockGroupKey(row, colTask, colParent))) {
+                out.add(i);
+            }
+        }
+        return out;
     }
 
     private static List<Integer> eligibleRowIndices(
@@ -173,7 +253,7 @@ public final class PlanInputProcessSequenceRowOrder {
         rows.add(to, moved);
     }
 
-    private static void moveEligibleBlock(
+    private static void moveRowBlock(
             ObservableList<ObservableList<String>> rows,
             List<Integer> blockIndices,
             int from,
@@ -201,15 +281,15 @@ public final class PlanInputProcessSequenceRowOrder {
         }
     }
 
-    private static double sortBlockKey(RowMeta m, Map<String, Double> eligibleBlockDtoByTaskId) {
+    private static double sortBlockKey(RowMeta m, Map<String, Double> eligibleBlockDtoByBlockKey) {
         if (m.dto() == null) {
             return DTO_MISSING;
         }
         if (m.excluded()) {
             return m.dto();
         }
-        if (!m.taskId().isEmpty()) {
-            Double block = eligibleBlockDtoByTaskId.get(m.taskId());
+        if (!m.blockKey().isEmpty()) {
+            Double block = eligibleBlockDtoByBlockKey.get(m.blockKey());
             if (block != null) {
                 return block;
             }
@@ -217,23 +297,37 @@ public final class PlanInputProcessSequenceRowOrder {
         return m.dto();
     }
 
-    private static Map<String, List<String>> collectProcessContentTokensByTaskId(
-            ObservableList<ObservableList<String>> rows, int colTask, int colContent) {
+    private static Map<String, List<String>> collectProcessContentTokensByBlockKey(
+            ObservableList<ObservableList<String>> rows,
+            int colTask,
+            int colParent,
+            int colContent) {
         Map<String, List<String>> out = new LinkedHashMap<>();
         if (colTask < 0 || colContent < 0) {
             return out;
         }
         for (ObservableList<String> row : rows) {
-            String taskId = cellAt(row, colTask);
-            if (taskId.isEmpty() || out.containsKey(taskId)) {
+            String key = blockGroupKey(row, colTask, colParent);
+            if (key.isEmpty() || out.containsKey(key)) {
                 continue;
             }
             List<String> tokens = parseProcessContentTokens(cellAt(row, colContent));
             if (!tokens.isEmpty()) {
-                out.put(taskId, tokens);
+                out.put(key, tokens);
             }
         }
         return out;
+    }
+
+    static int parseBranchSeq(String raw, int fallbackIndex) {
+        if (raw == null || raw.isBlank()) {
+            return fallbackIndex;
+        }
+        try {
+            return Integer.parseInt(raw.strip());
+        } catch (NumberFormatException ex) {
+            return fallbackIndex;
+        }
     }
 
     static List<String> parseProcessContentTokens(String raw) {
@@ -306,9 +400,12 @@ public final class PlanInputProcessSequenceRowOrder {
 
     private record RowMeta(
             int originalIndex,
+            String blockKey,
             String taskId,
+            int branchSeq,
             Double dto,
             Integer rank,
             int lineSeq,
-            boolean excluded) {}
+            boolean excluded,
+            boolean stage3) {}
 }
