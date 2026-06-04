@@ -45,7 +45,7 @@ import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.PlanInputDeprecatedOverrideColumnSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputEditedCellMarks;
 import jp.co.pm.ai.desktop.ui.PlanInputDateColumnSupport;
-import jp.co.pm.ai.desktop.ui.PlanInputProcessSequenceRowOrder;
+import jp.co.pm.ai.desktop.ui.PlanInputSpreadsheetRowReorder;
 import jp.co.pm.ai.desktop.ui.PlanInputStage3DispatchableViolationSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
@@ -60,6 +60,9 @@ import jp.co.pm.ai.planning.stage2.core.Stage2RollUnitLengthTables;
 /**
  * 「配台計画_タスク入力3.0」タブ。段階3.0 前処理（入力3表生成）で書き出した枝番タスクを
  * {@link PlanInputTabController} と同じ ControlsFX {@link SpreadsheetView}（配色・列操作・編集）で表示する。
+ *
+ * <p>行の DnD・↑↓ は {@link PlanInputSpreadsheetRowReorder} により入力1表タブと同じ
+ * （§A-1 工程連続順・配台不要=yes 行の単独配置・配台対象行のブロック移動）。
  */
 public class PlanInputStage3TabController {
 
@@ -276,6 +279,7 @@ public class PlanInputStage3TabController {
             return;
         }
         try {
+            renumberDispatchTrialOrderColumn();
             List<List<String>> dataRows = copyRowsForSave();
             PlanInputTabularIo.writeExcelSheetPreservingOthers(
                     workbook,
@@ -312,6 +316,7 @@ public class PlanInputStage3TabController {
             r.add("");
         }
         rows.add(r);
+        renumberDispatchTrialOrderColumn();
         markTableDirtySinceSave();
         rebuildSpreadsheet();
     }
@@ -336,6 +341,7 @@ public class PlanInputStage3TabController {
                 rows.remove(r);
             }
         }
+        renumberDispatchTrialOrderColumn();
         markTableDirtySinceSave();
         rebuildSpreadsheet();
     }
@@ -734,7 +740,7 @@ public class PlanInputStage3TabController {
     }
 
     private void renumberDispatchTrialOrderColumn() {
-        PlanInputProcessSequenceRowOrder.stabilizeAndRenumberDispatchTrialOrder(headersRef, rows);
+        PlanInputSpreadsheetRowReorder.stabilizeAndRenumberDispatchTrialOrder(headersRef, rows);
     }
 
     private int selectedDataRowIndex() {
@@ -793,8 +799,7 @@ public class PlanInputStage3TabController {
         if (a < 0 || b < 0 || a >= rows.size() || b >= rows.size() || a == b) {
             return;
         }
-        PlanInputProcessSequenceRowOrder.moveRowsForUserReorder(headersRef, rows, b, a);
-        renumberDispatchTrialOrderColumn();
+        PlanInputSpreadsheetRowReorder.moveAdjacentDataRows(headersRef, rows, a, b);
     }
 
     private void focusCellAfterReorder(int dataRowIndex, int columnIndex) {

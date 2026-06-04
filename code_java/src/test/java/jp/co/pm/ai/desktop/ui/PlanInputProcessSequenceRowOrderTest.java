@@ -131,6 +131,33 @@ class PlanInputProcessSequenceRowOrderTest {
     }
 
     @Test
+    void stabilize_withStage3LeadingColumns_maintainsEligibleBlock() {
+        List<String> headers =
+                List.of(
+                        "元依頼NO",
+                        "配台枝番",
+                        PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER,
+                        PlanInputProcessSequenceRowOrder.COL_TASK_ID,
+                        PlanInputProcessSequenceRowOrder.COL_PROCESS,
+                        PlanInputProcessSequenceRowOrder.COL_PROCESS_CONTENT,
+                        PlanInputProcessSequenceRowOrder.COL_EXCLUDE_FROM_ASSIGNMENT);
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        rows.add(rowStage3("P", "1", "1", "T6-1", "分割", "エンボス,巻返し", "yes"));
+        rows.add(rowStage3("P", "1", "2", "T6-1", "エンボス", "エンボス,巻返し", ""));
+        rows.add(rowStage3("P", "1", "3", "T6-1", "巻返し", "エンボス,巻返し", ""));
+        rows.add(rowStage3("P", "2", "4", "V6-3", "スライス", "スライス", ""));
+
+        PlanInputSpreadsheetRowReorder.moveAdjacentDataRows(headers, rows, 3, 1);
+
+        assertEquals("T6-1", cell(rows, 2, 3));
+        assertEquals("エンボス", cell(rows, 2, 4));
+        assertEquals("T6-1", cell(rows, 3, 3));
+        assertEquals("巻返し", cell(rows, 3, 4));
+        assertEquals("分割", cell(rows, 0, 4));
+        assertEquals("yes", cell(rows, 0, 6));
+    }
+
+    @Test
     void processSequenceRank_matchesNormalizedTokens() {
         List<String> tokens = List.of("スリット", "分割", "融着");
         assertEquals(0, PlanInputProcessSequenceRowOrder.processSequenceRank("スリット", tokens));
@@ -145,6 +172,18 @@ class PlanInputProcessSequenceRowOrderTest {
     private static ObservableList<String> row(
             String dto, String tid, String proc, String content, String exclude) {
         return FXCollections.observableArrayList(dto, tid, proc, content, exclude);
+    }
+
+    private static ObservableList<String> rowStage3(
+            String parentTask,
+            String branch,
+            String dto,
+            String tid,
+            String proc,
+            String content,
+            String exclude) {
+        return FXCollections.observableArrayList(
+                parentTask, branch, dto, tid, proc, content, exclude);
     }
 
     private static String cell(ObservableList<ObservableList<String>> rows, int r, int c) {

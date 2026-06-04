@@ -51,7 +51,7 @@ import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.PlanInputDeprecatedOverrideColumnSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputEditedCellMarks;
-import jp.co.pm.ai.desktop.ui.PlanInputProcessSequenceRowOrder;
+import jp.co.pm.ai.desktop.ui.PlanInputSpreadsheetRowReorder;
 import jp.co.pm.ai.desktop.ui.PlanInputDateColumnSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputRawInputDateShift;
 import jp.co.pm.ai.desktop.ui.PlanInputUnprocessedDispatchRemainingMismatchSupport;
@@ -277,7 +277,7 @@ public final class PlanInputTabController {
 
     /** 行並べ替え後: §A-1（加工内容順）を維持しつつ配台試行順番を 1..n に振り直す。 */
     private void renumberDispatchTrialOrderColumn() {
-        PlanInputProcessSequenceRowOrder.stabilizeAndRenumberDispatchTrialOrder(headersRef, rows);
+        PlanInputSpreadsheetRowReorder.stabilizeAndRenumberDispatchTrialOrder(headersRef, rows);
     }
 
     void bindShell(MainShellController shell) {
@@ -824,8 +824,7 @@ public final class PlanInputTabController {
         if (a < 0 || b < 0 || a >= rows.size() || b >= rows.size() || a == b) {
             return;
         }
-        PlanInputProcessSequenceRowOrder.moveRowsForUserReorder(headersRef, rows, b, a);
-        renumberDispatchTrialOrderColumn();
+        PlanInputSpreadsheetRowReorder.moveAdjacentDataRows(headersRef, rows, a, b);
     }
 
     /**
