@@ -69,6 +69,32 @@ class PlanInputProcessSequenceRowOrderTest {
     }
 
     @Test
+    void stabilize_preservesEligibleBlockPositionFromListOrder() {
+        List<String> headers =
+                List.of(
+                        PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER,
+                        PlanInputProcessSequenceRowOrder.COL_TASK_ID,
+                        PlanInputProcessSequenceRowOrder.COL_PROCESS,
+                        PlanInputProcessSequenceRowOrder.COL_PROCESS_CONTENT);
+        ObservableList<ObservableList<String>> rows = FXCollections.observableArrayList();
+        rows.add(row("1", "Y6-2", "スライス", "スライス"));
+        rows.add(row("2", "E6-1", "スリット", "スリット"));
+        rows.add(row("10", "T6-1", "巻返し", "エンボス,巻返し"));
+        rows.add(row("11", "T6-1", "エンボス", "エンボス,巻返し"));
+        rows.add(row("5", "V6-3", "スライス", "スライス"));
+
+        PlanInputProcessSequenceRowOrder.stabilizeAndRenumberDispatchTrialOrder(headers, rows);
+
+        assertEquals("Y6-2", cell(rows, 0, 1));
+        assertEquals("E6-1", cell(rows, 1, 1));
+        assertEquals("T6-1", cell(rows, 2, 1));
+        assertEquals("エンボス", cell(rows, 2, 2));
+        assertEquals("T6-1", cell(rows, 3, 1));
+        assertEquals("巻返し", cell(rows, 3, 2));
+        assertEquals("V6-3", cell(rows, 4, 1));
+    }
+
+    @Test
     void processSequenceRank_matchesNormalizedTokens() {
         List<String> tokens = List.of("スリット", "分割", "融着");
         assertEquals(0, PlanInputProcessSequenceRowOrder.processSequenceRank("スリット", tokens));

@@ -49,6 +49,7 @@ public final class PlanInputProcessSequenceRowOrder {
         int colExclude = headers.indexOf(COL_EXCLUDE_FROM_ASSIGNMENT);
 
         int n = rows.size();
+        seedTrialOrderKeysFromCurrentRowOrder(rows, colDto, n);
         Map<String, List<String>> tokensByTaskId = collectProcessContentTokensByTaskId(rows, colTask, colContent);
         Map<String, Double> eligibleBlockDtoByTaskId = new HashMap<>();
         Map<String, Integer> nextEligibleLineSeq = new HashMap<>();
@@ -99,6 +100,18 @@ public final class PlanInputProcessSequenceRowOrder {
         rows.setAll(reordered);
 
         for (int i = 0; i < rows.size(); i++) {
+            ObservableList<String> row = rows.get(i);
+            ensureSize(row, colDto + 1);
+            row.set(colDto, Integer.toString(i + 1));
+        }
+    }
+
+    /**
+     * 並べ替え後の行順を試行順キーに反映する。以降のブロック集約はこの位置を基準にする（旧キー最小値へ戻さない）。
+     */
+    private static void seedTrialOrderKeysFromCurrentRowOrder(
+            ObservableList<ObservableList<String>> rows, int colDto, int n) {
+        for (int i = 0; i < n; i++) {
             ObservableList<String> row = rows.get(i);
             ensureSize(row, colDto + 1);
             row.set(colDto, Integer.toString(i + 1));

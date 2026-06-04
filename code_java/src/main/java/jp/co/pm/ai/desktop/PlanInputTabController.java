@@ -279,7 +279,59 @@ public final class PlanInputTabController {
 
     /** 行並べ替え後: §A-1（加工内容順）を維持しつつ配台試行順番を 1..n に振り直す。 */
     private void renumberDispatchTrialOrderColumn() {
+        // #region agent log
+        if (shell != null && rows != null && !rows.isEmpty()) {
+            int colTid = headersRef.indexOf(PlanInputProcessSequenceRowOrder.COL_TASK_ID);
+            int colProc = headersRef.indexOf(PlanInputProcessSequenceRowOrder.COL_PROCESS);
+            int colDto = headersRef.indexOf(PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER);
+            List<String> sample = new ArrayList<>();
+            for (int i = 0; i < Math.min(8, rows.size()); i++) {
+                ObservableList<String> r = rows.get(i);
+                sample.add(
+                        i
+                                + ":"
+                                + (colTid >= 0 && colTid < r.size() ? r.get(colTid) : "")
+                                + "/"
+                                + (colProc >= 0 && colProc < r.size() ? r.get(colProc) : "")
+                                + "/dto="
+                                + (colDto >= 0 && colDto < r.size() ? r.get(colDto) : ""));
+            }
+            AgentDebugLog.appendStructured(
+                    shell.snapshotUiEnv(),
+                    "a2361b",
+                    "H6",
+                    "PlanInputTabController:renumberDispatchTrialOrderColumn:before",
+                    "before stabilize",
+                    Map.of("rowCount", rows.size(), "orderHead", sample, "runId", "reorder-fix"));
+        }
+        // #endregion
         PlanInputProcessSequenceRowOrder.stabilizeAndRenumberDispatchTrialOrder(headersRef, rows);
+        // #region agent log
+        if (shell != null && rows != null && !rows.isEmpty()) {
+            int colTid = headersRef.indexOf(PlanInputProcessSequenceRowOrder.COL_TASK_ID);
+            int colProc = headersRef.indexOf(PlanInputProcessSequenceRowOrder.COL_PROCESS);
+            int colDto = headersRef.indexOf(PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER);
+            List<String> sample = new ArrayList<>();
+            for (int i = 0; i < Math.min(8, rows.size()); i++) {
+                ObservableList<String> r = rows.get(i);
+                sample.add(
+                        i
+                                + ":"
+                                + (colTid >= 0 && colTid < r.size() ? r.get(colTid) : "")
+                                + "/"
+                                + (colProc >= 0 && colProc < r.size() ? r.get(colProc) : "")
+                                + "/dto="
+                                + (colDto >= 0 && colDto < r.size() ? r.get(colDto) : ""));
+            }
+            AgentDebugLog.appendStructured(
+                    shell.snapshotUiEnv(),
+                    "a2361b",
+                    "H6",
+                    "PlanInputTabController:renumberDispatchTrialOrderColumn:after",
+                    "after stabilize",
+                    Map.of("rowCount", rows.size(), "orderHead", sample, "runId", "reorder-fix"));
+        }
+        // #endregion
     }
 
     void bindShell(MainShellController shell) {
