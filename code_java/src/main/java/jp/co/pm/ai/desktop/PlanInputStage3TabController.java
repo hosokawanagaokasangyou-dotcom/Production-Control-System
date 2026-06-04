@@ -45,6 +45,7 @@ import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.PlanInputDeprecatedOverrideColumnSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputEditedCellMarks;
 import jp.co.pm.ai.desktop.ui.PlanInputDateColumnSupport;
+import jp.co.pm.ai.desktop.ui.PlanInputProcessSequenceRowOrder;
 import jp.co.pm.ai.desktop.ui.PlanInputStage3DispatchableViolationSupport;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnReorderDialog;
 import jp.co.pm.ai.desktop.ui.SpreadsheetColumnSettingsStrip;
@@ -131,7 +132,8 @@ public class PlanInputStage3TabController {
         installStageRunButtonDepth(stage31RunButton, Color.rgb(120, 81, 169, 0.35));
         installStageRunButtonDepth(stage32RunButton, Color.rgb(120, 81, 169, 0.35));
 
-        StackPane.setAlignment(spreadsheetView, Pos.CENTER_LEFT);
+        StackPane.setAlignment(spreadsheetView, Pos.TOP_LEFT);
+        spreadsheetView.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
         spreadsheetHost.getChildren().add(spreadsheetView);
         VBox.setVgrow(spreadsheetHost, Priority.ALWAYS);
 
@@ -142,17 +144,16 @@ public class PlanInputStage3TabController {
                 SpreadsheetPlanInputRowDragSupport::skipFullRowExpansionDuringPlanInputRowDrag);
         SpreadsheetThemeBridge.install(spreadsheetView);
         SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome(spreadsheetView);
+        SpreadsheetTabularSupport.installSpreadsheetClickSelectionAlign(spreadsheetView);
         SpreadsheetPlanInputRowDragSupport.install(
                 spreadsheetView,
                 SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex(),
                 rows,
-                () -> {
-                    renumberDispatchTrialOrderColumn();
-                    markTableDirtySinceSave();
-                    rebuildSpreadsheet();
-                });
+                this::finishRowReorderAfterDnD);
         SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
-                spreadsheetHost, headerColumnCount::get);
+                spreadsheetHost,
+                headerColumnCount::get,
+                SpreadsheetPlanInputRowDragSupport::skipFullRowExpansionDuringPlanInputRowDrag);
         if (rowSearchField != null) {
             rowSearchField
                     .textProperty()
@@ -346,8 +347,8 @@ public class PlanInputStage3TabController {
         }
         int colIdx = focusedColumnIndex();
         markTableDirtySinceSave();
-        swapDataRows(i - 1, i);
-        focusCellAfterReorder(i - 1, colIdx);
+        swapDataRowsInMemory(i - 1, i);
+        scheduleRowReorderPresentation(i - 1, colIdx);
     }
 
     @FXML
@@ -358,8 +359,8 @@ public class PlanInputStage3TabController {
         }
         int colIdx = focusedColumnIndex();
         markTableDirtySinceSave();
-        swapDataRows(i, i + 1);
-        focusCellAfterReorder(i + 1, colIdx);
+        swapDataRowsInMemory(i, i + 1);
+        scheduleRowReorderPresentation(i + 1, colIdx);
     }
 
     @FXML
@@ -587,15 +588,26 @@ public class PlanInputStage3TabController {
     }
 
     private void rebuildSpreadsheet() {
-        rebuildSpreadsheet(true);
+        rebuildSpreadsheet(true, SpreadsheetTabularSupport.GridAttachMode.STANDARD);
     }
 
     private void rebuildSpreadsheet(boolean preserveColumnFilters) {
+        SpreadsheetTabularSupport.GridAttachMode attach =
+                preserveColumnFilters
+                        ? SpreadsheetTabularSupport.GridAttachMode.STANDARD
+                        : SpreadsheetTabularSupport.GridAttachMode.FULL_RESET;
+        rebuildSpreadsheet(preserveColumnFilters, attach);
+    }
+
+    private void rebuildSpreadsheet(
+            boolean preserveColumnFilters, SpreadsheetTabularSupport.GridAttachMode attachMode) {
+        boolean rowReorderRefresh =
+                attachMode == SpreadsheetTabularSupport.GridAttachMode.IN_PLACE;
         if (headersRef.isEmpty()) {
             detachGridHandler();
             GridBase empty = new GridBase(0, 0);
-            spreadsheetView.getSelectionModel().clearSelection();
-            spreadsheetView.setGrid(empty);
+            SpreadsheetTabularSupport.attachGridToSpreadsheetView(
+                    spreadsheetView, empty, SpreadsheetTabularSupport.GridAttachMode.STANDARD);
             currentGrid = empty;
             updateStage3DispatchableViolationWarning();
             return;
@@ -650,12 +662,30 @@ public class PlanInputStage3TabController {
                     };
             grid.addEventHandler(GridChange.GRID_CHANGE_EVENT, gridChangeHandler);
             currentGrid = grid;
-            spreadsheetView.getSelectionModel().clearSelection();
-            spreadsheetView.setGrid(grid);
+            SpreadsheetTabularSupport.attachGridToSpreadsheetView(
+                    spreadsheetView, grid, attachMode);
 
             Platform.runLater(
                     () -> {
                         try {
+                            if (rowReorderRefresh) {
+                                SpreadsheetTabularSupport.applyFixedLeadingColumns(
+                                        spreadsheetView, headerColumnCount.get());
+                                SpreadsheetTabularSupport.applyColumnFiltersWithDialog(
+                                        spreadsheetView);
+                                SpreadsheetMultiColumnFilterCoordinator.restoreColumnAllowedSnapshot(
+                                        spreadsheetView, columnFilterSnapshot);
+                                SpreadsheetTabularSupport.pinSpreadsheetFilterRow(spreadsheetView);
+                                String q =
+                                        rowSearchField != null && rowSearchField.getText() != null
+                                                ? rowSearchField.getText().trim()
+                                                : "";
+                                if (!q.isEmpty()) {
+                                    SpreadsheetMultiColumnFilterCoordinator.setRowTextSearchQuery(
+                                            spreadsheetView, q);
+                                }
+                                return;
+                            }
                             SpreadsheetTabularSupport.applyColumnWidths(
                                     spreadsheetView, widths, widthDefault);
                             SpreadsheetTabularSupport.applyFixedLeadingColumns(
@@ -703,17 +733,7 @@ public class PlanInputStage3TabController {
     }
 
     private void renumberDispatchTrialOrderColumn() {
-        int col = headersRef.indexOf(COL_DISPATCH_TRIAL_ORDER);
-        if (col < 0) {
-            return;
-        }
-        for (int i = 0; i < rows.size(); i++) {
-            ObservableList<String> r = rows.get(i);
-            while (r.size() <= col) {
-                r.add("");
-            }
-            r.set(col, Integer.toString(i + 1));
-        }
+        PlanInputProcessSequenceRowOrder.stabilizeAndRenumberDispatchTrialOrder(headersRef, rows);
     }
 
     private int selectedDataRowIndex() {
@@ -751,7 +771,24 @@ public class PlanInputStage3TabController {
         return 0;
     }
 
-    private void swapDataRows(int a, int b) {
+    private void finishRowReorderAfterDnD() {
+        renumberDispatchTrialOrderColumn();
+        markTableDirtySinceSave();
+        applyRowReorderPresentation(-1, -1);
+    }
+
+    private void scheduleRowReorderPresentation(int focusDataRow, int focusColumn) {
+        Platform.runLater(() -> applyRowReorderPresentation(focusDataRow, focusColumn));
+    }
+
+    private void applyRowReorderPresentation(int focusDataRow, int focusColumn) {
+        rebuildSpreadsheet(true, SpreadsheetTabularSupport.GridAttachMode.IN_PLACE);
+        if (focusDataRow >= 0) {
+            focusCellAfterReorder(focusDataRow, focusColumn);
+        }
+    }
+
+    private void swapDataRowsInMemory(int a, int b) {
         if (a < 0 || b < 0 || a >= rows.size() || b >= rows.size() || a == b) {
             return;
         }
@@ -759,7 +796,6 @@ public class PlanInputStage3TabController {
         rows.set(a, rows.get(b));
         rows.set(b, moved);
         renumberDispatchTrialOrderColumn();
-        rebuildSpreadsheet();
     }
 
     private void focusCellAfterReorder(int dataRowIndex, int columnIndex) {
@@ -781,9 +817,13 @@ public class PlanInputStage3TabController {
                         return;
                     }
                     var sm = spreadsheetView.getSelectionModel();
-                    sm.clearSelection();
-                    sm.clearAndSelect(viewRow, scol);
-                    sm.focus(viewRow, scol);
+                    SpreadsheetTabularSupport.safeClearSpreadsheetSelection(spreadsheetView);
+                    try {
+                        sm.clearAndSelect(viewRow, scol);
+                        sm.focus(viewRow, scol);
+                    } catch (RuntimeException ex) {
+                        SpreadsheetTabularSupport.safeClearSpreadsheetSelection(spreadsheetView);
+                    }
                 });
     }
 

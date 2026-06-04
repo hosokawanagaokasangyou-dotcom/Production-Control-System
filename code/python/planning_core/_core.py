@@ -8241,12 +8241,66 @@ def _df_first_col_index_for_header(columns: pd.Index, hname: str) -> int | None:
     return None
 
 
+def _plan_input_dispatch_trial_order_sort_tuples_for_active_rows(
+    df: "pd.DataFrame",
+    active: list[int],
+    dto_idx: int,
+) -> tuple[dict[int, tuple], dict[str, float]]:
+    """
+    §A-1 維持: 依頼NO ブロック（ブロック内最小の試行順キー）→ 加工内容 rank → 同一依頼内行順。
+    戻り値: (行 index → sort tuple, 依頼NO → ブロック最小 float キー) — ログ用。
+    """
+    seq_by_tid = _collect_process_content_order_by_task_id(df)
+    tid_block_float: dict[str, float] = {}
+    tid_line_seq: dict[int, int] = {}
+    tid_next_line: dict[str, int] = defaultdict(int)
+    proc_idx = df.columns.get_loc(TASK_COL_MACHINE) if TASK_COL_MACHINE in df.columns else None
+    if isinstance(proc_idx, slice):
+        proc_idx = None
+
+    for i in active:
+        row = df.iloc[i]
+        tid = planning_task_id_str_from_plan_row(row)
+        if tid:
+            tid_line_seq[i] = tid_next_line[tid]
+            tid_next_line[tid] += 1
+        else:
+            tid_line_seq[i] = i
+        fk = _parse_dispatch_trial_order_float_sort_key(df.iat[i, dto_idx])
+        if tid and fk is not None:
+            prev = tid_block_float.get(tid)
+            tid_block_float[tid] = fk if prev is None else min(prev, fk)
+
+    sort_tuple_by_row: dict[int, tuple] = {}
+    for i in active:
+        fk = _parse_dispatch_trial_order_float_sort_key(df.iat[i, dto_idx])
+        if fk is None:
+            sort_tuple_by_row[i] = (1, i)
+            continue
+        row = df.iloc[i]
+        tid = planning_task_id_str_from_plan_row(row)
+        block = tid_block_float.get(tid, fk) if tid else fk
+        rank = None
+        if proc_idx is not None:
+            proc = df.iat[i, proc_idx]
+            rank = _process_sequence_rank_for_machine(
+                proc, seq_by_tid.get(tid) or []
+            )
+        rank_key = int(rank) if rank is not None else 10**9
+        line_key = tid_line_seq.get(i, i)
+        sort_tuple_by_row[i] = (0, block, rank_key, line_key, i)
+    return sort_tuple_by_row, tid_block_float
+
+
 def sort_plan_input_dispatch_trial_order_by_float_keys_via_openpyxl(
     workbook_path: str | None = None,
 ) -> bool:
     """
     「配台計画_タスク入力」の **現在のシート内容だけ** を使い、列「配台試行順番」を
     小数を含む並べ替えキーとして解釈して昇順に行を並べ替え、1..n に振り直す。
+
+    同一依頼NO内は §A-1（``加工内容`` のカンマ区切り順）で工程行を連続させる。
+    ブロック全体の位置は当該依頼NO行の試行順キーの **最小値** で決める。
 
     - ``_apply_planning_sheet_post_load_mutations`` ・マスタ ・
       ``fill_plan_dispatch_trial_order_column_stage1`` は **呼ばない**。
@@ -8333,13 +8387,11 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_openpyxl(
                 return False
 
         row_by_key: dict[float, int] = {}
-        sort_tuple_by_row: dict[int, tuple] = {}
         n_invalid_key = 0
         for i in active:
             fk = _parse_dispatch_trial_order_float_sort_key(df.iat[i, dto_idx])
             if fk is None:
                 n_invalid_key += 1
-                sort_tuple_by_row[i] = (1, i)
                 continue
             if fk in row_by_key:
                 logging.error(
@@ -8350,7 +8402,12 @@ def sort_plan_input_dispatch_trial_order_by_float_keys_via_openpyxl(
                 )
                 return False
             row_by_key[fk] = i
-            sort_tuple_by_row[i] = (0, fk, i)
+
+        sort_tuple_by_row, _tid_blocks = (
+            _plan_input_dispatch_trial_order_sort_tuples_for_active_rows(
+                df, active, dto_idx
+            )
+        )
 
         if n_invalid_key:
             logging.info(

@@ -52,6 +52,7 @@ import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.PlanInputDeprecatedOverrideColumnSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputEditedCellMarks;
+import jp.co.pm.ai.desktop.ui.PlanInputProcessSequenceRowOrder;
 import jp.co.pm.ai.desktop.ui.PlanInputDateColumnSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputRawInputDateShift;
 import jp.co.pm.ai.desktop.ui.PlanInputUnprocessedDispatchRemainingMismatchSupport;
@@ -231,7 +232,8 @@ public final class PlanInputTabController {
                                 }
                             });
         }
-        StackPane.setAlignment(spreadsheetView, Pos.CENTER_LEFT);
+        StackPane.setAlignment(spreadsheetView, Pos.TOP_LEFT);
+        spreadsheetView.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
         spreadsheetHost.getChildren().add(spreadsheetView);
         VBox.setVgrow(spreadsheetHost, Priority.ALWAYS);
 
@@ -242,18 +244,17 @@ public final class PlanInputTabController {
                 SpreadsheetPlanInputRowDragSupport::skipFullRowExpansionDuringPlanInputRowDrag);
         SpreadsheetThemeBridge.install(spreadsheetView);
         SpreadsheetTabularSupport.installPmAiReadableSpreadsheetChrome(spreadsheetView);
+        SpreadsheetTabularSupport.installSpreadsheetClickSelectionAlign(spreadsheetView);
         SpreadsheetPlanInputRowDragSupport.install(
                 spreadsheetView,
                 SpreadsheetTabularSupport.spreadsheetFirstDataRowIndex(),
                 rows,
-                () -> {
-                    renumberDispatchTrialOrderColumn();
-                    markPlanInputTableDirtySinceSave();
-                    rebuildSpreadsheet();
-                });
+                this::finishPlanInputRowReorderAfterDnD);
 
         SpreadsheetTabularSupport.installSpreadsheetChromeRelayoutDebouncerForHost(
-                spreadsheetHost, headerColumnCount::get);
+                spreadsheetHost,
+                headerColumnCount::get,
+                SpreadsheetPlanInputRowDragSupport::skipFullRowExpansionDuringPlanInputRowDrag);
 
         rowSearchField
                 .textProperty()
@@ -276,19 +277,9 @@ public final class PlanInputTabController {
         button.setEffect(depth);
     }
 
-    /** Renumbers dispatch-trial-order column to 1..n after row reorder (DnD, etc.). */
+    /** 行並べ替え後: §A-1（加工内容順）を維持しつつ配台試行順番を 1..n に振り直す。 */
     private void renumberDispatchTrialOrderColumn() {
-        int col = headersRef.indexOf(COL_DISPATCH_TRIAL_ORDER);
-        if (col < 0) {
-            return;
-        }
-        for (int i = 0; i < rows.size(); i++) {
-            ObservableList<String> r = rows.get(i);
-            while (r.size() <= col) {
-                r.add("");
-            }
-            r.set(col, Integer.toString(i + 1));
-        }
+        PlanInputProcessSequenceRowOrder.stabilizeAndRenumberDispatchTrialOrder(headersRef, rows);
     }
 
     void bindShell(MainShellController shell) {
@@ -759,8 +750,8 @@ public final class PlanInputTabController {
         }
         int colIdx = planInputFocusedColumnIndex();
         markPlanInputTableDirtySinceSave();
-        swapPlanInputDataRows(i - 1, i);
-        focusPlanInputCellAfterReorder(i - 1, colIdx);
+        swapPlanInputDataRowsInMemory(i - 1, i);
+        schedulePlanInputRowReorderPresentation(i - 1, colIdx);
     }
 
     @FXML
@@ -771,8 +762,8 @@ public final class PlanInputTabController {
         }
         int colIdx = planInputFocusedColumnIndex();
         markPlanInputTableDirtySinceSave();
-        swapPlanInputDataRows(i, i + 1);
-        focusPlanInputCellAfterReorder(i + 1, colIdx);
+        swapPlanInputDataRowsInMemory(i, i + 1);
+        schedulePlanInputRowReorderPresentation(i + 1, colIdx);
     }
 
     /** Selected data row index in {@link #rows}, or -1. Uses model row when filters/sort change view order. */
@@ -812,7 +803,26 @@ public final class PlanInputTabController {
         return 0;
     }
 
-    private void swapPlanInputDataRows(int a, int b) {
+    /** DnD 完了後（{@link SpreadsheetPlanInputRowDragSupport} が model を移動済み）。 */
+    private void finishPlanInputRowReorderAfterDnD() {
+        renumberDispatchTrialOrderColumn();
+        markPlanInputTableDirtySinceSave();
+        applyPlanInputRowReorderPresentation(-1, -1);
+    }
+
+    /** ↑↓ ボタン: 行入替後のグリッド再構築は次 FX パルスで行う（選択検証の IndexOutOfBounds 回避）。 */
+    private void schedulePlanInputRowReorderPresentation(int focusDataRow, int focusColumn) {
+        Platform.runLater(() -> applyPlanInputRowReorderPresentation(focusDataRow, focusColumn));
+    }
+
+    private void applyPlanInputRowReorderPresentation(int focusDataRow, int focusColumn) {
+        rebuildSpreadsheet(true, SpreadsheetTabularSupport.GridAttachMode.IN_PLACE);
+        if (focusDataRow >= 0) {
+            focusPlanInputCellAfterReorder(focusDataRow, focusColumn);
+        }
+    }
+
+    private void swapPlanInputDataRowsInMemory(int a, int b) {
         if (a < 0 || b < 0 || a >= rows.size() || b >= rows.size() || a == b) {
             return;
         }
@@ -820,7 +830,6 @@ public final class PlanInputTabController {
         rows.set(a, rows.get(b));
         rows.set(b, moved);
         renumberDispatchTrialOrderColumn();
-        rebuildSpreadsheet();
     }
 
     /**
@@ -845,9 +854,13 @@ public final class PlanInputTabController {
                         return;
                     }
                     var sm = spreadsheetView.getSelectionModel();
-                    sm.clearSelection();
-                    sm.clearAndSelect(viewRow, scol);
-                    sm.focus(viewRow, scol);
+                    SpreadsheetTabularSupport.safeClearSpreadsheetSelection(spreadsheetView);
+                    try {
+                        sm.clearAndSelect(viewRow, scol);
+                        sm.focus(viewRow, scol);
+                    } catch (RuntimeException ex) {
+                        SpreadsheetTabularSupport.safeClearSpreadsheetSelection(spreadsheetView);
+                    }
                 });
     }
 
@@ -1078,7 +1091,7 @@ public final class PlanInputTabController {
     }
 
     private void rebuildSpreadsheet() {
-        rebuildSpreadsheet(true);
+        rebuildSpreadsheet(true, SpreadsheetTabularSupport.GridAttachMode.STANDARD);
     }
 
     /**
@@ -1086,12 +1099,22 @@ public final class PlanInputTabController {
      *     論理列並べ替え後は {@code false}（列インデックスが変わるため）。
      */
     private void rebuildSpreadsheet(boolean preserveColumnFilters) {
+        SpreadsheetTabularSupport.GridAttachMode attach =
+                preserveColumnFilters
+                        ? SpreadsheetTabularSupport.GridAttachMode.STANDARD
+                        : SpreadsheetTabularSupport.GridAttachMode.FULL_RESET;
+        rebuildSpreadsheet(preserveColumnFilters, attach);
+    }
+
+    private void rebuildSpreadsheet(
+            boolean preserveColumnFilters, SpreadsheetTabularSupport.GridAttachMode attachMode) {
+        boolean rowReorderRefresh =
+                attachMode == SpreadsheetTabularSupport.GridAttachMode.IN_PLACE;
         if (headersRef.isEmpty()) {
             detachGridHandler();
             GridBase empty = new GridBase(0, 0);
-            // DnD 直後など setGrid 内の選択検証が旧インデックスで IndexOutOfBounds になるのを防ぐ
-            spreadsheetView.getSelectionModel().clearSelection();
-            spreadsheetView.setGrid(empty);
+            SpreadsheetTabularSupport.attachGridToSpreadsheetView(
+                    spreadsheetView, empty, SpreadsheetTabularSupport.GridAttachMode.STANDARD);
             currentGrid = empty;
             updatePlanInputUnprocessedDispatchRemainingWarning();
             return;
@@ -1146,12 +1169,30 @@ public final class PlanInputTabController {
                     };
             grid.addEventHandler(GridChange.GRID_CHANGE_EVENT, gridChangeHandler);
             currentGrid = grid;
-            spreadsheetView.getSelectionModel().clearSelection();
-            spreadsheetView.setGrid(grid);
+            SpreadsheetTabularSupport.attachGridToSpreadsheetView(
+                    spreadsheetView, grid, attachMode);
 
             Platform.runLater(
                     () -> {
                         try {
+                            if (rowReorderRefresh) {
+                                SpreadsheetTabularSupport.applyFixedLeadingColumns(
+                                        spreadsheetView, headerColumnCount.get());
+                                SpreadsheetTabularSupport.applyColumnFiltersWithDialog(
+                                        spreadsheetView);
+                                SpreadsheetMultiColumnFilterCoordinator.restoreColumnAllowedSnapshot(
+                                        spreadsheetView, columnFilterSnapshot);
+                                SpreadsheetTabularSupport.pinSpreadsheetFilterRow(spreadsheetView);
+                                String q =
+                                        rowSearchField.getText() != null
+                                                ? rowSearchField.getText().trim()
+                                                : "";
+                                if (!q.isEmpty()) {
+                                    SpreadsheetMultiColumnFilterCoordinator.setRowTextSearchQuery(
+                                            spreadsheetView, q);
+                                }
+                                return;
+                            }
                             SpreadsheetTabularSupport.applyColumnWidths(
                                     spreadsheetView, widths, widthDefault);
                             SpreadsheetTabularSupport.applyFixedLeadingColumns(
