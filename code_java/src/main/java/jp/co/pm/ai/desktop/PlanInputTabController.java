@@ -48,7 +48,6 @@ import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck;
 import jp.co.pm.ai.desktop.dispatch.DispatchPlanInputInteractiveCoverageCheck.TaskKey;
 import jp.co.pm.ai.desktop.io.ExcelCellReadSupport;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
-import jp.co.pm.ai.desktop.debug.AgentDebugLog;
 import jp.co.pm.ai.desktop.ui.ColumnVisibilitySupport;
 import jp.co.pm.ai.desktop.ui.PlanInputDeprecatedOverrideColumnSupport;
 import jp.co.pm.ai.desktop.ui.PlanInputEditedCellMarks;
@@ -92,8 +91,6 @@ public final class PlanInputTabController {
                     + "（段階2 load_planning_tasks_df: CSV / Parquet / xlsx 対応）。"
                     + "Excel のときはシート名も指定（TASK_PLAN_SHEET / この欄）。"
                     + " .xlsx 保存はデータのみ（マクロは含みません）。";
-
-    private static final String DEBUG_SESSION_ID = "5a9d50";
 
     private Stage ownerStage;
 
@@ -280,71 +277,7 @@ public final class PlanInputTabController {
 
     /** 行並べ替え後: §A-1（加工内容順）を維持しつつ配台試行順番を 1..n に振り直す。 */
     private void renumberDispatchTrialOrderColumn() {
-        // #region agent log
-        if (shell != null && rows != null && !rows.isEmpty()) {
-            int colTid = headersRef.indexOf(PlanInputProcessSequenceRowOrder.COL_TASK_ID);
-            int colProc = headersRef.indexOf(PlanInputProcessSequenceRowOrder.COL_PROCESS);
-            int colDto = headersRef.indexOf(PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER);
-            List<String> sample = new ArrayList<>();
-            for (int i = 0; i < Math.min(8, rows.size()); i++) {
-                ObservableList<String> r = rows.get(i);
-                sample.add(
-                        i
-                                + ":"
-                                + (colTid >= 0 && colTid < r.size() ? r.get(colTid) : "")
-                                + "/"
-                                + (colProc >= 0 && colProc < r.size() ? r.get(colProc) : "")
-                                + "/dto="
-                                + (colDto >= 0 && colDto < r.size() ? r.get(colDto) : ""));
-            }
-            AgentDebugLog.appendStructured(
-                    shell.snapshotUiEnv(),
-                    "a2361b",
-                    "H6",
-                    "PlanInputTabController:renumberDispatchTrialOrderColumn:before",
-                    "before stabilize",
-                    Map.of(
-                            "rowCount",
-                            rows.size(),
-                            "orderHead",
-                            sample,
-                            "runId",
-                            "eligible-block-fix"));
-        }
-        // #endregion
         PlanInputProcessSequenceRowOrder.stabilizeAndRenumberDispatchTrialOrder(headersRef, rows);
-        // #region agent log
-        if (shell != null && rows != null && !rows.isEmpty()) {
-            int colTid = headersRef.indexOf(PlanInputProcessSequenceRowOrder.COL_TASK_ID);
-            int colProc = headersRef.indexOf(PlanInputProcessSequenceRowOrder.COL_PROCESS);
-            int colDto = headersRef.indexOf(PlanInputProcessSequenceRowOrder.COL_DISPATCH_TRIAL_ORDER);
-            List<String> sample = new ArrayList<>();
-            for (int i = 0; i < Math.min(8, rows.size()); i++) {
-                ObservableList<String> r = rows.get(i);
-                sample.add(
-                        i
-                                + ":"
-                                + (colTid >= 0 && colTid < r.size() ? r.get(colTid) : "")
-                                + "/"
-                                + (colProc >= 0 && colProc < r.size() ? r.get(colProc) : "")
-                                + "/dto="
-                                + (colDto >= 0 && colDto < r.size() ? r.get(colDto) : ""));
-            }
-            AgentDebugLog.appendStructured(
-                    shell.snapshotUiEnv(),
-                    "a2361b",
-                    "H6",
-                    "PlanInputTabController:renumberDispatchTrialOrderColumn:after",
-                    "after stabilize",
-                    Map.of(
-                            "rowCount",
-                            rows.size(),
-                            "orderHead",
-                            sample,
-                            "runId",
-                            "eligible-block-fix"));
-        }
-        // #endregion
     }
 
     void bindShell(MainShellController shell) {
@@ -1318,31 +1251,6 @@ public final class PlanInputTabController {
         } else {
             planInputValidationWarningLabel.setText("");
         }
-        // #region agent log
-        if (shell != null) {
-            AgentDebugLog.appendStructured(
-                    shell.snapshotUiEnv(),
-                    DEBUG_SESSION_ID,
-                    "A",
-                    "PlanInputTabController.updatePlanInputUnprocessedDispatchRemainingWarning",
-                    "plan-input unprocessed vs dispatch-remaining mismatch scan",
-                    Map.of(
-                            "mismatchCount",
-                            mismatchTaskIds.size(),
-                            "mismatchTaskIds",
-                            mismatchTaskIds,
-                            "headersHasUnprocessed",
-                            headersRef.contains(
-                                    PlanInputUnprocessedDispatchRemainingMismatchSupport
-                                            .COL_UNPROCESSED),
-                            "headersHasDispatchRemaining",
-                            headersRef.contains(
-                                    PlanInputUnprocessedDispatchRemainingMismatchSupport
-                                            .COL_DISPATCH_REMAINING),
-                            "warningVisible",
-                            show));
-        }
-        // #endregion
     }
 
     private void applyLoaded() {
