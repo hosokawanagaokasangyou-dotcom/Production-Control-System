@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import jp.co.pm.ai.planning.stage2.Stage2InProgressNextDayDispatchIo;
+
 import jp.co.pm.ai.desktop.ui.TabularCellHighlight;
 
 /**
@@ -72,6 +74,36 @@ public final class DispatchPlanInputInteractiveCoverageCheck {
 
     public static boolean isEligiblePlanInputRow(Map<String, String> row) {
         return !isExcludedFromDispatchCoverage(row);
+    }
+
+    /**
+     * 加工途中・翌日配台ダイアログで 0 m と明示された行を整合確認の期待リストから外す。
+     *
+     * <p>段階2配台対象から外す意図（ダイアログ文言）に合わせ、手動修正表への必須載せ要件からも除外する。
+     */
+    public static List<TaskKey> excludeInProgressZeroNextDayFromExpected(
+            List<TaskKey> expected, Map<String, String> ui) {
+        if (expected == null || expected.isEmpty()) {
+            return List.of();
+        }
+        Set<String> zeroKeys = Stage2InProgressNextDayDispatchIo.zeroNextDayRowKeys(ui);
+        if (zeroKeys.isEmpty()) {
+            return expected;
+        }
+        List<TaskKey> filtered = new ArrayList<>(expected.size());
+        for (TaskKey key : expected) {
+            if (!key.isComplete()) {
+                continue;
+            }
+            String rowKey =
+                    Stage2InProgressNextDayDispatchIo.rowKey(
+                            key.requestNo(), key.process(), key.machineName());
+            if (zeroKeys.contains(rowKey)) {
+                continue;
+            }
+            filtered.add(key);
+        }
+        return List.copyOf(filtered);
     }
 
     /** 計画入力の期待キー（出現順・重複除去）のうち、配台表に無いもの。 */

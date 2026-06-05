@@ -622,6 +622,9 @@ public final class MainShellController {
     /** セッション保存する見出しエイリアス（キーは {@link MainShellTabId#key()}）。 */
     private final Map<String, String> mainShellTabTitleAliases = new LinkedHashMap<>();
 
+    /** 固定子タブ見出し色（{@link jp.co.pm.ai.desktop.config.MainShellInnerTabColorKeys}）。 */
+    private final Map<String, String> innerTabHeaderColorByKey = new LinkedHashMap<>();
+
     private static final String PM_AI_DESKTOP_CSS =
             Objects.requireNonNull(
                             PmAiFxApp.class.getResource("/jp/co/pm/ai/desktop/css/pm-ai-desktop.css"),
@@ -1186,6 +1189,7 @@ public final class MainShellController {
                 snapshotMainShellTabLayout(),
                 snapshotMainShellTabTitleAliases(),
                 snapshotInnerTabSelectedIndexByShellTabKey(),
+                snapshotInnerTabHeaderColorByKey(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttZoomPercent(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttDateColWidth(),
                 equipmentGanttGraphicTabController.snapshotEquipmentGanttMachineColWidth(),
@@ -1737,7 +1741,11 @@ public final class MainShellController {
 
     /** 終了確認後、または内部終了時のクリーンアップ（セッション保存・ロック解放）。 */
     private void performApplicationShutdownOnClose() {
-        ProcessOwnedLockFiles.releaseAllOwnedQuietly();
+        try {
+            ProcessOwnedLockFiles.releaseAllOwnedQuietly();
+        } catch (LinkageError ignored) {
+            // 増分 compile で target/classes が欠けると NoClassDefFoundError になるため終了自体は続行する
+        }
         if (geminiFreeTierModelsRefreshService != null) {
             geminiFreeTierModelsRefreshService.shutdown();
         }
@@ -2198,6 +2206,157 @@ public final class MainShellController {
         refreshMainShellTabDisplayedTitles();
     }
 
+    Map<String, String> innerTabHeaderColorByKeySnapshot() {
+        return Map.copyOf(innerTabHeaderColorByKey);
+    }
+
+    /** 依頼書入力など遅延構築タブの子 TabPane へ、保存済み見出し色を再適用する。 */
+    public void refreshInnerTabHeaderColorsForShellTab(MainShellTabId id) {
+        if (id == null) {
+            return;
+        }
+        applyInnerTabHeaderColorsForShellTab(id, innerTabHeaderColorByKey);
+        refreshMainShellTabHeaderChromeFromStoredColors();
+        Platform.runLater(this::refreshMainShellTabHeaderChromeFromStoredColors);
+    }
+
+    private Map<String, String> snapshotInnerTabHeaderColorByKey() {
+        return Map.copyOf(innerTabHeaderColorByKey);
+    }
+
+    private void applyInnerTabHeaderColorsFromSession(Map<String, String> fromSession) {
+        innerTabHeaderColorByKey.clear();
+        if (fromSession != null) {
+            for (Map.Entry<String, String> e : fromSession.entrySet()) {
+                if (e.getKey() != null
+                        && !e.getKey().isBlank()
+                        && e.getValue() != null
+                        && !e.getValue().isBlank()) {
+                    innerTabHeaderColorByKey.put(e.getKey().trim(), e.getValue().strip());
+                }
+            }
+        }
+        applyInnerTabHeaderColorsToLiveUi(innerTabHeaderColorByKey);
+    }
+
+    private void syncInnerTabHeaderColorsFromOrganizerTree(
+            TreeItem<MainShellTabOrganizerTabController.OrgRow> invisibleRoot) {
+        LinkedHashMap<String, String> next = new LinkedHashMap<>();
+        collectInnerTabHeaderColorsFromOrganizerTree(invisibleRoot, next);
+        innerTabHeaderColorByKey.clear();
+        innerTabHeaderColorByKey.putAll(next);
+        applyInnerTabHeaderColorsToLiveUi(innerTabHeaderColorByKey);
+    }
+
+    private static void collectInnerTabHeaderColorsFromOrganizerTree(
+            TreeItem<MainShellTabOrganizerTabController.OrgRow> node,
+            Map<String, String> out) {
+        if (node == null) {
+            return;
+        }
+        MainShellTabOrganizerTabController.OrgRow r = node.getValue();
+        if (r != null) {
+            if (r.kind == MainShellTabOrganizerTabController.OrgRow.Kind.INNER_TAB) {
+                String key =
+                        jp.co.pm.ai.desktop.config.MainShellInnerTabColorKeys.innerKey(
+                                r.tabId, r.groupTitle);
+                putOrRemoveInnerTabColor(out, key, r.colorHex);
+            } else if (r.kind == MainShellTabOrganizerTabController.OrgRow.Kind.INNER_NESTED_TAB) {
+                String key =
+                        jp.co.pm.ai.desktop.config.MainShellInnerTabColorKeys.nestedKey(
+                                r.tabId, r.anchorInnerTabLabel, r.groupTitle);
+                putOrRemoveInnerTabColor(out, key, r.colorHex);
+            }
+        }
+        for (TreeItem<MainShellTabOrganizerTabController.OrgRow> c : node.getChildren()) {
+            collectInnerTabHeaderColorsFromOrganizerTree(c, out);
+        }
+    }
+
+    private static void putOrRemoveInnerTabColor(
+            Map<String, String> out, String key, String colorHex) {
+        if (key == null || key.isBlank()) {
+            return;
+        }
+        String h = colorHex != null ? colorHex.strip() : "";
+        if (h.isBlank()) {
+            out.remove(key);
+        } else {
+            out.put(key, h);
+        }
+    }
+
+    private void applyInnerTabHeaderColorsToLiveUi(Map<String, String> colors) {
+        Map<String, String> safe = colors != null ? colors : Map.of();
+        for (MainShellTabId id : MainShellTabId.values()) {
+            if (id == MainShellTabId.TAB_ORGANIZER) {
+                continue;
+            }
+            if (jp.co.pm.ai.desktop.config.MainShellInnerTabCatalog.labelsFor(id).isEmpty()) {
+                continue;
+            }
+            applyInnerTabHeaderColorsForShellTab(id, safe);
+        }
+    }
+
+    private void applyInnerTabHeaderColorsForShellTab(
+            MainShellTabId shellTabId, Map<String, String> colors) {
+        Tab mainTab = mainShellTabFor(shellTabId);
+        if (mainTab == null || isLazyMainShellTabPlaceholder(mainTab.getContent())) {
+            return;
+        }
+        applyInnerTabHeaderColorsUnderNode(mainTab.getContent(), shellTabId, colors);
+    }
+
+    private void applyInnerTabHeaderColorsUnderNode(
+            javafx.scene.Node node, MainShellTabId shellTabId, Map<String, String> colors) {
+        javafx.scene.control.TabPane outer = findFirstTabPane(node);
+        if (outer == null) {
+            return;
+        }
+        List<String> labels =
+                jp.co.pm.ai.desktop.config.MainShellInnerTabCatalog.labelsFor(shellTabId);
+        for (javafx.scene.control.Tab tab : outer.getTabs()) {
+            String text = nz(tab.getText());
+            String innerKey =
+                    jp.co.pm.ai.desktop.config.MainShellInnerTabColorKeys.innerKey(shellTabId, text);
+            applyShellTabColor(tab, colors.getOrDefault(innerKey, ""));
+            int idx = labels.indexOf(text);
+            if (idx >= 0) {
+                List<String> nestedLabels =
+                        jp.co.pm.ai.desktop.config.MainShellInnerTabCatalog
+                                .nestedInnerTabLabelsUnderInnerTab(shellTabId, idx);
+                if (!nestedLabels.isEmpty() && tab.getContent() != null) {
+                    javafx.scene.control.TabPane inner = findFirstTabPane(tab.getContent());
+                    if (inner != null) {
+                        for (javafx.scene.control.Tab nestedTab : inner.getTabs()) {
+                            String nestedText = nz(nestedTab.getText());
+                            String nestedKey =
+                                    jp.co.pm.ai.desktop.config.MainShellInnerTabColorKeys.nestedKey(
+                                            shellTabId, text, nestedText);
+                            applyShellTabColor(nestedTab, colors.getOrDefault(nestedKey, ""));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static javafx.scene.control.TabPane findFirstTabPane(javafx.scene.Node node) {
+        if (node instanceof javafx.scene.control.TabPane tp) {
+            return tp;
+        }
+        if (node instanceof javafx.scene.Parent parent) {
+            for (javafx.scene.Node child : parent.getChildrenUnmodifiable()) {
+                javafx.scene.control.TabPane found = findFirstTabPane(child);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
     private Map<String, Integer> snapshotInnerTabSelectedIndexByShellTabKey() {
         LinkedHashMap<String, Integer> m = new LinkedHashMap<>();
         if (deliveryCalendarViewTabController != null) {
@@ -2465,6 +2624,7 @@ public final class MainShellController {
             }
             applyMainShellTabTitleAliasesFromSession(s.mainShellTabTitleAliases());
             applyInnerTabSelectionsFromSession(s.innerTabSelectedIndexByShellTabKey());
+            applyInnerTabHeaderColorsFromSession(s.innerTabHeaderColorByKey());
             lastEffectiveShellLeaf =
                     resolveEffectiveLeafTab(tabPane.getSelectionModel().getSelectedItem());
         } finally {
@@ -2599,6 +2759,10 @@ public final class MainShellController {
             return;
         }
         restoreDeferredTabContent(tab);
+        MainShellTabId shellId = mainShellTabId(tab);
+        if (shellId != null) {
+            applyInnerTabHeaderColorsForShellTab(shellId, innerTabHeaderColorByKey);
+        }
         Node content = tab.getContent();
         if (!(content instanceof TabPane inner)) {
             return;
@@ -2950,6 +3114,7 @@ public final class MainShellController {
         }
         syncLeafTabColorsFromOrganizerTree(invisibleRoot);
         syncGroupTabHeadersFromOrganizerTree(invisibleRoot);
+        syncInnerTabHeaderColorsFromOrganizerTree(invisibleRoot);
         /* 同一フレームで見出しへ反映（runLater のみだと未レイアウトで poke が無効になることがある） */
         refreshMainShellTabHeaderChromeFromStoredColors();
         Platform.runLater(this::refreshMainShellTabHeaderChromeFromStoredColors);
@@ -3193,6 +3358,8 @@ public final class MainShellController {
         if (!rebuildMainShellTabsFromLayout(layout)) {
             return false;
         }
+        applyInnerTabHeaderColorsToLiveUi(innerTabHeaderColorByKey);
+        Platform.runLater(this::refreshMainShellTabHeaderChromeFromStoredColors);
         DesktopSessionStateStore.save(collectDesktopSession());
         return true;
     }
@@ -6376,11 +6543,11 @@ public final class MainShellController {
             appendLog(
                     "["
                             + stageJa
-                            + "] 入力3表に未保存の変更があります。「保存」または「入力3表を再読込」で確定してから実行してください。");
+                            + "] 入力3表に未保存の変更があります。「保存」または「再読み込み」で確定してから実行してください。");
             showErrorDialog(
                     stageJa,
                     stageJa
-                            + " を実行する前に、入力3表タブの変更を「保存」または「入力3表を再読込」で確定してください。");
+                            + " を実行する前に、入力3表タブの変更を「保存」または「再読み込み」で確定してください。");
             return true;
         }
         return false;

@@ -1394,6 +1394,20 @@ public final class AppPaths {
                 .normalize();
     }
 
+    /**
+     * 操作者ダイアログで最後に選んだメンバー名（PC ローカル。{@link #factoryOperatorUsersStorePath} とは別）。
+     */
+    public static Path localFactoryOperatorLastSelectedPath(FactorySite site) {
+        FactorySite effective = site != null ? site : FactorySite.KONAN;
+        String suffix = effective.name().toLowerCase(Locale.ROOT);
+        return Paths.get(
+                        System.getProperty("user.home"),
+                        ".pm-ai-desktop",
+                        "last-factory-operator-" + suffix + ".txt")
+                .toAbsolutePath()
+                .normalize();
+    }
+
     /** 工場別ユーザー管理 PDF のファイル名（{@link FactorySite#name()} を含む）。 */
     public static String factoryOperatorUsersPdfFileName(FactorySite site) {
         FactorySite effective = site != null ? site : FactorySite.KONAN;

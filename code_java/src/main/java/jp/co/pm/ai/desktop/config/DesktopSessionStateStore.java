@@ -147,6 +147,19 @@ public final class DesktopSessionStateStore {
         return RequestFormComboChoices.fromJson(merged);
     }
 
+    /**
+     * 依頼書入力【設定】タブの「工場出荷状態に戻す」用。{@code init_setting} の工場別既定を優先し、
+     * 無ければマージ済み bundled、それも空なら {@link RequestFormComboChoices#bundledDefaults()}。
+     */
+    public static RequestFormComboChoices factoryShipmentRequestFormComboChoices(
+            Map<String, String> ui, FactorySite site) {
+        RequestFormComboChoices fromInit = loadFactoryRequestFormComboChoices(ui, site);
+        if (!fromInit.isEmpty()) {
+            return fromInit.mergedWithDefaults();
+        }
+        return RequestFormComboChoices.bundledDefaults();
+    }
+
     public static Path factoryJuchuHeaderAliasesPath(Map<String, String> ui, FactorySite site) {
         FactorySite effective = site != null ? site : GlobalInitSettingTarget.load();
         if (ui == null || ui.isEmpty()) {
@@ -236,6 +249,7 @@ public final class DesktopSessionStateStore {
         putMainShellTabLayout(root, state.mainShellTabLayout());
         putStringStringMap(root, "mainShellTabTitleAliases", state.mainShellTabTitleAliases());
         putStringIntMap(root, "innerTabSelectedIndexByShellTabKey", state.innerTabSelectedIndexByShellTabKey());
+        putStringStringMap(root, "innerTabHeaderColorByKey", state.innerTabHeaderColorByKey());
         putEquipmentGanttGraphicPrefs(root, state);
         putStage1NetworkCacheBadgePrefs(root, state);
         putRequestFormPreviewUpdateBadgePrefs(root, state);
@@ -377,6 +391,7 @@ public final class DesktopSessionStateStore {
                 loadMainShellTabLayout(root),
                 loadStringStringMap(root, "mainShellTabTitleAliases"),
                 loadStringIntMap(root, "innerTabSelectedIndexByShellTabKey"),
+                loadStringStringMap(root, "innerTabHeaderColorByKey"),
                 optionalDouble(root, "equipmentGanttGraphicZoomPercent", 0d),
                 optionalDouble(root, "equipmentGanttDateColWidth", 0d),
                 optionalDouble(root, "equipmentGanttMachineColWidth", 0d),

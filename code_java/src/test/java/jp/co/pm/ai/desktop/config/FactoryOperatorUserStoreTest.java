@@ -24,6 +24,7 @@ class FactoryOperatorUserStoreTest {
     @BeforeEach
     void isolateStore() throws Exception {
         System.setProperty("pm.ai.test.factoryOperatorUserStore", tmp.resolve("operators.bin").toString());
+        System.setProperty("pm.ai.test.factoryOperatorLastSelectedDir", tmp.resolve("last-selected").toString());
         FactoryOperatorUserStore.resetStoreForTests();
     }
 
@@ -31,6 +32,7 @@ class FactoryOperatorUserStoreTest {
     void clearProperty() {
         System.clearProperty("pm.ai.test.factoryOperatorUserStore");
         System.clearProperty("pm.ai.test.factoryOperatorUserLegacyStore");
+        System.clearProperty("pm.ai.test.factoryOperatorLastSelectedDir");
     }
 
     @Test
@@ -69,11 +71,13 @@ class FactoryOperatorUserStoreTest {
     }
 
     @Test
-    void persistsLastSelected() throws Exception {
+    void persistsLastSelectedLocallyNotInSharedBin() throws Exception {
         FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "古家");
         FactoryOperatorUserStore.clearSessionOperatorName();
         assertEquals("古家", FactoryOperatorUserStore.lastSelectedForFactory(FactorySite.KONAN));
-        assertTrue(Files.isRegularFile(FactoryOperatorUserStore.storePath()));
+        Path redirected = tmp.resolve("last-selected").resolve("last-factory-operator-konan.txt");
+        assertTrue(Files.isRegularFile(redirected));
+        assertEquals("古家", Files.readString(redirected, StandardCharsets.UTF_8).strip());
     }
 
     @Test
@@ -256,13 +260,16 @@ class FactoryOperatorUserStoreTest {
         Path networkBin = blockedParent.resolve(AppPaths.FACTORY_OPERATOR_USERS_BIN);
         Map<String, String> ui =
                 Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, summary.toString());
-        FactoryOperatorUserStore.configureFromUi(ui, FactorySite.KONAN);
         Path local = AppPaths.localFactoryOperatorUsersStorePath(FactorySite.KONAN);
+        Files.deleteIfExists(local);
+        FactoryOperatorUserStore.resetStoreForTests();
+        FactoryOperatorUserStore.configureFromUi(ui, FactorySite.KONAN);
         assertEquals(local, FactoryOperatorUserStore.storePath());
         assertTrue(FactoryOperatorUserStore.usingLocalStoreFallback());
         FactoryOperatorUserStore.addName(FactorySite.KONAN, "ローカル");
         assertTrue(Files.isRegularFile(local));
         assertTrue(!Files.isRegularFile(networkBin));
+        Files.deleteIfExists(local);
     }
 
     @Test
@@ -309,9 +316,13 @@ class FactoryOperatorUserStoreTest {
         Files.createDirectories(target.getParent());
         System.setProperty("pm.ai.test.factoryOperatorUserStore", target.toString());
         System.setProperty("pm.ai.test.factoryOperatorUserLegacyStore", legacy.toString());
+        System.setProperty("pm.ai.test.factoryOperatorLastSelectedDir", tmp.resolve("legacy-last").toString());
         FactoryOperatorUserStore.resetStoreForTests();
         assertEquals(List.of("砂田", "古家"), FactoryOperatorUserStore.namesForFactory(FactorySite.KONAN));
         assertEquals("古家", FactoryOperatorUserStore.lastSelectedForFactory(FactorySite.KONAN));
+        assertTrue(
+                Files.isRegularFile(
+                        tmp.resolve("legacy-last").resolve("last-factory-operator-konan.txt")));
         assertTrue(Files.isRegularFile(target));
         byte[] saved = Files.readAllBytes(target);
         assertEquals('P', saved[0]);

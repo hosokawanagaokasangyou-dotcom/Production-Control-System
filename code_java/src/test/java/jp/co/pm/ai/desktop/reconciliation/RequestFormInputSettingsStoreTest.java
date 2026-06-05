@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
+import jp.co.pm.ai.desktop.config.FactorySite;
 
 class RequestFormInputSettingsStoreTest {
 
@@ -42,6 +44,22 @@ class RequestFormInputSettingsStoreTest {
         assertEquals(2, loaded.comboChoices().optionsFor(RequestFormComboChoices.KEY_INPUT_KBN).size());
         assertEquals("C:\\work\\originals", loaded.paths().targetFolder());
         assertEquals("C:\\work\\juchu.xlsm", loaded.paths().juchuFilePath());
+    }
+
+    @Test
+    void factoryShipmentComboChoices_fallBackToBundledWhenNoInitSetting() {
+        RequestFormComboChoices factory =
+                DesktopSessionStateStore.factoryShipmentRequestFormComboChoices(
+                        Map.of(), FactorySite.KONAN);
+        assertEquals(
+                "通常入力",
+                factory.effectiveDefaultFor(RequestFormComboChoices.KEY_INPUT_KBN));
+        assertEquals(
+                "後加工",
+                factory.effectiveDefaultFor(RequestFormComboChoices.KEY_KAKO_KBN));
+        assertTrue(
+                factory.optionsFor(RequestFormComboChoices.KEY_INPUT_KBN)
+                        .contains("例外入力"));
     }
 
     @Test

@@ -143,6 +143,9 @@ public final class RequestFormInputTabController {
                 () -> shell != null && shell.isPlanningPipelineStageRunning());
         contentHost.getChildren().setAll(root);
         embeddedBuilt = true;
+        if (shell != null) {
+            shell.refreshInnerTabHeaderColorsForShellTab(MainShellTabId.REQUEST_FORM_INPUT);
+        }
         contentHost
                 .sceneProperty()
                 .addListener(

@@ -3184,7 +3184,10 @@ public final class DispatchInteractiveTabController {
         if (planInput == null) {
             return;
         }
-        List<TaskKey> expected = planInput.collectEligibleTaskKeysForDispatchCoverage();
+        List<TaskKey> expected =
+                DispatchPlanInputInteractiveCoverageCheck.excludeInProgressZeroNextDayFromExpected(
+                        planInput.collectEligibleTaskKeysForDispatchCoverage(),
+                        shell.snapshotUiEnv());
         if (expected.isEmpty()) {
             return;
         }

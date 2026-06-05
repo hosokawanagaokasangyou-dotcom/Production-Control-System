@@ -16,6 +16,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -29,9 +30,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /**
  * 工場別の配台システム操作者名（起動時選択・作成者表示用）と PIN（4～10 桁数字）。
  *
- * <p>永続化: {@link AppPaths#factoryOperatorUsersStorePath}（サマリ Excel と同一フォルダの
+ * <p>操作者一覧・PIN の永続化: {@link AppPaths#factoryOperatorUsersStorePath}（サマリ Excel と同一フォルダの
  * {@link AppPaths#FACTORY_OPERATOR_USERS_BIN}、バイナリ形式）。旧 {@code ~/.pm-ai-desktop/factory-operator-users.json}
  * から初回読込時に移行する。
+ *
+ * <p>最後に選択した操作者名（{@code lastSelected}）は PC ローカルの
+ * {@link AppPaths#localFactoryOperatorLastSelectedPath} のみ。共有 bin には書かない。
  */
 public final class FactoryOperatorUserStore {
 
@@ -222,7 +226,9 @@ public final class FactoryOperatorUserStore {
     }
 
     public static String lastSelectedForFactory(FactorySite site) throws IOException {
-        return loadFactory(site).lastSelected();
+        FactorySite factory = site != null ? site : FactorySite.KONAN;
+        migrateLastSelectedFromSharedStoreIfNeeded(factory);
+        return loadLastSelectedLocal(factory);
     }
 
     public static boolean hasPin(FactorySite site, String name) throws IOException {
@@ -336,15 +342,7 @@ public final class FactoryOperatorUserStore {
         Map<String, Integer> attempts = new LinkedHashMap<>(current.pinFailedAttempts());
         attempts.put(normalized, nextFailures);
         doc.factories()
-                .put(
-                        factory,
-                        new FactoryOperatorUsers(
-                                current.names(),
-                                current.lastSelected(),
-                                current.pinHashes(),
-                                attempts,
-                                current.pinMustChange(),
-                                current.pinPlaintextAdmin()));
+                .put(factory, forSharedStore(current.names(), current.pinHashes(), attempts, current.pinMustChange(), current.pinPlaintextAdmin()));
         saveDocument(doc);
         return nextFailures >= MAX_CONSECUTIVE_PIN_FAILURES
                 ? PinVerificationResult.LOCKED
@@ -503,19 +501,13 @@ public final class FactoryOperatorUserStore {
         doc.factories()
                 .put(
                         factory,
-                        new FactoryOperatorUsers(
-                                current.names(),
-                                current.lastSelected(),
-                                pins,
-                                attempts,
-                                mustChange,
-                                plaintextAdmin));
+                        forSharedStore(current.names(), pins, attempts, mustChange, plaintextAdmin));
         saveDocument(doc);
         return pinNorm;
     }
 
     /**
-     * セッション操作者を設定し、工場別 {@code lastSelected} を永続化する。
+     * セッション操作者を設定し、工場別の最終選択をローカルへ永続化する。
      *
      * @throws IllegalArgumentException 名前が一覧に無い／空
      */
@@ -529,34 +521,14 @@ public final class FactoryOperatorUserStore {
         FactoryOperatorUsers current = ensureFactory(doc, factory);
         if (isGuestOperator(normalized)) {
             sessionOperatorName = normalized;
-            doc.factories()
-                    .put(
-                            factory,
-                            new FactoryOperatorUsers(
-                                    current.names(),
-                                    normalized,
-                                    current.pinHashes(),
-                                    current.pinFailedAttempts(),
-                                    current.pinMustChange(),
-                                    current.pinPlaintextAdmin()));
-            saveDocument(doc);
+            saveLastSelectedLocal(factory, normalized);
             return;
         }
         if (!current.names().contains(normalized)) {
             throw new IllegalArgumentException("操作者名が一覧にありません: " + normalized);
         }
         sessionOperatorName = normalized;
-        doc.factories()
-                .put(
-                        factory,
-                        new FactoryOperatorUsers(
-                                current.names(),
-                                normalized,
-                                current.pinHashes(),
-                                current.pinFailedAttempts(),
-                                current.pinMustChange(),
-                                current.pinPlaintextAdmin()));
-        saveDocument(doc);
+        saveLastSelectedLocal(factory, normalized);
     }
 
     /**
@@ -593,13 +565,7 @@ public final class FactoryOperatorUserStore {
         doc.factories()
                 .put(
                         factory,
-                        new FactoryOperatorUsers(
-                                next,
-                                current.lastSelected(),
-                                pins,
-                                current.pinFailedAttempts(),
-                                mustChange,
-                                plaintextAdmin));
+                        forSharedStore(next, pins, current.pinFailedAttempts(), mustChange, plaintextAdmin));
         saveDocument(doc);
         return pin;
     }
@@ -617,8 +583,9 @@ public final class FactoryOperatorUserStore {
         }
         List<String> next = new ArrayList<>(current.names());
         next.remove(normalized);
-        String last =
-                normalized.equals(current.lastSelected()) ? "" : current.lastSelected();
+        if (normalized.equals(loadLastSelectedLocal(factory))) {
+            clearLastSelectedLocal(factory);
+        }
         Map<String, String> pins = new LinkedHashMap<>(current.pinHashes());
         pins.remove(normalized);
         Map<String, Integer> attempts = new LinkedHashMap<>(current.pinFailedAttempts());
@@ -628,9 +595,7 @@ public final class FactoryOperatorUserStore {
         Map<String, String> plaintextAdmin = new LinkedHashMap<>(current.pinPlaintextAdmin());
         plaintextAdmin.remove(normalized);
         doc.factories()
-                .put(
-                        factory,
-                        new FactoryOperatorUsers(next, last, pins, attempts, mustChange, plaintextAdmin));
+                .put(factory, forSharedStore(next, pins, attempts, mustChange, plaintextAdmin));
         if (normalized.equals(sessionOperatorName) && factory == GlobalInitSettingTarget.load()) {
             sessionOperatorName = "";
         }
@@ -641,8 +606,12 @@ public final class FactoryOperatorUserStore {
         FactorySite factory = site != null ? site : FactorySite.KONAN;
         Document doc = loadDocument();
         FactoryOperatorUsers current = ensureFactory(doc, factory);
-        String last =
-                DEFAULT_NAMES.contains(current.lastSelected()) ? current.lastSelected() : "";
+        String localLast = loadLastSelectedLocal(factory);
+        if (!localLast.isEmpty()
+                && !DEFAULT_NAMES.contains(localLast)
+                && !isGuestOperator(localLast)) {
+            clearLastSelectedLocal(factory);
+        }
         Map<String, String> pins = new LinkedHashMap<>();
         Map<String, Integer> attempts = new LinkedHashMap<>();
         Set<String> mustChange = new LinkedHashSet<>();
@@ -667,8 +636,7 @@ public final class FactoryOperatorUserStore {
         doc.factories()
                 .put(
                         factory,
-                        new FactoryOperatorUsers(
-                                DEFAULT_NAMES, last, pins, attempts, mustChange, plaintextAdmin));
+                        forSharedStore(DEFAULT_NAMES, pins, attempts, mustChange, plaintextAdmin));
         if (!DEFAULT_NAMES.contains(sessionOperatorName) && factory == GlobalInitSettingTarget.load()) {
             sessionOperatorName = "";
         }
@@ -768,8 +736,22 @@ public final class FactoryOperatorUserStore {
             }
             JsonNode root = JSON.readTree(legacy.toFile());
             Document doc = parseDocumentRoot(root);
+            persistLegacyLastSelectedFromDocument(doc);
             saveDocumentToPath(targetBin, doc);
             return;
+        }
+    }
+
+    /** 旧 JSON 移行時: 共有ストア保存前に {@code lastSelected} をローカルへ退避する。 */
+    private static void persistLegacyLastSelectedFromDocument(Document doc) throws IOException {
+        if (doc == null) {
+            return;
+        }
+        for (Map.Entry<FactorySite, FactoryOperatorUsers> e : doc.factories().entrySet()) {
+            String legacy = e.getValue().lastSelected();
+            if (!legacy.isEmpty() && !Files.isRegularFile(localLastSelectedPath(e.getKey()))) {
+                saveLastSelectedLocal(e.getKey(), legacy);
+            }
         }
     }
 
@@ -830,7 +812,7 @@ public final class FactoryOperatorUserStore {
             for (String name : e.getValue().names()) {
                 arr.add(name);
             }
-            fo.put("lastSelected", e.getValue().lastSelected());
+            fo.put("lastSelected", "");
             ObjectNode pins = fo.putObject("pinHashes");
             for (Map.Entry<String, String> pe : e.getValue().pinHashes().entrySet()) {
                 if (e.getValue().names().contains(pe.getKey())) {
@@ -1118,13 +1100,95 @@ public final class FactoryOperatorUserStore {
         doc.factories()
                 .put(
                         factory,
-                        new FactoryOperatorUsers(
+                        forSharedStore(
                                 current.names(),
-                                current.lastSelected(),
                                 current.pinHashes(),
                                 attempts,
                                 current.pinMustChange(),
                                 current.pinPlaintextAdmin()));
+    }
+
+    private static FactoryOperatorUsers forSharedStore(
+            List<String> names,
+            Map<String, String> pinHashes,
+            Map<String, Integer> pinFailedAttempts,
+            Set<String> pinMustChange,
+            Map<String, String> pinPlaintextAdmin) {
+        return new FactoryOperatorUsers(
+                names, "", pinHashes, pinFailedAttempts, pinMustChange, pinPlaintextAdmin);
+    }
+
+    private static Path localLastSelectedPath(FactorySite site) {
+        String test = System.getProperty("pm.ai.test.factoryOperatorLastSelectedDir");
+        if (test != null && !test.isBlank()) {
+            FactorySite effective = site != null ? site : FactorySite.KONAN;
+            String suffix = effective.name().toLowerCase(Locale.ROOT);
+            return Path.of(test)
+                    .resolve("last-factory-operator-" + suffix + ".txt")
+                    .toAbsolutePath()
+                    .normalize();
+        }
+        return AppPaths.localFactoryOperatorLastSelectedPath(site);
+    }
+
+    private static String loadLastSelectedLocal(FactorySite site) throws IOException {
+        Path path = localLastSelectedPath(site);
+        if (!Files.isRegularFile(path)) {
+            return "";
+        }
+        String text = Files.readString(path, StandardCharsets.UTF_8).strip();
+        return normalizeName(text);
+    }
+
+    private static void saveLastSelectedLocal(FactorySite site, String name) throws IOException {
+        String normalized = normalizeName(name);
+        if (normalized.isEmpty()) {
+            clearLastSelectedLocal(site);
+            return;
+        }
+        Path path = localLastSelectedPath(site);
+        if (path.getParent() != null) {
+            Files.createDirectories(path.getParent());
+        }
+        Files.writeString(
+                path,
+                normalized + System.lineSeparator(),
+                StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING);
+    }
+
+    private static void clearLastSelectedLocal(FactorySite site) throws IOException {
+        Files.deleteIfExists(localLastSelectedPath(site));
+    }
+
+    /**
+     * 旧版で共有 bin に残っていた {@code lastSelected} を、初回のみローカルへ移す。
+     */
+    private static void migrateLastSelectedFromSharedStoreIfNeeded(FactorySite factory) throws IOException {
+        if (Files.isRegularFile(localLastSelectedPath(factory))) {
+            return;
+        }
+        FactoryOperatorUsers shared = ensureFactory(loadDocument(), factory);
+        String legacy = shared.lastSelected();
+        if (legacy.isEmpty()) {
+            return;
+        }
+        saveLastSelectedLocal(factory, legacy);
+        if (!legacy.isEmpty()) {
+            Document doc = loadDocument();
+            FactoryOperatorUsers current = ensureFactory(doc, factory);
+            doc.factories()
+                    .put(
+                            factory,
+                            forSharedStore(
+                                    current.names(),
+                                    current.pinHashes(),
+                                    current.pinFailedAttempts(),
+                                    current.pinMustChange(),
+                                    current.pinPlaintextAdmin()));
+            saveDocument(doc);
+        }
     }
 
     private static String hashPin(FactorySite factory, String name, String pin) {
@@ -1155,6 +1219,9 @@ public final class FactoryOperatorUserStore {
         storeConfigured = false;
         Path path = storePath();
         Files.deleteIfExists(path);
+        for (FactorySite site : FactorySite.values()) {
+            Files.deleteIfExists(localLastSelectedPath(site));
+        }
     }
 
     /** テスト用: ファイルを直接書き込む。 */

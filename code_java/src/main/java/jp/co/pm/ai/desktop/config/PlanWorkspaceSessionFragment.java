@@ -202,6 +202,7 @@ public record PlanWorkspaceSessionFragment(
                 base.mainShellTabLayout(),
                 base.mainShellTabTitleAliases(),
                 Map.copyOf(mergedInner),
+                base.innerTabHeaderColorByKey(),
                 equipmentGanttGraphicZoomPercent,
                 equipmentGanttDateColWidth,
                 equipmentGanttMachineColWidth,

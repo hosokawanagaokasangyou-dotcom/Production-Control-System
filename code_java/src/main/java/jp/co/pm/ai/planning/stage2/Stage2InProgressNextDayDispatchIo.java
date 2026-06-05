@@ -4,9 +4,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -52,6 +55,84 @@ public final class Stage2InProgressNextDayDispatchIo {
         return AppPaths.resolveRepoRoot(ui)
                 .resolve(".pm-ai-cache")
                 .resolve("stage2-in-progress-next-day-dispatch.json");
+    }
+
+    /** 環境変数 → 既定キャッシュの順で読み込み対象 JSON を解決する。 */
+    public static Path resolveReadPath(Map<String, String> ui) {
+        if (ui != null) {
+            String fromEnv = ui.get(AppPaths.KEY_PM_AI_STAGE2_IN_PROGRESS_NEXT_DAY_DISPATCH_JSON);
+            if (fromEnv != null && !fromEnv.isBlank()) {
+                Path p = Path.of(fromEnv.strip()).toAbsolutePath().normalize();
+                if (Files.isRegularFile(p)) {
+                    return p;
+                }
+            }
+        }
+        Path cached = defaultCachePath(ui != null ? ui : Map.of());
+        return Files.isRegularFile(cached) ? cached : null;
+    }
+
+    public static List<Entry> readEntries(Path path) throws IOException {
+        if (path == null || !Files.isRegularFile(path)) {
+            return List.of();
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> root = JSON.readValue(path.toFile(), Map.class);
+        Object raw = root != null ? root.get("entries") : null;
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        List<Entry> out = new ArrayList<>(list.size());
+        for (Object item : list) {
+            if (!(item instanceof Map<?, ?>)) {
+                continue;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> entMap = (Map<String, Object>) item;
+            String taskId = String.valueOf(entMap.getOrDefault("task_id", "")).strip();
+            String process = String.valueOf(entMap.getOrDefault("process", "")).strip();
+            String machineName = String.valueOf(entMap.getOrDefault("machine_name", "")).strip();
+            double meters = 0.0;
+            Object mObj = entMap.get("next_day_dispatch_m");
+            if (mObj instanceof Number n) {
+                meters = sanitizeMeters(n.doubleValue());
+            } else if (mObj != null) {
+                try {
+                    meters = sanitizeMeters(Double.parseDouble(String.valueOf(mObj)));
+                } catch (NumberFormatException ignored) {
+                    meters = 0.0;
+                }
+            }
+            if (taskId.isEmpty()) {
+                continue;
+            }
+            out.add(new Entry(taskId, process, machineName, meters));
+        }
+        return List.copyOf(out);
+    }
+
+    /** 翌日配台 m が 0 の加工途中行キー（Python {@code rowKey} 形式）。 */
+    public static Set<String> zeroNextDayRowKeys(Map<String, String> ui) {
+        Path path;
+        try {
+            path = resolveReadPath(ui);
+            if (path == null) {
+                return Set.of();
+            }
+            List<Entry> entries = readEntries(path);
+            if (entries.isEmpty()) {
+                return Set.of();
+            }
+            LinkedHashSet<String> out = new LinkedHashSet<>();
+            for (Entry e : entries) {
+                if (e.nextDayDispatchM() <= 1e-12) {
+                    out.add(rowKey(e.taskId(), e.process(), e.machineName()));
+                }
+            }
+            return out.isEmpty() ? Set.of() : Collections.unmodifiableSet(out);
+        } catch (IOException ignored) {
+            return Set.of();
+        }
     }
 
     public static void write(Path path, List<Entry> entries) throws IOException {

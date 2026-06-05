@@ -44,6 +44,7 @@ import javafx.scene.paint.Color;
 import jp.co.pm.ai.desktop.config.DesktopSessionState;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.MainShellInnerTabCatalog;
+import jp.co.pm.ai.desktop.config.MainShellInnerTabColorKeys;
 import jp.co.pm.ai.desktop.config.MainShellTabLayoutNode;
 
 /**
@@ -455,13 +456,28 @@ public final class MainShellTabOrganizerTabController {
         return null;
     }
 
-    private static void appendInnerTabCatalogRows(TreeItem<OrgRow> tabItem, MainShellTabId id) {
+    private void appendInnerTabCatalogRows(TreeItem<OrgRow> tabItem, MainShellTabId id) {
+        java.util.Map<String, String> colors =
+                shell != null ? shell.innerTabHeaderColorByKeySnapshot() : java.util.Map.of();
         List<String> labels = MainShellInnerTabCatalog.labelsFor(id);
         for (int i = 0; i < labels.size(); i++) {
             String label = labels.get(i);
-            TreeItem<OrgRow> innerItem = leafItem(OrgRow.innerTab(id, label));
+            String innerColor = colors.getOrDefault(MainShellInnerTabColorKeys.innerKey(id, label), "");
+            TreeItem<OrgRow> innerItem = leafItem(OrgRow.innerTab(id, label, innerColor));
+            for (String nested :
+                    MainShellInnerTabCatalog.nestedInnerTabLabelsUnderInnerTab(id, i)) {
+                String nestedColor =
+                        colors.getOrDefault(
+                                MainShellInnerTabColorKeys.nestedKey(id, label, nested), "");
+                innerItem
+                        .getChildren()
+                        .add(leafItem(OrgRow.innerNestedTab(id, label, nested, nestedColor)));
+            }
             for (String pane : MainShellInnerTabCatalog.titledPaneLabelsUnderInnerTab(id, i)) {
                 innerItem.getChildren().add(leafItem(OrgRow.innerAccordionPane(id, label, pane)));
+            }
+            if (hasInnerNestedTabChildren(innerItem)) {
+                innerItem.setExpanded(false);
             }
             tabItem.getChildren().add(innerItem);
         }
@@ -610,7 +626,7 @@ public final class MainShellTabOrganizerTabController {
                 continue;
             }
             OrgRow.Kind k = ti.getValue().kind;
-            if (k == OrgRow.Kind.INNER_TAB || k == OrgRow.Kind.INNER_ACCORDION) {
+            if (OrgRow.isCatalogReferenceKind(k)) {
                 continue;
             }
             if (ti.getParent() == null || ti.getParent().getValue() == null) {
@@ -770,13 +786,18 @@ public final class MainShellTabOrganizerTabController {
             return;
         }
         String h = hex != null ? hex : "";
-        if (r.kind == OrgRow.Kind.INNER_TAB || r.kind == OrgRow.Kind.INNER_ACCORDION) {
-            return;
-        }
         if (r.kind == OrgRow.Kind.TAB) {
             ti.setValue(OrgRow.tab(r.tabId, h));
-        } else {
+        } else if (r.kind == OrgRow.Kind.GROUP) {
             ti.setValue(OrgRow.group(r.groupTitle, h));
+        } else if (r.kind == OrgRow.Kind.INNER_TAB) {
+            ti.setValue(OrgRow.innerTab(r.tabId, r.groupTitle, h));
+        } else if (r.kind == OrgRow.Kind.INNER_NESTED_TAB) {
+            ti.setValue(
+                    OrgRow.innerNestedTab(
+                            r.tabId, r.anchorInnerTabLabel, r.groupTitle, h));
+        } else if (OrgRow.isCatalogReferenceKind(r.kind)) {
+            return;
         }
     }
 
@@ -809,6 +830,9 @@ public final class MainShellTabOrganizerTabController {
                     "すべての作業タブをちょうど1回ずつ使う必要があります（不足・重複があります）。\n"
                             + leafKeyMismatchDetail(layout));
             return;
+        }
+        if (treeView.getRoot() != null) {
+            shell.syncMainShellTabHeaderColorsFromOrganizerTree(treeView.getRoot());
         }
         if (!shell.applyMainShellTabLayoutFromOrganizer(layout)) {
             alert(
@@ -906,7 +930,7 @@ public final class MainShellTabOrganizerTabController {
             return null;
         }
         OrgRow r = ti.getValue();
-        if (r.kind == OrgRow.Kind.INNER_TAB || r.kind == OrgRow.Kind.INNER_ACCORDION) {
+        if (OrgRow.isCatalogReferenceKind(r.kind)) {
             return null;
         }
         if (r.kind == OrgRow.Kind.TAB) {
@@ -954,7 +978,22 @@ public final class MainShellTabOrganizerTabController {
              * 子タブ直下の {@link javafx.scene.control.TitledPane} 見出し（レイアウト保存対象外）。{@link
              * #tabId} はメインシェルタブ、{@link #anchorInnerTabLabel} は親となる子タブ見出し。
              */
-            INNER_ACCORDION
+            INNER_ACCORDION,
+            /**
+             * 子タブ直下のさらに内側 TabPane 見出し（レイアウト保存対象外）。{@link #tabId} はメインシェルタブ、{@link
+             * #anchorInnerTabLabel} は親となる子タブ見出し。
+             */
+            INNER_NESTED_TAB
+        }
+
+        static boolean isCatalogReferenceKind(Kind kind) {
+            return kind == Kind.INNER_TAB
+                    || kind == Kind.INNER_ACCORDION
+                    || kind == Kind.INNER_NESTED_TAB;
+        }
+
+        static boolean supportsHeaderColorCustomization(Kind kind) {
+            return kind == Kind.INNER_TAB || kind == Kind.INNER_NESTED_TAB;
         }
 
         final Kind kind;
@@ -965,7 +1004,9 @@ public final class MainShellTabOrganizerTabController {
         /** GROUP: グループ名。INNER_TAB: 子タブ見出し。INNER_ACCORDION: TitledPane の text。 */
         String groupTitle;
         String colorHex;
-        /** INNER_ACCORDION のみ: {@link #labelsFor} のどの子タブ直下か（同一文言で紐づけ）。 */
+        /**
+         * INNER_ACCORDION / INNER_NESTED_TAB: {@link MainShellInnerTabCatalog#labelsFor} のどの子タブ直下か（同一文言で紐づけ）。
+         */
         final String anchorInnerTabLabel;
 
         private OrgRow(
@@ -995,11 +1036,15 @@ public final class MainShellTabOrganizerTabController {
 
         /** 親メインタブ ID と TabPane 内の子タブ見出し。 */
         static OrgRow innerTab(MainShellTabId parentTabId, String innerTitle) {
+            return innerTab(parentTabId, innerTitle, "");
+        }
+
+        static OrgRow innerTab(MainShellTabId parentTabId, String innerTitle, String colorHex) {
             return new OrgRow(
                     Kind.INNER_TAB,
                     Objects.requireNonNull(parentTabId),
                     innerTitle != null ? innerTitle : "",
-                    "",
+                    nz(colorHex),
                     "");
         }
 
@@ -1011,6 +1056,25 @@ public final class MainShellTabOrganizerTabController {
                     Objects.requireNonNull(shellTabId),
                     titledPaneTitle != null ? titledPaneTitle : "",
                     "",
+                    anchorInnerTabTitle != null ? anchorInnerTabTitle : "");
+        }
+
+        /** メインタブ・子タブ見出し・内側 TabPane の子タブ見出し。 */
+        static OrgRow innerNestedTab(
+                MainShellTabId shellTabId, String anchorInnerTabTitle, String nestedTabTitle) {
+            return innerNestedTab(shellTabId, anchorInnerTabTitle, nestedTabTitle, "");
+        }
+
+        static OrgRow innerNestedTab(
+                MainShellTabId shellTabId,
+                String anchorInnerTabTitle,
+                String nestedTabTitle,
+                String colorHex) {
+            return new OrgRow(
+                    Kind.INNER_NESTED_TAB,
+                    Objects.requireNonNull(shellTabId),
+                    nestedTabTitle != null ? nestedTabTitle : "",
+                    nz(colorHex),
                     anchorInnerTabTitle != null ? anchorInnerTabTitle : "");
         }
 
@@ -1033,6 +1097,15 @@ public final class MainShellTabOrganizerTabController {
                                 : "";
                 String pane = groupTitle != null && !groupTitle.isBlank() ? groupTitle : "";
                 return "[折りたたみ] " + parent + " — " + anchor + " — " + pane;
+            }
+            if (kind == Kind.INNER_NESTED_TAB) {
+                String parent = shell != null ? shell.mainShellTabTitle(tabId) : tabId.name();
+                String anchor =
+                        anchorInnerTabLabel != null && !anchorInnerTabLabel.isBlank()
+                                ? anchorInnerTabLabel
+                                : "";
+                String nested = groupTitle != null && !groupTitle.isBlank() ? groupTitle : "";
+                return "[子タブ] " + parent + " — " + anchor + " — " + nested;
             }
             String base = shell != null ? shell.mainShellTabTitle(tabId) : tabId.name();
             String c = colorHex != null && !colorHex.isBlank() ? "  [" + colorHex + "]" : "";
@@ -1059,6 +1132,15 @@ public final class MainShellTabOrganizerTabController {
                 String pane = groupTitle != null && !groupTitle.isBlank() ? groupTitle : "";
                 return parent + " — " + anchor + " — " + pane + "（TitledPane・並べ替え対象外）";
             }
+            if (kind == Kind.INNER_NESTED_TAB) {
+                String parent = shellCtl != null ? shellCtl.mainShellTabTitle(tabId) : tabId.name();
+                String anchor =
+                        anchorInnerTabLabel != null && !anchorInnerTabLabel.isBlank()
+                                ? anchorInnerTabLabel
+                                : "";
+                String nested = groupTitle != null && !groupTitle.isBlank() ? groupTitle : "";
+                return parent + " — " + anchor + " — " + nested + "（子タブ・並べ替え対象外）";
+            }
             return shellCtl != null ? shellCtl.mainShellTabTitle(tabId) : tabId.name();
         }
 
@@ -1072,6 +1154,9 @@ public final class MainShellTabOrganizerTabController {
             }
             if (kind == Kind.INNER_ACCORDION) {
                 return groupTitle != null && !groupTitle.isBlank() ? groupTitle : "パネル";
+            }
+            if (kind == Kind.INNER_NESTED_TAB) {
+                return groupTitle != null && !groupTitle.isBlank() ? groupTitle : "子タブ";
             }
             return shellCtl != null ? shellCtl.mainShellTabTitle(tabId) : tabId.name();
         }
@@ -1242,23 +1327,129 @@ public final class MainShellTabOrganizerTabController {
                 continue;
             }
             double indentOuter = CHILD_STRIP_HORIZONTAL_STAGGER + i * CHILD_STRIP_HORIZONTAL_STAGGER;
-            VBox block = new VBox(CHILD_STRIP_VERTICAL_GAP);
-            block.setFillWidth(false);
-            HBox head = new HBox(0);
-            head.setAlignment(Pos.CENTER_LEFT);
-            Region leadOuter = new Region();
-            leadOuter.setMinWidth(indentOuter);
-            leadOuter.setPrefWidth(indentOuter);
-            leadOuter.setMaxWidth(indentOuter);
-            head.getChildren().addAll(leadOuter, createPillForTreeItem(ch));
-            block.getChildren().add(head);
-            if (hasInnerAccordionChildren(ch)) {
-                block.getChildren().add(buildAccordionPaneStrip(ch, indentOuter));
+            if (hasInnerNestedTabChildren(ch)) {
+                col.getChildren().add(buildInnerTabRowWithNestedTabs(ch, indentOuter));
+            } else {
+                VBox block = new VBox(CHILD_STRIP_VERTICAL_GAP);
+                block.setFillWidth(false);
+                HBox head = new HBox(0);
+                head.setAlignment(Pos.CENTER_LEFT);
+                Region leadOuter = new Region();
+                leadOuter.setMinWidth(indentOuter);
+                leadOuter.setPrefWidth(indentOuter);
+                leadOuter.setMaxWidth(indentOuter);
+                head.getChildren().addAll(leadOuter, createPillForTreeItem(ch));
+                block.getChildren().add(head);
+                if (hasInnerAccordionChildren(ch)) {
+                    block.getChildren().add(buildAccordionPaneStrip(ch, indentOuter));
+                }
+                col.getChildren().add(block);
             }
-            col.getChildren().add(block);
             i++;
         }
         return col;
+    }
+
+    /**
+     * 子タブ行をメインタブと同様に ▼ 展開し、内側 TabPane の子タブを縦に並べる。
+     */
+    private VBox buildInnerTabRowWithNestedTabs(TreeItem<OrgRow> innerTabItem, double indentOuter) {
+        VBox col = new VBox(6);
+        col.setFillWidth(false);
+        col.getStyleClass().add("pm-org-main-with-inner");
+
+        HBox head = new HBox(8);
+        head.setAlignment(Pos.CENTER_LEFT);
+
+        Region leadOuter = new Region();
+        leadOuter.setMinWidth(indentOuter);
+        leadOuter.setPrefWidth(indentOuter);
+        leadOuter.setMaxWidth(indentOuter);
+
+        Button disclosure = new Button(innerTabItem.isExpanded() ? "▼" : "▶");
+        disclosure.setFocusTraversable(false);
+        disclosure.getStyleClass().add("pm-org-tree-disclosure");
+        disclosure.setMinSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+        disclosure.setMaxSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
+        disclosure.setOnAction(
+                e -> {
+                    innerTabItem.setExpanded(!innerTabItem.isExpanded());
+                    rebuildOrganizerVisualTree();
+                });
+
+        int nestedCount =
+                (int)
+                        innerTabItem.getChildren().stream()
+                                .filter(
+                                        c ->
+                                                c.getValue() != null
+                                                        && c.getValue().kind
+                                                                == OrgRow.Kind.INNER_NESTED_TAB)
+                                .count();
+        Label count =
+                new Label(
+                        String.format(
+                                Locale.JAPAN, "固定子タブ %d 件", Math.max(0, nestedCount)));
+        count.getStyleClass().add("pm-org-inner-child-count");
+
+        head.getChildren()
+                .addAll(
+                        leadOuter,
+                        disclosure,
+                        createPillForTreeItem(innerTabItem),
+                        count);
+        col.getChildren().add(head);
+
+        if (innerTabItem.isExpanded()) {
+            Label innerCaption =
+                    new Label("固定の子タブ（並べ替え・グループ化の対象外）");
+            innerCaption.setWrapText(true);
+            innerCaption.getStyleClass().add("pm-org-inner-section-caption");
+            col.getChildren().add(innerCaption);
+            VBox nestedStrip = buildNestedInnerTabChildStrip(innerTabItem, indentOuter);
+            nestedStrip.getStyleClass().add("pm-org-inner-child-strip");
+            col.getChildren().add(nestedStrip);
+        }
+        return col;
+    }
+
+    private VBox buildNestedInnerTabChildStrip(
+            TreeItem<OrgRow> innerTabItem, double outerIndentPx) {
+        VBox col = new VBox(CHILD_STRIP_VERTICAL_GAP);
+        col.setFillWidth(false);
+        col.setAlignment(Pos.TOP_LEFT);
+        int j = 0;
+        for (TreeItem<OrgRow> nested : innerTabItem.getChildren()) {
+            if (nested.getValue() == null
+                    || nested.getValue().kind != OrgRow.Kind.INNER_NESTED_TAB) {
+                continue;
+            }
+            double indent =
+                    outerIndentPx
+                            + CHILD_STRIP_HORIZONTAL_STAGGER * 2
+                            + j * CHILD_STRIP_HORIZONTAL_STAGGER;
+            HBox line = new HBox(0);
+            line.setAlignment(Pos.CENTER_LEFT);
+            Region lead = new Region();
+            lead.setMinWidth(indent);
+            lead.setPrefWidth(indent);
+            lead.setMaxWidth(indent);
+            line.getChildren().addAll(lead, createPillForTreeItem(nested));
+            col.getChildren().add(line);
+            j++;
+        }
+        return col;
+    }
+
+    private static boolean hasInnerNestedTabChildren(TreeItem<OrgRow> innerTabItem) {
+        if (innerTabItem == null) {
+            return false;
+        }
+        return innerTabItem.getChildren().stream()
+                .anyMatch(
+                        c ->
+                                c.getValue() != null
+                                        && c.getValue().kind == OrgRow.Kind.INNER_NESTED_TAB);
     }
 
     private static boolean hasInnerAccordionChildren(TreeItem<OrgRow> innerTabItem) {
@@ -1307,7 +1498,9 @@ public final class MainShellTabOrganizerTabController {
         } else if (row.kind == OrgRow.Kind.TAB) {
             pill.getStyleClass().add("pm-org-tree-pill-main");
         }
-        if (row.kind == OrgRow.Kind.INNER_TAB || row.kind == OrgRow.Kind.INNER_ACCORDION) {
+        if (row.kind == OrgRow.Kind.INNER_TAB
+                || row.kind == OrgRow.Kind.INNER_ACCORDION
+                || row.kind == OrgRow.Kind.INNER_NESTED_TAB) {
             pill.getStyleClass().add("pm-org-tree-pill-inner");
         }
         if (row.kind == OrgRow.Kind.INNER_ACCORDION) {
@@ -1356,7 +1549,7 @@ public final class MainShellTabOrganizerTabController {
                 text = "メイン";
                 styleClass = "pm-org-kind-badge-main";
             }
-            case INNER_TAB -> {
+            case INNER_TAB, INNER_NESTED_TAB -> {
                 text = "子タブ";
                 styleClass = "pm-org-kind-badge-inner";
             }
@@ -1377,8 +1570,7 @@ public final class MainShellTabOrganizerTabController {
 
     private void wirePillInteractions(StackPane pill, TreeItem<OrgRow> item) {
         OrgRow ov = item.getValue();
-        if (ov != null
-                && (ov.kind == OrgRow.Kind.INNER_TAB || ov.kind == OrgRow.Kind.INNER_ACCORDION)) {
+        if (ov != null && OrgRow.isCatalogReferenceKind(ov.kind)) {
             pill.getStyleClass().add("pm-org-tree-pill-locked");
             pill.setOnMouseClicked(
                     ev -> {
@@ -1622,10 +1814,8 @@ public final class MainShellTabOrganizerTabController {
         if (target.getValue() == null || source.getValue() == null) {
             return false;
         }
-        if (source.getValue().kind == OrgRow.Kind.INNER_TAB
-                || source.getValue().kind == OrgRow.Kind.INNER_ACCORDION
-                || target.getValue().kind == OrgRow.Kind.INNER_TAB
-                || target.getValue().kind == OrgRow.Kind.INNER_ACCORDION) {
+        if (OrgRow.isCatalogReferenceKind(source.getValue().kind)
+                || OrgRow.isCatalogReferenceKind(target.getValue().kind)) {
             return false;
         }
         return !isStrictDescendant(source, target);

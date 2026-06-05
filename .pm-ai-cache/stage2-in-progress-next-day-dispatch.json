@@ -1,9 +1,24 @@
 {
   "version" : 1,
   "entries" : [ {
+    "task_id" : "V6-3",
+    "process" : "スライス",
+    "machine_name" : "スライス機1　湖南",
+    "next_day_dispatch_m" : 0.0
+  }, {
+    "task_id" : "W6-8",
+    "process" : "EC",
+    "machine_name" : "EC機　湖南",
+    "next_day_dispatch_m" : 1500.0
+  }, {
     "task_id" : "E6-1",
     "process" : "スリット",
     "machine_name" : "スリット機1　湖南",
-    "next_day_dispatch_m" : 12300.0
+    "next_day_dispatch_m" : 11400.0
+  }, {
+    "task_id" : "Y6-12",
+    "process" : "スライス",
+    "machine_name" : "スライス機1　湖南",
+    "next_day_dispatch_m" : 4750.0
   } ]
 }

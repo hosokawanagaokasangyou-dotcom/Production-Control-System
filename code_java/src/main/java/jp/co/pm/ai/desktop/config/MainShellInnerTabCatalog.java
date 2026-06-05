@@ -33,6 +33,18 @@ public final class MainShellInnerTabCatalog {
         return List.of();
     }
 
+    /**
+     * 子タブ直下のさらに内側 TabPane の見出し（{@code innerTabIndex} は {@link #labelsFor} 順・0 始まり）。
+     */
+    public static List<String> nestedInnerTabLabelsUnderInnerTab(
+            MainShellTabId parent, int innerTabIndex) {
+        // 依頼書入力「マスター一覧」内 TabPane（ReconciliationApp）
+        if (parent == MainShellTabId.REQUEST_FORM_INPUT && innerTabIndex == 3) {
+            return List.of("機械コード", "工程マスタ", "加工内容マスタ");
+        }
+        return List.of();
+    }
+
     /** Display labels for TabPane tabs (not persisted IDs). */
     public static List<String> labelsFor(MainShellTabId parent) {
         if (parent == null) {
@@ -76,6 +88,12 @@ public final class MainShellInnerTabCatalog {
                             "ルール試走",
                             "適用トレース",
                             "JSON");
+            case REQUEST_FORM_INPUT ->
+                    List.of(
+                            "一括照合データベース・受注管理",
+                            "【設定】",
+                            "後加工商品マスタ",
+                            "マスター一覧");
             default -> List.of();
         };
     }

@@ -45,6 +45,7 @@ import java.util.regex.Pattern;
 import jp.co.pm.ai.desktop.bridge.PythonProcessRunner;
 import jp.co.pm.ai.desktop.bridge.StagePythonExecutable;
 import jp.co.pm.ai.desktop.config.AppPaths;
+import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.FactoryOperatorUserStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
 import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
@@ -830,9 +831,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         Tab tabSettings = createSettingsTab();
         // Tab 3: Post-processing product master editor (right of settings)
         Tab tabPostProcMaster = createPostProcessingProductMasterTab();
-        Tab tabPlanMachineDb = createPlanMachineCatalogTab();
+        Tab tabMasterList = createMasterListTab();
 
-        tabPane.getTabs().addAll(tabVerification, tabSettings, tabPostProcMaster, tabPlanMachineDb);
+        tabPane.getTabs().addAll(tabVerification, tabSettings, tabPostProcMaster, tabMasterList);
         root.setCenter(tabPane);
 
         mainStackPane = new StackPane();
@@ -1014,11 +1015,33 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
 
         Label title = new Label("\u30b3\u30f3\u30dc\u30dc\u30c3\u30af\u30b9\u9805\u76ee\u7de8\u96c6 / Settings - ComboBox \u5019\u88dc\u5024\u7ba1\u7406");
         title.getStyleClass().add("paper-main-title");
-        Label subtitle = new Label("\u5404\u30b3\u30f3\u30dc\u30dc\u30c3\u30af\u30b9\u306e\u9078\u629e\u80a2\u3092\u81ea\u7531\u306b\u8ffd\u52a0\u30fb\u524a\u9664\u30fb\u7de8\u96c6\u3067\u304d\u307e\u3059\u3002");
+        Label subtitle =
+                new Label(
+                        "各コンボボックスの選択肢を自由に追加・削除・編集できます。"
+                                + " 運用の正本はサマリ Excel と同じフォルダの "
+                                + AppPaths.REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME
+                                + "（追加・削除のたびに自動保存）。"
+                                + " 工場出荷の既定値はリポジトリの init_setting（またはソース同梱）にあり、"
+                                + "「工場出荷状態に戻す」で正本 JSON へ書き戻します。");
         subtitle.getStyleClass().add("paper-main-subtitle");
         subtitle.setWrapText(true);
         subtitle.setMaxWidth(SETTINGS_CARD_WIDTH * 2 + 12);
-        root.getChildren().addAll(title, subtitle);
+
+        Button btnResetComboToFactory = new Button("工場出荷状態に戻す");
+        btnResetComboToFactory.getStyleClass().add("btn-reload");
+        btnResetComboToFactory.setTooltip(
+                new Tooltip(
+                        "ComboBox 候補と入力区分・加工区分の既定を、init_setting の工場出荷既定"
+                                + "（無ければソース同梱）に戻し、"
+                                + AppPaths.REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME
+                                + " を上書きします。"));
+        registerGuestMutableControl(btnResetComboToFactory);
+        btnResetComboToFactory.setOnAction(evt -> confirmAndResetComboChoicesToFactoryShipment());
+
+        HBox resetRow = new HBox(8, btnResetComboToFactory);
+        resetRow.setAlignment(Pos.CENTER_LEFT);
+
+        root.getChildren().addAll(title, subtitle, resetRow);
 
         Label prefixTitle = new Label("マスタ候補コンボ 先頭文字フィルタ");
         prefixTitle.getStyleClass().add("paper-main-title");
@@ -1325,13 +1348,93 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         return tab;
     }
 
+    private Tab createMasterListTab() {
+        Tab tab = new Tab("マスター一覧");
+        tab.setClosable(false);
+
+        TabPane inner = new TabPane();
+        inner.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        inner.getTabs()
+                .addAll(
+                        createPlanMachineCatalogTab(),
+                        createKouteiMasterCatalogTab(),
+                        createNaiyoMasterCatalogTab());
+        tab.setContent(inner);
+        return tab;
+    }
+
     private Tab createPlanMachineCatalogTab() {
-        Tab tab = new Tab("機械コード（加工計画）");
+        return createLazyCatalogTab(
+                "機械コード",
+                "このタブを開くと機械コード一覧を読み込みます",
+                () -> {
+                    ScrollPane sp = new ScrollPane();
+                    sp.setFitToWidth(true);
+                    sp.getStyleClass().add("form-scroll-pane");
+                    VBox content =
+                            PostProcessingPlanMachineCatalogPane.build(
+                                    () -> uiEnvSnapshot, msg -> System.out.println(msg));
+                    sp.setContent(content);
+                    VBox.setVgrow(content, javafx.scene.layout.Priority.ALWAYS);
+                    return sp;
+                });
+    }
+
+    private Tab createKouteiMasterCatalogTab() {
+        return createLazyCatalogTab(
+                "工程マスタ",
+                "このタブを開くと工程マスタを読み込みます",
+                () -> {
+                    ScrollPane sp = new ScrollPane();
+                    sp.setFitToWidth(true);
+                    sp.getStyleClass().add("form-scroll-pane");
+                    VBox content =
+                            PostProcessingExcelMasterCatalogPane.build(
+                                    () -> uiEnvSnapshot,
+                                    PostProcessingKouteiNaiyoMasterLookup.KOUTEI_FILE_NAME,
+                                    "後加工工程マスタ",
+                                    PostProcessingKouteiNaiyoMasterLookup.KOUTEI_FILE_NAME
+                                            + "（アラジンマスタフォルダ）の内容を表示します。"
+                                            + " 後加工商品マスタ編集の工程コードコンボと同じデータです。",
+                                    PostProcessingKouteiNaiyoMasterLookup::invalidate,
+                                    msg -> System.out.println(msg));
+                    sp.setContent(content);
+                    VBox.setVgrow(content, javafx.scene.layout.Priority.ALWAYS);
+                    return sp;
+                });
+    }
+
+    private Tab createNaiyoMasterCatalogTab() {
+        return createLazyCatalogTab(
+                "加工内容マスタ",
+                "このタブを開くと加工内容マスタを読み込みます",
+                () -> {
+                    ScrollPane sp = new ScrollPane();
+                    sp.setFitToWidth(true);
+                    sp.getStyleClass().add("form-scroll-pane");
+                    VBox content =
+                            PostProcessingExcelMasterCatalogPane.build(
+                                    () -> uiEnvSnapshot,
+                                    PostProcessingKouteiNaiyoMasterLookup.NAIYO_FILE_NAME,
+                                    "後加工加工内容マスタ",
+                                    PostProcessingKouteiNaiyoMasterLookup.NAIYO_FILE_NAME
+                                            + "（アラジンマスタフォルダ）の内容を表示します。"
+                                            + " 後加工商品マスタ編集の加工内容コードコンボと同じデータです。",
+                                    PostProcessingKouteiNaiyoMasterLookup::invalidate,
+                                    msg -> System.out.println(msg));
+                    sp.setContent(content);
+                    VBox.setVgrow(content, javafx.scene.layout.Priority.ALWAYS);
+                    return sp;
+                });
+    }
+
+    private Tab createLazyCatalogTab(String tabTitle, String hintText, java.util.function.Supplier<javafx.scene.Parent> mountContent) {
+        Tab tab = new Tab(tabTitle);
         tab.setClosable(false);
 
         StackPane lazyHost = new StackPane();
         lazyHost.setAlignment(Pos.CENTER);
-        Label hint = new Label("このタブを開くと機械コード一覧を読み込みます");
+        Label hint = new Label(hintText);
         hint.getStyleClass().add("request-form-tab-loading-label");
         lazyHost.getChildren().add(hint);
         tab.setContent(lazyHost);
@@ -1346,20 +1449,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                             }
                             scheduleLazyTabMount(
                                     lazyHost,
-                                    "機械コード（加工計画）",
-                                    () -> {
-                                        ScrollPane sp = new ScrollPane();
-                                        sp.setFitToWidth(true);
-                                        sp.getStyleClass().add("form-scroll-pane");
-                                        VBox content =
-                                                PostProcessingPlanMachineCatalogPane.build(
-                                                        () -> uiEnvSnapshot,
-                                                        msg -> System.out.println(msg));
-                                        sp.setContent(content);
-                                        VBox.setVgrow(
-                                                content, javafx.scene.layout.Priority.ALWAYS);
-                                        lazyHost.getChildren().setAll(sp);
-                                    });
+                                    tabTitle,
+                                    () -> lazyHost.getChildren().setAll(mountContent.get()));
                         });
         return tab;
     }
@@ -1395,9 +1486,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 Class.forName(
                         "jp.co.pm.ai.desktop.reconciliation.PostProcessingProductMasterEditorPane");
                 Class.forName("jp.co.pm.ai.desktop.reconciliation.ReconciliationApp$ProductRow");
-            } else if ("機械コード（加工計画）".equals(tabTitle)) {
+            } else if ("機械コード".equals(tabTitle)) {
                 Class.forName(
                         "jp.co.pm.ai.desktop.reconciliation.PostProcessingPlanMachineCatalogPane");
+            } else if ("工程マスタ".equals(tabTitle) || "加工内容マスタ".equals(tabTitle)) {
+                Class.forName(
+                        "jp.co.pm.ai.desktop.reconciliation.PostProcessingExcelMasterCatalogPane");
             }
             return null;
         } catch (Throwable ex) {
@@ -1586,6 +1680,35 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     /** サマリ Excel 同フォルダへ依頼書入力設定を書き出す（ComboBox 候補・パス）。 */
     public void persistInputSettings() {
         saveSettings();
+    }
+
+    /** 工場出荷既定へ戻し、サマリ Excel 同フォルダの正本 JSON へ反映する。 */
+    public void resetComboChoicesToFactoryShipment() {
+        RequestFormComboChoices factory =
+                DesktopSessionStateStore.factoryShipmentRequestFormComboChoices(
+                        uiEnvSnapshot, GlobalInitSettingTarget.load());
+        applyComboChoices(factory);
+        saveSettings();
+    }
+
+    private void confirmAndResetComboChoicesToFactoryShipment() {
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("確認");
+        confirm.setHeaderText(null);
+        confirm.setContentText(
+                "ComboBox 候補と入力区分・加工区分の既定を工場出荷状態に戻します。"
+                        + " サマリ Excel と同じフォルダの "
+                        + AppPaths.REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME
+                        + " を上書きします。よろしいですか？");
+        if (hostWindow != null) {
+            confirm.initOwner(hostWindow);
+        }
+        confirm.showAndWait().filter(btn -> btn == ButtonType.OK).ifPresent(btn -> {
+            resetComboChoicesToFactoryShipment();
+            if (statusLabel != null) {
+                statusLabel.setText("ComboBox 候補を工場出荷状態に戻しました。");
+            }
+        });
     }
 
     private void syncFieldDefaultSelectorCombos() {

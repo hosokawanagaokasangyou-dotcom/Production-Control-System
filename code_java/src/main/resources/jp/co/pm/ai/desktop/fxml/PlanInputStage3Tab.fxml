@@ -26,13 +26,12 @@
                             styleClass="pm-stage-run-button,pm-stage-run-3" text="段階3.1(時間外)" />
                     <Button fx:id="stage32RunButton" mnemonicParsing="false" onAction="#onStage32RunButtonAction"
                             styleClass="pm-stage-run-button,pm-stage-run-3" text="段階3.2(数量厳守)" />
-                    <Region HBox.hgrow="ALWAYS" />
-                    <Button fx:id="reloadButton" mnemonicParsing="false" onAction="#onReloadButtonAction" text="入力3表を再読込" />
-                    <Button fx:id="saveButton" mnemonicParsing="false" onAction="#onSaveButtonAction" text="保存" />
                 </HBox>
                 <HBox alignment="CENTER_LEFT" spacing="8.0">
                     <Label minWidth="-Infinity" text="ファイル" />
                     <Label fx:id="pathLabel" maxWidth="Infinity" wrapText="true" HBox.hgrow="ALWAYS" />
+                    <Button fx:id="reloadButton" mnemonicParsing="false" onAction="#onReloadButtonAction" text="再読み込み" />
+                    <Button fx:id="saveButton" mnemonicParsing="false" onAction="#onSaveButtonAction" text="保存" />
                     <Label fx:id="statusLabel" wrapText="true" />
                 </HBox>
                 <HBox alignment="CENTER_LEFT" fx:id="tableOperationBar" spacing="6.0">
