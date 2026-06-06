@@ -212,6 +212,11 @@ public final class EnvVarDocs {
                         + "PDF が Excel より大きくはみ出すときは 0.65～0.70、小さすぎるときは 0.80 前後。"
                         + "変更後はプレビュー PDF キャッシュが再生成される。");
         put(
+                "PM_AI_REQUEST_FORM_RDP_PROFILE",
+                "依頼書入力タブ「リモートデスクトップ」で起動する RDP プロファイル（.rdp）のフルパス。"
+                        + "空のときは未設定。環境変数タブのファイル選択可。"
+                        + "子タブの「リモートデスクトップを起動」で mstsc.exe に渡されます（Windows のみ）。");
+        put(
                 "PM_AI_ACTUAL_DETAIL_WORKBOOK",
                 "加工実績明細DATAを読むブックのフルパス（指定時は"
                         + " PM_AI_ACTUAL_DETAIL_SOURCE_DIR より優先）。");

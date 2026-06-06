@@ -79,6 +79,20 @@ class AppPathsTest {
     }
 
     @Test
+    void requestFormRdpProfile_usesFilePickerNotFolder(@TempDir Path tmp) throws Exception {
+        assertTrue(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE));
+        assertFalse(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE));
+        assertTrue(AppPaths.resolveRequestFormRdpProfile(Map.of()).isEmpty());
+        Path rdp = tmp.resolve("remote.rdp");
+        Files.writeString(rdp, "screen mode id:i:2");
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE, rdp.toString());
+        assertEquals(
+                rdp.toAbsolutePath().normalize(),
+                AppPaths.resolveRequestFormRdpProfile(ui).orElseThrow());
+    }
+
+    @Test
     void resolveRequestFormOriginalDir_usesEnvOverrideOrFactoryDefault(@TempDir Path tmp) throws Exception {
         Path custom = tmp.resolve("original-forms");
         Files.createDirectories(custom);

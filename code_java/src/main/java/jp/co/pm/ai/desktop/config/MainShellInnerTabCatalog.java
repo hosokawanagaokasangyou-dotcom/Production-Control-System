@@ -93,7 +93,8 @@ public final class MainShellInnerTabCatalog {
                             "一括照合データベース・受注管理",
                             "【設定】",
                             "後加工商品マスタ",
-                            "マスター一覧");
+                            "マスター一覧",
+                            "リモートデスクトップ");
             default -> List.of();
         };
     }

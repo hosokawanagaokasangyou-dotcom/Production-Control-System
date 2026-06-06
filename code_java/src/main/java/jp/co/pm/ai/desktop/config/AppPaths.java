@@ -100,6 +100,11 @@ public final class AppPaths {
     public static final String KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR = "PM_AI_REQUEST_FORM_ORIGINAL_DIR";
 
     /**
+     * 依頼書入力タブ「リモートデスクトップ」で起動する RDP プロファイル（{@code *.rdp}）のフルパス。
+     */
+    public static final String KEY_PM_AI_REQUEST_FORM_RDP_PROFILE = "PM_AI_REQUEST_FORM_RDP_PROFILE";
+
+    /**
      * 依頼書 PDF プレビュー: Type0 日本語フォントのサイズ補正係数（Excel pt に乗算）。{@code 0.50}～{@code 1.00}。
      */
     public static final String KEY_PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE =
@@ -438,6 +443,7 @@ public final class AppPaths {
         s.add(KEY_PM_AI_PROCESSING_PLAN_PATH);
         s.add(KEY_PM_AI_ACTUAL_DETAIL_WORKBOOK);
         s.add(KEY_PM_AI_REQUEST_FORM_JUCHU_FILE);
+        s.add(KEY_PM_AI_REQUEST_FORM_RDP_PROFILE);
         s.add(KEY_PM_AI_PLAN_RESULT_TASK_JSON_PATH);
         s.add(KEY_PM_AI_CURSOR_DEBUG_LOG);
         s.add(KEY_PM_AI_DEBUG_LOG_MIRROR);
@@ -770,6 +776,18 @@ public final class AppPaths {
         return Path.of(defaultRequestFormOriginalDirForFactory(GlobalInitSettingTarget.load()))
                 .toAbsolutePath()
                 .normalize();
+    }
+
+    /**
+     * 依頼書入力タブの RDP プロファイル（{@code *.rdp}）。未設定・空は empty。
+     */
+    public static Optional<Path> resolveRequestFormRdpProfile(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_REQUEST_FORM_RDP_PROFILE));
+        if (override.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(Path.of(override).toAbsolutePath().normalize());
     }
 
     /** {@link FactorySite} 別の {@link #KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR} 既定（受注ファイルの親フォルダ）。 */

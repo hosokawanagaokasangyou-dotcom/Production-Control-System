@@ -91,6 +91,7 @@ public class ReconciliationApp {
     private Label embeddedTitleLabel;
     private Consumer<String> originalDirChangeHandler;
     private Consumer<String> juchuFileChangeHandler;
+    private Consumer<String> rdpProfileChangeHandler;
     private TextField txtJuchuPathDisplay;
     private ListView<RequestFormJuchuFileBackupStore.RequestFormJuchuFileBackupEntry>
             juchuBackupListView;
@@ -276,6 +277,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     /** 受注ファイル選択でパスが変わったとき、環境変数タブへ反映するためのコールバック。 */
     public void setJuchuFileChangeHandler(Consumer<String> handler) {
         this.juchuFileChangeHandler = handler;
+    }
+
+    /** RDP プロファイル選択でパスが変わったとき、環境変数タブへ反映するためのコールバック。 */
+    public void setRdpProfileChangeHandler(Consumer<String> handler) {
+        this.rdpProfileChangeHandler = handler;
     }
 
     public void setPreviewBadgeConfigSupplier(Supplier<RequestFormPreviewBadgeConfig> supplier) {
@@ -832,8 +838,15 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         // Tab 3: Post-processing product master editor (right of settings)
         Tab tabPostProcMaster = createPostProcessingProductMasterTab();
         Tab tabMasterList = createMasterListTab();
+        Tab tabRemoteDesktop = createRemoteDesktopTab();
 
-        tabPane.getTabs().addAll(tabVerification, tabSettings, tabPostProcMaster, tabMasterList);
+        tabPane.getTabs()
+                .addAll(
+                        tabVerification,
+                        tabSettings,
+                        tabPostProcMaster,
+                        tabMasterList,
+                        tabRemoteDesktop);
         root.setCenter(tabPane);
 
         mainStackPane = new StackPane();
@@ -1346,6 +1359,42 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                                     });
                         });
         return tab;
+    }
+
+    private Tab createRemoteDesktopTab() {
+        Tab tab = new Tab("リモートデスクトップ");
+        tab.setClosable(false);
+
+        ScrollPane sp = new ScrollPane();
+        sp.setFitToWidth(true);
+        sp.getStyleClass().add("form-scroll-pane");
+        VBox content =
+                RequestFormRemoteDesktopPane.buildTabContent(
+                        hostWindow,
+                        new RequestFormRemoteDesktopPane.Context(
+                                () -> uiEnvSnapshot,
+                                this::applySelectedRdpProfile,
+                                msg -> {
+                                    if (statusLabel != null) {
+                                        statusLabel.setText(msg);
+                                    }
+                                }));
+        sp.setContent(content);
+        tab.setContent(sp);
+        return tab;
+    }
+
+    private void applySelectedRdpProfile(String absolutePath) {
+        Map<String, String> next = new HashMap<>(uiEnvSnapshot);
+        if (absolutePath == null || absolutePath.isBlank()) {
+            next.remove(AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE);
+        } else {
+            next.put(AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE, absolutePath);
+        }
+        uiEnvSnapshot = Map.copyOf(next);
+        if (rdpProfileChangeHandler != null) {
+            rdpProfileChangeHandler.accept(absolutePath != null ? absolutePath : "");
+        }
     }
 
     private Tab createMasterListTab() {

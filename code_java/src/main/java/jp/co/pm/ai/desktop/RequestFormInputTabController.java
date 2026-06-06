@@ -124,6 +124,13 @@ public final class RequestFormInputTabController {
                                 AppPaths.KEY_PM_AI_REQUEST_FORM_JUCHU_FILE, path);
                     }
                 });
+        reconciliationApp.setRdpProfileChangeHandler(
+                path -> {
+                    if (shell != null) {
+                        shell.updateEnvTabValue(
+                                AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE, path);
+                    }
+                });
         Window host =
                 contentHost.getScene() != null ? contentHost.getScene().getWindow() : null;
         if (host == null && shell != null) {
