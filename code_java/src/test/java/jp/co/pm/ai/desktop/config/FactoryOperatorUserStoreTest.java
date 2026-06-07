@@ -82,7 +82,7 @@ class FactoryOperatorUserStoreTest {
 
     @Test
     void tryRestoreSessionFromLocalLastSelected_restoresWithoutPin() throws Exception {
-        FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "砂田");
+        FactoryOperatorUserStore.assignPinByAdmin(FactorySite.KONAN, "砂田", "1234");
         FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "砂田");
         FactoryOperatorUserStore.clearSessionOperatorName();
         assertTrue(FactoryOperatorUserStore.tryRestoreSessionFromLocalLastSelected(FactorySite.KONAN));
@@ -91,7 +91,7 @@ class FactoryOperatorUserStoreTest {
 
     @Test
     void tryRestoreSessionFromLocalLastSelected_failsWhenPinLocked() throws Exception {
-        String pin = FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "砂田");
+        String pin = FactoryOperatorUserStore.assignPinByAdmin(FactorySite.KONAN, "砂田", "1234");
         FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "砂田");
         FactoryOperatorUserStore.clearSessionOperatorName();
         for (int i = 0; i < FactoryOperatorUserStore.MAX_CONSECUTIVE_PIN_FAILURES; i++) {
