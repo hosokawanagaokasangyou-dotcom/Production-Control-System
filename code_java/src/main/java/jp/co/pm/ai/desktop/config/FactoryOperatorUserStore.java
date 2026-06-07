@@ -231,6 +231,35 @@ public final class FactoryOperatorUserStore {
         return loadLastSelectedLocal(factory);
     }
 
+    /**
+     * PC ローカルに保存した最終操作者でセッションを復元する。
+     *
+     * <p>一覧に無い・PIN ロック・初回 PIN 変更待ちのときは false。PIN 設定済みでも同一 PC では再入力しない。
+     */
+    public static boolean tryRestoreSessionFromLocalLastSelected(FactorySite site) throws IOException {
+        FactorySite factory = site != null ? site : FactorySite.KONAN;
+        String last = lastSelectedForFactory(factory);
+        if (last.isEmpty()) {
+            return false;
+        }
+        if (!loginChoicesForFactory(factory).contains(last)) {
+            return false;
+        }
+        if (!isGuestOperator(last)) {
+            if (isPinLocked(factory, last)) {
+                return false;
+            }
+            if (mustChangePin(factory, last)) {
+                return false;
+            }
+            if (!loadFactory(factory).names().contains(last)) {
+                return false;
+            }
+        }
+        selectSessionOperator(factory, last);
+        return true;
+    }
+
     public static boolean hasPin(FactorySite site, String name) throws IOException {
         FactorySite factory = site != null ? site : FactorySite.KONAN;
         String normalized = normalizeName(name);

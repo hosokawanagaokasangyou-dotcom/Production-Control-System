@@ -5729,6 +5729,28 @@ public final class MainShellController {
                 site != null ? site : GlobalInitSettingTarget.loadEffective(collectUiEnv());
         FactoryOperatorUserStore.configureFromUi(collectUiEnv(), factory);
         FactoryOperatorUserStore.clearSessionOperatorName();
+        if (startup) {
+            try {
+                if (FactoryOperatorUserStore.tryRestoreSessionFromLocalLastSelected(factory)) {
+                    String restored = FactoryOperatorUserStore.sessionOperatorName();
+                    appendLog(
+                            "[startup] 操作者: "
+                                    + restored
+                                    + " （"
+                                    + factory.displayLabelJa()
+                                    + "・前回選択を復元）"
+                                    + (FactoryOperatorUserStore.isGuestOperator(restored)
+                                            ? " ※サマリ Excel 生成不可"
+                                            : ""));
+                    refreshMainRunTabOperatorLabel();
+                    return;
+                }
+            } catch (IOException ex) {
+                appendLog(
+                        "[startup] 操作者の前回選択を復元できませんでした: "
+                                + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+            }
+        }
         while (FactoryOperatorUserStore.sessionOperatorName().isBlank()) {
             Optional<String> chosen = promptOperatorUserChoice(factory, startup);
             if (chosen.isEmpty()) {

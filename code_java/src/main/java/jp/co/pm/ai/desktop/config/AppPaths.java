@@ -105,6 +105,14 @@ public final class AppPaths {
     public static final String KEY_PM_AI_REQUEST_FORM_RDP_PROFILE = "PM_AI_REQUEST_FORM_RDP_PROFILE";
 
     /**
+     * 接続先サーバー上で RDP 接続時に起動するプログラム（.rdp の remoteapplicationprogram）。空なら無効。
+     */
+    public static final String KEY_PM_AI_RDP_COMPANION_PROGRAM = "PM_AI_RDP_COMPANION_PROGRAM";
+
+    /** {@link #KEY_PM_AI_RDP_COMPANION_PROGRAM} の引数（.rdp の remoteapplicationcmdline）。 */
+    public static final String KEY_PM_AI_RDP_COMPANION_PROGRAM_ARGS = "PM_AI_RDP_COMPANION_PROGRAM_ARGS";
+
+    /**
      * 依頼書 PDF プレビュー: Type0 日本語フォントのサイズ補正係数（Excel pt に乗算）。{@code 0.50}～{@code 1.00}。
      */
     public static final String KEY_PM_AI_REQUEST_FORM_PREVIEW_PDF_CJK_SCALE =
@@ -1414,6 +1422,7 @@ public final class AppPaths {
 
     /**
      * 操作者ダイアログで最後に選んだメンバー名（PC ローカル。{@link #factoryOperatorUsersStorePath} とは別）。
+     * 次回起動時に同一 PC で操作者ダイアログを省略して復元するために使う。
      */
     public static Path localFactoryOperatorLastSelectedPath(FactorySite site) {
         FactorySite effective = site != null ? site : FactorySite.KONAN;

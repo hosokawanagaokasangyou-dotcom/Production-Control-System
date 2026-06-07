@@ -81,6 +81,50 @@ class FactoryOperatorUserStoreTest {
     }
 
     @Test
+    void tryRestoreSessionFromLocalLastSelected_restoresWithoutPin() throws Exception {
+        FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "砂田");
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "砂田");
+        FactoryOperatorUserStore.clearSessionOperatorName();
+        assertTrue(FactoryOperatorUserStore.tryRestoreSessionFromLocalLastSelected(FactorySite.KONAN));
+        assertEquals("砂田", FactoryOperatorUserStore.sessionOperatorName());
+    }
+
+    @Test
+    void tryRestoreSessionFromLocalLastSelected_failsWhenPinLocked() throws Exception {
+        String pin = FactoryOperatorUserStore.issuePin(FactorySite.KONAN, "砂田");
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "砂田");
+        FactoryOperatorUserStore.clearSessionOperatorName();
+        for (int i = 0; i < FactoryOperatorUserStore.MAX_CONSECUTIVE_PIN_FAILURES; i++) {
+            FactoryOperatorUserStore.verifyPinAttempt(FactorySite.KONAN, "砂田", "0000");
+        }
+        assertTrue(FactoryOperatorUserStore.isPinLocked(FactorySite.KONAN, "砂田"));
+        assertTrue(!FactoryOperatorUserStore.tryRestoreSessionFromLocalLastSelected(FactorySite.KONAN));
+        assertEquals("", FactoryOperatorUserStore.sessionOperatorName());
+        FactoryOperatorUserStore.unlockPin(FactorySite.KONAN, "砂田");
+        assertTrue(FactoryOperatorUserStore.tryRestoreSessionFromLocalLastSelected(FactorySite.KONAN));
+        assertEquals("砂田", FactoryOperatorUserStore.sessionOperatorName());
+        FactoryOperatorUserStore.changePinByUser(FactorySite.KONAN, "砂田", pin, "2468");
+    }
+
+    @Test
+    void tryRestoreSessionFromLocalLastSelected_failsWhenMustChangePin() throws Exception {
+        FactoryOperatorUserStore.addName(FactorySite.KONAN, "新規");
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, "新規");
+        FactoryOperatorUserStore.clearSessionOperatorName();
+        assertTrue(FactoryOperatorUserStore.mustChangePin(FactorySite.KONAN, "新規"));
+        assertTrue(!FactoryOperatorUserStore.tryRestoreSessionFromLocalLastSelected(FactorySite.KONAN));
+        assertEquals("", FactoryOperatorUserStore.sessionOperatorName());
+    }
+
+    @Test
+    void tryRestoreSessionFromLocalLastSelected_restoresGuest() throws Exception {
+        FactoryOperatorUserStore.selectSessionOperator(FactorySite.KONAN, FactoryOperatorUserStore.GUEST_OPERATOR_NAME);
+        FactoryOperatorUserStore.clearSessionOperatorName();
+        assertTrue(FactoryOperatorUserStore.tryRestoreSessionFromLocalLastSelected(FactorySite.KONAN));
+        assertEquals(FactoryOperatorUserStore.GUEST_OPERATOR_NAME, FactoryOperatorUserStore.sessionOperatorName());
+    }
+
+    @Test
     void verifyAdminTabAccess_requiresAdministratorUsernameAndPassword() {
         assertTrue(
                 FactoryOperatorUserStore.verifyAdminTabAccess(
