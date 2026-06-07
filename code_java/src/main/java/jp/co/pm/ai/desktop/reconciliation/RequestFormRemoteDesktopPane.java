@@ -22,6 +22,8 @@ import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
 import javafx.scene.control.Tooltip;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -78,10 +80,31 @@ public final class RequestFormRemoteDesktopPane {
         iniPathLabel.setWrapText(true);
         iniPathLabel.setMaxWidth(CARD_WIDTH);
 
+        Label rapStatusLabel = new Label();
+        rapStatusLabel.setWrapText(true);
+        rapStatusLabel.setMaxWidth(CARD_WIDTH);
+        rapStatusLabel.getStyleClass().add("top-status");
+
         Label launcherPathLabel = new Label();
         launcherPathLabel.getStyleClass().add("paper-main-subtitle");
         launcherPathLabel.setWrapText(true);
-        launcherPathLabel.setMaxWidth(CARD_WIDTH);
+        HBox.setHgrow(launcherPathLabel, Priority.ALWAYS);
+
+        Button btnCopyLauncherPath = new Button("パスをコピー");
+        btnCopyLauncherPath.getStyleClass().add("btn-reload");
+        btnCopyLauncherPath.setTooltip(
+                new Tooltip("ランチャー exe の UNC フルパスをクリップボードへコピーします。"));
+        btnCopyLauncherPath.setOnAction(
+                e -> {
+                    String path = AppPaths.resolveRdpLauncherExe(uiEnv.get()).toString();
+                    copyToClipboard(path);
+                    rapStatusLabel.setText("ランチャー exe パスをクリップボードへコピーしました: " + path);
+                    status.accept("ランチャー exe パスをクリップボードへコピーしました。");
+                });
+
+        HBox launcherPathRow = new HBox(8, launcherPathLabel, btnCopyLauncherPath);
+        launcherPathRow.setAlignment(Pos.CENTER_LEFT);
+        launcherPathRow.setMaxWidth(CARD_WIDTH);
 
         Label deployStatusLabel = new Label();
         deployStatusLabel.setWrapText(true);
@@ -96,11 +119,6 @@ public final class RequestFormRemoteDesktopPane {
         List<TextField> slotFields = new ArrayList<>();
         VBox slotBox = new VBox(6);
         slotBox.setFillWidth(true);
-
-        Label rapStatusLabel = new Label();
-        rapStatusLabel.setWrapText(true);
-        rapStatusLabel.setMaxWidth(CARD_WIDTH);
-        rapStatusLabel.getStyleClass().add("top-status");
 
         Runnable refreshPaths =
                 () -> {
@@ -311,7 +329,7 @@ public final class RequestFormRemoteDesktopPane {
                 new VBox(
                         8,
                         iniPathLabel,
-                        launcherPathLabel,
+                        launcherPathRow,
                         deployStatusLabel,
                         slotSpinnerRow,
                         slotBox,
@@ -555,6 +573,15 @@ public final class RequestFormRemoteDesktopPane {
         } catch (IOException ignored) {
             // ignore
         }
+    }
+
+    private static void copyToClipboard(String text) {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        ClipboardContent content = new ClipboardContent();
+        content.putString(text);
+        Clipboard.getSystemClipboard().setContent(content);
     }
 
     private static void showAlert(Alert.AlertType type, String title, String message) {
