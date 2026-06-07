@@ -3,7 +3,9 @@ package jp.co.pm.ai.desktop.reconciliation;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -13,17 +15,24 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextField;
+import javafx.scene.control.TitledPane;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.RdpFileSigner;
+import jp.co.pm.ai.desktop.io.RdpRemoteLauncherDeployer;
+import jp.co.pm.ai.desktop.io.RdpRemoteLauncherIni;
 import jp.co.pm.ai.desktop.io.RemoteDesktopLauncher;
 
 /**
@@ -54,30 +63,278 @@ public final class RequestFormRemoteDesktopPane {
 
         Label subtitle =
                 new Label(
-                        "環境変数 "
-                                + AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE
-                                + " の .rdp で接続します。"
-                                + " 「リモート起動プログラム」は接続先サーバー上の exe パスで、"
-                                + " 起動時に .rdp へ RemoteApp 設定として書き込みます（環境変数タブと同期）。");
+                        "接続先 PC のタスクスケジューラが "
+                                + AppPaths.RDP_LAUNCHER_EXE_BASENAME
+                                + " を起動し、共有フォルダの "
+                                + AppPaths.RDP_LAUNCHER_INI_BASENAME
+                                + " に従ってプログラムを起動します。"
+                                + " ローカルからは .rdp で mstsc を起動します。");
         subtitle.getStyleClass().add("paper-main-subtitle");
         subtitle.setWrapText(true);
         subtitle.setMaxWidth(CARD_WIDTH);
 
+        Label iniPathLabel = new Label();
+        iniPathLabel.getStyleClass().add("paper-main-subtitle");
+        iniPathLabel.setWrapText(true);
+        iniPathLabel.setMaxWidth(CARD_WIDTH);
+
+        Label launcherPathLabel = new Label();
+        launcherPathLabel.getStyleClass().add("paper-main-subtitle");
+        launcherPathLabel.setWrapText(true);
+        launcherPathLabel.setMaxWidth(CARD_WIDTH);
+
+        Label deployStatusLabel = new Label();
+        deployStatusLabel.setWrapText(true);
+        deployStatusLabel.setMaxWidth(CARD_WIDTH);
+        deployStatusLabel.getStyleClass().add("top-status");
+
+        Spinner<Integer> slotSpinner =
+                new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, RdpRemoteLauncherIni.MAX_SLOTS, 1));
+        slotSpinner.setEditable(true);
+        slotSpinner.setPrefWidth(80);
+
+        List<TextField> slotFields = new ArrayList<>();
+        VBox slotBox = new VBox(6);
+        slotBox.setFillWidth(true);
+
+        Label rapStatusLabel = new Label();
+        rapStatusLabel.setWrapText(true);
+        rapStatusLabel.setMaxWidth(CARD_WIDTH);
+        rapStatusLabel.getStyleClass().add("top-status");
+
+        Runnable refreshPaths =
+                () -> {
+                    Map<String, String> ui = uiEnv.get();
+                    iniPathLabel.setText(
+                            "RAP設定.ini: " + AppPaths.resolveRdpLauncherIni(ui).toString());
+                    launcherPathLabel.setText(
+                            "ランチャー exe: " + AppPaths.resolveRdpLauncherExe(ui).toString());
+                };
+        refreshPaths.run();
+
+        Runnable rebuildSlotRows =
+                () -> {
+                    slotBox.getChildren().clear();
+                    slotFields.clear();
+                    int count =
+                            slotFields.isEmpty()
+                                    ? 3
+                                    : Math.min(RdpRemoteLauncherIni.MAX_SLOTS, slotFields.size());
+                    if (count < 3) {
+                        count = 3;
+                    }
+                    for (int i = 1; i <= count; i++) {
+                        final int slot = i;
+                        Label caption = fieldCaption("スロット " + slot);
+                        TextField field = new TextField();
+                        field.setPromptText("例: C:\\Windows\\System32\\notepad.exe または exe + 引数");
+                        HBox.setHgrow(field, Priority.ALWAYS);
+
+                        Button browse =
+                                new Button("参照...");
+                        browse.getStyleClass().add("btn-reload");
+                        browse.setTooltip(
+                                new Tooltip("ローカル PC 上の exe を参照（接続先パスは手入力）。"));
+                        browse.setOnAction(
+                                e -> {
+                                    FileChooser chooser = new FileChooser();
+                                    chooser.setTitle("スロット " + slot + " のプログラム");
+                                    chooser.getExtensionFilters()
+                                            .add(
+                                                    new FileChooser.ExtensionFilter(
+                                                            "実行ファイル (*.exe)", "*.exe"));
+                                    java.io.File chosen =
+                                            chooser.showOpenDialog(
+                                                    owner != null ? owner : browse.getScene().getWindow());
+                                    if (chosen != null) {
+                                        field.setText(chosen.getAbsolutePath());
+                                    }
+                                });
+
+                        HBox row = new HBox(8, field, browse);
+                        row.setAlignment(Pos.CENTER_LEFT);
+                        row.setMaxWidth(CARD_WIDTH);
+                        slotBox.getChildren().addAll(caption, row);
+                        slotFields.add(field);
+                    }
+                };
+
+        rebuildSlotRows.run();
+
+        Runnable loadIniFromShare =
+                () -> {
+                    Map<String, String> ui = uiEnv.get();
+                    Path iniPath = AppPaths.resolveRdpLauncherIni(ui);
+                    refreshPaths.run();
+                    try {
+                        RdpRemoteLauncherIni ini = RdpRemoteLauncherIni.load(iniPath);
+                        slotSpinner.getValueFactory().setValue(ini.selectedSlot());
+                        int visible = ini.visibleSlotCount();
+                        while (slotFields.size() < visible) {
+                            int next = slotFields.size() + 1;
+                            Label caption = fieldCaption("スロット " + next);
+                            TextField field = new TextField();
+                            HBox.setHgrow(field, Priority.ALWAYS);
+                            Button browse = new Button("参照...");
+                            browse.getStyleClass().add("btn-reload");
+                            HBox row = new HBox(8, field, browse);
+                            row.setAlignment(Pos.CENTER_LEFT);
+                            slotBox.getChildren().addAll(caption, row);
+                            slotFields.add(field);
+                        }
+                        for (int i = 1; i <= slotFields.size(); i++) {
+                            slotFields.get(i - 1).setText(ini.getSlot(i));
+                        }
+                        rapStatusLabel.setText("読込しました: " + iniPath);
+                    } catch (IOException ex) {
+                        rapStatusLabel.setText("読込失敗: " + ex.getMessage());
+                        showAlert(Alert.AlertType.ERROR, "読込失敗", ex.getMessage());
+                    }
+                };
+
+        Runnable ensureLauncherDeployed =
+                () -> {
+                    Map<String, String> ui = uiEnv.get();
+                    RdpRemoteLauncherDeployer.DeployOutcome outcome =
+                            RdpRemoteLauncherDeployer.ensureDeployed(ui, status);
+                    outcome.message().ifPresent(deployStatusLabel::setText);
+                };
+
+        Runnable saveIniToShare =
+                () -> {
+                    ensureLauncherDeployed.run();
+                    Map<String, String> ui = uiEnv.get();
+                    Path iniPath = AppPaths.resolveRdpLauncherIni(ui);
+                    RdpRemoteLauncherIni ini = new RdpRemoteLauncherIni();
+                    ini.setSelectedSlot(slotSpinner.getValue());
+                    for (int i = 1; i <= slotFields.size(); i++) {
+                        ini.setSlot(i, slotFields.get(i - 1).getText());
+                    }
+                    String validation = ini.validateMessageForSave();
+                    if (validation != null) {
+                        showAlert(Alert.AlertType.WARNING, "保存できません", validation);
+                        rapStatusLabel.setText(validation);
+                        return;
+                    }
+                    try {
+                        ini.save(iniPath);
+                        rapStatusLabel.setText("保存しました: " + iniPath);
+                        status.accept("RAP設定.ini を保存しました: " + iniPath);
+                    } catch (IOException ex) {
+                        rapStatusLabel.setText("保存失敗: " + ex.getMessage());
+                        showAlert(Alert.AlertType.ERROR, "保存失敗", ex.getMessage());
+                    }
+                };
+
+        Button btnReloadIni = new Button("再読込");
+        btnReloadIni.getStyleClass().add("btn-reload");
+        btnReloadIni.setOnAction(
+                e -> {
+                    Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+                    confirm.setTitle("再読込");
+                    confirm.setHeaderText(null);
+                    confirm.setContentText("共有フォルダから RAP設定.ini を再読込します。未保存の変更は失われます。");
+                    confirm.showAndWait().ifPresent(
+                            choice -> {
+                                if (choice == ButtonType.OK) {
+                                    loadIniFromShare.run();
+                                }
+                            });
+                });
+
+        Button btnSaveIni = new Button("保存");
+        btnSaveIni.getStyleClass().add("btn-reload");
+        btnSaveIni.setOnAction(e -> saveIniToShare.run());
+
+        Button btnAddSlot = new Button("+ 行を追加");
+        btnAddSlot.getStyleClass().add("btn-reload");
+        btnAddSlot.setOnAction(
+                e -> {
+                    if (slotFields.size() >= RdpRemoteLauncherIni.MAX_SLOTS) {
+                        return;
+                    }
+                    int next = slotFields.size() + 1;
+                    Label caption = fieldCaption("スロット " + next);
+                    TextField field = new TextField();
+                    HBox.setHgrow(field, Priority.ALWAYS);
+                    Button browse = new Button("参照...");
+                    browse.getStyleClass().add("btn-reload");
+                    browse.setOnAction(
+                            ev -> {
+                                FileChooser chooser = new FileChooser();
+                                chooser.setTitle("スロット " + next);
+                                chooser.getExtensionFilters()
+                                        .add(
+                                                new FileChooser.ExtensionFilter(
+                                                        "実行ファイル (*.exe)", "*.exe"));
+                                java.io.File chosen =
+                                        chooser.showOpenDialog(
+                                                owner != null ? owner : browse.getScene().getWindow());
+                                if (chosen != null) {
+                                    field.setText(chosen.getAbsolutePath());
+                                }
+                            });
+                    HBox row = new HBox(8, field, browse);
+                    row.setAlignment(Pos.CENTER_LEFT);
+                    slotBox.getChildren().addAll(caption, row);
+                    slotFields.add(field);
+                    btnAddSlot.setDisable(slotFields.size() >= RdpRemoteLauncherIni.MAX_SLOTS);
+                });
+
+        Button btnOpenFolder = new Button("フォルダを開く");
+        btnOpenFolder.getStyleClass().add("btn-reload");
+        btnOpenFolder.setOnAction(
+                e -> {
+                    Map<String, String> ui = uiEnv.get();
+                    Path dir = AppPaths.resolveRdpLauncherDeployDir(ui);
+                    if (!Files.isDirectory(dir)) {
+                        DirectoryChooser chooser = new DirectoryChooser();
+                        chooser.setTitle("RAP設定.ini のフォルダ");
+                        java.io.File chosen =
+                                chooser.showDialog(
+                                        owner != null ? owner : btnOpenFolder.getScene().getWindow());
+                        if (chosen != null) {
+                            openFolder(chosen.toPath());
+                        }
+                        return;
+                    }
+                    openFolder(dir);
+                });
+
+        HBox slotSpinnerRow = new HBox(8, new Label("起動プログラム番号:"), slotSpinner);
+        slotSpinnerRow.setAlignment(Pos.CENTER_LEFT);
+
+        HBox rapActionRow = new HBox(8, btnReloadIni, btnSaveIni, btnOpenFolder, btnAddSlot);
+        rapActionRow.setAlignment(Pos.CENTER_LEFT);
+
+        VBox rapContent =
+                new VBox(
+                        8,
+                        iniPathLabel,
+                        launcherPathLabel,
+                        deployStatusLabel,
+                        slotSpinnerRow,
+                        slotBox,
+                        rapActionRow,
+                        rapStatusLabel);
+        rapContent.setFillWidth(true);
+
+        TitledPane rapPane = new TitledPane("RAP設定（接続先起動プログラム）", rapContent);
+        rapPane.setExpanded(true);
+        rapPane.setMaxWidth(CARD_WIDTH);
+
+        // --- RDP profile section ---
         TextField profileField = new TextField();
         profileField.setEditable(false);
         profileField.setPromptText("（.rdp プロファイル未設定）");
         HBox.setHgrow(profileField, Priority.ALWAYS);
 
-        Label profileCaption = fieldCaption("RDP プロファイル");
-
-        Label companionCaption = fieldCaption("リモート起動プログラム（接続先のパス）");
         TextField companionProgramField = new TextField();
         companionProgramField.setPromptText("例: C:\\Windows\\System32\\notepad.exe");
         HBox.setHgrow(companionProgramField, Priority.ALWAYS);
 
-        Label argsCaption = fieldCaption("引数");
         TextField companionArgsField = new TextField();
-        companionArgsField.setPromptText("空白区切り。空白を含む引数は \"...\" で囲む");
+        companionArgsField.setPromptText("空白区切り");
         HBox.setHgrow(companionArgsField, Priority.ALWAYS);
 
         Label statusLabel = new Label();
@@ -103,8 +360,8 @@ public final class RequestFormRemoteDesktopPane {
                             ui.getOrDefault(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM, ""));
                     companionArgsField.setText(
                             ui.getOrDefault(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM_ARGS, ""));
+                    refreshPaths.run();
                 };
-        refreshFromEnv.run();
 
         Runnable persistCompanionFields =
                 () -> {
@@ -115,144 +372,32 @@ public final class RequestFormRemoteDesktopPane {
                         companionProgramArgsChangeHandler.accept(companionArgsField.getText().trim());
                     }
                 };
-        companionProgramField.focusedProperty()
+
+        companionProgramField
+                .focusedProperty()
                 .addListener((obs, wasFocused, focused) -> {
                     if (wasFocused && !focused) {
                         persistCompanionFields.run();
                     }
                 });
-        companionArgsField.focusedProperty()
+        companionArgsField
+                .focusedProperty()
                 .addListener((obs, wasFocused, focused) -> {
                     if (wasFocused && !focused) {
                         persistCompanionFields.run();
                     }
                 });
-
-        Button btnChoose = new Button("プロファイルを選択...");
-        btnChoose.getStyleClass().add("btn-reload");
-        btnChoose.setTooltip(
-                new Tooltip("接続に使う .rdp ファイルを選択し、環境変数タブへ反映します。"));
-        btnChoose.setOnAction(
-                e -> {
-                    FileChooser chooser = new FileChooser();
-                    chooser.setTitle("RDP プロファイル (.rdp) を選択");
-                    chooser.getExtensionFilters()
-                            .add(
-                                    new FileChooser.ExtensionFilter(
-                                            "リモートデスクトップ接続 (*.rdp)", "*.rdp"));
-                    String current = profileField.getText();
-                    if (!current.isBlank()) {
-                        Path p = Path.of(current);
-                        Path parent = p.getParent();
-                        if (parent != null && Files.isDirectory(parent)) {
-                            chooser.setInitialDirectory(parent.toFile());
-                        }
-                    }
-                    java.io.File chosen =
-                            chooser.showOpenDialog(owner != null ? owner : btnChoose.getScene().getWindow());
-                    if (chosen == null) {
-                        return;
-                    }
-                    String abs = chosen.getAbsolutePath();
-                    profileField.setText(abs);
-                    if (profileChangeHandler != null) {
-                        profileChangeHandler.accept(abs);
-                    }
-                    status.accept("RDP プロファイルを設定しました: " + abs);
-                    statusLabel.setText("プロファイル: " + abs);
-                });
-
-        Button btnClear = new Button("クリア");
-        btnClear.getStyleClass().add("btn-reload");
-        btnClear.setTooltip(new Tooltip("プロファイル指定を解除します。"));
-        btnClear.setOnAction(
-                e -> {
-                    profileField.clear();
-                    if (profileChangeHandler != null) {
-                        profileChangeHandler.accept("");
-                    }
-                    status.accept("RDP プロファイルをクリアしました。");
-                    statusLabel.setText("プロファイル未設定です。");
-                });
-
-        Button btnChooseProgram = new Button("プログラムを選択...");
-        btnChooseProgram.getStyleClass().add("btn-reload");
-        btnChooseProgram.setTooltip(
-                new Tooltip(
-                        "接続先サーバー上の exe パスを入力します。"
-                                + " ローカル PC と同じパスなら参照用にファイル選択できます。"));
-        btnChooseProgram.setOnAction(
-                e -> {
-                    FileChooser chooser = new FileChooser();
-                    chooser.setTitle("同時起動プログラムを選択");
-                    chooser.getExtensionFilters()
-                            .addAll(
-                                    new FileChooser.ExtensionFilter("実行ファイル (*.exe)", "*.exe"),
-                                    new FileChooser.ExtensionFilter("すべてのファイル", "*.*"));
-                    String current = companionProgramField.getText();
-                    if (!current.isBlank()) {
-                        Path p = Path.of(current);
-                        Path parent = p.getParent();
-                        if (parent != null && Files.isDirectory(parent)) {
-                            chooser.setInitialDirectory(parent.toFile());
-                        }
-                    }
-                    java.io.File chosen =
-                            chooser.showOpenDialog(
-                                    owner != null ? owner : btnChooseProgram.getScene().getWindow());
-                    if (chosen == null) {
-                        return;
-                    }
-                    String abs = chosen.getAbsolutePath();
-                    companionProgramField.setText(abs);
-                    persistCompanionFields.run();
-                    status.accept("リモート起動プログラムを設定しました: " + abs);
-                    statusLabel.setText("リモート起動: " + abs);
-                });
-
-        Button btnClearProgram = new Button("クリア");
-        btnClearProgram.getStyleClass().add("btn-reload");
-        btnClearProgram.setTooltip(new Tooltip("リモート起動プログラム指定を解除します（.rdp からも削除）。"));
-        btnClearProgram.setOnAction(
-                e -> {
-                    companionProgramField.clear();
-                    persistCompanionFields.run();
-                    status.accept("リモート起動プログラムをクリアしました。");
-                    statusLabel.setText("リモート起動プログラム未設定です。");
-                });
-
-        Button btnSignWizard = new Button("RDP 署名ウィザード...");
-        btnSignWizard.getStyleClass().add("btn-reload");
-        btnSignWizard.setTooltip(
-                new Tooltip(
-                        "Windows の rdpsign.exe で .rdp を署名し、"
-                                + " GPO 信頼設定用の SHA-1 サムプリントを案内します（Windows のみ）。"));
-        btnSignWizard.setOnAction(
-                e ->
-                        RdpProfileSignWizard.show(
-                                owner != null ? owner : btnSignWizard.getScene().getWindow(),
-                                RdpProfileSignWizard.initialProfileFromUi(uiEnv.get()),
-                                uiEnv.get(),
-                                msg -> {
-                                    status.accept(msg);
-                                    statusLabel.setText(msg);
-                                },
-                                path -> {
-                                    profileField.setText(path);
-                                    if (profileChangeHandler != null) {
-                                        profileChangeHandler.accept(path);
-                                    }
-                                }));
 
         Button btnLaunch = new Button("リモートデスクトップを起動");
         btnLaunch.getStyleClass().add("btn-reload");
         btnLaunch.setTooltip(
                 new Tooltip(
                         "指定 .rdp で mstsc.exe を起動します。"
-                                + " リモート起動プログラムが設定されていれば .rdp へ書き込んでから接続します。"));
+                                + " 接続先の起動プログラムは RAP設定.ini + タスクスケジューラが参照します。"));
         btnLaunch.setOnAction(
                 e -> {
                     persistCompanionFields.run();
+                    ensureLauncherDeployed.run();
                     Map<String, String> ui = new HashMap<>(uiEnv.get());
                     ui.put(
                             AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM,
@@ -302,40 +447,89 @@ public final class RequestFormRemoteDesktopPane {
                     }
                 });
 
-        HBox profileRow = new HBox(8, profileField, btnChoose, btnClear);
+        Button btnChoose = new Button("プロファイルを選択...");
+        btnChoose.getStyleClass().add("btn-reload");
+        btnChoose.setOnAction(
+                e -> {
+                    FileChooser chooser = new FileChooser();
+                    chooser.setTitle("RDP プロファイル (.rdp) を選択");
+                    chooser.getExtensionFilters()
+                            .add(
+                                    new FileChooser.ExtensionFilter(
+                                            "リモートデスクトップ接続 (*.rdp)", "*.rdp"));
+                    java.io.File chosen =
+                            chooser.showOpenDialog(owner != null ? owner : btnChoose.getScene().getWindow());
+                    if (chosen == null) {
+                        return;
+                    }
+                    profileField.setText(chosen.getAbsolutePath());
+                    if (profileChangeHandler != null) {
+                        profileChangeHandler.accept(chosen.getAbsolutePath());
+                    }
+                });
+
+        Button btnSignWizard = new Button("RDP 署名ウィザード...");
+        btnSignWizard.getStyleClass().add("btn-reload");
+        btnSignWizard.setOnAction(
+                e ->
+                        RdpProfileSignWizard.show(
+                                owner != null ? owner : btnSignWizard.getScene().getWindow(),
+                                RdpProfileSignWizard.initialProfileFromUi(uiEnv.get()),
+                                uiEnv.get(),
+                                msg -> {
+                                    status.accept(msg);
+                                    statusLabel.setText(msg);
+                                },
+                                path -> {
+                                    profileField.setText(path);
+                                    if (profileChangeHandler != null) {
+                                        profileChangeHandler.accept(path);
+                                    }
+                                }));
+
+        HBox profileRow = new HBox(8, profileField, btnChoose);
         profileRow.setAlignment(Pos.CENTER_LEFT);
         profileRow.setMaxWidth(CARD_WIDTH);
-
-        HBox companionRow =
-                new HBox(8, companionProgramField, btnChooseProgram, btnClearProgram);
-        companionRow.setAlignment(Pos.CENTER_LEFT);
-        companionRow.setMaxWidth(CARD_WIDTH);
-
-        HBox argsRow = new HBox(8, companionArgsField);
-        argsRow.setAlignment(Pos.CENTER_LEFT);
-        argsRow.setMaxWidth(CARD_WIDTH);
 
         HBox actionRow = new HBox(8, btnLaunch, btnSignWizard);
         actionRow.setAlignment(Pos.CENTER_LEFT);
 
-        VBox card =
+        VBox rdpContent =
                 new VBox(
-                        10,
-                        title,
-                        subtitle,
-                        profileCaption,
+                        8,
+                        fieldCaption("RDP プロファイル"),
                         profileRow,
-                        companionCaption,
-                        companionRow,
-                        argsCaption,
-                        argsRow,
                         actionRow,
                         statusLabel);
+        TitledPane rdpPane = new TitledPane("リモートデスクトップ接続", rdpContent);
+        rdpPane.setExpanded(true);
+        rdpPane.setMaxWidth(CARD_WIDTH);
+
+        VBox policyContent =
+                new VBox(
+                        8,
+                        fieldCaption("リモート起動プログラム（.rdp 組込・PM_AI_RDP_EMBED_STARTUP_IN_PROFILE=1 時）"),
+                        companionProgramField,
+                        fieldCaption("引数"),
+                        companionArgsField);
+        TitledPane policyPane = new TitledPane("ポリシー有効化後用（.rdp 組込）", policyContent);
+        policyPane.setExpanded(false);
+        policyPane.setMaxWidth(CARD_WIDTH);
+
+        VBox card = new VBox(10, title, subtitle, rapPane, rdpPane, policyPane);
         card.getStyleClass().add("settings-card");
         card.setPadding(new Insets(12));
         card.setMaxWidth(CARD_WIDTH);
         card.setPrefWidth(CARD_WIDTH);
         card.setFillWidth(true);
+
+        Runnable onTabShow =
+                () -> {
+                    refreshFromEnv.run();
+                    ensureLauncherDeployed.run();
+                    loadIniFromShare.run();
+                };
+        onTabShow.run();
 
         VBox root = new VBox(12, card);
         root.getStyleClass().add("form-tab-container");
@@ -350,6 +544,17 @@ public final class RequestFormRemoteDesktopPane {
         Label label = new Label(text);
         label.getStyleClass().add("paper-main-subtitle");
         return label;
+    }
+
+    private static void openFolder(Path dir) {
+        if (!RemoteDesktopLauncher.isSupportedPlatform()) {
+            return;
+        }
+        try {
+            new ProcessBuilder("explorer.exe", dir.toString()).start();
+        } catch (IOException ignored) {
+            // ignore
+        }
     }
 
     private static void showAlert(Alert.AlertType type, String title, String message) {

@@ -369,6 +369,22 @@
   }, {
     "key" : "PM_AI_RDP_COMPANION_PROGRAM_ARGS",
     "value" : "",
-    "description" : "接続先プログラムの引数（remoteapplicationcmdline）。"
+    "description" : "接続先プログラムの引数（alternate shell に付与）。"
+  }, {
+    "key" : "PM_AI_RDP_LAUNCHER_EXE",
+    "value" : "",
+    "description" : "接続先 RDP ランチャー exe のフルパス。空のときサマリ Excel 同階層。"
+  }, {
+    "key" : "PM_AI_RDP_LAUNCHER_INI",
+    "value" : "",
+    "description" : "RAP設定.ini のフルパス。空のときサマリ Excel 同階層。"
+  }, {
+    "key" : "PM_AI_RDP_LAUNCHER_AUTO_DEPLOY",
+    "value" : "",
+    "description" : "ランチャー exe の自動再配備。0/false/off で無効。"
+  }, {
+    "key" : "PM_AI_RDP_EMBED_STARTUP_IN_PROFILE",
+    "value" : "",
+    "description" : "1 で .rdp へ alternate shell 書込。既定 off。"
   } ]
 }

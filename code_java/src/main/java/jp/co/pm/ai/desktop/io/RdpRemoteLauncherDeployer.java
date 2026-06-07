@@ -1,0 +1,165 @@
+package jp.co.pm.ai.desktop.io;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.CopyOption;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Consumer;
+
+import jp.co.pm.ai.desktop.config.AppPaths;
+
+/**
+ * 同梱 {@link AppPaths#RDP_LAUNCHER_EXE_BASENAME} をサマリ Excel 同階層 UNC へ自動再配備する。
+ */
+public final class RdpRemoteLauncherDeployer {
+
+    private static final CopyOption[] COPY_OPTIONS =
+            new CopyOption[] {StandardCopyOption.REPLACE_EXISTING};
+
+    private static final String BUNDLED_RESOURCE_PREFIX = "/jp/co/pm/ai/desktop/rdp-launcher/";
+
+    private RdpRemoteLauncherDeployer() {}
+
+    public record DeployOutcome(boolean copied, boolean upToDate, Optional<String> message) {}
+
+    public static boolean isAutoDeployEnabled(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String raw = u.get(AppPaths.KEY_PM_AI_RDP_LAUNCHER_AUTO_DEPLOY);
+        if (raw == null || raw.isBlank()) {
+            return true;
+        }
+        String v = raw.trim().toLowerCase(Locale.ROOT);
+        return !("0".equals(v) || "false".equals(v) || "off".equals(v) || "no".equals(v));
+    }
+
+    public static DeployOutcome ensureDeployed(Map<String, String> ui) {
+        return ensureDeployed(ui, null);
+    }
+
+    public static DeployOutcome ensureDeployed(Map<String, String> ui, Consumer<String> log) {
+        Map<String, String> env = ui != null ? ui : Map.of();
+        if (!isAutoDeployEnabled(env)) {
+            return new DeployOutcome(false, true, Optional.of("ランチャー自動再配備は無効です。"));
+        }
+
+        Path deployExe = AppPaths.resolveRdpLauncherExe(env);
+        Path deployVersion = AppPaths.resolveRdpLauncherVersionFile(env);
+        Path deployDir = deployExe.getParent();
+
+        Optional<BigDecimal> bundledVer = readBundledVersion();
+        if (bundledVer.isEmpty()) {
+            String msg = "同梱ランチャーの版情報が見つかりません。";
+            if (log != null) {
+                log.accept(msg);
+            }
+            return new DeployOutcome(false, false, Optional.of(msg));
+        }
+
+        Optional<BigDecimal> sharedVer = parseVersionFile(deployVersion);
+        boolean missingExe = !Files.isRegularFile(deployExe);
+        boolean needsCopy =
+                missingExe
+                        || sharedVer.isEmpty()
+                        || bundledVer.get().compareTo(sharedVer.orElse(BigDecimal.ZERO)) > 0;
+
+        if (!needsCopy) {
+            String msg = "ランチャーは最新です（" + formatVersion(sharedVer) + "）。";
+            if (log != null) {
+                log.accept(msg);
+            }
+            return new DeployOutcome(false, true, Optional.of(msg));
+        }
+
+        try {
+            if (deployDir != null) {
+                Files.createDirectories(deployDir);
+            }
+            copyBundledResource(AppPaths.RDP_LAUNCHER_EXE_BASENAME, deployExe);
+            copyBundledResource(AppPaths.RDP_LAUNCHER_VERSION_BASENAME, deployVersion);
+            String msg =
+                    missingExe
+                            ? "ランチャーを配備しました（" + formatVersion(bundledVer) + "）。"
+                            : "ランチャーを再配備しました（"
+                                    + formatVersion(sharedVer)
+                                    + " → "
+                                    + formatVersion(bundledVer)
+                                    + "）。";
+            if (log != null) {
+                log.accept(msg);
+            }
+            return new DeployOutcome(true, false, Optional.of(msg));
+        } catch (IOException ex) {
+            String msg = "ランチャー配備に失敗しました: " + ex.getMessage();
+            if (log != null) {
+                log.accept(msg);
+            }
+            return new DeployOutcome(false, false, Optional.of(msg));
+        }
+    }
+
+    private static void copyBundledResource(String basename, Path target) throws IOException {
+        String resourcePath = BUNDLED_RESOURCE_PREFIX + basename;
+        try (InputStream in =
+                RdpRemoteLauncherDeployer.class.getResourceAsStream(resourcePath)) {
+            if (in == null) {
+                throw new IOException("同梱リソースが見つかりません: " + resourcePath);
+            }
+            Path parent = target.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            Files.copy(in, target, COPY_OPTIONS);
+        }
+    }
+
+    static Optional<BigDecimal> readBundledVersion() {
+        String resourcePath = BUNDLED_RESOURCE_PREFIX + AppPaths.RDP_LAUNCHER_VERSION_BASENAME;
+        try (InputStream in = RdpRemoteLauncherDeployer.class.getResourceAsStream(resourcePath)) {
+            if (in == null) {
+                return Optional.empty();
+            }
+            String raw = new String(in.readAllBytes(), StandardCharsets.UTF_8).trim();
+            if (raw.isEmpty()) {
+                return Optional.empty();
+            }
+            String firstLine = raw.lines().findFirst().orElse("").trim();
+            if (firstLine.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(new BigDecimal(firstLine));
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    static Optional<BigDecimal> parseVersionFile(Path file) {
+        if (!Files.isRegularFile(file)) {
+            return Optional.empty();
+        }
+        try {
+            String raw = Files.readString(file, StandardCharsets.UTF_8).trim();
+            if (raw.isEmpty()) {
+                return Optional.empty();
+            }
+            String firstLine = raw.lines().findFirst().orElse("").trim();
+            if (firstLine.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(new BigDecimal(firstLine));
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    private static String formatVersion(Optional<BigDecimal> version) {
+        return version.map(BigDecimal::toPlainString).orElse("未配備");
+    }
+}

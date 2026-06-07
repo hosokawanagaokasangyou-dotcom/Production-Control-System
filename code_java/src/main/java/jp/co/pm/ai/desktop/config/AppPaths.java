@@ -105,12 +105,28 @@ public final class AppPaths {
     public static final String KEY_PM_AI_REQUEST_FORM_RDP_PROFILE = "PM_AI_REQUEST_FORM_RDP_PROFILE";
 
     /**
-     * 接続先サーバー上で RDP 接続時に起動するプログラム（.rdp の remoteapplicationprogram）。空なら無効。
+     * 接続先サーバー上で RDP 接続時に起動するプログラム（.rdp の alternate shell（RemoteApp ではない））。空なら無効。
      */
     public static final String KEY_PM_AI_RDP_COMPANION_PROGRAM = "PM_AI_RDP_COMPANION_PROGRAM";
 
-    /** {@link #KEY_PM_AI_RDP_COMPANION_PROGRAM} の引数（.rdp の remoteapplicationcmdline）。 */
+    /** {@link #KEY_PM_AI_RDP_COMPANION_PROGRAM} の引数（alternate shell へ付与する引数）。 */
     public static final String KEY_PM_AI_RDP_COMPANION_PROGRAM_ARGS = "PM_AI_RDP_COMPANION_PROGRAM_ARGS";
+
+    /** 接続先 RDP ランチャー exe（{@link #RDP_LAUNCHER_EXE_BASENAME}）のフルパス上書き。 */
+    public static final String KEY_PM_AI_RDP_LAUNCHER_EXE = "PM_AI_RDP_LAUNCHER_EXE";
+
+    /** 接続先 RDP ランチャー設定 ini（{@link #RDP_LAUNCHER_INI_BASENAME}）のフルパス上書き。 */
+    public static final String KEY_PM_AI_RDP_LAUNCHER_INI = "PM_AI_RDP_LAUNCHER_INI";
+
+    /** {@code 1} のときのみ .rdp へ alternate shell（リモート起動プログラム）を書込。 */
+    public static final String KEY_PM_AI_RDP_EMBED_STARTUP_IN_PROFILE = "PM_AI_RDP_EMBED_STARTUP_IN_PROFILE";
+
+    /** 接続先ランチャー exe の自動再配備（{@code 0/false/off} で無効）。 */
+    public static final String KEY_PM_AI_RDP_LAUNCHER_AUTO_DEPLOY = "PM_AI_RDP_LAUNCHER_AUTO_DEPLOY";
+
+    public static final String RDP_LAUNCHER_EXE_BASENAME = "PmAiRdpRemoteLauncher.exe";
+    public static final String RDP_LAUNCHER_VERSION_BASENAME = "PmAiRdpRemoteLauncher.version.txt";
+    public static final String RDP_LAUNCHER_INI_BASENAME = "RAP設定.ini";
 
     /**
      * 依頼書 PDF プレビュー: Type0 日本語フォントのサイズ補正係数（Excel pt に乗算）。{@code 0.50}～{@code 1.00}。
@@ -1306,6 +1322,38 @@ public final class AppPaths {
             p = resolveRepoRoot(u).resolve("code").resolve(override);
         }
         return p.toAbsolutePath().normalize();
+    }
+
+    /** RDP ランチャー／{@link #RDP_LAUNCHER_INI_BASENAME} の配備先（サマリ Excel と同階層）。 */
+    public static Path resolveRdpLauncherDeployDir(Map<String, String> ui) {
+        Path summary = summaryAiDispatchXlsxPath(ui);
+        Path parent = summary.getParent();
+        if (parent == null) {
+            return summary.toAbsolutePath().normalize();
+        }
+        return parent.toAbsolutePath().normalize();
+    }
+
+    public static Path resolveRdpLauncherExe(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_RDP_LAUNCHER_EXE));
+        if (!override.isEmpty()) {
+            return Path.of(override).toAbsolutePath().normalize();
+        }
+        return resolveRdpLauncherDeployDir(u).resolve(RDP_LAUNCHER_EXE_BASENAME);
+    }
+
+    public static Path resolveRdpLauncherIni(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String override = trim(u.get(KEY_PM_AI_RDP_LAUNCHER_INI));
+        if (!override.isEmpty()) {
+            return Path.of(override).toAbsolutePath().normalize();
+        }
+        return resolveRdpLauncherDeployDir(u).resolve(RDP_LAUNCHER_INI_BASENAME);
+    }
+
+    public static Path resolveRdpLauncherVersionFile(Map<String, String> ui) {
+        return resolveRdpLauncherDeployDir(ui).resolve(RDP_LAUNCHER_VERSION_BASENAME);
     }
 
     /** 学習アーカイブのサブフォルダ名（親は {@link #summaryAiDispatchXlsxPath} と同一）。 */

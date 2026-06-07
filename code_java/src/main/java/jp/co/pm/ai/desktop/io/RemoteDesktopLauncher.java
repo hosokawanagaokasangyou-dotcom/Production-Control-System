@@ -47,9 +47,13 @@ public final class RemoteDesktopLauncher {
         String remoteProgram =
                 RdpCompanionLauncher.resolveRemoteProgramPath(env).orElse("");
         String remoteArgs = RdpCompanionLauncher.resolveRemoteProgramArgs(env);
+        boolean embedInProfile = RdpCompanionLauncher.isEmbedStartupInProfileEnabled(env);
         boolean signatureRemoved =
-                RdpProfileEditor.applyRemoteStartupProgram(abs, remoteProgram, remoteArgs);
-        Optional<String> summary = RdpCompanionLauncher.formatEmbeddedSummary(env);
+                embedInProfile
+                        ? RdpProfileEditor.applyRemoteStartupProgram(abs, remoteProgram, remoteArgs)
+                        : false;
+        Optional<String> summary =
+                embedInProfile ? RdpCompanionLauncher.formatEmbeddedSummary(env) : Optional.empty();
         if (RdpSecurityDialogAutomator.isAutoConfirmEnabled(env)) {
             RdpSecurityDialogAutomator.launchWithAutomatedConfirm(mstsc, abs, env);
         } else {

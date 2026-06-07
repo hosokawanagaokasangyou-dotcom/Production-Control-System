@@ -166,6 +166,22 @@ class AppPathsTest {
     }
 
     @Test
+    void resolveRdpLauncherPaths_sameDirAsSummary(@TempDir Path fakeRepo) throws IOException {
+        Path summary = fakeRepo.resolve("code").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createDirectories(summary.getParent());
+        Files.writeString(summary, "x");
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
+        Path deployDir = AppPaths.resolveRdpLauncherDeployDir(ui);
+        assertEquals(summary.getParent().normalize(), deployDir.normalize());
+        assertEquals(
+                deployDir.resolve(AppPaths.RDP_LAUNCHER_INI_BASENAME).normalize(),
+                AppPaths.resolveRdpLauncherIni(ui).normalize());
+        assertEquals(
+                deployDir.resolve(AppPaths.RDP_LAUNCHER_EXE_BASENAME).normalize(),
+                AppPaths.resolveRdpLauncherExe(ui).normalize());
+    }
+
+    @Test
     void defaultAladdinMasterDir_pathsMatchFactorySharedData() {
         assertEquals(
                 AppPaths.DEFAULT_KONAN_SHARED_DATA_DIR + "\\" + AppPaths.ALADDIN_MASTER_DIR_LEAF_NAME,

@@ -219,12 +219,28 @@ public final class EnvVarDocs {
         put(
                 "PM_AI_RDP_COMPANION_PROGRAM",
                 "RDP 接続先サーバー上で起動するプログラムのパス。"
-                        + "「リモートデスクトップを起動」時に .rdp へ remoteapplicationprogram として書き込む。"
+                        + "「リモートデスクトップを起動」時に .rdp へ alternate shell（接続時の初期プログラム）として書き込む。"
                         + "例: C:\\Windows\\System32\\notepad.exe（接続先のパス）。空なら通常デスクトップ接続。");
         put(
                 "PM_AI_RDP_COMPANION_PROGRAM_ARGS",
                 "PM_AI_RDP_COMPANION_PROGRAM の引数。"
-                        + " .rdp の remoteapplicationcmdline に書き込む。空なら引数なし。");
+                        + " .rdp の alternate shell の引数として書き込む。空なら引数なし。");
+        put(
+                "PM_AI_RDP_LAUNCHER_EXE",
+                "接続先 RDP ランチャー（PmAiRdpRemoteLauncher.exe）のフルパス。"
+                        + "空のときは PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK と同階層の PmAiRdpRemoteLauncher.exe。");
+        put(
+                "PM_AI_RDP_LAUNCHER_INI",
+                "接続先 RDP ランチャー設定（RAP設定.ini）のフルパス。"
+                        + "空のときはサマリ Excel と同階層の RAP設定.ini。");
+        put(
+                "PM_AI_RDP_LAUNCHER_AUTO_DEPLOY",
+                "依頼書 UI から接続先共有フォルダへランチャー exe を自動再配備する。"
+                        + "0/false/off で無効。既定は有効。");
+        put(
+                "PM_AI_RDP_EMBED_STARTUP_IN_PROFILE",
+                "1/true/on のときのみ PM_AI_RDP_COMPANION_PROGRAM を .rdp へ alternate shell として書込。"
+                        + "既定は off（接続先はタスクスケジューラ + RAP設定.ini）。");
         put(
                 "PM_AI_ACTUAL_DETAIL_WORKBOOK",
                 "加工実績明細DATAを読むブックのフルパス（指定時は"

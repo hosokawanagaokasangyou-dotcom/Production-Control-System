@@ -33,7 +33,13 @@ class RdpCompanionLauncherTest {
     }
 
     @Test
-    void formatEmbeddedSummary_includesArgsWhenPresent() {
+    void formatEmbeddedSummary_requiresEmbedFlag() {
+        assertFalse(
+                RdpCompanionLauncher.formatEmbeddedSummary(
+                        Map.of(
+                                AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM,
+                                "C:\\Windows\\System32\\notepad.exe"))
+                        .isPresent());
         assertEquals(
                 Optional.of("C:\\Windows\\System32\\notepad.exe foo"),
                 RdpCompanionLauncher.formatEmbeddedSummary(
@@ -41,6 +47,16 @@ class RdpCompanionLauncherTest {
                                 AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM,
                                 "C:\\Windows\\System32\\notepad.exe",
                                 AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM_ARGS,
-                                "foo")));
+                                "foo",
+                                AppPaths.KEY_PM_AI_RDP_EMBED_STARTUP_IN_PROFILE,
+                                "1")));
+    }
+
+    @Test
+    void isEmbedStartupInProfileEnabled() {
+        assertFalse(RdpCompanionLauncher.isEmbedStartupInProfileEnabled(Map.of()));
+        assertTrue(
+                RdpCompanionLauncher.isEmbedStartupInProfileEnabled(
+                        Map.of(AppPaths.KEY_PM_AI_RDP_EMBED_STARTUP_IN_PROFILE, "1")));
     }
 }
