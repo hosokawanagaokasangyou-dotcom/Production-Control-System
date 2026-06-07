@@ -30,6 +30,16 @@ public class CommandLineParserTests
         Assert.Equal(@"C:\Program Files\App\app.exe", parsed.Executable);
         Assert.Equal("--flag", parsed.Arguments);
     }
+
+    [Fact]
+    public void Parse_quotedUncPathWithSpaces()
+    {
+        var line =
+            @"""\\192.168.0.101\share\002  加工G\Aladdin_RPA_Studio.exe"" C:\Users\test\file.ardrpa";
+        var parsed = CommandLineParser.Parse(line);
+        Assert.Equal(@"\\192.168.0.101\share\002  加工G\Aladdin_RPA_Studio.exe", parsed.Executable);
+        Assert.Equal(@"C:\Users\test\file.ardrpa", parsed.Arguments);
+    }
 }
 
 public class LauncherIniTests

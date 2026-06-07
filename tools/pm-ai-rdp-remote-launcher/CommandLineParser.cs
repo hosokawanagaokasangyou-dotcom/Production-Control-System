@@ -19,13 +19,13 @@ internal static class CommandLineParser
 
         if (trimmed[0] == '"')
         {
-            var end = trimmed.IndexOf('"', 1);
+            var end = FindClosingQuote(trimmed, 1);
             if (end < 0)
             {
                 throw new FormatException("引用符が閉じられていません: " + line);
             }
 
-            var executable = trimmed[1..end];
+            var executable = trimmed[1..end].Replace("\"\"", "\"");
             var arguments = end + 1 < trimmed.Length ? trimmed[(end + 1)..].TrimStart() : string.Empty;
             return new ParsedCommand(executable, arguments);
         }
@@ -37,5 +37,26 @@ internal static class CommandLineParser
         }
 
         return new ParsedCommand(trimmed[..space], trimmed[(space + 1)..].Trim());
+    }
+
+    private static int FindClosingQuote(string text, int fromIndex)
+    {
+        for (var i = fromIndex; i < text.Length; i++)
+        {
+            if (text[i] != '"')
+            {
+                continue;
+            }
+
+            if (i + 1 < text.Length && text[i + 1] == '"')
+            {
+                i++;
+                continue;
+            }
+
+            return i;
+        }
+
+        return -1;
     }
 }

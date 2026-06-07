@@ -42,6 +42,8 @@ import jp.co.pm.ai.desktop.io.RemoteDesktopLauncher;
  */
 public final class RequestFormRemoteDesktopPane {
 
+    private record SlotRowFields(TextField programField, TextField argsField) {}
+
     public record Context(
             Supplier<Map<String, String>> uiEnv,
             Consumer<String> profileChangeHandler,
@@ -116,8 +118,8 @@ public final class RequestFormRemoteDesktopPane {
         slotSpinner.setEditable(true);
         slotSpinner.setPrefWidth(80);
 
-        List<TextField> slotFields = new ArrayList<>();
-        VBox slotBox = new VBox(6);
+        List<SlotRowFields> slotFields = new ArrayList<>();
+        VBox slotBox = new VBox(8);
         slotBox.setFillWidth(true);
 
         Runnable refreshPaths =
@@ -130,54 +132,53 @@ public final class RequestFormRemoteDesktopPane {
                 };
         refreshPaths.run();
 
-        Runnable rebuildSlotRows =
-                () -> {
-                    slotBox.getChildren().clear();
-                    slotFields.clear();
-                    int count =
-                            slotFields.isEmpty()
-                                    ? 3
-                                    : Math.min(RdpRemoteLauncherIni.MAX_SLOTS, slotFields.size());
-                    if (count < 3) {
-                        count = 3;
-                    }
-                    for (int i = 1; i <= count; i++) {
-                        final int slot = i;
-                        Label caption = fieldCaption("スロット " + slot);
-                        TextField field = new TextField();
-                        field.setPromptText("例: C:\\Windows\\System32\\notepad.exe または exe + 引数");
-                        HBox.setHgrow(field, Priority.ALWAYS);
+        java.util.function.IntConsumer appendSlotRow =
+                slot -> {
+                    Label caption = fieldCaption("スロット " + slot);
+                    TextField programField = new TextField();
+                    programField.setPromptText("接続先の exe パス（保存時に \"...\" で囲みます）");
+                    HBox.setHgrow(programField, Priority.ALWAYS);
 
-                        Button browse =
-                                new Button("参照...");
-                        browse.getStyleClass().add("btn-reload");
-                        browse.setTooltip(
-                                new Tooltip("ローカル PC 上の exe を参照（接続先パスは手入力）。"));
-                        browse.setOnAction(
-                                e -> {
-                                    FileChooser chooser = new FileChooser();
-                                    chooser.setTitle("スロット " + slot + " のプログラム");
-                                    chooser.getExtensionFilters()
-                                            .add(
-                                                    new FileChooser.ExtensionFilter(
-                                                            "実行ファイル (*.exe)", "*.exe"));
-                                    java.io.File chosen =
-                                            chooser.showOpenDialog(
-                                                    owner != null ? owner : browse.getScene().getWindow());
-                                    if (chosen != null) {
-                                        field.setText(chosen.getAbsolutePath());
-                                    }
-                                });
+                    TextField argsField = new TextField();
+                    argsField.setPromptText("引数（空白区切り。空白を含む引数は \"...\"）");
+                    HBox.setHgrow(argsField, Priority.ALWAYS);
 
-                        HBox row = new HBox(8, field, browse);
-                        row.setAlignment(Pos.CENTER_LEFT);
-                        row.setMaxWidth(CARD_WIDTH);
-                        slotBox.getChildren().addAll(caption, row);
-                        slotFields.add(field);
-                    }
+                    Button browse = new Button("参照...");
+                    browse.getStyleClass().add("btn-reload");
+                    browse.setTooltip(
+                            new Tooltip("ローカル PC 上の exe を参照（接続先 UNC パスは手入力）。"));
+                    browse.setOnAction(
+                            e -> {
+                                FileChooser chooser = new FileChooser();
+                                chooser.setTitle("スロット " + slot + " のプログラム");
+                                chooser.getExtensionFilters()
+                                        .add(
+                                                new FileChooser.ExtensionFilter(
+                                                        "実行ファイル (*.exe)", "*.exe"));
+                                java.io.File chosen =
+                                        chooser.showOpenDialog(
+                                                owner != null ? owner : browse.getScene().getWindow());
+                                if (chosen != null) {
+                                    programField.setText(chosen.getAbsolutePath());
+                                }
+                            });
+
+                    HBox programRow = new HBox(8, programField, browse);
+                    programRow.setAlignment(Pos.CENTER_LEFT);
+                    programRow.setMaxWidth(CARD_WIDTH);
+
+                    Label argsCaption = fieldCaption("  引数");
+                    HBox argsRow = new HBox(8, argsField);
+                    argsRow.setAlignment(Pos.CENTER_LEFT);
+                    argsRow.setMaxWidth(CARD_WIDTH);
+
+                    slotBox.getChildren().addAll(caption, programRow, argsCaption, argsRow);
+                    slotFields.add(new SlotRowFields(programField, argsField));
                 };
 
-        rebuildSlotRows.run();
+        for (int i = 1; i <= 3; i++) {
+            appendSlotRow.accept(i);
+        }
 
         Runnable loadIniFromShare =
                 () -> {
@@ -189,19 +190,13 @@ public final class RequestFormRemoteDesktopPane {
                         slotSpinner.getValueFactory().setValue(ini.selectedSlot());
                         int visible = ini.visibleSlotCount();
                         while (slotFields.size() < visible) {
-                            int next = slotFields.size() + 1;
-                            Label caption = fieldCaption("スロット " + next);
-                            TextField field = new TextField();
-                            HBox.setHgrow(field, Priority.ALWAYS);
-                            Button browse = new Button("参照...");
-                            browse.getStyleClass().add("btn-reload");
-                            HBox row = new HBox(8, field, browse);
-                            row.setAlignment(Pos.CENTER_LEFT);
-                            slotBox.getChildren().addAll(caption, row);
-                            slotFields.add(field);
+                            appendSlotRow.accept(slotFields.size() + 1);
                         }
                         for (int i = 1; i <= slotFields.size(); i++) {
-                            slotFields.get(i - 1).setText(ini.getSlot(i));
+                            RdpRemoteLauncherIni.Command command = ini.getSlotCommand(i);
+                            SlotRowFields row = slotFields.get(i - 1);
+                            row.programField().setText(command.executable());
+                            row.argsField().setText(command.arguments());
                         }
                         rapStatusLabel.setText("読込しました: " + iniPath);
                     } catch (IOException ex) {
@@ -226,7 +221,9 @@ public final class RequestFormRemoteDesktopPane {
                     RdpRemoteLauncherIni ini = new RdpRemoteLauncherIni();
                     ini.setSelectedSlot(slotSpinner.getValue());
                     for (int i = 1; i <= slotFields.size(); i++) {
-                        ini.setSlot(i, slotFields.get(i - 1).getText());
+                        SlotRowFields row = slotFields.get(i - 1);
+                        ini.setSlotCommand(
+                                i, row.programField().getText(), row.argsField().getText());
                     }
                     String validation = ini.validateMessageForSave();
                     if (validation != null) {
@@ -271,31 +268,7 @@ public final class RequestFormRemoteDesktopPane {
                     if (slotFields.size() >= RdpRemoteLauncherIni.MAX_SLOTS) {
                         return;
                     }
-                    int next = slotFields.size() + 1;
-                    Label caption = fieldCaption("スロット " + next);
-                    TextField field = new TextField();
-                    HBox.setHgrow(field, Priority.ALWAYS);
-                    Button browse = new Button("参照...");
-                    browse.getStyleClass().add("btn-reload");
-                    browse.setOnAction(
-                            ev -> {
-                                FileChooser chooser = new FileChooser();
-                                chooser.setTitle("スロット " + next);
-                                chooser.getExtensionFilters()
-                                        .add(
-                                                new FileChooser.ExtensionFilter(
-                                                        "実行ファイル (*.exe)", "*.exe"));
-                                java.io.File chosen =
-                                        chooser.showOpenDialog(
-                                                owner != null ? owner : browse.getScene().getWindow());
-                                if (chosen != null) {
-                                    field.setText(chosen.getAbsolutePath());
-                                }
-                            });
-                    HBox row = new HBox(8, field, browse);
-                    row.setAlignment(Pos.CENTER_LEFT);
-                    slotBox.getChildren().addAll(caption, row);
-                    slotFields.add(field);
+                    appendSlotRow.accept(slotFields.size() + 1);
                     btnAddSlot.setDisable(slotFields.size() >= RdpRemoteLauncherIni.MAX_SLOTS);
                 });
 

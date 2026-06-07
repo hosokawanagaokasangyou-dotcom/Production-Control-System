@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.OptionalInt;
 import java.util.TreeMap;
 
 /**
@@ -23,7 +22,7 @@ public final class RdpRemoteLauncherIni {
     public record Command(String executable, String arguments) {}
 
     private int selectedSlot = 1;
-    private final Map<Integer, String> slots = new TreeMap<>();
+    private final Map<Integer, Command> slots = new TreeMap<>();
 
     public int selectedSlot() {
         return selectedSlot;
@@ -36,24 +35,41 @@ public final class RdpRemoteLauncherIni {
         selectedSlot = slot;
     }
 
-    public Map<Integer, String> slotsSnapshot() {
-        return Map.copyOf(slots);
+    public Command getSlotCommand(int slot) {
+        return slots.getOrDefault(slot, new Command("", ""));
     }
 
+    /** ini 1 行分（{@code "exe" [引数...]}）の文字列。 */
     public String getSlot(int slot) {
-        return slots.getOrDefault(slot, "");
+        Command command = slots.get(slot);
+        if (command == null || command.executable().isBlank()) {
+            return "";
+        }
+        return formatSlotIniValue(command.executable(), command.arguments());
     }
 
-    public void setSlot(int slot, String commandLine) {
+    public void setSlotCommand(int slot, String program, String arguments) {
         if (slot < 1 || slot > MAX_SLOTS) {
             throw new IllegalArgumentException("スロット番号は 1～" + MAX_SLOTS + " です: " + slot);
         }
-        String trimmed = commandLine != null ? commandLine.trim() : "";
-        if (trimmed.isEmpty()) {
+        String programTrimmed = program != null ? program.trim() : "";
+        String argsTrimmed = arguments != null ? arguments.trim() : "";
+        if (programTrimmed.isEmpty()) {
             slots.remove(slot);
         } else {
-            slots.put(slot, trimmed);
+            slots.put(slot, new Command(programTrimmed, argsTrimmed));
         }
+    }
+
+    /** @deprecated UI からは {@link #setSlotCommand(int, String, String)} を使用 */
+    @Deprecated
+    public void setSlot(int slot, String commandLine) {
+        if (commandLine == null || commandLine.isBlank()) {
+            slots.remove(slot);
+            return;
+        }
+        Command parsed = parseCommandLine(commandLine);
+        setSlotCommand(slot, parsed.executable(), parsed.arguments());
     }
 
     public static RdpRemoteLauncherIni load(Path path) throws IOException {
@@ -88,10 +104,11 @@ public final class RdpRemoteLauncherIni {
             try {
                 int slot = Integer.parseInt(key);
                 if (slot >= 1 && slot <= MAX_SLOTS && !value.isEmpty()) {
-                    ini.slots.put(slot, value);
+                    Command parsed = parseCommandLine(value);
+                    ini.setSlotCommand(slot, parsed.executable(), parsed.arguments());
                 }
-            } catch (NumberFormatException ignored) {
-                // ignore unknown keys
+            } catch (RuntimeException ignored) {
+                // ignore unknown or malformed keys
             }
         }
         return ini;
@@ -105,17 +122,35 @@ public final class RdpRemoteLauncherIni {
         }
         List<String> lines = new ArrayList<>();
         lines.add(SELECTED_SLOT_KEY + "=" + selectedSlot);
-        for (Map.Entry<Integer, String> entry : slots.entrySet()) {
-            String value = entry.getValue();
-            if (value != null && !value.isBlank()) {
-                lines.add(entry.getKey() + "=" + value.trim());
+        for (Map.Entry<Integer, Command> entry : slots.entrySet()) {
+            Command command = entry.getValue();
+            if (command != null && !command.executable().isBlank()) {
+                lines.add(
+                        entry.getKey()
+                                + "="
+                                + formatSlotIniValue(command.executable(), command.arguments()));
             }
         }
         Files.write(path, lines, StandardCharsets.UTF_8);
     }
 
     /**
-     * 1 行の「exe [引数...]」を分割する（引用符・UNC 対応）。
+     * ini スロット行の値を生成する。exe は常に {@code "..."} で囲む（パス空白対策）。
+     */
+    public static String formatSlotIniValue(String program, String arguments) {
+        if (program == null || program.isBlank()) {
+            throw new IllegalArgumentException("プログラムパスが空です。");
+        }
+        String quoted = "\"" + program.trim().replace("\"", "\"\"") + "\"";
+        String args = arguments != null ? arguments.trim() : "";
+        if (args.isEmpty()) {
+            return quoted;
+        }
+        return quoted + " " + args;
+    }
+
+    /**
+     * 1 行の「"exe" [引数...]」または「exe [引数...]」を分割する。
      */
     public static Command parseCommandLine(String line) {
         if (line == null || line.isBlank()) {
@@ -123,11 +158,11 @@ public final class RdpRemoteLauncherIni {
         }
         String trimmed = line.trim();
         if (trimmed.startsWith("\"")) {
-            int end = trimmed.indexOf('"', 1);
+            int end = findClosingQuote(trimmed, 1);
             if (end < 0) {
                 throw new IllegalArgumentException("引用符が閉じられていません: " + line);
             }
-            String executable = trimmed.substring(1, end);
+            String executable = trimmed.substring(1, end).replace("\"\"", "\"");
             String arguments =
                     end + 1 < trimmed.length() ? trimmed.substring(end + 1).trim() : "";
             return new Command(executable, arguments);
@@ -139,28 +174,37 @@ public final class RdpRemoteLauncherIni {
         return new Command(trimmed.substring(0, space), trimmed.substring(space + 1).trim());
     }
 
+    private static int findClosingQuote(String text, int fromIndex) {
+        for (int i = fromIndex; i < text.length(); i++) {
+            if (text.charAt(i) != '"') {
+                continue;
+            }
+            if (i + 1 < text.length() && text.charAt(i + 1) == '"') {
+                i++;
+                continue;
+            }
+            return i;
+        }
+        return -1;
+    }
+
     public String validateMessageForSave() {
         if (selectedSlot < 1 || selectedSlot > MAX_SLOTS) {
             return "起動プログラム番号は 1～" + MAX_SLOTS + " を指定してください。";
         }
-        String command = getSlot(selectedSlot);
-        if (command.isBlank()) {
-            return "起動プログラム番号 " + selectedSlot + " に対応するスロットが空です。";
+        Command selected = getSlotCommand(selectedSlot);
+        if (selected.executable().isBlank()) {
+            return "起動プログラム番号 " + selectedSlot + " のプログラムパスが空です。";
         }
-        try {
-            parseCommandLine(command);
-        } catch (IllegalArgumentException ex) {
-            return "スロット " + selectedSlot + " のコマンド行が不正です: " + ex.getMessage();
-        }
-        for (Map.Entry<Integer, String> entry : slots.entrySet()) {
-            String value = entry.getValue();
-            if (value == null || value.isBlank()) {
+        for (Map.Entry<Integer, Command> entry : slots.entrySet()) {
+            Command command = entry.getValue();
+            if (command == null || command.executable().isBlank()) {
                 continue;
             }
             try {
-                parseCommandLine(value);
+                formatSlotIniValue(command.executable(), command.arguments());
             } catch (IllegalArgumentException ex) {
-                return "スロット " + entry.getKey() + " のコマンド行が不正です: " + ex.getMessage();
+                return "スロット " + entry.getKey() + " が不正です: " + ex.getMessage();
             }
         }
         return null;

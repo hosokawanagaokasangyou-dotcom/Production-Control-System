@@ -24,56 +24,73 @@ class RdpRemoteLauncherIniTest {
     }
 
     @Test
-    void parseCommandLine_uncWithArgs() {
+    void parseCommandLine_quotedExecutableOnly() {
+        RdpRemoteLauncherIni.Command cmd =
+                RdpRemoteLauncherIni.parseCommandLine("\"C:\\Windows\\System32\\notepad.exe\"");
+        assertEquals("C:\\Windows\\System32\\notepad.exe", cmd.executable());
+        assertEquals("", cmd.arguments());
+    }
+
+    @Test
+    void parseCommandLine_quotedUncWithArgs() {
         String line =
-                "\\\\192.168.0.101\\share\\Aladdin_RPA_Studio.exe C:\\Users\\test\\file.ardrpa";
+                "\"\\\\192.168.0.101\\share\\002  加工G\\Aladdin_RPA_Studio.exe\" C:\\Users\\test\\file.ardrpa";
         RdpRemoteLauncherIni.Command cmd = RdpRemoteLauncherIni.parseCommandLine(line);
-        assertEquals("\\\\192.168.0.101\\share\\Aladdin_RPA_Studio.exe", cmd.executable());
+        assertEquals("\\\\192.168.0.101\\share\\002  加工G\\Aladdin_RPA_Studio.exe", cmd.executable());
         assertEquals("C:\\Users\\test\\file.ardrpa", cmd.arguments());
     }
 
     @Test
-    void parseCommandLine_quotedExecutable() {
-        RdpRemoteLauncherIni.Command cmd =
-                RdpRemoteLauncherIni.parseCommandLine("\"C:\\Program Files\\App\\app.exe\" --flag");
-        assertEquals("C:\\Program Files\\App\\app.exe", cmd.executable());
-        assertEquals("--flag", cmd.arguments());
+    void formatSlotIniValue_quotesProgramAlways() {
+        assertEquals(
+                "\"C:\\Windows\\System32\\notepad.exe\"",
+                RdpRemoteLauncherIni.formatSlotIniValue("C:\\Windows\\System32\\notepad.exe", ""));
+        assertEquals(
+                "\"\\\\server\\share\\app.exe\" C:\\tmp\\a.ardrpa",
+                RdpRemoteLauncherIni.formatSlotIniValue(
+                        "\\\\server\\share\\app.exe", "C:\\tmp\\a.ardrpa"));
     }
 
     @Test
-    void loadAndSave_roundTrip(@TempDir Path tmp) throws Exception {
+    void loadAndSave_roundTripWithQuotes(@TempDir Path tmp) throws Exception {
         Path iniPath = tmp.resolve("RAP設定.ini");
         Files.writeString(
                 iniPath,
                 """
                 起動プログラム番号=2
-                1=C:\\Windows\\System32\\notepad.exe
-                2=\\\\server\\share\\app.exe arg1
+                1="C:\\Windows\\System32\\notepad.exe"
+                2="\\\\server\\share\\002  加工G\\app.exe" arg1
                 """,
                 StandardCharsets.UTF_8);
 
         RdpRemoteLauncherIni loaded = RdpRemoteLauncherIni.load(iniPath);
         assertEquals(2, loaded.selectedSlot());
-        assertEquals("C:\\Windows\\System32\\notepad.exe", loaded.getSlot(1));
+        assertEquals("C:\\Windows\\System32\\notepad.exe", loaded.getSlotCommand(1).executable());
+        assertEquals("\\\\server\\share\\002  加工G\\app.exe", loaded.getSlotCommand(2).executable());
+        assertEquals("arg1", loaded.getSlotCommand(2).arguments());
 
+        loaded.setSlotCommand(2, "\\\\server\\share\\002  加工G\\app.exe", "arg1");
         Path out = tmp.resolve("out.ini");
         loaded.save(out);
         RdpRemoteLauncherIni again = RdpRemoteLauncherIni.load(out);
-        assertEquals(2, again.selectedSlot());
-        assertEquals("\\\\server\\share\\app.exe arg1", again.getSlot(2));
+        assertEquals("arg1", again.getSlotCommand(2).arguments());
+        assertTrue(again.getSlot(1).startsWith("\""));
+        assertTrue(again.getSlot(1).endsWith("notepad.exe\""));
+        assertTrue(Files.readString(out, StandardCharsets.UTF_8).contains("002  加工G"));
     }
 
     @Test
-    void validateMessageForSave_emptySelectedSlot() {
+    void validateMessageForSave_emptyProgramOnSelectedSlot() {
         RdpRemoteLauncherIni ini = new RdpRemoteLauncherIni();
         ini.setSelectedSlot(2);
+        ini.setSlotCommand(1, "C:\\Windows\\System32\\notepad.exe", "");
         assertNotNull(ini.validateMessageForSave());
     }
 
     @Test
     void validateMessageForSave_ok() {
         RdpRemoteLauncherIni ini = new RdpRemoteLauncherIni();
-        ini.setSlot(1, "C:\\Windows\\System32\\notepad.exe");
+        ini.setSlotCommand(1, "C:\\Windows\\System32\\notepad.exe", "");
         assertNull(ini.validateMessageForSave());
     }
 
