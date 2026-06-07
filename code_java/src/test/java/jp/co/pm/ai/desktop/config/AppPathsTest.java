@@ -93,6 +93,13 @@ class AppPathsTest {
     }
 
     @Test
+    void rdpCompanionProgram_isPlainEnvKeyNotFilePicker() {
+        assertFalse(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM));
+        assertFalse(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM));
+        assertFalse(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM_ARGS));
+    }
+
+    @Test
     void resolveRequestFormOriginalDir_usesEnvOverrideOrFactoryDefault(@TempDir Path tmp) throws Exception {
         Path custom = tmp.resolve("original-forms");
         Files.createDirectories(custom);

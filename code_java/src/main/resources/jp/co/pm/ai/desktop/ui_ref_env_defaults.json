@@ -362,5 +362,13 @@
     "key" : "PM_AI_REQUEST_FORM_RDP_PROFILE",
     "value" : "",
     "description" : "依頼書入力タブ「リモートデスクトップ」で起動する RDP プロファイル（.rdp）のフルパス。空のときは未設定。環境変数タブの「ファイル...」で選択可。"
+  }, {
+    "key" : "PM_AI_RDP_COMPANION_PROGRAM",
+    "value" : "C:\\Windows\\System32\\notepad.exe",
+    "description" : "接続先サーバー上で RDP 接続時に起動するプログラム。.rdp へ書き込む。"
+  }, {
+    "key" : "PM_AI_RDP_COMPANION_PROGRAM_ARGS",
+    "value" : "",
+    "description" : "接続先プログラムの引数（remoteapplicationcmdline）。"
   } ]
 }

@@ -92,6 +92,8 @@ public class ReconciliationApp {
     private Consumer<String> originalDirChangeHandler;
     private Consumer<String> juchuFileChangeHandler;
     private Consumer<String> rdpProfileChangeHandler;
+    private Consumer<String> rdpCompanionProgramChangeHandler;
+    private Consumer<String> rdpCompanionProgramArgsChangeHandler;
     private TextField txtJuchuPathDisplay;
     private ListView<RequestFormJuchuFileBackupStore.RequestFormJuchuFileBackupEntry>
             juchuBackupListView;
@@ -282,6 +284,16 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     /** RDP プロファイル選択でパスが変わったとき、環境変数タブへ反映するためのコールバック。 */
     public void setRdpProfileChangeHandler(Consumer<String> handler) {
         this.rdpProfileChangeHandler = handler;
+    }
+
+    /** RDP 同時起動プログラムが変わったとき、環境変数タブへ反映するためのコールバック。 */
+    public void setRdpCompanionProgramChangeHandler(Consumer<String> handler) {
+        this.rdpCompanionProgramChangeHandler = handler;
+    }
+
+    /** RDP 同時起動プログラム引数が変わったとき、環境変数タブへ反映するためのコールバック。 */
+    public void setRdpCompanionProgramArgsChangeHandler(Consumer<String> handler) {
+        this.rdpCompanionProgramArgsChangeHandler = handler;
     }
 
     public void setPreviewBadgeConfigSupplier(Supplier<RequestFormPreviewBadgeConfig> supplier) {
@@ -1374,6 +1386,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                         new RequestFormRemoteDesktopPane.Context(
                                 () -> uiEnvSnapshot,
                                 this::applySelectedRdpProfile,
+                                this::applyRdpCompanionProgram,
+                                this::applyRdpCompanionProgramArgs,
                                 msg -> {
                                     if (statusLabel != null) {
                                         statusLabel.setText(msg);
@@ -1394,6 +1408,32 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         uiEnvSnapshot = Map.copyOf(next);
         if (rdpProfileChangeHandler != null) {
             rdpProfileChangeHandler.accept(absolutePath != null ? absolutePath : "");
+        }
+    }
+
+    private void applyRdpCompanionProgram(String absolutePath) {
+        Map<String, String> next = new HashMap<>(uiEnvSnapshot);
+        if (absolutePath == null || absolutePath.isBlank()) {
+            next.remove(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM);
+        } else {
+            next.put(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM, absolutePath);
+        }
+        uiEnvSnapshot = Map.copyOf(next);
+        if (rdpCompanionProgramChangeHandler != null) {
+            rdpCompanionProgramChangeHandler.accept(absolutePath != null ? absolutePath : "");
+        }
+    }
+
+    private void applyRdpCompanionProgramArgs(String args) {
+        Map<String, String> next = new HashMap<>(uiEnvSnapshot);
+        if (args == null || args.isBlank()) {
+            next.remove(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM_ARGS);
+        } else {
+            next.put(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM_ARGS, args);
+        }
+        uiEnvSnapshot = Map.copyOf(next);
+        if (rdpCompanionProgramArgsChangeHandler != null) {
+            rdpCompanionProgramArgsChangeHandler.accept(args != null ? args : "");
         }
     }
 

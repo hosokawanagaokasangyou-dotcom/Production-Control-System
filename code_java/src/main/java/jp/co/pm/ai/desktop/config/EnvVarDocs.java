@@ -217,6 +217,15 @@ public final class EnvVarDocs {
                         + "空のときは未設定。環境変数タブのファイル選択可。"
                         + "子タブの「リモートデスクトップを起動」で mstsc.exe に渡されます（Windows のみ）。");
         put(
+                "PM_AI_RDP_COMPANION_PROGRAM",
+                "RDP 接続先サーバー上で起動するプログラムのパス。"
+                        + "「リモートデスクトップを起動」時に .rdp へ remoteapplicationprogram として書き込む。"
+                        + "例: C:\\Windows\\System32\\notepad.exe（接続先のパス）。空なら通常デスクトップ接続。");
+        put(
+                "PM_AI_RDP_COMPANION_PROGRAM_ARGS",
+                "PM_AI_RDP_COMPANION_PROGRAM の引数。"
+                        + " .rdp の remoteapplicationcmdline に書き込む。空なら引数なし。");
+        put(
                 "PM_AI_ACTUAL_DETAIL_WORKBOOK",
                 "加工実績明細DATAを読むブックのフルパス（指定時は"
                         + " PM_AI_ACTUAL_DETAIL_SOURCE_DIR より優先）。");

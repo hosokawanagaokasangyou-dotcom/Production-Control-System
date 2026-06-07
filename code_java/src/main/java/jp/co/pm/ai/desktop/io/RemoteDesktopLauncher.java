@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -13,18 +14,28 @@ import java.util.Optional;
  */
 public final class RemoteDesktopLauncher {
 
+    /** {@link #launch(Path, Map)} の結果。 */
+    public record LaunchOutcome(
+            Path rdpProfile,
+            Optional<String> remoteStartupSummary,
+            boolean signatureRemoved) {}
+
     private RemoteDesktopLauncher() {}
 
     public static boolean isSupportedPlatform() {
         return isWindows();
     }
 
+    public static LaunchOutcome launch(Path rdpProfile) throws IOException {
+        return launch(rdpProfile, Map.of());
+    }
+
     /**
-     * @param rdpProfile .rdp ファイルの絶対パス
-     * @throws IOException 起動失敗・未対応プラットフォーム・ファイル不正
+     * @param ui リモート起動プログラム設定の解決に使用
      */
-    public static void launch(Path rdpProfile) throws IOException {
-        Path abs = validateRdpProfile(rdpProfile);
+    public static LaunchOutcome launch(Path rdpProfile, Map<String, String> ui) throws IOException {
+        Path preferred = RdpFileSigner.resolvePreferredSignedProfilePath(rdpProfile, ui);
+        Path abs = validateRdpProfile(preferred);
         if (!isSupportedPlatform()) {
             throw new IOException("リモートデスクトップの起動は Windows のみ対応です。");
         }
@@ -32,7 +43,19 @@ public final class RemoteDesktopLauncher {
         if (mstsc == null) {
             throw new IOException("mstsc.exe が見つかりません。");
         }
-        startDetached(List.of(mstsc.toString(), abs.toString()));
+        Map<String, String> env = ui != null ? ui : Map.of();
+        String remoteProgram =
+                RdpCompanionLauncher.resolveRemoteProgramPath(env).orElse("");
+        String remoteArgs = RdpCompanionLauncher.resolveRemoteProgramArgs(env);
+        boolean signatureRemoved =
+                RdpProfileEditor.applyRemoteStartupProgram(abs, remoteProgram, remoteArgs);
+        Optional<String> summary = RdpCompanionLauncher.formatEmbeddedSummary(env);
+        if (RdpSecurityDialogAutomator.isAutoConfirmEnabled(env)) {
+            RdpSecurityDialogAutomator.launchWithAutomatedConfirm(mstsc, abs, env);
+        } else {
+            startDetached(List.of(mstsc.toString(), abs.toString()));
+        }
+        return new LaunchOutcome(abs, summary, signatureRemoved);
     }
 
     public static Optional<Path> resolveMstscExeOptional() {

@@ -131,6 +131,19 @@ public final class RequestFormInputTabController {
                                 AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE, path);
                     }
                 });
+        reconciliationApp.setRdpCompanionProgramChangeHandler(
+                path -> {
+                    if (shell != null) {
+                        shell.updateEnvTabValue(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM, path);
+                    }
+                });
+        reconciliationApp.setRdpCompanionProgramArgsChangeHandler(
+                args -> {
+                    if (shell != null) {
+                        shell.updateEnvTabValue(
+                                AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM_ARGS, args);
+                    }
+                });
         Window host =
                 contentHost.getScene() != null ? contentHost.getScene().getWindow() : null;
         if (host == null && shell != null) {
