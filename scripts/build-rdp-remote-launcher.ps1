@@ -10,7 +10,7 @@ $versionTxt = Join-Path $RepoRoot 'version.txt'
 
 Push-Location $launcherDir
 try {
-    dotnet publish -c Release -r win-x64 --self-contained false
+    dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
     $publishDir = Join-Path $launcherDir 'bin/Release/net8.0-windows/win-x64/publish'
     $exe = Join-Path $publishDir 'PmAiRdpRemoteLauncher.exe'
     if (-not (Test-Path -LiteralPath $exe)) {
