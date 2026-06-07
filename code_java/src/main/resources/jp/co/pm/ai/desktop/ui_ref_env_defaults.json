@@ -371,6 +371,18 @@
     "value" : "",
     "description" : "接続先プログラムの引数（alternate shell に付与）。"
   }, {
+    "key" : "PM_AI_RDP_FULLSCREEN",
+    "value" : "0",
+    "description" : "RDP 起動時に全画面にする。1/true/on=全画面、0/false/off=ウィンドウ（既定）。ウィンドウ時は PM_AI_RDP_DESKTOP_WIDTH/HEIGHT を .rdp に書き込む。"
+  }, {
+    "key" : "PM_AI_RDP_DESKTOP_WIDTH",
+    "value" : "1280",
+    "description" : "RDP ウィンドウ表示時の幅（ピクセル）。PM_AI_RDP_FULLSCREEN=0 のとき mstsc 起動前に .rdp へ反映。既定 1280。"
+  }, {
+    "key" : "PM_AI_RDP_DESKTOP_HEIGHT",
+    "value" : "800",
+    "description" : "RDP ウィンドウ表示時の高さ（ピクセル）。PM_AI_RDP_FULLSCREEN=0 のとき mstsc 起動前に .rdp へ反映。既定 800。"
+  }, {
     "key" : "PM_AI_RDP_LAUNCHER_EXE",
     "value" : "",
     "description" : "接続先 RDP ランチャー exe のフルパス。空のときサマリ Excel 同階層。"

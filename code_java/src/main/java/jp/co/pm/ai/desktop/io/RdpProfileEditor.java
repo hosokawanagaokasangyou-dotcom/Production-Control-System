@@ -24,14 +24,26 @@ public final class RdpProfileEditor {
     public record RemoteStartupSettings(String programPath, String arguments) {}
 
     /**
-     * リモート デスクトップの解像度を設定する。
+     * リモート デスクトップの解像度を設定する（全画面）。
      *
      * @return 署名行を削除した場合 {@code true}
      */
     public static boolean applyDesktopSize(Path rdpProfile, int width, int height) throws IOException {
+        return applyDesktopDisplay(rdpProfile, width, height, true);
+    }
+
+    /**
+     * リモート デスクトップの解像度と表示モードを設定する。
+     *
+     * @param fullScreen {@code true} で全画面（screen mode id 2）、{@code false} でウィンドウ（1）
+     * @return 署名行を削除した場合 {@code true}
+     */
+    public static boolean applyDesktopDisplay(
+            Path rdpProfile, int width, int height, boolean fullScreen) throws IOException {
         if (width <= 0 || height <= 0) {
             throw new IllegalArgumentException("width/height must be positive");
         }
+        int screenMode = fullScreen ? 2 : 1;
         Path abs = RemoteDesktopLauncher.validateRdpProfile(rdpProfile);
         List<String> lines = readLines(abs);
         boolean removedSignature = false;
@@ -63,7 +75,7 @@ public final class RdpProfileEditor {
                     continue;
                 }
                 if ("screen mode id".equals(key)) {
-                    out.add("screen mode id:i:2");
+                    out.add("screen mode id:i:" + screenMode);
                     hasScreenMode = true;
                     continue;
                 }
@@ -77,7 +89,7 @@ public final class RdpProfileEditor {
             out.add("desktopheight:i:" + height);
         }
         if (!hasScreenMode) {
-            out.add("screen mode id:i:2");
+            out.add("screen mode id:i:" + screenMode);
         }
         writeLines(abs, out);
         return removedSignature;
@@ -100,11 +112,11 @@ public final class RdpProfileEditor {
         boolean removedSignature = false;
         List<String> out = new ArrayList<>(lines.size() + 4);
         boolean hasMode = false;
-        boolean hasName = false;
         boolean hasProgram = false;
         boolean hasCmdline = false;
+        boolean hasName = false;
         boolean hasAlternateShell = false;
-        boolean hasDisableCheck = false;
+        boolean hasWorkingDir = false;
         for (String rawLine : lines) {
             String line = stripBom(rawLine);
             if (line.isEmpty()) {
@@ -119,15 +131,11 @@ public final class RdpProfileEditor {
             if (intMatcher.matches()) {
                 String key = normalizeKey(intMatcher.group(1));
                 if ("remoteapplicationmode".equals(key)) {
-                    out.add("remoteapplicationmode:i:" + (enable ? 1 : 0));
+                    out.add("remoteapplicationmode:i:0");
                     hasMode = true;
                     continue;
                 }
                 if ("disableremoteappcheck".equals(key)) {
-                    if (enable) {
-                        out.add("disableremoteappcheck:i:1");
-                    }
-                    hasDisableCheck = true;
                     continue;
                 }
             }
@@ -135,45 +143,54 @@ public final class RdpProfileEditor {
             if (strMatcher.matches()) {
                 String key = normalizeKey(strMatcher.group(1));
                 if ("remoteapplicationprogram".equals(key)) {
-                    out.add("remoteapplicationprogram:s:" + (enable ? program : ""));
+                    out.add("remoteapplicationprogram:s:");
                     hasProgram = true;
                     continue;
                 }
                 if ("remoteapplicationcmdline".equals(key)) {
-                    out.add("remoteapplicationcmdline:s:" + (enable ? args : ""));
+                    out.add("remoteapplicationcmdline:s:");
                     hasCmdline = true;
                     continue;
                 }
                 if ("remoteapplicationname".equals(key)) {
-                    out.add("remoteapplicationname:s:" + (enable ? deriveRemoteAppName(program) : ""));
+                    out.add("remoteapplicationname:s:");
                     hasName = true;
                     continue;
                 }
                 if ("alternate shell".equals(key)) {
-                    out.add("alternate shell:s:" + (enable ? "rdpinit.exe" : ""));
+                    out.add("alternate shell:s:" + (enable ? buildAlternateShellValue(program, args) : ""));
                     hasAlternateShell = true;
+                    continue;
+                }
+                if ("shell working directory".equals(key)) {
+                    out.add(
+                            "shell working directory:s:"
+                                    + (enable ? deriveWorkingDirectory(program) : ""));
+                    hasWorkingDir = true;
                     continue;
                 }
             }
             out.add(line);
         }
         if (!hasMode) {
-            out.add("remoteapplicationmode:i:" + (enable ? 1 : 0));
+            out.add("remoteapplicationmode:i:0");
         }
         if (!hasProgram) {
-            out.add("remoteapplicationprogram:s:" + (enable ? program : ""));
+            out.add("remoteapplicationprogram:s:");
         }
         if (!hasCmdline) {
-            out.add("remoteapplicationcmdline:s:" + (enable ? args : ""));
+            out.add("remoteapplicationcmdline:s:");
         }
         if (!hasName) {
-            out.add("remoteapplicationname:s:" + (enable ? deriveRemoteAppName(program) : ""));
+            out.add("remoteapplicationname:s:");
         }
         if (!hasAlternateShell) {
-            out.add("alternate shell:s:" + (enable ? "rdpinit.exe" : ""));
+            out.add("alternate shell:s:" + (enable ? buildAlternateShellValue(program, args) : ""));
         }
-        if (enable && !hasDisableCheck) {
-            out.add("disableremoteappcheck:i:1");
+        if (!hasWorkingDir) {
+            out.add(
+                    "shell working directory:s:"
+                            + (enable ? deriveWorkingDirectory(program) : ""));
         }
         writeLines(abs, out);
         return removedSignature;
@@ -181,22 +198,68 @@ public final class RdpProfileEditor {
 
     public static RemoteStartupSettings readRemoteStartupProgram(Path rdpProfile) throws IOException {
         Path abs = RemoteDesktopLauncher.validateRdpProfile(rdpProfile);
-        String program = "";
-        String args = "";
+        String alternateShell = "";
         for (String rawLine : readLines(abs)) {
             String line = stripBom(rawLine);
             Matcher strMatcher = STRING_SETTING.matcher(line);
             if (!strMatcher.matches()) {
                 continue;
             }
-            String key = normalizeKey(strMatcher.group(1));
-            if ("remoteapplicationprogram".equals(key)) {
-                program = strMatcher.group(2).trim();
-            } else if ("remoteapplicationcmdline".equals(key)) {
-                args = strMatcher.group(2).trim();
+            if ("alternate shell".equals(normalizeKey(strMatcher.group(1)))) {
+                alternateShell = strMatcher.group(2).trim();
             }
         }
-        return new RemoteStartupSettings(program, args);
+        return parseAlternateShellValue(alternateShell);
+    }
+
+    static String buildAlternateShellValue(String program, String args) {
+        if (args == null || args.isBlank()) {
+            return program;
+        }
+        if (program.indexOf(' ') >= 0 && !program.startsWith("\"")) {
+            return "\"" + program + "\" " + args;
+        }
+        return program + " " + args;
+    }
+
+    static RemoteStartupSettings parseAlternateShellValue(String alternateShell) {
+        if (alternateShell == null || alternateShell.isBlank()) {
+            return new RemoteStartupSettings("", "");
+        }
+        String trimmed = alternateShell.strip();
+        if (trimmed.startsWith("\"")) {
+            int end = trimmed.indexOf('"', 1);
+            if (end > 0) {
+                String program = trimmed.substring(1, end);
+                String rest = trimmed.substring(end + 1).strip();
+                return new RemoteStartupSettings(program, rest);
+            }
+        }
+        int space = trimmed.indexOf(' ');
+        if (space < 0) {
+            return new RemoteStartupSettings(trimmed, "");
+        }
+        return new RemoteStartupSettings(trimmed.substring(0, space), trimmed.substring(space + 1).strip());
+    }
+
+    static String deriveWorkingDirectory(String program) {
+        if (program == null || program.isBlank()) {
+            return "";
+        }
+        String exe = program.strip();
+        if (exe.startsWith("\"")) {
+            int end = exe.indexOf('"', 1);
+            if (end > 0) {
+                exe = exe.substring(1, end);
+            }
+        } else {
+            int space = exe.indexOf(' ');
+            if (space >= 0) {
+                exe = exe.substring(0, space);
+            }
+        }
+        int slash = Math.max(exe.lastIndexOf('\\'), exe.lastIndexOf('/'));
+        return slash > 0 ? exe.substring(0, slash) : "";
     }
 
     static List<String> readLines(Path file) throws IOException {
@@ -229,15 +292,6 @@ public final class RdpProfileEditor {
         out[1] = (byte) 0xFE;
         System.arraycopy(body, 0, out, 2, body.length);
         Files.write(file, out);
-    }
-
-    private static String deriveRemoteAppName(String program) {
-        if (program == null || program.isBlank()) {
-            return "RemoteApp";
-        }
-        String name = Path.of(program.replace('/', '\\')).getFileName().toString();
-        int dot = name.lastIndexOf('.');
-        return dot > 0 ? name.substring(0, dot) : name;
     }
 
     private static boolean isSignatureLine(String line) {

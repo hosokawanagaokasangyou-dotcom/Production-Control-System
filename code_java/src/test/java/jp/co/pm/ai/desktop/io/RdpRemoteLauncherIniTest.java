@@ -1,6 +1,7 @@
 package jp.co.pm.ai.desktop.io;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -49,6 +50,53 @@ class RdpRemoteLauncherIniTest {
                 "\"\\\\server\\share\\app.exe\" C:\\tmp\\a.ardrpa",
                 RdpRemoteLauncherIni.formatSlotIniValue(
                         "\\\\server\\share\\app.exe", "C:\\tmp\\a.ardrpa"));
+    }
+
+    @Test
+    void formatSlotIniValue_quotesArgumentsWithSpaces() {
+        String arg =
+                "\\\\192.168.0.101\\share\\scenarios\\工程別生産計画問い合わ せ.ardrpa";
+        String formatted =
+                RdpRemoteLauncherIni.formatSlotIniValue(
+                        "Z:\\portable\\Aladdin_RPA_Studio.exe", arg);
+        assertEquals(
+                "\"Z:\\portable\\Aladdin_RPA_Studio.exe\" "
+                        + "\"\\\\192.168.0.101\\share\\scenarios\\工程別生産計画問い合わ せ.ardrpa\"",
+                formatted);
+    }
+
+    @Test
+    void argumentsForUiDisplay_stripsQuotes() {
+        assertEquals(
+                "\\\\server\\a.ardrpa",
+                RdpRemoteLauncherIni.argumentsForUiDisplay("\"\\\\server\\a.ardrpa\""));
+        assertEquals(
+                "\\\\server\\問い合わ せ.ardrpa",
+                RdpRemoteLauncherIni.argumentsForUiDisplay(
+                        "\"\\\\server\\問い合わ せ.ardrpa\""));
+    }
+
+    @Test
+    void loadAndSave_persistsDisconnectOnChildExit(@TempDir Path tmp) throws Exception {
+        Path iniPath = tmp.resolve("RAP設定.ini");
+        Files.writeString(
+                iniPath,
+                """
+                起動プログラム番号=1
+                終了時RDP切断=0
+                1="C:\\Windows\\System32\\notepad.exe"
+                """,
+                StandardCharsets.UTF_8);
+
+        RdpRemoteLauncherIni loaded = RdpRemoteLauncherIni.load(iniPath);
+        assertFalse(loaded.disconnectOnChildExit());
+
+        loaded.setDisconnectOnChildExit(true);
+        Path out = tmp.resolve("out.ini");
+        loaded.save(out);
+        RdpRemoteLauncherIni again = RdpRemoteLauncherIni.load(out);
+        assertTrue(again.disconnectOnChildExit());
+        assertTrue(Files.readString(out, StandardCharsets.UTF_8).contains("終了時RDP切断=1"));
     }
 
     @Test

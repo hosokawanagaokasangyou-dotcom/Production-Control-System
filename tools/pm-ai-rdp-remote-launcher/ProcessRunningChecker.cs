@@ -7,18 +7,25 @@ internal static class ProcessRunningChecker
 {
     internal static bool IsAlreadyRunning(ParsedCommand command)
     {
+        return TryFindRunningProcessId(command).HasValue;
+    }
+
+    internal static int? TryFindRunningProcessId(ParsedCommand command)
+    {
         var executable = NormalizePath(command.Executable);
         var processName = Path.GetFileNameWithoutExtension(executable);
         if (string.IsNullOrWhiteSpace(processName))
         {
-            return false;
+            return null;
         }
 
         var signature = BuildMatchSignature(executable, command.Arguments);
         try
         {
             using var searcher = new ManagementObjectSearcher(
-                "SELECT CommandLine, ExecutablePath FROM Win32_Process WHERE Name = '" + EscapeWmi(processName + ".exe") + "'");
+                "SELECT ProcessId, CommandLine, ExecutablePath FROM Win32_Process WHERE Name = '"
+                    + EscapeWmi(processName + ".exe")
+                    + "'");
             foreach (ManagementObject obj in searcher.Get())
             {
                 using (obj)
@@ -27,7 +34,13 @@ internal static class ProcessRunningChecker
                     var executablePath = obj["ExecutablePath"]?.ToString() ?? string.Empty;
                     if (Matches(executable, command.Arguments, signature, commandLine, executablePath))
                     {
-                        return true;
+                        var processIdRaw = obj["ProcessId"];
+                        if (processIdRaw != null && uint.TryParse(processIdRaw.ToString(), out var processId))
+                        {
+                            return (int)processId;
+                        }
+
+                        return null;
                     }
                 }
             }
@@ -35,10 +48,10 @@ internal static class ProcessRunningChecker
         catch (ManagementException)
         {
             // WMI 不可時は重複判定をスキップし起動を試みる。
-            return false;
+            return null;
         }
 
-        return false;
+        return null;
     }
 
     private static bool Matches(

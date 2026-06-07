@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $launcherDir = Join-Path $RepoRoot 'tools/pm-ai-rdp-remote-launcher'
 $resourceDir = Join-Path $RepoRoot 'code_java/src/main/resources/jp/co/pm/ai/desktop/rdp-launcher'
-$versionTxt = Join-Path $RepoRoot 'version.txt'
+$launcherVersionTxt = Join-Path $launcherDir 'PmAiRdpRemoteLauncher.version.txt'
 
 Push-Location $launcherDir
 try {
@@ -20,14 +20,17 @@ try {
     New-Item -ItemType Directory -Force -Path $resourceDir | Out-Null
     Copy-Item -LiteralPath $exe -Destination (Join-Path $resourceDir 'PmAiRdpRemoteLauncher.exe') -Force
 
-    $version = '1.00'
-    if (Test-Path -LiteralPath $versionTxt) {
-        $version = (Get-Content -LiteralPath $versionTxt -TotalCount 1).Trim()
+    if (-not (Test-Path -LiteralPath $launcherVersionTxt)) {
+        throw "Launcher version file not found: $launcherVersionTxt"
+    }
+    $version = (Get-Content -LiteralPath $launcherVersionTxt -TotalCount 1).Trim()
+    if ([string]::IsNullOrWhiteSpace($version)) {
+        throw "Launcher version is empty: $launcherVersionTxt"
     }
     $versionPath = Join-Path $resourceDir 'PmAiRdpRemoteLauncher.version.txt'
     $utf8NoBom = New-Object System.Text.UTF8Encoding $false
     [System.IO.File]::WriteAllText($versionPath, $version + [Environment]::NewLine, $utf8NoBom)
-    Write-Host "Bundled RDP launcher $version -> $resourceDir"
+    Write-Host "Bundled RDP launcher $version (from $launcherVersionTxt) -> $resourceDir"
 }
 finally {
     Pop-Location

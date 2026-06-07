@@ -5,6 +5,12 @@ namespace PmAi.RdpRemoteLauncher;
 internal static class LauncherLog
 {
     private static readonly object Gate = new();
+    private static string? mirrorDirectory;
+
+    internal static void SetMirrorDirectory(string? directory)
+    {
+        mirrorDirectory = string.IsNullOrWhiteSpace(directory) ? null : directory.Trim();
+    }
 
     internal static void Info(string message)
     {
@@ -27,17 +33,25 @@ internal static class LauncherLog
         lock (Gate)
         {
             Console.Error.WriteLine(line);
-            try
+            AppendToDailyLog(Path.Combine(Path.GetTempPath(), "PM-AI-RDP-Launcher"), line);
+            if (!string.IsNullOrWhiteSpace(mirrorDirectory))
             {
-                var dir = Path.Combine(Path.GetTempPath(), "PM-AI-RDP-Launcher");
-                Directory.CreateDirectory(dir);
-                var file = Path.Combine(dir, "launcher-" + DateTime.Now.ToString("yyyyMMdd") + ".log");
-                File.AppendAllText(file, line + Environment.NewLine, Encoding.UTF8);
+                AppendToDailyLog(mirrorDirectory, line);
             }
-            catch
-            {
-                // ログ書込失敗は無視
-            }
+        }
+    }
+
+    private static void AppendToDailyLog(string directory, string line)
+    {
+        try
+        {
+            Directory.CreateDirectory(directory);
+            var file = Path.Combine(directory, "launcher-" + DateTime.Now.ToString("yyyyMMdd") + ".log");
+            File.AppendAllText(file, line + Environment.NewLine, Encoding.UTF8);
+        }
+        catch
+        {
+            // ログ書込失敗は無視
         }
     }
 }

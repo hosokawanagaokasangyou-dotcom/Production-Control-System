@@ -55,7 +55,11 @@ public final class RequestFormInputTabController {
     /** メインシェルで当該タブが初めて実体化されたあとに呼ぶ。 */
     void onMainShellTabSelected() {
         showTabLoadingIfNeeded();
-        Platform.runLater(this::activateAfterTabPainted);
+        if (embeddedBuilt) {
+            activateEmbeddedIfReady();
+            return;
+        }
+        scheduleEmbeddedMount();
     }
 
     /** 依頼書入力タブから離れたとき（バックグラウンド監視停止）。 */
@@ -65,8 +69,7 @@ public final class RequestFormInputTabController {
         }
     }
 
-    private void activateAfterTabPainted() {
-        ensureEmbeddedMounted();
+    private void activateEmbeddedIfReady() {
         if (reconciliationApp == null || shell == null) {
             return;
         }
@@ -75,41 +78,28 @@ public final class RequestFormInputTabController {
         logRequestFormPaths(ui);
     }
 
-    private void showTabLoadingIfNeeded() {
-        if (contentHost == null || embeddedBuilt) {
-            return;
-        }
-        if (tabLoadingPane == null) {
-            tabLoadingPane = buildTabLoadingPane();
-        }
-        if (contentHost.getChildren().isEmpty()
-                || !contentHost.getChildren().contains(tabLoadingPane)) {
-            contentHost.getChildren().setAll(tabLoadingPane);
-        }
+    private void scheduleEmbeddedMount() {
+        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
+        Thread prep =
+                new Thread(
+                        () -> {
+                            FactorySite factorySite = GlobalInitSettingTarget.load();
+                            JuchuHeaderAliasRegistry registry =
+                                    JuchuHeaderAliasRegistry.loadForFactory(factorySite, ui);
+                            Platform.runLater(() -> mountEmbedded(registry, ui));
+                        },
+                        "request-form-embed-prep");
+        prep.setDaemon(true);
+        prep.start();
     }
 
-    private static Parent buildTabLoadingPane() {
-        VBox box = new VBox(14);
-        box.setAlignment(Pos.CENTER);
-        box.getStyleClass().add(TAB_LOADING_STYLE_CLASS);
-        ProgressIndicator indicator = new ProgressIndicator();
-        indicator.setMaxSize(48, 48);
-        Label label = new Label("依頼書入力を準備しています…");
-        label.getStyleClass().add("request-form-tab-loading-label");
-        box.getChildren().addAll(indicator, label);
-        return box;
-    }
-
-    private void ensureEmbeddedMounted() {
+    private void mountEmbedded(JuchuHeaderAliasRegistry registry, Map<String, String> ui) {
         if (embeddedBuilt || contentHost == null) {
             return;
         }
         showTabLoadingIfNeeded();
-        Map<String, String> ui = shell != null ? shell.snapshotUiEnv() : Map.of();
         reconciliationApp = new ReconciliationApp();
-        FactorySite factorySite = GlobalInitSettingTarget.load();
-        reconciliationApp.configureJuchuHeaderAliasRegistry(
-                JuchuHeaderAliasRegistry.loadForFactory(factorySite, ui));
+        reconciliationApp.configureJuchuHeaderAliasRegistry(registry);
         reconciliationApp.setOriginalDirChangeHandler(
                 path -> {
                     if (shell != null) {
@@ -144,6 +134,12 @@ public final class RequestFormInputTabController {
                                 AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM_ARGS, args);
                     }
                 });
+        reconciliationApp.setRdpDisplayEnvChangeHandler(
+                values -> {
+                    if (shell != null && values != null) {
+                        values.forEach(shell::updateEnvTabValue);
+                    }
+                });
         Window host =
                 contentHost.getScene() != null ? contentHost.getScene().getWindow() : null;
         if (host == null && shell != null) {
@@ -174,6 +170,32 @@ public final class RequestFormInputTabController {
                                 reconciliationApp.updateHostWindow(scene.getWindow());
                             }
                         });
+        activateEmbeddedIfReady();
+    }
+
+    private void showTabLoadingIfNeeded() {
+        if (contentHost == null || embeddedBuilt) {
+            return;
+        }
+        if (tabLoadingPane == null) {
+            tabLoadingPane = buildTabLoadingPane();
+        }
+        if (contentHost.getChildren().isEmpty()
+                || !contentHost.getChildren().contains(tabLoadingPane)) {
+            contentHost.getChildren().setAll(tabLoadingPane);
+        }
+    }
+
+    private static Parent buildTabLoadingPane() {
+        VBox box = new VBox(14);
+        box.setAlignment(Pos.CENTER);
+        box.getStyleClass().add(TAB_LOADING_STYLE_CLASS);
+        ProgressIndicator indicator = new ProgressIndicator();
+        indicator.setMaxSize(48, 48);
+        Label label = new Label("依頼書入力を準備しています…");
+        label.getStyleClass().add("request-form-tab-loading-label");
+        box.getChildren().addAll(indicator, label);
+        return box;
     }
 
     /** デザインタブ変更後に依頼書プレビュー上部バッジを再描画する。 */

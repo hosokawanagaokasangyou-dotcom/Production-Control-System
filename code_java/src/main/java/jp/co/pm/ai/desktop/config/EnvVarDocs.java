@@ -226,6 +226,17 @@ public final class EnvVarDocs {
                 "PM_AI_RDP_COMPANION_PROGRAM の引数。"
                         + " .rdp の alternate shell の引数として書き込む。空なら引数なし。");
         put(
+                "PM_AI_RDP_FULLSCREEN",
+                "RDP 起動時の全画面設定。1/true/on=全画面、0/false/off=ウィンドウ（既定）。"
+                        + " ウィンドウ時は PM_AI_RDP_DESKTOP_WIDTH/HEIGHT を .rdp へ書き込み mstsc をウィンドウ表示する。"
+                        + " 配台計画システムの背面で接続先 RPA を動かす用途では 0 を推奨。");
+        put(
+                "PM_AI_RDP_DESKTOP_WIDTH",
+                "RDP ウィンドウ表示時の幅（ピクセル）。PM_AI_RDP_FULLSCREEN=0 のとき起動前に .rdp へ反映。既定 1280。");
+        put(
+                "PM_AI_RDP_DESKTOP_HEIGHT",
+                "RDP ウィンドウ表示時の高さ（ピクセル）。PM_AI_RDP_FULLSCREEN=0 のとき起動前に .rdp へ反映。既定 800。");
+        put(
                 "PM_AI_RDP_LAUNCHER_EXE",
                 "接続先 RDP ランチャー（PmAiRdpRemoteLauncher.exe）のフルパス。"
                         + "空のときは PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK と同階層の PmAiRdpRemoteLauncher.exe。");

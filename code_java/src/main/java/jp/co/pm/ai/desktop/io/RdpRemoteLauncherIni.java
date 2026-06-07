@@ -16,12 +16,15 @@ import java.util.TreeMap;
 public final class RdpRemoteLauncherIni {
 
     public static final String SELECTED_SLOT_KEY = "起動プログラム番号";
+    /** 子プロセス終了後に RDP セッションを切断する（C# ランチャーが参照）。 */
+    public static final String DISCONNECT_ON_CHILD_EXIT_KEY = "終了時RDP切断";
     public static final int MAX_SLOTS = 9;
 
     /** exe パスと引数。 */
     public record Command(String executable, String arguments) {}
 
     private int selectedSlot = 1;
+    private boolean disconnectOnChildExit = true;
     private final Map<Integer, Command> slots = new TreeMap<>();
 
     public int selectedSlot() {
@@ -33,6 +36,15 @@ public final class RdpRemoteLauncherIni {
             throw new IllegalArgumentException("起動プログラム番号は 1～" + MAX_SLOTS + " です: " + slot);
         }
         selectedSlot = slot;
+    }
+
+    /** 子プロセス終了後に RDP を切断する（既定 true）。 */
+    public boolean disconnectOnChildExit() {
+        return disconnectOnChildExit;
+    }
+
+    public void setDisconnectOnChildExit(boolean disconnectOnChildExit) {
+        this.disconnectOnChildExit = disconnectOnChildExit;
     }
 
     public Command getSlotCommand(int slot) {
@@ -101,6 +113,10 @@ public final class RdpRemoteLauncherIni {
                 }
                 continue;
             }
+            if (DISCONNECT_ON_CHILD_EXIT_KEY.equals(key)) {
+                ini.disconnectOnChildExit = parseBoolean(value, true);
+                continue;
+            }
             try {
                 int slot = Integer.parseInt(key);
                 if (slot >= 1 && slot <= MAX_SLOTS && !value.isEmpty()) {
@@ -122,6 +138,7 @@ public final class RdpRemoteLauncherIni {
         }
         List<String> lines = new ArrayList<>();
         lines.add(SELECTED_SLOT_KEY + "=" + selectedSlot);
+        lines.add(DISCONNECT_ON_CHILD_EXIT_KEY + "=" + (disconnectOnChildExit ? "1" : "0"));
         for (Map.Entry<Integer, Command> entry : slots.entrySet()) {
             Command command = entry.getValue();
             if (command != null && !command.executable().isBlank()) {
@@ -136,17 +153,108 @@ public final class RdpRemoteLauncherIni {
 
     /**
      * ini スロット行の値を生成する。exe は常に {@code "..."} で囲む（パス空白対策）。
+     * 引数に空白を含むトークンは {@code "..."} で囲む（cmd / CreateProcess 向け）。
      */
     public static String formatSlotIniValue(String program, String arguments) {
         if (program == null || program.isBlank()) {
             throw new IllegalArgumentException("プログラムパスが空です。");
         }
         String quoted = "\"" + program.trim().replace("\"", "\"\"") + "\"";
-        String args = arguments != null ? arguments.trim() : "";
-        if (args.isEmpty()) {
+        String formattedArgs = formatArgumentsForProcess(arguments);
+        if (formattedArgs.isEmpty()) {
             return quoted;
         }
-        return quoted + " " + args;
+        return quoted + " " + formattedArgs;
+    }
+
+    /** UI 表示用: 保存済み ini の引数から引用符を外して見せる。 */
+    public static String argumentsForUiDisplay(String arguments) {
+        if (arguments == null || arguments.isBlank()) {
+            return "";
+        }
+        return String.join(" ", tokenizeArguments(arguments));
+    }
+
+    /**
+     * 引数文字列をトークン化し、空白を含む各トークンを {@code "..."} で囲んで返す。
+     */
+    public static String formatArgumentsForProcess(String arguments) {
+        if (arguments == null || arguments.isBlank()) {
+            return "";
+        }
+        String trimmed = arguments.trim();
+        if (!trimmed.startsWith("\"") && looksLikeSinglePathWithSpaces(trimmed)) {
+            return quoteArgumentIfNeeded(trimmed);
+        }
+        List<String> tokens = tokenizeArguments(trimmed);
+        StringBuilder out = new StringBuilder();
+        for (String token : tokens) {
+            if (token.isEmpty()) {
+                continue;
+            }
+            if (out.length() > 0) {
+                out.append(' ');
+            }
+            out.append(quoteArgumentIfNeeded(token));
+        }
+        return out.toString();
+    }
+
+    /** {@code \\server\...} や {@code Z:\...} の 1 パスに空白が含まれる入力（UI 未引用）向け。 */
+    private static boolean looksLikeSinglePathWithSpaces(String value) {
+        if (value.indexOf(' ') < 0) {
+            return false;
+        }
+        if (value.startsWith("\\\\")) {
+            return true;
+        }
+        return value.length() >= 2
+                && value.charAt(1) == ':'
+                && Character.isLetter(value.charAt(0));
+    }
+
+    static List<String> tokenizeArguments(String arguments) {
+        List<String> tokens = new ArrayList<>();
+        if (arguments == null || arguments.isBlank()) {
+            return tokens;
+        }
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+        for (int i = 0; i < arguments.length(); i++) {
+            char c = arguments.charAt(i);
+            if (inQuotes) {
+                if (c == '"') {
+                    if (i + 1 < arguments.length() && arguments.charAt(i + 1) == '"') {
+                        current.append('"');
+                        i++;
+                    } else {
+                        inQuotes = false;
+                    }
+                } else {
+                    current.append(c);
+                }
+            } else if (c == '"') {
+                inQuotes = true;
+            } else if (Character.isWhitespace(c)) {
+                if (current.length() > 0) {
+                    tokens.add(current.toString());
+                    current.setLength(0);
+                }
+            } else {
+                current.append(c);
+            }
+        }
+        if (current.length() > 0) {
+            tokens.add(current.toString());
+        }
+        return tokens;
+    }
+
+    private static String quoteArgumentIfNeeded(String token) {
+        if (token.indexOf(' ') >= 0 || token.indexOf('\t') >= 0) {
+            return "\"" + token.replace("\"", "\"\"") + "\"";
+        }
+        return token;
     }
 
     /**
@@ -227,5 +335,17 @@ public final class RdpRemoteLauncherIni {
     public int visibleSlotCount() {
         int highest = highestDefinedSlot();
         return Math.min(MAX_SLOTS, Math.max(3, highest == 0 ? 3 : highest));
+    }
+
+    private static boolean parseBoolean(String raw, boolean defaultValue) {
+        if (raw == null || raw.isBlank()) {
+            return defaultValue;
+        }
+        String v = raw.trim().toLowerCase(java.util.Locale.ROOT);
+        return switch (v) {
+            case "1", "true", "on", "yes" -> true;
+            case "0", "false", "off", "no" -> false;
+            default -> defaultValue;
+        };
     }
 }

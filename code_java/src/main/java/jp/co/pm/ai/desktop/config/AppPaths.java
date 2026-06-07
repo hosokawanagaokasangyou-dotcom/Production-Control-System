@@ -124,6 +124,15 @@ public final class AppPaths {
     /** 接続先ランチャー exe の自動再配備（{@code 0/false/off} で無効）。 */
     public static final String KEY_PM_AI_RDP_LAUNCHER_AUTO_DEPLOY = "PM_AI_RDP_LAUNCHER_AUTO_DEPLOY";
 
+    /** mstsc 起動時に全画面にする（{@code 1/true/on}）。空または {@code 0} でウィンドウ＋解像度指定。 */
+    public static final String KEY_PM_AI_RDP_FULLSCREEN = "PM_AI_RDP_FULLSCREEN";
+
+    /** ウィンドウ表示時のリモートデスクトップ幅（ピクセル）。空なら 1280。 */
+    public static final String KEY_PM_AI_RDP_DESKTOP_WIDTH = "PM_AI_RDP_DESKTOP_WIDTH";
+
+    /** ウィンドウ表示時のリモートデスクトップ高さ（ピクセル）。空なら 800。 */
+    public static final String KEY_PM_AI_RDP_DESKTOP_HEIGHT = "PM_AI_RDP_DESKTOP_HEIGHT";
+
     public static final String RDP_LAUNCHER_EXE_BASENAME = "PmAiRdpRemoteLauncher.exe";
     public static final String RDP_LAUNCHER_VERSION_BASENAME = "PmAiRdpRemoteLauncher.version.txt";
     public static final String RDP_LAUNCHER_INI_BASENAME = "RAP設定.ini";

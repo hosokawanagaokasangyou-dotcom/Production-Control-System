@@ -9,13 +9,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
@@ -33,6 +36,7 @@ import javafx.stage.Window;
 
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.io.RdpFileSigner;
+import jp.co.pm.ai.desktop.io.RdpLaunchDisplaySettings;
 import jp.co.pm.ai.desktop.io.RdpRemoteLauncherDeployer;
 import jp.co.pm.ai.desktop.io.RdpRemoteLauncherIni;
 import jp.co.pm.ai.desktop.io.RemoteDesktopLauncher;
@@ -49,17 +53,22 @@ public final class RequestFormRemoteDesktopPane {
             Consumer<String> profileChangeHandler,
             Consumer<String> companionProgramChangeHandler,
             Consumer<String> companionProgramArgsChangeHandler,
+            Consumer<Map<String, String>> displayEnvChangeHandler,
             Consumer<String> statusConsumer) {}
 
     private static final double CARD_WIDTH = 720;
 
+    /** 構築結果。{@link #scheduleInitialRefresh()} はタブ初回表示時のみ呼ぶ（UNC I/O を初回マウントから分離）。 */
+    public record TabContent(VBox root, Runnable scheduleInitialRefresh) {}
+
     private RequestFormRemoteDesktopPane() {}
 
-    public static VBox buildTabContent(Window owner, Context ctx) {
+    public static TabContent buildTabContent(Window owner, Context ctx) {
         Supplier<Map<String, String>> uiEnv = ctx.uiEnv() != null ? ctx.uiEnv() : () -> Map.of();
         Consumer<String> profileChangeHandler = ctx.profileChangeHandler();
         Consumer<String> companionProgramChangeHandler = ctx.companionProgramChangeHandler();
         Consumer<String> companionProgramArgsChangeHandler = ctx.companionProgramArgsChangeHandler();
+        Consumer<Map<String, String>> displayEnvChangeHandler = ctx.displayEnvChangeHandler();
         Consumer<String> status = ctx.statusConsumer() != null ? ctx.statusConsumer() : s -> {};
 
         Label title = new Label("リモートデスクトップ");
@@ -118,6 +127,15 @@ public final class RequestFormRemoteDesktopPane {
         slotSpinner.setEditable(true);
         slotSpinner.setPrefWidth(80);
 
+        CheckBox chkDisconnectOnChildExit = new CheckBox("子プロセス終了時に RDP を切断");
+        chkDisconnectOnChildExit.setSelected(true);
+        chkDisconnectOnChildExit.setTooltip(
+                new Tooltip(
+                        "接続先ランチャーが起動したプログラムの終了を待ち、終了後に RDP セッションを切断します。"
+                                + " RAP設定.ini の「"
+                                + RdpRemoteLauncherIni.DISCONNECT_ON_CHILD_EXIT_KEY
+                                + "」に保存されます。"));
+
         List<SlotRowFields> slotFields = new ArrayList<>();
         VBox slotBox = new VBox(8);
         slotBox.setFillWidth(true);
@@ -140,7 +158,7 @@ public final class RequestFormRemoteDesktopPane {
                     HBox.setHgrow(programField, Priority.ALWAYS);
 
                     TextField argsField = new TextField();
-                    argsField.setPromptText("引数（空白区切り。空白を含む引数は \"...\"）");
+                    argsField.setPromptText("引数（空白区切り。パスに空白があれば保存時に自動で \"...\" 付与）");
                     HBox.setHgrow(argsField, Priority.ALWAYS);
 
                     Button browse = new Button("参照...");
@@ -181,29 +199,15 @@ public final class RequestFormRemoteDesktopPane {
         }
 
         Runnable loadIniFromShare =
-                () -> {
-                    Map<String, String> ui = uiEnv.get();
-                    Path iniPath = AppPaths.resolveRdpLauncherIni(ui);
-                    refreshPaths.run();
-                    try {
-                        RdpRemoteLauncherIni ini = RdpRemoteLauncherIni.load(iniPath);
-                        slotSpinner.getValueFactory().setValue(ini.selectedSlot());
-                        int visible = ini.visibleSlotCount();
-                        while (slotFields.size() < visible) {
-                            appendSlotRow.accept(slotFields.size() + 1);
-                        }
-                        for (int i = 1; i <= slotFields.size(); i++) {
-                            RdpRemoteLauncherIni.Command command = ini.getSlotCommand(i);
-                            SlotRowFields row = slotFields.get(i - 1);
-                            row.programField().setText(command.executable());
-                            row.argsField().setText(command.arguments());
-                        }
-                        rapStatusLabel.setText("読込しました: " + iniPath);
-                    } catch (IOException ex) {
-                        rapStatusLabel.setText("読込失敗: " + ex.getMessage());
-                        showAlert(Alert.AlertType.ERROR, "読込失敗", ex.getMessage());
-                    }
-                };
+                () ->
+                        scheduleIniReloadFromShare(
+                                uiEnv,
+                                slotSpinner,
+                                slotFields,
+                                appendSlotRow,
+                                rapStatusLabel,
+                                refreshPaths,
+                                chkDisconnectOnChildExit);
 
         Runnable ensureLauncherDeployed =
                 () -> {
@@ -220,6 +224,7 @@ public final class RequestFormRemoteDesktopPane {
                     Path iniPath = AppPaths.resolveRdpLauncherIni(ui);
                     RdpRemoteLauncherIni ini = new RdpRemoteLauncherIni();
                     ini.setSelectedSlot(slotSpinner.getValue());
+                    ini.setDisconnectOnChildExit(chkDisconnectOnChildExit.isSelected());
                     for (int i = 1; i <= slotFields.size(); i++) {
                         SlotRowFields row = slotFields.get(i - 1);
                         ini.setSlotCommand(
@@ -305,6 +310,7 @@ public final class RequestFormRemoteDesktopPane {
                         launcherPathRow,
                         deployStatusLabel,
                         slotSpinnerRow,
+                        chkDisconnectOnChildExit,
                         slotBox,
                         rapActionRow,
                         rapStatusLabel);
@@ -333,26 +339,74 @@ public final class RequestFormRemoteDesktopPane {
         statusLabel.setMaxWidth(CARD_WIDTH);
         statusLabel.getStyleClass().add("top-status");
 
-        Runnable refreshFromEnv =
+        CheckBox chkFullScreen = new CheckBox("全画面で起動");
+        chkFullScreen.setTooltip(
+                new Tooltip("オフのときは下記の幅・高さでウィンドウ表示（配台計画システムの背面で作業しやすい）。"));
+
+        Spinner<Integer> desktopWidthSpinner =
+                new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(800, 3840, 1280, 10));
+        desktopWidthSpinner.setEditable(true);
+        desktopWidthSpinner.setPrefWidth(100);
+
+        Spinner<Integer> desktopHeightSpinner =
+                new Spinner<>(new SpinnerValueFactory.IntegerSpinnerValueFactory(600, 2160, 800, 10));
+        desktopHeightSpinner.setEditable(true);
+        desktopHeightSpinner.setPrefWidth(100);
+
+        Runnable applyDisplayFieldsFromUi =
                 () -> {
                     Map<String, String> ui = uiEnv.get();
-                    Optional<Path> configured = AppPaths.resolveRequestFormRdpProfile(ui);
-                    if (configured.isEmpty()) {
-                        profileField.setText("");
-                    } else {
-                        Path preferred =
-                                RdpFileSigner.resolvePreferredSignedProfilePath(configured.get(), ui);
-                        profileField.setText(preferred.toString());
-                        if (!preferred.equals(configured.get()) && profileChangeHandler != null) {
-                            profileChangeHandler.accept(preferred.toString());
-                        }
-                    }
-                    companionProgramField.setText(
-                            ui.getOrDefault(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM, ""));
-                    companionArgsField.setText(
-                            ui.getOrDefault(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM_ARGS, ""));
-                    refreshPaths.run();
+                    chkFullScreen.setSelected(RdpLaunchDisplaySettings.resolveFullScreen(ui));
+                    desktopWidthSpinner
+                            .getValueFactory()
+                            .setValue(RdpLaunchDisplaySettings.resolveWidth(ui));
+                    desktopHeightSpinner
+                            .getValueFactory()
+                            .setValue(RdpLaunchDisplaySettings.resolveHeight(ui));
+                    updateDisplayControlsEnabled(
+                            chkFullScreen, desktopWidthSpinner, desktopHeightSpinner);
                 };
+
+        Runnable persistDisplayFields =
+                () -> {
+                    Map<String, String> values = new HashMap<>();
+                    values.put(
+                            AppPaths.KEY_PM_AI_RDP_FULLSCREEN,
+                            chkFullScreen.isSelected() ? "1" : "0");
+                    values.put(
+                            AppPaths.KEY_PM_AI_RDP_DESKTOP_WIDTH,
+                            String.valueOf(desktopWidthSpinner.getValue()));
+                    values.put(
+                            AppPaths.KEY_PM_AI_RDP_DESKTOP_HEIGHT,
+                            String.valueOf(desktopHeightSpinner.getValue()));
+                    if (displayEnvChangeHandler != null) {
+                        displayEnvChangeHandler.accept(values);
+                    }
+                };
+
+        chkFullScreen
+                .selectedProperty()
+                .addListener(
+                        (obs, was, selected) -> {
+                            updateDisplayControlsEnabled(
+                                    chkFullScreen, desktopWidthSpinner, desktopHeightSpinner);
+                            persistDisplayFields.run();
+                        });
+        desktopWidthSpinner
+                .valueProperty()
+                .addListener((obs, was, now) -> persistDisplayFields.run());
+        desktopHeightSpinner
+                .valueProperty()
+                .addListener((obs, was, now) -> persistDisplayFields.run());
+
+        HBox displaySizeRow =
+                new HBox(
+                        8,
+                        new Label("幅:"),
+                        desktopWidthSpinner,
+                        new Label("高さ:"),
+                        desktopHeightSpinner);
+        displaySizeRow.setAlignment(Pos.CENTER_LEFT);
 
         Runnable persistCompanionFields =
                 () -> {
@@ -388,7 +442,7 @@ public final class RequestFormRemoteDesktopPane {
         btnLaunch.setOnAction(
                 e -> {
                     persistCompanionFields.run();
-                    ensureLauncherDeployed.run();
+                    persistDisplayFields.run();
                     Map<String, String> ui = new HashMap<>(uiEnv.get());
                     ui.put(
                             AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM,
@@ -396,6 +450,15 @@ public final class RequestFormRemoteDesktopPane {
                     ui.put(
                             AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM_ARGS,
                             companionArgsField.getText().trim());
+                    ui.put(
+                            AppPaths.KEY_PM_AI_RDP_FULLSCREEN,
+                            chkFullScreen.isSelected() ? "1" : "0");
+                    ui.put(
+                            AppPaths.KEY_PM_AI_RDP_DESKTOP_WIDTH,
+                            String.valueOf(desktopWidthSpinner.getValue()));
+                    ui.put(
+                            AppPaths.KEY_PM_AI_RDP_DESKTOP_HEIGHT,
+                            String.valueOf(desktopHeightSpinner.getValue()));
                     Optional<Path> profile = AppPaths.resolveRequestFormRdpProfile(ui);
                     if (profile.isEmpty()) {
                         showAlert(
@@ -423,6 +486,7 @@ public final class RequestFormRemoteDesktopPane {
                             profileField.setText(preferred.toString());
                         }
                         String msg = "リモートデスクトップを起動しました: " + outcome.rdpProfile();
+                        msg += "\n表示: " + RdpLaunchDisplaySettings.formatSummary(ui);
                         if (outcome.remoteStartupSummary().isPresent()) {
                             msg += "\n.rdp に組込: " + outcome.remoteStartupSummary().get();
                         }
@@ -490,6 +554,8 @@ public final class RequestFormRemoteDesktopPane {
                         8,
                         fieldCaption("RDP プロファイル"),
                         profileRow,
+                        chkFullScreen,
+                        displaySizeRow,
                         actionRow,
                         statusLabel);
         TitledPane rdpPane = new TitledPane("リモートデスクトップ接続", rdpContent);
@@ -514,13 +580,23 @@ public final class RequestFormRemoteDesktopPane {
         card.setPrefWidth(CARD_WIDTH);
         card.setFillWidth(true);
 
-        Runnable onTabShow =
-                () -> {
-                    refreshFromEnv.run();
-                    ensureLauncherDeployed.run();
-                    loadIniFromShare.run();
-                };
-        onTabShow.run();
+        Runnable scheduleInitialRefresh =
+                () ->
+                        scheduleSharedSettingsRefresh(
+                                uiEnv,
+                                profileField,
+                                profileChangeHandler,
+                                companionProgramField,
+                                companionArgsField,
+                                refreshPaths,
+                                deployStatusLabel,
+                                status,
+                                slotSpinner,
+                                slotFields,
+                                appendSlotRow,
+                                rapStatusLabel,
+                                applyDisplayFieldsFromUi,
+                                chkDisconnectOnChildExit);
 
         VBox root = new VBox(12, card);
         root.getStyleClass().add("form-tab-container");
@@ -528,7 +604,174 @@ public final class RequestFormRemoteDesktopPane {
         root.setFillWidth(true);
         root.setMaxWidth(Double.MAX_VALUE);
         VBox.setVgrow(root, Priority.ALWAYS);
-        return root;
+        return new TabContent(root, scheduleInitialRefresh);
+    }
+
+    private static void scheduleSharedSettingsRefresh(
+            Supplier<Map<String, String>> uiEnv,
+            TextField profileField,
+            Consumer<String> profileChangeHandler,
+            TextField companionProgramField,
+            TextField companionArgsField,
+            Runnable refreshPaths,
+            Label deployStatusLabel,
+            Consumer<String> status,
+            Spinner<Integer> slotSpinner,
+            List<SlotRowFields> slotFields,
+            IntConsumer appendSlotRow,
+            Label rapStatusLabel,
+            Runnable applyDisplayFieldsFromUi,
+            CheckBox chkDisconnectOnChildExit) {
+        runBackgroundThenFx(
+                () -> {
+                    Map<String, String> ui = uiEnv.get();
+                    RdpRemoteLauncherDeployer.DeployOutcome deploy =
+                            RdpRemoteLauncherDeployer.ensureDeployed(ui, null);
+                    Path iniPath = AppPaths.resolveRdpLauncherIni(ui);
+                    RdpRemoteLauncherIni ini = null;
+                    IOException iniError = null;
+                    try {
+                        ini = RdpRemoteLauncherIni.load(iniPath);
+                    } catch (IOException ex) {
+                        iniError = ex;
+                    }
+                    Optional<Path> configured = AppPaths.resolveRequestFormRdpProfile(ui);
+                    Path preferredProfile = null;
+                    if (configured.isPresent()) {
+                        preferredProfile =
+                                RdpFileSigner.resolvePreferredSignedProfilePath(configured.get(), ui);
+                    }
+                    final RdpRemoteLauncherIni loadedIni = ini;
+                    final IOException loadError = iniError;
+                    final Path resolvedIniPath = iniPath;
+                    final Path resolvedPreferred = preferredProfile;
+                    final Optional<Path> resolvedConfigured = configured;
+                    final Optional<String> deployMessage = deploy.message();
+                    Platform.runLater(
+                            () -> {
+                                refreshPaths.run();
+                                deployMessage.ifPresent(
+                                        msg -> {
+                                            deployStatusLabel.setText(msg);
+                                            status.accept(msg);
+                                        });
+                                if (resolvedConfigured.isEmpty()) {
+                                    profileField.setText("");
+                                } else {
+                                    Path preferred =
+                                            resolvedPreferred != null
+                                                    ? resolvedPreferred
+                                                    : resolvedConfigured.get();
+                                    profileField.setText(preferred.toString());
+                                    if (!preferred.equals(resolvedConfigured.get())
+                                            && profileChangeHandler != null) {
+                                        profileChangeHandler.accept(preferred.toString());
+                                    }
+                                }
+                                companionProgramField.setText(
+                                        ui.getOrDefault(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM, ""));
+                                companionArgsField.setText(
+                                        ui.getOrDefault(
+                                                AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM_ARGS, ""));
+                                applyDisplayFieldsFromUi.run();
+                                if (loadError != null) {
+                                    rapStatusLabel.setText("読込失敗: " + loadError.getMessage());
+                                    showAlert(Alert.AlertType.ERROR, "読込失敗", loadError.getMessage());
+                                    return;
+                                }
+                                if (loadedIni == null) {
+                                    return;
+                                }
+                                applyLoadedIni(
+                                        loadedIni,
+                                        resolvedIniPath,
+                                        slotSpinner,
+                                        slotFields,
+                                        appendSlotRow,
+                                        rapStatusLabel,
+                                        chkDisconnectOnChildExit);
+                            });
+                });
+    }
+
+    private static void scheduleIniReloadFromShare(
+            Supplier<Map<String, String>> uiEnv,
+            Spinner<Integer> slotSpinner,
+            List<SlotRowFields> slotFields,
+            IntConsumer appendSlotRow,
+            Label rapStatusLabel,
+            Runnable refreshPaths,
+            CheckBox chkDisconnectOnChildExit) {
+        runBackgroundThenFx(
+                () -> {
+                    Map<String, String> ui = uiEnv.get();
+                    Path iniPath = AppPaths.resolveRdpLauncherIni(ui);
+                    RdpRemoteLauncherIni ini = null;
+                    IOException iniError = null;
+                    try {
+                        ini = RdpRemoteLauncherIni.load(iniPath);
+                    } catch (IOException ex) {
+                        iniError = ex;
+                    }
+                    final RdpRemoteLauncherIni loadedIni = ini;
+                    final IOException loadError = iniError;
+                    final Path resolvedIniPath = iniPath;
+                    Platform.runLater(
+                            () -> {
+                                refreshPaths.run();
+                                if (loadError != null) {
+                                    rapStatusLabel.setText("読込失敗: " + loadError.getMessage());
+                                    showAlert(Alert.AlertType.ERROR, "読込失敗", loadError.getMessage());
+                                    return;
+                                }
+                                applyLoadedIni(
+                                        loadedIni,
+                                        resolvedIniPath,
+                                        slotSpinner,
+                                        slotFields,
+                                        appendSlotRow,
+                                        rapStatusLabel,
+                                        chkDisconnectOnChildExit);
+                            });
+                });
+    }
+
+    private static void applyLoadedIni(
+            RdpRemoteLauncherIni ini,
+            Path iniPath,
+            Spinner<Integer> slotSpinner,
+            List<SlotRowFields> slotFields,
+            IntConsumer appendSlotRow,
+            Label rapStatusLabel,
+            CheckBox chkDisconnectOnChildExit) {
+        slotSpinner.getValueFactory().setValue(ini.selectedSlot());
+        chkDisconnectOnChildExit.setSelected(ini.disconnectOnChildExit());
+        int visible = ini.visibleSlotCount();
+        while (slotFields.size() < visible) {
+            appendSlotRow.accept(slotFields.size() + 1);
+        }
+        for (int i = 1; i <= slotFields.size(); i++) {
+            RdpRemoteLauncherIni.Command command = ini.getSlotCommand(i);
+            SlotRowFields row = slotFields.get(i - 1);
+            row.programField().setText(command.executable());
+            row.argsField().setText(RdpRemoteLauncherIni.argumentsForUiDisplay(command.arguments()));
+        }
+        rapStatusLabel.setText("読込しました: " + iniPath);
+    }
+
+    private static void runBackgroundThenFx(Runnable backgroundWork) {
+        Thread worker = new Thread(backgroundWork, "request-form-rdp-io");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private static void updateDisplayControlsEnabled(
+            CheckBox chkFullScreen,
+            Spinner<Integer> desktopWidthSpinner,
+            Spinner<Integer> desktopHeightSpinner) {
+        boolean windowed = !chkFullScreen.isSelected();
+        desktopWidthSpinner.setDisable(!windowed);
+        desktopHeightSpinner.setDisable(!windowed);
     }
 
     private static Label fieldCaption(String text) {

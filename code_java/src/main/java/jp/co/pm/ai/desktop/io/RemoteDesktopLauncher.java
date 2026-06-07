@@ -52,6 +52,8 @@ public final class RemoteDesktopLauncher {
                 embedInProfile
                         ? RdpProfileEditor.applyRemoteStartupProgram(abs, remoteProgram, remoteArgs)
                         : false;
+        boolean displaySignatureRemoved = RdpLaunchDisplaySettings.applyToProfile(abs, env);
+        signatureRemoved = signatureRemoved || displaySignatureRemoved;
         Optional<String> summary =
                 embedInProfile ? RdpCompanionLauncher.formatEmbeddedSummary(env) : Optional.empty();
         if (RdpSecurityDialogAutomator.isAutoConfirmEnabled(env)) {

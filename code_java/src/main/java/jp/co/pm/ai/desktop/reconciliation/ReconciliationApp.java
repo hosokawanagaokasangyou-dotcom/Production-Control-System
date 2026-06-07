@@ -94,6 +94,7 @@ public class ReconciliationApp {
     private Consumer<String> rdpProfileChangeHandler;
     private Consumer<String> rdpCompanionProgramChangeHandler;
     private Consumer<String> rdpCompanionProgramArgsChangeHandler;
+    private Consumer<Map<String, String>> rdpDisplayEnvChangeHandler;
     private TextField txtJuchuPathDisplay;
     private ListView<RequestFormJuchuFileBackupStore.RequestFormJuchuFileBackupEntry>
             juchuBackupListView;
@@ -296,6 +297,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         this.rdpCompanionProgramArgsChangeHandler = handler;
     }
 
+    /** RDP 表示設定（全画面・解像度）が変わったとき、環境変数タブへ反映するためのコールバック。 */
+    public void setRdpDisplayEnvChangeHandler(Consumer<Map<String, String>> handler) {
+        this.rdpDisplayEnvChangeHandler = handler;
+    }
+
     public void setPreviewBadgeConfigSupplier(Supplier<RequestFormPreviewBadgeConfig> supplier) {
         this.previewBadgeConfigSupplier =
                 supplier != null ? supplier : RequestFormPreviewBadgeConfig::defaults;
@@ -333,7 +339,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         this.repoRootHint = repoRootHint;
         applyRepoRootAsWorkspaceIfPresent(repoRootHint);
         configureFromUiEnv(uiEnv);
-        loadSettings();
+        scheduleLoadSettingsAsync();
         ensureJuchuPathDefault();
 
         // --- TOP MENU BAR ---
@@ -899,9 +905,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     /** 依頼書入力タブ選択時: 環境変数反映と、変更があったときだけマスタを非同期再読込。 */
     public void onEmbeddedTabActivated(Map<String, String> uiEnv) {
         configureFromUiEnv(uiEnv);
-        reloadComboChoicesFromSummarySettings();
         reloadMasterProductListFromDiskIfStale(null);
         startEmbeddedTabPolling();
+        scheduleReloadComboChoicesFromSummarySettings();
     }
 
     /** 依頼書入力タブを離れたとき: バックグラウンド監視を停止。 */
@@ -1377,24 +1383,47 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         Tab tab = new Tab("リモートデスクトップ");
         tab.setClosable(false);
 
-        ScrollPane sp = new ScrollPane();
-        sp.setFitToWidth(true);
-        sp.getStyleClass().add("form-scroll-pane");
-        VBox content =
-                RequestFormRemoteDesktopPane.buildTabContent(
-                        hostWindow,
-                        new RequestFormRemoteDesktopPane.Context(
-                                () -> uiEnvSnapshot,
-                                this::applySelectedRdpProfile,
-                                this::applyRdpCompanionProgram,
-                                this::applyRdpCompanionProgramArgs,
-                                msg -> {
-                                    if (statusLabel != null) {
-                                        statusLabel.setText(msg);
-                                    }
-                                }));
-        sp.setContent(content);
-        tab.setContent(sp);
+        StackPane lazyHost = new StackPane();
+        lazyHost.setAlignment(Pos.CENTER);
+        Label hint = new Label("このタブを開くとリモートデスクトップ設定を読み込みます");
+        hint.getStyleClass().add("request-form-tab-loading-label");
+        lazyHost.getChildren().add(hint);
+        tab.setContent(lazyHost);
+
+        java.util.concurrent.atomic.AtomicBoolean contentMounted =
+                new java.util.concurrent.atomic.AtomicBoolean(false);
+        tab.selectedProperty()
+                .addListener(
+                        (obs, wasSelected, selected) -> {
+                            if (!selected || !contentMounted.compareAndSet(false, true)) {
+                                return;
+                            }
+                            scheduleLazyTabMount(
+                                    lazyHost,
+                                    "リモートデスクトップ",
+                                    () -> {
+                                        ScrollPane sp = new ScrollPane();
+                                        sp.setFitToWidth(true);
+                                        sp.getStyleClass().add("form-scroll-pane");
+                                        RequestFormRemoteDesktopPane.TabContent built =
+                                                RequestFormRemoteDesktopPane.buildTabContent(
+                                                        hostWindow,
+                                                        new RequestFormRemoteDesktopPane.Context(
+                                                                () -> uiEnvSnapshot,
+                                                                this::applySelectedRdpProfile,
+                                                                this::applyRdpCompanionProgram,
+                                                                this::applyRdpCompanionProgramArgs,
+                                                                this::applyRdpDisplayEnv,
+                                                                msg -> {
+                                                                    if (statusLabel != null) {
+                                                                        statusLabel.setText(msg);
+                                                                    }
+                                                                }));
+                                        sp.setContent(built.root());
+                                        lazyHost.getChildren().setAll(sp);
+                                        built.scheduleInitialRefresh().run();
+                                    });
+                        });
         return tab;
     }
 
@@ -1434,6 +1463,26 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         uiEnvSnapshot = Map.copyOf(next);
         if (rdpCompanionProgramArgsChangeHandler != null) {
             rdpCompanionProgramArgsChangeHandler.accept(args != null ? args : "");
+        }
+    }
+
+    private void applyRdpDisplayEnv(Map<String, String> values) {
+        if (values == null || values.isEmpty()) {
+            return;
+        }
+        Map<String, String> next = new HashMap<>(uiEnvSnapshot);
+        for (Map.Entry<String, String> entry : values.entrySet()) {
+            String key = entry.getKey();
+            String value = entry.getValue();
+            if (value == null || value.isBlank()) {
+                next.remove(key);
+            } else {
+                next.put(key, value.trim());
+            }
+        }
+        uiEnvSnapshot = Map.copyOf(next);
+        if (rdpDisplayEnvChangeHandler != null) {
+            rdpDisplayEnvChangeHandler.accept(values);
         }
     }
 
@@ -1578,6 +1627,8 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             } else if ("機械コード".equals(tabTitle)) {
                 Class.forName(
                         "jp.co.pm.ai.desktop.reconciliation.PostProcessingPlanMachineCatalogPane");
+            } else if ("リモートデスクトップ".equals(tabTitle)) {
+                Class.forName("jp.co.pm.ai.desktop.reconciliation.RequestFormRemoteDesktopPane");
             } else if ("工程マスタ".equals(tabTitle) || "加工内容マスタ".equals(tabTitle)) {
                 Class.forName(
                         "jp.co.pm.ai.desktop.reconciliation.PostProcessingExcelMasterCatalogPane");
@@ -3980,8 +4031,19 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         originalFilePollTimeline.setCycleCount(javafx.animation.Timeline.INDEFINITE);
         originalFilePollTimeline.play();
 
-        runJuchuLockPollTick();
-        runOriginalFilePollTick();
+        scheduleEmbeddedTabPollBootstrap();
+    }
+
+    private void scheduleEmbeddedTabPollBootstrap() {
+        Thread bootstrap =
+                new Thread(
+                        () -> {
+                            Platform.runLater(this::runJuchuLockPollTick);
+                            pollOriginalFilesInWorkspaceAsync();
+                        },
+                        "request-form-poll-bootstrap");
+        bootstrap.setDaemon(true);
+        bootstrap.start();
     }
 
     private void stopEmbeddedTabPolling() {
@@ -4042,19 +4104,31 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void pollOriginalFilesInWorkspace() {
-        File folder = new File(targetFolder);
-        if (!folder.isDirectory()) {
-            return;
-        }
-        File[] files = listOriginalWorkbooks(folder);
-        if (files == null) {
-            return;
-        }
-        for (File file : files) {
-            originalUpdateMonitor.ensureTracked(file);
-            originalUpdateMonitor.poll(file);
-        }
-        Platform.runLater(this::refreshPreviewFileHeader);
+        pollOriginalFilesInWorkspaceAsync();
+    }
+
+    private void pollOriginalFilesInWorkspaceAsync() {
+        String folderPath = targetFolder;
+        Thread worker =
+                new Thread(
+                        () -> {
+                            File folder = new File(folderPath);
+                            if (!folder.isDirectory()) {
+                                return;
+                            }
+                            File[] files = listOriginalWorkbooks(folder);
+                            if (files == null) {
+                                return;
+                            }
+                            for (File file : files) {
+                                originalUpdateMonitor.ensureTracked(file);
+                                originalUpdateMonitor.poll(file);
+                            }
+                            Platform.runLater(this::refreshPreviewFileHeader);
+                        },
+                        "request-form-original-poll");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     private void syncOriginalFileMonitorAfterReload() {
@@ -5683,30 +5757,45 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void loadSettings() {
-        RequestFormInputSettingsStore.load(uiEnvSnapshot)
-                .ifPresent(
-                        settings -> {
-                            RequestFormInputSettingsStore.ReconciliationPaths paths =
-                                    settings.paths();
-                            if (paths != null) {
-                                String folder = paths.targetFolder();
-                                if (folder != null
-                                        && !folder.isBlank()
-                                        && new File(folder).isDirectory()) {
-                                    targetFolder = folder;
-                                }
-                                String juchuPath = paths.juchuFilePath();
-                                if (juchuPath != null
-                                        && !juchuPath.isBlank()
-                                        && new File(juchuPath).isFile()) {
-                                    juchuFilePath = juchuPath;
-                                }
+        RequestFormInputSettingsStore.load(uiEnvSnapshot).ifPresent(this::applyLoadedInputSettings);
+    }
+
+    private void scheduleLoadSettingsAsync() {
+        Map<String, String> ui = uiEnvSnapshot;
+        Thread worker =
+                new Thread(
+                        () -> {
+                            java.util.Optional<RequestFormInputSettingsStore.Settings> settings =
+                                    RequestFormInputSettingsStore.load(ui);
+                            if (settings.isEmpty()) {
+                                return;
                             }
-                            if (settings.comboChoices() != null
-                                    && !settings.comboChoices().isEmpty()) {
-                                applyComboChoices(settings.comboChoices().mergedWithDefaults());
-                            }
-                        });
+                            Platform.runLater(() -> applyLoadedInputSettings(settings.get()));
+                        },
+                        "request-form-settings-load");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private void applyLoadedInputSettings(RequestFormInputSettingsStore.Settings settings) {
+        if (settings == null) {
+            return;
+        }
+        RequestFormInputSettingsStore.ReconciliationPaths paths = settings.paths();
+        if (paths != null) {
+            String folder = paths.targetFolder();
+            if (folder != null && !folder.isBlank() && new File(folder).isDirectory()) {
+                targetFolder = folder;
+            }
+            String juchuPath = paths.juchuFilePath();
+            if (juchuPath != null && !juchuPath.isBlank() && new File(juchuPath).isFile()) {
+                juchuFilePath = juchuPath;
+                refreshJuchuPathDisplay();
+            }
+        }
+        if (settings.comboChoices() != null && !settings.comboChoices().isEmpty()) {
+            applyComboChoices(settings.comboChoices().mergedWithDefaults());
+        }
     }
 
     private void saveSettings() {
@@ -5719,6 +5808,24 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     /** サマリ Excel 同フォルダの {@link AppPaths#REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME} から候補を再読込。 */
+    private void scheduleReloadComboChoicesFromSummarySettings() {
+        Map<String, String> ui = uiEnvSnapshot;
+        FactorySite site = GlobalInitSettingTarget.load();
+        Thread worker =
+                new Thread(
+                        () -> {
+                            RequestFormComboChoices fromSummary =
+                                    RequestFormInputSettingsStore.loadComboChoices(ui, site);
+                            if (fromSummary == null || fromSummary.isEmpty()) {
+                                return;
+                            }
+                            Platform.runLater(() -> applyComboChoices(fromSummary));
+                        },
+                        "request-form-combo-reload");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
     private void reloadComboChoicesFromSummarySettings() {
         RequestFormComboChoices fromSummary =
                 RequestFormInputSettingsStore.loadComboChoices(
