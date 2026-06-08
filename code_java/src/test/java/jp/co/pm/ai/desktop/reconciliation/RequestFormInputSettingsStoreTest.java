@@ -14,6 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
 import jp.co.pm.ai.desktop.config.AppPaths;
 import jp.co.pm.ai.desktop.config.DesktopSessionStateStore;
 import jp.co.pm.ai.desktop.config.FactorySite;
+import jp.co.pm.ai.desktop.config.GlobalInitSettingTarget;
 
 class RequestFormInputSettingsStoreTest {
 
@@ -92,6 +93,34 @@ class RequestFormInputSettingsStoreTest {
                 loaded.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT));
         assertEquals(
                 List.of("G1"),
+                loaded.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW));
+    }
+
+    @Test
+    void load_readsFlatPrefixKeysAtSettingsRoot() throws Exception {
+        Path summaryXlsx = tempDir.resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createFile(summaryXlsx);
+        Map<String, String> ui =
+                Map.of(AppPaths.KEY_PM_AI_SUMMARY_AI_DISPATCH_WORKBOOK, summaryXlsx.toString());
+
+        Path storePath = RequestFormInputSettingsStore.resolveStorePath(ui);
+        Files.writeString(
+                storePath,
+                """
+                {
+                  "masterCandidatePrefixProduct": ["LEG"],
+                  "masterCandidatePrefixRaw": ["RAW"]
+                }
+                """);
+
+        RequestFormComboChoices loaded =
+                RequestFormInputSettingsStore.loadComboChoices(
+                        ui, GlobalInitSettingTarget.load());
+        assertEquals(
+                List.of("LEG"),
+                loaded.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT));
+        assertEquals(
+                List.of("RAW"),
                 loaded.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW));
     }
 }

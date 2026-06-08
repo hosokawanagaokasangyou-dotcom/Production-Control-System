@@ -222,11 +222,50 @@ public final class RequestFormComboChoices {
         return new RequestFormComboChoices(mergedLists, mergedDefaults);
     }
 
+    /** {@code session_defaults*.json} 等、{@link #JSON_KEY} 配下に候補がある JSON 根から読む。 */
     public static RequestFormComboChoices fromJson(JsonNode root) {
-        if (root == null) {
+        if (root == null || !root.isObject()) {
             return empty();
         }
         JsonNode node = root.get(JSON_KEY);
+        if (node == null || !node.isObject()) {
+            return empty();
+        }
+        return fromChoicesObject(node);
+    }
+
+    /**
+     * {@link jp.co.pm.ai.desktop.reconciliation.RequestFormInputSettingsStore} の settings ファイル根から読む。
+     * {@link #JSON_KEY} 配下を優先し、無ければ根直下の候補キー（移行用）も見る。
+     */
+    public static RequestFormComboChoices fromSettingsFileRoot(JsonNode root) {
+        if (root == null || !root.isObject()) {
+            return empty();
+        }
+        JsonNode nested = root.get(JSON_KEY);
+        if (nested != null && nested.isObject()) {
+            RequestFormComboChoices fromNested = fromChoicesObject(nested);
+            if (!fromNested.isEmpty()) {
+                return fromNested;
+            }
+        }
+        if (hasAnyComboListKey(root)) {
+            return fromChoicesObject(root);
+        }
+        return empty();
+    }
+
+    private static boolean hasAnyComboListKey(JsonNode root) {
+        for (String key : ALL_KEYS) {
+            JsonNode arr = root.get(key);
+            if (arr != null && arr.isArray()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static RequestFormComboChoices fromChoicesObject(JsonNode node) {
         if (node == null || !node.isObject()) {
             return empty();
         }

@@ -91,10 +91,6 @@ public class ReconciliationApp {
     private Label embeddedTitleLabel;
     private Consumer<String> originalDirChangeHandler;
     private Consumer<String> juchuFileChangeHandler;
-    private Consumer<String> rdpProfileChangeHandler;
-    private Consumer<String> rdpCompanionProgramChangeHandler;
-    private Consumer<String> rdpCompanionProgramArgsChangeHandler;
-    private Consumer<Map<String, String>> rdpDisplayEnvChangeHandler;
     private TextField txtJuchuPathDisplay;
     private ListView<RequestFormJuchuFileBackupStore.RequestFormJuchuFileBackupEntry>
             juchuBackupListView;
@@ -280,26 +276,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     /** 受注ファイル選択でパスが変わったとき、環境変数タブへ反映するためのコールバック。 */
     public void setJuchuFileChangeHandler(Consumer<String> handler) {
         this.juchuFileChangeHandler = handler;
-    }
-
-    /** RDP プロファイル選択でパスが変わったとき、環境変数タブへ反映するためのコールバック。 */
-    public void setRdpProfileChangeHandler(Consumer<String> handler) {
-        this.rdpProfileChangeHandler = handler;
-    }
-
-    /** RDP 同時起動プログラムが変わったとき、環境変数タブへ反映するためのコールバック。 */
-    public void setRdpCompanionProgramChangeHandler(Consumer<String> handler) {
-        this.rdpCompanionProgramChangeHandler = handler;
-    }
-
-    /** RDP 同時起動プログラム引数が変わったとき、環境変数タブへ反映するためのコールバック。 */
-    public void setRdpCompanionProgramArgsChangeHandler(Consumer<String> handler) {
-        this.rdpCompanionProgramArgsChangeHandler = handler;
-    }
-
-    /** RDP 表示設定（全画面・解像度）が変わったとき、環境変数タブへ反映するためのコールバック。 */
-    public void setRdpDisplayEnvChangeHandler(Consumer<Map<String, String>> handler) {
-        this.rdpDisplayEnvChangeHandler = handler;
     }
 
     public void setPreviewBadgeConfigSupplier(Supplier<RequestFormPreviewBadgeConfig> supplier) {
@@ -856,15 +832,13 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         // Tab 3: Post-processing product master editor (right of settings)
         Tab tabPostProcMaster = createPostProcessingProductMasterTab();
         Tab tabMasterList = createMasterListTab();
-        Tab tabRemoteDesktop = createRemoteDesktopTab();
 
         tabPane.getTabs()
                 .addAll(
                         tabVerification,
                         tabSettings,
                         tabPostProcMaster,
-                        tabMasterList,
-                        tabRemoteDesktop);
+                        tabMasterList);
         root.setCenter(tabPane);
 
         mainStackPane = new StackPane();
@@ -1032,6 +1006,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 evt -> {
                     if (tab.isSelected()) {
                         refreshJuchuBackupList();
+                        scheduleLoadSettingsAsync();
                     }
                 });
 
@@ -1379,113 +1354,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         return tab;
     }
 
-    private Tab createRemoteDesktopTab() {
-        Tab tab = new Tab("リモートデスクトップ");
-        tab.setClosable(false);
-
-        StackPane lazyHost = new StackPane();
-        lazyHost.setAlignment(Pos.CENTER);
-        Label hint = new Label("このタブを開くとリモートデスクトップ設定を読み込みます");
-        hint.getStyleClass().add("request-form-tab-loading-label");
-        lazyHost.getChildren().add(hint);
-        tab.setContent(lazyHost);
-
-        java.util.concurrent.atomic.AtomicBoolean contentMounted =
-                new java.util.concurrent.atomic.AtomicBoolean(false);
-        tab.selectedProperty()
-                .addListener(
-                        (obs, wasSelected, selected) -> {
-                            if (!selected || !contentMounted.compareAndSet(false, true)) {
-                                return;
-                            }
-                            scheduleLazyTabMount(
-                                    lazyHost,
-                                    "リモートデスクトップ",
-                                    () -> {
-                                        ScrollPane sp = new ScrollPane();
-                                        sp.setFitToWidth(true);
-                                        sp.getStyleClass().add("form-scroll-pane");
-                                        RequestFormRemoteDesktopPane.TabContent built =
-                                                RequestFormRemoteDesktopPane.buildTabContent(
-                                                        hostWindow,
-                                                        new RequestFormRemoteDesktopPane.Context(
-                                                                () -> uiEnvSnapshot,
-                                                                this::applySelectedRdpProfile,
-                                                                this::applyRdpCompanionProgram,
-                                                                this::applyRdpCompanionProgramArgs,
-                                                                this::applyRdpDisplayEnv,
-                                                                msg -> {
-                                                                    if (statusLabel != null) {
-                                                                        statusLabel.setText(msg);
-                                                                    }
-                                                                }));
-                                        sp.setContent(built.root());
-                                        lazyHost.getChildren().setAll(sp);
-                                        built.scheduleInitialRefresh().run();
-                                    });
-                        });
-        return tab;
-    }
-
-    private void applySelectedRdpProfile(String absolutePath) {
-        Map<String, String> next = new HashMap<>(uiEnvSnapshot);
-        if (absolutePath == null || absolutePath.isBlank()) {
-            next.remove(AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE);
-        } else {
-            next.put(AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE, absolutePath);
-        }
-        uiEnvSnapshot = Map.copyOf(next);
-        if (rdpProfileChangeHandler != null) {
-            rdpProfileChangeHandler.accept(absolutePath != null ? absolutePath : "");
-        }
-    }
-
-    private void applyRdpCompanionProgram(String absolutePath) {
-        Map<String, String> next = new HashMap<>(uiEnvSnapshot);
-        if (absolutePath == null || absolutePath.isBlank()) {
-            next.remove(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM);
-        } else {
-            next.put(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM, absolutePath);
-        }
-        uiEnvSnapshot = Map.copyOf(next);
-        if (rdpCompanionProgramChangeHandler != null) {
-            rdpCompanionProgramChangeHandler.accept(absolutePath != null ? absolutePath : "");
-        }
-    }
-
-    private void applyRdpCompanionProgramArgs(String args) {
-        Map<String, String> next = new HashMap<>(uiEnvSnapshot);
-        if (args == null || args.isBlank()) {
-            next.remove(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM_ARGS);
-        } else {
-            next.put(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM_ARGS, args);
-        }
-        uiEnvSnapshot = Map.copyOf(next);
-        if (rdpCompanionProgramArgsChangeHandler != null) {
-            rdpCompanionProgramArgsChangeHandler.accept(args != null ? args : "");
-        }
-    }
-
-    private void applyRdpDisplayEnv(Map<String, String> values) {
-        if (values == null || values.isEmpty()) {
-            return;
-        }
-        Map<String, String> next = new HashMap<>(uiEnvSnapshot);
-        for (Map.Entry<String, String> entry : values.entrySet()) {
-            String key = entry.getKey();
-            String value = entry.getValue();
-            if (value == null || value.isBlank()) {
-                next.remove(key);
-            } else {
-                next.put(key, value.trim());
-            }
-        }
-        uiEnvSnapshot = Map.copyOf(next);
-        if (rdpDisplayEnvChangeHandler != null) {
-            rdpDisplayEnvChangeHandler.accept(values);
-        }
-    }
-
     private Tab createMasterListTab() {
         Tab tab = new Tab("マスター一覧");
         tab.setClosable(false);
@@ -1627,8 +1495,6 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
             } else if ("機械コード".equals(tabTitle)) {
                 Class.forName(
                         "jp.co.pm.ai.desktop.reconciliation.PostProcessingPlanMachineCatalogPane");
-            } else if ("リモートデスクトップ".equals(tabTitle)) {
-                Class.forName("jp.co.pm.ai.desktop.reconciliation.RequestFormRemoteDesktopPane");
             } else if ("工程マスタ".equals(tabTitle) || "加工内容マスタ".equals(tabTitle)) {
                 Class.forName(
                         "jp.co.pm.ai.desktop.reconciliation.PostProcessingExcelMasterCatalogPane");
@@ -1970,10 +1836,12 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         replaceOptList(optUser, comboChoicesState.optionsFor(RequestFormComboChoices.KEY_USER));
         replaceOptListOrClear(
                 optMasterCandidatePrefixProduct,
-                comboChoicesState.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT));
+                prefixFilterOptions(
+                        comboChoicesState, RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT));
         replaceOptListOrClear(
                 optMasterCandidatePrefixRaw,
-                comboChoicesState.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW));
+                prefixFilterOptions(
+                        comboChoicesState, RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW));
         refreshDynamicRowComboItems();
         refreshAllMasterCandidateCombos();
         syncFieldDefaultSelectorCombos();
@@ -2047,6 +1915,16 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         } else {
             target.setAll(values);
         }
+    }
+
+    /** マスタ候補先頭フィルタは bundled 既定が無いため、保存済みリストのみ反映する。 */
+    private static java.util.List<String> prefixFilterOptions(
+            RequestFormComboChoices state, String key) {
+        if (state == null || key == null) {
+            return List.of();
+        }
+        java.util.List<String> saved = state.asMap().get(key);
+        return saved != null ? saved : List.of();
     }
 
     private void refreshAllMasterCandidateCombos() {

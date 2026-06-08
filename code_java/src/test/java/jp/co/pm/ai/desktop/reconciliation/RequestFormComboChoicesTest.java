@@ -102,4 +102,20 @@ class RequestFormComboChoicesTest {
                 List.of("R1"),
                 loaded.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW));
     }
+
+    @Test
+    void fromSettingsFileRoot_readsFlatPrefixKeysAtRoot() throws Exception {
+        ObjectNode root = JSON.createObjectNode();
+        root.putArray(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT).add("A2").add("B1");
+        root.putArray(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW).add("R1");
+        root.put("targetFolder", "C:\\work\\originals");
+
+        RequestFormComboChoices loaded = RequestFormComboChoices.fromSettingsFileRoot(root);
+        assertEquals(
+                List.of("A2", "B1"),
+                loaded.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_PRODUCT));
+        assertEquals(
+                List.of("R1"),
+                loaded.optionsFor(RequestFormComboChoices.KEY_MASTER_CANDIDATE_PREFIX_RAW));
+    }
 }

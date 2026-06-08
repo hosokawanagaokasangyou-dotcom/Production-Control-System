@@ -50,17 +50,33 @@ public final class RequestFormInputSettingsStore {
     }
 
     public static Optional<Settings> load(Map<String, String> ui) {
-        Path storePath = resolveStorePath(ui);
-        if (Files.isRegularFile(storePath)) {
-            try {
-                JsonNode root = JSON.readTree(storePath.toFile());
-                return Optional.of(parseRoot(root));
-            } catch (IOException ex) {
-                System.err.println(
-                        "Could not load request form input settings: " + storePath + " — " + ex.getMessage());
+        Optional<Settings> fromPrimary = loadFromFile(resolveStorePath(ui));
+        if (fromPrimary.isPresent()) {
+            return fromPrimary;
+        }
+        Path legacyPath = AppPaths.requestFormInputSettingsJsonPathLegacy(ui);
+        Path primaryPath = resolveStorePath(ui);
+        if (!legacyPath.equals(primaryPath)) {
+            fromPrimary = loadFromFile(legacyPath);
+            if (fromPrimary.isPresent()) {
+                return fromPrimary;
             }
         }
         return loadLegacyMigration(ui);
+    }
+
+    private static Optional<Settings> loadFromFile(Path storePath) {
+        if (!Files.isRegularFile(storePath)) {
+            return Optional.empty();
+        }
+        try {
+            JsonNode root = JSON.readTree(storePath.toFile());
+            return Optional.of(parseRoot(root));
+        } catch (IOException ex) {
+            System.err.println(
+                    "Could not load request form input settings: " + storePath + " — " + ex.getMessage());
+            return Optional.empty();
+        }
     }
 
     public static RequestFormComboChoices loadComboChoices(Map<String, String> ui, FactorySite site) {
@@ -116,7 +132,7 @@ public final class RequestFormInputSettingsStore {
         if (root == null || !root.isObject()) {
             return Settings.empty();
         }
-        RequestFormComboChoices combo = RequestFormComboChoices.fromJson(root);
+        RequestFormComboChoices combo = RequestFormComboChoices.fromSettingsFileRoot(root);
         String targetFolder = textOrEmpty(root.get(KEY_TARGET_FOLDER));
         String juchuPath = textOrEmpty(root.get(KEY_JUCHU_FILE_PATH));
         return new Settings(combo, new ReconciliationPaths(targetFolder, juchuPath));

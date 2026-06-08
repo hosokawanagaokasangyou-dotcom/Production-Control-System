@@ -136,6 +136,10 @@ public final class AppPaths {
     public static final String RDP_LAUNCHER_EXE_BASENAME = "PmAiRdpRemoteLauncher.exe";
     public static final String RDP_LAUNCHER_VERSION_BASENAME = "PmAiRdpRemoteLauncher.version.txt";
     public static final String RDP_LAUNCHER_INI_BASENAME = "RAP設定.ini";
+    /** 起動プロファイル（名称・説明等）の JSON。{@link #RDP_LAUNCHER_INI_BASENAME} と同階層。 */
+    public static final String RDP_LAUNCH_PROFILES_BASENAME = "RDP起動プロファイル.json";
+    /** リモートデスクトップタブで最後に選んだ起動プロファイル番号（1～9）。 */
+    public static final String KEY_PM_AI_RDP_LAUNCH_PROFILE_NUMBER = "PM_AI_RDP_LAUNCH_PROFILE_NUMBER";
 
     /**
      * 依頼書 PDF プレビュー: Type0 日本語フォントのサイズ補正係数（Excel pt に乗算）。{@code 0.50}～{@code 1.00}。
@@ -1365,6 +1369,29 @@ public final class AppPaths {
         return resolveRdpLauncherDeployDir(ui).resolve(RDP_LAUNCHER_VERSION_BASENAME);
     }
 
+    /** 起動プロファイル JSON（名称・説明・区分等）。 */
+    public static Path resolveRdpLaunchProfilesFile(Map<String, String> ui) {
+        return resolveRdpLauncherDeployDir(ui).resolve(RDP_LAUNCH_PROFILES_BASENAME);
+    }
+
+    /** 起動プロファイル番号（1～9）。未設定・不正時は 1。 */
+    public static int resolveRdpLaunchProfileNumber(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String raw = trim(u.get(KEY_PM_AI_RDP_LAUNCH_PROFILE_NUMBER));
+        if (raw.isEmpty()) {
+            return 1;
+        }
+        try {
+            int n = Integer.parseInt(raw);
+            if (n >= 1 && n <= 9) {
+                return n;
+            }
+        } catch (NumberFormatException ignored) {
+            // fall through
+        }
+        return 1;
+    }
+
     /** 学習アーカイブのサブフォルダ名（親は {@link #summaryAiDispatchXlsxPath} と同一）。 */
     public static final String KEY_PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR =
             "PM_AI_DISPATCH_LEARNING_ARCHIVE_SUBDIR";
@@ -1664,8 +1691,22 @@ public final class AppPaths {
     public static final String REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME =
             "request_form_input_settings.json";
 
-    /** {@link #summaryAiDispatchXlsxPath(Map)} と同一フォルダの依頼書入力設定 JSON。 */
+    /**
+     * {@link #summaryAiDispatchXlsxPathForFactory(Map, FactorySite)} と同一フォルダの依頼書入力設定 JSON。
+     *
+     * <p>操作者 bin 等と同様、環境変数のサマリが別工場を指すときは利用工場の既定 UNC 配下を使う。
+     */
     public static Path requestFormInputSettingsJsonPath(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        FactorySite site = GlobalInitSettingTarget.loadEffective(u);
+        return siblingOfSummaryAiDispatchWorkbookForFactory(
+                u, site, REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME);
+    }
+
+    /**
+     * 依頼書入力設定 JSON の旧解決（工場無指定のサマリ sibling）。移行読込用。
+     */
+    public static Path requestFormInputSettingsJsonPathLegacy(Map<String, String> ui) {
         return siblingOfSummaryAiDispatchWorkbook(ui, REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME);
     }
 
