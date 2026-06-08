@@ -1,12 +1,15 @@
 {
   "version": 2,
-  "dgSpecHash": "XVC41qFh1zI=",
+  "dgSpecHash": "gtaWJjRdJH4=",
   "success": true,
   "projectFilePath": "C:\\工程管理AIプロジェクト_JAVA\\tools\\pm-ai-rdp-remote-launcher\\PmAiRdpRemoteLauncher.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\0585\\.nuget\\packages\\microsoft.net.illink.tasks\\8.0.27\\microsoft.net.illink.tasks.8.0.27.nupkg.sha512",
     "C:\\Users\\0585\\.nuget\\packages\\system.codedom\\8.0.0\\system.codedom.8.0.0.nupkg.sha512",
-    "C:\\Users\\0585\\.nuget\\packages\\system.management\\8.0.0\\system.management.8.0.0.nupkg.sha512"
+    "C:\\Users\\0585\\.nuget\\packages\\system.management\\8.0.0\\system.management.8.0.0.nupkg.sha512",
+    "C:\\Users\\0585\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\8.0.27\\microsoft.netcore.app.runtime.win-x64.8.0.27.nupkg.sha512",
+    "C:\\Users\\0585\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\8.0.27\\microsoft.windowsdesktop.app.runtime.win-x64.8.0.27.nupkg.sha512",
+    "C:\\Users\\0585\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\8.0.27\\microsoft.aspnetcore.app.runtime.win-x64.8.0.27.nupkg.sha512"
   ],
   "logs": []
 }

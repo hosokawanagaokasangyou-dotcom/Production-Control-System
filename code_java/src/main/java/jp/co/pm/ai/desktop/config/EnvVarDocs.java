@@ -243,11 +243,28 @@ public final class EnvVarDocs {
         put(
                 "PM_AI_RDP_LAUNCHER_INI",
                 "接続先 RDP ランチャー設定（RAP設定.ini）のフルパス。"
-                        + "空のときはサマリ Excel と同階層の RAP設定.ini。");
+                        + "空のときはサマリ Excel と同階層の RAP設定.ini。"
+                        + " 接続直前に PM-AI が 起動プログラム番号 と 操作者=セッション操作者名 を部分更新する。"
+                        + " スロット行は exe + シナリオ (.ardrpa) のみ（--id / --password は含めない）。");
+        put(
+                "PM_AI_OPERATOR_USER",
+                "起動時に選択した操作者名。子プロセス env に載せる。"
+                        + " RAP設定.ini の 操作者= 行と operator-aladdin-credentials.launcher.json と組み合わせ、"
+                        + " C# ランチャーが Aladdin RPA 起動引数 --id / --password を付与する。"
+                        + " 資格情報本体は factory-operator-users.bin（リモートデスクトップタブで編集）。");
+        put(
+                "PM_AI_FACTORY_SITE",
+                "利用工場（KONAN / KOKUBU）。C# ランチャーが operator-aladdin-credentials.launcher.json"
+                        + " 内の工場ブロックを選ぶときに参照（未設定時は KONAN）。");
         put(
                 "PM_AI_RDP_LAUNCHER_AUTO_DEPLOY",
                 "依頼書 UI から接続先共有フォルダへランチャー exe を自動再配備する。"
                         + "0/false/off で無効。既定は有効。");
+        put(
+                "PM_AI_RDP_LAUNCH_PROFILE_NUMBER",
+                "リモートデスクトップタブで最後に選んだ起動プロファイル番号（1～9）。"
+                        + " RAP設定.ini の起動プログラム番号（スロット）と同一。"
+                        + " 名称・説明は共有フォルダの RDP起動プロファイル.json に保存。");
         put(
                 "PM_AI_RDP_EMBED_STARTUP_IN_PROFILE",
                 "1/true/on のときのみ PM_AI_RDP_COMPANION_PROGRAM を .rdp へ alternate shell として書込。"

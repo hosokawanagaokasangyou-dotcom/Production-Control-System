@@ -25,23 +25,34 @@ internal static class Program
             if (string.IsNullOrWhiteSpace(iniPath))
             {
                 LauncherLog.Error("ini パスが未指定です。--ini または PM_AI_RDP_LAUNCHER_INI、または exe 同階層の RAP設定.ini を指定してください。");
-                return ExitMissingIni;
+                return ExitWithLog(ExitMissingIni, "ini パス未指定");
             }
 
             if (!File.Exists(iniPath))
             {
                 LauncherLog.Error("ini が見つかりません: " + iniPath);
-                return ExitMissingIni;
+                return ExitWithLog(ExitMissingIni, "ini 不在");
             }
 
             LauncherLog.Info("ini パス: " + iniPath);
 
             var ini = LauncherIni.Load(iniPath);
+            LauncherLog.Info("起動プログラム番号=" + ini.SelectedSlot);
+            if (ini.IsLauncherDisabled)
+            {
+                LauncherLog.Info(
+                    "起動プログラム番号="
+                        + LauncherIni.DisabledSlot
+                        + " のため何もしません（RPA 起動・RDP 切断・サインアウトなし）。");
+                return ExitWithLog(ExitOk, "抑止（起動プログラム番号=0）");
+            }
+
+            var startedSlot = ini.SelectedSlot;
             var commandLine = ini.ResolveSelectedCommand();
             if (string.IsNullOrWhiteSpace(commandLine))
             {
                 LauncherLog.Error("起動プログラム番号 " + ini.SelectedSlot + " に対応するスロットが ini にありません: " + iniPath);
-                return ExitError;
+                return ExitWithLog(ExitError, "スロット未定義");
             }
 
             ParsedCommand parsed;
@@ -52,11 +63,23 @@ internal static class Program
             catch (FormatException ex)
             {
                 LauncherLog.Error(ex.Message);
-                return ExitError;
+                return ExitWithLog(ExitError, "コマンド行解析失敗");
             }
 
             var disconnectOnChildExit = ini.ResolveDisconnectOnChildExit();
             LauncherLog.Info("終了時RDP切断: " + (disconnectOnChildExit ? "有効" : "無効"));
+            LauncherLog.Info(
+                "操作者="
+                    + (string.IsNullOrWhiteSpace(ini.OperatorName) ? "(未設定)" : ini.OperatorName));
+
+            var credentials = OperatorAladdinCredentialsStore.Resolve(iniPath, ini.OperatorName);
+            if (credentials == null)
+            {
+                LauncherLog.Error(
+                    "アラジン資格情報が未設定のため RPA を起動しません。"
+                        + " PM-AI リモートデスクトップタブで資格情報を保存してから接続してください。");
+                return ExitWithLog(ExitError, "アラジン資格情報未設定");
+            }
 
             Process? child = null;
             var existingProcessId = ProcessRunningChecker.TryFindRunningProcessId(parsed);
@@ -67,7 +90,7 @@ internal static class Program
                 if (child == null)
                 {
                     LauncherLog.Error("既存プロセスを開けませんでした PID=" + existingProcessId.Value);
-                    return ExitError;
+                    return ExitWithLog(ExitError, "既存 PID オープン失敗");
                 }
             }
             else
@@ -78,7 +101,9 @@ internal static class Program
                     workingDirectory = Environment.CurrentDirectory;
                 }
 
-                var argumentTokens = WindowsArgumentFormatter.TokenizeForProcess(parsed.Arguments);
+                var argumentTokens = AladdinRpaArgumentAppender.AppendCredentials(
+                    WindowsArgumentFormatter.TokenizeForProcess(parsed.Arguments),
+                    credentials);
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = parsed.Executable,
@@ -104,16 +129,19 @@ internal static class Program
                 if (child == null)
                 {
                     LauncherLog.Error("子プロセスの起動に失敗しました: " + commandLine);
-                    return ExitError;
+                    return ExitWithLog(ExitError, "子プロセス起動失敗");
                 }
 
                 LauncherLog.Info("起動しました PID=" + child.Id + " (ini 行): " + commandLine);
             }
 
+            TrySuppressIniSlotAfterStart(iniPath, startedSlot);
+
             using (child)
             {
-                child.WaitForExit();
-                LauncherLog.Info("子プロセス終了 PID=" + child.Id + " ExitCode=" + child.ExitCode);
+                var monitor = new ProcessTreeMonitor(child.Id, parsed);
+                monitor.WaitUntilFinished();
+                LauncherLog.Info("子プロセス終了 PID=" + child.Id + " ExitCode=" + FormatExitCode(child));
             }
 
             if (disconnectOnChildExit)
@@ -128,12 +156,51 @@ internal static class Program
                 }
             }
 
-            return ExitOk;
+            return ExitWithLog(ExitOk, "正常終了");
         }
         catch (Exception ex)
         {
             LauncherLog.Error(ex.Message);
-            return ExitError;
+            return ExitWithLog(ExitError, "例外: " + ex.Message);
+        }
+    }
+
+    private static void TrySuppressIniSlotAfterStart(string iniPath, int startedSlot)
+    {
+        try
+        {
+            LauncherIni.WriteSelectedSlot(iniPath, LauncherIni.DisabledSlot);
+            LauncherLog.Info(
+                "起動プログラム番号を 0 に設定しました（"
+                    + startedSlot
+                    + " → 0）。タスクスケジューラ再実行時の二重起動を抑止します。");
+        }
+        catch (Exception ex)
+        {
+            LauncherLog.Error("起動プログラム番号の 0 設定に失敗: " + ex.Message);
+        }
+    }
+
+    private static int ExitWithLog(int exitCode, string reason)
+    {
+        LauncherLog.Info("PmAiRdpRemoteLauncher 終了 exitCode=" + exitCode + " reason=" + reason);
+        return exitCode;
+    }
+
+    private static string FormatExitCode(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Refresh();
+            }
+
+            return process.HasExited ? process.ExitCode.ToString() : "(実行中)";
+        }
+        catch
+        {
+            return "(不明)";
         }
     }
 

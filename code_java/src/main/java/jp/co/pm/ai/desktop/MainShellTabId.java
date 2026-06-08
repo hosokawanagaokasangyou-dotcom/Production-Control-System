@@ -24,6 +24,8 @@ public enum MainShellTabId {
     PLAN_INPUT_STAGE3("planInputStage3"),
     /** 加工依頼書の照合・対比型入力（湖南工場・ReconciliationApp 由来）。 */
     REQUEST_FORM_INPUT("requestFormInput"),
+    /** RDP 接続・RAP 設定・接続先ランチャー配備。 */
+    REMOTE_DESKTOP("remoteDesktop"),
     STAGE1_PREVIEW("stage1Preview"),
     /** メイン画面「材料・製品種類情報」: {@code code/} 配下の製品・原反キー・値テーブル。 */
     CODE_LOOKUP_TABLES("codeLookupTables"),

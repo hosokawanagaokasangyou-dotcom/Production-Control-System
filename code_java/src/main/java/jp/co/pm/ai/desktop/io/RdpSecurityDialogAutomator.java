@@ -39,15 +39,19 @@ public final class RdpSecurityDialogAutomator {
     /**
      * 監視スクリプトを起動したうえで {@code mstsc.exe} を起動する（非同期・呼び出し元は待たない）。
      */
-    public static void launchWithAutomatedConfirm(Path mstscExe, Path rdpProfile, Map<String, String> ui)
+    public static Path launchWithAutomatedConfirm(Path mstscExe, Path rdpProfile, Map<String, String> ui)
             throws IOException {
         Objects.requireNonNull(mstscExe, "mstscExe");
         Objects.requireNonNull(rdpProfile, "rdpProfile");
         if (!RemoteDesktopLauncher.isSupportedPlatform()) {
             throw new IOException("RDP セキュリティダイアログ自動操作は Windows のみ対応です。");
         }
-        Path scriptFile = resolveScriptDir().resolve("rdp-security-auto.ps1");
-        writeUtf8PowerShell(scriptFile, buildAutomationScript(mstscExe, rdpProfile, DEFAULT_TIMEOUT_SEC));
+        Path scriptDir = resolveScriptDir();
+        Path scriptFile = scriptDir.resolve("rdp-security-auto.ps1");
+        Path pidMarkerFile = scriptDir.resolve("rdp-mstsc-" + System.currentTimeMillis() + ".pid");
+        writeUtf8PowerShell(
+                scriptFile,
+                buildAutomationScript(mstscExe, rdpProfile, DEFAULT_TIMEOUT_SEC, pidMarkerFile));
         ProcessBuilder pb =
                 new ProcessBuilder(
                         "powershell.exe",
@@ -61,11 +65,15 @@ public final class RdpSecurityDialogAutomator {
                         scriptFile.toAbsolutePath().normalize().toString());
         pb.redirectErrorStream(true);
         pb.start();
+        return pidMarkerFile;
     }
 
-    static String buildAutomationScript(Path mstscExe, Path rdpProfile, int timeoutSec) {
+    static String buildAutomationScript(
+            Path mstscExe, Path rdpProfile, int timeoutSec, Path pidMarkerFile) {
         String mstsc = escapePowerShellSingleQuoted(mstscExe.toAbsolutePath().normalize().toString());
         String rdp = escapePowerShellSingleQuoted(rdpProfile.toAbsolutePath().normalize().toString());
+        String pidFile =
+                escapePowerShellSingleQuoted(pidMarkerFile.toAbsolutePath().normalize().toString());
         int timeout = Math.max(5, timeoutSec);
         return """
                 $ErrorActionPreference = 'Continue'
@@ -133,11 +141,15 @@ public final class RdpSecurityDialogAutomator {
 
                 $mstsc = '%s'
                 $rdp = '%s'
+                $pidFile = '%s'
                 $timeout = %d
                 if (-not (Test-Path -LiteralPath $mstsc)) { exit 3 }
                 if (-not (Test-Path -LiteralPath $rdp)) { exit 4 }
                 try {
-                  Start-Process -FilePath $mstsc -ArgumentList @($rdp) -WindowStyle Normal -PassThru | Out-Null
+                  $proc = Start-Process -FilePath $mstsc -ArgumentList @($rdp) -WindowStyle Normal -PassThru
+                  if ($null -ne $proc) {
+                    Set-Content -LiteralPath $pidFile -Value ([string]$proc.Id) -Encoding ascii -NoNewline
+                  }
                 } catch {
                   exit 5
                 }
@@ -148,7 +160,7 @@ public final class RdpSecurityDialogAutomator {
                 if (Invoke-ConnectButton -Window $dialog) { exit 0 }
                 exit 1
                 """
-                .formatted(mstsc, rdp, timeout);
+                .formatted(mstsc, rdp, pidFile, timeout);
     }
 
     static String escapePowerShellSingleQuoted(String value) {

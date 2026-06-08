@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 
 /**
  * Windows リモートデスクトップ接続（{@code mstsc.exe}）を .rdp プロファイルで起動する。
@@ -18,7 +19,11 @@ public final class RemoteDesktopLauncher {
     public record LaunchOutcome(
             Path rdpProfile,
             Optional<String> remoteStartupSummary,
-            boolean signatureRemoved) {}
+            boolean signatureRemoved,
+            /** 直接起動した mstsc の PID。 */
+            OptionalLong mstscProcessId,
+            /** セキュリティダイアログ自動操作時に mstsc PID を書き込むマーカーファイル。 */
+            Optional<Path> mstscPidMarkerFile) {}
 
     private RemoteDesktopLauncher() {}
 
@@ -56,12 +61,24 @@ public final class RemoteDesktopLauncher {
         signatureRemoved = signatureRemoved || displaySignatureRemoved;
         Optional<String> summary =
                 embedInProfile ? RdpCompanionLauncher.formatEmbeddedSummary(env) : Optional.empty();
+        OptionalLong mstscPidHint = OptionalLong.empty();
+        Optional<Path> mstscPidMarker = Optional.empty();
         if (RdpSecurityDialogAutomator.isAutoConfirmEnabled(env)) {
-            RdpSecurityDialogAutomator.launchWithAutomatedConfirm(mstsc, abs, env);
+            mstscPidMarker =
+                    Optional.of(
+                            RdpSecurityDialogAutomator.launchWithAutomatedConfirm(mstsc, abs, env));
         } else {
-            startDetached(List.of(mstsc.toString(), abs.toString()));
+            Process started = startDetached(List.of(mstsc.toString(), abs.toString()));
+            mstscPidHint = OptionalLong.of(started.pid());
         }
-        return new LaunchOutcome(abs, summary, signatureRemoved);
+        OptionalLong mstscPid =
+                mstscPidHint.isPresent() ? mstscPidHint : findLatestMstscPidForProfile(abs);
+        return new LaunchOutcome(abs, summary, signatureRemoved, mstscPid, mstscPidMarker);
+    }
+
+    /** 起動直後の mstsc PID（自動確認 OFF 時は Process#pid、ON 時はスキャン）。 */
+    private static OptionalLong findLatestMstscPidForProfile(Path rdpProfile) {
+        return RdpMstscProcessFinder.scanForMstscProcessId(rdpProfile);
     }
 
     public static Optional<Path> resolveMstscExeOptional() {
@@ -98,10 +115,10 @@ public final class RemoteDesktopLauncher {
         return null;
     }
 
-    private static void startDetached(List<String> command) throws IOException {
+    private static Process startDetached(List<String> command) throws IOException {
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
-        pb.start();
+        return pb.start();
     }
 
     private static boolean isWindows() {

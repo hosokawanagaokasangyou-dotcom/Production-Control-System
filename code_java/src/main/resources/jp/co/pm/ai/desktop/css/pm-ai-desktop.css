@@ -1899,3 +1899,268 @@
     -fx-font-size: 12px;
     -fx-text-fill: -fx-mid-text-color;
 }
+
+.pm-remote-desktop-tab.form-tab-container,
+.pm-remote-desktop-tab .pm-rdp-form-tab-container {
+    -fx-padding: 16;
+    -fx-background-color: transparent;
+}
+
+.pm-remote-desktop-split {
+    -fx-padding: 0;
+    -fx-background-color: transparent;
+}
+
+.pm-remote-desktop-split > .split-pane-divider {
+    -fx-padding: 0 3 0 3;
+}
+
+/* --- ページ見出し --- */
+
+.pm-remote-desktop-tab .pm-rdp-page-title {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-text-background-color;
+}
+
+.pm-remote-desktop-tab .pm-rdp-page-subtitle,
+.pm-remote-desktop-tab .pm-rdp-meta-label {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+.pm-remote-desktop-tab .pm-rdp-meta-label {
+    -fx-font-family: "Consolas", "Cascadia Mono", "Courier New", monospace;
+    -fx-font-size: 11px;
+}
+
+.pm-remote-desktop-tab .pm-rdp-field-caption {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: derive(-fx-text-background-color, 30%);
+}
+
+/* --- 左カラム --- */
+
+.pm-remote-desktop-tab .pm-rdp-form-scroll {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+    -fx-border-width: 0;
+}
+
+.pm-remote-desktop-tab .pm-rdp-form-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+
+.pm-remote-desktop-tab .pm-rdp-settings-stack {
+    -fx-spacing: 16;
+    -fx-fill-width: true;
+}
+
+/* --- 接続ヒーロー（主操作） --- */
+
+.pm-remote-desktop-tab .pm-rdp-connect-hero {
+    -fx-background-color: derive(-fx-base, 10%);
+    -fx-border-color: derive(-fx-accent, 35%);
+    -fx-border-width: 1.5;
+    -fx-border-radius: 12;
+    -fx-background-radius: 12;
+    -fx-padding: 18 20 20 20;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.12), 16, 0.18, 0, 4);
+}
+
+.pm-remote-desktop-tab .pm-rdp-section-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-accent;
+    -fx-padding: 0 0 2 0;
+}
+
+.pm-remote-desktop-tab .pm-rdp-launch-block {
+    -fx-padding: 8 0 4 0;
+}
+
+.pm-remote-desktop-tab .button.pm-rdp-connect-button {
+    -fx-cursor: hand;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-padding: 16 28;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+    -fx-min-height: 56;
+    -fx-pref-height: 56;
+    -fx-max-width: infinity;
+    -fx-background-color: #2563eb;
+    -fx-border-color: #1d4ed8;
+    -fx-text-fill: #ffffff;
+    -fx-effect: dropshadow(gaussian, rgba(37, 99, 235, 0.38), 14, 0.32, 0, 5);
+}
+
+.pm-remote-desktop-tab .button.pm-rdp-connect-button:hover {
+    -fx-background-color: #1d4ed8;
+    -fx-border-color: #1e40af;
+    -fx-effect: dropshadow(gaussian, rgba(37, 99, 235, 0.48), 18, 0.36, 0, 6);
+}
+
+.pm-remote-desktop-tab .button.pm-rdp-connect-button:pressed {
+    -fx-background-color: #1e40af;
+    -fx-border-color: #1e3a8a;
+    -fx-effect: dropshadow(gaussian, rgba(37, 99, 235, 0.22), 8, 0.28, 0, 2);
+}
+
+.pm-remote-desktop-tab .button.pm-rdp-connect-button:focused {
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.pm-remote-desktop-tab .button.pm-rdp-connect-button.pm-rdp-connect-pending {
+    -fx-background-color: #0f766e;
+    -fx-border-color: #115e59;
+    -fx-effect: dropshadow(gaussian, rgba(15, 118, 110, 0.38), 14, 0.32, 0, 5);
+}
+
+.pm-remote-desktop-tab .button.pm-rdp-connect-button.pm-rdp-connect-pending:hover {
+    -fx-background-color: #14b8a6;
+    -fx-border-color: #0f766e;
+}
+
+.pm-remote-desktop-tab .button.pm-rdp-connect-button.pm-rdp-connect-pending:pressed {
+    -fx-background-color: #134e4a;
+    -fx-border-color: #115e59;
+}
+
+.pm-remote-desktop-tab .button.pm-rdp-connect-button.pm-rdp-connect-deploying:disabled {
+    -fx-background-color: derive(-fx-base, -4%);
+    -fx-border-color: derive(-fx-text-box-border, -8%);
+    -fx-text-fill: -fx-mid-text-color;
+    -fx-opacity: 0.88;
+    -fx-effect: null;
+}
+
+.pm-remote-desktop-tab .button.pm-rdp-connect-button.pm-rdp-connect-active:disabled {
+    -fx-background-color: #059669;
+    -fx-border-color: #047857;
+    -fx-text-fill: #ffffff;
+    -fx-opacity: 0.95;
+    -fx-effect: dropshadow(gaussian, rgba(5, 150, 105, 0.35), 12, 0.3, 0, 4);
+}
+
+/* --- 二次ボタン --- */
+
+.pm-remote-desktop-tab .button.pm-rdp-secondary-button {
+    -fx-cursor: hand;
+    -fx-background-color: derive(-fx-control-inner-background, 4%);
+    -fx-border-color: derive(-fx-text-box-border, -10%);
+    -fx-border-width: 1;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 7 14;
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-text-background-color;
+}
+
+.pm-remote-desktop-tab .button.pm-rdp-secondary-button:hover {
+    -fx-background-color: derive(-fx-control-inner-background, -6%);
+    -fx-border-color: derive(-fx-accent, 20%);
+}
+
+.pm-remote-desktop-tab .button.pm-rdp-secondary-button:pressed {
+    -fx-background-color: derive(-fx-control-inner-background, -10%);
+}
+
+.pm-remote-desktop-tab .button.pm-rdp-secondary-button:disabled {
+    -fx-opacity: 0.5;
+}
+
+/* --- 折りたたみセクション --- */
+
+.pm-remote-desktop-tab .pm-rdp-section-pane {
+    -fx-text-fill: -fx-text-background-color;
+}
+
+.pm-remote-desktop-tab .pm-rdp-section-pane > .title {
+    -fx-background-color: derive(-fx-base, 6%);
+    -fx-border-color: derive(-fx-text-box-border, 8%);
+    -fx-border-width: 1;
+    -fx-border-radius: 8 8 0 0;
+    -fx-background-radius: 8 8 0 0;
+    -fx-padding: 8 12 8 12;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+}
+
+.pm-remote-desktop-tab .pm-rdp-section-pane > .content {
+    -fx-background-color: derive(-fx-base, 4%);
+    -fx-border-color: derive(-fx-text-box-border, 8%);
+    -fx-border-width: 0 1 1 1;
+    -fx-border-radius: 0 0 8 8;
+    -fx-background-radius: 0 0 8 8;
+    -fx-padding: 12 14 14 14;
+}
+
+.pm-remote-desktop-tab .pm-rdp-section-pane:focused > .title {
+    -fx-background-color: derive(-fx-base, 6%);
+}
+
+/* --- ステータス --- */
+
+.pm-remote-desktop-tab .pm-rdp-status-label {
+    -fx-background-color: derive(-fx-base, -6%);
+    -fx-border-color: derive(-fx-text-box-border, 4%);
+    -fx-border-width: 1;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 8 12;
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-mid-text-color;
+}
+
+/* --- 右ペイン（ini プレビュー） --- */
+
+.pm-remote-desktop-tab .pm-rdp-ini-panel {
+    -fx-background-color: derive(-fx-base, 8%);
+    -fx-border-color: derive(-fx-text-box-border, 6%);
+    -fx-border-width: 1;
+    -fx-border-radius: 10;
+    -fx-background-radius: 10;
+    -fx-padding: 16;
+}
+
+.pm-remote-desktop-tab .pm-rdp-ini-panel-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-accent;
+}
+
+.pm-remote-desktop-tab .pm-rdp-profile-detail {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-mid-text-color;
+    -fx-padding: 0 0 4 0;
+}
+
+.pm-remote-desktop-tab .pm-rdp-profile-card {
+    -fx-background-color: derive(-fx-base, 4%);
+    -fx-border-color: derive(-fx-text-box-border, 10%);
+    -fx-border-width: 1;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-padding: 12 14;
+}
+
+.pm-remote-desktop-tab .pm-rdp-profile-card-title {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-accent;
+}
+
+.pm-remote-desktop-tab .combo-box {
+    -fx-max-width: infinity;
+}
+
+.pm-remote-desktop-tab .pm-remote-desktop-ini-preview {
+    -fx-font-family: "Consolas", "Cascadia Mono", "Courier New", monospace;
+    -fx-font-size: 12px;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+}

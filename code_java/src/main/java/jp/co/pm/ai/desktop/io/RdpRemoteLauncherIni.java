@@ -16,8 +16,12 @@ import java.util.TreeMap;
 public final class RdpRemoteLauncherIni {
 
     public static final String SELECTED_SLOT_KEY = "起動プログラム番号";
+    /** 接続直前に Java が書くセッション操作者名（C# ランチャーが資格情報解決に使用）。 */
+    public static final String OPERATOR_KEY = "操作者";
     /** 子プロセス終了後に RDP セッションを切断する（C# ランチャーが参照）。 */
     public static final String DISCONNECT_ON_CHILD_EXIT_KEY = "終了時RDP切断";
+    /** タスクスケジューラ経由の RPA 起動を抑止（配台から RDP 接続中）。 */
+    public static final int SLOT_DISABLED = 0;
     public static final int MAX_SLOTS = 9;
 
     /** exe パスと引数。 */
@@ -105,7 +109,7 @@ public final class RdpRemoteLauncherIni {
             if (SELECTED_SLOT_KEY.equals(key)) {
                 try {
                     int slot = Integer.parseInt(value);
-                    if (slot >= 1 && slot <= MAX_SLOTS) {
+                    if (slot == SLOT_DISABLED || (slot >= 1 && slot <= MAX_SLOTS)) {
                         ini.selectedSlot = slot;
                     }
                 } catch (NumberFormatException ignored) {
@@ -136,6 +140,10 @@ public final class RdpRemoteLauncherIni {
         if (parent != null) {
             Files.createDirectories(parent);
         }
+        Files.write(path, toIniLines(), StandardCharsets.UTF_8);
+    }
+
+    private List<String> toIniLines() {
         List<String> lines = new ArrayList<>();
         lines.add(SELECTED_SLOT_KEY + "=" + selectedSlot);
         lines.add(DISCONNECT_ON_CHILD_EXIT_KEY + "=" + (disconnectOnChildExit ? "1" : "0"));
@@ -148,7 +156,111 @@ public final class RdpRemoteLauncherIni {
                                 + formatSlotIniValue(command.executable(), command.arguments()));
             }
         }
+        return lines;
+    }
+
+    /**
+     * RDP 接続プロセス（mstsc）開始前に、タスクスケジューラが参照する起動番号を確定する。
+     * 接続直後にタスクスケジューラが ini を読むため、{@link RemoteDesktopLauncher#launch} より先に呼ぶ。
+     */
+    public static void writeTaskSchedulerSlotBeforeConnect(Path path, int slot) throws IOException {
+        restoreTaskSchedulerSlot(path, slot);
+    }
+
+    /** @see #writeTaskSchedulerSlotBeforeConnect(Path, int) */
+    public static void writeTaskSchedulerSlotBeforeConnect(
+            Path path, int slot, Map<String, String> ui) throws IOException {
+        writeTaskSchedulerSlotBeforeConnect(path, slot);
+    }
+
+    /**
+     * 接続直前に {@link #OPERATOR_KEY} 行のみ部分更新する（スロット定義は保持）。
+     */
+    public static void writeOperatorContext(Path path, String operatorName) throws IOException {
+        mergeIniScalarKey(path, OPERATOR_KEY, operatorName != null ? operatorName.strip() : "");
+    }
+
+    private static void mergeIniScalarKey(Path path, String key, String value) throws IOException {
+        Objects.requireNonNull(path, "path");
+        Objects.requireNonNull(key, "key");
+        List<String> lines = new ArrayList<>();
+        if (Files.isRegularFile(path)) {
+            lines.addAll(Files.readAllLines(path, StandardCharsets.UTF_8));
+        }
+        String prefix = key + "=";
+        boolean replaced = false;
+        for (int i = 0; i < lines.size(); i++) {
+            String trimmed = lines.get(i).trim();
+            if (trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith(";")) {
+                continue;
+            }
+            if (!trimmed.startsWith(prefix)) {
+                continue;
+            }
+            lines.set(i, key + "=" + value);
+            replaced = true;
+            break;
+        }
+        if (!replaced) {
+            lines.add(key + "=" + value);
+        }
+        Path parent = path.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
         Files.write(path, lines, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * ini の起動番号を 0 にする（タスクスケジューラ抑止）。
+     * RDP 切断後の保険、または手動抑止用。スロット定義行は保持する。
+     */
+    public static void writeTaskSchedulerSuppress(Path path) throws IOException {
+        mergeIniScalarKey(path, SELECTED_SLOT_KEY, String.valueOf(SLOT_DISABLED));
+    }
+
+    /** @see #writeTaskSchedulerSuppress(Path) */
+    public static void writeTaskSchedulerSuppress(Path path, Map<String, String> ui)
+            throws IOException {
+        writeTaskSchedulerSuppress(path);
+    }
+
+    /**
+     * RDP セッション終了後、タスクスケジューラ用に {@code RAP設定.ini} の起動番号を UI 値へ戻す。
+     */
+    public static void restoreTaskSchedulerSlot(Path path, int slot) throws IOException {
+        Objects.requireNonNull(path, "path");
+        if (slot < 1 || slot > MAX_SLOTS) {
+            return;
+        }
+        mergeIniScalarKey(path, SELECTED_SLOT_KEY, String.valueOf(slot));
+    }
+
+    /** @see #restoreTaskSchedulerSlot(Path, int) */
+    public static void restoreTaskSchedulerSlot(Path path, int slot, Map<String, String> ui)
+            throws IOException {
+        restoreTaskSchedulerSlot(path, slot);
+    }
+
+    /** デバッグ・UI 向け: ini の起動プログラム番号行（見つからなければ空文字）。 */
+    public static String readIniHeadLine(Path path) {
+        try {
+            if (!Files.isRegularFile(path)) {
+                return "";
+            }
+            for (String rawLine : Files.readAllLines(path, StandardCharsets.UTF_8)) {
+                String line = rawLine.trim();
+                if (line.isEmpty() || line.startsWith("#") || line.startsWith(";")) {
+                    continue;
+                }
+                if (line.startsWith(SELECTED_SLOT_KEY + "=")) {
+                    return line;
+                }
+            }
+        } catch (IOException ignored) {
+            // ignore
+        }
+        return "";
     }
 
     /**

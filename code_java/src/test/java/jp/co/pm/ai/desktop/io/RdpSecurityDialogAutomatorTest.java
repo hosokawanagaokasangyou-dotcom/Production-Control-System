@@ -35,12 +35,15 @@ class RdpSecurityDialogAutomatorTest {
                 RdpSecurityDialogAutomator.buildAutomationScript(
                         Path.of("C:\\Windows\\System32\\mstsc.exe"),
                         Path.of("C:\\repo\\Default.pm-ai-signed.rdp"),
-                        30);
+                        30,
+                        Path.of("C:\\Temp\\PM-AI-rdp-sign\\rdp-mstsc-test.pid"));
         assertTrue(script.contains("mstsc.exe"));
         assertTrue(script.contains("Default.pm-ai-signed.rdp"));
+        assertTrue(script.contains("rdp-mstsc-test.pid"));
         assertTrue(script.contains("Find-SecurityDialog"));
         assertTrue(script.contains("Enable-AllCheckboxes"));
         assertTrue(script.contains("Invoke-ConnectButton"));
+        assertTrue(script.contains("Start-Process"));
     }
 
     @Test

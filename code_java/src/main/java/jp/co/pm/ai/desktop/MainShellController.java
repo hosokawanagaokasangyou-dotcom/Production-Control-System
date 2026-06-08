@@ -361,6 +361,9 @@ public final class MainShellController {
     private RequestFormInputTabController requestFormInputTabController;
 
     @FXML
+    private RemoteDesktopTabController remoteDesktopTabController;
+
+    @FXML
     private Stage1PreviewTabController stage1PreviewTabController;
 
     @FXML
@@ -472,6 +475,9 @@ public final class MainShellController {
 
     @FXML
     private Tab mainShellTabRequestFormInput;
+
+    @FXML
+    private Tab mainShellTabRemoteDesktop;
 
     @FXML
     private Tab mainShellTabStage1Preview;
@@ -727,6 +733,9 @@ public final class MainShellController {
         if (requestFormInputTabController != null) {
             requestFormInputTabController.bindShell(this);
         }
+        if (remoteDesktopTabController != null) {
+            remoteDesktopTabController.bindShell(this);
+        }
         stage1PreviewTabController.bindShell(this);
         if (codeDispatchLookupTablesTabController != null) {
             codeDispatchLookupTablesTabController.bindShell(this);
@@ -872,6 +881,11 @@ public final class MainShellController {
                                     && requestFormInputTabController != null) {
                                 Platform.runLater(
                                         requestFormInputTabController::onMainShellTabSelected);
+                            }
+                            if (newTab == mainShellTabRemoteDesktop
+                                    && remoteDesktopTabController != null) {
+                                Platform.runLater(
+                                        remoteDesktopTabController::onMainShellTabSelected);
                             }
                             if (prevTab == mainShellTabEquipmentStatusDashboard
                                     && equipmentStatusDashboardTabController != null) {
@@ -1893,6 +1907,9 @@ public final class MainShellController {
         if (t == mainShellTabRequestFormInput) {
             return MainShellTabId.REQUEST_FORM_INPUT;
         }
+        if (t == mainShellTabRemoteDesktop) {
+            return MainShellTabId.REMOTE_DESKTOP;
+        }
         if (t == mainShellTabStage1Preview) {
             return MainShellTabId.STAGE1_PREVIEW;
         }
@@ -1971,6 +1988,7 @@ public final class MainShellController {
             case PLAN_INPUT -> mainShellTabPlanInput;
             case PLAN_INPUT_STAGE3 -> mainShellTabPlanInputStage3;
             case REQUEST_FORM_INPUT -> mainShellTabRequestFormInput;
+            case REMOTE_DESKTOP -> mainShellTabRemoteDesktop;
             case STAGE1_PREVIEW -> mainShellTabStage1Preview;
             case CODE_LOOKUP_TABLES -> mainShellTabCodeLookupTables;
             case EXCLUDE_RULES -> mainShellTabExcludeRules;

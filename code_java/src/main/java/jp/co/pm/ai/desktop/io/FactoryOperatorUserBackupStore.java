@@ -117,6 +117,27 @@ public final class FactoryOperatorUserBackupStore {
         }
     }
 
+    /**
+     * schema 昇格前の自動バックアップ（1 プロセス内で同一ストアに対し 1 回まで）。
+     *
+     * @param priorSchemaVersion 書込前の schemaVersion
+     */
+    public static void createAutomaticSchemaUpgradeBackup(
+            Map<String, String> ui, int priorSchemaVersion, String label) throws IOException {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        FactorySite effective = GlobalInitSettingTarget.loadEffective(u);
+        FactoryOperatorUserStore.configureFromUi(u, effective);
+        Path current = FactoryOperatorUserStore.storePath();
+        if (!Files.isRegularFile(current)) {
+            return;
+        }
+        String resolvedLabel =
+                label != null && !label.isBlank()
+                        ? label.strip()
+                        : "アップデート前自動バックアップ schema-" + priorSchemaVersion;
+        createManualBackup(u, resolvedLabel);
+    }
+
     /** 現行 {@link FactoryOperatorUserStore} を手動バックアップする。 */
     public static FactoryOperatorUserBackupEntry createManualBackup(Map<String, String> ui, String label)
             throws IOException {

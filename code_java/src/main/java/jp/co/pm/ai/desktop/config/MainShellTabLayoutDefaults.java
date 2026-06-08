@@ -28,6 +28,7 @@ public final class MainShellTabLayoutDefaults {
                     MainShellTabId.PIPELINE_EXECUTION_TIMING.key(),
                     MainShellTabId.PLAN_INPUT.key(),
                     MainShellTabId.REQUEST_FORM_INPUT.key(),
+                    MainShellTabId.REMOTE_DESKTOP.key(),
                     MainShellTabId.DISPATCH_INTERACTIVE.key(),
                     MainShellTabId.PLAN_INPUT_STAGE3.key(),
                     MainShellTabId.LEARNED_SPEED_DATA.key(),
@@ -79,6 +80,7 @@ public final class MainShellTabLayoutDefaults {
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PIPELINE_EXECUTION_TIMING.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_INPUT.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.REQUEST_FORM_INPUT.key(), ""));
+        top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.REMOTE_DESKTOP.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.DISPATCH_INTERACTIVE.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.PLAN_INPUT_STAGE3.key(), ""));
         top.add(MainShellTabLayoutNode.tabNode(MainShellTabId.LEARNED_SPEED_DATA.key(), ""));

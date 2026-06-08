@@ -28,7 +28,13 @@ public final class RdpRemoteLauncherDeployer {
 
     private RdpRemoteLauncherDeployer() {}
 
-    public record DeployOutcome(boolean copied, boolean upToDate, Optional<String> message) {}
+    public record DeployOutcome(boolean copied, boolean upToDate, Optional<String> message) {
+
+        /** 配備成功（最新済み・コピー完了・自動配備オフ）または転送不要。 */
+        public boolean succeeded() {
+            return copied || upToDate;
+        }
+    }
 
     public static boolean isAutoDeployEnabled(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
@@ -49,7 +55,21 @@ public final class RdpRemoteLauncherDeployer {
         if (!isAutoDeployEnabled(env)) {
             return new DeployOutcome(false, true, Optional.of("ランチャー自動再配備は無効です。"));
         }
+        return deployIfNeeded(env, log, false);
+    }
 
+    /** 版比較を行わず同梱 exe / version.txt を共有先へ上書きコピーする。 */
+    public static DeployOutcome forceDeploy(Map<String, String> ui) {
+        return forceDeploy(ui, null);
+    }
+
+    public static DeployOutcome forceDeploy(Map<String, String> ui, Consumer<String> log) {
+        Map<String, String> env = ui != null ? ui : Map.of();
+        return deployIfNeeded(env, log, true);
+    }
+
+    private static DeployOutcome deployIfNeeded(
+            Map<String, String> env, Consumer<String> log, boolean force) {
         Path deployExe = AppPaths.resolveRdpLauncherExe(env);
         Path deployVersion = AppPaths.resolveRdpLauncherVersionFile(env);
         Path deployDir = deployExe.getParent();
@@ -66,7 +86,8 @@ public final class RdpRemoteLauncherDeployer {
         Optional<BigDecimal> sharedVer = parseVersionFile(deployVersion);
         boolean missingExe = !Files.isRegularFile(deployExe);
         boolean needsCopy =
-                missingExe
+                force
+                        || missingExe
                         || sharedVer.isEmpty()
                         || bundledVer.get().compareTo(sharedVer.orElse(BigDecimal.ZERO)) > 0;
 
@@ -79,30 +100,71 @@ public final class RdpRemoteLauncherDeployer {
         }
 
         try {
-            if (deployDir != null) {
-                Files.createDirectories(deployDir);
-            }
-            copyBundledResource(AppPaths.RDP_LAUNCHER_EXE_BASENAME, deployExe);
-            copyBundledResource(AppPaths.RDP_LAUNCHER_VERSION_BASENAME, deployVersion);
+            copyLauncherFiles(deployExe, deployVersion, deployDir);
             String msg =
-                    missingExe
-                            ? "ランチャーを配備しました（" + formatVersion(bundledVer) + "）。"
-                            : "ランチャーを再配備しました（"
+                    force
+                            ? "ランチャーを強制転送しました（"
                                     + formatVersion(sharedVer)
                                     + " → "
                                     + formatVersion(bundledVer)
-                                    + "）。";
+                                    + "）。"
+                            : missingExe
+                                    ? "ランチャーを配備しました（" + formatVersion(bundledVer) + "）。"
+                                    : "ランチャーを再配備しました（"
+                                            + formatVersion(sharedVer)
+                                            + " → "
+                                            + formatVersion(bundledVer)
+                                            + "）。";
             if (log != null) {
                 log.accept(msg);
             }
             return new DeployOutcome(true, false, Optional.of(msg));
         } catch (IOException ex) {
-            String msg = "ランチャー配備に失敗しました: " + ex.getMessage();
+            String msg = formatDeployFailure(ex);
             if (log != null) {
                 log.accept(msg);
             }
             return new DeployOutcome(false, false, Optional.of(msg));
         }
+    }
+
+    private static String formatDeployFailure(IOException ex) {
+        String detail = ex.getMessage() != null ? ex.getMessage() : ex.toString();
+        if (looksLikeFileInUse(ex)) {
+            return "ランチャー配備に失敗しました（接続先で "
+                    + AppPaths.RDP_LAUNCHER_EXE_BASENAME
+                    + " が使用中の可能性があります。"
+                    + " リモートデスクトップの既存セッションを終了してから再転送してください）: "
+                    + detail;
+        }
+        return "ランチャー配備に失敗しました: " + detail;
+    }
+
+    static boolean looksLikeFileInUse(IOException ex) {
+        if (ex == null) {
+            return false;
+        }
+        String msg = ex.getMessage();
+        if (msg == null || msg.isBlank()) {
+            return false;
+        }
+        String lower = msg.toLowerCase(Locale.ROOT);
+        return lower.contains("being used by another process")
+                || lower.contains("used by another process")
+                || lower.contains("process cannot access")
+                || lower.contains("sharing violation")
+                || msg.contains("使用中")
+                || msg.contains("別のプロセス")
+                || msg.contains("共有違反");
+    }
+
+    private static void copyLauncherFiles(Path deployExe, Path deployVersion, Path deployDir)
+            throws IOException {
+        if (deployDir != null) {
+            Files.createDirectories(deployDir);
+        }
+        copyBundledResource(AppPaths.RDP_LAUNCHER_EXE_BASENAME, deployExe);
+        copyBundledResource(AppPaths.RDP_LAUNCHER_VERSION_BASENAME, deployVersion);
     }
 
     private static void copyBundledResource(String basename, Path target) throws IOException {

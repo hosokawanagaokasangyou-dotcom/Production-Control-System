@@ -451,4 +451,53 @@ class FactoryOperatorUserStoreTest {
                         FactoryOperatorUserStore.assignPinByAdmin(
                                 FactorySite.KONAN, FactoryOperatorUserStore.GUEST_OPERATOR_NAME, "1234"));
     }
+
+    @Test
+    void aladdinCredentials_roundTripAndPinChangePreserves() throws Exception {
+        FactoryOperatorUserStore.setAladdinCredentials(FactorySite.KONAN, "砂田", "000585", "000585585");
+        assertTrue(FactoryOperatorUserStore.hasAladdinCredentials(FactorySite.KONAN, "砂田"));
+        var creds = FactoryOperatorUserStore.aladdinCredentialsFor(FactorySite.KONAN, "砂田");
+        assertTrue(creds.isPresent());
+        assertEquals("000585", creds.get().loginId());
+        assertEquals("000585585", creds.get().password());
+
+        FactoryOperatorUserStore.assignPinByAdmin(FactorySite.KONAN, "砂田", "2468");
+        assertTrue(FactoryOperatorUserStore.hasAladdinCredentials(FactorySite.KONAN, "砂田"));
+        assertEquals("000585", FactoryOperatorUserStore.aladdinLoginIdFor(FactorySite.KONAN, "砂田"));
+    }
+
+    @Test
+    void aladdinCredentials_schema5MigrationPreservesPins() throws Exception {
+        FactoryOperatorUserStore.writeRawJsonForTests(
+                """
+                {
+                  "schemaVersion": 5,
+                  "factories": {
+                    "KONAN": {
+                      "names": ["砂田", "古家", "図司", "細川"],
+                      "pinHashes": {},
+                      "pinMustChange": []
+                    }
+                  }
+                }
+                """);
+        FactoryOperatorUserStore.setAladdinCredentials(FactorySite.KONAN, "細川", "111111", "secret-pass");
+        assertEquals("111111", FactoryOperatorUserStore.aladdinLoginIdFor(FactorySite.KONAN, "細川"));
+        assertTrue(FactoryOperatorUserStore.namesForFactory(FactorySite.KONAN).contains("細川"));
+
+        byte[] saved = Files.readAllBytes(FactoryOperatorUserStore.storePath());
+        FactoryOperatorUserStore.resetStoreForTests();
+        Path store = Path.of(System.getProperty("pm.ai.test.factoryOperatorUserStore"));
+        Files.write(store, saved);
+        assertTrue(FactoryOperatorUserStore.hasAladdinCredentials(FactorySite.KONAN, "細川"));
+    }
+
+    @Test
+    void removeName_dropsAladdinCredentialsOnlyForRemoved() throws Exception {
+        FactoryOperatorUserStore.setAladdinCredentials(FactorySite.KONAN, "砂田", "a", "pass1");
+        FactoryOperatorUserStore.setAladdinCredentials(FactorySite.KONAN, "古家", "b", "pass2");
+        FactoryOperatorUserStore.removeName(FactorySite.KONAN, "砂田");
+        assertTrue(!FactoryOperatorUserStore.hasAladdinCredentials(FactorySite.KONAN, "砂田"));
+        assertTrue(FactoryOperatorUserStore.hasAladdinCredentials(FactorySite.KONAN, "古家"));
+    }
 }

@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -125,6 +126,114 @@ class RdpRemoteLauncherIniTest {
         assertTrue(again.getSlot(1).startsWith("\""));
         assertTrue(again.getSlot(1).endsWith("notepad.exe\""));
         assertTrue(Files.readString(out, StandardCharsets.UTF_8).contains("002  加工G"));
+    }
+
+    @Test
+    void writeOperatorContext_mergesOperatorKey(@TempDir Path tmp) throws Exception {
+        Path iniPath = tmp.resolve("RAP設定.ini");
+        Files.writeString(
+                iniPath,
+                """
+                起動プログラム番号=1
+                1="Z:\\app.exe"
+                """,
+                StandardCharsets.UTF_8);
+
+        RdpRemoteLauncherIni.writeOperatorContext(iniPath, "細川");
+
+        String text = Files.readString(iniPath, StandardCharsets.UTF_8);
+        assertTrue(text.contains(RdpRemoteLauncherIni.OPERATOR_KEY + "=細川"));
+        RdpRemoteLauncherIni loaded = RdpRemoteLauncherIni.load(iniPath);
+        assertEquals(1, loaded.selectedSlot());
+    }
+
+    @Test
+    void writeTaskSchedulerSlotBeforeConnect_preservesOperator(@TempDir Path tmp) throws Exception {
+        Path iniPath = tmp.resolve("RAP設定.ini");
+        Files.writeString(
+                iniPath,
+                """
+                起動プログラム番号=1
+                操作者=古家
+                2="Z:\\app.exe"
+                """,
+                StandardCharsets.UTF_8);
+
+        RdpRemoteLauncherIni.writeTaskSchedulerSlotBeforeConnect(iniPath, 2);
+
+        String text = Files.readString(iniPath, StandardCharsets.UTF_8);
+        assertTrue(text.contains(RdpRemoteLauncherIni.OPERATOR_KEY + "=古家"));
+    }
+
+    @Test
+    void writeTaskSchedulerSlotBeforeConnect_setsSpinnerSlot(@TempDir Path tmp) throws Exception {
+        Path iniPath = tmp.resolve("RAP設定.ini");
+        Files.writeString(
+                iniPath,
+                """
+                起動プログラム番号=0
+                2="Z:\\app.exe"
+                """,
+                StandardCharsets.UTF_8);
+
+        RdpRemoteLauncherIni.writeTaskSchedulerSlotBeforeConnect(iniPath, 2);
+
+        RdpRemoteLauncherIni loaded = RdpRemoteLauncherIni.load(iniPath);
+        assertEquals(2, loaded.selectedSlot());
+    }
+
+    @Test
+    void writeTaskSchedulerSuppress_setsSlotZeroPreservingSlots(@TempDir Path tmp) throws Exception {
+        Path iniPath = tmp.resolve("RAP設定.ini");
+        Files.writeString(
+                iniPath,
+                """
+                起動プログラム番号=2
+                終了時RDP切断=1
+                2="Z:\\portable\\Aladdin_RPA_Studio.exe" "\\\\server\\a.ardrpa"
+                """,
+                StandardCharsets.UTF_8);
+
+        RdpRemoteLauncherIni.writeTaskSchedulerSuppress(iniPath);
+
+        RdpRemoteLauncherIni loaded = RdpRemoteLauncherIni.load(iniPath);
+        assertEquals(RdpRemoteLauncherIni.SLOT_DISABLED, loaded.selectedSlot());
+        assertEquals("Z:\\portable\\Aladdin_RPA_Studio.exe", loaded.getSlotCommand(2).executable());
+        assertTrue(Files.readString(iniPath, StandardCharsets.UTF_8).contains("起動プログラム番号=0"));
+    }
+
+    @Test
+    void restoreTaskSchedulerSlot_restoresFromZero(@TempDir Path tmp) throws Exception {
+        Path iniPath = tmp.resolve("RAP設定.ini");
+        Files.writeString(
+                iniPath,
+                """
+                起動プログラム番号=0
+                2="Z:\\app.exe"
+                """,
+                StandardCharsets.UTF_8);
+
+        RdpRemoteLauncherIni.restoreTaskSchedulerSlot(iniPath, 2, Map.of());
+
+        RdpRemoteLauncherIni loaded = RdpRemoteLauncherIni.load(iniPath);
+        assertEquals(2, loaded.selectedSlot());
+        assertTrue(
+                Files.readString(iniPath, StandardCharsets.UTF_8).contains("起動プログラム番号=2"));
+    }
+
+    @Test
+    void load_parsesDisabledSlot(@TempDir Path tmp) throws Exception {
+        Path iniPath = tmp.resolve("RAP設定.ini");
+        Files.writeString(
+                iniPath,
+                """
+                起動プログラム番号=0
+                2="C:\\app.exe"
+                """,
+                StandardCharsets.UTF_8);
+
+        RdpRemoteLauncherIni loaded = RdpRemoteLauncherIni.load(iniPath);
+        assertEquals(RdpRemoteLauncherIni.SLOT_DISABLED, loaded.selectedSlot());
     }
 
     @Test

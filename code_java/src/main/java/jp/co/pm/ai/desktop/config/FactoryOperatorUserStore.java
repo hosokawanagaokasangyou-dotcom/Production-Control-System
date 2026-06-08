@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -26,6 +27,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import jp.co.pm.ai.desktop.crypto.AladdinOperatorCredentialsCrypto;
+import jp.co.pm.ai.desktop.io.FactoryOperatorUserBackupStore;
+import jp.co.pm.ai.desktop.io.OperatorAladdinCredentialsLauncherJson;
 
 /**
  * 工場別の配台システム操作者名（起動時選択・作成者表示用）と PIN（4～10 桁数字）。
@@ -54,7 +59,12 @@ public final class FactoryOperatorUserStore {
     private static volatile boolean storeConfigured;
     private static volatile boolean usingLocalStoreFallback;
 
-    public static final int SCHEMA_VERSION = 5;
+    public static final int SCHEMA_VERSION = 6;
+
+    private static final int LEGACY_SCHEMA_BEFORE_ALADDIN = 5;
+
+    private static final java.util.Set<String> SCHEMA_UPGRADE_BACKUP_PATHS =
+            java.util.Collections.synchronizedSet(new java.util.LinkedHashSet<>());
     public static final int MAX_NAMES_PER_FACTORY = 50;
     public static final int MAX_NAME_LENGTH = 40;
     public static final int MIN_PIN_LENGTH = 4;
@@ -89,13 +99,18 @@ public final class FactoryOperatorUserStore {
         INVALID_PIN
     }
 
+    /** 操作者別アラジン RPA ログイン資格情報。 */
+    public record AladdinCredentials(String loginId, String password) {}
+
     public record FactoryOperatorUsers(
             List<String> names,
             String lastSelected,
             Map<String, String> pinHashes,
             Map<String, Integer> pinFailedAttempts,
             Set<String> pinMustChange,
-            Map<String, String> pinPlaintextAdmin) {
+            Map<String, String> pinPlaintextAdmin,
+            Map<String, String> aladdinLoginIds,
+            Map<String, String> aladdinPasswordCiphertext) {
 
         public FactoryOperatorUsers {
             names = names != null ? List.copyOf(names) : List.of();
@@ -104,14 +119,17 @@ public final class FactoryOperatorUserStore {
             pinFailedAttempts = pinFailedAttempts != null ? Map.copyOf(pinFailedAttempts) : Map.of();
             pinMustChange = pinMustChange != null ? Set.copyOf(pinMustChange) : Set.of();
             pinPlaintextAdmin = pinPlaintextAdmin != null ? Map.copyOf(pinPlaintextAdmin) : Map.of();
+            aladdinLoginIds = aladdinLoginIds != null ? Map.copyOf(aladdinLoginIds) : Map.of();
+            aladdinPasswordCiphertext =
+                    aladdinPasswordCiphertext != null ? Map.copyOf(aladdinPasswordCiphertext) : Map.of();
         }
 
         public FactoryOperatorUsers(List<String> names, String lastSelected) {
-            this(names, lastSelected, Map.of(), Map.of(), Set.of(), Map.of());
+            this(names, lastSelected, Map.of(), Map.of(), Set.of(), Map.of(), Map.of(), Map.of());
         }
 
         public FactoryOperatorUsers(List<String> names, String lastSelected, Map<String, String> pinHashes) {
-            this(names, lastSelected, pinHashes, Map.of(), Set.of(), Map.of());
+            this(names, lastSelected, pinHashes, Map.of(), Set.of(), Map.of(), Map.of(), Map.of());
         }
 
         public FactoryOperatorUsers(
@@ -119,7 +137,7 @@ public final class FactoryOperatorUserStore {
                 String lastSelected,
                 Map<String, String> pinHashes,
                 Map<String, Integer> pinFailedAttempts) {
-            this(names, lastSelected, pinHashes, pinFailedAttempts, Set.of(), Map.of());
+            this(names, lastSelected, pinHashes, pinFailedAttempts, Set.of(), Map.of(), Map.of(), Map.of());
         }
 
         public FactoryOperatorUsers(
@@ -128,7 +146,25 @@ public final class FactoryOperatorUserStore {
                 Map<String, String> pinHashes,
                 Map<String, Integer> pinFailedAttempts,
                 Set<String> pinMustChange) {
-            this(names, lastSelected, pinHashes, pinFailedAttempts, pinMustChange, Map.of());
+            this(names, lastSelected, pinHashes, pinFailedAttempts, pinMustChange, Map.of(), Map.of(), Map.of());
+        }
+
+        public FactoryOperatorUsers(
+                List<String> names,
+                String lastSelected,
+                Map<String, String> pinHashes,
+                Map<String, Integer> pinFailedAttempts,
+                Set<String> pinMustChange,
+                Map<String, String> pinPlaintextAdmin) {
+            this(
+                    names,
+                    lastSelected,
+                    pinHashes,
+                    pinFailedAttempts,
+                    pinMustChange,
+                    pinPlaintextAdmin,
+                    Map.of(),
+                    Map.of());
         }
     }
 
@@ -371,7 +407,15 @@ public final class FactoryOperatorUserStore {
         Map<String, Integer> attempts = new LinkedHashMap<>(current.pinFailedAttempts());
         attempts.put(normalized, nextFailures);
         doc.factories()
-                .put(factory, forSharedStore(current.names(), current.pinHashes(), attempts, current.pinMustChange(), current.pinPlaintextAdmin()));
+                .put(
+                        factory,
+                        forSharedStore(
+                                current,
+                                current.names(),
+                                current.pinHashes(),
+                                attempts,
+                                current.pinMustChange(),
+                                current.pinPlaintextAdmin()));
         saveDocument(doc);
         return nextFailures >= MAX_CONSECUTIVE_PIN_FAILURES
                 ? PinVerificationResult.LOCKED
@@ -530,7 +574,7 @@ public final class FactoryOperatorUserStore {
         doc.factories()
                 .put(
                         factory,
-                        forSharedStore(current.names(), pins, attempts, mustChange, plaintextAdmin));
+                        forSharedStore(current, current.names(), pins, attempts, mustChange, plaintextAdmin));
         saveDocument(doc);
         return pinNorm;
     }
@@ -594,7 +638,13 @@ public final class FactoryOperatorUserStore {
         doc.factories()
                 .put(
                         factory,
-                        forSharedStore(next, pins, current.pinFailedAttempts(), mustChange, plaintextAdmin));
+                        forSharedStore(
+                                current,
+                                next,
+                                pins,
+                                current.pinFailedAttempts(),
+                                mustChange,
+                                plaintextAdmin));
         saveDocument(doc);
         return pin;
     }
@@ -623,8 +673,21 @@ public final class FactoryOperatorUserStore {
         mustChange.remove(normalized);
         Map<String, String> plaintextAdmin = new LinkedHashMap<>(current.pinPlaintextAdmin());
         plaintextAdmin.remove(normalized);
+        Map<String, String> aladdinIds = new LinkedHashMap<>(current.aladdinLoginIds());
+        aladdinIds.remove(normalized);
+        Map<String, String> aladdinPasswords = new LinkedHashMap<>(current.aladdinPasswordCiphertext());
+        aladdinPasswords.remove(normalized);
         doc.factories()
-                .put(factory, forSharedStore(next, pins, attempts, mustChange, plaintextAdmin));
+                .put(
+                        factory,
+                        forSharedStore(
+                                next,
+                                pins,
+                                attempts,
+                                mustChange,
+                                plaintextAdmin,
+                                aladdinIds,
+                                aladdinPasswords));
         if (normalized.equals(sessionOperatorName) && factory == GlobalInitSettingTarget.load()) {
             sessionOperatorName = "";
         }
@@ -645,6 +708,8 @@ public final class FactoryOperatorUserStore {
         Map<String, Integer> attempts = new LinkedHashMap<>();
         Set<String> mustChange = new LinkedHashSet<>();
         Map<String, String> plaintextAdmin = new LinkedHashMap<>();
+        Map<String, String> aladdinIds = new LinkedHashMap<>();
+        Map<String, String> aladdinPasswords = new LinkedHashMap<>();
         for (String n : DEFAULT_NAMES) {
             String h = current.pinHashes().get(n);
             if (h != null && !h.isBlank()) {
@@ -661,11 +726,26 @@ public final class FactoryOperatorUserStore {
             if (plain != null && !plain.isBlank()) {
                 plaintextAdmin.put(n, plain);
             }
+            String aladdinId = current.aladdinLoginIds().get(n);
+            if (aladdinId != null && !aladdinId.isBlank()) {
+                aladdinIds.put(n, aladdinId);
+            }
+            String aladdinCipher = current.aladdinPasswordCiphertext().get(n);
+            if (aladdinCipher != null && !aladdinCipher.isBlank()) {
+                aladdinPasswords.put(n, aladdinCipher);
+            }
         }
         doc.factories()
                 .put(
                         factory,
-                        forSharedStore(DEFAULT_NAMES, pins, attempts, mustChange, plaintextAdmin));
+                        forSharedStore(
+                                DEFAULT_NAMES,
+                                pins,
+                                attempts,
+                                mustChange,
+                                plaintextAdmin,
+                                aladdinIds,
+                                aladdinPasswords));
         if (!DEFAULT_NAMES.contains(sessionOperatorName) && factory == GlobalInitSettingTarget.load()) {
             sessionOperatorName = "";
         }
@@ -689,6 +769,100 @@ public final class FactoryOperatorUserStore {
             return "初回変更待";
         }
         return hasPin(site, name) ? "設定済" : "未設定";
+    }
+
+    /** 当該操作者のアラジン ログイン ID（未設定なら空）。 */
+    public static String aladdinLoginIdFor(FactorySite site, String name) throws IOException {
+        FactorySite factory = site != null ? site : FactorySite.KONAN;
+        String normalized = normalizeName(name);
+        if (normalized.isEmpty()) {
+            return "";
+        }
+        String id = loadFactory(factory).aladdinLoginIds().get(normalized);
+        return id != null ? id.strip() : "";
+    }
+
+    /** アラジン ID と復号可能パスワードの両方が設定済みか。 */
+    public static boolean hasAladdinCredentials(FactorySite site, String name) throws IOException {
+        return aladdinCredentialsFor(site, name).isPresent();
+    }
+
+    /** 当該操作者のアラジン資格情報（ID・パスワード両方あるときのみ）。 */
+    public static Optional<AladdinCredentials> aladdinCredentialsFor(FactorySite site, String name)
+            throws IOException {
+        FactorySite factory = site != null ? site : FactorySite.KONAN;
+        String normalized = normalizeName(name);
+        if (normalized.isEmpty()) {
+            return Optional.empty();
+        }
+        FactoryOperatorUsers current = loadFactory(factory);
+        String loginId = current.aladdinLoginIds().get(normalized);
+        String ciphertext = current.aladdinPasswordCiphertext().get(normalized);
+        if (loginId == null || loginId.isBlank() || ciphertext == null || ciphertext.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            JsonNode payload = JSON.readTree(ciphertext);
+            String password = AladdinOperatorCredentialsCrypto.decryptFromPayload(payload);
+            if (password.isBlank()) {
+                return Optional.empty();
+            }
+            return Optional.of(new AladdinCredentials(loginId.strip(), password));
+        } catch (Exception ex) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * 操作者別アラジン RPA ログイン資格情報を保存する。
+     *
+     * @throws IllegalArgumentException 操作者名・ID・パスワードが不正
+     */
+    public static void setAladdinCredentials(
+            FactorySite site, String name, String loginId, String password) throws IOException {
+        FactorySite factory = site != null ? site : FactorySite.KONAN;
+        String normalized = normalizeName(name);
+        if (normalized.isEmpty()) {
+            throw new IllegalArgumentException("操作者名が空です。");
+        }
+        if (isGuestOperator(normalized)) {
+            throw new IllegalArgumentException("ゲストにはアラジン資格情報を設定できません。");
+        }
+        String id = loginId != null ? loginId.strip() : "";
+        if (id.isEmpty()) {
+            throw new IllegalArgumentException("アラジン ログイン ID が空です。");
+        }
+        String pass = password != null ? password : "";
+        if (pass.isBlank()) {
+            throw new IllegalArgumentException("アラジン パスワードが空です。");
+        }
+        Document doc = loadDocument();
+        FactoryOperatorUsers current = ensureFactory(doc, factory);
+        if (!current.names().contains(normalized)) {
+            throw new IllegalArgumentException("操作者名が一覧にありません: " + normalized);
+        }
+        ObjectNode payload;
+        try {
+            payload = AladdinOperatorCredentialsCrypto.encryptToPayload(pass);
+        } catch (GeneralSecurityException ex) {
+            throw new IOException("アラジン資格情報の暗号化に失敗しました。", ex);
+        }
+        Map<String, String> loginIds = new LinkedHashMap<>(current.aladdinLoginIds());
+        Map<String, String> passwords = new LinkedHashMap<>(current.aladdinPasswordCiphertext());
+        loginIds.put(normalized, id);
+        passwords.put(normalized, JSON.writeValueAsString(payload));
+        doc.factories()
+                .put(
+                        factory,
+                        forSharedStore(
+                                current.names(),
+                                current.pinHashes(),
+                                current.pinFailedAttempts(),
+                                current.pinMustChange(),
+                                current.pinPlaintextAdmin(),
+                                loginIds,
+                                passwords));
+        saveDocument(doc);
     }
 
     private static FactoryOperatorUsers loadFactory(FactorySite site) throws IOException {
@@ -866,6 +1040,18 @@ public final class FactoryOperatorUserStore {
                     plaintextAdmin.put(pe.getKey(), pe.getValue());
                 }
             }
+            ObjectNode aladdinLoginIds = fo.putObject("aladdinLoginIds");
+            for (Map.Entry<String, String> ae : e.getValue().aladdinLoginIds().entrySet()) {
+                if (e.getValue().names().contains(ae.getKey())) {
+                    aladdinLoginIds.put(ae.getKey(), ae.getValue());
+                }
+            }
+            ObjectNode aladdinPasswordCiphertext = fo.putObject("aladdinPasswordCiphertext");
+            for (Map.Entry<String, String> ae : e.getValue().aladdinPasswordCiphertext().entrySet()) {
+                if (e.getValue().names().contains(ae.getKey())) {
+                    aladdinPasswordCiphertext.put(ae.getKey(), ae.getValue());
+                }
+            }
         }
         return root;
     }
@@ -966,8 +1152,55 @@ public final class FactoryOperatorUserStore {
                                 }
                             });
         }
+        Map<String, String> aladdinLoginIds = new LinkedHashMap<>();
+        JsonNode aladdinIdsNode = node.get("aladdinLoginIds");
+        if (aladdinIdsNode != null && aladdinIdsNode.isObject()) {
+            aladdinIdsNode
+                    .fields()
+                    .forEachRemaining(
+                            e -> {
+                                String key = normalizeName(e.getKey());
+                                if (key.isEmpty() || !names.contains(key)) {
+                                    return;
+                                }
+                                JsonNode v = e.getValue();
+                                if (v != null && v.isTextual()) {
+                                    String id = v.asText("").strip();
+                                    if (!id.isEmpty()) {
+                                        aladdinLoginIds.put(key, id);
+                                    }
+                                }
+                            });
+        }
+        Map<String, String> aladdinPasswordCiphertext = new LinkedHashMap<>();
+        JsonNode aladdinPwNode = node.get("aladdinPasswordCiphertext");
+        if (aladdinPwNode != null && aladdinPwNode.isObject()) {
+            aladdinPwNode
+                    .fields()
+                    .forEachRemaining(
+                            e -> {
+                                String key = normalizeName(e.getKey());
+                                if (key.isEmpty() || !names.contains(key)) {
+                                    return;
+                                }
+                                JsonNode v = e.getValue();
+                                if (v != null && v.isTextual()) {
+                                    String cipher = v.asText("").strip();
+                                    if (!cipher.isEmpty()) {
+                                        aladdinPasswordCiphertext.put(key, cipher);
+                                    }
+                                }
+                            });
+        }
         return new FactoryOperatorUsers(
-                names, last, pinHashes, pinFailedAttempts, pinMustChange, pinPlaintextAdmin);
+                names,
+                last,
+                pinHashes,
+                pinFailedAttempts,
+                pinMustChange,
+                pinPlaintextAdmin,
+                aladdinLoginIds,
+                aladdinPasswordCiphertext);
     }
 
     private static void saveDocument(Document doc) throws IOException {
@@ -1057,6 +1290,7 @@ public final class FactoryOperatorUserStore {
         if (path.getParent() != null) {
             Files.createDirectories(path.getParent());
         }
+        maybeAutoBackupBeforeSchemaUpgrade(path);
         byte[] encoded = encodeBinaryDocument(documentToObjectNode(doc));
         Files.write(
                 path,
@@ -1064,6 +1298,73 @@ public final class FactoryOperatorUserStore {
                 StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING,
                 StandardOpenOption.WRITE);
+        syncLauncherCredentialsJson(path, doc);
+    }
+
+    private static void maybeAutoBackupBeforeSchemaUpgrade(Path path) {
+        if (!Files.isRegularFile(path)) {
+            return;
+        }
+        String pathKey = path.toAbsolutePath().normalize().toString();
+        if (SCHEMA_UPGRADE_BACKUP_PATHS.contains(pathKey)) {
+            return;
+        }
+        try {
+            JsonNode root = readStoreRoot(path);
+            if (root == null || !root.isObject()) {
+                return;
+            }
+            int ver = root.path("schemaVersion").asInt(0);
+            if (ver <= 0) {
+                ver = 1;
+            }
+            if (ver >= SCHEMA_VERSION) {
+                return;
+            }
+            FactoryOperatorUserBackupStore.createAutomaticSchemaUpgradeBackup(
+                    Map.of(), ver, "アップデート前自動バックアップ schema-" + ver);
+            SCHEMA_UPGRADE_BACKUP_PATHS.add(pathKey);
+        } catch (IOException ignored) {
+            // バックアップ失敗でも書込は続行
+        }
+    }
+
+    private static void syncLauncherCredentialsJson(Path storePath, Document doc) {
+        Path parent = storePath.getParent();
+        if (parent == null || doc == null) {
+            return;
+        }
+        Path jsonPath = parent.resolve(OperatorAladdinCredentialsLauncherJson.FILE_NAME);
+        try {
+            Map<FactorySite, Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry>>
+                    byFactory = new LinkedHashMap<>();
+            for (Map.Entry<FactorySite, FactoryOperatorUsers> e : doc.factories().entrySet()) {
+                Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry> operators =
+                        new LinkedHashMap<>();
+                FactoryOperatorUsers factoryUsers = e.getValue();
+                for (String name : factoryUsers.names()) {
+                    String loginId = factoryUsers.aladdinLoginIds().get(name);
+                    String cipher = factoryUsers.aladdinPasswordCiphertext().get(name);
+                    if (loginId == null
+                            || loginId.isBlank()
+                            || cipher == null
+                            || cipher.isBlank()) {
+                        continue;
+                    }
+                    JsonNode payload = JSON.readTree(cipher);
+                    if (payload != null && payload.isObject()) {
+                        operators.put(
+                                name,
+                                new OperatorAladdinCredentialsLauncherJson.OperatorEntry(
+                                        loginId, (ObjectNode) payload));
+                    }
+                }
+                byFactory.put(e.getKey(), operators);
+            }
+            OperatorAladdinCredentialsLauncherJson.writeAllFactories(jsonPath, byFactory);
+        } catch (Exception ignored) {
+            // 副産物 JSON の失敗は bin 保存を妨げない
+        }
     }
 
     private static Document defaultDocument() {
@@ -1130,6 +1431,7 @@ public final class FactoryOperatorUserStore {
                 .put(
                         factory,
                         forSharedStore(
+                                current,
                                 current.names(),
                                 current.pinHashes(),
                                 attempts,
@@ -1138,13 +1440,54 @@ public final class FactoryOperatorUserStore {
     }
 
     private static FactoryOperatorUsers forSharedStore(
+            FactoryOperatorUsers base,
             List<String> names,
             Map<String, String> pinHashes,
             Map<String, Integer> pinFailedAttempts,
             Set<String> pinMustChange,
             Map<String, String> pinPlaintextAdmin) {
+        return forSharedStore(
+                names,
+                pinHashes,
+                pinFailedAttempts,
+                pinMustChange,
+                pinPlaintextAdmin,
+                base != null ? base.aladdinLoginIds() : Map.of(),
+                base != null ? base.aladdinPasswordCiphertext() : Map.of());
+    }
+
+    private static FactoryOperatorUsers forSharedStore(
+            List<String> names,
+            Map<String, String> pinHashes,
+            Map<String, Integer> pinFailedAttempts,
+            Set<String> pinMustChange,
+            Map<String, String> pinPlaintextAdmin,
+            Map<String, String> aladdinLoginIds,
+            Map<String, String> aladdinPasswordCiphertext) {
         return new FactoryOperatorUsers(
-                names, "", pinHashes, pinFailedAttempts, pinMustChange, pinPlaintextAdmin);
+                names,
+                "",
+                pinHashes,
+                pinFailedAttempts,
+                pinMustChange,
+                pinPlaintextAdmin,
+                filterAladdinMap(aladdinLoginIds, names),
+                filterAladdinMap(aladdinPasswordCiphertext, names));
+    }
+
+    private static Map<String, String> filterAladdinMap(
+            Map<String, String> source, List<String> names) {
+        Map<String, String> out = new LinkedHashMap<>();
+        if (source == null || names == null) {
+            return out;
+        }
+        for (String name : names) {
+            String value = source.get(name);
+            if (value != null && !value.isBlank()) {
+                out.put(name, value);
+            }
+        }
+        return out;
     }
 
     private static Path localLastSelectedPath(FactorySite site) {
@@ -1211,6 +1554,7 @@ public final class FactoryOperatorUserStore {
                     .put(
                             factory,
                             forSharedStore(
+                                    current,
                                     current.names(),
                                     current.pinHashes(),
                                     current.pinFailedAttempts(),
@@ -1246,6 +1590,7 @@ public final class FactoryOperatorUserStore {
         configuredNetworkStorePath = null;
         usingLocalStoreFallback = false;
         storeConfigured = false;
+        SCHEMA_UPGRADE_BACKUP_PATHS.clear();
         Path path = storePath();
         Files.deleteIfExists(path);
         for (FactorySite site : FactorySite.values()) {

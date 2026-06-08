@@ -6,6 +6,60 @@ namespace PmAiRdpRemoteLauncher.Tests;
 public class LauncherIniTests
 {
     [Fact]
+    public void Load_parsesDisabledSlot()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "rap-" + Guid.NewGuid().ToString("N") + ".ini");
+        File.WriteAllText(
+            path,
+            """
+            起動プログラム番号=0
+            終了時RDP切断=1
+            2="C:\app.exe"
+            """);
+
+        try
+        {
+            var ini = LauncherIni.Load(path);
+            Assert.True(ini.IsLauncherDisabled);
+            Assert.Null(ini.ResolveSelectedCommand());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void WriteSelectedSlot_updatesHeadLinePreservingSlots()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "rap-" + Guid.NewGuid().ToString("N") + ".ini");
+        File.WriteAllText(
+            path,
+            """
+            起動プログラム番号=2
+            終了時RDP切断=1
+            2="C:\app.exe" arg
+            """,
+            System.Text.Encoding.UTF8);
+
+        try
+        {
+            LauncherIni.WriteSelectedSlot(path, LauncherIni.DisabledSlot);
+
+            var text = File.ReadAllText(path, System.Text.Encoding.UTF8);
+            Assert.Contains("起動プログラム番号=0", text);
+            Assert.Contains("2=\"C:\\app.exe\" arg", text);
+            var reloaded = LauncherIni.Load(path);
+            Assert.True(reloaded.IsLauncherDisabled);
+            Assert.Equal("\"C:\\app.exe\" arg", reloaded.Slots[2]);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Load_parsesDisconnectOnChildExit()
     {
         var path = Path.Combine(Path.GetTempPath(), "rap-" + Guid.NewGuid().ToString("N") + ".ini");

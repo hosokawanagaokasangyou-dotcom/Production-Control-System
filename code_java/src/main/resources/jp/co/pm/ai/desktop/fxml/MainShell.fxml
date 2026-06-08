@@ -120,6 +120,11 @@
                         <fx:include fx:id="requestFormInputTab" source="RequestFormInputTab.fxml"/>
                     </content>
                 </Tab>
+                <Tab fx:id="mainShellTabRemoteDesktop" closable="false" text="リモートデスクトップ">
+                    <content>
+                        <fx:include fx:id="remoteDesktopTab" source="RemoteDesktopTab.fxml"/>
+                    </content>
+                </Tab>
                 <Tab fx:id="mainShellTabStage1Preview" closable="false"
                      text="段階1 成形結果">
                     <content>

@@ -5,12 +5,19 @@ namespace PmAi.RdpRemoteLauncher;
 internal sealed class LauncherIni
 {
     internal const string SelectedSlotKey = "起動プログラム番号";
+    internal const string OperatorKey = "操作者";
     internal const string DisconnectOnChildExitKey = "終了時RDP切断";
     internal const string DefaultIniFileName = "RAP設定.ini";
     internal const string IniPathEnvVar = "PM_AI_RDP_LAUNCHER_INI";
     internal const string DisconnectOnChildExitEnvVar = "PM_AI_RDP_DISCONNECT_ON_CHILD_EXIT";
 
+    /** タスクスケジューラ経由の自動起動を抑止（RPA 起動・RDP 切断ともに行わない）。 */
+    internal const int DisabledSlot = 0;
+
     internal int SelectedSlot { get; set; } = 1;
+
+    /** 接続直前に PM-AI が書くセッション操作者名。 */
+    internal string OperatorName { get; set; } = "";
 
     /** 子プロセス終了後に RDP セッションを切断する（既定 true）。 */
     internal bool DisconnectOnChildExit { get; set; } = true;
@@ -38,7 +45,7 @@ internal sealed class LauncherIni
             var value = line[(eq + 1)..].Trim();
             if (key == SelectedSlotKey)
             {
-                if (int.TryParse(value, out var slot) && slot >= 1)
+                if (int.TryParse(value, out var slot) && slot >= DisabledSlot)
                 {
                     ini.SelectedSlot = slot;
                 }
@@ -51,6 +58,12 @@ internal sealed class LauncherIni
                 continue;
             }
 
+            if (key == OperatorKey)
+            {
+                ini.OperatorName = value;
+                continue;
+            }
+
             if (int.TryParse(key, out var slotNumber) && slotNumber >= 1 && !string.IsNullOrWhiteSpace(value))
             {
                 ini.Slots[slotNumber] = value;
@@ -60,8 +73,15 @@ internal sealed class LauncherIni
         return ini;
     }
 
+    internal bool IsLauncherDisabled => SelectedSlot == DisabledSlot;
+
     internal string? ResolveSelectedCommand()
     {
+        if (IsLauncherDisabled)
+        {
+            return null;
+        }
+
         return Slots.TryGetValue(SelectedSlot, out var command) ? command : null;
     }
 
@@ -74,6 +94,45 @@ internal sealed class LauncherIni
         }
 
         return DisconnectOnChildExit;
+    }
+
+    /// <summary>
+    /// 起動プログラム番号行のみ更新する。スロット定義行は保持する。
+    /// </summary>
+    internal static void WriteSelectedSlot(string path, int selectedSlot)
+    {
+        if (selectedSlot < DisabledSlot)
+        {
+            throw new ArgumentOutOfRangeException(nameof(selectedSlot), selectedSlot, "slot must be >= 0");
+        }
+
+        var lines = File.ReadAllLines(path, Encoding.UTF8).ToList();
+        var keyPrefix = SelectedSlotKey + "=";
+        var replaced = false;
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var trimmed = lines[i].Trim();
+            if (trimmed.Length == 0 || trimmed.StartsWith('#') || trimmed.StartsWith(';'))
+            {
+                continue;
+            }
+
+            if (!trimmed.StartsWith(keyPrefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            lines[i] = SelectedSlotKey + "=" + selectedSlot;
+            replaced = true;
+            break;
+        }
+
+        if (!replaced)
+        {
+            lines.Insert(0, SelectedSlotKey + "=" + selectedSlot);
+        }
+
+        File.WriteAllLines(path, lines, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
 
     private static bool ParseBoolean(string raw, bool defaultValue)

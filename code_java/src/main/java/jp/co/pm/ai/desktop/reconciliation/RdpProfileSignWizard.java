@@ -236,7 +236,7 @@ public final class RdpProfileSignWizard {
                             + " は変更しません）");
         }
 
-        Button btnBrowse = new Button("参照...");
+        Button btnBrowse = new Button("参照");
         btnBrowse.getStyleClass().add("btn-reload");
         btnBrowse.setOnAction(
                 e -> {
