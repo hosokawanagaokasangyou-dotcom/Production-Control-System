@@ -16,6 +16,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import jp.co.pm.ai.desktop.io.OperatorAladdinCredentialsLauncherJson;
+
 class FactoryOperatorUserStoreTest {
 
     @TempDir
@@ -499,5 +501,26 @@ class FactoryOperatorUserStoreTest {
         FactoryOperatorUserStore.removeName(FactorySite.KONAN, "砂田");
         assertTrue(!FactoryOperatorUserStore.hasAladdinCredentials(FactorySite.KONAN, "砂田"));
         assertTrue(FactoryOperatorUserStore.hasAladdinCredentials(FactorySite.KONAN, "古家"));
+    }
+
+    @Test
+    void syncLauncherCredentialsJsonToDeployDir_writesBesideRapIni(@TempDir Path fakeRepo)
+            throws Exception {
+        Path summary = fakeRepo.resolve("code").resolve(AppPaths.SUMMARY_AI_DISPATCH_XLSX);
+        Files.createDirectories(summary.getParent());
+        Files.writeString(summary, "x");
+        Map<String, String> ui = Map.of(AppPaths.KEY_PM_AI_REPO_ROOT, fakeRepo.toString());
+
+        FactoryOperatorUserStore.setAladdinCredentials(FactorySite.KONAN, "砂田", "000585", "000585585");
+        FactoryOperatorUserStore.syncLauncherCredentialsJsonToDeployDir(ui);
+
+        Path jsonPath =
+                AppPaths.resolveRdpLauncherIni(ui)
+                        .getParent()
+                        .resolve(OperatorAladdinCredentialsLauncherJson.FILE_NAME);
+        assertTrue(Files.isRegularFile(jsonPath));
+        String text = Files.readString(jsonPath, StandardCharsets.UTF_8);
+        assertTrue(text.contains("000585"));
+        assertTrue(text.contains("砂田"));
     }
 }

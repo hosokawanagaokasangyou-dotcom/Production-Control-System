@@ -817,6 +817,7 @@ public final class RequestFormRemoteDesktopPane {
                             preIni.setDisconnectOnChildExit(launchProfileMeta.disconnectOnChildExit());
                             preIni.save(launcherIniPath);
                         }
+                        FactoryOperatorUserStore.syncLauncherCredentialsJsonToDeployDir(ui);
                         RdpRemoteLauncherIni.writeTaskSchedulerSlotBeforeConnect(
                                 launcherIniPath, launchSlot, ui);
                         RdpRemoteLauncherIni.writeOperatorContext(
@@ -889,34 +890,28 @@ public final class RequestFormRemoteDesktopPane {
                                             event ->
                                                     Platform.runLater(
                                                             () -> {
-                                                    if (event.reason()
-                                                            != RdpMstscSessionMonitor
-                                                                    .EndReason
-                                                                    .MONITOR_INTERRUPTED) {
-                                                        rdpSessionActive.set(false);
-                                                        updateLaunchButtonState[0]
-                                                                .run();
-                                                        try {
-                                                            Path iniPath =
-                                                                    AppPaths.resolveRdpLauncherIni(
-                                                                            ui);
-                                                            RdpRemoteLauncherIni
-                                                                    .writeTaskSchedulerSuppress(
-                                                                            iniPath, ui);
-                                                            status.accept(
-                                                                    "RAP設定.ini の起動プログラム番号を "
-                                                                            + RdpRemoteLauncherIni
-                                                                                    .SLOT_DISABLED
-                                                                            + " に設定しました（タスクスケジューラ抑止・保険）。");
-                                                            if (refreshIniFilePreview[0] != null) {
-                                                                refreshIniFilePreview[0].run();
-                                                            }
-                                                        } catch (IOException suppressEx) {
-                                                            status.accept(
-                                                                    "起動プログラム番号の抑止（0）設定に失敗: "
-                                                                            + suppressEx
-                                                                                    .getMessage());
+                                                    rdpSessionActive.set(false);
+                                                    updateLaunchButtonState[0].run();
+                                                    try {
+                                                        Path iniPath =
+                                                                AppPaths.resolveRdpLauncherIni(
+                                                                        ui);
+                                                        RdpRemoteLauncherIni
+                                                                .writeTaskSchedulerSuppress(
+                                                                        iniPath, ui);
+                                                        status.accept(
+                                                                "RAP設定.ini の起動プログラム番号を "
+                                                                        + RdpRemoteLauncherIni
+                                                                                .SLOT_DISABLED
+                                                                        + " に設定しました（タスクスケジューラ抑止・保険）。");
+                                                        if (refreshIniFilePreview[0] != null) {
+                                                            refreshIniFilePreview[0].run();
                                                         }
+                                                    } catch (IOException suppressEx) {
+                                                        status.accept(
+                                                                "起動プログラム番号の抑止（0）設定に失敗: "
+                                                                        + suppressEx
+                                                                                .getMessage());
                                                     }
                                                                 String endMsg =
                                                                         formatRdpSessionEndMessage(
@@ -1114,6 +1109,7 @@ public final class RequestFormRemoteDesktopPane {
                         FactoryOperatorUserStore.configureFromUi(ui, site);
                         FactoryOperatorUserStore.setAladdinCredentials(
                                 site, operator, loginId, password);
+                        FactoryOperatorUserStore.syncLauncherCredentialsJsonToDeployDir(ui);
                         aladdinPasswordField.clear();
                         if (refreshAladdinCredentialsUi[0] != null) {
                             refreshAladdinCredentialsUi[0].run();

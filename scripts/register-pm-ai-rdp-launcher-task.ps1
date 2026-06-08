@@ -17,7 +17,9 @@ if (-not (Test-Path -LiteralPath $LauncherExePath)) {
 
 $launcherDir = Split-Path -LiteralPath $LauncherExePath -Parent
 if ([string]::IsNullOrWhiteSpace($IniPath)) {
-    $IniPath = Join-Path $launcherDir 'RAP設定.ini'
+  # PM-AI が書き込む ini はサマリ Excel と同階層（共有 DATA）の RAP設定.ini。
+  # portable 等 exe だけ別フォルダのときは -IniPath で共有 DATA を明示指定すること。
+  $IniPath = Join-Path $launcherDir 'RAP設定.ini'
 }
 
 $arguments = "--ini `"$IniPath`""

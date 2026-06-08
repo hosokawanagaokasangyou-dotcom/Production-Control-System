@@ -19,6 +19,8 @@ internal static class Program
                 + " BaseDirectory="
                 + AppContext.BaseDirectory);
 
+        string? suppressIniPath = null;
+        var consumedSlot = 0;
         try
         {
             var iniPath = ResolveIniPath(args, exeDir);
@@ -35,9 +37,11 @@ internal static class Program
             }
 
             LauncherLog.Info("ini パス: " + iniPath);
+            suppressIniPath = iniPath;
 
             var ini = LauncherIni.Load(iniPath);
-            LauncherLog.Info("起動プログラム番号=" + ini.SelectedSlot);
+            consumedSlot = ini.SelectedSlot;
+            LauncherLog.Info("起動プログラム番号=" + consumedSlot);
             if (ini.IsLauncherDisabled)
             {
                 LauncherLog.Info(
@@ -47,7 +51,7 @@ internal static class Program
                 return ExitWithLog(ExitOk, "抑止（起動プログラム番号=0）");
             }
 
-            var startedSlot = ini.SelectedSlot;
+            var startedSlot = consumedSlot;
             var commandLine = ini.ResolveSelectedCommand();
             if (string.IsNullOrWhiteSpace(commandLine))
             {
@@ -135,7 +139,7 @@ internal static class Program
                 LauncherLog.Info("起動しました PID=" + child.Id + " (ini 行): " + commandLine);
             }
 
-            TrySuppressIniSlotAfterStart(iniPath, startedSlot);
+            TrySuppressIniSlot(iniPath, startedSlot);
 
             using (child)
             {
@@ -163,9 +167,16 @@ internal static class Program
             LauncherLog.Error(ex.Message);
             return ExitWithLog(ExitError, "例外: " + ex.Message);
         }
+        finally
+        {
+            if (consumedSlot > LauncherIni.DisabledSlot && !string.IsNullOrWhiteSpace(suppressIniPath))
+            {
+                TrySuppressIniSlot(suppressIniPath, consumedSlot);
+            }
+        }
     }
 
-    private static void TrySuppressIniSlotAfterStart(string iniPath, int startedSlot)
+    private static void TrySuppressIniSlot(string iniPath, int startedSlot)
     {
         try
         {

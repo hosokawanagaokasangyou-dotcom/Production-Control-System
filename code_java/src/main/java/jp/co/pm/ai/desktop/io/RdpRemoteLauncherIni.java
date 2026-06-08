@@ -29,6 +29,7 @@ public final class RdpRemoteLauncherIni {
 
     private int selectedSlot = 1;
     private boolean disconnectOnChildExit = true;
+    private String operatorName = "";
     private final Map<Integer, Command> slots = new TreeMap<>();
 
     public int selectedSlot() {
@@ -121,6 +122,10 @@ public final class RdpRemoteLauncherIni {
                 ini.disconnectOnChildExit = parseBoolean(value, true);
                 continue;
             }
+            if (OPERATOR_KEY.equals(key)) {
+                ini.operatorName = value != null ? value.strip() : "";
+                continue;
+            }
             try {
                 int slot = Integer.parseInt(key);
                 if (slot >= 1 && slot <= MAX_SLOTS && !value.isEmpty()) {
@@ -136,6 +141,9 @@ public final class RdpRemoteLauncherIni {
 
     public void save(Path path) throws IOException {
         Objects.requireNonNull(path, "path");
+        if (operatorName.isBlank()) {
+            operatorName = readScalarValue(path, OPERATOR_KEY);
+        }
         Path parent = path.getParent();
         if (parent != null) {
             Files.createDirectories(parent);
@@ -147,6 +155,9 @@ public final class RdpRemoteLauncherIni {
         List<String> lines = new ArrayList<>();
         lines.add(SELECTED_SLOT_KEY + "=" + selectedSlot);
         lines.add(DISCONNECT_ON_CHILD_EXIT_KEY + "=" + (disconnectOnChildExit ? "1" : "0"));
+        if (operatorName != null && !operatorName.isBlank()) {
+            lines.add(OPERATOR_KEY + "=" + operatorName.strip());
+        }
         for (Map.Entry<Integer, Command> entry : slots.entrySet()) {
             Command command = entry.getValue();
             if (command != null && !command.executable().isBlank()) {
@@ -178,6 +189,27 @@ public final class RdpRemoteLauncherIni {
      */
     public static void writeOperatorContext(Path path, String operatorName) throws IOException {
         mergeIniScalarKey(path, OPERATOR_KEY, operatorName != null ? operatorName.strip() : "");
+    }
+
+    private static String readScalarValue(Path path, String key) {
+        if (path == null || key == null || key.isBlank() || !Files.isRegularFile(path)) {
+            return "";
+        }
+        String prefix = key + "=";
+        try {
+            for (String rawLine : Files.readAllLines(path, StandardCharsets.UTF_8)) {
+                String line = rawLine.trim();
+                if (line.isEmpty() || line.startsWith("#") || line.startsWith(";")) {
+                    continue;
+                }
+                if (line.startsWith(prefix)) {
+                    return line.substring(prefix.length()).trim();
+                }
+            }
+        } catch (IOException ignored) {
+            // ignore
+        }
+        return "";
     }
 
     private static void mergeIniScalarKey(Path path, String key, String value) throws IOException {

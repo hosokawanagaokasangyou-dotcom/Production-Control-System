@@ -203,6 +203,27 @@ class RdpRemoteLauncherIniTest {
     }
 
     @Test
+    void save_preservesOperatorKey(@TempDir Path tmp) throws Exception {
+        Path iniPath = tmp.resolve("RAP設定.ini");
+        Files.writeString(
+                iniPath,
+                """
+                起動プログラム番号=1
+                操作者=細川
+                1="Z:\\app.exe"
+                """,
+                StandardCharsets.UTF_8);
+
+        RdpRemoteLauncherIni ini = new RdpRemoteLauncherIni();
+        ini.setSelectedSlot(1);
+        ini.setSlotCommand(1, "Z:\\app.exe", "");
+        ini.save(iniPath);
+
+        String text = Files.readString(iniPath, StandardCharsets.UTF_8);
+        assertTrue(text.contains(RdpRemoteLauncherIni.OPERATOR_KEY + "=細川"));
+    }
+
+    @Test
     void restoreTaskSchedulerSlot_restoresFromZero(@TempDir Path tmp) throws Exception {
         Path iniPath = tmp.resolve("RAP設定.ini");
         Files.writeString(

@@ -865,6 +865,24 @@ public final class FactoryOperatorUserStore {
         saveDocument(doc);
     }
 
+    /**
+     * C# {@code PmAiRdpRemoteLauncher} が参照する {@code operator-aladdin-credentials.launcher.json}
+     * を {@link AppPaths#resolveRdpLauncherIni} と同じ共有フォルダへ書き出す。
+     */
+    public static synchronized void syncLauncherCredentialsJsonToDeployDir(Map<String, String> ui)
+            throws IOException {
+        Map<String, String> env = ui != null ? ui : Map.of();
+        configureFromUi(env, GlobalInitSettingTarget.loadEffective(env));
+        Document doc = loadDocument();
+        Path iniPath = AppPaths.resolveRdpLauncherIni(env);
+        Path parent = iniPath.getParent();
+        if (parent == null) {
+            throw new IOException("RAP設定.ini の親ディレクトリが解決できません: " + iniPath);
+        }
+        writeLauncherCredentialsJson(
+                parent.resolve(OperatorAladdinCredentialsLauncherJson.FILE_NAME), doc);
+    }
+
     private static FactoryOperatorUsers loadFactory(FactorySite site) throws IOException {
         return ensureFactory(loadDocument(), site != null ? site : FactorySite.KONAN);
     }
@@ -1334,37 +1352,46 @@ public final class FactoryOperatorUserStore {
         if (parent == null || doc == null) {
             return;
         }
-        Path jsonPath = parent.resolve(OperatorAladdinCredentialsLauncherJson.FILE_NAME);
         try {
-            Map<FactorySite, Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry>>
-                    byFactory = new LinkedHashMap<>();
-            for (Map.Entry<FactorySite, FactoryOperatorUsers> e : doc.factories().entrySet()) {
-                Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry> operators =
-                        new LinkedHashMap<>();
-                FactoryOperatorUsers factoryUsers = e.getValue();
-                for (String name : factoryUsers.names()) {
-                    String loginId = factoryUsers.aladdinLoginIds().get(name);
-                    String cipher = factoryUsers.aladdinPasswordCiphertext().get(name);
-                    if (loginId == null
-                            || loginId.isBlank()
-                            || cipher == null
-                            || cipher.isBlank()) {
-                        continue;
-                    }
-                    JsonNode payload = JSON.readTree(cipher);
-                    if (payload != null && payload.isObject()) {
-                        operators.put(
-                                name,
-                                new OperatorAladdinCredentialsLauncherJson.OperatorEntry(
-                                        loginId, (ObjectNode) payload));
-                    }
-                }
-                byFactory.put(e.getKey(), operators);
-            }
-            OperatorAladdinCredentialsLauncherJson.writeAllFactories(jsonPath, byFactory);
+            writeLauncherCredentialsJson(
+                    parent.resolve(OperatorAladdinCredentialsLauncherJson.FILE_NAME), doc);
         } catch (Exception ignored) {
             // 副産物 JSON の失敗は bin 保存を妨げない
         }
+    }
+
+    private static void writeLauncherCredentialsJson(Path jsonPath, Document doc)
+            throws IOException {
+        Objects.requireNonNull(jsonPath, "jsonPath");
+        if (doc == null) {
+            return;
+        }
+        Map<FactorySite, Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry>>
+                byFactory = new LinkedHashMap<>();
+        for (Map.Entry<FactorySite, FactoryOperatorUsers> e : doc.factories().entrySet()) {
+            Map<String, OperatorAladdinCredentialsLauncherJson.OperatorEntry> operators =
+                    new LinkedHashMap<>();
+            FactoryOperatorUsers factoryUsers = e.getValue();
+            for (String name : factoryUsers.names()) {
+                String loginId = factoryUsers.aladdinLoginIds().get(name);
+                String cipher = factoryUsers.aladdinPasswordCiphertext().get(name);
+                if (loginId == null
+                        || loginId.isBlank()
+                        || cipher == null
+                        || cipher.isBlank()) {
+                    continue;
+                }
+                JsonNode payload = JSON.readTree(cipher);
+                if (payload != null && payload.isObject()) {
+                    operators.put(
+                            name,
+                            new OperatorAladdinCredentialsLauncherJson.OperatorEntry(
+                                    loginId, (ObjectNode) payload));
+                }
+            }
+            byFactory.put(e.getKey(), operators);
+        }
+        OperatorAladdinCredentialsLauncherJson.writeAllFactories(jsonPath, byFactory);
     }
 
     private static Document defaultDocument() {
