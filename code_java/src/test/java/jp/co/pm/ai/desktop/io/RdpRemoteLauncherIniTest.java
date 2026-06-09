@@ -295,6 +295,43 @@ class RdpRemoteLauncherIniTest {
     }
 
     @Test
+    void normalizeScenarioArguments_preservesScenarioFlagFormat() {
+        String path = "\\\\192.168.0.101\\share\\002  加工G\\a.ardrpa";
+        String normalizedPath = "\\\\192.168.0.101\\share\\002 加工G\\a.ardrpa";
+        assertEquals(
+                "--scenario \"" + normalizedPath + "\"",
+                RdpRemoteLauncherIni.normalizeScenarioArguments("--scenario " + path));
+        assertEquals(
+                "--scenario \"" + path + "\"",
+                RdpRemoteLauncherIni.normalizeScenarioArguments(
+                        "--scenario \"" + path + "\""));
+    }
+
+    @Test
+    void loadAndSave_roundTripScenarioArgumentsFromUi(@TempDir Path tmp) throws Exception {
+        String uiArgs =
+                "--scenario \"\\\\192.168.0.101\\share\\002  加工G\\工程別.ardrpa\"";
+        RdpRemoteLauncherIni ini = new RdpRemoteLauncherIni();
+        ini.setSelectedSlot(1);
+        ini.setSlotCommand(
+                1,
+                "Z:\\portable\\Aladdin_RPA_Studio.exe",
+                RdpRemoteLauncherIni.mergeEternalFlag(
+                        RdpRemoteLauncherIni.normalizeScenarioArguments(uiArgs), false));
+        Path iniPath = tmp.resolve("RAP設定.ini");
+        ini.save(iniPath);
+
+        RdpRemoteLauncherIni loaded = RdpRemoteLauncherIni.load(iniPath);
+        assertTrue(
+                loaded.getSlotCommand(1).arguments().contains("工程別.ardrpa"),
+                "arguments=" + loaded.getSlotCommand(1).arguments());
+        assertEquals(
+                uiArgs.replace("\"", ""),
+                RdpRemoteLauncherIni.argumentsForUiDisplayWithoutManagedFlags(
+                        loaded.getSlotCommand(1).arguments()));
+    }
+
+    @Test
     void normalizeScenarioArguments_convertsBarePath() {
         assertEquals(
                 "--scenario \\\\server\\share\\a.ardrpa",

@@ -27,6 +27,7 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.Label;
@@ -94,6 +95,11 @@ public final class RequestFormRemoteDesktopPane {
 
     private static final List<Double> LAUNCHER_LOG_PRESET_FONT_SIZES =
             List.of(9d, 10d, 11d, 12d, 13d, 14d, 15d, 16d, 18d, 20d, 22d, 24d);
+
+    /** 右ペイン上下分割の初期比率（上 = ini プレビュー）。 */
+    private static final double RIGHT_PANE_TOP_RATIO_INITIAL = 1.0 / 3.0;
+
+    private static final double RIGHT_PANE_MIN_HEIGHT = 72;
 
     /** 構築結果。{@link #scheduleInitialRefresh()} はタブ初回表示時のみ呼ぶ（UNC I/O を初回マウントから分離）。 */
     public record TabContent(SplitPane root, Runnable scheduleInitialRefresh) {}
@@ -273,6 +279,44 @@ public final class RequestFormRemoteDesktopPane {
                     Label header = new Label("プロファイル " + profileNumber);
                     header.getStyleClass().add("pm-rdp-profile-card-title");
 
+                    Region headerSpacer = new Region();
+                    HBox.setHgrow(headerSpacer, Priority.ALWAYS);
+
+                    Button btnCopyToEmpty = new Button("空きへコピー");
+                    styleSecondaryButton(btnCopyToEmpty);
+                    btnCopyToEmpty.setTooltip(
+                            new Tooltip(
+                                    "このプロファイルの内容を、空の別プロファイルへコピーします。"
+                                            + " コピー先が空でない場合は上書きしません。"));
+                    btnCopyToEmpty.setOnAction(
+                            e ->
+                                    copyProfileToEmptySlot(
+                                            owner != null
+                                                    ? owner
+                                                    : btnCopyToEmpty.getScene().getWindow(),
+                                            profileNumber,
+                                            profileFields,
+                                            refreshLaunchProfileCombo[0]));
+
+                    Button btnClearProfile = new Button("クリア");
+                    styleSecondaryButton(btnClearProfile);
+                    btnClearProfile.setTooltip(
+                            new Tooltip("このプロファイルの名称・RPA 設定などをすべて空にします。"));
+                    btnClearProfile.setOnAction(
+                            e ->
+                                    confirmAndClearProfile(
+                                            owner != null
+                                                    ? owner
+                                                    : btnClearProfile.getScene().getWindow(),
+                                            profileNumber,
+                                            profileFields,
+                                            refreshLaunchProfileCombo[0]));
+
+                    HBox headerRow =
+                            new HBox(8, header, headerSpacer, btnCopyToEmpty, btnClearProfile);
+                    headerRow.setAlignment(Pos.CENTER_LEFT);
+                    headerRow.setMaxWidth(CARD_WIDTH);
+
                     TextField nameField = new TextField();
                     nameField.setPromptText("例: アラジン 工程マスタ取得");
                     HBox.setHgrow(nameField, Priority.ALWAYS);
@@ -360,7 +404,7 @@ public final class RequestFormRemoteDesktopPane {
                     VBox cardInner =
                             new VBox(
                                     8,
-                                    header,
+                                    headerRow,
                                     fieldCaption("名称"),
                                     nameField,
                                     fieldCaption("説明"),
@@ -1274,7 +1318,7 @@ public final class RequestFormRemoteDesktopPane {
         iniPreviewPane.getStyleClass().add("pm-rdp-ini-panel");
         iniPreviewPane.setPadding(new Insets(16));
         iniPreviewPane.setFillWidth(true);
-        VBox.setVgrow(iniPreviewPane, Priority.ALWAYS);
+        iniPreviewPane.setMinHeight(RIGHT_PANE_MIN_HEIGHT);
 
         AtomicReference<String> launcherLogFullText = new AtomicReference<>("");
         AtomicReference<String> launcherLogBaseMeta = new AtomicReference<>("読込待ち…");
@@ -1370,6 +1414,20 @@ public final class RequestFormRemoteDesktopPane {
                                 applyLauncherLogFilter);
         btnRefreshLauncherLog.setOnAction(e -> refreshLauncherLog[0].run());
 
+        Button btnDeleteLauncherLog = new Button("ログ削除");
+        styleSecondaryButton(btnDeleteLauncherLog);
+        btnDeleteLauncherLog.setTooltip(
+                new Tooltip("共有フォルダ上の当日 launcher ログファイルを削除します。"));
+        btnDeleteLauncherLog.setOnAction(
+                e ->
+                        confirmAndDeleteLauncherLog(
+                                owner != null
+                                        ? owner
+                                        : btnDeleteLauncherLog.getScene().getWindow(),
+                                uiEnv,
+                                refreshLauncherLog[0],
+                                status));
+
         HBox launcherLogToolbar =
                 new HBox(
                         8,
@@ -1379,7 +1437,8 @@ public final class RequestFormRemoteDesktopPane {
                         launcherLogFontFamilyCombo,
                         new Label("サイズ"),
                         launcherLogFontSizeCombo,
-                        btnRefreshLauncherLog);
+                        btnRefreshLauncherLog,
+                        btnDeleteLauncherLog);
         launcherLogToolbar.setAlignment(Pos.CENTER_LEFT);
         launcherLogSearchField.setMaxWidth(Double.MAX_VALUE);
 
@@ -1393,15 +1452,14 @@ public final class RequestFormRemoteDesktopPane {
         launcherLogPane.getStyleClass().add("pm-rdp-launcher-log-panel");
         launcherLogPane.setPadding(new Insets(16));
         launcherLogPane.setFillWidth(true);
-        VBox.setVgrow(launcherLogPane, Priority.ALWAYS);
+        launcherLogPane.setMinHeight(RIGHT_PANE_MIN_HEIGHT);
 
         SplitPane rightPaneSplit = new SplitPane(iniPreviewPane, launcherLogPane);
         rightPaneSplit.setOrientation(Orientation.VERTICAL);
-        rightPaneSplit.setDividerPositions(0.58);
+        rightPaneSplit.setDividerPositions(RIGHT_PANE_TOP_RATIO_INITIAL);
         SplitPane.setResizableWithParent(iniPreviewPane, Boolean.TRUE);
         SplitPane.setResizableWithParent(launcherLogPane, Boolean.TRUE);
         rightPaneSplit.getStyleClass().add("pm-remote-desktop-right-split");
-        VBox.setVgrow(rightPaneSplit, Priority.ALWAYS);
 
         ScrollPane leftScroll = new ScrollPane(card);
         leftScroll.setFitToWidth(true);
@@ -1687,6 +1745,67 @@ public final class RequestFormRemoteDesktopPane {
         if (refreshLauncherLog != null) {
             refreshLauncherLog.run();
         }
+    }
+
+    private static void confirmAndDeleteLauncherLog(
+            Window owner,
+            Supplier<Map<String, String>> uiEnv,
+            Runnable refreshLauncherLog,
+            Consumer<String> status) {
+        Path logPath = AppPaths.resolveRdpLauncherSharedLogPath(uiEnv.get());
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("ログ削除");
+        confirm.setHeaderText("接続先ランチャーログを削除しますか？");
+        Label body = new Label(logPath.toString() + "\n\nこの操作は取り消せません。");
+        body.setWrapText(true);
+        body.setMaxWidth(520);
+        confirm.getDialogPane().setContent(body);
+        if (owner != null) {
+            confirm.initOwner(owner);
+        }
+        confirm.showAndWait().ifPresent(
+                choice -> {
+                    if (choice == ButtonType.OK) {
+                        scheduleLauncherLogDelete(uiEnv, logPath, refreshLauncherLog, status);
+                    }
+                });
+    }
+
+    private static void scheduleLauncherLogDelete(
+            Supplier<Map<String, String>> uiEnv,
+            Path logPath,
+            Runnable refreshLauncherLog,
+            Consumer<String> status) {
+        runBackgroundThenFx(
+                () -> {
+                    String message;
+                    boolean succeeded;
+                    try {
+                        if (!Files.exists(logPath)) {
+                            succeeded = true;
+                            message = "ログファイルは既に存在しません: " + logPath;
+                        } else {
+                            Files.delete(logPath);
+                            succeeded = true;
+                            message = "ランチャーログを削除しました: " + logPath;
+                        }
+                    } catch (IOException ex) {
+                        succeeded = false;
+                        message = "ログ削除に失敗: " + ex.getMessage() + " (" + logPath + ")";
+                    }
+                    final String resultMessage = message;
+                    final boolean ok = succeeded;
+                    Platform.runLater(
+                            () -> {
+                                if (ok) {
+                                    refreshLauncherLog.run();
+                                    status.accept(resultMessage);
+                                } else {
+                                    showAlert(Alert.AlertType.ERROR, "ログ削除", resultMessage);
+                                    status.accept(resultMessage);
+                                }
+                            });
+                });
     }
 
     private static void scheduleLauncherLogRefresh(
@@ -2127,6 +2246,131 @@ public final class RequestFormRemoteDesktopPane {
             }
         }
         return null;
+    }
+
+    private static boolean isProfileRowEmpty(ProfileRowFields row) {
+        if (row == null) {
+            return true;
+        }
+        return row.nameField().getText().trim().isEmpty()
+                && row.descriptionField().getText().trim().isEmpty()
+                && row.categoryField().getText().trim().isEmpty()
+                && row.programField().getText().trim().isEmpty()
+                && row.argsField().getText().trim().isEmpty()
+                && !row.chkRpaEternal().isSelected();
+    }
+
+    private static void copyProfileRowFields(ProfileRowFields source, ProfileRowFields target) {
+        target.nameField().setText(source.nameField().getText());
+        target.descriptionField().setText(source.descriptionField().getText());
+        target.categoryField().setText(source.categoryField().getText());
+        target.programField().setText(source.programField().getText());
+        target.argsField().setText(source.argsField().getText());
+        target.chkRpaEternal().setSelected(source.chkRpaEternal().isSelected());
+    }
+
+    private static void clearProfileRowFields(ProfileRowFields row) {
+        row.nameField().clear();
+        row.descriptionField().clear();
+        row.categoryField().clear();
+        row.programField().clear();
+        row.argsField().clear();
+        row.chkRpaEternal().setSelected(false);
+    }
+
+    private static void copyProfileToEmptySlot(
+            Window owner,
+            int sourceNumber,
+            List<ProfileRowFields> profileFields,
+            Runnable refreshCombo) {
+        ProfileRowFields source = findProfileRow(profileFields, sourceNumber);
+        if (source == null) {
+            return;
+        }
+        if (isProfileRowEmpty(source)) {
+            showAlert(
+                    Alert.AlertType.INFORMATION,
+                    "コピーできません",
+                    "プロファイル " + sourceNumber + " が空のため、コピーする内容がありません。");
+            return;
+        }
+        List<Integer> emptyTargets = new ArrayList<>();
+        for (ProfileRowFields row : profileFields) {
+            if (row.number() != sourceNumber && isProfileRowEmpty(row)) {
+                emptyTargets.add(row.number());
+            }
+        }
+        if (emptyTargets.isEmpty()) {
+            showAlert(
+                    Alert.AlertType.INFORMATION,
+                    "コピーできません",
+                    "プロファイル "
+                            + sourceNumber
+                            + " をコピーできる空のプロファイルがありません。"
+                            + " コピー先が空でない場合は上書きしません。");
+            return;
+        }
+        ChoiceDialog<Integer> dialog =
+                new ChoiceDialog<>(emptyTargets.getFirst(), emptyTargets);
+        dialog.setTitle("プロファイルをコピー");
+        dialog.setHeaderText("プロファイル " + sourceNumber + " → 空きプロファイル");
+        dialog.setContentText("コピー先のプロファイル番号:");
+        if (owner != null) {
+            dialog.initOwner(owner);
+        }
+        dialog.showAndWait()
+                .ifPresent(
+                        targetNumber -> {
+                            ProfileRowFields target = findProfileRow(profileFields, targetNumber);
+                            if (target == null) {
+                                return;
+                            }
+                            if (!isProfileRowEmpty(target)) {
+                                showAlert(
+                                        Alert.AlertType.WARNING,
+                                        "コピーできません",
+                                        "プロファイル "
+                                                + targetNumber
+                                                + " は空ではないため、上書きしませんでした。");
+                                return;
+                            }
+                            copyProfileRowFields(source, target);
+                            if (refreshCombo != null) {
+                                refreshCombo.run();
+                            }
+                        });
+    }
+
+    private static void confirmAndClearProfile(
+            Window owner,
+            int profileNumber,
+            List<ProfileRowFields> profileFields,
+            Runnable refreshCombo) {
+        ProfileRowFields row = findProfileRow(profileFields, profileNumber);
+        if (row == null) {
+            return;
+        }
+        if (isProfileRowEmpty(row)) {
+            return;
+        }
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("プロファイルをクリア");
+        confirm.setHeaderText("プロファイル " + profileNumber + " の内容をクリアしますか？");
+        confirm.setContentText("名称・説明・区分・RPA プログラム・RPA 引数・--eternal 設定が空になります。");
+        if (owner != null) {
+            confirm.initOwner(owner);
+        }
+        confirm.showAndWait()
+                .ifPresent(
+                        choice -> {
+                            if (choice != ButtonType.OK) {
+                                return;
+                            }
+                            clearProfileRowFields(row);
+                            if (refreshCombo != null) {
+                                refreshCombo.run();
+                            }
+                        });
     }
 
     private static String profileComboLabel(ProfileRowFields row, RdpLaunchProfile meta) {

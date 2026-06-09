@@ -366,11 +366,18 @@ public final class RdpRemoteLauncherIni {
         List<String> tokens = new ArrayList<>(tokenizeArguments(arguments.trim()));
         stripCredentialFlags(tokens);
         tokens.removeIf(token -> AladdinRpaLaunchArgs.ETERNAL_FLAG.equalsIgnoreCase(token));
-        removeFlagWithValue(tokens, AladdinRpaLaunchArgs.SCENARIO_FLAG);
 
         List<String> scenarioPaths = new ArrayList<>();
         List<String> others = new ArrayList<>();
-        for (String token : tokens) {
+        for (int i = 0; i < tokens.size(); i++) {
+            String token = tokens.get(i);
+            if (AladdinRpaLaunchArgs.SCENARIO_FLAG.equalsIgnoreCase(token)) {
+                if (i + 1 < tokens.size()) {
+                    scenarioPaths.add(collectScenarioPathAfterFlag(tokens, i + 1));
+                    i = skipScenarioPathTokensAfterFlag(tokens, i + 1);
+                }
+                continue;
+            }
             if (looksLikeScenarioPath(token)) {
                 scenarioPaths.add(token);
             } else if (!token.isBlank()) {
@@ -434,6 +441,26 @@ public final class RdpRemoteLauncherIni {
             }
             return;
         }
+    }
+
+    private static String collectScenarioPathAfterFlag(List<String> tokens, int startIndex) {
+        StringBuilder scenarioPath = new StringBuilder(tokens.get(startIndex));
+        int index = startIndex;
+        while (index + 1 < tokens.size() && !looksLikeScenarioPath(scenarioPath.toString())) {
+            index++;
+            scenarioPath.append(' ').append(tokens.get(index));
+        }
+        return scenarioPath.toString();
+    }
+
+    private static int skipScenarioPathTokensAfterFlag(List<String> tokens, int startIndex) {
+        int index = startIndex;
+        StringBuilder scenarioPath = new StringBuilder(tokens.get(index));
+        while (index + 1 < tokens.size() && !looksLikeScenarioPath(scenarioPath.toString())) {
+            index++;
+            scenarioPath.append(' ').append(tokens.get(index));
+        }
+        return index;
     }
 
     private static boolean looksLikeScenarioPath(String token) {

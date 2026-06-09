@@ -71,6 +71,30 @@ public class AladdinRpaArgumentAppenderTests
     }
 
     [Fact]
+    public void AppendCredentials_preservesScenarioPathWithSpaces()
+    {
+        var tokens = AladdinRpaArgumentAppender.AppendCredentials(
+            new[]
+            {
+                AladdinRpaLaunchArgs.ScenarioFlag,
+                @"\\192.168.0.101\share\002  加工G\a.ardrpa",
+            },
+            new OperatorAladdinCredentials("000585", "secret"));
+
+        Assert.Equal(
+            new[]
+            {
+                AladdinRpaLaunchArgs.IdFlag,
+                "000585",
+                AladdinRpaLaunchArgs.PasswordFlag,
+                "secret",
+                AladdinRpaLaunchArgs.ScenarioFlag,
+                @"\\192.168.0.101\share\002  加工G\a.ardrpa",
+            },
+            tokens);
+    }
+
+    [Fact]
     public void AppendCredentials_withoutScenario_usesCredentialsOnly()
     {
         var tokens = AladdinRpaArgumentAppender.AppendCredentials(

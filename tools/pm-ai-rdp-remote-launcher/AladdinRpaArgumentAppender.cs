@@ -76,12 +76,23 @@ internal static class AladdinRpaArgumentAppender
     /** 旧 ini（.ardrpa パスのみ）を {@code --scenario path} に揃える。 */
     private static void NormalizeScenarioTokens(List<string> tokens)
     {
-        RemoveFlagWithValue(tokens, AladdinRpaLaunchArgs.ScenarioFlag);
-
         var scenarioPaths = new List<string>();
         var others = new List<string>();
-        foreach (var token in tokens)
+        for (var i = 0; i < tokens.Count; i++)
         {
+            var token = tokens[i];
+            if (string.Equals(token, AladdinRpaLaunchArgs.ScenarioFlag, StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 < tokens.Count)
+                {
+                    var (path, nextIndex) = CollectScenarioPathAfterFlag(tokens, i + 1);
+                    scenarioPaths.Add(path);
+                    i = nextIndex;
+                }
+
+                continue;
+            }
+
             if (LooksLikeScenarioPath(token))
             {
                 scenarioPaths.Add(token);
@@ -101,23 +112,19 @@ internal static class AladdinRpaArgumentAppender
         }
     }
 
-    private static void RemoveFlagWithValue(List<string> tokens, string flag)
+    private static (string Path, int Index) CollectScenarioPathAfterFlag(
+        IReadOnlyList<string> tokens,
+        int startIndex)
     {
-        for (var i = 0; i < tokens.Count; i++)
+        var parts = new List<string> { tokens[startIndex] };
+        var index = startIndex;
+        while (index + 1 < tokens.Count && !LooksLikeScenarioPath(string.Join(" ", parts)))
         {
-            if (!string.Equals(tokens[i], flag, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            tokens.RemoveAt(i);
-            if (i < tokens.Count)
-            {
-                tokens.RemoveAt(i);
-            }
-
-            return;
+            index++;
+            parts.Add(tokens[index]);
         }
+
+        return (string.Join(" ", parts), index);
     }
 
     private static bool LooksLikeScenarioPath(string token)
