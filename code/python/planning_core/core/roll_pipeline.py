@@ -5,7 +5,9 @@ ROLL_PIPELINE_EC_MACHINE = "EC機　湖南"
 ROLL_PIPELINE_INSP_PROCESS = "検査"
 ROLL_PIPELINE_INSP_MACHINE = "熱融着機　湖南"
 ROLL_PIPELINE_REWIND_PROCESS = "巻返し"
-ROLL_PIPELINE_REWIND_MACHINE = "EC機　湖南"
+# §B-3 後続は EC 機（EC機　湖南）と異なる設備上的巻返しのみ。
+# 同一 EC 機上的巻返しは実巻返しを行わず段階1で配台不要とするため B-3 対象外。
+ROLL_PIPELINE_REWIND_MACHINE = ROLL_PIPELINE_EC_MACHINE
 ROLL_PIPELINE_INITIAL_BUFFER_ROLLS = 2
 ROLL_PIPELINE_INSP_UNCAPPED_ROOM = 1.0e18
 WIP_LIMIT_EC_BEFORE_INSP_ROLLS = os.environ.get(
@@ -853,12 +855,20 @@ def _row_matches_roll_pipeline_inspection(proc, mach) -> bool:
         == _normalize_equipment_match_key(ROLL_PIPELINE_INSP_MACHINE)
     )
 def _row_matches_roll_pipeline_rewind(proc, mach) -> bool:
-    return (
+    """
+    §B-3 後続: 巻返しかつ EC 機（EC機　湖南）と **異なる** 設備のみ。
+    同一 EC 機上的巻返しは実配台しないため B-3 に含めない。
+    """
+    if (
         _normalize_process_name_for_rule_match(proc)
-        == _normalize_process_name_for_rule_match(ROLL_PIPELINE_REWIND_PROCESS)
-        and _normalize_equipment_match_key(mach)
-        == _normalize_equipment_match_key(ROLL_PIPELINE_REWIND_MACHINE)
-    )
+        != _normalize_process_name_for_rule_match(ROLL_PIPELINE_REWIND_PROCESS)
+    ):
+        return False
+    mach_key = _normalize_equipment_match_key(mach)
+    ec_key = _normalize_equipment_match_key(ROLL_PIPELINE_EC_MACHINE)
+    if not mach_key:
+        return False
+    return mach_key != ec_key
 def _pipeline_ec_roll_done_units(task_queue, tid: str) -> float:
     tid = str(tid or "").strip()
     s = 0.0
@@ -7282,7 +7292,7 @@ def _raise_if_remaining_tasks_exceed_attendance_calendar(
         logging.warning(
             "%s: 勤怠カレンダーの最終日（%s）までに配台しきれないタスクが %s 件あります。"
             " 手動修正試行は結果を書き出して続行します（例: %s）。"
-            " master.xlsm の勤怠日付延長または計画日の見直しを検討してください。",
+            " 配台試行順・特別ルール・設備占有の見直し、または計画期間延長（勤怠日付追加）を検討してください。",
             context_label,
             last_iso,
             len(pending),
@@ -7292,18 +7302,99 @@ def _raise_if_remaining_tasks_exceed_attendance_calendar(
             _LAST_INTERACTIVE_STAGE3_META["remaining_tasks_at_calendar_end"] = len(pending)
             _LAST_INTERACTIVE_STAGE3_META["remaining_tasks_soft_fail"] = True
         return
+    _tq_sample_by_key: dict[tuple[str, str, str], dict] = {}
+    for _tq_s in task_queue or []:
+        _tq_sample_by_key[
+            (
+                str(_tq_s.get("task_id") or "").strip(),
+                str(_tq_s.get("machine") or "").strip(),
+                str(_tq_s.get("machine_name") or "").strip(),
+            )
+        ] = _tq_s
+
+    def _pending_sample_label(p: dict) -> str:
+        tid = str(p.get("task_id") or "").strip()
+        proc = str(p.get("process") or "").strip()
+        base = f"{tid}/{proc}" if tid and proc else (tid or proc or "（依頼NO不明）")
+        try:
+            rem_u = float(p.get("remaining_units") or 0)
+        except (TypeError, ValueError):
+            rem_u = 0.0
+        try:
+            rem_m = float(p.get("remaining_m") or 0)
+        except (TypeError, ValueError):
+            rem_m = 0.0
+        if rem_u > 1e-12:
+            base += f"（残{rem_u:g}ロール"
+            if rem_m > 1e-12:
+                base += f"・{rem_m:g}m"
+            base += "）"
+        _src = _tq_sample_by_key.get(
+            (
+                tid,
+                proc,
+                str(p.get("machine_name") or "").strip(),
+            )
+        ) or {}
+        _prod = str(_src.get(TASK_COL_PRODUCT) or "")
+        if "NR28" in unicodedata.normalize("NFKC", _prod) and proc == "EC":
+            base += "・L3/NR28で3名必要"
+        return base
+
     samples: list[str] = []
     for t in pending[:8]:
-        tid = str(t.get("task_id") or "").strip()
-        mach = str(t.get("process") or "").strip()
-        if tid or mach:
-            samples.append(f"{tid}/{mach}" if tid and mach else (tid or mach))
+        samples.append(_pending_sample_label(t))
     sample_s = "、".join(samples) if samples else "（依頼NO不明）"
     if len(pending) > 8:
         sample_s += f" 他{len(pending) - 8}件"
     no_op_blocked = [
         t for t in pending if t.get("_dispatch_block_no_op_on_working_days")
     ]
+    l11_hint = ""
+    if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
+        _l11_samples: list[str] = []
+        for t in pending:
+            proc = str(t.get("process") or "").strip()
+            if proc != "EC":
+                continue
+            tid = str(t.get("task_id") or "").strip()
+            if not tid:
+                continue
+            _src = _tq_sample_by_key.get(
+                (
+                    tid,
+                    proc,
+                    str(t.get("machine_name") or "").strip(),
+                )
+            ) or {}
+            if not _src.get("roll_pipeline_ec"):
+                continue
+            try:
+                _wip = float(
+                    _wip_ec_before_insp_roll_count(
+                        task_queue, task_id_exact=tid
+                    )
+                )
+            except (TypeError, ValueError):
+                _wip = 0.0
+            if _wip + 1e-12 < float(WIP_LIMIT_EC_BEFORE_INSP_ROLLS):
+                continue
+            if not _b2_ec_insp_pair_in_queue(task_queue, tid):
+                continue
+            _l11_samples.append(
+                f"{tid}/EC（検査前WIP={_wip:g}、上限{WIP_LIMIT_EC_BEFORE_INSP_ROLLS}・後続検査/巻返しの消化が必要）"
+            )
+        if _l11_samples:
+            l11_hint = (
+                " 特別ルールL11: "
+                + "；".join(_l11_samples[:3])
+                + (
+                    f" 他{len(_l11_samples) - 3}件"
+                    if len(_l11_samples) > 3
+                    else ""
+                )
+                + "。"
+            )
     no_op_hint = ""
     if no_op_blocked:
         no_op_samples: list[str] = []
@@ -7325,10 +7416,14 @@ def _raise_if_remaining_tasks_exceed_attendance_calendar(
             f" OP 担当の勤怠（休暇・公休等）を確認してください。"
         )
     raise PlanningValidationError(
-        f"{context_label}: 勤怠カレンダーの最終日（{last_iso}）までに配台しきれません"
+        f"{context_label}: 計画期間（勤怠マスタ最終日 {last_iso}）内に配台しきれません"
         f"（残タスク {len(pending)} 件）。"
+        f"{l11_hint}"
         f"{no_op_hint}"
-        f" master.xlsm の勤怠日付を延長してから再実行してください。例: {sample_s}"
+        f" 計画期間の延長を意図しない場合は、配台試行順・特別ルール（例: L3/NR28 の3名編成）・"
+        f"EC機の終盤占有・タスク量を見直してください。"
+        f" 計画期間そのものを延ばす運用のときのみ、勤怠シートに日付行を追加してください。"
+        f" 残量例: {sample_s}"
     )
 def _stage3_extend_attendance_calendar_enabled() -> bool:
     """後方互換。段階3パリティと同一判定。"""

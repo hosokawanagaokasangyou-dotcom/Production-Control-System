@@ -4842,6 +4842,7 @@ public final class MainShellController {
 
     /**
      * 段階1／2.0～3.2／配台試行 実行中は「実行・ログ」以外のタブを無効化し、タブ切り替えを禁止する（ツールバーに進捗・中断）。
+     * 依頼書入力・リモートデスクトップは段階処理と並行操作できるよう除外する。
      */
     private void applyRunTabGating() {
         String script = activeRunStageScript;
@@ -4870,15 +4871,22 @@ public final class MainShellController {
             return;
         }
         for (Tab t : tabs) {
-            boolean specialRulesTab = t == mainShellTabSpecialRules;
-            t.setDisable(pipelineBusy && t != mainShellTabRun && !specialRulesTab);
+            t.setDisable(pipelineBusy && !isMainShellTabOperableDuringPipelineRun(t));
         }
         if (pipelineBusy) {
             Tab sel = tabPane.getSelectionModel().getSelectedItem();
-            if (sel != mainShellTabRun && sel != mainShellTabSpecialRules) {
+            if (!isMainShellTabOperableDuringPipelineRun(sel)) {
                 selectMainShellTab(MainShellTabId.RUN);
             }
         }
+    }
+
+    /** 段階1／2.0～3.2／配台試行 実行中も切り替え・操作を許可するメインシェル最上段タブ。 */
+    private boolean isMainShellTabOperableDuringPipelineRun(Tab t) {
+        return t == mainShellTabRun
+                || t == mainShellTabSpecialRules
+                || t == mainShellTabRequestFormInput
+                || t == mainShellTabRemoteDesktop;
     }
 
     /** 段階スクリプト／配台試行のいずれかが {@link #runLock} 保持中なら true。 */
@@ -5079,12 +5087,36 @@ public final class MainShellController {
         }
     }
 
+    /** 子プロセス末尾ログから PlanningValidationError 相当の1行を拾う（段階2の勤怠終端エラー等）。 */
+    private static String planningValidationDetailFromTail(List<String> tailLines) {
+        if (tailLines == null || tailLines.isEmpty()) {
+            return null;
+        }
+        for (int i = tailLines.size() - 1; i >= 0; i--) {
+            String ln = tailLines.get(i);
+            if (ln == null || ln.isBlank()) {
+                continue;
+            }
+            String stripped = ln.startsWith("[child] ") ? ln.substring(8).trim() : ln.trim();
+            if (stripped.contains("勤怠カレンダー")
+                    || stripped.contains("配台しきれません")
+                    || stripped.contains("必須列")
+                    || stripped.contains("検証エラー")
+                    || stripped.startsWith("段階1:")
+                    || stripped.startsWith("段階2:")
+                    || stripped.startsWith("段階3:")) {
+                return stripped;
+            }
+        }
+        return null;
+    }
+
     private static String exitHintJa(int code) {
         return switch (code) {
             case 0 -> "正常終了しました。";
             case 1 -> "一般エラーです（データや設定の不整合など）。";
             case 2 -> "致命的エラー、またはマスタ・入力ファイルの欠如などです。";
-            case 3 -> "計画データの検証エラーです（必須列の不足など）。";
+            case 3 -> "計画データの検証エラーです（計画期間内に配台しきれない・必須列不足など）。";
             case 9 -> "ユーザーによる中断です。";
             default -> "終了コード " + code + " です。";
         };
@@ -5110,6 +5142,10 @@ public final class MainShellController {
             int c = code != null ? code : -1;
             body.append(exitCodeLegend(c)).append("\n");
             body.append(exitHintJa(c));
+            String validationDetail = planningValidationDetailFromTail(tailLines);
+            if (validationDetail != null) {
+                body.append("\n\n【検証エラー詳細】\n").append(validationDetail);
+            }
         }
         body.append("\n\n詳細は「実行・ログ」タブのログを確認してください。");
         if (tailLines != null && !tailLines.isEmpty()) {

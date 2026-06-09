@@ -343,40 +343,42 @@ def _trial_order_flow_eligible_tasks(
                 _pd = interactive_trial_pair_dates.get((tid_n, mach_n))
                 if _pd is not None and current_date not in _pd:
                     continue
-            # L11: 検査前WIPが限界以上なら EC をブロック（集計は AGGREGATE_MODE）
+            # L11: 検査前WIPが限界以上なら EC をブロック（集計は AGGREGATE_MODE）。
+            # 配台キューに B-2 検査または B-3 巻返し（異設備）後続が無い依頼は対象外
+            # （同一 EC 機上的巻返しは段階1配台不要のため L11 で EC を止めない）。
             if isinstance(WIP_LIMIT_EC_BEFORE_INSP_ROLLS, int) and WIP_LIMIT_EC_BEFORE_INSP_ROLLS > 0:
                 if task.get("roll_pipeline_ec"):
-                    if _wip_ec_l11_aggregate_is_global():
-                        _wip_use = _wip_l11_global_val
-                        _wip_cache_key = "global"
-                    else:
-                        _m = WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE
-                        if _m == "task_id":
-                            _wip_bk = str(task.get("task_id") or "").strip()
+                    _tid_l11 = str(task.get("task_id") or "").strip()
+                    if _tid_l11 and _b2_ec_insp_pair_in_queue(task_queue, _tid_l11):
+                        if _wip_ec_l11_aggregate_is_global():
+                            _wip_use = _wip_l11_global_val
+                            _wip_cache_key = "global"
                         else:
-                            _wip_bk = _wip_l11_bucket_key_for_task_id(
-                                str(task.get("task_id") or "")
-                            )
-                        _wip_cache_key = f"{_m}:{_wip_bk}"
-                        if _wip_cache_key not in _wip_l11_by_bucket:
+                            _m = WIP_LIMIT_EC_BEFORE_INSP_AGGREGATE_MODE
                             if _m == "task_id":
-                                _wip_l11_by_bucket[_wip_cache_key] = (
-                                    _wip_ec_before_insp_roll_count(
-                                        task_queue, task_id_exact=_wip_bk
-                                    )
-                                )
+                                _wip_bk = _tid_l11
                             else:
-                                _wip_l11_by_bucket[_wip_cache_key] = (
-                                    _wip_ec_before_insp_roll_count(
-                                        task_queue, task_id_head=_wip_bk
+                                _wip_bk = _wip_l11_bucket_key_for_task_id(_tid_l11)
+                            _wip_cache_key = f"{_m}:{_wip_bk}"
+                            if _wip_cache_key not in _wip_l11_by_bucket:
+                                if _m == "task_id":
+                                    _wip_l11_by_bucket[_wip_cache_key] = (
+                                        _wip_ec_before_insp_roll_count(
+                                            task_queue, task_id_exact=_wip_bk
+                                        )
                                     )
-                                )
-                        _wip_use = _wip_l11_by_bucket[_wip_cache_key]
-                    if (
-                        _wip_use is not None
-                        and _wip_use >= float(WIP_LIMIT_EC_BEFORE_INSP_ROLLS)
-                    ):
-                        continue
+                                else:
+                                    _wip_l11_by_bucket[_wip_cache_key] = (
+                                        _wip_ec_before_insp_roll_count(
+                                            task_queue, task_id_head=_wip_bk
+                                        )
+                                    )
+                            _wip_use = _wip_l11_by_bucket[_wip_cache_key]
+                        if (
+                            _wip_use is not None
+                            and _wip_use >= float(WIP_LIMIT_EC_BEFORE_INSP_ROLLS)
+                        ):
+                            continue
             # L10: SEC前WIPが限界以上ならスリットをブロック（SECは進めてWIP解消）
             if wip_slit_before_sec is not None and wip_slit_before_sec >= float(
                 WIP_LIMIT_SLIT_BEFORE_SEC_ROLLS
@@ -1386,6 +1388,29 @@ def _assign_one_roll_trial_order_flow(
                         "、".join(_as_only[:8])
                         + (f" 他{len(_as_only) - 8}人" if len(_as_only) > 8 else ""),
                     )
+            _fail_reason = "other_no_team"
+            if (
+                len(capable_members) >= int(req_num or 1)
+                and _mem_max_end is not None
+                and isinstance(_mach_floor_eff, datetime)
+                and _mach_floor_eff >= _mem_max_end
+            ):
+                _fail_reason = "mach_floor_after_shift_end"
+            elif len(capable_members) < int(req_num or 1):
+                _fail_reason = "capable_lt_req"
+            elif (
+                len(capable_members) >= int(req_num or 1)
+                and not op_today
+            ):
+                _fail_reason = "no_op_on_working_day"
+            task["_debug_fail_attempts"] = (
+                int(task.get("_debug_fail_attempts") or 0) + 1
+            )
+            task["_debug_last_fail_reason"] = _fail_reason
+            task["_debug_last_fail_date"] = str(current_date)
+            task["_debug_last_fail_capable"] = len(capable_members)
+            task["_debug_last_fail_req_num"] = int(req_num or 1)
+            task["_debug_last_fail_op_today"] = len(op_today)
             _interactive_append_team_shortage_op_as(
                 task,
                 current_date,
@@ -1531,6 +1556,9 @@ def _trial_order_hard_precheck_blocks_assign_probe(task: dict, task_queue: list)
         wip_ec_before_insp is not None
         and wip_ec_before_insp >= float(WIP_LIMIT_EC_BEFORE_INSP_ROLLS)
         and task.get("roll_pipeline_ec")
+        and _b2_ec_insp_pair_in_queue(
+            task_queue, str(task.get("task_id") or "").strip()
+        )
     ):
         return True
     if wip_slit_before_sec is not None and wip_slit_before_sec >= float(
