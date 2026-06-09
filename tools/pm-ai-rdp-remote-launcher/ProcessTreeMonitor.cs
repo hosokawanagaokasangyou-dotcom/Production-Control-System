@@ -5,19 +5,30 @@ namespace PmAi.RdpRemoteLauncher;
 
 internal sealed class ProcessTreeMonitor
 {
+    private readonly Process _rootProcess;
     private readonly int _rootProcessId;
-    private readonly ParsedCommand? _commandSignature;
+    private readonly ParsedCommand _launchCommand;
+    private readonly string? _loginId;
+    private readonly bool _useSignatureCompletion;
+    private readonly string? _scenarioPathFragment;
     private readonly HashSet<int> _trackedProcessIds = new();
+    private bool _launchSignatureSeen;
+    private readonly DateTime _monitorStartUtc = DateTime.UtcNow;
     private DateTime _lastStatusLogUtc = DateTime.MinValue;
 
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan StatusLogInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan SignatureStartupGrace = TimeSpan.FromSeconds(12);
 
-    internal ProcessTreeMonitor(int rootProcessId, ParsedCommand? commandSignature = null)
+    internal ProcessTreeMonitor(Process rootProcess, ParsedCommand launchCommand, string? loginId)
     {
-        _rootProcessId = rootProcessId;
-        _commandSignature = commandSignature;
-        _trackedProcessIds.Add(rootProcessId);
+        _rootProcess = rootProcess ?? throw new ArgumentNullException(nameof(rootProcess));
+        _rootProcessId = rootProcess.Id;
+        _launchCommand = launchCommand;
+        _loginId = string.IsNullOrWhiteSpace(loginId) ? null : loginId.Trim();
+        _useSignatureCompletion = _loginId != null;
+        _scenarioPathFragment = ProcessRunningChecker.ExtractScenarioPathFragment(launchCommand.Arguments);
+        _trackedProcessIds.Add(_rootProcessId);
     }
 
     internal void WaitUntilFinished(CancellationToken cancellationToken = default)
@@ -27,14 +38,11 @@ internal sealed class ProcessTreeMonitor
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            ExpandTrackedWithChildren();
+            SyncTrackedProcesses();
             RemoveExitedProcesses();
 
-            var treeEmpty = _trackedProcessIds.Count == 0;
-            var signatureGone = !IsSignatureProcessRunning();
-            if (treeEmpty && signatureGone)
+            if (IsMonitoringComplete())
             {
-                LauncherLog.Info("全プロセス終了（プロセスツリー監視完了）");
                 return;
             }
 
@@ -43,8 +51,54 @@ internal sealed class ProcessTreeMonitor
         }
     }
 
-    private void ExpandTrackedWithChildren()
+    private bool IsMonitoringComplete()
     {
+        if (_useSignatureCompletion)
+        {
+            var running = ProcessRunningChecker.IsLaunchInstanceRunning(_launchCommand, _loginId);
+            if (running)
+            {
+                _launchSignatureSeen = true;
+                return false;
+            }
+
+            RefreshRootProcessState();
+            if (!_launchSignatureSeen)
+            {
+                // 起動直後は WMI がコマンド行を拾うまで猶予。ルートが生きていればツリー監視を継続。
+                if (!_rootProcess.HasExited
+                    && DateTime.UtcNow - _monitorStartUtc < SignatureStartupGrace)
+                {
+                    return false;
+                }
+
+                if (!_rootProcess.HasExited && _trackedProcessIds.Count > 0)
+                {
+                    return false;
+                }
+            }
+
+            LauncherLog.Info("起動シグネチャ一致プロセスなし（監視完了）");
+            return true;
+        }
+
+        if (_trackedProcessIds.Count == 0)
+        {
+            LauncherLog.Info("全プロセス終了（プロセスツリー監視完了）");
+            return true;
+        }
+
+        return false;
+    }
+
+    private void SyncTrackedProcesses()
+    {
+        RefreshRootProcessState();
+        if (!_rootProcess.HasExited)
+        {
+            _trackedProcessIds.Add(_rootProcessId);
+        }
+
         var snapshot = _trackedProcessIds.ToArray();
         foreach (var parentId in snapshot)
         {
@@ -52,6 +106,38 @@ internal sealed class ProcessTreeMonitor
             {
                 _trackedProcessIds.Add(childId);
             }
+        }
+
+        if (!_useSignatureCompletion)
+        {
+            return;
+        }
+
+        foreach (var pid in ProcessRunningChecker.FindAllMatchingProcessIds(_launchCommand, _loginId))
+        {
+            _trackedProcessIds.Add(pid);
+        }
+
+        if (string.IsNullOrWhiteSpace(_scenarioPathFragment))
+        {
+            return;
+        }
+
+        foreach (var pid in ProcessRunningChecker.FindProcessIdsByCommandLineContains(_scenarioPathFragment))
+        {
+            _trackedProcessIds.Add(pid);
+        }
+    }
+
+    private void RefreshRootProcessState()
+    {
+        try
+        {
+            _rootProcess.Refresh();
+        }
+        catch (InvalidOperationException)
+        {
+            // プロセス既終了
         }
     }
 
@@ -100,22 +186,13 @@ internal sealed class ProcessTreeMonitor
         try
         {
             using var process = Process.GetProcessById(processId);
+            process.Refresh();
             return !process.HasExited;
         }
         catch (ArgumentException)
         {
             return false;
         }
-    }
-
-    private bool IsSignatureProcessRunning()
-    {
-        if (!_commandSignature.HasValue)
-        {
-            return false;
-        }
-
-        return ProcessRunningChecker.IsAlreadyRunning(_commandSignature.Value, loginId: null);
     }
 
     private void LogStatusIfDue()
@@ -137,7 +214,10 @@ internal sealed class ProcessTreeMonitor
         var pids = _trackedProcessIds.Count == 0
             ? "(なし)"
             : string.Join(", ", _trackedProcessIds.OrderBy(id => id));
-        var signature = IsSignatureProcessRunning() ? "あり" : "なし";
+        var signature =
+            _useSignatureCompletion
+                ? (ProcessRunningChecker.IsLaunchInstanceRunning(_launchCommand, _loginId) ? "あり" : "なし")
+                : "(資格情報なし)";
         LauncherLog.Info(
             "監視中… ルートPID="
                 + _rootProcessId

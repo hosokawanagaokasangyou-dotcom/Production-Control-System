@@ -169,7 +169,7 @@ internal static class Program
 
             using (child)
             {
-                var monitor = new ProcessTreeMonitor(child.Id, parsed);
+                var monitor = new ProcessTreeMonitor(child, launchCommand, credentials.LoginId);
                 monitor.WaitUntilFinished();
                 LauncherLog.Info("子プロセス終了 PID=" + child.Id + " ExitCode=" + FormatExitCode(child));
             }
