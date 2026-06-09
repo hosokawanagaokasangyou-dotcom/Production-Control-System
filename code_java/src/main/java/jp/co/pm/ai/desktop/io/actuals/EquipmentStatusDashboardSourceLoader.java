@@ -15,9 +15,6 @@ import jp.co.pm.ai.desktop.io.JsonTableIo;
 import jp.co.pm.ai.desktop.io.NetworkSourceFileReloadCache;
 import jp.co.pm.ai.desktop.io.PlanInputTabularIo;
 import jp.co.pm.ai.desktop.io.TaskInputSourceRawGridIo;
-import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardBuilder.ActualsSnapshot;
-import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardBuilder.AladdinSnapshot;
-import jp.co.pm.ai.desktop.io.actuals.EquipmentStatusDashboardBuilder.DispatchSnapshot;
 
 /** ダッシュボード用3系統データのディスク読込。 */
 public final class EquipmentStatusDashboardSourceLoader {

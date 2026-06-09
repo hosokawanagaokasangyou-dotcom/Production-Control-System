@@ -115,7 +115,7 @@ internal sealed class ProcessTreeMonitor
             return false;
         }
 
-        return ProcessRunningChecker.IsAlreadyRunning(_commandSignature.Value);
+        return ProcessRunningChecker.IsAlreadyRunning(_commandSignature.Value, loginId: null);
     }
 
     private void LogStatusIfDue()

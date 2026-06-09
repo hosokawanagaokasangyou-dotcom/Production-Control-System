@@ -40,6 +40,15 @@ public class CommandLineParserTests
         Assert.Equal(@"\\192.168.0.101\share\002  加工G\Aladdin_RPA_Studio.exe", parsed.Executable);
         Assert.Equal(@"C:\Users\test\file.ardrpa", parsed.Arguments);
     }
+
+    [Fact]
+    public void Parse_stripsExtraSurroundingQuotesFromExecutable()
+    {
+        var line = @"""Z:\share\002  加工G\Aladdin_RPA_Studio.exe""";
+        var parsed = CommandLineParser.Parse(line);
+        Assert.Equal(@"Z:\share\002  加工G\Aladdin_RPA_Studio.exe", parsed.Executable);
+        Assert.Equal(string.Empty, parsed.Arguments);
+    }
 }
 
 public class LauncherIniTests

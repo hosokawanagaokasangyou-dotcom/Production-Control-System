@@ -69,7 +69,8 @@ public final class RequestFormRemoteDesktopPane {
             TextField descriptionField,
             TextField categoryField,
             TextField programField,
-            TextField argsField) {}
+            TextField argsField,
+            CheckBox chkRpaEternal) {}
 
     public record Context(
             Supplier<Map<String, String>> uiEnv,
@@ -290,7 +291,7 @@ public final class RequestFormRemoteDesktopPane {
 
                     TextField argsField = new TextField();
                     argsField.setPromptText(
-                            "任意: シナリオ .ardrpa（空なら Aladdin 本体のみ起動）");
+                            "任意: --scenario path.ardrpa（空なら Aladdin 本体のみ起動）");
                     HBox.setHgrow(argsField, Priority.ALWAYS);
 
                     Button browseArgs = new Button("参照");
@@ -309,7 +310,9 @@ public final class RequestFormRemoteDesktopPane {
                                         chooser.showOpenDialog(
                                                 owner != null ? owner : browseArgs.getScene().getWindow());
                                 if (chosen != null) {
-                                    argsField.setText(chosen.getAbsolutePath());
+                                    argsField.setText(
+                                            RdpRemoteLauncherIni.formatScenarioArgument(
+                                                    chosen.getAbsolutePath()));
                                 }
                             });
 
@@ -317,6 +320,14 @@ public final class RequestFormRemoteDesktopPane {
                     argsRow.setAlignment(Pos.CENTER_LEFT);
                     argsRow.setMaxWidth(CARD_WIDTH);
                     HBox.setHgrow(argsField, Priority.ALWAYS);
+
+                    CheckBox chkRpaEternal = new CheckBox("RPA に --eternal を付与");
+                    chkRpaEternal.setSelected(false);
+                    chkRpaEternal.setTooltip(
+                            new Tooltip(
+                                    "オンにすると RPA 起動引数へ --eternal を追加します。"
+                                            + " シナリオが無い場合や、シナリオ終了後もプロセスを終了させたくないときに使います。"
+                                            + " 接続先ランチャーは --id / --password を先に付与し、--eternal は末尾に付けます。"));
 
                     Button browse = new Button("参照");
                     styleSecondaryButton(browse);
@@ -358,7 +369,8 @@ public final class RequestFormRemoteDesktopPane {
                                     fieldCaption("RPA プログラム"),
                                     programRow,
                                     fieldCaption("RPA 引数"),
-                                    argsRow);
+                                    argsRow,
+                                    chkRpaEternal);
                     cardInner.getStyleClass().add("pm-rdp-profile-card");
                     cardInner.setFillWidth(true);
                     cardInner.setMaxWidth(CARD_WIDTH);
@@ -381,7 +393,8 @@ public final class RequestFormRemoteDesktopPane {
                                     descriptionField,
                                     categoryField,
                                     programField,
-                                    argsField));
+                                    argsField,
+                                    chkRpaEternal));
                 };
 
         for (int i = 1; i <= 3; i++) {
@@ -422,7 +435,10 @@ public final class RequestFormRemoteDesktopPane {
                         ini.setSlotCommand(
                                 row.number(),
                                 row.programField().getText(),
-                                row.argsField().getText());
+                                RdpRemoteLauncherIni.mergeEternalFlag(
+                                        RdpRemoteLauncherIni.normalizeScenarioArguments(
+                                                row.argsField().getText()),
+                                        row.chkRpaEternal().isSelected()));
                     }
                     String validation = ini.validateMessageForSave();
                     if (validation != null) {
@@ -809,6 +825,9 @@ public final class RequestFormRemoteDesktopPane {
                     }
 
                     int launchSlot = selectedLaunchProfile;
+                    if (launchProfileNumberChangeHandler != null) {
+                        launchProfileNumberChangeHandler.accept(launchSlot);
+                    }
                     String launchProfileLabel = profileComboLabel(launchRow, launchProfileMeta);
                     Path launcherIniPath = AppPaths.resolveRdpLauncherIni(ui);
                     try {
@@ -1064,7 +1083,9 @@ public final class RequestFormRemoteDesktopPane {
         Label rpaInjectedArgsHint =
                 new Label(
                         "RPA 引数が空のときは Aladdin_RPA_Studio.exe のみ起動します。"
-                                + " シナリオ実行時は .ardrpa のフルパスを入力してください。"
+                                + " シナリオ実行時は "
+                                + AladdinRpaLaunchArgs.SCENARIO_FLAG
+                                + " と .ardrpa パスを入力してください。"
                                 + " "
                                 + AladdinRpaLaunchArgs.ID_FLAG
                                 + " / "
@@ -1552,11 +1573,14 @@ public final class RequestFormRemoteDesktopPane {
         }
 
         int loadedSlot = ini.selectedSlot();
-        int preferredProfile = AppPaths.resolveRdpLaunchProfileNumber(ui);
-        int comboTarget =
-                loadedSlot >= 1 && loadedSlot <= RdpRemoteLauncherIni.MAX_SLOTS
-                        ? loadedSlot
-                        : preferredProfile;
+        int comboTarget;
+        if (AppPaths.hasSavedRdpLaunchProfileNumber(ui)) {
+            comboTarget = AppPaths.resolveRdpLaunchProfileNumber(ui);
+        } else if (loadedSlot >= 1 && loadedSlot <= RdpRemoteLauncherIni.MAX_SLOTS) {
+            comboTarget = loadedSlot;
+        } else {
+            comboTarget = 1;
+        }
         chkDisconnectOnChildExit.setSelected(ini.disconnectOnChildExit());
 
         int visibleFromIni = ini.visibleSlotCount();
@@ -1573,18 +1597,27 @@ public final class RequestFormRemoteDesktopPane {
         for (ProfileRowFields row : profileFields) {
             RdpRemoteLauncherIni.Command command = ini.getSlotCommand(row.number());
             row.programField().setText(command.executable());
+            String slotArguments = command.arguments();
+            boolean eternalFromIni = RdpRemoteLauncherIni.hasEternalFlag(slotArguments);
             row.argsField()
-                    .setText(RdpRemoteLauncherIni.argumentsForUiDisplay(command.arguments()));
-
+                    .setText(
+                            RdpRemoteLauncherIni.argumentsForUiDisplayWithoutManagedFlags(
+                                    slotArguments));
             RdpLaunchProfile meta =
                     profileMetadataByNumber.getOrDefault(row.number(), RdpLaunchProfile.empty(row.number()));
             row.nameField().setText(meta.name());
             row.descriptionField().setText(meta.description());
             row.categoryField().setText(meta.category());
+            boolean eternal =
+                    meta.rpaEternal() != null ? meta.rpaEternal() : eternalFromIni;
+            row.chkRpaEternal().setSelected(eternal);
         }
 
         if (refreshLaunchProfileCombo != null) {
             refreshLaunchProfileCombo.run();
+            if (launchProfileCombo.getItems().contains(comboTarget)) {
+                launchProfileCombo.setValue(comboTarget);
+            }
         } else {
             launchProfileCombo.setValue(comboTarget);
         }
@@ -1855,7 +1888,8 @@ public final class RequestFormRemoteDesktopPane {
                 null,
                 null,
                 null,
-                null);
+                null,
+                row.chkRpaEternal().isSelected());
     }
 
     private static List<RdpLaunchProfile> collectProfilesFromRows(List<ProfileRowFields> rows) {

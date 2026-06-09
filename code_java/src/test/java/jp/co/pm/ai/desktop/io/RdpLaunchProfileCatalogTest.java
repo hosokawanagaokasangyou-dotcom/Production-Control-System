@@ -36,7 +36,8 @@ class RdpLaunchProfileCatalogTest {
                                 true,
                                 false,
                                 1280,
-                                800));
+                                800,
+                                true));
         RdpLaunchProfileCatalog.save(json, original);
         List<RdpLaunchProfile> loaded = RdpLaunchProfileCatalog.load(json);
         assertEquals(1, loaded.size());
@@ -51,7 +52,8 @@ class RdpLaunchProfileCatalogTest {
                 List.of(
                         RdpLaunchProfile.empty(1),
                         RdpLaunchProfile.empty(2),
-                        new RdpLaunchProfile(3, "アラジン RPA", "説明", "マスタ更新", null, null, null, null));
+                        new RdpLaunchProfile(
+                                3, "アラジン RPA", "説明", "マスタ更新", null, null, null, null, null));
         RdpLaunchProfileCatalog.save(json, original);
         List<RdpLaunchProfile> loaded = RdpLaunchProfileCatalog.load(json);
         assertEquals(3, loaded.size());
@@ -63,7 +65,7 @@ class RdpLaunchProfileCatalogTest {
     void ensureCount_fillsMissingNumbers() {
         List<RdpLaunchProfile> ensured =
                 RdpLaunchProfileCatalog.ensureCount(
-                        List.of(new RdpLaunchProfile(2, "B", "", "", null, null, null, null)), 3);
+                        List.of(new RdpLaunchProfile(2, "B", "", "", null, null, null, null, null)), 3);
         assertEquals(3, ensured.size());
         assertEquals(1, ensured.get(0).number());
         assertEquals("B", ensured.get(1).name());
@@ -71,7 +73,8 @@ class RdpLaunchProfileCatalogTest {
 
     @Test
     void displayLabel_includesNumber() {
-        RdpLaunchProfile profile = new RdpLaunchProfile(2, "アラジン 工程マスタ取得", "", "", null, null, null, null);
+        RdpLaunchProfile profile =
+                new RdpLaunchProfile(2, "アラジン 工程マスタ取得", "", "", null, null, null, null, null);
         assertEquals("2: アラジン 工程マスタ取得", profile.displayLabel());
     }
 }

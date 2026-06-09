@@ -82,7 +82,6 @@ class AppPathsTest {
     void requestFormRdpProfile_usesFilePickerNotFolder(@TempDir Path tmp) throws Exception {
         assertTrue(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE));
         assertFalse(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_REQUEST_FORM_RDP_PROFILE));
-        assertTrue(AppPaths.resolveRequestFormRdpProfile(Map.of()).isEmpty());
         Path rdp = tmp.resolve("remote.rdp");
         Files.writeString(rdp, "screen mode id:i:2");
         Map<String, String> ui =
@@ -90,6 +89,43 @@ class AppPathsTest {
         assertEquals(
                 rdp.toAbsolutePath().normalize(),
                 AppPaths.resolveRequestFormRdpProfile(ui).orElseThrow());
+    }
+
+    @Test
+    void resolveWindowsDefaultRdpProfile_prefersOneDriveJapaneseDocuments(@TempDir Path fakeHome)
+            throws Exception {
+        Path plainDocs = fakeHome.resolve("Documents");
+        Files.createDirectories(plainDocs);
+        Path plainDefault = plainDocs.resolve(AppPaths.WINDOWS_DEFAULT_RDP_FILENAME);
+        Files.writeString(plainDefault, "screen mode id:i:2");
+
+        Path oneDriveJa =
+                fakeHome.resolve("OneDrive").resolve("ドキュメント");
+        Files.createDirectories(oneDriveJa);
+        Path oneDriveDefault = oneDriveJa.resolve(AppPaths.WINDOWS_DEFAULT_RDP_FILENAME);
+        Files.writeString(oneDriveDefault, "screen mode id:i:2");
+
+        assertEquals(
+                plainDefault.toAbsolutePath().normalize(),
+                AppPaths.resolveWindowsDefaultRdpProfileUnder(fakeHome).orElseThrow());
+
+        Files.delete(plainDefault);
+        assertEquals(
+                oneDriveDefault.toAbsolutePath().normalize(),
+                AppPaths.resolveWindowsDefaultRdpProfileUnder(fakeHome).orElseThrow());
+    }
+
+    @Test
+    void resolveRequestFormRdpProfile_fallsBackToWindowsDefaultWhenEnvEmpty(@TempDir Path fakeHome)
+            throws Exception {
+        Path docs = fakeHome.resolve("Documents");
+        Files.createDirectories(docs);
+        Path rdp = docs.resolve(AppPaths.WINDOWS_DEFAULT_RDP_FILENAME);
+        Files.writeString(rdp, "screen mode id:i:2");
+
+        assertEquals(
+                rdp.toAbsolutePath().normalize(),
+                AppPaths.resolveWindowsDefaultRdpProfileUnder(fakeHome).orElseThrow());
     }
 
     @Test
@@ -179,6 +215,33 @@ class AppPathsTest {
         assertEquals(
                 deployDir.resolve(AppPaths.RDP_LAUNCHER_EXE_BASENAME).normalize(),
                 AppPaths.resolveRdpLauncherExe(ui).normalize());
+    }
+
+    @Test
+    void hasSavedRdpLaunchProfileNumber_detectsValidSessionValue() {
+        assertFalse(AppPaths.hasSavedRdpLaunchProfileNumber(Map.of()));
+        assertFalse(
+                AppPaths.hasSavedRdpLaunchProfileNumber(
+                        Map.of(AppPaths.KEY_PM_AI_RDP_LAUNCH_PROFILE_NUMBER, "")));
+        assertFalse(
+                AppPaths.hasSavedRdpLaunchProfileNumber(
+                        Map.of(AppPaths.KEY_PM_AI_RDP_LAUNCH_PROFILE_NUMBER, "0")));
+        assertTrue(
+                AppPaths.hasSavedRdpLaunchProfileNumber(
+                        Map.of(AppPaths.KEY_PM_AI_RDP_LAUNCH_PROFILE_NUMBER, "3")));
+    }
+
+    @Test
+    void resolveRdpLaunchProfileNumber_defaultsWhenMissingOrInvalid() {
+        assertEquals(1, AppPaths.resolveRdpLaunchProfileNumber(Map.of()));
+        assertEquals(
+                1,
+                AppPaths.resolveRdpLaunchProfileNumber(
+                        Map.of(AppPaths.KEY_PM_AI_RDP_LAUNCH_PROFILE_NUMBER, "x")));
+        assertEquals(
+                5,
+                AppPaths.resolveRdpLaunchProfileNumber(
+                        Map.of(AppPaths.KEY_PM_AI_RDP_LAUNCH_PROFILE_NUMBER, "5")));
     }
 
     @Test

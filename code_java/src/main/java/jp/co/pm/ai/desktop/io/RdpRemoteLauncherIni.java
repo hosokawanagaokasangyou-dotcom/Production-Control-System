@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
 
+import jp.co.pm.ai.desktop.config.AladdinRpaLaunchArgs;
+
 /**
  * 共有 UNC 上の {@code RAP設定.ini}（接続先 RDP ランチャー向け）の読み書き。
  */
@@ -69,7 +71,7 @@ public final class RdpRemoteLauncherIni {
         if (slot < 1 || slot > MAX_SLOTS) {
             throw new IllegalArgumentException("スロット番号は 1～" + MAX_SLOTS + " です: " + slot);
         }
-        String programTrimmed = program != null ? program.trim() : "";
+        String programTrimmed = stripSurroundingQuotes(program != null ? program.trim() : "");
         String argsTrimmed = arguments != null ? arguments.trim() : "";
         if (programTrimmed.isEmpty()) {
             slots.remove(slot);
@@ -317,6 +319,151 @@ public final class RdpRemoteLauncherIni {
             return "";
         }
         return String.join(" ", tokenizeArguments(arguments));
+    }
+
+    /** ini 引数に {@link AladdinRpaLaunchArgs#ETERNAL_FLAG} が含まれるか。 */
+    public static boolean hasEternalFlag(String arguments) {
+        return tokenizeArguments(arguments != null ? arguments : "").stream()
+                .anyMatch(token -> AladdinRpaLaunchArgs.ETERNAL_FLAG.equalsIgnoreCase(token));
+    }
+
+    /** UI 向け: {@link AladdinRpaLaunchArgs#ETERNAL_FLAG} を除いた引数表示。 */
+    public static String argumentsForUiDisplayWithoutEternal(String arguments) {
+        return argumentsForUiDisplayWithoutManagedFlags(arguments);
+    }
+
+    /**
+     * UI 向け: ランチャー付与フラグ（{@link AladdinRpaLaunchArgs#ID_FLAG} 等）と {@link AladdinRpaLaunchArgs#ETERNAL_FLAG}
+     * を除いた表示。
+     */
+    public static String argumentsForUiDisplayWithoutManagedFlags(String arguments) {
+        List<String> tokens = new ArrayList<>(tokenizeArguments(arguments != null ? arguments : ""));
+        stripCredentialFlags(tokens);
+        tokens.removeIf(token -> AladdinRpaLaunchArgs.ETERNAL_FLAG.equalsIgnoreCase(token));
+        if (tokens.isEmpty()) {
+            return "";
+        }
+        return String.join(" ", tokens);
+    }
+
+    /** UI／保存向け: {@code --scenario "path.ardrpa"} 形式の 1 シナリオ引数。 */
+    public static String formatScenarioArgument(String scenarioPath) {
+        if (scenarioPath == null || scenarioPath.isBlank()) {
+            return "";
+        }
+        return formatTokensForIniArguments(
+                List.of(AladdinRpaLaunchArgs.SCENARIO_FLAG, scenarioPath.strip()));
+    }
+
+    /**
+     * ini 保存向け: シナリオパスを {@link AladdinRpaLaunchArgs#SCENARIO_FLAG} 付きに正規化する。
+     * 旧形式（.ardrpa パスのみ）も受け付ける。
+     */
+    public static String normalizeScenarioArguments(String arguments) {
+        if (arguments == null || arguments.isBlank()) {
+            return "";
+        }
+        List<String> tokens = new ArrayList<>(tokenizeArguments(arguments.trim()));
+        stripCredentialFlags(tokens);
+        tokens.removeIf(token -> AladdinRpaLaunchArgs.ETERNAL_FLAG.equalsIgnoreCase(token));
+        removeFlagWithValue(tokens, AladdinRpaLaunchArgs.SCENARIO_FLAG);
+
+        List<String> scenarioPaths = new ArrayList<>();
+        List<String> others = new ArrayList<>();
+        for (String token : tokens) {
+            if (looksLikeScenarioPath(token)) {
+                scenarioPaths.add(token);
+            } else if (!token.isBlank()) {
+                others.add(token);
+            }
+        }
+
+        List<String> normalized = new ArrayList<>(others);
+        for (String path : scenarioPaths) {
+            normalized.add(AladdinRpaLaunchArgs.SCENARIO_FLAG);
+            normalized.add(path);
+        }
+        if (normalized.isEmpty()) {
+            return "";
+        }
+        return formatTokensForIniArguments(normalized);
+    }
+
+    /**
+     * スロット保存用: シナリオ引数を正規化し {@link AladdinRpaLaunchArgs#ETERNAL_FLAG} を付与または除去する。
+     */
+    public static String mergeEternalFlag(String arguments, boolean eternal) {
+        String normalized = normalizeScenarioArguments(arguments);
+        List<String> tokens =
+                normalized.isBlank()
+                        ? new ArrayList<>()
+                        : new ArrayList<>(tokenizeArguments(normalized));
+        tokens.removeIf(token -> AladdinRpaLaunchArgs.ETERNAL_FLAG.equalsIgnoreCase(token));
+        if (eternal) {
+            tokens.add(AladdinRpaLaunchArgs.ETERNAL_FLAG);
+        }
+        if (tokens.isEmpty()) {
+            return "";
+        }
+        return formatTokensForIniArguments(tokens);
+    }
+
+    private static void stripCredentialFlags(List<String> tokens) {
+        for (int i = 0; i < tokens.size(); i++) {
+            String token = tokens.get(i);
+            if (!AladdinRpaLaunchArgs.ID_FLAG.equalsIgnoreCase(token)
+                    && !AladdinRpaLaunchArgs.PASSWORD_FLAG.equalsIgnoreCase(token)) {
+                continue;
+            }
+            tokens.remove(i);
+            if (i < tokens.size()) {
+                tokens.remove(i);
+            }
+            i = Math.max(-1, i - 1);
+        }
+    }
+
+    private static void removeFlagWithValue(List<String> tokens, String flag) {
+        for (int i = 0; i < tokens.size(); i++) {
+            if (!flag.equalsIgnoreCase(tokens.get(i))) {
+                continue;
+            }
+            tokens.remove(i);
+            if (i < tokens.size()) {
+                tokens.remove(i);
+            }
+            return;
+        }
+    }
+
+    private static boolean looksLikeScenarioPath(String token) {
+        return token != null
+                && token.toLowerCase(java.util.Locale.ROOT).endsWith(".ardrpa");
+    }
+
+    static String stripSurroundingQuotes(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String trimmed = value.strip();
+        while (trimmed.length() >= 2 && trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+            trimmed = trimmed.substring(1, trimmed.length() - 1).strip();
+        }
+        return trimmed.replace("\"\"", "\"");
+    }
+
+    private static String formatTokensForIniArguments(List<String> tokens) {
+        StringBuilder out = new StringBuilder();
+        for (String token : tokens) {
+            if (token.isEmpty()) {
+                continue;
+            }
+            if (out.length() > 0) {
+                out.append(' ');
+            }
+            out.append(quoteArgumentIfNeeded(token));
+        }
+        return out.toString();
     }
 
     /**

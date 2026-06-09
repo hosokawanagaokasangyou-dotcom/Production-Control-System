@@ -1,25 +1,23 @@
 using System.Management;
-using System.Text;
 
 namespace PmAi.RdpRemoteLauncher;
 
 internal static class ProcessRunningChecker
 {
-    internal static bool IsAlreadyRunning(ParsedCommand command)
+    internal static bool IsAlreadyRunning(ParsedCommand command, string? loginId = null)
     {
-        return TryFindRunningProcessId(command).HasValue;
+        return TryFindRunningProcessId(command, loginId).HasValue;
     }
 
-    internal static int? TryFindRunningProcessId(ParsedCommand command)
+    internal static int? TryFindRunningProcessId(ParsedCommand command, string? loginId = null)
     {
-        var executable = NormalizePath(command.Executable);
+        var executable = NormalizePath(LauncherPaths.NormalizeExecutablePath(command.Executable));
         var processName = Path.GetFileNameWithoutExtension(executable);
         if (string.IsNullOrWhiteSpace(processName))
         {
             return null;
         }
 
-        var signature = BuildMatchSignature(executable, command.Arguments);
         try
         {
             using var searcher = new ManagementObjectSearcher(
@@ -32,16 +30,18 @@ internal static class ProcessRunningChecker
                 {
                     var commandLine = obj["CommandLine"]?.ToString() ?? string.Empty;
                     var executablePath = obj["ExecutablePath"]?.ToString() ?? string.Empty;
-                    if (Matches(executable, command.Arguments, signature, commandLine, executablePath))
+                    if (!Matches(command, loginId, commandLine, executablePath, executable))
                     {
-                        var processIdRaw = obj["ProcessId"];
-                        if (processIdRaw != null && uint.TryParse(processIdRaw.ToString(), out var processId))
-                        {
-                            return (int)processId;
-                        }
-
-                        return null;
+                        continue;
                     }
+
+                    var processIdRaw = obj["ProcessId"];
+                    if (processIdRaw != null && uint.TryParse(processIdRaw.ToString(), out var processId))
+                    {
+                        return (int)processId;
+                    }
+
+                    return null;
                 }
             }
         }
@@ -55,24 +55,65 @@ internal static class ProcessRunningChecker
     }
 
     private static bool Matches(
-        string executable,
-        string arguments,
-        string signature,
+        ParsedCommand command,
+        string? loginId,
         string commandLine,
-        string executablePath)
+        string executablePath,
+        string executable)
+    {
+        if (!ExecutableMatches(executable, executablePath, commandLine))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(command.Arguments))
+        {
+            // 引数なし起動は常に新規起動する（--id 付与は起動直前のため既存判定しない）。
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(loginId))
+        {
+            return false;
+        }
+
+        if (!commandLine.Contains(AladdinRpaLaunchArgs.IdFlag, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!commandLine.Contains(loginId.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        foreach (var token in WindowsArgumentFormatter.Tokenize(command.Arguments))
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                continue;
+            }
+
+            if (IsCredentialFlag(token) || string.Equals(token, loginId.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!commandLine.Contains(token, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool ExecutableMatches(string executable, string executablePath, string commandLine)
     {
         if (!string.IsNullOrWhiteSpace(executablePath)
             && string.Equals(NormalizePath(executablePath), executable, StringComparison.OrdinalIgnoreCase))
         {
-            if (string.IsNullOrWhiteSpace(arguments))
-            {
-                return true;
-            }
-
-            if (commandLine.Contains(arguments, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
+            return true;
         }
 
         if (string.IsNullOrWhiteSpace(commandLine))
@@ -80,39 +121,13 @@ internal static class ProcessRunningChecker
             return false;
         }
 
-        return commandLine.Contains(signature, StringComparison.OrdinalIgnoreCase);
+        return commandLine.Contains(executable, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string BuildMatchSignature(string executable, string arguments)
+    private static bool IsCredentialFlag(string token)
     {
-        if (!string.IsNullOrWhiteSpace(arguments))
-        {
-            var argToken = ExtractArgumentToken(arguments);
-            if (!string.IsNullOrWhiteSpace(argToken))
-            {
-                return argToken;
-            }
-        }
-
-        return executable;
-    }
-
-    private static string ExtractArgumentToken(string arguments)
-    {
-        var trimmed = arguments.Trim();
-        if (trimmed.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        if (trimmed[0] == '"')
-        {
-            var end = trimmed.IndexOf('"', 1);
-            return end > 0 ? trimmed[1..end] : trimmed.Trim('"');
-        }
-
-        var space = trimmed.IndexOf(' ');
-        return space < 0 ? trimmed : trimmed[..space];
+        return string.Equals(token, AladdinRpaLaunchArgs.IdFlag, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(token, AladdinRpaLaunchArgs.PasswordFlag, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string NormalizePath(string path)

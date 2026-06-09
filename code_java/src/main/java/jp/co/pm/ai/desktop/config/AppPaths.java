@@ -141,6 +141,9 @@ public final class AppPaths {
     /** リモートデスクトップタブで最後に選んだ起動プロファイル番号（1～9）。 */
     public static final String KEY_PM_AI_RDP_LAUNCH_PROFILE_NUMBER = "PM_AI_RDP_LAUNCH_PROFILE_NUMBER";
 
+    /** Windows の mstsc が保存する既定 RDP プロファイル名。 */
+    public static final String WINDOWS_DEFAULT_RDP_FILENAME = "Default.rdp";
+
     /**
      * 依頼書 PDF プレビュー: Type0 日本語フォントのサイズ補正係数（Excel pt に乗算）。{@code 0.50}～{@code 1.00}。
      */
@@ -816,13 +819,51 @@ public final class AppPaths {
     }
 
     /**
-     * 依頼書入力タブの RDP プロファイル（{@code *.rdp}）。未設定・空は empty。
+     * Windows の {@code Documents/Default.rdp} 等（OneDrive 日本語フォルダ含む）。存在する最初の候補。
+     */
+    public static Optional<Path> resolveWindowsDefaultRdpProfile() {
+        String userProfile = System.getenv("USERPROFILE");
+        if (userProfile == null || userProfile.isBlank()) {
+            userProfile = System.getProperty("user.home");
+        }
+        if (userProfile == null || userProfile.isBlank()) {
+            return Optional.empty();
+        }
+        return resolveWindowsDefaultRdpProfileUnder(Path.of(userProfile));
+    }
+
+    static Optional<Path> resolveWindowsDefaultRdpProfileUnder(Path userHome) {
+        if (userHome == null) {
+            return Optional.empty();
+        }
+        List<Path> candidates =
+                List.of(
+                        userHome.resolve("Documents").resolve(WINDOWS_DEFAULT_RDP_FILENAME),
+                        userHome
+                                .resolve("OneDrive")
+                                .resolve("Documents")
+                                .resolve(WINDOWS_DEFAULT_RDP_FILENAME),
+                        userHome
+                                .resolve("OneDrive")
+                                .resolve("ドキュメント")
+                                .resolve(WINDOWS_DEFAULT_RDP_FILENAME),
+                        userHome.resolve("ドキュメント").resolve(WINDOWS_DEFAULT_RDP_FILENAME));
+        for (Path candidate : candidates) {
+            if (Files.isRegularFile(candidate)) {
+                return Optional.of(candidate.toAbsolutePath().normalize());
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * 依頼書入力タブの RDP プロファイル（{@code *.rdp}）。未設定・空は Windows 既定 {@code Default.rdp} を試す。
      */
     public static Optional<Path> resolveRequestFormRdpProfile(Map<String, String> ui) {
         Map<String, String> u = ui != null ? ui : Map.of();
         String override = trim(u.get(KEY_PM_AI_REQUEST_FORM_RDP_PROFILE));
         if (override.isEmpty()) {
-            return Optional.empty();
+            return resolveWindowsDefaultRdpProfile();
         }
         return Optional.of(Path.of(override).toAbsolutePath().normalize());
     }
@@ -1372,6 +1413,21 @@ public final class AppPaths {
     /** 起動プロファイル JSON（名称・説明・区分等）。 */
     public static Path resolveRdpLaunchProfilesFile(Map<String, String> ui) {
         return resolveRdpLauncherDeployDir(ui).resolve(RDP_LAUNCH_PROFILES_BASENAME);
+    }
+
+    /** セッションに保存済みの起動プロファイル番号（1～9）があるか。 */
+    public static boolean hasSavedRdpLaunchProfileNumber(Map<String, String> ui) {
+        Map<String, String> u = ui != null ? ui : Map.of();
+        String raw = trim(u.get(KEY_PM_AI_RDP_LAUNCH_PROFILE_NUMBER));
+        if (raw.isEmpty()) {
+            return false;
+        }
+        try {
+            int n = Integer.parseInt(raw);
+            return n >= 1 && n <= 9;
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
     }
 
     /** 起動プロファイル番号（1～9）。未設定・不正時は 1。 */

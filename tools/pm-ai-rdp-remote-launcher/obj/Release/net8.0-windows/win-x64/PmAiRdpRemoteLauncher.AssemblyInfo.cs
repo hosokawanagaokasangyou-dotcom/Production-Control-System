@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PmAiRdpRemoteLauncher")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4880998cfcd0a951135f9383894cc25391e41c6d")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+244e77c3f301b97f0a45449c14e3e458e2ff02a7")]
 [assembly: System.Reflection.AssemblyProductAttribute("PmAiRdpRemoteLauncher")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PmAiRdpRemoteLauncher")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

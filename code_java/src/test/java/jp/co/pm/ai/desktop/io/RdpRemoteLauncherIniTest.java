@@ -276,4 +276,53 @@ class RdpRemoteLauncherIniTest {
     void parseCommandLine_blankThrows() {
         assertThrows(IllegalArgumentException.class, () -> RdpRemoteLauncherIni.parseCommandLine("  "));
     }
+
+    @Test
+    void mergeEternalFlag_addsAndRemovesFlag() {
+        assertEquals("--eternal", RdpRemoteLauncherIni.mergeEternalFlag("", true));
+        String withScenario =
+                RdpRemoteLauncherIni.mergeEternalFlag("\\\\server\\share\\a.ardrpa", true);
+        assertTrue(withScenario.contains("--scenario"));
+        assertTrue(withScenario.contains("a.ardrpa"));
+        assertTrue(RdpRemoteLauncherIni.hasEternalFlag(withScenario));
+        assertTrue(
+                RdpRemoteLauncherIni.hasEternalFlag(
+                        RdpRemoteLauncherIni.mergeEternalFlag(
+                                "--scenario \\\\server\\share\\a.ardrpa --eternal", true)));
+        assertFalse(
+                RdpRemoteLauncherIni.hasEternalFlag(
+                        RdpRemoteLauncherIni.mergeEternalFlag("\\\\server\\share\\a.ardrpa", false)));
+    }
+
+    @Test
+    void normalizeScenarioArguments_convertsBarePath() {
+        assertEquals(
+                "--scenario \\\\server\\share\\a.ardrpa",
+                RdpRemoteLauncherIni.normalizeScenarioArguments("\\\\server\\share\\a.ardrpa"));
+    }
+
+    @Test
+    void setSlotCommand_stripsSurroundingQuotesFromProgram(@TempDir Path tmp) throws Exception {
+        RdpRemoteLauncherIni ini = new RdpRemoteLauncherIni();
+        ini.setSlotCommand(1, "\"Z:\\app\\Aladdin_RPA_Studio.exe\"", "");
+        assertEquals("Z:\\app\\Aladdin_RPA_Studio.exe", ini.getSlotCommand(1).executable());
+    }
+
+    @Test
+    void formatScenarioArgument_usesScenarioFlag() {
+        assertEquals(
+                "--scenario C:\\tmp\\a.ardrpa",
+                RdpRemoteLauncherIni.formatScenarioArgument("C:\\tmp\\a.ardrpa"));
+    }
+
+    @Test
+    void argumentsForUiDisplayWithoutEternal_stripsFlag() {
+        assertEquals(
+                "--scenario \\\\server\\share\\a.ardrpa",
+                RdpRemoteLauncherIni.argumentsForUiDisplayWithoutEternal(
+                        "--scenario \\\\server\\share\\a.ardrpa --eternal"));
+        assertTrue(
+                RdpRemoteLauncherIni.hasEternalFlag(
+                        "--scenario \\\\server\\share\\a.ardrpa --eternal"));
+    }
 }

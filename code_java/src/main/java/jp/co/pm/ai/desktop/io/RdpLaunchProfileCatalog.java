@@ -153,7 +153,8 @@ public final class RdpLaunchProfileCatalog {
                 nullableBoolean(node.get("disconnectOnChildExit")),
                 nullableBoolean(node.get("fullScreen")),
                 nullableInteger(node.get("desktopWidth")),
-                nullableInteger(node.get("desktopHeight")));
+                nullableInteger(node.get("desktopHeight")),
+                nullableBoolean(node.get("rpaEternal")));
     }
 
     private static ObjectNode toJson(RdpLaunchProfile profile) {
@@ -173,6 +174,9 @@ public final class RdpLaunchProfileCatalog {
         }
         if (profile.desktopHeight() != null) {
             node.put("desktopHeight", profile.desktopHeight());
+        }
+        if (profile.rpaEternal() != null) {
+            node.put("rpaEternal", profile.rpaEternal());
         }
         return node;
     }

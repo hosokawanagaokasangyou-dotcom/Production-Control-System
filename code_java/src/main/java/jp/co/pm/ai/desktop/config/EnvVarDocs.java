@@ -245,7 +245,7 @@ public final class EnvVarDocs {
                 "接続先 RDP ランチャー設定（RAP設定.ini）のフルパス。"
                         + "空のときはサマリ Excel と同階層の RAP設定.ini。"
                         + " 接続直前に PM-AI が 起動プログラム番号 と 操作者=セッション操作者名 を部分更新する。"
-                        + " スロット行は exe + シナリオ (.ardrpa) のみ（--id / --password は含めない）。");
+                        + " スロット行は exe + --scenario .ardrpa（--id / --password は含めない）。");
         put(
                 "PM_AI_OPERATOR_USER",
                 "起動時に選択した操作者名。子プロセス env に載せる。"
@@ -262,7 +262,8 @@ public final class EnvVarDocs {
                         + "0/false/off で無効。既定は有効。");
         put(
                 "PM_AI_RDP_LAUNCH_PROFILE_NUMBER",
-                "リモートデスクトップタブで最後に選んだ起動プロファイル番号（1～9）。"
+                "リモートデスクトップタブで最後に使用した起動プロファイル番号（1～9）。"
+                        + " 次回起動時の ComboBox 既定値。"
                         + " RAP設定.ini の起動プログラム番号（スロット）と同一。"
                         + " 名称・説明は共有フォルダの RDP起動プロファイル.json に保存。");
         put(

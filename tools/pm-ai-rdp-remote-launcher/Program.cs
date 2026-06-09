@@ -14,6 +14,8 @@ internal static class Program
         LauncherLog.SetMirrorDirectory(exeDir);
         LauncherLog.Info(
             "PmAiRdpRemoteLauncher 開始"
+                + " version="
+                + ResolveLauncherVersionLabel()
                 + " ProcessPath="
                 + (LauncherPaths.ResolveExecutablePath() ?? "(不明)")
                 + " BaseDirectory="
@@ -85,11 +87,32 @@ internal static class Program
                 return ExitWithLog(ExitError, "アラジン資格情報未設定");
             }
 
+            var argumentTokens = AladdinRpaArgumentAppender.AppendCredentials(
+                WindowsArgumentFormatter.TokenizeForProcess(parsed.Arguments),
+                credentials);
+            var launchArguments = WindowsArgumentFormatter.FormatArgumentString(
+                string.Join(" ", argumentTokens));
+            var launchCommand = new ParsedCommand(parsed.Executable, launchArguments);
+
+            if (!File.Exists(parsed.Executable))
+            {
+                LauncherLog.Error("起動プログラムが見つかりません: " + parsed.Executable);
+                return ExitWithLog(ExitError, "起動プログラム不在");
+            }
+
             Process? child = null;
-            var existingProcessId = ProcessRunningChecker.TryFindRunningProcessId(parsed);
+            var existingProcessId = ProcessRunningChecker.TryFindRunningProcessId(
+                launchCommand,
+                credentials.LoginId);
             if (existingProcessId.HasValue)
             {
-                LauncherLog.Info("既に起動済みのため監視のみ: PID=" + existingProcessId.Value + " | " + commandLine);
+                LauncherLog.Info(
+                    "既に起動済みのため監視のみ: PID="
+                        + existingProcessId.Value
+                        + " | "
+                        + launchCommand.Executable
+                        + " "
+                        + launchArguments);
                 child = TryOpenProcess(existingProcessId.Value);
                 if (child == null)
                 {
@@ -105,9 +128,6 @@ internal static class Program
                     workingDirectory = Environment.CurrentDirectory;
                 }
 
-                var argumentTokens = AladdinRpaArgumentAppender.AppendCredentials(
-                    WindowsArgumentFormatter.TokenizeForProcess(parsed.Arguments),
-                    credentials);
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = parsed.Executable,
@@ -132,11 +152,17 @@ internal static class Program
                 child = Process.Start(startInfo);
                 if (child == null)
                 {
-                    LauncherLog.Error("子プロセスの起動に失敗しました: " + commandLine);
+                    LauncherLog.Error("子プロセスの起動に失敗しました: " + launchCommand.Executable + " " + launchArguments);
                     return ExitWithLog(ExitError, "子プロセス起動失敗");
                 }
 
-                LauncherLog.Info("起動しました PID=" + child.Id + " (ini 行): " + commandLine);
+                LauncherLog.Info(
+                    "起動しました PID="
+                        + child.Id
+                        + " | "
+                        + launchCommand.Executable
+                        + " "
+                        + launchArguments);
             }
 
             TrySuppressIniSlot(iniPath, startedSlot);
@@ -231,6 +257,31 @@ internal static class Program
         catch (ArgumentException)
         {
             return null;
+        }
+    }
+
+    private static string ResolveLauncherVersionLabel()
+    {
+        try
+        {
+            var exeDir = LauncherPaths.ResolveExecutableDirectory();
+            if (string.IsNullOrWhiteSpace(exeDir))
+            {
+                return "(不明)";
+            }
+
+            var versionPath = Path.Combine(exeDir, "PmAiRdpRemoteLauncher.version.txt");
+            if (!File.Exists(versionPath))
+            {
+                return "(version.txt なし)";
+            }
+
+            var line = File.ReadLines(versionPath).FirstOrDefault()?.Trim();
+            return string.IsNullOrWhiteSpace(line) ? "(空)" : line;
+        }
+        catch
+        {
+            return "(読取失敗)";
         }
     }
 

@@ -395,6 +395,10 @@
     "value" : "",
     "description" : "ランチャー exe の自動再配備。0/false/off で無効。"
   }, {
+    "key" : "PM_AI_RDP_LAUNCH_PROFILE_NUMBER",
+    "value" : "",
+    "description" : "リモートデスクトップタブで最後に使用した起動プロファイル番号（1～9）。次回の ComboBox 既定値。未設定時は 1。"
+  }, {
     "key" : "PM_AI_RDP_EMBED_STARTUP_IN_PROFILE",
     "value" : "",
     "description" : "1 で .rdp へ alternate shell 書込。既定 off。"

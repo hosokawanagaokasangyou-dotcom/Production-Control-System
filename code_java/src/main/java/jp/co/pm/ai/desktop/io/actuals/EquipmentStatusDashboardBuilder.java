@@ -59,12 +59,6 @@ public final class EquipmentStatusDashboardBuilder {
 
     private EquipmentStatusDashboardBuilder() {}
 
-    public record ActualsSnapshot(List<String> headers, List<List<String>> rows) {}
-
-    public record AladdinSnapshot(List<String> headers, List<List<String>> rows) {}
-
-    public record DispatchSnapshot(List<String> headers, List<List<String>> rows) {}
-
     public static List<EquipmentMachineStatus> build(
             ActualsSnapshot actuals,
             AladdinSnapshot aladdin,

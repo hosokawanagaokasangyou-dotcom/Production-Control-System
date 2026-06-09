@@ -25,7 +25,7 @@ internal static class CommandLineParser
                 throw new FormatException("引用符が閉じられていません: " + line);
             }
 
-            var executable = trimmed[1..end].Replace("\"\"", "\"");
+            var executable = LauncherPaths.NormalizeExecutablePath(trimmed[1..end].Replace("\"\"", "\""));
             var arguments = end + 1 < trimmed.Length ? trimmed[(end + 1)..].TrimStart() : string.Empty;
             return new ParsedCommand(executable, arguments);
         }
@@ -33,10 +33,12 @@ internal static class CommandLineParser
         var space = trimmed.IndexOf(' ');
         if (space < 0)
         {
-            return new ParsedCommand(trimmed, string.Empty);
+            return new ParsedCommand(LauncherPaths.NormalizeExecutablePath(trimmed), string.Empty);
         }
 
-        return new ParsedCommand(trimmed[..space], trimmed[(space + 1)..].Trim());
+        return new ParsedCommand(
+            LauncherPaths.NormalizeExecutablePath(trimmed[..space]),
+            trimmed[(space + 1)..].Trim());
     }
 
     private static int FindClosingQuote(string text, int fromIndex)

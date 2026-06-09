@@ -19,7 +19,8 @@ public record RdpLaunchProfile(
         Boolean disconnectOnChildExit,
         Boolean fullScreen,
         Integer desktopWidth,
-        Integer desktopHeight) {
+        Integer desktopHeight,
+        Boolean rpaEternal) {
 
     public RdpLaunchProfile {
         if (number < 1 || number > RdpRemoteLauncherIni.MAX_SLOTS) {
@@ -32,7 +33,7 @@ public record RdpLaunchProfile(
     }
 
     public static RdpLaunchProfile empty(int number) {
-        return new RdpLaunchProfile(number, "", "", "", null, null, null, null);
+        return new RdpLaunchProfile(number, "", "", "", null, null, null, null, null);
     }
 
     /** 接続ボタン横 ComboBox 向けの短い表示。 */
@@ -72,6 +73,12 @@ public record RdpLaunchProfile(
             }
             sb.append("終了時 RDP 切断: オフ（プロファイル設定）");
         }
+        if (Boolean.TRUE.equals(rpaEternal)) {
+            if (sb.length() > 0) {
+                sb.append('\n');
+            }
+            sb.append("RPA: --eternal（シナリオなし／終了後もプロセス維持）");
+        }
         return sb.toString();
     }
 
@@ -98,7 +105,8 @@ public record RdpLaunchProfile(
                 && Objects.equals(disconnectOnChildExit, other.disconnectOnChildExit)
                 && Objects.equals(fullScreen, other.fullScreen)
                 && Objects.equals(desktopWidth, other.desktopWidth)
-                && Objects.equals(desktopHeight, other.desktopHeight);
+                && Objects.equals(desktopHeight, other.desktopHeight)
+                && Objects.equals(rpaEternal, other.rpaEternal);
     }
 
     @Override
@@ -111,6 +119,7 @@ public record RdpLaunchProfile(
                 disconnectOnChildExit,
                 fullScreen,
                 desktopWidth,
-                desktopHeight);
+                desktopHeight,
+                rpaEternal);
     }
 }
