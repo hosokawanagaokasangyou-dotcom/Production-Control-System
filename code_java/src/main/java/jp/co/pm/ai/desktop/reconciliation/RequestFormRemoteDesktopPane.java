@@ -1,12 +1,16 @@
 package jp.co.pm.ai.desktop.reconciliation;
 
 import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.charset.MalformedInputException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -17,6 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import javafx.application.Platform;
 import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
@@ -40,7 +45,9 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.scene.text.Font;
 import javafx.stage.DirectoryChooser;
+import javafx.util.StringConverter;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
 
@@ -82,6 +89,11 @@ public final class RequestFormRemoteDesktopPane {
             Consumer<String> statusConsumer) {}
 
     private static final double CARD_WIDTH = 720;
+
+    private static final String LAUNCHER_LOG_DEFAULT_FONT_FAMILY_LABEL = "システム既定";
+
+    private static final List<Double> LAUNCHER_LOG_PRESET_FONT_SIZES =
+            List.of(9d, 10d, 11d, 12d, 13d, 14d, 15d, 16d, 18d, 20d, 22d, 24d);
 
     /** 構築結果。{@link #scheduleInitialRefresh()} はタブ初回表示時のみ呼ぶ（UNC I/O を初回マウントから分離）。 */
     public record TabContent(SplitPane root, Runnable scheduleInitialRefresh) {}
@@ -243,22 +255,10 @@ public final class RequestFormRemoteDesktopPane {
                     iniPathLabel.setText(
                             "RAP設定.ini: " + AppPaths.resolveRdpLauncherIni(ui).toString());
                     launcherPathLabel.setText("ランチャー exe: " + launcherExe.toString());
-                    Path logDir = launcherExe.getParent();
-                    String logFile =
-                            logDir != null
-                                    ? logDir.resolve(
-                                                    "launcher-"
-                                                            + java.time.LocalDate.now()
-                                                                    .format(
-                                                                            java.time.format
-                                                                                    .DateTimeFormatter
-                                                                                    .BASIC_ISO_DATE)
-                                                            + ".log")
-                                            .toString()
-                                    : "(不明)";
+                    Path sharedLog = AppPaths.resolveRdpLauncherSharedLogPath(ui);
                     launcherLogPathLabel.setText(
                             "接続先ランチャーログ（共有フォルダ）: "
-                                    + logFile
+                                    + sharedLog
                                     + " ／ 接続先 TEMP: %TEMP%\\PM-AI-RDP-Launcher\\launcher-"
                                     + java.time.LocalDate.now()
                                             .format(
@@ -403,6 +403,7 @@ public final class RequestFormRemoteDesktopPane {
         refreshLaunchProfileCombo[0].run();
 
         Runnable[] refreshIniFilePreview = new Runnable[1];
+        Runnable[] refreshLauncherLog = new Runnable[1];
 
         Runnable loadIniFromShare =
                 () ->
@@ -416,6 +417,7 @@ public final class RequestFormRemoteDesktopPane {
                                 refreshPaths,
                                 chkDisconnectOnChildExit,
                                 refreshIniFilePreview[0],
+                                refreshLauncherLog[0],
                                 refreshLaunchProfileCombo[0]);
 
         Runnable saveIniToShareBody =
@@ -462,9 +464,7 @@ public final class RequestFormRemoteDesktopPane {
                         status.accept(
                                 "RAP設定.ini と起動プロファイル JSON を保存しました: "
                                         + iniPath);
-                        if (refreshIniFilePreview[0] != null) {
-                            refreshIniFilePreview[0].run();
-                        }
+                        refreshRightPanePreviews(refreshIniFilePreview[0], refreshLauncherLog[0]);
                     } catch (IOException ex) {
                         rapStatusLabel.setText("保存失敗: " + ex.getMessage());
                         showAlert(Alert.AlertType.ERROR, "保存失敗", ex.getMessage());
@@ -841,9 +841,7 @@ public final class RequestFormRemoteDesktopPane {
                                 launcherIniPath, launchSlot, ui);
                         RdpRemoteLauncherIni.writeOperatorContext(
                                 launcherIniPath, sessionOperator);
-                        if (refreshIniFilePreview[0] != null) {
-                            refreshIniFilePreview[0].run();
-                        }
+                        refreshRightPanePreviews(refreshIniFilePreview[0], refreshLauncherLog[0]);
                     } catch (IOException iniEx) {
                         showAlert(
                                 Alert.AlertType.ERROR,
@@ -923,9 +921,9 @@ public final class RequestFormRemoteDesktopPane {
                                                                         + RdpRemoteLauncherIni
                                                                                 .SLOT_DISABLED
                                                                         + " に設定しました（タスクスケジューラ抑止・保険）。");
-                                                        if (refreshIniFilePreview[0] != null) {
-                                                            refreshIniFilePreview[0].run();
-                                                        }
+                                                        refreshRightPanePreviews(
+                                                                refreshIniFilePreview[0],
+                                                                refreshLauncherLog[0]);
                                                     } catch (IOException suppressEx) {
                                                         status.accept(
                                                                 "起動プログラム番号の抑止（0）設定に失敗: "
@@ -1278,14 +1276,141 @@ public final class RequestFormRemoteDesktopPane {
         iniPreviewPane.setFillWidth(true);
         VBox.setVgrow(iniPreviewPane, Priority.ALWAYS);
 
+        AtomicReference<String> launcherLogFullText = new AtomicReference<>("");
+        AtomicReference<String> launcherLogBaseMeta = new AtomicReference<>("読込待ち…");
+
+        Label launcherLogTitle = new Label("接続先ランチャーログ");
+        launcherLogTitle.getStyleClass().add("pm-rdp-ini-panel-title");
+
+        Label launcherLogMetaLabel = new Label("読込待ち…");
+        launcherLogMetaLabel.setWrapText(true);
+        launcherLogMetaLabel.getStyleClass().add("pm-rdp-page-subtitle");
+
+        TextField launcherLogSearchField = new TextField();
+        launcherLogSearchField.setPromptText("ログ行を部分一致で絞り込み（空欄ですべて表示）");
+        HBox.setHgrow(launcherLogSearchField, Priority.ALWAYS);
+
+        ComboBox<String> launcherLogFontFamilyCombo = new ComboBox<>();
+        launcherLogFontFamilyCombo.setPrefWidth(120);
+        List<String> launcherLogFontFamilies = new ArrayList<>();
+        launcherLogFontFamilies.add(LAUNCHER_LOG_DEFAULT_FONT_FAMILY_LABEL);
+        List<String> installedFontFamilies = new ArrayList<>(Font.getFamilies());
+        Collections.sort(installedFontFamilies);
+        launcherLogFontFamilies.addAll(installedFontFamilies);
+        launcherLogFontFamilyCombo.getItems().setAll(launcherLogFontFamilies);
+        launcherLogFontFamilyCombo.getSelectionModel().selectFirst();
+
+        ComboBox<Double> launcherLogFontSizeCombo = new ComboBox<>();
+        launcherLogFontSizeCombo.setPrefWidth(72);
+        launcherLogFontSizeCombo.getItems().setAll(LAUNCHER_LOG_PRESET_FONT_SIZES);
+        launcherLogFontSizeCombo.setConverter(
+                new StringConverter<>() {
+                    @Override
+                    public String toString(Double object) {
+                        if (object == null) {
+                            return "";
+                        }
+                        if (object == Math.rint(object)) {
+                            return String.valueOf(object.intValue());
+                        }
+                        return object.toString();
+                    }
+
+                    @Override
+                    public Double fromString(String string) {
+                        if (string == null || string.isBlank()) {
+                            return null;
+                        }
+                        return Double.valueOf(string.trim());
+                    }
+                });
+        launcherLogFontSizeCombo.setValue(12d);
+
+        TextArea launcherLogArea = new TextArea();
+        launcherLogArea.setEditable(false);
+        launcherLogArea.setWrapText(false);
+        launcherLogArea.setPromptText("共有フォルダ上の launcher-yyyyMMdd.log がここに表示されます。");
+        launcherLogArea.getStyleClass().add("pm-remote-desktop-launcher-log");
+        VBox.setVgrow(launcherLogArea, Priority.ALWAYS);
+
+        Runnable applyLauncherLogFont =
+                () ->
+                        applyLauncherLogAreaFont(
+                                launcherLogArea,
+                                launcherLogFontFamilyCombo.getValue(),
+                                launcherLogFontSizeCombo.getValue());
+        launcherLogFontFamilyCombo
+                .valueProperty()
+                .addListener((obs, was, now) -> applyLauncherLogFont.run());
+        launcherLogFontSizeCombo
+                .valueProperty()
+                .addListener((obs, was, now) -> applyLauncherLogFont.run());
+        applyLauncherLogFont.run();
+
+        Runnable applyLauncherLogFilter =
+                () ->
+                        applyLauncherLogSearchFilter(
+                                launcherLogArea,
+                                launcherLogMetaLabel,
+                                launcherLogBaseMeta.get(),
+                                launcherLogFullText.get(),
+                                launcherLogSearchField.getText());
+        launcherLogSearchField
+                .textProperty()
+                .addListener((obs, was, now) -> applyLauncherLogFilter.run());
+
+        Button btnRefreshLauncherLog = new Button("ログ更新");
+        styleSecondaryButton(btnRefreshLauncherLog);
+        refreshLauncherLog[0] =
+                () ->
+                        scheduleLauncherLogRefresh(
+                                uiEnv,
+                                launcherLogFullText,
+                                launcherLogBaseMeta,
+                                applyLauncherLogFilter);
+        btnRefreshLauncherLog.setOnAction(e -> refreshLauncherLog[0].run());
+
+        HBox launcherLogToolbar =
+                new HBox(
+                        8,
+                        new Label("検索"),
+                        launcherLogSearchField,
+                        new Label("フォント"),
+                        launcherLogFontFamilyCombo,
+                        new Label("サイズ"),
+                        launcherLogFontSizeCombo,
+                        btnRefreshLauncherLog);
+        launcherLogToolbar.setAlignment(Pos.CENTER_LEFT);
+        launcherLogSearchField.setMaxWidth(Double.MAX_VALUE);
+
+        VBox launcherLogPane =
+                new VBox(
+                        10,
+                        launcherLogTitle,
+                        launcherLogMetaLabel,
+                        launcherLogToolbar,
+                        launcherLogArea);
+        launcherLogPane.getStyleClass().add("pm-rdp-launcher-log-panel");
+        launcherLogPane.setPadding(new Insets(16));
+        launcherLogPane.setFillWidth(true);
+        VBox.setVgrow(launcherLogPane, Priority.ALWAYS);
+
+        SplitPane rightPaneSplit = new SplitPane(iniPreviewPane, launcherLogPane);
+        rightPaneSplit.setOrientation(Orientation.VERTICAL);
+        rightPaneSplit.setDividerPositions(0.58);
+        SplitPane.setResizableWithParent(iniPreviewPane, Boolean.TRUE);
+        SplitPane.setResizableWithParent(launcherLogPane, Boolean.TRUE);
+        rightPaneSplit.getStyleClass().add("pm-remote-desktop-right-split");
+        VBox.setVgrow(rightPaneSplit, Priority.ALWAYS);
+
         ScrollPane leftScroll = new ScrollPane(card);
         leftScroll.setFitToWidth(true);
         leftScroll.getStyleClass().add("pm-rdp-form-scroll");
 
-        SplitPane splitPane = new SplitPane(leftScroll, iniPreviewPane);
+        SplitPane splitPane = new SplitPane(leftScroll, rightPaneSplit);
         splitPane.setDividerPositions(0.52);
         SplitPane.setResizableWithParent(leftScroll, Boolean.TRUE);
-        SplitPane.setResizableWithParent(iniPreviewPane, Boolean.TRUE);
+        SplitPane.setResizableWithParent(rightPaneSplit, Boolean.TRUE);
         splitPane.getStyleClass().add("pm-remote-desktop-split");
 
         Runnable scheduleInitialRefresh =
@@ -1314,6 +1439,7 @@ public final class RequestFormRemoteDesktopPane {
                                 updateLaunchButtonState[0],
                                 refreshAladdinCredentialsUi[0],
                                 refreshIniFilePreview[0],
+                                refreshLauncherLog[0],
                                 refreshLaunchProfileCombo[0]);
 
         return new TabContent(splitPane, scheduleInitialRefresh);
@@ -1343,6 +1469,7 @@ public final class RequestFormRemoteDesktopPane {
             Runnable updateLaunchButtonState,
             Runnable refreshAladdinCredentialsUi,
             Runnable refreshIniFilePreview,
+            Runnable refreshLauncherLog,
             Runnable refreshLaunchProfileCombo) {
         Platform.runLater(
                 () -> {
@@ -1417,8 +1544,9 @@ public final class RequestFormRemoteDesktopPane {
                                 if (loadError != null) {
                                     rapStatusLabel.setText("読込失敗: " + loadError.getMessage());
                                     showAlert(Alert.AlertType.ERROR, "読込失敗", loadError.getMessage());
-                                    if (refreshIniFilePreview != null) {
-                                        refreshIniFilePreview.run();
+                                    if (refreshIniFilePreview != null || refreshLauncherLog != null) {
+                                        refreshRightPanePreviews(
+                                                refreshIniFilePreview, refreshLauncherLog);
                                     }
                                     return;
                                 }
@@ -1441,9 +1569,7 @@ public final class RequestFormRemoteDesktopPane {
                                 if (refreshAladdinCredentialsUi != null) {
                                     refreshAladdinCredentialsUi.run();
                                 }
-                                if (refreshIniFilePreview != null) {
-                                    refreshIniFilePreview.run();
-                                }
+                                refreshRightPanePreviews(refreshIniFilePreview, refreshLauncherLog);
                             });
                 });
     }
@@ -1458,6 +1584,7 @@ public final class RequestFormRemoteDesktopPane {
             Runnable refreshPaths,
             CheckBox chkDisconnectOnChildExit,
             Runnable refreshIniFilePreview,
+            Runnable refreshLauncherLog,
             Runnable refreshLaunchProfileCombo) {
         runBackgroundThenFx(
                 () -> {
@@ -1484,8 +1611,9 @@ public final class RequestFormRemoteDesktopPane {
                                 if (loadError != null) {
                                     rapStatusLabel.setText("読込失敗: " + loadError.getMessage());
                                     showAlert(Alert.AlertType.ERROR, "読込失敗", loadError.getMessage());
-                                    if (refreshIniFilePreview != null) {
-                                        refreshIniFilePreview.run();
+                                    if (refreshIniFilePreview != null || refreshLauncherLog != null) {
+                                        refreshRightPanePreviews(
+                                                refreshIniFilePreview, refreshLauncherLog);
                                     }
                                     return;
                                 }
@@ -1502,9 +1630,7 @@ public final class RequestFormRemoteDesktopPane {
                                         chkDisconnectOnChildExit,
                                         ui,
                                         refreshLaunchProfileCombo);
-                                if (refreshIniFilePreview != null) {
-                                    refreshIniFilePreview.run();
-                                }
+                                refreshRightPanePreviews(refreshIniFilePreview, refreshLauncherLog);
                             });
                 });
     }
@@ -1552,6 +1678,138 @@ public final class RequestFormRemoteDesktopPane {
                                 metaLabel.setText(previewMeta);
                             });
                 });
+    }
+
+    private static void refreshRightPanePreviews(Runnable refreshIniFilePreview, Runnable refreshLauncherLog) {
+        if (refreshIniFilePreview != null) {
+            refreshIniFilePreview.run();
+        }
+        if (refreshLauncherLog != null) {
+            refreshLauncherLog.run();
+        }
+    }
+
+    private static void scheduleLauncherLogRefresh(
+            Supplier<Map<String, String>> uiEnv,
+            AtomicReference<String> fullTextHolder,
+            AtomicReference<String> baseMetaHolder,
+            Runnable applyFilter) {
+        runBackgroundThenFx(
+                () -> {
+                    Map<String, String> ui = uiEnv.get();
+                    Path logPath = AppPaths.resolveRdpLauncherSharedLogPath(ui);
+                    String body;
+                    String meta;
+                    try {
+                        if (!Files.isRegularFile(logPath)) {
+                            body = "";
+                            meta = "ファイル未作成: " + logPath;
+                        } else {
+                            body = readLauncherLogText(logPath);
+                            var modified =
+                                    Files.getLastModifiedTime(logPath)
+                                            .toInstant()
+                                            .atZone(java.time.ZoneId.systemDefault())
+                                            .toLocalDateTime()
+                                            .format(
+                                                    java.time.format.DateTimeFormatter.ofPattern(
+                                                            "yyyy-MM-dd HH:mm:ss"));
+                            long lineCount = body.isEmpty() ? 0 : body.lines().count();
+                            meta =
+                                    logPath
+                                            + " · "
+                                            + Files.size(logPath)
+                                            + " bytes · "
+                                            + lineCount
+                                            + " 行 · 更新 "
+                                            + modified;
+                        }
+                    } catch (IOException ex) {
+                        body = "";
+                        meta = "読込失敗: " + ex.getMessage() + " (" + logPath + ")";
+                    }
+                    final String logBody = body;
+                    final String logMeta = meta;
+                    Platform.runLater(
+                            () -> {
+                                fullTextHolder.set(logBody);
+                                baseMetaHolder.set(logMeta);
+                                applyFilter.run();
+                            });
+                });
+    }
+
+    private static String readLauncherLogText(Path logPath) throws IOException {
+        try {
+            return Files.readString(logPath, StandardCharsets.UTF_8);
+        } catch (MalformedInputException ex) {
+            return Files.readString(logPath, Charset.forName("MS932"));
+        }
+    }
+
+    private static void applyLauncherLogSearchFilter(
+            TextArea area,
+            Label metaLabel,
+            String baseMeta,
+            String fullText,
+            String searchRaw) {
+        String full = fullText != null ? fullText : "";
+        String search = searchRaw != null ? searchRaw.trim() : "";
+        String meta = baseMeta != null ? baseMeta : "";
+        if (search.isEmpty()) {
+            area.setText(full);
+            metaLabel.setText(meta);
+            return;
+        }
+        if (full.isEmpty()) {
+            area.setText("");
+            metaLabel.setText(meta + " · 検索「" + search + "」 0 / 0 行");
+            return;
+        }
+        String searchLower = search.toLowerCase(Locale.ROOT);
+        StringBuilder filtered = new StringBuilder();
+        int matchCount = 0;
+        int totalLines = 0;
+        for (String line : full.split("\n", -1)) {
+            if (line.isEmpty() && full.isEmpty()) {
+                break;
+            }
+            totalLines++;
+            if (line.toLowerCase(Locale.ROOT).contains(searchLower)) {
+                if (matchCount > 0) {
+                    filtered.append('\n');
+                }
+                filtered.append(line);
+                matchCount++;
+            }
+        }
+        area.setText(filtered.toString());
+        metaLabel.setText(
+                meta + " · 検索「" + search + "」 " + matchCount + " / " + totalLines + " 行");
+    }
+
+    private static void applyLauncherLogAreaFont(
+            TextArea area, String familyChoice, Double sizePoints) {
+        double size =
+                sizePoints != null && sizePoints > 0 && Double.isFinite(sizePoints)
+                        ? sizePoints
+                        : Font.getDefault().getSize();
+        if (familyChoice == null
+                || familyChoice.equals(LAUNCHER_LOG_DEFAULT_FONT_FAMILY_LABEL)) {
+            area.setStyle(
+                    String.format(
+                            Locale.ROOT,
+                            "-fx-font-family: \"Consolas\", \"Cascadia Mono\", \"Courier New\", monospace; -fx-font-size: %.0fpx;",
+                            size));
+            return;
+        }
+        String escaped = familyChoice.replace("'", "\\'");
+        area.setStyle(
+                String.format(
+                        Locale.ROOT,
+                        "-fx-font-family: '%s'; -fx-font-size: %.0fpx;",
+                        escaped,
+                        size));
     }
 
     private static void applyLoadedSettings(

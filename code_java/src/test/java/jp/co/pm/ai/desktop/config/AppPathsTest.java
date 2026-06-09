@@ -215,6 +215,15 @@ class AppPathsTest {
         assertEquals(
                 deployDir.resolve(AppPaths.RDP_LAUNCHER_EXE_BASENAME).normalize(),
                 AppPaths.resolveRdpLauncherExe(ui).normalize());
+        assertTrue(
+                AppPaths.resolveRdpLauncherSharedLogPath(ui)
+                        .getFileName()
+                        .toString()
+                        .startsWith("launcher-"));
+        assertTrue(
+                AppPaths.resolveRdpLauncherSharedLogPath(ui)
+                        .normalize()
+                        .startsWith(deployDir.normalize()));
     }
 
     @Test

@@ -1915,6 +1915,15 @@
     -fx-padding: 0 3 0 3;
 }
 
+.pm-remote-desktop-right-split {
+    -fx-padding: 0;
+    -fx-background-color: transparent;
+}
+
+.pm-remote-desktop-right-split > .split-pane-divider {
+    -fx-padding: 2 0 2 0;
+}
+
 /* --- ページ見出し --- */
 
 .pm-remote-desktop-tab .pm-rdp-page-title {
@@ -2159,6 +2168,21 @@
 }
 
 .pm-remote-desktop-tab .pm-remote-desktop-ini-preview {
+    -fx-font-family: "Consolas", "Cascadia Mono", "Courier New", monospace;
+    -fx-font-size: 12px;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+}
+
+.pm-remote-desktop-tab .pm-rdp-launcher-log-panel {
+    -fx-background-color: derive(-fx-base, 8%);
+    -fx-background-radius: 8;
+    -fx-border-color: derive(-fx-base, -18%);
+    -fx-border-radius: 8;
+    -fx-border-width: 1;
+}
+
+.pm-remote-desktop-tab .pm-remote-desktop-launcher-log {
     -fx-font-family: "Consolas", "Cascadia Mono", "Courier New", monospace;
     -fx-font-size: 12px;
     -fx-background-radius: 6;

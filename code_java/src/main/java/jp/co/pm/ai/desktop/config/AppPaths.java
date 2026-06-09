@@ -1,6 +1,8 @@
 package jp.co.pm.ai.desktop.config;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -1408,6 +1410,17 @@ public final class AppPaths {
 
     public static Path resolveRdpLauncherVersionFile(Map<String, String> ui) {
         return resolveRdpLauncherDeployDir(ui).resolve(RDP_LAUNCHER_VERSION_BASENAME);
+    }
+
+    /** 接続先共有フォルダ上の当日ランチャーログ（{@code launcher-yyyyMMdd.log}）。 */
+    public static Path resolveRdpLauncherSharedLogPath(Map<String, String> ui) {
+        Path launcherExe = resolveRdpLauncherExe(ui);
+        String date = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
+        Path logDir = launcherExe.getParent();
+        if (logDir == null) {
+            return launcherExe.resolveSibling("launcher-" + date + ".log");
+        }
+        return logDir.resolve("launcher-" + date + ".log");
     }
 
     /** 起動プロファイル JSON（名称・説明・区分等）。 */
