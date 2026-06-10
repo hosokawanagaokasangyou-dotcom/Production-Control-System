@@ -145,12 +145,18 @@ public final class RdpLaunchProfileCatalog {
         if (number < 1 || number > RdpRemoteLauncherIni.MAX_SLOTS) {
             return null;
         }
+        RdpSessionEndAction sessionEndAction = null;
+        JsonNode sessionEndActionNode = node.get("sessionEndAction");
+        if (sessionEndActionNode != null && sessionEndActionNode.isTextual()) {
+            sessionEndAction = RdpSessionEndAction.fromProfileJson(sessionEndActionNode.asText());
+        }
         return new RdpLaunchProfile(
                 number,
                 textOrEmpty(node.get("name")),
                 textOrEmpty(node.get("description")),
                 textOrEmpty(node.get("category")),
                 nullableBoolean(node.get("disconnectOnChildExit")),
+                sessionEndAction,
                 nullableBoolean(node.get("fullScreen")),
                 nullableInteger(node.get("desktopWidth")),
                 nullableInteger(node.get("desktopHeight")),
@@ -163,7 +169,9 @@ public final class RdpLaunchProfileCatalog {
         node.put("name", profile.name());
         node.put("description", profile.description());
         node.put("category", profile.category());
-        if (profile.disconnectOnChildExit() != null) {
+        if (profile.sessionEndAction() != null) {
+            node.put("sessionEndAction", profile.sessionEndAction().iniValue());
+        } else if (profile.disconnectOnChildExit() != null) {
             node.put("disconnectOnChildExit", profile.disconnectOnChildExit());
         }
         if (profile.fullScreen() != null) {

@@ -20,11 +20,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javafx.application.Platform;
+import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ChoiceDialog;
@@ -64,6 +66,7 @@ import jp.co.pm.ai.desktop.io.RdpLaunchDisplaySettings;
 import jp.co.pm.ai.desktop.io.RdpMstscSessionMonitor;
 import jp.co.pm.ai.desktop.io.RdpRemoteLauncherDeployer;
 import jp.co.pm.ai.desktop.io.RdpRemoteLauncherIni;
+import jp.co.pm.ai.desktop.io.RdpSessionEndAction;
 import jp.co.pm.ai.desktop.io.RemoteDesktopLauncher;
 
 /**
@@ -245,14 +248,35 @@ public final class RequestFormRemoteDesktopPane {
                             }
                         });
 
-        CheckBox chkDisconnectOnChildExit = new CheckBox("子プロセス終了時に RDP を切断");
-        chkDisconnectOnChildExit.setSelected(true);
-        chkDisconnectOnChildExit.setTooltip(
+        ComboBox<RdpSessionEndAction> cmbSessionEndAction =
+                new ComboBox<>(
+                        FXCollections.observableArrayList(RdpSessionEndAction.values()));
+        cmbSessionEndAction.setValue(RdpSessionEndAction.SIGN_OUT);
+        cmbSessionEndAction.setMaxWidth(CARD_WIDTH);
+        cmbSessionEndAction.setConverter(
+                new StringConverter<>() {
+                    @Override
+                    public String toString(RdpSessionEndAction action) {
+                        return action == null ? "" : action.displayLabel();
+                    }
+
+                    @Override
+                    public RdpSessionEndAction fromString(String string) {
+                        return RdpSessionEndAction.fromIniValue(string, RdpSessionEndAction.SIGN_OUT);
+                    }
+                });
+        cmbSessionEndAction.setTooltip(
                 new Tooltip(
-                        "接続先ランチャーが起動したプログラムの終了を待ち、終了後に RDP セッションを切断します。"
+                        "接続先ランチャーが起動したプログラムの終了を待ち、終了後の RDP セッション操作を選びます。"
+                                + " 「なし」は操作しません。「切断」はセッションを残して接続のみ終了します。"
+                                + " 「サインアウト」はセッションを終了します。"
                                 + " RAP設定.ini の「"
-                                + RdpRemoteLauncherIni.DISCONNECT_ON_CHILD_EXIT_KEY
+                                + RdpRemoteLauncherIni.SESSION_END_ACTION_KEY
                                 + "」に保存されます。"));
+        Label sessionEndActionLabel = new Label("子プロセス終了時のセッション操作");
+        HBox sessionEndActionRow =
+                new HBox(8, sessionEndActionLabel, cmbSessionEndAction);
+        sessionEndActionRow.setAlignment(Pos.CENTER_LEFT);
 
         Runnable refreshPaths =
                 () -> {
@@ -459,7 +483,7 @@ public final class RequestFormRemoteDesktopPane {
                                 appendProfileRow,
                                 rapStatusLabel,
                                 refreshPaths,
-                                chkDisconnectOnChildExit,
+                                cmbSessionEndAction,
                                 refreshIniFilePreview[0],
                                 refreshLauncherLog[0],
                                 refreshLaunchProfileCombo[0]);
@@ -476,7 +500,9 @@ public final class RequestFormRemoteDesktopPane {
                                     ? selectedProfile
                                     : AppPaths.resolveRdpLaunchProfileNumber(ui);
                     ini.setSelectedSlot(profileNumber);
-                    ini.setDisconnectOnChildExit(chkDisconnectOnChildExit.isSelected());
+                    RdpSessionEndAction endAction = cmbSessionEndAction.getValue();
+                    ini.setSessionEndAction(
+                            endAction != null ? endAction : RdpSessionEndAction.SIGN_OUT);
                     for (ProfileRowFields row : profileFields) {
                         ini.setSlotCommand(
                                 row.number(),
@@ -620,7 +646,7 @@ public final class RequestFormRemoteDesktopPane {
                         launcherPathBlock,
                         deployStatusLabel,
                         profileBox,
-                        chkDisconnectOnChildExit,
+                        sessionEndActionRow,
                         rapActionRow,
                         rapStatusLabel);
         rapContent.setFillWidth(true);
@@ -867,6 +893,19 @@ public final class RequestFormRemoteDesktopPane {
                                 "リモートデスクトップの起動は Windows 上のデスクトップアプリでのみ利用できます。");
                         return;
                     }
+                    Path configuredProfile = profile.get();
+                    Path launchProfilePath =
+                            RdpFileSigner.resolvePreferredSignedProfilePath(configuredProfile, ui);
+                    if (warnDefaultRdpBlockedAndMaybeOpenSignWizard(
+                            owner != null ? owner : btnLaunch.getScene().getWindow(),
+                            launchProfilePath,
+                            uiEnv.get(),
+                            status,
+                            statusLabel,
+                            profileChangeHandler,
+                            profileField)) {
+                        return;
+                    }
 
                     int launchSlot = selectedLaunchProfile;
                     if (launchProfileNumberChangeHandler != null) {
@@ -875,9 +914,11 @@ public final class RequestFormRemoteDesktopPane {
                     String launchProfileLabel = profileComboLabel(launchRow, launchProfileMeta);
                     Path launcherIniPath = AppPaths.resolveRdpLauncherIni(ui);
                     try {
-                        if (launchProfileMeta.disconnectOnChildExit() != null) {
+                        RdpSessionEndAction profileEndAction =
+                                launchProfileMeta.resolvedSessionEndAction();
+                        if (profileEndAction != null) {
                             RdpRemoteLauncherIni preIni = RdpRemoteLauncherIni.load(launcherIniPath);
-                            preIni.setDisconnectOnChildExit(launchProfileMeta.disconnectOnChildExit());
+                            preIni.setSessionEndAction(profileEndAction);
                             preIni.save(launcherIniPath);
                         }
                         FactoryOperatorUserStore.syncLauncherCredentialsJsonToDeployDir(ui);
@@ -898,7 +939,7 @@ public final class RequestFormRemoteDesktopPane {
                     Runnable performLaunch =
                             () -> {
                                 try {
-                                    Path configured = profile.get();
+                                    Path configured = configuredProfile;
                                     Path preferred =
                                             RdpFileSigner.resolvePreferredSignedProfilePath(
                                                     configured, ui);
@@ -1488,7 +1529,7 @@ public final class RequestFormRemoteDesktopPane {
                                 appendProfileRow,
                                 rapStatusLabel,
                                 applyDisplayFieldsFromUi,
-                                chkDisconnectOnChildExit,
+                                cmbSessionEndAction,
                                 btnForceDeployLauncher,
                                 btnLaunch,
                                 launcherDeployInProgress,
@@ -1518,7 +1559,7 @@ public final class RequestFormRemoteDesktopPane {
             IntConsumer appendProfileRow,
             Label rapStatusLabel,
             Runnable applyDisplayFieldsFromUi,
-            CheckBox chkDisconnectOnChildExit,
+            ComboBox<RdpSessionEndAction> cmbSessionEndAction,
             Button btnForceDeployLauncher,
             Button btnLaunch,
             AtomicBoolean launcherDeployInProgress,
@@ -1621,7 +1662,7 @@ public final class RequestFormRemoteDesktopPane {
                                         profileMetadataByNumber,
                                         appendProfileRow,
                                         rapStatusLabel,
-                                        chkDisconnectOnChildExit,
+                                        cmbSessionEndAction,
                                         uiEnv.get(),
                                         refreshLaunchProfileCombo);
                                 if (refreshAladdinCredentialsUi != null) {
@@ -1640,7 +1681,7 @@ public final class RequestFormRemoteDesktopPane {
             IntConsumer appendProfileRow,
             Label rapStatusLabel,
             Runnable refreshPaths,
-            CheckBox chkDisconnectOnChildExit,
+            ComboBox<RdpSessionEndAction> cmbSessionEndAction,
             Runnable refreshIniFilePreview,
             Runnable refreshLauncherLog,
             Runnable refreshLaunchProfileCombo) {
@@ -1685,7 +1726,7 @@ public final class RequestFormRemoteDesktopPane {
                                         profileMetadataByNumber,
                                         appendProfileRow,
                                         rapStatusLabel,
-                                        chkDisconnectOnChildExit,
+                                        cmbSessionEndAction,
                                         ui,
                                         refreshLaunchProfileCombo);
                                 refreshRightPanePreviews(refreshIniFilePreview, refreshLauncherLog);
@@ -1941,7 +1982,7 @@ public final class RequestFormRemoteDesktopPane {
             Map<Integer, RdpLaunchProfile> profileMetadataByNumber,
             IntConsumer appendProfileRow,
             Label rapStatusLabel,
-            CheckBox chkDisconnectOnChildExit,
+            ComboBox<RdpSessionEndAction> cmbSessionEndAction,
             Map<String, String> ui,
             Runnable refreshLaunchProfileCombo) {
         profileMetadataByNumber.clear();
@@ -1958,7 +1999,7 @@ public final class RequestFormRemoteDesktopPane {
         } else {
             comboTarget = 1;
         }
-        chkDisconnectOnChildExit.setSelected(ini.disconnectOnChildExit());
+        cmbSessionEndAction.setValue(ini.sessionEndAction());
 
         int visibleFromIni = ini.visibleSlotCount();
         int visibleFromCatalog =
@@ -2164,7 +2205,7 @@ public final class RequestFormRemoteDesktopPane {
     private static String formatRdpSessionEndMessage(RdpMstscSessionMonitor.SessionEndEvent event) {
         return switch (event.reason()) {
             case MSTSC_EXIT ->
-                    "リモートデスクトップ接続が終了しました（接続先 RPA 完了後の RDP 切断を含む）。";
+                    "リモートデスクトップ接続が終了しました（接続先 RPA 完了後のセッション終了操作を含む）。";
             case PROCESS_NOT_FOUND ->
                     "mstsc プロセスを特定できなかったため、接続終了を監視できませんでした: "
                             + event.rdpProfile();
@@ -2391,6 +2432,7 @@ public final class RequestFormRemoteDesktopPane {
                 null,
                 null,
                 null,
+                null,
                 row.chkRpaEternal().isSelected());
     }
 
@@ -2449,5 +2491,58 @@ public final class RequestFormRemoteDesktopPane {
         body.setMinWidth(360);
         alert.getDialogPane().setContent(body);
         alert.showAndWait();
+    }
+
+    /**
+     * {@link AppPaths#WINDOWS_DEFAULT_RDP_FILENAME} が解決結果のとき警告し、署名ウィザードを案内する。
+     *
+     * @return 起動を中止すべきとき {@code true}
+     */
+    private static boolean warnDefaultRdpBlockedAndMaybeOpenSignWizard(
+            Window owner,
+            Path resolvedProfile,
+            Map<String, String> uiEnv,
+            Consumer<String> status,
+            Label statusLabel,
+            Consumer<String> profileChangeHandler,
+            TextField profileField) {
+        if (!RemoteDesktopLauncher.isDefaultRdpLaunchBlocked(resolvedProfile)) {
+            return false;
+        }
+        ButtonType openWizard =
+                new ButtonType("署名ウィザードを開く", ButtonBar.ButtonData.OK_DONE);
+        Alert alert =
+                new Alert(
+                        Alert.AlertType.WARNING,
+                        RemoteDesktopLauncher.DEFAULT_RDP_LAUNCH_BLOCKED_MESSAGE,
+                        openWizard,
+                        ButtonType.CANCEL);
+        alert.setTitle("Default.rdp は使用できません");
+        alert.setHeaderText("署名済みプロファイルを作成してください");
+        Label body = new Label(RemoteDesktopLauncher.DEFAULT_RDP_LAUNCH_BLOCKED_MESSAGE);
+        body.setWrapText(true);
+        body.setMaxWidth(520);
+        body.setMinWidth(360);
+        alert.getDialogPane().setContent(body);
+        Optional<ButtonType> choice = alert.showAndWait();
+        if (choice.isPresent() && choice.get() == openWizard) {
+            RdpProfileSignWizard.show(
+                    owner,
+                    Optional.of(resolvedProfile),
+                    uiEnv,
+                    msg -> {
+                        status.accept(msg);
+                        statusLabel.setText(msg);
+                    },
+                    path -> {
+                        profileField.setText(path);
+                        if (profileChangeHandler != null) {
+                            profileChangeHandler.accept(path);
+                        }
+                    });
+        }
+        status.accept("Default.rdp のためリモートデスクトップを起動しませんでした。");
+        statusLabel.setText("Default.rdp は使用できません。署名済みプロファイルを作成してください。");
+        return true;
     }
 }

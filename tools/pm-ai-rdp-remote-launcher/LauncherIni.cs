@@ -7,11 +7,13 @@ internal sealed class LauncherIni
     internal const string SelectedSlotKey = "起動プログラム番号";
     internal const string OperatorKey = "操作者";
     internal const string DisconnectOnChildExitKey = "終了時RDP切断";
+    internal const string SessionEndActionKey = "終了時セッション操作";
     internal const string DefaultIniFileName = "RAP設定.ini";
     internal const string IniPathEnvVar = "PM_AI_RDP_LAUNCHER_INI";
     internal const string DisconnectOnChildExitEnvVar = "PM_AI_RDP_DISCONNECT_ON_CHILD_EXIT";
+    internal const string SessionEndActionEnvVar = "PM_AI_RDP_SESSION_END_ACTION";
 
-    /** タスクスケジューラ経由の自動起動を抑止（RPA 起動・RDP 切断ともに行わない）。 */
+    /** タスクスケジューラ経由の自動起動を抑止（RPA 起動・サインアウトともに行わない）。 */
     internal const int DisabledSlot = 0;
 
     internal int SelectedSlot { get; set; } = 1;
@@ -19,14 +21,18 @@ internal sealed class LauncherIni
     /** 接続直前に PM-AI が書くセッション操作者名。 */
     internal string OperatorName { get; set; } = "";
 
-    /** 子プロセス終了後に RDP セッションを切断する（既定 true）。 */
+    /** 子プロセス終了後に RDP セッション操作を行う（後方互換。SessionEndAction が正）。 */
     internal bool DisconnectOnChildExit { get; set; } = true;
+
+    /** 子プロセス終了後のセッション操作（既定サインアウト）。 */
+    internal SessionEndAction SessionEndAction { get; set; } = SessionEndAction.SignOut;
 
     internal Dictionary<int, string> Slots { get; } = new();
 
     internal static LauncherIni Load(string path)
     {
         var ini = new LauncherIni();
+        var sawSessionEndActionKey = false;
         foreach (var rawLine in File.ReadAllLines(path, Encoding.UTF8))
         {
             var line = rawLine.Trim();
@@ -58,6 +64,13 @@ internal sealed class LauncherIni
                 continue;
             }
 
+            if (key == SessionEndActionKey)
+            {
+                ini.SessionEndAction = ParseSessionEndAction(value, ini.SessionEndAction);
+                sawSessionEndActionKey = true;
+                continue;
+            }
+
             if (key == OperatorKey)
             {
                 ini.OperatorName = value;
@@ -68,6 +81,13 @@ internal sealed class LauncherIni
             {
                 ini.Slots[slotNumber] = value;
             }
+        }
+
+        if (!sawSessionEndActionKey)
+        {
+            ini.SessionEndAction = ini.DisconnectOnChildExit
+                ? SessionEndAction.SignOut
+                : SessionEndAction.None;
         }
 
         return ini;
@@ -87,13 +107,24 @@ internal sealed class LauncherIni
 
     internal bool ResolveDisconnectOnChildExit()
     {
-        var fromEnv = Environment.GetEnvironmentVariable(DisconnectOnChildExitEnvVar);
+        return ResolveSessionEndAction() != SessionEndAction.None;
+    }
+
+    internal SessionEndAction ResolveSessionEndAction()
+    {
+        var fromEnv = Environment.GetEnvironmentVariable(SessionEndActionEnvVar);
         if (!string.IsNullOrWhiteSpace(fromEnv))
         {
-            return ParseBoolean(fromEnv, DisconnectOnChildExit);
+            return ParseSessionEndAction(fromEnv, SessionEndAction);
         }
 
-        return DisconnectOnChildExit;
+        var legacyEnv = Environment.GetEnvironmentVariable(DisconnectOnChildExitEnvVar);
+        if (!string.IsNullOrWhiteSpace(legacyEnv) && !ParseBoolean(legacyEnv, DisconnectOnChildExit))
+        {
+            return SessionEndAction.None;
+        }
+
+        return SessionEndAction;
     }
 
     /// <summary>
@@ -133,6 +164,23 @@ internal sealed class LauncherIni
         }
 
         File.WriteAllLines(path, lines, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    }
+
+    private static SessionEndAction ParseSessionEndAction(string raw, SessionEndAction defaultValue)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return defaultValue;
+        }
+
+        var normalized = raw.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "なし" or "none" or "off" or "0" => SessionEndAction.None,
+            "切断" or "disconnect" or "rdp切断" or "rdp_disconnect" => SessionEndAction.Disconnect,
+            "サインアウト" or "signout" or "sign_out" or "logoff" or "ログオフ" => SessionEndAction.SignOut,
+            _ => defaultValue,
+        };
     }
 
     private static bool ParseBoolean(string raw, bool defaultValue)

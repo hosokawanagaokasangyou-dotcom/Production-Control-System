@@ -49,7 +49,7 @@ internal static class Program
                 LauncherLog.Info(
                     "起動プログラム番号="
                         + LauncherIni.DisabledSlot
-                        + " のため何もしません（RPA 起動・RDP 切断・サインアウトなし）。");
+                        + " のため何もしません（RPA 起動・サインアウトなし）。");
                 return ExitWithLog(ExitOk, "抑止（起動プログラム番号=0）");
             }
 
@@ -72,8 +72,8 @@ internal static class Program
                 return ExitWithLog(ExitError, "コマンド行解析失敗");
             }
 
-            var disconnectOnChildExit = ini.ResolveDisconnectOnChildExit();
-            LauncherLog.Info("終了時RDP切断: " + (disconnectOnChildExit ? "有効" : "無効"));
+            var sessionEndAction = ini.ResolveSessionEndAction();
+            LauncherLog.Info("終了時セッション操作: " + FormatSessionEndAction(sessionEndAction));
             LauncherLog.Info(
                 "操作者="
                     + (string.IsNullOrWhiteSpace(ini.OperatorName) ? "(未設定)" : ini.OperatorName));
@@ -87,8 +87,15 @@ internal static class Program
                 return ExitWithLog(ExitError, "アラジン資格情報未設定");
             }
 
+            var iniArgumentTokens = WindowsArgumentFormatter.TokenizeForProcess(parsed.Arguments);
+            if (AladdinRpaArgumentAppender.WouldStripEternalForScenario(iniArgumentTokens))
+            {
+                LauncherLog.Info(
+                    "シナリオ指定のため --eternal を除去します（終了検知とセッション終了操作のため）。");
+            }
+
             var argumentTokens = AladdinRpaArgumentAppender.AppendCredentials(
-                WindowsArgumentFormatter.TokenizeForProcess(parsed.Arguments),
+                iniArgumentTokens,
                 credentials);
             var launchArguments = WindowsArgumentFormatter.FormatArgumentString(
                 string.Join(" ", argumentTokens));
@@ -174,16 +181,21 @@ internal static class Program
                 LauncherLog.Info("子プロセス終了 PID=" + child.Id + " ExitCode=" + FormatExitCode(child));
             }
 
-            if (disconnectOnChildExit)
+            if (sessionEndAction != SessionEndAction.None)
             {
-                if (RdpSessionDisconnecter.TryDisconnectCurrentSession(out var disconnectError))
+                var sessionEndSucceeded = sessionEndAction switch
                 {
-                    LauncherLog.Info("RDP セッションを切断しました");
-                }
-                else
-                {
-                    LauncherLog.Error("RDP 切断失敗: " + disconnectError);
-                }
+                    SessionEndAction.Disconnect =>
+                        RdpSessionDisconnecter.TryDisconnectCurrentSession(out var disconnectError)
+                            ? LogSessionEndSuccess("RDP セッションを切断しました")
+                            : LogSessionEndFailure("RDP 切断失敗: " + disconnectError),
+                    SessionEndAction.SignOut =>
+                        RdpSessionSignOuter.TrySignOutCurrentSession(out var signOutError)
+                            ? LogSessionEndSuccess("RDP セッションをサインアウトしました")
+                            : LogSessionEndFailure("サインアウト失敗: " + signOutError),
+                    _ => true,
+                };
+                _ = sessionEndSucceeded;
             }
 
             return ExitWithLog(ExitOk, "正常終了");
@@ -216,6 +228,29 @@ internal static class Program
         {
             LauncherLog.Error("起動プログラム番号の 0 設定に失敗: " + ex.Message);
         }
+    }
+
+    private static bool LogSessionEndSuccess(string message)
+    {
+        LauncherLog.Info(message);
+        return true;
+    }
+
+    private static bool LogSessionEndFailure(string message)
+    {
+        LauncherLog.Error(message);
+        return false;
+    }
+
+    private static string FormatSessionEndAction(SessionEndAction action)
+    {
+        return action switch
+        {
+            SessionEndAction.None => "なし",
+            SessionEndAction.Disconnect => "切断",
+            SessionEndAction.SignOut => "サインアウト",
+            _ => action.ToString(),
+        };
     }
 
     private static int ExitWithLog(int exitCode, string reason)

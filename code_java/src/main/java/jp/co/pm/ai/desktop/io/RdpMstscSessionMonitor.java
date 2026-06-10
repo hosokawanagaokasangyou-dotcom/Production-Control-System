@@ -12,7 +12,7 @@ import java.util.function.Consumer;
 /**
  * ローカル {@code mstsc.exe} の終了を監視する。
  *
- * <p>接続先 {@code PmAiRdpRemoteLauncher} が子プロセス終了後に RDP を切断すると mstsc も終了するため、
+ * <p>接続先 {@code PmAiRdpRemoteLauncher} が子プロセス終了後にサインアウトすると mstsc も終了するため、
  * 配台システム側で RPA 完了相当のタイミングを検知できる。
  */
 public final class RdpMstscSessionMonitor {

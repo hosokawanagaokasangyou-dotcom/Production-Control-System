@@ -5,6 +5,7 @@ internal static class AladdinRpaArgumentAppender
     /// <summary>
     /// Aladdin RPA 起動引数を組み立てる。
     /// 資格情報（--id / --password）を先頭、--eternal は末尾（シナリオなし起動時のログイン失敗回避）。
+    /// シナリオ指定時は --eternal を付けない（終了後もプロセスが残りセッション終了操作が遅延するため）。
     /// </summary>
     internal static List<string> AppendCredentials(
         IReadOnlyList<string> tokens,
@@ -14,6 +15,7 @@ internal static class AladdinRpaArgumentAppender
         RemoveExistingCredentialFlags(others);
         var hasEternal = RemoveFlag(others, AladdinRpaLaunchArgs.EternalFlag);
         NormalizeScenarioTokens(others);
+        var hasScenario = ContainsScenario(others);
 
         var result = new List<string>
         {
@@ -23,12 +25,40 @@ internal static class AladdinRpaArgumentAppender
             credentials.Password,
         };
         result.AddRange(others);
-        if (hasEternal)
+        if (hasEternal && !hasScenario)
         {
             result.Add(AladdinRpaLaunchArgs.EternalFlag);
         }
 
         return result;
+    }
+
+    internal static bool WouldStripEternalForScenario(IReadOnlyList<string> tokens)
+    {
+        var others = new List<string>(tokens);
+        RemoveExistingCredentialFlags(others);
+        var hasEternal = others.Any(t =>
+            string.Equals(t, AladdinRpaLaunchArgs.EternalFlag, StringComparison.OrdinalIgnoreCase));
+        NormalizeScenarioTokens(others);
+        return hasEternal && ContainsScenario(others);
+    }
+
+    private static bool ContainsScenario(IReadOnlyList<string> tokens)
+    {
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            if (string.Equals(tokens[i], AladdinRpaLaunchArgs.ScenarioFlag, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (LooksLikeScenarioPath(tokens[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void RemoveExistingCredentialFlags(List<string> tokens)

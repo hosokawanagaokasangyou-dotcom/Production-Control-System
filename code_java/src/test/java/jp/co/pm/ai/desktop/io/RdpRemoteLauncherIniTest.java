@@ -91,13 +91,41 @@ class RdpRemoteLauncherIniTest {
 
         RdpRemoteLauncherIni loaded = RdpRemoteLauncherIni.load(iniPath);
         assertFalse(loaded.disconnectOnChildExit());
+        assertEquals(RdpSessionEndAction.NONE, loaded.sessionEndAction());
 
         loaded.setDisconnectOnChildExit(true);
         Path out = tmp.resolve("out.ini");
         loaded.save(out);
         RdpRemoteLauncherIni again = RdpRemoteLauncherIni.load(out);
         assertTrue(again.disconnectOnChildExit());
+        assertEquals(RdpSessionEndAction.SIGN_OUT, again.sessionEndAction());
         assertTrue(Files.readString(out, StandardCharsets.UTF_8).contains("終了時RDP切断=1"));
+        assertTrue(
+                Files.readString(out, StandardCharsets.UTF_8)
+                        .contains(RdpRemoteLauncherIni.SESSION_END_ACTION_KEY + "=サインアウト"));
+    }
+
+    @Test
+    void loadAndSave_persistsSessionEndActionDisconnect(@TempDir Path tmp) throws Exception {
+        Path iniPath = tmp.resolve("RAP設定.ini");
+        Files.writeString(
+                iniPath,
+                """
+                起動プログラム番号=1
+                終了時RDP切断=1
+                終了時セッション操作=切断
+                1="C:\\Windows\\System32\\notepad.exe"
+                """,
+                StandardCharsets.UTF_8);
+
+        RdpRemoteLauncherIni loaded = RdpRemoteLauncherIni.load(iniPath);
+        assertEquals(RdpSessionEndAction.DISCONNECT, loaded.sessionEndAction());
+
+        loaded.setSessionEndAction(RdpSessionEndAction.SIGN_OUT);
+        Path out = tmp.resolve("out.ini");
+        loaded.save(out);
+        RdpRemoteLauncherIni again = RdpRemoteLauncherIni.load(out);
+        assertEquals(RdpSessionEndAction.SIGN_OUT, again.sessionEndAction());
     }
 
     @Test

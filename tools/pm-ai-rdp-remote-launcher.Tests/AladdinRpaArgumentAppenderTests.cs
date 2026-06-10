@@ -25,7 +25,7 @@ public class AladdinRpaArgumentAppenderTests
     }
 
     [Fact]
-    public void AppendCredentials_putsScenarioBetweenCredentialsAndEternal()
+    public void AppendCredentials_putsScenarioBetweenCredentialsWithoutEternal()
     {
         var tokens = AladdinRpaArgumentAppender.AppendCredentials(
             new[]
@@ -45,9 +45,29 @@ public class AladdinRpaArgumentAppenderTests
                 "secret",
                 AladdinRpaLaunchArgs.ScenarioFlag,
                 @"\\server\share\a.ardrpa",
-                AladdinRpaLaunchArgs.EternalFlag,
             },
             tokens);
+    }
+
+    [Fact]
+    public void WouldStripEternalForScenario_trueWhenBothPresent()
+    {
+        Assert.True(
+            AladdinRpaArgumentAppender.WouldStripEternalForScenario(
+                new[]
+                {
+                    AladdinRpaLaunchArgs.ScenarioFlag,
+                    @"\\server\share\a.ardrpa",
+                    AladdinRpaLaunchArgs.EternalFlag,
+                }));
+    }
+
+    [Fact]
+    public void WouldStripEternalForScenario_falseWhenScenarioAbsent()
+    {
+        Assert.False(
+            AladdinRpaArgumentAppender.WouldStripEternalForScenario(
+                new[] { AladdinRpaLaunchArgs.EternalFlag }));
     }
 
     [Fact]

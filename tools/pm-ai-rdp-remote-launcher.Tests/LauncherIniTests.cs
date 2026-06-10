@@ -83,6 +83,53 @@ public class LauncherIniTests
         }
     }
 
+    [Fact]
+    public void Load_parsesSessionEndActionDisconnect()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "rap-" + Guid.NewGuid().ToString("N") + ".ini");
+        File.WriteAllText(
+            path,
+            """
+            起動プログラム番号=1
+            終了時RDP切断=1
+            終了時セッション操作=切断
+            1="C:\app.exe"
+            """);
+
+        try
+        {
+            var ini = LauncherIni.Load(path);
+            Assert.Equal(SessionEndAction.Disconnect, ini.ResolveSessionEndAction());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Load_legacyDisconnectFlagDefaultsToSignOut()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "rap-" + Guid.NewGuid().ToString("N") + ".ini");
+        File.WriteAllText(
+            path,
+            """
+            起動プログラム番号=1
+            終了時RDP切断=1
+            1="C:\app.exe"
+            """);
+
+        try
+        {
+            var ini = LauncherIni.Load(path);
+            Assert.Equal(SessionEndAction.SignOut, ini.ResolveSessionEndAction());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [Theory]
     [InlineData("1", true)]
     [InlineData("0", false)]

@@ -20,8 +20,10 @@ public final class RdpRemoteLauncherIni {
     public static final String SELECTED_SLOT_KEY = "起動プログラム番号";
     /** 接続直前に Java が書くセッション操作者名（C# ランチャーが資格情報解決に使用）。 */
     public static final String OPERATOR_KEY = "操作者";
-    /** 子プロセス終了後に RDP セッションを切断する（C# ランチャーが参照）。 */
+    /** 子プロセス終了後に RDP セッション操作を行うか（後方互換。{@link #SESSION_END_ACTION_KEY} が正）。 */
     public static final String DISCONNECT_ON_CHILD_EXIT_KEY = "終了時RDP切断";
+    /** 子プロセス終了後のセッション操作（C# ランチャーが参照）。値: なし / 切断 / サインアウト */
+    public static final String SESSION_END_ACTION_KEY = "終了時セッション操作";
     /** タスクスケジューラ経由の RPA 起動を抑止（配台から RDP 接続中）。 */
     public static final int SLOT_DISABLED = 0;
     public static final int MAX_SLOTS = 9;
@@ -31,6 +33,8 @@ public final class RdpRemoteLauncherIni {
 
     private int selectedSlot = 1;
     private boolean disconnectOnChildExit = true;
+    private RdpSessionEndAction sessionEndAction = RdpSessionEndAction.SIGN_OUT;
+    private boolean sessionEndActionExplicit;
     private String operatorName = "";
     private final Map<Integer, Command> slots = new TreeMap<>();
 
@@ -45,13 +49,24 @@ public final class RdpRemoteLauncherIni {
         selectedSlot = slot;
     }
 
-    /** 子プロセス終了後に RDP を切断する（既定 true）。 */
+    /** 子プロセス終了後にセッション操作を行う（後方互換）。 */
     public boolean disconnectOnChildExit() {
-        return disconnectOnChildExit;
+        return sessionEndAction.enabled();
     }
 
     public void setDisconnectOnChildExit(boolean disconnectOnChildExit) {
+        sessionEndAction = disconnectOnChildExit ? RdpSessionEndAction.SIGN_OUT : RdpSessionEndAction.NONE;
         this.disconnectOnChildExit = disconnectOnChildExit;
+    }
+
+    public RdpSessionEndAction sessionEndAction() {
+        return sessionEndAction;
+    }
+
+    public void setSessionEndAction(RdpSessionEndAction sessionEndAction) {
+        this.sessionEndAction =
+                sessionEndAction != null ? sessionEndAction : RdpSessionEndAction.SIGN_OUT;
+        this.disconnectOnChildExit = this.sessionEndAction.enabled();
     }
 
     public Command getSlotCommand(int slot) {
@@ -97,6 +112,7 @@ public final class RdpRemoteLauncherIni {
         if (!Files.isRegularFile(path)) {
             return ini;
         }
+        boolean sawSessionEndActionKey = false;
         List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
         for (String rawLine : lines) {
             String line = rawLine.trim();
@@ -124,6 +140,12 @@ public final class RdpRemoteLauncherIni {
                 ini.disconnectOnChildExit = parseBoolean(value, true);
                 continue;
             }
+            if (SESSION_END_ACTION_KEY.equals(key)) {
+                ini.sessionEndAction =
+                        RdpSessionEndAction.fromIniValue(value, RdpSessionEndAction.SIGN_OUT);
+                ini.sessionEndActionExplicit = true;
+                continue;
+            }
             if (OPERATOR_KEY.equals(key)) {
                 ini.operatorName = value != null ? value.strip() : "";
                 continue;
@@ -138,6 +160,13 @@ public final class RdpRemoteLauncherIni {
                 // ignore unknown or malformed keys
             }
         }
+        if (!ini.sessionEndActionExplicit) {
+            ini.sessionEndAction =
+                    ini.disconnectOnChildExit
+                            ? RdpSessionEndAction.SIGN_OUT
+                            : RdpSessionEndAction.NONE;
+        }
+        ini.disconnectOnChildExit = ini.sessionEndAction.enabled();
         return ini;
     }
 
@@ -156,7 +185,8 @@ public final class RdpRemoteLauncherIni {
     private List<String> toIniLines() {
         List<String> lines = new ArrayList<>();
         lines.add(SELECTED_SLOT_KEY + "=" + selectedSlot);
-        lines.add(DISCONNECT_ON_CHILD_EXIT_KEY + "=" + (disconnectOnChildExit ? "1" : "0"));
+        lines.add(DISCONNECT_ON_CHILD_EXIT_KEY + "=" + (sessionEndAction.enabled() ? "1" : "0"));
+        lines.add(SESSION_END_ACTION_KEY + "=" + sessionEndAction.iniValue());
         if (operatorName != null && !operatorName.isBlank()) {
             lines.add(OPERATOR_KEY + "=" + operatorName.strip());
         }
@@ -247,7 +277,7 @@ public final class RdpRemoteLauncherIni {
 
     /**
      * ini の起動番号を 0 にする（タスクスケジューラ抑止）。
-     * RDP 切断後の保険、または手動抑止用。スロット定義行は保持する。
+     * サインアウト後の保険、または手動抑止用。スロット定義行は保持する。
      */
     public static void writeTaskSchedulerSuppress(Path path) throws IOException {
         mergeIniScalarKey(path, SELECTED_SLOT_KEY, String.valueOf(SLOT_DISABLED));

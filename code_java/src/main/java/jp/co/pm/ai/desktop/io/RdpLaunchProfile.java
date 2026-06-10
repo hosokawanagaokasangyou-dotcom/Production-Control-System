@@ -17,6 +17,7 @@ public record RdpLaunchProfile(
         String description,
         String category,
         Boolean disconnectOnChildExit,
+        RdpSessionEndAction sessionEndAction,
         Boolean fullScreen,
         Integer desktopWidth,
         Integer desktopHeight,
@@ -33,7 +34,21 @@ public record RdpLaunchProfile(
     }
 
     public static RdpLaunchProfile empty(int number) {
-        return new RdpLaunchProfile(number, "", "", "", null, null, null, null, null);
+        return new RdpLaunchProfile(number, "", "", "", null, null, null, null, null, null);
+    }
+
+    /** プロファイルが ini より優先する終了時セッション操作。未設定なら null。 */
+    public RdpSessionEndAction resolvedSessionEndAction() {
+        if (sessionEndAction != null) {
+            return sessionEndAction;
+        }
+        if (Boolean.FALSE.equals(disconnectOnChildExit)) {
+            return RdpSessionEndAction.NONE;
+        }
+        if (Boolean.TRUE.equals(disconnectOnChildExit)) {
+            return RdpSessionEndAction.SIGN_OUT;
+        }
+        return null;
     }
 
     /** 接続ボタン横 ComboBox 向けの短い表示。 */
@@ -67,11 +82,14 @@ public record RdpLaunchProfile(
                 sb.append("既定（接続タブの表示設定）");
             }
         }
-        if (Boolean.FALSE.equals(disconnectOnChildExit)) {
+        RdpSessionEndAction resolvedEndAction = resolvedSessionEndAction();
+        if (resolvedEndAction != null) {
             if (sb.length() > 0) {
                 sb.append('\n');
             }
-            sb.append("終了時 RDP 切断: オフ（プロファイル設定）");
+            sb.append("終了時セッション操作: ")
+                    .append(resolvedEndAction.displayLabel())
+                    .append("（プロファイル設定）");
         }
         if (Boolean.TRUE.equals(rpaEternal)) {
             if (sb.length() > 0) {
@@ -103,6 +121,7 @@ public record RdpLaunchProfile(
                 && Objects.equals(description, other.description)
                 && Objects.equals(category, other.category)
                 && Objects.equals(disconnectOnChildExit, other.disconnectOnChildExit)
+                && Objects.equals(sessionEndAction, other.sessionEndAction)
                 && Objects.equals(fullScreen, other.fullScreen)
                 && Objects.equals(desktopWidth, other.desktopWidth)
                 && Objects.equals(desktopHeight, other.desktopHeight)
@@ -117,6 +136,7 @@ public record RdpLaunchProfile(
                 description,
                 category,
                 disconnectOnChildExit,
+                sessionEndAction,
                 fullScreen,
                 desktopWidth,
                 desktopHeight,

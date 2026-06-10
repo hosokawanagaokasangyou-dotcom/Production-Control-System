@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace PmAi.RdpRemoteLauncher;
@@ -12,30 +11,20 @@ internal static class RdpSessionDisconnecter
 
         if (!TryResolveCurrentSessionId(out var sessionId, out var resolveError))
         {
-            LauncherLog.Warn(resolveError ?? "セッション ID を取得できませんでした");
-            return TryShutdownLogoffFallback(out errorMessage);
+            errorMessage = resolveError ?? "セッション ID を取得できませんでした";
+            return false;
         }
 
         LauncherLog.Info("RDP 切断対象セッション ID=" + sessionId + " (自プロセス PID=" + Environment.ProcessId + ")");
 
         if (WTSApi.WTSDisconnectSession(WTSApi.WtsCurrentServerHandle, (int)sessionId, false))
         {
+            LauncherLog.Info("WTSDisconnectSession で RDP セッションを切断しました");
             return true;
         }
 
-        var disconnectError = FormatWin32Error("WTSDisconnectSession");
-        LauncherLog.Warn("WTSDisconnectSession 失敗: " + disconnectError + " — WTSLogoffSession を試行");
-
-        if (WTSApi.WTSLogoffSession(WTSApi.WtsCurrentServerHandle, (int)sessionId, false))
-        {
-            LauncherLog.Info("WTSLogoffSession でセッションを終了しました");
-            return true;
-        }
-
-        var logoffError = FormatWin32Error("WTSLogoffSession");
-        LauncherLog.Warn("WTSLogoffSession 失敗: " + logoffError + " — shutdown /l /f を試行");
-
-        return TryShutdownLogoffFallback(out errorMessage);
+        errorMessage = FormatWin32Error("WTSDisconnectSession");
+        return false;
     }
 
     private static bool TryResolveCurrentSessionId(out uint sessionId, out string? errorMessage)
@@ -60,40 +49,6 @@ internal static class RdpSessionDisconnecter
         return false;
     }
 
-    private static bool TryShutdownLogoffFallback(out string? errorMessage)
-    {
-        errorMessage = null;
-        try
-        {
-            var systemRoot = Environment.GetEnvironmentVariable("SystemRoot");
-            var shutdownPath = string.IsNullOrWhiteSpace(systemRoot)
-                ? "shutdown.exe"
-                : Path.Combine(systemRoot, "System32", "shutdown.exe");
-
-            LauncherLog.Info("shutdown.exe /l /f を起動してログオフを試行: " + shutdownPath);
-            using var shutdown = Process.Start(
-                new ProcessStartInfo
-                {
-                    FileName = shutdownPath,
-                    Arguments = "/l /f",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                });
-            if (shutdown == null)
-            {
-                errorMessage = "shutdown.exe の起動に失敗しました";
-                return false;
-            }
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            errorMessage = "shutdown /l /f 失敗: " + ex.Message;
-            return false;
-        }
-    }
-
     private static string FormatWin32Error(string apiName)
     {
         var win32 = Marshal.GetLastWin32Error();
@@ -114,9 +69,5 @@ internal static class RdpSessionDisconnecter
         [DllImport("wtsapi32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         internal static extern bool WTSDisconnectSession(nint hServer, int sessionId, bool bWait);
-
-        [DllImport("wtsapi32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        internal static extern bool WTSLogoffSession(nint hServer, int sessionId, bool bWait);
     }
 }
