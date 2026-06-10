@@ -99,6 +99,7 @@ public final class RequestFormInputTabController {
         }
         showTabLoadingIfNeeded();
         reconciliationApp = new ReconciliationApp();
+        reconciliationApp.setStartupComboChoices(pendingComboChoices.mergedWithDefaults());
         reconciliationApp.configureJuchuHeaderAliasRegistry(registry);
         reconciliationApp.setOriginalDirChangeHandler(
                 path -> {
@@ -121,9 +122,6 @@ public final class RequestFormInputTabController {
         }
         Path repoRoot = shell != null ? AppPaths.resolveRepoRoot(ui) : null;
         Parent root = reconciliationApp.buildEmbeddedRoot(host, repoRoot, ui);
-        if (pendingComboChoices != null) {
-            reconciliationApp.applyComboChoices(pendingComboChoices.mergedWithDefaults());
-        }
         reconciliationApp.setPreviewBadgeConfigSupplier(
                 () ->
                         shell != null

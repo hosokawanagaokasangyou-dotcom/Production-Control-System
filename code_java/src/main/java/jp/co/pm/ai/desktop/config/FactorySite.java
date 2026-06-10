@@ -175,7 +175,7 @@ public enum FactorySite {
         return Optional.empty();
     }
 
-    static Optional<FactorySite> inferFromPortableBundleSourceValue(String raw) {
+    public static Optional<FactorySite> inferFromPortableBundleSourceValue(String raw) {
         if (raw == null || raw.isBlank()) {
             return Optional.empty();
         }

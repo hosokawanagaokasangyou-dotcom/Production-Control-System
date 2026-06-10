@@ -195,7 +195,7 @@ C:\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\bin\Rel
 C:\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\bin\Release\net8.0-windows\win-x64\hostfxr.dll
 C:\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\bin\Release\net8.0-windows\win-x64\hostpolicy.dll
 C:\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\bin\Release\net8.0-windows\win-x64\mscordaccore.dll
-C:\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\bin\Release\net8.0-windows\win-x64\mscordaccore_amd64_amd64_8.0.2726.22922.dll
 C:\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\bin\Release\net8.0-windows\win-x64\mscordbi.dll
 C:\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\bin\Release\net8.0-windows\win-x64\mscorrc.dll
 C:\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\bin\Release\net8.0-windows\win-x64\msquic.dll
+C:\工程管理AIプロジェクト_JAVA\tools\pm-ai-rdp-remote-launcher\bin\Release\net8.0-windows\win-x64\mscordaccore_amd64_amd64_8.0.2826.26413.dll

@@ -13,12 +13,14 @@ internal sealed class ProcessTreeMonitor
     private readonly string? _scenarioPathFragment;
     private readonly HashSet<int> _trackedProcessIds = new();
     private bool _launchSignatureSeen;
+    private DateTime? _lastVisibleWindowUtc;
     private readonly DateTime _monitorStartUtc = DateTime.UtcNow;
     private DateTime _lastStatusLogUtc = DateTime.MinValue;
 
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan StatusLogInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan SignatureStartupGrace = TimeSpan.FromSeconds(12);
+    private static readonly TimeSpan ScenarioUiIdleTimeout = TimeSpan.FromSeconds(15);
 
     internal ProcessTreeMonitor(Process rootProcess, ParsedCommand launchCommand, string? loginId)
     {
@@ -40,6 +42,7 @@ internal sealed class ProcessTreeMonitor
         {
             SyncTrackedProcesses();
             RemoveExitedProcesses();
+            UpdateScenarioWindowActivity();
 
             if (IsMonitoringComplete())
             {
@@ -59,6 +62,11 @@ internal sealed class ProcessTreeMonitor
             if (running)
             {
                 _launchSignatureSeen = true;
+                if (TryCompleteAfterScenarioUiIdle())
+                {
+                    return true;
+                }
+
                 return false;
             }
 
@@ -139,6 +147,45 @@ internal sealed class ProcessTreeMonitor
         {
             // プロセス既終了
         }
+    }
+
+    private void UpdateScenarioWindowActivity()
+    {
+        if (string.IsNullOrWhiteSpace(_scenarioPathFragment) || !_launchSignatureSeen)
+        {
+            return;
+        }
+
+        var matchingProcessIds = ProcessRunningChecker.FindAllMatchingProcessIds(_launchCommand, _loginId);
+        if (matchingProcessIds.Count == 0)
+        {
+            return;
+        }
+
+        if (ProcessMainWindowChecker.AnyVisibleTopLevelWindow(matchingProcessIds))
+        {
+            _lastVisibleWindowUtc = DateTime.UtcNow;
+        }
+    }
+
+    private bool TryCompleteAfterScenarioUiIdle()
+    {
+        if (string.IsNullOrWhiteSpace(_scenarioPathFragment) || !_launchSignatureSeen || !_lastVisibleWindowUtc.HasValue)
+        {
+            return false;
+        }
+
+        var idleFor = DateTime.UtcNow - _lastVisibleWindowUtc.Value;
+        if (idleFor < ScenarioUiIdleTimeout)
+        {
+            return false;
+        }
+
+        LauncherLog.Info(
+            "シナリオ起動後 UI 非表示が "
+                + (int)ScenarioUiIdleTimeout.TotalSeconds
+                + " 秒継続（監視完了）");
+        return true;
     }
 
     private static IEnumerable<int> QueryChildProcessIds(int parentProcessId)

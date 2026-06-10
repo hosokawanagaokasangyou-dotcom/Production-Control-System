@@ -14,7 +14,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * デスクトップ本体の終了後更新（{@link PortableBundleUpdateLauncher}）のあと、次回起動で工場既定選択などを続行するためのマーカー。
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record PortableBundleUpgradeFollowUp(String installRoot, String version, String createdAt) {
+public record PortableBundleUpgradeFollowUp(
+        String installRoot, String version, String createdAt, String factorySite) {
 
     public static final String MANIFEST_FILE_NAME = "pending-portable-upgrade-followup.json";
 
@@ -24,15 +25,28 @@ public record PortableBundleUpgradeFollowUp(String installRoot, String version, 
         return PortableBundlePendingUpdate.userStateDirectory().resolve(MANIFEST_FILE_NAME);
     }
 
-    public static void writePending(Path installRoot, String version) throws IOException {
+    public static void writePending(Path installRoot, String version, FactorySite site) throws IOException {
         Objects.requireNonNull(installRoot, "installRoot");
         Files.createDirectories(PortableBundlePendingUpdate.userStateDirectory());
         PortableBundleUpgradeFollowUp state =
                 new PortableBundleUpgradeFollowUp(
                         installRoot.toAbsolutePath().normalize().toString(),
                         version != null ? version.strip() : "",
-                        Instant.now().toString());
+                        Instant.now().toString(),
+                        site != null ? site.name() : null);
         MAPPER.writerWithDefaultPrettyPrinter().writeValue(manifestPath().toFile(), state);
+    }
+
+    /** 後方互換: {@code factorySite} 未記録の旧マニフェスト向け。 */
+    public Optional<FactorySite> factorySiteOrEmpty() {
+        if (factorySite == null || factorySite.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(FactorySite.valueOf(factorySite.trim()));
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
     }
 
     public static Optional<PortableBundleUpgradeFollowUp> readIfPresent() {

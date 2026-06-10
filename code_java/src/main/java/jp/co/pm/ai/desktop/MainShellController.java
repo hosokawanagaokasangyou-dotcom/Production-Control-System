@@ -620,6 +620,12 @@ public final class MainShellController {
     private Runnable uiEnvPersistSchedule;
     private final AtomicBoolean envResetInProgress = new AtomicBoolean(false);
 
+    /** ポータル自動バージョンアップ実行中は起動時操作者ダイアログを出さない。 */
+    private final AtomicBoolean deferOperatorPromptForPortableUpgrade = new AtomicBoolean(false);
+
+    /** バージョンアップ後処理で操作者を復元済みなら {@link #maybePromptOperatorUserAtStartup()} を省略。 */
+    private final AtomicBoolean skipOperatorPromptAfterPortableUpgrade = new AtomicBoolean(false);
+
     private DesktopTheme pendingTheme = DesktopTheme.LIGHT;
 
     /** FXML 読込直後に固定した既定見出し（内部 ID は {@link MainShellTabId#key()} のまま）。 */
@@ -1800,7 +1806,8 @@ public final class MainShellController {
             return;
         }
 
-        performGlobalUiFactoryResetWithoutConfirmation();
+        performGlobalUiFactoryResetWithoutConfirmation(
+                GlobalInitSettingTarget.loadEffective(collectUiEnv()));
 
         Alert done = new Alert(AlertType.INFORMATION);
         initDialogOwnerIfSceneReady(done);
@@ -1816,10 +1823,11 @@ public final class MainShellController {
      *
      * <p>ポータブル自動バージョンアップ完了後に呼び出し、バンドル／{@code init_setting} 既定へ UI を揃える。
      */
-    private void performGlobalUiFactoryResetWithoutConfirmation() {
+    private void performGlobalUiFactoryResetWithoutConfirmation(FactorySite factorySite) {
+        FactorySite site = factorySite != null ? factorySite : FactorySite.KONAN;
         suppressEnvSessionPersistence.set(true);
         try {
-            applyEnvRowsFullBundledResetAndPersist(false, FactorySite.KONAN);
+            applyEnvRowsFullBundledResetAndPersist(false, site);
             try {
                 Files.deleteIfExists(TableColumnOrderPersistence.userHomeStorePath());
             } catch (IOException ignored) {
@@ -1837,7 +1845,7 @@ public final class MainShellController {
              * 早期 return と相性が悪く、アップグレード直後に「初期化されていない」ように見えることがあるため false。
              */
             applyDesktopSession(merged, false, false);
-            applyFactoryRequestFormGlobalSettings(GlobalInitSettingTarget.load(), true);
+            applyFactoryRequestFormGlobalSettings(site, true);
             TableColumnOrderPersistence.materializeTableColumnStoreAfterFactoryReset(collectUiEnv());
             applyDesktopThemeFromSession(merged);
             refreshDesktopSessionDependentUi();
@@ -5583,19 +5591,6 @@ public final class MainShellController {
         }
     }
 
-    /**
-     * ポータブル自動バージョンアップ完了直後: 湖南／国分の環境タブ既定をユーザーに選ばせる。
-     *
-     * @return OK 時は選択した工場。キャンセル時は empty（呼び出し側で湖南とみなす）。
-     */
-    private Optional<FactorySite> promptFactorySiteAfterPortableUpgrade() {
-        return promptFactorySiteChoice(
-                "自動バージョンアップ",
-                "バージョンアップが完了しました。\n"
-                        + "ネットワークの計画／実績フォルダ・自動バージョンアップ用 ZIP・マスタファイル名の既定を、利用する工場に合わせて選んでください。\n"
-                        + "（キャンセルした場合は湖南工場の既定のままです。）");
-    }
-
     /** デスクトップ本体の終了後更新の直前: ユーザーへ再起動を明示する。 */
     private void showPortableUpgradeDeferredRestartDialog(String versionLabel) {
         Alert a = new Alert(AlertType.INFORMATION);
@@ -5610,7 +5605,8 @@ public final class MainShellController {
                         + "）。\n\n"
                         + "PMD.exe とアプリケーション本体（app・runtime）を反映するため、"
                         + "このウィンドウを終了し、自動的に再起動します。\n\n"
-                        + "再起動後、利用工場（湖南／国分）の選択画面が表示されます。\n"
+                        + "再起動後、利用工場の設定を維持したまま環境を初期化します。"
+                        + "操作者選択は表示しません（前回選択を復元します）。\n"
                         + "OK を押して続行してください。");
         a.showAndWait();
     }
@@ -6093,6 +6089,12 @@ public final class MainShellController {
     }
 
     private void maybePromptOperatorUserAtStartup() {
+        if (skipOperatorPromptAfterPortableUpgrade.compareAndSet(true, false)) {
+            return;
+        }
+        if (deferOperatorPromptForPortableUpgrade.get()) {
+            return;
+        }
         FactorySite factory = GlobalInitSettingTarget.loadEffective(collectUiEnv());
         FactoryOperatorUserStore.configureFromUi(collectUiEnv(), factory);
         if (FactoryOperatorUserStore.usingLocalStoreFallback()) {
@@ -7611,13 +7613,15 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
         Path localData = cwd.resolve("pm-ai-data").normalize();
         if (PortableBundleUpgradeFollowUp.isPendingFor(cwd)) {
             appendLog(
-                    "[startup] バージョンアップ後の再起動を検出: 工場既定の選択など後処理を続行します。");
+                    "[startup] バージョンアップ後の再起動を検出: 工場既定の維持と環境反映を続行します。");
+            deferOperatorPromptForPortableUpgrade.set(true);
             finishPortableUpgradeWithFactorySitePrompt(
                     cwd,
                     localData,
                     0,
                     null,
-                    "（デスクトップ本体の再起動後）");
+                    "（デスクトップ本体の再起動後）",
+                    Optional.empty());
             return;
         }
         Map<String, String> ui = collectUiEnv();
@@ -7708,6 +7712,9 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
             appendLog("[startup] ポータル同期はユーザー操作によりスキップしました（版 " + canonVerStr + " → 保留）。");
             return;
         }
+
+        final FactorySite upgradeFactorySite = resolveFactorySiteForPortableUpgrade(Optional.of(canonical));
+        deferOperatorPromptForPortableUpgrade.set(true);
 
         selectMainShellTab(MainShellTabId.RUN);
         mainRunTabController.prepareRunTabForPortableBundleSync();
@@ -7940,9 +7947,9 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                     if (deferredDesktopRelaunch.get()) {
                         try {
                             applyPortableUpgradeBundledPolicyFromPmAiData(localData);
-                            performGlobalUiFactoryResetWithoutConfirmation();
+                            performGlobalUiFactoryResetWithoutConfirmation(upgradeFactorySite);
                             applyBundledPortableDefaultsIfPresent();
-                            PortableBundleUpgradeFollowUp.writePending(cwd, canonVerStr);
+                            PortableBundleUpgradeFollowUp.writePending(cwd, canonVerStr, upgradeFactorySite);
                             showPortableUpgradeDeferredRestartDialog(canonVerStr);
                             long pid = ProcessHandle.current().pid();
                             Path staging = PortableBundlePendingUpdate.defaultStagingDirectory();
@@ -7957,7 +7964,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                                     this::appendLog);
                             appendLog(
                                     "[startup] デスクトップ本体を適用するため終了します（pmd-apply-portable-update.ps1 が再起動します）。"
-                                            + " 再起動後に工場既定の選択を表示します。");
+                                            + " 再起動後に工場設定を維持して環境を反映します。");
                             fileLogLine(fileLog, "[startup] deferred desktop apply launched");
                             if (fileLog != null) {
                                 fileLog.close(true, "deferred desktop apply");
@@ -7973,7 +7980,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                         return;
                     }
                     applyPortableUpgradeBundledPolicyFromPmAiData(localData);
-                    performGlobalUiFactoryResetWithoutConfirmation();
+                    performGlobalUiFactoryResetWithoutConfirmation(upgradeFactorySite);
                     applyBundledPortableDefaultsIfPresent();
                     String doneBanner =
                             "[startup] --- ポータルバージョンアップ完了（同期ファイル約 "
@@ -7991,10 +7998,12 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                             localData,
                             filesSynced.get(),
                             fileLog,
-                            "（デスクトップ本体の変更が無いため再起動は不要です）");
+                            "（デスクトップ本体の変更が無いため再起動は不要です）",
+                            Optional.of(canonical));
                 });
         task.setOnFailed(
                 e -> {
+                    deferOperatorPromptForPortableUpgrade.set(false);
                     mainRunTabController.flushPortableBundleSyncLog();
                     if (localZipHolder[0] != null) {
                         try {
@@ -8053,23 +8062,25 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
     }
 
     /**
-     * ポータル同期後の工場既定選択と環境タブのネットワーク／マスタ既定反映。デスクトップ本体再起動後は {@link
+     * ポータル同期後の工場既定反映と環境タブのネットワーク／マスタ既定反映。デスクトップ本体再起動後は {@link
      * PortableBundleUpgradeFollowUp} 経由でここだけ再実行する。
+     *
+     * <p>工場選択ダイアログは出さず、アップデート前の利用工場（または正本 UNC からの推定）を維持する。操作者選択もスキップし、
+     * 前回選択の復元のみ試みる。
      */
     private void finishPortableUpgradeWithFactorySitePrompt(
             Path cwd,
             Path localData,
             int filesSyncedApprox,
             PortableBundleUpgradeLog fileLog,
-            String completionNoteSuffix) {
+            String completionNoteSuffix,
+            Optional<Path> canonicalOpt) {
         applyRepoFolderPathNormalization();
-        Optional<FactorySite> chosenOpt = promptFactorySiteAfterPortableUpgrade();
-        FactorySite siteAfterUpgrade = chosenOpt.orElse(FactorySite.KONAN);
-        if (chosenOpt.isEmpty()) {
-            appendLog("[startup] 工場既定の選択をキャンセルしたため湖南工場の既定を適用します。");
-        }
+        FactorySite siteAfterUpgrade = resolveFactorySiteForPortableUpgrade(canonicalOpt);
         applyFactorySitePortableAndNetworkDefaults(siteAfterUpgrade);
-        FactoryOperatorUserStore.configureFromUi(collectUiEnv(), siteAfterUpgrade);
+        restoreOperatorAfterPortableUpgrade(siteAfterUpgrade);
+        skipOperatorPromptAfterPortableUpgrade.set(true);
+        deferOperatorPromptForPortableUpgrade.set(false);
         ensureBootstrapDefaultValuesVisible(collectUiEnv());
         ensureUiRefOptionalDisplayDefaultsVisible(collectUiEnv());
         applyRepoFolderPathNormalization();
@@ -8084,7 +8095,7 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
                         + "グローバル設定「デフォルトに戻す」相当で UI をバンドル既定へ揃えました。"
                         + " 工場既定: "
                         + siteAfterUpgrade.displayLabelJa()
-                        + "。"
+                        + "（アップデート前の利用工場を維持）。"
                         + (completionNoteSuffix != null ? completionNoteSuffix : "");
         appendLog(completion);
         fileLogLine(fileLog, completion);
@@ -8098,6 +8109,61 @@ public PlanInputTabController planInputTabControllerForDispatchRollUnit() {
             fileLog.appendLine(
                     "[startup] finishPortableUpgrade filesSyncedApprox=" + filesSyncedApprox);
         }
+    }
+
+    /**
+     * ポータル自動バージョンアップ時に利用工場を決める。環境タブの UNC 推定 → 永続ファイル → 正本パス の順。
+     * いずれも判定不能のときのみ {@link FactorySite#KONAN}。
+     */
+    private FactorySite resolveFactorySiteForPortableUpgrade(Optional<Path> canonicalOpt) {
+        Optional<FactorySite> fromFollowUp =
+                PortableBundleUpgradeFollowUp.readIfPresent()
+                        .flatMap(PortableBundleUpgradeFollowUp::factorySiteOrEmpty);
+        if (fromFollowUp.isPresent()) {
+            return fromFollowUp.get();
+        }
+        Optional<FactorySite> fromEnv = FactorySite.inferFromUiEnv(collectUiEnv());
+        if (fromEnv.isPresent()) {
+            return fromEnv.get();
+        }
+        FactorySite stored = GlobalInitSettingTarget.load();
+        if (stored != null) {
+            return stored;
+        }
+        Optional<FactorySite> fromCanonical =
+                canonicalOpt.flatMap(FactorySite::inferFromPortableBundleInitSetting);
+        if (fromCanonical.isEmpty() && canonicalOpt.isPresent()) {
+            fromCanonical =
+                    FactorySite.inferFromPortableBundleSourceValue(canonicalOpt.get().toString());
+        }
+        return fromCanonical.orElse(FactorySite.KONAN);
+    }
+
+    /** バージョンアップ後: 操作者選択ダイアログは出さず、前回選択の復元のみ試みる。 */
+    private void restoreOperatorAfterPortableUpgrade(FactorySite site) {
+        FactoryOperatorUserStore.configureFromUi(collectUiEnv(), site);
+        try {
+            if (FactoryOperatorUserStore.tryRestoreSessionFromLocalLastSelected(site)) {
+                appendLog(
+                        "[startup] 操作者: "
+                                + FactoryOperatorUserStore.sessionOperatorName()
+                                + " （"
+                                + site.displayLabelJa()
+                                + "・バージョンアップ後に前回選択を復元）"
+                                + (FactoryOperatorUserStore.isGuestOperator(
+                                                FactoryOperatorUserStore.sessionOperatorName())
+                                        ? " ※サマリ Excel 生成不可"
+                                        : ""));
+            } else {
+                appendLog(
+                        "[startup] 操作者: バージョンアップ後は選択を省略しました（後から実行・ログタブ等で選べます）。");
+            }
+        } catch (IOException ex) {
+            appendLog(
+                    "[startup] 操作者の復元をスキップ: "
+                            + (ex.getMessage() != null ? ex.getMessage() : ex.toString()));
+        }
+        refreshMainRunTabOperatorLabel();
     }
 
     private static void fileLogLine(PortableBundleUpgradeLog fileLog, String line) {

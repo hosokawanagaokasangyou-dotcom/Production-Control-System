@@ -38,6 +38,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -53,6 +54,7 @@ import jp.co.pm.ai.desktop.io.PoiWorkbookFileWriter;
 import jp.co.pm.ai.desktop.io.PoiWorkbookOpener;
 import jp.co.pm.ai.desktop.io.PoiWorkbookSaver;
 import jp.co.pm.ai.desktop.io.RequestFormJuchuFileBackupStore;
+import jp.co.pm.ai.desktop.ui.ComboBoxPopupRightAlign;
 import jp.co.pm.ai.desktop.ui.PersonBadgeNodeFactory;
 
 public class ReconciliationApp {
@@ -246,6 +248,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     private final ObservableList<String> optMasterCandidatePrefixRaw = FXCollections.observableArrayList();
 
     private RequestFormComboChoices comboChoicesState = RequestFormComboChoices.bundledDefaults();
+    /** {@link #buildEmbeddedRoot} 前に {@link RequestFormInputTabController} が渡すセッション復元候補。 */
+    private RequestFormComboChoices startupComboChoices = RequestFormComboChoices.empty();
+    private final List<ListView<String>> comboChoiceListViews = new ArrayList<>();
+    private final AtomicLong comboChoicesLoadGeneration = new AtomicLong(0);
+    private boolean suppressComboChoiceAutosave = false;
 
     // Settings & Caching fields
     private volatile long lastInteractionTime = System.currentTimeMillis();
@@ -310,12 +317,25 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
      * @param uiEnv 環境変数タブ（{@link AppPaths#KEY_PM_AI_ALADDIN_MASTER_DIR}、
      *     {@link AppPaths#KEY_PM_AI_REQUEST_FORM_ORIGINAL_DIR} 等）
      */
+    /**
+     * 依頼書入力タブ埋め込み構築前にセッション復元済み候補を渡す。
+     * {@link #buildEmbeddedRoot} 内で設定 UI 構築より先に {@link #applyComboChoices} する。
+     */
+    public void setStartupComboChoices(RequestFormComboChoices choices) {
+        startupComboChoices =
+                choices != null
+                        ? choices.mergedWithDefaults()
+                        : RequestFormComboChoices.empty();
+    }
+
     public Parent buildEmbeddedRoot(Window hostWindow, Path repoRootHint, Map<String, String> uiEnv) {
         this.hostWindow = hostWindow;
         this.repoRootHint = repoRootHint;
         applyRepoRootAsWorkspaceIfPresent(repoRootHint);
         configureFromUiEnv(uiEnv);
-        scheduleLoadSettingsAsync();
+        applyComboChoices(resolveStartupComboChoices());
+        RequestFormInputSettingsStore.load(uiEnvSnapshot)
+                .ifPresent(this::applyLoadedInputSettingsPaths);
         ensureJuchuPathDefault();
 
         // --- TOP MENU BAR ---
@@ -881,7 +901,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         configureFromUiEnv(uiEnv);
         reloadMasterProductListFromDiskIfStale(null);
         startEmbeddedTabPolling();
-        scheduleReloadComboChoicesFromSummarySettings();
+        scheduleComboChoicesReloadFromSummarySettings();
     }
 
     /** 依頼書入力タブを離れたとき: バックグラウンド監視を停止。 */
@@ -1006,7 +1026,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 evt -> {
                     if (tab.isSelected()) {
                         refreshJuchuBackupList();
-                        scheduleLoadSettingsAsync();
+                        scheduleInputSettingsReloadAsync();
                     }
                 });
 
@@ -1564,8 +1584,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         lbl.getStyleClass().add("settings-card-title");
 
         ListView<String> listView = new ListView<>(items);
+        comboChoiceListViews.add(listView);
         listView.getStyleClass().add("settings-list");
-        listView.setPrefHeight(Math.min(Math.max(items.size(), 2) * 26 + 2, 110));
+        updateComboChoiceListViewHeight(listView, items.size());
         listView.setMaxHeight(110);
         listView.setEditable(false);
 
@@ -1588,7 +1609,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     String v = tfNew.getText().trim();
                     if (!v.isEmpty() && !items.contains(v)) {
                         items.add(v);
-                        listView.setPrefHeight(Math.min(Math.max(items.size(), 2) * 26 + 2, 140));
+                        updateComboChoiceListViewHeight(listView, items.size());
                         tfNew.clear();
                         saveSettings();
                         if (afterChange != null) {
@@ -1607,7 +1628,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                     String sel = listView.getSelectionModel().getSelectedItem();
                     if (sel != null) {
                         items.remove(sel);
-                        listView.setPrefHeight(Math.min(Math.max(items.size(), 2) * 26 + 2, 140));
+                        updateComboChoiceListViewHeight(listView, items.size());
                         saveSettings();
                         if (afterChange != null) {
                             afterChange.run();
@@ -1672,7 +1693,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void updateFieldDefaultInState(String key, String value) {
-        if (key == null || value == null || value.isBlank()) {
+        if (suppressComboChoiceAutosave || key == null || value == null || value.isBlank()) {
             return;
         }
         LinkedHashMap<String, String> nextDefaults =
@@ -1718,13 +1739,19 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void syncFieldDefaultSelectorCombos() {
-        if (cmbSettingsDefaultInputKbn != null) {
-            cmbSettingsDefaultInputKbn.setValue(
-                    comboChoicesState.effectiveDefaultFor(RequestFormComboChoices.KEY_INPUT_KBN));
-        }
-        if (cmbSettingsDefaultKakoKbn != null) {
-            cmbSettingsDefaultKakoKbn.setValue(
-                    comboChoicesState.effectiveDefaultFor(RequestFormComboChoices.KEY_KAKO_KBN));
+        boolean prevSuppress = suppressComboChoiceAutosave;
+        suppressComboChoiceAutosave = true;
+        try {
+            if (cmbSettingsDefaultInputKbn != null) {
+                cmbSettingsDefaultInputKbn.setValue(
+                        comboChoicesState.effectiveDefaultFor(RequestFormComboChoices.KEY_INPUT_KBN));
+            }
+            if (cmbSettingsDefaultKakoKbn != null) {
+                cmbSettingsDefaultKakoKbn.setValue(
+                        comboChoicesState.effectiveDefaultFor(RequestFormComboChoices.KEY_KAKO_KBN));
+            }
+        } finally {
+            suppressComboChoiceAutosave = prevSuppress;
         }
     }
 
@@ -1845,6 +1872,20 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         refreshDynamicRowComboItems();
         refreshAllMasterCandidateCombos();
         syncFieldDefaultSelectorCombos();
+        refreshComboChoiceListViews();
+    }
+
+    private RequestFormComboChoices resolveStartupComboChoices() {
+        if (startupComboChoices != null && !startupComboChoices.isEmpty()) {
+            return startupComboChoices.mergedWithDefaults();
+        }
+        RequestFormComboChoices fromStore =
+                RequestFormInputSettingsStore.loadComboChoices(
+                        uiEnvSnapshot, GlobalInitSettingTarget.load());
+        if (fromStore != null && !fromStore.isEmpty()) {
+            return fromStore;
+        }
+        return RequestFormComboChoices.bundledDefaults();
     }
 
     /**
@@ -1902,7 +1943,28 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         if (target == null || values == null || values.isEmpty()) {
             return;
         }
+        if (target.size() == values.size() && target.equals(values)) {
+            return;
+        }
         target.setAll(values);
+    }
+
+    private static void updateComboChoiceListViewHeight(ListView<String> listView, int itemCount) {
+        if (listView == null) {
+            return;
+        }
+        listView.setPrefHeight(Math.min(Math.max(itemCount, 2) * 26 + 2, 110));
+    }
+
+    private void refreshComboChoiceListViews() {
+        for (ListView<String> listView : comboChoiceListViews) {
+            if (listView == null) {
+                continue;
+            }
+            ObservableList<String> items = listView.getItems();
+            updateComboChoiceListViewHeight(listView, items != null ? items.size() : 0);
+            listView.refresh();
+        }
     }
 
     private static void replaceOptListOrClear(
@@ -5638,8 +5700,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
         RequestFormInputSettingsStore.load(uiEnvSnapshot).ifPresent(this::applyLoadedInputSettings);
     }
 
-    private void scheduleLoadSettingsAsync() {
-        Map<String, String> ui = uiEnvSnapshot;
+    private void scheduleInputSettingsReloadAsync() {
+        long generation = comboChoicesLoadGeneration.incrementAndGet();
+        Map<String, String> ui = Map.copyOf(uiEnvSnapshot);
         Thread worker =
                 new Thread(
                         () -> {
@@ -5648,7 +5711,22 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                             if (settings.isEmpty()) {
                                 return;
                             }
-                            Platform.runLater(() -> applyLoadedInputSettings(settings.get()));
+                            RequestFormInputSettingsStore.Settings loaded = settings.get();
+                            RequestFormComboChoices combo =
+                                    loaded.comboChoices() != null
+                                            && !loaded.comboChoices().isEmpty()
+                                            ? loaded.comboChoices().mergedWithDefaults()
+                                            : null;
+                            Platform.runLater(
+                                    () -> {
+                                        if (generation != comboChoicesLoadGeneration.get()) {
+                                            return;
+                                        }
+                                        applyLoadedInputSettingsPaths(loaded);
+                                        if (combo != null) {
+                                            applyComboChoices(combo);
+                                        }
+                                    });
                         },
                         "request-form-settings-load");
         worker.setDaemon(true);
@@ -5656,6 +5734,16 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     private void applyLoadedInputSettings(RequestFormInputSettingsStore.Settings settings) {
+        if (settings == null) {
+            return;
+        }
+        applyLoadedInputSettingsPaths(settings);
+        if (settings.comboChoices() != null && !settings.comboChoices().isEmpty()) {
+            applyComboChoices(settings.comboChoices().mergedWithDefaults());
+        }
+    }
+
+    private void applyLoadedInputSettingsPaths(RequestFormInputSettingsStore.Settings settings) {
         if (settings == null) {
             return;
         }
@@ -5671,13 +5759,11 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                 refreshJuchuPathDisplay();
             }
         }
-        if (settings.comboChoices() != null && !settings.comboChoices().isEmpty()) {
-            applyComboChoices(settings.comboChoices().mergedWithDefaults());
-        }
     }
 
     private void saveSettings() {
-        if (!FactoryOperatorUserStore.sessionMayMutateRequestFormInput()) {
+        if (suppressComboChoiceAutosave
+                || !FactoryOperatorUserStore.sessionMayMutateRequestFormInput()) {
             return;
         }
         comboChoicesState = snapshotComboChoices();
@@ -5686,8 +5772,9 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     }
 
     /** サマリ Excel 同フォルダの {@link AppPaths#REQUEST_FORM_INPUT_SETTINGS_JSON_FILENAME} から候補を再読込。 */
-    private void scheduleReloadComboChoicesFromSummarySettings() {
-        Map<String, String> ui = uiEnvSnapshot;
+    private void scheduleComboChoicesReloadFromSummarySettings() {
+        long generation = comboChoicesLoadGeneration.incrementAndGet();
+        Map<String, String> ui = Map.copyOf(uiEnvSnapshot);
         FactorySite site = GlobalInitSettingTarget.load();
         Thread worker =
                 new Thread(
@@ -5697,7 +5784,13 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
                             if (fromSummary == null || fromSummary.isEmpty()) {
                                 return;
                             }
-                            Platform.runLater(() -> applyComboChoices(fromSummary));
+                            Platform.runLater(
+                                    () -> {
+                                        if (generation != comboChoicesLoadGeneration.get()) {
+                                            return;
+                                        }
+                                        applyComboChoices(fromSummary);
+                                    });
                         },
                         "request-form-combo-reload");
         worker.setDaemon(true);
@@ -6540,6 +6633,7 @@ private final List<ProductInfo> masterProductList = new ArrayList<>();
     private static final String MASTER_CANDIDATE_SUPPRESS_EDITOR_FILTER_PROP = "suppressCandidateEditorFilter";
 
     private static void wireCandidateComboBox(ComboBox<String> combo, Runnable refreshOnOpen) {
+        ComboBoxPopupRightAlign.install(combo);
         combo.setEditable(true);
         combo.getEditor()
                 .textProperty()

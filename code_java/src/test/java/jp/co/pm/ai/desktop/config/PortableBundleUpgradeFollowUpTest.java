@@ -20,7 +20,7 @@ class PortableBundleUpgradeFollowUpTest {
         String prev = System.getProperty("user.home");
         try {
             System.setProperty("user.home", home.toString());
-            PortableBundleUpgradeFollowUp.writePending(install, "7.17");
+            PortableBundleUpgradeFollowUp.writePending(install, "7.17", FactorySite.KONAN);
             assertTrue(PortableBundleUpgradeFollowUp.isPendingFor(install));
             assertFalse(PortableBundleUpgradeFollowUp.isPendingFor(tmp.resolve("other")));
             PortableBundleUpgradeFollowUp.clear();

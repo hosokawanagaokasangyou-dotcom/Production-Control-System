@@ -129,6 +129,20 @@ class AppPathsTest {
     }
 
     @Test
+    void isWindowsDefaultRdpProfile_matchesFilenameOnly(@TempDir Path tmp) throws Exception {
+        Path customDir = tmp.resolve("pm-ai-data");
+        Files.createDirectories(customDir);
+        Path defaultRdp = customDir.resolve("Default.rdp");
+        Files.writeString(defaultRdp, "screen mode id:i:2");
+        Path signed = customDir.resolve("Default.pm-ai-signed.rdp");
+        Files.writeString(signed, "screen mode id:i:2");
+
+        assertTrue(AppPaths.isWindowsDefaultRdpProfile(defaultRdp));
+        assertFalse(AppPaths.isWindowsDefaultRdpProfile(signed));
+        assertFalse(AppPaths.isWindowsDefaultRdpProfile(customDir.resolve("factory.rdp")));
+    }
+
+    @Test
     void rdpCompanionProgram_isPlainEnvKeyNotFilePicker() {
         assertFalse(AppPaths.isFilePathEnvKey(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM));
         assertFalse(AppPaths.isFolderPathEnvKey(AppPaths.KEY_PM_AI_RDP_COMPANION_PROGRAM));

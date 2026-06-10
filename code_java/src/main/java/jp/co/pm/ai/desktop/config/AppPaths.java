@@ -146,6 +146,15 @@ public final class AppPaths {
     /** Windows の mstsc が保存する既定 RDP プロファイル名。 */
     public static final String WINDOWS_DEFAULT_RDP_FILENAME = "Default.rdp";
 
+    /** ファイル名が {@link #WINDOWS_DEFAULT_RDP_FILENAME} か（大文字小文字無視）。 */
+    public static boolean isWindowsDefaultRdpProfile(Path rdpProfile) {
+        if (rdpProfile == null) {
+            return false;
+        }
+        return WINDOWS_DEFAULT_RDP_FILENAME.equalsIgnoreCase(
+                rdpProfile.getFileName().toString());
+    }
+
     /**
      * 依頼書 PDF プレビュー: Type0 日本語フォントのサイズ補正係数（Excel pt に乗算）。{@code 0.50}～{@code 1.00}。
      */

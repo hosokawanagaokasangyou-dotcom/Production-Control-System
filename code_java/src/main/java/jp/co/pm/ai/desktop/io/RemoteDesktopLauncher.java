@@ -10,10 +10,21 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 
+import jp.co.pm.ai.desktop.config.AppPaths;
+
 /**
  * Windows リモートデスクトップ接続（{@code mstsc.exe}）を .rdp プロファイルで起動する。
  */
 public final class RemoteDesktopLauncher {
+
+    /** {@link #ensureLaunchableRdpProfile(Path)} で拒否したときの説明（UI と共有）。 */
+    public static final String DEFAULT_RDP_LAUNCH_BLOCKED_MESSAGE =
+            "起動プロファイルが Default.rdp です。"
+                    + " 配台システムが .rdp に画面サイズ等を書き込むため、"
+                    + " Windows 既定の Default.rdp を使用すると普段の作業環境の画面サイズが変更されます。"
+                    + "\n\nRDP 署名ウィザードで署名済みプロファイル"
+                    + "（例: Default.pm-ai-signed.rdp）を作成し、"
+                    + " RDP プロファイル (.rdp) のパスを更新してから起動してください。";
 
     /** {@link #launch(Path, Map)} の結果。 */
     public record LaunchOutcome(
@@ -41,6 +52,7 @@ public final class RemoteDesktopLauncher {
     public static LaunchOutcome launch(Path rdpProfile, Map<String, String> ui) throws IOException {
         Path preferred = RdpFileSigner.resolvePreferredSignedProfilePath(rdpProfile, ui);
         Path abs = validateRdpProfile(preferred);
+        ensureLaunchableRdpProfile(abs);
         if (!isSupportedPlatform()) {
             throw new IOException("リモートデスクトップの起動は Windows のみ対応です。");
         }
@@ -98,6 +110,17 @@ public final class RemoteDesktopLauncher {
             throw new IOException("RDP プロファイルは .rdp ファイルを指定してください: " + abs);
         }
         return abs;
+    }
+
+    /** {@link AppPaths#WINDOWS_DEFAULT_RDP_FILENAME} は起動不可（署名済みコピーを使う）。 */
+    public static boolean isDefaultRdpLaunchBlocked(Path rdpProfile) {
+        return AppPaths.isWindowsDefaultRdpProfile(rdpProfile);
+    }
+
+    public static void ensureLaunchableRdpProfile(Path rdpProfile) throws IOException {
+        if (isDefaultRdpLaunchBlocked(rdpProfile)) {
+            throw new IOException(DEFAULT_RDP_LAUNCH_BLOCKED_MESSAGE);
+        }
     }
 
     private static Path resolveMstscExe() {

@@ -37,4 +37,21 @@ class RemoteDesktopLauncherTest {
         Path validated = RemoteDesktopLauncher.validateRdpProfile(rdp);
         assertEquals(rdp.toAbsolutePath().normalize(), validated);
     }
+
+    @Test
+    void ensureLaunchableRdpProfile_rejectsDefaultRdp(@TempDir Path tmp) throws Exception {
+        Path rdp = tmp.resolve("Default.rdp");
+        Files.writeString(rdp, "screen mode id:i:2");
+        IOException ex =
+                assertThrows(
+                        IOException.class, () -> RemoteDesktopLauncher.ensureLaunchableRdpProfile(rdp));
+        assertTrue(ex.getMessage().contains("Default.rdp"));
+    }
+
+    @Test
+    void ensureLaunchableRdpProfile_acceptsSignedProfile(@TempDir Path tmp) throws Exception {
+        Path rdp = tmp.resolve("Default.pm-ai-signed.rdp");
+        Files.writeString(rdp, "screen mode id:i:2");
+        RemoteDesktopLauncher.ensureLaunchableRdpProfile(rdp);
+    }
 }
