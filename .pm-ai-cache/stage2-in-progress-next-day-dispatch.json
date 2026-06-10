@@ -1,0 +1,14 @@
+{
+  "version" : 1,
+  "entries" : [ {
+    "task_id" : "W6-8",
+    "process" : "検査",
+    "machine_name" : "熱融着機　湖南",
+    "next_day_dispatch_m" : 0.0
+  }, {
+    "task_id" : "Y6-15",
+    "process" : "スライス",
+    "machine_name" : "スライス機1　湖南",
+    "next_day_dispatch_m" : 7200.0
+  } ]
+}
