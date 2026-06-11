@@ -2,6 +2,7 @@ package jp.co.pm.ai.desktop.io;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
@@ -12,6 +13,21 @@ public final class RdpLaunchDisplaySettings {
 
     public static final int DEFAULT_WIDTH = 1280;
     public static final int DEFAULT_HEIGHT = 800;
+    public static final int MIN_WIDTH = 270;
+    public static final int MIN_HEIGHT = 200;
+    public static final int MAX_WIDTH = 3840;
+    public static final int MAX_HEIGHT = 2160;
+
+    /** 起動時に確定した表示設定。 */
+    public record LaunchDisplay(boolean fullScreen, int width, int height) {
+
+        public String summaryText() {
+            if (fullScreen) {
+                return "全画面";
+            }
+            return width + " x " + height + "（ウィンドウ）";
+        }
+    }
 
     private RdpLaunchDisplaySettings() {}
 
@@ -26,11 +42,68 @@ public final class RdpLaunchDisplaySettings {
     }
 
     public static int resolveWidth(Map<String, String> ui) {
-        return parsePositiveInt(trimFromUi(ui, AppPaths.KEY_PM_AI_RDP_DESKTOP_WIDTH), DEFAULT_WIDTH);
+        return clampWidth(parsePositiveInt(trimFromUi(ui, AppPaths.KEY_PM_AI_RDP_DESKTOP_WIDTH), DEFAULT_WIDTH));
     }
 
     public static int resolveHeight(Map<String, String> ui) {
-        return parsePositiveInt(trimFromUi(ui, AppPaths.KEY_PM_AI_RDP_DESKTOP_HEIGHT), DEFAULT_HEIGHT);
+        return clampHeight(parsePositiveInt(trimFromUi(ui, AppPaths.KEY_PM_AI_RDP_DESKTOP_HEIGHT), DEFAULT_HEIGHT));
+    }
+
+    public static int clampWidth(int width) {
+        return Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, width));
+    }
+
+    public static int clampHeight(int height) {
+        return Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, height));
+    }
+
+    /**
+     * 起動プロファイルと環境変数から表示設定を確定する。
+     *
+     * @param profile 選択中プロファイル（行 UI 由来を推奨）
+     * @param ui 環境変数タブ由来のマップ（プロファイル未設定フィールドのフォールバック）
+     * @param embedInTab 埋め込みモードでは全画面を強制 OFF
+     */
+    public static LaunchDisplay resolveLaunchDisplay(
+            RdpLaunchProfile profile, Map<String, String> ui, boolean embedInTab) {
+        Map<String, String> env = ui != null ? ui : Map.of();
+        RdpLaunchProfile p = profile != null ? profile : RdpLaunchProfile.empty(1);
+
+        boolean fullScreen;
+        if (p.fullScreen() != null) {
+            fullScreen = p.fullScreen();
+        } else {
+            fullScreen = resolveFullScreen(env);
+        }
+        if (embedInTab) {
+            fullScreen = false;
+        }
+
+        int width;
+        if (p.desktopWidth() != null) {
+            width = clampWidth(p.desktopWidth());
+        } else {
+            width = resolveWidth(env);
+        }
+
+        int height;
+        if (p.desktopHeight() != null) {
+            height = clampHeight(p.desktopHeight());
+        } else {
+            height = resolveHeight(env);
+        }
+
+        return new LaunchDisplay(fullScreen, width, height);
+    }
+
+    /** {@link LaunchDisplay} を ui マップへ書き込む（起動直前用）。 */
+    public static Map<String, String> applyLaunchDisplayToUi(
+            Map<String, String> ui, LaunchDisplay display) {
+        Map<String, String> merged = new HashMap<>(ui != null ? ui : Map.of());
+        merged.put(AppPaths.KEY_PM_AI_RDP_FULLSCREEN, display.fullScreen() ? "1" : "0");
+        merged.put(AppPaths.KEY_PM_AI_RDP_DESKTOP_WIDTH, String.valueOf(display.width()));
+        merged.put(AppPaths.KEY_PM_AI_RDP_DESKTOP_HEIGHT, String.valueOf(display.height()));
+        return merged;
     }
 
     /**
@@ -39,17 +112,22 @@ public final class RdpLaunchDisplaySettings {
      * @return 署名行を削除した場合 {@code true}
      */
     public static boolean applyToProfile(Path rdpProfile, Map<String, String> ui) throws IOException {
-        int width = resolveWidth(ui);
-        int height = resolveHeight(ui);
-        boolean fullScreen = resolveFullScreen(ui);
-        return RdpProfileEditor.applyDesktopDisplay(rdpProfile, width, height, fullScreen);
+        LaunchDisplay display =
+                resolveLaunchDisplay(null, ui, RdpEmbedSettings.isEmbedInTabEnabled(ui));
+        return applyToProfile(rdpProfile, display);
+    }
+
+    public static boolean applyToProfile(Path rdpProfile, LaunchDisplay display) throws IOException {
+        return RdpProfileEditor.applyDesktopDisplay(
+                rdpProfile, display.width(), display.height(), display.fullScreen());
     }
 
     public static String formatSummary(Map<String, String> ui) {
-        if (resolveFullScreen(ui)) {
-            return "全画面";
-        }
-        return resolveWidth(ui) + " x " + resolveHeight(ui) + "（ウィンドウ）";
+        return resolveLaunchDisplay(null, ui, RdpEmbedSettings.isEmbedInTabEnabled(ui)).summaryText();
+    }
+
+    public static String formatSummary(LaunchDisplay display) {
+        return display.summaryText();
     }
 
     private static int parsePositiveInt(String raw, int defaultValue) {

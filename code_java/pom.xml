@@ -22,6 +22,7 @@
     <jfreechart.version>1.5.4</jfreechart.version>
     <pdfbox.version>3.0.5</pdfbox.version>
     <jackson.version>2.21.3</jackson.version>
+    <jna.version>5.16.0</jna.version>
     <junit.version>5.12.2</junit.version>
     <!-- poi-ooxml が運ぶ log4j-api と同一に揃える（log4j-core 無しだと API がプロバイダ不足になり ERROR になる） -->
     <log4j.version>2.24.3</log4j.version>
@@ -68,6 +69,16 @@
       <groupId>org.apache.pdfbox</groupId>
       <artifactId>pdfbox</artifactId>
       <version>${pdfbox.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>net.java.dev.jna</groupId>
+      <artifactId>jna</artifactId>
+      <version>${jna.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>net.java.dev.jna</groupId>
+      <artifactId>jna-platform</artifactId>
+      <version>${jna.version}</version>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
